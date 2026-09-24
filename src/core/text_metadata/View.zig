@@ -1,10 +1,11 @@
 //! Validated, borrowed metadata. URI and run storage share the frame lifetime.
+const bytecodec = @import("bytecodec");
 const std = @import("std");
 const limits = @import("limits.zig");
 const RowFlags = @import("RowFlags.zig").RowFlags;
 const LinkRun = @import("LinkRun.zig");
 const Runs = @import("Runs.zig");
-const Decoder = @import("../schema/Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const View = @This();
 
 encoded: []const u8,

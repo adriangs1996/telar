@@ -1,11 +1,12 @@
 //! User-visible notifications raised by a client or the runtime.
 
+const bytecodec = @import("bytecodec");
 const ShowNotification = @import("ShowNotification.zig");
 const codec = @import("../codec.zig");
-const Encoder = @import("../Encoder.zig");
+const Encoder = bytecodec.Encoder;
 const tags = @import("tags.zig");
 const id = @import("../id.zig");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const Notification = @import("Notification.zig");
 const std = @import("std");
 const types = @import("../types.zig");

@@ -1,13 +1,13 @@
+const bytecodec = @import("bytecodec");
 const id = @import("id.zig");
 const Cursor = @import("Cursor.zig");
 const Mouse = @import("Mouse.zig");
 const InputModes = @import("InputModes.zig");
 const frame_support = @import("frame_support.zig");
 const Scroll = @import("Scroll.zig");
-const Decoder = @import("Decoder.zig");
-const cellgrid = @import("cellgrid");
-const Style = cellgrid.Style;
-const Cell = cellgrid.Cell;
+const Decoder = bytecodec.Decoder;
+const cellcodec = @import("cellcodec");
+const CellReader = cellcodec.CellReader;
 const View = @import("../text_metadata/View.zig");
 const FrameView = @This();
 
@@ -63,31 +63,8 @@ const SpanIterator = struct {
         cell_count: u32,
         encoded_cells: []const u8,
 
-        pub fn cells(self: SpanView) CellIterator {
-            return .{
-                .decoder = .init(self.encoded_cells),
-                .remaining = self.cell_count,
-            };
+        pub fn cells(self: SpanView) CellReader {
+            return .init(self.encoded_cells, self.cell_count);
         }
     };
-};
-
-const CellIterator = struct {
-    decoder: Decoder,
-    remaining: u32,
-    style: ?Style = null,
-
-    pub fn next(self: *CellIterator) !?Cell {
-        if (self.remaining == 0) {
-            return null;
-        }
-        self.remaining -= 1;
-        const cell = try frame_support.decodeCell(&self.decoder, &self.style);
-        // The span header promised exactly `cell_count` cells; leftover bytes
-        // after the last one are corruption, not padding.
-        if (self.remaining == 0) {
-            try self.decoder.ensureEnd();
-        }
-        return cell;
-    }
 };

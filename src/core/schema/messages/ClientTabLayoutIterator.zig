@@ -1,4 +1,5 @@
-const Decoder = @import("../Decoder.zig");
+const bytecodec = @import("bytecodec");
+const Decoder = bytecodec.Decoder;
 const ClientTabLayoutView = @import("ClientTabLayoutView.zig");
 const layout = @import("layout.zig");
 const ClientTabLayoutIterator = @This();

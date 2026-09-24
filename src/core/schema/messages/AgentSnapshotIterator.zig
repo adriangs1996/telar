@@ -1,4 +1,5 @@
-const Decoder = @import("../Decoder.zig");
+const bytecodec = @import("bytecodec");
+const Decoder = bytecodec.Decoder;
 const AgentSnapshotEntry = @import("../AgentSnapshotEntry.zig");
 const agent = @import("agent.zig");
 const AgentSnapshotIterator = @This();

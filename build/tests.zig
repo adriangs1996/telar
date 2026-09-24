@@ -164,6 +164,8 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     transport_test_step.dependOn(app.modules.libraries.addTestRun(b, "localsocket"));
     const schema_test_step = b.step("test-schema", "Run the shared protocol schema tests");
     const wire_test_step = b.step("test-wire", "Run wire contracts without PTY integration tests");
+    wire_test_step.dependOn(app.modules.libraries.addTestRun(b, "bytecodec"));
+    wire_test_step.dependOn(app.modules.libraries.addTestRun(b, "cellcodec"));
     const frontend_test_step = b.step("test-frontend", "Run the frontend package tests");
     const release_step = b.step(
         "verify-release",
@@ -182,7 +184,6 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         // Only referenced through non-pub imports elsewhere, so their tests
         // never run unless they are their own suite roots.
         .{ .path = "src/core/graphics.zig" },
-        .{ .path = "src/core/schema/wire.zig", .schema = true },
         .{ .path = "src/core/diagnostics.zig" },
         .{ .path = "src/core/ProfileStore.zig", .libc = true },
         .{ .path = "src/core/schema/handshake.zig", .schema = true },

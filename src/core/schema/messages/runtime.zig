@@ -1,10 +1,11 @@
 //! Connection-level messages: runtime lifecycle, subscription to retained
 //! runtime state, generic request outcomes and host status.
 
+const bytecodec = @import("bytecodec");
 const TerminalColors = @import("../TerminalColors.zig");
-const Encoder = @import("../Encoder.zig");
+const Encoder = bytecodec.Encoder;
 const tags = @import("tags.zig");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const RequestRuntimeState = @import("RequestRuntimeState.zig");
 const RequestFailed = @import("RequestFailed.zig");
 const codec = @import("../codec.zig");

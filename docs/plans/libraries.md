@@ -71,9 +71,9 @@ alias are one word.
 | `sqlite` (done) | the three `@cImport("sqlite3.h")` in `history/persistence/sqlite.zig`, `agent/session_readers/codex.zig`, `agent/session_readers/session_readers.zig` | one binding plus the statement and migration helpers; the history schema and row mapping stay in `history/persistence/history_sql.zig`. A typed wrapper over the raw `c` calls in `Store.zig` is still open |
 | `agentfiles` (done) | `agent/transcript.zig`, the Claude and Codex readers in `agent/session_readers` | the watch, job and completion stay; `agent/description.zig` generates titles with telar's prompt and stays |
 | `jsonl` (done) | `agent_panes/{Stream,OutputFrame}.zig` and the JSON helpers of `agent_panes/protocol.zig` | the rest of `agent_panes` translates Codex's protocol into telar's agent threads and stays |
-| `kitty-media` | `src/backend/media` (processing, budgets, PNG through wuffs) | produces `core.ImageKey`, `core.Image`, `ShmName` and the graphics limits of the protocol; waits for `wire` |
-| `pane-render` | `pane/{blit,damage,text_search,Diff,Cursor,TextDump}.zig` | encodes `core.Span` and cell sizes of the protocol; waits for `wire` |
-| `checkpoint` (not a library) | `src/backend/persistence` | it is telar's session format (pane kinds, providers, tab labels); its codec is `wire`'s |
+| `kitty-media` | `src/backend/media` (processing, budgets, PNG through wuffs) | produces `core.ImageKey`, `core.Image`, `ShmName` and applies the protocol's graphics limits; those are telar's protocol, so the cut is limits as configuration and key and image values the library owns |
+| `pane-render` | `pane/{blit,damage,text_search,Diff,Cursor,TextDump}.zig` | cell sizes come from `cellcodec`; what still ties it to telar is the frame protocol (`core.Span`, `span_header_size`) and search (`SearchMatch` and its limits) |
+| `checkpoint` (not a library) | `src/backend/persistence` | it is telar's session format (pane kinds, providers, tab labels); its codec is `bytecodec` |
 | `localsocket` (done) | `transport/{LocalListener,local}.zig` (both sides) and `src/core/transport` | none; the handshake stays in the app because it speaks telar's wire |
 | `editorremote` (done) | `editors/{remote,expressions,Target,Candidate}.zig`, `core/editor.zig` | the search works on its own candidates and reports an index; the runtime job keeps panes and the reply |
 | `hostmetrics`, `gitstatus` (done) | `runtime/observability/{Sampler,system_metrics,darwin,Raw,Values,SystemMetricsSample}.zig`, `runtime/resources/git_probe.zig` | the probe interval and the per-workspace completion stay in the runtime |
@@ -90,14 +90,20 @@ alias are one word.
 | --- | --- | --- |
 | `httprelay` (done) | `proxy/http`, `proxy/h2/{relay,connection,Observer,Transcoder}.zig` | every file tagged events with `agent/types.ApiDialect` and `middleware.Phase`; the relay now reports neutral stages and telar maps them to phases |
 | `exchangecapture` (done) | `proxy/capture` | `Half` embedded a telar pane and credential; it now carries the caller's comptime `Meta`, and the credential gate stays in telar's `Channel` |
-| `wire` | `src/core/schema` (192 files) | it reaches back into core's root 56 times for shared value types; those move down into `wire` or into `cells` |
+| `bytecodec` (done) | `schema/{Encoder,Decoder,wire}.zig` | none |
+| `cellcodec` (done) | the cell run half of `schema/frame_support.zig` and `FrameView`'s cell iterator | the frame's size budget becomes a limit the caller passes |
 | `syntax`, `diagram-client` | `gui/syntax`, `gui/diagrams` worker and protocol | the capture-to-role mapping and the image decode path become library dependencies |
 
 What stays in `telar-core` after the cuts: agent manifests and providers,
 plugin manifests and capabilities, proxy and editor protocol values, history
-filters and fuzzy matching. It imports `wire`, `cellgrid` and `pacing` where
-its own values need them and republishes none of them: every package imports
-the libraries it uses by name.
+filters and fuzzy matching, and the protocol in `src/core/schema`. The
+schema was listed as a `wire` library, but 145 of its 192 files are telar's
+messages (workspaces, tabs, agents, approvals, change review) and it imports
+some twenty of core's domain values; its field codec (`GenericDerived`)
+switches on telar's ids and enums. Only its byte codec and cell encoding are
+mechanism, and those are `bytecodec` and `cellcodec`. Core imports them,
+`cellgrid` and `pacing` where its own values need them and republishes none
+of them: every package imports the libraries it uses by name.
 
 ## Business rules that must move into flows, not into libraries
 
@@ -157,7 +163,7 @@ the libraries it uses by name.
    `agentfiles`, `editorremote`, `cmdcapture`, `jsonl`. Measuring what each
    candidate uses from core showed `history-store` and `checkpoint` persist
    telar's own model, so they stay; `kitty-media` and `pane-render` build
-   protocol values and move after `wire`.
+   protocol values, and their cuts are listed above.
 4. Proxy. Done: `eventstream`, `h2frames`, `localca`. The relay and the
    capture buffer carry telar policy, so the proxy first moves to the
    procedural model:
@@ -183,7 +189,9 @@ the libraries it uses by name.
      (done); the bounded queue both proxy channels duplicated moves to
      `lib/dropqueue`, and the credential gate on it stays in telar (done).
    Step 4 is done.
-5. `wire`, which touches both processes and every message.
+5. The protocol's mechanism: `bytecodec` (the bounded little-endian
+   encoder and decoder) and `cellcodec` (cell runs). The messages stay in
+   core as telar's protocol. Done.
 6. Client and GUI: `key-capture`, `screen-diff`, `kitty-render`, `image`,
    `box-glyphs`, `markdown-spans`, `syntax`, `diagram-client`.
 7. In parallel with any of the above: the business rules listed in the

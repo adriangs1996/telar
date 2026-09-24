@@ -1,7 +1,8 @@
+const bytecodec = @import("bytecodec");
 const std = @import("std");
 const Entry = @import("RecentConversation.zig");
-const Encoder = @import("schema/Encoder.zig");
-const Decoder = @import("schema/Decoder.zig");
+const Encoder = bytecodec.Encoder;
+const Decoder = bytecodec.Decoder;
 
 pub const capacity = 16;
 pub const Phase = enum(u8) { loading, ready, failed };

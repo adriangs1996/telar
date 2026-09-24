@@ -1,4 +1,5 @@
-const Decoder = @import("../Decoder.zig");
+const bytecodec = @import("bytecodec");
+const Decoder = bytecodec.Decoder;
 const SearchMatch = @import("../SearchMatch.zig");
 const SearchMatchIterator = @This();
 

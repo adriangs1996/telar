@@ -1,8 +1,9 @@
 //! History pages are targeted request replies, independent of live revisions.
+const bytecodec = @import("bytecodec");
 const agent_thread = @import("../../agent_thread.zig");
 const std = @import("std");
-const Encoder = @import("../Encoder.zig");
-const Decoder = @import("../Decoder.zig");
+const Encoder = bytecodec.Encoder;
+const Decoder = bytecodec.Decoder;
 const codec = @import("../codec.zig");
 const id = @import("../id.zig");
 const tags = @import("tags.zig");

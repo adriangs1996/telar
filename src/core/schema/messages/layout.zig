@@ -2,11 +2,12 @@
 //! and the bootstrap snapshot it gets back on reconnect. Every tree is
 //! validated as a complete pre-order binary tree before either side trusts it.
 
+const bytecodec = @import("bytecodec");
 const ClientLayoutUpdate = @import("../ClientLayoutUpdate.zig");
-const Encoder = @import("../Encoder.zig");
+const Encoder = bytecodec.Encoder;
 const tags = @import("tags.zig");
 const codec = @import("../codec.zig");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const ClientLayoutUpdateView = @import("ClientLayoutUpdateView.zig");
 const types = @import("../types.zig");
 const ClientLayoutSnapshot = @import("../ClientLayoutSnapshot.zig");

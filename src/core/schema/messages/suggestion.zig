@@ -1,12 +1,13 @@
 //! Shell command suggestions answered by the runtime's agent engine.
 
+const bytecodec = @import("bytecodec");
 const SuggestCommand = @import("SuggestCommand.zig");
 const codec = @import("../codec.zig");
 const types = @import("../types.zig");
-const Encoder = @import("../Encoder.zig");
+const Encoder = bytecodec.Encoder;
 const tags = @import("tags.zig");
 const id = @import("../id.zig");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const CommandSuggestion = @import("CommandSuggestion.zig");
 const std = @import("std");
 

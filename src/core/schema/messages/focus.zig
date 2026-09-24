@@ -2,14 +2,15 @@
 //! runtime and the client that owns the target pane. Every message carries
 //! the exact pane generation so a stale request never moves focus.
 
+const bytecodec = @import("bytecodec");
 const RequestPaneFocus = @import("RequestPaneFocus.zig");
-const Encoder = @import("../Encoder.zig");
+const Encoder = bytecodec.Encoder;
 const tags = @import("tags.zig");
 const id = @import("../id.zig");
 const CompletePaneFocus = @import("CompletePaneFocus.zig");
 const PaneFocusCommand = @import("PaneFocusCommand.zig");
 const PaneFocusResult = @import("PaneFocusResult.zig");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const ClientRoute = @import("ClientRoute.zig");
 const types = @import("../types.zig");
 const std = @import("std");

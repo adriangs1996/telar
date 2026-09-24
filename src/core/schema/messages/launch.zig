@@ -1,13 +1,14 @@
 //! The launch body shared by every message that starts a child: cwd,
 //! arguments and environment, bounded before any consumer allocates.
 
-const Encoder = @import("../Encoder.zig");
+const bytecodec = @import("bytecodec");
+const Encoder = bytecodec.Encoder;
 const Launch = @import("../Launch.zig");
 const codec = @import("../codec.zig");
 const types = @import("../types.zig");
 const id = @import("../id.zig");
 const std = @import("std");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const LaunchView = @import("LaunchView.zig");
 
 pub fn encodeLaunch(encoder: *Encoder, launch: Launch) !void {

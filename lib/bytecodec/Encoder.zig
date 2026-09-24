@@ -4,10 +4,20 @@ const Encoder = @This();
 buffer: []u8,
 index: usize = 0,
 
+/// Writes into `buffer` from its start.
+///
+/// ```zig
+/// var encoder = Encoder.init(&buffer);
+/// ```
 pub fn init(buffer: []u8) Encoder {
     return .{ .buffer = buffer };
 }
 
+/// Appends one byte.
+///
+/// ```zig
+/// try encoder.writeByte(7);
+/// ```
 pub fn writeByte(self: *Encoder, value: u8) error{BufferTooSmall}!void {
     if (self.index == self.buffer.len) {
         return error.BufferTooSmall;
@@ -16,6 +26,11 @@ pub fn writeByte(self: *Encoder, value: u8) error{BufferTooSmall}!void {
     self.index += 1;
 }
 
+/// Appends an integer in little-endian order.
+///
+/// ```zig
+/// try encoder.writeInt(u32, 0x12345678);
+/// ```
 pub fn writeInt(self: *Encoder, comptime T: type, value: T) error{BufferTooSmall}!void {
     const size = @sizeOf(T);
 
@@ -27,6 +42,11 @@ pub fn writeInt(self: *Encoder, comptime T: type, value: T) error{BufferTooSmall
     self.index += size;
 }
 
+/// Appends raw bytes. `bytes` may overlap the buffer.
+///
+/// ```zig
+/// try encoder.writeBytes("telar");
+/// ```
 pub fn writeBytes(self: *Encoder, bytes: []const u8) error{BufferTooSmall}!void {
     if (self.buffer.len - self.index < bytes.len) {
         return error.BufferTooSmall;
@@ -36,6 +56,11 @@ pub fn writeBytes(self: *Encoder, bytes: []const u8) error{BufferTooSmall}!void 
     self.index += bytes.len;
 }
 
+/// Appends a u16 length prefix and the bytes.
+///
+/// ```zig
+/// try encoder.writeSized16("telar");
+/// ```
 pub fn writeSized16(self: *Encoder, bytes: []const u8) !void {
     if (bytes.len > std.math.maxInt(u16)) {
         return error.LengthOverflow;
@@ -45,6 +70,11 @@ pub fn writeSized16(self: *Encoder, bytes: []const u8) !void {
     try self.writeBytes(bytes);
 }
 
+/// Appends a u32 length prefix and the bytes.
+///
+/// ```zig
+/// try encoder.writeSized32(payload);
+/// ```
 pub fn writeSized32(self: *Encoder, bytes: []const u8) !void {
     if (bytes.len > std.math.maxInt(u32)) {
         return error.LengthOverflow;
@@ -54,6 +84,11 @@ pub fn writeSized32(self: *Encoder, bytes: []const u8) !void {
     try self.writeBytes(bytes);
 }
 
+/// Returns the bytes written so far.
+///
+/// ```zig
+/// const payload = encoder.finish();
+/// ```
 pub fn finish(self: *Encoder) []const u8 {
     return self.buffer[0..self.index];
 }

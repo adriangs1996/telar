@@ -1,4 +1,5 @@
-const Decoder = @import("../Decoder.zig");
+const bytecodec = @import("bytecodec");
+const Decoder = bytecodec.Decoder;
 const PaneForeground = @import("PaneForeground.zig");
 const id = @import("../id.zig");
 const PaneForegroundIterator = @This();

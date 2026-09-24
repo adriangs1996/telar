@@ -1,13 +1,14 @@
 //! Tagged Kitty-graphics messages. The bodies live in `schema/graphics.zig`;
 //! this file only adds the wire tag and the client-side flow control.
 
+const bytecodec = @import("bytecodec");
 const RequestGraphicsSnapshot = @import("RequestGraphicsSnapshot.zig");
 const codec = @import("../codec.zig");
 const tags = @import("tags.zig");
 const GraphicsCredit = @import("GraphicsCredit.zig");
 const ConfigureGraphics = @import("ConfigureGraphics.zig");
 const Snapshot = @import("../Snapshot.zig");
-const Encoder = @import("../Encoder.zig");
+const Encoder = bytecodec.Encoder;
 const bodies = @import("../graphics.zig");
 const Image = @import("../Image.zig");
 const SharedImage = @import("../SharedImage.zig");

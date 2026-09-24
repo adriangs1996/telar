@@ -1,7 +1,8 @@
 //! Checked, bounded review controls and immutable edition snapshots.
+const bytecodec = @import("bytecodec");
 const std = @import("std");
-const Encoder = @import("../Encoder.zig");
-const Decoder = @import("../Decoder.zig");
+const Encoder = bytecodec.Encoder;
+const Decoder = bytecodec.Decoder;
 const id = @import("../id.zig");
 const codec = @import("../codec.zig");
 const tags = @import("tags.zig");

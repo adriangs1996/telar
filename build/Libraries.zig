@@ -96,6 +96,13 @@ const specs = [_]Spec{
         .libc = true,
     },
     .{
+        .name = "bytecodec",
+    },
+    .{
+        .name = "cellcodec",
+        .imports = &.{ "cellgrid", "bytecodec" },
+    },
+    .{
         .name = "dropqueue",
     },
     .{

@@ -1,8 +1,9 @@
+const bytecodec = @import("bytecodec");
 const std = @import("std");
 const Skill = @import("AgentSkill.zig");
 const AgentSkillInfo = @import("AgentSkillInfo.zig");
-const Encoder = @import("schema/Encoder.zig");
-const Decoder = @import("schema/Decoder.zig");
+const Encoder = bytecodec.Encoder;
+const Decoder = bytecodec.Decoder;
 const Skills = @This();
 
 pub const capacity = 128;

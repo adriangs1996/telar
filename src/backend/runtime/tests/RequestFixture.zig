@@ -1,3 +1,4 @@
+const bytecodec = @import("bytecodec");
 const localsocket = @import("localsocket");
 const response_queue = @import("../delivery/response_queue.zig");
 const std = @import("std");
@@ -113,7 +114,7 @@ pub fn openPane(self: *RequestFixture) !*Pane {
 }
 
 pub fn sleepLaunch(buffer: []u8) !core.LaunchView {
-    var encoder = core.Encoder.init(buffer);
+    var encoder = bytecodec.Encoder.init(buffer);
     try encoder.writeSized16("/bin/sleep");
     try encoder.writeSized16("600");
     return .{

@@ -4,6 +4,7 @@
 //! event loop drives these panes through `PaneStore`. Actor results cross back
 //! into that owner as `PaneKey` values, never as mutable pane pointers.
 
+const bytecodec = @import("bytecodec");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const std = @import("std");
@@ -895,7 +896,7 @@ test "the pane input queue reports whole-message loss" {
 
 test "launch records keep restorable commands and reject the rest" {
     var arguments_buffer: [128]u8 = undefined;
-    var encoder = core.Encoder.init(&arguments_buffer);
+    var encoder = bytecodec.Encoder.init(&arguments_buffer);
     try encoder.writeSized16("/bin/zsh");
     try encoder.writeSized16("-l");
     const encoded = encoder.finish();

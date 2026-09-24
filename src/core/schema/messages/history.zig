@@ -1,13 +1,14 @@
 //! Command history: queries, results, imports, deletion, pruning, captured
 //! output and aggregate statistics.
 
+const bytecodec = @import("bytecodec");
 const QueryHistory = @import("QueryHistory.zig");
 const codec = @import("../codec.zig");
 const types = @import("../types.zig");
-const Encoder = @import("../Encoder.zig");
+const Encoder = bytecodec.Encoder;
 const tags = @import("tags.zig");
 const id = @import("../id.zig");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const std = @import("std");
 const HistoryResults = @import("HistoryResults.zig");
 const HistoryResultsView = @import("HistoryResultsView.zig");

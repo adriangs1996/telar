@@ -24,7 +24,6 @@ const layout_module = @import("messages/layout.zig");
 const runtime_module = @import("messages/runtime.zig");
 const messages_graphics = @import("messages/graphics.zig");
 
-pub const wire = @import("wire.zig");
 pub const graphics = @import("graphics.zig");
 
 pub const frame = @import("frame_support.zig");

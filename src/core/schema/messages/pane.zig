@@ -1,14 +1,15 @@
 //! Pane lifecycle, input, output and text messages: everything a client
 //! says to or hears from one pane, apart from focus arbitration.
 
+const bytecodec = @import("bytecodec");
 const OpenPane = @import("OpenPane.zig");
 const codec = @import("../codec.zig");
-const Encoder = @import("../Encoder.zig");
+const Encoder = bytecodec.Encoder;
 const tags = @import("tags.zig");
 const id = @import("../id.zig");
 const Launch = @import("../Launch.zig");
 const launch_mod = @import("launch.zig");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const OpenPaneView = @import("OpenPaneView.zig");
 const types = @import("../types.zig");
 const PaneInput = @import("PaneInput.zig");

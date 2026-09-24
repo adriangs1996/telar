@@ -1,5 +1,6 @@
+const bytecodec = @import("bytecodec");
 const tab = @import("tab.zig");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const PaneDescriptor = @import("../PaneDescriptor.zig");
 const id = @import("../id.zig");
 const codec = @import("../codec.zig");

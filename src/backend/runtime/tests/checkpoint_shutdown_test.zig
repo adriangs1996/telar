@@ -1,3 +1,4 @@
+const bytecodec = @import("bytecodec");
 const session_checkpoint = @import("../session_checkpoint.zig");
 const pane_launch = @import("../pane_launch.zig");
 const agent_panes = @import("../agent_panes.zig");
@@ -79,7 +80,7 @@ test "shutdown replaces a pending checkpoint with the latest session and release
 }
 
 fn sleepLaunch(buffer: []u8) !core_module.LaunchView {
-    var encoder = core_module.Encoder.init(buffer);
+    var encoder = bytecodec.Encoder.init(buffer);
     try encoder.writeSized16("/bin/sleep");
     try encoder.writeSized16("600");
 

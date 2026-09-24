@@ -1,3 +1,4 @@
+const bytecodec = @import("bytecodec");
 const core = @import("telar-core");
 const Counters = @import("Counters.zig");
 const checkpoint = @import("checkpoint.zig");
@@ -11,13 +12,13 @@ const PaneRecord = @import("PaneRecord.zig");
 /// ```
 const Reader = @This();
 
-inner: core.Decoder,
+inner: bytecodec.Decoder,
 counters: Counters,
 version: u16,
 finished: bool = false,
 
 pub fn init(bytes: []const u8) !Reader {
-    var decoder = core.Decoder.init(bytes);
+    var decoder = bytecodec.Decoder.init(bytes);
     const header = try decoder.readBytes(checkpoint.magic.len);
     if (!std.mem.eql(u8, header, checkpoint.magic)) {
         return error.InvalidCheckpoint;

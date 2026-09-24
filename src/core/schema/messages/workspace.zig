@@ -1,13 +1,14 @@
 //! Workspace identity, snapshots and the workspace list.
 
+const bytecodec = @import("bytecodec");
 const types = @import("../types.zig");
 const id = @import("../id.zig");
 const CreateWorkspace = @import("CreateWorkspace.zig");
 const codec = @import("../codec.zig");
-const Encoder = @import("../Encoder.zig");
+const Encoder = bytecodec.Encoder;
 const tags = @import("tags.zig");
 const launch_mod = @import("launch.zig");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const CreateWorkspaceView = @import("CreateWorkspaceView.zig");
 const RenameWorkspace = @import("RenameWorkspace.zig");
 const RequestWorkspaceSnapshot = @import("RequestWorkspaceSnapshot.zig");

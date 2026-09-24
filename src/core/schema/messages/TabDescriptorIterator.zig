@@ -1,4 +1,5 @@
-const Decoder = @import("../Decoder.zig");
+const bytecodec = @import("bytecodec");
+const Decoder = bytecodec.Decoder;
 const PaneForegroundIterator = @import("PaneForegroundIterator.zig");
 const id = @import("../id.zig");
 const TabDescriptorIterator = @This();

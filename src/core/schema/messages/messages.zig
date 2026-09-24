@@ -6,6 +6,7 @@
 //! and the trailing-bytes check, so a payload is never accepted with data
 //! after its message.
 
+const bytecodec = @import("bytecodec");
 const agent_thread = @import("agent_thread.zig");
 const agent_history = @import("agent_history.zig");
 const OpenEditor = @import("OpenEditor.zig");
@@ -95,7 +96,7 @@ const HistoryStatsView = @import("HistoryStatsView.zig");
 const PaneFocusCommand = @import("PaneFocusCommand.zig");
 const PaneFocusResult = @import("PaneFocusResult.zig");
 const PaneProgress = @import("PaneProgress.zig");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const tags = @import("tags.zig");
 const pane = @import("pane.zig");
 const GenericDerived = @import("../GenericDerived.zig").Type;

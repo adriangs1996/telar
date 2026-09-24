@@ -1,8 +1,9 @@
+const bytecodec = @import("bytecodec");
 const std = @import("std");
 const OpenEditor = @import("OpenEditor.zig");
 const EditorOpened = @import("EditorOpened.zig");
-const Encoder = @import("../Encoder.zig");
-const Decoder = @import("../Decoder.zig");
+const Encoder = bytecodec.Encoder;
+const Decoder = bytecodec.Decoder;
 const tags = @import("tags.zig");
 const id = @import("../id.zig");
 

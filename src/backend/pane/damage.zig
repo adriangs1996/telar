@@ -1,5 +1,6 @@
 //! Cost-aware frame spans from conservative terminal row damage.
 
+const cellcodec = @import("cellcodec");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const Diff = @import("Diff.zig");
@@ -71,16 +72,16 @@ pub fn collectSpans(input: Input, storage: []core.Span) Diff {
                 }
                 const gap_len = start - previous_end;
                 const maximum_profitable_gap = core.span_header_size +
-                    core.max_style_size;
+                    cellcodec.max_style_size;
                 if (previous_end / cols == start / cols and
                     gap_len <= maximum_profitable_gap)
                 {
                     const previous_style = previous.cells[previous.cells.len - 1].style;
                     const gap = current[previous_end..start];
-                    const merged_cost = core.encodedCellsSize(gap, previous_style) +
-                        core.encodedCellSize(current[start], gap[gap.len - 1].style);
+                    const merged_cost = cellcodec.encodedCellsSize(gap, previous_style) +
+                        cellcodec.encodedCellSize(current[start], gap[gap.len - 1].style);
                     const separate_cost = core.span_header_size +
-                        core.encodedCellSize(current[start], null);
+                        cellcodec.encodedCellSize(current[start], null);
                     if (merged_cost <= separate_cost) {
                         previous.cells = current[previous_start..index];
                         result.coalesced_spans += 1;
@@ -166,10 +167,10 @@ test "short unchanged gaps share a cheaper span" {
     try std.testing.expectEqual(@as(usize, 4), spans[0].cells.len);
 
     const separate_size = 2 * core.span_header_size +
-        core.encodedCellsSize(current[1..2], null) +
-        core.encodedCellsSize(current[4..5], null);
+        cellcodec.encodedCellsSize(current[1..2], null) +
+        cellcodec.encodedCellsSize(current[4..5], null);
     const merged_size = core.span_header_size +
-        core.encodedCellsSize(current[1..5], null);
+        cellcodec.encodedCellsSize(current[1..5], null);
     try std.testing.expectEqual(separate_size - merged_size, diff.bytes_saved);
 }
 

@@ -5,6 +5,7 @@
 //! rebuild: identities, paths, labels, pane launch commands and client layout
 //! replicas. File descriptors, PTYs and in-flight work are never written.
 
+const bytecodec = @import("bytecodec");
 const core = @import("telar-core");
 const WorkspaceRecord = @import("WorkspaceRecord.zig");
 const TabRecord = @import("TabRecord.zig");
@@ -226,7 +227,7 @@ test "pane titles must be printable and come from a durable source" {
 
 test "a version 1 checkpoint still reads, with no pane title" {
     var buffer: [512]u8 = undefined;
-    var inner = core.Encoder.init(&buffer);
+    var inner = bytecodec.Encoder.init(&buffer);
     try inner.writeBytes(magic);
     try inner.writeInt(u16, 1);
     try inner.writeInt(u64, 2);

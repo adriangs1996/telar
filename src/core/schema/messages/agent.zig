@@ -1,6 +1,7 @@
 //! Agent lifecycle reports, acknowledgements and the projected agent
 //! snapshot every runtime-state subscriber receives.
 
+const bytecodec = @import("bytecodec");
 const types = @import("../types.zig");
 const std = @import("std");
 const AcknowledgeAgent = @import("AcknowledgeAgent.zig");
@@ -8,9 +9,9 @@ const codec = @import("../codec.zig");
 const tags = @import("tags.zig");
 const QueryAgents = @import("QueryAgents.zig");
 const ReportAgentSession = @import("ReportAgentSession.zig");
-const Encoder = @import("../Encoder.zig");
+const Encoder = bytecodec.Encoder;
 const id = @import("../id.zig");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const ReportAgent = @import("ReportAgent.zig");
 const ReportAgentCommand = @import("ReportAgentCommand.zig");
 const ReportAgentTitle = @import("ReportAgentTitle.zig");

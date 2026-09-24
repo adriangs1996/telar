@@ -6,6 +6,7 @@
 //! buffer and hands it to a worker that writes a temp file and renames it
 //! into place. Restore runs once, before the listener accepts clients.
 
+const bytecodec = @import("bytecodec");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -91,7 +92,7 @@ pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: core.Agent
 /// Rebuilds fixed resume argv only when the original executable is the same
 /// built-in agent. Shells keep their argv and receive the shell resume line.
 /// Example: `const count = try directResumeArguments(&encoder, executable, session);`.
-pub fn directResumeArguments(encoder: *core.Encoder, executable: []const u8, session: ResumeSession) !?u16 {
+pub fn directResumeArguments(encoder: *bytecodec.Encoder, executable: []const u8, session: ResumeSession) !?u16 {
     const prefix = providers.of(session.provider).resume_prefix orelse return null;
     var words = std.mem.tokenizeScalar(u8, prefix, ' ');
     const command = words.next() orelse return null;
@@ -324,7 +325,7 @@ fn restorePane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !vo
     }
 
     var argument_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
-    var encoder = core.Encoder.init(&argument_buffer);
+    var encoder = bytecodec.Encoder.init(&argument_buffer);
     const resumable = resumeForPane(model, record);
     var arguments = ArgumentIterator.init(record.arguments);
     const executable = arguments.next() orelse return error.InvalidLaunch;
@@ -342,7 +343,7 @@ fn restorePane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !vo
         .encoded_environment = "",
     };
     var direct_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
-    var direct_encoder = core.Encoder.init(&direct_buffer);
+    var direct_encoder = bytecodec.Encoder.init(&direct_buffer);
     const direct_count = if (resumable) |session|
         try directResumeArguments(&direct_encoder, executable, session)
     else

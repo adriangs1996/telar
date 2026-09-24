@@ -1,4 +1,5 @@
-const Decoder = @import("../Decoder.zig");
+const bytecodec = @import("bytecodec");
+const Decoder = bytecodec.Decoder;
 const HistoryStatsTop = @import("HistoryStatsTop.zig");
 const types = @import("../types.zig");
 const HistoryStatsTopIterator = @This();

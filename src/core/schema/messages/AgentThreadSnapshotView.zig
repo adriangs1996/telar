@@ -1,7 +1,8 @@
+const bytecodec = @import("bytecodec");
 const agent_thread = @import("agent_thread.zig");
 const id = @import("../id.zig");
 const Snapshot = @import("../../AgentThreadSnapshot.zig");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 
 pane_id: id.PaneId,
 pane_generation: u64,

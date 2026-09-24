@@ -220,6 +220,8 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `hostmetrics` | cpu, memory and battery of the host, without allocation |
 | `gitstatus` | a working tree's branch and whether it has changes |
 | `localsocket` | same-user Unix sockets and length-prefixed framing |
+| `bytecodec` | bounds-checked little-endian encoding into caller buffers and decoding from borrowed bytes |
+| `cellcodec` | runs of cells with a packed header, styles written on change and colors sized by kind |
 | `agentfiles` | titles from Claude Code's JSONL transcript and Codex's thread database |
 | `editorremote` | reusing a terminal editor: identify it, reach its server, open a literal path |
 | `cmdcapture` | commands, directories, exit status and output tails read from a pane's terminal |

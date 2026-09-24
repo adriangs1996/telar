@@ -1,3 +1,4 @@
+const bytecodec = @import("bytecodec");
 const core = @import("telar-core");
 const Counters = @import("Counters.zig");
 const checkpoint = @import("checkpoint.zig");
@@ -14,10 +15,10 @@ const LayoutRecord = @import("LayoutRecord.zig");
 /// ```
 const Encoder = @This();
 
-inner: core.Encoder,
+inner: bytecodec.Encoder,
 
 pub fn init(buffer: []u8, counters: Counters) !Encoder {
-    var encoder: Encoder = .{ .inner = core.Encoder.init(buffer) };
+    var encoder: Encoder = .{ .inner = bytecodec.Encoder.init(buffer) };
     try encoder.inner.writeBytes(checkpoint.magic);
     try encoder.inner.writeInt(u16, checkpoint.version);
     try encoder.inner.writeInt(u64, counters.next_workspace_id);

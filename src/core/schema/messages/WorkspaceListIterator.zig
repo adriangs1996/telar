@@ -1,4 +1,5 @@
-const Decoder = @import("../Decoder.zig");
+const bytecodec = @import("bytecodec");
+const Decoder = bytecodec.Decoder;
 const WorkspaceListEntry = @import("WorkspaceListEntry.zig");
 const workspace = @import("workspace.zig");
 const WorkspaceListIterator = @This();

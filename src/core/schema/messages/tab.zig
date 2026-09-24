@@ -1,15 +1,16 @@
 //! Tab lifecycle inside a workspace and the per-tab pane snapshot.
 
+const bytecodec = @import("bytecodec");
 const pane_kind = @import("../pane_kind.zig");
 const std = @import("std");
 const RequestTabSnapshot = @import("RequestTabSnapshot.zig");
 const codec = @import("../codec.zig");
 const tags = @import("tags.zig");
 const CreateTab = @import("CreateTab.zig");
-const Encoder = @import("../Encoder.zig");
+const Encoder = bytecodec.Encoder;
 const id = @import("../id.zig");
 const launch_mod = @import("launch.zig");
-const Decoder = @import("../Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const CreateTabView = @import("CreateTabView.zig");
 const RenameTab = @import("RenameTab.zig");
 const CloseTab = @import("CloseTab.zig");

@@ -1,4 +1,5 @@
-const Decoder = @import("../Decoder.zig");
+const bytecodec = @import("bytecodec");
+const Decoder = bytecodec.Decoder;
 const codec = @import("../codec.zig");
 const std = @import("std");
 const ArgumentIterator = @This();

@@ -1,13 +1,14 @@
 //! Shared validators, composite-value codecs, and the derived fixed-layout
 //! serializer used by the files under `messages/`.
 
+const bytecodec = @import("bytecodec");
 const id = @import("id.zig");
 const std = @import("std");
 const EnvironmentEntry = @import("EnvironmentEntry.zig");
 const types = @import("types.zig");
-const Encoder = @import("Encoder.zig");
+const Encoder = bytecodec.Encoder;
 const TerminalSize = @import("TerminalSize.zig");
-const Decoder = @import("Decoder.zig");
+const Decoder = bytecodec.Decoder;
 const TabLocation = @import("TabLocation.zig");
 const GenericDerived = @import("GenericDerived.zig").Type;
 
