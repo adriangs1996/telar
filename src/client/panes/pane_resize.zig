@@ -1,7 +1,7 @@
 //! Pane resize: commits split and fullscreen changes and delivers the new
 //! geometry to the runtime.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const std = @import("std");
 const pane_attachment = @import("pane_attachment.zig");
 const pane_focus = @import("pane_focus.zig");
@@ -25,7 +25,7 @@ pub fn togglePaneFullscreen(client: *Client, command: data.TogglePaneFullscreenR
 
 /// Offers sizes for attached visible panes, reserving space for the attachment shelf.
 /// Example: `try pane_resize.resizeAttachedPanes(client, tab, area);`
-pub fn resizeAttachedPanes(client: *Client, tab: usize, area: core.Rect) !void {
+pub fn resizeAttachedPanes(client: *Client, tab: usize, area: cellgrid.Rect) !void {
     var layout = data.tab_layout.snapshot(&client.model, tab, area).*;
     _ = layout.reserveBelowPane(if (client.attachments) |shelf| shelf.reservation() else null);
     var panes = client.model.panes.iterate(client.model.tabs.location[tab].tab_id);

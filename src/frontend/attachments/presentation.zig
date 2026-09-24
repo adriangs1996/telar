@@ -1,11 +1,11 @@
 //! Preview placement geometry and its committed Kitty output state.
 
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
 
 /// Example: `const placement = fitPlacement(image_size, cell_size, area);`.
-pub fn fitPlacement(image: Size, cell: Size, area: core.Rect) ?kitty_protocol.OutputPlacement {
+pub fn fitPlacement(image: Size, cell: Size, area: cellgrid.Rect) ?kitty_protocol.OutputPlacement {
     if (area.isEmpty()) {
         return null;
     }

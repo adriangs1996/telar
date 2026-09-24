@@ -3,6 +3,7 @@
 //! back/front buffers. Shared presentation tokens become commits only after
 //! the host output adapter reports successful delivery.
 
+const pacing = @import("pacing");
 const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -40,7 +41,7 @@ scheduler: Scheduler,
 metrics: *client.TelemetryMetrics,
 screen: Screen,
 compositor: Compositor,
-pacer: core.Pacer = .{},
+pacer: pacing.Pacer = .{},
 /// The client's one presentation lifecycle, borrowed for the presenter's
 /// life.
 presentation_state: *client.PresentationLifecycleState,
@@ -122,7 +123,7 @@ pub fn requestDraw(self: *Presenter) !void {
             self.pending_updates,
         );
     }
-    const now_ns = client.monotonic(self.io);
+    const now_ns = pacing.clock.monotonic(self.io);
     if (self.pacer.waitUntil(now_ns)) |deadline_ns| {
         if (self.draw_pending) {
             return;
@@ -155,8 +156,8 @@ pub fn requestDraw(self: *Presenter) !void {
 /// try presenter.requestMedia();
 /// ```
 pub fn requestMedia(self: *Presenter) !void {
-    const now_ns = client.monotonic(self.io);
-    const deadline_ns = if (self.media_after_draw) now_ns else now_ns +| core.pace.default_interval;
+    const now_ns = pacing.clock.monotonic(self.io);
+    const deadline_ns = if (self.media_after_draw) now_ns else now_ns +| pacing.pace.default_interval;
     self.media_after_draw = false;
     try self.requestMediaAt(deadline_ns);
 }
@@ -203,7 +204,7 @@ pub fn completeMediaTick(self: *Presenter, result: anyerror!void) !void {
 /// ```
 pub fn presentDue(self: *Presenter, projection: client.Projection, resources: Resources) !?client.Token {
     if (comptime core.enabled) {
-        self.metrics.draw_lateness.observe(client.monotonic(self.io) -| self.draw_due_ns);
+        self.metrics.draw_lateness.observe(pacing.clock.monotonic(self.io) -| self.draw_due_ns);
     }
     if (self.pending_updates == 0 or self.presentation_state.active != null) {
         return null;
@@ -334,7 +335,7 @@ pub fn presentMedia(self: *Presenter, projection: client.Projection, resources: 
     }
 
     _ = projection.tab orelse return;
-    const media_idle = client.monotonic(self.io) -| self.last_input_ns >=
+    const media_idle = pacing.clock.monotonic(self.io) -| self.last_input_ns >=
         toast_graphics.idle_after_ns;
     resources.view.kittyAttachments().reapRetired();
     const covered_before = resources.view.graphicalToastsCover(projection.notifications);
@@ -359,7 +360,7 @@ pub fn presentMedia(self: *Presenter, projection: client.Projection, resources: 
             .cell_width = projection.host_size.cell_width_px,
             .cell_height = projection.host_size.cell_height_px,
             .budget = kitty_codec.transmission_budget_per_frame,
-            .now_ns = if (comptime core.enabled) client.monotonic(self.io) else 0,
+            .now_ns = if (comptime core.enabled) pacing.clock.monotonic(self.io) else 0,
         },
         .sidebar = resources.view.kittySidebar(),
         .icons = resources.view.kittyIcons(),
@@ -403,7 +404,7 @@ fn notePaneGraphics(self: *Presenter, graphics_stats: Stats) void {
     self.metrics.pane_transmission_passes += graphics_stats.transmission_passes;
     self.metrics.pane_compress_passes += graphics_stats.compress_passes;
     if (graphics_stats.shared_images + graphics_stats.inline_images != 0) {
-        const presented_ns = client.monotonic(self.io);
+        const presented_ns = pacing.clock.monotonic(self.io);
         if (self.last_pane_present_ns) |previous| {
             self.metrics.pane_present_interval.observe(presented_ns -| previous);
         }
@@ -518,7 +519,7 @@ fn present(self: *Presenter, input: CellPresentation) !Presented {
             .cell_width = input.projection.host_size.cell_width_px,
             .cell_height = input.projection.host_size.cell_height_px,
             .mode = .control,
-            .now_ns = if (comptime core.enabled) client.monotonic(self.io) else 0,
+            .now_ns = if (comptime core.enabled) pacing.clock.monotonic(self.io) else 0,
         } else null,
         .pill = input.resources.view.kittyPill(),
     };
@@ -535,7 +536,7 @@ fn present(self: *Presenter, input: CellPresentation) !Presented {
         self.metrics.pill_graphics_flushed_bytes += control_writer.pill_bytes;
     }
     return .{
-        .presented_ns = client.monotonic(self.io),
+        .presented_ns = pacing.clock.monotonic(self.io),
         .commit = composed.commit,
     };
 }
@@ -557,7 +558,7 @@ fn presentEmpty(self: *Presenter, projection: client.Projection, resources: Reso
         self.metrics.pill_graphics_flushed_bytes += control_writer.pill_bytes;
     }
 
-    return .{ .presented_ns = client.monotonic(self.io), .commit = .{} };
+    return .{ .presented_ns = pacing.clock.monotonic(self.io), .commit = .{} };
 }
 
 /// Sends the host window title when the rendered template changes. The

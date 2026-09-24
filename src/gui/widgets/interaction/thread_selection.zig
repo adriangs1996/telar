@@ -1,4 +1,5 @@
 //! Native conversation selection shares delivered geometry with keyboard copy mode.
+const pacing = @import("pacing");
 const event_module = @import("../../input/event.zig");
 const std = @import("std");
 const client = @import("telar-client");
@@ -121,7 +122,7 @@ pub fn prepare(gui: *GuiAdapter) !void {
         selection.frozen = false;
     }
     if (selection.dragging and selection.outside != 0) {
-        const now = client.monotonic(gui.app.io);
+        const now = pacing.clock.monotonic(gui.app.io);
         if (now >= selection.next_scroll_ns) {
             try scroll(gui, selection.outside);
             selection.next_scroll_ns = now + 30 * std.time.ns_per_ms;

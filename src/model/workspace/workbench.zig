@@ -1,6 +1,6 @@
 //! The grid the panes of the active tab share: what the host leaves after
 //! its chrome.
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const std = @import("std");
 const ClientModel = @import("../state/ClientModel.zig");
 const GridRegions = @import("../layout/GridRegions.zig");
@@ -11,7 +11,7 @@ const Region = @import("Region.zig");
 /// Example: `const area = workbench.region(&model).area;`
 pub fn region(model: *const ClientModel) Region {
     const size = model.host.host_size;
-    const area: core.Rect = if (model.host.grid_chrome)
+    const area: cellgrid.Rect = if (model.host.grid_chrome)
         GridRegions.calculate(size.cols, size.rows, model.sidebar_visible, model.sidebar_width).workbench
     else
         .{
@@ -32,10 +32,10 @@ test "a window's workbench is its whole grid and a terminal's is what its chrome
     });
     defer model.deinit();
 
-    try std.testing.expectEqual(core.Rect{ .w = 120, .h = 40 }, region(&model).area);
+    try std.testing.expectEqual(cellgrid.Rect{ .w = 120, .h = 40 }, region(&model).area);
 
     model.host.grid_chrome = true;
-    try std.testing.expectEqual(core.Rect{ .x = 42, .y = 1, .w = 78, .h = 38 }, region(&model).area);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 42, .y = 1, .w = 78, .h = 38 }, region(&model).area);
 }
 
 test "a workbench that returns to its old area still invalidates captured input" {

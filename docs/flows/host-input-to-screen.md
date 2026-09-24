@@ -107,7 +107,7 @@ key. Partial global sequences retain the configured binding timeout.
 worker token before asking the router to expire partial state. Both paths reuse
 the same input-routing revision and timer synchronization as a TTY read.
 
-Each deadline uses `core.DeadlineScheduler`. It stores one atomic absolute
+Each deadline uses `pacing.DeadlineScheduler`. It stores one atomic absolute
 deadline, one wake event and one pending worker. Replacing or removing a
 deadline wakes that worker instead of queueing another. A configuration reload
 sets `model.to_host.rebind_input`; `host_effects.deliver` compiles a complete
@@ -422,13 +422,13 @@ writes the `.pane_frame` message to that client. Intermediate visual states may
 be folded; they are not queued as a replay.
 
 Admission happens before VT projection and diff. Each attachment owns a
-`core.Pacer`: idle credits permit an immediate burst, then sustained output
+`pacing.Pacer`: idle credits permit an immediate burst, then sustained output
 uses the shared 60 Hz policy. A completed no-op projection consumes a credit
 too. Admitted PTY input opens a bounded grace window for that pane's
 attachments; snapshots and final output bypass the cadence. Outstanding ACKs
 and active ingestion retain their existing ownership rules.
 
-One runtime-owned `core.DeadlineScheduler` wakes the runtime when a deferred
+One runtime-owned `pacing.DeadlineScheduler` wakes the runtime when a deferred
 publication is due; the update's flush arms it once from every client's
 earliest deadline. Its `updateEarlier` policy preserves an armed
 deadline through temporary ingest/ACK waits; only an earlier deadline replaces

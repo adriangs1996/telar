@@ -1,6 +1,6 @@
 //! Toast overlay rendering for the client notification center.
 
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const Context = @import("Context.zig");
 const widget = @import("context_support.zig");
@@ -10,7 +10,7 @@ pub const card_height: u16 = 4;
 pub const card_gap: u16 = 1;
 pub const max_width: u16 = 48;
 
-pub fn overlayArea(workbench: core.Rect) core.Rect {
+pub fn overlayArea(workbench: cellgrid.Rect) cellgrid.Rect {
     if (workbench.w < 12 or workbench.h < card_height) {
         return .{};
     }
@@ -33,13 +33,13 @@ pub fn overlayArea(workbench: core.Rect) core.Rect {
 
 /// Renders visible notification cards and their semantic targets.
 /// For example: `render(context, area, center);`.
-pub fn render(context: *Context, area: core.Rect, center: *const data.Center) void {
+pub fn render(context: *Context, area: cellgrid.Rect, center: *const data.Center) void {
     renderMode(context, .{ .area = area, .center = center, .paint = true });
 }
 
 /// Keeps the cell-aligned semantic targets when KGP owns the pixels.
 /// For example: `registerHits(context, area, center);`.
-pub fn registerHits(context: *Context, area: core.Rect, center: *const data.Center) void {
+pub fn registerHits(context: *Context, area: cellgrid.Rect, center: *const data.Center) void {
     renderMode(context, .{ .area = area, .center = center, .paint = false });
 }
 
@@ -60,7 +60,7 @@ fn renderMode(context: *Context, mode: RenderMode) void {
     for (0..visible_count) |index| {
         const item = center.itemAt(index).?;
         const visible_width = item.animatedWidth(area.w);
-        const card: core.Rect = .{
+        const card: cellgrid.Rect = .{
             .x = area.x + area.w - visible_width,
             .y = area.y + @as(u16, @intCast(index)) * (card_height + card_gap),
             .w = visible_width,
@@ -96,8 +96,8 @@ fn drawCard(context: *Context, input: CardInput) void {
     const accent = levelColor(context, item.level);
     const hovered = context.isHovered(activate);
     const background = if (hovered) context.palette.surface1 else context.palette.surface0;
-    const body_style: core.Style = .{ .fg = context.palette.text, .bg = background };
-    const border_style: core.Style = .{
+    const body_style: cellgrid.Style = .{ .fg = context.palette.text, .bg = background };
+    const border_style: cellgrid.Style = .{
         .fg = accent,
         .bg = background,
         .flags = .{ .bold = true },
@@ -108,7 +108,7 @@ fn drawCard(context: *Context, input: CardInput) void {
     if (card.w < 8) {
         return;
     }
-    const content: core.Rect = .{
+    const content: cellgrid.Rect = .{
         .x = card.x + 2,
         .y = card.y + 1,
         .w = card.w -| 4,
@@ -124,7 +124,7 @@ fn drawCard(context: *Context, input: CardInput) void {
 
     if (card.w >= 12) {
         const dismiss: widget.Action = .{ .notification_dismiss = item.id };
-        const close: core.Rect = .{
+        const close: cellgrid.Rect = .{
             .x = card.x + card.w - 3,
             .y = card.y,
             .w = 2,
@@ -143,7 +143,7 @@ fn drawCard(context: *Context, input: CardInput) void {
     }
 }
 
-fn levelColor(context: *const Context, level: data.NotificationLevel) core.Color {
+fn levelColor(context: *const Context, level: data.NotificationLevel) cellgrid.Color {
     return switch (level) {
         .info => context.palette.blue,
         .success => context.palette.green,
@@ -155,7 +155,7 @@ fn levelColor(context: *const Context, level: data.NotificationLevel) core.Color
 test "toast cards register activation and a separate close target" {
     const std = std_module;
     const theme = data.theme_support;
-    var buffer = try core.Buffer.init(std.testing.allocator, 80, 24);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 80, 24);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var center: data.Center = .{};
@@ -185,13 +185,13 @@ test "toast cards register activation and a separate close target" {
 }
 
 const RenderMode = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     center: *const data.Center,
     paint: bool,
 };
 
 const CardInput = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     item: *const data.NotificationItem,
     paint: bool,
 };

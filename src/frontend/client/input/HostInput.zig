@@ -1,3 +1,4 @@
+const pacing = @import("pacing");
 const client = @import("telar-client");
 const data = @import("model");
 const std = @import("std");
@@ -14,8 +15,8 @@ router: host_inputs.Router,
 chunk: Chunk = .{},
 read_pending: bool = false,
 presentation_revision: u64 = 0,
-input_timeout: client.Scheduler = .{},
-binding_timeout: client.Scheduler = .{},
+input_timeout: pacing.DeadlineScheduler = .{},
+binding_timeout: pacing.DeadlineScheduler = .{},
 startup_input: StartupInput = .{},
 
 /// Creates the host input state around the client-owned TTY handle.

@@ -2,6 +2,7 @@
 //! agent behind one pane, and the most urgent agent of a tab or workspace
 //! through the shared comparator, so a dot on a tab and a pill agree with
 //! the sidebar order. Pure lookups over the projected replica; no state.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
@@ -9,7 +10,7 @@ const client = @import("telar-client");
 
 /// One colour per meaning, the same in every surface.
 /// Example: `const color = attention.statusColor(palette, agent.status);`
-pub fn statusColor(palette: data.Palette, status: core.AgentStatus) core.Color {
+pub fn statusColor(palette: data.Palette, status: core.AgentStatus) cellgrid.Color {
     return switch (status) {
         .working => palette.teal,
         .ready, .done => palette.green,
@@ -36,7 +37,7 @@ pub fn paneAgent(projection: *const client.Projection, location: core.TabLocatio
 /// The status colour of a tab's most urgent agent when that agent needs the
 /// person; null when nothing in the tab is blocked or failed.
 /// Example: `const dot = attention.tabDot(projection, palette, tab.location);`
-pub fn tabDot(projection: *const client.Projection, palette: data.Palette, location: core.TabLocation) ?core.Color {
+pub fn tabDot(projection: *const client.Projection, palette: data.Palette, location: core.TabLocation) ?cellgrid.Color {
     var urgent: ?*const data.Agent = null;
     for (projection.agents.slice()) |*agent| {
         if (!std.meta.eql(agent.location, location)) {
@@ -52,7 +53,7 @@ pub fn tabDot(projection: *const client.Projection, palette: data.Palette, locat
 /// The status colour of a workspace's most urgent agent when it needs the
 /// person; every tab of the workspace counts.
 /// Example: `const dot = attention.workspaceDot(projection, palette, id);`
-pub fn workspaceDot(projection: *const client.Projection, palette: data.Palette, workspace: core.WorkspaceId) ?core.Color {
+pub fn workspaceDot(projection: *const client.Projection, palette: data.Palette, workspace: core.WorkspaceId) ?cellgrid.Color {
     var urgent: ?*const data.Agent = null;
     for (projection.agents.slice()) |*agent| {
         const owner = switch (agent.location.workspace) {
@@ -88,7 +89,7 @@ fn mostUrgent(current: ?*const data.Agent, candidate: *const data.Agent) *const 
     return if (client.agent_attention.compare(candidate, previous) == .lt) candidate else previous;
 }
 
-fn dotColor(palette: data.Palette, urgent: ?*const data.Agent) ?core.Color {
+fn dotColor(palette: data.Palette, urgent: ?*const data.Agent) ?cellgrid.Color {
     const agent = urgent orelse return null;
     if (!needsInput(agent.status)) {
         return null;

@@ -1,8 +1,8 @@
 //! Groups whole graphemes by face, retaining contextual shaping within each span.
+const cellgrid = @import("cellgrid");
 const GlyphAtlas = @import("GlyphAtlas.zig");
 const assets = @import("assets");
 const font_id = @import("font_id.zig");
-const core = @import("telar-core");
 const FontSet = @import("FontSet.zig");
 const FontRun = @import("FontRun.zig");
 const Box = @import("BoxDrawing.zig");
@@ -11,7 +11,7 @@ const Braille = @import("Braille.zig");
 const FontRuns = @This();
 
 fonts: *const FontSet,
-iterator: core.GraphemeIterator,
+iterator: cellgrid.GraphemeIterator,
 /// The face a caller asked for; graphemes it lacks follow the terminal chain.
 preferred: font_id.Id = .primary,
 

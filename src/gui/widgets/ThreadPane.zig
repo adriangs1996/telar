@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const thread_status = @import("thread_status.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -16,7 +17,7 @@ const ThreadControl = @import("ThreadControl.zig");
 const ThreadLayoutOptions = @import("ThreadLayoutOptions.zig");
 const ThreadPane = @This();
 
-area: core.Rect,
+area: cellgrid.Rect,
 thread: client.ThreadView,
 
 /// Draws a native conversation with an attachment-scoped composer and controls.
@@ -93,7 +94,7 @@ fn drawTerminalThread(self: ThreadPane, canvas: *Canvas) !void {
     const body, const composer = rest.splitBottom(1);
     if (!body.isEmpty()) {
         const label = "No conversation available";
-        const width = @min(body.w, core.measure(label));
+        const width = @min(body.w, cellgrid.text.measure(label));
         try canvas.text(.{ .x = body.x + (body.w - width) / 2, .y = body.y + body.h / 2, .w = width, .h = 1 }, .{ .text = label, .color = palette.subtext0 });
     }
 

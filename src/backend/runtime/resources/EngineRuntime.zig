@@ -7,7 +7,7 @@ const GenericService = pi_rpc.GenericService;
 /// prompt; teardown stops the service before joining and destroying it.
 const EngineRuntime = @This();
 
-pub const Options = pi_rpc.Options;
+const Options = pi_rpc.Options;
 pub const Service = GenericService(EnginePurpose);
 
 const Worker = std.Io.Future(anyerror!void);

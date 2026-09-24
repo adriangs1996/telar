@@ -1,5 +1,5 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const model_data = @import("model");
 const Plan = @This();
 
@@ -13,5 +13,5 @@ pub fn thumbnailSlice(self: *const Plan) []const PlanItem {
 
 const PlanItem = struct {
     id: model_data.AttachmentId,
-    area: core.Rect,
+    area: cellgrid.Rect,
 };

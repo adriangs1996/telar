@@ -1,6 +1,6 @@
 //! Request, command preview and submission controls for the native palette.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("../Canvas.zig");
 const TextField = @import("../TextField.zig");
@@ -9,7 +9,7 @@ const WrappedLines = @import("WrappedLines.zig");
 const PaletteHits = @import("PaletteHits.zig");
 const SuggestionPanel = @This();
 
-area: core.Rect,
+area: cellgrid.Rect,
 projection: *const client.Projection,
 hits: *PaletteHits,
 
@@ -64,7 +64,7 @@ pub fn draw(self: SuggestionPanel, target: *Canvas) !void {
     try self.footer(canvas, controls);
 }
 
-fn preview(self: SuggestionPanel, canvas: *Canvas, area: core.Rect) !bool {
+fn preview(self: SuggestionPanel, canvas: *Canvas, area: cellgrid.Rect) !bool {
     if (area.isEmpty()) {
         return true;
     }
@@ -96,7 +96,7 @@ fn preview(self: SuggestionPanel, canvas: *Canvas, area: core.Rect) !bool {
     return lines.next() != null;
 }
 
-fn footer(self: SuggestionPanel, canvas: *Canvas, area: core.Rect) !void {
+fn footer(self: SuggestionPanel, canvas: *Canvas, area: cellgrid.Rect) !void {
     const state = self.projection.suggestion;
     const prompt = self.projection.prompt.?;
     const bounds = canvas.rect(area);

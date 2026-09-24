@@ -1,5 +1,6 @@
 //! Projection from host mouse events to a focused pane's SGR protocol.
 
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const data = @import("model");
 const PixelProjection = @import("PixelProjection.zig");
@@ -44,6 +45,6 @@ pub fn encodeSgr(buffer: []u8, input: SgrInput) ![]const u8 {
 
 const SgrInput = struct {
     event: data.Mouse,
-    pane_position: core.Point,
+    pane_position: cellgrid.Point,
     pixels: ?PixelProjection = null,
 };

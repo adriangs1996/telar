@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
 const client_module = @import("telar-client");
@@ -481,7 +482,7 @@ test "runtime destroys a pane after its shell exits" {
 
     const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
     defer gpa.free(receive_buffer);
-    var cells: [40 * 8]core.Cell = @splat(.{});
+    var cells: [40 * 8]cellgrid.Cell = @splat(.{});
     var pane_id: schema.PaneId = .invalid;
     var location: ?schema.TabLocation = null;
     var saw_output = false;
@@ -828,8 +829,8 @@ test "one client drives two attached panes and closes either one" {
         .bytes = "two\n",
     }));
 
-    var first_cells: [40 * 8]core.Cell = @splat(.{});
-    var second_cells: [40 * 8]core.Cell = @splat(.{});
+    var first_cells: [40 * 8]cellgrid.Cell = @splat(.{});
+    var second_cells: [40 * 8]cellgrid.Cell = @splat(.{});
     var saw_first = false;
     var saw_second = false;
     var close_sent = false;
@@ -966,7 +967,7 @@ test "pane keeps running while its client is disconnected" {
         .launch = .{ .cwd = directory, .arguments = &.{"/bin/false"} },
     }));
 
-    var cells: [40 * 8]core.Cell = @splat(.{});
+    var cells: [40 * 8]cellgrid.Cell = @splat(.{});
     var saw_output = false;
     var attached = false;
     var finish_released = false;
@@ -1956,7 +1957,7 @@ test "runtime persists terminal-edited commands without shell integration" {
     var input_sent = false;
     var saw_graphics = false;
     var saw_root_cwd = false;
-    var cells: [80 * 24]core.Cell = @splat(.{});
+    var cells: [80 * 24]cellgrid.Cell = @splat(.{});
     while (true) {
         switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
             .pane_opened => |opened| pane_id = opened.pane_id,
@@ -2082,7 +2083,7 @@ test "modified Enter follows the compatibility profile and child keyboard negoti
     };
     const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
     defer gpa.free(receive_buffer);
-    var cells: [40 * 8]core.Cell = @splat(.{});
+    var cells: [40 * 8]cellgrid.Cell = @splat(.{});
     var stage: usize = 0;
     while (true) switch (try schema.decodeServer(connection.receive(io, receive_buffer) catch |err| {
         const expected = if (stage < stages.len) stages[stage].marker else "INPUT_OK";
@@ -2305,7 +2306,7 @@ fn expectGraphicsRoundtrip(comptime transmission: []const u8) !void {
     defer gpa.free(receive_buffer);
     var store = frontend.Store.init(gpa);
     defer store.deinit();
-    var cells: [40 * 8]core.Cell = @splat(.{});
+    var cells: [40 * 8]cellgrid.Cell = @splat(.{});
     var pane_id: schema.PaneId = .invalid;
     var saw_child_reply = false;
     var saw_image = false;
@@ -2479,7 +2480,7 @@ test "input to one pane flows while another pane's PTY is wedged" {
     }));
     var wedged_pane: schema.PaneId = .invalid;
     var wedged_location: schema.TabLocation = undefined;
-    var cells: [40 * 8]core.Cell = @splat(.{});
+    var cells: [40 * 8]cellgrid.Cell = @splat(.{});
     var a_ready = false;
     while (!a_ready) switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
         .pane_opened => |opened| {
@@ -2589,7 +2590,7 @@ test "two clients observe one pane with independent frame acknowledgement" {
 
     const first_receive = try gpa.alloc(u8, core.max_frame_size);
     defer gpa.free(first_receive);
-    var first_cells: [40 * 8]core.Cell = @splat(.{});
+    var first_cells: [40 * 8]cellgrid.Cell = @splat(.{});
     var pane_id: schema.PaneId = .invalid;
     var first_snapshot = false;
     var child_ready = false;
@@ -2623,7 +2624,7 @@ test "two clients observe one pane with independent frame acknowledgement" {
     }));
     const second_receive = try gpa.alloc(u8, core.max_frame_size);
     defer gpa.free(second_receive);
-    var second_cells: [40 * 8]core.Cell = @splat(.{});
+    var second_cells: [40 * 8]cellgrid.Cell = @splat(.{});
     var second_opened = false;
     var second_snapshot = false;
     while (!second_opened or !second_snapshot) {
@@ -2718,7 +2719,7 @@ test "two clients observe one pane with independent frame acknowledgement" {
         .pane_id = pane_id,
         .size = .{ .cols = 80, .rows = 20 },
     }));
-    var resized_cells: [80 * 20]core.Cell = @splat(.{});
+    var resized_cells: [80 * 20]cellgrid.Cell = @splat(.{});
     while (true) switch (try schema.decodeServer(try second.receive(io, second_receive))) {
         .pane_frame => |frame| {
             try second.send(io, try schema.encodeFrameAck(&second_send, .{
@@ -2877,7 +2878,7 @@ pub fn connectRuntimeForTest(io: std.Io, path: []const u8) !RuntimeTestChannel {
     return error.RuntimeDidNotStart;
 }
 
-fn rowContains(cells: []const core.Cell, needle: []const u8) bool {
+fn rowContains(cells: []const cellgrid.Cell, needle: []const u8) bool {
     if (needle.len > cells.len) {
         return false;
     }
@@ -2893,7 +2894,7 @@ fn rowContains(cells: []const core.Cell, needle: []const u8) bool {
     return false;
 }
 
-fn applyFrameCells(cells: []core.Cell, frame: core.FrameView) !void {
+fn applyFrameCells(cells: []cellgrid.Cell, frame: core.FrameView) !void {
     var spans = frame.spans();
     while (try spans.next()) |span| {
         var source = span.cells();

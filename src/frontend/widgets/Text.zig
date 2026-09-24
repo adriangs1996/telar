@@ -1,5 +1,5 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Text = @This();
 
 text: []const u8,
-color: core.Color
+color: cellgrid.Color

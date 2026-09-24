@@ -1,6 +1,6 @@
 //! Bounded geometry and source catalog published with the frame that drew it.
+const cellgrid = @import("cellgrid");
 const std = @import("std");
-const core = @import("telar-core");
 const Geometry = @This();
 const Row = @import("ThreadTextRow.zig");
 const Fragment = @import("ThreadTextFragment.zig");
@@ -46,7 +46,7 @@ pub fn append(self: *Geometry, canvas: *Canvas, run: Run) !?Fragment {
         return null;
     }
     var count: usize = 1;
-    var iterator: core.GraphemeIterator = .{ .bytes = run.text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = run.text };
     while (iterator.next() != null) {
         count += 1;
     }

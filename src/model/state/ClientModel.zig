@@ -1,3 +1,5 @@
+const pacing = @import("pacing");
+const cellgrid = @import("cellgrid");
 const agent_options = @import("../panes/agent_options.zig");
 const core = @import("telar-core");
 const model_data = @import("../model.zig");
@@ -90,8 +92,8 @@ sound_playback: model_data.SoundPlayback = .{ .configuration = .{} },
 link_opening: model_data.Opening = .{},
 link_pointer: model_data.Pointer = .{},
 change_review: model_data.ChangeReviewSession = .{},
-sidebar_animation_scheduler: core.DeadlineScheduler = .{},
-notification_scheduler: core.DeadlineScheduler = .{},
+sidebar_animation_scheduler: pacing.DeadlineScheduler = .{},
+notification_scheduler: pacing.DeadlineScheduler = .{},
 bar_updates: model_data.BarUpdatesState = .{},
 favicons: model_data.FaviconsState = .{},
 /// Application key leases, owned by routing rather than by the host reader.
@@ -2109,7 +2111,7 @@ pub fn reconcileWorkspace(model: *ClientModel, snapshot: WorkspaceSnapshotInput)
 /// ```zig
 /// const reconciliation = try model.reconcileTab(snapshot, workbench);
 /// ```
-pub fn reconcileTab(model: *ClientModel, snapshot: PaneSnapshot, area: core.Rect) !TabReconciliation {
+pub fn reconcileTab(model: *ClientModel, snapshot: PaneSnapshot, area: cellgrid.Rect) !TabReconciliation {
     const tab = model.tabs.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
     if (!std.meta.eql(model.tabs.location[tab], snapshot.location)) {
         return error.UnexpectedTab;

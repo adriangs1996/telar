@@ -7,7 +7,7 @@
 //! hardware cursor is hidden by default in favour of one inverse-video cell.
 //! This module reads those conventions back from a committed pane frame.
 
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Marker = @import("Marker.zig");
 const Scan = @import("Scan.zig");
 const std = @import("std");
@@ -34,7 +34,7 @@ pub const Uuid = [uuid_len]u8;
 /// ```zig
 /// const marker = path_marker.find(buffer, uuid) orelse return;
 /// ```
-pub fn find(buffer: *const core.Buffer, uuid: Uuid) ?Marker {
+pub fn find(buffer: *const cellgrid.Buffer, uuid: Uuid) ?Marker {
     var scan = Scan.start(buffer) orelse return null;
     while (scan.position()) |at| : (scan.step()) {
         const head = parseHead(buffer, at) orelse continue;
@@ -58,7 +58,7 @@ pub fn find(buffer: *const core.Buffer, uuid: Uuid) ?Marker {
 /// var found: [4]Marker = undefined;
 /// const count = path_marker.collect(buffer, &found);
 /// ```
-pub fn collect(buffer: *const core.Buffer, out: []Marker) usize {
+pub fn collect(buffer: *const cellgrid.Buffer, out: []Marker) usize {
     var count: usize = 0;
     var scan = Scan.start(buffer) orelse return 0;
     while (scan.position()) |at| : (scan.step()) {
@@ -138,7 +138,7 @@ pub fn cursorOnRow(screen: Screen, y: u16) ?u16 {
 /// ```zig
 /// const steps = path_marker.stepsOnRow(buffer, marker.end.y, .{ .from = marker.end.x, .to = cursor_x }) orelse return;
 /// ```
-pub fn stepsOnRow(buffer: *const core.Buffer, y: u16, span: Span) ?u8 {
+pub fn stepsOnRow(buffer: *const cellgrid.Buffer, y: u16, span: Span) ?u8 {
     if (span.from > span.to or span.to > buffer.w or y >= buffer.h) {
         return null;
     }
@@ -159,7 +159,7 @@ pub fn stepsOnRow(buffer: *const core.Buffer, y: u16, span: Span) ?u8 {
     return @intCast(steps);
 }
 
-fn parseHead(buffer: *const core.Buffer, start: Position) ?Head {
+fn parseHead(buffer: *const cellgrid.Buffer, start: Position) ?Head {
     var scan = Scan.at(buffer, start) orelse return null;
     for (prefix) |byte| {
         if (!scan.expect(byte)) {
@@ -228,7 +228,7 @@ fn matchExtension(scan: Scan) ?Position {
     return null;
 }
 
-fn extend(buffer: *const core.Buffer, head: Head) Marker {
+fn extend(buffer: *const cellgrid.Buffer, head: Head) Marker {
     const start = pathStart(buffer, head.start);
 
     return .{
@@ -246,7 +246,7 @@ fn extend(buffer: *const core.Buffer, head: Head) Marker {
 /// Walks back over the word holding the file name, following force-wrapped
 /// rows, and returns its first `/`. A word broken by Pi's grapheme wrapping
 /// fills the row up to the reserved cursor column.
-fn pathStart(buffer: *const core.Buffer, marker: Position) Position {
+fn pathStart(buffer: *const cellgrid.Buffer, marker: Position) Position {
     var x = marker.x;
     var y = marker.y;
     var slash: ?Position = null;
@@ -286,7 +286,7 @@ fn pathStart(buffer: *const core.Buffer, marker: Position) Position {
     return slash orelse marker;
 }
 
-fn rowForceWrapped(buffer: *const core.Buffer, y: u16) bool {
+fn rowForceWrapped(buffer: *const cellgrid.Buffer, y: u16) bool {
     const last_content = cellAt(
         buffer,
         buffer.w - 2,
@@ -301,7 +301,7 @@ fn rowForceWrapped(buffer: *const core.Buffer, y: u16) bool {
     return !isBlank(last_content) and isBlank(reserved);
 }
 
-fn countCells(buffer: *const core.Buffer, start: Position, end: Position) ?u8 {
+fn countCells(buffer: *const cellgrid.Buffer, start: Position, end: Position) ?u8 {
     var scan = Scan.at(buffer, start) orelse return null;
     var cells: u16 = 0;
     while (true) {
@@ -322,7 +322,7 @@ fn countCells(buffer: *const core.Buffer, start: Position, end: Position) ?u8 {
     }
 }
 
-fn isolatedInverse(buffer: *const core.Buffer, at: Position) bool {
+fn isolatedInverse(buffer: *const cellgrid.Buffer, at: Position) bool {
     if (at.x >= buffer.w or at.y >= buffer.h) {
         return false;
     }
@@ -348,15 +348,15 @@ fn isolatedInverse(buffer: *const core.Buffer, at: Position) bool {
     return !left_inverse and !right_inverse;
 }
 
-pub fn cellAt(buffer: *const core.Buffer, x: u16, y: u16) *const core.Cell {
+pub fn cellAt(buffer: *const cellgrid.Buffer, x: u16, y: u16) *const cellgrid.Cell {
     return &buffer.cells[@as(usize, y) * buffer.w + x];
 }
 
-pub fn isSingle(cell: *const core.Cell) bool {
+pub fn isSingle(cell: *const cellgrid.Cell) bool {
     return cell.width == 1 and cell.len == 1;
 }
 
-fn isBlank(cell: *const core.Cell) bool {
+fn isBlank(cell: *const cellgrid.Cell) bool {
     return cell.len == 0 or (cell.len == 1 and cell.bytes[0] == ' ');
 }
 
@@ -369,7 +369,7 @@ const test_path = "/var/folders/8x/abc/T/pi-clipboard-" ++ test_uuid ++ ".png";
 
 /// Lays `text` out like Pi's editor: rows of `width - 1` cells, broken at
 /// any grapheme once the row is full.
-fn writeWrapped(buffer: *core.Buffer, origin: Position, text: []const u8) Position {
+fn writeWrapped(buffer: *cellgrid.Buffer, origin: Position, text: []const u8) Position {
     var x = origin.x;
     var y = origin.y;
     for (text) |byte| {
@@ -400,7 +400,7 @@ fn writeWrapped(buffer: *core.Buffer, origin: Position, text: []const u8) Positi
 }
 
 test "a pasted path on one row is one marker with its full extent" {
-    var buffer = try core.Buffer.init(
+    var buffer = try cellgrid.Buffer.init(
         std.testing.allocator,
         120,
         2,
@@ -438,7 +438,7 @@ test "a pasted path on one row is one marker with its full extent" {
 }
 
 test "a path broken over force-wrapped rows keeps one identity and extent" {
-    var buffer = try core.Buffer.init(
+    var buffer = try cellgrid.Buffer.init(
         std.testing.allocator,
         40,
         4,
@@ -467,7 +467,7 @@ test "a path broken over force-wrapped rows keeps one identity and extent" {
 }
 
 test "a word soft-wrapped before the path is not part of its extent" {
-    var buffer = try core.Buffer.init(
+    var buffer = try cellgrid.Buffer.init(
         std.testing.allocator,
         40,
         4,
@@ -510,7 +510,7 @@ test "a word soft-wrapped before the path is not part of its extent" {
 }
 
 test "a file name glued to following text is no longer a marker" {
-    var buffer = try core.Buffer.init(
+    var buffer = try cellgrid.Buffer.init(
         std.testing.allocator,
         120,
         1,
@@ -548,7 +548,7 @@ test "a file name glued to following text is no longer a marker" {
 }
 
 test "markers collect in screen order and keep the newest when full" {
-    var buffer = try core.Buffer.init(
+    var buffer = try cellgrid.Buffer.init(
         std.testing.allocator,
         80,
         3,
@@ -582,7 +582,7 @@ test "markers collect in screen order and keep the newest when full" {
 }
 
 test "the cursor is the hardware cursor or Pi's isolated inverse cell" {
-    var buffer = try core.Buffer.init(
+    var buffer = try cellgrid.Buffer.init(
         std.testing.allocator,
         20,
         2,
@@ -681,7 +681,7 @@ test "the cursor is the hardware cursor or Pi's isolated inverse cell" {
 }
 
 test "row steps count graphemes rather than cells" {
-    var buffer = try core.Buffer.init(
+    var buffer = try cellgrid.Buffer.init(
         std.testing.allocator,
         20,
         1,

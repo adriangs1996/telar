@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const SidebarRendererInput = @import("../../graphics/SidebarRendererInput.zig");
 const client = @import("telar-client");
@@ -31,7 +32,7 @@ const kitty_sidebar_module = @import("../../graphics/kitty_sidebar.zig");
 const TabDrag = @import("TabDrag.zig");
 const State = @This();
 
-scratch: core.Buffer,
+scratch: cellgrid.Buffer,
 regions: data.GridRegions,
 theme: data.ColorTheme,
 icon_theme: data.icons.Theme,
@@ -41,10 +42,10 @@ sidebar_requested: bool = true,
 sidebar_preferred_width: u16 = data.sidebar.default_width,
 sidebar_resize_active: bool = false,
 hovered: ?context_support.Action = null,
-pointer_position: ?core.Point = null,
+pointer_position: ?cellgrid.Point = null,
 // Last projected content bounds distinguish border crossings without
 // invalidating chrome for every mouse move within the same pane.
-pointer_content: core.Rect = .{},
+pointer_content: cellgrid.Rect = .{},
 sidebar: WidgetsState = .{},
 workspace_list_collapsed: bool = false,
 dirty: bool = true,
@@ -61,7 +62,7 @@ graphics_plan: GraphicsPlan = .{},
 graphics_plan_dirty: bool = false,
 cell_width_px: u16 = 0,
 cell_height_px: u16 = 0,
-modal_overlay_area: core.Rect = .{},
+modal_overlay_area: cellgrid.Rect = .{},
 
 pub fn init(gpa: std.mem.Allocator, width: u16, height: u16) !State {
     return initWithTheme(gpa, .{ .width = width, .height = height }, data.theme_support.default_theme);
@@ -119,7 +120,7 @@ pub fn resize(self: *State, width: u16, height: u16) !void {
     self.dirty = true;
 }
 
-pub fn workbench(self: *const State) core.Rect {
+pub fn workbench(self: *const State) cellgrid.Rect {
     return self.regions.workbench;
 }
 
@@ -447,7 +448,7 @@ pub fn graphicalToastsCover(self: *const State, snapshot: *const data.Center) bo
     return self.kitty_toasts.covers(snapshot);
 }
 
-pub fn graphicalModalCovers(self: *const State, area: core.Rect) bool {
+pub fn graphicalModalCovers(self: *const State, area: cellgrid.Rect) bool {
     return self.kitty_modal.covers(area);
 }
 
@@ -593,7 +594,7 @@ fn renderDiagnosticBanner(self: *State, screen: *Screen, diagnostic: ?[]const u8
         return;
     }
     const colors = self.palette();
-    const style: core.Style = .{
+    const style: cellgrid.Style = .{
         .fg = colors.text,
         .bg = colors.red,
         .flags = .{ .bold = true },
@@ -635,7 +636,7 @@ pub fn render(self: *State, screen: *Screen, input: RenderInput) !RenderStats {
             null,
     };
     var fallback_layout: data.LayoutSnapshot = .{};
-    var fallback_attachment_area: core.Rect = .{};
+    var fallback_attachment_area: cellgrid.Rect = .{};
     const layout = if (input.compositor) |compositor|
         compositor.layoutSnapshot()
     else layout: {
@@ -698,7 +699,7 @@ pub fn render(self: *State, screen: *Screen, input: RenderInput) !RenderStats {
         else
             goto_picker_module.modalArea(application_area)
     else
-        core.Rect{};
+        cellgrid.Rect{};
     const graphical_modal = self.graphicalModalCovers(current_modal_area);
     if (input.compositor) |compositor| {
         if (!self.modal_overlay_area.isEmpty()) {
@@ -718,7 +719,7 @@ pub fn render(self: *State, screen: *Screen, input: RenderInput) !RenderStats {
     self.kitty_pill.observe(pill_plan, self.palette());
     if (self.kitty_pill.coversText(pill_plan, self.palette())) {
         for (pill_plan.slice()) |label| {
-            const area: core.Rect = .{ .x = pill_plan.area.x + label.offset, .y = pill_plan.area.y, .w = label.width, .h = 1 };
+            const area: cellgrid.Rect = .{ .x = pill_plan.area.x + label.offset, .y = pill_plan.area.y, .w = label.width, .h = 1 };
             self.scratch.fill(area, .{ .glyph = " ", .style = .{} });
         }
     }
@@ -907,13 +908,13 @@ const Appearance = struct {
 };
 
 const GraphicsPlan = struct {
-    toast_area: core.Rect = .{},
-    sidebar_area: core.Rect = .{},
+    toast_area: cellgrid.Rect = .{},
+    sidebar_area: cellgrid.Rect = .{},
     focused_card: ?SidebarFocus = null,
     provider_marks: [core.max_agent_snapshot_entries]SidebarProviderPlacement = undefined,
     provider_mark_count: u8 = 0,
     icons: Plan = .{},
     attachments: client.Plan = .{},
-    modal_area: core.Rect = .{},
+    modal_area: cellgrid.Rect = .{},
     pill_labels: PresentationPlan = .{},
 };

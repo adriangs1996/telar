@@ -3,6 +3,7 @@
 
 pub const Buffer = @import("Buffer.zig");
 pub const Cell = @import("Cell.zig");
+pub const Color = @import("Color.zig").Color;
 pub const GraphemeIterator = @import("GraphemeIterator.zig");
 pub const Point = @import("Point.zig");
 pub const Rect = @import("Rect.zig");

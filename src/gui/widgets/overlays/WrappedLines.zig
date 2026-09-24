@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const WrappedLines = @This();
 
 text: []const u8,
@@ -16,7 +16,7 @@ pub fn next(self: *WrappedLines) ?[]const u8 {
 
     const start = self.index;
     var used: u16 = 0;
-    var iterator: core.GraphemeIterator = .{ .bytes = self.text, .index = self.index };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = self.text, .index = self.index };
     while (iterator.index < self.text.len) {
         const before = iterator.index;
         if (self.text[before] == '\n' or self.text[before] == '\r') {

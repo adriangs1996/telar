@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const std = @import("std");
 
 /// A fixed capacity field.
@@ -278,7 +278,7 @@ pub fn Type(comptime capacity: usize) type {
             if (at == 0) {
                 return null;
             }
-            var it: core.GraphemeIterator = .{
+            var it: cellgrid.GraphemeIterator = .{
                 .bytes = self.text(),
             };
             var previous: usize = 0;
@@ -295,7 +295,7 @@ pub fn Type(comptime capacity: usize) type {
             if (at >= self.len) {
                 return null;
             }
-            var it: core.GraphemeIterator = .{
+            var it: cellgrid.GraphemeIterator = .{
                 .bytes = self.bytes[at..self.len],
             };
             const cluster = it.next() orelse return null;
@@ -339,7 +339,7 @@ pub fn Type(comptime capacity: usize) type {
             }
             // Or on the right: scroll until it fits, by clusters so the left
             // edge never lands inside one.
-            while (core.measure(self.bytes[self.scroll..self.head]) >= width) {
+            while (cellgrid.text.measure(self.bytes[self.scroll..self.head]) >= width) {
                 const next = self.clusterAfter(self.scroll) orelse break;
                 self.scroll = next;
             }
@@ -348,7 +348,7 @@ pub fn Type(comptime capacity: usize) type {
             var used: u16 = 0;
             while (end_at < self.len) {
                 const next = self.clusterAfter(end_at) orelse break;
-                const cluster_width = core.measure(self.bytes[end_at..next]);
+                const cluster_width = cellgrid.text.measure(self.bytes[end_at..next]);
                 if (used + cluster_width > width) {
                     break;
                 }
@@ -361,10 +361,10 @@ pub fn Type(comptime capacity: usize) type {
             const to = @max(self.head, self.anchor);
             return .{
                 .text = visible,
-                .cursor = core.measure(self.bytes[self.scroll..self.head]),
+                .cursor = cellgrid.text.measure(self.bytes[self.scroll..self.head]),
                 .selection = if (self.hasSelection()) .{
-                    core.measure(self.bytes[self.scroll..@max(from, self.scroll)]),
-                    core.measure(self.bytes[self.scroll..@min(@max(to, self.scroll), end_at)]),
+                    cellgrid.text.measure(self.bytes[self.scroll..@max(from, self.scroll)]),
+                    cellgrid.text.measure(self.bytes[self.scroll..@min(@max(to, self.scroll), end_at)]),
                 } else null,
                 .clipped_left = self.scroll > 0,
                 .clipped_right = end_at < self.len,
@@ -377,7 +377,7 @@ pub fn Type(comptime capacity: usize) type {
             var start = at;
             while (start > 0) {
                 const previous = self.clusterBefore(start) orelse break;
-                if (core.measure(self.bytes[previous..at]) > width -| 1) {
+                if (cellgrid.text.measure(self.bytes[previous..at]) > width -| 1) {
                     break;
                 }
                 start = previous;

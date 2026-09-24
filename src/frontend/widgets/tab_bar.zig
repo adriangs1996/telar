@@ -1,7 +1,7 @@
 //! Ordered tab navigation.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const Context = @import("Context.zig");
 const Label = @import("Label.zig");
 const widget = @import("context_support.zig");
@@ -27,7 +27,7 @@ pub fn render(context: *Context, input: TabBarInput) void {
                 break;
             }
 
-            const gap: core.Rect = .{ .x = x, .y = input.area.y, .w = tab_gap, .h = 1 };
+            const gap: cellgrid.Rect = .{ .x = x, .y = input.area.y, .w = tab_gap, .h = 1 };
             _ = context.buffer.writeTruncated(gap, .{ .point = .{ .x = x, .y = input.area.y }, .text = " ", .max_width = tab_gap, .style = barStyle(context) });
             x += tab_gap;
         }
@@ -39,10 +39,10 @@ pub fn render(context: *Context, input: TabBarInput) void {
 
         const label = Label.init(model, slot);
         const width = @min(label.width(), remaining);
-        const rect: core.Rect = .{ .x = x, .y = input.area.y, .w = width, .h = 1 };
+        const rect: cellgrid.Rect = .{ .x = x, .y = input.area.y, .w = width, .h = 1 };
         const action: widget.Action = .{ .select_tab = model.tabs.location[slot].tab_id };
         context.hits.add(rect, action);
-        const style: core.Style = if (slot == input.tab)
+        const style: cellgrid.Style = if (slot == input.tab)
             activeStyle(context)
         else if (context.isHovered(action))
             hoveredStyle(context)
@@ -69,11 +69,11 @@ pub fn desiredWidth(input: TabBarInput) u16 {
     return total;
 }
 
-pub fn barStyle(context: *const Context) core.Style {
+pub fn barStyle(context: *const Context) cellgrid.Style {
     return .{ .fg = context.palette.subtext0, .bg = context.palette.panel_bg };
 }
 
-fn activeStyle(context: *const Context) core.Style {
+fn activeStyle(context: *const Context) cellgrid.Style {
     return .{
         .fg = context.palette.surface_dim,
         .bg = context.palette.accent,
@@ -83,11 +83,11 @@ fn activeStyle(context: *const Context) core.Style {
 
 /// Inactive tabs sit one surface above the bar so they read as buttons; the
 /// gap between them keeps the bar's own background.
-fn inactiveStyle(context: *const Context) core.Style {
+fn inactiveStyle(context: *const Context) cellgrid.Style {
     return .{ .fg = context.palette.subtext0, .bg = context.palette.surface0 };
 }
 
-fn hoveredStyle(context: *const Context) core.Style {
+fn hoveredStyle(context: *const Context) cellgrid.Style {
     return .{
         .fg = context.palette.text,
         .bg = context.palette.surface1,
@@ -95,7 +95,7 @@ fn hoveredStyle(context: *const Context) core.Style {
     };
 }
 
-fn decorateProgress(context: *Context, input: TabBarInput, rect: core.Rect) void {
+fn decorateProgress(context: *Context, input: TabBarInput, rect: cellgrid.Rect) void {
     const pane = data.tab_layout.focusedPaneConst(input.model, input.tab) orelse return;
     if (pane.progress_state == .remove or rect.w == 0) {
         return;
@@ -184,7 +184,7 @@ fn alignedStart(input: TabBarInput, width: u16) u16 {
 }
 
 const TabBarInput = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     model: *const data.ClientModel,
     /// The active tab's slot in `model.tabs`.
     tab: usize,

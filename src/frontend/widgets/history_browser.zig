@@ -1,6 +1,7 @@
 //! Compact history browser with bounded text storage and visible-cell composition.
 //! History text reaches the host only through the ordinary cell renderer.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const Context = @import("Context.zig");
@@ -16,7 +17,7 @@ const picker = @import("goto_picker.zig");
 
 /// Computes the same compact rectangle for cell composition and graphical overlays.
 /// Example: `const area = modalArea(application, .{ .count = 6, .inspecting = false });`.
-pub fn modalArea(application: core.Rect, geometry: Geometry) core.Rect {
+pub fn modalArea(application: cellgrid.Rect, geometry: Geometry) cellgrid.Rect {
     if (application.w < 20 or application.h < 7) {
         return .{};
     }
@@ -34,14 +35,14 @@ pub fn modalArea(application: core.Rect, geometry: Geometry) core.Rect {
 
 /// Draws search, visible rows and optional detail without allocating.
 /// Example: `const result = render(context, application, input);`.
-pub fn render(context: *Context, application: core.Rect, input: HistoryBrowserInput) GotoPickerOutput {
+pub fn render(context: *Context, application: cellgrid.Rect, input: HistoryBrowserInput) GotoPickerOutput {
     const area = modalArea(application, .{ .count = @intCast(input.entries.len), .inspecting = input.inspecting });
     if (area.isEmpty()) {
         return .{ .area = area, .cursor = null };
     }
 
     var draw: Drawing = .{ .context = context, .input = input, .background = context.palette.panel_bg };
-    const base: core.Style = .{ .fg = context.palette.text, .bg = draw.background };
+    const base: cellgrid.Style = .{ .fg = context.palette.text, .bg = draw.background };
     if (input.graphical_frame) {
         context.buffer.fillWithoutCorners(area, base);
     } else {
@@ -60,13 +61,13 @@ pub fn render(context: *Context, application: core.Rect, input: HistoryBrowserIn
     const footer_y = inner.y + inner.h - 1;
     const query_y = footer_y - 1;
     const detail_y = query_y - 1;
-    const list: core.Rect = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = detail_y - inner.y };
+    const list: cellgrid.Rect = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = detail_y - inner.y };
     const selected: ?Entry = if (input.entries.len == 0) null else input.entries[@min(input.selection, input.entries.len - 1)];
     if (input.inspecting and selected != null) {
         if (list.w >= 100) {
-            const left: core.Rect = .{ .x = list.x, .y = list.y, .w = list.w / 2, .h = list.h };
+            const left: cellgrid.Rect = .{ .x = list.x, .y = list.y, .w = list.w / 2, .h = list.h };
             draw.rows(left);
-            const right: core.Rect = .{ .x = left.x + left.w + 1, .y = list.y, .w = list.w - left.w - 1, .h = list.h };
+            const right: cellgrid.Rect = .{ .x = left.x + left.w + 1, .y = list.y, .w = list.w - left.w - 1, .h = list.h };
             draw.inspect(right, selected.?);
         } else {
             draw.inspect(list, selected.?);
@@ -84,11 +85,11 @@ pub fn render(context: *Context, application: core.Rect, input: HistoryBrowserIn
 
     var prefix_buffer: [48]u8 = undefined;
     const prefix = std.fmt.bufPrint(&prefix_buffer, "[{s}] > ", .{input.scope}) catch "> ";
-    const query: core.Rect = .{ .x = inner.x, .y = query_y, .w = inner.w, .h = 1 };
+    const query: cellgrid.Rect = .{ .x = inner.x, .y = query_y, .w = inner.w, .h = 1 };
     context.buffer.fill(query, .{ .glyph = " ", .style = .{ .fg = context.palette.text, .bg = context.palette.surface0 } });
     draw.background = context.palette.surface0;
     draw.line(query, .{ .text = prefix, .color = context.palette.accent });
-    const prefix_width = @min(core.measure(prefix), query.w);
+    const prefix_width = @min(cellgrid.text.measure(prefix), query.w);
     const field = input.field.view(query.w -| prefix_width);
     draw.line(.{ .x = query.x + prefix_width, .y = query.y, .w = query.w -| prefix_width, .h = 1 }, .{ .text = field.text, .color = context.palette.text });
     draw.background = context.palette.panel_bg;
@@ -109,13 +110,13 @@ pub fn render(context: *Context, application: core.Rect, input: HistoryBrowserIn
 
 /// Bounds scroll against the same wrapped detail and responsive width used for drawing.
 /// Example: `const limit = inspectionScrollLimit(application, content);`.
-pub fn inspectionScrollLimit(application: core.Rect, content: Inspection) u32 {
+pub fn inspectionScrollLimit(application: cellgrid.Rect, content: Inspection) u32 {
     const area = modalArea(application, .{ .count = 1, .inspecting = true }).inner(1);
     const width = if (area.w >= 100) area.w - area.w / 2 - 1 else area.w;
     return detailScrollLimit(.{ .w = width, .h = area.h -| 3 }, content);
 }
 
-pub fn detailScrollLimit(area: core.Rect, content: Inspection) u32 {
+pub fn detailScrollLimit(area: cellgrid.Rect, content: Inspection) u32 {
     if (area.w == 0) {
         return 0;
     }
@@ -124,7 +125,7 @@ pub fn detailScrollLimit(area: core.Rect, content: Inspection) u32 {
     var count: u32 = 0;
     for (detail.texts()) |text| {
         count += 1;
-        var iterator: core.GraphemeIterator = .{ .bytes = text };
+        var iterator: cellgrid.GraphemeIterator = .{ .bytes = text };
         var x: u16 = 0;
         while (iterator.next()) |cluster| {
             const newline = iterator.index > 0 and text[iterator.index - 1] == '\n';
@@ -166,7 +167,7 @@ pub fn ageText(ms: i64, storage: []u8) []const u8 {
 }
 
 test "compact geometry follows content and remains inside small terminals" {
-    const application: core.Rect = .{ .w = 160, .h = 60 };
+    const application: cellgrid.Rect = .{ .w = 160, .h = 60 };
     const small = modalArea(application, .{ .count = 3, .inspecting = false });
     const large = modalArea(application, .{ .count = 100, .inspecting = false });
     try std.testing.expect(small.h < large.h);
@@ -178,7 +179,7 @@ test "compact geometry follows content and remains inside small terminals" {
 }
 
 test "history retains result cells and selection while searching" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 120, 36);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 120, 36);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: Context = .{ .buffer = &buffer, .hits = &hits, .palette = &data.theme_support.default_theme.palette, .hovered = null };
@@ -186,7 +187,7 @@ test "history retains result cells and selection while searching" {
     const entry: Entry = .{ .id = 1, .pane_id = @enumFromInt(2), .command = "zig build", .cwd = "/work", .started_at_ms = 1000, .duration_ns = 1000000, .exit_code = 0, .status = .completed, .author = .human };
     var input: HistoryBrowserInput = .{ .field = &field, .entries = &.{entry}, .selection = 0, .scope = "global", .now_ms = 1000 };
     const result = render(&context, buffer.area(), input);
-    const visible = try std.testing.allocator.dupe(core.Cell, buffer.cells);
+    const visible = try std.testing.allocator.dupe(cellgrid.Cell, buffer.cells);
     defer std.testing.allocator.free(visible);
 
     input.loading = true;
@@ -196,7 +197,7 @@ test "history retains result cells and selection while searching" {
 
 test "wrapped inspector clamps scroll even beyond 64 thousand lines" {
     const entry: Entry = .{ .id = 1, .pane_id = @enumFromInt(2), .command = "echo hi", .cwd = "/work", .started_at_ms = -1, .duration_ns = 0, .exit_code = 0, .status = .completed, .author = .human };
-    const application: core.Rect = .{ .w = 56, .h = 20 };
+    const application: cellgrid.Rect = .{ .w = 56, .h = 20 };
     const limit = inspectionScrollLimit(application, .{ .entry = entry, .output = "a\n" ** 32768, .output_hint = "Captured output" });
     try std.testing.expect(limit > 32700);
     try std.testing.expectEqual(@as(u32, 0), inspectionScrollLimit(application, .{ .entry = entry, .output = "done", .output_hint = "Captured output" }));
@@ -205,7 +206,7 @@ test "wrapped inspector clamps scroll even beyond 64 thousand lines" {
 }
 
 test "history renderer puts the query below results and contains control bytes" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 120, 36);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 120, 36);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: Context = .{ .buffer = &buffer, .hits = &hits, .palette = &data.theme_support.default_theme.palette, .hovered = null };

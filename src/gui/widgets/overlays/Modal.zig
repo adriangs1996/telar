@@ -1,13 +1,13 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Canvas = @import("../Canvas.zig");
 const Modal = @This();
 
-area: core.Rect,
+area: cellgrid.Rect,
 title: []const u8,
 
 /// Centers a bounded modal, retaining a usable field on very small hosts.
 /// Example: `const area = Modal.bounds(host, .{ .w = 72, .h = 7 });`.
-pub fn bounds(host: core.Rect, wanted: core.Rect) core.Rect {
+pub fn bounds(host: cellgrid.Rect, wanted: cellgrid.Rect) cellgrid.Rect {
     const horizontal: u16 = if (host.w > 12) 2 else 0;
     const vertical: u16 = if (host.h > 6) 1 else 0;
     const width = @min(wanted.w, host.w -| horizontal * 2);
@@ -29,6 +29,6 @@ pub fn draw(self: Modal, canvas: *Canvas) !void {
 }
 
 /// Example: `const inner = modal.content();`.
-pub fn content(self: Modal) core.Rect {
+pub fn content(self: Modal) cellgrid.Rect {
     return if (self.area.w > 2 and self.area.h > 2) self.area.inner(1) else self.area;
 }

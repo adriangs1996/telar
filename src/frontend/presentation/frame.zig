@@ -1,5 +1,6 @@
 //! Applies protocol frames to the client's terminal screen.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const Screen = @import("Screen.zig");
@@ -38,9 +39,9 @@ test "a patch updates the screen and reports its work" {
     var screen = try Screen.init(std.testing.allocator, 4, 2);
     defer screen.deinit();
 
-    const cells = [_]core.Cell{
-        .{ .bytes = [_]u8{'x'} ++ [_]u8{0} ** (core.Cell.max_bytes - 1) },
-        .{ .bytes = [_]u8{'y'} ++ [_]u8{0} ** (core.Cell.max_bytes - 1) },
+    const cells = [_]cellgrid.Cell{
+        .{ .bytes = [_]u8{'x'} ++ [_]u8{0} ** (cellgrid.Cell.max_bytes - 1) },
+        .{ .bytes = [_]u8{'y'} ++ [_]u8{0} ** (cellgrid.Cell.max_bytes - 1) },
     };
     const spans = [_]core.Span{.{ .start = 2, .cells = &cells }};
     var encoded: [256]u8 = undefined;
@@ -66,7 +67,7 @@ test "a patch cannot silently resize the client screen" {
     var screen = try Screen.init(std.testing.allocator, 4, 2);
     defer screen.deinit();
 
-    const cells = [_]core.Cell{.{}};
+    const cells = [_]cellgrid.Cell{.{}};
     const spans = [_]core.Span{.{ .start = 0, .cells = &cells }};
     var encoded: [256]u8 = undefined;
     const payload = try core.encodePaneFrame(&encoded, .{

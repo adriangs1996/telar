@@ -1,4 +1,5 @@
 //! One native connection's shared model and disposable host resources.
+const pacing = @import("pacing");
 const gui_event = @import("gui_event.zig");
 const mailbox = @import("mailbox");
 const favicon_worker = @import("image/favicon_worker.zig");
@@ -97,7 +98,7 @@ hostname: [std.posix.HOST_NAME_MAX]u8 = undefined,
 hostname_len: usize = 0,
 input_queue: InputQueue = .{},
 router: input_routing.Type,
-binding_timeout: client.Scheduler = .{},
+binding_timeout: pacing.DeadlineScheduler = .{},
 /// Replaces the time of noted pane input; pacing tests pin it so scheduler
 /// delays cannot expire their grace.
 pane_input_time: ?u64 = null,
@@ -726,7 +727,7 @@ fn drainInput(self: *GuiAdapter) !void {
                         .{
                             .key = text.key(),
                             .raw = "",
-                            .now_ns = client.monotonic(app.io),
+                            .now_ns = pacing.clock.monotonic(app.io),
                         },
                     );
                 }
@@ -986,7 +987,7 @@ fn dispatchKey(self: *GuiAdapter, key: KeyInput) !void {
         .{
             .key = key.terminalKey(),
             .raw = "",
-            .now_ns = client.monotonic(self.app.io),
+            .now_ns = pacing.clock.monotonic(self.app.io),
         },
     );
 }
@@ -1037,7 +1038,7 @@ fn dispatchClipboard(self: *GuiAdapter, result: ClipboardResult) !bool {
         const kind = self.host.complete(result) orelse return true;
 
         if (kind == .write) {
-            if (self.widgets.copy_feedback.complete(result, client.monotonic(self.app.io))) {
+            if (self.widgets.copy_feedback.complete(result, pacing.clock.monotonic(self.app.io))) {
                 self.widgets.dispatcher.revision +%= 1;
             }
 
@@ -1381,7 +1382,7 @@ fn finishInput(self: *GuiAdapter, pending: bool) !void {
     }
 
     if (self.binding_timeout.update(app.io, self.router.bindingDeadline()) == .schedule) {
-        self.driver.inbox.start(.binding_timeout, .{ client.wait, .{ app.io, &self.binding_timeout } }) catch |err| {
+        self.driver.inbox.start(.binding_timeout, .{ pacing.deadline_timer.wait, .{ app.io, &self.binding_timeout } }) catch |err| {
             self.binding_timeout.schedulingFailed();
 
             return err;
@@ -1405,7 +1406,7 @@ fn expireBinding(self: *GuiAdapter, result: anyerror!void) !void {
 
     try self.binding_timeout.complete(result);
     const pending = self.router.prefixPending();
-    self.stopped = try self.applyInputDecision(self.router.expireBinding(client.monotonic(app.io))) == .stop;
+    self.stopped = try self.applyInputDecision(self.router.expireBinding(pacing.clock.monotonic(app.io))) == .stop;
     try self.finishInput(pending);
 }
 
@@ -1704,7 +1705,7 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
         return error.PresentationBusy;
     }
 
-    self.chrome.now_ns = client.monotonic(self.app.io);
+    self.chrome.now_ns = pacing.clock.monotonic(self.app.io);
     try thread_scroll.advance(self, self.chrome.now_ns);
     try thread_selection.prepare(self);
     self.diagrams.beginFrame();

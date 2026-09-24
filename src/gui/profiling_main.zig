@@ -1,4 +1,5 @@
 //! Offline CPU workloads. This executable does not open a native window.
+const cellgrid = @import("cellgrid");
 const std = @import("std");
 const core = @import("telar-core");
 const options = @import("profile_options");
@@ -65,7 +66,7 @@ const Probe = struct {
 
     /// Reports sizes and runs validated fixed workloads. Example: `try probe.run();`
     pub fn run(self: *Probe) !void {
-        inline for (.{ core.Cell, data.Pane, data.Tabs, data.Panes, client.Client, Renderer, CellMesh, Quad.Quad, ThreadFlow, Widget, core.ProfileStore }) |T| {
+        inline for (.{ cellgrid.Cell, data.Pane, data.Tabs, data.Panes, client.Client, Renderer, CellMesh, Quad.Quad, ThreadFlow, Widget, core.ProfileStore }) |T| {
             try self.writer.print("{{\"type\":\"layout\",\"name\":\"{s}\",\"size\":{d},\"alignment\":{d},\"fields\":[", .{ @typeName(T), @sizeOf(T), @alignOf(T) });
             inline for (std.meta.fields(T), 0..) |field, index| {
                 try self.writer.print("{s}{{\"name\":\"{s}\",\"offset\":{d},\"size\":{d}}}", .{ if (index == 0) "" else ",", field.name, @offsetOf(T, field.name), @sizeOf(field.type) });
@@ -126,7 +127,7 @@ const Probe = struct {
             cell.* = .{};
             cell.bytes[0] = 'b';
         }
-        const area: core.Rect = .{ .w = size.cols, .h = size.rows };
+        const area: cellgrid.Rect = .{ .w = size.cols, .h = size.rows };
         var before: core.ProfileCounters = .{};
         var started: i96 = 0;
         var checksum: usize = 0;
@@ -181,10 +182,10 @@ const Probe = struct {
                 .resize => _ = try renderer.measure(.{ .width = renderer.viewport[0], .height = renderer.viewport[1] + (if (stimulus % 2 == 0) @as(u32, 1) else 0) - (if (stimulus % 2 == 1) @as(u32, 1) else 0), .scale = 1 }),
             }
             renderer.begin();
-            const first_area: core.Rect = if (multiple) .{ .w = area.w, .h = area.h / 2 } else area;
+            const first_area: cellgrid.Rect = if (multiple) .{ .w = area.w, .h = area.h / 2 } else area;
             try renderer.drawPane(.{ .pane = &pane, .view = .{ .pane_id = pane.id, .outer = first_area, .content = first_area, .focused = true, .display_index = 1 }, .hide_cursor = mode != .cursor and mode != .focus, .copy = if (mode == .selection) .{ .cursor = .{ .x = @intCast(stimulus % size.cols), .y = @intCast(stimulus % size.rows) }, .anchor = .{ .x = 0, .y = 0 }, .linewise = false, .pointer = true } else null });
             if (multiple) {
-                const second_area: core.Rect = .{ .y = first_area.h, .w = area.w, .h = area.h - first_area.h };
+                const second_area: cellgrid.Rect = .{ .y = first_area.h, .w = area.w, .h = area.h - first_area.h };
                 try renderer.drawPane(.{ .pane = &other, .view = .{ .pane_id = other.id, .outer = second_area, .content = second_area, .focused = false, .display_index = 2 }, .hide_cursor = true });
             }
             renderer.seal();

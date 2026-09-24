@@ -1,7 +1,7 @@
 //! One cell row lent to a pixel band: a copy of the canvas whose origin is
 //! the row centred in the band. The caller owns the temporary canvas through
 //! its children's synchronous draws.
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Canvas = @import("Canvas.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
@@ -9,7 +9,7 @@ const LentRow = @This();
 
 canvas: Canvas,
 /// The lent row in the lent canvas's own grid: `x = 0`, `y = 0`, one row.
-area: core.Rect,
+area: cellgrid.Rect,
 
 /// Places the row over `bounds`; false when the band holds no whole cell.
 /// Example:

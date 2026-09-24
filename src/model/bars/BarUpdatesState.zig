@@ -1,5 +1,5 @@
+const pacing = @import("pacing");
 const model = @import("model.zig");
-const core = @import("telar-core");
 const bar_updates = @import("../operations/configuration/bar_timing.zig");
 const CommandExecution = @import("../operations/configuration/CommandExecution.zig");
 const Synchronization = @import("../operations/configuration/Synchronization.zig");
@@ -8,7 +8,7 @@ const DueInput = @import("../operations/configuration/DueInput.zig");
 const Due = @import("../operations/configuration/Due.zig");
 const BarUpdatesState = @This();
 
-scheduler: core.DeadlineScheduler = .{},
+scheduler: pacing.DeadlineScheduler = .{},
 generation: u64 = 0,
 deadlines: [bar_updates.position_count]u64 = @splat(bar_updates.no_deadline),
 pending_callbacks: u8 = 0,

@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const frontend = @import("telar-frontend");
 const core = @import("telar-core");
@@ -19,7 +20,7 @@ pub fn init(gpa: std.mem.Allocator) !MultiplexerContext {
         .tab_id = @enumFromInt(1),
     };
     try data.workspace_handoff.bootstrap(model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = main.cols, .rows = main.rows } });
-    const area: core.Rect = .{ .w = main.cols, .h = main.rows };
+    const area: cellgrid.Rect = .{ .w = main.cols, .h = main.rows };
     try data.pane_split.split(model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
     try data.pane_split.split(model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(3), .location = location, .axis = .vertical, .area = area });
     try data.pane_split.split(model, 0, .{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(4), .location = location, .axis = .vertical, .area = area });

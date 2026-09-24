@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
@@ -204,7 +205,7 @@ fn row(context: *anyopaque, canvas: *Canvas, value: DiffRow) !void {
     if (query.len != 0 and search_scope) {
         const fragment_start = fragment_offset - offset;
         var occurrence = std.mem.indexOfPos(u8, value.line.text, fragment_start -| (query.len - 1), query);
-        var clusters: core.GraphemeIterator = .{ .bytes = value.fragment };
+        var clusters: cellgrid.GraphemeIterator = .{ .bytes = value.fragment };
         var x = value.code.x;
         while (clusters.next()) |cluster| {
             const end = fragment_start + clusters.index;
@@ -227,7 +228,7 @@ fn row(context: *anyopaque, canvas: *Canvas, value: DiffRow) !void {
     if (w.copy_range) |selection| {
         const low = @min(selection[0], selection[1]);
         const high = @max(selection[0], selection[1]);
-        var clusters: core.GraphemeIterator = .{ .bytes = value.fragment };
+        var clusters: cellgrid.GraphemeIterator = .{ .bytes = value.fragment };
         var x = value.code.x;
         while (clusters.next()) |cluster| {
             const end = fragment_offset + clusters.index;

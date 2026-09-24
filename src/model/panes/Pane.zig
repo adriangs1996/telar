@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const agent_options_module = @import("agent_options.zig");
 const std = @import("std");
 const builtin = @import("builtin");
@@ -16,7 +17,7 @@ const Composer = @import("Composer.zig");
 gpa: std.mem.Allocator,
 id: core.PaneId,
 location: core.TabLocation,
-buffer: core.Buffer,
+buffer: cellgrid.Buffer,
 text_metadata: *core.TextMetadata,
 damage_rows: []DamageRow,
 attached: bool,
@@ -66,7 +67,7 @@ pub fn init(gpa: std.mem.Allocator, initial: Initial) !Pane {
     }
 
     try initial.spec.size.validate();
-    var buffer = try core.Buffer.init(gpa, initial.spec.size.cols, initial.spec.size.rows);
+    var buffer = try cellgrid.Buffer.init(gpa, initial.spec.size.cols, initial.spec.size.rows);
     errdefer buffer.deinit();
 
     const rows = try gpa.alloc(DamageRow, initial.spec.size.rows);
@@ -172,7 +173,7 @@ pub fn applyFrame(self: *Pane, frame: core.FrameView) !Applied {
     self.applied_frame_id = frame.frame_id;
     self.pending_frame_id = frame.frame_id;
     core.profiling.add(.pane_copy_cells, applied.cells);
-    core.profiling.add(.pane_copy_bytes, applied.cells * @sizeOf(core.Cell));
+    core.profiling.add(.pane_copy_bytes, applied.cells * @sizeOf(cellgrid.Cell));
     return applied;
 }
 

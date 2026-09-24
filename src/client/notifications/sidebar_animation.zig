@@ -1,6 +1,6 @@
 //! Application policy for the model-owned sidebar animation loop.
 
-const core = @import("telar-core");
+const pacing = @import("pacing");
 const data = @import("model");
 const std = @import("std");
 const Client = @import("../execution/Client.zig");
@@ -41,7 +41,7 @@ fn scheduleSidebarAnimation(client: *Client) !void {
         return;
     }
 
-    const deadline_ns = core.monotonic(client.io) +| sidebar_animation_interval_ns;
+    const deadline_ns = pacing.clock.monotonic(client.io) +| sidebar_animation_interval_ns;
     switch (scheduler.update(client.io, deadline_ns)) {
         .idle, .retained => {},
         .schedule => client.to_workers.push(.{ .timer = .{ .kind = .sidebar_animation, .scheduler = scheduler } }) catch |err| {

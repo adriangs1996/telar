@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const TestingPaneFrame = @This();
 
@@ -9,4 +10,4 @@ rows: u16 = 2,
 cursor: core.Cursor = .{},
 input_modes: core.InputModes = .{},
 scroll: core.Scroll = .{ .total_rows = 2, .offset = 0 },
-cells: ?[]const core.Cell = null,
+cells: ?[]const cellgrid.Cell = null,

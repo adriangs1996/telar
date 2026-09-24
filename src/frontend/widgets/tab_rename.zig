@@ -1,5 +1,6 @@
 //! Inline tab-name editor occupying the bottom bar.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const Context = @import("Context.zig");
@@ -37,8 +38,8 @@ pub fn render(context: *Context, input: TabRenameInput) Cursor {
         .bg = context.palette.panel_bg,
         .flags = .{ .bold = true },
     } });
-    const field_x = area.x + core.measure(prefix);
-    const field_area: core.Rect = .{
+    const field_x = area.x + cellgrid.text.measure(prefix);
+    const field_area: cellgrid.Rect = .{
         .x = field_x,
         .y = area.y,
         .w = area.w -| (field_x - area.x),
@@ -62,12 +63,12 @@ pub fn render(context: *Context, input: TabRenameInput) Cursor {
 fn renderCreateForm(context: *Context, input: TabRenameInput, form: *const data.WorkspaceForm) Cursor {
     const area = input.area;
     const prompt = input.prompt.?;
-    const label_style: core.Style = .{ .fg = context.palette.accent, .bg = context.palette.panel_bg, .flags = .{ .bold = true } };
+    const label_style: cellgrid.Style = .{ .fg = context.palette.accent, .bg = context.palette.panel_bg, .flags = .{ .bold = true } };
     var x = area.x;
     const end = area.x + area.w;
     x += writeLabel(context, .{ .area = area, .x = x, .text = " new context: ", .style = label_style });
 
-    const name_area: core.Rect = .{ .x = x, .y = area.y, .w = @min(24, end -| x), .h = 1 };
+    const name_area: cellgrid.Rect = .{ .x = x, .y = area.y, .w = @min(24, end -| x), .h = 1 };
     var name_field = prompt.field;
     const name_view = name_field.view(name_area.w);
     writeField(context, .{ .area = name_area, .text = name_view.text, .focused = form.focus == .name });
@@ -77,8 +78,8 @@ fn renderCreateForm(context: *Context, input: TabRenameInput, form: *const data.
     const remaining = end -| x;
     const entries = if (input.path_completion) |state| state.entries() else &.{};
     const list_wanted = !form.confirm_create and entries.len != 0 and remaining > 30;
-    const hint_width: u16 = if (form.confirm_create) @min(core.measure(create_hint), remaining / 2) else 0;
-    const directory_area: core.Rect = .{ .x = x, .y = area.y, .w = if (list_wanted) remaining / 2 else remaining - hint_width, .h = 1 };
+    const hint_width: u16 = if (form.confirm_create) @min(cellgrid.text.measure(create_hint), remaining / 2) else 0;
+    const directory_area: cellgrid.Rect = .{ .x = x, .y = area.y, .w = if (list_wanted) remaining / 2 else remaining - hint_width, .h = 1 };
     var directory_field = prompt.directory;
     const directory_view = directory_field.view(directory_area.w);
     writeField(context, .{ .area = directory_area, .text = directory_view.text, .focused = form.focus == .directory });
@@ -114,7 +115,7 @@ fn writeLabel(context: *Context, input: LabelInput) u16 {
     const x = input.x;
     const text = input.text;
     const style = input.style;
-    const width = @min(core.measure(text), (area.x + area.w) -| x);
+    const width = @min(cellgrid.text.measure(text), (area.x + area.w) -| x);
     if (width == 0) {
         return 0;
     }
@@ -141,15 +142,15 @@ fn writeField(context: *Context, input: FieldInput) void {
 
 /// One single-row field of the inline new-context form.
 const FieldInput = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     text: []const u8,
     focused: bool,
 };
 
 /// One clipped label written at a column of a single-row area.
 const LabelInput = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     x: u16,
     text: []const u8,
-    style: core.Style,
+    style: cellgrid.Style,
 };

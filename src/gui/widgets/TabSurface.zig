@@ -1,6 +1,6 @@
 //! A tab's neutral outline and rounded upper corners. Its open lower edge
 //! joins the terminal background without a separate selection stripe.
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Canvas = @import("Canvas.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
@@ -30,7 +30,7 @@ pub fn draw(self: TabSurface, canvas: *Canvas) !void {
     try shape(canvas, inner, color);
 }
 
-fn shape(canvas: *Canvas, bounds: Rect, color: core.Color) !void {
+fn shape(canvas: *Canvas, bounds: Rect, color: cellgrid.Color) !void {
     const radius = @min(canvas.chrome.px(8), @min(bounds.width, bounds.height) / 2);
     const head: Surface = .{ .bounds = .{ .x = bounds.x, .y = bounds.y, .width = bounds.width, .height = radius * 2 }, .fill = .{ .radius = radius, .color = color } };
     try head.draw(canvas);

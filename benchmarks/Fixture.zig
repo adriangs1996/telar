@@ -1,11 +1,12 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const std = @import("std");
 const main = @import("main.zig");
 const Fixture = @This();
 
 gpa: std.mem.Allocator,
-cells_a: []core.Cell,
-cells_b: []core.Cell,
+cells_a: []cellgrid.Cell,
+cells_b: []cellgrid.Cell,
 encode_buffer: []u8,
 terminal_output: []u8,
 sparse_storage_a: []u8,
@@ -22,9 +23,9 @@ fragmented_payloads: [2][]const u8,
 full_payloads: [2][]const u8,
 
 pub fn init(gpa: std.mem.Allocator) !Fixture {
-    const cells_a = try gpa.alloc(core.Cell, main.cell_count);
+    const cells_a = try gpa.alloc(cellgrid.Cell, main.cell_count);
     errdefer gpa.free(cells_a);
-    const cells_b = try gpa.alloc(core.Cell, main.cell_count);
+    const cells_b = try gpa.alloc(cellgrid.Cell, main.cell_count);
     errdefer gpa.free(cells_b);
     main.fillEditor(cells_a, 0);
     main.fillEditor(cells_b, 1);

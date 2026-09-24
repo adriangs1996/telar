@@ -1,3 +1,4 @@
+const pacing = @import("pacing");
 const core = @import("telar-core");
 const std = @import("std");
 const ReviewJobs = @import("../change_review/Jobs.zig");
@@ -73,7 +74,7 @@ review_owner_stamp: u64 = 0,
 review_discovery_blocked: bool = false,
 editor_open: EditorOpenState = .{},
 input_sequence: u64 = 0,
-cell_timer: core.DeadlineScheduler = .{},
+cell_timer: pacing.DeadlineScheduler = .{},
 
 /// Composes the model over resources that outlive it. The caller keeps the
 /// model at a stable address until `deinit` completes.

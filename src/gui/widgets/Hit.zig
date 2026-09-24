@@ -1,5 +1,5 @@
+const cellgrid = @import("cellgrid");
 const action_module = @import("action.zig");
-const core = @import("telar-core");
 
-area: core.Rect,
+area: cellgrid.Rect,
 action: action_module.Action,

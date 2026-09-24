@@ -1,3 +1,4 @@
+const pacing = @import("pacing");
 const core = @import("telar-core");
 const Pane = @import("../../pane/Pane.zig");
 const CellSync = @import("CellSync.zig");
@@ -20,7 +21,7 @@ pub const CommitEffect = @import("CommitEffect.zig");
 pane: *Pane,
 cells: CellSync,
 graphics: GraphicsSync,
-cell_pacer: core.Pacer = .{},
+cell_pacer: pacing.Pacer = .{},
 cell_deadline_ns: ?u64 = null,
 observed_cwd_revision: u64 = 0,
 observed_foreground_revision: u64 = 0,
@@ -216,7 +217,7 @@ pub fn prepareNextCells(self: *Attachment, preparation: CellPreparation) !?Prepa
         return null;
     }
 
-    const now_ns = core.monotonic(preparation.io);
+    const now_ns = pacing.clock.monotonic(preparation.io);
     if (pane.cell_input_ns) |input_ns| {
         if (self.cell_pacer.last_input_ns != input_ns) {
             self.cell_pacer.noteInput(input_ns);

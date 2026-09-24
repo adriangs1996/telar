@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
 const ClientModel = @import("../ClientModel.zig");
@@ -14,7 +15,7 @@ test "pane focus resolves identity and direction through one visible revision" {
     };
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
-    const area: core.Rect = .{ .w = 80, .h = 24 };
+    const area: cellgrid.Rect = .{ .w = 80, .h = 24 };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try model_data.pane_split.split(&model, model.tabs.active, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     _ = model.panes.find(first).?.setForegroundName("nvim");
@@ -69,7 +70,7 @@ test "fullscreen directional focus publishes geometry only for horizontal moves"
     };
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
-    const area: core.Rect = .{ .w = 80, .h = 24 };
+    const area: cellgrid.Rect = .{ .w = 80, .h = 24 };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try model_data.pane_split.split(&model, model.tabs.active, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .vertical, .area = area });
     try std.testing.expect(model.tabs.layout[model.tabs.active].focusPane(first));
@@ -113,7 +114,7 @@ test "pane resize owns direction resolution geometry and visible revisions" {
     };
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
-    const area: core.Rect = .{ .w = 101, .h = 41 };
+    const area: cellgrid.Rect = .{ .w = 101, .h = 41 };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 101, .rows = 41 } });
     try model_data.pane_split.split(&model, model.tabs.active, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(model.tabs.layout[model.tabs.active].focusPane(first));
@@ -163,7 +164,7 @@ test "pane fullscreen preserves tiled geometry through two visible revisions" {
     };
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
-    const area: core.Rect = .{ .w = 101, .h = 41 };
+    const area: cellgrid.Rect = .{ .w = 101, .h = 41 };
     try std.testing.expect(model.togglePaneFullscreen(.{ .area = area }) == null);
     try std.testing.expectEqual(Version{}, model.version());
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 101, .rows = 41 } });
@@ -204,7 +205,7 @@ test "splitting a single fullscreen pane focuses the new pane without leaving fu
     };
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
-    const area: core.Rect = .{ .w = 101, .h = 41 };
+    const area: cellgrid.Rect = .{ .w = 101, .h = 41 };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
     const entered = model.togglePaneFullscreen(.{ .area = area }).?;
     try std.testing.expect(entered.fullscreen);
@@ -357,7 +358,7 @@ test "split confirmation replaces a target retired during pane creation" {
     try std.testing.expect(model.panes.find(created).?.attached);
     try std.testing.expectEqual(created, model.tabs.layout[model.tabs.active].focused().?);
     try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
-    try std.testing.expectEqualDeep(core.Rect{ .w = 40, .h = 10 }, commit.area);
+    try std.testing.expectEqualDeep(cellgrid.Rect{ .w = 40, .h = 10 }, commit.area);
     try std.testing.expectEqual(model.tabs.layout[model.tabs.active].currentRevision(), commit.layout_revision);
     try std.testing.expectEqual(model.version().workspace, commit.workspace_revision);
     try std.testing.expectEqual(model.version().tabs, commit.tabs_revision);
@@ -463,7 +464,7 @@ test "applying layouts rejects foreign membership before changing focus or geome
     const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
-    const area: core.Rect = .{ .w = 80, .h = 24 };
+    const area: cellgrid.Rect = .{ .w = 80, .h = 24 };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try model_data.pane_split.split(&model, model.tabs.active, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     const saved = model.tabs.layout[model.tabs.active];

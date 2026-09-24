@@ -1,5 +1,6 @@
 //! Multi-pane client state and composition.
 
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
@@ -141,7 +142,7 @@ pub fn setPaneCursor(screen: *Screen, pane: *const data.Pane, projection: PaneCu
     };
 }
 
-pub fn syncComposed(screen: *Screen, composed: *const core.Buffer) !usize {
+pub fn syncComposed(screen: *Screen, composed: *const cellgrid.Buffer) !usize {
     std.debug.assert(screen.sizeMatches(composed.w, composed.h));
     var damaged: usize = 0;
     var y: u16 = 0;
@@ -163,7 +164,7 @@ pub fn syncComposed(screen: *Screen, composed: *const core.Buffer) !usize {
     return damaged;
 }
 
-pub fn syncComposedRow(screen: *Screen, composed: *const core.Buffer, y: u16) !usize {
+pub fn syncComposedRow(screen: *Screen, composed: *const cellgrid.Buffer, y: u16) !usize {
     std.debug.assert(screen.sizeMatches(composed.w, composed.h));
     if (y >= composed.h) {
         return 0;
@@ -184,8 +185,8 @@ pub fn syncComposedRow(screen: *Screen, composed: *const core.Buffer, y: u16) !u
     }, &sink);
 }
 
-pub fn drawBorder(buffer: *core.Buffer, input: BorderInput) Plan {
-    const style: core.Style = if (input.view.focused)
+pub fn drawBorder(buffer: *cellgrid.Buffer, input: BorderInput) Plan {
+    const style: cellgrid.Style = if (input.view.focused)
         .{ .fg = input.palette.accent, .flags = .{ .bold = true } }
     else
         .{ .fg = input.palette.overlay0 };
@@ -204,11 +205,11 @@ pub fn drawBorder(buffer: *core.Buffer, input: BorderInput) Plan {
         .{ input.view.display_index, if (input.foreground_name.len == 0) "shell" else input.foreground_name },
     ) catch " pane ";
     buffer.box(input.view.outer, .{ .style = style, .title = text });
-    drawProgress(buffer, input, core.measure(text));
+    drawProgress(buffer, input, cellgrid.text.measure(text));
     return .{};
 }
 
-fn drawFullscreenTabs(buffer: *core.Buffer, input: BorderInput) Result {
+fn drawFullscreenTabs(buffer: *cellgrid.Buffer, input: BorderInput) Result {
     const model = input.fullscreen_model.?;
     const outer = input.view.outer;
     if (outer.w <= 4 or outer.h < 2) {
@@ -233,7 +234,7 @@ fn drawFullscreenTabs(buffer: *core.Buffer, input: BorderInput) Result {
     });
 }
 
-fn drawProgress(buffer: *core.Buffer, input: BorderInput, title_width: u16) void {
+fn drawProgress(buffer: *cellgrid.Buffer, input: BorderInput, title_width: u16) void {
     if (input.progress_state == .remove or input.view.outer.w < 8) {
         return;
     }
@@ -250,7 +251,7 @@ fn drawProgress(buffer: *core.Buffer, input: BorderInput, title_width: u16) void
         .pause => input.palette.yellow,
         else => input.palette.teal,
     };
-    const progress_style: core.Style = .{ .fg = color, .flags = .{ .bold = true } };
+    const progress_style: cellgrid.Style = .{ .fg = color, .flags = .{ .bold = true } };
     const head = switch (input.progress_state) {
         .@"error" => "×",
         .pause => "Ⅱ",
@@ -288,12 +289,12 @@ fn bouncingPosition(width: u16, frame: u8) u16 {
     return @intCast((@as(u32, width - 1) * phase) / 127);
 }
 
-pub fn drawGraphicsPlaceholder(buffer: *core.Buffer, area: core.Rect, palette: *const data.Palette) void {
+pub fn drawGraphicsPlaceholder(buffer: *cellgrid.Buffer, area: cellgrid.Rect, palette: *const data.Palette) void {
     if (area.w == 0 or area.h == 0) {
         return;
     }
     const label = "[graphics unavailable]";
-    const width = @min(area.w, core.measure(label));
+    const width = @min(area.w, cellgrid.text.measure(label));
     const x = area.x + (area.w - width) / 2;
     const y = area.y + area.h / 2;
     _ = buffer.writeTruncated(area, .{ .point = .{ .x = x, .y = y }, .text = label, .max_width = width, .style = .{
@@ -304,7 +305,7 @@ pub fn drawGraphicsPlaceholder(buffer: *core.Buffer, area: core.Rect, palette: *
 }
 
 test "progress thread weaves determinate state and moves indeterminate shuttle" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 32, 3);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 32, 3);
     defer buffer.deinit();
     const view: data.LayoutView = .{
         .pane_id = @enumFromInt(1),
@@ -403,7 +404,7 @@ test "compositor places a bottom reservation below only its target pane" {
     const gpa = std.testing.allocator;
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
-    const area: core.Rect = .{ .w = 40, .h = 12 };
+    const area: cellgrid.Rect = .{ .w = 40, .h = 12 };
     var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
@@ -571,7 +572,7 @@ test "fullscreen composes only the focused pane across the whole tab" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const area: core.Rect = .{ .w = 40, .h = 7 };
+    const area: cellgrid.Rect = .{ .w = 40, .h = 7 };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 6 } });
     try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(model.tabs.layout[0].focusPane(@enumFromInt(1)));
@@ -610,7 +611,7 @@ test "single-pane fullscreen draws labels and progress and restores borderless c
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const area: core.Rect = .{ .w = 40, .h = 7 };
+    const area: cellgrid.Rect = .{ .w = 40, .h = 7 };
     const pane_id: core.PaneId = @enumFromInt(1);
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
     const pane = model.panes.find(pane_id).?;
@@ -656,7 +657,7 @@ test "fullscreen border keeps the pane's tiled display index" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const area: core.Rect = .{ .w = 40, .h = 7 };
+    const area: cellgrid.Rect = .{ .w = 40, .h = 7 };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 6 } });
     try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(model.tabs.layout[0].focusPane(@enumFromInt(2)));
@@ -677,7 +678,7 @@ test "fullscreen border keeps the pane's tiled display index" {
     try std.testing.expectEqualStrings("1", screen.back.cells[3].text());
     try std.testing.expectEqualStrings("2", screen.back.cells[13].text());
     try std.testing.expectEqual(data.theme_support.default_theme.palette.accent, screen.back.cells[13].style.bg);
-    try std.testing.expectEqual(core.Color.default, screen.back.cells[3].style.bg);
+    try std.testing.expectEqual(cellgrid.Color.default, screen.back.cells[3].style.bg);
     try std.testing.expectEqualStrings("│", screen.back.cells[area.w].text());
     try std.testing.expectEqualStrings("│", screen.back.cells[2 * area.w - 1].text());
 }
@@ -690,7 +691,7 @@ test "fullscreen tabs follow focus and survive progress animation without idle r
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const area: core.Rect = .{ .x = 2, .y = 1, .w = 60, .h = 12 };
+    const area: cellgrid.Rect = .{ .x = 2, .y = 1, .w = 60, .h = 12 };
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
     const third: core.PaneId = @enumFromInt(3);
@@ -714,7 +715,7 @@ test "fullscreen tabs follow focus and survive progress animation without idle r
 
     try std.testing.expectEqual(second, model.tabs.layout[0].focusDirection(.right, area).?);
     _ = try testingRender(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
-    try std.testing.expectEqual(core.Color.default, screen.back.at(14, 1).?.style.bg);
+    try std.testing.expectEqual(cellgrid.Color.default, screen.back.at(14, 1).?.style.bg);
     try std.testing.expectEqual(palette.accent, screen.back.at(25, 1).?.style.bg);
     const idle = try testingRender(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
     try std.testing.expect(!idle.full);
@@ -779,7 +780,7 @@ test "pane borders use the selected theme without coloring pane contents" {
     });
 
     try std.testing.expectEqualDeep(selected.palette.accent, screen.back.cells[10].style.fg);
-    try std.testing.expectEqualDeep(core.Color.default, screen.back.cells[21].style.bg);
+    try std.testing.expectEqualDeep(cellgrid.Color.default, screen.back.cells[21].style.bg);
     try std.testing.expectEqualStrings("1", screen.back.at(3, 0).?.text());
     try std.testing.expectEqualStrings("z", screen.back.at(5, 0).?.text());
     try std.testing.expectEqualStrings("2", screen.back.at(13, 0).?.text());
@@ -829,7 +830,7 @@ test "frame state and pending acknowledgements stay per pane" {
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 2, .rows = 1 } });
     try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 7, .h = 3 } });
 
-    const cells = [_]core.Cell{ .{}, .{} };
+    const cells = [_]cellgrid.Cell{ .{}, .{} };
     const spans = [_]core.Span{.{ .start = 0, .cells = &cells }};
     var encoded: [256]u8 = undefined;
     const payload = try core.encodePaneFrame(&encoded, .{
@@ -926,7 +927,7 @@ test "fullscreen presentation commits include hidden panes" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const area: core.Rect = .{ .w = 20, .h = 4 };
+    const area: cellgrid.Rect = .{ .w = 20, .h = 4 };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 9, .rows = 3 } });
     try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(model.tabs.layout[0].focusPane(@enumFromInt(1)));
@@ -975,7 +976,7 @@ test "snapshot discovery keeps a pane the area cannot fit" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const area: core.Rect = .{ .w = 4, .h = 3 };
+    const area: cellgrid.Rect = .{ .w = 4, .h = 3 };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 4, .rows = 3 } });
 
     try data.tab_snapshot_reconciliation.addDiscovered(&model, 0, .{ .pane_id = @enumFromInt(2), .location = location, .area = area });
@@ -1005,7 +1006,7 @@ test "unchanged composition produces no terminal damage" {
     var initial_writer = std.Io.Writer.fixed(&output);
     _ = try screen.flush(&initial_writer);
 
-    const snapshot_cells = [_]core.Cell{.{}} ** 24;
+    const snapshot_cells = [_]cellgrid.Cell{.{}} ** 24;
     const snapshot_spans = [_]core.Span{.{
         .start = 0,
         .cells = &snapshot_cells,
@@ -1035,8 +1036,8 @@ test "unchanged composition produces no terminal damage" {
     try std.testing.expectEqual(@as(usize, 0), second.damaged_cells);
     try std.testing.expectEqual(@as(usize, 0), unchanged_flush.scanned);
 
-    const patch_cells = [_]core.Cell{.{
-        .bytes = [_]u8{'x'} ++ [_]u8{0} ** (core.Cell.max_bytes - 1),
+    const patch_cells = [_]cellgrid.Cell{.{
+        .bytes = [_]u8{'x'} ++ [_]u8{0} ** (cellgrid.Cell.max_bytes - 1),
     }};
     const patch_spans = [_]core.Span{.{ .start = 11, .cells = &patch_cells }};
     const patch_payload = try core.encodePaneFrame(&encoded, .{
@@ -1148,7 +1149,7 @@ test "pane index survives collisions removal and slot reuse" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const area: core.Rect = .{ .w = 80, .h = 24 };
+    const area: cellgrid.Rect = .{ .w = 80, .h = 24 };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(129), .location = location, .axis = .horizontal, .area = area });
 
@@ -1193,7 +1194,7 @@ test "pane mouse planning keeps buttons focused and wheels pointer-local" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const area: core.Rect = .{ .w = 80, .h = 24 };
+    const area: cellgrid.Rect = .{ .w = 80, .h = 24 };
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 39, .rows = 24 } });
@@ -1245,7 +1246,7 @@ test "pane mouse planning keeps buttons focused and wheels pointer-local" {
 test "focused pane mouse planning ignores missing and empty pane content" {
     var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
-    const area: core.Rect = .{ .w = 80, .h = 24 };
+    const area: cellgrid.Rect = .{ .w = 80, .h = 24 };
     const pane_id: core.PaneId = @enumFromInt(1);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1267,7 +1268,7 @@ const TestingComposition = struct {
     /// The composed tab; tests compose their only tab.
     tab: usize = 0,
     screen: *Screen,
-    area: core.Rect,
+    area: cellgrid.Rect,
     palette: *const data.Palette = &data.theme_support.default_theme.palette,
     copy: ?client.CopyProjection = null,
     bottom_reservation: ?data.PaneBottomReservation = null,
@@ -1287,13 +1288,13 @@ const BorderInput = struct {
 };
 
 const PaneCursor = struct {
-    content: core.Rect,
+    content: cellgrid.Rect,
     copy: ?data.CopyModeView,
 };
 
 const PaneRange = struct {
     screen: *Screen,
-    composed: *core.Buffer,
+    composed: *cellgrid.Buffer,
     pane: *const data.Pane,
     destination_x: u16,
     destination_y: u16,
@@ -1312,7 +1313,7 @@ const ComposeSink = struct {
     /// Copies each changed run into the composed buffer and the screen at once,
     /// so the composed cache and the terminal patch can never disagree.
     patch: PatchSink,
-    composed_row: []core.Cell,
+    composed_row: []cellgrid.Cell,
 
     pub fn copyRun(self: *ComposeSink, run_start: u16, count: u16) !void {
         @memcpy(

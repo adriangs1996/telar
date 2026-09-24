@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const std = @import("std");
 const Fixture = @import("Fixture.zig");
@@ -5,16 +6,16 @@ const main = @import("main.zig");
 const DamageContext = @This();
 
 gpa: std.mem.Allocator,
-acknowledged: []core.Cell,
-current: []core.Cell,
+acknowledged: []cellgrid.Cell,
+current: []cellgrid.Cell,
 damaged_rows: []bool,
 spans: []core.Span,
 changed_index: usize,
 
 pub fn init(gpa: std.mem.Allocator, fixture: *const Fixture, workload: main.Workload) !DamageContext {
-    const acknowledged = try gpa.dupe(core.Cell, fixture.cells_a);
+    const acknowledged = try gpa.dupe(cellgrid.Cell, fixture.cells_a);
     errdefer gpa.free(acknowledged);
-    const current = try gpa.dupe(core.Cell, fixture.cells_a);
+    const current = try gpa.dupe(cellgrid.Cell, fixture.cells_a);
     errdefer gpa.free(current);
     const damaged_rows = try gpa.alloc(bool, main.rows);
     errdefer gpa.free(damaged_rows);

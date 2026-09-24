@@ -1,6 +1,6 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Cursor = @import("Cursor.zig");
 const Output = @This();
 
-area: core.Rect,
+area: cellgrid.Rect,
 cursor: ?Cursor,

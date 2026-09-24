@@ -6,7 +6,7 @@
 //! animating. Any media failure removes every placement and leaves the cell
 //! renderer fully functional.
 
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const kitty_protocol = @import("kitty_protocol");
 const data = @import("model");
 const std = @import("std");
@@ -34,7 +34,7 @@ pub fn resolveColors(palette: *const data.Palette) ?Colors {
     };
 }
 
-fn rgb(color: core.Color) ?[3]u8 {
+fn rgb(color: cellgrid.Color) ?[3]u8 {
     return color.rgbChannels();
 }
 
@@ -136,7 +136,7 @@ test "large toast transmission is chunked across bounded media passes" {
         .target = .{ .select_tab = @enumFromInt(7) },
     });
     _ = center.advance(data.notifications.transition_duration_ns);
-    const area: core.Rect = .{ .x = 20, .y = 1, .w = 48, .h = 4 };
+    const area: cellgrid.Rect = .{ .x = 20, .y = 1, .w = 48, .h = 4 };
     renderer.prepare(.{ .area = area, .center = &center, .palette = &data.theme_support.default_theme.palette });
     try std.testing.expect(renderer.transmissionPending());
     try std.testing.expect(!renderer.coversAll());
@@ -187,7 +187,7 @@ test "rasterization waits for media idle and oversized cells fall back" {
     var center: data.Center = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
     _ = center.advance(data.notifications.transition_duration_ns);
-    const area: core.Rect = .{ .w = 48, .h = 4 };
+    const area: cellgrid.Rect = .{ .w = 48, .h = 4 };
 
     renderer.setMediaIdle(false);
     renderer.prepare(.{ .area = area, .center = &center, .palette = &data.theme_support.default_theme.palette });

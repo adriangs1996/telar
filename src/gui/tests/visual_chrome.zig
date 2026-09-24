@@ -1,5 +1,6 @@
 //! Slice 5 of the GUI visual language: pixel chrome bands, the tab strip,
 //! attention dots and rings, pane headers and the toast policy.
+const cellgrid = @import("cellgrid");
 const QuadList = @import("../render/QuadList.zig");
 const frame_widget = @import("../widgets/frame_widget.zig");
 const data = @import("model");
@@ -96,7 +97,7 @@ fn blockedAgents(location: core.TabLocation, status: core.AgentStatus) !data.Age
     return agents;
 }
 
-fn dotQuads(quads: []const Quad, bounds: Rect, color: core.Color) usize {
+fn dotQuads(quads: []const Quad, bounds: Rect, color: cellgrid.Color) usize {
     var count: usize = 0;
     for (quads) |quad| {
         const rounded = quad.radius > 0 and quad.width == quad.height and quad.width <= 8;
@@ -109,7 +110,7 @@ fn dotQuads(quads: []const Quad, bounds: Rect, color: core.Color) usize {
     return count;
 }
 
-fn coloredQuads(quads: []const Quad, bounds: Rect, color: core.Color) usize {
+fn coloredQuads(quads: []const Quad, bounds: Rect, color: cellgrid.Color) usize {
     var count: usize = 0;
     for (quads) |quad| {
         const inside = quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height;
@@ -119,7 +120,7 @@ fn coloredQuads(quads: []const Quad, bounds: Rect, color: core.Color) usize {
     return count;
 }
 
-fn matchesColor(quad: Quad, color: core.Color) bool {
+fn matchesColor(quad: Quad, color: cellgrid.Color) bool {
     const rgb = color.rgbChannels().?;
     return @abs(quad.r - @as(f32, @floatFromInt(rgb[0])) / 255) < 0.01 and @abs(quad.g - @as(f32, @floatFromInt(rgb[1])) / 255) < 0.01 and @abs(quad.b - @as(f32, @floatFromInt(rgb[2])) / 255) < 0.01;
 }

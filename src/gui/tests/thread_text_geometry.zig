@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const std = @import("std");
 const core = @import("telar-core");
 const Fixture = @import("ConversationFixture.zig");
@@ -287,7 +288,7 @@ test "thread text oversized sans input rejects clusters split by the bounded gra
     var canvas = fixture.canvas();
     geometry.addRow(view(&value), 0);
     const combined = "e" ++ "\u{301}" ** 15;
-    var iterator: core.GraphemeIterator = .{ .bytes = combined };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = combined };
     try std.testing.expectEqual(combined.len, iterator.next().?.bytes.len);
     try std.testing.expect(iterator.next() == null);
     var input = run(view(&value), combined);

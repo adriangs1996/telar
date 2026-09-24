@@ -1,4 +1,5 @@
 //! Pure marker scanning and editor-navigation plans over committed cells.
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const model_data = @import("model");
 
@@ -97,7 +98,7 @@ pub fn pathScreen(screen: MarkerScreen) model_data.Screen {
 /// the newest ones on screen, mirroring how Claude's numbers are paired.
 /// Picks the marker carrying `number` closest to the cursor. The transcript
 /// above the prompt may repeat a sent prompt's markers.
-pub fn findMarker(buffer: *const core.Buffer, number: u16, cursor: core.Cursor) ?MarkerPosition {
+pub fn findMarker(buffer: *const cellgrid.Buffer, number: u16, cursor: core.Cursor) ?MarkerPosition {
     var best: ?MarkerPosition = null;
     var best_distance: u32 = std.math.maxInt(u32);
     var scan: MarkerScan = .{ .buffer = buffer };
@@ -118,7 +119,7 @@ pub fn findMarker(buffer: *const core.Buffer, number: u16, cursor: core.Cursor) 
     return best;
 }
 
-pub fn markerPresent(buffer: *const core.Buffer, number: u16) bool {
+pub fn markerPresent(buffer: *const cellgrid.Buffer, number: u16) bool {
     var scan: MarkerScan = .{ .buffer = buffer };
     while (scan.next()) |marker| {
         if (marker.number == number) {
@@ -129,8 +130,8 @@ pub fn markerPresent(buffer: *const core.Buffer, number: u16) bool {
     return false;
 }
 
-pub fn markerTouchesCursor(buffer: *const core.Buffer, boundary: MarkerBoundary) bool {
-    const cursor: core.Point = .{ .x = boundary.cursor.x, .y = boundary.cursor.y };
+pub fn markerTouchesCursor(buffer: *const cellgrid.Buffer, boundary: MarkerBoundary) bool {
+    const cursor: cellgrid.Point = .{ .x = boundary.cursor.x, .y = boundary.cursor.y };
     var scan: MarkerScan = .{ .buffer = buffer };
     while (scan.next()) |marker| {
         if (marker.number != boundary.ordinal) {
@@ -152,12 +153,12 @@ pub fn markerTouchesCursor(buffer: *const core.Buffer, boundary: MarkerBoundary)
 /// Reads one `[Image #N]` placeholder whose head starts at `at`. The editor
 /// may have wrapped the placeholder at its space: the head then closes its
 /// row and `#N]` opens the next one after that row's indentation.
-pub fn parseMarker(buffer: *const core.Buffer, at: core.Point) ?MarkerPosition {
+pub fn parseMarker(buffer: *const cellgrid.Buffer, at: cellgrid.Point) ?MarkerPosition {
     if (!cellsMatch(buffer, at, marker_head)) {
         return null;
     }
 
-    const after_head: core.Point = .{ .x = at.x + marker_head_width, .y = at.y };
+    const after_head: cellgrid.Point = .{ .x = at.x + marker_head_width, .y = at.y };
     if (cellsMatch(buffer, after_head, marker_separator)) {
         const tail = parseMarkerTail(buffer, .{ .x = after_head.x + marker_separator_width, .y = at.y }) orelse return null;
 
@@ -169,7 +170,7 @@ pub fn parseMarker(buffer: *const core.Buffer, at: core.Point) ?MarkerPosition {
     }
 
     const number_x = firstInkOnRow(buffer, at.y + 1) orelse return null;
-    const hash: core.Point = .{ .x = number_x, .y = at.y + 1 };
+    const hash: cellgrid.Point = .{ .x = number_x, .y = at.y + 1 };
     if (!cellsMatch(buffer, hash, "#")) {
         return null;
     }
@@ -180,7 +181,7 @@ pub fn parseMarker(buffer: *const core.Buffer, at: core.Point) ?MarkerPosition {
 }
 
 /// Reads the `N]` that closes a marker, starting at its first digit.
-pub fn parseMarkerTail(buffer: *const core.Buffer, at: core.Point) ?MarkerTail {
+pub fn parseMarkerTail(buffer: *const cellgrid.Buffer, at: cellgrid.Point) ?MarkerTail {
     var number: u16 = 0;
     var x = at.x;
     while (x < buffer.w) : (x += 1) {
@@ -208,13 +209,13 @@ pub fn parseMarkerTail(buffer: *const core.Buffer, at: core.Point) ?MarkerTail {
     return null;
 }
 
-pub fn cellAt(buffer: *const core.Buffer, at: core.Point) core.Cell {
+pub fn cellAt(buffer: *const cellgrid.Buffer, at: cellgrid.Point) cellgrid.Cell {
     return buffer.cells[@as(usize, at.y) * buffer.w + at.x];
 }
 
 /// Reports whether `literal` occupies the cells starting at `at`, one ASCII
 /// byte per single-width cell.
-pub fn cellsMatch(buffer: *const core.Buffer, at: core.Point, literal: []const u8) bool {
+pub fn cellsMatch(buffer: *const cellgrid.Buffer, at: cellgrid.Point, literal: []const u8) bool {
     if (at.y >= buffer.h or at.x + literal.len > buffer.w) {
         return false;
     }
@@ -229,11 +230,11 @@ pub fn cellsMatch(buffer: *const core.Buffer, at: core.Point, literal: []const u
     return true;
 }
 
-pub fn cellBlank(cell: core.Cell) bool {
+pub fn cellBlank(cell: cellgrid.Cell) bool {
     return cell.width == 0 or std.mem.eql(u8, cell.text(), " ");
 }
 
-pub fn rowBlankFrom(buffer: *const core.Buffer, at: core.Point) bool {
+pub fn rowBlankFrom(buffer: *const cellgrid.Buffer, at: cellgrid.Point) bool {
     var x = at.x;
     while (x < buffer.w) : (x += 1) {
         if (!cellBlank(cellAt(buffer, .{ .x = x, .y = at.y }))) {
@@ -244,7 +245,7 @@ pub fn rowBlankFrom(buffer: *const core.Buffer, at: core.Point) bool {
     return true;
 }
 
-pub fn firstInkOnRow(buffer: *const core.Buffer, y: u16) ?u16 {
+pub fn firstInkOnRow(buffer: *const cellgrid.Buffer, y: u16) ?u16 {
     var x: u16 = 0;
     while (x < buffer.w) : (x += 1) {
         if (!cellBlank(cellAt(buffer, .{ .x = x, .y = y }))) {
@@ -257,7 +258,7 @@ pub fn firstInkOnRow(buffer: *const core.Buffer, y: u16) ?u16 {
 
 /// Width of the marker occupying one row from `x`, or 0 when the cell opens
 /// no marker or the marker wraps onto the next row.
-pub fn markerWidthAt(buffer: *const core.Buffer, x: u16, y: u16) u16 {
+pub fn markerWidthAt(buffer: *const cellgrid.Buffer, x: u16, y: u16) u16 {
     const marker = parseMarker(buffer, .{ .x = x, .y = y }) orelse return 0;
     if (!marker.contiguous()) {
         return 0;
@@ -283,7 +284,7 @@ pub fn promptContinuesAtCursor(screen: MarkerScreen) bool {
 
 /// The hardware cursor when the child shows it, otherwise Pi's isolated
 /// inverse-video cell.
-pub fn editorCursor(screen: MarkerScreen) ?core.Point {
+pub fn editorCursor(screen: MarkerScreen) ?cellgrid.Point {
     if (screen.cursor.visible) {
         return .{ .x = screen.cursor.x, .y = screen.cursor.y };
     }
@@ -298,7 +299,7 @@ pub fn editorCursor(screen: MarkerScreen) ?core.Point {
     return null;
 }
 
-pub fn atomicSteps(buffer: *const core.Buffer, y: u16, span: model_data.Span) ?u8 {
+pub fn atomicSteps(buffer: *const cellgrid.Buffer, y: u16, span: model_data.Span) ?u8 {
     if (span.from > span.to or span.to > buffer.w) {
         return null;
     }
@@ -331,5 +332,5 @@ const MarkerBoundary = struct {
 
 const MarkerTail = struct {
     number: u16,
-    end: core.Point,
+    end: cellgrid.Point,
 };

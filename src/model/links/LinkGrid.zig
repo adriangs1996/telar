@@ -1,9 +1,10 @@
 //! Traverses logical text without mistaking a hard newline for a soft wrap.
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const Position = @import("Position.zig");
 const LinkGrid = @This();
 
-buffer: *const core.Buffer,
+buffer: *const cellgrid.Buffer,
 scroll: core.Scroll,
 rows: []const core.TextRowFlags = &.{},
 

@@ -1,5 +1,5 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const SidebarFocus = @This();
 
-area: core.Rect,
+area: cellgrid.Rect,
 color: [3]u8,

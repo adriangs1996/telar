@@ -5,8 +5,8 @@
 //! overlay plan. That keeps layout and interaction usable while making the
 //! selected icon face independent of the host terminal font.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const std = @import("std");
 
 pub fn working(frame: u8) data.icons.Icon {
@@ -44,21 +44,21 @@ test "icon theme names have one canonical spelling" {
 test "graphical placeholders occupy one terminal cell" {
     inline for (std.meta.fields(data.icons.Icon)) |field| {
         const icon: data.icons.Icon = @enumFromInt(field.value);
-        try std.testing.expectEqual(@as(u16, 1), core.measure(icon.cellFallbackGlyph()));
+        try std.testing.expectEqual(@as(u16, 1), cellgrid.text.measure(icon.cellFallbackGlyph()));
     }
 }
 
 test "sidebar controls retain directional Unicode fallbacks" {
     try std.testing.expectEqualStrings("\u{25c0}", data.icons.Icon.sidebar_collapse.unicodeGlyph());
     try std.testing.expectEqualStrings("\u{25b6}", data.icons.Icon.sidebar_expand.unicodeGlyph());
-    try std.testing.expectEqual(@as(u16, 1), core.measure(data.icons.Icon.sidebar_collapse.unicodeGlyph()));
-    try std.testing.expectEqual(@as(u16, 1), core.measure(data.icons.Icon.sidebar_expand.unicodeGlyph()));
+    try std.testing.expectEqual(@as(u16, 1), cellgrid.text.measure(data.icons.Icon.sidebar_collapse.unicodeGlyph()));
+    try std.testing.expectEqual(@as(u16, 1), cellgrid.text.measure(data.icons.Icon.sidebar_expand.unicodeGlyph()));
 }
 
 test "the telar mark keeps one plain cell in every layer" {
     try std.testing.expectEqualStrings("\u{25a3}", data.icons.Icon.telar_mark.unicodeGlyph());
     try std.testing.expectEqualStrings(" ", data.icons.Icon.telar_mark.cellFallbackGlyph());
-    try std.testing.expectEqual(@as(u16, 1), core.measure(data.icons.Icon.telar_mark.unicodeGlyph()));
+    try std.testing.expectEqual(@as(u16, 1), cellgrid.text.measure(data.icons.Icon.telar_mark.unicodeGlyph()));
 }
 
 test "battery icon follows charge quarters" {

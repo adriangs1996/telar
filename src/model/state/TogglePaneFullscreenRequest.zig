@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const TogglePaneFullscreenRequest = @This();
 
-area: core.Rect,
+area: cellgrid.Rect,

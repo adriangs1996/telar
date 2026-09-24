@@ -1,5 +1,6 @@
 //! Adapts terminal protocol replies and probe expiry to client host state.
 
+const pacing = @import("pacing");
 const client_module = @import("telar-client");
 const data = @import("model");
 const TerminalAdapter = @import("../TerminalAdapter.zig");
@@ -28,7 +29,7 @@ pub fn refresh(terminal: *TerminalAdapter) !void {
 fn queryColors(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
-    if (!terminal.host_negotiation.begin(client_module.monotonic(client.io))) {
+    if (!terminal.host_negotiation.begin(pacing.clock.monotonic(client.io))) {
         return;
     }
 
@@ -43,7 +44,7 @@ pub fn scheduleExpiry(terminal: *TerminalAdapter) !void {
     const state = &terminal.host_negotiation;
     switch (state.timer.update(client.io, state.deadline_ns)) {
         .idle, .retained => {},
-        .schedule => terminal.inbox.start(.capability_timeout, .{ client_module.wait, .{
+        .schedule => terminal.inbox.start(.capability_timeout, .{ pacing.deadline_timer.wait, .{
             client.io, &state.timer,
         } }) catch |err| {
             state.timer.schedulingFailed();
@@ -61,7 +62,7 @@ pub fn handleExpiry(terminal: *TerminalAdapter, result: anyerror!void) !?data.Ho
     const client = &terminal.app;
 
     try terminal.host_negotiation.timer.complete(result);
-    if (!terminal.host_negotiation.expire(client_module.monotonic(client.io))) {
+    if (!terminal.host_negotiation.expire(pacing.clock.monotonic(client.io))) {
         try scheduleExpiry(terminal);
         return null;
     }
@@ -83,7 +84,7 @@ pub fn observe(terminal: *TerminalAdapter, response: term.Event.TerminalResponse
         else => null,
     };
     if (color) |target| {
-        if (!terminal.host_negotiation.accept(target, client_module.monotonic(client.io))) {
+        if (!terminal.host_negotiation.accept(target, pacing.clock.monotonic(client.io))) {
             return null;
         }
     }

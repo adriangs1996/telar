@@ -1,8 +1,8 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const gfx = @import("gfx");
 const Quad_module = gfx.Quad;
 const std = @import("std");
-const core = @import("telar-core");
 const Session = @import("Session.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const Canvas = @import("../widgets/Canvas.zig");
@@ -134,7 +134,7 @@ test "Braille chrome preserves blank columns clipping colors and configured grid
         renderer.config.font = .{ .size = 22, .line_height = 0.75, .letter_spacing = -5, .thicken = true };
         _ = try renderer.measure(.{ .width = 800, .height = 600, .scale = scale });
         var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = .{ 8, 12 }, .theme = data.theme_support.default_theme };
-        const area: core.Rect = .{ .x = 2, .y = 1, .w = 3, .h = 1 };
+        const area: cellgrid.Rect = .{ .x = 2, .y = 1, .w = 3, .h = 1 };
         const bounds = canvas.rect(area);
         const width: f32 = @floatFromInt(renderer.metrics.cell_width);
         const height: f32 = @floatFromInt(renderer.metrics.cell_height);
@@ -211,13 +211,13 @@ test "Braille animation stays within retained budgets without allocating or touc
     try std.testing.expect(!failing.has_induced_failure);
 }
 
-fn cell(pattern: u8) core.Cell {
-    var result: core.Cell = .{};
+fn cell(pattern: u8) cellgrid.Cell {
+    var result: cellgrid.Cell = .{};
     result.len = std.unicode.utf8Encode(@as(u21, 0x2800) + pattern, &result.bytes) catch unreachable;
     return result;
 }
 
-fn paneContent(session: *Session) core.Rect {
+fn paneContent(session: *Session) cellgrid.Rect {
     const tab = session.gui.app.model.tabs.active;
     return data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, data.workbench.region(&session.gui.app.model).area).?.content;
 }

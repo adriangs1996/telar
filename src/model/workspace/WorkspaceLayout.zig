@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const layout_support = @import("layout_support.zig");
 const Slot = @import("Slot.zig");
@@ -410,7 +411,7 @@ pub fn focusPane(self: *Layout, pane_id: core.PaneId) bool {
 /// ```zig
 /// const focused = layout.focusDirection(.right, area);
 /// ```
-pub fn focusDirection(self: *Layout, direction: layout_support.Direction, area: core.Rect) ?core.PaneId {
+pub fn focusDirection(self: *Layout, direction: layout_support.Direction, area: cellgrid.Rect) ?core.PaneId {
     const current_id = self.focused() orelse return null;
     const candidate = if (self.fullscreen)
         self.fullscreenFocusTarget(direction)
@@ -454,7 +455,7 @@ fn fullscreenFocusTarget(self: *const Layout, direction: layout_support.Directio
 /// requested edge is outside the tab, the nearest opposite edge moves in
 /// that direction instead. Ratios stay bounded and every leaf retains at
 /// least one content cell along the resized axis.
-pub fn resizeFocused(self: *Layout, direction: layout_support.Direction, area: core.Rect) bool {
+pub fn resizeFocused(self: *Layout, direction: layout_support.Direction, area: cellgrid.Rect) bool {
     const leaf = self.findLeaf(self.focused_pane) orelse return false;
     const target = self.resizeSplit(leaf, direction) orelse return false;
     const branch = self.nodes[target].node.split;
@@ -531,7 +532,7 @@ pub fn toggleFullscreen(self: *Layout) bool {
 /// ```zig
 /// const allowed = layout.canSplit(.{ .pane_id = pane_id, .axis = .horizontal }, area);
 /// ```
-pub fn canSplit(self: *const Layout, target: SplitTarget, area: core.Rect) bool {
+pub fn canSplit(self: *const Layout, target: SplitTarget, area: cellgrid.Rect) bool {
     var geometry: LayoutSnapshot = .{};
     self.snapshot(area, &geometry);
 
@@ -543,7 +544,7 @@ pub fn canSplit(self: *const Layout, target: SplitTarget, area: core.Rect) bool 
 /// ```zig
 /// const split = layout.prospectiveSplit(.{ .pane_id = pane_id, .axis = .horizontal }, area);
 /// ```
-pub fn prospectiveSplit(self: *const Layout, target: SplitTarget, area: core.Rect) ?ProspectiveSplit {
+pub fn prospectiveSplit(self: *const Layout, target: SplitTarget, area: cellgrid.Rect) ?ProspectiveSplit {
     var geometry: LayoutSnapshot = .{};
     self.snapshot(area, &geometry);
 
@@ -552,7 +553,7 @@ pub fn prospectiveSplit(self: *const Layout, target: SplitTarget, area: core.Rec
 
 /// A fullscreen pane keeps its border and labels regardless of pane count.
 /// Example: `layout.snapshot(area, &geometry);`.
-pub fn snapshot(self: *const Layout, area: core.Rect, output: *LayoutSnapshot) void {
+pub fn snapshot(self: *const Layout, area: cellgrid.Rect, output: *LayoutSnapshot) void {
     if (!self.fullscreen) {
         return self.snapshotTiled(area, output);
     }
@@ -577,7 +578,7 @@ pub fn snapshot(self: *const Layout, area: core.Rect, output: *LayoutSnapshot) v
     );
 }
 
-fn snapshotTiled(self: *const Layout, area: core.Rect, output: *LayoutSnapshot) void {
+fn snapshotTiled(self: *const Layout, area: cellgrid.Rect, output: *LayoutSnapshot) void {
     output.reset(
         .{
             .area = area,
@@ -587,7 +588,7 @@ fn snapshotTiled(self: *const Layout, area: core.Rect, output: *LayoutSnapshot) 
         },
     );
     const root = self.root orelse return;
-    const Pending = struct { node: layout_support.NodeIndex, area: core.Rect };
+    const Pending = struct { node: layout_support.NodeIndex, area: cellgrid.Rect };
     var stack: [layout_support.max_nodes]Pending = undefined;
     var stack_len: usize = 1;
     var display_index: u16 = 0;
@@ -640,7 +641,7 @@ fn snapshotTiled(self: *const Layout, area: core.Rect, output: *LayoutSnapshot) 
     }
 }
 
-pub fn views(self: *const Layout, area: core.Rect, output: *[core.max_panes_per_tab]View) []View {
+pub fn views(self: *const Layout, area: cellgrid.Rect, output: *[core.max_panes_per_tab]View) []View {
     var snapshot_output: LayoutSnapshot = .{};
     self.snapshot(area, &snapshot_output);
     @memcpy(output[0..snapshot_output.len], snapshot_output.views());
@@ -674,7 +675,7 @@ fn resizeSplit(self: *const Layout, leaf: layout_support.NodeIndex, direction: l
     return fallback;
 }
 
-fn nodeArea(self: *const Layout, target: layout_support.NodeIndex, area: core.Rect) core.Rect {
+fn nodeArea(self: *const Layout, target: layout_support.NodeIndex, area: cellgrid.Rect) cellgrid.Rect {
     var path: [layout_support.max_nodes]layout_support.NodeIndex = undefined;
     var path_len: usize = 0;
     var current = target;

@@ -1,7 +1,7 @@
 //! Compact tool rows and stable subagent cards share the same typed lifecycle.
+const cellgrid = @import("cellgrid");
 const TextFit = @import("TextFit.zig");
 const std = @import("std");
-const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
@@ -173,7 +173,7 @@ fn statusText(self: Activity) []const u8 {
     };
 }
 
-fn statusColor(self: Activity, canvas: *const Canvas) core.Color {
+fn statusColor(self: Activity, canvas: *const Canvas) cellgrid.Color {
     return switch (self.view.item.status) {
         .failed => canvas.theme.palette.red,
         .declined => canvas.theme.palette.yellow,

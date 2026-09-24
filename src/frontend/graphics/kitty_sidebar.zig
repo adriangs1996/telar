@@ -1,5 +1,6 @@
 //! Sidebar media assets and rasterization, independent of the pane image store.
 
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const SidebarProviderPlacement = @import("SidebarProviderPlacement.zig");
 const std = @import("std");
@@ -160,7 +161,7 @@ test "sidebar theme changes recolor OpenAI without reallocating or changing othe
 test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
     var renderer = KittySidebarRenderer.init(std.testing.allocator);
     defer renderer.deinit();
-    const area: core.Rect = .{ .x = 1, .y = 1, .w = 8, .h = 8 };
+    const area: cellgrid.Rect = .{ .x = 1, .y = 1, .w = 8, .h = 8 };
     const providers = [_]SidebarProviderPlacement{
         .{
             .area = .{ .x = 3, .y = 5, .w = 2, .h = 2 },
@@ -209,7 +210,7 @@ test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
 test "sidebar focused card is rounded bounded and moves without retransmission" {
     var renderer = KittySidebarRenderer.init(std.testing.allocator);
     defer renderer.deinit();
-    const area: core.Rect = .{ .x = 1, .y = 1, .w = 60, .h = 20 };
+    const area: cellgrid.Rect = .{ .x = 1, .y = 1, .w = 60, .h = 20 };
     const color = [3]u8{ 35, 35, 35 };
     const first: SidebarFocus = .{
         .area = .{ .x = 2, .y = 4, .w = 57, .h = 3 },

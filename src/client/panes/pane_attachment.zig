@@ -1,5 +1,6 @@
 //! Pane attachment: attaches visible panes to the runtime and adopts the panes
 //! it opens.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -41,7 +42,7 @@ pub fn synchronizePaneAttachments(client: *Client) !bool {
 /// Connects visible detached panes after canonical membership is loaded.
 /// Pending attachments are coalesced; failed delivery rolls back its correlation.
 /// Example: `if (tab.snapshot_loaded) { try pane_attachment.attachVisiblePanes(client, tab, area); }`
-pub fn attachVisiblePanes(model: *data.ClientModel, tab: usize, area: core.Rect) !void {
+pub fn attachVisiblePanes(model: *data.ClientModel, tab: usize, area: cellgrid.Rect) !void {
     std.debug.assert(model.tabs.snapshot_loaded[tab]);
     var panes = model.panes.iterate(model.tabs.location[tab].tab_id);
 

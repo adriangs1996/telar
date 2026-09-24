@@ -1,5 +1,5 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 
-color: core.Color,
+color: cellgrid.Color,
 italic: bool = false,
 bold: bool = false,

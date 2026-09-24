@@ -1,5 +1,5 @@
+const cellgrid = @import("cellgrid");
 const std = @import("std");
-const core = @import("telar-core");
 
 pub const path_bytes = 61;
 
@@ -33,7 +33,7 @@ pub fn compactPath(path: []const u8, storage: *[path_bytes]u8) []const u8 {
 }
 
 fn tailStart(text: []const u8, limits: struct { bytes: usize, codepoints: usize }) usize {
-    var right: core.GraphemeIterator = .{ .bytes = text };
+    var right: cellgrid.GraphemeIterator = .{ .bytes = text };
     var left = right;
     var bytes: usize = 0;
     var codepoints: usize = 0;
@@ -51,7 +51,7 @@ fn tailStart(text: []const u8, limits: struct { bytes: usize, codepoints: usize 
 }
 
 fn copyPath(path: []const u8, destination: []u8) []const u8 {
-    var iterator: core.GraphemeIterator = .{ .bytes = path };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = path };
     var written: usize = 0;
     while (iterator.next()) |cluster| {
         @memcpy(destination[written..][0..cluster.bytes.len], cluster.bytes);

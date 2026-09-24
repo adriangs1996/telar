@@ -1,5 +1,6 @@
 //! Cost-aware frame spans from conservative terminal row damage.
 
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const Diff = @import("Diff.zig");
 const std = @import("std");
@@ -104,7 +105,7 @@ pub fn collectSpans(input: Input, storage: []core.Span) Diff {
 }
 
 test "damage limits patch generation to dirty rows" {
-    const acknowledged = [_]core.Cell{.{}} ** 12;
+    const acknowledged = [_]cellgrid.Cell{.{}} ** 12;
     var current = acknowledged;
     current[1].bytes[0] = 'x';
     current[9].bytes[0] = 'y';
@@ -120,7 +121,7 @@ test "damage limits patch generation to dirty rows" {
 }
 
 test "damage from separate rows accumulates without scanning the gap" {
-    const acknowledged = [_]core.Cell{.{}} ** 12;
+    const acknowledged = [_]cellgrid.Cell{.{}} ** 12;
     var current = acknowledged;
     current[1].bytes[0] = 'x';
     current[9].bytes[0] = 'y';
@@ -136,7 +137,7 @@ test "damage from separate rows accumulates without scanning the gap" {
 }
 
 test "adjacent damage across rows stays one span" {
-    const acknowledged = [_]core.Cell{.{}} ** 8;
+    const acknowledged = [_]cellgrid.Cell{.{}} ** 8;
     var current = acknowledged;
     current[3].bytes[0] = 'x';
     current[4].bytes[0] = 'y';
@@ -150,7 +151,7 @@ test "adjacent damage across rows stays one span" {
 }
 
 test "short unchanged gaps share a cheaper span" {
-    const acknowledged = [_]core.Cell{.{}} ** 8;
+    const acknowledged = [_]cellgrid.Cell{.{}} ** 8;
     var current = acknowledged;
     current[1].bytes[0] = 'x';
     current[4].bytes[0] = 'y';
@@ -173,7 +174,7 @@ test "short unchanged gaps share a cheaper span" {
 }
 
 test "an expensive gap keeps separate spans" {
-    const acknowledged = [_]core.Cell{.{}} ** 32;
+    const acknowledged = [_]cellgrid.Cell{.{}} ** 32;
     var current = acknowledged;
     current[1].bytes[0] = 'x';
     current[30].bytes[0] = 'y';
@@ -187,7 +188,7 @@ test "an expensive gap keeps separate spans" {
 }
 
 test "too many damaged runs request a snapshot" {
-    const acknowledged = [_]core.Cell{.{}} ** 32;
+    const acknowledged = [_]cellgrid.Cell{.{}} ** 32;
     var current = acknowledged;
     current[0].bytes[0] = 'x';
     current[31].bytes[0] = 'y';
@@ -199,8 +200,8 @@ test "too many damaged runs request a snapshot" {
 }
 
 const Input = struct {
-    current: []const core.Cell,
-    acknowledged: []const core.Cell,
+    current: []const cellgrid.Cell,
+    acknowledged: []const cellgrid.Cell,
     cols: u16,
     damaged_rows: []const bool,
 };

@@ -1,5 +1,5 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const client = @import("telar-client");
 const Modal = @import("Modal.zig");
 const TextField = @import("../TextField.zig");
@@ -7,7 +7,7 @@ const TextField = @import("../TextField.zig");
 const Canvas = @import("../Canvas.zig");
 const PickerModal = @This();
 
-area: core.Rect,
+area: cellgrid.Rect,
 projection: *const client.Projection,
 
 /// Uses the client's canonical fuzzy matches, including its selection ordering.

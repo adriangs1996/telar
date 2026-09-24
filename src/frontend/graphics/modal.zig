@@ -5,8 +5,8 @@
 //! without scaling, so the border keeps one physical thickness on every side.
 //! Modal text and the rectangular body stay in the cell buffer.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const Asset = @import("Asset.zig");
 const ModalRenderKey = @import("ModalRenderKey.zig");
 const std = @import("std");
@@ -123,7 +123,7 @@ pub fn fill(pixels: []u8, color: [3]u8) void {
         pixels[index..][0..4].* = .{ color[0], color[1], color[2], 255 };
 }
 
-pub fn rgb(color: core.Color) ?[3]u8 {
+pub fn rgb(color: cellgrid.Color) ?[3]u8 {
     return color.rgbChannels();
 }
 
@@ -139,7 +139,7 @@ pub fn placementImageId(index: usize) u32 {
     return imageId(if (index < 4) 0 else if (index < 6) 1 else 2);
 }
 
-pub fn optionalAreaEql(a: ?core.Rect, b: ?core.Rect) bool {
+pub fn optionalAreaEql(a: ?cellgrid.Rect, b: ?cellgrid.Rect) bool {
     if (a == null or b == null) {
         return a == null and b == null;
     }
@@ -191,7 +191,7 @@ test "modal frame transmission ends in eight natural-size placements" {
     var renderer = ModalRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    const area: core.Rect = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
+    const area: cellgrid.Rect = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
     renderer.prepare(area, &opaque_palette);
 
     var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
@@ -213,7 +213,7 @@ test "closing a stale modal frame leaves no media work behind" {
     var renderer = ModalRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    const area: core.Rect = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
+    const area: cellgrid.Rect = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
     renderer.prepare(area, &opaque_palette);
 
     var initial: std.Io.Writer.Allocating = .init(std.testing.allocator);

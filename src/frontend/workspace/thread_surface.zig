@@ -1,9 +1,9 @@
 //! Cell painting of a thread surface: the agent header, the transcript area
 //! and the composer line. The GUI paints the same projection natively.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const client = @import("telar-client");
-const core = @import("telar-core");
 const std = @import("std");
 
 /// Paints one thread surface into `area`, clearing it first so stale terminal
@@ -12,12 +12,12 @@ const std = @import("std");
 /// ```zig
 /// thread_surface.paint(target, view.content, .{ .view = thread, .palette = palette });
 /// ```
-pub fn paint(buffer: *core.Buffer, area: core.Rect, input: ThreadSurfaceInput) void {
+pub fn paint(buffer: *cellgrid.Buffer, area: cellgrid.Rect, input: ThreadSurfaceInput) void {
     if (area.w == 0 or area.h == 0) {
         return;
     }
 
-    const base: core.Style = .{ .fg = input.palette.text, .bg = input.palette.surface_dim };
+    const base: cellgrid.Style = .{ .fg = input.palette.text, .bg = input.palette.surface_dim };
     buffer.fill(area, .{ .style = base });
     const header, const rest = area.splitTop(1);
     paintHeader(buffer, header, input);
@@ -30,7 +30,7 @@ pub fn paint(buffer: *core.Buffer, area: core.Rect, input: ThreadSurfaceInput) v
     paintComposer(buffer, composer, input);
 }
 
-fn paintHeader(buffer: *core.Buffer, row: core.Rect, input: ThreadSurfaceInput) void {
+fn paintHeader(buffer: *cellgrid.Buffer, row: cellgrid.Rect, input: ThreadSurfaceInput) void {
     var storage: [128]u8 = undefined;
     const text = if (input.view.agent) |agent|
         std.fmt.bufPrint(&storage, " {s} {s} · {s}", .{ agent.iconGlyph(), agent.displayName(), @tagName(agent.status) }) catch storage[0..0]
@@ -44,13 +44,13 @@ fn paintHeader(buffer: *core.Buffer, row: core.Rect, input: ThreadSurfaceInput) 
     });
 }
 
-fn paintBody(buffer: *core.Buffer, body: core.Rect, input: ThreadSurfaceInput) void {
+fn paintBody(buffer: *cellgrid.Buffer, body: cellgrid.Rect, input: ThreadSurfaceInput) void {
     if (body.h == 0) {
         return;
     }
 
     const label = if (input.view.kind == .agent) "Open Telar GUI to view this conversation" else "transcript index pending";
-    const width = @min(body.w, core.measure(label));
+    const width = @min(body.w, cellgrid.text.measure(label));
     _ = buffer.writeTruncated(body, .{
         .point = .{ .x = body.x + (body.w - width) / 2, .y = body.y + body.h / 2 },
         .text = label,
@@ -59,7 +59,7 @@ fn paintBody(buffer: *core.Buffer, body: core.Rect, input: ThreadSurfaceInput) v
     });
 }
 
-fn paintComposer(buffer: *core.Buffer, row: core.Rect, input: ThreadSurfaceInput) void {
+fn paintComposer(buffer: *cellgrid.Buffer, row: cellgrid.Rect, input: ThreadSurfaceInput) void {
     if (input.view.kind == .agent) {
         return;
     }
@@ -77,11 +77,11 @@ fn paintComposer(buffer: *core.Buffer, row: core.Rect, input: ThreadSurfaceInput
 }
 
 test "thread surface paints header, body and composer inside its area" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 30, 6);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 30, 6);
     defer buffer.deinit();
     buffer.clear(.{});
     const palette: data.Palette = data.theme_support.default_theme.palette;
-    const area: core.Rect = .{ .x = 1, .y = 1, .w = 26, .h = 4 };
+    const area: cellgrid.Rect = .{ .x = 1, .y = 1, .w = 26, .h = 4 };
 
     paint(&buffer, area, .{ .view = .{ .pane_id = @enumFromInt(1), .agent = null, .composer = "hi" }, .palette = &palette });
 

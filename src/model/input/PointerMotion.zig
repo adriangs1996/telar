@@ -1,5 +1,5 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const PointerMotion = @This();
 
-position: core.Point,
+position: cellgrid.Point,
 release: bool = false,

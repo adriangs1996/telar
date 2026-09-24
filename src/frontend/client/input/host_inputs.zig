@@ -1,5 +1,6 @@
 //! Owns one client's host-TTY read, native router and replaceable deadlines.
 
+const pacing = @import("pacing");
 const data = @import("model");
 const client_module = @import("telar-client");
 const core = @import("telar-core");
@@ -146,12 +147,12 @@ fn routeBytes(terminal: *TerminalAdapter, bytes: []const u8) !bool {
     const client = &terminal.app;
 
     const state = &terminal.host_input;
-    terminal.presenter.noteInput(client_module.monotonic(client.io));
+    terminal.presenter.noteInput(pacing.clock.monotonic(client.io));
     const prefix_was_pending = state.router.prefixPending();
     const lease_overflows_before = state.router.leaseOverflowCount();
     const control = try feed(terminal, .{
         .bytes = bytes,
-        .now_ns = client_module.monotonic(client.io),
+        .now_ns = pacing.clock.monotonic(client.io),
     });
     client.telemetry.metrics.key_lease_overflows +%= state.router.leaseOverflowCount() -% lease_overflows_before;
     if (control == .stop) {
@@ -191,11 +192,11 @@ fn expire(terminal: *TerminalAdapter, expiry: Expiry) !bool {
     const state = &terminal.host_input;
     const prefix_was_pending = state.router.prefixPending();
     const control = switch (expiry) {
-        .input => if (state.router.expireInput(client_module.monotonic(client.io))) |event|
-            try decoded(terminal, event, client_module.monotonic(client.io))
+        .input => if (state.router.expireInput(pacing.clock.monotonic(client.io))) |event|
+            try decoded(terminal, event, pacing.clock.monotonic(client.io))
         else
             .continue_routing,
-        .binding => try applyDecision(terminal, state.router.expireBinding(client_module.monotonic(client.io))),
+        .binding => try applyDecision(terminal, state.router.expireBinding(pacing.clock.monotonic(client.io))),
     };
     if (control == .stop) {
         state.router.clear();
@@ -411,7 +412,7 @@ fn synchronizeInputTimeout(terminal: *TerminalAdapter) !void {
     const scheduler = &terminal.host_input.input_timeout;
     switch (scheduler.update(client.io, terminal.host_input.router.inputDeadline())) {
         .idle, .retained => {},
-        .schedule => terminal.inbox.start(.input_timeout, .{ client_module.wait, .{ client.io, scheduler } }) catch |err| {
+        .schedule => terminal.inbox.start(.input_timeout, .{ pacing.deadline_timer.wait, .{ client.io, scheduler } }) catch |err| {
             scheduler.schedulingFailed();
 
             return err;
@@ -425,7 +426,7 @@ fn synchronizeBindingTimeout(terminal: *TerminalAdapter) !void {
     const scheduler = &terminal.host_input.binding_timeout;
     switch (scheduler.update(client.io, terminal.host_input.router.bindingDeadline())) {
         .idle, .retained => {},
-        .schedule => terminal.inbox.start(.binding_timeout, .{ client_module.wait, .{ client.io, scheduler } }) catch |err| {
+        .schedule => terminal.inbox.start(.binding_timeout, .{ pacing.deadline_timer.wait, .{ client.io, scheduler } }) catch |err| {
             scheduler.schedulingFailed();
 
             return err;

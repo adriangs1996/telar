@@ -1,5 +1,6 @@
 //! Centered goto-picker modal: one query line above a scored result list.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const modal = @import("modal.zig");
@@ -18,7 +19,7 @@ pub const max_row_bytes = 160;
 /// ```zig
 /// const area = modalArea(context.buffer.area());
 /// ```
-pub fn modalArea(application: core.Rect) core.Rect {
+pub fn modalArea(application: cellgrid.Rect) cellgrid.Rect {
     if (application.w < 20 or application.h < 6) {
         return .{};
     }
@@ -33,14 +34,14 @@ pub fn modalArea(application: core.Rect) core.Rect {
 /// ```zig
 /// const output = render(context, context.buffer.area(), picker_input);
 /// ```
-pub fn render(context: *Context, application: core.Rect, input: GotoPickerInput) GotoPickerOutput {
+pub fn render(context: *Context, application: cellgrid.Rect, input: GotoPickerInput) GotoPickerOutput {
     const area = modalArea(application);
     if (area.isEmpty()) {
         return .{ .area = area, .cursor = null };
     }
 
     const background = context.palette.panel_bg;
-    const style: core.Style = .{ .fg = context.palette.text, .bg = background };
+    const style: cellgrid.Style = .{ .fg = context.palette.text, .bg = background };
     if (input.graphical_frame) {
         context.buffer.fillWithoutCorners(area, style);
     } else {
@@ -53,7 +54,7 @@ pub fn render(context: *Context, application: core.Rect, input: GotoPickerInput)
         });
     }
 
-    const title: core.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 4, .h = 1 };
+    const title: cellgrid.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 4, .h = 1 };
     _ = context.buffer.writeTruncated(title, .{ .point = .{ .x = title.x, .y = title.y }, .text = input.title, .max_width = title.w, .style = .{
         .fg = context.palette.accent,
         .bg = background,
@@ -61,7 +62,7 @@ pub fn render(context: *Context, application: core.Rect, input: GotoPickerInput)
     } });
 
     const inner = area.inner(1);
-    const query: core.Rect = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = 1 };
+    const query: cellgrid.Rect = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = 1 };
     const prefix_width = context.buffer.writeText(query, .{ .point = .{ .x = query.x, .y = query.y }, .text = "> ", .style = .{
         .fg = context.palette.accent,
         .bg = background,
@@ -77,7 +78,7 @@ pub fn render(context: *Context, application: core.Rect, input: GotoPickerInput)
             break;
         }
 
-        const line: core.Rect = .{ .x = inner.x, .y = row_y, .w = inner.w, .h = 1 };
+        const line: cellgrid.Rect = .{ .x = inner.x, .y = row_y, .w = inner.w, .h = 1 };
         const row_background = if (row.selected) context.palette.surface1 else background;
         context.buffer.fill(line, .{ .glyph = " ", .style = .{ .fg = context.palette.text, .bg = row_background } });
         _ = context.buffer.writeTruncated(line, .{ .point = .{ .x = line.x + 1, .y = line.y }, .text = row.slice(), .max_width = line.w -| 2, .style = .{
@@ -99,7 +100,7 @@ pub fn render(context: *Context, application: core.Rect, input: GotoPickerInput)
     else
         "";
     if (footer_text.len != 0) {
-        const footer: core.Rect = .{ .x = area.x + 2, .y = area.y + area.h - 1, .w = area.w -| 4, .h = 1 };
+        const footer: cellgrid.Rect = .{ .x = area.x + 2, .y = area.y + area.h - 1, .w = area.w -| 4, .h = 1 };
         _ = context.buffer.writeTruncated(footer, .{ .point = .{ .x = footer.x, .y = footer.y }, .text = footer_text, .max_width = footer.w, .style = .{
             .fg = context.palette.subtext0,
             .bg = background,
@@ -116,9 +117,9 @@ pub fn render(context: *Context, application: core.Rect, input: GotoPickerInput)
 }
 
 test "cell fallback connects every border edge and graphical frame keeps corners untouched" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 40, 12);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 40, 12);
     defer buffer.deinit();
-    const outside: core.Style = .{ .bg = .rgb(.{ 1, 2, 3 }) };
+    const outside: cellgrid.Style = .{ .bg = .rgb(.{ 1, 2, 3 }) };
     buffer.fill(buffer.area(), .{ .glyph = "#", .style = outside });
     var hits: widget.Hits = .{};
     var context: Context = .{

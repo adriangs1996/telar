@@ -3,6 +3,7 @@ const Application = @import("Application.zig");
 const Benchmarks = @import("Benchmarks.zig");
 const Suite = @import("Suite.zig");
 const Libraries = @import("Libraries.zig");
+const model_build = @import("model.zig");
 
 const source_roots: []const []const u8 = &.{ "build.zig", "build", "lib", "src", "examples", "benchmarks", "test", "linters" };
 
@@ -49,6 +50,14 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     // source validators run separately and never execute application tests.
     const check_step = b.step("check", "Analyze test suites and validate source organization");
     test_step.dependOn(app.modules.libraries.addTests(b, app.coverage, check_step));
+    const reexports = b.addSystemCommand(&.{ "python3", b.pathFromRoot("tools/check_library_reexports.py"), "--root", b.pathFromRoot(".") });
+    const reexport_tests = b.addSystemCommand(&.{ "python3", b.pathFromRoot("tools/test_library_reexports.py") });
+    reexports.setEnvironmentVariable("PYTHONDONTWRITEBYTECODE", "1");
+    reexport_tests.setEnvironmentVariable("PYTHONDONTWRITEBYTECODE", "1");
+    reexports.step.dependOn(&reexport_tests.step);
+    b.step("check-library-reexports", "Check that packages import libraries instead of re-exporting them").dependOn(&reexports.step);
+    check_step.dependOn(&reexports.step);
+    test_step.dependOn(&reexports.step);
     const inventory_tests = b.addSystemCommand(&.{ "python3", b.pathFromRoot("tools/test_compare_zig_tests.py") });
     inventory_tests.setEnvironmentVariable("PYTHONDONTWRITEBYTECODE", "1");
     test_step.dependOn(&inventory_tests.step);
@@ -71,7 +80,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     std.debug.assert(app.modules.client.import_table.get("telar-lua").? == app.modules.telar_lua and app.modules.client.import_table.get("lua-api").? == app.modules.lua_api);
 
     std.debug.assert(app.modules.client.import_table.get("model").? == app.modules.data);
-    std.debug.assert(app.modules.data.import_table.count() == 1 and app.modules.data.import_table.get("telar-core").? == app.modules.core);
+    std.debug.assert(app.modules.data.import_table.count() == 1 + model_build.libraries.len and app.modules.data.import_table.get("telar-core").? == app.modules.core);
 
     for (app.modules.core.import_table.values()) |dependency| {
         std.debug.assert(dependency != app.modules.client and dependency != app.modules.frontend and dependency != app.modules.backend);

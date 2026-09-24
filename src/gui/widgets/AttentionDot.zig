@@ -1,11 +1,11 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Canvas = @import("Canvas.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const AttentionDot = @This();
 
 area: Rect,
-color: core.Color,
+color: cellgrid.Color,
 
 pub const diameter: f32 = 6;
 pub const gap: f32 = 6;

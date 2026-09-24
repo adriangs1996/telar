@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Context = @import("Context.zig");
 const HistoryBrowserInput = @import("HistoryBrowserInput.zig");
 const Text = @import("Text.zig");
@@ -12,13 +12,13 @@ const Drawing = @This();
 
 context: *Context,
 input: HistoryBrowserInput,
-background: core.Color,
+background: cellgrid.Color,
 
-pub fn line(self: *Drawing, area: core.Rect, value: Text) void {
+pub fn line(self: *Drawing, area: cellgrid.Rect, value: Text) void {
     _ = self.context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x, .y = area.y }, .text = value.text, .max_width = area.w, .style = .{ .fg = value.color, .bg = self.background } });
 }
 
-pub fn rows(self: *Drawing, area: core.Rect) void {
+pub fn rows(self: *Drawing, area: cellgrid.Rect) void {
     if (self.input.entries.len == 0) {
         self.line(area, .{ .text = if (self.input.loading) "Searching..." else "No matching commands", .color = self.context.palette.subtext0 });
         return;
@@ -30,7 +30,7 @@ pub fn rows(self: *Drawing, area: core.Rect) void {
     for (0..count) |offset| {
         const index = start + offset;
         const entry = self.input.entries[index];
-        const row: core.Rect = .{ .x = area.x, .y = area.y + area.h - 1 - @as(u16, @intCast(offset)), .w = area.w, .h = 1 };
+        const row: cellgrid.Rect = .{ .x = area.x, .y = area.y + area.h - 1 - @as(u16, @intCast(offset)), .w = area.w, .h = 1 };
         self.background = if (index == selected) self.context.palette.surface1 else self.context.palette.panel_bg;
         self.context.buffer.fill(row, .{ .glyph = " ", .style = .{ .bg = self.background } });
         self.line(row, .{ .text = if (index == selected) ">" else " ", .color = self.context.palette.accent });
@@ -58,14 +58,14 @@ pub fn rows(self: *Drawing, area: core.Rect) void {
     self.background = self.context.palette.panel_bg;
 }
 
-fn command(self: *Drawing, area: core.Rect, command_text: []const u8) void {
+fn command(self: *Drawing, area: cellgrid.Rect, command_text: []const u8) void {
     self.line(area, .{ .text = command_text, .color = self.context.palette.text });
     const query = self.input.field.text();
     if (query.len == 0) {
         return;
     }
 
-    var iterator: core.GraphemeIterator = .{ .bytes = command_text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = command_text };
     var x = area.x;
     var matched: usize = 0;
     while (iterator.next()) |cluster| {
@@ -82,7 +82,7 @@ fn command(self: *Drawing, area: core.Rect, command_text: []const u8) void {
     }
 }
 
-pub fn inspect(self: *Drawing, area: core.Rect, entry: Entry) void {
+pub fn inspect(self: *Drawing, area: cellgrid.Rect, entry: Entry) void {
     const content: Inspection = .{ .entry = entry, .output = self.input.output, .output_hint = self.input.output_hint };
     const scroll = if (self.input.detail_scroll == 0) 0 else @min(self.input.detail_scroll, history_browser.detailScrollLimit(area, content));
     var lines: Wrapped = .{ .draw = self, .area = area, .skip = scroll };

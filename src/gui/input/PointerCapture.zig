@@ -1,4 +1,5 @@
 //! A child mouse gesture retains stable identity, never a borrowed pane.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
@@ -8,7 +9,7 @@ const Capture = @This();
 pane_id: core.PaneId,
 generation: u64,
 location: core.TabLocation,
-content: core.Rect,
+content: cellgrid.Rect,
 cell_width: u16,
 cell_height: u16,
 

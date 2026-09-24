@@ -143,6 +143,18 @@ pub fn addImports(self: Libraries, module: *std.Build.Module) void {
     }
 }
 
+/// Makes only the named libraries importable from `module`, for a package
+/// whose boundary admits a few pure ones.
+///
+/// ```zig
+/// libraries.addSelectedImports(data, &.{ "cellgrid", "pacing" });
+/// ```
+pub fn addSelectedImports(self: Libraries, module: *std.Build.Module, names: []const []const u8) void {
+    for (names) |name| {
+        module.addImport(name, self.get(name));
+    }
+}
+
 /// The library named `name`.
 ///
 /// ```zig

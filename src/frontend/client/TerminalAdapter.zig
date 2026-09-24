@@ -2,9 +2,9 @@
 //! that only make sense while somebody is looking. `init` builds the shared
 //! state in place, then binds every host port to this heap-stable value.
 
+const pacing = @import("pacing");
 const client_module = @import("telar-client");
 const mailbox = @import("mailbox");
-const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
 const Params = @import("Params.zig");
@@ -119,7 +119,7 @@ pub fn init(params: Params) !*TerminalAdapter {
     const client = &terminal.app;
     client.model.host.clipboard_capture = capture_module.platformSupported();
     client.model.host.grid_chrome = true;
-    client.model.host.animation_frame_ns = core.pace.default_interval;
+    client.model.host.animation_frame_ns = pacing.pace.default_interval;
     client.graphics = host_ports.graphicsRetention(terminal);
     client.chrome = host_ports.chrome(terminal);
     client.attachments = host_ports.attachmentShelf(terminal);

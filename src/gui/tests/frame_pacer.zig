@@ -1,3 +1,4 @@
+const pacing = @import("pacing");
 const std = @import("std");
 const core = @import("telar-core");
 const FramePacer = @import("../FramePacer.zig");
@@ -34,7 +35,7 @@ fn busy() FramePacer {
 }
 
 fn ordinaryDeadline() u64 {
-    return now(.initial) + core.pace.default_interval;
+    return now(.initial) + pacing.pace.default_interval;
 }
 
 test "native cadence starts immediately and preserves its slot after a late wake" {
@@ -46,16 +47,16 @@ test "native cadence starts immediately and preserves its slot after a late wake
     const late = ordinaryDeadline() + @intFromEnum(Duration.late_wakeup);
     try std.testing.expectEqual(@as(?u64, null), pacer.waitUntil(&.{}, late));
     pacer.record(&.{}, late);
-    try std.testing.expectEqual(@as(?u64, ordinaryDeadline() + core.pace.default_interval), pacer.waitUntil(&.{}, late));
+    try std.testing.expectEqual(@as(?u64, ordinaryDeadline() + pacing.pace.default_interval), pacer.waitUntil(&.{}, late));
 }
 
 test "native drawing after idle starts a full interval instead of reusing an old slot" {
     var pacer = busy();
-    const resumed = ordinaryDeadline() + core.pace.default_interval + @intFromEnum(Duration.late_wakeup);
+    const resumed = ordinaryDeadline() + pacing.pace.default_interval + @intFromEnum(Duration.late_wakeup);
     try std.testing.expectEqual(@as(?u64, null), pacer.waitUntil(&.{}, resumed));
     pacer.record(&.{}, resumed);
-    try std.testing.expectEqual(@as(?u64, resumed + core.pace.default_interval), pacer.waitUntil(&.{}, resumed));
-    try std.testing.expectEqual(@as(?u64, resumed + core.pace.default_interval), pacer.waitUntil(&.{}, resumed + @intFromEnum(Duration.tick)));
+    try std.testing.expectEqual(@as(?u64, resumed + pacing.pace.default_interval), pacer.waitUntil(&.{}, resumed));
+    try std.testing.expectEqual(@as(?u64, resumed + pacing.pace.default_interval), pacer.waitUntil(&.{}, resumed + @intFromEnum(Duration.tick)));
 }
 
 test "native input grace ignores pre-input damage and output from another pane" {
@@ -84,7 +85,7 @@ test "native grace charges a captured revision once and admits its successor" {
     var pacer = busy();
     pacer.noteInput(pane(.target, .pending), now(.input));
     pacer.record(&.{pane(.target, .echo)}, now(.echo));
-    const deadline = now(.echo) + core.pace.default_interval;
+    const deadline = now(.echo) + pacing.pace.default_interval;
     try std.testing.expectEqual(@as(?u64, deadline), pacer.waitUntil(&.{pane(.target, .echo)}, now(.later)));
     try std.testing.expectEqual(@as(?u64, null), pacer.waitUntil(&.{pane(.target, .following)}, now(.later)));
 }
@@ -93,19 +94,19 @@ test "native input grace spends only its bounded frame budget and accrues no cad
     var pacer = busy();
     var candidate = pane(.target, .pending);
     pacer.noteInput(candidate, now(.input));
-    for (0..core.pace.default_input_frames) |_| {
+    for (0..pacing.pace.default_input_frames) |_| {
         candidate.frame_id += 1;
         try std.testing.expectEqual(@as(?u64, null), pacer.waitUntil(&.{candidate}, now(.echo)));
         pacer.record(&.{candidate}, now(.echo));
     }
 
     candidate.frame_id += 1;
-    const deadline = now(.echo) + core.pace.default_interval;
+    const deadline = now(.echo) + pacing.pace.default_interval;
     try std.testing.expectEqual(@as(?u64, deadline), pacer.waitUntil(&.{candidate}, now(.echo)));
-    try std.testing.expectEqual(@as(u64, core.pace.default_input_frames + 1), pacer.cadence.stats.drawn);
+    try std.testing.expectEqual(@as(u64, pacing.pace.default_input_frames + 1), pacer.cadence.stats.drawn);
     try std.testing.expectEqual(@as(?u64, null), pacer.waitUntil(&.{candidate}, deadline));
     pacer.record(&.{candidate}, deadline);
-    try std.testing.expectEqual(@as(?u64, deadline + core.pace.default_interval), pacer.waitUntil(&.{candidate}, deadline));
+    try std.testing.expectEqual(@as(?u64, deadline + pacing.pace.default_interval), pacer.waitUntil(&.{candidate}, deadline));
 }
 
 test "native grace expires exactly at its deadline and cannot precede input" {
@@ -114,11 +115,11 @@ test "native grace expires exactly at its deadline and cannot precede input" {
     const candidate = pane(.target, .echo);
     try std.testing.expectEqual(@as(?u64, ordinaryDeadline()), pacer.waitUntil(&.{candidate}, now(.initial)));
 
-    const expiration = now(.input) + core.pace.default_input_grace;
+    const expiration = now(.input) + pacing.pace.default_input_grace;
     const before = expiration - @intFromEnum(Duration.tick);
     pacer.record(&.{}, before);
     try std.testing.expectEqual(@as(?u64, null), pacer.waitUntil(&.{candidate}, before));
-    try std.testing.expectEqual(@as(?u64, ordinaryDeadline() + core.pace.default_interval), pacer.waitUntil(&.{candidate}, expiration));
+    try std.testing.expectEqual(@as(?u64, ordinaryDeadline() + pacing.pace.default_interval), pacer.waitUntil(&.{candidate}, expiration));
 }
 
 test "native preparations charge only panes captured in that commit" {
@@ -126,13 +127,13 @@ test "native preparations charge only panes captured in that commit" {
     pacer.noteInput(pane(.target, .pending), now(.input));
     pacer.noteInput(pane(.background, .pending), now(.input));
     var target = pane(.target, .pending);
-    for (0..core.pace.default_input_frames) |_| {
+    for (0..pacing.pace.default_input_frames) |_| {
         target.frame_id += 1;
         pacer.record(&.{target}, now(.echo));
     }
 
     target.frame_id += 1;
-    try std.testing.expectEqual(@as(?u64, now(.echo) + core.pace.default_interval), pacer.waitUntil(&.{target}, now(.later)));
+    try std.testing.expectEqual(@as(?u64, now(.echo) + pacing.pace.default_interval), pacer.waitUntil(&.{target}, now(.later)));
     try std.testing.expectEqual(@as(?u64, null), pacer.waitUntil(&.{pane(.background, .echo)}, now(.later)));
 }
 
@@ -154,13 +155,13 @@ test "native new input resets grace against the latest applied frame" {
     var pacer = busy();
     var candidate = pane(.target, .pending);
     pacer.noteInput(candidate, now(.input));
-    for (0..core.pace.default_input_frames) |_| {
+    for (0..pacing.pace.default_input_frames) |_| {
         candidate.frame_id += 1;
         pacer.record(&.{candidate}, now(.echo));
     }
 
     pacer.noteInput(candidate, now(.later));
-    try std.testing.expectEqual(@as(?u64, now(.echo) + core.pace.default_interval), pacer.waitUntil(&.{candidate}, now(.later)));
+    try std.testing.expectEqual(@as(?u64, now(.echo) + pacing.pace.default_interval), pacer.waitUntil(&.{candidate}, now(.later)));
     candidate.frame_id += 1;
     try std.testing.expectEqual(@as(?u64, null), pacer.waitUntil(&.{candidate}, now(.later)));
 }
@@ -205,12 +206,12 @@ test "native ordinary frames do not spend input grace" {
     pacer.noteInput(candidate, now(.input));
     candidate.frame_id += 1;
     pacer.record(&.{candidate}, ordinaryDeadline());
-    for (0..core.pace.default_input_frames) |_| {
+    for (0..pacing.pace.default_input_frames) |_| {
         candidate.frame_id += 1;
         try std.testing.expectEqual(@as(?u64, null), pacer.waitUntil(&.{candidate}, ordinaryDeadline()));
         pacer.record(&.{candidate}, ordinaryDeadline());
     }
 
     candidate.frame_id += 1;
-    try std.testing.expectEqual(@as(?u64, ordinaryDeadline() + core.pace.default_interval), pacer.waitUntil(&.{candidate}, ordinaryDeadline()));
+    try std.testing.expectEqual(@as(?u64, ordinaryDeadline() + pacing.pace.default_interval), pacer.waitUntil(&.{candidate}, ordinaryDeadline()));
 }

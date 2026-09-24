@@ -1,5 +1,6 @@
 //! Pane labels drawn inside the fullscreen border, in layout display order.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const Result = @import("Result.zig");
@@ -13,7 +14,7 @@ const std = @import("std");
 /// ```zig
 /// const used = fullscreen_tabs.draw(buffer, input);
 /// ```
-pub fn draw(buffer: *core.Buffer, input: Input) Result {
+pub fn draw(buffer: *cellgrid.Buffer, input: Input) Result {
     if (input.area.w == 0 or input.area.h == 0 or input.names.len == 0) {
         return .{};
     }
@@ -65,8 +66,8 @@ pub fn draw(buffer: *core.Buffer, input: Input) Result {
         }
 
         const width = @min(label.width, input.area.w - used);
-        const rect: core.Rect = .{ .x = input.area.x + used, .y = input.area.y, .w = width, .h = 1 };
-        const style: core.Style = if (index == input.focused)
+        const rect: cellgrid.Rect = .{ .x = input.area.x + used, .y = input.area.y, .w = width, .h = 1 };
+        const style: cellgrid.Style = if (index == input.focused)
             .{ .fg = input.palette.surface_dim, .bg = input.palette.accent }
         else
             .{ .fg = input.palette.subtext0 };
@@ -92,7 +93,7 @@ pub fn draw(buffer: *core.Buffer, input: Input) Result {
 }
 
 test "fullscreen tabs label every pane and highlight only the focused pane" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     buffer.fill(buffer.area(), .{ .glyph = "─", .style = .{} });
     const palette = &data.theme_support.default_theme.palette;
@@ -104,7 +105,7 @@ test "fullscreen tabs label every pane and highlight only the focused pane" {
     });
 
     const expected = " 1 nvim ─ 2 claude ─ 3 shell ";
-    var clusters: core.GraphemeIterator = .{ .bytes = expected };
+    var clusters: cellgrid.GraphemeIterator = .{ .bytes = expected };
     var x: u16 = 0;
     while (clusters.next()) |cluster| : (x += cluster.width) {
         try std.testing.expectEqualStrings(cluster.bytes, buffer.at(x, 0).?.text());
@@ -119,14 +120,14 @@ test "fullscreen tabs label every pane and highlight only the focused pane" {
 }
 
 test "fullscreen tabs keep focus visible at every width within fixed pane bounds" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 82, 3);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 82, 3);
     defer buffer.deinit();
     const palette = &data.theme_support.default_theme.palette;
     const names = [_][]const u8{"long-foreground-process-name"} ** core.max_panes_per_tab;
     for (0..names.len) |focused| {
         for (0..79) |width| {
             buffer.fill(buffer.area(), .{ .glyph = ".", .style = .{} });
-            const area: core.Rect = .{ .x = 2, .y = 1, .w = @intCast(width), .h = 1 };
+            const area: cellgrid.Rect = .{ .x = 2, .y = 1, .w = @intCast(width), .h = 1 };
             const used = draw(&buffer, .{ .area = area, .names = &names, .focused = focused, .palette = palette });
             try std.testing.expect(used.width <= width);
             var selected_cells: usize = 0;
@@ -149,13 +150,13 @@ test "fullscreen tabs keep focus visible at every width within fixed pane bounds
 }
 
 test "fullscreen label plans retain bounded truncated Unicode text" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 84, 3);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 84, 3);
     defer buffer.deinit();
     const names: []const []const u8 = &.{ "long-process-name", "界界界界界", "e\u{301}ditor-long" };
     for (0..names.len) |focused| {
         for (0..80) |width| {
             buffer.clear(.{});
-            const area: core.Rect = .{ .x = 2, .y = 1, .w = @intCast(width), .h = 1 };
+            const area: cellgrid.Rect = .{ .x = 2, .y = 1, .w = @intCast(width), .h = 1 };
             const result = draw(&buffer, .{
                 .area = area,
                 .names = names,
@@ -176,7 +177,7 @@ test "fullscreen label plans retain bounded truncated Unicode text" {
 }
 
 test "fullscreen tabs truncate Unicode names at grapheme boundaries" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 17, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 17, 1);
     defer buffer.deinit();
     _ = draw(&buffer, .{
         .area = buffer.area(),
@@ -203,13 +204,13 @@ const Label = struct {
             if (name.len == 0) "shell" else name,
         }) catch unreachable;
         label.len = text.len;
-        label.width = core.measure(text);
+        label.width = cellgrid.text.measure(text);
         return label;
     }
 };
 
 const Input = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     names: []const []const u8,
     focused: usize,
     palette: *const data.Palette,

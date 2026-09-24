@@ -1,6 +1,6 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const SidebarRendererInput = @import("SidebarRendererInput.zig");
-const core = @import("telar-core");
 const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
 const modal = @import("modal.zig");
@@ -15,8 +15,8 @@ supported: bool = false,
 cell_width: u16 = 0,
 cell_height: u16 = 0,
 key: ?ModalRenderKey = null,
-desired_area: ?core.Rect = null,
-emitted_area: ?core.Rect = null,
+desired_area: ?cellgrid.Rect = null,
+emitted_area: ?cellgrid.Rect = null,
 frame_usable: bool = false,
 partial: ?modal.AssetKind = null,
 abort_pending: bool = false,
@@ -57,7 +57,7 @@ pub fn configure(self: *Renderer, configuration: SidebarRendererInput) bool {
     return true;
 }
 
-pub fn prepare(self: *Renderer, area: core.Rect, palette: *const data.Palette) void {
+pub fn prepare(self: *Renderer, area: cellgrid.Rect, palette: *const data.Palette) void {
     self.frame_usable = self.supported and self.cell_width != 0 and
         self.cell_height != 0 and !area.isEmpty();
     const background = modal.rgb(palette.panel_bg) orelse {
@@ -158,7 +158,7 @@ pub fn prepare(self: *Renderer, area: core.Rect, palette: *const data.Palette) v
     for (&self.assets) |*asset| asset.dirty = true;
 }
 
-pub fn covers(self: *const Renderer, area: core.Rect) bool {
+pub fn covers(self: *const Renderer, area: cellgrid.Rect) bool {
     if (!self.frame_usable or self.partial != null or self.abort_pending or
         !modal.optionalAreaEql(self.desired_area, area) or
         !modal.optionalAreaEql(self.emitted_area, area))
@@ -309,7 +309,7 @@ fn deletePlacements(self: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error
     return written;
 }
 
-fn writePlacements(self: *const Renderer, writer: *std.Io.Writer, area: core.Rect) std.Io.Writer.Error!usize {
+fn writePlacements(self: *const Renderer, writer: *std.Io.Writer, area: cellgrid.Rect) std.Io.Writer.Error!usize {
     const key = self.key.?;
     const horizontal = self.assets[@intFromEnum(modal.AssetKind.horizontal)];
     const vertical = self.assets[@intFromEnum(modal.AssetKind.vertical)];

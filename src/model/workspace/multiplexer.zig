@@ -1,5 +1,6 @@
 //! Pane membership, navigation and layout state independent of presentation.
 
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 
 pub const MetadataChange = enum {
@@ -8,7 +9,7 @@ pub const MetadataChange = enum {
     display_changed,
 };
 
-pub fn rectSize(rect: core.Rect) ?core.TerminalSize {
+pub fn rectSize(rect: cellgrid.Rect) ?core.TerminalSize {
     if (rect.w == 0 or rect.h == 0) {
         return null;
     }

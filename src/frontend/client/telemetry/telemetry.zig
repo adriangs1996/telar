@@ -1,5 +1,7 @@
 //! Client observability state and its stable JSON projection.
 
+const pacing = @import("pacing");
+const cellgrid = @import("cellgrid");
 const client_module = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
@@ -304,7 +306,7 @@ fn capture(terminal: *TerminalAdapter, heap: core.SnapshotSnapshot) ?Snapshot {
         .attachment_cache_bytes = terminal.view.kittyAttachments().retainedBytes(),
         .screen_bytes = (terminal.presenter.screen.front.cells.len +
             terminal.presenter.screen.back.cells.len) *
-            @sizeOf(core.Cell),
+            @sizeOf(cellgrid.Cell),
         .shared_expiries = terminal.graphics_store.delivery.shared_expiries,
         .shared_retire_latency = terminal.graphics_store.delivery.retire_latency,
         .heap = heap,
@@ -335,7 +337,7 @@ fn writeDiagnostics(io: std.Io, sink: *core.Sink, bytes: []const u8) anyerror!vo
 test "client telemetry reports lua kitty and heap retained bytes" {
     const io = std.testing.io;
     const capabilities: data.HostCapabilities = .{};
-    const pacer: core.Pacer = .{};
+    const pacer: pacing.Pacer = .{};
     const metrics: client_module.TelemetryMetrics = .{ .started_ns = 0, .key_lease_overflows = 3 };
     var buffer: [8192]u8 = undefined;
     const line = try format(&buffer, .{

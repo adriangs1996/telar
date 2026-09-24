@@ -1,4 +1,5 @@
 //! Native hover and link ownership across asynchronous state transitions.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
@@ -174,7 +175,7 @@ fn prefixAfterPointer(code: u32) !void {
 
 fn receiveLink(fixture: *Fixture, frame_id: u64, text: []const u8) !void {
     const pane = fixture.session.gui.app.model.panes.find(Session.pane_id).?;
-    var cells: [256]core.Cell = @splat(.{});
+    var cells: [256]cellgrid.Cell = @splat(.{});
     const count = pane.buffer.cells.len;
     if (count > cells.len or text.len > pane.buffer.w) {
         return error.TestScreenTooLarge;
@@ -247,7 +248,7 @@ test "native preview coverage survives pointer leave failed presentation and lat
     const preview = gui.pointer.hover.shown_preview.?;
     try fixture.send(fixture.event(7));
     try std.testing.expect(gui.pointer.hover.link == null);
-    try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.pointer.hover.shown_preview);
+    try std.testing.expectEqualDeep(@as(?cellgrid.Rect, preview), gui.pointer.hover.shown_preview);
     const token = try fixture.session.draw();
     try std.testing.expect(gui.pointer.hover.prepared_preview == null);
     try input_support.presented(
@@ -255,14 +256,14 @@ test "native preview coverage survives pointer leave failed presentation and lat
         token + 1,
         true,
     );
-    try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.pointer.hover.shown_preview);
+    try std.testing.expectEqualDeep(@as(?cellgrid.Rect, preview), gui.pointer.hover.shown_preview);
     try input_support.presented(
         gui,
         token,
         false,
     );
     try fixture.session.settle();
-    try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.pointer.hover.shown_preview);
+    try std.testing.expectEqualDeep(@as(?cellgrid.Rect, preview), gui.pointer.hover.shown_preview);
 
     const pane = gui.app.model.panes.find(Session.pane_id).?;
     pane.mouse = .{ .tracking = .button, .sgr = true };

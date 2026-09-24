@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const GenericInput = @import("GenericInput.zig").Type;
 const std = @import("std");
@@ -25,7 +25,7 @@ pub const Screen = @import("Screen.zig");
 
 pub const PatchSink = @import("PatchSink.zig");
 
-pub fn writeStyle(w: *std.Io.Writer, style: core.Style) !void {
+pub fn writeStyle(w: *std.Io.Writer, style: cellgrid.Style) !void {
     // Reset first: turning attributes off individually needs one code per
     // attribute and a memory of which were on. Resetting costs four bytes.
     try w.writeAll("\x1b[0");
@@ -843,7 +843,7 @@ const max_color_len = 17;
 /// Longest cursor position: `ESC [ 4294967295 ; 4294967295 H`.
 const max_cursor_position_len = 2 + 10 + 1 + 10 + 1;
 
-fn writeColor(w: *std.Io.Writer, color: core.Color, comptime layer: ColorLayer) !void {
+fn writeColor(w: *std.Io.Writer, color: cellgrid.Color, comptime layer: ColorLayer) !void {
     const prefix = std.fmt.comptimePrint(";{d}", .{@intFromEnum(layer)});
     const channels = color.value;
     if (color.kind == .default) {
@@ -932,7 +932,7 @@ test "direct escape formatting matches std.fmt at every boundary" {
         }
     }
 
-    for ([_]core.Color{ .default, .indexed(0), .indexed(7), .indexed(255), .rgb(.{ 0, 9, 10 }), .rgb(.{ 255, 255, 255 }) }) |color| {
+    for ([_]cellgrid.Color{ .default, .indexed(0), .indexed(7), .indexed(255), .rgb(.{ 0, 9, 10 }), .rgb(.{ 255, 255, 255 }) }) |color| {
         var direct = std.Io.Writer.fixed(&direct_storage);
         try writeColor(&direct, color, .underline);
         var formatted = std.Io.Writer.fixed(&formatted_storage);

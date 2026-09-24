@@ -1,5 +1,6 @@
 //! Native motion advances before projection; drawing and hit testing share the
 //! same model offset. Page delivery rebases the trajectory without an impulse.
+const pacing = @import("pacing");
 const routing = @import("routing.zig");
 const message_links = @import("message_links.zig");
 const core = @import("telar-core");
@@ -45,7 +46,7 @@ pub fn input(gui: *GuiAdapter, target: Target, event: Event) !void {
     const pane_id = target.action.transcript;
     const pane = gui.app.model.agentPane(pane_id) orelse return;
     const motions = &gui.widgets.thread_scroll;
-    const now_ns = client.monotonic(gui.app.io);
+    const now_ns = pacing.clock.monotonic(gui.app.io);
     const cancelled = event.phase == .cancel or event.momentum == .cancel;
     if (event.precise and event.phase != .begin and motions.discarded_gesture) {
         return;

@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const SidebarRendererInput = @import("SidebarRendererInput.zig");
 const core = @import("telar-core");
@@ -23,8 +24,8 @@ key: ?Key = null,
 failed: bool = false,
 generation: u64 = 0,
 emitted_generation: u64 = 0,
-desired: ?core.Rect = null,
-emitted: ?core.Rect = null,
+desired: ?cellgrid.Rect = null,
+emitted: ?cellgrid.Rect = null,
 emitted_plan: Plan = .{},
 emitted_key: ?Key = null,
 emitted_image_id: u32 = pill.image_id,
@@ -111,8 +112,8 @@ pub fn covers(self: *const Renderer, plan: *const Plan, palette: *const data.Pal
     const key = self.renderKey(plan, palette) orelse return false;
     return self.matches(plan, key) and !self.failed and !self.transferInProgress() and
         self.image_emitted and !self.image_dirty and self.generation == self.emitted_generation and
-        std.meta.eql(self.desired, @as(?core.Rect, plan.area)) and
-        std.meta.eql(self.emitted, @as(?core.Rect, plan.area));
+        std.meta.eql(self.desired, @as(?cellgrid.Rect, plan.area)) and
+        std.meta.eql(self.emitted, @as(?cellgrid.Rect, plan.area));
 }
 
 /// Keeps small-font text visible while only its selection is being replaced.
@@ -121,7 +122,7 @@ pub fn covers(self: *const Renderer, plan: *const Plan, palette: *const data.Pal
 pub fn coversText(self: *const Renderer, plan: *const Plan, palette: *const data.Palette) bool {
     const key = self.renderKey(plan, palette) orelse return false;
     return !self.failed and self.image_emitted and
-        std.meta.eql(self.desired, @as(?core.Rect, plan.area)) and self.emittedTextMatches(plan, key);
+        std.meta.eql(self.desired, @as(?cellgrid.Rect, plan.area)) and self.emittedTextMatches(plan, key);
 }
 
 /// Retires stale text before the next cell frame, without rasterization.
@@ -132,7 +133,7 @@ pub fn observe(self: *Renderer, plan: *const Plan, palette: *const data.Palette)
         return;
     };
     if ((!self.matches(plan, key) and !self.coversText(plan, palette)) or
-        !std.meta.eql(self.desired, @as(?core.Rect, plan.area)))
+        !std.meta.eql(self.desired, @as(?cellgrid.Rect, plan.area)))
     {
         self.hide();
     }
@@ -265,7 +266,7 @@ fn hide(self: *Renderer) void {
 
 fn emittedTextMatches(self: *const Renderer, plan: *const Plan, key: Key) bool {
     return self.emitted_key != null and std.meta.eql(self.emitted_key.?, key) and
-        std.meta.eql(self.emitted, @as(?core.Rect, plan.area)) and self.emitted_plan.sameText(plan);
+        std.meta.eql(self.emitted, @as(?cellgrid.Rect, plan.area)) and self.emitted_plan.sameText(plan);
 }
 
 fn matches(self: *const Renderer, plan: *const Plan, key: Key) bool {

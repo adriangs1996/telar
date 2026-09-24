@@ -3,6 +3,7 @@
 //! This is deliberately linear. Reading `render` shows every visible widget,
 //! its region, its order, and the only conditional replacement in the frame.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -140,7 +141,7 @@ fn bottomDesiredWidth(slot: *const data.bar_values.Slot, input: CompositionInput
     };
 }
 
-fn bottomStyle(context: *const Context) core.Style {
+fn bottomStyle(context: *const Context) cellgrid.Style {
     return .{
         .fg = context.palette.subtext0,
         .bg = context.palette.panel_bg,

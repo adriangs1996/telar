@@ -1,7 +1,7 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const event_module = @import("../input/event.zig");
 const std = @import("std");
-const core = @import("telar-core");
 const Widget = @import("Widget.zig");
 const Editor = @import("editor.zig");
 const Route = @import("../widgets/interaction/Route.zig");
@@ -331,7 +331,7 @@ fn sourceOffset(w: *Widget, target: Target, x: f64) usize {
     const source = w.model.current().source;
     const end = start + (std.mem.indexOfAny(u8, source[start..], "\r\n") orelse source.len - start);
     const wanted = std.math.clamp(x - target.bounds.x, 0, target.bounds.width);
-    var iterator: core.GraphemeIterator = .{ .bytes = source[start..end] };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = source[start..end] };
     var used: f64 = 0;
     var at = start;
     while (iterator.next()) |cluster| {

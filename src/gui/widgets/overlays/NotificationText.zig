@@ -1,6 +1,6 @@
 //! Bounded proportional wrapping for a notification body, borrowed for a draw.
+const cellgrid = @import("cellgrid");
 const std = @import("std");
-const core = @import("telar-core");
 const Canvas = @import("../Canvas.zig");
 const Label = @import("../Label.zig");
 const TextFit = @import("../TextFit.zig");
@@ -52,7 +52,7 @@ pub fn wrap(self: *Text, canvas: *Canvas, input: NotificationTextInput) !void {
         if (try canvas.measure(label) > input.width) {
             end = 0;
             var word_end: usize = 0;
-            var iterator: core.GraphemeIterator = .{ .bytes = label.text };
+            var iterator: cellgrid.GraphemeIterator = .{ .bytes = label.text };
             while (iterator.next()) |cluster| {
                 const candidate = end + cluster.bytes.len;
                 label.text = remaining[0..candidate];

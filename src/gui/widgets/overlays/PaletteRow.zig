@@ -1,11 +1,11 @@
 //! What one palette row shows: an icon column, a proportional label, muted
 //! secondary text and a right-aligned monospace hint.
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Canvas = @import("../Canvas.zig");
 const Label = @import("../Label.zig");
 const PaletteRow = @This();
 
-area: core.Rect = .{},
+area: cellgrid.Rect = .{},
 icon: []const u8,
 primary: []const u8,
 secondary: []const u8 = "",
@@ -13,7 +13,7 @@ hint: []const u8 = "",
 /// Commands and paths keep the monospace face.
 mono: bool = false,
 /// Overrides the label color, for failures.
-color: ?core.Color = null,
+color: ?cellgrid.Color = null,
 
 /// Reserves hint cells before clipping the primary and secondary labels.
 /// Example: `try row.draw(canvas);`
@@ -26,9 +26,9 @@ pub fn draw(self: PaletteRow, canvas: *Canvas) !void {
     const colors = canvas.theme.palette;
     const parts = row.splitLeft(2);
     try canvas.text(parts[0], .{ .text = self.icon, .color = colors.subtext0 });
-    const hint_cells = @min(core.measure(self.hint), parts[1].w);
+    const hint_cells = @min(cellgrid.text.measure(self.hint), parts[1].w);
     const body = parts[1].splitLeft(parts[1].w -| (hint_cells + 1))[0];
-    const hint_area: core.Rect = .{ .x = row.x + row.w - hint_cells, .y = row.y, .w = hint_cells, .h = 1 };
+    const hint_area: cellgrid.Rect = .{ .x = row.x + row.w - hint_cells, .y = row.y, .w = hint_cells, .h = 1 };
     try canvas.text(hint_area, .{ .text = self.hint, .color = colors.subtext0 });
     const primary_label: Label = .{ .text = self.primary, .color = self.color orelse colors.text, .face = if (self.mono) .mono else .sans, .size = .body };
     try canvas.text(body, primary_label);

@@ -1,5 +1,5 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const ProspectiveSplit = @This();
 
-existing_content: core.Rect,
-new_content: core.Rect,
+existing_content: cellgrid.Rect,
+new_content: cellgrid.Rect,

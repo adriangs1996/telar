@@ -4,15 +4,25 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import re
 
 from check_client_boundaries import calls, imports
 
 ALLOWED_MODULES = {"std", "builtin", "telar-core"}
+MODEL_LIBRARIES = re.compile(r"pub const libraries = \[_\]\[\]const u8\{([^}]*)\};")
 SOURCE_ROOTS = ("src", "examples", "benchmarks", "test", "build")
+
+
+def model_libraries(root):
+    """The libraries `build/model.zig` gives the model, the one list of them."""
+    build = root / "build/model.zig"
+    match = MODEL_LIBRARIES.search(build.read_text()) if build.is_file() else None
+    return set(re.findall(r'"([^"]+)"', match.group(1))) if match else set()
 
 
 def violations(root):
     root = root.resolve()
+    allowed = ALLOWED_MODULES | model_libraries(root)
     model = root / "src/model"
     files = [p for folder in SOURCE_ROOTS for p in (root / folder).rglob("*.zig")]
     files.extend(root.glob("*.zig"))
@@ -34,7 +44,7 @@ def violations(root):
                             errors.append(f"{source}: missing or incorrectly cased model file: {path}")
                     elif target.is_relative_to(model):
                         errors.append(f'{source}: consume the public @import("model") API: {path}')
-                elif inside and path not in ALLOWED_MODULES:
+                elif inside and path not in allowed:
                     errors.append(f"{source}: forbidden model dependency: {path}")
                 elif path == "model" and any(source.is_relative_to(root / "src" / lower) for lower in ("core", "lua")):
                     errors.append(f"{source}: reverse dependency on model")

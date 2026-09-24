@@ -1,10 +1,10 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Drawing = @import("Drawing.zig");
 const Text = @import("Text.zig");
 const Wrapped = @This();
 
 draw: *Drawing,
-area: core.Rect,
+area: cellgrid.Rect,
 row: u16 = 0,
 skip: u32,
 
@@ -13,7 +13,7 @@ pub fn text(self: *Wrapped, value: Text) void {
         return;
     }
 
-    var iterator: core.GraphemeIterator = .{ .bytes = value.text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = value.text };
     var x: u16 = 0;
     while (iterator.next()) |cluster| {
         const newline = iterator.index > 0 and value.text[iterator.index - 1] == '\n';

@@ -1,6 +1,6 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const kitty_sidebar = @import("kitty_sidebar.zig");
 const SidebarProviderPlacement = @This();
 
-area: core.Rect,
+area: cellgrid.Rect,
 provider: kitty_sidebar.SidebarProvider,

@@ -1,6 +1,6 @@
 //! Shared measured-word placement for the transcript's layout and painting.
+const cellgrid = @import("cellgrid");
 const std = @import("std");
-const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Label = @import("Label.zig");
 const gfx = @import("gfx");
@@ -149,7 +149,7 @@ fn appendChunk(self: *Flow, value: Label) !void {
     var offset: usize = 0;
     while (offset < value.text.len) {
         const room = @max(1, self.bounds.width - self.x);
-        var iterator: core.GraphemeIterator = .{ .bytes = value.text, .index = offset };
+        var iterator: cellgrid.GraphemeIterator = .{ .bytes = value.text, .index = offset };
         var end = offset;
         while (iterator.next() != null) {
             const from = advances[offset];
@@ -257,7 +257,7 @@ fn positions(self: *Flow, label: Label, output: []u32) !void {
         return self.canvas.atlas.caretPositions(.{ .text = label.text, .x = 0, .y = 0, .color = .white, .pixel_height = self.canvas.chrome.text(label.size) orelse self.canvas.metrics.pixel_height, .face = if (label.bold) .sans_semibold else .sans }, output);
     }
 
-    var iterator: core.GraphemeIterator = .{ .bytes = label.text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = label.text };
     var advance: u32 = 0;
     output[0] = 0;
     while (iterator.next()) |cluster| {
@@ -284,7 +284,7 @@ fn visible(self: Flow) bool {
 }
 
 fn fittingPrefix(self: *Flow, label: Label, room: f32) !usize {
-    var iterator: core.GraphemeIterator = .{ .bytes = label.text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = label.text };
     const first = iterator.next().?;
     var low = first.bytes.len;
     var high = label.text.len;
@@ -330,7 +330,7 @@ fn chunkLength(text: []const u8) usize {
         return text.len;
     }
 
-    var iterator: core.GraphemeIterator = .{ .bytes = text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = text };
     var end: usize = 0;
     while (iterator.next() != null) {
         if (iterator.index > chunk_bytes and end > 0) {

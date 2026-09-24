@@ -1,5 +1,5 @@
 //! Proportional text in bounded shaping runs, including long diagnostics.
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const gfx = @import("gfx");
@@ -15,7 +15,7 @@ label: Label,
 /// Example: `try (Caption{ .bounds = area, .label = label }).draw(canvas);`
 pub fn draw(self: Caption, canvas: *Canvas) !void {
     var remaining = self.bounds;
-    var iterator: core.GraphemeIterator = .{ .bytes = self.label.text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = self.label.text };
     while (remaining.width > 0 and iterator.index < iterator.bytes.len) {
         var storage: [64]u8 = undefined;
         var len: usize = 0;

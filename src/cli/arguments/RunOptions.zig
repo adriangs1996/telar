@@ -1,10 +1,10 @@
+const pty = @import("pty");
 const data = @import("model");
-const backend = @import("telar-backend");
 const std = @import("std");
 const run = @import("run.zig");
 const RunOptions = @This();
 
-command: backend.Command,
+command: pty.Command,
 command_set: bool = false,
 theme: data.ColorTheme = data.theme_support.default_theme,
 theme_set: bool = false,
@@ -187,7 +187,7 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
 
         options.command = try run.defaultShell(environ);
     } else {
-        options.command = try backend.Command.fromArgv(args[command_start..]);
+        options.command = try pty.Command.fromArgv(args[command_start..]);
         options.command_set = true;
     }
 

@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const Initial = @import("Initial.zig");
 const FrameInput = @import("FrameInput.zig");
 const Pane = @import("Pane.zig");
@@ -96,7 +97,7 @@ test "change review availability follows managed conversation identity without w
 }
 
 fn frame(storage: []u8, input: FrameInput) !core.FrameView {
-    var cells = [_]core.Cell{.{}} ** 9;
+    var cells = [_]cellgrid.Cell{.{}} ** 9;
     cells[0].bytes[0] = input.character;
     const count = if (input.base == 0) @as(usize, input.cols) * input.rows else 1;
     const spans = [_]core.Span{.{ .start = 0, .cells = cells[0..count] }};

@@ -1,11 +1,11 @@
 //! Owns configured bar ticks, bounded Lua evaluation and command workers.
 
+const pacing = @import("pacing");
 const bar_update = @import("bar_update.zig");
 const local_time = @import("../resources/local_time.zig");
 const data = @import("model");
 const client_diagnostic = @import("client_diagnostic.zig");
 const BarUpdateFailure = @import("BarUpdateFailure.zig");
-const core = @import("telar-core");
 const std = @import("std");
 const Client = @import("../execution/Client.zig");
 const Job = @import("../execution/Job.zig").Job;
@@ -38,7 +38,7 @@ pub fn handleTick(client: *Client, result: anyerror!void) !void {
     const due = client.model.bar_updates.takeDue(.{
         .generation = generation.number,
         .configuration = configuration,
-        .now_ns = core.monotonic(client.io),
+        .now_ns = pacing.clock.monotonic(client.io),
     });
 
     client.model.bar_updates.pending_callbacks |= due.dynamic_mask;
@@ -273,7 +273,7 @@ pub fn rearm(client: *Client) !void {
 /// The timer the bar deadlines need, or null while the pending one still
 /// fits or nothing is due.
 fn timerJob(io: std.Io, state: *data.BarUpdatesState) ?Job {
-    const deadline_ns = if (state.pending_callbacks != 0) core.monotonic(io) else state.nextDeadline();
+    const deadline_ns = if (state.pending_callbacks != 0) pacing.clock.monotonic(io) else state.nextDeadline();
 
     return switch (state.scheduler.update(io, deadline_ns)) {
         .idle, .retained => null,
@@ -291,7 +291,7 @@ test "bar timers reuse one pending worker and follow the earliest deadline" {
     try std.testing.expectEqual(Job.Kind.bar, first.timer.kind);
     try std.testing.expect(state.scheduler.pending);
     const immediate = state.scheduler.deadline_ns.load(.acquire);
-    try std.testing.expect(immediate <= core.monotonic(io));
+    try std.testing.expect(immediate <= pacing.clock.monotonic(io));
     try std.testing.expect(timerJob(io, &state) == null);
 
     state.pending_callbacks = 0;
@@ -302,7 +302,7 @@ test "bar timers reuse one pending worker and follow the earliest deadline" {
         .{
             .generation = 2,
             .configuration = null,
-            .now_ns = core.monotonic(io),
+            .now_ns = pacing.clock.monotonic(io),
         },
     );
     try std.testing.expect(timerJob(io, &state) == null);
@@ -350,7 +350,7 @@ pub fn synchronizeBars(client: *Client) !void {
         .{
             .generation = if (client.lua_generation) |generation| generation.number else client.model.configuration_generation,
             .configuration = barConfiguration(client),
-            .now_ns = core.monotonic(client.io),
+            .now_ns = pacing.clock.monotonic(client.io),
         },
     );
 

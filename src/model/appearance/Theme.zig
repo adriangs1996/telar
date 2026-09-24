@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const role_module = @import("../syntax/role.zig");
 const theme_support = @import("theme_support.zig");
 const Palette = @import("Palette.zig");
@@ -17,7 +17,7 @@ syntax_styles: SyntaxStyles = .initFill(null),
 
 /// Resolves syntax roles at paint time, including live palette overrides.
 /// Example: `const ink = theme.syntax(.keyword);`
-pub fn syntax(self: Theme, role: role_module.Role) core.Color {
+pub fn syntax(self: Theme, role: role_module.Role) cellgrid.Color {
     return self.syntaxStyle(role).color;
 }
 

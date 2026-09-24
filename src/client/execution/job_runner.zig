@@ -1,5 +1,6 @@
 //! Executes one client job on a worker thread and turns its result into the
 //! client message the adapter delivers.
+const pacing = @import("pacing");
 const std = @import("std");
 const core = @import("telar-core");
 const Job = @import("Job.zig").Job;
@@ -19,9 +20,9 @@ pub fn run(io: std.Io, gpa: std.mem.Allocator, job: Job) Message {
         .runtime_read => |state| .{ .server = state.read(io) },
         .runtime_send => |send| .{ .sent = sendRuntime(io, send) },
         .timer => |timer| switch (timer.kind) {
-            .bar => .{ .bar_tick = core.deadline_timer.wait(io, timer.scheduler) },
-            .notification => .{ .notification_tick = core.deadline_timer.wait(io, timer.scheduler) },
-            .sidebar_animation => .{ .sidebar_animation_tick = core.deadline_timer.wait(io, timer.scheduler) },
+            .bar => .{ .bar_tick = pacing.deadline_timer.wait(io, timer.scheduler) },
+            .notification => .{ .notification_tick = pacing.deadline_timer.wait(io, timer.scheduler) },
+            .sidebar_animation => .{ .sidebar_animation_tick = pacing.deadline_timer.wait(io, timer.scheduler) },
         },
         .bar_command => |bar| .{ .bar_command = .{
             .execution_id = bar.execution_id,

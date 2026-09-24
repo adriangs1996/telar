@@ -65,7 +65,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
         .target = app.modules.target,
         .optimize = bench_optimize,
     });
-    const bench_data = model_build.create(b, bench_core);
+    const bench_data = model_build.create(b, bench_core, bench_libraries);
     const bench_client = client_build.add(
         b,
         .{

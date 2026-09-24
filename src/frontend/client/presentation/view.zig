@@ -1,5 +1,6 @@
 //! Visible structure and interaction state of one telar client.
 
+const cellgrid = @import("cellgrid");
 const client = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
@@ -66,7 +67,7 @@ pub fn promptField(prompt: ?*data.Prompt) ?*tab_rename_module.Field {
 
 /// Computes the deterministic result set and renders the visible window with
 /// the clamped selection highlighted, scrolled so the selection stays visible.
-pub fn renderGotoPicker(context: *Context, application: core.Rect, sources: PickerSources) GotoPickerOutput {
+pub fn renderGotoPicker(context: *Context, application: cellgrid.Rect, sources: PickerSources) GotoPickerOutput {
     var results: data.Results = .{};
     const match_sources: data.Sources = .{
         .agents = sources.agents,
@@ -109,7 +110,7 @@ pub fn renderGotoPicker(context: *Context, application: core.Rect, sources: Pick
 }
 
 /// Projects owned history into the specialized compact browser.
-fn renderHistoryPalette(context: *Context, application: core.Rect, sources: PickerSources) GotoPickerOutput {
+fn renderHistoryPalette(context: *Context, application: cellgrid.Rect, sources: PickerSources) GotoPickerOutput {
     const entries = sources.history.slice();
     var rows: [core.max_history_results]Entry = undefined;
     for (entries, 0..) |*entry, index| {
@@ -149,7 +150,7 @@ fn renderHistoryPalette(context: *Context, application: core.Rect, sources: Pick
 /// Renders the suggestion palette through the same list modal: one row
 /// holding the suggested command, the waiting state or the failure, and a
 /// footer that says what Enter does next.
-fn renderSuggestPalette(context: *Context, application: core.Rect, sources: PickerSources) GotoPickerOutput {
+fn renderSuggestPalette(context: *Context, application: cellgrid.Rect, sources: PickerSources) GotoPickerOutput {
     const state = sources.suggestion;
     const text: []const u8 = switch (state.phase) {
         .idle => "",
@@ -201,7 +202,7 @@ pub fn addStats(a: RenderStats, b: RenderStats) RenderStats {
     return .{ .scanned = a.scanned + b.scanned, .damaged = a.damaged + b.damaged };
 }
 
-pub fn syncRegion(screen: *Screen, source: *const core.Buffer, area: core.Rect) !RenderStats {
+pub fn syncRegion(screen: *Screen, source: *const cellgrid.Buffer, area: cellgrid.Rect) !RenderStats {
     var stats: RenderStats = .{};
     var y = area.y;
     while (y < area.y + area.h) : (y += 1) {
@@ -239,10 +240,10 @@ fn testingCompose(compositor: *Compositor, composition: TestingComposition) !voi
 
 test "visible regions reserve top bottom sidebar and workbench" {
     const regions = data.GridRegions.calculate(120, 40, true, data.sidebar.default_width);
-    try std.testing.expectEqual(core.Rect{ .x = 42, .w = 78, .h = 1 }, regions.top);
-    try std.testing.expectEqual(core.Rect{ .x = 0, .y = 0, .w = 42, .h = 40 }, regions.sidebar);
-    try std.testing.expectEqual(core.Rect{ .x = 42, .y = 1, .w = 78, .h = 38 }, regions.workbench);
-    try std.testing.expectEqual(core.Rect{ .x = 42, .y = 39, .w = 78, .h = 1 }, regions.bottom);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 42, .w = 78, .h = 1 }, regions.top);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 0, .y = 0, .w = 42, .h = 40 }, regions.sidebar);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 42, .y = 1, .w = 78, .h = 38 }, regions.workbench);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 42, .y = 39, .w = 78, .h = 1 }, regions.bottom);
 }
 
 test "mouse pointer distinguishes clickable chrome panes and sidebar resizing" {
@@ -251,7 +252,7 @@ test "mouse pointer distinguishes clickable chrome panes and sidebar resizing" {
 
     var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
-    const area: core.Rect = .{ .w = 1, .h = 1 };
+    const area: cellgrid.Rect = .{ .w = 1, .h = 1 };
     state.pointer_position = .{ .x = 0, .y = 0 };
     state.hits.add(area, .toggle_sidebar);
     try std.testing.expectEqual(core.PointerShape.pointer, state.mousePointerShape(.{ .model = &model, .tab = 0 }));
@@ -281,15 +282,15 @@ test "sidebar toggle changes only the disposable client layout" {
     var state = try State.init(gpa, 100, 30);
     defer state.deinit();
     try std.testing.expectEqual(@as(u16, data.sidebar.default_width), state.regions.sidebar.w);
-    try std.testing.expectEqual(core.Rect{ .x = 42, .w = 58, .h = 1 }, state.regions.top);
-    try std.testing.expectEqual(core.Rect{ .x = 42, .y = 29, .w = 58, .h = 1 }, state.regions.bottom);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 42, .w = 58, .h = 1 }, state.regions.top);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 42, .y = 29, .w = 58, .h = 1 }, state.regions.bottom);
 
     state.toggleSidebar();
 
     try std.testing.expectEqual(@as(u16, 0), state.regions.sidebar.w);
     try std.testing.expectEqual(@as(u16, 100), state.regions.workbench.w);
-    try std.testing.expectEqual(core.Rect{ .w = 100, .h = 1 }, state.regions.top);
-    try std.testing.expectEqual(core.Rect{ .x = 0, .y = 29, .w = 100, .h = 1 }, state.regions.bottom);
+    try std.testing.expectEqual(cellgrid.Rect{ .w = 100, .h = 1 }, state.regions.top);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 0, .y = 29, .w = 100, .h = 1 }, state.regions.bottom);
 }
 
 test "sidebar separator drag reports exact preferred widths" {
@@ -660,7 +661,7 @@ test "focused agent image preview reserves space below its pane and opens a moda
         .compositor = &compositor,
         .agents = &snapshot,
     });
-    try std.testing.expectEqual(core.Rect{ .x = 10, .y = 3, .w = 80, .h = 24 }, state.graphics_plan.modal_area);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 10, .y = 3, .w = 80, .h = 24 }, state.graphics_plan.modal_area);
     try std.testing.expect(!sidebar_before_modal.eqlPublic(screen.back.at(20, 4).?));
 
     model.panes.find(first_pane).?.pointer_shape = .crosshair;
@@ -911,7 +912,7 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
         for (0..label.width) |offset| {
             const cell = screen.back.at(original.area.x + label.offset + @as(u16, @intCast(offset)), original.area.y).?;
             try std.testing.expectEqualStrings(" ", cell.text());
-            try std.testing.expectEqual(core.Color.default, cell.style.bg);
+            try std.testing.expectEqual(cellgrid.Color.default, cell.style.bg);
         }
     }
 
@@ -1101,10 +1102,10 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
         .force = true,
     });
 
-    try std.testing.expectEqualDeep(core.Color.default, screen.back.cells[0].style.bg);
+    try std.testing.expectEqualDeep(cellgrid.Color.default, screen.back.cells[0].style.bg);
     // The sidebar column stays on the host terminal's background.
     try std.testing.expectEqualDeep(
-        core.Color.default,
+        cellgrid.Color.default,
         screen.back.cells[@as(usize, 23) * 80].style.bg,
     );
 }
@@ -1405,7 +1406,7 @@ const TestingComposition = struct {
     /// The composed tab; tests compose their only tab.
     tab: usize = 0,
     screen: *Screen,
-    area: core.Rect,
+    area: cellgrid.Rect,
     palette: *const data.Palette = &data.theme_support.default_theme.palette,
     bottom_reservation: ?data.PaneBottomReservation = null,
 };

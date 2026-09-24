@@ -1,6 +1,6 @@
 //! Fits one label into a pixel width with a trailing ellipsis. Prefix widths
 //! come from `Canvas.measure`, so warm labels only read the shaping cache.
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Canvas = @import("Canvas.zig");
 const Label = @import("Label.zig");
 const TextFit = @This();
@@ -48,7 +48,7 @@ pub fn fit(self: TextFit, label: Label, buffer: *[max_bytes]u8) ![]const u8 {
 }
 
 fn graphemes(text: []const u8) usize {
-    var iterator: core.GraphemeIterator = .{ .bytes = text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = text };
     var count: usize = 0;
     while (iterator.next() != null) {
         count += 1;
@@ -58,7 +58,7 @@ fn graphemes(text: []const u8) usize {
 }
 
 fn prefixBytes(text: []const u8, count: usize) usize {
-    var iterator: core.GraphemeIterator = .{ .bytes = text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = text };
     var bytes: usize = 0;
     var seen: usize = 0;
     while (seen < count) : (seen += 1) {

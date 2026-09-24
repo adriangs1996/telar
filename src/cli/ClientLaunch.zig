@@ -1,4 +1,4 @@
-const backend = @import("telar-backend");
+const pty = @import("pty");
 const client_module = @import("telar-client");
 const core = @import("telar-core");
 const data = @import("model");
@@ -14,7 +14,7 @@ const Launch = @This();
 process: std.process.Init,
 options: *const RunOptions,
 endpoint: []const u8,
-argument_storage: [backend.max_args][]const u8 = undefined,
+argument_storage: [pty.command_support.max_args][]const u8 = undefined,
 argument_count: usize = 0,
 cwd_buffer: [std.fs.max_path_bytes]u8 = undefined,
 cwd_len: usize = 0,

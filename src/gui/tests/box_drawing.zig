@@ -1,8 +1,8 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const gfx = @import("gfx");
 const Quad_module = gfx.Quad;
 const std = @import("std");
-const core = @import("telar-core");
 const Session = @import("Session.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const Canvas = @import("../widgets/Canvas.zig");
@@ -29,7 +29,7 @@ test "terminal box borders join adjacent cells for light heavy double and mixed 
     for (frames) |frame| {
         @memset(pane.buffer.cells, .{});
         for (frame, 0..) |row, y| {
-            var iter: core.GraphemeIterator = .{ .bytes = row };
+            var iter: cellgrid.GraphemeIterator = .{ .bytes = row };
             var x: usize = 0;
             while (iter.next()) |cluster| : (x += 1) {
                 pane.buffer.cells[y * pane.buffer.w + x] = fromText(cluster.bytes);
@@ -147,7 +147,7 @@ test "chrome box strokes follow line height letter spacing and scale through the
             var quads = QuadList.init(std.testing.allocator);
             defer quads.deinit();
             var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = .{ 7, 11 }, .theme = data.theme_support.default_theme };
-            const area: core.Rect = .{ .x = 1, .y = 2, .w = 3, .h = 1 };
+            const area: cellgrid.Rect = .{ .x = 1, .y = 2, .w = 3, .h = 1 };
             const bounds = canvas.rect(area);
             try canvas.text(area, .{ .text = "│ │", .faint = true });
             try std.testing.expectEqual(@as(usize, 2), quads.items().len);
@@ -220,15 +220,15 @@ test "all box glyphs animate within retained capacity without allocation after w
     try std.testing.expect(!failing.has_induced_failure);
 }
 
-fn fromText(text: []const u8) core.Cell {
-    var result: core.Cell = .{};
+fn fromText(text: []const u8) cellgrid.Cell {
+    var result: cellgrid.Cell = .{};
     @memcpy(result.bytes[0..text.len], text);
     result.len = @intCast(text.len);
     return result;
 }
 
-fn cell(cp: u21) core.Cell {
-    var result: core.Cell = .{};
+fn cell(cp: u21) cellgrid.Cell {
+    var result: cellgrid.Cell = .{};
     result.len = std.unicode.utf8Encode(cp, &result.bytes) catch unreachable;
     return result;
 }

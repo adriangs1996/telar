@@ -1,7 +1,7 @@
 //! One preset with optional chrome and terminal color overrides.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const lua_api = @import("lua-api");
-const core = @import("telar-core");
 const std = @import("std");
 const value = @import("lua_value.zig");
 const Snapshot = @import("Snapshot.zig");
@@ -222,7 +222,7 @@ fn rgb(self: Parser, field: []const u8) ![3]u8 {
     return parsed.rgbChannels() orelse self.invalid("theme.terminal colors must be explicit #RRGGBB values");
 }
 
-fn color(self: Parser, field: []const u8) !core.Color {
+fn color(self: Parser, field: []const u8) !cellgrid.Color {
     const text = value.string(self.state, -1) orelse return self.invalid("theme colors must be strings");
     if (std.mem.eql(u8, text, "default")) {
         return .default;

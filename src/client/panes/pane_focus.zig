@@ -1,5 +1,6 @@
 //! Pane focus: moves focus between panes and reports focus changes to the
 //! children that asked for them.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -28,7 +29,7 @@ pub fn applyPaneFocus(client: *Client, command: data.PaneFocusRequest) !?data.Pa
 }
 
 /// Delivers resources for a committed focus, including newly revealed panes. Example: `try pane_focus.deliverPaneFocus(client, focus, area);`
-pub fn deliverPaneFocus(client: *Client, focus: data.PaneFocus, area: core.Rect) !void {
+pub fn deliverPaneFocus(client: *Client, focus: data.PaneFocus, area: cellgrid.Rect) !void {
     const active = client.model.tabs.activeSlot() orelse return error.StalePaneFocus;
     if (!std.meta.eql(client.model.tabs.location[active], focus.location) or
         client.model.tabs.layout[active].focused() != focus.focused or

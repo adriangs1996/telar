@@ -1,5 +1,6 @@
 //! Frame-scoped widget dependencies and semantic UI actions.
 
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const data = @import("model");
 const GenericHits = @import("../ui/GenericHits.zig").Type;
@@ -33,7 +34,7 @@ pub const Action = union(enum) {
 pub const Hits = GenericHits(Action, 704);
 
 test "Nerd Font icons retain a cell fallback and publish a graphical mark" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 4, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 4, 1);
     defer buffer.deinit();
     var hits: Hits = .{};
     var plan: Plan = .{};
@@ -45,7 +46,7 @@ test "Nerd Font icons retain a cell fallback and publish a graphical mark" {
         .icon_theme = .nerd_font,
         .icon_plan = &plan,
     };
-    const style: core.Style = .{
+    const style: cellgrid.Style = .{
         .fg = .rgb(.{ 1, 2, 3 }),
         .bg = .rgb(.{ 4, 5, 6 }),
     };
@@ -61,7 +62,7 @@ test "Nerd Font icons retain a cell fallback and publish a graphical mark" {
 }
 
 test "the telar mark stays graphical over a host-provided background" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 4, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 4, 1);
     defer buffer.deinit();
     var hits: Hits = .{};
     var plan: Plan = .{};
@@ -80,7 +81,7 @@ test "the telar mark stays graphical over a host-provided background" {
 }
 
 test "the telar mark publishes a graphical mark under the Unicode theme too" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 4, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 4, 1);
     defer buffer.deinit();
     var hits: Hits = .{};
     var plan: Plan = .{};
@@ -92,7 +93,7 @@ test "the telar mark publishes a graphical mark under the Unicode theme too" {
         .icon_theme = .unicode,
         .icon_plan = &plan,
     };
-    const style: core.Style = .{
+    const style: cellgrid.Style = .{
         .fg = data.theme_support.default_theme.palette.accent,
         .bg = data.theme_support.default_theme.palette.panel_bg,
     };
@@ -108,7 +109,7 @@ test "the telar mark publishes a graphical mark under the Unicode theme too" {
 }
 
 test "Nerd Font theme keeps Unicode when terminal colors cannot be reproduced" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 4, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 4, 1);
     defer buffer.deinit();
     var hits: Hits = .{};
     var plan: Plan = .{};

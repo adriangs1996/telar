@@ -1,5 +1,6 @@
 //! Applies validated protocol spans to client-owned cells, without a renderer.
 
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const Applied = @import("Applied.zig");
 const std = @import("std");
@@ -7,7 +8,7 @@ const std = @import("std");
 /// Applies a frame validated by schema.decodeServer. Pane owns base-frame
 /// admission; this function owns only cell replacement and snapshot resizing.
 /// Example: const work = try applyBuffer(&buffer, &cursor, frame);
-pub fn applyBuffer(buffer: *core.Buffer, cursor: *core.Cursor, frame: core.FrameView) !Applied {
+pub fn applyBuffer(buffer: *cellgrid.Buffer, cursor: *core.Cursor, frame: core.FrameView) !Applied {
     if (frame.base_frame_id == 0 and (buffer.w != frame.cols or buffer.h != frame.rows)) {
         try buffer.resize(frame.cols, frame.rows);
     } else if (buffer.w != frame.cols or buffer.h != frame.rows) {

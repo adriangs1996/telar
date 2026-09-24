@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const CellMesh = @import("../render/CellMesh.zig");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
 const data = @import("model");
@@ -76,7 +77,7 @@ test "native decorated combining clusters remain bounded and atlas exhaustion re
     const atlas = &renderer.atlas.?;
     var canvas: Canvas = .{ .atlas = atlas, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
     const cluster = "a" ++ "\u{301}" ** 15;
-    const area: core.Rect = .{ .w = 120, .h = 1 };
+    const area: cellgrid.Rect = .{ .w = 120, .h = 1 };
     renderer.quads.clear();
     try canvas.text(area, .{ .text = cluster ** 120, .color = .default, .bold = true, .italic = true, .faint = true, .underline = true, .strikethrough = true });
     const count = renderer.quads.items().len;
@@ -111,7 +112,7 @@ fn populateMultiplexer(fixture: *Fixture) !void {
 
     _ = data.tab_selection.select(model, Session.location.tab_id);
     const tab = model.tabs.active;
-    const area: core.Rect = .{
+    const area: cellgrid.Rect = .{
         .w = 160,
         .h = 60,
     };

@@ -1,4 +1,5 @@
 //! Owned identity and visible bounds of a link under the native pointer.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
@@ -7,9 +8,9 @@ const Hit = @This();
 pane_id: core.PaneId,
 generation: u64,
 location: core.TabLocation,
-content: core.Rect,
+content: cellgrid.Rect,
 scroll_offset: u32 = 0,
-area: core.Rect,
+area: cellgrid.Rect,
 match: data.LinkMatch,
 
 /// A gesture can open only the same target in the same attached pane and cells.
@@ -24,7 +25,7 @@ pub fn eql(self: *const Hit, other: *const Hit) bool {
 
 /// Uses the same clipped overlay bounds for painting and delivered hit testing.
 /// Example: `const area = hit.previewArea();`
-pub fn previewArea(self: *const Hit) ?core.Rect {
+pub fn previewArea(self: *const Hit) ?cellgrid.Rect {
     if (self.content.h < 2) {
         return null;
     }

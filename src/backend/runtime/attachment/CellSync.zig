@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const TextMetadataCapture = @import("../../pane/TextMetadataCapture.zig");
 const core = @import("telar-core");
 const vt = @import("ghostty-vt");
@@ -10,7 +11,7 @@ const Diff = @import("../../pane/Diff.zig");
 const damage_module = @import("../../pane/damage.zig");
 const Sync = @This();
 
-acknowledged: core.Buffer,
+acknowledged: cellgrid.Buffer,
 acknowledged_text_revision: u64 = 0,
 acknowledged_text_projected: bool = false,
 acknowledged_cursor: core.Cursor = .{},
@@ -18,7 +19,7 @@ acknowledged_mouse: core.Mouse = .{},
 acknowledged_input_modes: core.InputModes = .{},
 acknowledged_pointer_shape: core.PointerShape = .default,
 acknowledged_scroll: core.Scroll = .{ .total_rows = 1, .offset = 0 },
-projected: core.Buffer,
+projected: cellgrid.Buffer,
 projected_damage: []bool,
 projected_state: vt.RenderState = .empty,
 projected_text_metadata: TextMetadataCapture,
@@ -32,9 +33,9 @@ snapshot_pending: bool = true,
 gpa: std.mem.Allocator,
 
 pub fn init(gpa: std.mem.Allocator, pane: *Pane) !Sync {
-    var acknowledged = try core.Buffer.init(gpa, pane.screen.w, pane.screen.h);
+    var acknowledged = try cellgrid.Buffer.init(gpa, pane.screen.w, pane.screen.h);
     errdefer acknowledged.deinit();
-    var projected = try core.Buffer.init(gpa, pane.screen.w, pane.screen.h);
+    var projected = try cellgrid.Buffer.init(gpa, pane.screen.w, pane.screen.h);
     errdefer projected.deinit();
     const projected_damage = try gpa.alloc(bool, pane.screen.h);
     errdefer gpa.free(projected_damage);
@@ -357,7 +358,7 @@ const Outstanding = struct {
 };
 
 const Projection = struct {
-    buffer: *const core.Buffer,
+    buffer: *const cellgrid.Buffer,
     damaged_rows: []const bool,
     cursor: core.Cursor,
     scroll: core.Scroll,

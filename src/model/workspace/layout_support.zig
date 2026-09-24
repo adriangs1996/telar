@@ -1,5 +1,6 @@
 //! Disposable pane layout owned by the client.
 
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const SplitGeometry = @import("SplitGeometry.zig");
 const std = @import("std");
@@ -22,7 +23,7 @@ pub const Direction = @import("../types/LayoutDirection.zig").LayoutDirection;
 
 pub const Node = @import("../types/LayoutNode.zig").LayoutNode;
 
-pub fn splitArea(geometry: SplitGeometry) [2]core.Rect {
+pub fn splitArea(geometry: SplitGeometry) [2]cellgrid.Rect {
     std.debug.assert(geometry.ratio <= core.client_layout_ratio_scale);
 
     return switch (geometry.axis) {
@@ -82,14 +83,14 @@ pub fn equalShareRatio(remaining: usize) u16 {
     );
 }
 
-pub fn extent(area: core.Rect, axis: Axis) u16 {
+pub fn extent(area: cellgrid.Rect, axis: Axis) u16 {
     return switch (axis) {
         .horizontal => area.w,
         .vertical => area.h,
     };
 }
 
-fn borderedContent(area: core.Rect) core.Rect {
+fn borderedContent(area: cellgrid.Rect) cellgrid.Rect {
     return area.inner(1);
 }
 
@@ -162,14 +163,14 @@ test "splits produce non-overlapping bordered content rectangles" {
     );
     try std.testing.expectEqual(@as(usize, 2), visible.len);
     try std.testing.expectEqual(
-        core.Rect{
+        cellgrid.Rect{
             .w = 39,
             .h = 24,
         },
         visible[0].outer,
     );
     try std.testing.expectEqual(
-        core.Rect{
+        cellgrid.Rect{
             .x = 1,
             .y = 1,
             .w = 37,
@@ -178,7 +179,7 @@ test "splits produce non-overlapping bordered content rectangles" {
         visible[0].content,
     );
     try std.testing.expectEqual(
-        core.Rect{
+        cellgrid.Rect{
             .x = 40,
             .w = 40,
             .h = 24,
@@ -205,14 +206,14 @@ test "disabled pane gaps remove the empty cell between borders" {
         &storage,
     );
     try std.testing.expectEqual(
-        core.Rect{
+        cellgrid.Rect{
             .w = 40,
             .h = 24,
         },
         visible[0].outer,
     );
     try std.testing.expectEqual(
-        core.Rect{
+        cellgrid.Rect{
             .x = 40,
             .w = 40,
             .h = 24,
@@ -225,7 +226,7 @@ test "disabled pane gaps remove the empty cell between borders" {
 test "disabled pane gaps permit the smallest pair of bordered panes" {
     var layout: Layout = .{};
     try layout.addRoot(@enumFromInt(1));
-    const area: core.Rect = .{
+    const area: cellgrid.Rect = .{
         .w = 6,
         .h = 3,
     };
@@ -252,7 +253,7 @@ test "directional focus follows pane geometry" {
     try layout.splitFocused(@enumFromInt(2), .horizontal);
     try layout.splitFocused(@enumFromInt(3), .vertical);
 
-    const area: core.Rect = .{
+    const area: cellgrid.Rect = .{
         .w = 80,
         .h = 24,
     };
@@ -326,7 +327,7 @@ test "bottom reservation preserves a minimum pane height" {
 }
 
 test "directional resize grows and shrinks horizontal and vertical panes" {
-    const area: core.Rect = .{
+    const area: cellgrid.Rect = .{
         .w = 101,
         .h = 41,
     };
@@ -360,7 +361,7 @@ test "directional resize grows and shrinks horizontal and vertical panes" {
 }
 
 test "resize selects the nearest matching ancestor and preserves usable pane content" {
-    const area: core.Rect = .{
+    const area: cellgrid.Rect = .{
         .w = 80,
         .h = 24,
     };
@@ -403,7 +404,7 @@ test "resize selects the nearest matching ancestor and preserves usable pane con
 }
 
 test "fullscreen toggles one pane without destroying the tiled layout" {
-    const area: core.Rect = .{
+    const area: cellgrid.Rect = .{
         .w = 101,
         .h = 41,
     };
@@ -445,7 +446,7 @@ test "fullscreen toggles one pane without destroying the tiled layout" {
 }
 
 test "fullscreen navigation follows display order and restores spatial geometry" {
-    const area: core.Rect = .{
+    const area: cellgrid.Rect = .{
         .w = 101,
         .h = 41,
     };
@@ -532,7 +533,7 @@ test "fullscreen pane order tracks splits and removals" {
 }
 
 test "fullscreen survives single-pane splits and removals until the tab is empty" {
-    const area: core.Rect = .{
+    const area: cellgrid.Rect = .{
         .w = 101,
         .h = 41,
     };

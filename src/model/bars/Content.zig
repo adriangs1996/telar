@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const model = @import("model.zig");
 const Segment = @import("Segment.zig");
 const SegmentInput = @import("SegmentInput.zig");
@@ -55,9 +55,9 @@ pub fn width(self: *const Content) u16 {
     var result: u16 = 0;
     for (self.slice()) |segment| {
         if (segment.icon) |icon| {
-            result +|= @max(@as(u16, 1), core.measure(icon.unicodeGlyph()));
+            result +|= @max(@as(u16, 1), cellgrid.text.measure(icon.unicodeGlyph()));
         }
-        result +|= core.measure(self.text(segment));
+        result +|= cellgrid.text.measure(self.text(segment));
     }
 
     return result;

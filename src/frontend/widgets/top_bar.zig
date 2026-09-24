@@ -5,6 +5,7 @@
 //! The list collapses to `active +N` on user request or when the row cannot
 //! fit it; the TLS badge remains while interception or system trust is on.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const Context = @import("Context.zig");
@@ -24,7 +25,7 @@ pub fn render(context: *Context, input: TopBarInput) void {
         return;
     }
 
-    const bar_style: core.Style = .{
+    const bar_style: cellgrid.Style = .{
         .fg = context.palette.text,
         .bg = context.palette.panel_bg,
     };
@@ -34,7 +35,7 @@ pub fn render(context: *Context, input: TopBarInput) void {
     // and closes the sidebar, and dims while the sidebar is hidden. Collapsing
     // the list is a keyboard action, or the counter shown while collapsed.
     // The mark spans two cells so its square can grow to the row's height.
-    const logo: core.Rect = .{
+    const logo: cellgrid.Rect = .{
         .x = area.x,
         .y = area.y,
         .w = @min(area.w, 4),
@@ -43,7 +44,7 @@ pub fn render(context: *Context, input: TopBarInput) void {
 
     context.hits.add(logo, .toggle_sidebar);
 
-    const logo_style: core.Style =
+    const logo_style: cellgrid.Style =
         if (context.isHovered(.toggle_sidebar))
             .{
                 .fg = context.palette.accent,
@@ -97,13 +98,13 @@ pub fn render(context: *Context, input: TopBarInput) void {
     }, input);
 
     if (badge_visible) {
-        const badge: core.Rect = .{
+        const badge: cellgrid.Rect = .{
             .x = area.x + area.w - badge_width,
             .y = area.y,
             .w = badge_width,
             .h = 1,
         };
-        const badge_style: core.Style = .{
+        const badge_style: cellgrid.Style = .{
             .fg = if (!input.proxy_tls_active)
                 context.palette.yellow
             else if (input.proxy_tls_scope == .wildcard)
@@ -133,7 +134,7 @@ fn rightDesiredWidth(input: TopBarInput) u16 {
     };
 }
 
-fn renderRight(context: *Context, area: core.Rect, input: TopBarInput) void {
+fn renderRight(context: *Context, area: cellgrid.Rect, input: TopBarInput) void {
     switch (input.right.*) {
         .content => |*content| bar_content.render(context, area, .{
             .content = content,
@@ -170,8 +171,8 @@ fn renderList(context: *Context, input: TopBarInput, list: ListInput) void {
             const counter = std.fmt.bufPrint(&counter_buffer, " +{d} ", .{
                 snapshot.count - 1,
             }) catch " + ";
-            const width = @min(core.measure(counter), row_end -| x);
-            const rect: core.Rect = .{ .x = x, .y = list.area.y, .w = width, .h = 1 };
+            const width = @min(cellgrid.text.measure(counter), row_end -| x);
+            const rect: cellgrid.Rect = .{ .x = x, .y = list.area.y, .w = width, .h = 1 };
             context.hits.add(rect, .toggle_workspace_list);
             _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = x, .y = list.area.y }, .text = counter, .max_width = width, .style = .{
                 .fg = if (context.isHovered(.toggle_workspace_list))
@@ -207,12 +208,12 @@ fn drawWorkspace(context: *Context, draw: WorkspaceDraw) u16 {
             .active_name = draw.active_name,
         }, draw.index),
     }) catch " workspace ";
-    const width = @min(core.measure(label), draw.area.w);
+    const width = @min(cellgrid.text.measure(label), draw.area.w);
     if (width == 0) {
         return draw.area.x;
     }
 
-    const rect: core.Rect = .{ .x = draw.area.x, .y = draw.area.y, .w = width, .h = 1 };
+    const rect: cellgrid.Rect = .{ .x = draw.area.x, .y = draw.area.y, .w = width, .h = 1 };
     const is_active = draw.active_index != null and draw.active_index.? == draw.index;
     const action: widget.Action = if (is_active)
         .active_workspace
@@ -220,7 +221,7 @@ fn drawWorkspace(context: *Context, draw: WorkspaceDraw) u16 {
         .{ .select_workspace = draw.snapshot.workspaceAt(draw.index) };
     context.hits.add(rect, action);
 
-    const style: core.Style = if (is_active)
+    const style: cellgrid.Style = if (is_active)
         .{
             .fg = context.palette.text,
             .bg = if (context.isHovered(action))
@@ -240,18 +241,18 @@ fn drawWorkspace(context: *Context, draw: WorkspaceDraw) u16 {
     return draw.area.x + width;
 }
 
-fn renderFallback(context: *Context, input: TopBarInput, area: core.Rect) void {
+fn renderFallback(context: *Context, input: TopBarInput, area: cellgrid.Rect) void {
     var workspace_buffer: [core.max_workspace_name_bytes + 16]u8 = undefined;
     const workspace = workspaceLabel(input.location, input.workspace_name, &workspace_buffer);
-    const width = @min(core.measure(workspace) + 1, area.w);
+    const width = @min(cellgrid.text.measure(workspace) + 1, area.w);
     if (width == 0) {
         return;
     }
 
-    const rect: core.Rect = .{ .x = area.x, .y = area.y, .w = width, .h = 1 };
+    const rect: cellgrid.Rect = .{ .x = area.x, .y = area.y, .w = width, .h = 1 };
     context.hits.add(rect, .active_workspace);
 
-    const style: core.Style = .{
+    const style: cellgrid.Style = .{
         .fg = context.palette.text,
         .bg = if (context.isHovered(.active_workspace))
             context.palette.surface0
@@ -271,7 +272,7 @@ fn listFits(names: WorkspaceNames, available: u16) bool {
 fn listWidth(snapshot: *const data.WorkspaceListSnapshot, active_index: ?usize, active_name: []const u8) u16 {
     var total: u16 = 0;
     for (0..snapshot.count) |index| {
-        total +|= core.measure(workspaceNameAt(.{
+        total +|= cellgrid.text.measure(workspaceNameAt(.{
             .snapshot = snapshot,
             .active_index = active_index,
             .active_name = active_name,
@@ -360,7 +361,7 @@ test "the workspace label ignores git branch and dirty state" {
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1, .branch = "main" },
     };
     _ = try snapshot.replace(.{ .revision = 1, .entries = &entries });
-    var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: Context = .{
@@ -412,7 +413,7 @@ test "the active name replaces only the active workspace snapshot name" {
 }
 
 test "the telar mark toggles the sidebar and dims while it is hidden" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var plan: Plan = .{};
@@ -454,7 +455,7 @@ test "the telar mark toggles the sidebar and dims while it is hidden" {
 }
 
 test "proxy badge reserves the right edge before workspace navigation" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: Context = .{
@@ -484,7 +485,7 @@ test "proxy badge reserves the right edge before workspace navigation" {
 }
 
 test "wildcard proxy scope renders a distinct warning badge" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 20, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 20, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: Context = .{
@@ -512,7 +513,7 @@ test "wildcard proxy scope renders a distinct warning badge" {
 }
 
 test "installed system trust keeps a yellow badge while the proxy is off" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 20, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 20, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: Context = .{
@@ -540,7 +541,7 @@ test "installed system trust keeps a yellow badge while the proxy is off" {
 }
 
 test "configured right content stops before the permanent proxy badge" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: Context = .{
@@ -578,7 +579,7 @@ test "configured right content stops before the permanent proxy badge" {
 }
 
 test "workspace navigation starts right after the telar mark" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: Context = .{
@@ -618,7 +619,7 @@ test "workspace navigation starts right after the telar mark" {
 }
 
 const ListInput = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     active_id: ?core.WorkspaceId,
 };
 
@@ -633,5 +634,5 @@ const WorkspaceDraw = struct {
     index: usize,
     active_index: ?usize,
     active_name: []const u8,
-    area: core.Rect,
+    area: cellgrid.Rect,
 };

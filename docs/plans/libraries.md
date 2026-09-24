@@ -95,8 +95,9 @@ alias are one word.
 
 What stays in `telar-core` after the cuts: agent manifests and providers,
 plugin manifests and capabilities, proxy and editor protocol values, history
-filters and fuzzy matching, the root re-exports. It becomes a thin shared
-vocabulary over `wire`, `cells`, `time` and `pacing`.
+filters and fuzzy matching. It imports `wire`, `cellgrid` and `pacing` where
+its own values need them and republishes none of them: every package imports
+the libraries it uses by name.
 
 ## Business rules that must move into flows, not into libraries
 
@@ -147,9 +148,10 @@ vocabulary over `wire`, `cells`, `time` and `pacing`.
    the library imports a telar module. Done; the pattern lives in
    `build/Libraries.zig`.
 2. Shared low layers: `cellgrid`, `pacing`, `vt-scan`, `sqlite`, and a
-   decision on the PNG decoder. `cellgrid`, `unicode`, `pacing`, `vtscan` and `sqlite` are done, and PNG
-   decoding settled on Wuffs in `imaging`;
-   `telar-core` re-exports them, so its consumers did not change.
+   decision on the PNG decoder. `cellgrid`, `unicode`, `pacing`, `vtscan`
+   and `sqlite` are done, and PNG decoding settled on Wuffs in `imaging`.
+   No package republishes a library member; consumers import each library
+   directly, and `check-library-reexports` enforces it.
 3. Backend mechanisms: `command-capture`, `history-store`, `kitty-media`,
    `pane-render`, `transcripts`, `codex-app-server`, `checkpoint`,
    `local-socket`, `editor-remote`, `system-metrics`, `git-probe`.

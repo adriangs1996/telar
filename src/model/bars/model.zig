@@ -1,6 +1,6 @@
 //! Bounded configuration and presentation state for client-owned bars.
 
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Content = @import("Content.zig");
 const Dynamic = @import("Dynamic.zig");
 const Command = @import("BarCommand.zig");
@@ -59,7 +59,7 @@ pub const PaletteColor = enum {
 
 pub const Color = union(enum) {
     palette: PaletteColor,
-    value: core.Color,
+    value: cellgrid.Color,
 };
 
 pub const Source = union(enum) {
@@ -145,7 +145,7 @@ test "bar content reserves the rendered width of wide Unicode icons" {
     try content.append(.{ .text = "", .icon = .battery_full });
 
     try std.testing.expectEqual(
-        @max(@as(u16, 1), core.measure(ui_icons.Icon.battery_full.unicodeGlyph())),
+        @max(@as(u16, 1), cellgrid.text.measure(ui_icons.Icon.battery_full.unicodeGlyph())),
         content.width(),
     );
 }

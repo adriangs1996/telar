@@ -1,5 +1,6 @@
 //! Client integration tests for presentation.
 
+const cellgrid = @import("cellgrid");
 const client_module = @import("telar-client");
 const core = @import("telar-core");
 const data = @import("model");
@@ -150,7 +151,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
     );
 
     var payload: [128]u8 = undefined;
-    const cells = [_]core.Cell{.{}};
+    const cells = [_]cellgrid.Cell{.{}};
     for ([_]core.PointerShape{ .text, .wait, .zoom_in }, 0..) |shape, index| {
         const encoded = try core.encodePaneFrame(&payload, .{
             .pane_id = TestHarness.bootstrap_pane,
@@ -420,7 +421,7 @@ test "TUI frame ACKs advance while a sealed host write retains its presentation 
 }
 
 fn receiveCellFrame(harness: *TestHarness, frame_id: u64) !void {
-    var cells: [4]core.Cell = @splat(.{});
+    var cells: [4]cellgrid.Cell = @splat(.{});
     cells[0].bytes[0] = if (frame_id == 1) 'A' else 'B';
     var wire: [1024]u8 = undefined;
     const payload = try core.encodePaneFrame(&wire, .{

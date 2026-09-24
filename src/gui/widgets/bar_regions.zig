@@ -1,8 +1,8 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 
 /// Gives tabs a minimum readable label before sharing space between other slots.
 /// Example: `const regions = calculate(area, .{ 24, 0, 40 }, 2);`
-pub fn calculate(area: core.Rect, desired: [3]u16, tabs_index: usize) [3]core.Rect {
+pub fn calculate(area: cellgrid.Rect, desired: [3]u16, tabs_index: usize) [3]cellgrid.Rect {
     var widths: [3]u16 = @splat(0);
     widths[tabs_index] = @min(desired[tabs_index], @min(area.w, 16));
     var remaining = area.w - widths[tabs_index];

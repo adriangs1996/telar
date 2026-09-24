@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const icons = @import("../../layout/icons.zig");
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
@@ -63,7 +64,7 @@ test "workspace return names inactive tabs using each client's saved pane focus"
     const first: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
     const second: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
     const size: core.TerminalSize = .{ .cols = 40, .rows = 10 };
-    const area = core.Rect{ .w = 40, .h = 10 };
+    const area = cellgrid.Rect{ .w = 40, .h = 10 };
     try model_data.workspace_handoff.bootstrap(model, .{ .pane_id = @enumFromInt(1), .location = first, .size = size });
     _ = try model.reconcileTab(.{ .location = first, .panes = &.{@enumFromInt(1)} }, area);
     const inactive = try model_data.tab_creation.add(model, .{ .location = second, .position = 1, .label = "", .root_pane_id = @enumFromInt(2) }, size);

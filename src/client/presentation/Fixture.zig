@@ -1,3 +1,4 @@
+const pacing = @import("pacing");
 const headless_event = @import("headless_event.zig");
 const model_data = @import("model");
 const Client = @import("../execution/Client.zig");
@@ -58,7 +59,7 @@ pub fn initWithAllocator(allocator: std.mem.Allocator) !*Fixture {
     // execute the production operations. Unused host capabilities stay unbound.
     fixture.app.graphics = .{ .context = fixture, .apply_fn = unsupportedGraphics, .clear_pane_fn = clearPane, .set_pane_visible_fn = setVisible, .pane_visible_fn = visible, .has_pane_graphics_fn = hasGraphics, .ingress_version_fn = ingress, .peek_credit_fn = peekCredit, .consume_credit_fn = consumeCredit };
     fixture.adapter = .{ .state = &fixture.app.presentation };
-    fixture.app.model.host.animation_frame_ns = core.pace.default_interval;
+    fixture.app.model.host.animation_frame_ns = pacing.pace.default_interval;
     try fixture.arrive();
     return fixture;
 }

@@ -1,10 +1,10 @@
 //! Allocation-free rendering for validated configured bar segments.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const Context = @import("Context.zig");
 
-pub fn render(context: *Context, area: core.Rect, input: BarContentInput) void {
+pub fn render(context: *Context, area: cellgrid.Rect, input: BarContentInput) void {
     if (area.isEmpty()) {
         return;
     }
@@ -29,7 +29,7 @@ pub fn render(context: *Context, area: core.Rect, input: BarContentInput) void {
     }
 }
 
-fn resolveStyle(context: *const Context, configured: data.Style) core.Style {
+fn resolveStyle(context: *const Context, configured: data.Style) cellgrid.Style {
     return .{
         .fg = if (configured.foreground) |color| resolveColor(context, color) else context.palette.subtext0,
         .bg = if (configured.background) |color| resolveColor(context, color) else context.palette.panel_bg,
@@ -43,7 +43,7 @@ fn resolveStyle(context: *const Context, configured: data.Style) core.Style {
     };
 }
 
-fn resolveColor(context: *const Context, color: data.bar_values.Color) core.Color {
+fn resolveColor(context: *const Context, color: data.bar_values.Color) cellgrid.Color {
     return switch (color) {
         .value => |value| value,
         .palette => |role| switch (role) {

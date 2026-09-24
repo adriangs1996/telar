@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const std = @import("std");
 const core = @import("telar-core");
 const Fixture = @import("LinkFixture.zig");
@@ -28,7 +29,7 @@ test "native OSC 8 opens its destination and highlights separated runs of the sa
     try std.testing.expectEqual(@as(?u16, link), hit.match.link_index);
     var regions = Regions.init(hit, pane);
     try std.testing.expectEqualDeep(hit.area, regions.next().?);
-    try std.testing.expectEqualDeep(core.Rect{ .x = hit.content.x + 4, .y = hit.content.y + 1, .w = 3, .h = 1 }, regions.next().?);
+    try std.testing.expectEqualDeep(cellgrid.Rect{ .x = hit.content.x + 4, .y = hit.content.y + 1, .w = 3, .h = 1 }, regions.next().?);
     try std.testing.expect(regions.next() == null);
     try fixture.send(fixture.event(1));
     try fixture.send(fixture.event(2));
@@ -83,8 +84,8 @@ test "native wrapped URLs underline both physical rows and require a VT soft wra
     const hit = &gui.pointer.hover.link.?;
     try std.testing.expectEqualStrings("https://e/path", hit.match.target.uri());
     var regions = Regions.init(hit, pane);
-    try std.testing.expectEqualDeep(core.Rect{ .x = hit.content.x + start, .y = hit.content.y, .w = 10, .h = 1 }, regions.next().?);
-    try std.testing.expectEqualDeep(core.Rect{ .x = hit.content.x, .y = hit.content.y + 1, .w = 4, .h = 1 }, regions.next().?);
+    try std.testing.expectEqualDeep(cellgrid.Rect{ .x = hit.content.x + start, .y = hit.content.y, .w = 10, .h = 1 }, regions.next().?);
+    try std.testing.expectEqualDeep(cellgrid.Rect{ .x = hit.content.x, .y = hit.content.y + 1, .w = 4, .h = 1 }, regions.next().?);
     try std.testing.expect(regions.next() == null);
     event.code = 1;
     try fixture.send(event);

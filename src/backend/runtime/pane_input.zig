@@ -2,6 +2,7 @@
 //! text and runtime responses queue on the pane and one bounded write per
 //! kind runs at a time.
 
+const pacing = @import("pacing");
 const pane_observation = @import("pane_observation.zig");
 const core = @import("telar-core");
 const std = @import("std");
@@ -193,7 +194,7 @@ fn forward(model: *RuntimeModel, pane: *Pane, bytes: []const u8) !void {
     try pane_observation.start(model, pane);
 
     if (pane.queuePtyInput(bytes) and bytes.len != 0) {
-        pane.cell_input_ns = core.monotonic(model.io);
+        pane.cell_input_ns = pacing.clock.monotonic(model.io);
     }
 
     try startInputWrite(model, pane);

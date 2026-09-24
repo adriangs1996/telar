@@ -1,14 +1,14 @@
 //! One configured bar slot in a cell row supplied by its parent's canvas.
 //! Tabs have their own widget and leave this slot empty.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const BarContent = @import("BarContent.zig");
 const MetricsLabel = @import("MetricsLabel.zig");
 const SlotPainter = @This();
 
 slot: *const data.bar_values.Slot,
-area: core.Rect = .{},
+area: cellgrid.Rect = .{},
 metrics: ?data.SystemMetrics = null,
 
 /// Measures one slot in cells for the caller's own layout.

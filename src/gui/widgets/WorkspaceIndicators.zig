@@ -1,5 +1,6 @@
 //! Compact numbered project marks in runtime order, with no tab-like surfaces.
 //! Overflow is used only when the available pixels cannot hold every project.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const AgentCard = @import("AgentCard.zig");
 const std = @import("std");
@@ -157,13 +158,13 @@ fn overflowCounter(self: WorkspaceIndicators, canvas: *Canvas, range: [2]usize) 
     }
 }
 
-fn drawAttention(self: WorkspaceIndicators, canvas: *Canvas, color: core.Color) !void {
+fn drawAttention(self: WorkspaceIndicators, canvas: *Canvas, color: cellgrid.Color) !void {
     const bounds = self.area;
     const diameter = @min(canvas.chrome.px(4), @min(bounds.width, bounds.height));
     try canvas.fillRoundedAt(.{ .x = bounds.x + bounds.width - diameter, .y = bounds.y, .width = diameter, .height = diameter }, .{ .radius = diameter / 2, .color = color });
 }
 
-fn hiddenDot(self: WorkspaceIndicators, canvas: *const Canvas, range: [2]usize) ?core.Color {
+fn hiddenDot(self: WorkspaceIndicators, canvas: *const Canvas, range: [2]usize) ?cellgrid.Color {
     const projection = self.context.projection;
     var urgent: ?*const data.Agent = null;
     for (projection.agents.slice()) |*agent| {

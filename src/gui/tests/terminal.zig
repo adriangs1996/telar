@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const builtin = @import("builtin");
     const gfx = @import("gfx");
 const Quad_module = gfx.Quad;
@@ -379,7 +380,7 @@ test "native resize publishes exact grid pixels and preserves runtime-owned pane
     );
     try session.gui.resize(size, session.gui.renderer.theme);
     try session.settle();
-    try std.testing.expectEqual(core.Rect{ .w = size.cols, .h = size.rows }, data.workbench.region(&session.gui.app.model).area);
+    try std.testing.expectEqual(cellgrid.Rect{ .w = size.cols, .h = size.rows }, data.workbench.region(&session.gui.app.model).area);
     try std.testing.expectEqual(size, session.gui.app.model.host.host_size);
     try std.testing.expectEqual(size.cell_width_px, session.gui.app.model.host.host_size.cell_width_px);
     try std.testing.expect(session.resize_count > 0);
@@ -476,7 +477,7 @@ test "native inbox holds input and GPU completion until the consumer runs" {
     try std.testing.expectEqual(consumed, inbox.snapshot().consumed);
 }
 
-fn paneContent(session: *Session) core.Rect {
+fn paneContent(session: *Session) cellgrid.Rect {
     const tab = session.gui.app.model.tabs.active;
     return data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, data.workbench.region(&session.gui.app.model).area).?.content;
 }

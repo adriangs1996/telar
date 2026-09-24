@@ -1,5 +1,6 @@
 //! Client integration tests for pane updates.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const client_module = @import("telar-client");
@@ -45,8 +46,8 @@ test "a patch against an unknown base requests a fresh snapshot" {
     try std.testing.expectEqual(@as(u64, 0), message.request_snapshot.known_frame_id);
 
     // A full snapshot must carry exactly one span covering the whole grid.
-    const blank: core.Cell = .{};
-    const cells: [4]core.Cell = @splat(blank);
+    const blank: cellgrid.Cell = .{};
+    const cells: [4]cellgrid.Cell = @splat(blank);
     try terminal.graphics_store.setPaneVisible(TestHarness.bootstrap_pane, false);
     const snapshot = try core.encodePaneFrame(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
@@ -101,7 +102,7 @@ test "a frame made stale by detach has no state resources or presentation effect
     const pending_updates = terminal.presenter.pending_updates;
     const graphics_visible = terminal.graphics_store.paneVisible(TestHarness.bootstrap_pane);
     const frames = client.telemetry.metrics.frames;
-    const cells = [_]core.Cell{.{}};
+    const cells = [_]cellgrid.Cell{.{}};
     var payload: [256]u8 = undefined;
     const snapshot = try core.encodePaneFrame(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
@@ -137,7 +138,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     const terminal = harness.terminal;
     client.model.request_lifecycle.tracker = .{};
 
-    const cells = [_]core.Cell{.{}};
+    const cells = [_]cellgrid.Cell{.{}};
     var payload: [256]u8 = undefined;
     const snapshot = try core.encodePaneFrame(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
@@ -219,7 +220,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     try std.testing.expect(tab_snapshot == .request_tab_snapshot);
     try std.testing.expectEqualDeep(destination, tab_snapshot.request_tab_snapshot.location);
 
-    var destination_cells = [_]core.Cell{.{}};
+    var destination_cells = [_]cellgrid.Cell{.{}};
     destination_cells[0].bytes[0] = 'N';
     const destination_snapshot = try core.encodePaneFrame(&payload, .{
         .pane_id = destination_pane,

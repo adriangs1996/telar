@@ -1,5 +1,8 @@
 //! Reproducible benchmarks for telar's interactive path.
 
+const pacing = @import("pacing");
+const vtscan = @import("vtscan");
+const cellgrid = @import("cellgrid");
 const profile_options = @import("profile_options");
 const data = @import("model");
 const core = @import("telar-core");
@@ -189,7 +192,7 @@ pub fn frame(frame_id: u64, spans: []const core.Span) core.Frame {
     };
 }
 
-pub fn fillEditor(cells: []core.Cell, variant: u8) void {
+pub fn fillEditor(cells: []cellgrid.Cell, variant: u8) void {
     for (cells, 0..) |*cell, index| {
         const x = index % cols;
         const y = index / cols;
@@ -206,7 +209,7 @@ pub fn fillEditor(cells: []core.Cell, variant: u8) void {
     }
 }
 
-pub fn fillFragmentedSpans(spans: []core.Span, cells: []const core.Cell) void {
+pub fn fillFragmentedSpans(spans: []core.Span, cells: []const cellgrid.Cell) void {
     var span_index: usize = 0;
     for (0..fragmented_rows) |y| {
         for ([_]usize{ 12, 91 }) |cluster_start| {
@@ -972,7 +975,7 @@ const DecodeContext = struct {
 };
 
 const HistoryInputContext = struct {
-    scanner: backend.InputScanner = .{},
+    scanner: vtscan.InputScanner = .{},
 };
 
 const Case = struct {
@@ -984,7 +987,7 @@ const Case = struct {
 };
 
 const PacerContext = struct {
-    pacer: frontend.Pacer = .{},
+    pacer: pacing.Pacer = .{},
     now_ns: u64 = 0,
 };
 

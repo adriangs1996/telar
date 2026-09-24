@@ -1,5 +1,6 @@
 //! Cell publication admission preserves the latest projection and input priority.
 
+const pacing = @import("pacing");
 const std = @import("std");
 const core = @import("telar-core");
 const PaneFixture = @import("PaneFixture.zig");
@@ -37,7 +38,7 @@ fn deferPublication(attachment: *Attachment) void {
     attachment.cell_pacer.interval = @intFromEnum(TestInterval.deferred);
     attachment.cell_pacer.burst = 0;
     attachment.cell_pacer.credits = 0;
-    attachment.cell_pacer.anchor_ns = core.monotonic(std.testing.io);
+    attachment.cell_pacer.anchor_ns = pacing.clock.monotonic(std.testing.io);
 }
 
 fn expirePublication(attachment: *Attachment) void {
@@ -278,7 +279,7 @@ test "successive no-op projections consume publication credit and defer further 
         .interval = @intFromEnum(TestInterval.deferred),
         .burst = @intFromEnum(PreparationBudget.single),
         .credits = @intFromEnum(PreparationBudget.single),
-        .anchor_ns = core.monotonic(std.testing.io),
+        .anchor_ns = pacing.clock.monotonic(std.testing.io),
     };
     @memset(fixture.pane.damaged_rows, false);
     fixture.pane.dirty = false;

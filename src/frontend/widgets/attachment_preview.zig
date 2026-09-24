@@ -1,6 +1,6 @@
 //! Cell fallback, hit targets, and KGP placement plan for local image pastes.
 
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const client = @import("telar-client");
 const data = @import("model");
 const Context = @import("Context.zig");
@@ -14,12 +14,12 @@ pub const shelf_height: u16 = 6;
 pub const shelf_minimum_height: u16 = 3;
 pub const pane_minimum_height: u16 = 3;
 
-pub fn renderShelf(context: *Context, area: core.Rect, snapshot: *const client.AttachmentSnapshot) client.Plan {
+pub fn renderShelf(context: *Context, area: cellgrid.Rect, snapshot: *const client.AttachmentSnapshot) client.Plan {
     var plan: client.Plan = .{};
     if (area.isEmpty() or snapshot.len == 0) {
         return plan;
     }
-    const style: core.Style = .{ .fg = context.palette.text, .bg = context.palette.surface0 };
+    const style: cellgrid.Style = .{ .fg = context.palette.text, .bg = context.palette.surface0 };
     context.hits.add(area, .attachment_shelf_hold);
     context.buffer.fill(area, .{ .glyph = " ", .style = style });
     const inner = area.inner(1);
@@ -33,7 +33,7 @@ pub fn renderShelf(context: *Context, area: core.Rect, snapshot: *const client.A
     }
 
     for (snapshot.slice(), 0..) |item, index| {
-        const card: core.Rect = .{
+        const card: cellgrid.Rect = .{
             .x = inner.x + @as(u16, @intCast(index)) * (width + card_gap),
             .y = inner.y,
             .w = width,
@@ -42,12 +42,12 @@ pub fn renderShelf(context: *Context, area: core.Rect, snapshot: *const client.A
         const open: widget.Action = .{ .attachment_open = item.id };
         const hovered = context.isHovered(open);
         const background = if (hovered) context.palette.surface1 else context.palette.surface0;
-        const card_style: core.Style = .{ .fg = context.palette.accent, .bg = background };
+        const card_style: cellgrid.Style = .{ .fg = context.palette.accent, .bg = background };
         context.buffer.fill(card, .{ .glyph = " ", .style = .{ .fg = context.palette.text, .bg = background } });
         context.buffer.box(card, .{ .style = card_style });
         context.hits.add(card, open);
         if (card.w >= 4) {
-            const close: core.Rect = .{ .x = card.x + card.w - 2, .y = card.y, .w = 1, .h = 1 };
+            const close: cellgrid.Rect = .{ .x = card.x + card.w - 2, .y = card.y, .w = 1, .h = 1 };
             const dismiss: widget.Action = .{ .attachment_dismiss = item.id };
             context.hits.add(close, dismiss);
             _ = context.buffer.writeText(close, .{ .point = .{ .x = close.x, .y = close.y }, .text = "×", .style = .{
@@ -76,7 +76,7 @@ pub fn renderShelf(context: *Context, area: core.Rect, snapshot: *const client.A
 /// ```zig
 /// const area = modalArea(context.buffer.area());
 /// ```
-pub fn modalArea(application: core.Rect) core.Rect {
+pub fn modalArea(application: cellgrid.Rect) cellgrid.Rect {
     if (application.w < 12 or application.h < 6) {
         return .{};
     }
@@ -89,7 +89,7 @@ pub fn modalArea(application: core.Rect) core.Rect {
 /// ```zig
 /// const area = renderModal(context, input);
 /// ```
-pub fn renderModal(context: *Context, input: ModalInput) core.Rect {
+pub fn renderModal(context: *Context, input: ModalInput) cellgrid.Rect {
     const id = input.snapshot.modal orelse return .{};
     const area = modalArea(input.application);
     if (area.isEmpty()) {
@@ -102,8 +102,8 @@ pub fn renderModal(context: *Context, input: ModalInput) core.Rect {
     context.hits.add(area, .attachment_modal_hold);
 
     const background = context.palette.panel_bg;
-    const style: core.Style = .{ .fg = context.palette.text, .bg = background };
-    const border_style: core.Style = .{
+    const style: cellgrid.Style = .{ .fg = context.palette.text, .bg = background };
+    const border_style: cellgrid.Style = .{
         .fg = context.palette.accent,
         .bg = background,
     };
@@ -113,12 +113,12 @@ pub fn renderModal(context: *Context, input: ModalInput) core.Rect {
         context.buffer.fill(area, .{ .glyph = " ", .style = style });
         context.buffer.box(area, .{ .style = border_style });
     }
-    const title: core.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 6, .h = 1 };
+    const title: cellgrid.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 6, .h = 1 };
     _ = context.buffer.writeTruncated(title, .{ .point = .{ .x = title.x, .y = title.y }, .text = "Image preview", .max_width = title.w, .style = .{
         .fg = context.palette.accent,
         .bg = background,
     } });
-    const close: core.Rect = .{ .x = area.x + area.w - 3, .y = area.y, .w = 2, .h = 1 };
+    const close: cellgrid.Rect = .{ .x = area.x + area.w - 3, .y = area.y, .w = 2, .h = 1 };
     context.hits.add(close, .attachment_modal_close);
     _ = context.buffer.writeText(close, .{ .point = .{ .x = close.x, .y = close.y }, .text = "× ", .style = .{
         .fg = context.palette.subtext0,
@@ -133,7 +133,7 @@ pub fn renderModal(context: *Context, input: ModalInput) core.Rect {
 }
 
 test "shelf publishes one bounded image placement and two hit targets" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 40, 8);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 40, 8);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: Context = .{
@@ -150,7 +150,7 @@ test "shelf publishes one bounded image placement and two hit targets" {
 }
 
 test "cell modal draws a connected border" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 40, 10);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 40, 10);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     const palette = &data.theme_support.default_theme.palette;
@@ -181,11 +181,11 @@ test "cell modal draws a connected border" {
     try std.testing.expectEqualStrings("─", buffer.at(area.x + 1, area.y).?.text());
     try std.testing.expectEqualStrings("─", buffer.at(area.x + 1, area.y + area.h - 1).?.text());
     try std.testing.expectEqualDeep(palette.panel_bg, buffer.at(area.x, area.y + 1).?.style.bg);
-    try std.testing.expect(std.meta.eql(buffer.at(area.x - 1, area.y + 1).?.style.bg, core.Color.default));
+    try std.testing.expect(std.meta.eql(buffer.at(area.x - 1, area.y + 1).?.style.bg, cellgrid.Color.default));
 }
 
 test "graphical modal leaves corner cells to its rounded frame" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 40, 10);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 40, 10);
     defer buffer.deinit();
     buffer.fill(buffer.area(), .{ .glyph = ".", .style = .{} });
     var hits: widget.Hits = .{};
@@ -212,7 +212,7 @@ test "graphical modal leaves corner cells to its rounded frame" {
 }
 
 const ModalInput = struct {
-    application: core.Rect,
+    application: cellgrid.Rect,
     snapshot: *const client.AttachmentSnapshot,
     plan: *client.Plan,
     graphical_frame: bool,

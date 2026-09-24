@@ -4,7 +4,7 @@
 //! ClientModel caches the latest values. Rendering only formats what is
 //! already in memory, in fixed buffers, so the frame stays allocation free.
 
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const client = @import("telar-client");
 const data = @import("model");
 const Context = @import("Context.zig");
@@ -13,7 +13,7 @@ const std = @import("std");
 const icons_module = @import("../ui/icons.zig");
 const widget = @import("context_support.zig");
 
-pub fn render(context: *Context, area: core.Rect, metrics: ?Metrics) void {
+pub fn render(context: *Context, area: cellgrid.Rect, metrics: ?Metrics) void {
     if (area.isEmpty()) {
         return;
     }
@@ -21,7 +21,7 @@ pub fn render(context: *Context, area: core.Rect, metrics: ?Metrics) void {
     var x = area.x + 1;
     const background = context.palette.panel_bg;
 
-    const cpu_style: core.Style = .{
+    const cpu_style: cellgrid.Style = .{
         .fg = cpuColor(context, values.cpu_percent),
         .bg = background,
     };
@@ -31,7 +31,7 @@ pub fn render(context: *Context, area: core.Rect, metrics: ?Metrics) void {
     x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = cpu, .style = cpu_style });
     x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = "  ", .style = .{ .bg = background } });
 
-    const memory_style: core.Style = .{
+    const memory_style: cellgrid.Style = .{
         .fg = context.palette.mauve,
         .bg = background,
     };
@@ -46,7 +46,7 @@ pub fn render(context: *Context, area: core.Rect, metrics: ?Metrics) void {
     // Machines without a battery show nothing rather than a fake 0%.
     if (values.battery_percent) |battery| {
         x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = "  ", .style = .{ .bg = background } });
-        const battery_style: core.Style = .{
+        const battery_style: cellgrid.Style = .{
             .fg = if (battery < 20) context.palette.red else context.palette.green,
             .bg = background,
         };
@@ -66,21 +66,21 @@ pub fn desiredWidth(metrics: ?Metrics) u16 {
         values.memory_used_decigib / 10,
         values.memory_used_decigib % 10,
     }) catch return 0;
-    var width: u16 = 1 + iconWidth(.cpu) + core.measure(cpu) + 2 + iconWidth(.memory) + core.measure(memory);
+    var width: u16 = 1 + iconWidth(.cpu) + cellgrid.text.measure(cpu) + 2 + iconWidth(.memory) + cellgrid.text.measure(memory);
     if (values.battery_percent) |battery| {
         var battery_buffer: [10]u8 = undefined;
         const text = std.fmt.bufPrint(&battery_buffer, "{d}%", .{battery}) catch return width;
-        width +|= 2 + iconWidth(icons_module.battery(battery)) + core.measure(text);
+        width +|= 2 + iconWidth(icons_module.battery(battery)) + cellgrid.text.measure(text);
     }
 
     return width;
 }
 
 fn iconWidth(icon: data.icons.Icon) u16 {
-    return @max(@as(u16, 1), core.measure(icon.unicodeGlyph()));
+    return @max(@as(u16, 1), cellgrid.text.measure(icon.unicodeGlyph()));
 }
 
-pub fn renderMode(context: *Context, area: core.Rect, mode: client.Mode) void {
+pub fn renderMode(context: *Context, area: cellgrid.Rect, mode: client.Mode) void {
     if (area.isEmpty() or mode == .normal) {
         return;
     }
@@ -92,7 +92,7 @@ pub fn renderMode(context: *Context, area: core.Rect, mode: client.Mode) void {
     }
 }
 
-fn renderPrefix(context: *Context, area: core.Rect, hints: *const client.Hints) void {
+fn renderPrefix(context: *Context, area: cellgrid.Rect, hints: *const client.Hints) void {
     var x = renderModeLabel(context, area, " PREFIX ");
     renderPair(context, .{ .area = area, .x = &x, .key = "Esc", .label = "cancel" });
     for (hints.slice()) |hint| {
@@ -101,7 +101,7 @@ fn renderPrefix(context: *Context, area: core.Rect, hints: *const client.Hints) 
     }
 }
 
-fn renderCopy(context: *Context, area: core.Rect) void {
+fn renderCopy(context: *Context, area: cellgrid.Rect) void {
     var x = renderModeLabel(context, area, " COPY ");
     renderPair(context, .{ .area = area, .x = &x, .key = "h/j/k/l", .label = "move" });
     renderPair(context, .{ .area = area, .x = &x, .key = "w/b/e", .label = "word" });
@@ -113,7 +113,7 @@ fn renderCopy(context: *Context, area: core.Rect) void {
     renderPair(context, .{ .area = area, .x = &x, .key = "q/Esc", .label = "exit" });
 }
 
-fn renderModeLabel(context: *Context, area: core.Rect, label: []const u8) u16 {
+fn renderModeLabel(context: *Context, area: cellgrid.Rect, label: []const u8) u16 {
     return area.x + context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x, .y = area.y }, .text = label, .max_width = area.w, .style = .{
         .fg = context.palette.surface_dim,
         .bg = context.palette.accent,
@@ -200,7 +200,7 @@ fn append(buffer: *[32]u8, len: *usize, text: []const u8) void {
     len.* += take;
 }
 
-fn cpuColor(context: *const Context, cpu_percent: u8) core.Color {
+fn cpuColor(context: *const Context, cpu_percent: u8) cellgrid.Color {
     if (cpu_percent > 90) {
         return context.palette.red;
     }
@@ -211,7 +211,7 @@ fn cpuColor(context: *const Context, cpu_percent: u8) core.Color {
 }
 
 test "mode bars render prefix and copy hints" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 120, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 120, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: Context = .{
@@ -241,14 +241,14 @@ test "key labels preserve modifiers and special keys" {
 }
 
 const WriteInput = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     x: *u16,
     text: []const u8,
-    style: core.Style,
+    style: cellgrid.Style,
 };
 
 const PairInput = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     x: *u16,
     key: []const u8,
     label: []const u8,

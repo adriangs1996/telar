@@ -35,7 +35,7 @@ pub fn add(b: *std.Build) *std.Build.Step {
             .module = cross_unicode,
         }});
         cross_libraries.addImports(cross_core);
-        const cross_data = model_build.create(b, cross_core);
+        const cross_data = model_build.create(b, cross_core, cross_libraries);
         cross_libraries.addChecks(b, cross_step, cross_target);
         const raster_check = b.addLibrary(.{
             .name = b.fmt("text-rasterizer-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),

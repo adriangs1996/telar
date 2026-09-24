@@ -1,6 +1,6 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const std = @import("std");
-const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
 const gfx = @import("gfx");
@@ -12,9 +12,9 @@ test "native bottom widgets preserve configured positions and legacy top content
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var state: data.BarsState = .{};
-    const red = core.Color.rgb(.{ 255, 0, 0 });
-    const green = core.Color.rgb(.{ 0, 255, 0 });
-    const blue = core.Color.rgb(.{ 0, 0, 255 });
+    const red = cellgrid.Color.rgb(.{ 255, 0, 0 });
+    const green = cellgrid.Color.rgb(.{ 0, 255, 0 });
+    const blue = cellgrid.Color.rgb(.{ 0, 0, 255 });
     state.layout.bottom = .{ try colored("left", red), .tabs, try colored("right", green) };
     state.layout.top_right = try colored("legacy", blue);
     var projection = fixture.projection();
@@ -44,11 +44,11 @@ test "native footer reserves TLS ahead of widgets and mode hints in narrow windo
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.showSidebar(false);
-    const tls_color = core.Color.rgb(.{ 243, 41, 99 });
+    const tls_color = cellgrid.Color.rgb(.{ 243, 41, 99 });
     fixture.session.gui.app.model.theme.palette.peach = tls_color;
     fixture.session.gui.app.model.theme.palette.yellow = tls_color;
     fixture.session.gui.app.model.theme.palette.red = tls_color;
-    const widget_color = core.Color.rgb(.{ 0, 255, 0 });
+    const widget_color = cellgrid.Color.rgb(.{ 0, 255, 0 });
     var state: data.BarsState = .{};
     state.layout.bottom = .{ try colored("left widget that exceeds the viewport", widget_color), .tabs, try colored("right widget that exceeds the viewport", widget_color) };
     state.layout.top_right = try colored("legacy widget that exceeds the viewport", widget_color);
@@ -96,7 +96,7 @@ test "native footer clips tall terminal line spacing without hiding configured w
     try fixture.measure(.{ .width = 1200, .height = 800, .scale = 2 });
     const renderer = &fixture.session.gui.renderer;
     try std.testing.expect(renderer.metrics.cell_height > renderer.chrome.status_bar);
-    const color = core.Color.rgb(.{ 0, 255, 0 });
+    const color = cellgrid.Color.rgb(.{ 0, 255, 0 });
     var state: data.BarsState = .{};
     state.layout.bottom = .{ try colored("visible", color), .empty, .tabs };
     state.layout.top_right = try colored("legacy", color);
@@ -115,13 +115,13 @@ test "native footer clips tall terminal line spacing without hiding configured w
     }
 }
 
-fn colored(text: []const u8, color: core.Color) !data.bar_values.Slot {
+fn colored(text: []const u8, color: cellgrid.Color) !data.bar_values.Slot {
     var content: data.Content = .{};
     try content.append(.{ .text = text, .style = .{ .background = .{ .value = color } } });
     return .{ .content = content };
 }
 
-fn paintedBounds(fixture: *Fixture, color: core.Color) ?Rect {
+fn paintedBounds(fixture: *Fixture, color: cellgrid.Color) ?Rect {
     const expected = colors.resolve(color, Color.black);
     const band = fixture.chrome.presented().bands.status_bar;
     var result: ?Rect = null;

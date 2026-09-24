@@ -1,7 +1,7 @@
 //! One native card. Text and semantic state are borrowed only while drawing.
+const cellgrid = @import("cellgrid");
 const shared_model = @import("model");
 const std = @import("std");
-const core = @import("telar-core");
 const Canvas = @import("../Canvas.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
@@ -130,7 +130,7 @@ fn register(self: *const Card, value: Target) void {
     hits.count += 1;
 }
 
-fn accentColor(self: *const Card, canvas: *const Canvas) core.Color {
+fn accentColor(self: *const Card, canvas: *const Canvas) cellgrid.Color {
     return switch (self.item.level) {
         .info => canvas.theme.palette.blue,
         .success => canvas.theme.palette.green,

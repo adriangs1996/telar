@@ -1,5 +1,6 @@
 //! Tab flows over the flat client model: selection, moves, labels, root
 //! replacement and snapshot reconciliation.
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const std = @import("std");
 const icons = @import("../layout/icons.zig");
@@ -544,7 +545,7 @@ test "tab reconciliation restores a bookmarked nested split tree" {
     const left: core.PaneId = @enumFromInt(10);
     const top_right: core.PaneId = @enumFromInt(42);
     const bottom_right: core.PaneId = @enumFromInt(77);
-    const area: core.Rect = .{ .w = 60, .h = 20 };
+    const area: cellgrid.Rect = .{ .w = 60, .h = 20 };
 
     var saved: WorkspaceLayout = .{};
     try saved.addRoot(left);

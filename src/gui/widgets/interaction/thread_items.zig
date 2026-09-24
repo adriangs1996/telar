@@ -1,6 +1,7 @@
 //! Conversation controls resolve against the live attachment and stable item
 //! identity, even when input still refers to an older delivered frame.
 
+const pacing = @import("pacing");
 const client = @import("telar-client");
 const std = @import("std");
 
@@ -92,7 +93,7 @@ pub fn copied(gui: *GuiAdapter, result: ClipboardResult) void {
         }
 
         gui.widgets.copied_item = pending.control;
-        gui.widgets.copied_until_ns = client.monotonic(gui.app.io) +| 2 * std.time.ns_per_s;
+        gui.widgets.copied_until_ns = pacing.clock.monotonic(gui.app.io) +| 2 * std.time.ns_per_s;
         gui.widgets.dispatcher.revision +%= 1;
         return;
     }

@@ -4,6 +4,7 @@
 //! event loop drives these panes through `PaneStore`. Actor results cross back
 //! into that owner as `PaneKey` values, never as mutable pane pointers.
 
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const std = @import("std");
 const Clock = @import("../history/Clock.zig");
@@ -84,8 +85,6 @@ pub const PtyOutputReadResult = enum {
     finished,
 };
 
-const vtscan = @import("vtscan");
-pub const KittyFramingCounter = vtscan.KittyFramingCounter;
 
 pub const CwdState = @import("CwdState.zig");
 
@@ -237,7 +236,7 @@ test "pane frames follow VT cursor style blink and visibility across every read 
     defer pane.text_metadata.deinit(gpa);
     pane.render_state = .empty;
     defer pane.render_state.deinit(gpa);
-    pane.screen = try core.Buffer.init(gpa, 4, 2);
+    pane.screen = try cellgrid.Buffer.init(gpa, 4, 2);
     defer pane.screen.deinit();
     var rows: [2]bool = @splat(false);
     pane.damaged_rows = &rows;
@@ -839,7 +838,7 @@ test "a failed resize cannot split the screen from its damage flags" {
         try std.testing.expect(fail_index < 64);
         var failing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = fail_index });
         const allocator = failing.allocator();
-        var screen = core.Buffer.init(allocator, 10, 4) catch continue;
+        var screen = cellgrid.Buffer.init(allocator, 10, 4) catch continue;
         defer screen.deinit();
         var damaged = allocator.alloc(bool, 4) catch continue;
         defer allocator.free(damaged);

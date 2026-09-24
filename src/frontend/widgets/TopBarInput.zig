@@ -1,10 +1,11 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const top_bar = @import("top_bar.zig");
 const Metrics = @import("Metrics.zig");
 const Input = @This();
 
-area: core.Rect,
+area: cellgrid.Rect,
 sidebar_visible: bool,
 location: ?core.TabLocation,
 workspace_name: []const u8,

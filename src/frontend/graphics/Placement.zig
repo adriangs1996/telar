@@ -1,5 +1,5 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Placement = @This();
 
-area: core.Rect,
+area: cellgrid.Rect,
 slot: u8,

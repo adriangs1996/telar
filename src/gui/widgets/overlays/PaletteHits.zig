@@ -1,20 +1,20 @@
 //! The visible palette rows of one prepared frame, addressed by result index.
 //! This is the overlay's own bounded hit map; the chrome `HitMap` is not
 //! involved, so its capacity does not change.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const PaletteHits = @This();
 
 pub const capacity = 16;
 
-rows: [capacity]core.Rect = undefined,
+rows: [capacity]cellgrid.Rect = undefined,
 /// Result index of `rows[0]`; rows are consecutive after it.
 first: u16 = 0,
 count: u8 = 0,
 
 /// Records the next visible row. Rows beyond the capacity are not painted,
 /// so they are never recorded. Example: `hits.add(row);`.
-pub fn add(self: *PaletteHits, area: core.Rect) void {
+pub fn add(self: *PaletteHits, area: cellgrid.Rect) void {
     if (self.count == capacity or area.isEmpty()) {
         return;
     }

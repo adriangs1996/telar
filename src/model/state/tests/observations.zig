@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
 const ClientModel = @import("../ClientModel.zig");
@@ -410,7 +411,7 @@ test "an unfocused done agent is never acknowledged" {
     };
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
-    const area: core.Rect = .{ .w = 80, .h = 24 };
+    const area: cellgrid.Rect = .{ .w = 80, .h = 24 };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try model_data.pane_split.split(&model, model.tabs.active, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     const done_key: model_data.AgentKey = .{ .pane_id = first, .pane_generation = 2 };

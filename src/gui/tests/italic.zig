@@ -1,6 +1,6 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const std = @import("std");
-const core = @import("telar-core");
 const client = @import("telar-client");
 const Session = @import("Session.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
@@ -210,7 +210,7 @@ fn configured(thicken: bool, line_height: f32) !*Session {
     return session;
 }
 
-fn content(session: *Session) core.Rect {
+fn content(session: *Session) cellgrid.Rect {
     return data.tab_layout.view(&session.gui.app.model, session.gui.app.model.tabs.active, Session.pane_id, data.workbench.region(&session.gui.app.model).area).?.content;
 }
 

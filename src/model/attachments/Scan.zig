@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Position = @import("Position.zig");
 const path_marker = @import("path_marker.zig");
 /// Walks cells in Pi's logical order: left to right, then down to the next
@@ -7,11 +7,11 @@ const path_marker = @import("path_marker.zig");
 /// to the next row.
 const Scan = @This();
 
-buffer: *const core.Buffer,
+buffer: *const cellgrid.Buffer,
 x: u16,
 y: u16,
 
-pub fn start(buffer: *const core.Buffer) ?Scan {
+pub fn start(buffer: *const cellgrid.Buffer) ?Scan {
     if (buffer.w < 2 or buffer.h == 0) {
         return null;
     }
@@ -23,7 +23,7 @@ pub fn start(buffer: *const core.Buffer) ?Scan {
     };
 }
 
-pub fn at(buffer: *const core.Buffer, origin: Position) ?Scan {
+pub fn at(buffer: *const cellgrid.Buffer, origin: Position) ?Scan {
     if (buffer.w < 2 or origin.y >= buffer.h or origin.x >= buffer.w) {
         return null;
     }
@@ -51,7 +51,7 @@ pub fn position(self: *Scan) ?Position {
     };
 }
 
-pub fn cell(self: *Scan) ?*const core.Cell {
+pub fn cell(self: *Scan) ?*const cellgrid.Cell {
     const here = self.position() orelse return null;
 
     return path_marker.cellAt(

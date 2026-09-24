@@ -1,5 +1,6 @@
 //! The runtime's canonical pane list for one tab reaches the client
 //! (docs/flows/tab-snapshot-reconciliation.md).
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const std = @import("std");
 const ClientModel = @import("../state/ClientModel.zig");
@@ -11,7 +12,7 @@ const tab_layout = @import("tab_layout.zig");
 /// Reconciles canonical pane membership while keeping matching pane
 /// buffers and the client's layout. Returns the tab's slot.
 /// Example: `const slot = try tab_snapshot_reconciliation.reconcile(model, snapshot, area);`
-pub fn reconcile(model: *ClientModel, snapshot: PaneSnapshot, area: core.Rect) !usize {
+pub fn reconcile(model: *ClientModel, snapshot: PaneSnapshot, area: cellgrid.Rect) !usize {
     const slot = model.tabs.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
     if (!std.meta.eql(model.tabs.location[slot], snapshot.location)) {
         return error.UnexpectedTab;

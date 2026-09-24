@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
 const ClientModel = @import("../ClientModel.zig");
@@ -58,7 +59,7 @@ test "workspace departure commits one empty version and captures bounded client 
     const first: core.PaneId = @enumFromInt(1);
     const focused: core.PaneId = @enumFromInt(2);
     const third: core.PaneId = @enumFromInt(3);
-    const area: core.Rect = .{ .w = 40, .h = 10 };
+    const area: cellgrid.Rect = .{ .w = 40, .h = 10 };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = active, .size = .{ .cols = 20, .rows = 5 } });
     try model_data.pane_split.split(&model, model.tabs.active, .{ .existing_pane = first, .new_pane = focused, .location = active, .axis = .horizontal, .area = area });
     _ = try model_data.tab_creation.add(&model, .{
@@ -104,7 +105,7 @@ test "workspace arrival commits atomically and stages the saved layout" {
     };
     const left: core.PaneId = @enumFromInt(10);
     const focused: core.PaneId = @enumFromInt(11);
-    const area: core.Rect = .{ .w = 60, .h = 12 };
+    const area: cellgrid.Rect = .{ .w = 60, .h = 12 };
     var saved: model_data.WorkspaceLayout = .{};
     try saved.addRoot(left);
     try saved.split(.{ .existing_pane = left, .new_pane = focused, .axis = .horizontal });
@@ -175,7 +176,7 @@ fn expectInactiveFullscreenReturn(replace: bool) !void {
     const first: core.PaneId = @enumFromInt(10);
     const clicked: core.PaneId = @enumFromInt(11);
     const other: core.PaneId = @enumFromInt(20);
-    const area: core.Rect = .{ .w = 101, .h = 41 };
+    const area: cellgrid.Rect = .{ .w = 101, .h = 41 };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
     _ = try model.reconcileTab(.{ .location = location, .panes = &.{first} }, area);
     try model_data.pane_split.split(&model, model.tabs.active, .{ .existing_pane = first, .new_pane = clicked, .location = location, .axis = .vertical, .area = area });
@@ -380,7 +381,7 @@ test "failed workspace replacement rolls back retained layouts" {
     defer model.deinit();
     const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
     const pane_id: core.PaneId = @enumFromInt(10);
-    const area: core.Rect = .{ .w = 40, .h = 10 };
+    const area: cellgrid.Rect = .{ .w = 40, .h = 10 };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
     _ = try model.reconcileTab(.{ .location = location, .panes = &.{pane_id} }, area);
     _ = model.togglePaneFullscreen(.{ .area = area }).?;
@@ -407,7 +408,7 @@ test "provisional arrivals cannot overwrite retained fullscreen layouts" {
     const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
     const first: core.PaneId = @enumFromInt(10);
     const clicked: core.PaneId = @enumFromInt(11);
-    const area: core.Rect = .{ .w = 60, .h = 12 };
+    const area: cellgrid.Rect = .{ .w = 60, .h = 12 };
     var saved: model_data.WorkspaceLayout = .{};
     try saved.addRoot(first);
     try saved.splitFocused(clicked, .vertical);
@@ -613,7 +614,7 @@ test "active tab reconciliation versions pane changes and reports retired panes"
     try std.testing.expectEqual(@as(usize, 0), addition.removed_panes.slice().len);
     try std.testing.expect(model.panes.find(second) != null);
     try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
-    try std.testing.expectEqualDeep(core.Rect{ .w = 40, .h = 10 }, addition.area);
+    try std.testing.expectEqualDeep(cellgrid.Rect{ .w = 40, .h = 10 }, addition.area);
     try std.testing.expect(addition.snapshot_loaded);
     try std.testing.expectEqual(model.tabs.layout[model.tabs.active].currentRevision(), addition.layout_revision);
     try std.testing.expectEqual(model.version().workspace, addition.workspace_revision);

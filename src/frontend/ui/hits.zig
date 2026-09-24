@@ -5,7 +5,7 @@
 //! widget cannot implement it: by the time the widget under the modal is asked,
 //! the wrong answer has already been given.
 
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const GenericHits = @import("GenericHits.zig").Type;
 const std = @import("std");
 
@@ -39,7 +39,7 @@ test "a modal swallows clicks on its blank interior" {
     var h: TestHits = .{};
     h.add(.{ .x = 0, .y = 0, .w = 40, .h = 20 }, .{ .row = 7 });
 
-    const frame: core.Rect = .{ .x = 10, .y = 5, .w = 20, .h = 8 };
+    const frame: cellgrid.Rect = .{ .x = 10, .y = 5, .w = 20, .h = 8 };
     h.beginLayer(frame);
     h.add(.{ .x = 12, .y = 10, .w = 6, .h = 1 }, .button);
     h.endLayer();

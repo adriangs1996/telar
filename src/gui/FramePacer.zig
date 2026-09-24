@@ -1,5 +1,6 @@
 //! Native drawing cadence and input grace, independent of GPU ownership.
 //! Callers supply visible pane identities and only record sealed preparations.
+const pacing = @import("pacing");
 const data = @import("model");
 const core = @import("telar-core");
 const PaneInputGrace = @import("PaneInputGrace.zig");
@@ -9,7 +10,7 @@ pub const Pane = data.PresentationCommit.PaneCommit;
 
 const OrdinaryBudget = enum(u32) { frame = 1 };
 
-cadence: core.Pacer = .{
+cadence: pacing.Pacer = .{
     .burst = @intFromEnum(OrdinaryBudget.frame),
     .credits = @intFromEnum(OrdinaryBudget.frame),
 },
@@ -90,7 +91,7 @@ pub fn waitUntil(self: *const FramePacer, panes: []const Pane, now_ns: u64) ?u64
 /// Example: `pacer.record(flight.delivery.commit.slice(), now_ns);`
 pub fn record(self: *FramePacer, panes: []const Pane, now_ns: u64) void {
     const deadline: ?u64 = if (self.cadence.anchor_ns) |anchor| anchor +| self.cadence.interval else null;
-    const frame: core.Pacer.Record = .{
+    const frame: pacing.Pacer.Record = .{
         .now = now_ns,
         .scheduled_deadline = if (deadline) |due| if (due <= now_ns and now_ns - due < self.cadence.interval) due else null else null,
         .absorbed = 1,

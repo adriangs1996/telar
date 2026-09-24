@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const data = @import("model");
 const Fixture = @import("Fixture.zig");
@@ -16,7 +17,7 @@ pub const Outcome = enum { applied, ignored, exit };
 
 fn sendFrame(fixture: *Fixture, input: FrameInput) !void {
     var wire: [1024]u8 = undefined;
-    var cells: [4]core.Cell = @splat(.{});
+    var cells: [4]cellgrid.Cell = @splat(.{});
     cells[0].bytes[0] = input.text;
     const bytes = try core.encodePaneFrame(&wire, .{
         .pane_id = pane_id,
@@ -39,7 +40,7 @@ test "headless inbox owns delayed wire state and preserves patches before depend
     try fixture.expectAck(1);
     const token = try fixture.prepare();
     var wire: [1024]u8 = undefined;
-    var cells: [1]core.Cell = @splat(.{});
+    var cells: [1]cellgrid.Cell = @splat(.{});
     cells[0].bytes[0] = 'B';
     const bytes = try core.encodePaneFrame(&wire, .{
         .pane_id = pane_id,

@@ -1,6 +1,6 @@
 //! A command result with native selection and secondary execution metadata.
+const cellgrid = @import("cellgrid");
 const std = @import("std");
-const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("../Canvas.zig");
 const gfx = @import("gfx");
@@ -67,7 +67,7 @@ pub fn draw(self: Row, canvas: *Canvas) !void {
 fn commandText(self: Row, canvas: *Canvas, value: struct { bounds: Rect, text: []const u8 }) !void {
     _ = try canvas.textAt(value.bounds, .{ .text = value.text, .color = canvas.theme.palette.text });
     const query = self.projection.prompt.?.field.text();
-    var iterator: core.GraphemeIterator = .{ .bytes = value.text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = value.text };
     var column: u16 = 0;
     var matched: usize = 0;
     const cell: f32 = @floatFromInt(canvas.metrics.cell_width);

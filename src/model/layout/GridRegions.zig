@@ -1,20 +1,20 @@
 //! Splits the host grid between the sidebar, the tab bar, the workbench and
 //! the status bar, for hosts that draw their chrome in cells.
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const std = @import("std");
 const sidebar_layout = @import("sidebar.zig");
 const GridRegions = @This();
 
-full: core.Rect,
-top: core.Rect,
-body: core.Rect,
-sidebar: core.Rect,
-workbench: core.Rect,
-bottom: core.Rect,
+full: cellgrid.Rect,
+top: cellgrid.Rect,
+body: cellgrid.Rect,
+sidebar: cellgrid.Rect,
+workbench: cellgrid.Rect,
+bottom: cellgrid.Rect,
 
 /// Example: `const regions = GridRegions.calculate(120, 40, true, 42);`
 pub fn calculate(width: u16, height: u16, sidebar_visible: bool, sidebar_width: u16) GridRegions {
-    const full: core.Rect = .{ .w = width, .h = height };
+    const full: cellgrid.Rect = .{ .w = width, .h = height };
     const top_height: u16 = @intFromBool(height != 0);
     const bottom_height: u16 = @intFromBool(height >= 2);
     const actual_width = sidebar_layout.actualWidth(full.w, sidebar_visible, sidebar_width);
@@ -34,17 +34,17 @@ pub fn calculate(width: u16, height: u16, sidebar_visible: bool, sidebar_width: 
 
 test "regions expose the complete chrome layout" {
     const regions = calculate(120, 40, true, sidebar_layout.default_width);
-    try std.testing.expectEqual(core.Rect{ .x = 42, .w = 78, .h = 1 }, regions.top);
-    try std.testing.expectEqual(core.Rect{ .x = 0, .y = 0, .w = 42, .h = 40 }, regions.sidebar);
-    try std.testing.expectEqual(core.Rect{ .x = 42, .y = 1, .w = 78, .h = 38 }, regions.workbench);
-    try std.testing.expectEqual(core.Rect{ .x = 42, .y = 39, .w = 78, .h = 1 }, regions.bottom);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 42, .w = 78, .h = 1 }, regions.top);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 0, .y = 0, .w = 42, .h = 40 }, regions.sidebar);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 42, .y = 1, .w = 78, .h = 38 }, regions.workbench);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 42, .y = 39, .w = 78, .h = 1 }, regions.bottom);
 }
 
 test "hiding the sidebar expands both bars to the full client width" {
     const regions = calculate(120, 40, false, sidebar_layout.default_width);
 
-    try std.testing.expectEqual(core.Rect{ .w = 120, .h = 1 }, regions.top);
-    try std.testing.expectEqual(core.Rect{ .x = 0, .y = 39, .w = 120, .h = 1 }, regions.bottom);
+    try std.testing.expectEqual(cellgrid.Rect{ .w = 120, .h = 1 }, regions.top);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 0, .y = 39, .w = 120, .h = 1 }, regions.bottom);
 }
 
 test "layouts below the minimum useful sidebar width suppress it" {

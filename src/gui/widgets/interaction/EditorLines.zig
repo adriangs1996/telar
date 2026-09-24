@@ -1,5 +1,5 @@
 //! Word wrapping in measured pixels for proportional editors or terminal cells.
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Font = @import("EditorFont.zig");
 const LineFit = @import("LineFit.zig");
 const Lines = @This();
@@ -32,7 +32,7 @@ pub fn next(self: *Lines) ?[]const u8 {
     self.line_start = start;
     var used: u32 = 0;
     var boundary = start;
-    var iterator: core.GraphemeIterator = .{ .bytes = self.text, .index = start };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = self.text, .index = start };
     while (iterator.index < self.text.len) {
         const before = iterator.index;
         if (self.text[before] == '\n' or self.text[before] == '\r') {
@@ -70,7 +70,7 @@ pub fn next(self: *Lines) ?[]const u8 {
 /// Example: `const x = lines.position(selection - line_start);`
 pub fn position(self: *const Lines, offset: usize) u32 {
     const at = @min(offset, self.line_end - self.line_start);
-    return if (self.font != null and self.text.len <= Font.max_bytes) self.line_positions[at] else core.measure(self.text[self.line_start .. self.line_start + at]);
+    return if (self.font != null and self.text.len <= Font.max_bytes) self.line_positions[at] else cellgrid.text.measure(self.text[self.line_start .. self.line_start + at]);
 }
 
 fn nextShaped(self: *Lines) []const u8 {
@@ -105,7 +105,7 @@ fn nextShaped(self: *Lines) []const u8 {
             limit = @min(limit, line.len / 2);
         }
 
-        var iterator: core.GraphemeIterator = .{ .bytes = line };
+        var iterator: cellgrid.GraphemeIterator = .{ .bytes = line };
         var boundary: usize = 0;
         while (iterator.next() != null) {
             if (iterator.index > limit and boundary != 0) {
@@ -142,7 +142,7 @@ fn nextShaped(self: *Lines) []const u8 {
 }
 
 fn fittingEnd(text: []const u8, input: LineFit) usize {
-    var iterator: core.GraphemeIterator = .{ .bytes = text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = text };
     var boundary: usize = 0;
     var before: usize = 0;
     while (iterator.next()) |cluster| {

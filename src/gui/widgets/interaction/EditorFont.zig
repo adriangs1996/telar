@@ -1,6 +1,6 @@
 //! Resident shaping shared by composer painting and native input.
+const cellgrid = @import("cellgrid");
 const std = @import("std");
-const core = @import("telar-core");
 const GlyphAtlas = @import("../../text/GlyphAtlas.zig");
 const Font = @This();
 
@@ -12,7 +12,7 @@ pub const max_bytes = 8192;
 /// Measures a complete shaped span without font discovery.
 /// Example: `const width = font.measure(line);`
 pub fn measure(self: Font, text: []const u8) u16 {
-    const advance = self.atlas.measureResident(.{ .text = text, .x = 0, .y = 0, .color = .white, .face = .sans, .pixel_height = self.pixel_height }) catch return @intCast(@min(65535, core.measure(text)));
+    const advance = self.atlas.measureResident(.{ .text = text, .x = 0, .y = 0, .color = .white, .face = .sans, .pixel_height = self.pixel_height }) catch return @intCast(@min(65535, cellgrid.text.measure(text)));
     return @intFromFloat(@max(0, @min(65535, @round(advance))));
 }
 
@@ -21,7 +21,7 @@ pub fn measure(self: Font, text: []const u8) u16 {
 pub fn positions(self: Font, text: []const u8, output: []u32) void {
     std.debug.assert(output.len == text.len + 1);
     self.atlas.caretPositions(.{ .text = text, .x = 0, .y = 0, .color = .white, .face = .sans, .pixel_height = self.pixel_height }, output) catch {
-        var iterator: core.GraphemeIterator = .{ .bytes = text };
+        var iterator: cellgrid.GraphemeIterator = .{ .bytes = text };
         var width: u32 = 0;
         output[0] = 0;
         while (iterator.next()) |cluster| {

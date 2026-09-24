@@ -1,9 +1,9 @@
 //! Kitty attachment placements and transmission; the shared catalog owns PNGs.
 
+const cellgrid = @import("cellgrid");
 const client = @import("telar-client");
 const SidebarRendererInput = @import("../graphics/SidebarRendererInput.zig");
 const kitty_protocol = @import("kitty_protocol");
-const core = @import("telar-core");
 const std = @import("std");
 const kitty_codec = @import("../graphics/kitty_codec.zig");
 const presentation = @import("presentation.zig");
@@ -170,7 +170,7 @@ pub fn write(store: *Store, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
     return written;
 }
 
-pub fn fitPlacement(store: *const Store, slot: *const Slot, area: core.Rect) ?kitty_protocol.OutputPlacement {
+pub fn fitPlacement(store: *const Store, slot: *const Slot, area: cellgrid.Rect) ?kitty_protocol.OutputPlacement {
     return presentation.fitPlacement(.{ .width = slot.width, .height = slot.height }, .{ .width = store.delivery.cell_width, .height = store.delivery.cell_height }, area);
 }
 

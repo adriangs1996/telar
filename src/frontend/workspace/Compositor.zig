@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
@@ -14,13 +15,13 @@ const thread_surface = @import("thread_surface.zig");
 const Compositor = @This();
 
 gpa: std.mem.Allocator,
-composed: ?core.Buffer = null,
-area: core.Rect = .{},
+composed: ?cellgrid.Buffer = null,
+area: cellgrid.Rect = .{},
 source: ?core.TabLocation = null,
 border_theme: ?BorderTheme = null,
 copy: ?client.CopyProjection = null,
 bottom_reservation: ?data.PaneBottomReservation = null,
-bottom_reservation_area: core.Rect = .{},
+bottom_reservation_area: cellgrid.Rect = .{},
 layout_snapshot: data.LayoutSnapshot = .{},
 fullscreen_labels: Plan = .{},
 panes: [core.max_panes_per_tab]PaneProjection = undefined,
@@ -215,7 +216,7 @@ pub fn render(self: *Compositor, composition: Composition) !CompositionResult {
 /// ```zig
 /// compositor.copyArea(destination, area);
 /// ```
-pub fn copyArea(self: *const Compositor, destination: *core.Buffer, area: core.Rect) void {
+pub fn copyArea(self: *const Compositor, destination: *cellgrid.Buffer, area: cellgrid.Rect) void {
     const source = if (self.composed) |*buffer| buffer else return;
     if (source.w != destination.w or source.h != destination.h) {
         return;
@@ -247,7 +248,7 @@ pub fn layoutSnapshot(self: *const Compositor) *const data.LayoutSnapshot {
 /// ```zig
 /// const shelf = compositor.bottomReservationArea();
 /// ```
-pub fn bottomReservationArea(self: *const Compositor) core.Rect {
+pub fn bottomReservationArea(self: *const Compositor) cellgrid.Rect {
     return self.bottom_reservation_area;
 }
 
@@ -446,10 +447,10 @@ const PaneProjection = struct {
 };
 
 const BorderTheme = struct {
-    focused: core.Color,
-    unfocused: core.Color,
-    tab_text: core.Color,
-    selected_tab_text: core.Color,
+    focused: cellgrid.Color,
+    unfocused: cellgrid.Color,
+    tab_text: cellgrid.Color,
+    selected_tab_text: cellgrid.Color,
 };
 
 const CopyChangeComposition = struct {
@@ -465,7 +466,7 @@ const IncrementalComposition = struct {
     /// The composed tab's slot in `model.tabs`.
     tab: usize,
     screen: *Screen,
-    target: *core.Buffer,
+    target: *cellgrid.Buffer,
     previous_copy: ?client.CopyProjection,
     copy_changed: bool,
 };
@@ -479,7 +480,7 @@ const Composition = struct {
 };
 
 const CompositionInput = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     palette: *const data.Palette,
     copy: ?client.CopyProjection = null,
     bottom_reservation: ?data.PaneBottomReservation = null,

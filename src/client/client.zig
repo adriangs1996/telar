@@ -19,7 +19,6 @@ const markers = @import("attachments/markers.zig");
 const handshake = @import("transport/handshake.zig");
 const action_routing = @import("input/action_routing.zig");
 const worker = @import("plugins/worker.zig");
-const core = @import("telar-core");
 
 pub const Activity = sidebar_animation.Activity;
 pub const Client = @import("execution/Client.zig");
@@ -110,7 +109,6 @@ pub const RuntimeTransportState = @import("connection/RuntimeTransportState.zig"
 pub const Message = @import("execution/Message.zig").Message;
 pub const Job = @import("execution/Job.zig").Job;
 pub const job_runner = @import("execution/job_runner.zig");
-pub const Scheduler = core.DeadlineScheduler;
 pub const agent_attention = @import("agents/attention.zig");
 pub const StartOutcome = plugin_action.StartOutcome;
 pub const SyncInput = @import("presentation/SyncInput.zig");
@@ -131,7 +129,6 @@ pub const markerPolicy = attachment_prompt.markerPolicy;
 pub const max_keys = data.input_limits.max_synthetic_keys;
 pub const max_title_bytes = window_title.max_title_bytes;
 pub const minimum_marker_width = markers.minimum_marker_width;
-pub const monotonic = core.monotonic;
 pub const pane_input = @import("panes/pane_input.zig");
 pub const perform = handshake.perform;
 pub const performSchema = handshake.performSchema;
@@ -142,7 +139,6 @@ pub const runPluginWorker = worker.run;
 pub const supportsSharedMemory = store.supportsSharedMemory;
 pub const tracked = mouse_protocol.tracked;
 pub const validateDefaultBindings = default_bindings.validate;
-pub const wait = core.deadline_timer.wait;
 
 test {
     _ = @import("change_review/view/Model.zig");

@@ -1,10 +1,10 @@
 //! The one flush that follows every runtime update: reaps finished panes,
 //! delivers at most one message per client and settles observed damage.
 
+const pacing = @import("pacing");
 const pane_closure = @import("pane_closure.zig");
 const pane_graphics = @import("pane_graphics.zig");
 const client_connection = @import("client_connection.zig");
-const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
@@ -169,7 +169,7 @@ fn scheduleCellPublication(model: *RuntimeModel) !void {
         return;
     }
 
-    model.select.concurrent(.cell_publication_due, core.deadline_timer.wait, .{ model.io, &model.cell_timer }) catch |err| {
+    model.select.concurrent(.cell_publication_due, pacing.deadline_timer.wait, .{ model.io, &model.cell_timer }) catch |err| {
         model.cell_timer.schedulingFailed();
         return err;
     };

@@ -3,8 +3,8 @@
 //! Focus replacements keep the old labels visible until the new image is placed.
 //! Text, geometry and theme changes still fall back to cells; latest plan wins.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const Plan = @import("../presentation/Plan.zig");
 const Label = @import("../presentation/Label.zig");
 const std = @import("std");
@@ -21,7 +21,7 @@ fn testingPlan(names: []const []const u8, selected: usize) Plan {
         var label: Label = .{ .offset = plan.area.w, .width = 0, .selected = index == selected };
         const text = std.fmt.bufPrint(&label.bytes, "{d} {s}", .{ index + 1, name }) catch unreachable;
         label.len = @intCast(text.len);
-        label.width = core.measure(text) + 2;
+        label.width = cellgrid.text.measure(text) + 2;
         plan.labels[plan.len] = label;
         plan.len += 1;
         plan.area.w += label.width + @as(u16, @intFromBool(index + 1 != names.len));

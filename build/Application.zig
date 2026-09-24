@@ -111,7 +111,7 @@ pub fn init(b: *std.Build) ?@This() {
     });
     libraries.addImports(core);
     coverage.instrumentModule(core);
-    const data = model_build.create(b, core);
+    const data = model_build.create(b, core, libraries);
     b.modules.put(
         b.allocator,
         b.dupe("model"),

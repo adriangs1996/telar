@@ -1,5 +1,7 @@
 //! GUI controller for widget decisions. Domain edits remain commands to the
 //! existing shared prompt/application handlers; no widget mutates model fields.
+const pacing = @import("pacing");
+const cellgrid = @import("cellgrid");
 const composer_menu = @import("composer_menu.zig");
 const tab_drag = @import("tab_drag.zig");
 const thread_scroll = @import("thread_scroll.zig");
@@ -363,7 +365,7 @@ fn routeAgentBinding(gui: *GuiAdapter, event: event_module.Event) !bool {
 
         // A binding may replace its composer with a tab or modal before keyUp.
         // Existing fallback leases still complete through their original router.
-        _ = try gui.routeKey(.{ .key = key, .raw = "", .now_ns = client.monotonic(gui.app.io) });
+        _ = try gui.routeKey(.{ .key = key, .raw = "", .now_ns = pacing.clock.monotonic(gui.app.io) });
         return true;
     }
 
@@ -399,7 +401,7 @@ fn routeAgentBinding(gui: *GuiAdapter, event: event_module.Event) !bool {
     }
 
     gui.widgets.cancelComposition();
-    _ = try gui.routeKey(.{ .key = key, .raw = "", .now_ns = client.monotonic(gui.app.io) });
+    _ = try gui.routeKey(.{ .key = key, .raw = "", .now_ns = pacing.clock.monotonic(gui.app.io) });
     return true;
 }
 
@@ -659,9 +661,9 @@ fn editor(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
                 const column = @max(0, (pointer.x - geometry.bounds.x) / geometry.cell_width);
                 var offset: u32 = @intCast(copy.scroll);
                 var used: f64 = 0;
-                var iterator: core.GraphemeIterator = .{ .bytes = visible.text };
+                var iterator: cellgrid.GraphemeIterator = .{ .bytes = visible.text };
                 while (iterator.next()) |cluster| {
-                    const width: f64 = @floatFromInt(core.measure(cluster.bytes));
+                    const width: f64 = @floatFromInt(cellgrid.text.measure(cluster.bytes));
                     if (column < used + width / 2) {
                         break;
                     }

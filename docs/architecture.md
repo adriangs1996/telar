@@ -179,7 +179,7 @@ is one index probe, not a walk through nested structs.
 
 | Package | Owns |
 | --- | --- |
-| `telar-core` | wire values shared by both processes, re-exporting `cellgrid` and `pacing` |
+| `telar-core` | wire values shared by both processes |
 | `telar-backend` | the runtime: children, PTYs, emulation, agents, history, proxy |
 | `model` | client state and its procedures, with no I/O, Lua or host access |
 | `telar-client` | `Client` and the client flows: runtime socket, Lua VM, job queue, inbox |
@@ -197,7 +197,11 @@ module named after the directory. A library imports only `std`, external
 dependencies and other libraries; `build/Libraries.zig` registers it, makes it
 importable from every package and fails the build if it imports anything
 else. Consumers import the module once and alias its members
-(`const gfx = @import("gfx");` then `const Rect = gfx.Rect;`).
+(`const gfx = @import("gfx");` then `const Rect = gfx.Rect;`). A package
+depends on a library by importing it, never through another package: no
+file outside `lib/` declares `pub const X = library.member`, and
+`zig build check-library-reexports` rejects one. The model imports only the
+libraries `build/model.zig` lists, pure values and deadlines.
 
 | Library | Provides |
 | --- | --- |

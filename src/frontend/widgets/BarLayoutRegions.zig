@@ -1,9 +1,9 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const Regions = @This();
 
-items: [3]core.Rect,
+items: [3]cellgrid.Rect,
 
-pub fn calculate(area: core.Rect, input: Widths) Regions {
+pub fn calculate(area: cellgrid.Rect, input: Widths) Regions {
     var widths: [3]u16 = @splat(0);
     const tabs_index: usize = input.tabs_index;
     const tab_minimum = @min(input.desired[tabs_index], @min(area.w, 16));
@@ -44,8 +44,8 @@ pub fn calculate(area: core.Rect, input: Widths) Regions {
     const tab_extra = @min(input.desired[tabs_index] - tab_minimum, remaining);
     widths[tabs_index] += tab_extra;
 
-    const left: core.Rect = .{ .x = area.x, .y = area.y, .w = widths[0], .h = area.h };
-    const right: core.Rect = .{
+    const left: cellgrid.Rect = .{ .x = area.x, .y = area.y, .w = widths[0], .h = area.h };
+    const right: cellgrid.Rect = .{
         .x = area.x + area.w - widths[2],
         .y = area.y,
         .w = widths[2],
@@ -55,7 +55,7 @@ pub fn calculate(area: core.Rect, input: Widths) Regions {
     const gap_end = right.x;
     const centered = area.x + (area.w - widths[1]) / 2;
     const center_x = @min(@max(centered, gap_start), gap_end - widths[1]);
-    const center: core.Rect = .{ .x = center_x, .y = area.y, .w = widths[1], .h = area.h };
+    const center: cellgrid.Rect = .{ .x = center_x, .y = area.y, .w = widths[1], .h = area.h };
 
     return .{ .items = .{ left, center, right } };
 }

@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
 const TestingPaneFrame = @import("TestingPaneFrame.zig");
@@ -265,8 +266,8 @@ test "pane frame application commits screen copy state and one frame revision" {
     pane.scroll = .{ .total_rows = 4, .offset = 2 };
     pane.cursor = .{ .visible = true, .x = 0, .y = 1 };
     try std.testing.expect(model.enterCopyMode());
-    const cells = [_]core.Cell{
-        .{ .bytes = [_]u8{'x'} ++ [_]u8{0} ** (core.Cell.max_bytes - 1) },
+    const cells = [_]cellgrid.Cell{
+        .{ .bytes = [_]u8{'x'} ++ [_]u8{0} ** (cellgrid.Cell.max_bytes - 1) },
         .{},
         .{},
         .{},
@@ -333,7 +334,7 @@ test "pane frame application separates detached panes from patch recovery" {
     const detached = try model_data.pane_frame.receive(&model, try testingPaneFrame(&encoded, .{
         .pane_id = pane_id,
         .frame_id = 5,
-        .cells = &[_]core.Cell{ .{}, .{}, .{}, .{} },
+        .cells = &[_]cellgrid.Cell{ .{}, .{}, .{}, .{} },
     }));
     try std.testing.expect(detached == .detached);
     try std.testing.expectEqualDeep(Version{}, model.version());
@@ -341,7 +342,7 @@ test "pane frame application separates detached panes from patch recovery" {
     pane.attached = true;
     const absent = try model_data.pane_frame.receive(&model, try testingPaneFrame(&encoded, .{
         .pane_id = @enumFromInt(9),
-        .cells = &[_]core.Cell{ .{}, .{}, .{}, .{} },
+        .cells = &[_]cellgrid.Cell{ .{}, .{}, .{}, .{} },
     }));
     try std.testing.expect(absent == .detached);
     try std.testing.expectEqual(@as(u64, 3), pane.applied_frame_id);

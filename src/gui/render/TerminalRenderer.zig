@@ -1,4 +1,5 @@
 //! Converts runtime cells into a bounded native frame. No VT parsing lives here.
+const cellgrid = @import("cellgrid");
 const frame_budget = @import("frame_budget.zig");
 const data = @import("model");
 const std = @import("std");
@@ -292,8 +293,8 @@ pub fn drawPane(self: *Renderer, paint: PanePaint) !void {
         for (source, retained.metadata, 0..) |*original, *metadata, col| {
             // Only a selected cell needs a projected copy; every other cell
             // is compared in place in the pane buffer.
-            var selected: core.Cell = undefined;
-            const cell: *const core.Cell = if (paint.copy) |copy| projected: {
+            var selected: cellgrid.Cell = undefined;
+            const cell: *const cellgrid.Cell = if (paint.copy) |copy| projected: {
                 if (!copy.selected(@intCast(col), pane.scroll.offset + @as(u32, @intCast(row)))) {
                     break :projected original;
                 }
@@ -446,11 +447,11 @@ fn paintCell(self: *Renderer, paint: CellPaint) !void {
     }
 }
 
-fn cellRect(self: *const Renderer, cells: core.Rect) Rect {
+fn cellRect(self: *const Renderer, cells: cellgrid.Rect) Rect {
     return self.metrics.rect(self.origin, cells);
 }
 
-fn color(self: *const Renderer, value: core.Color, fallback: Color) Color {
+fn color(self: *const Renderer, value: cellgrid.Color, fallback: Color) Color {
     return colors.withPalette(value, fallback, &self.theme.palette);
 }
 
@@ -487,7 +488,7 @@ test "fallback icons retain their full texture in tightened terminal cells" {
         _ = try renderer.measure(.{ .width = 800, .height = 600, .scale = scale });
         const rect = renderer.metrics.rect(.{ 4, 7 }, .{ .x = 1, .y = 1, .w = 1, .h = 1 });
         for ([_][]const u8{ "\u{f07b}", "\u{f02db}" }) |icon| {
-            var cell: core.Cell = .{ .len = @intCast(icon.len) };
+            var cell: cellgrid.Cell = .{ .len = @intCast(icon.len) };
             @memcpy(cell.bytes[0..icon.len], icon);
             for (0..4) |style| {
                 cell.style.flags.bold = style & 1 != 0;

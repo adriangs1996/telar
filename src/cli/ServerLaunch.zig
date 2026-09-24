@@ -1,3 +1,4 @@
+const pi_rpc = @import("pi_rpc");
 const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -26,7 +27,7 @@ proxy_intercept_hosts: []const []const u8 = &.{},
 description_arguments: [data.config_values.max_agent_description_command_args][]const u8 = undefined,
 agent_description_options: ?backend.AgentDescriptionOptions = null,
 engine_arguments: [data.config_values.max_agent_description_command_args][]const u8 = undefined,
-engine_options: ?backend.Options = null,
+engine_options: ?pi_rpc.Options = null,
 agent_manifests: core.Table = core.builtin_table,
 history_filters: core.Filters = .{},
 history_output_capture: bool = false,

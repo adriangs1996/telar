@@ -5,6 +5,7 @@
 //! bytes are disposable presentation state: the agent remains the authority
 //! for whether an attachment was accepted.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -92,7 +93,7 @@ test "marker removal keeps preview order aligned with atomic child placeholders"
     _ = store.setTarget(target);
     try store.adopt(try testCapture(std.testing.allocator, testRequest(1, target), "first"));
     try store.adopt(try testCapture(std.testing.allocator, testRequest(2, target), "second"));
-    var buffer = try core.Buffer.init(std.testing.allocator, 64, 2);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 64, 2);
     defer buffer.deinit();
     const prompt = "> [Image #1]xx[Image #2]tail";
     const cursor_x = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = prompt, .style = .{} });
@@ -142,7 +143,7 @@ test "Claude previews retain stable marker numbers across attachment deletion" {
     const second = try testCapture(std.testing.allocator, testRequest(2, target), "second");
     second.request.marker_policy = .stable_number;
     try store.adopt(second);
-    var buffer = try core.Buffer.init(std.testing.allocator, 64, 2);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 64, 2);
     defer buffer.deinit();
     var cursor_x = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "> [Image #7][Image #12]", .style = .{} });
 
@@ -177,7 +178,7 @@ test "a marker wrapped at its space keeps its preview and stays dismissable" {
     const capture = try testCapture(std.testing.allocator, testRequest(1, target), "first");
     capture.request.marker_policy = .stable_number;
     try store.adopt(capture);
-    var buffer = try core.Buffer.init(std.testing.allocator, 40, 3);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 40, 3);
     defer buffer.deinit();
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "> aaaaaaaaaaaaaaaaaaaaaaaaaaaaa [Image", .style = .{} });
     const end_x = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = "  #1]", .style = .{} });
@@ -212,7 +213,7 @@ test "a marker wrapped at its space keeps its preview and stays dismissable" {
 }
 
 test "Enter after a trailing backslash continues the prompt" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 20, 2);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 20, 2);
     defer buffer.deinit();
     const end_x = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "> hello\\", .style = .{} });
 
@@ -235,7 +236,7 @@ fn adoptPiCapture(store: *delivery.Store, sequence: u64, target: data.Attachment
     try store.adopt(capture);
 }
 
-fn writePiCursor(buffer: *core.Buffer, x: u16, y: u16) void {
+fn writePiCursor(buffer: *cellgrid.Buffer, x: u16, y: u16) void {
     buffer.setCell(.{ .x = x, .y = y }, .{ .text = " ", .width = 1, .style = .{ .flags = .{ .inverse = true } } });
 }
 
@@ -246,7 +247,7 @@ test "Pi previews pair with pasted paths and are closed by deleting the whole pa
     _ = store.setTarget(target);
     try adoptPiCapture(&store, 1, target);
     try adoptPiCapture(&store, 2, target);
-    var buffer = try core.Buffer.init(std.testing.allocator, 200, 2);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 200, 2);
     defer buffer.deinit();
     const prompt = "see " ++ pi_path ++ " and " ++ pi_second_path;
     const cursor_x = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = prompt, .style = .{} });
@@ -282,7 +283,7 @@ test "a Pi path removed by any editor command retires its preview within the wat
     const target: data.AttachmentTarget = .{ .pane_id = @enumFromInt(8), .pane_generation = 4 };
     _ = store.setTarget(target);
     try adoptPiCapture(&store, 1, target);
-    var buffer = try core.Buffer.init(std.testing.allocator, 40, 4);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 40, 4);
     defer buffer.deinit();
     var x: u16 = 0;
     var y: u16 = 0;
@@ -314,7 +315,7 @@ test "a deletion watch expires after the bounded frame count" {
     const target: data.AttachmentTarget = .{ .pane_id = @enumFromInt(8), .pane_generation = 4 };
     _ = store.setTarget(target);
     try adoptPiCapture(&store, 1, target);
-    var buffer = try core.Buffer.init(std.testing.allocator, 120, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 120, 1);
     defer buffer.deinit();
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = pi_path, .style = .{} });
     const screen: client.MarkerScreen = .{ .buffer = &buffer, .cursor = .{ .visible = false, .x = 0, .y = 0 } };
@@ -336,7 +337,7 @@ test "deleting a Pi path whose capture is still in flight is reported" {
     defer store.deinit();
     const target: data.AttachmentTarget = .{ .pane_id = @enumFromInt(8), .pane_generation = 4 };
     _ = store.setTarget(target);
-    var buffer = try core.Buffer.init(std.testing.allocator, 120, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 120, 1);
     defer buffer.deinit();
     const cursor_x = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = pi_path, .style = .{} });
     writePiCursor(&buffer, cursor_x, 0);

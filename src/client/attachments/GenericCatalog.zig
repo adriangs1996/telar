@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const model_data = @import("model");
 const std = @import("std");
 const data = @import("model");
@@ -503,7 +503,7 @@ pub fn Type(comptime Delivery: type) type {
             return null;
         }
 
-        pub fn pathForNextUnpaired(self: *const Self, target: model_data.AttachmentTarget, buffer: *const core.Buffer) ?model_data.attachments_path_marker.Uuid {
+        pub fn pathForNextUnpaired(self: *const Self, target: model_data.AttachmentTarget, buffer: *const cellgrid.Buffer) ?model_data.attachments_path_marker.Uuid {
             var found: [model_data.attachment_types.max_items * 2]model_data.Marker = undefined;
             const count = model_data.attachments_path_marker.collect(buffer, &found);
             var candidates: [model_data.attachment_types.max_items * 2]model_data.attachments_path_marker.Uuid = undefined;
@@ -537,7 +537,7 @@ pub fn Type(comptime Delivery: type) type {
             return count;
         }
 
-        pub fn markerForNextUnpaired(self: *const Self, target: model_data.AttachmentTarget, buffer: *const core.Buffer) ?u16 {
+        pub fn markerForNextUnpaired(self: *const Self, target: model_data.AttachmentTarget, buffer: *const cellgrid.Buffer) ?u16 {
             var candidates: [model_data.attachment_types.max_items]u16 = @splat(0);
             var candidate_count: u8 = 0;
             var scan: MarkerScan = .{ .buffer = buffer };

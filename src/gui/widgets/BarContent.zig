@@ -1,13 +1,13 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const std = @import("std");
-const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Strip = @import("Strip.zig");
 const Label = @import("Label.zig");
 const BarContent = @This();
 
 content: *const data.Content,
-area: core.Rect,
+area: cellgrid.Rect,
 
 /// Draws validated Lua segments with the same palette roles as terminal cells.
 /// Example: `try content.draw(canvas);`
@@ -44,7 +44,7 @@ pub fn draw(self: BarContent, canvas: *Canvas) !void {
         }
 
         var text_strip: Strip = .{ .area = text_area };
-        var iterator: core.GraphemeIterator = .{ .bytes = label.text };
+        var iterator: cellgrid.GraphemeIterator = .{ .bytes = label.text };
         while (iterator.next()) |cluster| {
             const icon = isIcon(cluster.bytes);
             const area = text_strip.take(if (icon) 2 else cluster.width);
@@ -59,7 +59,7 @@ pub fn draw(self: BarContent, canvas: *Canvas) !void {
     }
 }
 
-fn color(canvas: *const Canvas, value: data.bar_values.Color) core.Color {
+fn color(canvas: *const Canvas, value: data.bar_values.Color) cellgrid.Color {
     return switch (value) {
         .value => |literal| literal,
         .palette => |role| switch (role) {
@@ -84,7 +84,7 @@ pub fn columns(content: *const data.Content) u16 {
 }
 
 fn textColumns(text: []const u8) u16 {
-    var iterator: core.GraphemeIterator = .{ .bytes = text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = text };
     var count: u16 = 0;
     while (iterator.next()) |cluster| {
         count +|= if (isIcon(cluster.bytes)) 2 else cluster.width;

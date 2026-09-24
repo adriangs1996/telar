@@ -1,10 +1,10 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const SidebarRendererInput = @import("SidebarRendererInput.zig");
 const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
 const Rasterizer = @import("Rasterizer.zig");
 const icon_graphics = @import("icons.zig");
-const core = @import("telar-core");
 const toast = @import("toast.zig");
 const toast_module = @import("../widgets/toast.zig");
 const kitty_codec = @import("kitty_codec.zig");
@@ -553,7 +553,7 @@ const ToastSlot = struct {
 };
 
 const Preparation = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     center: *const data.Center,
     palette: *const data.Palette,
     icon_theme: data.icons.Theme = .unicode,

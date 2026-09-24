@@ -1,9 +1,9 @@
 //! Slice 6 of the GUI visual language: the native command palette.
+const cellgrid = @import("cellgrid");
 const Viewport = @import("../native/Viewport.zig");
 const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
-const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("OverlayFixture.zig");
 const Session = @import("Session.zig");
@@ -38,7 +38,7 @@ fn populate(fixture: *Fixture) !void {
     } });
 }
 
-fn quadsInside(fixture: *Fixture, area: core.Rect) !void {
+fn quadsInside(fixture: *Fixture, area: cellgrid.Rect) !void {
     var canvas = fixture.canvas();
     const bounds = canvas.rect(area);
     for (fixture.renderer.quads.items()) |quad| {

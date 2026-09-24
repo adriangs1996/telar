@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const Change = @import("../types/Change.zig").Change;
 const PaneSplitDisposition = @import("../types/PaneSplitDisposition.zig").PaneSplitDisposition;
@@ -5,7 +6,7 @@ const PaneSplitCommit = @This();
 
 pane_id: core.PaneId,
 location: core.TabLocation,
-area: core.Rect,
+area: cellgrid.Rect,
 disposition: PaneSplitDisposition,
 change: Change,
 layout_revision: u64,

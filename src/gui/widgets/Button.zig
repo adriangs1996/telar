@@ -1,12 +1,12 @@
+const cellgrid = @import("cellgrid");
 const action_module = @import("action.zig");
-const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
 const Button = @This();
 
 context: *const Context,
-area: core.Rect,
+area: cellgrid.Rect,
 intent: client.Intent,
 text: []const u8,
 active: bool = false,

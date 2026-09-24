@@ -1,5 +1,5 @@
+const pacing = @import("pacing");
 const data = @import("model");
-const client = @import("telar-client");
 const std = @import("std");
 const host_negotiation = @import("host_negotiation.zig");
 const HostNegotiation = @This();
@@ -8,7 +8,7 @@ zlib_support: data.EnvironmentSupport = .unknown,
 deadline_ns: ?u64 = null,
 received: std.EnumSet(host_negotiation.Color) = .initEmpty(),
 initial_settled: bool = false,
-timer: client.Scheduler = .{},
+timer: pacing.DeadlineScheduler = .{},
 
 /// Example: `if (state.begin(now_ns)) try writer.writeAll(color_query);`.
 pub fn begin(self: *HostNegotiation, now_ns: u64) bool {

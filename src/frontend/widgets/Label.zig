@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -42,13 +43,13 @@ fn text(self: *const Label) []const u8 {
 
 pub fn width(self: *const Label) u16 {
     const marker: u16 = if (self.fullscreen) tab_bar.fullscreen_marker_width else 0;
-    return core.measure(self.text()) + marker;
+    return cellgrid.text.measure(self.text()) + marker;
 }
 
 /// Draws clipped text and icons only when their slots fit. Example: label.draw(context, placement);
 pub fn draw(self: *const Label, context: *Context, placement: Placement) void {
     const rect = placement.rect;
-    const text_width = @min(core.measure(self.text()), rect.w);
+    const text_width = @min(cellgrid.text.measure(self.text()), rect.w);
     _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = rect.x, .y = rect.y }, .text = self.text(), .max_width = text_width, .style = placement.style });
 
     if (self.icon) |icon| {
@@ -86,7 +87,7 @@ test "automatic tab labels draw the application icon while manual labels retain 
     try std.testing.expectEqualStrings(" 1:  nvim ", automatic.text());
     try std.testing.expectEqual(@as(u16, 10), automatic.width());
 
-    var buffer = try core.Buffer.init(std.testing.allocator, 30, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 30, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var plan: Plan = .{};
@@ -127,7 +128,7 @@ test "tab application icons remain within clipped labels" {
     var model = try testingModel("");
     defer model.deinit();
     const label = Label.init(&model, 0);
-    var buffer = try core.Buffer.init(std.testing.allocator, 30, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 30, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var plan: Plan = .{};
@@ -154,6 +155,6 @@ test "tab application icons remain within clipped labels" {
 }
 
 const Placement = struct {
-    rect: core.Rect,
-    style: core.Style,
+    rect: cellgrid.Rect,
+    style: cellgrid.Style,
 };

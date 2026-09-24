@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const Context = @import("Context.zig");
@@ -12,7 +13,7 @@ const FullscreenStrip = @This();
 context: *const Context,
 model: *const data.ClientModel,
 tab: usize,
-area: core.Rect,
+area: cellgrid.Rect,
 
 /// Fullscreen hides terminal leaves, but every pane remains directly reachable.
 /// Example: `try strip.draw(canvas);`
@@ -110,6 +111,6 @@ const PaneLabel = struct {
     }
 
     pub fn width(self: *const PaneLabel) u16 {
-        return core.measure(self.text());
+        return cellgrid.text.measure(self.text());
     }
 };

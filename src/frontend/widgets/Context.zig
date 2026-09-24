@@ -1,5 +1,5 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const context_support = @import("context_support.zig");
 const Plan = @import("../ui/Plan.zig");
 const std = @import("std");
@@ -7,7 +7,7 @@ const std = @import("std");
 /// transport, or runtime models.
 const Context = @This();
 
-buffer: *core.Buffer,
+buffer: *cellgrid.Buffer,
 hits: *context_support.Hits,
 palette: *const data.Palette,
 hovered: ?context_support.Action,
@@ -53,10 +53,10 @@ pub fn drawIcon(self: *Context, draw: IconDraw) u16 {
 }
 
 const IconDraw = struct {
-    area: core.Rect,
-    point: core.Point,
+    area: cellgrid.Rect,
+    point: cellgrid.Point,
     icon: data.icons.Icon,
-    style: core.Style,
+    style: cellgrid.Style,
     /// Cells the graphical mark may span sideways. The fallback glyph still
     /// takes the first cell only; the caller blanks the rest.
     columns: u16 = 1,

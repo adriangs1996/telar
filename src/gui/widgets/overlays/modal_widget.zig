@@ -1,9 +1,9 @@
 //! Composition selects the concrete modal before any widget emits quads.
+const cellgrid = @import("cellgrid");
 const HistoryModalMetrics = @import("HistoryModalMetrics.zig");
 const WorkspaceFormLayout = @import("WorkspaceFormLayout.zig");
 const HistoryModalLayout = @import("HistoryModalLayout.zig");
 const Canvas = @import("../Canvas.zig");
-const core = @import("telar-core");
 const Modal = @import("Modal.zig");
 const NamePrompt = @import("NamePrompt.zig");
 const WorkspaceForm = @import("WorkspaceForm.zig");
@@ -39,7 +39,7 @@ pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) 
         return;
     }
 
-    const host: core.Rect = .{ .w = input.projection.host_size.cols, .h = input.projection.host_size.rows };
+    const host: cellgrid.Rect = .{ .w = input.projection.host_size.cols, .h = input.projection.host_size.rows };
     if (prompt.target() == .create_workspace) {
         const layout = try WorkspaceFormLayout.measure(input.canvas, input.projection);
         pending.modal = host;

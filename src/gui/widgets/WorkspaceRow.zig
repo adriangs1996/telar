@@ -1,4 +1,5 @@
 //! A project identity: favicon, name and path, with attention separate from selection.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const AgentCard = @import("AgentCard.zig");
 const client = @import("telar-client");
@@ -13,7 +14,7 @@ const TextFit = @import("TextFit.zig");
 const attention = @import("attention.zig");
 const workspace_identity = @import("workspace_identity.zig");
 const WorkspaceRow = @This();
-const inactive_ink: core.Color = .rgb(.{ 115, 115, 115 });
+const inactive_ink: cellgrid.Color = .rgb(.{ 115, 115, 115 });
 
 context: *const Context,
 bounds: Rect,

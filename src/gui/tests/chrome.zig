@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const gfx = @import("gfx");
 const Quad = gfx.Quad;
 const data = @import("model");
@@ -78,7 +79,7 @@ test "native chrome geometry gives the workbench every grid cell of every host" 
             model.host.host_size.cols = width;
             model.host.host_size.rows = height;
             const workbench = data.workbench.region(model).area;
-            try std.testing.expectEqual(core.Rect{ .w = width, .h = height }, workbench);
+            try std.testing.expectEqual(cellgrid.Rect{ .w = width, .h = height }, workbench);
         }
     }
 }

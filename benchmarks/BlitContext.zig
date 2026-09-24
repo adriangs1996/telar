@@ -1,7 +1,7 @@
 //! A VT screen shaped like a syntax-highlighted editor, blitted in full into
 //! the runtime's cell buffer: the per-cell cost of `vt.RenderState` to `Cell`.
+const cellgrid = @import("cellgrid");
 const backend = @import("telar-backend");
-const core = @import("telar-core");
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const main = @import("main.zig");
@@ -10,14 +10,14 @@ const BlitContext = @This();
 gpa: std.mem.Allocator,
 terminal: vt.Terminal,
 state: vt.RenderState,
-buffer: core.Buffer,
+buffer: cellgrid.Buffer,
 
 pub fn init(gpa: std.mem.Allocator, io: std.Io) !BlitContext {
     var terminal = try vt.Terminal.init(io, gpa, .{ .cols = main.cols, .rows = main.rows });
     errdefer terminal.deinit(gpa);
     var state: vt.RenderState = .empty;
     errdefer state.deinit(gpa);
-    var buffer = try core.Buffer.init(gpa, main.cols, main.rows);
+    var buffer = try cellgrid.Buffer.init(gpa, main.cols, main.rows);
     errdefer buffer.deinit();
 
     var stream = terminal.vtStream();

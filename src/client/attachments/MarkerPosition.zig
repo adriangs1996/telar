@@ -1,11 +1,11 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const MarkerPosition = @This();
 
 number: u16,
 /// The `[` cell.
-start: core.Point,
+start: cellgrid.Point,
 /// One past the `]` cell, on the row holding it.
-end: core.Point,
+end: cellgrid.Point,
 
 pub fn contiguous(self: MarkerPosition) bool {
     return self.start.y == self.end.y;

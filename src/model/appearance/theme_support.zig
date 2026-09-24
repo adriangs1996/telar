@@ -1,7 +1,7 @@
 //! A preset owns chrome roles and native terminal colors. TUI panes and gaps
 //! retain their host's defaults; child truecolor remains application-owned.
 
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const std = @import("std");
 
 pub const Builtin = enum {
@@ -267,15 +267,15 @@ fn rgb24(value: u24) [3]u8 {
     return .{ @intCast(value >> 16), @intCast((value >> 8) & 0xff), @intCast(value & 0xff) };
 }
 
-fn rgb24c(value: u24) core.Color {
+fn rgb24c(value: u24) cellgrid.Color {
     return .rgb(rgb24(value));
 }
 
-fn rgb(red: u8, green: u8, blue: u8) core.Color {
+fn rgb(red: u8, green: u8, blue: u8) cellgrid.Color {
     return .rgb(.{ red, green, blue });
 }
 
-fn indexed(index: u8) core.Color {
+fn indexed(index: u8) cellgrid.Color {
     return .indexed(index);
 }
 
@@ -286,7 +286,7 @@ fn eql(a: []const u8, b: []const u8) bool {
 test "Shade is the default theme and its panel takes the terminal background" {
     try std.testing.expectEqual(Builtin.shade, default_theme.base);
     try std.testing.expectEqualDeep(rgb(168, 201, 140), default_theme.palette.accent);
-    try std.testing.expectEqualDeep(core.Color.default, default_theme.palette.panel_bg);
+    try std.testing.expectEqualDeep(cellgrid.Color.default, default_theme.palette.panel_bg);
     try std.testing.expectEqualDeep(rgb(212, 180, 119), default_theme.palette.yellow);
 
     const vesper = builtin(.vesper);
@@ -377,7 +377,7 @@ test "Pierre variants preserve Neovim chrome syntax and ANSI colors" {
 test "overrides replace only the requested color roles" {
     const base = builtin(.vesper);
     const custom = base.withOverrides(.{ .panel_bg = .default, .accent = rgb(1, 2, 3) });
-    try std.testing.expectEqualDeep(core.Color.default, custom.palette.panel_bg);
+    try std.testing.expectEqualDeep(cellgrid.Color.default, custom.palette.panel_bg);
     try std.testing.expectEqualDeep(rgb(1, 2, 3), custom.palette.accent);
     try std.testing.expectEqualDeep(base.palette.text, custom.palette.text);
 }

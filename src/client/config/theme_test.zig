@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const std = @import("std");
 const Generation = @import("Generation.zig");
@@ -36,7 +36,7 @@ test "theme overrides inherit through profiles and selecting a preset replaces t
     const custom = try load(source, "custom");
     defer custom.deinit();
     const snapshot = &custom.snapshot;
-    try std.testing.expectEqualDeep(core.Color.rgb(.{ 1, 2, 3 }), snapshot.theme.palette.accent);
+    try std.testing.expectEqualDeep(cellgrid.Color.rgb(.{ 1, 2, 3 }), snapshot.theme.palette.accent);
     try std.testing.expect(snapshot.theme.palette.text.kind == .default);
     try std.testing.expectEqual([3]u8{ 0xab, 0xcd, 0xef }, snapshot.theme.terminal.foreground);
     try std.testing.expectEqual([3]u8{ 0x44, 0x55, 0x66 }, snapshot.theme.terminal.background);
@@ -99,8 +99,8 @@ test "syntax styles inherit through profiles independently of chrome and termina
     const generation = try load(source, "custom");
     defer generation.deinit();
     const theme = generation.snapshot.theme;
-    try std.testing.expectEqualDeep(core.Color.rgb(.{ 0x11, 0x22, 0x33 }), theme.syntax(.keyword));
-    try std.testing.expectEqualDeep(core.Color.rgb(.{ 0x44, 0x55, 0x66 }), theme.syntax(.parameter));
+    try std.testing.expectEqualDeep(cellgrid.Color.rgb(.{ 0x11, 0x22, 0x33 }), theme.syntax(.keyword));
+    try std.testing.expectEqualDeep(cellgrid.Color.rgb(.{ 0x44, 0x55, 0x66 }), theme.syntax(.parameter));
     try std.testing.expect(!theme.syntaxStyle(.parameter).italic);
     try std.testing.expect(theme.syntaxStyle(.comment).bold);
     try std.testing.expectEqualDeep(data.theme_support.builtin(.shade).syntax(.comment), theme.syntax(.comment));

@@ -1,5 +1,6 @@
 //! Native chrome drawing over the terminal atlas and the host's measured grid.
 //! Every primitive is clipped to its supplied area; no widget owns GPU resources.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
 const assets = @import("assets");
@@ -70,13 +71,13 @@ pub fn terminal(self: *Canvas, paint: PanePaint) !void {
 
 /// Converts host grid coordinates including the configured window inset.
 /// Example: `const pixels = canvas.rect(regions.top);`
-pub fn rect(self: Canvas, area: core.Rect) Rect {
+pub fn rect(self: Canvas, area: cellgrid.Rect) Rect {
     return self.metrics.rect(self.origin, area);
 }
 
 /// Paints a pane band using the same background policy as the window bars.
 /// Example: `try canvas.panel(view.outer.row(0));`
-pub fn panel(self: *Canvas, area: core.Rect) !void {
+pub fn panel(self: *Canvas, area: cellgrid.Rect) !void {
     if (area.isEmpty()) {
         return;
     }
@@ -101,7 +102,7 @@ pub fn panelAt(self: *Canvas, bounds: Rect) !void {
 /// provides at the configured opacity, so it paints nothing; overlays that
 /// must cover pane content resolve it first with `covering`.
 /// Example: `try canvas.fill(regions.workbench, canvas.theme.palette.panel_bg);`
-pub fn fill(self: *Canvas, area: core.Rect, ink_color: core.Color) !void {
+pub fn fill(self: *Canvas, area: cellgrid.Rect, ink_color: cellgrid.Color) !void {
     if (area.isEmpty()) {
         return;
     }
@@ -111,7 +112,7 @@ pub fn fill(self: *Canvas, area: core.Rect, ink_color: core.Color) !void {
 
 /// `fill` over a device-pixel rectangle, for chrome laid out in pixels.
 /// Example: `try canvas.fillAt(thumb, palette.overlay0);`
-pub fn fillAt(self: *Canvas, bounds: Rect, ink_color: core.Color) !void {
+pub fn fillAt(self: *Canvas, bounds: Rect, ink_color: cellgrid.Color) !void {
     if (bounds.width <= 0 or bounds.height <= 0 or ink_color.kind == .default) {
         return;
     }
@@ -122,7 +123,7 @@ pub fn fillAt(self: *Canvas, bounds: Rect, ink_color: core.Color) !void {
 /// Paints a rounded surface; the fragment shader resolves the corners, so it
 /// costs one quad like `fill`. Radius is in device pixels.
 /// Example: `try canvas.fillRounded(card, .{ .radius = 8, .color = palette.surface0 });`
-pub fn fillRounded(self: *Canvas, area: core.Rect, fill_value: RoundedFill) !void {
+pub fn fillRounded(self: *Canvas, area: cellgrid.Rect, fill_value: RoundedFill) !void {
     if (area.isEmpty()) {
         return;
     }
@@ -147,7 +148,7 @@ pub fn fillRoundedAt(self: *Canvas, bounds: Rect, fill_value: RoundedFill) !void
 /// Strokes a band of `width` device pixels inside the area's outline and
 /// leaves the interior transparent. One quad, like `fill`.
 /// Example: `try canvas.ring(pane.outer, .{ .width = 2, .color = palette.yellow });`
-pub fn ring(self: *Canvas, area: core.Rect, stroke: Ring) !void {
+pub fn ring(self: *Canvas, area: cellgrid.Rect, stroke: Ring) !void {
     if (area.isEmpty()) {
         return;
     }
@@ -232,7 +233,7 @@ pub fn dimAt(self: *Canvas, bounds: Rect, alpha: f32) !void {
 /// callers measure first when they need whole tokens. Cached glyphs bypass
 /// shaping and rasterization after warmup.
 /// Example: `try canvas.text(area, .{ .text = "Workspace", .bold = true, .face = .sans, .size = .body });`
-pub fn text(self: *Canvas, area: core.Rect, label: Label) !void {
+pub fn text(self: *Canvas, area: cellgrid.Rect, label: Label) !void {
     if (area.isEmpty()) {
         return;
     }
@@ -321,7 +322,7 @@ fn lineBox(self: *Canvas, label: Label) !LineBox {
 /// Example: `const width = try canvas.measure(.{ .text = "hace 3m", .face = .sans });`
 pub fn measure(self: *Canvas, label: Label) !f32 {
     return switch (label.face) {
-        .mono => @floatFromInt(@as(u32, core.measure(label.text)) * self.metrics.cell_width),
+        .mono => @floatFromInt(@as(u32, cellgrid.text.measure(label.text)) * self.metrics.cell_width),
         .sans => try self.atlas.measure(self.run(label, .{ 0, 0 })),
     };
 }
@@ -331,7 +332,7 @@ fn monoText(self: *Canvas, placement: LabelPlacement, label: Label) !f32 {
     const baseline = placement.baseline;
     const ink = self.labelInk(label);
     const columns: u16 = @intFromFloat(@min(65535, @floor(bounds.width / @as(f32, @floatFromInt(self.metrics.cell_width)))));
-    var iterator: core.GraphemeIterator = .{ .bytes = label.text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = label.text };
     var column: u16 = 0;
     while (column < columns) {
         const cluster = iterator.next() orelse break;
@@ -385,7 +386,7 @@ fn labelInk(self: Canvas, label: Label) Color {
 
 /// Outlines a region with pixel strokes rather than terminal border glyphs.
 /// Example: `try canvas.border(pane.outer, canvas.theme.palette.accent);`
-pub fn border(self: *Canvas, area: core.Rect, ink_color: core.Color) !void {
+pub fn border(self: *Canvas, area: cellgrid.Rect, ink_color: cellgrid.Color) !void {
     if (area.isEmpty()) {
         return;
     }
@@ -401,11 +402,11 @@ pub fn border(self: *Canvas, area: core.Rect, ink_color: core.Color) !void {
 /// The window background as an explicit color, for surfaces that must cover
 /// what lies beneath them instead of showing the translucent window.
 /// Example: `try canvas.fill(modal.area, canvas.covering(palette.panel_bg));`
-pub fn covering(self: Canvas, value: core.Color) core.Color {
+pub fn covering(self: Canvas, value: cellgrid.Color) cellgrid.Color {
     return if (value.kind == .default) .rgb(self.theme.terminal.background) else value;
 }
 
-fn color(self: Canvas, value: core.Color, fallback: [3]u8) Color {
+fn color(self: Canvas, value: cellgrid.Color, fallback: [3]u8) Color {
     return colors.withPalette(value, Color.rgb(fallback[0], fallback[1], fallback[2]), &self.theme.terminal.palette);
 }
 
@@ -425,7 +426,7 @@ test "chrome text clips graphemes preserves metrics and reuses the terminal atla
         .metrics = .{ .cell_width = 12, .cell_height = 24, .baseline = 18, .pixel_height = 16 },
         .theme = data.theme_support.default_theme,
     };
-    const area: core.Rect = .{ .x = 2, .y = 3, .w = 3, .h = 1 };
+    const area: cellgrid.Rect = .{ .x = 2, .y = 3, .w = 3, .h = 1 };
     const label: Label = .{ .text = "e\u{301}界hidden", .underline = true };
     try canvas.text(area, label);
     const bounds = canvas.rect(area);
@@ -452,7 +453,7 @@ test "fallback icons fit each chrome column with negative letter spacing" {
     var quads = QuadList.init(std.testing.allocator);
     defer quads.deinit();
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = .{ 8, 12 }, .theme = data.theme_support.default_theme };
-    const area: core.Rect = .{ .x = 1, .y = 1, .w = 3, .h = 1 };
+    const area: cellgrid.Rect = .{ .x = 1, .y = 1, .w = 3, .h = 1 };
     try canvas.text(area, .{ .text = "\u{f07b}\u{f02db} " });
     try std.testing.expectEqual(@as(usize, 2), quads.items().len);
     const bounds = canvas.rect(area);

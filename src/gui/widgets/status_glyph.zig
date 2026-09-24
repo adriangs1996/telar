@@ -1,5 +1,6 @@
 //! One glyph and one palette role per agent status, shared by every chrome
 //! surface that shows attention (decisions 6 and P2 of the visual language).
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
@@ -43,7 +44,7 @@ pub fn glyph(status: core.AgentStatus, reason: core.AgentBlockedReason) []const 
 /// The palette role of a status: blocked yellow, working teal, done green,
 /// failed red, idle and unknown `overlay1`.
 /// Example: `const ink = status_glyph.color(palette, agent.status);`
-pub fn color(palette: data.Palette, status: core.AgentStatus) core.Color {
+pub fn color(palette: data.Palette, status: core.AgentStatus) cellgrid.Color {
     return switch (status) {
         .working => palette.teal,
         .done => palette.green,

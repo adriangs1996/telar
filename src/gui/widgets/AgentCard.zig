@@ -1,10 +1,10 @@
 //! One three-row agent card: project and status, a regular-weight title,
 //! then the live event while working or the workspace branch at rest. The card paints only;
 //! the sidebar owns its position, its hit target and its clipping.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const action_module = @import("action.zig");
 const std = @import("std");
-const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
 const gfx = @import("gfx");
@@ -206,7 +206,7 @@ fn markSide(_: AgentCard, canvas: *const Canvas) f32 {
 fn drawMark(self: AgentCard, canvas: *Canvas, chip: Rect) !void {
     const palette = canvas.theme.palette;
     if (canvas.providerMark(self.agent.provider)) |mark| {
-        const tint: core.Color = if (self.agent.provider == .codex)
+        const tint: cellgrid.Color = if (self.agent.provider == .codex)
             (if (palette.text.kind == .default) .rgb(canvas.theme.terminal.foreground) else palette.text)
         else
             .default;

@@ -1,12 +1,12 @@
 //! A concrete single-field prompt selected during scene composition.
+const cellgrid = @import("cellgrid");
 const shared_model = @import("model");
-const core = @import("telar-core");
 const Canvas = @import("../Canvas.zig");
 const Modal = @import("Modal.zig");
 const TextField = @import("../TextField.zig");
 const NamePrompt = @This();
 
-area: core.Rect,
+area: cellgrid.Rect,
 prompt: *const shared_model.Prompt,
 title: []const u8,
 

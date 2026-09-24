@@ -1,8 +1,8 @@
 //! A circular progress stroke composed from bounded, antialiased round quads.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const QuadList = @import("../render/QuadList.zig");
 const std = @import("std");
-const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
@@ -12,7 +12,7 @@ pub const segments = 64;
 const circle = points();
 
 area: Rect,
-color: core.Color,
+color: cellgrid.Color,
 fraction: f32,
 /// Turns clockwise from twelve o'clock.
 rotation: f32 = 0,

@@ -1,3 +1,4 @@
+const pty = @import("pty");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
 const std = @import("std");
@@ -75,7 +76,7 @@ fn dumpEchoTrace(init: std.process.Init) void {
     }
 }
 
-fn collectArgs(init: std.process.Init, storage: *[backend.max_args][*:0]const u8) ![]const [*:0]const u8 {
+fn collectArgs(init: std.process.Init, storage: *[pty.command_support.max_args][*:0]const u8) ![]const [*:0]const u8 {
     var iterator = init.minimal.args.iterate();
     var len: usize = 0;
     while (iterator.next()) |arg| {
@@ -96,7 +97,7 @@ fn collectArgs(init: std.process.Init, storage: *[backend.max_args][*:0]const u8
 /// ```
 pub fn main(init: std.process.Init) !void {
     defer dumpEchoTrace(init);
-    var arg_storage: [backend.max_args][*:0]const u8 = undefined;
+    var arg_storage: [pty.command_support.max_args][*:0]const u8 = undefined;
     const args = try collectArgs(init, &arg_storage);
 
     switch (try parser.Cli.parse(args, init.minimal.environ)) {

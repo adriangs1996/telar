@@ -7,6 +7,7 @@
 //! field except `name` is optional; a built-in name extends or overrides the
 //! shipped manifest instead of creating a new agent.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const lua_api = @import("lua-api");
@@ -159,7 +160,7 @@ fn optionalText(state: *lua_api.c.lua_State, lookup: FieldLookup, diagnostic: *d
 /// Stores one presentation string on the manifest. `icon` must also occupy
 /// exactly one cell so custom marks align with the built-in artwork.
 fn applyText(input: EntryInput, item: TextValue, diagnostic: *data.Diagnostic) !void {
-    if (std.mem.eql(u8, item.field, "icon") and core.measure(item.text) != 1) {
+    if (std.mem.eql(u8, item.field, "icon") and cellgrid.text.measure(item.text) != 1) {
         diagnostic.set("config.runtime.agents[{d}].icon must be exactly one cell wide", .{input.position});
         return error.InvalidConfig;
     }

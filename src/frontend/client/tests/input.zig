@@ -1,5 +1,6 @@
 //! Client integration tests for input.
 
+const cellgrid = @import("cellgrid");
 const client_module = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
@@ -119,7 +120,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
         .height = 2,
     };
     _ = try terminal.view.adoptAttachment(capture);
-    var pane_buffer = try core.Buffer.init(std.testing.allocator, 40, 3);
+    var pane_buffer = try cellgrid.Buffer.init(std.testing.allocator, 40, 3);
     defer pane_buffer.deinit();
     _ = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = "> [Image #7]", .style = .{} });
     var payload: [16 * 1024]u8 = undefined;
@@ -173,7 +174,7 @@ fn adoptPiPreview(terminal: *TerminalAdapter, target: data.AttachmentTarget) !vo
 /// Commits one Pi editor frame: hidden hardware cursor, an inverse-video
 /// cell right after `prompt` as Pi's own cursor.
 fn commitPiFrame(client: *client_module.Client, input: PiFrame) !void {
-    var pane_buffer = try core.Buffer.init(std.testing.allocator, 120, 3);
+    var pane_buffer = try cellgrid.Buffer.init(std.testing.allocator, 120, 3);
     defer pane_buffer.deinit();
     const cursor_x = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = input.prompt, .style = .{} });
     pane_buffer.setCell(.{ .x = cursor_x, .y = 1 }, .{ .text = " ", .width = 1, .style = .{ .flags = .{ .inverse = true } } });
@@ -274,7 +275,7 @@ test "host keys use the keyboard modes received in a pane frame" {
         try harness.bootstrap();
 
         var payload: [128]u8 = undefined;
-        const cells = [_]core.Cell{.{}};
+        const cells = [_]cellgrid.Cell{.{}};
         const snapshot = try core.encodePaneFrame(&payload, .{
             .pane_id = TestHarness.bootstrap_pane,
             .frame_id = 1,

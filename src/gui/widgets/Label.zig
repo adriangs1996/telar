@@ -1,9 +1,9 @@
+const cellgrid = @import("cellgrid");
 const label_face = @import("label_face.zig");
 const label_size = @import("label_size.zig");
-const core = @import("telar-core");
 
 text: []const u8,
-color: core.Color = .default,
+color: cellgrid.Color = .default,
 bold: bool = false,
 italic: bool = false,
 faint: bool = false,

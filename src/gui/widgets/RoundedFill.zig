@@ -1,4 +1,4 @@
 //! A filled chrome surface with rounded corners, in cell coordinates.
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 radius: f32,
-color: core.Color,
+color: cellgrid.Color,

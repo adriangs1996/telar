@@ -6,7 +6,7 @@
 //! damage row and one run walker keep those three from drifting apart - the
 //! previous copies disagreed even about what an *empty* row looked like.
 
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const std = @import("std");
 
 /// Walks [start, end) of one row, finds each run where `source` and
@@ -40,8 +40,8 @@ pub fn syncRow(sync: RowSync, sink: anytype) !usize {
 // ---------------------------------------------------------------------------
 
 test "run diffing copies exactly the disagreeing runs" {
-    var source = [_]core.Cell{.{}} ** 8;
-    var reference = [_]core.Cell{.{}} ** 8;
+    var source = [_]cellgrid.Cell{.{}} ** 8;
+    var reference = [_]cellgrid.Cell{.{}} ** 8;
     source[1].bytes[0] = 'a';
     source[2].bytes[0] = 'b';
     source[5].bytes[0] = 'c';
@@ -63,8 +63,8 @@ test "run diffing copies exactly the disagreeing runs" {
 }
 
 const RowSync = struct {
-    source: []const core.Cell,
-    reference: []const core.Cell,
+    source: []const cellgrid.Cell,
+    reference: []const cellgrid.Cell,
     start: u16,
     end: u16,
 };

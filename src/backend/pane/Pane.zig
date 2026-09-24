@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const revisions = @import("../revisions.zig");
 const pty = @import("pty");
 const Session = pty.Session;
@@ -73,7 +74,7 @@ input_write_len: usize = 0,
 size: core.TerminalSize,
 render_state: vt.RenderState = .empty,
 text_metadata: TextMetadataCapture,
-screen: core.Buffer,
+screen: cellgrid.Buffer,
 damaged_rows: []bool,
 output_buffer: [pane_namespace.output_chunk_size]u8 = undefined,
 cursor: core.Cursor = .{},
@@ -413,7 +414,7 @@ pub fn vtScrollbackBytes(self: *const Pane) usize {
 }
 
 pub fn vtScreenBytes(self: *const Pane) usize {
-    return self.screen.cells.len * @sizeOf(core.Cell);
+    return self.screen.cells.len * @sizeOf(cellgrid.Cell);
 }
 
 pub fn actorStarted(self: *Pane) void {

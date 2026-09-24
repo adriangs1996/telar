@@ -4,6 +4,7 @@
 //! filters, tabs, or task actions. Clicking an agent remains a client-owned
 //! navigation action that focuses its pane when that pane is attached.
 
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const data = @import("model");
 const Context = @import("Context.zig");
@@ -39,7 +40,7 @@ fn renderCells(context: *Context, input: SidebarInput, semantic: *Semantic) void
         return;
     }
 
-    const inside: core.Rect = .{
+    const inside: cellgrid.Rect = .{
         .x = area.x + 1,
         .y = area.y,
         .w = area.w - 2,
@@ -55,8 +56,8 @@ fn renderCells(context: *Context, input: SidebarInput, semantic: *Semantic) void
     drawAgents(context, input, semantic);
 }
 
-fn drawHeader(context: *Context, area: core.Rect, background: core.Color) void {
-    const row: core.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 3, .h = 1 };
+fn drawHeader(context: *Context, area: cellgrid.Rect, background: cellgrid.Color) void {
+    const row: cellgrid.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 3, .h = 1 };
     context.buffer.fill(row, .{ .glyph = " ", .style = .{ .bg = background } });
     _ = context.buffer.writeText(row, .{ .point = .{ .x = row.x, .y = row.y }, .text = minions_icon, .style = .{
         .fg = context.palette.accent,
@@ -126,7 +127,7 @@ fn drawAgentLine(context: *Context, line_input: AgentLineInput) void {
         context.palette.surface1
     else
         background;
-    const row: core.Rect = .{
+    const row: cellgrid.Rect = .{
         .x = semantic.list_area.x,
         .y = y,
         .w = semantic.list_area.w -| 1,
@@ -163,7 +164,7 @@ fn drawAgentLine(context: *Context, line_input: AgentLineInput) void {
         } });
     }
 
-    const body: core.Rect = .{ .x = row.x + 2, .y = y, .w = row.w -| 3, .h = 1 };
+    const body: cellgrid.Rect = .{ .x = row.x + 2, .y = y, .w = row.w -| 3, .h = 1 };
     if (line == 0) {
         var title_input = line_input;
         title_input.background = row_bg;
@@ -181,7 +182,7 @@ fn drawAgentLine(context: *Context, line_input: AgentLineInput) void {
     context.hits.add(row, action);
 }
 
-fn drawAgentTitle(context: *Context, line_input: AgentLineInput, area: core.Rect) void {
+fn drawAgentTitle(context: *Context, line_input: AgentLineInput, area: cellgrid.Rect) void {
     const input = line_input.sidebar;
     const semantic = line_input.semantic;
     const agent = line_input.agent;
@@ -190,8 +191,8 @@ fn drawAgentTitle(context: *Context, line_input: AgentLineInput, area: core.Rect
     if (area.w == 0) {
         return;
     }
-    const mark_area: core.Rect = .{ .x = area.x, .y = area.y, .w = 2, .h = 2 };
-    const icon_style: core.Style = .{ .fg = context.palette.accent, .bg = background };
+    const mark_area: cellgrid.Rect = .{ .x = area.x, .y = area.y, .w = 2, .h = 2 };
+    const icon_style: cellgrid.Style = .{ .fg = context.palette.accent, .bg = background };
     const glyph = agent.iconGlyph();
     const artwork = data.icons.Icon.forProvider(agent.provider);
     if (glyph.len != 0) {
@@ -262,11 +263,11 @@ fn drawAgentMeta(context: *Context, input: AgentMetaInput) void {
     if (area.w <= 3) {
         return;
     }
-    const style: core.Style = .{ .fg = context.palette.overlay0, .bg = background };
+    const style: cellgrid.Style = .{ .fg = context.palette.overlay0, .bg = background };
     const provider = agent.displayName();
     var x = area.x + 3;
     var remaining = area.w - 3;
-    const provider_width = core.measure(provider);
+    const provider_width = cellgrid.text.measure(provider);
     if (provider_width > remaining or agent.cwdLabel().len == 0) {
         _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = x, .y = area.y }, .text = provider, .max_width = remaining, .style = style });
         return;
@@ -274,7 +275,7 @@ fn drawAgentMeta(context: *Context, input: AgentMetaInput) void {
     x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = provider, .style = style });
     remaining -|= provider_width;
     const separator = " · ";
-    const separator_width = core.measure(separator);
+    const separator_width = cellgrid.text.measure(separator);
     if (remaining <= separator_width + 1) {
         return;
     }
@@ -313,7 +314,7 @@ fn drawStatus(context: *Context, input: AgentStatusInput) void {
 }
 
 fn statusWidth(status: core.AgentStatus) u16 {
-    return core.measure(statusLabel(status)) + 2;
+    return cellgrid.text.measure(statusLabel(status)) + 2;
 }
 
 fn statusIcon(status: core.AgentStatus, animation_frame: u8) data.icons.Icon {
@@ -338,7 +339,7 @@ fn statusLabel(status: core.AgentStatus) []const u8 {
     };
 }
 
-fn statusColor(context: *const Context, status: core.AgentStatus) core.Color {
+fn statusColor(context: *const Context, status: core.AgentStatus) cellgrid.Color {
     return switch (status) {
         .unknown => context.palette.overlay0,
         .working => context.palette.accent,
@@ -349,7 +350,7 @@ fn statusColor(context: *const Context, status: core.AgentStatus) core.Color {
     };
 }
 
-fn drawEmpty(context: *Context, area: core.Rect, background: core.Color) void {
+fn drawEmpty(context: *Context, area: cellgrid.Rect, background: cellgrid.Color) void {
     if (area.h < 2) {
         return;
     }
@@ -372,7 +373,7 @@ fn drawScrollbar(context: *Context, input: ScrollbarInput) void {
     if (total <= list.h or list.h == 0) {
         return;
     }
-    const area: core.Rect = .{ .x = list.x + list.w - 1, .y = list.y, .w = 1, .h = list.h };
+    const area: cellgrid.Rect = .{ .x = list.x + list.w - 1, .y = list.y, .w = 1, .h = list.h };
     const thumb = @max(1, area.h * area.h / total);
     const travel = area.h - thumb;
     const max_scroll = total - area.h;
@@ -394,14 +395,14 @@ fn drawRule(context: *Context, input: RuleInput) u16 {
     const y = input.y;
     const background = input.background;
 
-    const style: core.Style = .{ .fg = context.palette.surface1, .bg = background };
+    const style: cellgrid.Style = .{ .fg = context.palette.surface1, .bg = background };
     var x = area.x + 1;
     while (x < area.x + area.w - 1) : (x += 1)
         _ = context.buffer.writeText(area, .{ .point = .{ .x = x, .y = y }, .text = "─", .style = style });
     return y + 1;
 }
 
-fn drawRightSeparator(context: *Context, area: core.Rect, background: core.Color) void {
+fn drawRightSeparator(context: *Context, area: cellgrid.Rect, background: cellgrid.Color) void {
     if (area.w == 0) {
         return;
     }
@@ -415,12 +416,12 @@ fn drawRightSeparator(context: *Context, area: core.Rect, background: core.Color
     }
 }
 
-fn cellBackground(context: *const Context, transparent: bool) core.Color {
+fn cellBackground(context: *const Context, transparent: bool) cellgrid.Color {
     return if (transparent) .default else context.palette.panel_bg;
 }
 
 test "empty snapshot renders the minions header" {
-    var buffer = try core.Buffer.init(std.testing.allocator, 48, 20);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
@@ -465,7 +466,7 @@ test "agent snapshot renders compact selectable rows and status" {
         .status = .blocked,
     }};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var buffer = try core.Buffer.init(std.testing.allocator, 48, 20);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
@@ -542,7 +543,7 @@ test "agent without pane focus remains unhighlighted" {
         .status = .ready,
     };
     _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
-    var buffer = try core.Buffer.init(std.testing.allocator, 48, 20);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
@@ -579,7 +580,7 @@ test "transparent Codex row publishes an official provider mark" {
         .status = .ready,
     }};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var buffer = try core.Buffer.init(std.testing.allocator, 48, 20);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
@@ -598,7 +599,7 @@ test "transparent Codex row publishes an official provider mark" {
     });
     try std.testing.expectEqual(@as(u8, 1), output.provider_mark_count);
     try std.testing.expectEqual(core.AgentProvider.codex, output.provider_marks[0].provider);
-    try std.testing.expectEqual(core.Rect{ .x = 3, .y = 2, .w = 2, .h = 2 }, output.provider_marks[0].area);
+    try std.testing.expectEqual(cellgrid.Rect{ .x = 3, .y = 2, .w = 2, .h = 2 }, output.provider_marks[0].area);
 }
 
 test "graphical focus exposes only the four rounded card corners" {
@@ -615,7 +616,7 @@ test "graphical focus exposes only the four rounded card corners" {
         .status = .ready,
     }};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var buffer = try core.Buffer.init(std.testing.allocator, 48, 20);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
@@ -635,13 +636,13 @@ test "graphical focus exposes only the four rounded card corners" {
         .rounded_focus = true,
     });
     const card = output.focused_card.?;
-    try std.testing.expectEqual(core.Color.default, buffer.at(card.x, card.y).?.style.bg);
-    try std.testing.expectEqual(core.Color.default, buffer.at(card.x + card.w - 1, card.y).?.style.bg);
+    try std.testing.expectEqual(cellgrid.Color.default, buffer.at(card.x, card.y).?.style.bg);
+    try std.testing.expectEqual(cellgrid.Color.default, buffer.at(card.x + card.w - 1, card.y).?.style.bg);
     try std.testing.expectEqualDeep(palette.surface0, buffer.at(card.x + 1, card.y).?.style.bg);
     try std.testing.expectEqualDeep(palette.surface0, buffer.at(card.x, card.y + 1).?.style.bg);
-    try std.testing.expectEqual(core.Color.default, buffer.at(card.x, card.y + card.h - 1).?.style.bg);
+    try std.testing.expectEqual(cellgrid.Color.default, buffer.at(card.x, card.y + card.h - 1).?.style.bg);
     try std.testing.expectEqual(
-        core.Color.default,
+        cellgrid.Color.default,
         buffer.at(card.x + card.w - 1, card.y + card.h - 1).?.style.bg,
     );
 }
@@ -660,7 +661,7 @@ test "hover covers the complete three-row agent card" {
         .status = .working,
     };
     _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
-    var buffer = try core.Buffer.init(std.testing.allocator, 48, 20);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
@@ -714,7 +715,7 @@ test "partial card scroll preserves visible rows, spacing, and hit targets" {
     };
     var snapshot: data.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var buffer = try core.Buffer.init(std.testing.allocator, 48, 7);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 48, 7);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{ .scroll = 1 };
@@ -751,7 +752,7 @@ test "partial card scroll preserves visible rows, spacing, and hit targets" {
 }
 
 test "minions icon occupies one cell" {
-    try std.testing.expectEqual(@as(u16, 1), core.measure(minions_icon));
+    try std.testing.expectEqual(@as(u16, 1), cellgrid.text.measure(minions_icon));
 }
 
 test "working status uses an animated glyph" {
@@ -784,7 +785,7 @@ test "42 and 62 column cards reserve status before truncating context" {
     _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
     const widths = [_]u16{ 42, 62 };
     for (widths) |width| {
-        var buffer = try core.Buffer.init(std.testing.allocator, width, 12);
+        var buffer = try cellgrid.Buffer.init(std.testing.allocator, width, 12);
         defer buffer.deinit();
         var hits: widget.Hits = .{};
         var state: State = .{};
@@ -815,22 +816,22 @@ test "42 and 62 column cards reserve status before truncating context" {
 
 const ScrollbarInput = struct {
     state: *State,
-    list: core.Rect,
+    list: cellgrid.Rect,
     total: u16,
-    background: core.Color,
+    background: cellgrid.Color,
 };
 
 const AgentStatusInput = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     status: core.AgentStatus,
     animation_frame: u8,
-    background: core.Color,
+    background: cellgrid.Color,
 };
 
 const RuleInput = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     y: u16,
-    background: core.Color,
+    background: cellgrid.Color,
 };
 
 const AgentLineInput = struct {
@@ -839,11 +840,11 @@ const AgentLineInput = struct {
     y: u16,
     agent: *const data.Agent,
     line: u2,
-    background: core.Color,
+    background: cellgrid.Color,
 };
 
 const SidebarInput = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     snapshot: *const data.AgentSnapshot,
     state: *State,
     /// The client model and its active tab, for pane numbering.
@@ -856,14 +857,14 @@ const SidebarInput = struct {
 };
 
 const AgentLocationInput = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     agent: *const data.Agent,
     pane_index: u16,
-    background: core.Color,
+    background: cellgrid.Color,
 };
 
 const AgentMetaInput = struct {
-    area: core.Rect,
+    area: cellgrid.Rect,
     agent: *const data.Agent,
-    background: core.Color,
+    background: cellgrid.Color,
 };

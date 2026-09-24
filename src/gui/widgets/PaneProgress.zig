@@ -1,7 +1,7 @@
 //! A native progress capsule in pane chrome, never over terminal contents.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const std = @import("std");
-const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
@@ -111,7 +111,7 @@ fn label(self: Progress, canvas: *Canvas, storage: []u8) Label {
     return .{ .text = text, .color = self.progressColor(canvas), .face = .sans, .size = .small };
 }
 
-fn progressColor(self: Progress, canvas: *const Canvas) core.Color {
+fn progressColor(self: Progress, canvas: *const Canvas) cellgrid.Color {
     return switch (self.pane.progress_state) {
         .@"error" => canvas.theme.palette.red,
         .pause => canvas.theme.palette.yellow,

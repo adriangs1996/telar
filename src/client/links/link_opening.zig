@@ -1,7 +1,7 @@
 //! Link opening: resolves the link under the pointer and opens it with the
 //! host, one at a time.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const editor_file_links = @import("editor_file_links.zig");
 const notifications = @import("../notifications/notifications.zig");
 const tab_creation = @import("../workspace/tab_creation.zig");
@@ -79,7 +79,7 @@ pub fn completeLinkOpening(client: *Client, result: anyerror!void) !void {
     };
 }
 
-fn linkTargetAt(model: *data.ClientModel, tab: usize, event: data.Mouse, area: core.Rect) ?data.LinkTarget {
+fn linkTargetAt(model: *data.ClientModel, tab: usize, event: data.Mouse, area: cellgrid.Rect) ?data.LinkTarget {
     const plan = data.tab_layout.planPaneMouse(model, tab, event, area) orelse return null;
     const pane = model.panes.findInConst(model.tabs.location[tab].tab_id, plan.pane_id) orelse return null;
 

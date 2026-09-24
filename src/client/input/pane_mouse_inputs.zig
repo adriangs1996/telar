@@ -1,8 +1,8 @@
 //! Encodes pane-relative SGR mouse reports, including exact host pixels.
 
+const pacing = @import("pacing");
 const data = @import("model");
 const mouse_protocol = @import("mouse_protocol.zig");
-const core = @import("telar-core");
 const std = @import("std");
 const PixelProjection = @import("PixelProjection.zig");
 const mouse_protocol_module = @import("mouse_protocol.zig");
@@ -208,7 +208,7 @@ fn applyPaneMouseEffect(client: *Client, effect: data.PaneMouseEffect) !void {
                         .x = selection.command.event.x - selection.plan.content.x,
                         .y = selection.command.event.y - selection.plan.content.y,
                     },
-                    .now_ns = core.monotonic(client.io),
+                    .now_ns = pacing.clock.monotonic(client.io),
                 },
             );
         },

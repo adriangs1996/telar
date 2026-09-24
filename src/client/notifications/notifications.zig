@@ -1,5 +1,6 @@
 //! Notifications: publishes, times, activates and dismisses notifications and
 //! delivers them to the host.
+const pacing = @import("pacing");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -20,7 +21,7 @@ pub fn publishNotification(client: *Client, now_ns: u64, input: data.Notificatio
 /// Publishes one local notice at the current client monotonic timestamp.
 /// Example: `try notifications.publishNotificationNow(client, input);`
 pub fn publishNotificationNow(client: *Client, input: data.NotificationInput) !void {
-    _ = try publishNotification(client, core.monotonic(client.io), input);
+    _ = try publishNotification(client, pacing.clock.monotonic(client.io), input);
 }
 
 /// Completes one physical timer before advancing and rearming notification
@@ -29,20 +30,20 @@ pub fn publishNotificationNow(client: *Client, input: data.NotificationInput) !v
 pub fn completeNotificationTick(client: *Client, result: anyerror!void) !?data.NotificationChange {
     try client.model.notification_scheduler.complete(result);
 
-    return advanceNotifications(client, core.monotonic(client.io));
+    return advanceNotifications(client, pacing.clock.monotonic(client.io));
 }
 
 /// Activates one current notification and follows its target at the client
 /// monotonic timestamp.
 /// Example: `_ = try notifications.activateNotificationNow(client, id);`
 pub fn activateNotificationNow(client: *Client, id: data.NotificationId) !?data.NotificationActivation {
-    return activateNotification(client, id, core.monotonic(client.io));
+    return activateNotification(client, id, pacing.clock.monotonic(client.io));
 }
 
 /// Dismisses one current notification at the client monotonic timestamp.
 /// Example: `_ = try notifications.dismissNotificationNow(client, id);`
 pub fn dismissNotificationNow(client: *Client, id: data.NotificationId) !?data.NotificationChange {
-    return dismissNotification(client, id, core.monotonic(client.io));
+    return dismissNotification(client, id, pacing.clock.monotonic(client.io));
 }
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
@@ -101,7 +102,7 @@ pub fn completeNotificationDelivery(client: *Client, shown: core.NotificationSho
 pub fn applyRuntimeNotification(client: *Client, notification: core.Notification) !data.NotificationPublication {
     return publishNotification(
         client,
-        core.monotonic(client.io),
+        pacing.clock.monotonic(client.io),
         .{
             .level = switch (notification.level) {
                 .info => .info,
@@ -206,7 +207,7 @@ fn navigateNotification(client: *Client, target: data.NotificationTarget) !void 
 /// one inbox producer through the timer port.
 fn scheduleNotificationTimer(client: *Client) !void {
     const scheduler = &client.model.notification_scheduler;
-    const now_ns = core.monotonic(client.io);
+    const now_ns = pacing.clock.monotonic(client.io);
     const deadline_ns = client.model.notification_center.nextDeadline(
         now_ns,
         client.model.host.animation_frame_ns orelse std.math.maxInt(u64),

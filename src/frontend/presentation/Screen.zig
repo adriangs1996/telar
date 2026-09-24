@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -12,8 +13,8 @@ const screen_support = @import("screen_support.zig");
 /// ended up visible.
 const Screen = @This();
 
-front: core.Buffer,
-back: core.Buffer,
+front: cellgrid.Buffer,
+back: cellgrid.Buffer,
 damage_rows: []data.DamageRow,
 full_damage: bool = true,
 gpa: std.mem.Allocator,
@@ -39,9 +40,9 @@ pub const Position = @import("Position.zig");
 pub const Stats = @import("ScreenStats.zig");
 
 pub fn init(gpa: std.mem.Allocator, w: u16, h: u16) !Screen {
-    var front = try core.Buffer.init(gpa, w, h);
+    var front = try cellgrid.Buffer.init(gpa, w, h);
     errdefer front.deinit();
-    var back = try core.Buffer.init(gpa, w, h);
+    var back = try cellgrid.Buffer.init(gpa, w, h);
     errdefer back.deinit();
     const damage_rows = try gpa.alloc(data.DamageRow, h);
     @memset(damage_rows, .{});
@@ -84,7 +85,7 @@ pub fn deinit(self: *Screen) void {
 /// Arbitrary drawing cannot prove which cells it will touch, so borrowing
 /// the buffer marks the whole screen. Protocol patches use `patchCells`
 /// instead and retain exact damage.
-pub fn buffer(self: *Screen) *core.Buffer {
+pub fn buffer(self: *Screen) *cellgrid.Buffer {
     self.full_damage = true;
     return &self.back;
 }
@@ -95,7 +96,7 @@ pub fn sizeMatches(self: *const Screen, w: u16, h: u16) bool {
 
 /// Returns a writable linear patch and records the rows it intersects.
 /// The returned slice is valid until resize, like the backing buffer.
-pub fn patchCells(self: *Screen, start: u32, count: u32) ![]core.Cell {
+pub fn patchCells(self: *Screen, start: u32, count: u32) ![]cellgrid.Cell {
     const first: usize = start;
     const len: usize = count;
     const end = std.math.add(usize, first, len) catch return error.PatchOutOfBounds;
@@ -141,7 +142,7 @@ pub fn flush(self: *Screen, w: *std.Io.Writer) !Stats {
         try w.writeAll(pointer.sequence(self.mouse_pointer));
     }
 
-    var last_style: ?core.Style = null;
+    var last_style: ?cellgrid.Style = null;
     var cursor: ?struct { x: u16, y: u16 } = null;
 
     var y: u16 = 0;

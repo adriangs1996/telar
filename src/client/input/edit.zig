@@ -17,8 +17,8 @@
 //! No terminal here and no allocator. A field is a string with two offsets in
 //! it, which is what lets every edge case be a two line test.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const std = @import("std");
 
 // ---------------------------------------------------------------------------
@@ -193,7 +193,7 @@ test "the view never cuts a wide cluster in half" {
     while (width <= 12) : (width += 1) {
         f.home(false);
         const v = f.view(width);
-        try std.testing.expect(core.measure(v.text) <= width);
+        try std.testing.expect(cellgrid.text.measure(v.text) <= width);
         // Every visible byte belongs to a whole cluster.
         try std.testing.expectEqual(@as(usize, 0), v.text.len % astronaut.len);
     }

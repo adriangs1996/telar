@@ -5,13 +5,13 @@
 //! three chrome sizes shape and rasterize side by side without invalidating
 //! one another. Texel (0, 0) stays opaque white so solid rectangles are
 //! quads too. Configured and fallback faces share the page.
+const cellgrid = @import("cellgrid");
 const BoxInk = @import("BoxInk.zig");
 const GlyphRaster = @import("../native/GlyphRaster.zig");
 const assets = @import("assets");
 const builtin = @import("builtin");
 const font_id = @import("font_id.zig");
 const std = @import("std");
-const core = @import("telar-core");
 const freetype = @import("freetype");
 const QuadList = @import("../render/QuadList.zig");
 const gfx = @import("gfx");
@@ -310,7 +310,7 @@ pub fn caretPositions(self: *GlyphAtlas, run: TextRun, output: []u32) !void {
 }
 
 fn fillCaretCluster(cluster: CaretCluster, output: []u32) void {
-    var iterator: core.GraphemeIterator = .{ .bytes = cluster.text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = cluster.text };
     var count: u32 = 0;
     while (iterator.next() != null) {
         count += 1;
@@ -371,7 +371,7 @@ fn measureRun(self: *GlyphAtlas, run: TextRun, discover: bool) !f32 {
 // installed-font lookup and file read happen once per new grapheme and never
 // on a warm repaint. Failures keep the replacement glyph.
 fn discoverFallbacks(self: *GlyphAtlas, run: TextRun) void {
-    var iterator: core.GraphemeIterator = .{ .bytes = run.text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = run.text };
     while (iterator.next()) |cluster| {
         if (Braille.parse(cluster.bytes) != null or Box.parse(cluster.bytes) != null) {
             continue;

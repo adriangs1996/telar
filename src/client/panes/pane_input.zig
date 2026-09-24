@@ -1,4 +1,5 @@
 //! Pane input: delivers keys, pastes and expression input to the focused pane.
+const pacing = @import("pacing");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -204,7 +205,7 @@ pub fn recordPaneInput(client: *Client, started: u64, delivery: ?data.PaneInputD
     if (completed.byte_count != 0) {
         client.model.to_host.pane_input = .{
             .pane_id = completed.pane_id,
-            .at_ns = core.monotonic(client.io),
+            .at_ns = pacing.clock.monotonic(client.io),
         };
     }
 

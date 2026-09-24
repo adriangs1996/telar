@@ -1,10 +1,11 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
 
 const first: core.PaneId = @enumFromInt(1);
 const second: core.PaneId = @enumFromInt(2);
-const area: core.Rect = .{ .w = 80, .h = 24 };
+const area: cellgrid.Rect = .{ .w = 80, .h = 24 };
 
 test "presentation measurements change geometry without changing the split tree" {
     var tree: data.WorkspaceLayout = .{};

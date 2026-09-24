@@ -1,9 +1,9 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const tab_rename = @import("tab_rename.zig");
 const Input = @This();
 
-area: core.Rect,
+area: cellgrid.Rect,
 field: *tab_rename.Field,
 kind: tab_rename.Kind,
 /// The whole prompt, needed by the new-context form for its second field.

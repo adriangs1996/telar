@@ -6,8 +6,8 @@
 //! pane whose agent is blocked or failed and only while it is not focused;
 //! it fades in through `RingFades`. Unfocused panes get one quad of the
 //! terminal background at 0.15 over their content.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const Context = @import("Context.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
@@ -82,7 +82,7 @@ fn border(self: PaneDecorations, canvas: *Canvas, view: data.LayoutView) !void {
     const context = self.context;
     const outer = view.outer;
     const content = view.content;
-    const bands = [_]core.Rect{
+    const bands = [_]cellgrid.Rect{
         .{ .x = outer.x, .y = outer.y, .w = outer.w, .h = content.y -| outer.y },
         .{ .x = outer.x, .y = content.y + content.h, .w = outer.w, .h = (outer.y + outer.h) -| (content.y + content.h) },
         .{ .x = outer.x, .y = content.y, .w = content.x -| outer.x, .h = content.h },

@@ -2,6 +2,7 @@
 //! reconciliation. Everything here is pure over a cell buffer and a scroll
 //! position; the client applies the returned effects.
 
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const Point = @import("Point.zig");
 const Screen = @import("Screen.zig");
@@ -16,7 +17,7 @@ const chord = @import("chord.zig");
 pub const Direction = @import("../types/CopyModeDirection.zig").CopyModeDirection;
 
 pub fn pointerSpan(point: Point, granularity: core.Granularity, screen: Screen) [2]Point {
-    const local: core.Point = .{
+    const local: cellgrid.Point = .{
         .x = point.x,
         .y = @intCast(point.y - screen.scroll.offset),
     };
@@ -224,14 +225,14 @@ pub fn onFrame(state: *State, previous_offset: u32, scroll: core.Scroll) void {
 
 const WordClass = enum { space, word, punctuation };
 
-fn rowIndex(buffer: *const core.Buffer, scroll: core.Scroll, absolute_y: u32) ?u16 {
+fn rowIndex(buffer: *const cellgrid.Buffer, scroll: core.Scroll, absolute_y: u32) ?u16 {
     if (absolute_y < scroll.offset or absolute_y >= scroll.offset + buffer.h) {
         return null;
     }
     return @intCast(absolute_y - scroll.offset);
 }
 
-fn firstNonBlank(state: *State, buffer: *const core.Buffer, scroll: core.Scroll) void {
+fn firstNonBlank(state: *State, buffer: *const cellgrid.Buffer, scroll: core.Scroll) void {
     const row = rowIndex(
         buffer,
         scroll,
@@ -247,7 +248,7 @@ fn firstNonBlank(state: *State, buffer: *const core.Buffer, scroll: core.Scroll)
     state.cursor.x = @min(x, buffer.w -| 1);
 }
 
-fn lastNonBlank(state: *State, buffer: *const core.Buffer, scroll: core.Scroll) void {
+fn lastNonBlank(state: *State, buffer: *const cellgrid.Buffer, scroll: core.Scroll) void {
     const row = rowIndex(
         buffer,
         scroll,
@@ -302,7 +303,7 @@ fn paragraph(state: *State, screen: Screen, direction: i32) void {
     );
 }
 
-fn wordClass(buffer: *const core.Buffer, scroll: core.Scroll, point: Point) ?WordClass {
+fn wordClass(buffer: *const cellgrid.Buffer, scroll: core.Scroll, point: Point) ?WordClass {
     const row = rowIndex(
         buffer,
         scroll,
@@ -453,7 +454,7 @@ fn wordForward(state: *State, screen: Screen, end: bool) void {
     );
 }
 
-fn wordBackward(state: *State, buffer: *const core.Buffer, scroll: core.Scroll) void {
+fn wordBackward(state: *State, buffer: *const cellgrid.Buffer, scroll: core.Scroll) void {
     var point = previousPoint(state.cursor, buffer.w);
     while (wordClass(
         buffer,
@@ -535,7 +536,7 @@ test "vertical movement scrolls the viewport only at its edges" {
 }
 
 test "pointer selection includes both cells of wide glyphs without copying a bare click" {
-    var buffer = try core.Buffer.init(
+    var buffer = try cellgrid.Buffer.init(
         std.testing.allocator,
         10,
         2,
@@ -602,7 +603,7 @@ test "pointer selection includes both cells of wide glyphs without copying a bar
 }
 
 test "pointer word drags retain the original word when reversing direction" {
-    var buffer = try core.Buffer.init(
+    var buffer = try cellgrid.Buffer.init(
         std.testing.allocator,
         13,
         2,
@@ -708,7 +709,7 @@ test "pointer word drags retain the original word when reversing direction" {
 }
 
 test "pruned history moves the captured pointer origin with its highlight" {
-    var buffer = try core.Buffer.init(
+    var buffer = try cellgrid.Buffer.init(
         std.testing.allocator,
         10,
         2,
@@ -801,10 +802,10 @@ test "linear and linewise selections are inclusive" {
     try std.testing.expect(linewise.selected(99, 5));
 }
 
-fn testScreen(gpa: std.mem.Allocator, rows: []const []const u8) !core.Buffer {
+fn testScreen(gpa: std.mem.Allocator, rows: []const []const u8) !cellgrid.Buffer {
     var width: u16 = 0;
     for (rows) |row| width = @max(width, @as(u16, @intCast(row.len)));
-    var buffer = try core.Buffer.init(
+    var buffer = try cellgrid.Buffer.init(
         gpa,
         width,
         @intCast(rows.len),
@@ -1102,7 +1103,7 @@ test "matches select relative to the cursor, highlight and cycle with wrap" {
 }
 
 test "slash and question mark ask for the search input" {
-    var buffer = try core.Buffer.init(
+    var buffer = try cellgrid.Buffer.init(
         std.testing.allocator,
         10,
         5,
@@ -1151,7 +1152,7 @@ test "slash and question mark ask for the search input" {
 }
 
 test "o asks the client to open the link under the cursor" {
-    var buffer = try core.Buffer.init(
+    var buffer = try cellgrid.Buffer.init(
         std.testing.allocator,
         10,
         5,

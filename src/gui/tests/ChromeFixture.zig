@@ -1,9 +1,9 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const native = @import("../native/native.zig");
 const frame_widget = @import("../widgets/frame_widget.zig");
 const std = @import("std");
 const client = @import("telar-client");
-const core = @import("telar-core");
 const Session = @import("Session.zig");
 const Chrome = @import("../widgets/Chrome.zig");
 const Canvas = @import("../widgets/Canvas.zig");
@@ -86,7 +86,7 @@ pub fn prepare(self: *Fixture, projection_value: client.Projection) !void {
     self.chrome.seal();
 }
 
-pub fn target(self: *Fixture, intent: client.Intent) ?core.Rect {
+pub fn target(self: *Fixture, intent: client.Intent) ?cellgrid.Rect {
     const hits = &self.chrome.presented().hits;
     for (hits.items[0..hits.len]) |hit| {
         if (hit.action == .intent and std.meta.eql(hit.action.intent, intent)) {
@@ -125,7 +125,7 @@ pub fn resizeHandle(self: *Fixture) ?Rect {
     return null;
 }
 
-pub fn click(self: *Fixture, area: core.Rect, button: u8) client.ViewInteractionCommand {
+pub fn click(self: *Fixture, area: cellgrid.Rect, button: u8) client.ViewInteractionCommand {
     const command = self.chrome.pointer(.{ .x = area.x, .y = area.y, .kind = .press, .button = button });
     _ = self.chrome.pointer(.{ .x = area.x, .y = area.y, .kind = .release, .button = button });
     return command;

@@ -1,8 +1,8 @@
 //! Slice 1 of the GUI visual language: rounded quads, rings and the sans chrome face.
+const cellgrid = @import("cellgrid");
 const freetype = @import("freetype");
 const font_id = @import("../text/font_id.zig");
 const std = @import("std");
-const core = @import("telar-core");
 const QuadList = @import("../render/QuadList.zig");
 const gfx = @import("gfx");
 const Quad = gfx.Quad.Quad;
@@ -14,7 +14,7 @@ test "plain fills keep the textured quad path bit for bit" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var canvas = fixture.canvas();
-    const area: core.Rect = .{ .x = 2, .y = 3, .w = 4, .h = 2 };
+    const area: cellgrid.Rect = .{ .x = 2, .y = 3, .w = 4, .h = 2 };
     try canvas.fill(area, canvas.theme.palette.surface0);
     try std.testing.expectEqual(@as(usize, 1), fixture.quads.items().len);
     const plain = fixture.quads.items()[0];
@@ -40,7 +40,7 @@ test "rounded fills and rings are single quads carrying their shape" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var canvas = fixture.canvas();
-    const area: core.Rect = .{ .x = 1, .y = 1, .w = 20, .h = 3 };
+    const area: cellgrid.Rect = .{ .x = 1, .y = 1, .w = 20, .h = 3 };
     try canvas.fillRounded(area, .{ .radius = 8, .color = .rgb(.{ 10, 20, 30 }) });
     try canvas.ring(area, .{ .width = 2, .color = .rgb(.{ 255, 200, 0 }) });
     try canvas.ring(area, .{ .width = 1, .radius = 8, .color = .rgb(.{ 255, 255, 255 }) });
@@ -88,7 +88,7 @@ test "sans labels measure proportional widths and clip at the area edge" {
     try std.testing.expect(@mod(sans_width, 10) != 0 or sans_width < mono_width);
     try std.testing.expectEqual(@as(usize, 0), fixture.quads.items().len);
 
-    const wide: core.Rect = .{ .x = 1, .y = 2, .w = 60, .h = 1 };
+    const wide: cellgrid.Rect = .{ .x = 1, .y = 2, .w = 60, .h = 1 };
     try canvas.text(wide, .{ .text = label, .face = .sans });
     const unclipped = try std.testing.allocator.dupe(Quad, fixture.quads.items());
     defer std.testing.allocator.free(unclipped);
@@ -102,7 +102,7 @@ test "sans labels measure proportional widths and clip at the area edge" {
     try std.testing.expect(right <= origin.x + sans_width + 2);
     try std.testing.expect(right > origin.x + sans_width - 12);
 
-    const narrow: core.Rect = .{ .x = 1, .y = 2, .w = 6, .h = 1 };
+    const narrow: cellgrid.Rect = .{ .x = 1, .y = 2, .w = 6, .h = 1 };
     fixture.quads.clear();
     try canvas.text(narrow, .{ .text = label, .face = .sans, .underline = true });
     const bounds = canvas.rect(narrow);
@@ -124,7 +124,7 @@ test "bold sans selects the SemiBold face without synthetic emboldening" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var canvas = fixture.canvas();
-    const area: core.Rect = .{ .x = 0, .y = 0, .w = 40, .h = 1 };
+    const area: cellgrid.Rect = .{ .x = 0, .y = 0, .w = 40, .h = 1 };
     try canvas.text(area, .{ .text = "agents", .face = .sans });
     const regular = try std.testing.allocator.dupe(Quad, fixture.quads.items());
     defer std.testing.allocator.free(regular);

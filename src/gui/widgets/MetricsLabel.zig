@@ -1,6 +1,6 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const std = @import("std");
-const core = @import("telar-core");
 const MetricsLabel = @This();
 
 bytes: [96]u8 = undefined,
@@ -24,5 +24,5 @@ pub fn text(self: *const MetricsLabel) []const u8 {
 }
 
 pub fn width(self: *const MetricsLabel) u16 {
-    return core.measure(self.text());
+    return cellgrid.text.measure(self.text());
 }

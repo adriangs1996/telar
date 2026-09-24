@@ -1,4 +1,5 @@
 //! Native adapter fixture using the production controllers and owned outbox.
+const cellgrid = @import("cellgrid");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -241,7 +242,7 @@ pub fn bootstrap(self: *Session) !void {
 pub fn receiveFrame(self: *Session, frame_id: u64) !void {
     const pane = self.gui.app.model.panes.find(pane_id).?;
     const count = pane.buffer.cells.len;
-    var cells: [256]core.Cell = @splat(.{});
+    var cells: [256]cellgrid.Cell = @splat(.{});
     if (count > cells.len) {
         return error.TestScreenTooLarge;
     }

@@ -1,6 +1,6 @@
 //! Tokens supply color, while the existing grapheme iterator owns cell geometry.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
-const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Fragment = @import("SyntaxFragment.zig");
 const Self = @This();
@@ -13,7 +13,7 @@ roles: ?[]const data.role.Role = null,
 /// Example: `try syntax.draw(canvas, .{ .bounds = area, .text = fragment });`
 pub fn draw(self: *Self, canvas: *Canvas, fragment: Fragment) !void {
     const start = @intFromPtr(fragment.text.ptr) - @intFromPtr(self.source.ptr);
-    var graphemes: core.GraphemeIterator = .{ .bytes = fragment.text };
+    var graphemes: cellgrid.GraphemeIterator = .{ .bytes = fragment.text };
     var area = fragment.bounds;
     while (graphemes.index < fragment.text.len) {
         const offset = start + graphemes.index;

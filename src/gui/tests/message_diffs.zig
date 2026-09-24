@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -129,14 +130,14 @@ test "diff syntax follows every theme and recolors existing source after palette
         try expectInk(&canvas, canvas.theme.syntax(.comment));
     }
 
-    const override: core.Color = .rgb(.{ 17, 37, 227 });
+    const override: cellgrid.Color = .rgb(.{ 17, 37, 227 });
     canvas.theme.syntax_styles.set(.keyword, .{ .color = override });
     fixture.quads.clear();
     try text.draw(&canvas);
     try expectInk(&canvas, override);
 }
 
-fn expectInk(canvas: *const Canvas, color: core.Color) !void {
+fn expectInk(canvas: *const Canvas, color: cellgrid.Color) !void {
     const foreground = canvas.theme.terminal.foreground;
     const expected = colors.withPalette(color, Color.rgb(foreground[0], foreground[1], foreground[2]), &canvas.theme.terminal.palette);
     for (canvas.quads.items()) |quad| {

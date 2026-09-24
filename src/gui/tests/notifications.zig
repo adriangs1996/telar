@@ -1,3 +1,4 @@
+const pacing = @import("pacing");
 const ChromeFixture = @import("ChromeFixture.zig");
 const data = @import("model");
 const std = @import("std");
@@ -152,7 +153,7 @@ test "GUI notification lifecycle wakes at semantic boundaries while the host own
     var fixture = try ChromeFixture.init();
     defer fixture.deinit();
     const app = &fixture.session.gui.app;
-    const now = client.monotonic(app.io);
+    const now = pacing.clock.monotonic(app.io);
     _ = try client.notifications.publishNotification(
         app,
         now,

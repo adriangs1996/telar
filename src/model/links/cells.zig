@@ -1,5 +1,6 @@
 //! Adapts a pane's cell row to core's byte-oriented link recognizer.
 
+const cellgrid = @import("cellgrid");
 const Pane = @import("../panes/Pane.zig");
 const core_module = @import("telar-core");
 const data = @import("../model.zig");
@@ -8,7 +9,7 @@ const LinkMatch = @import("LinkMatch.zig");
 const std = @import("std");
 const LinkGrid = @import("LinkGrid.zig");
 
-const row_window_bytes = core_module.max_uri_bytes * 2 + core_module.Cell.max_bytes * 2;
+const row_window_bytes = core_module.max_uri_bytes * 2 + cellgrid.Cell.max_bytes * 2;
 const max_walk_cells = row_window_bytes * 2;
 
 /// Extracts the textual URI under one absolute pane position without allocating.
@@ -16,7 +17,7 @@ const max_walk_cells = row_window_bytes * 2;
 /// ```zig
 /// const target = extract(&buffer, scroll, .{ .x = 3, .y = 10 });
 /// ```
-pub fn extract(buffer: *const core_module.Buffer, scroll: core_module.Scroll, position: Position) ?data.LinkTarget {
+pub fn extract(buffer: *const cellgrid.Buffer, scroll: core_module.Scroll, position: Position) ?data.LinkTarget {
     const found = match(buffer, scroll, position) orelse return null;
     return found.target;
 }
@@ -24,7 +25,7 @@ pub fn extract(buffer: *const core_module.Buffer, scroll: core_module.Scroll, po
 /// Resolves a URI and its exclusive cell interval in absolute pane coordinates.
 /// The row window and the owned target are bounded; no allocation occurs.
 /// Example: `const found = match(&buffer, scroll, .{ .x = 3, .y = 10 });`
-pub fn match(buffer: *const core_module.Buffer, scroll: core_module.Scroll, position: Position) ?LinkMatch {
+pub fn match(buffer: *const cellgrid.Buffer, scroll: core_module.Scroll, position: Position) ?LinkMatch {
     return matchGrid(.{ .buffer = buffer, .scroll = scroll }, position);
 }
 
@@ -89,7 +90,7 @@ fn matchGrid(grid: LinkGrid, position: Position) ?LinkMatch {
         @memcpy(storage[len..][0..text.len], text);
         len += text.len;
         if (cursor_offset) |offset| {
-            if (len - offset >= core_module.max_uri_bytes + core_module.Cell.max_bytes) {
+            if (len - offset >= core_module.max_uri_bytes + cellgrid.Cell.max_bytes) {
                 break;
             }
         }
@@ -145,13 +146,13 @@ fn positions(grid: LinkGrid, first: usize, span: [2]usize) ?[2]Position {
     }
 }
 
-fn testBuffer(rows: []const []const u8) !core_module.Buffer {
+fn testBuffer(rows: []const []const u8) !cellgrid.Buffer {
     var width: u16 = 0;
     for (rows) |row| {
         width = @max(width, @as(u16, @intCast(row.len)));
     }
 
-    var buffer = try core_module.Buffer.init(std.testing.allocator, width, @intCast(rows.len));
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, width, @intCast(rows.len));
     buffer.fill(buffer.area(), .{ .glyph = " ", .style = .{} });
     for (rows, 0..) |row, y| {
         _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = @intCast(y) }, .text = row, .style = .{} });
@@ -211,7 +212,7 @@ test "Unicode link intervals use columns rather than bytes or codepoints" {
 }
 
 test "both halves of a final wide URI glyph extract the same target" {
-    var buffer = try core_module.Buffer.init(std.testing.allocator, 12, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 12, 1);
     defer buffer.deinit();
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "https://e/界", .style = .{} });
     const scroll: core_module.Scroll = .{ .total_rows = 1, .offset = 0 };
@@ -346,7 +347,7 @@ test "OSC 8 destinations win over labels and omitted tables never authorize labe
 }
 
 test "link windows remain bounded by cells when grapheme bytes are empty" {
-    var buffer = try core_module.Buffer.init(std.testing.allocator, max_walk_cells + 64, 1);
+    var buffer = try cellgrid.Buffer.init(std.testing.allocator, max_walk_cells + 64, 1);
     defer buffer.deinit();
     @memset(buffer.cells, .{ .len = 0, .width = 1 });
     const x = max_walk_cells + 1;

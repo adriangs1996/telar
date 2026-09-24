@@ -1,5 +1,6 @@
 //! Work the shared client asks its adapter to run off the event loop. Every
 //! job completes as one `Message`; `workers.run` executes it.
+const pacing = @import("pacing");
 const core = @import("telar-core");
 const data = @import("model");
 const RuntimeTransportState = @import("../connection/RuntimeTransportState.zig");
@@ -30,7 +31,7 @@ pub const Job = union(enum) {
 
     pub const Timer = struct {
         kind: Kind,
-        scheduler: *core.DeadlineScheduler,
+        scheduler: *pacing.DeadlineScheduler,
     };
 
     pub const Kind = enum {

@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const HistoryModalLayout = @import("../widgets/overlays/HistoryModalLayout.zig");
 const gfx = @import("gfx");
 const Quad = gfx.Quad;
@@ -283,7 +284,7 @@ test "native history paints owned command output and exposes exact inspector scr
     try std.testing.expectEqual(limit, fixture.overlays.inspectionScrollLimit(fixture.projection()).?);
 
     const tiny = Modal.bounds(.{ .w = 5, .h = 2 }, .{ .w = 140, .h = 30 });
-    try std.testing.expectEqualDeep(core.Rect{ .w = 5, .h = 2 }, tiny);
+    try std.testing.expectEqualDeep(cellgrid.Rect{ .w = 5, .h = 2 }, tiny);
 }
 
 test "native new-context form paints both fields, the completion list and the confirmation inside its modal" {
@@ -357,7 +358,7 @@ test "native suggestion states and thread surface stay within their assigned rec
 
     fixture.renderer.quads.clear();
     var canvas = fixture.canvas();
-    const area: core.Rect = .{ .x = 3, .y = 2, .w = 30, .h = 8 };
+    const area: cellgrid.Rect = .{ .x = 3, .y = 2, .w = 30, .h = 8 };
     try (ThreadPane{ .area = area, .thread = .{ .pane_id = @enumFromInt(1), .agent = null, .composer = "a draft\x1b[2J" } }).draw(&canvas);
     const bounds = canvas.rect(area);
     for (fixture.renderer.quads.items()) |quad| {

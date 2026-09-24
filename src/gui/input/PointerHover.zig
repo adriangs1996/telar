@@ -1,4 +1,5 @@
 //! One owned hover target. Pointer movement within a cell does no text scanning.
+const cellgrid = @import("cellgrid");
 const hover_target = @import("hover_target.zig");
 const data = @import("model");
 const std = @import("std");
@@ -15,8 +16,8 @@ shape: core.PointerShape = .default,
 link: ?Hit = null,
 shown_link: ?Hit = null,
 prepared_link: ?Hit = null,
-shown_preview: ?core.Rect = null,
-prepared_preview: ?core.Rect = null,
+shown_preview: ?cellgrid.Rect = null,
+prepared_preview: ?cellgrid.Rect = null,
 revision: u64 = 0,
 dirty: bool = true,
 

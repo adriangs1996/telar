@@ -1,7 +1,7 @@
 //! Wrapping shared by composer drawing, pointer selection and native IME.
+const cellgrid = @import("cellgrid");
 const GlyphAtlas = @import("../../text/GlyphAtlas.zig");
 const assets = @import("assets");
-const core = @import("telar-core");
 const WrappedLines = @import("EditorLines.zig");
 const EditorFont = @import("EditorFont.zig");
 const EditorShapingCache = @import("../../text/EditorShapingCache.zig");
@@ -54,7 +54,7 @@ pub fn offset(self: Layout, point: [2]f64) u32 {
         var at = start;
         var used: f64 = @floatFromInt(lines.position(0));
         var nearest = @abs(point[0] - used);
-        var iterator: core.GraphemeIterator = .{ .bytes = line };
+        var iterator: cellgrid.GraphemeIterator = .{ .bytes = line };
         while (iterator.next()) |cluster| {
             used = if (self.font != null) @floatFromInt(lines.position(iterator.index)) else used + @as(f64, @floatFromInt(cluster.width));
             const distance = @abs(point[0] - used);
@@ -132,7 +132,7 @@ test "shaped editor lines share kerning and internal ligature carets with pointe
         try std.testing.expect(lines.position(line.len) <= layout.columns);
     }
 
-    var iterator: core.GraphemeIterator = .{ .bytes = text };
+    var iterator: cellgrid.GraphemeIterator = .{ .bytes = text };
     while (iterator.next()) |_| {
         const position_value = layout.position(@intCast(iterator.index));
         try std.testing.expectEqual(@as(u32, @intCast(iterator.index)), layout.offset(.{ @floatFromInt(position_value[0]), @floatFromInt(position_value[1]) }));

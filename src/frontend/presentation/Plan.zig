@@ -1,9 +1,10 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const Label = @import("Label.zig");
 const std = @import("std");
 const Plan = @This();
 
-area: core.Rect = .{},
+area: cellgrid.Rect = .{},
 labels: [core.max_panes_per_tab]Label = undefined,
 len: u8 = 0,
 
@@ -82,7 +83,7 @@ pub fn sameContent(self: *const Plan, other: *const Plan) bool {
 }
 
 const PaintedLabel = struct {
-    buffer: *const core.Buffer,
-    area: core.Rect,
+    buffer: *const cellgrid.Buffer,
+    area: cellgrid.Rect,
     selected: bool,
 };

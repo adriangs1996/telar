@@ -1,4 +1,5 @@
 //! Borrows one pane while enumerating the visible spans of its hovered link.
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const Hit = @import("../input/LinkHit.zig");
@@ -19,7 +20,7 @@ pub fn init(hit: *const Hit, pane: *const data.Pane) Regions {
 
 /// Returns clipped host-grid rectangles without allocating or retaining a view.
 /// Example: `while (regions.next()) |area| try underline(area);`
-pub fn next(self: *Regions) ?core.Rect {
+pub fn next(self: *Regions) ?cellgrid.Rect {
     if (self.hit.match.link_index) |link_index| {
         while (self.runs.next()) |run| {
             if (run.link_index != link_index) {
@@ -54,7 +55,7 @@ pub fn next(self: *Regions) ?core.Rect {
     return null;
 }
 
-fn clippedArea(self: *const Regions, row: u32, columns: [2]u16) ?core.Rect {
+fn clippedArea(self: *const Regions, row: u32, columns: [2]u16) ?cellgrid.Rect {
     const content = self.hit.content;
     const right = @min(columns[1], content.w);
     if (row >= content.h or columns[0] >= right) {

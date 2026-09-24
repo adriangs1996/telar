@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const Metrics = @import("Metrics.zig");
 const View = @import("LayoutView.zig");
@@ -11,7 +12,7 @@ const SnapshotReset = @import("SnapshotReset.zig");
 /// is O(panes); pane lookup is bounded open addressing with no allocations.
 const Snapshot = @This();
 
-area: core.Rect = .{},
+area: cellgrid.Rect = .{},
 revision: u64 = 0,
 pane_gaps: bool = true,
 metrics: Metrics = .{},
@@ -37,7 +38,7 @@ pub fn find(self: *const Snapshot, pane_id: core.PaneId) ?View {
 /// ```zig
 /// const shelf = snapshot.reserveBelowPane(reservation);
 /// ```
-pub fn reserveBelowPane(self: *Snapshot, reservation: ?PaneBottomReservation) core.Rect {
+pub fn reserveBelowPane(self: *Snapshot, reservation: ?PaneBottomReservation) cellgrid.Rect {
     const requested = reservation orelse return .{};
     const view_index = self.index.get(core.raw(requested.pane_id)) orelse return .{};
     const view = &self.storage[view_index];

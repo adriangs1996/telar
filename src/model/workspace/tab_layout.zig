@@ -1,5 +1,6 @@
 //! The client-owned arrangement of one tab's panes: geometry, focus and
 //! pointer targets. `slot` is the tab's position in `model.tabs`.
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const std = @import("std");
 const ClientModel = @import("../state/ClientModel.zig");
@@ -18,7 +19,7 @@ const multiplexer = @import("multiplexer.zig");
 /// Geometry of one tab for `area`, rebuilt only when the tab, its layout
 /// revision or the area changed since the previous query.
 /// Example: `const snapshot = tab_layout.snapshot(model, slot, area);`
-pub fn snapshot(model: *ClientModel, slot: usize, area: core.Rect) *const LayoutSnapshot {
+pub fn snapshot(model: *ClientModel, slot: usize, area: cellgrid.Rect) *const LayoutSnapshot {
     core.profiling.add(.layout_query, 1);
     const tab_id = model.tabs.location[slot].tab_id;
     const layout = &model.tabs.layout[slot];
@@ -35,13 +36,13 @@ pub fn snapshot(model: *ClientModel, slot: usize, area: core.Rect) *const Layout
 }
 
 /// Example: `const view = tab_layout.view(model, slot, pane_id, area) orelse return;`
-pub fn view(model: *ClientModel, slot: usize, pane_id: core.PaneId, area: core.Rect) ?LayoutView {
+pub fn view(model: *ClientModel, slot: usize, pane_id: core.PaneId, area: cellgrid.Rect) ?LayoutView {
     return snapshot(model, slot, area).find(pane_id);
 }
 
 /// The terminal size a pane gets inside `area`, in cells and host pixels.
 /// Example: `const size = tab_layout.contentSize(model, slot, pane_id, area) orelse return;`
-pub fn contentSize(model: *ClientModel, slot: usize, pane_id: core.PaneId, area: core.Rect) ?core.TerminalSize {
+pub fn contentSize(model: *ClientModel, slot: usize, pane_id: core.PaneId, area: cellgrid.Rect) ?core.TerminalSize {
     const pane_view = view(model, slot, pane_id, area) orelse return null;
     var size = multiplexer.rectSize(pane_view.content) orelse return null;
     const host_size = model.host.host_size;
@@ -52,7 +53,7 @@ pub fn contentSize(model: *ClientModel, slot: usize, pane_id: core.PaneId, area:
 
 /// Previews splitting a pane against the tab's current membership.
 /// Example: `const split = tab_layout.prospectiveSplit(model, slot, target, area);`
-pub fn prospectiveSplit(model: *ClientModel, slot: usize, target: SplitTarget, area: core.Rect) ?ProspectiveSplit {
+pub fn prospectiveSplit(model: *ClientModel, slot: usize, target: SplitTarget, area: cellgrid.Rect) ?ProspectiveSplit {
     const pane_count = model.panes.countIn(model.tabs.location[slot].tab_id);
     return snapshot(model, slot, area).prospectiveSplit(target, pane_count);
 }
@@ -72,7 +73,7 @@ pub fn focusedPaneConst(model: *const ClientModel, slot: usize) ?*const Pane {
 /// Resolves one pointer event to a visible pane. Wheel events target the
 /// pane under the pointer; every other event targets the focused pane.
 /// Example: `const plan = tab_layout.planPaneMouse(model, slot, event, area) orelse return;`
-pub fn planPaneMouse(model: *ClientModel, slot: usize, event: Mouse, area: core.Rect) ?PaneMousePlan {
+pub fn planPaneMouse(model: *ClientModel, slot: usize, event: Mouse, area: cellgrid.Rect) ?PaneMousePlan {
     const tab_id = model.tabs.location[slot].tab_id;
     const layout_snapshot = snapshot(model, slot, area);
     const wheel = event.kind == .scroll_up or event.kind == .scroll_down;
@@ -98,7 +99,7 @@ pub fn planPaneMouse(model: *ClientModel, slot: usize, event: Mouse, area: core.
 
 /// Resolves the focused pane without consulting pointer coordinates.
 /// Example: `const plan = tab_layout.planFocusedPaneMouse(model, slot, area) orelse return;`
-pub fn planFocusedPaneMouse(model: *ClientModel, slot: usize, area: core.Rect) ?PaneMousePlan {
+pub fn planFocusedPaneMouse(model: *ClientModel, slot: usize, area: cellgrid.Rect) ?PaneMousePlan {
     const pane = focusedPane(model, slot) orelse return null;
     const pane_view = view(model, slot, pane.id, area) orelse return null;
     if (pane_view.content.w == 0 or pane_view.content.h == 0) {
@@ -110,7 +111,7 @@ pub fn planFocusedPaneMouse(model: *ClientModel, slot: usize, area: core.Rect) ?
 
 /// Captures the mouse policy of an already resolved pane.
 /// Example: `const plan = tab_layout.paneMousePlan(pane, view.content);`
-pub fn paneMousePlan(pane: *const Pane, content: core.Rect) PaneMousePlan {
+pub fn paneMousePlan(pane: *const Pane, content: cellgrid.Rect) PaneMousePlan {
     return .{
         .pane_id = pane.id,
         .content = content,

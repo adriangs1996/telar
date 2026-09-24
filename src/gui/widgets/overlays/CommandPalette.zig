@@ -1,11 +1,11 @@
 //! The native command palette: one rounded surface with the prefixed field,
 //! up to sixteen result rows and the prefix legend. It reads the client's
 //! canonical results for every mode and never scores anything itself.
+const cellgrid = @import("cellgrid");
 const TextField = @import("../TextField.zig");
 const router_module = @import("../../input/router.zig");
 const data = @import("model");
 const std = @import("std");
-const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("../Canvas.zig");
 const Modal = @import("Modal.zig");
@@ -29,7 +29,7 @@ pub const legend = [_][]const u8{ ">", "actions", "@", "agents & panes", "?", "s
 
 projection: *const client.Projection,
 hits: *PaletteHits,
-modal: *?core.Rect,
+modal: *?cellgrid.Rect,
 /// The native keymap that prints bound chords next to actions; absent in
 /// fixtures without a window.
 router: ?*const router_module.Type,
@@ -39,8 +39,8 @@ scale: f32,
 /// horizontally and anchored at eleven percent of the host height. Tiny
 /// hosts fall back to the shared modal bounds.
 /// Example: `const bounds = palette.area(canvas, rows);`
-pub fn area(self: CommandPalette, canvas: *Canvas, rows: u16) core.Rect {
-    const host: core.Rect = .{ .w = self.projection.host_size.cols, .h = self.projection.host_size.rows };
+pub fn area(self: CommandPalette, canvas: *Canvas, rows: u16) cellgrid.Rect {
+    const host: cellgrid.Rect = .{ .w = self.projection.host_size.cols, .h = self.projection.host_size.rows };
     const scale = if (self.scale > 0) self.scale else 1;
     const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
     const wanted: u16 = @intFromFloat(@ceil(@as(f32, width_px) * scale / cell));
@@ -91,7 +91,7 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
 
     if (prompt.paletteMode() == .suggest) {
         const inset: u16 = @min(2, content.w / 8);
-        const suggestion_area: core.Rect = .{ .x = content.x + inset, .y = content.y, .w = content.w - inset * 2, .h = content.h };
+        const suggestion_area: cellgrid.Rect = .{ .x = content.x + inset, .y = content.y, .w = content.w - inset * 2, .h = content.h };
         try (SuggestionPanel{ .area = suggestion_area, .projection = self.projection, .hits = hits }).draw(canvas);
         return;
     }
@@ -129,7 +129,7 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
 }
 
 // Keys in the monospace face, words in sans; the active prefix in accent.
-fn drawLegend(canvas: *Canvas, row: core.Rect, mode: data.command_palette.Prefix) !void {
+fn drawLegend(canvas: *Canvas, row: cellgrid.Rect, mode: data.command_palette.Prefix) !void {
     const colors = canvas.theme.palette;
     const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
     var remaining = row;
@@ -153,7 +153,7 @@ fn sources(self: CommandPalette) data.Sources {
 
 // The prefix byte is painted over the field text in the accent color; the
 // field keeps it as ordinary text so editing never needs a second cursor.
-fn drawField(canvas: *Canvas, row: core.Rect, prompt: data.Prompt) !void {
+fn drawField(canvas: *Canvas, row: cellgrid.Rect, prompt: data.Prompt) !void {
     const colors = canvas.theme.palette;
     var field = prompt.field;
     const view = field.view(row.w);

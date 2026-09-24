@@ -1,5 +1,7 @@
 //! Client integration tests for notifications and agents.
 
+const pacing = @import("pacing");
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const client_module = @import("telar-client");
@@ -258,7 +260,7 @@ test "notification timer commits lifecycle state before presenter observation" {
     defer harness.deinit();
     const client = harness.client;
     const terminal = harness.terminal;
-    const now_ns = client_module.monotonic(client.io);
+    const now_ns = pacing.clock.monotonic(client.io);
     _ = try client_module.notifications.publishNotification(client, now_ns, .{
         .title = "Building",
         .message = "Lifecycle tick",
@@ -628,7 +630,7 @@ test "system metrics commit before presenter-owned projection" {
     try std.testing.expect(std.mem.indexOf(u8, expanded_text, "80%") != null);
 }
 
-fn screenText(screen: *const Screen, area: core.Rect, storage: *[512]u8) ![]const u8 {
+fn screenText(screen: *const Screen, area: cellgrid.Rect, storage: *[512]u8) ![]const u8 {
     var len: usize = 0;
     for (area.x..area.x + area.w) |x| {
         const cell = screen.front.cells[@as(usize, area.y) * screen.front.w + x];

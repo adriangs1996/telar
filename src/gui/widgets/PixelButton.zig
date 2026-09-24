@@ -1,10 +1,10 @@
 //! A chrome control in device pixels with one semantic intent.
+const cellgrid = @import("cellgrid");
 const gfx = @import("gfx");
 const alignment_module = gfx.alignment;
 const label_face = @import("label_face.zig");
 const label_size = @import("label_size.zig");
 const action_module = @import("action.zig");
-const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
@@ -29,7 +29,7 @@ size: label_size.Size = .body,
 /// Horizontal inset of the label inside the control, in device pixels.
 inset: f32 = 0,
 /// An attention dot painted at the trailing edge in this color, if any.
-dot: ?core.Color = null,
+dot: ?cellgrid.Color = null,
 
 /// Paints and registers a pixel control. Plain controls retain a clear
 /// background on hover; centered labels reserve equal space around their dot.
@@ -44,7 +44,7 @@ pub fn draw(self: PixelButton, canvas: *Canvas) !void {
     const hovered = self.context.isHovered(action);
 
     if (self.background) {
-        const fill: core.Color = if (self.active) palette.accent else if (hovered) palette.surface1 else palette.surface0;
+        const fill: cellgrid.Color = if (self.active) palette.accent else if (hovered) palette.surface1 else palette.surface0;
         try canvas.fillRoundedAt(self.area, .{ .radius = self.radius, .color = fill });
     }
 

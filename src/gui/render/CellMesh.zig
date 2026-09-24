@@ -5,6 +5,7 @@
 //! background and the first ink quad, so they live in a dense `primary`
 //! array. Underlines, strikethroughs and multi-glyph clusters spill into a
 //! cold `overflow` array that warm draws touch only for the cells using it.
+const cellgrid = @import("cellgrid");
 const std = @import("std");
 const Paint = @import("CellPaint.zig");
 const Metadata = @import("CellMetadata.zig");
@@ -12,7 +13,6 @@ const gfx = @import("gfx");
 const Quad = gfx.Quad.Quad;
 const Color = gfx.Color;
 const Rect = gfx.Rect;
-const core = @import("telar-core");
 const Mesh = @This();
 
 pub const capacity = 24;
@@ -30,7 +30,7 @@ pub fn matches(self: Mesh, paint: Paint) bool {
 /// Compares against a cell still in its source buffer, so the warm draw
 /// loads it straight from memory instead of copying it into a key first.
 /// Example: `if (mesh.matchesCell(&row[x], rect)) reuse();`
-pub fn matchesCell(self: Mesh, cell: *const core.Cell, rect: Rect) bool {
+pub fn matchesCell(self: Mesh, cell: *const cellgrid.Cell, rect: Rect) bool {
     const cached = self.metadata;
     return cached.valid and cached.paint.rect.x == rect.x and cached.paint.rect.y == rect.y and
         cached.paint.rect.width == rect.width and cached.paint.rect.height == rect.height and

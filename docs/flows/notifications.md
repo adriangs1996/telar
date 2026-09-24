@@ -109,7 +109,7 @@ another request later.
 `model.notification_center.nextDeadline` for the next useful wakeup. Moving
 items wake at `model.host.animation_frame_ns`, while stable items sleep until
 expiry. The deadline lives in `model.notification_scheduler`, a
-`core.DeadlineScheduler` like the bar and sidebar animation timers. The
+`pacing.DeadlineScheduler` like the bar and sidebar animation timers. The
 scheduler owns one atomic deadline, one wake event and one pending flag. When
 it reports `.schedule`, the client starts one `.timer` job through
 `client.workers.start`; `job_runner` waits in `deadline_timer.wait`. Replacing

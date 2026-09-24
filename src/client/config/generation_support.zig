@@ -1,5 +1,6 @@
 //! Atomic client configuration generation and its compiled Lua callbacks.
 
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -251,7 +252,7 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expectEqual(@as(u64, 40 * std.time.ns_per_ms), generation.snapshot.input_escape_timeout_ns);
     try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
     try std.testing.expectEqualDeep(
-        core.Color.rgb(.{ 1, 2, 3 }),
+        cellgrid.Color.rgb(.{ 1, 2, 3 }),
         generation.snapshot.theme.palette.accent,
     );
     try std.testing.expectEqualDeep(

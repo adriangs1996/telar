@@ -1,5 +1,5 @@
-const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const RatioCandidate = @This();
 
-area: core.Rect,
+area: cellgrid.Rect,
 ratio: u16,
