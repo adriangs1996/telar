@@ -1,7 +1,9 @@
-const console = @import("console");
-const core = @import("telar-core");
 const std = @import("std");
-const Screen = @import("Screen.zig");
+const GenericScreen = @import("GenericScreen.zig").Type;
+const pointer = @import("pointer.zig");
+
+const TestShape = enum { default, pointer, ew_resize };
+const Screen = GenericScreen(TestShape);
 
 test "the diff sends only what changed" {
     const gpa = std.testing.allocator;
@@ -161,12 +163,12 @@ test "mouse pointer changes fold until a shape or recovery changes" {
     var writer: std.Io.Writer = .fixed(&out);
 
     _ = try screen.flush(&writer);
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), console.pointer.sequence(.default)) != null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(TestShape.default)) != null);
 
     writer = .fixed(&out);
     screen.mouse_pointer = .pointer;
     _ = try screen.flush(&writer);
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), console.pointer.sequence(.pointer)) != null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(TestShape.pointer)) != null);
 
     writer = .fixed(&out);
     _ = try screen.flush(&writer);
@@ -175,12 +177,12 @@ test "mouse pointer changes fold until a shape or recovery changes" {
     writer = .fixed(&out);
     screen.mouse_pointer = .ew_resize;
     _ = try screen.flush(&writer);
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), console.pointer.sequence(.ew_resize)) != null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(TestShape.ew_resize)) != null);
 
     writer = .fixed(&out);
     screen.invalidate();
     _ = try screen.flush(&writer);
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), console.pointer.sequence(.ew_resize)) != null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(TestShape.ew_resize)) != null);
 }
 
 test "a failed flush forgets nothing the terminal did not receive" {
@@ -204,19 +206,4 @@ test "a failed flush forgets nothing the terminal did not receive" {
     var retry = std.Io.Writer.fixed(&out);
     const stats = try screen.flush(&retry);
     try std.testing.expect(stats.cells >= 4);
-}
-
-test "every wire pointer shape has a bounded CSS sequence" {
-    inline for (std.meta.tags(core.PointerShape)) |shape| {
-        const encoded = console.pointer.sequence(shape);
-        try std.testing.expect(std.mem.startsWith(u8, encoded, "\x1b]22;"));
-        try std.testing.expect(std.mem.endsWith(u8, encoded, "\x1b\\"));
-        try std.testing.expect(encoded.len <= 20);
-
-        for (encoded[5 .. encoded.len - 2]) |byte| {
-            try std.testing.expect(std.ascii.isLower(byte) or byte == '-');
-        }
-    }
-
-    try std.testing.expectEqualStrings(console.sequences.reset_pointer, console.pointer.sequence(core.PointerShape.default));
 }

@@ -8,7 +8,7 @@ const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const std = @import("std");
-const Screen = @import("../../presentation/Screen.zig");
+const Screen = @import("../../presentation/terminal_screen.zig").Screen;
 const Compositor = @import("../../workspace/Compositor.zig");
 const State = @import("../../presentation/State.zig");
 const toast_graphics = @import("../../graphics/toast.zig");
@@ -580,6 +580,7 @@ fn syncWindowTitle(self: *Presenter, projection: client.Projection, writer: *std
 
 fn flushScreen(self: *Presenter, writer: *std.Io.Writer) !void {
     const started = core.now(self.io);
+    core.profiling.add(.tui_flush, 1);
     const stats = try self.screen.flush(writer);
     if (comptime core.enabled) {
         self.metrics.flushes += 1;
@@ -595,6 +596,7 @@ fn flushScreen(self: *Presenter, writer: *std.Io.Writer) !void {
 
 fn flushMedia(self: *Presenter, writer: *std.Io.Writer) !void {
     const started = core.now(self.io);
+    core.profiling.add(.tui_flush, 1);
     const stats = try self.screen.flush(writer);
     if (comptime core.enabled) {
         self.metrics.media_flushes += 1;

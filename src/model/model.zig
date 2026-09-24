@@ -1,4 +1,5 @@
 //! Shared values and bounded state. Public declarations are the module API.
+const cellgrid = @import("cellgrid");
 
 const std = @import("std");
 
@@ -13,7 +14,6 @@ pub const command_execution = @import("bars/command_execution.zig");
 pub const command_palette = @import("state/command_palette.zig");
 pub const config_values = @import("config/model.zig");
 pub const copy_mode = @import("input/copy_mode.zig");
-pub const damage = @import("panes/damage.zig");
 pub const effects = @import("config/effects.zig");
 pub const environment = @import("environment/environment.zig");
 pub const goto_picker = @import("state/goto_picker.zig");
@@ -108,7 +108,6 @@ pub const CopyModeCommand = @import("types/CopyModeCommand.zig").CopyModeCommand
 pub const CopyModeDirection = @import("types/CopyModeDirection.zig").CopyModeDirection;
 pub const CopyModeOutcome = @import("types/CopyModeOutcome.zig").CopyModeOutcome;
 pub const CopyModeView = @import("input/CopyModeView.zig");
-pub const DamageRow = @import("panes/DamageRow.zig");
 pub const Diagnostic = @import("config/Diagnostic.zig");
 pub const EditorOpening = @import("links/EditorOpening.zig");
 pub const EffectBatch = @import("config/EffectBatch.zig");
@@ -366,7 +365,6 @@ test {
     _ = @import("operations/configuration/Synchronization.zig");
     _ = @import("panes/AgentHistoryGap.zig");
     _ = @import("panes/AgentHistoryItem.zig");
-    _ = @import("panes/CellSpan.zig");
     _ = @import("panes/ChangeReviewAvailability.zig");
     _ = @import("panes/ComposerImageRemoval.zig");
     _ = @import("panes/FrameInput.zig");

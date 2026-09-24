@@ -478,7 +478,7 @@ captures an immutable `presentation_projection` and calls
    composes the immutable active-tab model into the screen back buffer;
 2. the TUI view's `State.render` composes Telar chrome;
 3. `flushScreen` calls `Screen.flush` in
-   `src/frontend/presentation/Screen.zig`;
+   `lib/console/GenericScreen.zig`, instantiated in `src/frontend/presentation/terminal_screen.zig`;
 4. the screen emits the minimal terminal diff and flushes the host writer;
 5. successful host-write completion commits the exact presented pane damage
    and releases graphics credits independently of cell ACKs.
@@ -548,7 +548,7 @@ connection. Native hosts without the callback retain their local cadence.
 - `mouse pointer distinguishes clickable chrome panes and sidebar resizing` in
   `src/frontend/client/presentation/view.zig` proves the semantic hover mapping.
 - `mouse pointer changes fold until a shape or recovery changes` in
-  `src/frontend/presentation/screen_tests.zig` proves OSC 22 coalescence and recovery;
+  `lib/console/screen_tests.zig` proves OSC 22 coalescence and recovery;
   the platform sequence test proves exit restores the default before leaving
   the alternate screen.
 - `host pointer shape follows semantic hover through paced presentation` in

@@ -1,19 +1,14 @@
-//! Damage rows and run diffing shared by the client's composition layers.
-//!
-//! Three places compare one row of cells against another and copy the runs
-//! that differ: pane damage into the composed buffer, the composed buffer
-//! into the screen, and chrome regions into the screen. One definition of a
-//! damage row and one run walker keep those three from drifting apart - the
-//! previous copies disagreed even about what an *empty* row looked like.
-
-const cellgrid = @import("cellgrid");
+//! Run diffing between two rows of cells: one walker for every layer that
+//! copies only the cells that changed, so they agree even about what an
+//! empty row looks like.
+const Cell = @import("Cell.zig");
 const std = @import("std");
 
 /// Walks [start, end) of one row, finds each run where `source` and
 /// `reference` disagree, and hands it to `sink.copyRun(run_start, count)`.
 /// Returns the cells copied. The sink may write into `reference`'s
 /// memory: every index a run covers has already been compared.
-/// For example: `const copied = try syncRow(.{ .source = source, .reference = reference, .start = 0, .end = width }, sink);`.
+/// For example: `const copied = try cellgrid.syncRow(.{ .source = source, .reference = reference, .start = 0, .end = width }, sink);`.
 pub fn syncRow(sync: RowSync, sink: anytype) !usize {
     var copied: usize = 0;
     var x = sync.start;
@@ -40,8 +35,8 @@ pub fn syncRow(sync: RowSync, sink: anytype) !usize {
 // ---------------------------------------------------------------------------
 
 test "run diffing copies exactly the disagreeing runs" {
-    var source = [_]cellgrid.Cell{.{}} ** 8;
-    var reference = [_]cellgrid.Cell{.{}} ** 8;
+    var source = [_]Cell{.{}} ** 8;
+    var reference = [_]Cell{.{}} ** 8;
     source[1].bytes[0] = 'a';
     source[2].bytes[0] = 'b';
     source[5].bytes[0] = 'c';
@@ -63,8 +58,8 @@ test "run diffing copies exactly the disagreeing runs" {
 }
 
 const RowSync = struct {
-    source: []const cellgrid.Cell,
-    reference: []const cellgrid.Cell,
+    source: []const Cell,
+    reference: []const Cell,
     start: u16,
     end: u16,
 };

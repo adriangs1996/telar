@@ -10,7 +10,7 @@ const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const host_inputs = @import("../input/host_inputs.zig");
-const Screen = @import("../../presentation/Screen.zig");
+const Screen = @import("../../presentation/terminal_screen.zig").Screen;
 const support = @import("support.zig");
 
 test "a failed request surfaces as a notification" {

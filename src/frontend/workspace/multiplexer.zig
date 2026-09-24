@@ -6,15 +6,14 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
 const std = @import("std");
-const diff = @import("../presentation/diff.zig");
-const Screen = @import("../presentation/Screen.zig");
-const PatchSink = @import("../presentation/PatchSink.zig");
+const Screen = @import("../presentation/terminal_screen.zig").Screen;
+const PatchSink = Screen.PatchSink;
 const Plan = @import("../presentation/Plan.zig");
 const Result = @import("Result.zig");
 const fullscreen_tabs = @import("fullscreen_tabs.zig");
 const Compositor = @import("Compositor.zig");
 const RenderStats = @import("RenderStats.zig");
-const Position = @import("../presentation/Position.zig");
+const Position = Screen.Position;
 
 pub fn copyView(copy: ?client.CopyProjection, pane_id: core.PaneId) ?data.CopyModeView {
     const projection = copy orelse return null;
@@ -109,7 +108,7 @@ pub fn syncPaneRange(range: PaneRange) !usize {
         .patch = .{ .screen = range.screen, .source_row = source_row, .base = destination_base },
         .composed_row = range.composed.cells[destination_base..],
     };
-    return diff.syncRow(.{
+    return cellgrid.syncRow(.{
         .source = source_row,
         .reference = sink.composed_row,
         .start = range.start,
@@ -154,7 +153,7 @@ pub fn syncComposed(screen: *Screen, composed: *const cellgrid.Buffer) !usize {
             .source_row = source_row,
             .base = row_start,
         };
-        damaged += try diff.syncRow(.{
+        damaged += try cellgrid.syncRow(.{
             .source = source_row,
             .reference = screen.back.cells[row_start..][0..composed.w],
             .start = 0,
@@ -177,7 +176,7 @@ pub fn syncComposedRow(screen: *Screen, composed: *const cellgrid.Buffer, y: u16
         .source_row = source_row,
         .base = row_start,
     };
-    return diff.syncRow(.{
+    return cellgrid.syncRow(.{
         .source = source_row,
         .reference = screen.back.cells[row_start..][0..composed.w],
         .start = 0,

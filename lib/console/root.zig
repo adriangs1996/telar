@@ -1,6 +1,7 @@
 //! The controlling terminal on every operating system: raw mode, resize
-//! notifications, a fast writer, the escape sequences that drive it, and
-//! the decoder for what it sends back.
+//! notifications, a fast writer, the escape sequences that drive it, a
+//! screen that sends only the cells that changed, and the decoder for what
+//! the terminal sends back.
 const builtin = @import("builtin");
 const host_input = @import("host_input.zig");
 const host_output = @import("host_output.zig");
@@ -8,6 +9,7 @@ const host_output = @import("host_output.zig");
 pub const ClipboardError = host_output.ClipboardError;
 pub const Event = host_input.Event;
 pub const GenericInput = @import("GenericInput.zig").Type;
+pub const GenericScreen = @import("GenericScreen.zig").Type;
 pub const Parsed = @import("Parsed.zig");
 pub const Size = @import("Size.zig");
 pub const max_clipboard_bytes = host_output.max_clipboard_bytes;
@@ -22,12 +24,17 @@ pub const writeStyle = host_output.writeStyle;
 
 test {
     _ = @import("GenericInput.zig");
+    _ = @import("GenericScreen.zig");
+    _ = @import("GraphicsEffect.zig");
     _ = @import("KittyModifierEvent.zig");
     _ = @import("Parsed.zig");
+    _ = @import("Position.zig");
+    _ = @import("ScreenStats.zig");
     _ = @import("host_input.zig");
     _ = @import("host_output.zig");
     _ = @import("platform.zig");
     _ = @import("pointer.zig");
+    _ = @import("screen_tests.zig");
     _ = @import("sequences.zig");
     _ = @import("windows.zig");
     if (builtin.os.tag != .windows) {

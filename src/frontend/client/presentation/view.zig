@@ -16,9 +16,8 @@ const history_browser_module = @import("../../widgets/history_browser.zig");
 const context_support = @import("../../widgets/context_support.zig");
 const std = @import("std");
 const RenderStats = @import("RenderStats.zig");
-const Screen = @import("../../presentation/Screen.zig");
-const PatchSink = @import("../../presentation/PatchSink.zig");
-const diff = @import("../../presentation/diff.zig");
+const Screen = @import("../../presentation/terminal_screen.zig").Screen;
+const PatchSink = Screen.PatchSink;
 const Compositor = @import("../../workspace/Compositor.zig");
 const State = @import("State.zig");
 const RenderInput = @import("RenderInput.zig");
@@ -213,7 +212,7 @@ pub fn syncRegion(screen: *Screen, source: *const cellgrid.Buffer, area: cellgri
             .source_row = source_row,
             .base = row_start,
         };
-        stats.damaged += try diff.syncRow(.{
+        stats.damaged += try cellgrid.syncRow(.{
             .source = source_row,
             .reference = screen.back.cells[row_start..][0..source.w],
             .start = area.x,

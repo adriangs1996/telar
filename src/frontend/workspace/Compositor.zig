@@ -7,7 +7,7 @@ const Plan = @import("../presentation/Plan.zig");
 const CompositionResult = @import("CompositionResult.zig");
 const RenderStats = @import("RenderStats.zig");
 const multiplexer = @import("multiplexer.zig");
-const Screen = @import("../presentation/Screen.zig");
+const Screen = @import("../presentation/terminal_screen.zig").Screen;
 const thread_surface = @import("thread_surface.zig");
 /// Presentation-owned cache for one active tab. It borrows an immutable
 /// multiplexer model during composition and returns the exact model work that

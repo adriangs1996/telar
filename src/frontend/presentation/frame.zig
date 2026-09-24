@@ -3,7 +3,7 @@
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
-const Screen = @import("Screen.zig");
+const Screen = @import("terminal_screen.zig").Screen;
 const std = @import("std");
 
 pub fn apply(screen: *Screen, frame: core.FrameView) !data.Applied {

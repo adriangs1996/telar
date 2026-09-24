@@ -107,7 +107,7 @@ the selected shape without affecting input or cell output.
 - `src/frontend/client/tests/presentation.zig`: decoded snapshots and zero-span pointer
   patches reach host presentation without pointer movement; chrome takes over
   on hover, and leaving copy mode cannot restore stale hover.
-- `lib/console/pointer.zig` and `src/frontend/presentation/screen_tests.zig`:
+- `lib/console/pointer.zig`, `lib/console/screen_tests.zig` and `src/frontend/presentation/pointer_shapes_test.zig`:
   bounded static CSS sequences for every wire shape, unchanged-shape
   suppression, output invalidation and re-emission.
 

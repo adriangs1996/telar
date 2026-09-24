@@ -207,12 +207,12 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | --- | --- |
 | `pty` | spawning a command on a pseudo-terminal, its environment, resize and exit |
 | `pi_rpc` | a client for Pi's JSONL RPC mode, generic over who asked |
-| `console` | the controlling terminal: raw mode, resize notifications, writer, escape sequences, and decoding the keys, mouse reports and replies it sends |
+| `console` | the controlling terminal: raw mode, resize notifications, writer, escape sequences, a screen that sends only changed cells, and decoding the keys, mouse reports and replies it sends |
 | `mailbox` | the bounded inbox between worker tasks and one consumer |
 | `animate` | springs, transitions and the frame clock that advances them |
 | `gfx` | rectangles, colors, quads, the quad list a frame is built in, and one-axis layout |
 | `unicode` | grapheme widths from the emulator's tables; builds may bind another provider |
-| `cellgrid` | cells, styles and buffers, and text laid out into them |
+| `cellgrid` | cells, styles and buffers, text laid out into them, damage rows and run diffing |
 | `pacing` | the monotonic clock, replaceable deadlines and the frame pacer |
 | `vtscan` | byte-at-a-time scanners for OSC strings, typed input and Kitty graphics framing |
 | `sqlite` | the one SQLite binding, statement helpers, additive migrations, FTS5 quoting |
