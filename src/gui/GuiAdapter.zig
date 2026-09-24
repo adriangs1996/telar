@@ -166,6 +166,8 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.binding_timeout = .{};
     gui.binding_target = null;
     gui.binding_revision = 0;
+    gui.pane_input_time = null;
+    gui.job_hook = null;
     gui.pointer = .{};
     gui.terminal_clipboard = .{};
     gui.paste_route = .shared;

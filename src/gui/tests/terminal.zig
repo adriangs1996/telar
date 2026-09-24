@@ -427,6 +427,16 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
     }
 }
 
+test "a new adapter starts its own jobs and paces input by the reported time" {
+    const session = try Session.init();
+    defer session.deinit();
+    const gui = try Session.openAdapter(&session.connection);
+    defer gui.deinit();
+
+    try std.testing.expect(gui.job_hook == null);
+    try std.testing.expect(gui.pane_input_time == null);
+}
+
 test "native driver joins a blocked socket read before freeing the shared client" {
     const session = try Session.init();
     defer session.deinit();

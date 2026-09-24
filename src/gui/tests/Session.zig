@@ -55,6 +55,19 @@ pub fn init() !*Session {
     };
     errdefer session.connection.deinit(std.testing.io);
     errdefer session.peer.deinit(std.testing.io);
+    session.gui = try openAdapter(&session.connection);
+    errdefer session.gui.deinit();
+    session.gui.job_hook = .{
+        .context = session,
+        .start = startJob,
+    };
+    return session;
+}
+
+/// Opens a production adapter over `connection` with the fixture's window
+/// size, before any test seam is set.
+/// Example: `const gui = try Session.openAdapter(&session.connection);`
+pub fn openAdapter(connection: *core.SocketChannel) !*GuiAdapter {
     var measurement = Renderer.init(std.testing.allocator);
     defer measurement.deinit();
     const size = try measurement.measure(
@@ -64,11 +77,11 @@ pub fn init() !*Session {
             .scale = 1,
         },
     );
-    session.gui = try GuiAdapter.init(
+    const gui = try GuiAdapter.init(
         .{
             .gpa = std.testing.allocator,
             .io = std.testing.io,
-            .connection = &session.connection,
+            .connection = connection,
             .host_size = size,
             .window_width_px = @as(u32, size.cols) * size.cell_width_px,
             .window_height_px = @as(u32, size.rows) * size.cell_height_px,
@@ -81,19 +94,16 @@ pub fn init() !*Session {
             },
         },
     );
-    errdefer session.gui.deinit();
-    _ = try session.gui.renderer.measure(
+    errdefer gui.deinit();
+    _ = try gui.renderer.measure(
         .{
             .width = 180,
             .height = 240,
             .scale = 1,
         },
     );
-    session.gui.job_hook = .{
-        .context = session,
-        .start = startJob,
-    };
-    return session;
+
+    return gui;
 }
 
 pub fn deinit(self: *Session) void {
