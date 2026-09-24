@@ -71,8 +71,8 @@ alias are one word.
 | `sqlite` (done) | the three `@cImport("sqlite3.h")` in `history/persistence/sqlite.zig`, `agent/session_readers/codex.zig`, `agent/session_readers/session_readers.zig` | one binding plus the statement and migration helpers; the history schema and row mapping stay in `history/persistence/history_sql.zig`. A typed wrapper over the raw `c` calls in `Store.zig` is still open |
 | `agentfiles` (done) | `agent/transcript.zig`, the Claude and Codex readers in `agent/session_readers` | the watch, job and completion stay; `agent/description.zig` generates titles with telar's prompt and stays |
 | `jsonl` (done) | `agent_panes/{Stream,OutputFrame}.zig` and the JSON helpers of `agent_panes/protocol.zig` | the rest of `agent_panes` translates Codex's protocol into telar's agent threads and stays |
-| `kitty-media` | `src/backend/media` (processing, budgets, PNG through wuffs) | produces `core.ImageKey`, `core.Image`, `ShmName` and applies the protocol's graphics limits; those are telar's protocol, so the cut is limits as configuration and key and image values the library owns |
-| `pane-render` | `pane/{blit,damage,text_search,Diff,Cursor,TextDump}.zig` | cell sizes come from `cellcodec`; what still ties it to telar is the frame protocol (`core.Span`, `span_header_size`) and search (`SearchMatch` and its limits) |
+| `kitty-media` (not a library) | `src/backend/media` | measured, it is the runtime's graphics actor: telar's atomic shared frames, file queries the pane answers after validating the file, shared-memory placeholders freed through a per-pane quota, and protocol images and placements. Its mechanism moved instead: PNG decoding goes through `imaging.png`, which bounds dimensions before allocating; the image format is `kitty_protocol.Format`; and control fields are read with `kitty_protocol.ControlFields` |
+| `vtgrid` (done) | `pane/{blit,damage,Diff,Cursor,BlitPane}.zig` | `collectSpans` is generic over the span type and takes the header cost; the search is generic over the match type and `SearchLimits`; callers count profiling. Selection moved to `cellgrid`. `TextDump` belongs to the pane and stays |
 | `checkpoint` (not a library) | `src/backend/persistence` | it is telar's session format (pane kinds, providers, tab labels); its codec is `bytecodec` |
 | `localsocket` (done) | `transport/{LocalListener,local}.zig` (both sides) and `src/core/transport` | none; the handshake stays in the app because it speaks telar's wire |
 | `editorremote` (done) | `editors/{remote,expressions,Target,Candidate}.zig`, `core/editor.zig` | the search works on its own candidates and reports an index; the runtime job keeps panes and the reply |
@@ -197,8 +197,9 @@ of them: every package imports the libraries it uses by name.
 6. Client and GUI. Done: `urlscan`, `mdinline`, `cellglyphs`,
    `kitty_protocol`, `keyinput`, the `console` additions, `textraster`,
    `syntaxhl`, `textfield`. Measuring each candidate first changed several
-   cuts; the table records what moved and what stays. `pane-render` and
-   `kitty-media` from step 3 remain open.
+   cuts; the table records what moved and what stays. From step 3,
+   `pane-render` became `vtgrid` and `kitty-media` stays in the runtime
+   with its mechanism moved to `imaging` and `kitty_protocol`.
 7. In parallel with any of the above: the business rules listed in the
    previous section move into flows.
 

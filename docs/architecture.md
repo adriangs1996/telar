@@ -226,7 +226,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `textraster` | text shaped and rasterized into RGBA with FreeType and HarfBuzz in a caller's font, and rounded fills |
 | `syntaxhl` | syntax roles, languages by file path, Tree-sitter captures as roles, and a bounded highlighting cache keyed by content |
 | `textfield` | a fixed-capacity single-line text field: byte offsets, grapheme-cluster movement, directed selection and a view scrolled to fit |
-| `kitty_protocol` | Kitty graphics transmission, placement and deletion commands written into a caller buffer |
+| `kitty_protocol` | Kitty graphics transmission, placement and deletion commands written into a caller buffer, the image format, and received control fields |
 | `cellglyphs` | box drawing, block elements and Braille painted from geometry into a quad list |
 | `mdinline` | inline Markdown spans over borrowed text and bounded link destination decoding |
 | `cellcodec` | runs of cells with a packed header, styles written on change and colors sized by kind |

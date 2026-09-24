@@ -11,6 +11,8 @@ const core = @import("telar-core");
 const png_test = @import("png_test.zig");
 const vt = @import("ghostty-vt");
 const std = @import("std");
+const ControlFields = kitty_protocol.ControlFields;
+const Format = kitty_protocol.Format;
 const SharedFrame = @import("SharedFrame.zig");
 const SharedFrameKey = @import("SharedFrameKey.zig");
 const FrameResource = @import("FrameResource.zig");
@@ -98,60 +100,52 @@ pub fn stripFileQueries(bytes: []const u8, scratch: []u8, sink: anytype) []const
 
 fn parseFileQueryControl(control: []const u8) ?FileQueryControl {
     var image_id: ?u32 = null;
-    var format: ?u8 = null;
+    var format: ?Format = null;
     var width: ?u32 = null;
     var height: ?u32 = null;
     var query = false;
     var file = false;
-    var fields = std.mem.splitScalar(u8, control, ',');
-    while (fields.next()) |field| {
-        const equals = std.mem.indexOfScalar(u8, field, '=') orelse return null;
-        if (equals != 1 or equals + 1 == field.len) {
-            return null;
-        }
-        const value = field[equals + 1 ..];
-        switch (field[0]) {
+    var fields = ControlFields.init(control);
+    while (fields.next() catch return null) |field| {
+        const value = field.value;
+        switch (field.key) {
             'a' => {
                 if (query or !std.mem.eql(u8, value, "q")) {
                     return null;
                 }
+
                 query = true;
             },
             't' => {
                 if (file or !std.mem.eql(u8, value, "f")) {
                     return null;
                 }
+
                 file = true;
             },
-            'i' => image_id = parseUniqueU32(image_id, value) orelse return null,
+            'i' => image_id = ControlFields.uniqueId(image_id, value) orelse return null,
             'f' => {
                 if (format != null) {
                     return null;
                 }
-                const parsed = std.fmt.parseUnsigned(u8, value, 10) catch return null;
-                if (parsed != 24 and parsed != 32) {
-                    return null;
-                }
-                format = parsed;
+
+                format = Format.parse(value) orelse return null;
             },
-            's' => width = parseUniqueU32(width, value) orelse return null,
-            'v' => height = parseUniqueU32(height, value) orelse return null,
+            's' => width = ControlFields.uniqueId(width, value) orelse return null,
+            'v' => height = ControlFields.uniqueId(height, value) orelse return null,
             'q' => {},
             else => return null,
         }
     }
+
     if (!query or !file) {
         return null;
     }
-    const bpp: usize = if ((format orelse 32) == 24) 3 else 4;
-    const pixels = std.math.mul(
-        usize,
-        @as(usize, width orelse return null),
-        @as(usize, height orelse return null),
-    ) catch return null;
+
+    const byte_len = (format orelse Format.rgba).byteLen(width orelse return null, height orelse return null) orelse return null;
     return .{
         .image_id = image_id orelse return null,
-        .byte_len = std.math.mul(usize, pixels, bpp) catch return null,
+        .byte_len = byte_len,
     };
 }
 
@@ -365,21 +359,17 @@ fn sharedFrameAt(bytes: []const u8, start: usize) ?SharedFrame {
 fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
     var image_id: ?u32 = null;
     var placement_id: ?u32 = null;
-    var format: ?u8 = null;
+    var format: ?Format = null;
     var width: ?u32 = null;
     var height: ?u32 = null;
     var transmit = false;
     var medium: ?Medium = null;
     var cursor_static = false;
     var quiet = false;
-    var fields = std.mem.splitScalar(u8, control, ',');
-    while (fields.next()) |field| {
-        const equals = std.mem.indexOfScalar(u8, field, '=') orelse return null;
-        if (equals != 1 or equals + 1 == field.len) {
-            return null;
-        }
-        const value = field[equals + 1 ..];
-        switch (field[0]) {
+    var fields = ControlFields.init(control);
+    while (fields.next() catch return null) |field| {
+        const value = field.value;
+        switch (field.key) {
             'a' => {
                 if (transmit or !std.mem.eql(u8, value, "T")) {
                     return null;
@@ -392,20 +382,17 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
                 }
                 medium = if (std.mem.eql(u8, value, "s")) .shared else if (std.mem.eql(u8, value, "f")) .file else return null;
             },
-            'i' => image_id = parseUniqueU32(image_id, value) orelse return null,
-            'p' => placement_id = parseUniqueU32(placement_id, value) orelse return null,
+            'i' => image_id = ControlFields.uniqueId(image_id, value) orelse return null,
+            'p' => placement_id = ControlFields.uniqueId(placement_id, value) orelse return null,
             'f' => {
                 if (format != null) {
                     return null;
                 }
-                const parsed = std.fmt.parseUnsigned(u8, value, 10) catch return null;
-                if (parsed != 24 and parsed != 32) {
-                    return null;
-                }
-                format = parsed;
+
+                format = Format.parse(value) orelse return null;
             },
-            's' => width = parseUniqueU32(width, value) orelse return null,
-            'v' => height = parseUniqueU32(height, value) orelse return null,
+            's' => width = ControlFields.uniqueId(width, value) orelse return null,
+            'v' => height = ControlFields.uniqueId(height, value) orelse return null,
             'C' => {
                 if (cursor_static or !std.mem.eql(u8, value, "1")) {
                     return null;
@@ -430,32 +417,16 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
     }
     const image = image_id orelse return null;
     const placement = placement_id orelse return null;
-    const depth = format orelse return null;
-    const bpp: usize = if (depth == 24) 3 else 4;
-    const pixels = std.math.mul(
-        usize,
-        @as(usize, width orelse return null),
-        @as(usize, height orelse return null),
-    ) catch return null;
-    const byte_len = std.math.mul(usize, pixels, bpp) catch return null;
+    const pixel_format = format orelse return null;
+    const byte_len = pixel_format.byteLen(width orelse return null, height orelse return null) orelse return null;
     return .{
         .key = .{ .image_id = image, .placement_id = placement },
         .byte_len = byte_len,
-        .format = if (depth == 24) .rgb else .rgba,
+        .format = pixel_format,
         .width = width.?,
         .height = height.?,
         .medium = medium orelse return null,
     };
-}
-
-fn parseUniqueU32(current: ?u32, value: []const u8) ?u32 {
-    if (current != null) {
-        return null;
-    }
-
-    const parsed = std.fmt.parseUnsigned(u32, value, 10) catch return null;
-
-    return if (parsed == 0) null else parsed;
 }
 
 /// Stable identity for a child placement. Anonymous placements use Ghostty's
