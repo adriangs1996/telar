@@ -90,6 +90,10 @@ pub fn init(b: *std.Build) ?@This() {
             .name = "wuffs",
             .module = wuffs,
         },
+        .{
+            .name = "tls",
+            .module = tls,
+        },
     });
     for (libraries.modules) |library| {
         coverage.instrumentModule(library.?);

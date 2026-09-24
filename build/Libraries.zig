@@ -84,6 +84,17 @@ const specs = [_]Spec{
         .posix = true,
     },
     .{
+        .name = "eventstream",
+    },
+    .{
+        .name = "h2frames",
+    },
+    .{
+        .name = "localca",
+        .imports = &.{"tls"},
+        .libc = true,
+    },
+    .{
         .name = "gitstatus",
     },
     .{

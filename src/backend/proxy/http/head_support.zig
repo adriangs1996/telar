@@ -5,7 +5,8 @@
 //! into the input.
 
 const types = @import("types.zig");
-const Session = @import("../Session.zig");
+const localca = @import("localca");
+const Session = localca.Session;
 const std = @import("std");
 const middleware = @import("../middleware.zig");
 const types_module = @import("../../agent/types.zig");

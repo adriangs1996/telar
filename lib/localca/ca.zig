@@ -1,4 +1,4 @@
-//! Private local certificate authority used only by Telar child processes.
+//! Private local certificate authority trusted only by its owner's child processes.
 
 const std = @import("std");
 const tlsz = @import("tls");
@@ -17,7 +17,6 @@ pub const leaf_seconds: i64 = 30 * 24 * 60 * 60;
 pub const backdate_seconds: i64 = 3600;
 pub const max_cert_len = 1024;
 pub const max_pem_len = 2 * max_cert_len;
-pub const ca_common_name = "telar local CA";
 
 pub const Resources = @import("Resources.zig");
 
@@ -27,21 +26,21 @@ pub const Pair = @import("Pair.zig");
 
 pub const Authority = @import("Authority.zig");
 
-pub fn generate(io: std.Io, validity_seconds: i64) Error!Pair {
+pub fn generate(io: std.Io, validity_seconds: i64, common_name: []const u8) Error!Pair {
     const now = std.Io.Clock.real.now(io).toSeconds();
     var pair: Pair = .{ .key_pair = tlsz.x509.KeyPair.generate(io) };
     defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
     const cert = tlsz.x509.create(
         &pair.cert_buf,
         .{
-            .common_name = ca_common_name,
+            .common_name = common_name,
             .serial = randomSerial(io),
             .not_before = now - backdate_seconds,
             .not_after = now + validity_seconds,
             .is_ca = true,
         },
         pair.key_pair.public_key,
-        .{ .common_name = ca_common_name, .key_pair = &pair.key_pair },
+        .{ .common_name = common_name, .key_pair = &pair.key_pair },
     ) catch return error.CertFailed;
     pair.cert_len = cert.len;
     return pair;
@@ -82,8 +81,8 @@ pub fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
     }).parse() catch return error.ReadFailed;
     parsed_cert.verify(parsed_cert, std.Io.Clock.real.now(io).toSeconds()) catch
         return error.ReadFailed;
-    const authority: Authority = .{ .pair = pair };
-    var probe = authority.mint(io, "validation.telar.invalid") catch
+    const authority: Authority = .{ .pair = pair, .common_name = files.common_name };
+    var probe = authority.mint(io, "validation.invalid") catch
         return error.ReadFailed;
     defer std.crypto.secureZero(u8, std.mem.asBytes(&probe));
     const parsed_probe = (std.crypto.Certificate{
@@ -186,9 +185,13 @@ pub fn randomSerial(io: std.Io) u64 {
     return source.interface().int(u64) >> 1;
 }
 
+
+/// The authority name the tests create and load.
+const test_name = "test local CA";
+
 test "minted leaves verify against the local authority" {
     const io = std.testing.io;
-    const authority: Authority = .{ .pair = try generate(io, ca_seconds) };
+    const authority: Authority = .{ .pair = try generate(io, ca_seconds, test_name), .common_name = test_name };
     const leaf = try authority.mint(io, "api.anthropic.com");
     const parsed_leaf = try (std.crypto.Certificate{ .buffer = leaf.certDer(), .index = 0 }).parse();
     const parsed_ca = try (std.crypto.Certificate{ .buffer = authority.pair.certDer(), .index = 0 }).parse();
@@ -212,7 +215,7 @@ test "authority files and derived bundle are owner-only" {
     const bundle_path = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory});
 
     const resources: Resources = .{ .io = io, .allocator = gpa };
-    const files: AuthorityFiles = .{ .key = key_path, .certificate = cert_path };
+    const files: AuthorityFiles = .{ .key = key_path, .certificate = cert_path, .common_name = test_name };
     var authority = try Authority.loadOrCreate(resources, files);
     try authority.writeBundle(resources, bundle_path);
     _ = try Authority.loadOrCreate(resources, files);
@@ -225,9 +228,9 @@ test "authority files and derived bundle are owner-only" {
 
 test "system authorities have a bounded 30-day lifetime" {
     const io = std.testing.io;
-    const authority: Authority = .{ .pair = try generate(io, system_ca_seconds) };
+    const authority: Authority = .{ .pair = try generate(io, system_ca_seconds, test_name), .common_name = test_name };
     try std.testing.expect(try authority.hasSystemLifetime());
-    try std.testing.expect(!(try (Authority{ .pair = try generate(io, ca_seconds) }).hasSystemLifetime()));
+    try std.testing.expect(!(try (Authority{ .pair = try generate(io, ca_seconds, test_name), .common_name = test_name }).hasSystemLifetime()));
     try std.testing.expectEqual(@as(usize, 40), authority.fingerprint().len);
 }
 

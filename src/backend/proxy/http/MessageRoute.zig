@@ -1,4 +1,5 @@
-const Session = @import("../Session.zig");
+const localca = @import("localca");
+const Session = localca.Session;
 const types = @import("../../agent/types.zig");
 const Half = @import("../capture/Half.zig");
 const MessageRoute = @This();

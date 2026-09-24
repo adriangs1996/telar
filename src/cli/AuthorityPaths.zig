@@ -1,3 +1,4 @@
+const localca = @import("localca");
 const backend = @import("telar-backend");
 const std = @import("std");
 const proxy = @import("proxy.zig");
@@ -18,8 +19,12 @@ pub fn init(directory: []const u8) !AuthorityPaths {
     return paths;
 }
 
-pub fn files(self: *const AuthorityPaths) backend.AuthorityFiles {
-    return .{ .key = self.key[0..self.key_len], .certificate = self.certificate[0..self.certificate_len] };
+pub fn files(self: *const AuthorityPaths) localca.AuthorityFiles {
+    return .{
+        .key = self.key[0..self.key_len],
+        .certificate = self.certificate[0..self.certificate_len],
+        .common_name = backend.ca_identity.common_name,
+    };
 }
 
 pub fn recordPath(self: *const AuthorityPaths) []const u8 {

@@ -1,8 +1,9 @@
 //! Anthropic streaming-protocol interpretation.
 
-const SseEvent = @import("../SseEvent.zig");
+const eventstream = @import("eventstream");
+const SseEvent = eventstream.SseEvent;
 const std = @import("std");
-const sse = @import("../sse.zig");
+const sse = eventstream.sse;
 
 /// Returns whether an SSE event explicitly reports a naturally completed
 /// Claude turn.

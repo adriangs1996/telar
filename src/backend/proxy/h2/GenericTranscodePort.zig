@@ -1,4 +1,5 @@
-const SessionType = @import("../Session.zig");
+const localca = @import("localca");
+const SessionType = localca.Session;
 const relay = @import("relay.zig");
 
 pub fn Type(comptime Session: type, comptime Sink: type) type {

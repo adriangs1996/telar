@@ -1,6 +1,7 @@
 const types = @import("../../agent/types.zig");
-const Decoder = @import("../Decoder.zig");
-const SseEvent = @import("../SseEvent.zig");
+const eventstream = @import("eventstream");
+const Decoder = eventstream.Decoder;
+const SseEvent = eventstream.SseEvent;
 const std = @import("std");
 const claude = @import("claude.zig");
 /// Bounded interpreter for one streamed provider response.

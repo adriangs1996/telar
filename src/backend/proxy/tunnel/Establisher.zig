@@ -3,7 +3,8 @@ const Exchange = @import("Exchange.zig");
 const GenericAttempt = @import("../GenericAttempt.zig").Type;
 const std = @import("std");
 const GenericRoute = @import("../GenericRoute.zig").Type;
-const Session = @import("../Session.zig");
+const localca = @import("localca");
+const Session = localca.Session;
 const tls = @import("tls.zig");
 const Establisher = @This();
 

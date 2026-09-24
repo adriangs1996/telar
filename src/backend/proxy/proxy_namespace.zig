@@ -22,11 +22,13 @@ const lifecycle_mod = @import("lifecycle.zig");
 const observation_queue = @import("observation_queue.zig");
 const provider_provider = @import("provider/provider.zig");
 const service_mod = @import("service/service_namespace.zig");
-const sse = @import("sse.zig");
-const tls = @import("tls.zig");
+const eventstream = @import("eventstream");
+const sse = eventstream.sse;
+const localca = @import("localca");
+const tls = localca.tls;
 const tls_tunnel = @import("tls_tunnel.zig");
 
-pub const ca = @import("ca.zig");
+const ca = localca.ca;
 
 pub const PaneKey = @import("../pane/PaneKey.zig");
 pub const ApiDialect = types.ApiDialect;

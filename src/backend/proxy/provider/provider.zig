@@ -8,7 +8,8 @@ const types = @import("../../agent/types.zig");
 const request = @import("request_support.zig");
 const dialect_mod = @import("dialect.zig");
 const std = @import("std");
-const sse = @import("../sse.zig");
+const eventstream = @import("eventstream");
+const sse = eventstream.sse;
 const claude = @import("claude.zig");
 
 pub const ApiDialect = types.ApiDialect;

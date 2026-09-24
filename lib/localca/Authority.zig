@@ -7,6 +7,8 @@ const tls = @import("tls");
 const Authority = @This();
 
 pair: Pair,
+/// Issuer name of every leaf; the subject the certificate was created with.
+common_name: []const u8,
 
 /// Loads one complete authority or atomically creates both missing files.
 /// A partial key/certificate pair is rejected instead of being repaired.
@@ -37,7 +39,7 @@ pub fn loadExisting(resources: Resources, files: AuthorityFiles) ca.Error!Author
     try ca.validateStoredFile(resources.io, files.key);
     try ca.validateStoredFile(resources.io, files.certificate);
 
-    return .{ .pair = try ca.load(resources, files) };
+    return .{ .pair = try ca.load(resources, files), .common_name = files.common_name };
 }
 
 /// Creates a new 30-day authority at unused paths. This is the rotation
@@ -47,10 +49,10 @@ pub fn loadExisting(resources: Resources, files: AuthorityFiles) ca.Error!Author
 /// var authority = try Authority.createSystem(resources, temporary_files);
 /// ```
 pub fn createSystem(resources: Resources, files: AuthorityFiles) ca.Error!Authority {
-    var pair = try ca.generate(resources.io, ca.system_ca_seconds);
+    var pair = try ca.generate(resources.io, ca.system_ca_seconds, files.common_name);
     defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
     try ca.persist(resources.io, &pair, files);
-    return .{ .pair = pair };
+    return .{ .pair = pair, .common_name = files.common_name };
 }
 
 /// Returns the uppercase SHA-1 certificate fingerprint accepted by the
@@ -77,7 +79,7 @@ pub fn expiresWithin(self: *const Authority, io: std.Io, seconds: u64) ca.Error!
     return parsed.validity.not_after <= now +| seconds;
 }
 
-/// Reports whether the certificate has Telar's bounded system-trust
+/// Reports whether the certificate has the bounded system-trust
 /// lifetime rather than the ten-year private-CA lifetime.
 ///
 /// ```zig
@@ -103,7 +105,7 @@ fn loadOrCreateWithValidity(resources: Resources, files: AuthorityFiles, validit
     if (key_exists) {
         try ca.validateStoredFile(io, key_path);
         try ca.validateStoredFile(io, cert_path);
-        const authority: Authority = .{ .pair = try ca.load(resources, files) };
+        const authority: Authority = .{ .pair = try ca.load(resources, files), .common_name = files.common_name };
         if (validity_seconds == ca.system_ca_seconds and !(try authority.hasSystemLifetime())) {
             return error.ReadFailed;
         }
@@ -111,14 +113,14 @@ fn loadOrCreateWithValidity(resources: Resources, files: AuthorityFiles, validit
         return authority;
     }
 
-    var pair = try ca.generate(io, validity_seconds);
+    var pair = try ca.generate(io, validity_seconds, files.common_name);
     defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
     try ca.persist(io, &pair, files);
-    return .{ .pair = pair };
+    return .{ .pair = pair, .common_name = files.common_name };
 }
 
 /// `SSL_CERT_FILE` replaces system trust. The child therefore receives a
-/// bundle containing both platform roots and Telar's private authority.
+/// bundle containing both platform roots and this private authority.
 ///
 /// ```zig
 /// try authority.writeBundle(resources, output_path);
@@ -150,7 +152,7 @@ pub fn mint(self: *const Authority, io: std.Io, host: []const u8) ca.Error!Pair 
             .not_after = now + ca.leaf_seconds,
         },
         leaf.key_pair.public_key,
-        .{ .common_name = ca.ca_common_name, .key_pair = &self.pair.key_pair },
+        .{ .common_name = self.common_name, .key_pair = &self.pair.key_pair },
     ) catch return error.CertFailed;
     leaf.cert_len = cert.len;
     return leaf;

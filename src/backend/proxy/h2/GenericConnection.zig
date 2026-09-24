@@ -1,5 +1,6 @@
 const GenericConnectionPort = @import("GenericConnectionPort.zig").Type;
-const Settings = @import("Settings.zig");
+const h2frames = @import("h2frames");
+const Settings = h2frames.Settings;
 const Stats = @import("Stats.zig");
 
 /// Creates the lifecycle owner for one intercepted HTTP/2 connection.

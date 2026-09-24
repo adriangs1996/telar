@@ -5,7 +5,8 @@
 
 const std = @import("std");
 const FakeSessionType = @import("FakeSession.zig");
-const Session = @import("../Session.zig");
+const localca = @import("localca");
+const Session = localca.Session;
 const types = @import("types.zig");
 
 pub const max_chunk_line_bytes = 128;

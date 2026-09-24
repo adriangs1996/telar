@@ -1,5 +1,6 @@
 const std = @import("std");
-const Settings = @import("Settings.zig");
+const h2frames = @import("h2frames");
+const Settings = h2frames.Settings;
 const Stats = @import("Stats.zig");
 const relay = @import("relay.zig");
 

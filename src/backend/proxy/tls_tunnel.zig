@@ -6,7 +6,8 @@ const GenericTlsTunnelPort = @import("GenericTlsTunnelPort.zig").Type;
 const GenericTlsTunnelCommand = @import("GenericTlsTunnelCommand.zig").Type;
 const TlsTunnelCapture = @import("TlsTunnelCapture.zig");
 const std = @import("std");
-const tls = @import("tls.zig");
+const localca = @import("localca");
+const tls = localca.tls;
 
 pub const Step = enum {
     check_interception,

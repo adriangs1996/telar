@@ -6,25 +6,24 @@ const GenericConnection = @import("GenericConnection.zig").Type;
 const TransformPipeline = @import("../TransformPipeline.zig");
 const TransformContext = @import("../TransformContext.zig");
 const std = @import("std");
-const Session = @import("../Session.zig");
+const localca = @import("localca");
+const Session = localca.Session;
 const types = @import("../../agent/types.zig");
 const IntegrationContext = @import("IntegrationContext.zig");
 const middleware = @import("../middleware.zig");
 const connection = @import("connection.zig");
-const streams = @import("streams.zig");
+const h2frames = @import("h2frames");
+const streams = h2frames.streams;
 
 pub const Direction = relay_mod.Direction;
 pub const client_preface = relay_mod.client_preface;
 pub const Stats = @import("Stats.zig");
 pub const Lifecycle = @import("Lifecycle.zig");
-pub const HeaderBlock = @import("HeaderBlock.zig");
-pub const HeaderField = @import("HeaderField.zig");
 pub const RequestBody = @import("RequestBody.zig");
 pub const RequestFinished = @import("RequestFinished.zig");
 pub const ResponseBody = @import("ResponseBody.zig");
 pub const Event = relay_mod.Event;
-pub const PeerSettings = @import("PeerSettings.zig");
-pub const Settings = @import("Settings.zig");
+const Settings = h2frames.Settings;
 
 pub const Route = @import("H2Route.zig");
 

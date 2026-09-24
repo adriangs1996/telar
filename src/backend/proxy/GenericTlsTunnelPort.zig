@@ -1,5 +1,6 @@
 const GenericAttempt = @import("GenericAttempt.zig").Type;
-const tls = @import("tls.zig");
+const localca = @import("localca");
+const tls = localca.tls;
 const GenericEstablished = @import("GenericEstablished.zig").Type;
 
 /// Defines interception policy, TLS establishment, metrics, and failure

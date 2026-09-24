@@ -5,7 +5,7 @@ const GenericConnection = @import("GenericConnection.zig").Type;
 const Capture = @import("Capture.zig");
 const std = @import("std");
 
-pub const Settings = @import("Settings.zig");
+const h2frames = @import("h2frames");
 
 pub const Step = enum {
     response_decode_failure,

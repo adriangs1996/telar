@@ -65,7 +65,7 @@ therefore survives an inactive proxy and a client reconnect.
 
 ## Validation
 
-- `src/backend/proxy/ca.zig` proves the 30-day lifetime, key/certificate match,
+- `lib/localca/ca.zig` proves the 30-day lifetime, key/certificate match,
   owner-only persistence, fingerprint, and bounded expiry check.
 - `src/cli/proxy.zig` proves record parsing, permissions, fingerprint matching,
   default paths, and direct platform command construction.

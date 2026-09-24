@@ -1,4 +1,5 @@
-const SessionType = @import("Session.zig");
+const localca = @import("localca");
+const SessionType = localca.Session;
 
 pub fn Type(comptime Session: type) type {
     return struct {

@@ -28,6 +28,10 @@ pub fn init(b: *std.Build, app: Application) @This() {
             .name = "wuffs",
             .module = app.modules.wuffs,
         },
+        .{
+            .name = "tls",
+            .module = app.modules.tls,
+        },
     });
     const bench_lua_api = lua_build.add(b, .{ .target = app.modules.target, .optimize = bench_optimize, .name = "lua-bench" });
     const bench_lua = b.createModule(.{

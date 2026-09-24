@@ -224,6 +224,9 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `editorremote` | reusing a terminal editor: identify it, reach its server, open a literal path |
 | `cmdcapture` | commands, directories, exit status and output tails read from a pane's terminal |
 | `jsonl` | bounded JSON-lines streams, in-place truncation of output fields, total value accessors |
+| `eventstream` | incremental, bounded Server-Sent Events decoding |
+| `h2frames` | HTTP/2 frames, SETTINGS, header blocks and stream states, without a connection |
+| `localca` | a local certificate authority, per-host leaves, system roots and intercepted TLS sessions |
 
 A rule that decides what telar means stays in a flow even when it is pure;
 [`plans/libraries.md`](plans/libraries.md) lists what is still to move.

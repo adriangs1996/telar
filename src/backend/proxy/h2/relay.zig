@@ -5,8 +5,9 @@
 //! independent inflater and deflater. DATA, flow control, and stream ownership
 //! remain end to end in both modes.
 
-const framing = @import("framing.zig");
-const stream_state = @import("streams.zig");
+const h2frames = @import("h2frames");
+const framing = h2frames.framing;
+const stream_state = h2frames.streams;
 const GenericTranscodePort = @import("GenericTranscodePort.zig").Type;
 const Observer = @import("Observer.zig");
 const std = @import("std");
@@ -19,7 +20,8 @@ const BodyCollector = @import("BodyCollector.zig");
 const TestTranscodeSetup = @import("TestTranscodeSetup.zig");
 const Transformation = @import("../Transformation.zig");
 const TransformPipeline = @import("../TransformPipeline.zig");
-const Session = @import("../Session.zig");
+const localca = @import("localca");
+const Session = localca.Session;
 
 pub const c = @cImport({
     @cInclude("nghttp2/nghttp2.h");
@@ -27,7 +29,6 @@ pub const c = @cImport({
 
 pub const client_preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 pub const max_header_block_bytes = 128 * 1024;
-pub const max_tracked_streams = stream_state.max_tracked_streams;
 
 pub const frame_data: u8 = 0x0;
 pub const frame_headers: u8 = 0x1;
@@ -53,9 +54,9 @@ pub const RequestFinished = @import("RequestFinished.zig");
 
 pub const ResponseBody = @import("ResponseBody.zig");
 
-pub const HeaderField = @import("HeaderField.zig");
+const HeaderField = h2frames.HeaderField;
 
-pub const HeaderBlock = @import("HeaderBlock.zig");
+const HeaderBlock = h2frames.HeaderBlock;
 
 /// One borrowed observation produced while relaying HTTP/2 frames.
 pub const Event = union(enum) {
@@ -67,7 +68,7 @@ pub const Event = union(enum) {
     response_body: ResponseBody,
 };
 
-pub const PeerSettings = @import("PeerSettings.zig");
+const PeerSettings = h2frames.PeerSettings;
 
 pub const Route = @import("RelayRoute.zig");
 

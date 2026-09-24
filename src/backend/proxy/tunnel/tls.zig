@@ -3,10 +3,11 @@
 const GenericTlsTunnelPort = @import("../GenericTlsTunnelPort.zig").Type;
 const Establisher = @import("Establisher.zig");
 const std = @import("std");
-const Session = @import("../Session.zig");
+const localca = @import("localca");
+const Session = localca.Session;
 const GenericTlsTunnelCommand = @import("../GenericTlsTunnelCommand.zig").Type;
 const GenericAttempt = @import("../GenericAttempt.zig").Type;
-const tls_transport = @import("../tls.zig");
+const tls_transport = localca.tls;
 const GenericEstablished = @import("../GenericEstablished.zig").Type;
 const metrics = @import("../metrics.zig");
 

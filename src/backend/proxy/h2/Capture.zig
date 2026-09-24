@@ -1,7 +1,8 @@
 const std = @import("std");
 const Stats = @import("Stats.zig");
 const connection = @import("connection.zig");
-const Settings = @import("Settings.zig");
+const h2frames = @import("h2frames");
+const Settings = h2frames.Settings;
 const relay = @import("relay.zig");
 const Capture = @This();
 

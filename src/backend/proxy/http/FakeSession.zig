@@ -1,6 +1,7 @@
 const std = @import("std");
 const test_support = @import("test_support.zig");
-const Session = @import("../Session.zig");
+const localca = @import("localca");
+const Session = localca.Session;
 const FakeSession = @This();
 
 child_input: []const u8 = "",

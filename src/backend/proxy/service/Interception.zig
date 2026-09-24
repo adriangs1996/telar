@@ -1,10 +1,12 @@
 const std = @import("std");
-const Authority = @import("../Authority.zig");
-const Roots = @import("../Roots.zig");
+const localca = @import("localca");
+const ca_identity = @import("../ca_identity.zig");
+const Authority = localca.Authority;
+const Roots = localca.Roots;
 const Policy = @import("../Policy.zig");
 const Paths = @import("Paths.zig");
-const Resources = @import("../Resources.zig");
-const AuthorityFiles = @import("../AuthorityFiles.zig");
+const Resources = localca.Resources;
+const AuthorityFiles = localca.AuthorityFiles;
 const Counters = @import("../Counters.zig");
 const TunnelResources = @import("../tunnel/Resources.zig");
 const Interception = @This();
@@ -26,7 +28,11 @@ hosts: Policy,
 /// ```
 pub fn init(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !Interception {
     const resources: Resources = .{ .io = io, .allocator = gpa };
-    const files: AuthorityFiles = .{ .key = paths.key, .certificate = paths.certificate };
+    const files: AuthorityFiles = .{
+        .key = paths.key,
+        .certificate = paths.certificate,
+        .common_name = ca_identity.common_name,
+    };
     var authority = if (paths.system_authority)
         try Authority.loadOrCreateSystem(resources, files)
     else

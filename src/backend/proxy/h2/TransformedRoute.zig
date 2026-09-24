@@ -1,5 +1,6 @@
 const RelayRoute = @import("RelayRoute.zig");
-const PeerSettings = @import("PeerSettings.zig");
+const h2frames = @import("h2frames");
+const PeerSettings = h2frames.PeerSettings;
 const TransformPipeline = @import("../TransformPipeline.zig");
 const std = @import("std");
 const TransformContext = @import("../TransformContext.zig");
