@@ -157,8 +157,28 @@ the libraries it uses by name.
    candidate uses from core showed `history-store` and `checkpoint` persist
    telar's own model, so they stay; `kitty-media` and `pane-render` build
    protocol values and move after `wire`.
-4. Proxy: `sse`, `h2-framing`, `local-ca`, then `http-relay` and
-   `capture-buffer` once the dialect and pane tags are parameters.
+4. Proxy. Done: `eventstream`, `h2frames`, `localca`. The relay and the
+   capture buffer carry telar policy, so the proxy first moves to the
+   procedural model:
+   - A. Ports with one production implementation become direct calls:
+     lifecycle, accept loop, CONNECT authentication, TLS establishment, the
+     credential gate and the observer pipeline. Done.
+   - B1. The transformer pipeline goes; the one production rule (identity
+     encoding for Claude inference requests) is a rewrite telar hands the
+     relay.
+   - B2. HTTP/1.1 head analysis reports method and target; telar classifies
+     the request by dialect.
+   - B3. The relay reports forwarded head and body bytes; capture happens in
+     telar.
+   - B4. The HTTP/1.1 connection and exchange ports become one comptime
+     handler type whose methods receive the relay's neutral events.
+   - B5. The same for HTTP/2: the relay reports stream facts (head, status,
+     reset, goaway, body end) and telar decides phases.
+   - B6. `middleware.zig` splits into HTTP header rules, which go with the
+     relay, and telar's phases and protocols.
+   - C. The HTTP/1.1 and HTTP/2 relays and header rules move to
+     `lib/httprelay`; the capture buffer, keyed by an owner id, and one
+     credential-gated queue generic over its payload move to `lib/`.
 5. `wire`, which touches both processes and every message.
 6. Client and GUI: `key-capture`, `screen-diff`, `kitty-render`, `image`,
    `box-glyphs`, `markdown-spans`, `syntax`, `diagram-client`.
