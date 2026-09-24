@@ -6,7 +6,8 @@ const GuiAdapter = @import("../../GuiAdapter.zig");
 const Target = @import("Target.zig");
 const Control = @import("MessageLinkControl.zig");
 const Preview = @import("../MessageLinkPreview.zig");
-const Destination = @import("../MessageLinkDestination.zig");
+const mdinline = @import("mdinline");
+const Destination = mdinline.Destination;
 
 /// Borrows only the destination range of the recorded immutable message item.
 /// Example: `const text = message_links.destination(gui, control) orelse return;`

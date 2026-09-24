@@ -5,7 +5,8 @@ const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const WrappedLines = @import("overlays/WrappedLines.zig");
 const MessageLinkControl = @import("interaction/MessageLinkControl.zig");
-const MessageLinkDestination = @import("MessageLinkDestination.zig");
+const mdinline = @import("mdinline");
+const MessageLinkDestination = mdinline.Destination;
 const Preview = @This();
 
 control: MessageLinkControl,

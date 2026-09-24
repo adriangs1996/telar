@@ -161,7 +161,7 @@ message revision and delivered geometry before queuing an owned clipboard write.
 It uses the existing host clipboard queue and creates no runtime state or IPC
 messages. Replaced snapshots cannot open or copy a replacement destination.
 `widget_interaction.zig` covers browser dispatch, file editor creation, right-click
-copying and stale message rejection; `message_spans_test.zig` covers bare URI
+copying and stale message rejection; `lib/mdinline/spans_tests.zig` covers bare URI
 recognition and literal code.
 
 Tools appear as compact activity rows with their command, file summary or tool

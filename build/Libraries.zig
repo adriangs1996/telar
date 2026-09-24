@@ -99,6 +99,10 @@ const specs = [_]Spec{
         .name = "urlscan",
     },
     .{
+        .name = "mdinline",
+        .imports = &.{"urlscan"},
+    },
+    .{
         .name = "bytecodec",
     },
     .{

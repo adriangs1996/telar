@@ -2,7 +2,8 @@
 const MessageTable = @import("MessageTable.zig");
 const std = @import("std");
 const MessageBlocks = @import("MessageBlocks.zig");
-const MessageSpans = @import("MessageSpans.zig");
+const mdinline = @import("mdinline");
+const MessageSpans = mdinline.Spans;
 const MessageTableCells = @import("MessageTableCells.zig");
 const Selection = @This();
 

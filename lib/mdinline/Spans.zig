@@ -2,8 +2,8 @@
 //! unfinished syntax stays literal. Block parsing owns fenced-code isolation.
 const urlscan = @import("urlscan");
 const std = @import("std");
-const Span = @import("MessageSpan.zig");
-const Scope = @import("MessageSpanScope.zig");
+const Span = @import("Span.zig");
+const Scope = @import("Scope.zig");
 const Spans = @This();
 
 text: []const u8,
@@ -489,11 +489,6 @@ test "inline Markdown removes only complete presentation delimiters" {
     try std.testing.expectEqual(.emphasis, spans.next().?.kind);
     try std.testing.expectEqualStrings("; **stream", spans.next().?.text);
     try std.testing.expect(spans.next() == null);
-}
-
-test {
-    _ = @import("message_spans_test.zig");
-    _ = @import("MessageLinkDestination.zig");
 }
 
 fn bareLink(self: *Spans, range: [2]usize) ?usize {

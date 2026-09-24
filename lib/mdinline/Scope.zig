@@ -1,5 +1,5 @@
 //! A bounded inline style or link scope within one borrowed source string.
-const Span = @import("MessageSpan.zig");
+const Span = @import("Span.zig");
 
 start: usize,
 end: usize,

@@ -1,6 +1,6 @@
 const std = @import("std");
-const Spans = @import("MessageSpans.zig");
-const MessageSpan = @import("MessageSpan.zig");
+const Spans = @import("Spans.zig");
+const Span = @import("Span.zig");
 
 fn visible(source: []const u8, destination: []u8) []const u8 {
     var spans: Spans = .{ .text = source };
@@ -17,7 +17,7 @@ test "Markdown link labels retain inline code strong emphasis and one source ide
     var spans: Spans = .{ .text = "See [**documentation** and `input` or *examples*](../input.zig) now" };
     try std.testing.expectEqualStrings("See ", spans.next().?.text);
     const expected_text = [_][]const u8{ "documentation", " and ", "input", " or ", "examples" };
-    const expected_kind = [_]@FieldType(MessageSpan, "kind"){ .strong, .plain, .code, .plain, .emphasis };
+    const expected_kind = [_]@FieldType(Span, "kind"){ .strong, .plain, .code, .plain, .emphasis };
     for (expected_text, expected_kind) |text, kind| {
         const span = spans.next().?;
         try std.testing.expectEqualStrings(text, span.text);

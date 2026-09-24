@@ -222,6 +222,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `localsocket` | same-user Unix sockets and length-prefixed framing |
 | `bytecodec` | bounds-checked little-endian encoding into caller buffers and decoding from borrowed bytes |
 | `urlscan` | classifying a URI by scheme and finding the URI under an offset in a line |
+| `mdinline` | inline Markdown spans over borrowed text and bounded link destination decoding |
 | `cellcodec` | runs of cells with a packed header, styles written on change and colors sized by kind |
 | `agentfiles` | titles from Claude Code's JSONL transcript and Codex's thread database |
 | `editorremote` | reusing a terminal editor: identify it, reach its server, open a literal path |
