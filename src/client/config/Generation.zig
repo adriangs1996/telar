@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const lua = @import("telar-lua");
 const data = @import("model");
 const core = @import("telar-core");
@@ -870,7 +871,7 @@ fn parsePrefix(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !v
         diagnostic.set("config.client.prefix must be a string", .{});
         return error.InvalidConfig;
     };
-    const prefix = data.chord.parseKey(value) catch |err| {
+    const prefix = keyinput.chord.parseKey(value) catch |err| {
         diagnostic.set("invalid config.client.prefix: {s}", .{@errorName(err)});
         return error.InvalidConfig;
     };
@@ -1040,7 +1041,7 @@ fn parseBinding(self: *Generation, binding_input: BindingInput, diagnostic: *dat
         );
         return error.InvalidConfig;
     }
-    var keys: [data.config_values.max_binding_keys]data.Key = undefined;
+    var keys: [data.config_values.max_binding_keys]keyinput.Key = undefined;
     const key_offset: usize = @intFromBool(prefixed);
     if (prefixed) {
         keys[0] = self.snapshot.prefix;
@@ -1055,7 +1056,7 @@ fn parseBinding(self: *Generation, binding_input: BindingInput, diagnostic: *dat
             );
             return error.InvalidConfig;
         };
-        keys[key_offset + key_index] = data.chord.parseKey(name) catch |err| {
+        keys[key_offset + key_index] = keyinput.chord.parseKey(name) catch |err| {
             lua_value.pop(state, 2);
             diagnostic.set(
                 "invalid keybinding {d}: {s}",

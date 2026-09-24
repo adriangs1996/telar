@@ -1,4 +1,4 @@
-const data = @import("model");
+const keyinput = @import("keyinput");
 const keybind = @import("keybind.zig");
 const Capture = @This();
 
@@ -16,7 +16,7 @@ pub fn forward(self: *Capture, bytes: []const u8) !void {
     self.len += bytes.len;
 }
 
-pub fn action(self: *Capture, value: keybind.TestAction) !data.KeybindControl {
+pub fn action(self: *Capture, value: keybind.TestAction) !keyinput.Control {
     self.actions[self.action_len] = value;
     self.action_len += 1;
     return if (self.stop_on_action) .stop else .continue_routing;

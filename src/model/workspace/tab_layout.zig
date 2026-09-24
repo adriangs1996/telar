@@ -1,5 +1,6 @@
 //! The client-owned arrangement of one tab's panes: geometry, focus and
 //! pointer targets. `slot` is the tab's position in `model.tabs`.
+const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const std = @import("std");
@@ -13,7 +14,7 @@ const PaneMousePlan = @import("PaneMousePlan.zig");
 const ProspectiveSplit = @import("ProspectiveSplit.zig");
 const SplitTarget = @import("SplitTarget.zig");
 const PaneSet = @import("PaneSet.zig");
-const Mouse = @import("../input/Mouse.zig");
+const Mouse = keyinput.Mouse;
 const multiplexer = @import("multiplexer.zig");
 
 /// Geometry of one tab for `area`, rebuilt only when the tab, its layout

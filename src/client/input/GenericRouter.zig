@@ -1,10 +1,11 @@
+const keyinput = @import("keyinput");
 const routing_tests = @import("routing_tests.zig");
 const data = @import("model");
 const GenericKeymap = @import("GenericKeymap.zig").Type;
 const std = @import("std");
 const Capture = @import("Capture.zig");
 
-pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime Decoder: type) type {
+pub fn Type(comptime Action: type, comptime limits: keyinput.RouterLimits, comptime Decoder: type) type {
     const term = Decoder;
     const max_bindings = limits.max_bindings;
     const max_keys = limits.max_keys;
@@ -16,9 +17,9 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
     }
 
     const Map = GenericKeymap(Action, max_bindings, max_keys);
-    const BindingType = data.GenericBinding(Action, max_keys);
+    const BindingType = keyinput.GenericBinding(Action, max_keys);
     const LeaseOwner = enum { binding, application };
-    const Leases = data.GenericTable(LeaseOwner, data.keybind.max_physical_leases);
+    const Leases = keyinput.GenericTable(LeaseOwner, data.keybind.max_physical_leases);
     return struct {
         pub const Feed = struct {
             bytes: []const u8,
@@ -27,27 +28,27 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
 
         pub const Context = struct {
             captures_keys: bool = false,
-            repeat_policy: ?data.RepeatPolicy = null,
+            repeat_policy: ?keyinput.RepeatPolicy = null,
         };
 
         pub const ActionRequest = struct {
             value: Action,
-            key: data.Key,
+            key: keyinput.Key,
             now_ns: u64,
             repeated: bool = false,
         };
 
         pub const Replay = struct {
-            held_keys: [max_keys]data.Key = undefined,
+            held_keys: [max_keys]keyinput.Key = undefined,
             held_key_len: u8 = 0,
             held_raw: [held_capacity]u8 = undefined,
             held_raw_len: usize = 0,
-            current_key: ?data.Key = null,
+            current_key: ?keyinput.Key = null,
             current_raw: []const u8 = "",
         };
 
         pub const Decision = union(enum) {
-            forward: struct { key: data.Key, raw: []const u8 },
+            forward: struct { key: keyinput.Key, raw: []const u8 },
             replay: Replay,
             action: ActionRequest,
             pending,
@@ -62,13 +63,13 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
         };
 
         map: Map,
-        prefix: ?data.Key = null,
+        prefix: ?keyinput.Key = null,
         candidates: Map.Range = .{ .start = 0, .end = 0 },
         depth: u8 = 0,
         prefix_pending: bool = false,
         held: [held_capacity]u8 = undefined,
         held_len: usize = 0,
-        held_keys: [max_keys]data.Key = undefined,
+        held_keys: [max_keys]keyinput.Key = undefined,
         held_key_len: u8 = 0,
         input: [input_capacity]u8 = undefined,
         input_start: usize = 0,
@@ -82,9 +83,9 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
         repeating: ?RepeatingBinding = null,
 
         const RepeatingBinding = struct {
-            key: data.Key,
+            key: keyinput.Key,
             action: Action,
-            policy: data.RepeatPolicy,
+            policy: keyinput.RepeatPolicy,
             last_ns: u64,
         };
 
@@ -94,7 +95,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
             return initWithPrefix(configured, null);
         }
 
-        pub fn initWithPrefix(configured: []const BindingType, prefix: ?data.Key) !Self {
+        pub fn initWithPrefix(configured: []const BindingType, prefix: ?keyinput.Key) !Self {
             const map = try Map.init(configured);
             return .{
                 .map = map,
@@ -113,7 +114,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
         /// retain only an existing binding lease, independent of focus or modifiers.
         /// This query never advances a sequence or changes physical ownership.
         /// Example: `if (router.wantsBinding(key)) return routeGlobal(key);`
-        pub fn wantsBinding(self: *const Self, key: data.Key) bool {
+        pub fn wantsBinding(self: *const Self, key: keyinput.Key) bool {
             if (key.phase != .press) {
                 const physical = key.physical orelse return false;
                 return self.leases.owner(physical) == .binding;
@@ -129,7 +130,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
         /// Returns a physical key to a widget after a chord replays into it.
         /// The widget then owns subsequent repeats and release; another key's
         /// retained repeat remains active. Example: `router.relinquishKey(physical);`
-        pub fn relinquishKey(self: *Self, physical: data.Key.Physical) void {
+        pub fn relinquishKey(self: *Self, physical: keyinput.Key.Physical) void {
             _ = self.releasePhysicalKey(physical);
         }
 
@@ -161,10 +162,10 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
         /// Returns the configured one-key suffix for a prefixed action. The
         /// client uses this to render help from the effective keymap instead
         /// of repeating default binding labels in the UI.
-        pub fn prefixedKeyForAction(self: *const Self, action: Action) ?data.Key {
+        pub fn prefixedKeyForAction(self: *const Self, action: Action) ?keyinput.Key {
             const prefix = self.prefix orelse return null;
             for (self.map.bindings[0..self.map.len]) |*binding| {
-                if (binding.len != 2 or data.keybind.keyOrder(binding.keys[0], prefix) != .eq) {
+                if (binding.len != 2 or keyinput.keybind.keyOrder(binding.keys[0], prefix) != .eq) {
                     continue;
                 }
                 if (std.meta.eql(binding.action, action)) {
@@ -264,7 +265,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
         }
 
         pub const KeyInput = struct {
-            key: data.Key,
+            key: keyinput.Key,
             raw: []const u8,
             now_ns: u64,
         };
@@ -346,7 +347,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
 
         /// Arm repeats only after a successful action, using its resulting owner.
         /// Example: `router.actionCompleted(request, repeatPolicy(request.value));`
-        pub fn actionCompleted(self: *Self, request: ActionRequest, policy: ?data.RepeatPolicy) void {
+        pub fn actionCompleted(self: *Self, request: ActionRequest, policy: ?keyinput.RepeatPolicy) void {
             if (request.repeated or request.key.physical == null) {
                 return;
             }
@@ -358,7 +359,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
 
         /// Release a failed press and cancel repeats after delivery/action errors.
         /// Example: `errdefer router.eventFailed(input.key);`
-        pub fn eventFailed(self: *Self, key: data.Key) void {
+        pub fn eventFailed(self: *Self, key: keyinput.Key) void {
             self.repeating = null;
             if (key.phase == .press) {
                 if (key.physical) |physical| {
@@ -367,12 +368,12 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
             }
         }
 
-        fn repeatBinding(self: *Self, input: KeyInput, policy: ?data.RepeatPolicy) Decision {
+        fn repeatBinding(self: *Self, input: KeyInput, policy: ?keyinput.RepeatPolicy) Decision {
             const held = self.repeating orelse return .discard;
             if (!held.key.physical.?.eql(input.key.physical.?)) {
                 return .discard;
             }
-            if (data.keybind.keyOrder(held.key, input.key) != .eq or !std.meta.eql(policy, @as(?data.RepeatPolicy, held.policy))) {
+            if (keyinput.keybind.keyOrder(held.key, input.key) != .eq or !std.meta.eql(policy, @as(?keyinput.RepeatPolicy, held.policy))) {
                 self.repeating = null;
                 return .discard;
             }
@@ -385,7 +386,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
             return .{ .action = .{ .value = held.action, .key = input.key, .now_ns = input.now_ns, .repeated = true } };
         }
 
-        fn releasePhysicalKey(self: *Self, physical: data.Key.Physical) ?LeaseOwner {
+        fn releasePhysicalKey(self: *Self, physical: keyinput.Key.Physical) ?LeaseOwner {
             if (self.repeating) |held| {
                 if (held.key.physical.?.eql(physical)) {
                     self.repeating = null;
@@ -395,7 +396,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
             return self.leases.release(physical);
         }
 
-        fn transferKeyToApplication(self: *Self, key_value: data.Key) void {
+        fn transferKeyToApplication(self: *Self, key_value: keyinput.Key) void {
             const identity = key_value.physical orelse return;
             if (self.leases.owner(identity) == null) {
                 return;
@@ -405,7 +406,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
             std.debug.assert(transferred);
         }
 
-        fn transferKeysToApplication(self: *Self, keys: []const data.Key) void {
+        fn transferKeysToApplication(self: *Self, keys: []const keyinput.Key) void {
             for (keys) |key_value| {
                 self.transferKeyToApplication(key_value);
             }
@@ -414,7 +415,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
         fn routeKey(self: *Self, input: KeyInput) Decision {
             const key = input.key;
             const raw = input.raw;
-            if (self.prefix_pending and data.keybind.isPlainEscape(key)) {
+            if (self.prefix_pending and keyinput.keybind.isPlainEscape(key)) {
                 self.resetMatch();
                 return .discard;
             }
@@ -432,7 +433,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
                 }
                 const held_key_len = self.held_key_len;
                 const held_raw_len = self.held_len;
-                var held_keys: [max_keys]data.Key = undefined;
+                var held_keys: [max_keys]keyinput.Key = undefined;
                 var held_raw: [held_capacity]u8 = undefined;
                 @memcpy(held_keys[0..held_key_len], self.held_keys[0..held_key_len]);
                 @memcpy(held_raw[0..held_raw_len], self.held[0..held_raw_len]);
@@ -458,7 +459,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
             if (self.held_len + raw.len > self.held.len) {
                 const held_key_len = self.held_key_len;
                 const held_raw_len = self.held_len;
-                var held_keys: [max_keys]data.Key = undefined;
+                var held_keys: [max_keys]keyinput.Key = undefined;
                 var held_raw: [held_capacity]u8 = undefined;
                 @memcpy(held_keys[0..held_key_len], self.held_keys[0..held_key_len]);
                 @memcpy(held_raw[0..held_raw_len], self.held[0..held_raw_len]);
@@ -480,7 +481,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
             self.depth = @intCast(next_depth);
             if (next_depth == 1) {
                 if (self.prefix) |prefix| {
-                    self.prefix_pending = data.keybind.keyOrder(key, prefix) == .eq;
+                    self.prefix_pending = keyinput.keybind.keyOrder(key, prefix) == .eq;
                 }
             }
             return .pending;
@@ -565,8 +566,8 @@ fn testRouter() type {
 
 test "binding admission finds configured direct and chord shortcuts without changing state" {
     const Router = testRouter();
-    const Binding = data.GenericBinding(routing_tests.Action, 4);
-    const parse = data.keybind.parseKey;
+    const Binding = keyinput.GenericBinding(routing_tests.Action, 4);
+    const parse = keyinput.chord.parseKey;
     const router = try Router.init(&.{
         try Binding.parse(&.{ "ctrl+k", "ctrl+c" }, .next),
         try Binding.parse(&.{"alt+down"}, .next),
@@ -592,15 +593,15 @@ test "binding admission finds configured direct and chord shortcuts without chan
 
 test "binding admission keeps ordinary chord misses with the router until replay" {
     const Router = testRouter();
-    const Binding = data.GenericBinding(routing_tests.Action, 4);
+    const Binding = keyinput.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{ "a", "b" }, .next)});
     var capture: Capture = .{};
-    const first = try data.keybind.parseKey("a");
-    const miss = try data.keybind.parseKey("x");
+    const first = try keyinput.chord.parseKey("a");
+    const miss = try keyinput.chord.parseKey("x");
     try std.testing.expect(router.wantsBinding(first));
     _ = try capture.apply(router.routeEvent(.{ .key = first, .raw = "", .now_ns = 1 }, .{}));
     const deadline = router.bindingDeadline();
-    try std.testing.expect(router.wantsBinding(try data.keybind.parseKey("b")));
+    try std.testing.expect(router.wantsBinding(try keyinput.chord.parseKey("b")));
     try std.testing.expect(router.wantsBinding(miss));
     try std.testing.expectEqual(deadline, router.bindingDeadline());
     try std.testing.expectEqual(@as(u8, 1), router.depth);
@@ -614,13 +615,13 @@ test "binding admission keeps ordinary chord misses with the router until replay
 
 test "binding admission resolves persistent prefix misses and Escape without claiming unleased repeats" {
     const Router = testRouter();
-    const Binding = data.GenericBinding(routing_tests.Action, 4);
-    const prefix = try data.keybind.parseKey("ctrl+b");
+    const Binding = keyinput.GenericBinding(routing_tests.Action, 4);
+    const prefix = try keyinput.chord.parseKey("ctrl+b");
     var router = try Router.initWithPrefix(&.{try Binding.parse(&.{ "ctrl+b", "n" }, .next)}, prefix);
     var capture: Capture = .{};
     for ([_][]const u8{ "x", "escape" }) |name| {
         _ = try capture.apply(router.routeEvent(.{ .key = prefix, .raw = "", .now_ns = 1 }, .{}));
-        const press = try data.keybind.parseKey(name);
+        const press = try keyinput.chord.parseKey(name);
         try std.testing.expect(router.wantsBinding(press));
         var repeat = press;
         repeat.phase = .repeat;
@@ -638,11 +639,11 @@ test "binding admission resolves persistent prefix misses and Escape without cla
 
 test "binding admission retains a physical shortcut through focus and keymap replacement" {
     const Router = testRouter();
-    const Binding = data.GenericBinding(routing_tests.Action, 4);
+    const Binding = keyinput.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{"ctrl+n"}, .next)});
     var original: Capture = .{};
     var other_focus: Capture = .{};
-    var event = try data.keybind.parseKey("ctrl+n");
+    var event = try keyinput.chord.parseKey("ctrl+n");
     event.physical = .{ .value = 42 };
     try std.testing.expect(router.wantsBinding(event));
     _ = try original.apply(router.routeEvent(.{ .key = event, .raw = "", .now_ns = 1 }, .{}));
@@ -664,15 +665,15 @@ test "binding admission retains a physical shortcut through focus and keymap rep
 
 test "binding admission cannot steal application repeats or releases when modifiers become a shortcut" {
     const Router = testRouter();
-    const Binding = data.GenericBinding(routing_tests.Action, 4);
+    const Binding = keyinput.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{"ctrl+n"}, .next)});
     var capture: Capture = .{};
-    var event = try data.keybind.parseKey("n");
+    var event = try keyinput.chord.parseKey("n");
     event.physical = .{ .value = 42 };
     try std.testing.expect(!router.wantsBinding(event));
     _ = try capture.apply(router.routeEvent(.{ .key = event, .raw = "", .now_ns = 1 }, .{}));
     event.mods.ctrl = true;
-    for ([_]data.Key.Phase{ .repeat, .release }) |phase| {
+    for ([_]keyinput.Key.Phase{ .repeat, .release }) |phase| {
         event.phase = phase;
         try std.testing.expect(!router.wantsBinding(event));
     }
@@ -690,12 +691,12 @@ test "binding admission cannot steal application repeats or releases when modifi
 
 test "replayed chord keys can return their physical ownership to the original widget" {
     const Router = testRouter();
-    const Binding = data.GenericBinding(routing_tests.Action, 4);
+    const Binding = keyinput.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{ "a", "b" }, .next)});
     var capture: Capture = .{};
-    var first = try data.keybind.parseKey("a");
+    var first = try keyinput.chord.parseKey("a");
     first.physical = .{ .value = 1 };
-    var miss = try data.keybind.parseKey("x");
+    var miss = try keyinput.chord.parseKey("x");
     miss.physical = .{ .value = 2 };
     _ = try capture.apply(router.routeEvent(.{ .key = first, .raw = "", .now_ns = 1 }, .{}));
     _ = try capture.apply(router.routeEvent(.{ .key = miss, .raw = "", .now_ns = 2 }, .{}));
@@ -715,10 +716,10 @@ test "replayed chord keys can return their physical ownership to the original wi
 
 test "relinquishing a physical key preserves another shortcut repeat and cancels its own" {
     const Router = testRouter();
-    const Binding = data.GenericBinding(routing_tests.Action, 4);
+    const Binding = keyinput.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{"ctrl+n"}, .next)});
     var capture: Capture = .{};
-    var event = try data.keybind.parseKey("ctrl+n");
+    var event = try keyinput.chord.parseKey("ctrl+n");
     event.physical = .{ .value = 42 };
     _ = try capture.apply(router.routeEvent(.{ .key = event, .raw = "", .now_ns = 1 }, .{}));
     router.repeating = .{ .key = event, .action = .next, .policy = .{ .interval_ns = 1, .context = 9 }, .last_ns = 1 };

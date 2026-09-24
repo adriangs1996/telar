@@ -1,4 +1,5 @@
 //! Gives copy mode first refusal for pointer events inside its pane.
+const keyinput = @import("keyinput");
 
 const cellgrid = @import("cellgrid");
 const data = @import("model");
@@ -11,13 +12,13 @@ const copy_mode = @import("copy_mode.zig");
 /// ```zig
 /// if (try apply(client, tab, event)) return;
 /// ```
-pub fn apply(client: *Client, tab: usize, event: data.Mouse) !bool {
+pub fn apply(client: *Client, tab: usize, event: keyinput.Mouse) !bool {
     const command: CopyModePointerCommand = .{ .kind = event.kind, .left_button = event.button & 0b11 == 0 };
     const outcome = try route(client, command, resolve(&client.model, tab, event));
     return outcome != .unowned;
 }
 
-fn resolve(model: *data.ClientModel, tab: usize, event: data.Mouse) Authority {
+fn resolve(model: *data.ClientModel, tab: usize, event: keyinput.Mouse) Authority {
     const area = data.workbench.region(model).area;
     if (model.pointerSelection()) |selection| {
         const view = data.tab_layout.view(model, tab, selection.pane_id, area);
@@ -121,6 +122,6 @@ pub const Outcome = enum {
 };
 
 const CopyModePointerCommand = struct {
-    kind: data.Mouse.Kind,
+    kind: keyinput.Mouse.Kind,
     left_button: bool = true,
 };

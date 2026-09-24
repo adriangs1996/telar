@@ -1,4 +1,5 @@
 //! Client integration tests for configuration.
+const keyinput = @import("keyinput");
 
 const client_module = @import("telar-client");
 const data = @import("model");
@@ -105,7 +106,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try std.testing.expect(!client.model.sidebar_visible);
     try std.testing.expect(!client.model.pane_gaps);
     try std.testing.expect(!terminal.view.sidebar_requested);
-    try std.testing.expectEqualDeep(try data.chord.parseKey("ctrl+s"), terminal.host_input.router.prefix.?);
+    try std.testing.expectEqualDeep(try keyinput.chord.parseKey("ctrl+s"), terminal.host_input.router.prefix.?);
     try std.testing.expectEqual(
         @as(u64, 40 * std.time.ns_per_ms),
         terminal.host_input.router.escape_timeout_ns,
@@ -694,7 +695,7 @@ test "Lua expression paste uses pane modes and copy-mode authority" {
     );
     const version = client.model.version();
 
-    try std.testing.expectEqual(data.KeybindControl.continue_routing, try client_module.actions.executeAction(client, configured, .binding));
+    try std.testing.expectEqual(keyinput.Control.continue_routing, try client_module.actions.executeAction(client, configured, .binding));
     try std.testing.expectEqualDeep(version, client.model.version());
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -706,7 +707,7 @@ test "Lua expression paste uses pane modes and copy-mode authority" {
     _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
     const copy_version = client.model.version();
     const outbox_len = client.model.to_runtime.len;
-    try std.testing.expectEqual(data.KeybindControl.continue_routing, try client_module.actions.executeAction(client, configured, .binding));
+    try std.testing.expectEqual(keyinput.Control.continue_routing, try client_module.actions.executeAction(client, configured, .binding));
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expectEqualDeep(copy_version, client.model.version());
@@ -784,7 +785,7 @@ test "attachment modal captures semantic keys until escape closes it" {
     const pending_updates = terminal.presenter.pending_updates;
 
     try std.testing.expect(data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)));
-    try host_inputs.key(terminal, try data.chord.parseKey("x"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("x"));
 
     try std.testing.expect(terminal.view.hasAttachmentModal());
     try std.testing.expectEqual(interaction_revision, terminal.view.interactionVersion());
@@ -792,7 +793,7 @@ test "attachment modal captures semantic keys until escape closes it" {
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
-    try host_inputs.key(terminal, try data.chord.parseKey("escape"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("escape"));
 
     try std.testing.expect(!terminal.view.hasAttachmentModal());
     try std.testing.expect(!data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)));
@@ -818,7 +819,7 @@ test "control-v reaches the pane when no clipboard preview target exists" {
     const client = harness.client;
     const terminal = harness.terminal;
 
-    try host_inputs.key(terminal, try data.chord.parseKey("ctrl+v"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("ctrl+v"));
 
     try std.testing.expect(client.model.clipboard.capture == null);
     try harness.settle();

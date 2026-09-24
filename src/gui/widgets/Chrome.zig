@@ -1,8 +1,8 @@
 //! Disposable native controls. The shared client remains the sole navigation owner.
+const keyinput = @import("keyinput");
 const SidebarRegions = @import("SidebarRegions.zig");
 const core = @import("telar-core");
 const action_module = @import("action.zig");
-const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
@@ -104,7 +104,7 @@ pub fn widgetPointer(self: *Chrome, event: PointerEvent, resizing: bool) void {
 /// Retains a cell-control gesture through release, even outside its
 /// bounds. Compare `revision` around this call to request a local repaint.
 /// Example: `const command = chrome.pointer(mouse);`
-pub fn pointer(self: *Chrome, event: data.Mouse) client.ViewInteractionCommand {
+pub fn pointer(self: *Chrome, event: keyinput.Mouse) client.ViewInteractionCommand {
     const visible = self.presented();
     const action = visible.hits.at(.{ event.x, event.y });
     self.hover(action);

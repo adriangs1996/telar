@@ -1,4 +1,4 @@
-const data = @import("model");
+const keyinput = @import("keyinput");
 const std = @import("std");
 
 pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_keys: usize) type {
@@ -6,7 +6,7 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
         @compileError("max_bindings must fit in a non-zero u16");
     }
 
-    const BindingType = data.GenericBinding(Action, max_keys);
+    const BindingType = keyinput.GenericBinding(Action, max_keys);
     return struct {
         bindings: [max_bindings]BindingType = undefined,
         order: [max_bindings]u16 = undefined,
@@ -39,7 +39,7 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
             while (index < map.len) : (index += 1) {
                 const previous = map.bindingAt(index - 1);
                 const current = map.bindingAt(index);
-                const shared = data.keybind.commonPrefix(previous.slice(), current.slice());
+                const shared = keyinput.keybind.commonPrefix(previous.slice(), current.slice());
                 if (shared == previous.len or shared == current.len) {
                     if (previous.len == current.len) {
                         return error.DuplicateBinding;
@@ -55,14 +55,14 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
         }
 
         pub const Range = struct { start: usize, end: usize };
-        const Match = struct { depth: usize, key: data.Key };
+        const Match = struct { depth: usize, key: keyinput.Key };
 
         pub fn matchingRange(self: *const Self, range: Range, match: Match) ?Range {
             var low = range.start;
             var high = range.end;
             while (low < high) {
                 const middle = low + (high - low) / 2;
-                if (data.keybind.keyOrder(self.bindingAt(middle).keys[match.depth], match.key) == .lt) {
+                if (keyinput.keybind.keyOrder(self.bindingAt(middle).keys[match.depth], match.key) == .lt) {
                     low = middle + 1;
                 } else {
                     high = middle;
@@ -73,7 +73,7 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
             high = range.end;
             while (low < high) {
                 const middle = low + (high - low) / 2;
-                if (data.keybind.keyOrder(self.bindingAt(middle).keys[match.depth], match.key) == .gt) {
+                if (keyinput.keybind.keyOrder(self.bindingAt(middle).keys[match.depth], match.key) == .gt) {
                     high = middle;
                 } else {
                     low = middle + 1;
@@ -90,7 +90,7 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
         }
 
         fn orderLessThan(bindings: *const [max_bindings]BindingType, a: u16, b: u16) bool {
-            return data.keybind.sequenceOrder(bindings[a].slice(), bindings[b].slice()) == .lt;
+            return keyinput.keybind.sequenceOrder(bindings[a].slice(), bindings[b].slice()) == .lt;
         }
     };
 }

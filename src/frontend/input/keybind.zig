@@ -4,6 +4,7 @@
 //! strings into `Key` values and hands the resulting bindings to `Router.init`.
 //! The router then owns a sorted, bounded copy. Routing performs no allocation
 //! and never has to retain slices owned by the configuration parser.
+const keyinput = @import("keyinput");
 
 const client = @import("telar-client");
 const data = @import("model");
@@ -22,7 +23,7 @@ const TerminalResponseCapture = @import("TerminalResponseCapture.zig");
 // ---------------------------------------------------------------------------
 
 pub const TestAction = enum { detach, palette, next };
-const TestBinding = data.GenericBinding(TestAction, 4);
+const TestBinding = keyinput.GenericBinding(TestAction, 4);
 const TestRouter = GenericRouter(TestAction, .{ .max_bindings = 16, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 });
 
 test "terminal decoding and direct semantic input produce identical routing" {
@@ -38,7 +39,7 @@ test "terminal decoding and direct semantic input produce identical routing" {
 
     _ = try collect.feed(&terminal, .{ .bytes = "\x1b[", .now_ns = 0 }, &decoded);
     _ = try collect.feed(&terminal, .{ .bytes = "A\x1b[D\x1b[B", .now_ns = 1 }, &decoded);
-    const events = [_]data.Key{
+    const events = [_]keyinput.Key{
         .{ .code = .up, .physical = .{ .value = 0x110001 } },
         .{ .code = .left, .physical = .{ .value = 0x110003 } },
         .{ .code = .down, .physical = .{ .value = 0x110002 } },
@@ -53,26 +54,26 @@ test "terminal decoding and direct semantic input produce identical routing" {
 }
 
 test "configuration keys parse into semantic chords" {
-    const ctrl_b = try data.chord.parseKey("Ctrl+B");
+    const ctrl_b = try keyinput.chord.parseKey("Ctrl+B");
     try std.testing.expect(ctrl_b.isCtrl('b'));
 
-    const shifted = try data.chord.parseKey("ctrl+shift+left");
+    const shifted = try keyinput.chord.parseKey("ctrl+shift+left");
     try std.testing.expect(shifted.mods.ctrl);
     try std.testing.expect(shifted.mods.shift);
     try std.testing.expect(shifted.code == .left);
 
-    const back_tab = try data.chord.parseKey("shift+tab");
+    const back_tab = try keyinput.chord.parseKey("shift+tab");
     try std.testing.expect(back_tab.code == .back_tab);
     try std.testing.expect(!back_tab.mods.shift);
 
-    const enye = try data.chord.parseKey("ñ");
+    const enye = try keyinput.chord.parseKey("ñ");
     try std.testing.expect(enye.code.char.eql("ñ"));
 
-    const alt_x = try data.chord.parseKey("alt+x");
+    const alt_x = try keyinput.chord.parseKey("alt+x");
     try std.testing.expect(alt_x.mods.alt);
     try std.testing.expect(alt_x.code.char.eql("x"));
 
-    const shifted_char = try data.chord.parseKey("shift+a");
+    const shifted_char = try keyinput.chord.parseKey("shift+a");
     try std.testing.expect(!shifted_char.mods.shift);
     try std.testing.expect(shifted_char.code.char.eql("A"));
 }
@@ -86,22 +87,22 @@ test "an active editor receives keys before configured bindings" {
 
     try std.testing.expectEqual(@as(usize, 1), capture.key_count);
     try std.testing.expectEqual(@as(usize, 0), capture.action_count);
-    try std.testing.expectEqualDeep(data.Key{ .code = .{ .char = .init("a") } }, capture.keys[0]);
+    try std.testing.expectEqualDeep(keyinput.Key{ .code = .{ .char = .init("a") } }, capture.keys[0]);
 }
 
 test "configuration rejects malformed keys" {
-    try std.testing.expectError(error.EmptyKey, data.chord.parseKey(""));
-    try std.testing.expectError(error.MissingKey, data.chord.parseKey("ctrl"));
-    try std.testing.expectError(error.DuplicateModifier, data.chord.parseKey("ctrl+ctrl+a"));
-    try std.testing.expectError(error.ModifierAfterKey, data.chord.parseKey("a+ctrl"));
-    try std.testing.expectError(error.KeyMustBeOneCodepoint, data.chord.parseKey("ab"));
-    try std.testing.expectError(error.UnrepresentableKey, data.chord.parseKey("shift+1"));
-    try std.testing.expectError(error.UnrepresentableKey, data.chord.parseKey("ctrl+shift+a"));
+    try std.testing.expectError(error.EmptyKey, keyinput.chord.parseKey(""));
+    try std.testing.expectError(error.MissingKey, keyinput.chord.parseKey("ctrl"));
+    try std.testing.expectError(error.DuplicateModifier, keyinput.chord.parseKey("ctrl+ctrl+a"));
+    try std.testing.expectError(error.ModifierAfterKey, keyinput.chord.parseKey("a+ctrl"));
+    try std.testing.expectError(error.KeyMustBeOneCodepoint, keyinput.chord.parseKey("ab"));
+    try std.testing.expectError(error.UnrepresentableKey, keyinput.chord.parseKey("shift+1"));
+    try std.testing.expectError(error.UnrepresentableKey, keyinput.chord.parseKey("ctrl+shift+a"));
 }
 
 test "keymap rejects duplicate and ambiguous sequences" {
-    const ctrl_b = try data.chord.parseKey("ctrl+b");
-    const d = try data.chord.parseKey("d");
+    const ctrl_b = try keyinput.chord.parseKey("ctrl+b");
+    const d = try keyinput.chord.parseKey("d");
     const duplicate = [_]TestBinding{
         try .init(&.{ctrl_b}, .detach),
         try .init(&.{ctrl_b}, .palette),
@@ -132,7 +133,7 @@ test "keymap accepts sibling sequences with one shared prefix" {
 
 test "keymap action representation does not affect sequence identity" {
     const SmallAction = enum(u8) { detach, palette };
-    const SmallBinding = data.GenericBinding(SmallAction, 4);
+    const SmallBinding = keyinput.GenericBinding(SmallAction, 4);
     const SmallRouter = GenericRouter(SmallAction, .{ .max_bindings = 16, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 });
     const siblings = [_]SmallBinding{
         try .parse(&.{ "ctrl+b", "d" }, .detach),
@@ -147,7 +148,7 @@ test "unbound input is byte-for-byte transparent" {
     var capture: Capture = .{};
 
     const input = "hello ñ\x1b[A\x1b[999~";
-    try std.testing.expectEqual(data.KeybindControl.continue_routing, try collect.feed(&router, .{ .bytes = input, .now_ns = 0 }, &capture));
+    try std.testing.expectEqual(keyinput.Control.continue_routing, try collect.feed(&router, .{ .bytes = input, .now_ns = 0 }, &capture));
     try std.testing.expectEqualStrings(input, capture.slice());
     try std.testing.expectEqual(@as(usize, 0), capture.action_len);
 }
@@ -195,9 +196,9 @@ test "modified Enter reaches the semantic handler at every chunk boundary" {
             try std.testing.expectEqual(@as(usize, 0), capture.key_count);
             _ = try collect.feed(&router, .{ .bytes = sequence[split..], .now_ns = 1 }, &capture);
             try std.testing.expectEqual(@as(usize, 1), capture.key_count);
-            try std.testing.expectEqual(data.Key.Code.enter, capture.keys[0].code);
+            try std.testing.expectEqual(keyinput.Key.Code.enter, capture.keys[0].code);
             try std.testing.expect(capture.keys[0].mods.shift);
-            try std.testing.expectEqual(data.Key.Phase.press, capture.keys[0].phase);
+            try std.testing.expectEqual(keyinput.Key.Phase.press, capture.keys[0].phase);
             try std.testing.expectEqual(@as(usize, 0), capture.action_count);
         }
     }
@@ -227,9 +228,9 @@ test "an application-owned key keeps repeats and release" {
     _ = try collect.feed(&router, .{ .bytes = lifecycle, .now_ns = 0 }, &capture);
 
     try std.testing.expectEqual(@as(usize, 3), capture.key_count);
-    try std.testing.expectEqual(data.Key.Phase.press, capture.keys[0].phase);
-    try std.testing.expectEqual(data.Key.Phase.repeat, capture.keys[1].phase);
-    try std.testing.expectEqual(data.Key.Phase.release, capture.keys[2].phase);
+    try std.testing.expectEqual(keyinput.Key.Phase.press, capture.keys[0].phase);
+    try std.testing.expectEqual(keyinput.Key.Phase.repeat, capture.keys[1].phase);
+    try std.testing.expectEqual(keyinput.Key.Phase.release, capture.keys[2].phase);
     try std.testing.expectEqual(@as(u32, 13), capture.keys[2].physical.?.value);
 }
 
@@ -356,8 +357,8 @@ test "new input and reload cancel hold while preserving physical ownership" {
 
 test "changed or unavailable repeat authority permanently cancels the hold" {
     const bindings = [_]TestBinding{try .parse(&.{"-"}, .next)};
-    const original: data.RepeatPolicy = .{ .interval_ns = 100, .context = 7 };
-    const replacements = [_]?data.RepeatPolicy{ null, .{ .interval_ns = 100, .context = 8 } };
+    const original: keyinput.RepeatPolicy = .{ .interval_ns = 100, .context = 7 };
+    const replacements = [_]?keyinput.RepeatPolicy{ null, .{ .interval_ns = 100, .context = 8 } };
 
     for (replacements) |replacement| {
         var router = try TestRouter.init(&bindings);
@@ -377,7 +378,7 @@ test "a failed repeated action cancels further execution" {
     const bindings = [_]TestBinding{try .parse(&.{"-"}, .next)};
     var router = try TestRouter.init(&bindings);
     var capture: SemanticCapture = .{ .repeat_policy = .{ .interval_ns = 100, .context = 7 } };
-    const key_value: data.Key = .{
+    const key_value: keyinput.Key = .{
         .code = .{ .char = .init("-") },
         .phase = .repeat,
         .physical = .{ .value = 45 },
@@ -393,7 +394,7 @@ test "a failed repeated action cancels further execution" {
 }
 
 test "releasing a physical prefix does not cancel its logical state" {
-    const prefix = try data.chord.parseKey("ctrl+s");
+    const prefix = try keyinput.chord.parseKey("ctrl+s");
     const bindings = [_]TestBinding{try .parse(&.{ "ctrl+s", "d" }, .detach)};
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
@@ -421,7 +422,7 @@ test "router replacement preserves a held application's owner" {
     _ = try collect.feed(&replacement, .{ .bytes = release, .now_ns = 1 }, &capture);
 
     try std.testing.expectEqual(@as(usize, 2), capture.key_count);
-    try std.testing.expectEqual(data.Key.Phase.release, capture.keys[1].phase);
+    try std.testing.expectEqual(keyinput.Key.Phase.release, capture.keys[1].phase);
 }
 
 test "lease saturation drops a new physical lifecycle" {
@@ -430,7 +431,7 @@ test "lease saturation drops a new physical lifecycle" {
 
     for (0..data.keybind.max_physical_leases + 1) |index| {
         const value: u32 = @intCast(index + 1);
-        const key_value: data.Key = .{
+        const key_value: keyinput.Key = .{
             .code = .{ .char = .init("x") },
             .physical = .{ .value = value },
         };
@@ -442,7 +443,7 @@ test "lease saturation drops a new physical lifecycle" {
 }
 
 test "failed application delivery does not leave native ownership" {
-    const identity: data.Physical = .{ .value = 120 };
+    const identity: keyinput.Physical = .{ .value = 120 };
     var router = try TestRouter.init(&.{});
     var capture: SemanticCapture = .{ .fail_key = true };
 
@@ -486,7 +487,7 @@ test "a fragmented KGP capability reply is consumed at every split" {
 }
 
 test "an asynchronous terminal response does not cancel prefix mode" {
-    const prefix = try data.chord.parseKey("ctrl+b");
+    const prefix = try keyinput.chord.parseKey("ctrl+b");
     const bindings = [_]TestBinding{try .parse(&.{ "ctrl+b", "d" }, .detach)};
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: TerminalResponseCapture = .{};
@@ -511,7 +512,7 @@ test "a failed sequence replays its bytes in order" {
 }
 
 test "a configured prefix waits without a binding deadline" {
-    const prefix = try data.chord.parseKey("ctrl+b");
+    const prefix = try keyinput.chord.parseKey("ctrl+b");
     const bindings = [_]TestBinding{try .parse(&.{ "ctrl+b", "d" }, .detach)};
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
@@ -529,7 +530,7 @@ test "a configured prefix waits without a binding deadline" {
 }
 
 test "an invalid prefix suffix is consumed" {
-    const prefix = try data.chord.parseKey("ctrl+b");
+    const prefix = try keyinput.chord.parseKey("ctrl+b");
     const bindings = [_]TestBinding{try .parse(&.{ "ctrl+b", "d" }, .detach)};
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
@@ -544,7 +545,7 @@ test "an invalid prefix suffix is consumed" {
 }
 
 test "escape cancels a pending prefix" {
-    const prefix = try data.chord.parseKey("ctrl+b");
+    const prefix = try keyinput.chord.parseKey("ctrl+b");
     const bindings = [_]TestBinding{try .parse(&.{ "ctrl+b", "d" }, .detach)};
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
@@ -558,7 +559,7 @@ test "escape cancels a pending prefix" {
 }
 
 test "a global partial binding keeps its timeout beside a persistent prefix" {
-    const prefix = try data.chord.parseKey("ctrl+b");
+    const prefix = try keyinput.chord.parseKey("ctrl+b");
     const bindings = [_]TestBinding{
         try .parse(&.{ "ctrl+b", "d" }, .detach),
         try .parse(&.{ "ctrl+x", "n" }, .next),
@@ -574,14 +575,14 @@ test "a global partial binding keeps its timeout beside a persistent prefix" {
 }
 
 test "the router exposes effective prefixed action keys" {
-    const prefix = try data.chord.parseKey("ctrl+s");
+    const prefix = try keyinput.chord.parseKey("ctrl+s");
     const bindings = [_]TestBinding{
         try .parse(&.{ "ctrl+s", "x" }, .detach),
         try .parse(&.{"ctrl+d"}, .palette),
     };
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
 
-    try std.testing.expectEqualDeep(try data.chord.parseKey("x"), router.prefixedKeyForAction(.detach).?);
+    try std.testing.expectEqualDeep(try keyinput.chord.parseKey("x"), router.prefixedKeyForAction(.detach).?);
     try std.testing.expect(router.prefixedKeyForAction(.palette) == null);
 }
 
@@ -653,7 +654,7 @@ test "an action may stop routing the rest of its input chunk" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{ .stop_on_action = true };
 
-    try std.testing.expectEqual(data.KeybindControl.stop, try collect.feed(&router, .{ .bytes = "a\x02db", .now_ns = 0 }, &capture));
+    try std.testing.expectEqual(keyinput.Control.stop, try collect.feed(&router, .{ .bytes = "a\x02db", .now_ns = 0 }, &capture));
     try std.testing.expectEqualStrings("a", capture.slice());
     try std.testing.expectEqualSlices(TestAction, &.{.detach}, capture.actions[0..capture.action_len]);
 }

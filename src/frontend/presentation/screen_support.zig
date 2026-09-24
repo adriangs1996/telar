@@ -1,5 +1,5 @@
+const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
-const data = @import("model");
 const GenericInput = @import("GenericInput.zig").Type;
 const std = @import("std");
 const KittyModifierEvent = @import("KittyModifierEvent.zig");
@@ -146,8 +146,8 @@ pub fn writeClipboard(w: *std.Io.Writer, payload: []const u8) (ClipboardError ||
 // ---------------------------------------------------------------------------
 
 pub const Event = union(enum) {
-    key: Key,
-    mouse: Mouse,
+    key: keyinput.Key,
+    mouse: keyinput.Mouse,
     terminal_response: TerminalResponse,
     /// Bracketed paste boundaries.
     ///
@@ -179,9 +179,6 @@ pub const Event = union(enum) {
         primary_device_attributes,
     };
 
-    pub const Key = data.Key;
-    pub const Char = data.Char;
-    pub const Mouse = data.Mouse;
 };
 
 pub const Parsed = @import("Parsed.zig");
@@ -425,7 +422,7 @@ fn parseKittyKey(body: []const u8, length: usize) ?Parsed {
     };
 }
 
-fn parseCursorKey(body: []const u8, code: Event.Key.Code, length: usize) ?Parsed {
+fn parseCursorKey(body: []const u8, code: keyinput.Key.Code, length: usize) ?Parsed {
     const parameters = parseFunctionKeyParameters(body) orelse return null;
     if (parameters.number != 1) {
         return null;
@@ -454,7 +451,7 @@ fn parseTildeKey(body: []const u8, length: usize) ?Parsed {
         }
     }
 
-    const code: Event.Key.Code = switch (parameters.number) {
+    const code: keyinput.Key.Code = switch (parameters.number) {
         1, 7 => .home,
         3 => .delete,
         5 => .page_up,
@@ -487,7 +484,7 @@ fn parseFunctionKeyParameters(body: []const u8) ?FunctionKeyParameters {
     return .{ .number = number, .modifier_event = modifier_event };
 }
 
-fn parseKittyCodepoints(field: []const u8) ?Event.Key.KittyCodepoints {
+fn parseKittyCodepoints(field: []const u8) ?keyinput.Key.KittyCodepoints {
     var values = std.mem.splitScalar(u8, field, ':');
     const primary = values.next() orelse return null;
     if (primary.len == 0) {
@@ -542,7 +539,7 @@ fn parseKittyModifierEvent(field: ?[]const u8) ?KittyModifierEvent {
     }
 
     const event_value = std.fmt.parseUnsigned(u2, event_text, 10) catch return null;
-    const event: Event.Key.Phase = switch (event_value) {
+    const event: keyinput.Key.Phase = switch (event_value) {
         1 => .press,
         2 => .repeat,
         3 => .release,
@@ -571,7 +568,7 @@ fn codepointKey(codepoint: u32, modifier: u32, length: usize) ?Parsed {
     return key(code, mods, length);
 }
 
-fn codepointCode(codepoint: u32) ?Event.Key.Code {
+fn codepointCode(codepoint: u32) ?keyinput.Key.Code {
     return switch (codepoint) {
         9 => .tab,
         13 => .enter,
@@ -586,7 +583,7 @@ fn codepointCode(codepoint: u32) ?Event.Key.Code {
     };
 }
 
-fn parseKeyModifiers(modifier: u32) ?Event.Key.Mods {
+fn parseKeyModifiers(modifier: u32) ?keyinput.Key.Mods {
     if (modifier == 0) {
         return null;
     }
@@ -714,11 +711,11 @@ fn parseSs3(input: []const u8) ?Parsed {
     };
 }
 
-fn key(code: Event.Key.Code, mods: Event.Key.Mods, length: usize) Parsed {
+fn key(code: keyinput.Key.Code, mods: keyinput.Key.Mods, length: usize) Parsed {
     return .{ .event = .{ .key = .{ .code = code, .mods = mods } }, .len = length };
 }
 
-fn physicalKey(pressed: Event.Key, length: usize) Parsed {
+fn physicalKey(pressed: keyinput.Key, length: usize) Parsed {
     var leased = pressed;
     leased.physical = physicalIdentity(pressed.code);
 
@@ -728,17 +725,17 @@ fn physicalKey(pressed: Event.Key, length: usize) Parsed {
     };
 }
 
-fn altKey(pressed: Event.Key, length: usize) Parsed {
+fn altKey(pressed: keyinput.Key, length: usize) Parsed {
     var modified = pressed;
     modified.mods.alt = true;
 
     return .{ .event = .{ .key = modified }, .len = length };
 }
 
-fn physicalIdentity(code: Event.Key.Code) Event.Key.Physical {
+fn physicalIdentity(code: keyinput.Key.Code) keyinput.Key.Physical {
     return switch (code) {
         .char => |char| .{ .value = std.unicode.utf8Decode(char.slice()) catch 0 },
-        .tab, .back_tab => .{ .value = @as(u32, 0x110000) + @intFromEnum(std.meta.Tag(Event.Key.Code).tab) },
+        .tab, .back_tab => .{ .value = @as(u32, 0x110000) + @intFromEnum(std.meta.Tag(keyinput.Key.Code).tab) },
         else => .{ .value = @as(u32, 0x110000) + @intFromEnum(std.meta.activeTag(code)) },
     };
 }
@@ -747,7 +744,7 @@ fn physicalIdentity(code: Event.Key.Code) Event.Key.Physical {
 ///
 /// Zero means the parameter was absent, which is not the same as "no
 /// modifiers" arithmetically - subtracting one from it would set every bit.
-fn modsOf(param: u32) Event.Key.Mods {
+fn modsOf(param: u32) keyinput.Key.Mods {
     if (param == 0) {
         return .{};
     }
@@ -795,7 +792,7 @@ fn parseMouse(input: []const u8) ?Parsed {
         const x = fields[1] -| 1;
         const y = fields[2] -| 1;
 
-        const kind: Event.Mouse.Kind = if (button & 64 != 0)
+        const kind: keyinput.Mouse.Kind = if (button & 64 != 0)
             (if (button & 1 == 0) .scroll_up else .scroll_down)
         else if (button & 32 != 0)
             (if (button & 3 == 3) .move else .drag)
@@ -820,9 +817,9 @@ fn parseMouse(input: []const u8) ?Parsed {
 // Tests
 // ---------------------------------------------------------------------------
 
-const KeyCode = Event.Key.Code;
+const KeyCode = keyinput.Key.Code;
 
-fn expectMouse(input: []const u8, expected: Event.Mouse) !void {
+fn expectMouse(input: []const u8, expected: keyinput.Mouse) !void {
     const parsed = parse(input) orelse return error.NoEvent;
     try std.testing.expectEqual(input.len, parsed.len);
     try std.testing.expectEqual(expected.x, parsed.event.mouse.x);
@@ -1257,7 +1254,7 @@ test "Kitty keyboard mode disambiguates Ctrl keys from legacy controls" {
 }
 
 test "modified Enter is decoded from CSI-u and modifyOtherKeys" {
-    const cases = [_]struct { sequence: []const u8, mods: Event.Key.Mods, phase: Event.Key.Phase, physical: bool }{
+    const cases = [_]struct { sequence: []const u8, mods: keyinput.Key.Mods, phase: keyinput.Key.Phase, physical: bool }{
         .{ .sequence = "\x1b[13;2u", .mods = .{ .shift = true }, .phase = .press, .physical = true },
         .{ .sequence = "\x1b[13;2:1u", .mods = .{ .shift = true }, .phase = .press, .physical = true },
         .{ .sequence = "\x1b[13;2:2u", .mods = .{ .shift = true }, .phase = .repeat, .physical = true },
@@ -1282,7 +1279,7 @@ test "modified Enter is decoded from CSI-u and modifyOtherKeys" {
 }
 
 test "Kitty alternate key codes preserve the primary key" {
-    const cases = [_]struct { sequence: []const u8, expected: Event.Key }{
+    const cases = [_]struct { sequence: []const u8, expected: keyinput.Key }{
         .{
             .sequence = "\x1b[47:63:47;6:1u",
             .expected = .{
@@ -1315,18 +1312,18 @@ test "Kitty key releases remain semantic events without desynchronizing the stre
     const parsed = parse(release).?;
     try std.testing.expectEqual(release.len, parsed.len);
     try std.testing.expectEqual(KeyCode.enter, parsed.event.key.code);
-    try std.testing.expectEqual(Event.Key.Phase.release, parsed.event.key.phase);
+    try std.testing.expectEqual(keyinput.Key.Phase.release, parsed.event.key.phase);
     try std.testing.expectEqual(@as(u32, 13), parsed.event.key.physical.?.value);
 
     var input: GenericInput(32) = .{};
     try std.testing.expectEqual(release.len + 1, input.push(release ++ "x"));
-    try std.testing.expectEqual(Event.Key.Phase.release, input.next().?.key.phase);
+    try std.testing.expectEqual(keyinput.Key.Phase.release, input.next().?.key.phase);
     try std.testing.expect(input.next().?.key.code.char.eql("x"));
     try std.testing.expect(input.next() == null);
 }
 
 test "Kitty key lifecycles parse at every boundary after the CSI introducer" {
-    const cases = [_]struct { sequence: []const u8, code: KeyCode, phase: Event.Key.Phase, physical: u32 }{
+    const cases = [_]struct { sequence: []const u8, code: KeyCode, phase: keyinput.Key.Phase, physical: u32 }{
         .{ .sequence = "\x1b[115::115;5:1u", .code = .{ .char = .init("s") }, .phase = .press, .physical = 115 },
         .{ .sequence = "\x1b[115::115;5:2u", .code = .{ .char = .init("s") }, .phase = .repeat, .physical = 115 },
         .{ .sequence = "\x1b[115::115;1:3u", .code = .{ .char = .init("s") }, .phase = .release, .physical = 115 },
@@ -1475,8 +1472,8 @@ test "a partial paste marker asks for more bytes" {
 }
 
 test "page keys use their numbered CSI forms" {
-    try std.testing.expectEqual(Event.Key.Code.page_up, parse("\x1b[5~").?.event.key.code);
-    try std.testing.expectEqual(Event.Key.Code.page_down, parse("\x1b[6~").?.event.key.code);
+    try std.testing.expectEqual(keyinput.Key.Code.page_up, parse("\x1b[5~").?.event.key.code);
+    try std.testing.expectEqual(keyinput.Key.Code.page_down, parse("\x1b[6~").?.event.key.code);
 }
 
 test "the real cursor is placed only when a field asks for it" {

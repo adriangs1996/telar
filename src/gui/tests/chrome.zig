@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const gfx = @import("gfx");
 const Quad = gfx.Quad;
@@ -373,7 +374,7 @@ test "native mode hints preserve navigation in the top bar" {
     var hints: client.Hints = .{};
     hints.append(
         .{
-            .key = try data.chord.parseKey("Ctrl+v"),
+            .key = try keyinput.chord.parseKey("Ctrl+v"),
             .label = "split vertically",
         },
     );

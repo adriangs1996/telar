@@ -1,5 +1,6 @@
 //! Key routing: decides who owns a key press, repeat or release (a prompt,
 //! a leased pane, copy mode, a binding or the focused pane) and delivers it.
+const keyinput = @import("keyinput");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -80,7 +81,7 @@ fn routePaneKey(client: *Client, command: data.PaneCommand) !?core.PaneId {
     return completed.pane_id;
 }
 
-fn routePhysicalKey(client: *Client, key: data.Key, authority: data.KeyRoutingAuthority) !data.KeyRoutingOutcome {
+fn routePhysicalKey(client: *Client, key: keyinput.Key, authority: data.KeyRoutingAuthority) !data.KeyRoutingOutcome {
     const identity = key.physical orelse return (try routeCurrentKey(
         client,
         .{
@@ -100,7 +101,7 @@ fn routePhysicalKey(client: *Client, key: data.Key, authority: data.KeyRoutingAu
     };
 }
 
-fn routeKeyPress(client: *Client, key: data.Key, authority: data.KeyRoutingAuthority) !data.KeyRoutingOutcome {
+fn routeKeyPress(client: *Client, key: keyinput.Key, authority: data.KeyRoutingAuthority) !data.KeyRoutingOutcome {
     const identity = key.physical.?;
     if (!client.model.input_leases.acquire(identity, .ignored)) {
         return .{
@@ -123,7 +124,7 @@ fn routeKeyPress(client: *Client, key: data.Key, authority: data.KeyRoutingAutho
     return routed.outcome;
 }
 
-fn routeKeyRepeat(client: *Client, key: data.Key, owner: data.KeyRoutingLeaseOwner) !data.KeyRoutingOutcome {
+fn routeKeyRepeat(client: *Client, key: keyinput.Key, owner: data.KeyRoutingLeaseOwner) !data.KeyRoutingOutcome {
     return switch (owner) {
         .ignored => .{
             .owner = .ignored,
@@ -159,7 +160,7 @@ fn routeKeyRepeat(client: *Client, key: data.Key, owner: data.KeyRoutingLeaseOwn
     };
 }
 
-fn routeKeyRelease(client: *Client, key: data.Key, owner: data.KeyRoutingLeaseOwner) !data.KeyRoutingOutcome {
+fn routeKeyRelease(client: *Client, key: keyinput.Key, owner: data.KeyRoutingLeaseOwner) !data.KeyRoutingOutcome {
     return switch (owner) {
         .ignored => .{
             .owner = .ignored,
@@ -250,7 +251,7 @@ fn routeCurrentKey(client: *Client, command: data.KeyRoutingCommand, authority: 
     };
 }
 
-fn routeLeasedPaneKey(client: *Client, key: data.Key, pane_id: core.PaneId) !data.KeyRoutingOutcome {
+fn routeLeasedPaneKey(client: *Client, key: keyinput.Key, pane_id: core.PaneId) !data.KeyRoutingOutcome {
     const delivered = try routePaneKey(
         client,
         .{

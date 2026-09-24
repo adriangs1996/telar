@@ -1,13 +1,13 @@
 //! Human-readable key chords for palette hints, formatted the way the mode
 //! bar prints prefix hints. Nothing here allocates; callers pass a buffer.
-const data = @import("model");
+const keyinput = @import("keyinput");
 const std = @import("std");
 
 pub const max_bytes = 64;
 
 /// Writes `prefix suffix` (or only `suffix` without a prefix) into `buffer`.
 /// Example: `const hint = chord(&storage, router.prefix, key);`.
-pub fn chord(buffer: *[max_bytes]u8, prefix: ?data.Key, key: data.Key) []const u8 {
+pub fn chord(buffer: *[max_bytes]u8, prefix: ?keyinput.Key, key: keyinput.Key) []const u8 {
     var prefix_storage: [max_bytes / 2]u8 = undefined;
     var key_storage: [max_bytes / 2]u8 = undefined;
     const suffix = format(&key_storage, key);
@@ -19,7 +19,7 @@ pub fn chord(buffer: *[max_bytes]u8, prefix: ?data.Key, key: data.Key) []const u
 }
 
 /// Example: `const text = format(&storage, key);`.
-pub fn format(buffer: []u8, key: data.Key) []const u8 {
+pub fn format(buffer: []u8, key: keyinput.Key) []const u8 {
     const code = switch (key.code) {
         .char => |character| character.slice(),
         .up => "Up",
@@ -43,15 +43,15 @@ pub fn format(buffer: []u8, key: data.Key) []const u8 {
 
 test "chords print the prefix before the bound suffix" {
     var storage: [max_bytes]u8 = undefined;
-    const prefix = try data.chord.parseKey("ctrl+b");
+    const prefix = try keyinput.chord.parseKey("ctrl+b");
     try std.testing.expectEqualStrings("Ctrl+b %", chord(
         &storage,
         prefix,
-        try data.chord.parseKey("%"),
+        try keyinput.chord.parseKey("%"),
     ));
     try std.testing.expectEqualStrings("Shift+Left", chord(
         &storage,
         null,
-        try data.chord.parseKey("shift+left"),
+        try keyinput.chord.parseKey("shift+left"),
     ));
 }

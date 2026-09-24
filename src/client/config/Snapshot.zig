@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const data = @import("model");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const GuiConfig = @import("GuiConfig.zig");
@@ -21,7 +22,7 @@ history_match_fts: bool = false,
 theme_light: ?data.ColorTheme = null,
 theme_dark: ?data.ColorTheme = null,
 bars: data.BarConfiguration = .{},
-prefix: data.Key = data.keybind.default_prefix,
+prefix: keyinput.Key = data.keybind.default_prefix,
 input_escape_timeout_ns: u64 = data.keybind.default_escape_timeout_ns,
 input_sequence_timeout_ns: u64 = data.keybind.default_sequence_timeout_ns,
 bindings: [data.config_values.max_bindings]data.config_values.ConfiguredBinding = undefined,

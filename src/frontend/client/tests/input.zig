@@ -1,4 +1,5 @@
 //! Client integration tests for input.
+const keyinput = @import("keyinput");
 
 const cellgrid = @import("cellgrid");
 const client_module = @import("telar-client");
@@ -11,7 +12,6 @@ const std = @import("std");
 const host_inputs = @import("../input/host_inputs.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const Chunk = @import("../input/Chunk.zig");
-const term = @import("../../presentation/screen_support.zig");
 
 test "closing a preview deletes its matching atomic image marker" {
     var harness: TestHarness = undefined;
@@ -84,11 +84,11 @@ test "child marker deletion and prompt submission retire paired previews" {
         .y = 0,
     };
 
-    try host_inputs.key(terminal, try data.chord.parseKey("backspace"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("backspace"));
 
     try std.testing.expectEqual(@as(u8, 0), terminal.view.kittyAttachments().snapshot().len);
     const pending = (try client.model.clipboard.reserve(target)).?;
-    try host_inputs.key(terminal, try data.chord.parseKey("enter"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("enter"));
     try std.testing.expect(client.model.clipboard.capture == null);
     const completed = try support.testingClipboardCapture(client, pending, "private png");
 
@@ -137,7 +137,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
 
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(marker_frame));
     try std.testing.expectEqual(@as(u8, 1), terminal.view.kittyAttachments().snapshot().len);
-    try host_inputs.key(terminal, try data.chord.parseKey("backspace"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("backspace"));
     try std.testing.expectEqual(@as(u8, 1), terminal.view.kittyAttachments().snapshot().len);
 
     pane_buffer.clear(.{});
@@ -233,7 +233,7 @@ test "a Pi path removed by a word deletion retires its preview on the next frame
     try commitPiFrame(client, .{ .target = target, .prompt = "> " ++ pi_test_path, .id = 1 });
     try std.testing.expectEqual(@as(u8, 1), terminal.view.kittyAttachments().snapshot().len);
 
-    try host_inputs.key(terminal, try data.chord.parseKey("ctrl+w"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("ctrl+w"));
     try std.testing.expectEqual(@as(u8, 1), terminal.view.kittyAttachments().snapshot().len);
     try commitPiFrame(client, .{
         .target = target,
@@ -437,7 +437,7 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
-    try host_inputs.key(terminal, try data.chord.parseKey("escape"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("escape"));
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expect(client.model.enterCopyMode());
 
@@ -508,7 +508,7 @@ test "mouse reports preserve scrollback and remain outside user-input telemetry"
     const input_bytes = client.telemetry.metrics.input_bytes;
     const timing_count = client.telemetry.metrics.input_enqueue.count;
     const mouse_events = client.telemetry.metrics.mouse_events;
-    const point: term.Event.Mouse = .{
+    const point: keyinput.Mouse = .{
         .x = pane_view.content.x,
         .y = pane_view.content.y,
         .kind = .move,
@@ -662,7 +662,7 @@ test "focused scroll bindings target focus rather than hover and normal input re
     try std.testing.expectEqual(focused, scrolled.set_pane_viewport.pane_id);
     try std.testing.expectEqual(@as(u32, 7), scrolled.set_pane_viewport.offset);
 
-    try host_inputs.key(terminal, try data.chord.parseKey("x"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("x"));
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expect(terminal.graphics_store.paneVisible(focused));
     try harness.settle();
@@ -936,7 +936,7 @@ test "focused scroll retires copy mode before moving the restored viewport" {
     const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
     _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
-    try host_inputs.key(terminal, try data.chord.parseKey("g"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("g"));
     try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -1020,7 +1020,7 @@ test "native thread view action flips the focused pane surface" {
         const control = try client_module.actions.executeAction(client, .toggle_thread_view, .effect);
 
         expected_version.panes +%= 1;
-        try std.testing.expectEqual(data.KeybindControl.continue_routing, control);
+        try std.testing.expectEqual(keyinput.Control.continue_routing, control);
         try std.testing.expectEqual(expected_surface, client.model.tabs.layout[active].surface(focused));
         try std.testing.expectEqualDeep(expected_version, client.model.version());
     }

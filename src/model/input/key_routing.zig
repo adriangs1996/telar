@@ -1,6 +1,7 @@
 //! Application policy for assigning routed host input to one client owner.
+const keyinput = @import("keyinput");
 
-const GenericTable = @import("GenericTable.zig").Type;
+const GenericTable = keyinput.GenericTable;
 const keybind = @import("keybind.zig");
 const KeyRoutingAuthority = @import("KeyRoutingAuthority.zig");
 const std = @import("std");

@@ -222,6 +222,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `localsocket` | same-user Unix sockets and length-prefixed framing |
 | `bytecodec` | bounds-checked little-endian encoding into caller buffers and decoding from borrowed bytes |
 | `urlscan` | classifying a URI by scheme and finding the URI under an offset in a line |
+| `keyinput` | keys, characters, modifiers and mouse events as values, chord parsing, binding order, bounded bindings and physical-key leases |
 | `kitty_protocol` | Kitty graphics transmission, placement and deletion commands written into a caller buffer |
 | `cellglyphs` | box drawing, block elements and Braille painted from geometry into a quad list |
 | `mdinline` | inline Markdown spans over borrowed text and bounded link destination decoding |

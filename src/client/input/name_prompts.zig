@@ -1,4 +1,5 @@
 //! Maps host key and paste events to name-prompt commands.
+const keyinput = @import("keyinput");
 
 const data = @import("model");
 
@@ -6,7 +7,7 @@ const data = @import("model");
 /// bounded slices between the paste markers; the adapter decodes bytes.
 pub const Input = union(enum) {
     command: data.PromptCommand,
-    key: data.Key,
+    key: keyinput.Key,
     paste_start,
     paste_end,
     paste_text: []const u8,

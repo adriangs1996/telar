@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
@@ -68,7 +69,7 @@ fn plain(palette: data.Palette, text: []const u8) Label {
     return .{ .text = text, .color = palette.subtext0 };
 }
 
-fn formatKey(buffer: []u8, key: data.Key) []const u8 {
+fn formatKey(buffer: []u8, key: keyinput.Key) []const u8 {
     const code = switch (key.code) {
         .char => |character| character.slice(),
         .up => "Up",

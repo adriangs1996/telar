@@ -1,8 +1,9 @@
 //! Validated configuration values shared by the Lua compiler and client.
+const keyinput = @import("keyinput");
 
 const data = @import("../model.zig");
 const core = @import("telar-core");
-const GenericBinding = @import("../input/GenericBinding.zig").Type;
+const GenericBinding = keyinput.GenericBinding;
 const ProxyInterceptHosts = @import("ProxyInterceptHosts.zig");
 const std = @import("std");
 

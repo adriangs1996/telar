@@ -1,4 +1,5 @@
 //! Visible structure and interaction state of one telar client.
+const keyinput = @import("keyinput");
 
 const cellgrid = @import("cellgrid");
 const client = @import("telar-client");
@@ -20,7 +21,6 @@ const PatchSink = @import("../../presentation/PatchSink.zig");
 const diff = @import("../../presentation/diff.zig");
 const Compositor = @import("../../workspace/Compositor.zig");
 const State = @import("State.zig");
-const term = @import("../../presentation/screen_support.zig");
 const RenderInput = @import("RenderInput.zig");
 const attachment_preview_module = @import("../../widgets/attachment_preview.zig");
 const kitty_codec = @import("../../graphics/kitty_codec.zig");
@@ -437,7 +437,7 @@ test "workbench clicks return focus intent without mutating pane layout" {
         .force = true,
     });
     const second_view = data.tab_layout.snapshot(&model, 0, state.workbench()).find(second).?;
-    const point = term.Event.Mouse{
+    const point = keyinput.Mouse{
         .x = second_view.content.x,
         .y = second_view.content.y,
         .kind = .move,
@@ -548,13 +548,13 @@ test "sidebar agent snapshots version changed hover only once" {
         .force = true,
     });
 
-    const first_row = term.Event.Mouse{ .x = 4, .y = 4, .kind = .move };
+    const first_row = keyinput.Mouse{ .x = 4, .y = 4, .kind = .move };
     const before_hover = state.interactionVersion();
     _ = state.handleMouse(first_row);
     try std.testing.expectEqual(before_hover + 1, state.interactionVersion());
     _ = state.handleMouse(first_row);
     try std.testing.expectEqual(before_hover + 1, state.interactionVersion());
-    const click = term.Event.Mouse{ .x = 4, .y = 4, .kind = .press };
+    const click = keyinput.Mouse{ .x = 4, .y = 4, .kind = .press };
     const interaction = state.handleMouse(click);
     try std.testing.expectEqualDeep(client.Intent{ .focus_agent = agent_entries[0].key }, interaction.intent);
     try std.testing.expectEqual(before_hover + 1, state.interactionVersion());
@@ -1231,7 +1231,7 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
 
     // Tabs anchor to the right edge: the automatic shell label and icon,
     // one empty cell and " 2:logs " occupy the last twenty columns.
-    const click = term.Event.Mouse{ .x = 65, .y = 23, .kind = .press };
+    const click = keyinput.Mouse{ .x = 65, .y = 23, .kind = .press };
     const interaction = state.handleMouse(click);
     try std.testing.expectEqualDeep(
         client.Intent{ .select_tab = @enumFromInt(4) },

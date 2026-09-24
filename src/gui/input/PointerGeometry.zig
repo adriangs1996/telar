@@ -1,4 +1,4 @@
-const data = @import("model");
+const keyinput = @import("keyinput");
 const std = @import("std");
 const core = @import("telar-core");
 const Event = @import("PointerEvent.zig");
@@ -9,7 +9,7 @@ size: core.TerminalSize = .{ .cols = 0, .rows = 0 },
 
 /// Padding lies outside the grid, never over its first cell. Existing drags
 /// clamp there so selection can finish beyond the window. Example: `geometry.resolve(event)`.
-pub fn resolve(self: Geometry, event: Event) ?data.Mouse {
+pub fn resolve(self: Geometry, event: Event) ?keyinput.Mouse {
     if (event.kind == .leave) {
         return null;
     }

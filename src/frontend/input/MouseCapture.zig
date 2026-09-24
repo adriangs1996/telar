@@ -1,6 +1,5 @@
-const data = @import("model");
+const keyinput = @import("keyinput");
 const keybind = @import("keybind.zig");
-const term = @import("../presentation/screen_support.zig");
 const MouseCapture = @This();
 
 forwarded: usize = 0,
@@ -10,10 +9,10 @@ pub fn forward(self: *MouseCapture, bytes: []const u8) !void {
     self.forwarded += bytes.len;
 }
 
-pub fn action(_: *MouseCapture, _: keybind.TestAction) !data.KeybindControl {
+pub fn action(_: *MouseCapture, _: keybind.TestAction) !keyinput.Control {
     return .continue_routing;
 }
 
-pub fn mouse(self: *MouseCapture, _: term.Event.Mouse) !void {
+pub fn mouse(self: *MouseCapture, _: keyinput.Mouse) !void {
     self.mouse_events += 1;
 }

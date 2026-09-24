@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const std = @import("std");
@@ -55,7 +56,7 @@ test "native footer reserves TLS ahead of widgets and mode hints in narrow windo
     var hints: client.Hints = .{};
     hints.append(
         .{
-            .key = try data.chord.parseKey("Ctrl+v"),
+            .key = try keyinput.chord.parseKey("Ctrl+v"),
             .label = "split vertically",
         },
     );

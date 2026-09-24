@@ -1,6 +1,6 @@
 //! Cell targets become authoritative only after their frame is delivered.
+const keyinput = @import("keyinput");
 const client = @import("telar-client");
-const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const widget = @import("../../widgets/context_support.zig");
@@ -8,7 +8,7 @@ const GenericHits = @import("../../ui/GenericHits.zig").Type;
 const TabDrag = @This();
 
 gesture: client.TabDrag = .{},
-escape_key: ?data.Physical = null,
+escape_key: ?keyinput.Physical = null,
 hits: GenericHits(core.TabId, core.max_tabs_per_workspace) = .{},
 workspace: ?core.WorkspaceLocation = null,
 
@@ -34,7 +34,7 @@ pub fn present(self: *TabDrag, hits: *const widget.Hits, workspace: ?core.Worksp
 
 /// Includes the one-cell gaps between tabs in the nearest insertion slot.
 /// Example: `const target = drag.destination(mouse);`
-pub fn destination(self: *const TabDrag, mouse: data.Mouse) ?core.TabMoveTarget {
+pub fn destination(self: *const TabDrag, mouse: keyinput.Mouse) ?core.TabMoveTarget {
     const entries = self.hits.registered();
     if (entries.len == 0) {
         return null;

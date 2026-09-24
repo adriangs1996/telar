@@ -1,4 +1,5 @@
 //! Reproducible benchmarks for telar's interactive path.
+const keyinput = @import("keyinput");
 
 const pacing = @import("pacing");
 const vtscan = @import("vtscan");
@@ -308,7 +309,7 @@ fn runOutboxInput(context: *OutboxContext, iterations: usize) !u64 {
 }
 
 pub const KeybindAction = enum(u8) { detach, palette };
-pub const KeybindBinding = data.GenericBinding(KeybindAction, 4);
+pub const KeybindBinding = keyinput.GenericBinding(KeybindAction, 4);
 pub const KeybindRouter = frontend.GenericRouter(KeybindAction, .{
     .max_bindings = 16,
     .max_keys = 4,

@@ -1,4 +1,5 @@
 //! Lua actions: evaluates a Lua binding and applies the effects it returns.
+const keyinput = @import("keyinput");
 const data = @import("model");
 const lua_diagnostics = @import("../config/lua_actions.zig");
 const client_diagnostic = @import("../config/client_diagnostic.zig");
@@ -9,7 +10,7 @@ const pane_input = @import("../panes/pane_input.zig");
 const plugin_actions = @import("../plugins/plugin_actions.zig");
 const Client = @import("../execution/Client.zig");
 
-pub fn executeLuaAction(client: *Client, command: data.LuaActionCommand) !data.KeybindControl {
+pub fn executeLuaAction(client: *Client, command: data.LuaActionCommand) !keyinput.Control {
     const copy_mode_active = copy_mode.copyModeActive(client);
     const outcome = try evaluateLuaAction(client, command);
     switch (outcome) {

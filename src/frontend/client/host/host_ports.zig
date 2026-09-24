@@ -1,5 +1,6 @@
 //! Terminal implementations of the client's host service ports. Each port
 //! binds one heap-stable client so workers complete through its event loop.
+const keyinput = @import("keyinput");
 
 const tab_drag = @import("../input/tab_drag.zig");
 const client_module = @import("telar-client");
@@ -98,7 +99,7 @@ fn inspectionScrollLimit(context: *anyopaque) ?u32 {
     return history_inspection.scrollLimit(&client.model);
 }
 
-fn pointer(context: *anyopaque, event: data.Mouse) client_module.ViewInteractionCommand {
+fn pointer(context: *anyopaque, event: keyinput.Mouse) client_module.ViewInteractionCommand {
     const terminal: *TerminalAdapter = @ptrCast(@alignCast(context));
     if (tab_drag.press(terminal, event)) |interaction| {
         return interaction;

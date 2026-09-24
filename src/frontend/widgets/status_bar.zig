@@ -3,6 +3,7 @@
 //! The runtime samples cpu, memory, and battery off the interactive path and
 //! ClientModel caches the latest values. Rendering only formats what is
 //! already in memory, in fixed buffers, so the frame stays allocation free.
+const keyinput = @import("keyinput");
 
 const cellgrid = @import("cellgrid");
 const client = @import("telar-client");
@@ -162,7 +163,7 @@ fn write(context: *Context, input_write: WriteInput) void {
     });
 }
 
-fn formatKey(buffer: *[32]u8, key: data.Key) []const u8 {
+fn formatKey(buffer: *[32]u8, key: keyinput.Key) []const u8 {
     var len: usize = 0;
     if (key.mods.ctrl) {
         append(buffer, &len, "Ctrl+");
@@ -221,7 +222,7 @@ test "mode bars render prefix and copy hints" {
         .hovered = null,
     };
     var hints: client.Hints = .{};
-    hints.append(.{ .key = try data.chord.parseKey("N"), .label = "new workspace" });
+    hints.append(.{ .key = try keyinput.chord.parseKey("N"), .label = "new workspace" });
 
     renderMode(&context, buffer.area(), .{ .prefix = hints });
     try std.testing.expectEqualStrings("P", buffer.at(1, 0).?.text());
@@ -236,7 +237,7 @@ test "key labels preserve modifiers and special keys" {
     var buffer: [32]u8 = undefined;
     try std.testing.expectEqualStrings(
         "Ctrl+Alt+Left",
-        formatKey(&buffer, try data.chord.parseKey("ctrl+alt+left")),
+        formatKey(&buffer, try keyinput.chord.parseKey("ctrl+alt+left")),
     );
 }
 

@@ -1,4 +1,5 @@
 //! Pane input: delivers keys, pastes and expression input to the focused pane.
+const keyinput = @import("keyinput");
 const pacing = @import("pacing");
 const data = @import("model");
 const core = @import("telar-core");
@@ -112,7 +113,7 @@ pub fn finishPanePaste(client: *Client) !data.PanePasteOutcome {
 }
 
 /// Delivers one synthetic key sequence in a single pane-input transaction.
-pub fn sendPaneKeys(client: *Client, target: data.PaneInputTarget, keys: []const data.Key) !?data.PaneInputDelivery {
+pub fn sendPaneKeys(client: *Client, target: data.PaneInputTarget, keys: []const keyinput.Key) !?data.PaneInputDelivery {
     const started = core.now(client.io);
 
     if (keys.len == 0 or keys.len > data.input_limits.max_synthetic_keys) {

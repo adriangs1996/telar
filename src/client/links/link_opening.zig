@@ -1,5 +1,6 @@
 //! Link opening: resolves the link under the pointer and opens it with the
 //! host, one at a time.
+const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const editor_file_links = @import("editor_file_links.zig");
@@ -32,7 +33,7 @@ pub fn openLink(client: *Client, target: data.LinkTarget) !bool {
 
 /// Gives a textual link first refusal before child mouse reporting.
 /// Example: `_ = try link_opening.inputLinkPointer(app, tab, event);`
-pub fn inputLinkPointer(client: *Client, tab: usize, event: data.Mouse) !bool {
+pub fn inputLinkPointer(client: *Client, tab: usize, event: keyinput.Mouse) !bool {
     const command: data.LinksPointerCommand = .{
         .kind = switch (event.kind) {
             .press => .press,
@@ -79,7 +80,7 @@ pub fn completeLinkOpening(client: *Client, result: anyerror!void) !void {
     };
 }
 
-fn linkTargetAt(model: *data.ClientModel, tab: usize, event: data.Mouse, area: cellgrid.Rect) ?data.LinkTarget {
+fn linkTargetAt(model: *data.ClientModel, tab: usize, event: keyinput.Mouse, area: cellgrid.Rect) ?data.LinkTarget {
     const plan = data.tab_layout.planPaneMouse(model, tab, event, area) orelse return null;
     const pane = model.panes.findInConst(model.tabs.location[tab].tab_id, plan.pane_id) orelse return null;
 

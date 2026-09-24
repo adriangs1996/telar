@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const thread_scroll = @import("../widgets/interaction/thread_scroll.zig");
 const ClipboardResult = @import("../input/ClipboardResult.zig");
 const event_module = @import("../input/event.zig");
@@ -1735,7 +1736,7 @@ test "held agent scroll bindings pace transcript movement and stop on release" {
     try publish(session);
     adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up }));
     const pane = session.gui.app.model.agentPane(Session.pane_id).?;
-    var key: data.Key = .{
+    var key: keyinput.Key = .{
         .code = .{
             .char = .init("-"),
         },

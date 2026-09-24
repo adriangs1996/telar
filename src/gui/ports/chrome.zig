@@ -1,5 +1,5 @@
 //! Native hit testing answers the shared chrome port.
-const data = @import("model");
+const keyinput = @import("keyinput");
 const client = @import("telar-client");
 const hover_target = @import("../input/hover_target.zig");
 const GuiAdapter = @import("../GuiAdapter.zig");
@@ -18,7 +18,7 @@ fn host(context: *anyopaque) *GuiAdapter {
     return @ptrCast(@alignCast(context));
 }
 
-fn pointer(context: *anyopaque, event: data.Mouse) client.ViewInteractionCommand {
+fn pointer(context: *anyopaque, event: keyinput.Mouse) client.ViewInteractionCommand {
     const gui = host(context);
     // A prompt can open before its first paint; it already owns the pointer.
     if (gui.app.model.name_prompt.active() and gui.overlays.presented().modal == null) {
@@ -40,7 +40,7 @@ fn pointer(context: *anyopaque, event: data.Mouse) client.ViewInteractionCommand
     return gui.chrome.pointer(event);
 }
 
-fn linkPointer(context: *anyopaque, event: data.Mouse) bool {
+fn linkPointer(context: *anyopaque, event: keyinput.Mouse) bool {
     if (event.kind != .press or event.button & 3 == 1) {
         return false;
     }

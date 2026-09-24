@@ -1,4 +1,4 @@
-const data = @import("model");
+const keyinput = @import("keyinput");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const Session = @import("Session.zig");
@@ -35,7 +35,7 @@ fn typeText(session: *Session, text: []const u8) !void {
     try review.send(session, .{ .text = .{ .bytes = text } });
 }
 
-fn press(session: *Session, code: data.Key.Code) !void {
+fn press(session: *Session, code: keyinput.Key.Code) !void {
     try review.send(session, .{ .key = .{ .code = code } });
     try review.send(session, .{ .key = .{ .code = code, .phase = .release } });
 }

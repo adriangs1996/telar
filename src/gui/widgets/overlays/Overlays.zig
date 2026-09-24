@@ -1,6 +1,6 @@
+const keyinput = @import("keyinput");
 const router_module = @import("../../input/router.zig");
 const modal_widget = @import("modal_widget.zig");
-const data = @import("model");
 const client = @import("telar-client");
 const HitState = @import("HitState.zig");
 const GenericPresentedState = @import("../../render/GenericPresentedState.zig").Type;
@@ -64,7 +64,7 @@ pub fn presented(self: *const Overlays) *const HitState {
 /// through release if a prompt closes between pointer events. A primary
 /// press on a palette row chooses that row.
 /// Example: `if (overlays.pointer(mouse)) |interaction| return interaction;`.
-pub fn pointer(self: *Overlays, mouse: data.Mouse) ?client.ViewInteractionCommand {
+pub fn pointer(self: *Overlays, mouse: keyinput.Mouse) ?client.ViewInteractionCommand {
     const button = mouse.button & 3;
     const captured = self.gesture != null;
     if (mouse.kind == .release and self.gesture == button) {

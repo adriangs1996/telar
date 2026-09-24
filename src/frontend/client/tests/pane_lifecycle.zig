@@ -1,4 +1,5 @@
 //! Client integration tests for pane lifecycle.
+const keyinput = @import("keyinput");
 
 const core = @import("telar-core");
 const client_module = @import("telar-client");
@@ -7,7 +8,6 @@ const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const host_inputs = @import("../input/host_inputs.zig");
-const term = @import("../../presentation/screen_support.zig");
 const support = @import("support.zig");
 
 test "pane focus commits before reports resize and presentation" {
@@ -347,7 +347,7 @@ test "mouse focus precedes forwarding its triggering press" {
 
     _ = client.model.syncReportedPaneFocus().?;
     const first_view = data.tab_layout.view(&client.model, model, first, area).?;
-    const point = term.Event.Mouse{
+    const point = keyinput.Mouse{
         .x = first_view.content.x,
         .y = first_view.content.y,
         .kind = .move,
@@ -1166,7 +1166,7 @@ test "detach action releases every tab before stopping the client" {
     const pending_updates = terminal.presenter.pending_updates;
 
     try std.testing.expectEqual(
-        data.KeybindControl.stop,
+        keyinput.Control.stop,
         try client_module.actions.executeAction(client, .detach, .effect),
     );
 
@@ -1204,7 +1204,7 @@ test "detach action captures layout changes from the same input batch" {
         },
         .effect,
     );
-    try std.testing.expectEqual(data.KeybindControl.stop, try client_module.actions.executeAction(client, .detach, .effect));
+    try std.testing.expectEqual(keyinput.Control.stop, try client_module.actions.executeAction(client, .detach, .effect));
     try harness.settle();
 
     var buffer: [core.max_client_layout_wire_bytes]u8 = undefined;
@@ -1393,7 +1393,7 @@ const FullscreenReattachment = struct {
 
     pub fn expectInput(self: FullscreenReattachment, pane_id: core.PaneId) !void {
         try std.testing.expectEqual(pane_id, self.harness.client.model.planPaneInput(.focused).?.pane_id);
-        try host_inputs.key(self.harness.terminal, try data.chord.parseKey("x"));
+        try host_inputs.key(self.harness.terminal, try keyinput.chord.parseKey("x"));
         try self.harness.settle();
         var buffer: [256]u8 = undefined;
         const message = try self.harness.nextClientMessage(&buffer);

@@ -1,5 +1,6 @@
 //! GUI controller for widget decisions. Domain edits remain commands to the
 //! existing shared prompt/application handlers; no widget mutates model fields.
+const keyinput = @import("keyinput");
 const pacing = @import("pacing");
 const cellgrid = @import("cellgrid");
 const composer_menu = @import("composer_menu.zig");
@@ -331,14 +332,14 @@ pub fn continueFallback(gui: *GuiAdapter, event: event_module.Event) !bool {
 }
 
 fn routeAgentBinding(gui: *GuiAdapter, event: event_module.Event) !bool {
-    const key: data.Key = switch (event) {
+    const key: keyinput.Key = switch (event) {
         .key => |value| value.terminalKey(),
         .text => |value| blk: {
             if (value.physical == null or value.bytes.len == 0 or value.bytes.len > 4 or (value.phase == .press and gui.widgets.preedit.owner != null)) {
                 return false;
             }
 
-            var result: data.Key = .{
+            var result: keyinput.Key = .{
                 .code = .{
                     .char = .{
                         .bytes = @splat(0),
@@ -408,7 +409,7 @@ fn routeAgentBinding(gui: *GuiAdapter, event: event_module.Event) !bool {
 /// Replays an unmatched or expired chord only to its original live composer.
 /// Held keys return to widget ownership before ordinary repeat/release routing.
 /// Example: `try routing.replayBindingKey(gui, owner, key);`
-pub fn replayBindingKey(gui: *GuiAdapter, owner: Id, key: data.Key) !void {
+pub fn replayBindingKey(gui: *GuiAdapter, owner: Id, key: keyinput.Key) !void {
     const target = gui.widgets.dispatcher.focusedTarget();
     const focused_pane: ?core.PaneId = if (gui.app.model.tabs.activeSlot()) |tab| gui.app.model.tabs.layout[tab].focused() else null;
     const valid = gui.widgets.dispatcher.window_focused and gui.widgets.dispatcher.maps.presented().modal_layer == 0 and gui.widgets.composer_menu.selector == null and target != null and target.?.id.eql(owner) and target.?.action == .composer and focused_pane == target.?.action.composer and field(gui, target.?) != null;

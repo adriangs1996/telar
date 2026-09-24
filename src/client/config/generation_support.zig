@@ -1,4 +1,5 @@
 //! Atomic client configuration generation and its compiled Lua callbacks.
+const keyinput = @import("keyinput");
 
 const cellgrid = @import("cellgrid");
 const data = @import("model");
@@ -163,7 +164,7 @@ pub fn parseInputDecision(state: *lua_api.c.lua_State, input_decision: DecisionI
                 diagnostic.set("input decision key {d} must be a string", .{key_index + 1});
                 return error.InvalidExpressionResult;
             };
-            keys.items[key_index] = data.chord.parseKey(value) catch |err| {
+            keys.items[key_index] = keyinput.chord.parseKey(value) catch |err| {
                 diagnostic.set("invalid input decision key {d}: {s}", .{ key_index + 1, @errorName(err) });
                 lua_value.pop(state, 1);
                 return error.InvalidExpressionResult;
@@ -263,14 +264,14 @@ test "client config compiles theme, bindings, and callbacks" {
         data.Action{ .lua_callback = .{ .generation = 7, .id = 0 } },
         generation.snapshot.bindings[1].action,
     );
-    const ctrl_s = try data.chord.parseKey("ctrl+s");
+    const ctrl_s = try keyinput.chord.parseKey("ctrl+s");
     try std.testing.expectEqualDeep(ctrl_s, generation.snapshot.prefix);
     try std.testing.expectEqualDeep(ctrl_s, generation.snapshot.bindings[0].keys[0]);
-    try std.testing.expectEqualDeep(try data.chord.parseKey("%"), generation.snapshot.bindings[0].keys[1]);
+    try std.testing.expectEqualDeep(try keyinput.chord.parseKey("%"), generation.snapshot.bindings[0].keys[1]);
     try std.testing.expectEqual(@as(u8, 2), generation.snapshot.bindings[0].len);
     try std.testing.expectEqualDeep(ctrl_s, generation.snapshot.bindings[1].keys[0]);
-    try std.testing.expectEqualDeep(try data.chord.parseKey("g"), generation.snapshot.bindings[1].keys[1]);
-    try std.testing.expectEqualDeep(try data.chord.parseKey("ctrl+g"), generation.snapshot.bindings[2].keys[0]);
+    try std.testing.expectEqualDeep(try keyinput.chord.parseKey("g"), generation.snapshot.bindings[1].keys[1]);
+    try std.testing.expectEqualDeep(try keyinput.chord.parseKey("ctrl+g"), generation.snapshot.bindings[2].keys[0]);
     try std.testing.expectEqual(@as(u8, 1), generation.snapshot.bindings[2].len);
     try std.testing.expectEqual(data.Action.detach, generation.snapshot.bindings[2].action);
     try std.testing.expectEqualDeep(
@@ -307,7 +308,7 @@ test "focused scroll Lua actions compile for global and prefixed bindings" {
     try std.testing.expectEqualDeep(data.Action{ .scroll_pane = .up }, generation.snapshot.bindings[0].action);
     try std.testing.expectEqualDeep(data.Action{ .scroll_pane = .down }, generation.snapshot.bindings[1].action);
     try std.testing.expectEqual(@as(u8, 1), generation.snapshot.bindings[0].len);
-    try std.testing.expectEqualDeep(try data.chord.parseKey("alt+up"), generation.snapshot.bindings[0].keys[0]);
+    try std.testing.expectEqualDeep(try keyinput.chord.parseKey("alt+up"), generation.snapshot.bindings[0].keys[0]);
     try std.testing.expectEqual(@as(u8, 2), generation.snapshot.bindings[1].len);
     try std.testing.expectEqualDeep(generation.snapshot.prefix, generation.snapshot.bindings[1].keys[0]);
 }
@@ -340,7 +341,7 @@ test "history palette Lua action constructor compiles" {
 
     try std.testing.expectEqual(@as(u16, 1), generation.snapshot.binding_count);
     try std.testing.expectEqualDeep(
-        try data.chord.parseKey("ctrl+r"),
+        try keyinput.chord.parseKey("ctrl+r"),
         generation.snapshot.bindings[0].keys[0],
     );
     try std.testing.expectEqual(@as(u8, 1), generation.snapshot.bindings[0].len);
@@ -541,8 +542,8 @@ test "Lua expression returns semantic input instead of terminal bytes" {
     );
     try std.testing.expect(decision == .keys);
     try std.testing.expectEqual(@as(u8, 2), decision.keys.len);
-    try std.testing.expectEqual(data.Key.Code.left, decision.keys.items[0].code);
-    try std.testing.expectEqual(data.Key.Code.enter, decision.keys.items[1].code);
+    try std.testing.expectEqual(keyinput.Key.Code.left, decision.keys.items[0].code);
+    try std.testing.expectEqual(keyinput.Key.Code.enter, decision.keys.items[1].code);
 }
 
 test "Lua callback cannot mutate its context" {
@@ -1099,8 +1100,8 @@ test "profile overlays base config before CLI locks are applied" {
     try std.testing.expectEqual(@as(usize, 16 * 1024 * 1024), generation.snapshot.runtime.graphics_pane_bytes);
     try std.testing.expectEqual(@as(usize, 64 * 1024 * 1024), generation.snapshot.runtime.graphics_global_bytes);
     const binding = generation.snapshot.bindings[0];
-    try std.testing.expectEqualDeep(try data.chord.parseKey("ctrl+s"), binding.keys[0]);
-    try std.testing.expectEqualDeep(try data.chord.parseKey("f"), binding.keys[1]);
+    try std.testing.expectEqualDeep(try keyinput.chord.parseKey("ctrl+s"), binding.keys[0]);
+    try std.testing.expectEqualDeep(try keyinput.chord.parseKey("f"), binding.keys[1]);
     const decision = try generation.invokeExpression(
         .{ .reference = binding.action.lua_expr, .context = .{
             .sidebar_visible = false,
@@ -1113,8 +1114,8 @@ test "profile overlays base config before CLI locks are applied" {
     );
     try std.testing.expect(decision == .forward_binding);
     try std.testing.expectEqual(@as(u8, 2), decision.forward_binding.len);
-    try std.testing.expectEqualDeep(try data.chord.parseKey("ctrl+s"), decision.forward_binding.items[0]);
-    try std.testing.expectEqualDeep(try data.chord.parseKey("f"), decision.forward_binding.items[1]);
+    try std.testing.expectEqualDeep(try keyinput.chord.parseKey("ctrl+s"), decision.forward_binding.items[0]);
+    try std.testing.expectEqualDeep(try keyinput.chord.parseKey("f"), decision.forward_binding.items[1]);
 }
 
 test "selected profile must exist" {

@@ -1,4 +1,5 @@
 //! One native connection's shared model and disposable host resources.
+const keyinput = @import("keyinput");
 const pacing = @import("pacing");
 const gui_event = @import("gui_event.zig");
 const mailbox = @import("mailbox");
@@ -837,7 +838,7 @@ fn drainInput(self: *GuiAdapter) !void {
 
 /// Resolve and execute one semantic key before accepting the next event.
 /// Example: `_ = try gui.routeKey(event);`
-pub fn routeKey(self: *GuiAdapter, event: input_routing.Type.KeyInput) !shared_model.keybind.Control {
+pub fn routeKey(self: *GuiAdapter, event: input_routing.Type.KeyInput) !keyinput.Control {
     errdefer self.router.eventFailed(event.key);
 
     defer {
@@ -860,7 +861,7 @@ pub fn routeKey(self: *GuiAdapter, event: input_routing.Type.KeyInput) !shared_m
     return control;
 }
 
-fn applyInputDecision(self: *GuiAdapter, decision: input_routing.Type.Decision) !shared_model.keybind.Control {
+fn applyInputDecision(self: *GuiAdapter, decision: input_routing.Type.Decision) !keyinput.Control {
     switch (decision) {
         .forward => |value| {
             _ = try client.key_routing.routeKeyInput(
@@ -903,7 +904,7 @@ fn applyInputDecision(self: *GuiAdapter, decision: input_routing.Type.Decision) 
     return .continue_routing;
 }
 
-fn deliverKey(self: *GuiAdapter, value: shared_model.Key) !void {
+fn deliverKey(self: *GuiAdapter, value: keyinput.Key) !void {
     if (self.binding_target) |owner| {
         if (value.phase == .press) {
             try widget_routing.replayBindingKey(
@@ -928,7 +929,7 @@ fn deliverKey(self: *GuiAdapter, value: shared_model.Key) !void {
 /// keys open the native palette already prefixed, and sidebar resize uses
 /// this window's pixel preference. Other actions keep the shared routing.
 /// Copy mode retires first, as the shared native action policy does.
-fn executeAction(self: *GuiAdapter, value: shared_model.actions.Action) !shared_model.keybind.Control {
+fn executeAction(self: *GuiAdapter, value: shared_model.actions.Action) !keyinput.Control {
     if (value == .scroll_pane) {
         if (try widget_routing.scrollFocusedThread(self, value.scroll_pane)) {
             return .continue_routing;
@@ -2011,7 +2012,7 @@ const PointerState = struct {
     gesture_revision: u64 = 0,
     scroll_remainder: f64 = 0,
     owners: [3]pointer_owner.Owner = @splat(.shared),
-    last: [3]data.Mouse = @splat(.{
+    last: [3]keyinput.Mouse = @splat(.{
         .x = 0,
         .y = 0,
         .kind = .release,

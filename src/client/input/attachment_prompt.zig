@@ -1,4 +1,5 @@
 //! Application policy binding local previews to one agent prompt's image markers.
+const keyinput = @import("keyinput");
 const core = @import("telar-core");
 const model_data = @import("model");
 
@@ -35,7 +36,7 @@ pub fn backslashContinuesPrompt(policy: model_data.AttachmentMarkerPolicy) bool 
 /// ```zig
 /// if (editsMarkers(policy, key)) store.expectMarkerDeletion(target);
 /// ```
-pub fn editsMarkers(policy: model_data.AttachmentMarkerPolicy, key: model_data.Key) bool {
+pub fn editsMarkers(policy: model_data.AttachmentMarkerPolicy, key: keyinput.Key) bool {
     if (key.phase == .release or !policy.learnsIdentity()) {
         return false;
     }
@@ -62,7 +63,7 @@ pub fn editsMarkers(policy: model_data.AttachmentMarkerPolicy, key: model_data.K
     return false;
 }
 
-fn isLetter(key: model_data.Key, letter: u8) bool {
+fn isLetter(key: keyinput.Key, letter: u8) bool {
     return switch (key.code) {
         .char => |char| char.len == 1 and std.ascii.toLower(char.bytes[0]) == letter,
         else => false,
@@ -80,13 +81,13 @@ test "marker policies follow each provider's prompt conventions" {
 }
 
 test "Pi path markers yield to word and line deletion keys" {
-    const backspace: model_data.Key = .{ .code = .backspace };
+    const backspace: keyinput.Key = .{ .code = .backspace };
     try std.testing.expect(editsMarkers(.pasted_path, backspace));
     try std.testing.expect(editsMarkers(.stable_number, backspace));
     try std.testing.expect(!editsMarkers(.ordered, backspace));
     try std.testing.expect(!editsMarkers(.pasted_path, .{ .code = .backspace, .phase = .release }));
 
-    const word_backward: model_data.Key = .{ .code = .{ .char = .init("w") }, .mods = .{ .ctrl = true } };
+    const word_backward: keyinput.Key = .{ .code = .{ .char = .init("w") }, .mods = .{ .ctrl = true } };
     try std.testing.expect(editsMarkers(.pasted_path, word_backward));
     try std.testing.expect(!editsMarkers(.stable_number, word_backward));
     try std.testing.expect(editsMarkers(.pasted_path, .{ .code = .backspace, .mods = .{ .alt = true } }));

@@ -1,6 +1,6 @@
+const keyinput = @import("keyinput");
 const client = @import("telar-client");
 const core = @import("telar-core");
-const data = @import("model");
 const std = @import("std");
 const term = @import("../presentation/screen_support.zig");
 
@@ -103,13 +103,13 @@ test "Kitty associated text never turns shortcuts controls or releases into text
         }
 
         for (0..8) |mods_bits| {
-            const mods: data.Key.Mods = @bitCast(@as(u3, @intCast(mods_bits)));
+            const mods: keyinput.Key.Mods = @bitCast(@as(u3, @intCast(mods_bits)));
             if (!mods.ctrl and !mods.alt) {
                 continue;
             }
 
-            for ([_]data.Key.Phase{ .press, .repeat, .release }) |phase| {
-                const key: data.Key = .{ .code = .{ .char = .init("c") }, .mods = mods, .phase = phase };
+            for ([_]keyinput.Key.Phase{ .press, .repeat, .release }) |phase| {
+                const key: keyinput.Key = .{ .code = .{ .char = .init("c") }, .mods = mods, .phase = phase };
                 const baseline = try client.encodeKey(&baseline_buffer, key, .{ .kitty_keyboard_flags = flags });
                 try std.testing.expectEqualStrings(baseline, try client.encodeKey(&buffer, key, .{ .kitty_keyboard_flags = flags | 16 }));
             }

@@ -1,4 +1,5 @@
 //! Native hover and link ownership across asynchronous state transitions.
+const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const input_support = @import("input_support.zig");
@@ -155,7 +156,7 @@ fn prefixAfterPointer(code: u32) !void {
     const gui = fixture.session.gui;
     gui.adoptBindings(
         .{
-            .prefix = try data.chord.parseKey("ctrl+space"),
+            .prefix = try keyinput.chord.parseKey("ctrl+space"),
             .bindings = &.{},
             .escape_timeout_ns = std.time.ns_per_s,
             .sequence_timeout_ns = 10 * std.time.ns_per_s,

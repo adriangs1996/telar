@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const native = @import("../native/native.zig");
 const data = @import("model");
 const input_support = @import("input_support.zig");
@@ -115,7 +116,7 @@ test "native custom prefix navigates pane focus fullscreen and copy mode" {
     try session.receiveFrame(1);
     session.gui.adoptBindings(
         .{
-            .prefix = try data.chord.parseKey("ctrl+space"),
+            .prefix = try keyinput.chord.parseKey("ctrl+space"),
             .bindings = &.{},
             .escape_timeout_ns = 1,
             .sequence_timeout_ns = 1,
@@ -240,7 +241,7 @@ test "native child release crosses a newly opened prompt only with its acquired 
     const pane = app.model.panes.find(Session.pane_id).?;
     pane.mouse = .{ .sgr = true, .tracking = .button };
     const view = data.tab_layout.view(&app.model, tab, pane.id, data.workbench.region(&session.gui.app.model).area).?;
-    const press: data.Mouse = .{
+    const press: keyinput.Mouse = .{
         .x = view.content.x,
         .y = view.content.y,
         .kind = .press,
@@ -538,12 +539,12 @@ const ActionCapture = struct {
     value: ?data.actions.Action = null,
     keys: usize = 0,
 
-    pub fn action(self: *ActionCapture, value: data.actions.Action) !data.keybind.Control {
+    pub fn action(self: *ActionCapture, value: data.actions.Action) !keyinput.Control {
         self.value = value;
         return .continue_routing;
     }
 
-    pub fn key(self: *ActionCapture, _: data.Key) !void {
+    pub fn key(self: *ActionCapture, _: keyinput.Key) !void {
         self.keys += 1;
     }
 

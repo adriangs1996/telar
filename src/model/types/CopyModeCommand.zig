@@ -1,4 +1,5 @@
-const Key = @import("../input/Key.zig");
+const keyinput = @import("keyinput");
+const Key = keyinput.Key;
 const PointerMotion = @import("../input/PointerMotion.zig");
 const CopyModeMatches = @import("../state/CopyModeMatches.zig");
 

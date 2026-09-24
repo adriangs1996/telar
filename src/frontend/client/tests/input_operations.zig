@@ -1,4 +1,5 @@
 //! Exercises direct operations with real client state and the runtime outbox.
+const keyinput = @import("keyinput");
 const data = @import("model");
 
 const std = @import("std");
@@ -20,7 +21,7 @@ test "key press rolls back its physical lease when runtime delivery fails" {
     try harness.bootstrap();
     const client = harness.client;
     try fillOutbox(client);
-    var key = try data.chord.parseKey("x");
+    var key = try keyinput.chord.parseKey("x");
     key.physical = .{ .value = 41 };
 
     try std.testing.expectError(error.ClientOutboxFull, api.key_routing.routeKeyInput(
@@ -44,7 +45,7 @@ test "physical key repeat and release keep their pane after focus and prompt cha
     const other: core.PaneId = @enumFromInt(11);
     try data.pane_split.split(&client.model, tab, .{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = other, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = terminal.view.workbench() });
     try std.testing.expect(client.model.tabs.layout[tab].focusPane(TestHarness.bootstrap_pane));
-    var key = try data.chord.parseKey("x");
+    var key = try keyinput.chord.parseKey("x");
     key.physical = .{ .value = 41 };
     try std.testing.expect((try api.key_routing.routeKeyInput(
         client,
@@ -102,7 +103,7 @@ test "physical lease saturation rejects input before mutation or transport" {
     }
     const version = client.model.version();
     const overflows = client.telemetry.metrics.key_lease_overflows;
-    var key = try data.chord.parseKey("x");
+    var key = try keyinput.chord.parseKey("x");
     key.physical = .{ .value = identity + 1 };
 
     const outcome = try api.key_routing.routeKeyInput(

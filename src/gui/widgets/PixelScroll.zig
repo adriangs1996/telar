@@ -1,5 +1,5 @@
 //! Bounded, disposable scrolling for a native list in device pixels.
-const data = @import("model");
+const keyinput = @import("keyinput");
 const PixelScroll = @This();
 
 scroll: u16 = 0,
@@ -30,7 +30,7 @@ pub fn resetGesture(self: *PixelScroll) void {
 
 /// Moves one item without changing client navigation.
 /// Example: `if (scroll.wheel(.scroll_down)) chrome.invalidate();`
-pub fn wheel(self: *PixelScroll, kind: data.Mouse.Kind) bool {
+pub fn wheel(self: *PixelScroll, kind: keyinput.Mouse.Kind) bool {
     return self.scrollBy(switch (kind) {
         .scroll_up => -@as(f64, @floatFromInt(self.step)),
         .scroll_down => @as(f64, @floatFromInt(self.step)),

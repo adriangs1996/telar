@@ -1,6 +1,7 @@
 //! Client-owned input routing over the last successfully delivered targets.
 //! The compositor may prepare new targets while input retains the visible
 //! ones. Gesture and physical-key leases keep their owner across focus changes.
+const keyinput = @import("keyinput");
 const event_module = @import("../../input/event.zig");
 const key_owner = @import("key_owner.zig");
 const data = @import("model");
@@ -13,7 +14,7 @@ const Registry = @import("Registry.zig");
 const Route = @import("Route.zig");
 const GenericPresentedState = @import("../../render/GenericPresentedState.zig").Type;
 const TextInput = @import("../../input/TextInput.zig");
-const GenericTable = data.GenericTable;
+const GenericTable = keyinput.GenericTable;
 const Dispatcher = @This();
 
 maps: GenericPresentedState(Registry) = .{},

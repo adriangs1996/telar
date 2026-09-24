@@ -1,4 +1,5 @@
 //! Mouse selection through the real client input, outbox and presenter ports.
+const keyinput = @import("keyinput");
 
 const core = @import("telar-core");
 const data = @import("model");
@@ -48,7 +49,7 @@ test "mouse drag copies pane coordinates and keeps highlighting until typing" {
         .linewise = false,
     }, copied.copy_selection);
 
-    try host_inputs.key(terminal, try data.chord.parseKey("x"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("x"));
     try std.testing.expect(client.model.copyModeProjection() == null);
     try harness.settle();
     const input = try harness.nextClientMessage(&buffer);

@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
@@ -577,7 +578,7 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
     try std.testing.expectEqualDeep(copy_version, model.version());
 
     const copy_commit = model.commitCopyMode(model.planCopyMode(.{
-        .key = try model_data.chord.parseKey("g"),
+        .key = try keyinput.chord.parseKey("g"),
     }).?).?;
 
     try std.testing.expectEqual(@as(u32, 0), copy_commit.viewport.?.offset);
@@ -636,12 +637,12 @@ test "copy mode plans reject no-ops and stale commits" {
     try std.testing.expect(model.enterCopyMode());
     const version = model.version();
 
-    try std.testing.expect(model.planCopyMode(.{ .key = try model_data.chord.parseKey("left") }) == null);
-    try std.testing.expect(model.planCopyMode(.{ .key = try model_data.chord.parseKey("z") }) == null);
+    try std.testing.expect(model.planCopyMode(.{ .key = try keyinput.chord.parseKey("left") }) == null);
+    try std.testing.expect(model.planCopyMode(.{ .key = try keyinput.chord.parseKey("z") }) == null);
     try std.testing.expectEqualDeep(version, model.version());
 
-    const first = model.planCopyMode(.{ .key = try model_data.chord.parseKey("right") }).?;
-    const stale = model.planCopyMode(.{ .key = try model_data.chord.parseKey("right") }).?;
+    const first = model.planCopyMode(.{ .key = try keyinput.chord.parseKey("right") }).?;
+    const stale = model.planCopyMode(.{ .key = try keyinput.chord.parseKey("right") }).?;
     const commit = model.commitCopyMode(first).?;
 
     try std.testing.expect(commit.active);
@@ -666,14 +667,14 @@ test "copy mode plans the textual link under its cursor without mutation" {
     try std.testing.expect(model.enterCopyMode());
     const version = model.version();
 
-    const plan = model.planCopyMode(.{ .key = try model_data.chord.parseKey("o") }).?;
+    const plan = model.planCopyMode(.{ .key = try keyinput.chord.parseKey("o") }).?;
 
     try std.testing.expectEqualStrings("file:///tmp/a%20b.txt", plan.open_link.?.uri());
     try std.testing.expectEqualDeep(version, model.version());
-    try std.testing.expect(model.planCopyMode(.{ .key = try model_data.chord.parseKey("o") }) != null);
+    try std.testing.expect(model.planCopyMode(.{ .key = try keyinput.chord.parseKey("o") }) != null);
 
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
-    try std.testing.expect(model.planCopyMode(.{ .key = try model_data.chord.parseKey("o") }) == null);
+    try std.testing.expect(model.planCopyMode(.{ .key = try keyinput.chord.parseKey("o") }) == null);
 }
 
 test "an active tab transition releases copy authority" {

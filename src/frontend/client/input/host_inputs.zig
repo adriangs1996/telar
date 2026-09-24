@@ -1,4 +1,5 @@
 //! Owns one client's host-TTY read, native router and replaceable deadlines.
+const keyinput = @import("keyinput");
 
 const pacing = @import("pacing");
 const data = @import("model");
@@ -237,7 +238,7 @@ pub fn forward(terminal: *TerminalAdapter, bytes: []const u8) !void {
 /// ```zig
 /// try host_inputs.key(terminal, pressed);
 /// ```
-pub fn key(terminal: *TerminalAdapter, value: data.Key) !void {
+pub fn key(terminal: *TerminalAdapter, value: keyinput.Key) !void {
     const client = &terminal.app;
 
     const escape_key = &terminal.view.tab_drag.escape_key;
@@ -269,7 +270,7 @@ pub fn key(terminal: *TerminalAdapter, value: data.Key) !void {
     );
 }
 
-pub fn mouse(terminal: *TerminalAdapter, event: data.Mouse) !void {
+pub fn mouse(terminal: *TerminalAdapter, event: keyinput.Mouse) !void {
     const client = &terminal.app;
 
     if (try tab_drag.retained(terminal, event)) {
@@ -301,7 +302,7 @@ pub fn terminalResponse(terminal: *TerminalAdapter, response: term.Event.Termina
 
 /// Execute each decision before decoding the next event, so later keys observe
 /// changes to focus and modal state. Example: `_ = try host_inputs.feed(terminal, input);`
-pub fn feed(terminal: *TerminalAdapter, input: Router.Feed) !data.KeybindControl {
+pub fn feed(terminal: *TerminalAdapter, input: Router.Feed) !keyinput.Control {
     const router = &terminal.host_input.router;
     var remaining = input;
     while (router.next(&remaining)) |event| {
@@ -313,7 +314,7 @@ pub fn feed(terminal: *TerminalAdapter, input: Router.Feed) !data.KeybindControl
     return .continue_routing;
 }
 
-fn decoded(terminal: *TerminalAdapter, event: Router.Decoded, now_ns: u64) !data.KeybindControl {
+fn decoded(terminal: *TerminalAdapter, event: Router.Decoded, now_ns: u64) !keyinput.Control {
     const client = &terminal.app;
 
     const router = &terminal.host_input.router;
@@ -362,7 +363,7 @@ fn decoded(terminal: *TerminalAdapter, event: Router.Decoded, now_ns: u64) !data
     return .continue_routing;
 }
 
-fn applyDecision(terminal: *TerminalAdapter, decision: Router.Decision) !data.KeybindControl {
+fn applyDecision(terminal: *TerminalAdapter, decision: Router.Decision) !keyinput.Control {
     const client = &terminal.app;
 
     const router = &terminal.host_input.router;
@@ -441,7 +442,7 @@ fn read(io: std.Io, file: std.Io.File, chunk: *Chunk) anyerror!u16 {
 }
 
 test "host input configuration owns router timeouts" {
-    const prefix = try data.chord.parseKey("ctrl+s");
+    const prefix = try keyinput.chord.parseKey("ctrl+s");
     const router = try buildRouter(.{
         .prefix = prefix,
         .bindings = &.{},
@@ -464,7 +465,7 @@ test "router replacement clears obsolete deadlines and visible prefix state" {
     });
     original.prefix_pending = true;
     const replacement = try buildRouter(.{
-        .prefix = try data.chord.parseKey("ctrl+s"),
+        .prefix = try keyinput.chord.parseKey("ctrl+s"),
         .bindings = &.{},
         .escape_timeout_ns = 5,
         .sequence_timeout_ns = 20,
@@ -488,8 +489,8 @@ test "router replacement clears obsolete deadlines and visible prefix state" {
 }
 
 test "prefix status uses only the effective host input router" {
-    const prefix = try data.chord.parseKey("ctrl+s");
-    const suffix = try data.chord.parseKey("t");
+    const prefix = try keyinput.chord.parseKey("ctrl+s");
+    const suffix = try keyinput.chord.parseKey("t");
     const binding = try data.config_values.ConfiguredBinding.init(&.{ prefix, suffix }, .new_tab);
     var router = try Router.initWithPrefix(&.{binding}, prefix);
     router.prefix_pending = true;

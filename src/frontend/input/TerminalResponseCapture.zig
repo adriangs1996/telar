@@ -1,4 +1,4 @@
-const data = @import("model");
+const keyinput = @import("keyinput");
 const keybind = @import("keybind.zig");
 const term = @import("../presentation/screen_support.zig");
 const TerminalResponseCapture = @This();
@@ -12,7 +12,7 @@ pub fn forward(self: *TerminalResponseCapture, bytes: []const u8) !void {
     self.forwarded += bytes.len;
 }
 
-pub fn action(self: *TerminalResponseCapture, _: keybind.TestAction) !data.KeybindControl {
+pub fn action(self: *TerminalResponseCapture, _: keybind.TestAction) !keyinput.Control {
     self.actions += 1;
     return .continue_routing;
 }

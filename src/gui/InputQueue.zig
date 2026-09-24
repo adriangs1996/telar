@@ -1,7 +1,7 @@
 //! Ordered, bounded input storage. Owns payload lifetimes and release recovery.
+const keyinput = @import("keyinput");
 const native = @import("native/native.zig");
 const input_item = @import("input_item.zig");
-const data = @import("model");
 const std = @import("std");
 const event_types = @import("input/event.zig");
 const decode_input = @import("native/decode_input.zig");
@@ -240,7 +240,7 @@ test "native key normalization preserves configured Ctrl-Space Alt uppercase and
     for (expected, 0..) |name, index| {
         var key = input.items[index].key;
         key.physical = null;
-        try std.testing.expectEqualDeep(try data.chord.parseKey(name), key.terminalKey());
+        try std.testing.expectEqualDeep(try keyinput.chord.parseKey(name), key.terminalKey());
     }
 
     try std.testing.expectEqual(@as(u32, 50), input.items[0].key.physical.?.value);

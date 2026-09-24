@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const HistoryModalLayout = @import("../widgets/overlays/HistoryModalLayout.zig");
 const gfx = @import("gfx");
@@ -73,7 +74,7 @@ test "native prompt renders selections and owns its gesture until release" {
 test "native modal closure keeps its presented pointer barrier across failed frames" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
-    const move: data.Mouse = .{
+    const move: keyinput.Mouse = .{
         .x = 1,
         .y = 1,
         .kind = .move,

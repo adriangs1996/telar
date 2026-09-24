@@ -1,5 +1,6 @@
+const keyinput = @import("keyinput");
 const effects = @import("effects.zig");
-const Key = @import("../input/Key.zig");
+const Key = keyinput.Key;
 const InputKeys = @This();
 
 items: [effects.max_expression_keys]Key = undefined,

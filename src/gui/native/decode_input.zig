@@ -1,6 +1,6 @@
 //! One checked translation of the native ABI into synchronous semantic input.
+const keyinput = @import("keyinput");
 const AccessibilityAction = @import("../input/AccessibilityAction.zig");
-const data = @import("model");
 const std = @import("std");
 const NativeEvent = @import("InputEvent.zig").InputEvent;
 const events = @import("../input/event.zig");
@@ -34,8 +34,8 @@ pub fn decode(native: NativeEvent) !events.Event {
         return error.InvalidUtf8;
     }
 
-    const phase: data.Key.Phase = if (native.kind <= 4) @enumFromInt(native.phase) else .press;
-    const physical: ?data.Key.Physical = if (native.physical == 0) null else .{
+    const phase: keyinput.Key.Phase = if (native.kind <= 4) @enumFromInt(native.phase) else .press;
+    const physical: ?keyinput.Key.Physical = if (native.physical == 0) null else .{
         .value = native.physical,
     };
     switch (native.kind) {
@@ -48,7 +48,7 @@ pub fn decode(native: NativeEvent) !events.Event {
         },
         2 => return .{ .paste = text },
         3 => {
-            const codes = [_]data.Key.Code{
+            const codes = [_]keyinput.Key.Code{
                 .enter,
                 .tab,
                 .backspace,
@@ -176,7 +176,7 @@ fn selectionRange(text: []const u8, start: u32, end: u32) !void {
 }
 
 test "semantic native decoder preserves held keys committed text and focus" {
-    for ([_]data.Key.Phase{
+    for ([_]keyinput.Key.Phase{
         .press,
         .repeat,
         .release,

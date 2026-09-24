@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const SidebarRendererInput = @import("../../graphics/SidebarRendererInput.zig");
@@ -468,7 +469,7 @@ pub fn graphicalPillCoversPlan(self: *const State) bool {
 /// ```zig
 /// const interaction = view.handleMouse(mouse);
 /// ```
-pub fn handleMouse(self: *State, mouse: screen_support.Event.Mouse) client.ViewInteractionCommand {
+pub fn handleMouse(self: *State, mouse: keyinput.Mouse) client.ViewInteractionCommand {
     var result: client.ViewInteractionCommand = .{};
     if (self.attachment_store.hasModal()) {
         result.consumed = true;

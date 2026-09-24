@@ -1,5 +1,6 @@
 //! Agent attachments: keeps the image markers in an agent's prompt and the
 //! attachment shelf in step.
+const keyinput = @import("keyinput");
 const attachment_prompt = @import("../input/attachment_prompt.zig");
 const markers_module = @import("markers.zig");
 const data = @import("model");
@@ -132,13 +133,13 @@ fn planAttachmentRemoval(client: *Client, id: data.AttachmentId) ?data.RemovalCo
 }
 
 fn deliverAttachmentRemoval(client: *Client, command: data.RemovalCommand) !void {
-    var keys: [data.attachment_types.max_removal_keys]data.Key = undefined;
+    var keys: [data.attachment_types.max_removal_keys]keyinput.Key = undefined;
     var len: usize = 0;
-    const movement: data.Key.Code = switch (command.marker.direction) {
+    const movement: keyinput.Key.Code = switch (command.marker.direction) {
         .left => .left,
         .right => .right,
     };
-    const restoration: data.Key.Code = switch (command.marker.direction) {
+    const restoration: keyinput.Key.Code = switch (command.marker.direction) {
         .left => .right,
         .right => .left,
     };

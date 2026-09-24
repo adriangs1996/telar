@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const localsocket = @import("localsocket");
 const pacing = @import("pacing");
 const headless_event = @import("headless_event.zig");
@@ -202,12 +203,12 @@ fn consumeCredit(context: *anyopaque, credit: Credit) void {
     fixture.graphics.consumeCredit(credit);
 }
 
-pub fn key(self: *Fixture, value: model_data.Key) !void {
+pub fn key(self: *Fixture, value: keyinput.Key) !void {
     try self.inbox.post(.{ .key = value });
     try self.drain();
 }
 
-fn applyKey(self: *Fixture, value: model_data.Key) !void {
+fn applyKey(self: *Fixture, value: keyinput.Key) !void {
     _ = try pane_input.sendPaneInput(
         &self.app,
         .{

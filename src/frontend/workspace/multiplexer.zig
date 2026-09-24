@@ -1,4 +1,5 @@
 //! Multi-pane client state and composition.
+const keyinput = @import("keyinput");
 
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
@@ -14,7 +15,6 @@ const fullscreen_tabs = @import("fullscreen_tabs.zig");
 const Compositor = @import("Compositor.zig");
 const RenderStats = @import("RenderStats.zig");
 const Position = @import("../presentation/Position.zig");
-const term = @import("../presentation/screen_support.zig");
 
 pub fn copyView(copy: ?client.CopyProjection, pane_id: core.PaneId) ?data.CopyModeView {
     const projection = copy orelse return null;
@@ -1205,7 +1205,7 @@ test "pane mouse planning keeps buttons focused and wheels pointer-local" {
     second_pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
     second_pane.scroll = .{ .total_rows = second_pane.buffer.h, .offset = 0 };
     const second_view = data.tab_layout.snapshot(&model, 0, area).find(second).?;
-    const second_point: term.Event.Mouse = .{
+    const second_point: keyinput.Mouse = .{
         .x = second_view.content.x,
         .y = second_view.content.y,
         .kind = .press,

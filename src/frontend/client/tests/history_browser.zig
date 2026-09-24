@@ -1,6 +1,6 @@
 //! History flow proof through host input, runtime messages and the real client outbox.
+const keyinput = @import("keyinput");
 
-const data = @import("model");
 const core = @import("telar-core");
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
@@ -29,7 +29,7 @@ test "history input preserves search through inspection and pages past the first
         .{
             .key = .{
                 .code = .{
-                    .char = data.Char.init("o"),
+                    .char = keyinput.Char.init("o"),
                 },
                 .mods = .{
                     .ctrl = true,

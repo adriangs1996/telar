@@ -1,6 +1,6 @@
 //! Bounded ownership for host keys that report a physical lifecycle.
+const keyinput = @import("keyinput");
 
-const data = @import("model");
 const std = @import("std");
 
 const TestOwner = enum {
@@ -9,10 +9,10 @@ const TestOwner = enum {
     prompt,
 };
 
-const TestTable = data.GenericTable(TestOwner, 2);
+const TestTable = keyinput.GenericTable(TestOwner, 2);
 
 test "a physical identity keeps one replaceable owner" {
-    const key: data.Physical = .{ .value = 115 };
+    const key: keyinput.Physical = .{ .value = 115 };
     var leases: TestTable = .{};
 
     try std.testing.expect(leases.acquire(key, .binding));

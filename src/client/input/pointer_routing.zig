@@ -1,4 +1,5 @@
 //! Wires host pointer authority and normalization to client pointer owners.
+const keyinput = @import("keyinput");
 
 const data = @import("model");
 const core = @import("telar-core");
@@ -16,7 +17,7 @@ const pane_mouse_input = @import("pane_mouse_inputs.zig");
 /// ```zig
 /// _ = try apply(client, event);
 /// ```
-pub fn apply(client: *Client, event: data.Mouse) !Outcome {
+pub fn apply(client: *Client, event: keyinput.Mouse) !Outcome {
     if (comptime core.enabled) {
         client.telemetry.metrics.mouse_events += 1;
     }
@@ -49,7 +50,7 @@ pub fn apply(client: *Client, event: data.Mouse) !Outcome {
     return .pane;
 }
 
-fn resolve(client: *Client, event: data.Mouse) Authority {
+fn resolve(client: *Client, event: keyinput.Mouse) Authority {
     const selection = client.model.pointerSelection();
     const captured = if (selection) |value| value.dragging else false;
     if (client.model.name_prompt.active() and !captured) {

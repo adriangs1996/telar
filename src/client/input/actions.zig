@@ -1,5 +1,6 @@
 //! Actions: runs one bound action, from a key binding or from a validated Lua
 //! effect, against the focused pane or the client.
+const keyinput = @import("keyinput");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -28,20 +29,20 @@ const workspace_creation = @import("../workspace/workspace_creation.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 const Client = @import("../execution/Client.zig");
 
-const ctrl_h = data.chord.parseKey("ctrl+h") catch unreachable;
+const ctrl_h = keyinput.chord.parseKey("ctrl+h") catch unreachable;
 
-const ctrl_j = data.chord.parseKey("ctrl+j") catch unreachable;
+const ctrl_j = keyinput.chord.parseKey("ctrl+j") catch unreachable;
 
-const ctrl_k = data.chord.parseKey("ctrl+k") catch unreachable;
+const ctrl_k = keyinput.chord.parseKey("ctrl+k") catch unreachable;
 
-const ctrl_l = data.chord.parseKey("ctrl+l") catch unreachable;
+const ctrl_l = keyinput.chord.parseKey("ctrl+l") catch unreachable;
 
 /// Bindings obey prompt authority; validated native effects retain their caller's authority.
 const ActionOrigin = enum { binding, effect };
 
 /// Executes a binding or a validated native effect with its existing prompt policy.
 /// Example: `_ = try actions.executeAction(client, .{ .split_pane = .horizontal }, .binding);`
-pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) anyerror!data.KeybindControl {
+pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) anyerror!keyinput.Control {
     if (origin == .binding and client.model.name_prompt.active()) {
         return .continue_routing;
     }
@@ -203,7 +204,7 @@ pub fn repeatPane(client: *const Client) ?core.PaneId {
     return if (pane.attached) pane.id else null;
 }
 
-pub fn navigationKey(direction: data.InputDirection) data.Key {
+pub fn navigationKey(direction: data.InputDirection) keyinput.Key {
     return switch (direction) {
         .left => ctrl_h,
         .right => ctrl_l,

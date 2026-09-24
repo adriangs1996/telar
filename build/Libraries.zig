@@ -99,6 +99,9 @@ const specs = [_]Spec{
         .name = "kitty_protocol",
     },
     .{
+        .name = "keyinput",
+    },
+    .{
         .name = "cellglyphs",
         .imports = &.{"gfx"},
     },

@@ -1,6 +1,7 @@
 //! The sidebar as a pixel band: its width from the configuration, the grid
 //! it leaves beside it, the pointer targets inside it and the drag, keyboard
 //! and reload paths that move it.
+const keyinput = @import("keyinput");
 const native = @import("../native/native.zig");
 const data = @import("model");
 const input_support = @import("input_support.zig");
@@ -125,7 +126,7 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
     const renderer = &fixture.session.gui.renderer;
     const shared = gui.app.model.sidebar_width;
     const revision = gui.chrome.revision;
-    try std.testing.expectEqual(data.keybind.Control.continue_routing, try input_support.action(
+    try std.testing.expectEqual(keyinput.Control.continue_routing, try input_support.action(
         gui,
         .{
             .resize_sidebar = .right,
@@ -133,13 +134,13 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
     ));
     try std.testing.expectEqual(@as(f32, 300), gui.sidebar.logical);
     try std.testing.expect(gui.chrome.revision != revision);
-    try std.testing.expectEqual(data.keybind.Control.continue_routing, try input_support.action(
+    try std.testing.expectEqual(keyinput.Control.continue_routing, try input_support.action(
         gui,
         .{
             .resize_sidebar = .left,
         },
     ));
-    try std.testing.expectEqual(data.keybind.Control.continue_routing, try input_support.action(
+    try std.testing.expectEqual(keyinput.Control.continue_routing, try input_support.action(
         gui,
         .{
             .resize_sidebar = .left,

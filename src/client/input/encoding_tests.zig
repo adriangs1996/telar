@@ -1,4 +1,4 @@
-const data = @import("model");
+const keyinput = @import("keyinput");
 const core = @import("telar-core");
 const std = @import("std");
 const encoding_support = @import("encoding_support.zig");
@@ -44,8 +44,8 @@ test "Enter modifiers follow the child's keyboard protocol" {
     var buffer: [32]u8 = undefined;
     var expected_buffer: [32]u8 = undefined;
     for (0..8) |bits| {
-        const mods: data.Key.Mods = @bitCast(@as(u3, @intCast(bits)));
-        const pressed: data.Key = .{ .code = .enter, .mods = mods };
+        const mods: keyinput.Key.Mods = @bitCast(@as(u3, @intCast(bits)));
+        const pressed: keyinput.Key = .{ .code = .enter, .mods = mods };
         const legacy = if (mods.alt) "\x1b\r" else "\r";
         try std.testing.expectEqualStrings(legacy, try encoding_support.encodeKey(&buffer, pressed, .{}));
         const xterm = if (bits == 0) "\r" else try std.fmt.bufPrint(
@@ -80,7 +80,7 @@ test "Enter modifiers follow the child's keyboard protocol" {
 
 test "legacy children receive repeats as presses and never receive releases" {
     var buffer: [32]u8 = undefined;
-    const repeat: data.Key = .{
+    const repeat: keyinput.Key = .{
         .code = .{ .char = .init("s") },
         .mods = .{ .ctrl = true },
         .phase = .repeat,
@@ -99,7 +99,7 @@ test "legacy children receive repeats as presses and never receive releases" {
 test "report-all mode encodes plain key lifecycles" {
     var buffer: [32]u8 = undefined;
     const modes: core.InputModes = .{ .kitty_keyboard_flags = 10 };
-    var key: data.Key = .{
+    var key: keyinput.Key = .{
         .code = .{ .char = .init("x") },
         .physical = .{ .value = 120 },
     };
@@ -112,7 +112,7 @@ test "report-all mode encodes plain key lifecycles" {
 }
 
 test "modified Enter encoding reports insufficient output space" {
-    const pressed: data.Key = .{ .code = .enter, .mods = .{ .shift = true } };
+    const pressed: keyinput.Key = .{ .code = .enter, .mods = .{ .shift = true } };
     var kitty_buffer: [6]u8 = undefined;
     try std.testing.expectError(error.WriteFailed, encoding_support.encodeKey(&kitty_buffer, pressed, .{ .kitty_keyboard_flags = 1 }));
     var xterm_buffer: [9]u8 = undefined;

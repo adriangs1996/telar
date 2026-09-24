@@ -1,5 +1,5 @@
+const keyinput = @import("keyinput");
 const hints_support = @import("hints_support.zig");
-const data = @import("model");
 const Hints = @This();
 
 items: [hints_support.max_prefix_hints]Hint = undefined,
@@ -18,6 +18,6 @@ pub fn slice(self: *const Hints) []const Hint {
 }
 
 const Hint = struct {
-    key: data.Key,
+    key: keyinput.Key,
     label: []const u8,
 };

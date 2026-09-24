@@ -2,6 +2,7 @@
 //!
 //! This file is the capability's public namespace (ADR-0002); the files in
 //! this directory are implementation details behind it.
+const keyinput = @import("keyinput");
 
 const client = @import("telar-client");
 const data = @import("model");
@@ -63,7 +64,7 @@ test "configured action names cover multiplexer operations" {
 }
 
 test "default bindings compile without ambiguous prefixes" {
-    const prefix = try data.chord.parseKey("ctrl+s");
+    const prefix = try keyinput.chord.parseKey("ctrl+s");
     var bindings = try client.default_bindings.load(prefix);
     var resize_directions: std.EnumSet(data.InputDirection) = .initEmpty();
     var fullscreen = false;

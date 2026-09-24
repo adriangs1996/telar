@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const data = @import("model");
 const core = @import("telar-core");
 const Generation = @import("config/Generation.zig");
@@ -11,7 +12,7 @@ cwd: []const u8,
 endpoint: []const u8,
 /// Process environment used to expand `~` and `$VAR` in typed directories.
 environ: std.process.Environ = .empty,
-prefix: data.Key = data.keybind.default_prefix,
+prefix: keyinput.Key = data.keybind.default_prefix,
 bindings: []const data.config_values.ConfiguredBinding = &.{},
 theme: data.ColorTheme = data.theme_support.default_theme,
 gui: GuiConfig = .{},

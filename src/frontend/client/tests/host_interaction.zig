@@ -1,4 +1,5 @@
 //! Client integration tests for host interaction.
+const keyinput = @import("keyinput");
 
 const core = @import("telar-core");
 const data = @import("model");
@@ -548,7 +549,7 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     try std.testing.expect(!terminal.graphics_store.paneVisible(pane.id));
     try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 
-    try host_inputs.key(terminal, try data.chord.parseKey("x"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("x"));
 
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expect(terminal.graphics_store.paneVisible(pane.id));
@@ -649,7 +650,7 @@ test "a full outbox preserves the committed pane viewport and rejects input" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        host_inputs.key(terminal, try data.chord.parseKey("x")),
+        host_inputs.key(terminal, try keyinput.chord.parseKey("x")),
     );
 
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
@@ -673,7 +674,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     const pending_updates_before = terminal.presenter.pending_updates;
 
     try std.testing.expectEqual(
-        data.KeybindControl.continue_routing,
+        keyinput.Control.continue_routing,
         try client_module.actions.executeAction(client, .enter_copy_mode, .effect),
     );
     try std.testing.expect(client.model.copyModeActive());
@@ -720,8 +721,8 @@ test "copy mode round trip: enter, select, copy, leave" {
     try std.testing.expectEqual(painted_cursor_y, terminal.presenter.compositor.copy.?.view.cursor.y);
 
     // While in copy mode, keys route to the selection, not the pane.
-    try host_inputs.key(terminal, try data.chord.parseKey("v"));
-    try host_inputs.key(terminal, try data.chord.parseKey("l"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("v"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("l"));
     try std.testing.expectEqual(@as(u16, 0), terminal.presenter.compositor.copy.?.view.cursor.x);
     try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
     try presentation_lifecycle.observe(terminal);
@@ -730,7 +731,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     try std.testing.expect(terminal.presenter.compositor.copy.?.view.anchor != null);
 
     const version_before_copy = client.model.version();
-    try host_inputs.key(terminal, try data.chord.parseKey("enter"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("enter"));
     try std.testing.expect(!client.model.copyModeActive());
     try support.expectNonCopyOrViewportVersionEqual(version_before_copy, client.model.version());
     try std.testing.expectEqual(version_before_copy.copy + 1, client.model.version().copy);
@@ -772,7 +773,7 @@ test "copy-mode o opens a file URI in an editor tab without leaving the mode" {
 
     _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
     const version = client.model.version();
-    try host_inputs.key(terminal, try data.chord.parseKey("o"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("o"));
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -842,7 +843,7 @@ test "native action preflight retires copy mode before concrete delivery" {
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(client.model.sidebar_visible);
     try std.testing.expectEqual(
-        data.KeybindControl.continue_routing,
+        keyinput.Control.continue_routing,
         try client_module.actions.executeAction(client, .toggle_sidebar, .effect),
     );
 
@@ -895,12 +896,12 @@ test "a full outbox keeps copy mode and its selection active" {
     }
 
     _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
-    try host_inputs.key(terminal, try data.chord.parseKey("v"));
+    try host_inputs.key(terminal, try keyinput.chord.parseKey("v"));
     const version = client.model.version();
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        host_inputs.key(terminal, try data.chord.parseKey("enter")),
+        host_inputs.key(terminal, try keyinput.chord.parseKey("enter")),
     );
 
     try std.testing.expect(client.model.copyModeActive());

@@ -1,4 +1,5 @@
 //! One owned hover target. Pointer movement within a cell does no text scanning.
+const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const hover_target = @import("hover_target.zig");
 const data = @import("model");
@@ -121,7 +122,7 @@ pub fn prepare(self: *Hover) void {
 
 /// Visible previews cover terminal cells until a replacement is delivered.
 /// Example: `if (hover.covers(mouse)) return .{ .consumed = true };`
-pub fn covers(self: *const Hover, mouse: data.Mouse) bool {
+pub fn covers(self: *const Hover, mouse: keyinput.Mouse) bool {
     const preview = self.shown_preview orelse return false;
     return preview.contains(mouse.x, mouse.y);
 }

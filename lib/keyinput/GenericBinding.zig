@@ -1,4 +1,6 @@
-const data = @import("../model.zig");
+const Key = @import("Key.zig");
+const chord = @import("chord.zig");
+const keybind = @import("keybind.zig");
 const std = @import("std");
 
 pub fn Type(comptime Action: type, comptime max_keys: usize) type {
@@ -9,13 +11,13 @@ pub fn Type(comptime Action: type, comptime max_keys: usize) type {
     return struct {
         // Fully initialized so configuration values remain safe to copy as a
         // whole struct even though comparisons inspect only `len` keys.
-        keys: [max_keys]data.Key = @splat(.plain(.escape)),
+        keys: [max_keys]Key = @splat(.plain(.escape)),
         len: u8,
         action: Action,
 
         const Self = @This();
 
-        pub fn init(keys: []const data.Key, action: Action) !Self {
+        pub fn init(keys: []const Key, action: Action) !Self {
             if (keys.len == 0) {
                 return error.EmptySequence;
             }
@@ -35,22 +37,22 @@ pub fn Type(comptime Action: type, comptime max_keys: usize) type {
                 return error.SequenceTooLong;
             }
             var binding: Self = .{ .len = @intCast(names.len), .action = action };
-            for (names, 0..) |name, index| binding.keys[index] = try data.chord.parseKey(name);
+            for (names, 0..) |name, index| binding.keys[index] = try chord.parseKey(name);
             return binding;
         }
 
         pub fn sameSequence(self: *const Self, b: *const Self) bool {
-            return data.keybind.sequenceOrder(self.slice(), b.slice()) == .eq;
+            return keybind.sequenceOrder(self.slice(), b.slice()) == .eq;
         }
 
         /// True when one sequence equals or prefixes the other — the same
         /// overlap Keymap.init rejects as duplicate or ambiguous.
         pub fn conflictsWith(self: *const Self, b: *const Self) bool {
-            const shared = data.keybind.commonPrefix(self.slice(), b.slice());
+            const shared = keybind.commonPrefix(self.slice(), b.slice());
             return shared == self.len or shared == b.len;
         }
 
-        pub fn slice(self: *const Self) []const data.Key {
+        pub fn slice(self: *const Self) []const Key {
             return self.keys[0..self.len];
         }
     };

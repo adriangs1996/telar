@@ -1,4 +1,5 @@
 //! Client integration tests for notifications and agents.
+const keyinput = @import("keyinput");
 
 const pacing = @import("pacing");
 const cellgrid = @import("cellgrid");
@@ -8,7 +9,6 @@ const client_module = @import("telar-client");
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const term = @import("../../presentation/screen_support.zig");
 const host_inputs = @import("../input/host_inputs.zig");
 const Screen = @import("../../presentation/Screen.zig");
 const support = @import("support.zig");
@@ -180,7 +180,7 @@ test "notification action delivers one correlated runtime request without model 
     });
 
     try std.testing.expectEqual(
-        data.KeybindControl.continue_routing,
+        keyinput.Control.continue_routing,
         try client_module.actions.executeAction(
             client,
             .{
@@ -459,7 +459,7 @@ test "toast activation commits by id before following its navigation target" {
         .notifications = &client.model.notification_center,
         .force = true,
     });
-    var click: ?term.Event.Mouse = null;
+    var click: ?keyinput.Mouse = null;
     for (terminal.view.hits.registered()) |entry| switch (entry.action) {
         .notification_activate => |id| {
             if (id != notification_id) {

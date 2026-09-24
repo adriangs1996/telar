@@ -1,18 +1,19 @@
 //! Client-owned copy mode: cursor, selection, vim motions and frame
 //! reconciliation. Everything here is pure over a cell buffer and a scroll
 //! position; the client applies the returned effects.
+const keyinput = @import("keyinput");
 
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const Point = @import("Point.zig");
 const Screen = @import("Screen.zig");
 const State = @import("State.zig");
-const Key = @import("Key.zig");
+const Key = keyinput.Key;
 const Effect = @import("Effect.zig");
 const Viewport = @import("Viewport.zig");
 const std = @import("std");
 const View = @import("CopyModeView.zig");
-const chord = @import("chord.zig");
+const chord = keyinput.chord;
 
 pub const Direction = @import("../types/CopyModeDirection.zig").CopyModeDirection;
 

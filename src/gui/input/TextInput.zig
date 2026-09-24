@@ -1,9 +1,9 @@
+const keyinput = @import("keyinput");
 const std = @import("std");
-const data = @import("model");
 
 bytes: []const u8,
-phase: data.Key.Phase = .press,
-physical: ?data.Key.Physical = null,
+phase: keyinput.Key.Phase = .press,
+physical: ?keyinput.Key.Physical = null,
 target_id: u64 = 0,
 generation: u64 = 0,
 replacement_start: u32 = std.math.maxInt(u32),

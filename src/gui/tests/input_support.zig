@@ -1,4 +1,5 @@
 //! Test native admission through the same owner and notification path as the host.
+const keyinput = @import("keyinput");
 const native = @import("../native/native.zig");
 const event_module = @import("../input/event.zig");
 const data = @import("model");
@@ -54,7 +55,7 @@ pub fn bindingExpired(gui: *GuiAdapter) !void {
 
 /// Trigger a configured binding through host admission instead of invoking an
 /// internal action directly. Example: `_ = try input_support.action(gui, .toggle_sidebar);`
-pub fn action(gui: *GuiAdapter, value: data.actions.Action) !data.keybind.Control {
+pub fn action(gui: *GuiAdapter, value: data.actions.Action) !keyinput.Control {
     const binding = try data.config_values.ConfiguredBinding.parse(&.{"alt+z"}, value);
     gui.adoptBindings(.{
         .prefix = data.keybind.default_prefix,

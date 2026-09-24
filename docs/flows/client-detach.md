@@ -14,7 +14,7 @@ actions.executeAction(.detach)
         -> tab-owned focus-out
         -> detach, retire pending correlation, hide graphics per pane
         -> ClientModel.commitTabDetachment
-  -> return KeybindControl.stop to the event loop
+  -> return keyinput.Control.stop to the event loop
 ```
 
 `tab_removal.detachAllTabs` captures tab locations before the first effect and
