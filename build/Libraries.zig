@@ -96,6 +96,9 @@ const specs = [_]Spec{
         .libc = true,
     },
     .{
+        .name = "urlscan",
+    },
+    .{
         .name = "bytecodec",
     },
     .{

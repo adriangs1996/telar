@@ -1,7 +1,7 @@
-const link = @import("link.zig");
+const uri = @import("uri.zig");
 const Match = @This();
 
-scheme: link.Scheme,
+scheme: uri.Scheme,
 start: usize,
 end: usize,
 

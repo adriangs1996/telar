@@ -1,5 +1,5 @@
-//! Adapts a pane's cell row to core's byte-oriented link recognizer.
-
+//! Adapts a pane's cell row to the byte-oriented link recognizer in `urlscan`.
+const urlscan = @import("urlscan");
 const cellgrid = @import("cellgrid");
 const Pane = @import("../panes/Pane.zig");
 const core_module = @import("telar-core");
@@ -9,7 +9,7 @@ const LinkMatch = @import("LinkMatch.zig");
 const std = @import("std");
 const LinkGrid = @import("LinkGrid.zig");
 
-const row_window_bytes = core_module.max_uri_bytes * 2 + cellgrid.Cell.max_bytes * 2;
+const row_window_bytes = urlscan.max_uri_bytes * 2 + cellgrid.Cell.max_bytes * 2;
 const max_walk_cells = row_window_bytes * 2;
 
 /// Extracts the textual URI under one absolute pane position without allocating.
@@ -57,7 +57,7 @@ fn matchGrid(grid: LinkGrid, position: Position) ?LinkMatch {
     var start = cursor;
     var bytes_before: usize = 0;
     var visited: usize = 0;
-    while (bytes_before <= core_module.max_uri_bytes) {
+    while (bytes_before <= urlscan.max_uri_bytes) {
         if (visited == max_walk_cells) {
             return null;
         }
@@ -90,7 +90,7 @@ fn matchGrid(grid: LinkGrid, position: Position) ?LinkMatch {
         @memcpy(storage[len..][0..text.len], text);
         len += text.len;
         if (cursor_offset) |offset| {
-            if (len - offset >= core_module.max_uri_bytes + cellgrid.Cell.max_bytes) {
+            if (len - offset >= urlscan.max_uri_bytes + cellgrid.Cell.max_bytes) {
                 break;
             }
         }
@@ -99,7 +99,7 @@ fn matchGrid(grid: LinkGrid, position: Position) ?LinkMatch {
     }
 
     const offset = cursor_offset orelse return null;
-    const found = core_module.extractAt(storage[0..len], offset) orelse return null;
+    const found = urlscan.extractAt(storage[0..len], offset) orelse return null;
     const range = positions(grid, start, .{ found.start, found.end }) orelse return null;
     if (!completeRange(grid, range)) {
         return null;
@@ -243,21 +243,21 @@ test "matched targets own their bytes and reject out-of-viewport positions" {
 }
 
 test "maximum URI length remains bounded inside a larger row window" {
-    const uri = "https://e/" ++ "a" ** (core_module.max_uri_bytes - "https://e/".len);
+    const uri = "https://e/" ++ "a" ** (urlscan.max_uri_bytes - "https://e/".len);
     var buffer = try testBuffer(&.{"prefix " ++ uri ++ " suffix https://other.example"});
     defer buffer.deinit();
     const scroll: core_module.Scroll = .{ .total_rows = 1, .offset = 0 };
-    for ([_]u16{ 7, 7 + core_module.max_uri_bytes / 2, 7 + core_module.max_uri_bytes - 1 }) |x| {
+    for ([_]u16{ 7, 7 + urlscan.max_uri_bytes / 2, 7 + urlscan.max_uri_bytes - 1 }) |x| {
         const found = match(&buffer, scroll, .{ .x = x, .y = 0 }).?;
         try std.testing.expectEqualStrings(uri, found.target.uri());
         try std.testing.expectEqual(@as(u16, 7), found.start.x);
-        try std.testing.expectEqual(@as(u16, 7 + core_module.max_uri_bytes), found.end.x);
+        try std.testing.expectEqual(@as(u16, 7 + urlscan.max_uri_bytes), found.end.x);
         const target = extract(&buffer, scroll, .{ .x = x, .y = 0 }).?;
         try std.testing.expect(found.target.eql(&target));
     }
 
-    try std.testing.expect(match(&buffer, scroll, .{ .x = 7 + core_module.max_uri_bytes, .y = 0 }) == null);
-    const other = match(&buffer, scroll, .{ .x = 7 + core_module.max_uri_bytes + 12, .y = 0 }).?;
+    try std.testing.expect(match(&buffer, scroll, .{ .x = 7 + urlscan.max_uri_bytes, .y = 0 }) == null);
+    const other = match(&buffer, scroll, .{ .x = 7 + urlscan.max_uri_bytes + 12, .y = 0 }).?;
     try std.testing.expectEqualStrings("https://other.example", other.target.uri());
 }
 

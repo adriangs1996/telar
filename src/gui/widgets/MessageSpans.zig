@@ -1,7 +1,7 @@
 //! Borrowed inline Markdown spans. Lookahead is linear-budgeted; unsupported or
 //! unfinished syntax stays literal. Block parsing owns fenced-code isolation.
+const urlscan = @import("urlscan");
 const std = @import("std");
-const core = @import("telar-core");
 const Span = @import("MessageSpan.zig");
 const Scope = @import("MessageSpanScope.zig");
 const Spans = @This();
@@ -513,12 +513,12 @@ fn bareLink(self: *Spans, range: [2]usize) ?usize {
         return null;
     }
 
-    const cost = @min(range[1] - at, core.max_uri_bytes + 1);
+    const cost = @min(range[1] - at, urlscan.max_uri_bytes + 1);
     if (self.lookahead_left.? < cost) {
         return null;
     }
 
     self.lookahead_left.? -= cost;
-    const found = core.extractAt(self.text[at..range[1]], 0) orelse return null;
+    const found = urlscan.extractAt(self.text[at..range[1]], 0) orelse return null;
     return at + found.end;
 }

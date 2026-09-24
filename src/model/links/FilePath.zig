@@ -1,10 +1,10 @@
-const core = @import("telar-core");
+const urlscan = @import("urlscan");
 const LinkTarget = @import("LinkTarget.zig");
 const std = @import("std");
 const file_uri = @import("file_uri.zig");
 const FilePath = @This();
 
-storage: [core.max_uri_bytes]u8 = undefined,
+storage: [urlscan.max_uri_bytes]u8 = undefined,
 len: u16,
 
 /// Decodes a local `file://` target without filesystem access.
@@ -62,7 +62,7 @@ pub fn slice(self: *const FilePath) []const u8 {
 /// Accepts an absolute Markdown path or a validated local file URI.
 /// Example: `const path = try FilePath.fromDestination("/tmp/report.md");`
 pub fn fromDestination(text: []const u8) !FilePath {
-    if (text.len == 0 or text.len > core.max_uri_bytes or !std.unicode.utf8ValidateSlice(text)) {
+    if (text.len == 0 or text.len > urlscan.max_uri_bytes or !std.unicode.utf8ValidateSlice(text)) {
         return error.InvalidFileLink;
     }
 

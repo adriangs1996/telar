@@ -34,7 +34,7 @@ const prefixes = [_]Prefix{
 /// Classifies one complete supported URI after validating its structure.
 ///
 /// ```zig
-/// const scheme = link.classify("https://example.com").?;
+/// const scheme = urlscan.classify("https://example.com").?;
 /// ```
 pub fn classify(uri: []const u8) ?Scheme {
     if (uri.len == 0 or uri.len > max_uri_bytes or containsSeparator(uri) or !std.unicode.utf8ValidateSlice(uri)) {
@@ -77,7 +77,7 @@ pub fn classify(uri: []const u8) ?Scheme {
 /// Delimiters and unmatched closing punctuation are excluded from the match.
 ///
 /// ```zig
-/// const match = link.extractAt("see (https://example.com).", 10).?;
+/// const match = urlscan.extractAt("see (https://example.com).", 10).?;
 /// const uri = match.text("see (https://example.com).");
 /// ```
 pub fn extractAt(line: []const u8, byte_offset: usize) ?Match {

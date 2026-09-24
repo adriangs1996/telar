@@ -2,7 +2,7 @@ const std = @import("std");
 const Libraries = @import("Libraries.zig");
 
 /// The libraries the model may import: pure values and deadlines, no I/O.
-pub const libraries = [_][]const u8{ "cellgrid", "pacing" };
+pub const libraries = [_][]const u8{ "cellgrid", "pacing", "urlscan" };
 
 /// Builds shared values for the same target and optimization as their core dependency.
 /// Example: `const data = model_build.create(b, core, app_libraries);`
