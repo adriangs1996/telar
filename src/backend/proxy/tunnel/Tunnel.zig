@@ -7,6 +7,7 @@ const Producer = @import("../capture/Producer.zig");
 const std = @import("std");
 const head_support = @import("../http/head_support.zig");
 const tunnel_namespace = @import("tunnel_namespace.zig");
+const connect_authentication = @import("../connect_authentication.zig");
 const Exchange = @import("Exchange.zig");
 const dialect_module = @import("../provider/dialect.zig");
 const Establisher = @import("Establisher.zig");
@@ -47,7 +48,7 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
     var head: [head_support.max_bytes]u8 = undefined;
     defer std.crypto.secureZero(u8, &head);
     const head_len = tunnel_namespace.readConnectHead(io, self.child, &head) orelse return;
-    var authenticated = switch (tunnel_namespace.Authenticate.execute(self, head[0..head_len])) {
+    var authenticated = switch (connect_authentication.authenticate(self.dependencies.tls.io, self.dependencies.credentials, head[0..head_len])) {
         .authenticated => |value| value,
         .rejected => |rejection| {
             if (rejection.metric) |metric| {

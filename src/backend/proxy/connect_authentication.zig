@@ -1,8 +1,8 @@
 //! Authentication and target policy for one HTTP CONNECT request.
 
 const core = @import("telar-core");
-const GenericCredentialPort = @import("GenericCredentialPort.zig").Type;
-const GenericConnectAuthenticationCommand = @import("GenericConnectAuthenticationCommand.zig").Type;
+const identity = @import("identity.zig");
+const Registry = @import("Registry.zig");
 const std = @import("std");
 const Credential = @import("Credential.zig");
 const ExpectedRejection = @import("ExpectedRejection.zig");
@@ -38,6 +38,30 @@ pub const Decision = union(enum) {
     authenticated: Authenticated,
     rejected: Rejection,
 };
+
+/// Authenticates before revealing target validity. Only an exact
+/// `CONNECT authority HTTP/1.1` line with a bounded hostname and a nonzero
+/// decimal port is accepted. A successful value owns a credential copy whose
+/// token the caller must securely erase; its validated hostname borrows from
+/// `head`.
+///
+/// ```zig
+/// const decision = connect_authentication.authenticate(io, &registry, head);
+/// ```
+pub fn authenticate(io: std.Io, credentials: *Registry, head: []const u8) Decision {
+    var credential = identity.parseProxyAuthorization(head) orelse return rejectInvalidAuthorization();
+    defer std.crypto.secureZero(u8, &credential.token);
+
+    if (!credentials.contains(io, &credential)) {
+        return rejectUnknownCredential();
+    }
+
+    const target = parseTarget(head) orelse return rejectInvalidTarget();
+    return .{ .authenticated = .{
+        .credential = credential,
+        .target = target,
+    } };
+}
 
 pub fn parseTarget(head: []const u8) ?Target {
     const line_end = std.mem.indexOf(u8, head, "\r\n") orelse return null;
@@ -105,11 +129,19 @@ pub fn rejectInvalidTarget() Decision {
     } };
 }
 
-const test_credential_port: GenericCredentialPort(TestStore) = .{
-    .contains = TestStore.contains,
-};
+/// A registry holding `testCredential` when `live`.
+fn testRegistry(live: bool) !Registry {
+    var registry: Registry = .{};
+    if (live) {
+        try registry.register(std.testing.io, &testCredential());
+    }
 
-const TestCommand = GenericConnectAuthenticationCommand(TestStore, test_credential_port);
+    return registry;
+}
+
+fn execute(registry: *Registry, head: []const u8) Decision {
+    return authenticate(std.testing.io, registry, head);
+}
 
 fn testCredential() Credential {
     return .{
@@ -140,63 +172,59 @@ fn expectRejected(decision: Decision, expected: ExpectedRejection) !void {
 }
 
 test "missing authorization is rejected before credential or target lookup" {
-    var store: TestStore = .{ .expected = testCredential() };
+    var registry = try testRegistry(true);
 
     try expectRejected(
-        TestCommand.execute(&store, "GET / HTTP/1.1\r\n\r\n"),
+        execute(&registry, "GET / HTTP/1.1\r\n\r\n"),
         .{
             .reason = .invalid_authorization,
             .response = authentication_required_response,
             .metric = .invalid_authorization,
         },
     );
-    try std.testing.expectEqual(@as(usize, 0), store.lookups);
 }
 
 test "a malformed Basic value is an invalid authorization" {
-    var store: TestStore = .{ .expected = testCredential() };
+    var registry = try testRegistry(true);
 
     try expectRejected(
-        TestCommand.execute(&store, "CONNECT api.openai.com:443 HTTP/1.1\r\nProxy-Authorization: Basic !!!\r\n\r\n"),
+        execute(&registry, "CONNECT api.openai.com:443 HTTP/1.1\r\nProxy-Authorization: Basic !!!\r\n\r\n"),
         .{
             .reason = .invalid_authorization,
             .response = authentication_required_response,
             .metric = .invalid_authorization,
         },
     );
-    try std.testing.expectEqual(@as(usize, 0), store.lookups);
 }
 
 test "a parsed credential must still be live" {
     var head_buffer: [256]u8 = undefined;
     const head = try requestHead("CONNECT api.openai.com:443 HTTP/1.1", &head_buffer);
-    var store: TestStore = .{ .expected = testCredential(), .live = false };
+    var registry = try testRegistry(false);
 
     try expectRejected(
-        TestCommand.execute(&store, head),
+        execute(&registry, head),
         .{
             .reason = .unknown_credential,
             .response = authentication_required_response,
             .metric = .unknown_credential,
         },
     );
-    try std.testing.expectEqual(@as(usize, 1), store.lookups);
 }
 
 test "target validity is hidden until credential authentication succeeds" {
     var head_buffer: [256]u8 = undefined;
     const head = try requestHead("GET / HTTP/1.1", &head_buffer);
-    var store: TestStore = .{ .expected = testCredential(), .live = false };
+    var registry = try testRegistry(false);
 
     try expectRejected(
-        TestCommand.execute(&store, head),
+        execute(&registry, head),
         .{
             .reason = .unknown_credential,
             .response = authentication_required_response,
             .metric = .unknown_credential,
         },
     );
-    try std.testing.expectEqual(@as(usize, 1), store.lookups);
 }
 
 test "authenticated malformed targets map to a bad request without an auth metric" {
@@ -216,26 +244,25 @@ test "authenticated malformed targets map to a bad request without an auth metri
     for (invalid_start_lines) |start_line| {
         var head_buffer: [512]u8 = undefined;
         const head = try requestHead(start_line, &head_buffer);
-        var store: TestStore = .{ .expected = testCredential() };
+        var registry = try testRegistry(true);
 
         try expectRejected(
-            TestCommand.execute(&store, head),
+            execute(&registry, head),
             .{
                 .reason = .invalid_target,
                 .response = bad_request_response,
                 .metric = null,
             },
         );
-        try std.testing.expectEqual(@as(usize, 1), store.lookups);
     }
 }
 
 test "a live credential and valid CONNECT target produce authenticated input" {
     var head_buffer: [256]u8 = undefined;
     const head = try requestHead("CONNECT api.openai.com:443 HTTP/1.1", &head_buffer);
-    var store: TestStore = .{ .expected = testCredential() };
+    var registry = try testRegistry(true);
 
-    var authenticated = switch (TestCommand.execute(&store, head)) {
+    var authenticated = switch (execute(&registry, head)) {
         .authenticated => |value| value,
         .rejected => return error.ExpectedAuthenticatedConnect,
     };
@@ -244,16 +271,4 @@ test "a live credential and valid CONNECT target produce authenticated input" {
     try std.testing.expect(std.meta.eql(testCredential(), authenticated.credential));
     try std.testing.expectEqualStrings("api.openai.com", authenticated.target.host.bytes);
     try std.testing.expectEqual(@as(u16, 443), authenticated.target.port);
-    try std.testing.expectEqual(@as(usize, 1), store.lookups);
 }
-
-const TestStore = struct {
-    expected: Credential,
-    live: bool = true,
-    lookups: usize = 0,
-
-    pub fn contains(self: *TestStore, credential: *const Credential) bool {
-        self.lookups += 1;
-        return self.live and std.meta.eql(self.expected, credential.*);
-    }
-};

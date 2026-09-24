@@ -1,23 +1,9 @@
 //! One authenticated CONNECT tunnel from request head through protocol relay.
 
-const GenericCredentialPort = @import("../GenericCredentialPort.zig").Type;
-const Tunnel = @import("Tunnel.zig");
-const GenericConnectAuthenticationCommand = @import("../GenericConnectAuthenticationCommand.zig").Type;
-const Credential = @import("../Credential.zig");
 const Counters = @import("../Counters.zig");
 const connect_authentication = @import("../connect_authentication.zig");
 const std = @import("std");
 const Snapshot = @import("../Snapshot.zig");
-
-const credential_port: GenericCredentialPort(Tunnel) = .{
-    .contains = containsCredential,
-};
-
-pub const Authenticate = GenericConnectAuthenticationCommand(Tunnel, credential_port);
-
-fn containsCredential(tunnel: *Tunnel, credential: *const Credential) bool {
-    return tunnel.dependencies.credentials.contains(tunnel.dependencies.tls.io, credential);
-}
 
 pub fn recordAuthenticationRejection(telemetry: *Counters, rejection: connect_authentication.RejectionMetric) void {
     telemetry.record(.rejected_connection);
