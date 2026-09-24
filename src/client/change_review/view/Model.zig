@@ -1,9 +1,9 @@
+const textfield = @import("textfield");
 const std = @import("std");
 const Revision = @import("Revision.zig");
 const Comment = @import("Comment.zig");
 const Anchor = @import("Anchor.zig");
 const limits = @import("limits.zig");
-const data = @import("model");
 const SearchMatch = @import("SearchMatch.zig");
 const Self = @This();
 
@@ -595,7 +595,7 @@ test "review search rejects oversized or invalid queries atomically and handles 
 const Search = struct {
     pub const Direction = enum { forward, backward };
 
-    query: data.GenericField(limits.search_bytes) = .{},
+    query: textfield.GenericField(limits.search_bytes) = .{},
     match: ?SearchMatch = null,
 
     /// Retains a bounded literal query; invalid input leaves the previous search intact.

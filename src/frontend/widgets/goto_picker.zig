@@ -1,4 +1,5 @@
 //! Centered goto-picker modal: one query line above a scored result list.
+const textfield = @import("textfield");
 
 const cellgrid = @import("cellgrid");
 const data = @import("model");
@@ -10,7 +11,7 @@ const GotoPickerOutput = @import("GotoPickerOutput.zig");
 const std = @import("std");
 const widget = @import("context_support.zig");
 
-pub const Field = data.GenericField(core.max_tab_label_bytes);
+pub const Field = textfield.GenericField(core.max_tab_label_bytes);
 pub const max_rows = 12;
 pub const max_row_bytes = 160;
 

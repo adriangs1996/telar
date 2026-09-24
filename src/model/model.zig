@@ -116,7 +116,6 @@ pub const Failure = @import("input/Failure.zig");
 pub const FailurePublication = @import("input/FailurePublication.zig");
 pub const FaviconsState = @import("state/FaviconsState.zig");
 pub const FilePath = @import("links/FilePath.zig");
-pub const GenericField = @import("input/GenericField.zig").Type;
 pub const HistoryPaletteState = @import("state/HistoryPaletteState.zig");
 pub const HistoryPasteRequest = @import("input/HistoryPasteRequest.zig");
 pub const HostAppearance = @import("types/HostAppearance.zig").HostAppearance;

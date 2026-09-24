@@ -99,6 +99,10 @@ const specs = [_]Spec{
         .imports = &.{"cellgrid"},
     },
     .{
+        .name = "textfield",
+        .imports = &.{"cellgrid"},
+    },
+    .{
         .name = "console",
         .imports = &.{ "cellgrid", "keyinput" },
         .libc = true,

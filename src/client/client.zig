@@ -166,7 +166,6 @@ test {
     _ = @import("completion/favicon_lookup.zig");
     _ = @import("input/pane_mouse_inputs.zig");
     _ = @import("graphics/tests.zig");
-    _ = @import("input/edit.zig");
     _ = @import("input/key_lease.zig");
     _ = @import("links/host.zig");
     _ = @import("links/target_support.zig");

@@ -1,3 +1,4 @@
+const textfield = @import("textfield");
 const keyinput = @import("keyinput");
 const thread_scroll = @import("../widgets/interaction/thread_scroll.zig");
 const ClipboardResult = @import("../input/ClipboardResult.zig");
@@ -318,7 +319,7 @@ test "native byte ranges reject partial scalars and preserve backwards selection
 }
 
 test "atomic field replacement protects selected text from invalid input capacity and aliasing" {
-    var field: data.GenericField(8) = .init("a界b");
+    var field: textfield.GenericField(8) = .init("a界b");
     _ = field.selectRange(.{ 4, 1 });
     try std.testing.expect(!field.replace(.{ 1, 4 }, "01234567"));
     try std.testing.expectEqualStrings("a界b", field.text());

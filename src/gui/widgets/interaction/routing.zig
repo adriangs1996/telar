@@ -1,5 +1,6 @@
 //! GUI controller for widget decisions. Domain edits remain commands to the
 //! existing shared prompt/application handlers; no widget mutates model fields.
+const textfield = @import("textfield");
 const keyinput = @import("keyinput");
 const pacing = @import("pacing");
 const cellgrid = @import("cellgrid");
@@ -32,7 +33,7 @@ const ScrollEvent = @import("../../input/ScrollEvent.zig");
 const AccessibilityAction = @import("../../input/AccessibilityAction.zig");
 const Owner = @import("../../host/Owner.zig");
 const ClipboardResult = @import("../../input/ClipboardResult.zig");
-const GenericField = data.GenericField;
+const GenericField = textfield.GenericField;
 
 /// Delivered controls may outlive their pane's keyboard focus between frames.
 /// Example: `routing.reconcileFocus(gui);`

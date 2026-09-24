@@ -1,7 +1,8 @@
 //! Bounded name-prompt state and pure editing transitions.
+const textfield = @import("textfield");
 
 const core = @import("telar-core");
-const GenericField = @import("../input/GenericField.zig").Type;
+const GenericField = textfield.GenericField;
 const NamePromptState = @import("NamePromptState.zig");
 const WorkspaceForm = @import("WorkspaceForm.zig");
 const command_palette = @import("command_palette.zig");

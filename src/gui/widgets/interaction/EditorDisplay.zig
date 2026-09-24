@@ -1,10 +1,10 @@
 //! The same bounded provisional value drives glyphs and native caret queries.
-const data = @import("model");
+const textfield = @import("textfield");
 const FieldView = @import("FieldView.zig");
 const Preedit = @import("Preedit.zig");
 const Display = @This();
 
-field: data.GenericField(8192),
+field: textfield.GenericField(8192),
 provisional: bool = false,
 
 /// Surrounding text remains untouched; only this local display copy changes.

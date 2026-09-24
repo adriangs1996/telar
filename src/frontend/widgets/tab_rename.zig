@@ -1,4 +1,5 @@
 //! Inline tab-name editor occupying the bottom bar.
+const textfield = @import("textfield");
 
 const cellgrid = @import("cellgrid");
 const data = @import("model");
@@ -7,7 +8,7 @@ const Context = @import("Context.zig");
 const TabRenameInput = @import("TabRenameInput.zig");
 const Cursor = @import("Cursor.zig");
 
-pub const Field = data.GenericField(core.max_tab_label_bytes);
+pub const Field = textfield.GenericField(core.max_tab_label_bytes);
 pub const Kind = enum { rename_tab, create_workspace, rename_workspace, copy_search_forward, copy_search_backward };
 
 pub const create_hint = " create? ↵";

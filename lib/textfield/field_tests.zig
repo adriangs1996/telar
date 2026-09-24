@@ -1,31 +1,12 @@
-//! A single line text field.
-//!
-//! The whole file is one discipline: **every position is a byte offset, and
-//! every movement is by grapheme cluster.** Those are two different numbers and
-//! keeping them straight is the entire difficulty.
-//!
-//!     "e" + combining acute   3 bytes, 2 codepoints, 1 cluster, 1 column
-//!     a family emoji         25 bytes, 7 codepoints, 1 cluster, 2 columns
-//!
-//! One press of Left moves one *cluster*. Backspace deletes one *cluster*. The
-//! cursor is drawn at a *column*. And the buffer is indexed in *bytes*. Every
-//! classic text field bug is one of those four quantities standing in for
-//! another: a backspace that leaves half a codepoint and corrupts the line, a
-//! cursor that lands between the two halves of an emoji, an arrow key that has
-//! to be pressed twice on an accented letter.
-//!
-//! No terminal here and no allocator. A field is a string with two offsets in
-//! it, which is what lets every edge case be a two line test.
-
 const cellgrid = @import("cellgrid");
-const data = @import("model");
 const std = @import("std");
+const GenericField = @import("GenericField.zig").Type;
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-const F = data.GenericField(128);
+const F = GenericField(128);
 
 /// A base letter plus a combining acute: one cluster, two codepoints.
 const e_acute = "e\u{0301}";
@@ -142,7 +123,7 @@ test "a paste is an insert, so it cannot behave differently from typing" {
 test "input past the capacity is dropped whole, never split" {
     // Truncating mid cluster would store a fragment that renders as a
     // replacement character and cannot be deleted by one backspace.
-    var f: data.GenericField(8) = .init("");
+    var f: GenericField(8) = .init("");
     f.insert("1234567");
     f.insert(astronaut);
     try std.testing.expectEqualStrings("1234567", f.text());
