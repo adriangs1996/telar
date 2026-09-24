@@ -6,6 +6,7 @@ const Quota = @import("Quota.zig");
 const Half = @import("Half.zig");
 const std = @import("std");
 const Channel = @import("Channel.zig");
+const Registry = @import("../Registry.zig");
 
 pub const capacity = 256;
 
@@ -15,6 +16,13 @@ fn testCredential(generation: u64) Credential {
         .pane_generation = generation,
         .token = .{0x5a} ** identity.token_bytes,
     };
+}
+
+/// A registry where generation 1 of the test pane is live.
+fn liveRegistry() !Registry {
+    var registry: Registry = .{};
+    try registry.register(std.testing.io, &testCredential(1));
+    return registry;
 }
 
 fn testHalf(quota: *Quota, credential: Credential, stream_id: u32) *Half {
@@ -38,9 +46,9 @@ fn testHalf(quota: *Quota, credential: Credential, stream_id: u32) *Half {
 }
 
 test "queue saturation drops and frees the rejected half" {
-    var gate_state: GateState = .{};
+    var registry = try liveRegistry();
     var channel: Channel = undefined;
-    channel.init(.{ .context = &gate_state, .is_live = GateState.accepts });
+    channel.init(&registry);
     var quota = Quota.init(capacity + 1);
     const credential = testCredential(1);
 
@@ -63,9 +71,9 @@ test "queue saturation drops and frees the rejected half" {
 }
 
 test "delivery rejects a credential revoked after publication" {
-    var gate_state: GateState = .{};
+    var registry = try liveRegistry();
     var channel: Channel = undefined;
-    channel.init(.{ .context = &gate_state, .is_live = GateState.accepts });
+    channel.init(&registry);
     defer channel.close(std.testing.io);
     var quota = Quota.init(2);
     const credential = testCredential(1);
@@ -74,17 +82,8 @@ test "delivery rejects a credential revoked after publication" {
         .half = testHalf(&quota, credential, 1),
     }));
 
-    gate_state.generation = 2;
+    registry.removePane(std.testing.io, .{ .id = @enumFromInt(7), .generation = 1 });
     channel.close(std.testing.io);
     try std.testing.expectError(error.Closed, channel.receive(std.testing.io));
     try std.testing.expectEqual(@as(usize, 0), quota.used());
 }
-
-const GateState = struct {
-    generation: u64 = 1,
-
-    pub fn accepts(context: *anyopaque, credential: *const Credential) bool {
-        const state: *const GateState = @ptrCast(@alignCast(context));
-        return credential.pane_generation == state.generation;
-    }
-};

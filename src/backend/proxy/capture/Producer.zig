@@ -2,7 +2,7 @@ const std = @import("std");
 const Config = @import("Config.zig");
 const Quota = @import("Quota.zig");
 const Channel = @import("Channel.zig");
-const CredentialGate = @import("../CredentialGate.zig");
+const Registry = @import("../Registry.zig");
 const StartOptions = @import("StartOptions.zig");
 const Half = @import("Half.zig");
 const Credential = @import("../Credential.zig");
@@ -23,7 +23,7 @@ decode_failed: std.atomic.Value(u64) = .init(0),
 /// Initializes bounded capture storage and its credential-gated queue.
 ///
 /// ```zig
-/// try producer.init(gpa, .{ .config = config, .gate = gate });
+/// try producer.init(gpa, .{ .config = config, .credentials = &registry });
 /// ```
 pub fn init(self: *Producer, gpa: std.mem.Allocator, options: InitOptions) !void {
     try options.config.validate();
@@ -32,7 +32,7 @@ pub fn init(self: *Producer, gpa: std.mem.Allocator, options: InitOptions) !void
         .config = options.config,
         .quota = .init(options.config.max_total_bytes),
     };
-    self.channel.init(options.gate);
+    self.channel.init(options.credentials);
 }
 
 /// Reserves one direction of an exchange without blocking the relay.
@@ -174,7 +174,7 @@ pub fn metrics(self: *const Producer) CaptureMetrics {
 
 const InitOptions = struct {
     config: Config,
-    gate: CredentialGate,
+    credentials: *Registry,
 };
 
 const CapturePublication = struct {

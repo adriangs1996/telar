@@ -8,6 +8,7 @@ const Producer = @import("Producer.zig");
 const std = @import("std");
 const Credential = @import("../Credential.zig");
 const identity = @import("../identity.zig");
+const Registry = @import("../Registry.zig");
 
 test {
     _ = buffer;
@@ -17,18 +18,19 @@ test {
 }
 
 test "disabled capture does not allocate or reserve quota" {
-    var gate_context: u8 = 0;
-    var producer: Producer = undefined;
-    try producer.init(std.testing.allocator, .{
-        .config = .{},
-        .gate = .{ .context = &gate_context, .is_live = TestGate.accepts },
-    });
-    defer producer.close(std.testing.io);
     const credential: Credential = .{
         .pane_id = @enumFromInt(1),
         .pane_generation = 1,
         .token = .{0x5a} ** identity.token_bytes,
     };
+    var registry: Registry = .{};
+    try registry.register(std.testing.io, &credential);
+    var producer: Producer = undefined;
+    try producer.init(std.testing.allocator, .{
+        .config = .{},
+        .credentials = &registry,
+    });
+    defer producer.close(std.testing.io);
 
     try std.testing.expect(producer.start(.{
         .credential = credential,
@@ -43,9 +45,3 @@ test "disabled capture does not allocate or reserve quota" {
     try std.testing.expectEqual(@as(u64, 0), producer.metrics().started);
     try std.testing.expectEqual(@as(u64, 0), producer.metrics().skipped_quota);
 }
-
-const TestGate = struct {
-    pub fn accepts(_: *anyopaque, _: *const Credential) bool {
-        return true;
-    }
-};

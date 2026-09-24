@@ -1,24 +1,26 @@
 const queue = @import("queue.zig");
 const std = @import("std");
-const CredentialGate = @import("../CredentialGate.zig");
+const Registry = @import("../Registry.zig");
 const Credential = @import("../Credential.zig");
 const Half = @import("Half.zig");
 const Channel = @This();
 
 storage: [queue.capacity]Envelope = undefined,
 events: std.Io.Queue(Envelope) = undefined,
-gate: CredentialGate = undefined,
+/// Live pane credentials, checked at publication and again at delivery.
+credentials: *Registry = undefined,
 queued: std.atomic.Value(u64) = .init(0),
 high_water: std.atomic.Value(u64) = .init(0),
 dropped: std.atomic.Value(u64) = .init(0),
 
-/// Initializes fixed queue storage and its pane-credential gate.
+/// Initializes fixed queue storage over the registry whose live
+/// credentials admit halves at publication and delivery time.
 ///
 /// ```zig
-/// channel.init(gate);
+/// channel.init(&registry);
 /// ```
-pub fn init(self: *Channel, gate: CredentialGate) void {
-    self.* = .{ .gate = gate };
+pub fn init(self: *Channel, credentials: *Registry) void {
+    self.* = .{ .credentials = credentials };
     self.events = .init(&self.storage);
 }
 
@@ -28,7 +30,7 @@ pub fn init(self: *Channel, gate: CredentialGate) void {
 /// _ = channel.publish(io, .{ .credential = credential, .half = half });
 /// ```
 pub fn publish(self: *Channel, io: std.Io, publication: QueuePublication) bool {
-    if (!self.gate.accepts(&publication.credential)) {
+    if (!self.credentials.contains(io, &publication.credential)) {
         publication.half.deinit();
         return false;
     }
@@ -64,7 +66,7 @@ pub fn receive(self: *Channel, io: std.Io) anyerror!*Half {
         defer std.crypto.secureZero(u8, &envelope.credential.token);
         self.release();
 
-        if (self.gate.accepts(&envelope.credential)) {
+        if (self.credentials.contains(io, &envelope.credential)) {
             return envelope.half;
         }
 

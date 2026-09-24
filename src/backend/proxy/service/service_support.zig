@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const Tunnel = @import("../tunnel/Tunnel.zig");
-const Credential = @import("../Credential.zig");
 
 pub const max_connections: u32 = 64;
 
@@ -65,9 +64,4 @@ fn serveConnection(service: *Service, stream: std.Io.net.Stream) std.Io.Cancelab
     });
 
     return tunnel.run();
-}
-
-pub fn observationCredentialIsLive(context: *anyopaque, credential: *const Credential) bool {
-    const service: *Service = @ptrCast(@alignCast(context));
-    return service.credentials.contains(service.io, credential);
 }

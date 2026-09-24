@@ -31,7 +31,7 @@ const Snapshot = @import("../Snapshot.zig");
 const FakeSessionType = @import("../http/FakeSession.zig");
 const Producer = @import("../capture/Producer.zig");
 const Config = @import("../capture/Config.zig");
-const Credential = @import("../Credential.zig");
+const Registry = @import("../Registry.zig");
 const Observer = @import("../provider/Observer.zig");
 
 const exchange_port: GenericExchangePort(Http1Connection) = .{
@@ -468,11 +468,22 @@ test "final status maps to response completion or failure" {
     }
 }
 
-fn testCaptureProducer(producer: *Producer, context: *u8, config: Config) !void {
+fn testCaptureProducer(producer: *Producer, registry: *Registry, config: Config) !void {
     try producer.init(std.testing.allocator, .{
         .config = config,
-        .gate = .{ .context = context, .is_live = Http1CaptureGate.accepts },
+        .credentials = registry,
     });
+}
+
+/// A registry holding the credential `Http1TestHarness` authenticates with.
+fn harnessRegistry() !Registry {
+    var registry: Registry = .{};
+    try registry.register(std.testing.io, &.{
+        .pane_id = try core.pane(7),
+        .pane_generation = 11,
+        .token = .{0x42} ** identity.token_bytes,
+    });
+    return registry;
 }
 
 test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
@@ -483,9 +494,9 @@ test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
     const response = response_head ++ "hello";
 
     for (1..request.len + 1) |split_size| {
-        var gate_context: u8 = 0;
+        var registry = try harnessRegistry();
         var producer: Producer = undefined;
-        try testCaptureProducer(&producer, &gate_context, .{
+        try testCaptureProducer(&producer, &registry, .{
             .enabled = true,
             .max_part_bytes = 512,
             .max_exchange_bytes = 1024,
@@ -576,9 +587,9 @@ test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
 test "capture truncation never truncates HTTP1 forwarding" {
     const FakeSession = FakeSessionType;
     const wire = "9\r\nWikipedia\r\n0\r\n\r\n";
-    var gate_context: u8 = 0;
+    var registry = try harnessRegistry();
     var producer: Producer = undefined;
-    try testCaptureProducer(&producer, &gate_context, .{
+    try testCaptureProducer(&producer, &registry, .{
         .enabled = true,
         .max_part_bytes = 5,
         .max_exchange_bytes = 10,
@@ -655,12 +666,6 @@ const ResponseBodyObserver = struct {
         self.response.deinit();
         self.inspect_payload = false;
         self.capture_half = null;
-    }
-};
-
-const Http1CaptureGate = struct {
-    pub fn accepts(_: *anyopaque, _: *const Credential) bool {
-        return true;
     }
 };
 

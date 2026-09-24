@@ -4,22 +4,38 @@ const MiddlewareEvent = @import("MiddlewareEvent.zig");
 const identity = @import("identity.zig");
 const std = @import("std");
 const Credential = @import("Credential.zig");
+const Registry = @import("Registry.zig");
 
 pub const capacity = 256;
-
-pub const CredentialGate = @import("CredentialGate.zig");
 
 pub const Metrics = @import("ObservationQueueMetrics.zig");
 
 pub const Channel = @import("Channel.zig");
 
+fn testCredential(generation: u64) Credential {
+    return .{
+        .pane_id = @enumFromInt(7),
+        .pane_generation = generation,
+        .token = .{0x5a} ** identity.token_bytes,
+    };
+}
+
+/// A registry where only `generation` of the test pane is live.
+fn liveRegistry(generation: u64) !Registry {
+    var registry: Registry = .{};
+    try registry.register(std.testing.io, &testCredential(generation));
+    return registry;
+}
+
+/// Revokes the live generation and makes `next` live instead.
+fn replaceGeneration(registry: *Registry, revoked: u64, next: u64) !void {
+    registry.removePane(std.testing.io, .{ .id = @enumFromInt(7), .generation = revoked });
+    try registry.register(std.testing.io, &testCredential(next));
+}
+
 fn testEvent(generation: u64, connection_id: u64) MiddlewareEvent {
     return .{
-        .credential = .{
-            .pane_id = @enumFromInt(7),
-            .pane_generation = generation,
-            .token = .{0x5a} ** identity.token_bytes,
-        },
+        .credential = testCredential(generation),
         .dialect = .anthropic_messages,
         .phase = .request_started,
         .protocol = .http11,
@@ -35,9 +51,9 @@ fn publishBatch(channel: *Channel, io: std.Io, first_connection_id: u64) void {
 }
 
 test "publication rejects revoked credentials without consuming capacity" {
-    var state: GateState = .{};
+    var registry = try liveRegistry(1);
     var channel: Channel = undefined;
-    channel.init(state.gate());
+    channel.init(&registry);
 
     channel.publish(std.testing.io, testEvent(2, 1));
 
@@ -45,9 +61,9 @@ test "publication rejects revoked credentials without consuming capacity" {
 }
 
 test "bounded publication records depth high water and loss" {
-    var state: GateState = .{};
+    var registry = try liveRegistry(1);
     var channel: Channel = undefined;
-    channel.init(state.gate());
+    channel.init(&registry);
 
     for (0..capacity) |index| {
         channel.publish(std.testing.io, testEvent(1, index));
@@ -72,9 +88,9 @@ test "bounded publication records depth high water and loss" {
 test "concurrent publishers cannot reserve beyond the fixed bound" {
     const publisher_count = 8;
     const events_per_publisher = 64;
-    var state: GateState = .{};
+    var registry = try liveRegistry(1);
     var channel: Channel = undefined;
-    channel.init(state.gate());
+    channel.init(&registry);
     var publishers: std.Io.Group = .init;
 
     for (0..publisher_count) |index| {
@@ -99,12 +115,12 @@ test "concurrent publishers cannot reserve beyond the fixed bound" {
 }
 
 test "delivery discards events revoked after publication" {
-    var state: GateState = .{};
+    var registry = try liveRegistry(1);
     var channel: Channel = undefined;
-    channel.init(state.gate());
+    channel.init(&registry);
 
     channel.publish(std.testing.io, testEvent(1, 1));
-    state.live_generation = 2;
+    try replaceGeneration(&registry, 1, 2);
     channel.publish(std.testing.io, testEvent(2, 2));
 
     var event = try channel.receive(std.testing.io);
@@ -119,9 +135,9 @@ test "delivery discards events revoked after publication" {
 }
 
 test "direct handoff reserves depth before a waiting receiver releases it" {
-    var state: GateState = .{};
+    var registry = try liveRegistry(1);
     var channel: Channel = undefined;
-    channel.init(state.gate());
+    channel.init(&registry);
     var receiver = try std.testing.io.concurrent(Channel.receive, .{ &channel, std.testing.io });
 
     channel.publish(std.testing.io, testEvent(1, 9));
@@ -133,9 +149,9 @@ test "direct handoff reserves depth before a waiting receiver releases it" {
 }
 
 test "closure drains buffered observations then rejects delivery and publication" {
-    var state: GateState = .{};
+    var registry = try liveRegistry(1);
     var channel: Channel = undefined;
-    channel.init(state.gate());
+    channel.init(&registry);
     channel.publish(std.testing.io, testEvent(1, 4));
     channel.close(std.testing.io);
 
@@ -149,25 +165,12 @@ test "closure drains buffered observations then rejects delivery and publication
 }
 
 test "closure wakes a receiver waiting on an empty channel" {
-    var state: GateState = .{};
+    var registry = try liveRegistry(1);
     var channel: Channel = undefined;
-    channel.init(state.gate());
+    channel.init(&registry);
     var receiver = try std.testing.io.concurrent(Channel.receive, .{ &channel, std.testing.io });
 
     channel.close(std.testing.io);
 
     try std.testing.expectError(error.Closed, receiver.await(std.testing.io));
 }
-
-const GateState = struct {
-    live_generation: u64 = 1,
-
-    fn isLive(context: *anyopaque, credential: *const Credential) bool {
-        const state: *GateState = @ptrCast(@alignCast(context));
-        return credential.pane_generation == state.live_generation;
-    }
-
-    pub fn gate(self: *GateState) CredentialGate {
-        return .{ .context = self, .is_live = isLive };
-    }
-};

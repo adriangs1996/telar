@@ -1,26 +1,27 @@
 const observation_queue = @import("observation_queue.zig");
 const MiddlewareEvent = @import("MiddlewareEvent.zig");
 const std = @import("std");
-const CredentialGate = @import("CredentialGate.zig");
+const Registry = @import("Registry.zig");
 const Observer = @import("Observer.zig");
 const ObservationQueueMetrics = @import("ObservationQueueMetrics.zig");
 const Channel = @This();
 
 storage: [observation_queue.capacity]MiddlewareEvent = undefined,
 events: std.Io.Queue(MiddlewareEvent) = undefined,
-gate: CredentialGate = undefined,
+/// Live pane credentials, checked at publication and again at delivery.
+credentials: *Registry = undefined,
 queued: std.atomic.Value(u64) = .init(0),
 high_water: std.atomic.Value(u64) = .init(0),
 dropped: std.atomic.Value(u64) = .init(0),
 
-/// Initializes queue storage at its final address and installs the live
-/// credential policy used at publication and delivery time.
+/// Initializes queue storage at its final address over the registry whose
+/// live credentials admit events at publication and delivery time.
 ///
 /// ```zig
-/// channel.init(gate);
+/// channel.init(&registry);
 /// ```
-pub fn init(self: *Channel, gate: CredentialGate) void {
-    self.* = .{ .gate = gate };
+pub fn init(self: *Channel, credentials: *Registry) void {
+    self.* = .{ .credentials = credentials };
     self.events = .init(&self.storage);
 }
 
@@ -46,7 +47,7 @@ pub fn receive(self: *Channel, io: std.Io) anyerror!MiddlewareEvent {
         defer std.crypto.secureZero(u8, &event.credential.token);
         self.release();
 
-        if (self.gate.accepts(&event.credential)) {
+        if (self.credentials.contains(io, &event.credential)) {
             return event;
         }
     }
@@ -81,7 +82,7 @@ fn observe(context: *anyopaque, io: std.Io, event: MiddlewareEvent) void {
 }
 
 pub fn publish(self: *Channel, io: std.Io, event: MiddlewareEvent) void {
-    if (!self.gate.accepts(&event.credential)) {
+    if (!self.credentials.contains(io, &event.credential)) {
         return;
     }
 

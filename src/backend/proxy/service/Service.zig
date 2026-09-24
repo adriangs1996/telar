@@ -60,16 +60,10 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
         .configuration = configuration,
         .observations = undefined,
     };
-    try service.observations.init(.{
-        .context = service,
-        .is_live = service_support.observationCredentialIsLive,
-    });
+    try service.observations.init(&service.credentials);
     try service.captures.init(gpa, .{
         .config = paths.capture,
-        .gate = .{
-            .context = service,
-            .is_live = service_support.observationCredentialIsLive,
-        },
+        .credentials = &service.credentials,
     });
 
     return service;

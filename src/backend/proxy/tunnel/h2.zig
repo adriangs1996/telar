@@ -27,7 +27,7 @@ const Streams = @import("../provider/Streams.zig");
 const TransformPipeline = @import("../TransformPipeline.zig");
 const ResponseStreams = @import("../provider/ResponseStreams.zig");
 const Producer = @import("../capture/Producer.zig");
-const Credential = @import("../Credential.zig");
+const Registry = @import("../Registry.zig");
 const HeaderField = h2frames.HeaderField;
 const Joiner = @import("../capture/Joiner.zig");
 
@@ -292,7 +292,12 @@ test "decode failure increments only the HTTP2 counter" {
 }
 
 test "HTTP2 capture keeps interleaved streams independent for unknown dialects" {
-    var gate_context: u8 = 0;
+    var registry: Registry = .{};
+    try registry.register(std.testing.io, &.{
+        .pane_id = try core.pane(13),
+        .pane_generation = 17,
+        .token = .{0x24} ** identity.token_bytes,
+    });
     var producer: Producer = undefined;
     try producer.init(std.testing.allocator, .{
         .config = .{
@@ -301,7 +306,7 @@ test "HTTP2 capture keeps interleaved streams independent for unknown dialects" 
             .max_exchange_bytes = 1024,
             .max_total_bytes = 4096,
         },
-        .gate = .{ .context = &gate_context, .is_live = H2CaptureGate.accepts },
+        .credentials = &registry,
     });
     defer producer.close(std.testing.io);
     var harness: H2TestHarness = .{};
@@ -379,12 +384,6 @@ test "HTTP2 capture keeps interleaved streams independent for unknown dialects" 
     try std.testing.expect(saw_first);
     try std.testing.expect(saw_second);
 }
-
-const H2CaptureGate = struct {
-    pub fn accepts(_: *anyopaque, _: *const Credential) bool {
-        return true;
-    }
-};
 
 const H2TestHarness = struct {
     capture: H2Capture = .{},

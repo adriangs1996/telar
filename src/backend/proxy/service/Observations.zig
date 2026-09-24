@@ -1,6 +1,6 @@
 const Pipeline = @import("../Pipeline.zig");
 const Channel = @import("../Channel.zig");
-const CredentialGate = @import("../CredentialGate.zig");
+const Registry = @import("../Registry.zig");
 const std = @import("std");
 const MiddlewareEvent = @import("../MiddlewareEvent.zig");
 const ObservationQueueMetrics = @import("../ObservationQueueMetrics.zig");
@@ -15,14 +15,14 @@ channel: Channel,
 ///
 /// ```zig
 /// var observations: Observations = undefined;
-/// try observations.init(liveness);
+/// try observations.init(&registry);
 /// ```
-pub fn init(self: *Observations, liveness: CredentialGate) !void {
+pub fn init(self: *Observations, credentials: *Registry) !void {
     self.* = .{
         .pipeline_value = .{},
         .channel = undefined,
     };
-    self.channel.init(liveness);
+    self.channel.init(credentials);
     try self.pipeline_value.add(self.channel.observer());
 }
 
