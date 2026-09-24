@@ -63,14 +63,12 @@ test {
     _ = @import("history/metrics.zig");
     _ = @import("history/model.zig");
     _ = @import("history/observer_support.zig");
-    _ = @import("history/osc.zig");
     _ = @import("history/persistence/history_sql.zig");
     _ = @import("history/prompt_scan.zig");
     _ = @import("history/query_result.zig");
     _ = @import("history/request_factory.zig");
     _ = @import("history/sequence_support.zig");
     _ = @import("history/service_support.zig");
-    _ = @import("history/terminal.zig");
     _ = @import("history/worker_support.zig");
     _ = @import("media/media.zig");
     _ = @import("media/png.zig");

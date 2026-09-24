@@ -4,7 +4,8 @@ const core = @import("telar-core");
 const std = @import("std");
 const Service = @import("Service.zig");
 const CommandContext = @import("CommandContext.zig");
-const Command = @import("Command.zig");
+const cmdcapture = @import("cmdcapture");
+const Command = cmdcapture.Command;
 
 test "service configuration controls recording and output capture" {
     const io = std.testing.io;

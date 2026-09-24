@@ -1,5 +1,6 @@
 const CommandContext = @import("CommandContext.zig");
-const Command = @import("Command.zig");
+const cmdcapture = @import("cmdcapture");
+const Command = cmdcapture.Command;
 const CommandRecord = @This();
 
 context: CommandContext,

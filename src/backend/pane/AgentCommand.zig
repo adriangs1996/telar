@@ -1,5 +1,6 @@
 const core = @import("telar-core");
-const Command = @import("../history/Command.zig");
+const cmdcapture = @import("cmdcapture");
+const Command = cmdcapture.Command;
 const AgentCommand = @This();
 
 command: Command,

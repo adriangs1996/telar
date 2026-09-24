@@ -87,6 +87,10 @@ const specs = [_]Spec{
         .libc = true,
     },
     .{
+        .name = "cmdcapture",
+        .imports = &.{ "ghostty-vt", "vtscan" },
+    },
+    .{
         .name = "agentfiles",
         .imports = &.{"sqlite"},
         .host_only = true,

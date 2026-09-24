@@ -1,7 +1,8 @@
 const core = @import("telar-core");
 const Pane = @import("Pane.zig");
 const Stats = @import("../history/Stats.zig");
-const Command = @import("../history/Command.zig");
+const cmdcapture = @import("cmdcapture");
+const Command = cmdcapture.Command;
 const CaptureContext = @This();
 
 pane: *Pane,

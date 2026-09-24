@@ -1,4 +1,5 @@
-const Clock = @import("Clock.zig");
+const cmdcapture = @import("cmdcapture");
+const Clock = cmdcapture.Clock;
 const OutputObservation = @This();
 
 bytes: []const u8,

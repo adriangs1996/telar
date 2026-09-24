@@ -23,7 +23,7 @@ Debug runtime crashed after alternate-screen input followed by resize and output
 The original tracker also fails a deterministic test of that sequence; successful
 startup runs alone therefore do not establish valid pin ownership.
 
-`src/backend/history/terminal.zig` covers alternate input followed by resize,
+`lib/cmdcapture/terminal.zig` covers alternate input followed by resize,
 screen changes during an edit or pending submission, initialization and teardown
 with alternate active, and completion of a running command. `zig build test`
 includes these regressions. `tools/gui_text_input.py` additionally checks native

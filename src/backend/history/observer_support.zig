@@ -9,10 +9,11 @@
 
 const core = @import("telar-core");
 
-const Clock = @import("Clock.zig");
+const cmdcapture = @import("cmdcapture");
+const Clock = cmdcapture.Clock;
 const vt = @import("ghostty-vt");
 const std = @import("std");
-const Command = @import("Command.zig");
+const Command = cmdcapture.Command;
 
 pub const batch_bytes = 4 * 16 * 1024;
 pub const batch_events = 512;
