@@ -285,12 +285,9 @@ fn enforceIncompleteGraphics(self: *Processor, observation: GraphicsIngest) void
 
 pub fn queueGraphicsLimitResponse(self: *Processor, image_id: u32) void {
     var response: [128]u8 = undefined;
-    const bytes = std.fmt.bufPrint(
-        &response,
-        "\x1b_Gi={d};ENOMEM: graphics upload limit exceeded\x1b\\",
-        .{image_id},
-    ) catch return;
-    self.responses.write(bytes);
+    var writer = std.Io.Writer.fixed(&response);
+    _ = kitty_protocol.writeError(&writer, image_id, .ENOMEM, "graphics upload limit exceeded") catch return;
+    self.responses.write(writer.buffered());
 }
 
 const GraphicsIngest = struct {

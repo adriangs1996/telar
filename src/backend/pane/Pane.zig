@@ -955,16 +955,6 @@ fn updateObservedCwd(self: *Pane) bool {
     return self.cwd.update(self.history_observer.currentCwd());
 }
 
-pub fn queueGraphicsLimitResponse(self: *Pane, image_id: u32) void {
-    var response: [128]u8 = undefined;
-    const bytes = std.fmt.bufPrint(
-        &response,
-        "\x1b_Gi={d};ENOMEM: graphics upload limit exceeded\x1b\\",
-        .{image_id},
-    ) catch return;
-    _ = self.pty_responses.push(bytes);
-}
-
 pub fn observeGraphicsDamage(self: *Pane) void {
     const storage = &self.media.terminal.screens.active.kitty_images;
     if (!storage.dirty) {
