@@ -15,9 +15,9 @@ request_finished: usize = 0,
 
 pub fn emit(self: *BodyCollector, event: relay.Event) void {
     switch (event) {
-        .lifecycle => |observed| switch (observed.phase) {
+        .lifecycle => |observed| switch (observed.stage) {
             .response_activity => self.activity += 1,
-            .response_finished => {
+            .response_ended => {
                 self.finished_before_body = self.len == 0;
                 self.finished += 1;
             },

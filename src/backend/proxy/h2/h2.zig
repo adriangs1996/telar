@@ -8,7 +8,6 @@ const localca = @import("localca");
 const Session = localca.Session;
 const RouteMatch = @import("../RouteMatch.zig");
 const IntegrationContext = @import("IntegrationContext.zig");
-const middleware = @import("../middleware.zig");
 const connection = @import("connection.zig");
 const h2frames = @import("h2frames");
 const streams = h2frames.streams;
@@ -157,7 +156,8 @@ test "HTTP2 connection composition relays both directions before settlement" {
     try std.testing.expect(context.session.origin_half_closed);
     try std.testing.expect(context.session.child_half_closed);
     try std.testing.expectEqual(@as(u32, 3), context.event_count.load(.monotonic));
-    try std.testing.expectEqual(middleware.Phase.request_started, context.request_phase.?);
+    try std.testing.expectEqual(Lifecycle.Stage.request_started, context.request_stage.?.stage);
+    try std.testing.expect(context.request_stage.?.watched);
     try std.testing.expectEqual(@as(u8, 0), context.decode_failures);
     try std.testing.expectEqual(@as(u8, 1), context.settlements);
 }

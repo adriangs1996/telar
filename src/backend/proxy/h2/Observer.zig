@@ -114,7 +114,7 @@ fn observePayload(self: *Observer, payload: []const u8, sink: anytype) void {
     if (self.framing.frame_type == relay.frame_data and payload.len != 0) {
         if (self.direction == .response) {
             sink.emit(.{ .lifecycle = .{
-                .phase = .response_activity,
+                .stage = .response_activity,
                 .stream_id = self.framing.stream_id,
                 .status_code = self.streams.status(self.framing.stream_id),
             } });
@@ -187,10 +187,8 @@ fn finishFrame(self: *Observer, sink: anytype) void {
                     .request => {
                         if (decoded.request and self.streams.startRequest(self.block_stream)) {
                             sink.emit(.{ .lifecycle = .{
-                                .phase = if (decoded.isWatched())
-                                    .request_started
-                                else
-                                    .auxiliary_request_started,
+                                .stage = .request_started,
+                                .watched = decoded.isWatched(),
                                 .stream_id = self.block_stream,
                                 .status_code = 0,
                             } });
@@ -213,7 +211,7 @@ fn finishFrame(self: *Observer, sink: anytype) void {
                         if (self.block_end_stream) {
                             const status_code = self.streams.status(self.block_stream);
                             sink.emit(.{ .lifecycle = .{
-                                .phase = if (status_code >= 400) .request_failed else .response_finished,
+                                .stage = .response_ended,
                                 .stream_id = self.block_stream,
                                 .status_code = status_code,
                             } });
@@ -232,7 +230,7 @@ fn finishFrame(self: *Observer, sink: anytype) void {
 
     if (completed_type == relay.frame_rst_stream and completed_stream != 0) {
         sink.emit(.{ .lifecycle = .{
-            .phase = .request_failed,
+            .stage = .stream_reset,
             .stream_id = completed_stream,
             .status_code = self.streams.status(completed_stream),
         } });
@@ -244,7 +242,7 @@ fn finishFrame(self: *Observer, sink: anytype) void {
         self.streams.hasActiveResponses())
     {
         sink.emit(.{ .lifecycle = .{
-            .phase = .request_failed,
+            .stage = .connection_lost,
             .stream_id = 0,
             .status_code = 0,
         } });
@@ -254,7 +252,7 @@ fn finishFrame(self: *Observer, sink: anytype) void {
     {
         const status_code = self.streams.status(completed_stream);
         sink.emit(.{ .lifecycle = .{
-            .phase = if (status_code >= 400) .request_failed else .response_finished,
+            .stage = .response_ended,
             .stream_id = completed_stream,
             .status_code = status_code,
         } });

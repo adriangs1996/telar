@@ -661,12 +661,12 @@ test "HPACK status turns a completed HTTP2 error stream into failure" {
     );
 
     const Collector = struct {
-        phase: middleware.Phase = .request_started,
+        stage: Lifecycle.Stage = .request_started,
         stream_id: u32 = 0,
         status_code: u16 = 0,
         pub fn emit(self: *@This(), event: Event) void {
             const observed = lifecycle(event) orelse return;
-            self.phase = observed.phase;
+            self.stage = observed.stage;
             self.stream_id = observed.stream_id;
             self.status_code = observed.status_code;
         }
@@ -677,7 +677,7 @@ test "HPACK status turns a completed HTTP2 error stream into failure" {
     for (frames[0 .. 2 * framing.header_bytes + encoded_len]) |byte|
         observer.observe(&.{byte}, &collector);
     try std.testing.expect(!observer.failed);
-    try std.testing.expectEqual(middleware.Phase.request_failed, collector.phase);
+    try std.testing.expectEqual(Lifecycle.Stage.response_ended, collector.stage);
     try std.testing.expectEqual(@as(u32, 1), collector.stream_id);
     try std.testing.expectEqual(@as(u16, 429), collector.status_code);
 }
@@ -692,7 +692,7 @@ test "request trailers do not emit a second request start" {
         pub fn emit(self: *@This(), event: Event) void {
             const observed = lifecycle(event) orelse return;
 
-            if (observed.phase == .request_started) {
+            if ((observed.stage == .request_started and observed.watched)) {
                 self.starts += 1;
             }
         }
@@ -764,10 +764,10 @@ test "HTTP2 requests outside the watched routes start as auxiliary" {
         pub fn emit(self: *@This(), event: Event) void {
             const observed = lifecycle(event) orelse return;
 
-            if (observed.phase == .request_started) {
+            if ((observed.stage == .request_started and observed.watched)) {
                 self.starts += 1;
             }
-            if (observed.phase == .auxiliary_request_started) {
+            if ((observed.stage == .request_started and !observed.watched)) {
                 self.auxiliary_starts += 1;
             }
         }
@@ -793,7 +793,7 @@ test "HPACK dynamic table survives padded response blocks" {
         pub fn emit(self: *@This(), event: Event) void {
             const observed = lifecycle(event) orelse return;
 
-            if (observed.phase == .response_finished and observed.status_code == 200) {
+            if (observed.stage == .response_ended and observed.status_code == 200) {
                 self.completed += 1;
             }
         }
@@ -913,12 +913,12 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
         pub fn emit(self: *@This(), event: Event) void {
             const observed = lifecycle(event) orelse return;
 
-            if (observed.phase == .request_started) {
+            if ((observed.stage == .request_started and observed.watched)) {
                 self.starts += 1;
                 self.output_bytes_at_start = self.session.len;
             }
 
-            if (observed.phase == .auxiliary_request_started) {
+            if ((observed.stage == .request_started and !observed.watched)) {
                 self.auxiliary_starts += 1;
             }
         }
@@ -1009,7 +1009,7 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
         pub fn emit(self: *@This(), event: Event) void {
             const observed = lifecycle(event) orelse return;
 
-            if (observed.phase == .response_finished and observed.status_code == 200) {
+            if (observed.stage == .response_ended and observed.status_code == 200) {
                 self.completed += 1;
             }
         }

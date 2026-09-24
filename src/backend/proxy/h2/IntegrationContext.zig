@@ -2,12 +2,12 @@ const localca = @import("localca");
 const Session = localca.Session;
 const std = @import("std");
 const RouteMatch = @import("../RouteMatch.zig");
-const middleware = @import("../middleware.zig");
 const h2frames = @import("h2frames");
 const Settings = h2frames.Settings;
 const Stats = @import("Stats.zig");
 const h2 = @import("h2.zig");
 const relay_module = @import("relay.zig");
+const Lifecycle = @import("Lifecycle.zig");
 const IntegrationContext = @This();
 
 const watched_routes = [_]RouteMatch{.{ .method = "POST", .paths = &.{"/v1/messages"} }};
@@ -15,7 +15,7 @@ const watched_routes = [_]RouteMatch{.{ .method = "POST", .paths = &.{"/v1/messa
 session: FakeSession,
 request_done: *std.Io.Queue(u8),
 event_count: std.atomic.Value(u32) = .init(0),
-request_phase: ?middleware.Phase = null,
+request_stage: ?Lifecycle = null,
 decode_failures: u8 = 0,
 settlements: u8 = 0,
 
@@ -43,7 +43,7 @@ pub fn emit(self: *IntegrationContext, event: relay_module.Event) void {
 
     switch (event) {
         .lifecycle => |observed| if (observed.stream_id == 1) {
-            self.request_phase = observed.phase;
+            self.request_stage = observed;
         },
         .request_headers, .request_body, .request_finished, .response_headers, .response_body => {},
     }

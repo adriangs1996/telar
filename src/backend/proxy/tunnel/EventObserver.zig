@@ -1,4 +1,5 @@
 const std = @import("std");
+const middleware = @import("../middleware.zig");
 const Exchange = @import("Exchange.zig");
 const ResponseStreams = @import("../provider/ResponseStreams.zig");
 const Streams = @import("../provider/Streams.zig");
@@ -62,7 +63,8 @@ pub fn emit(self: *EventObserver, event: relay.Event) void {
 }
 
 fn observeLifecycle(self: *EventObserver, lifecycle: Lifecycle) void {
-    if (self.shouldClassifyRequest(lifecycle)) {
+    const phase = phaseOf(lifecycle);
+    if (self.shouldClassifyRequest(phase)) {
         const requests = self.requests.?;
         if (!requests.start(lifecycle.stream_id)) {
             publishRequestClass(self.exchange, lifecycle.stream_id, .auxiliary);
@@ -71,35 +73,47 @@ fn observeLifecycle(self: *EventObserver, lifecycle: Lifecycle) void {
         return;
     }
 
-    if (lifecycle.phase == .request_failed) {
+    if (phase == .request_failed) {
         if (self.requests) |requests| {
             requests.discard(lifecycle.stream_id);
         }
     }
 
     self.exchange.publishStatus(.{
-        .phase = lifecycle.phase,
+        .phase = phase,
         .stream_id = lifecycle.stream_id,
         .status_code = lifecycle.status_code,
     });
 
     if (self.captures) |captures| {
-        if (lifecycle.phase == .response_finished or lifecycle.phase == .request_failed) {
-            captures.finish(lifecycle.stream_id, if (lifecycle.phase == .response_finished) .finished else .failed);
+        if (phase == .response_finished or phase == .request_failed) {
+            captures.finish(lifecycle.stream_id, if (phase == .response_finished) .finished else .failed);
         }
     }
 
     if (self.responses) |responses| {
         if (lifecycle.stream_id != 0 and
-            (lifecycle.phase == .response_finished or lifecycle.phase == .request_failed))
+            (phase == .response_finished or phase == .request_failed))
         {
             responses.finish(lifecycle.stream_id);
         }
     }
 }
 
-fn shouldClassifyRequest(self: *const EventObserver, lifecycle: Lifecycle) bool {
-    return self.exchange.dialect == .anthropic_messages and self.requests != null and lifecycle.phase == .request_started;
+fn shouldClassifyRequest(self: *const EventObserver, phase: middleware.Phase) bool {
+    return self.exchange.dialect == .anthropic_messages and self.requests != null and phase == .request_started;
+}
+
+/// The lifecycle phase a relay stage means: a watched request is inference,
+/// and a response ending in an error status, a reset stream or a lost
+/// connection is a failed request.
+fn phaseOf(lifecycle: Lifecycle) middleware.Phase {
+    return switch (lifecycle.stage) {
+        .request_started => if (lifecycle.watched) .request_started else .auxiliary_request_started,
+        .response_activity => .response_activity,
+        .response_ended => if (lifecycle.status_code >= 400) .request_failed else .response_finished,
+        .stream_reset, .connection_lost => .request_failed,
+    };
 }
 
 fn finishRequest(self: *EventObserver, stream_id: u32) void {
@@ -149,4 +163,14 @@ test "payload inspection requires a successful SSE response body" {
         .sse_body = false,
         .bytes = "",
     }));
+}
+
+test "relay stages map to lifecycle phases" {
+    try std.testing.expectEqual(middleware.Phase.request_started, phaseOf(.{ .stage = .request_started, .stream_id = 1, .status_code = 0, .watched = true }));
+    try std.testing.expectEqual(middleware.Phase.auxiliary_request_started, phaseOf(.{ .stage = .request_started, .stream_id = 1, .status_code = 0 }));
+    try std.testing.expectEqual(middleware.Phase.response_activity, phaseOf(.{ .stage = .response_activity, .stream_id = 1, .status_code = 200 }));
+    try std.testing.expectEqual(middleware.Phase.response_finished, phaseOf(.{ .stage = .response_ended, .stream_id = 1, .status_code = 399 }));
+    try std.testing.expectEqual(middleware.Phase.request_failed, phaseOf(.{ .stage = .response_ended, .stream_id = 1, .status_code = 429 }));
+    try std.testing.expectEqual(middleware.Phase.request_failed, phaseOf(.{ .stage = .stream_reset, .stream_id = 1, .status_code = 200 }));
+    try std.testing.expectEqual(middleware.Phase.request_failed, phaseOf(.{ .stage = .connection_lost, .stream_id = 0, .status_code = 0 }));
 }

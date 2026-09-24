@@ -148,7 +148,7 @@ fn processPayload(self: *Transcoder, payload: []const u8, port: anytype) bool {
         if (self.framing.frame_type == relay.frame_data and payload.len != 0) {
             if (self.configuration.direction == .response) {
                 port.emit(.{ .lifecycle = .{
-                    .phase = .response_activity,
+                    .stage = .response_activity,
                     .stream_id = self.framing.stream_id,
                     .status_code = self.streams.status(self.framing.stream_id),
                 } });
@@ -307,14 +307,12 @@ fn finishHeaderBlock(self: *Transcoder, port: anytype) bool {
         self.streams.startRequest(self.block_stream))
     {
         port.emit(.{ .lifecycle = .{
-            .phase = if (RouteMatch.matchesAny(
+            .stage = .request_started,
+            .watched = RouteMatch.matchesAny(
                 original.find(":method") orelse "",
                 original.find(":path") orelse "",
                 self.watched_routes,
-            ))
-                .request_started
-            else
-                .auxiliary_request_started,
+            ),
             .stream_id = self.block_stream,
             .status_code = 0,
         } });
@@ -376,7 +374,7 @@ fn finishHeaderBlock(self: *Transcoder, port: anytype) bool {
             .response => {
                 const final_status = self.streams.status(self.block_stream);
                 port.emit(.{ .lifecycle = .{
-                    .phase = if (final_status >= 400) .request_failed else .response_finished,
+                    .stage = .response_ended,
                     .stream_id = self.block_stream,
                     .status_code = final_status,
                 } });
@@ -511,7 +509,7 @@ fn observeCompletedFrame(self: *Transcoder, completed: CompletedFrame, port: any
 
     if (frame_type == relay.frame_rst_stream and frame_stream != 0) {
         port.emit(.{ .lifecycle = .{
-            .phase = .request_failed,
+            .stage = .stream_reset,
             .stream_id = frame_stream,
             .status_code = self.streams.status(frame_stream),
         } });
@@ -523,7 +521,7 @@ fn observeCompletedFrame(self: *Transcoder, completed: CompletedFrame, port: any
         self.streams.hasActiveResponses())
     {
         port.emit(.{ .lifecycle = .{
-            .phase = .request_failed,
+            .stage = .connection_lost,
             .stream_id = 0,
             .status_code = 0,
         } });
@@ -532,7 +530,7 @@ fn observeCompletedFrame(self: *Transcoder, completed: CompletedFrame, port: any
     {
         const status_code = self.streams.status(frame_stream);
         port.emit(.{ .lifecycle = .{
-            .phase = if (status_code >= 400) .request_failed else .response_finished,
+            .stage = .response_ended,
             .stream_id = frame_stream,
             .status_code = status_code,
         } });

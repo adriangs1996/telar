@@ -143,8 +143,8 @@ test "Claude request bodies refine interleaved route candidates per stream" {
         .requests = &requests,
     };
 
-    observer.emit(.{ .lifecycle = .{ .phase = .request_started, .stream_id = 63, .status_code = 0 } });
-    observer.emit(.{ .lifecycle = .{ .phase = .request_started, .stream_id = 65, .status_code = 0 } });
+    observer.emit(.{ .lifecycle = .{ .stage = .request_started, .stream_id = 63, .status_code = 0, .watched = true } });
+    observer.emit(.{ .lifecycle = .{ .stage = .request_started, .stream_id = 65, .status_code = 0, .watched = true } });
     try std.testing.expectEqual(@as(u64, 0), harness.observations.metrics().queued);
 
     const primary_split = claude_primary_request.len / 2;
@@ -193,12 +193,13 @@ test "final DATA publishes Claude completion before transport completion" {
     };
 
     observer.emit(.{ .lifecycle = .{
-        .phase = .request_started,
+        .stage = .request_started,
+        .watched = true,
         .stream_id = 31,
         .status_code = 0,
     } });
     observer.emit(.{ .lifecycle = .{
-        .phase = .response_activity,
+        .stage = .response_activity,
         .stream_id = 31,
         .status_code = 200,
     } });
@@ -209,7 +210,7 @@ test "final DATA publishes Claude completion before transport completion" {
         .bytes = claude_end_turn_event,
     } });
     observer.emit(.{ .lifecycle = .{
-        .phase = .response_finished,
+        .stage = .response_ended,
         .stream_id = 31,
         .status_code = 200,
     } });
@@ -293,8 +294,8 @@ test "HTTP2 capture keeps interleaved streams independent for unknown dialects" 
     response_observer.emit(.{ .response_headers = .{ .stream_id = 1, .fields = &response_headers } });
     response_observer.emit(.{ .response_body = .{ .stream_id = 3, .status_code = 200, .sse_body = false, .bytes = "two" } });
     response_observer.emit(.{ .response_body = .{ .stream_id = 1, .status_code = 200, .sse_body = false, .bytes = "one" } });
-    response_observer.emit(.{ .lifecycle = .{ .phase = .response_finished, .stream_id = 1, .status_code = 200 } });
-    response_observer.emit(.{ .lifecycle = .{ .phase = .response_finished, .stream_id = 3, .status_code = 200 } });
+    response_observer.emit(.{ .lifecycle = .{ .stage = .response_ended, .stream_id = 1, .status_code = 200 } });
+    response_observer.emit(.{ .lifecycle = .{ .stage = .response_ended, .stream_id = 3, .status_code = 200 } });
 
     var joiner = Joiner.init(30_000);
     defer joiner.deinit();
