@@ -30,7 +30,7 @@ pub fn readRequest(self: *ConnectionIntegration) ?RequestHead {
         .is_response = false,
         .response_to_head = false,
         .watched_routes = &watched_routes,
-    }) orelse return null;
+    }, IgnoreTestObserver{}) orelse return null;
 
     return .{
         .watched = parsed.watched,
@@ -54,7 +54,7 @@ pub fn relayResponse(self: *ConnectionIntegration, request: RequestHead) ?Respon
             .to = .child,
             .is_response = true,
             .response_to_head = request.response_context == .head_request,
-        }) orelse return null;
+        }, IgnoreTestObserver{}) orelse return null;
 
         if (!http.relayBody(
             &self.session,

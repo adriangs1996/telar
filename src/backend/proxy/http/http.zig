@@ -36,13 +36,14 @@ pub const MessageRoute = @import("MessageRoute.zig");
 
 pub const HeadTransform = @import("HeadTransform.zig");
 
-/// Relays one complete HTTP/1.1 message and returns its metadata.
+/// Relays one complete HTTP/1.1 message and returns its metadata. The
+/// observer sees the head bytes as read and every forwarded body fragment.
 ///
 /// ```zig
 /// const message = relay(session, route, &observer);
 /// ```
 pub fn relay(session: anytype, route: MessageRoute, observer: anytype) ?Message {
-    const parsed = relayHead(session, route) orelse return null;
+    const parsed = relayHead(session, route, observer) orelse return null;
 
     if (!relayBody(session, .{
         .from = route.from,
@@ -58,17 +59,16 @@ pub fn relay(session: anytype, route: MessageRoute, observer: anytype) ?Message 
 /// Relays exactly one HTTP head without consuming body bytes.
 ///
 /// The connection owner can therefore run the request body and response
-/// concurrently for `Expect: 100-continue` and early final responses.
+/// concurrently for `Expect: 100-continue` and early final responses. The
+/// observer's `head` receives the head bytes as read.
 ///
 /// ```zig
-/// const head = relayHead(session, route);
+/// const head = relayHead(session, route, &observer);
 /// ```
-pub fn relayHead(session: anytype, route: MessageRoute) ?Head {
+pub fn relayHead(session: anytype, route: MessageRoute, observer: anytype) ?Head {
     var buffer: [head.max_bytes]u8 = undefined;
     const len = head.read(session, route.from, &buffer) orelse return null;
-    if (route.capture) |capture| {
-        capture.appendHead(buffer[0..len]);
-    }
+    observer.head(buffer[0..len]);
 
     if (!session.writeAll(route.to, buffer[0..len])) {
         return null;
@@ -81,27 +81,24 @@ pub fn relayHead(session: anytype, route: MessageRoute) ?Head {
     });
 }
 
-/// Relays one HTTP head after applying the configured transformation pipeline.
+/// Relays one HTTP head after applying the matching rewrites.
 ///
 /// Invalid, oversized, or framing-changing results preserve the original head.
-/// The pipeline never receives the session, and this function performs the one
-/// network write selected by its decision.
+/// The rewrites never receive the session, and this function performs the one
+/// network write selected by its decision. The observer's `head` receives the
+/// original head bytes, before any rewrite.
 ///
 /// ```zig
-/// const head = relayHeadTransformed(session, transformation);
+/// const head = relayHeadTransformed(session, transformation, &observer);
 /// ```
-pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform) ?Head {
+pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform, observer: anytype) ?Head {
     if (transformation.rewrites.len == 0) {
-        var route = transformation.route;
-        route.capture = transformation.capture;
-        return relayHead(session, route);
+        return relayHead(session, transformation.route, observer);
     }
 
     var original: [head.max_bytes]u8 = undefined;
     const original_len = head.read(session, transformation.route.from, &original) orelse return null;
-    if (transformation.capture) |capture| {
-        capture.appendHead(original[0..original_len]);
-    }
+    observer.head(original[0..original_len]);
     const original_head = head.analyze(original[0..original_len], .{
         .is_response = transformation.route.is_response,
         .response_to_head = transformation.route.response_to_head,
@@ -159,7 +156,7 @@ test "request head is forwarded before its body is consumed" {
         .to = .origin,
         .is_response = false,
         .response_to_head = false,
-    }).?;
+    }, IgnoreTestObserver{}).?;
 
     try std.testing.expectEqual(head_len, fake.child_offset);
     try std.testing.expectEqualStrings(request[0..head_len], fake.originOutput());
@@ -190,7 +187,7 @@ test "transformed head selection is the only head written" {
             .response_to_head = false,
         },
         .rewrites = &head_rewrites,
-    }).?;
+    }, IgnoreTestObserver{}).?;
 
     try std.testing.expectEqualDeep(types.BodyPlan{ .content_length = 4 }, parsed.framing);
     try std.testing.expect(std.mem.indexOf(u8, fake.originOutput(), "x-telar: enabled\r\n") != null);
@@ -212,7 +209,7 @@ test "a preserved transformation forwards the original head exactly" {
             .response_to_head = false,
         },
         .rewrites = &head_rewrites,
-    }).?;
+    }, IgnoreTestObserver{}).?;
 
     try std.testing.expectEqualStrings(request, fake.originOutput());
 }

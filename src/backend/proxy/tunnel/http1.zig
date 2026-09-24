@@ -70,8 +70,7 @@ fn relayRequestHead(connection: *Http1Connection) ?RequestHead {
             .watched_routes = request_support.inferenceRoutes(connection.exchange.dialect),
         },
         .rewrites = connection.request_rewrites,
-        .capture = connection.request_capture,
-    }) orelse return null;
+    }, HeadCapture{ .half = connection.request_capture }) orelse return null;
 
     return .{
         .watched = parsed.watched,
@@ -138,8 +137,7 @@ fn relayResponse(connection: *Http1Connection, request: RequestHead) ?ResponseHe
                 .response_to_head = request.response_context == .head_request,
             },
             .rewrites = &.{},
-            .capture = connection.response_capture,
-        }) orelse return null;
+        }, HeadCapture{ .half = connection.response_capture }) orelse return null;
 
         if (head.message.informational) {
             if (connection.response_capture) |half| {
@@ -379,7 +377,7 @@ test "Claude SSE completion is published after forwarded response activity" {
         .is_response = false,
         .response_to_head = false,
         .watched_routes = request_support.inferenceRoutes(harness.exchange.dialect),
-    }).?;
+    }, HeadCapture{ .half = null }).?;
     const request: RequestHead = .{
         .watched = parsed_request.watched,
         .body = parsed_request.framing,
@@ -392,7 +390,7 @@ test "Claude SSE completion is published after forwarded response activity" {
         .to = .child,
         .is_response = true,
         .response_to_head = false,
-    }).?;
+    }, HeadCapture{ .half = null }).?;
     var observer: ResponseBodyObserver = .init(&harness.exchange, .{
         .inspect_payload = shouldInspectResponse(request, parsed_response),
         .capture_half = null,
@@ -525,8 +523,7 @@ test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
             .to = .origin,
             .is_response = false,
             .response_to_head = false,
-            .capture = request_half,
-        }).?;
+        }, HeadCapture{ .half = request_half }).?;
         var request_observer: Observer = .{};
         try std.testing.expect(http.relayBody(&session, .{
             .from = .child,
@@ -550,8 +547,7 @@ test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
             .to = .child,
             .is_response = true,
             .response_to_head = false,
-            .capture = response_half,
-        }).?;
+        }, HeadCapture{ .half = response_half }).?;
         var response_observer = ResponseBodyObserver.init(&harness.exchange, .{
             .inspect_payload = false,
             .capture_half = response_half,
@@ -664,6 +660,17 @@ const ResponseBodyObserver = struct {
         self.response.deinit();
         self.inspect_payload = false;
         self.capture_half = null;
+    }
+};
+
+/// Copies each forwarded head into the exchange half that captures it.
+const HeadCapture = struct {
+    half: ?*Half,
+
+    pub fn head(self: HeadCapture, bytes: []const u8) void {
+        if (self.half) |half| {
+            half.appendHead(bytes);
+        }
     }
 };
 
