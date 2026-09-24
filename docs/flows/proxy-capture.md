@@ -7,8 +7,9 @@ while `runtime.proxy.capture.enabled` is true.
 
 ## Ownership path
 
-1. `src/backend/proxy/tunnel/http1.zig` copies original head bytes and
-   de-framed body fragments into one request half and one response half.
+1. `src/backend/proxy/tunnel/Http1Connection.zig` copies the original head
+   bytes the relay hands its observer, and de-framed body fragments, into one
+   request half and one response half.
    `tunnel/h2.zig` does the same
    per stream using separate 128-slot direction tables. Relay writes complete
    before body fragments are observed.

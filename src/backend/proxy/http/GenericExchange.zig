@@ -5,28 +5,29 @@ const ExchangeState = @import("ExchangeState.zig");
 const types = @import("types.zig");
 const ResponseHead = @import("ResponseHead.zig");
 
-/// Creates the executor for one HTTP/1.1 exchange.
+/// Creates the executor for one HTTP/1.1 exchange. `Context` provides
+/// `relayRequestBody(BodyPlan) bool` and `relayResponse(RequestHead)
+/// ?ResponseHead`.
 ///
 /// ```zig
-/// const RelayExchange = Exchange(Context, exchange_port);
-/// const outcome = RelayExchange.execute(&context, request);
+/// const RelayExchange = GenericExchange(Context);
+/// const outcome = RelayExchange.execute(io, &context, request);
 /// ```
-pub fn Type(comptime Context: type, comptime port: anytype) type {
+pub fn Type(comptime Context: type) type {
     return struct {
         /// Relays a bodyless response synchronously. When a request has a body,
         /// the upload and response race so an origin may reject the upload
         /// early. Every unfinished task is cancelled before returning.
         ///
         /// ```zig
-        /// const outcome = RelayExchange.execute(&context, request);
+        /// const outcome = RelayExchange.execute(io, &context, request);
         /// ```
-        pub fn execute(context: *Context, request: RequestHead) connection.ExchangeOutcome {
+        pub fn execute(io: std.Io, context: *Context, request: RequestHead) connection.ExchangeOutcome {
             if (!request.body.hasBody()) {
-                const response = port.relay_response(context, request) orelse return .failed;
+                const response = context.relayResponse(request) orelse return .failed;
                 return .{ .complete = response };
             }
 
-            const io = port.io(context);
             var event_storage: [2]connection.Event = undefined;
             var workers = std.Io.Select(connection.Event).init(io, &event_storage);
             workers.concurrent(.request_body, relayBody, .{ context, request.body }) catch return .failed;
@@ -48,11 +49,11 @@ pub fn Type(comptime Context: type, comptime port: anytype) type {
         }
 
         fn relayBody(context: *Context, body: types.BodyPlan) bool {
-            return port.relay_body(context, body);
+            return context.relayRequestBody(body);
         }
 
         fn relayResponse(context: *Context, request: RequestHead) ?ResponseHead {
-            return port.relay_response(context, request);
+            return context.relayResponse(request);
         }
     };
 }

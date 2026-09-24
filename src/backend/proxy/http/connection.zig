@@ -4,9 +4,7 @@
 //! bodies and responses run concurrently, which observations are published,
 //! and whether the intercepted connection is reused, closed, or upgraded.
 
-const GenericExchangePort = @import("GenericExchangePort.zig").Type;
 const GenericExchange = @import("GenericExchange.zig").Type;
-const GenericPort = @import("GenericPort.zig").Type;
 const GenericConnection = @import("GenericConnection.zig").Type;
 const ResponseHead = @import("ResponseHead.zig");
 const types = @import("types.zig");
@@ -69,20 +67,14 @@ test "exchange state rejects either failed relay" {
     try std.testing.expectEqual(ExchangeOutcome.failed, response_failed.accept(.{ .response = null }).?);
 }
 
-const exchange_test_port: GenericExchangePort(ExchangeCapture) = .{
-    .io = ExchangeCapture.io,
-    .relay_body = ExchangeCapture.relayBody,
-    .relay_response = ExchangeCapture.relayResponse,
-};
-
-const TestExchange = GenericExchange(ExchangeCapture, exchange_test_port);
+const TestExchange = GenericExchange(ExchangeCapture);
 
 test "bodyless exchange never schedules a body relay" {
     var capture: ExchangeCapture = .{};
 
     try std.testing.expectEqualDeep(
         ExchangeOutcome{ .complete = testingResponse(200, .final, .keep_alive) },
-        TestExchange.execute(&capture, testingRequest(.none)),
+        TestExchange.execute(std.testing.io, &capture, testingRequest(.none)),
     );
     try std.testing.expectEqual(@as(u32, 0), capture.body_calls.load(.monotonic));
     try std.testing.expectEqual(@as(u32, 1), capture.response_calls.load(.monotonic));
@@ -100,7 +92,7 @@ test "an early response cancels an unfinished request body" {
 
     try std.testing.expectEqualDeep(
         ExchangeOutcome{ .early_response = testingResponse(200, .final, .keep_alive) },
-        TestExchange.execute(&capture, testingRequest(.{ .content_length = 4 })),
+        TestExchange.execute(std.testing.io, &capture, testingRequest(.{ .content_length = 4 })),
     );
     try std.testing.expectEqual(@as(u32, 1), capture.body_calls.load(.monotonic));
     try std.testing.expectEqual(@as(u32, 1), capture.response_calls.load(.monotonic));
@@ -120,7 +112,7 @@ test "a failed response cancels an unfinished request body" {
 
     try std.testing.expectEqual(
         ExchangeOutcome.failed,
-        TestExchange.execute(&capture, testingRequest(.{ .content_length = 4 })),
+        TestExchange.execute(std.testing.io, &capture, testingRequest(.{ .content_length = 4 })),
     );
     try std.testing.expect(capture.body_canceled.load(.monotonic));
 }
@@ -138,7 +130,7 @@ test "a failed request body cancels an unfinished response" {
 
     try std.testing.expectEqual(
         ExchangeOutcome.failed,
-        TestExchange.execute(&capture, testingRequest(.{ .content_length = 4 })),
+        TestExchange.execute(std.testing.io, &capture, testingRequest(.{ .content_length = 4 })),
     );
     try std.testing.expect(capture.response_canceled.load(.monotonic));
 }
@@ -152,16 +144,7 @@ pub const Step = enum {
     upgrade,
 };
 
-const connection_test_port: GenericPort(ConnectionCapture) = .{
-    .read_request = ConnectionCapture.readRequest,
-    .exchange = ConnectionCapture.exchange,
-    .publish_request = ConnectionCapture.publishRequest,
-    .publish_response = ConnectionCapture.publishResponse,
-    .publish_failure = ConnectionCapture.publishFailure,
-    .upgrade = ConnectionCapture.upgrade,
-};
-
-const TestConnection = GenericConnection(ConnectionCapture, connection_test_port);
+const TestConnection = GenericConnection(ConnectionCapture);
 
 fn expectSteps(capture: *const ConnectionCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.step_len]);

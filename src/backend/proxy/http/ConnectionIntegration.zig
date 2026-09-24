@@ -19,10 +19,6 @@ response_count: usize = 0,
 failure_count: usize = 0,
 upgraded: bool = false,
 
-pub fn io(_: *ConnectionIntegration) std.Io {
-    return std.testing.io;
-}
-
 pub fn readRequest(self: *ConnectionIntegration) ?RequestHead {
     const parsed = http.relayHead(&self.session, .{
         .from = .child,
@@ -77,8 +73,8 @@ pub fn relayResponse(self: *ConnectionIntegration, request: RequestHead) ?Respon
     }
 }
 
-pub fn exchange(self: *ConnectionIntegration, request: RequestHead) connection_module.ExchangeOutcome {
-    return http.IntegrationExchange.execute(self, request);
+pub fn relayExchange(self: *ConnectionIntegration, request: RequestHead) connection_module.ExchangeOutcome {
+    return http.IntegrationExchange.execute(std.testing.io, self, request);
 }
 
 pub fn publishRequest(self: *ConnectionIntegration, request: RequestHead) void {

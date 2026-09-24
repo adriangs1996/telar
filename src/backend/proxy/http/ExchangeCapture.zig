@@ -16,11 +16,7 @@ body_canceled: std.atomic.Value(bool) = .init(false),
 response_canceled: std.atomic.Value(bool) = .init(false),
 response: ?ResponseHead = connection.testingResponse(200, .final, .keep_alive),
 
-pub fn io(_: *ExchangeCapture) std.Io {
-    return std.testing.io;
-}
-
-pub fn relayBody(self: *ExchangeCapture, _: types.BodyPlan) bool {
+pub fn relayRequestBody(self: *ExchangeCapture, _: types.BodyPlan) bool {
     _ = self.body_calls.fetchAdd(1, .monotonic);
 
     if (self.response_started) |started| {

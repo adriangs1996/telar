@@ -55,7 +55,7 @@ heads, and trailers are preserved. A server that ignores the negotiation and
 returns a content coding remains unobservable rather than feeding compressed
 bytes to the SSE decoder.
 
-`ResponseBodyObserver.observe` in `proxy/tunnel/http1.zig` handles HTTP/1.1
+`ResponseBodyObserver.observe` in `proxy/tunnel/Http1Connection.zig` handles HTTP/1.1
 response fragments. `EventObserver.emit` in `proxy/tunnel/EventObserver.zig`
 handles HTTP/2 DATA events. Both feed borrowed
 payload bytes from successful, identity-encoded SSE responses to
@@ -96,7 +96,7 @@ recording headers or payloads. Their interpretation is documented in
 
 ## Validation
 
-- `Claude request bodies refine route candidates before publication` (`tunnel/http1.zig`)
+- `Claude request bodies refine route candidates before publication` (`tunnel/Http1Connection.zig`)
   covers startup, bodyless, and primary request classification at the service
   boundary.
 - `Claude request bodies refine interleaved route candidates per stream` (`tunnel/h2.zig`)

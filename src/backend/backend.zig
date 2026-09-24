@@ -115,7 +115,7 @@ test {
     _ = @import("proxy/service/service_test.zig");
     _ = @import("proxy/tunnel/exchange_support.zig");
     _ = @import("proxy/tunnel/h2.zig");
-    _ = @import("proxy/tunnel/http1.zig");
+    _ = @import("proxy/tunnel/Http1Connection.zig");
     _ = @import("proxy/tunnel/tunnel_namespace.zig");
     _ = @import("proxy_test.zig");
     _ = @import("runtime/RuntimeModel.zig");

@@ -31,7 +31,7 @@ pub fn readRequest(self: *ConnectionCapture) ?RequestHead {
     return self.requests[self.request_index];
 }
 
-pub fn exchange(self: *ConnectionCapture, _: RequestHead) connection.ExchangeOutcome {
+pub fn relayExchange(self: *ConnectionCapture, _: RequestHead) connection.ExchangeOutcome {
     self.record(.exchange);
     defer self.outcome_index += 1;
     return self.outcomes[self.outcome_index];

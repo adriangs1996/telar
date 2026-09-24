@@ -8,9 +8,7 @@ const head = @import("head_support.zig");
 const body = @import("body.zig");
 const types = @import("types.zig");
 const connection = @import("connection.zig");
-const GenericExchangePort = @import("GenericExchangePort.zig").Type;
 const GenericExchange = @import("GenericExchange.zig").Type;
-const GenericPort = @import("GenericPort.zig").Type;
 const GenericConnection = @import("GenericConnection.zig").Type;
 const transform = @import("transform.zig");
 const std = @import("std");
@@ -233,24 +231,9 @@ test "informational response is delimited before the final response" {
     try std.testing.expectEqualStrings(responses, fake.childOutput());
 }
 
-const integration_exchange_port: GenericExchangePort(ConnectionIntegration) = .{
-    .io = ConnectionIntegration.io,
-    .relay_body = ConnectionIntegration.relayRequestBody,
-    .relay_response = ConnectionIntegration.relayResponse,
-};
+pub const IntegrationExchange = GenericExchange(ConnectionIntegration);
 
-pub const IntegrationExchange = GenericExchange(ConnectionIntegration, integration_exchange_port);
-
-const integration_connection_port: GenericPort(ConnectionIntegration) = .{
-    .read_request = ConnectionIntegration.readRequest,
-    .exchange = ConnectionIntegration.exchange,
-    .publish_request = ConnectionIntegration.publishRequest,
-    .publish_response = ConnectionIntegration.publishResponse,
-    .publish_failure = ConnectionIntegration.publishFailure,
-    .upgrade = ConnectionIntegration.upgrade,
-};
-
-const IntegrationConnection = GenericConnection(ConnectionIntegration, integration_connection_port);
+const IntegrationConnection = GenericConnection(ConnectionIntegration);
 
 test "HTTP connection composition relays keep-alive exchanges and publishes final results" {
     const requests = "POST /v1/messages HTTP/1.1\r\nHost: example.test\r\nContent-Length: 0\r\n\r\n" ++
