@@ -99,13 +99,6 @@ pub fn init(b: *std.Build) ?@This() {
         coverage.instrumentModule(library.?);
     }
 
-    const kitty_protocol = b.addModule("kitty_protocol", .{
-        .root_source_file = b.path("src/kitty_protocol/kitty_protocol.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    coverage.instrumentModule(kitty_protocol);
-
     // Runtime and client share values through core. The TUI additionally
     // imports client behavior; neither common package imports an adapter.
     const core = b.addModule("telar-core", .{
@@ -161,7 +154,6 @@ pub fn init(b: *std.Build) ?@This() {
     frontend.addImport("model", data);
     frontend.addImport("telar-core", core);
     frontend.addImport("telar-client", client);
-    frontend.addImport("kitty_protocol", kitty_protocol);
     frontend.addImport("telar-lua", telar_lua);
     frontend.addImport("lua-api", lua_api);
     frontend.addImport("freetype", freetype);
@@ -233,7 +225,6 @@ pub fn init(b: *std.Build) ?@This() {
         .backend = backend,
         .frontend = frontend,
         .client = client,
-        .kitty_protocol = kitty_protocol,
         .lua_api = lua_api,
         .telar_lua = telar_lua,
         .tls = tls,

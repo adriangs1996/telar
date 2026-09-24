@@ -9,7 +9,6 @@ data: *std.Build.Module,
 backend: *std.Build.Module,
 frontend: *std.Build.Module,
 client: *std.Build.Module,
-kitty_protocol: *std.Build.Module,
 lua_api: *std.Build.Module,
 telar_lua: *std.Build.Module,
 tls: *std.Build.Module,
@@ -44,7 +43,6 @@ pub fn addSuiteTest(self: Modules, b: *std.Build, suite: Suite) *std.Build.Step.
     tests.root_module.addImport("telar-frontend", self.frontend);
     tests.root_module.addImport("telar-client", self.client);
     tests.root_module.addImport("model", self.data);
-    tests.root_module.addImport("kitty_protocol", self.kitty_protocol);
     tests.root_module.addImport("lua-api", self.lua_api);
     tests.root_module.addImport("telar-lua", self.telar_lua);
     tests.root_module.addImport("tls", self.tls);

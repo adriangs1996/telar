@@ -58,11 +58,6 @@ pub fn init(b: *std.Build, app: Application) @This() {
     bench_backend.addImport("tls", app.modules.tls);
     bench_backend.addImport("telar-lua", bench_lua);
     bench_libraries.addImports(bench_backend);
-    const bench_kitty_protocol = b.createModule(.{
-        .root_source_file = b.path("src/kitty_protocol/kitty_protocol.zig"),
-        .target = app.modules.target,
-        .optimize = bench_optimize,
-    });
     const bench_data = model_build.create(b, bench_core, bench_libraries);
     const bench_client = client_build.add(
         b,
@@ -86,7 +81,6 @@ pub fn init(b: *std.Build, app: Application) @This() {
     bench_frontend.addImport("telar-core", bench_core);
     bench_frontend.addImport("telar-client", bench_client);
     bench_frontend.addImport("model", bench_data);
-    bench_frontend.addImport("kitty_protocol", bench_kitty_protocol);
     bench_frontend.addImport("lua-api", bench_lua_api);
     bench_frontend.addImport("telar-lua", bench_lua);
     bench_frontend.addImport("freetype", bench_freetype);

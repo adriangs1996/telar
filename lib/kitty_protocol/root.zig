@@ -1,4 +1,6 @@
-//! Public entrypoint for kitty_protocol.
+//! Kitty graphics protocol commands written into a caller buffer: direct,
+//! chunked, PNG and shared-memory transmission, placement, deletion and
+//! aborting a partial transmission. Nothing here allocates or reads replies.
 
 const deletion = @import("deletion.zig");
 const placement = @import("placement.zig");
