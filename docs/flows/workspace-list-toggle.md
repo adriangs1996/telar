@@ -15,7 +15,7 @@ native, Lua, plugin or top-bar action
         |
 actions.executeAction
         |
-ClientModel.toggleWorkspaceList
+workspace_list.toggle
         |
 presentation_lifecycle.observe
         |
@@ -34,7 +34,7 @@ that intent through the shared dispatcher and the same concrete operation.
 
 ## Presentation
 
-The action calls `ClientModel.toggleWorkspaceList` directly. No IPC, resource
+The action calls `workspace_list.toggle` directly. No IPC, resource
 cleanup or immediate geometry synchronization is needed, and the operation has
 no reference to the view or `Presenter`.
 

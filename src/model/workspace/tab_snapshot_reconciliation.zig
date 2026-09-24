@@ -1,5 +1,7 @@
 //! The runtime's canonical pane list for one tab reaches the client
 //! (docs/flows/tab-snapshot-reconciliation.md).
+const TabReconciliation = @import("../state/TabReconciliation.zig");
+const tab_snapshot_reconciliation = @import("tab_snapshot_reconciliation.zig");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const std = @import("std");
@@ -159,4 +161,75 @@ fn restoreFocus(model: *ClientModel, slot: usize, snapshot: PaneSnapshot, pane_i
     } else {
         _ = model.tabs.layout[slot].focusPane(pane_id);
     }
+}
+
+/// Commits one canonical pane list while preserving retained pane state.
+/// Only visible active-tab changes advance the pane revision.
+///
+/// ```zig
+/// const reconciliation = try reconcileTab(model, snapshot, workbench);
+/// ```
+pub fn reconcileTab(model: *ClientModel, snapshot: PaneSnapshot, area: cellgrid.Rect) !TabReconciliation {
+    const tab = model.tabs.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
+    if (!std.meta.eql(model.tabs.location[tab], snapshot.location)) {
+        return error.UnexpectedTab;
+    }
+
+    if (snapshot.panes.len > core.max_panes_per_tab) {
+        return error.TooManyPanes;
+    }
+
+    for (snapshot.panes, 0..) |pane_id, index| {
+        if (std.mem.findScalar(core.PaneId, snapshot.panes[0..index], pane_id) != null) {
+            return error.DuplicatePane;
+        }
+
+        const existing = model.panes.findConst(pane_id);
+        if (existing != null and !std.meta.eql(existing.?.location, snapshot.location)) {
+            return error.PaneAlreadyExists;
+        }
+    }
+
+    const active_location = model.activeTabLocation() orelse return error.NoActiveTab;
+    const active = std.meta.eql(active_location, snapshot.location);
+    const previous_layout_revision = model.tabs.layout[tab].currentRevision();
+    var reconciliation: TabReconciliation = .{
+        .location = snapshot.location,
+        .area = area,
+        .active = active,
+        .panes_changed = false,
+    };
+    var panes = model.panes.iterateConst(snapshot.location.tab_id);
+    while (panes.next()) |pane| {
+        if (std.mem.findScalar(core.PaneId, snapshot.panes, pane.id) == null) {
+            reconciliation.removed_panes.append(pane.id);
+        }
+    }
+
+    if (model.saved_layouts.find(snapshot.location)) |saved| {
+        const already_staged = if (model.pending_layout_restore) |pending| std.meta.eql(pending.location, snapshot.location) else false;
+        if (!already_staged) {
+            model.pending_layout_restore = .{
+                .location = snapshot.location,
+                .layout = saved.layout,
+                .restore_saved_focus = true,
+            };
+        }
+    }
+
+    const reconciled = try tab_snapshot_reconciliation.reconcile(model, snapshot, area);
+    model.saved_layouts.forget(snapshot.location);
+    reconciliation.panes_changed = model.tabs.layout[reconciled].currentRevision() != previous_layout_revision;
+    if (reconciliation.active and reconciliation.panes_changed) {
+        model.panes_revision +%= 1;
+    }
+
+    reconciliation.snapshot_loaded = model.tabs.snapshot_loaded[reconciled];
+    reconciliation.layout_revision = model.tabs.layout[reconciled].currentRevision();
+    reconciliation.workspace_revision = model.workspace_revision;
+    reconciliation.tabs_revision = model.tabs_revision;
+    reconciliation.active_tab_revision = model.active_tab_revision;
+    reconciliation.panes_revision = model.panes_revision;
+
+    return reconciliation;
 }

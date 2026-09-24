@@ -237,10 +237,10 @@ test "toasts cap at two and skip a pane already on screen" {
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
     for ([_][]const u8{ "One", "Two", "Three", "Four" }) |title| {
-        _ = model.publishNotification(0, .{ .title = title, .message = "done", .target = .{ .focus_pane = @enumFromInt(999) } });
+        _ = data.notifications.publish(model, 0, .{ .title = title, .message = "done", .target = .{ .focus_pane = @enumFromInt(999) } });
     }
 
-    _ = model.advanceNotifications(data.notifications.transition_duration_ns);
+    _ = data.notifications.advance(model, data.notifications.transition_duration_ns);
     var overlays: Overlays = .{};
     const renderer = &fixture.session.gui.renderer;
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
@@ -252,11 +252,11 @@ test "toasts cap at two and skip a pane already on screen" {
     overlays.seal();
     try std.testing.expectEqual(@as(usize, Notifications.max_visible * 2), overlays.prepared().notifications.count);
 
-    _ = model.dismissNotification(model.notification_center.itemAt(0).?.id, data.notifications.transition_duration_ns);
-    _ = model.dismissNotification(model.notification_center.itemAt(1).?.id, data.notifications.transition_duration_ns);
-    _ = model.dismissNotification(model.notification_center.itemAt(2).?.id, data.notifications.transition_duration_ns);
-    _ = model.advanceNotifications(data.notifications.transition_duration_ns * 3);
-    _ = model.publishNotification(
+    _ = data.notifications.dismiss(model, model.notification_center.itemAt(0).?.id, data.notifications.transition_duration_ns);
+    _ = data.notifications.dismiss(model, model.notification_center.itemAt(1).?.id, data.notifications.transition_duration_ns);
+    _ = data.notifications.dismiss(model, model.notification_center.itemAt(2).?.id, data.notifications.transition_duration_ns);
+    _ = data.notifications.advance(model, data.notifications.transition_duration_ns * 3);
+    _ = data.notifications.publish(model, 
         data.notifications.transition_duration_ns * 3,
         .{
             .title = "Seen",
@@ -266,7 +266,7 @@ test "toasts cap at two and skip a pane already on screen" {
             },
         },
     );
-    _ = model.advanceNotifications(data.notifications.transition_duration_ns * 4);
+    _ = data.notifications.advance(model, data.notifications.transition_duration_ns * 4);
     renderer.quads.clear();
     projection = fixture.projection();
     widgets = .{};

@@ -30,14 +30,14 @@ existing reset policy rather than blocking PTY input.
 runtime_messages.handleServerMessage(.graphics_*)
   -> pane_graphics.applyPaneGraphics
      -> pane_graphics.applyResources -> graphics.apply (GraphicsRetention)
-     -> changed: ClientModel.setPaneGraphicsFallback
+     -> changed: pane_graphics.setFallback
      -> revision break: request_graphics_snapshot
      -> shared-map failure: configure_graphics(shared=false), then snapshot
   -> adapter observes model and graphics ingress revisions
 
 committed host capability (images support changed)
   -> pane_graphics.syncFallbacks + model.to_host.invalidate_placements
-  -> bounded pane traversal -> ClientModel.setPaneGraphicsFallback
+  -> bounded pane traversal -> pane_graphics.setFallback
 ```
 
 `pane_graphics.applyPaneGraphics` translates physical ingress results into semantic fallback
@@ -47,7 +47,7 @@ advances its physical revision; stale deltas and rejected operations do not.
 The presenter observes this revision independently of the model, including when
 supported graphics cause no fallback change.
 
-Only `ClientModel.setPaneGraphicsFallback` commits cell fallback. A changed value
+Only `pane_graphics.setFallback` commits cell fallback. A changed value
 advances the pane-graphics revision; unknown panes and repeats do nothing.
 `syncFallbacks` uses the committed host capability. Supported hosts clear
 fallback without querying physical presence; other capability states query

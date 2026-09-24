@@ -127,7 +127,7 @@ pub fn completeTabClose(client: *Client, closed: core.TabClosed) !TabCloseOutcom
     };
 
     try data.tab_close.validateWorkspaceTransition(command);
-    const commit = try client.model.removeTab(
+    const commit = try data.tab_removal.commitRemoval(&client.model, 
         .{
             .location = command.location,
             .workspace_removed = command.workspace_removed,

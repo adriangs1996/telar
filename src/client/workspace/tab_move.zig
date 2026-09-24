@@ -60,5 +60,5 @@ pub fn completeTabMove(model: *data.ClientModel, moved: core.TabMoved) !data.Cha
         return error.UnexpectedTabMoved;
     }
 
-    return model.applyTabPosition(moved.location, moved.position) catch return error.UnexpectedTabMoved;
+    return data.tab_move.applyPosition(model, moved.location, moved.position) catch return error.UnexpectedTabMoved;
 }

@@ -17,7 +17,7 @@ runtime tab_closed
   -> tab_removal.completeTabClose
      -> correlate explicit reply or classify lifecycle event
      -> tab_close.validateWorkspaceTransition
-     -> ClientModel.removeTab -> tab_removal.remove
+     -> tab_removal.commitRemoval -> tab_removal.remove
      -> retire requests and exact pane resources
      -> synchronize successor / follow predecessor / exit
   -> adapter observes presentation revisions

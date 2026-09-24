@@ -31,7 +31,7 @@ test "palette row clips long hints in narrow and empty widget bounds" {
 }
 
 fn populate(fixture: *Fixture) !void {
-    _ = try fixture.model.reconcileWorkspaceList(.{ .revision = 1, .entries = &.{
+    _ = try data.workspace_list_snapshot.reconcile(&fixture.model, .{ .revision = 1, .entries = &.{
         .{ .workspace = @enumFromInt(1), .name = "alpha", .path = "/alpha", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "beta", .path = "/beta", .tab_count = 1 },
         .{ .workspace = @enumFromInt(3), .name = "gamma", .path = "/gamma", .tab_count = 1 },

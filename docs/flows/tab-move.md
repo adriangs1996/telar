@@ -13,7 +13,7 @@ actions.executeAction or GUI/TUI tab drag release
   -> runtime_messages.handleServerMessage
   -> tab_move.completeTabMove
      -> consume and verify exact move continuation
-     -> ClientModel.applyTabPosition -> tab_move.move
+     -> tab_move.applyPosition -> tab_move.move
   -> adapter observes presentation revisions
 ```
 

@@ -20,7 +20,7 @@ test "pane focus commits before reports resize and presentation" {
     const second: core.PaneId = @enumFromInt(20);
     const area = terminal.view.workbench();
 
-    const split = try client.model.commitPaneSplit(.{
+    const split = try data.pane_split.commitSplit(&client.model, .{
         .split = .{
             .target_pane = TestHarness.bootstrap_pane,
             .location = TestHarness.bootstrap_location,
@@ -103,7 +103,7 @@ test "fullscreen tab round trip reconnects panes revealed by focus or tiled layo
         try harness.allowTabSelection();
         const client = harness.client;
         const terminal = harness.terminal;
-        _ = try client.model.reconcileTab(.{
+        _ = try data.tab_snapshot_reconciliation.reconcileTab(&client.model, .{
             .location = TestHarness.bootstrap_location,
             .panes = &.{TestHarness.bootstrap_pane},
         }, terminal.view.workbench());
@@ -278,7 +278,7 @@ test "navigation lets Neovim consume internal movement before Telar focus" {
     const client = harness.client;
     const terminal = harness.terminal;
     const second: core.PaneId = @enumFromInt(20);
-    _ = try client.model.commitPaneSplit(.{
+    _ = try data.pane_split.commitSplit(&client.model, .{
         .split = .{
             .target_pane = TestHarness.bootstrap_pane,
             .location = TestHarness.bootstrap_location,
@@ -329,7 +329,7 @@ test "mouse focus precedes forwarding its triggering press" {
     const second: core.PaneId = @enumFromInt(20);
     const area = terminal.view.workbench();
 
-    _ = try client.model.commitPaneSplit(.{
+    _ = try data.pane_split.commitSplit(&client.model, .{
         .split = .{
             .target_pane = first,
             .location = TestHarness.bootstrap_location,
@@ -413,7 +413,7 @@ test "pane resize publishes committed geometry before presentation" {
     const second: core.PaneId = @enumFromInt(20);
     const area = terminal.view.workbench();
 
-    _ = try client.model.commitPaneSplit(.{
+    _ = try data.pane_split.commitSplit(&client.model, .{
         .split = .{
             .target_pane = first,
             .location = TestHarness.bootstrap_location,
@@ -531,7 +531,7 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
     const second: core.PaneId = @enumFromInt(20);
     const area = terminal.view.workbench();
 
-    _ = try client.model.commitPaneSplit(.{
+    _ = try data.pane_split.commitSplit(&client.model, .{
         .split = .{
             .target_pane = first,
             .location = TestHarness.bootstrap_location,

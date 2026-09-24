@@ -572,7 +572,7 @@ pub fn rejectStaleSidebarCommits(comptime deliver: fn (*Client, data.SidebarLayo
     // Uninitialized ports make accidental delivery of a rejected commit invalid.
     app.model = data.ClientModel.init(std.testing.allocator, true);
     defer app.model.deinit();
-    const committed = app.model.toggleSidebar();
+    const committed = data.sidebar.toggle(&app.model);
 
     var stale = committed;
     stale.chrome_revision -= 1;

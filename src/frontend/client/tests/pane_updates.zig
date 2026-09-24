@@ -359,7 +359,7 @@ test "pane foreground and focus update automatic tab labels through presentation
     try std.testing.expectEqual(presented_updates, terminal.presenter.pending_updates);
 
     const second_pane: core.PaneId = @enumFromInt(11);
-    _ = try client.model.commitPaneSplit(.{
+    _ = try data.pane_split.commitSplit(&client.model, .{
         .split = .{
             .target_pane = TestHarness.bootstrap_pane,
             .location = TestHarness.bootstrap_location,
@@ -416,7 +416,7 @@ test "close pane request waits for the authoritative exit before committing" {
     const terminal = harness.terminal;
     client.model.request_lifecycle.tracker = .{};
     const closing_pane: core.PaneId = @enumFromInt(11);
-    const split = try client.model.commitPaneSplit(.{
+    const split = try data.pane_split.commitSplit(&client.model, .{
         .split = .{
             .target_pane = TestHarness.bootstrap_pane,
             .location = TestHarness.bootstrap_location,

@@ -71,13 +71,13 @@ test "native link gesture remains cancelled after switching tabs away and back" 
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
     const second: core.TabId = @enumFromInt(2);
-    _ = try model.createTab(.{ .created = .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, .size = model.host.host_size });
-    _ = try model.selectTab(.{ .tab_id = Session.location.tab_id });
+    _ = try data.tab_creation.create(model, .{ .created = .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, .size = model.host.host_size });
+    _ = try data.tab_selection.commitSelection(model, .{ .tab_id = Session.location.tab_id });
     try fixture.present();
     try fixture.send(fixture.event(1));
-    _ = try model.selectTab(.{ .tab_id = second });
+    _ = try data.tab_selection.commitSelection(model, .{ .tab_id = second });
     try fixture.present();
-    _ = try model.selectTab(.{ .tab_id = Session.location.tab_id });
+    _ = try data.tab_selection.commitSelection(model, .{ .tab_id = Session.location.tab_id });
     try fixture.present();
     try fixture.send(fixture.event(2));
     try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);

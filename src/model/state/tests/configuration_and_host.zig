@@ -1,3 +1,6 @@
+const workspace_list_snapshot = @import("../../workspace/workspace_list_snapshot.zig");
+const workspace_list = @import("../../workspace/workspace_list.zig");
+const sidebar = @import("../../layout/sidebar.zig");
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
 const ClientModel = @import("../ClientModel.zig");
@@ -10,18 +13,18 @@ test "sidebar visibility advances only the chrome revision" {
     defer model.deinit();
 
     try std.testing.expect(model.sidebar_visible);
-    try std.testing.expect(model.setSidebarVisible(true) == null);
+    try std.testing.expect(sidebar.setVisible(&model, true) == null);
     try std.testing.expectEqualDeep(Version{}, model.version());
 
-    const hidden = model.toggleSidebar();
+    const hidden = sidebar.toggle(&model);
 
     try std.testing.expect(!hidden.visible);
     try std.testing.expect(!model.sidebar_visible);
     try std.testing.expectEqual(@as(u64, 1), hidden.chrome_revision);
     try std.testing.expectEqual(Version{ .chrome = 1 }, model.version());
-    try std.testing.expect(model.setSidebarVisible(false) == null);
+    try std.testing.expect(sidebar.setVisible(&model, false) == null);
 
-    const shown = model.setSidebarVisible(true).?;
+    const shown = sidebar.setVisible(&model, true).?;
 
     try std.testing.expect(shown.visible);
     try std.testing.expect(model.sidebar_visible);
@@ -138,7 +141,7 @@ test "callback context is a value projection of committed client state" {
     };
     const pane_id: core.PaneId = @enumFromInt(7);
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    _ = model.toggleSidebar();
+    _ = sidebar.toggle(&model);
 
     try std.testing.expectEqualDeep(model_data.CallbackContext{
         .sidebar_visible = false,
@@ -406,18 +409,18 @@ test "workspace list collapse advances only the chrome revision" {
     defer model.deinit();
 
     try std.testing.expect(!model.workspace_list_collapsed);
-    try std.testing.expect(model.setWorkspaceListCollapsed(false) == null);
+    try std.testing.expect(workspace_list.setCollapsed(&model, false) == null);
     try std.testing.expectEqualDeep(Version{}, model.version());
 
-    const collapsed = model.toggleWorkspaceList();
+    const collapsed = workspace_list.toggle(&model);
 
     try std.testing.expect(collapsed.collapsed);
     try std.testing.expect(model.workspace_list_collapsed);
     try std.testing.expectEqual(@as(u64, 1), collapsed.chrome_revision);
     try std.testing.expectEqual(Version{ .chrome = 1 }, model.version());
-    try std.testing.expect(model.setWorkspaceListCollapsed(true) == null);
+    try std.testing.expect(workspace_list.setCollapsed(&model, true) == null);
 
-    const expanded = model.setWorkspaceListCollapsed(false).?;
+    const expanded = workspace_list.setCollapsed(&model, false).?;
 
     try std.testing.expect(!expanded.collapsed);
     try std.testing.expect(!model.workspace_list_collapsed);
@@ -435,7 +438,7 @@ test "workspace list reconciliation owns navigation state and one isolated revis
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/work/api", .tab_count = 1 },
     };
 
-    const commit = (try model.reconcileWorkspaceList(.{
+    const commit = (try workspace_list_snapshot.reconcile(&model, .{
         .revision = 7,
         .entries = &entries,
     })).?;
@@ -448,12 +451,12 @@ test "workspace list reconciliation owns navigation state and one isolated revis
     try std.testing.expectEqual(Version{ .workspace_list = 1 }, model.version());
     try std.testing.expectEqualStrings("telar", model.workspace_list_snapshot.nameAt(0));
     try std.testing.expectEqualStrings("/w/telar", model.workspace_list_snapshot.pathAt(0));
-    try std.testing.expect(model.knowsWorkspace(@enumFromInt(1)));
-    try std.testing.expect(!model.knowsWorkspace(@enumFromInt(9)));
+    try std.testing.expect(workspace_list_snapshot.knowsWorkspace(&model, @enumFromInt(1)));
+    try std.testing.expect(!workspace_list_snapshot.knowsWorkspace(&model, @enumFromInt(9)));
     try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(2)), model.workspace_list_snapshot.workspaceAtPosition(1).?);
     try std.testing.expect(model.workspace_list_snapshot.workspaceAtPosition(2) == null);
 
-    try std.testing.expect((try model.reconcileWorkspaceList(.{
+    try std.testing.expect((try workspace_list_snapshot.reconcile(&model, .{
         .revision = 6,
         .entries = &entries,
     })) == null);
@@ -463,7 +466,7 @@ test "workspace list reconciliation owns navigation state and one isolated revis
         .{ .workspace = @enumFromInt(3), .name = "one", .path = "/one", .tab_count = 1 },
         .{ .workspace = @enumFromInt(3), .name = "two", .path = "/two", .tab_count = 1 },
     };
-    try std.testing.expectError(error.DuplicateWorkspace, model.reconcileWorkspaceList(.{
+    try std.testing.expectError(error.DuplicateWorkspace, workspace_list_snapshot.reconcile(&model, .{
         .revision = 8,
         .entries = &duplicate,
     }));

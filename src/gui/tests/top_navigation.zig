@@ -23,10 +23,10 @@ test "workspace departure retains the delivered indicators and overflow window u
         entry.* = .{ .workspace = id, .name = "project", .path = "/project", .tab_count = 1 };
     }
 
-    _ = try model.reconcileWorkspaceList(.{ .revision = 1, .entries = &entries });
+    _ = try data.workspace_list_snapshot.reconcile(model, .{ .revision = 1, .entries = &entries });
     for ([_]u32{ 900, 320 }) |width| {
         try fixture.measure(.{ .width = width, .height = 700, .scale = 1 });
-        _ = try model.replaceWorkspace(.{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = ids[4] }, .tab_id = Session.location.tab_id }, .size = model.host.host_size });
+        _ = try data.workspace_handoff.replace(model, .{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = ids[4] }, .tab_id = Session.location.tab_id }, .size = model.host.host_size });
         try fixture.paint(fixture.projection());
         const selected = fixture.bandTarget(.{ .select_workspace = ids[4] }).?;
         const region: Rect = .{ .x = 0, .y = 0, .width = selected.x + selected.width, .height = fixture.chrome.presented().bands.top_bar.height };
@@ -37,7 +37,7 @@ test "workspace departure retains the delivered indicators and overflow window u
             target.* = fixture.bandTarget(.{ .select_workspace = id });
         }
 
-        _ = model.departWorkspace();
+        _ = data.workspace_handoff.depart(model);
         try std.testing.expect(model.workspace == null);
         for (0..3) |_| {
             try fixture.paint(fixture.projection());
@@ -49,7 +49,7 @@ test "workspace departure retains the delivered indicators and overflow window u
             }
         }
 
-        _ = try model.arriveWorkspace(.{ .pane_id = Session.pane_id, .location = Session.location, .size = model.host.host_size });
+        _ = try data.workspace_handoff.arrive(model, .{ .pane_id = Session.pane_id, .location = Session.location, .size = model.host.host_size });
         try fixture.paint(fixture.projection());
         try std.testing.expectEqual(ids[0], fixture.chrome.presented().workspace.?);
         try std.testing.expect(fixture.bandTarget(.{ .select_workspace = ids[0] }) != null);
@@ -61,7 +61,7 @@ test "workspace handoff retains only delivered identities still present in the l
     defer fixture.deinit();
     try fixture.showSidebar(false);
     const model = &fixture.session.gui.app.model;
-    _ = try model.reconcileWorkspaceList(.{ .revision = 1, .entries = &.{
+    _ = try data.workspace_list_snapshot.reconcile(model, .{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(9), .name = "freya", .path = "/freya", .tab_count = 1 },
     } });
@@ -75,11 +75,11 @@ test "workspace handoff retains only delivered identities still present in the l
     projection.tab = other.tabs.activeSlot();
     try fixture.prepare(projection);
     fixture.chrome.present(false);
-    _ = model.departWorkspace();
+    _ = data.workspace_handoff.depart(model);
     try fixture.paint(fixture.projection());
     try std.testing.expectEqual(Session.location.workspace.workspace, fixture.chrome.presented().workspace.?);
 
-    _ = try model.reconcileWorkspaceList(.{ .revision = 2, .entries = &.{
+    _ = try data.workspace_list_snapshot.reconcile(model, .{ .revision = 2, .entries = &.{
         .{ .workspace = @enumFromInt(9), .name = "freya", .path = "/freya", .tab_count = 1 },
     } });
     try fixture.paint(fixture.projection());
@@ -92,7 +92,7 @@ test "five compact projects fit without pill backgrounds and reuse landed favico
     defer fixture.deinit();
     try fixture.showSidebar(false);
     const model = &fixture.session.gui.app.model;
-    _ = try model.reconcileWorkspaceList(.{ .revision = 1, .entries = &.{
+    _ = try data.workspace_list_snapshot.reconcile(model, .{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(9), .name = "freya", .path = "/freya", .tab_count = 1 },
         .{ .workspace = @enumFromInt(30), .name = "configs", .path = "/configs", .tab_count = 1 },
@@ -204,7 +204,7 @@ test "native workspace visibility ignores the inherited collapse flag in wide an
     defer fixture.deinit();
     try fixture.showSidebar(false);
     const model = &fixture.session.gui.app.model;
-    _ = try model.reconcileWorkspaceList(.{ .revision = 1, .entries = &.{
+    _ = try data.workspace_list_snapshot.reconcile(model, .{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(9), .name = "freya", .path = "/freya", .tab_count = 1 },
         .{ .workspace = @enumFromInt(30), .name = "configs", .path = "/configs", .tab_count = 1 },
@@ -348,7 +348,7 @@ test "moving workspaces to the sidebar preserves every tab bound across sidebar 
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
-    _ = try model.reconcileWorkspaceList(.{ .revision = 1, .entries = &.{
+    _ = try data.workspace_list_snapshot.reconcile(model, .{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/telar", .tab_count = 2 },
         .{ .workspace = @enumFromInt(9), .name = "server", .path = "/server", .tab_count = 1 },
         .{ .workspace = @enumFromInt(30), .name = "config", .path = "/config", .tab_count = 1 },
@@ -388,7 +388,7 @@ test "native active tab remains reachable after long preceding labels at narrow 
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
-    _ = try model.reconcileWorkspaceList(.{ .revision = 1, .entries = &.{
+    _ = try data.workspace_list_snapshot.reconcile(model, .{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "a workspace with a long name", .path = "/one", .tab_count = 8 },
         .{ .workspace = @enumFromInt(2), .name = "another workspace with a long name", .path = "/two", .tab_count = 1 },
         .{ .workspace = @enumFromInt(3), .name = "third workspace with a long name", .path = "/three", .tab_count = 1 },

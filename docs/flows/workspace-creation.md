@@ -13,7 +13,7 @@ name_prompt.inputPrompt -> submitPrompt(.create_workspace) -> submitWorkspacePro
   -> runtime_messages.handleServerMessage
   -> pane_attachment.completePaneOpen
      -> workspace_creation.createOpenedWorkspace
-        -> ClientModel.replaceWorkspace -> workspace_handoff.replaceWithRoot
+        -> workspace_handoff.replace -> workspace_handoff.replaceWithRoot
         -> workspace_handoff.releaseWorkspace(departure)
         -> workspace_handoff.activateWorkspace(root)
   -> adapter observes presentation revisions
@@ -34,7 +34,7 @@ the client must not send stale detach or focus-out messages afterward.
 
 The continuation retains the size originally sent, independent of later host
 resize. Confirmation consumes it once, checks `created=true`, and stages a
-saved layout only for the exact confirmed workspace/tab. `ClientModel.replaceWorkspace`
+saved layout only for the exact confirmed workspace/tab. `workspace_handoff.replace`
 captures the old departure and constructs the new root before retiring the old
 store. Validation/allocation failure keeps the previous projection and all
 revisions. Success advances workspace, tabs, active-tab and panes once; there

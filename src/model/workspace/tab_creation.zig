@@ -1,5 +1,9 @@
 //! A runtime-confirmed tab joins the client's workspace
 //! (docs/flows/tab-creation.md).
+const NewTab = @import("../state/NewTab.zig");
+const tab_creation = @import("tab_creation.zig");
+const model_namespace = @import("../state/model_namespace.zig");
+const model_data = @import("../model.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const ClientModel = @import("../state/ClientModel.zig");
@@ -56,4 +60,41 @@ pub fn add(model: *ClientModel, created: CreatedTab, size: core.TerminalSize) !u
     model.tabs.snapshot_loaded[slot] = true;
     model.tabs.active = slot;
     return slot;
+}
+
+/// Commits a runtime-confirmed tab and makes its identity active.
+///
+/// ```zig
+/// const creation = try create(model, command);
+/// ```
+pub fn create(model: *ClientModel, command: NewTab) !model_data.TabCreation {
+    const previous = model.tabs.activeSlot() orelse return error.NoActiveTab;
+    const previous_location = model.tabs.location[previous];
+    const previous_layout_revision = model.tabs.layout[previous].currentRevision();
+    const tabs_revision_before = model.tabs_revision;
+    const active_tab_revision_before = model.active_tab_revision;
+    const copy_revision_before = model.copy_revision;
+
+    const created = try tab_creation.add(model, command.created, command.size);
+    model.tabs_revision +%= 1;
+    model.active_tab_revision +%= 1;
+    model_namespace.releaseInvalidCopyMode(model);
+
+    return .{
+        .previous = previous_location,
+        .created = command.created.location,
+        .created_root_pane_id = command.created.root_pane_id,
+        .created_position = command.created.position,
+        .previous_layout_revision = previous_layout_revision,
+        .created_layout_revision = model.tabs.layout[created].currentRevision(),
+        .tabs_revision_before = tabs_revision_before,
+        .active_tab_revision_before = active_tab_revision_before,
+        .copy_revision_before = copy_revision_before,
+        .copy_released = model.copy_revision != copy_revision_before,
+        .workspace_revision = model.workspace_revision,
+        .tabs_revision = model.tabs_revision,
+        .active_tab_revision = model.active_tab_revision,
+        .panes_revision = model.panes_revision,
+        .copy_revision = model.copy_revision,
+    };
 }

@@ -5,6 +5,8 @@
 //! immutable snapshot. When the four slots fill, a new notice replaces the
 //! oldest one.
 
+const model_data = @import("../model.zig");
+const ClientModel = @import("../state/ClientModel.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const Item = @import("NotificationItem.zig");
@@ -235,4 +237,64 @@ test "stored text remains valid utf8 when it hits the byte bound" {
 
 test {
     std.testing.refAllDecls(@This());
+}
+
+/// Publishes one bounded client notification and advances its isolated
+/// version. The center owns all borrowed text before this call returns.
+///
+/// ```zig
+/// const publication = publish(model, now_ns, input);
+/// ```
+pub fn publish(model: *ClientModel, now_ns: u64, input: model_data.NotificationInput) model_data.NotificationPublication {
+    const id = model.notification_center.push(now_ns, input);
+    model.notifications_revision +%= 1;
+
+    return .{
+        .id = id,
+        .notifications_revision = model.notifications_revision,
+    };
+}
+
+/// Advances notification lifecycles to one monotonic timestamp.
+///
+/// ```zig
+/// const change = advance(model, now_ns) orelse return;
+/// ```
+pub fn advance(model: *ClientModel, now_ns: u64) ?model_data.NotificationChange {
+    if (!model.notification_center.advance(now_ns)) {
+        return null;
+    }
+
+    model.notifications_revision +%= 1;
+    return .{ .notifications_revision = model.notifications_revision };
+}
+
+/// Starts one notification's exit transition and returns its semantic
+/// target. Missing and already exiting identities are stale no-ops.
+///
+/// ```zig
+/// const activation = activate(model, id, now_ns) orelse return;
+/// ```
+pub fn activate(model: *ClientModel, id: model_data.NotificationId, now_ns: u64) ?model_data.NotificationActivation {
+    const target = model.notification_center.activate(id, now_ns) orelse return null;
+    model.notifications_revision +%= 1;
+
+    return .{
+        .target = target,
+        .notifications_revision = model.notifications_revision,
+    };
+}
+
+/// Starts one notification's exit transition without activating it.
+///
+/// ```zig
+/// const change = dismiss(model, id, now_ns) orelse return;
+/// ```
+pub fn dismiss(model: *ClientModel, id: model_data.NotificationId, now_ns: u64) ?model_data.NotificationChange {
+    if (!model.notification_center.dismiss(id, now_ns)) {
+        return null;
+    }
+
+    model.notifications_revision +%= 1;
+    return .{ .notifications_revision = model.notifications_revision };
 }

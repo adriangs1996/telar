@@ -1,3 +1,4 @@
+const notifications = @import("../../notifications/notifications.zig");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
@@ -125,7 +126,7 @@ test "notification lifecycle is model-owned and versioned by semantic change" {
     const tab_id: core.TabId = @enumFromInt(7);
     const started_ns: u64 = 100;
 
-    const publication = model.publishNotification(started_ns, .{
+    const publication = notifications.publish(&model, started_ns, .{
         .level = .success,
         .title = &title,
         .message = "Open completed tab",
@@ -141,25 +142,25 @@ test "notification lifecycle is model-owned and versioned by semantic change" {
     );
 
     const activation_ns = started_ns + model_data.notifications.transition_duration_ns;
-    const activation = model.activateNotification(publication.id, activation_ns).?;
+    const activation = notifications.activate(&model, publication.id, activation_ns).?;
 
     try std.testing.expectEqual(tab_id, activation.target.select_tab);
     try std.testing.expectEqual(@as(u64, 2), activation.notifications_revision);
     try std.testing.expectEqual(Version{ .notifications = 2 }, model.version());
-    try std.testing.expect(model.activateNotification(publication.id, activation_ns) == null);
+    try std.testing.expect(notifications.activate(&model, publication.id, activation_ns) == null);
     try std.testing.expectEqual(Version{ .notifications = 2 }, model.version());
 
-    const removal = model.advanceNotifications(activation_ns + model_data.notifications.transition_duration_ns).?;
+    const removal = notifications.advance(&model, activation_ns + model_data.notifications.transition_duration_ns).?;
 
     try std.testing.expectEqual(@as(u64, 3), removal.notifications_revision);
     try std.testing.expect(!model.notification_center.hasItems());
     try std.testing.expectEqual(Version{ .notifications = 3 }, model.version());
 
-    const second = model.publishNotification(1000, .{ .title = "Saved", .message = "Done" });
-    const dismissed = model.dismissNotification(second.id, 1001).?;
+    const second = notifications.publish(&model, 1000, .{ .title = "Saved", .message = "Done" });
+    const dismissed = notifications.dismiss(&model, second.id, 1001).?;
 
     try std.testing.expectEqual(@as(u64, 5), dismissed.notifications_revision);
-    try std.testing.expect(model.dismissNotification(second.id, 1001) == null);
+    try std.testing.expect(notifications.dismiss(&model, second.id, 1001) == null);
     try std.testing.expectEqual(Version{ .notifications = 5 }, model.version());
 }
 

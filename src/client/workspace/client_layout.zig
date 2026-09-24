@@ -67,11 +67,11 @@ pub fn restoreClientLayout(client: *Client, snapshot: core.ClientLayoutSnapshotV
         null;
 
     if (snapshot.restored) {
-        if (client.model.restoreSidebarLayout(snapshot.sidebar_visible, snapshot.sidebar_width)) |change| {
+        if (data.sidebar.restoreLayout(&client.model, snapshot.sidebar_visible, snapshot.sidebar_width)) |change| {
             try sidebar_toggle.deliverSidebarLayout(client, change);
         }
 
-        _ = client.model.setWorkspaceListCollapsed(snapshot.workspace_list_collapsed);
+        _ = data.workspace_list.setCollapsed(&client.model, snapshot.workspace_list_collapsed);
 
         client.model.restoreClientLayouts(saved_layouts);
         client.model.navigation_history = history;

@@ -1,5 +1,7 @@
 //! Shared sidebar sizing policy for semantic state and presentation geometry.
 
+const model_data = @import("../model.zig");
+const ClientModel = @import("../state/ClientModel.zig");
 const std = @import("std");
 
 pub const minimum_width: u16 = 42;
@@ -85,4 +87,73 @@ test "sidebar sizing retains useful bounds" {
         .wider,
     ));
     try std.testing.expectEqual(@as(u16, 42), clampInteractive(120, 1));
+}
+
+/// Commits an explicit sidebar preference. Repeated values preserve the
+/// chrome revision and produce no projection work.
+///
+/// ```zig
+/// const change = setVisible(model, false) orelse return;
+/// ```
+pub fn setVisible(model: *ClientModel, visible: bool) ?model_data.SidebarLayout {
+    return commitLayout(model, visible, model.sidebar_width);
+}
+
+/// Toggles the sidebar preference and advances only the chrome revision.
+///
+/// ```zig
+/// const change = toggle(model);
+/// ```
+pub fn toggle(model: *ClientModel) model_data.SidebarLayout {
+    return setVisible(model, !model.sidebar_visible).?;
+}
+
+/// Commits an exact pointer-selected width within current host geometry.
+///
+/// ```zig
+/// const change = setWidth(model, 70) orelse return;
+/// ```
+pub fn setWidth(model: *ClientModel, requested_width: u16) ?model_data.SidebarLayout {
+    const width = model_data.sidebar.clampInteractive(model.host.host_size.cols, requested_width);
+
+    return commitLayout(model, model.sidebar_visible, width);
+}
+
+/// Moves the preferred width by one keybinding step.
+///
+/// ```zig
+/// const change = stepWidth(model, .wider) orelse return;
+/// ```
+pub fn stepWidth(model: *ClientModel, direction: model_data.SidebarDirection) ?model_data.SidebarLayout {
+    const width = model_data.sidebar.step(model.host.host_size.cols, model.sidebar_width, direction);
+
+    return commitLayout(model, model.sidebar_visible, width);
+}
+
+/// Restores server-retained sidebar state without losing a preference
+/// merely because the current terminal is temporarily narrow.
+///
+/// ```zig
+/// const change = restoreLayout(model, true, 73) orelse return;
+/// ```
+pub fn restoreLayout(model: *ClientModel, visible: bool, preferred_width: u16) ?model_data.SidebarLayout {
+    const width = @max(model_data.sidebar.minimum_width, preferred_width);
+
+    return commitLayout(model, visible, width);
+}
+
+fn commitLayout(model: *ClientModel, visible: bool, width: u16) ?model_data.SidebarLayout {
+    if (model.sidebar_visible == visible and model.sidebar_width == width) {
+        return null;
+    }
+
+    model.sidebar_visible = visible;
+    model.sidebar_width = width;
+    model.chrome_revision +%= 1;
+
+    return .{
+        .visible = visible,
+        .width = width,
+        .chrome_revision = model.chrome_revision,
+    };
 }

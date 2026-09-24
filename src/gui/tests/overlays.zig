@@ -107,20 +107,20 @@ test "native modal closure keeps its presented pointer barrier across failed fra
 test "native notification replacement retains the delivered card identity" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
-    const first = fixture.model.publishNotification(0, .{ .title = "First", .message = "Delivered" }).id;
-    _ = fixture.model.advanceNotifications(data.notifications.transition_duration_ns);
+    const first = data.notifications.publish(&fixture.model, 0, .{ .title = "First", .message = "Delivered" }).id;
+    _ = data.notifications.advance(&fixture.model, data.notifications.transition_duration_ns);
     try fixture.paint();
     const close = fixture.overlays.presented().notifications.hits[1].bounds;
-    _ = fixture.model.dismissNotification(first, data.notifications.transition_duration_ns);
-    _ = fixture.model.advanceNotifications(data.notifications.transition_duration_ns * 2);
-    const second = fixture.model.publishNotification(
+    _ = data.notifications.dismiss(&fixture.model, first, data.notifications.transition_duration_ns);
+    _ = data.notifications.advance(&fixture.model, data.notifications.transition_duration_ns * 2);
+    const second = data.notifications.publish(&fixture.model, 
         data.notifications.transition_duration_ns * 2,
         .{
             .title = "Next",
             .message = "Prepared",
         },
     ).id;
-    _ = fixture.model.advanceNotifications(data.notifications.transition_duration_ns * 3);
+    _ = data.notifications.advance(&fixture.model, data.notifications.transition_duration_ns * 3);
     try fixture.prepare();
     try std.testing.expectEqual(close, fixture.overlays.prepared().notifications.hits[1].bounds);
     const mouse: PointerEvent = .{ .x = close.x, .y = close.y, .kind = .press };
@@ -188,7 +188,7 @@ test "native overlay gestures ignore modifier bits and cancel on focus loss" {
 test "native goto picker uses bounded shared results and reuses warm glyphs without allocation" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
-    _ = try fixture.model.reconcileWorkspaceList(.{ .revision = 1, .entries = &.{
+    _ = try data.workspace_list_snapshot.reconcile(&fixture.model, .{ .revision = 1, .entries = &.{
         .{ .workspace = @enumFromInt(1), .name = "alpha", .path = "/alpha", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "beta", .path = "/beta", .tab_count = 1 },
     } });
@@ -220,8 +220,8 @@ test "native goto picker uses bounded shared results and reuses warm glyphs with
 test "native notification close has precedence and cannot leak its release to a pane" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
-    const id = fixture.model.publishNotification(0, .{ .title = "Build complete", .message = "Open result", .target = .{ .select_tab = @enumFromInt(7) } }).id;
-    _ = fixture.model.advanceNotifications(data.notifications.transition_duration_ns);
+    const id = data.notifications.publish(&fixture.model, 0, .{ .title = "Build complete", .message = "Open result", .target = .{ .select_tab = @enumFromInt(7) } }).id;
+    _ = data.notifications.advance(&fixture.model, data.notifications.transition_duration_ns);
     try fixture.paint();
     try std.testing.expectEqual(@as(usize, 2), fixture.overlays.presented().notifications.count);
     const card = fixture.overlays.presented().notifications.hits[0].bounds;

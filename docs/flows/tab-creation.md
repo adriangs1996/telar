@@ -12,7 +12,7 @@ actions.executeAction
   -> runtime_messages.handleServerMessage
   -> tab_creation.completeTabCreation
      -> consume exact create_tab correlation
-     -> ClientModel.createTab -> tab_creation.add
+     -> tab_creation.create -> tab_creation.add
      -> tab_removal.detachTab(previous)
      -> pane_focus.synchronizeActivePane
      -> request agent conversation when applicable

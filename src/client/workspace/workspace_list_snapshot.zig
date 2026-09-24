@@ -76,7 +76,7 @@ pub fn applyWorkspaceSnapshot(client: *Client, snapshot: core.WorkspaceSnapshotV
         tab_count += 1;
     }
 
-    const reconciliation = try client.model.reconcileWorkspace(
+    const reconciliation = try data.workspace_reconciliation.reconcile(&client.model, 
         .{
             .workspace = snapshot.workspace,
             .name = snapshot.name,

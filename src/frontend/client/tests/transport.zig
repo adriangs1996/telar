@@ -460,8 +460,8 @@ test "client layout observation sends one canonical workspace update" {
     const client = harness.client;
     client.model.tabs.snapshot_loaded[client.model.tabs.active] = true;
     try client.model.client_layouts.markSnapshotReceived();
-    try std.testing.expect(client.model.restoreSidebarLayout(true, 53) != null);
-    try std.testing.expect(client.model.setWorkspaceListCollapsed(true) != null);
+    try std.testing.expect(data.sidebar.restoreLayout(&client.model, true, 53) != null);
+    try std.testing.expect(data.workspace_list.setCollapsed(&client.model, true) != null);
 
     try client_module.client_layout.synchronizeClientLayout(&client.model);
     try std.testing.expectEqual(@as(u8, 1), client.model.to_runtime.len);

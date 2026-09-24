@@ -44,7 +44,7 @@ test "split restores the original size when request identity allocation fails" {
     try harness.bootstrap();
     const app = harness.client;
     const before = app.model.version();
-    const plan = app.model.planPaneSplit(.{ .axis = .horizontal, .area = app.geometry().area }).?;
+    const plan = data.pane_split.planSplit(&app.model, .{ .axis = .horizontal, .area = app.geometry().area }).?;
     app.model.request_lifecycle.next_request_id = std.math.maxInt(u64);
 
     try std.testing.expectError(error.RequestIdExhausted, client.pane_split.requestPaneSplit(
@@ -71,7 +71,7 @@ test "split rejects mismatched runtime confirmations without mutation or deliver
     defer harness.deinit();
     try harness.bootstrap();
     const app = harness.client;
-    const plan = app.model.planPaneSplit(.{ .axis = .horizontal, .area = app.geometry().area }).?;
+    const plan = data.pane_split.planSplit(&app.model, .{ .axis = .horizontal, .area = app.geometry().area }).?;
     const before = app.model.version();
     const invalid = [_]core.PaneOpened{
         .{ .request_id = @enumFromInt(4), .pane_id = @enumFromInt(21), .location = TestHarness.bootstrap_location, .created = false },
@@ -104,7 +104,7 @@ test "split retains the runtime creation when confirmation delivery fails" {
     defer harness.deinit();
     try harness.bootstrap();
     const app = harness.client;
-    const plan = app.model.planPaneSplit(.{ .axis = .horizontal, .area = app.geometry().area }).?;
+    const plan = data.pane_split.planSplit(&app.model, .{ .axis = .horizontal, .area = app.geometry().area }).?;
     while (app.model.to_runtime.hasCapacity()) {
         try app.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
@@ -146,7 +146,7 @@ test "late split confirmation never detaches a currently represented pane" {
     defer harness.deinit();
     try harness.bootstrap();
     const app = harness.client;
-    const plan = app.model.planPaneSplit(.{ .axis = .horizontal, .area = app.geometry().area }).?;
+    const plan = data.pane_split.planSplit(&app.model, .{ .axis = .horizontal, .area = app.geometry().area }).?;
     const current: core.PaneId = @enumFromInt(21);
     _ = try harness.addTab(@enumFromInt(2), current);
     try std.testing.expect(data.tab_removal.remove(&app.model, plan.split.location.tab_id));
@@ -187,7 +187,7 @@ test "split recovery preserves model state when its resize cannot be queued" {
     defer harness.deinit();
     try harness.bootstrap();
     const app = harness.client;
-    const plan = app.model.planPaneSplit(.{ .axis = .horizontal, .area = app.geometry().area }).?;
+    const plan = data.pane_split.planSplit(&app.model, .{ .axis = .horizontal, .area = app.geometry().area }).?;
     while (app.model.to_runtime.hasCapacity()) {
         try app.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }

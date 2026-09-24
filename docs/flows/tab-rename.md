@@ -12,7 +12,7 @@ name_prompt.inputPrompt -> name_prompt.submitPrompt(.rename_tab)
   -> runtime_messages.handleServerMessage
   -> tab_rename.completeTabRename
      -> consume and verify exact rename continuation
-     -> ClientModel.renameTab -> tab_rename.rename
+     -> tab_rename.commitRename -> tab_rename.rename
   -> adapter observes presentation revisions
 ```
 

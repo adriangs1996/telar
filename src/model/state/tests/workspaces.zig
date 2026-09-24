@@ -1,3 +1,6 @@
+const workspace_handoff = @import("../../workspace/workspace_handoff.zig");
+const tab_snapshot_reconciliation = @import("../../workspace/tab_snapshot_reconciliation.zig");
+const workspace_reconciliation = @import("../../workspace/workspace_reconciliation.zig");
 const copy_mode = @import("../../input/copy_mode.zig");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
@@ -71,7 +74,7 @@ test "workspace departure commits one empty version and captures bounded client 
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model_data.tab_selection.select(&model, active.tab_id));
 
-    const departure = model.departWorkspace();
+    const departure = workspace_handoff.depart(&model);
 
     try std.testing.expectEqualDeep(@as(?core.WorkspaceLocation, workspace), departure.source);
     try std.testing.expectEqualDeep(active, departure.bookmark.?.location);
@@ -88,7 +91,7 @@ test "workspace departure commits one empty version and captures bounded client 
     }, model.version());
 
     const version = model.version();
-    const repeated = model.departWorkspace();
+    const repeated = workspace_handoff.depart(&model);
 
     try std.testing.expect(repeated.source == null);
     try std.testing.expect(repeated.bookmark == null);
@@ -113,7 +116,7 @@ test "workspace arrival commits atomically and stages the saved layout" {
     var expected: model_data.LayoutSnapshot = .{};
     saved.snapshot(area, &expected);
 
-    const activation = try model.arriveWorkspace(.{
+    const activation = try workspace_handoff.arrive(&model, .{
         .pane_id = focused,
         .location = location,
         .size = .{ .cols = 30, .rows = 8 },
@@ -148,7 +151,7 @@ test "workspace arrival commits atomically and stages the saved layout" {
         .location = location,
         .panes = &.{ left, focused },
     };
-    _ = try model.reconcileTab(snapshot, area);
+    _ = try tab_snapshot_reconciliation.reconcileTab(&model, snapshot, area);
     var actual: model_data.LayoutSnapshot = .{};
     model.tabs.layout[model.tabs.active].snapshot(area, &actual);
 
@@ -179,7 +182,7 @@ fn expectInactiveFullscreenReturn(replace: bool) !void {
     const other: core.PaneId = @enumFromInt(20);
     const area: cellgrid.Rect = .{ .w = 101, .h = 41 };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
-    _ = try model.reconcileTab(.{ .location = location, .panes = &.{first} }, area);
+    _ = try tab_snapshot_reconciliation.reconcileTab(&model, .{ .location = location, .panes = &.{first} }, area);
     try model_data.pane_split.split(&model, model.tabs.active, .{ .existing_pane = first, .new_pane = clicked, .location = location, .axis = .vertical, .area = area });
     try std.testing.expect(model.tabs.layout[model.tabs.active].focusPane(first));
     try std.testing.expect(model.tabs.layout[model.tabs.active].resizeFocused(.down, area));
@@ -194,20 +197,20 @@ fn expectInactiveFullscreenReturn(replace: bool) !void {
     }, .{ .cols = area.w, .rows = area.h });
     try std.testing.expectEqual(other_location, model.activeTabLocation().?);
     const departure = if (replace)
-        (try model.replaceWorkspace(.{
+        (try workspace_handoff.replace(&model, .{
             .pane_id = @enumFromInt(30),
             .location = .{ .workspace = .{ .workspace = @enumFromInt(3) }, .tab_id = @enumFromInt(3) },
             .size = .{ .cols = area.w, .rows = area.h },
         })).departure
     else
-        model.departWorkspace();
+        workspace_handoff.depart(&model);
     try std.testing.expectEqual(other_location, departure.bookmark.?.location);
     if (replace) {
-        _ = model.departWorkspace();
+        _ = workspace_handoff.depart(&model);
     }
 
-    _ = try model.arriveWorkspace(.{ .pane_id = clicked, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
-    _ = try model.reconcileTab(.{ .location = location, .panes = &.{ first, clicked } }, area);
+    _ = try workspace_handoff.arrive(&model, .{ .pane_id = clicked, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
+    _ = try tab_snapshot_reconciliation.reconcileTab(&model, .{ .location = location, .panes = &.{ first, clicked } }, area);
     try std.testing.expect(model.tabs.layout[model.tabs.active].isFullscreen());
     try std.testing.expectEqual(clicked, model.tabs.layout[model.tabs.active].focused().?);
     var restored_storage: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
@@ -226,7 +229,7 @@ test "rejected workspace arrival preserves its previous model and version" {
         .tab_id = @enumFromInt(4),
     };
 
-    try std.testing.expectError(error.InvalidPaneId, empty.arriveWorkspace(.{
+    try std.testing.expectError(error.InvalidPaneId, workspace_handoff.arrive(empty, .{
         .pane_id = .invalid,
         .location = location,
         .size = .{ .cols = 30, .rows = 8 },
@@ -242,7 +245,7 @@ test "rejected workspace arrival preserves its previous model and version" {
     defer occupied.deinit();
     try model_data.workspace_handoff.bootstrap(occupied, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 30, .rows = 8 } });
 
-    try std.testing.expectError(error.ModelNotEmpty, occupied.arriveWorkspace(.{
+    try std.testing.expectError(error.ModelNotEmpty, workspace_handoff.arrive(occupied, .{
         .pane_id = @enumFromInt(2),
         .location = location,
         .size = .{ .cols = 30, .rows = 8 },
@@ -284,7 +287,7 @@ test "workspace replacement commits the confirmed root and captures retired stat
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model_data.tab_selection.select(&model, previous.tab_id));
 
-    const committed = try model.replaceWorkspace(.{
+    const committed = try workspace_handoff.replace(&model, .{
         .pane_id = replacement_pane,
         .location = replacement,
         .size = .{ .cols = 30, .rows = 8 },
@@ -336,7 +339,7 @@ test "workspace replacement captures invalid copy-mode release" {
     try std.testing.expect(copy_mode.enter(&model));
     const version_before = model.version();
 
-    const committed = try model.replaceWorkspace(.{
+    const committed = try workspace_handoff.replace(&model, .{
         .pane_id = @enumFromInt(2),
         .location = replacement,
         .size = .{ .cols = 30, .rows = 8 },
@@ -358,12 +361,12 @@ test "rejected workspace replacement preserves the occupied projection" {
     const pane_id: core.PaneId = @enumFromInt(1);
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
-    try std.testing.expectError(error.WorkspaceAlreadyActive, model.replaceWorkspace(.{
+    try std.testing.expectError(error.WorkspaceAlreadyActive, workspace_handoff.replace(&model, .{
         .pane_id = @enumFromInt(2),
         .location = .{ .workspace = location.workspace, .tab_id = @enumFromInt(2) },
         .size = .{ .cols = 30, .rows = 8 },
     }));
-    try std.testing.expectError(error.InvalidPaneId, model.replaceWorkspace(.{
+    try std.testing.expectError(error.InvalidPaneId, workspace_handoff.replace(&model, .{
         .pane_id = .invalid,
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(2) },
@@ -384,7 +387,7 @@ test "failed workspace replacement rolls back retained layouts" {
     const pane_id: core.PaneId = @enumFromInt(10);
     const area: cellgrid.Rect = .{ .w = 40, .h = 10 };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
-    _ = try model.reconcileTab(.{ .location = location, .panes = &.{pane_id} }, area);
+    _ = try tab_snapshot_reconciliation.reconcileTab(&model, .{ .location = location, .panes = &.{pane_id} }, area);
     _ = model.togglePaneFullscreen(.{ .area = area }).?;
     const version = model.version();
     const saved_before = model.saved_layouts;
@@ -392,7 +395,7 @@ test "failed workspace replacement rolls back retained layouts" {
     model.gpa = failing.allocator();
     defer model.gpa = std.testing.allocator;
 
-    try std.testing.expectError(error.OutOfMemory, model.replaceWorkspace(.{
+    try std.testing.expectError(error.OutOfMemory, workspace_handoff.replace(&model, .{
         .pane_id = @enumFromInt(20),
         .location = .{ .workspace = .{ .workspace = @enumFromInt(2) }, .tab_id = @enumFromInt(2) },
         .size = .{ .cols = area.w, .rows = area.h },
@@ -419,19 +422,19 @@ test "provisional arrivals cannot overwrite retained fullscreen layouts" {
     try layouts.remember(.{ .location = location, .pane_id = first, .workspace_active = true, .layout = saved });
     model.restoreClientLayouts(layouts);
     const arrival: model_data.WorkspaceArrival = .{ .pane_id = clicked, .location = location, .size = .{ .cols = area.w, .rows = area.h } };
-    _ = try model.arriveWorkspace(arrival);
-    _ = model.departWorkspace();
+    _ = try workspace_handoff.arrive(&model, arrival);
+    _ = workspace_handoff.depart(&model);
     try std.testing.expectEqualDeep(saved, model.saved_layouts.find(location).?.layout);
 
-    _ = try model.arriveWorkspace(arrival);
-    try std.testing.expectError(error.DuplicatePane, model.reconcileTab(.{ .location = location, .panes = &.{ clicked, clicked } }, area));
+    _ = try workspace_handoff.arrive(&model, arrival);
+    try std.testing.expectError(error.DuplicatePane, tab_snapshot_reconciliation.reconcileTab(&model, .{ .location = location, .panes = &.{ clicked, clicked } }, area));
     try std.testing.expectEqualDeep(saved, model.saved_layouts.find(location).?.layout);
-    _ = try model.reconcileTab(.{ .location = location, .panes = &.{ first, clicked } }, area);
+    _ = try tab_snapshot_reconciliation.reconcileTab(&model, .{ .location = location, .panes = &.{ first, clicked } }, area);
     try std.testing.expect(model.saved_layouts.find(location) == null);
     try std.testing.expect(model.tabs.layout[model.tabs.active].isFullscreen());
     try std.testing.expectEqual(clicked, model.tabs.layout[model.tabs.active].focused().?);
     const revision = model.tabs.layout[model.tabs.active].currentRevision();
-    _ = try model.reconcileTab(.{ .location = location, .panes = &.{ first, clicked } }, area);
+    _ = try tab_snapshot_reconciliation.reconcileTab(&model, .{ .location = location, .panes = &.{ first, clicked } }, area);
     try std.testing.expectEqual(revision, model.tabs.layout[model.tabs.active].currentRevision());
 }
 
@@ -443,7 +446,7 @@ test "workspace replacement can recover from an already empty source" {
         .tab_id = @enumFromInt(2),
     };
 
-    const committed = try model.replaceWorkspace(.{
+    const committed = try workspace_handoff.replace(&model, .{
         .pane_id = @enumFromInt(2),
         .location = location,
         .size = .{ .cols = 30, .rows = 8 },
@@ -487,14 +490,14 @@ test "workspace reconciliation versions semantic dimensions independently" {
             .{ .tab_id = second.tab_id, .pane_count = 1, .label = "logs" },
         },
     };
-    const name_change = try model.reconcileWorkspace(named);
+    const name_change = try workspace_reconciliation.reconcile(&model, named);
 
     try std.testing.expect(name_change.workspace_changed);
     try std.testing.expect(!name_change.tabs_changed);
     try std.testing.expect(!name_change.active_tab_changed);
     try std.testing.expectEqualDeep(Version{ .workspace = 1 }, model.version());
 
-    const unchanged = try model.reconcileWorkspace(named);
+    const unchanged = try workspace_reconciliation.reconcile(&model, named);
 
     try std.testing.expect(!unchanged.workspace_changed);
     try std.testing.expect(!unchanged.tabs_changed);
@@ -509,7 +512,7 @@ test "workspace reconciliation versions semantic dimensions independently" {
             .{ .tab_id = first.tab_id, .pane_count = 1, .label = "" },
         },
     };
-    const tabs_change = try model.reconcileWorkspace(reordered);
+    const tabs_change = try workspace_reconciliation.reconcile(&model, reordered);
 
     try std.testing.expect(!tabs_change.workspace_changed);
     try std.testing.expect(tabs_change.tabs_changed);
@@ -525,7 +528,7 @@ test "workspace reconciliation versions semantic dimensions independently" {
             .{ .tab_id = first.tab_id, .pane_count = 1, .label = "" },
         },
     };
-    const active_change = try model.reconcileWorkspace(removed);
+    const active_change = try workspace_reconciliation.reconcile(&model, removed);
 
     try std.testing.expect(!active_change.workspace_changed);
     try std.testing.expect(active_change.tabs_changed);
@@ -558,7 +561,7 @@ test "rejected workspace snapshots preserve state and revisions" {
         .tabs = &.{},
     };
 
-    try std.testing.expectError(error.WorkspaceHasNoTabs, model.reconcileWorkspace(empty));
+    try std.testing.expectError(error.WorkspaceHasNoTabs, workspace_reconciliation.reconcile(&model, empty));
 
     const duplicate: WorkspaceSnapshotInput = .{
         .workspace = workspace,
@@ -568,7 +571,7 @@ test "rejected workspace snapshots preserve state and revisions" {
             .{ .tab_id = location.tab_id, .pane_count = 1, .label = "copy" },
         },
     };
-    try std.testing.expectError(error.DuplicateTab, model.reconcileWorkspace(duplicate));
+    try std.testing.expectError(error.DuplicateTab, workspace_reconciliation.reconcile(&model, duplicate));
 
     var excessive_tabs: [core.max_tabs_per_workspace + 1]model_data.WorkspaceTabInput = undefined;
     for (&excessive_tabs, 0..) |*tab, index| {
@@ -583,7 +586,7 @@ test "rejected workspace snapshots preserve state and revisions" {
         .name = "project",
         .tabs = &excessive_tabs,
     };
-    try std.testing.expectError(error.TabLimitReached, model.reconcileWorkspace(excessive));
+    try std.testing.expectError(error.TabLimitReached, workspace_reconciliation.reconcile(&model, excessive));
 
     try std.testing.expectEqualDeep(location, model.activeTabLocation().?);
     try std.testing.expectEqual(@as(usize, 1), model.tabs.count);
@@ -608,7 +611,7 @@ test "active tab reconciliation versions pane changes and reports retired panes"
         .panes = &.{ first, second },
     };
 
-    const addition = try model.reconcileTab(discovered, .{ .w = 40, .h = 10 });
+    const addition = try tab_snapshot_reconciliation.reconcileTab(&model, discovered, .{ .w = 40, .h = 10 });
 
     try std.testing.expect(addition.active);
     try std.testing.expect(addition.panes_changed);
@@ -623,7 +626,7 @@ test "active tab reconciliation versions pane changes and reports retired panes"
     try std.testing.expectEqual(model.version().active_tab, addition.active_tab_revision);
     try std.testing.expectEqual(model.version().panes, addition.panes_revision);
 
-    const unchanged = try model.reconcileTab(discovered, .{ .w = 40, .h = 10 });
+    const unchanged = try tab_snapshot_reconciliation.reconcileTab(&model, discovered, .{ .w = 40, .h = 10 });
 
     try std.testing.expect(!unchanged.panes_changed);
     try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
@@ -632,7 +635,7 @@ test "active tab reconciliation versions pane changes and reports retired panes"
         .location = location,
         .panes = &.{second},
     };
-    const removal = try model.reconcileTab(removed, .{ .w = 40, .h = 10 });
+    const removal = try tab_snapshot_reconciliation.reconcileTab(&model, removed, .{ .w = 40, .h = 10 });
 
     try std.testing.expect(removal.panes_changed);
     try std.testing.expectEqualSlices(core.PaneId, &.{first}, removal.removed_panes.slice());
@@ -659,7 +662,7 @@ test "tab reconciliation rejects excessive pane membership atomically" {
         .panes = &pane_ids,
     };
 
-    try std.testing.expectError(error.TooManyPanes, model.reconcileTab(snapshot, .{ .w = 40, .h = 10 }));
+    try std.testing.expectError(error.TooManyPanes, tab_snapshot_reconciliation.reconcileTab(&model, snapshot, .{ .w = 40, .h = 10 }));
 
     try std.testing.expectEqual(@as(usize, 1), model.panes.countIn(location.tab_id));
     try std.testing.expect(model.panes.find(root_pane) != null);
@@ -692,7 +695,7 @@ test "inactive tab reconciliation does not advance the visible pane revision" {
         .panes = &.{ @enumFromInt(2), @enumFromInt(3) },
     };
 
-    const reconciliation = try model.reconcileTab(snapshot, .{ .w = 40, .h = 10 });
+    const reconciliation = try tab_snapshot_reconciliation.reconcileTab(&model, snapshot, .{ .w = 40, .h = 10 });
 
     try std.testing.expect(!reconciliation.active);
     try std.testing.expect(reconciliation.panes_changed);
@@ -728,7 +731,7 @@ test "tab reconciliation rejects pane identities owned by another tab" {
         .panes = &.{ @enumFromInt(1), @enumFromInt(2) },
     };
 
-    try std.testing.expectError(error.PaneAlreadyExists, model.reconcileTab(snapshot, .{ .w = 40, .h = 10 }));
+    try std.testing.expectError(error.PaneAlreadyExists, tab_snapshot_reconciliation.reconcileTab(&model, snapshot, .{ .w = 40, .h = 10 }));
 
     try std.testing.expectEqual(@as(usize, 1), model.panes.countIn(first.tab_id));
     try std.testing.expectEqual(@as(usize, 1), model.panes.countIn(second.tab_id));

@@ -57,7 +57,7 @@ test "created agent tabs immediately expose the attached composer and preserve w
     defer model.deinit();
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     const agent_id: core.PaneId = @enumFromInt(2);
-    const created = try model.createTab(.{
+    const created = try data.tab_creation.create(&model, .{
         .created = .{
             .location = .{ .workspace = location.workspace, .tab_id = @enumFromInt(2) },
             .position = 1,
@@ -100,7 +100,7 @@ test "agent conversation survives receive reuse and rejects stale generations an
     try std.testing.expect(model.planPaneInput(.{ .key_lease = pane_id }) == null);
     try std.testing.expectEqual(core.PaneSurface.thread, model.togglePaneSurface().?);
 
-    _ = model.departWorkspace();
+    _ = data.workspace_handoff.depart(&model);
     try std.testing.expect(!try handler.applyAgentThread(try readySnapshot(&bytes, 3)));
 }
 
@@ -135,7 +135,7 @@ test "independent clients retain activity identities and child status across sna
     try std.testing.expectEqual(core.agent_thread.ItemStatus.running, second_thread.findItem(10).?.status);
     try std.testing.expectEqual(@as(u64, 9), second_thread.findItem(10).?.parent_identity);
 
-    _ = first.departWorkspace();
+    _ = data.workspace_handoff.depart(first);
     snapshot.revision = 2;
     snapshot.item_storage[1].status = .completed;
     snapshot.item_storage[1].complete = true;
@@ -566,7 +566,7 @@ test "hidden history completions update their window without invalidating the vi
     _ = reading.navigate(handler, pane_id, .older);
     const query = (try reading.begin(handler, pane_id)).?;
     const operation = historyOperation(model, query.view_generation);
-    _ = try model.createTab(.{ .created = .{ .location = .{ .workspace = location.workspace, .tab_id = @enumFromInt(2) }, .position = 1, .label = "Terminal", .root_pane_id = @enumFromInt(2) }, .size = .{ .cols = 40, .rows = 10 } });
+    _ = try data.tab_creation.create(model, .{ .created = .{ .location = .{ .workspace = location.workspace, .tab_id = @enumFromInt(2) }, .position = 1, .label = "Terminal", .root_pane_id = @enumFromInt(2) }, .size = .{ .cols = 40, .rows = 10 } });
     const revision = model.panes_revision;
     var buffer: [4096]u8 = undefined;
     try std.testing.expect(try reading.apply(handler, operation, try historyResponse(&buffer, query.view_generation)));
@@ -632,7 +632,7 @@ test "history ownership retains at most sixteen windows and evicts an inactive r
     const selected = model.agentPane(pane_id).?.agent_history.?;
     for (2..18) |number| {
         const id: core.PaneId = @enumFromInt(number);
-        _ = try model.createTab(.{ .created = .{ .location = .{ .workspace = location.workspace, .tab_id = @enumFromInt(number) }, .position = @intCast(number - 1), .label = "Agent", .root_pane_id = id, .kind = .agent, .pane_generation = 9 }, .size = .{ .cols = 40, .rows = 10 } });
+        _ = try data.tab_creation.create(model, .{ .created = .{ .location = .{ .workspace = location.workspace, .tab_id = @enumFromInt(number) }, .position = @intCast(number - 1), .label = "Agent", .root_pane_id = id, .kind = .agent, .pane_generation = 9 }, .size = .{ .cols = 40, .rows = 10 } });
         var bytes: [4096]u8 = undefined;
         var response = try readySnapshot(&bytes, 1);
         response.pane_id = id;

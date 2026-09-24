@@ -130,7 +130,7 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
                 },
             },
         ),
-        .toggle_workspace_list => _ = client.model.toggleWorkspaceList(),
+        .toggle_workspace_list => _ = data.workspace_list.toggle(&client.model),
         .new_workspace => _ = workspace_creation.beginWorkspacePrompt(client),
         .rename_workspace => _ = name_prompt.openNamePrompt(&client.model, .rename_workspace),
         .select_workspace => |position| _ = try workspace_handoff.selectWorkspace(

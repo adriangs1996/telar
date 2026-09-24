@@ -18,7 +18,7 @@ wire-to-client translation              construct NotificationInput
         |                                              |
 notifications.publishNotification <-------------------+
                                |
-                    ClientModel.publishNotification
+                    notifications.publish
                                |
             model.notification_center + notifications_revision
                                |

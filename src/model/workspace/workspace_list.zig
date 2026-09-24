@@ -5,6 +5,8 @@
 //! replace it atomically; stale or oversized snapshots preserve the last
 //! usable value.
 
+const WorkspaceListCollapse = @import("../state/WorkspaceListCollapse.zig");
+const ClientModel = @import("../state/ClientModel.zig");
 const core = @import("telar-core");
 const WorkspaceListSnapshot = @import("WorkspaceListSnapshot.zig");
 const EntryInput = @import("EntryInput.zig");
@@ -100,4 +102,33 @@ test "long names truncate on a codepoint boundary" {
 
     try std.testing.expectEqual(@as(usize, 48), truncated.len);
     try std.testing.expect(std.unicode.utf8ValidateSlice(truncated));
+}
+
+/// Commits an explicit workspace-list collapse preference. Repeated
+/// values preserve the chrome revision.
+///
+/// ```zig
+/// const change = setCollapsed(model, true) orelse return;
+/// ```
+pub fn setCollapsed(model: *ClientModel, collapsed: bool) ?WorkspaceListCollapse {
+    if (model.workspace_list_collapsed == collapsed) {
+        return null;
+    }
+
+    model.workspace_list_collapsed = collapsed;
+    model.chrome_revision +%= 1;
+
+    return .{
+        .collapsed = collapsed,
+        .chrome_revision = model.chrome_revision,
+    };
+}
+
+/// Toggles the workspace-list preference and advances only chrome.
+///
+/// ```zig
+/// const change = toggle(model);
+/// ```
+pub fn toggle(model: *ClientModel) WorkspaceListCollapse {
+    return setCollapsed(model, !model.workspace_list_collapsed).?;
 }

@@ -101,7 +101,7 @@ test "native decorated combining clusters remain bounded and atlas exhaustion re
 
 fn populateMultiplexer(fixture: *Fixture) !void {
     const model = &fixture.session.gui.app.model;
-    _ = try model.reconcileWorkspaceList(.{ .revision = 1, .entries = &.{
+    _ = try data.workspace_list_snapshot.reconcile(model, .{ .revision = 1, .entries = &.{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/telar", .tab_count = 4 },
         .{ .workspace = @enumFromInt(2), .name = "server", .path = "/server", .tab_count = 1 },
         .{ .workspace = @enumFromInt(3), .name = "web", .path = "/web", .tab_count = 1 },
@@ -147,9 +147,9 @@ fn populateMultiplexer(fixture: *Fixture) !void {
 
     _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &agents });
     for ([_][]const u8{ "Build complete", "Tests complete", "Format complete", "Integration complete" }) |title| {
-        _ = model.publishNotification(0, .{ .title = title, .message = "All checks passed", .target = .{ .select_tab = Session.location.tab_id } });
+        _ = data.notifications.publish(model, 0, .{ .title = title, .message = "All checks passed", .target = .{ .select_tab = Session.location.tab_id } });
     }
 
-    _ = model.advanceNotifications(data.notifications.transition_duration_ns);
+    _ = data.notifications.advance(model, data.notifications.transition_duration_ns);
     try std.testing.expectEqual(@as(u8, 4), model.notification_center.count);
 }

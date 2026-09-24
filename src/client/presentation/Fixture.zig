@@ -80,7 +80,7 @@ pub fn deinit(self: *Fixture) void {
 }
 
 pub fn arrive(self: *Fixture) !void {
-    _ = try self.model.arriveWorkspace(.{ .pane_id = headless_tests.pane_id, .location = headless_tests.location, .size = .{ .cols = 4, .rows = 1 } });
+    _ = try model_data.workspace_handoff.arrive(self.model, .{ .pane_id = headless_tests.pane_id, .location = headless_tests.location, .size = .{ .cols = 4, .rows = 1 } });
     self.activations += 1;
 }
 

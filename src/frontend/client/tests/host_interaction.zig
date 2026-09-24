@@ -158,7 +158,7 @@ test "host resize waits for canonical membership then resizes before attaching w
     try std.testing.expectEqual(initial_request_id, client.model.request_lifecycle.next_request_id);
     try std.testing.expect(!client.model.request_lifecycle.tracker.hasPane(.attachment, sibling));
 
-    _ = try client.model.reconcileTab(
+    _ = try data.tab_snapshot_reconciliation.reconcileTab(&client.model, 
         .{
             .location = client.model.tabs.location[tab],
             .panes = &.{
@@ -212,7 +212,7 @@ test "host resize rolls back rejected attachment correlation after offering conn
     const client = harness.client;
     const terminal = harness.terminal;
     const sibling: core.PaneId = @enumFromInt(20);
-    _ = try client.model.reconcileTab(
+    _ = try data.tab_snapshot_reconciliation.reconcileTab(&client.model, 
         .{
             .location = TestHarness.bootstrap_location,
             .panes = &.{

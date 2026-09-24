@@ -7,7 +7,7 @@ const Client = @import("../execution/Client.zig");
 /// Changes visibility and synchronizes pane geometry. Example: `_ = try toggle(client);`.
 /// Example: `_ = try sidebar_toggle.toggleSidebar(app);`
 pub fn toggleSidebar(client: *Client) !data.SidebarLayout {
-    const change = client.model.toggleSidebar();
+    const change = data.sidebar.toggle(&client.model);
     try deliverSidebarLayout(client, change);
     return change;
 }
@@ -16,8 +16,8 @@ pub fn toggleSidebar(client: *Client) !data.SidebarLayout {
 /// Example: `_ = try sidebar_toggle.resizeSidebar(app, requested);`
 pub fn resizeSidebar(client: *Client, requested: data.SidebarResize) !?data.SidebarLayout {
     const change = switch (requested) {
-        .exact => |width| client.model.setSidebarWidth(width),
-        .direction => |direction| client.model.stepSidebarWidth(direction),
+        .exact => |width| data.sidebar.setWidth(&client.model, width),
+        .direction => |direction| data.sidebar.stepWidth(&client.model, direction),
     } orelse return null;
 
     try deliverSidebarLayout(client, change);

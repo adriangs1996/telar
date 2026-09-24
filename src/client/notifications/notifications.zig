@@ -12,7 +12,7 @@ const Client = @import("../execution/Client.zig");
 /// Publishes one owned notice through the application boundary.
 /// Example: `_ = try notifications.publishNotification(client, now_ns, input);`
 pub fn publishNotification(client: *Client, now_ns: u64, input: data.NotificationInput) !data.NotificationPublication {
-    const publication = client.model.publishNotification(now_ns, input);
+    const publication = data.notifications.publish(&client.model, now_ns, input);
     try scheduleNotificationTimer(client);
     try deliverHostNotification(client, input);
     return publication;
@@ -147,7 +147,7 @@ fn deliverHostNotification(client: *Client, input: data.NotificationInput) !void
 
 /// Advances every notification lifecycle to one monotonic timestamp.
 fn advanceNotifications(client: *Client, now_ns: u64) !?data.NotificationChange {
-    const change = client.model.advanceNotifications(now_ns);
+    const change = data.notifications.advance(&client.model, now_ns);
     try scheduleNotificationTimer(client);
     return change;
 }
@@ -155,7 +155,7 @@ fn advanceNotifications(client: *Client, now_ns: u64) !?data.NotificationChange 
 /// Activates one current notification identity and follows its target at most
 /// once.
 fn activateNotification(client: *Client, id: data.NotificationId, now_ns: u64) !?data.NotificationActivation {
-    const activation = client.model.activateNotification(id, now_ns) orelse return null;
+    const activation = data.notifications.activate(&client.model, id, now_ns) orelse return null;
     try scheduleNotificationTimer(client);
     try navigateNotification(client, activation.target);
     return activation;
@@ -163,7 +163,7 @@ fn activateNotification(client: *Client, id: data.NotificationId, now_ns: u64) !
 
 /// Dismisses one current notification identity without navigation.
 fn dismissNotification(client: *Client, id: data.NotificationId, now_ns: u64) !?data.NotificationChange {
-    const change = client.model.dismissNotification(id, now_ns) orelse return null;
+    const change = data.notifications.dismiss(&client.model, id, now_ns) orelse return null;
     try scheduleNotificationTimer(client);
     return change;
 }

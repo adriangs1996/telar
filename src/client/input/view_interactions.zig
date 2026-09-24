@@ -1,5 +1,6 @@
 //! Wires semantic view interactions to existing client use cases.
 
+const data = @import("model");
 const view_interaction = @import("view_interaction.zig");
 const Client = @import("../execution/Client.zig");
 const ViewInteractionCommand = @import("ViewInteractionCommand.zig");
@@ -60,7 +61,7 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
             );
         },
         .toggle_workspace_list => {
-            _ = client.model.toggleWorkspaceList();
+            _ = data.workspace_list.toggle(&client.model);
         },
         .focus_agent => |key| _ = try agent_navigation.navigateAgent(client, key),
         .select_tab => |tab_id| {

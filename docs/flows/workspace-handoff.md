@@ -10,14 +10,14 @@ actions.executeAction, agent navigation, resync or canonical tab closure
   -> private requestWorkspaceSwitch: target, authority and bounded preflight
         -> tab_removal.detachTab for each captured tab
         -> correlated open_pane
-        -> ClientModel.departWorkspace -> workspace_handoff.clear
+        -> workspace_handoff.depart -> workspace_handoff.clear
         -> workspace_handoff.releaseWorkspace
   -> adapter observes the empty projection
 
 pane_opened(initial_open continuation)
   -> pane_attachment.completePaneOpen
   -> workspace_creation.arriveOpenedWorkspace
-     -> ClientModel.arriveWorkspace -> workspace_handoff.bootstrap
+     -> workspace_handoff.arrive -> workspace_handoff.bootstrap
      -> workspace_handoff.activateWorkspace
         -> active resources, host input, workspace snapshot, tab snapshot
   -> adapter observes the arrived projection
@@ -47,7 +47,7 @@ socket. A local detach/open failure keeps the original semantic projection,
 restores active graphics in order and requests a coalesced tab snapshot. A
 failure of that repair never replaces the original request error.
 
-Only a locally accepted open permits `ClientModel.departWorkspace`. Departure captures
+Only a locally accepted open permits `workspace_handoff.depart`. Departure captures
 the bookmark and bounded retired pane identities and retains reconciled layouts
 for active and inactive tabs. It advances workspace/tab/active-tab/pane revisions
 once, then releases local resources silently. The presenter can render that
@@ -55,7 +55,7 @@ empty model once; waiting for the reply does not create a redraw loop.
 
 Arrival consumes exact correlation. Saved bookmark geometry is accepted only
 for the confirmed tab, while the model prefers that tab's exact retained layout.
-`ClientModel.arriveWorkspace` requires an empty projection and constructs root/pane
+`workspace_handoff.arrive` requires an empty projection and constructs root/pane
 transactionally before committing. The confirmed pane remains the intended
 focus. Canonical tab reconciliation restores the tree only if its pane set
 matches; otherwise deterministic runtime order wins. Each successful tab

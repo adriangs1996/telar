@@ -28,8 +28,8 @@ test "projection composes terminal thread link chrome notifications and modal be
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "https://example.com", .style = .{} });
     pane.cursor = .{ .x = 0, .y = 0, .visible = true, .appearance = .{ .shape = .bar } };
     const hit = try linkFor(&fixture);
-    _ = model.publishNotification(0, .{ .title = "Build", .message = "Finished" });
-    _ = model.advanceNotifications(data.notifications.transition_duration_ns);
+    _ = data.notifications.publish(model, 0, .{ .title = "Build", .message = "Finished" });
+    _ = data.notifications.advance(model, data.notifications.transition_duration_ns);
     model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "Borrowed title" } });
     const projection = fixture.projection();
     var canvas = begin(&fixture, &projection);
@@ -100,9 +100,9 @@ test "complete widget list fits the maximum pane count with every optional layer
         try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = largest.pane_id, .new_pane = @enumFromInt(index + 100), .location = Session.location, .axis = if (largest.content.w > largest.content.h * 2) .horizontal else .vertical, .area = data.workbench.region(&gui.app.model).area });
     }
 
-    _ = gui.app.model.publishNotification(0, .{ .title = "First", .message = "Finished" });
-    _ = gui.app.model.publishNotification(0, .{ .title = "Second", .message = "Ready" });
-    _ = gui.app.model.advanceNotifications(data.notifications.transition_duration_ns);
+    _ = data.notifications.publish(&gui.app.model, 0, .{ .title = "First", .message = "Finished" });
+    _ = data.notifications.publish(&gui.app.model, 0, .{ .title = "Second", .message = "Ready" });
+    _ = data.notifications.advance(&gui.app.model, data.notifications.transition_duration_ns);
     gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "All panes" } });
     const projection = fixture.projection();
     const hit = try linkFor(&fixture);

@@ -54,7 +54,7 @@ pub fn measure(self: *Fixture, viewport: native.Viewport) !void {
 /// Example: `try fixture.showSidebar(false);`
 pub fn showSidebar(self: *Fixture, visible: bool) !void {
     const renderer = &self.session.gui.renderer;
-    _ = self.session.gui.app.model.setSidebarVisible(visible);
+    _ = data.sidebar.setVisible(&self.session.gui.app.model, visible);
     try self.measure(.{ .width = renderer.viewport[0], .height = renderer.viewport[1], .scale = renderer.scale });
 }
 

@@ -17,7 +17,7 @@ pub fn requestPaneSplit(client: *Client, command: data.RequestPaneSplit) !?data.
         return null;
     }
 
-    const plan = client.model.planPaneSplit(command) orelse return null;
+    const plan = data.pane_split.planSplit(&client.model, command) orelse return null;
     client.model.to_runtime.push(
         .{
             .pane_resize = plan.provisional_resize,
@@ -85,7 +85,7 @@ pub fn confirmPaneSplit(client: *Client, command: data.ConfirmPaneSplit) !data.P
         return error.UnexpectedPane;
     }
 
-    const commit = try client.model.commitPaneSplit(
+    const commit = try data.pane_split.commitSplit(&client.model, 
         .{
             .split = command.requested,
             .new_pane = command.confirmed_pane,
@@ -136,7 +136,7 @@ pub fn confirmPaneSplit(client: *Client, command: data.ConfirmPaneSplit) !data.P
 /// a target in an inactive tab is already detached and needs no resize.
 /// A rejected request restores the active target before the failure notice.
 pub fn recoverPaneSplit(model: *data.ClientModel, split: data.PaneSplit) !SplitRecovery {
-    return switch (model.recoverPaneSplit(
+    return switch (data.pane_split.recover(model, 
         .{
             .split = split,
             .area = data.workbench.region(model).area,

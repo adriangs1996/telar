@@ -23,7 +23,7 @@ Event.git_status -> workspace_git.finish (bounded branch copy, change
         |
 schema.workspace_list entries carry `branch` and `dirty`
         |
-client ClientModel.applyWorkspaceList -> model.workspace_list_snapshot
+client workspace_list_snapshot.apply -> model.workspace_list_snapshot
                     -> navigation metadata; top bar renders " name "
 ```
 

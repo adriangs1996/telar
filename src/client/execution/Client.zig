@@ -137,7 +137,7 @@ pub fn init(self: *Client, params: ClientInit) !void {
     self.model.sound_playback = .init(params.options.sound);
     try self.model.history_palette.prepare(gpa);
     try self.model.to_runtime.reservePayloads(gpa);
-    _ = self.model.setSidebarVisible(params.options.sidebar_visible);
+    _ = data.sidebar.setVisible(&self.model, params.options.sidebar_visible);
 }
 
 /// The key bindings of the live configuration, borrowed from its

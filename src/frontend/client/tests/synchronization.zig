@@ -513,7 +513,7 @@ test "sidebar workspace round trip restores fullscreen in a previously inactive 
     const first = TestHarness.bootstrap_pane;
     const clicked: core.PaneId = @enumFromInt(21);
     const area = terminal.view.workbench();
-    _ = try client.model.reconcileTab(.{ .location = TestHarness.bootstrap_location, .panes = &.{first} }, area);
+    _ = try data.tab_snapshot_reconciliation.reconcileTab(&client.model, .{ .location = TestHarness.bootstrap_location, .panes = &.{first} }, area);
     const fullscreen_tab = client.model.tabs.active;
     try data.pane_split.split(&client.model, fullscreen_tab, .{ .existing_pane = first, .new_pane = clicked, .location = TestHarness.bootstrap_location, .axis = .vertical, .area = area });
     try std.testing.expect(client.model.tabs.layout[fullscreen_tab].focusPane(first));

@@ -220,5 +220,5 @@ fn projects(fixture: *Fixture, count: usize) !void {
     }
 
     const model = &fixture.session.gui.app.model;
-    _ = try model.reconcileWorkspaceList(.{ .revision = model.workspace_list_snapshot.revision + 1, .entries = entries[0..count] });
+    _ = try data.workspace_list_snapshot.reconcile(model, .{ .revision = model.workspace_list_snapshot.revision + 1, .entries = entries[0..count] });
 }

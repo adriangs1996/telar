@@ -12,7 +12,7 @@ rename reply or requested workspace_snapshot
   -> runtime_messages.handleServerMessage
   -> workspace_list_snapshot.applyWorkspaceSnapshot
      -> consume rename/snapshot correlation and verify workspace
-     -> bounded descriptor decoding -> ClientModel.reconcileWorkspace
+     -> bounded descriptor decoding -> workspace_reconciliation.reconcile
         -> workspace_reconciliation.reconcileTabs
      -> ignore removed-tab requests; release removed-pane resources
      -> synchronize active resources if active tab changed

@@ -1,5 +1,6 @@
 //! Runtime messages: receives one decoded runtime message and hands it to the
 //! flow it belongs to.
+const data = @import("model");
 const core = @import("telar-core");
 const pane_graphics = @import("../panes/pane_graphics.zig");
 const agent_control = @import("../agents/agent_control.zig");
@@ -126,7 +127,7 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
                 .battery_percent = if (metrics.has_battery) metrics.battery_percent else null,
             },
         ),
-        .workspace_list => |list| _ = try client.model.applyWorkspaceList(list),
+        .workspace_list => |list| _ = try data.workspace_list_snapshot.apply(&client.model, list),
         .graphics_snapshot => |snapshot| _ = try pane_graphics.applyPaneGraphics(
             client,
             .{

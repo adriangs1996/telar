@@ -28,7 +28,7 @@ after the event
 `ClientModel` is the source of truth for requested visibility and preferred
 width. A toggle, exact pointer width or two-column keybinding step advances
 only `model.chrome_revision`, reported as `Version.chrome`, and returns the
-complete committed `SidebarLayout`. `ClientModel.toggleSidebar`,
+complete committed `SidebarLayout`. `sidebar.toggle`,
 `setSidebarWidth` and `stepSidebarWidth` commit it. Explicit configuration
 updates use `setSidebarVisible`; applying an identical layout is a no-op.
 

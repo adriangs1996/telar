@@ -1,3 +1,5 @@
+const tab_selection = @import("../../workspace/tab_selection.zig");
+const pane_graphics = @import("../../panes/pane_graphics.zig");
 const copy_mode = @import("../../input/copy_mode.zig");
 const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
@@ -387,18 +389,18 @@ test "pane graphics fallback versions only semantic changes" {
     const pane_id: core.PaneId = @enumFromInt(1);
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
 
-    const shown = model.setPaneGraphicsFallback(pane_id, true).?;
+    const shown = pane_graphics.setFallback(&model, pane_id, true).?;
 
     try std.testing.expect(shown.visible);
     try std.testing.expectEqual(@as(u64, 1), shown.pane_graphics_revision);
     try std.testing.expect(model.panes.find(pane_id).?.graphics_placeholder);
     try std.testing.expectEqualDeep(Version{ .pane_graphics = 1 }, model.version());
 
-    try std.testing.expect(model.setPaneGraphicsFallback(pane_id, true) == null);
-    try std.testing.expect(model.setPaneGraphicsFallback(@enumFromInt(9), true) == null);
+    try std.testing.expect(pane_graphics.setFallback(&model, pane_id, true) == null);
+    try std.testing.expect(pane_graphics.setFallback(&model, @enumFromInt(9), true) == null);
     try std.testing.expectEqualDeep(Version{ .pane_graphics = 1 }, model.version());
 
-    const hidden = model.setPaneGraphicsFallback(pane_id, false).?;
+    const hidden = pane_graphics.setFallback(&model, pane_id, false).?;
 
     try std.testing.expect(!hidden.visible);
     try std.testing.expectEqual(@as(u64, 2), hidden.pane_graphics_revision);
@@ -695,7 +697,7 @@ test "an active tab transition releases copy authority" {
     try std.testing.expect(copy_mode.enter(&model));
     const version = model.version();
 
-    const selection = (try model.selectTab(.{ .tab_id = second.tab_id })).?;
+    const selection = (try tab_selection.commitSelection(&model, .{ .tab_id = second.tab_id })).?;
 
     try std.testing.expectEqualDeep(first, selection.previous);
     try std.testing.expectEqualDeep(second, selection.selected);

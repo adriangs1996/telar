@@ -440,7 +440,7 @@ test "toast activation commits by id before following its navigation target" {
     const item = client.model.notification_center.itemAt(0).?;
     const notification_id = item.id;
     const visible_at_ns = item.transition_updated_ns + data.notifications.transition_duration_ns;
-    _ = client.model.advanceNotifications(visible_at_ns);
+    _ = data.notifications.advance(&client.model, visible_at_ns);
 
     const composed = try terminal.presenter.compositor.render(.{
         .model = &client.model,
@@ -666,8 +666,8 @@ test "workspace list snapshots commit before presenter-owned projection" {
     });
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(list));
 
-    try std.testing.expect(client.model.knowsWorkspace(@enumFromInt(1)));
-    try std.testing.expect(client.model.knowsWorkspace(@enumFromInt(2)));
+    try std.testing.expect(data.workspace_list_snapshot.knowsWorkspace(&client.model, @enumFromInt(1)));
+    try std.testing.expect(data.workspace_list_snapshot.knowsWorkspace(&client.model, @enumFromInt(2)));
     try std.testing.expectEqualStrings("/work/api", client.model.workspace_list_snapshot.pathAt(1));
     try std.testing.expectEqual(version_before.workspace_list + 1, client.model.version().workspace_list);
     try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);

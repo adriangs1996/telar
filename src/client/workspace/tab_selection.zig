@@ -12,7 +12,7 @@ pub fn selectTab(client: *Client, command: data.SelectTab) !?data.TabSelection {
         return null;
     }
 
-    const selection = client.model.selectTab(command.target) catch |err| switch (err) {
+    const selection = data.tab_selection.commitSelection(&client.model, command.target) catch |err| switch (err) {
         error.NoActiveTab, error.TabNotFound => return null,
     } orelse return null;
     try tab_removal.detachTab(client, selection.previous);

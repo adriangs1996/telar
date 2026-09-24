@@ -658,7 +658,7 @@ fn tabTarget(session: *Session, tab_id: core.TabId) !Target {
 fn addDragTabs(session: *Session) !void {
     const model = &session.gui.app.model;
     for (2..4) |id| {
-        _ = try model.createTab(.{ .created = .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(id) }, .position = @intCast(id - 1), .label = "tab", .root_pane_id = @enumFromInt(id * 10) }, .size = model.host.host_size });
+        _ = try data.tab_creation.create(model, .{ .created = .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(id) }, .position = @intCast(id - 1), .label = "tab", .root_pane_id = @enumFromInt(id * 10) }, .size = model.host.host_size });
     }
     _ = session.gui.app.model.request_lifecycle.tracker.take(@enumFromInt(3));
     try publish(session);

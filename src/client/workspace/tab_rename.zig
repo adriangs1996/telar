@@ -50,7 +50,7 @@ pub fn completeTabRename(model: *data.ClientModel, renamed: core.TabRenamed) !da
         return error.UnexpectedTabRenamed;
     }
 
-    return model.renameTab(
+    return data.tab_rename.commitRename(model, 
         .{
             .location = renamed.location,
             .label = renamed.label,

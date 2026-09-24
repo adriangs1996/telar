@@ -233,7 +233,7 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
             }
 
             const target: core.WorkspaceId = @enumFromInt(reply.target_id);
-            if (!client.model.knowsWorkspace(target)) {
+            if (!data.workspace_list_snapshot.knowsWorkspace(&client.model, target)) {
                 return error.WorkspaceNotFound;
             }
 
@@ -298,12 +298,12 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
             reply.status = .applied;
         },
         .workspace_list_collapse => {
-            _ = client.model.setWorkspaceListCollapsed(true);
+            _ = data.workspace_list.setCollapsed(&client.model, true);
 
             reply.status = .applied;
         },
         .workspace_list_expand => {
-            _ = client.model.setWorkspaceListCollapsed(false);
+            _ = data.workspace_list.setCollapsed(&client.model, false);
 
             reply.status = .applied;
         },

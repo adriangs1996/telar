@@ -16,7 +16,7 @@ pub fn syncFallbacks(model: *data.ClientModel, graphics: GraphicsRetention) void
         inspected += 1;
         const has_graphics = fallback_required and
             graphics.hasPaneGraphics(pane.id);
-        _ = model.setPaneGraphicsFallback(pane.id, has_graphics);
+        _ = data.pane_graphics.setFallback(model, pane.id, has_graphics);
     }
 
     std.debug.assert(inspected <= core.max_tabs_per_workspace * core.max_panes_per_tab);
@@ -65,7 +65,7 @@ pub fn applyPaneGraphics(client: *Client, command: data.PaneGraphicsCommand) !da
             break :block .{
                 .applied = .{
                     .pane_id = pane_id,
-                    .fallback = client.model.setPaneGraphicsFallback(
+                    .fallback = data.pane_graphics.setFallback(&client.model, 
                         pane_id,
                         client.model.host.host_capabilities.images != .supported and
                             state.has_graphics,

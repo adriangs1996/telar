@@ -181,7 +181,7 @@ test "a reconstructed attachment cannot inherit a completed old frame with the s
     try fixture.expectAck(1);
     const old = try fixture.prepare();
     const generation = fixture.model.panes.find(pane_id).?.attachment_generation;
-    _ = fixture.model.departWorkspace();
+    _ = data.workspace_handoff.depart(fixture.model);
     try std.testing.expectEqualStrings("A", fixture.adapter.frame.cells[0].text());
     try fixture.arrive();
     try sendFrame(fixture, .{ .text = 'B' });
@@ -283,8 +283,8 @@ test "headless preparation delivery input and steady-state patches allocate noth
 test "the headless cell budget rejects a whole preparation instead of truncating coverage" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
-    _ = fixture.model.departWorkspace();
-    _ = try fixture.model.arriveWorkspace(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 129, .rows = 129 } });
+    _ = data.workspace_handoff.depart(fixture.model);
+    _ = try data.workspace_handoff.arrive(fixture.model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 129, .rows = 129 } });
     try std.testing.expectError(error.HeadlessCellBudgetExceeded, fixture.prepare());
     try std.testing.expect(fixture.adapter.state.active == null);
     try std.testing.expect(fixture.outbox.peek() == null);
@@ -310,7 +310,7 @@ test "independent client assemblies produce identical semantic state and request
     try std.testing.expectEqualDeep(first.model.version(), second.model.version());
     try std.testing.expect(first.outbox.peek() == null);
     try std.testing.expect(second.outbox.peek() == null);
-    _ = first.model.departWorkspace();
+    _ = data.workspace_handoff.depart(first.model);
     try std.testing.expect(second.model.tabs.activeSlot() != null);
     try std.testing.expectEqualStrings("A", second.model.panes.find(pane_id).?.buffer.cells[0].text());
 }

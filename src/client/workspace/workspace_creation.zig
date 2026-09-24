@@ -55,7 +55,7 @@ fn sendCreateWorkspaceRequest(model: *data.ClientModel, request: core.CreateWork
 
 pub fn arriveOpenedWorkspace(client: *Client, opened: data.OpenedPane) !void {
     const size = data.multiplexer.rectSize(client.geometry().area) orelse return error.TerminalTooSmall;
-    const activation = try client.model.arriveWorkspace(workspace_handoff.workspaceArrival(
+    const activation = try data.workspace_handoff.arrive(&client.model, workspace_handoff.workspaceArrival(
         &client.model.navigation_history,
         opened,
         size,
@@ -68,7 +68,7 @@ pub fn createOpenedWorkspace(client: *Client, confirmation: data.WorkspaceCreati
         return error.UnexpectedRequest;
     }
 
-    const replacement = try client.model.replaceWorkspace(workspace_handoff.workspaceArrival(
+    const replacement = try data.workspace_handoff.replace(&client.model, workspace_handoff.workspaceArrival(
         &client.model.navigation_history,
         confirmation.opened,
         confirmation.requested_size,

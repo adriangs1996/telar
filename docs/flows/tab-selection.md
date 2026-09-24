@@ -7,7 +7,7 @@ All sources resolve their intent through one concrete operation:
 actions.executeAction, delivered tab click or agent navigation
   -> tab_selection.selectTab
      -> reject a pending tab snapshot
-     -> ClientModel.selectTab -> tab_selection.selectPosition / selectOffset
+     -> tab_selection.commitSelection -> tab_selection.selectPosition / selectOffset
      -> tab_removal.detachTab(previous)
      -> show selected graphics
      -> pane_focus.synchronizeActivePane

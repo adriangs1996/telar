@@ -14,7 +14,7 @@ test "notification motion samples host time without squeezing text or changing t
     const fixture = try Fixture.init();
     defer fixture.deinit();
     fixture.animation = .{};
-    const id = fixture.model.publishNotification(0, .{ .title = "Build complete", .message = "All checks passed", .level = .success }).id;
+    const id = data.notifications.publish(&fixture.model, 0, .{ .title = "Build complete", .message = "All checks passed", .level = .success }).id;
     const original = fixture.model.version();
     fixture.animation.?.begin(0);
     try fixture.paint();
@@ -40,7 +40,7 @@ test "notification motion samples host time without squeezing text or changing t
     try std.testing.expectEqual(@as(u32, 0), fixture.animation.?.wakeupAfter(fixture.animation.?.now_ns));
     try std.testing.expectEqual(original, fixture.model.version());
 
-    _ = fixture.model.dismissNotification(id, fixture.animation.?.now_ns);
+    _ = data.notifications.dismiss(&fixture.model, id, fixture.animation.?.now_ns);
     fixture.animation.?.begin(data.notifications.transition_duration_ns * 2 + data.notifications.transition_duration_ns / 2);
     try fixture.paint();
     try std.testing.expect(!fixture.overlays.presented().notifications.hits[0].enabled);
@@ -55,12 +55,12 @@ test "notification stack retargets from the current position and retires hidden 
     const fixture = try Fixture.init();
     defer fixture.deinit();
     fixture.animation = .{};
-    const first = fixture.model.publishNotification(0, .{ .title = "First", .message = "Done" }).id;
+    const first = data.notifications.publish(&fixture.model, 0, .{ .title = "First", .message = "Done" }).id;
     fixture.animation.?.begin(data.notifications.transition_duration_ns);
     try fixture.paint();
     const top = bounds(fixture, first).y;
 
-    _ = fixture.model.publishNotification(
+    _ = data.notifications.publish(&fixture.model, 
         data.notifications.transition_duration_ns,
         .{
             .title = "Second",
@@ -118,8 +118,8 @@ test "native notification text wraps words newlines and graphemes with a bounded
 test "notification controls use pixel edges and warm frames keep allocation bounds" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
-    const id = fixture.model.publishNotification(0, .{ .title = "Build complete", .message = "All checks passed" }).id;
-    _ = fixture.model.advanceNotifications(data.notifications.transition_duration_ns);
+    const id = data.notifications.publish(&fixture.model, 0, .{ .title = "Build complete", .message = "All checks passed" }).id;
+    _ = data.notifications.advance(&fixture.model, data.notifications.transition_duration_ns);
     try fixture.paint();
     const card = bounds(fixture, id);
     const close = fixture.overlays.presented().notifications.hits[1].bounds;

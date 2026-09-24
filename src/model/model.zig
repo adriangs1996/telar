@@ -4,6 +4,7 @@ const cellgrid = @import("cellgrid");
 const std = @import("std");
 
 pub const actions = @import("input/action.zig");
+pub const workspace_list_snapshot = @import("workspace/workspace_list_snapshot.zig");
 pub const pane_graphics = @import("panes/pane_graphics.zig");
 pub const attachment_types = @import("attachments/types.zig");
 pub const attachments_path_marker = @import("attachments/path_marker.zig");

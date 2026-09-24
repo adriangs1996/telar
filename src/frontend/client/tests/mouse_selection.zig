@@ -66,7 +66,7 @@ test "selection focuses its pane and owns drags and release outside its borders"
     const model = client.model.tabs.active;
     const first = TestHarness.bootstrap_pane;
     const second: core.PaneId = @enumFromInt(20);
-    _ = try client.model.commitPaneSplit(.{
+    _ = try data.pane_split.commitSplit(&client.model, .{
         .split = .{ .target_pane = first, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = terminal.view.workbench() },
         .new_pane = second,
     });

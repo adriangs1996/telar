@@ -72,7 +72,7 @@ pub fn applyTabSnapshot(client: *Client, snapshot: core.TabSnapshotView) !TabSna
         pane_count += 1;
     }
 
-    const reconciliation = try client.model.reconcileTab(
+    const reconciliation = try data.tab_snapshot_reconciliation.reconcileTab(&client.model, 
         .{
             .location = snapshot.location,
             .panes = pane_ids[0..pane_count],

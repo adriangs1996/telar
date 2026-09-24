@@ -63,7 +63,7 @@ pub fn completeTabCreation(client: *Client, created: core.TabCreated) !data.TabC
         return error.UnexpectedTabCreated;
     }
 
-    const creation = try client.model.createTab(
+    const creation = try data.tab_creation.create(&client.model, 
         .{
             .created = .{
                 .location = created.location,

@@ -29,7 +29,7 @@ pub fn selectWorkspace(client: *Client, target: data.WorkspaceSelectionTarget) !
         .workspace => |workspace| workspace,
     };
 
-    if (!client.model.knowsWorkspace(workspace)) {
+    if (!data.workspace_list_snapshot.knowsWorkspace(&client.model, workspace)) {
         return false;
     }
 
@@ -146,7 +146,7 @@ pub fn requestWorkspaceSwitch(client: *Client, target: WorkspaceSwitchTarget, au
         return err;
     };
 
-    const departure = client.model.departWorkspace();
+    const departure = data.workspace_handoff.depart(&client.model);
     releaseWorkspace(client, &departure);
     return departure;
 }

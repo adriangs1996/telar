@@ -9,7 +9,7 @@ bootstrap / selection / recovery -> tab_snapshot.requestTabSnapshot
   -> runtime_messages.handleServerMessage(.tab_snapshot)
   -> tab_snapshot.applyTabSnapshot
      -> consume exact correlation and decode bounded pane identities
-     -> ClientModel.reconcileTab -> tab_snapshot_reconciliation.reconcile
+     -> tab_snapshot_reconciliation.reconcileTab -> tab_snapshot_reconciliation.reconcile
      -> ignore removed-pane requests and pane_closure.releasePaneResources
      -> pane_focus.synchronizeActivePane
      -> pane_resize.resizeAttachedPanes

@@ -1,3 +1,4 @@
+const pane_split = @import("../../workspace/pane_split.zig");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
@@ -209,8 +210,8 @@ test "splitting a single fullscreen pane focuses the new pane without leaving fu
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
     const entered = model.togglePaneFullscreen(.{ .area = area }).?;
     try std.testing.expect(entered.fullscreen);
-    const plan = model.planPaneSplit(.{ .axis = .vertical, .area = area }).?;
-    const commit = try model.commitPaneSplit(.{ .split = plan.split, .new_pane = second });
+    const plan = pane_split.planSplit(&model, .{ .axis = .vertical, .area = area }).?;
+    const commit = try pane_split.commitSplit(&model, .{ .split = plan.split, .new_pane = second });
     try std.testing.expectEqual(.active, commit.disposition);
     try std.testing.expect(model.tabs.layout[model.tabs.active].isFullscreen());
     try std.testing.expectEqual(second, model.tabs.layout[model.tabs.active].focused().?);
@@ -342,7 +343,7 @@ test "split confirmation replaces a target retired during pane creation" {
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = target, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     try std.testing.expect(model_data.tab_layout.removePane(&model, target));
 
-    const commit = try model.commitPaneSplit(.{
+    const commit = try pane_split.commitSplit(&model, .{
         .split = .{
             .target_pane = target,
             .location = location,
@@ -388,7 +389,7 @@ test "inactive split confirmation retains membership without visible revision" {
         pane.pending_frame_id = 0;
     }
 
-    const commit = try model.commitPaneSplit(.{
+    const commit = try pane_split.commitSplit(&model, .{
         .split = .{
             .target_pane = target,
             .location = first,
@@ -404,7 +405,7 @@ test "inactive split confirmation retains membership without visible revision" {
     try std.testing.expectEqualDeep(Version{}, model.version());
     try std.testing.expectEqual(model.tabs.layout[model.tabs.find(first.tab_id).?].currentRevision(), commit.layout_revision);
     try std.testing.expectEqual(model.version().panes, commit.panes_revision);
-    try std.testing.expect(model.recoverPaneSplit(.{
+    try std.testing.expect(pane_split.recover(&model, .{
         .split = commitSplit(target, first, .vertical),
         .area = .{ .w = 40, .h = 10 },
     }) == .not_required);
@@ -428,7 +429,7 @@ test "split confirmation leaves a retired tab unrepresented" {
     }, .{ .cols = 40, .rows = 10 });
     try std.testing.expect(model_data.tab_removal.remove(&model, first.tab_id));
 
-    const commit = try model.commitPaneSplit(.{
+    const commit = try pane_split.commitSplit(&model, .{
         .split = .{
             .target_pane = target,
             .location = first,
