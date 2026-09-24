@@ -25,11 +25,11 @@ parse the harness payload once
         |
         +-> lifecycle mapping -> schema.report_agent
         |                         -> client_request.receive -> agent_hooks.receive
-        |                         -> Tracker.observeReport -> Agent.applyReport
+        |                         -> agent_status.observeReport -> Agent.applyReport
         |
         +-> session name mapping -> schema.report_agent_title
         |                         -> client_request.receive -> agent_hooks.receiveTitle
-        |                         -> Tracker.reportTitle -> Agent.reportTitle
+        |                         -> agent_status.reportTitle -> Agent.reportTitle
         |
         +-> manifest command_tools mapping -> schema.report_agent_command
                                           -> agent_hooks.receiveCommand
@@ -273,11 +273,11 @@ for `SessionEnd` and `Interrupt`.
 
 ## Validation
 
-- `src/backend/agent/tracker_tests.zig` proves precedence over screen evidence,
+- `src/backend/runtime/tests/agent_status_test.zig` proves precedence over screen evidence,
   `exited` withdrawal and expiry.
 - `src/backend/runtime/agent_hooks.zig` holds the reply contracts for
   `report_agent`, `report_agent_command` and `report_agent_title`.
-- `src/backend/agent/tracker_tests.zig` proves that an agent title outranks a
+- `src/backend/runtime/tests/agent_status_test.zig` proves that an agent title outranks a
   generated one, never clears a manual one, clears on an empty report and is
   durable.
 - `src/cli/hook.zig` proves the event mapping and subagent filtering for

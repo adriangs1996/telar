@@ -1,6 +1,7 @@
 //! The one-second maintenance tick expires stale agent evidence and starts
 //! the periodic observation work: the session checkpoint, one Git probe,
 //! one session-name probe, the idle engine check and capture expiry.
+const agent_status = @import("agent_status.zig");
 
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -19,7 +20,7 @@ pub fn tick(model: *RuntimeModel, result: anyerror!void) !void {
     if (result) |_| {
         var sources = Sources.init(model.io, model.select);
         try sources.waitForAgentMaintenance();
-        _ = model.agents.expire(std.Io.Timestamp.now(model.io, .real).toMilliseconds());
+        _ = agent_status.expire(model, std.Io.Timestamp.now(model.io, .real).toMilliseconds());
     } else |_| {}
 
     try session_checkpoint.start(model);

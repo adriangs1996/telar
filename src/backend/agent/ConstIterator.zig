@@ -1,8 +1,8 @@
-const Repository = @import("Repository.zig");
+const Agents = @import("Agents.zig");
 const Agent = @import("Agent.zig");
 const ConstIterator = @This();
 
-repository: *const Repository,
+repository: *const Agents,
 next_index: usize = 0,
 
 /// Returns immutable access to each stored aggregate once.

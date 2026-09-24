@@ -1,4 +1,5 @@
 //! Actor ownership and recovery through production event dispatch.
+const agent_status = @import("../agent_status.zig");
 const pane_graphics = @import("../pane_graphics.zig");
 const pane_observation = @import("../pane_observation.zig");
 const std = @import("std");
@@ -192,7 +193,7 @@ test "runtime child exit retires agent evidence and releases its wait borrow" {
         defer fixture.deinit();
         const pane = fixture.pane;
         try std.testing.expect(pane.beginExitWait());
-        _ = fixture.agents.observeProcess(.{ .identity = agent_identity.fromPane(pane), .provider = .codex, .process_id = 27, .observed_at_ms = 1 });
+        _ = agent_status.observeProcess(fixture.model, .{ .identity = agent_identity.fromPane(pane), .provider = .codex, .process_id = 27, .observed_at_ms = 1 });
         _ = try fixture.request.runtime.update(.{ .pane_exit = .{ .pane = pane.key(), .result = if (failed) error.WaitFailed else .{ .exited = 7 } } });
         try std.testing.expect(pane.exit != null);
         if (failed) {
@@ -203,7 +204,7 @@ test "runtime child exit retires agent evidence and releases its wait borrow" {
         try std.testing.expect(!pane.wait_pending);
         try std.testing.expectEqual(@as(u8, 0), pane.actor_count);
         try std.testing.expectEqual(@as(usize, 1), fixture.model.panes.exited_count);
-        try std.testing.expect(fixture.agents.projectedStatus(pane.key()) == null);
+        try std.testing.expect(agent_status.projectedStatus(fixture.model, pane.key()) == null);
     }
 }
 

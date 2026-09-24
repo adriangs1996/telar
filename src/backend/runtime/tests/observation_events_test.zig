@@ -1,4 +1,5 @@
 //! Agent and terminal observation contracts through Runtime.update.
+const agent_status = @import("../agent_status.zig");
 
 const core = @import("telar-core");
 const std = @import("std");
@@ -79,7 +80,7 @@ test "known process observation commits pane state agent evidence and metrics" {
     try std.testing.expectEqualStrings("/observed", fixture.pane.cwd.slice());
     try std.testing.expectEqual(foreground_revision + 1, fixture.pane.foreground_revision);
     try std.testing.expectEqualStrings("Claude Code", fixture.pane.agent_process_cache.name());
-    try std.testing.expectEqual(core.AgentStatus.ready, fixture.agents.projectedStatus(fixture.pane.key()).?);
+    try std.testing.expectEqual(core.AgentStatus.ready, agent_status.projectedStatus(fixture.model, fixture.pane.key()).?);
     try expectMetrics(fixture.metrics, .{
         .inspections = 1,
         .input_bytes = 13,
@@ -117,7 +118,7 @@ test "shell foreground removes the agent and ignores screen readiness" {
     try fixture.beginObservation();
     const identity = agent_identity.fromPane(fixture.pane);
     const process_id = nonShellProcessId(fixture.pane);
-    try std.testing.expect(fixture.agents.observeProcess(.{
+    try std.testing.expect(agent_status.observeProcess(fixture.model, .{
         .identity = identity,
         .provider = .codex,
         .process_id = process_id,
@@ -141,7 +142,7 @@ test "shell foreground removes the agent and ignores screen readiness" {
         },
     });
 
-    try std.testing.expect(fixture.agents.projectedStatus(identity.key) == null);
+    try std.testing.expect(agent_status.projectedStatus(fixture.model, identity.key) == null);
     try std.testing.expect(fixture.sound() == null);
     try expectMetrics(fixture.metrics, .{ .inspections = 1, .misses = 1 });
 }
@@ -153,7 +154,7 @@ test "shell startup observations preserve a queued resume until the agent starts
     try fixture.beginObservation();
     const key = fixture.pane.key();
     const session = try ResumeSession.init(.claude, try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 0));
-    try std.testing.expect(fixture.agents.restoreSession(key, session));
+    try std.testing.expect(agent_status.restoreSession(fixture.model, key, session));
     const shell_id = std.math.cast(u32, fixture.pane.session.processId()).?;
 
     try fixture.observed(.{
@@ -161,9 +162,9 @@ test "shell startup observations preserve a queued resume until the agent starts
         .stats = .{},
         .process_probe = .{ .cache = processCache(.unknown, shell_id, "sh"), .changed = true },
     });
-    try std.testing.expect(fixture.agents.awaitingResume(key));
-    try std.testing.expect(fixture.agents.resumeSession(key).?.eql(session));
-    try std.testing.expect(fixture.agents.projectedStatus(key) == null);
+    try std.testing.expect(agent_status.awaitingResume(fixture.model, key));
+    try std.testing.expect(agent_status.resumeSession(fixture.model, key).?.eql(session));
+    try std.testing.expect(agent_status.projectedStatus(fixture.model, key) == null);
 
     for ([_]Cache{
         processCache(.unknown, nonShellProcessId(fixture.pane), "git"),
@@ -177,9 +178,9 @@ test "shell startup observations preserve a queued resume until the agent starts
             .stats = .{},
             .process_probe = .{ .cache = cache, .changed = true },
         });
-        try std.testing.expect(fixture.agents.awaitingResume(key));
-        try std.testing.expect(fixture.agents.resumeSession(key).?.eql(session));
-        try std.testing.expect(fixture.agents.projectedStatus(key) == null);
+        try std.testing.expect(agent_status.awaitingResume(fixture.model, key));
+        try std.testing.expect(agent_status.resumeSession(fixture.model, key).?.eql(session));
+        try std.testing.expect(agent_status.projectedStatus(fixture.model, key) == null);
     }
 
     queueFollowUp(&fixture);
@@ -190,8 +191,8 @@ test "shell startup observations preserve a queued resume until the agent starts
         .stats = .{},
         .process_probe = .{ .cache = processCache(.claude, nonShellProcessId(fixture.pane), "Claude Code"), .changed = true },
     });
-    try std.testing.expect(!fixture.agents.awaitingResume(key));
-    try std.testing.expect(fixture.agents.resumeSession(key).?.eql(session));
+    try std.testing.expect(!agent_status.awaitingResume(fixture.model, key));
+    try std.testing.expect(agent_status.resumeSession(fixture.model, key).?.eql(session));
 
     queueFollowUp(&fixture);
     try std.testing.expect(fixture.pane.beginHistoryObservation() != null);
@@ -201,8 +202,8 @@ test "shell startup observations preserve a queued resume until the agent starts
         .stats = .{},
         .process_probe = .{ .cache = processCache(.unknown, shell_id, "sh"), .changed = true },
     });
-    try std.testing.expect(fixture.agents.resumeSession(key) == null);
-    try std.testing.expect(fixture.agents.projectedStatus(key) == null);
+    try std.testing.expect(agent_status.resumeSession(fixture.model, key) == null);
+    try std.testing.expect(agent_status.projectedStatus(fixture.model, key) == null);
 }
 
 test "an unknown non-shell process clears previous process evidence" {
@@ -220,7 +221,7 @@ test "an unknown non-shell process clears previous process evidence" {
             .changed = true,
         },
     });
-    try std.testing.expect(fixture.agents.projectedStatus(fixture.pane.key()) != null);
+    try std.testing.expect(agent_status.projectedStatus(fixture.model, fixture.pane.key()) != null);
 
     fixture.request.clearResponses();
     fixture.pane.queueHistoryOutput(.{ .bytes = "next", .shell_foreground = false, .clock = pane_mod.historyClock(std.testing.io) });
@@ -235,7 +236,7 @@ test "an unknown non-shell process clears previous process evidence" {
         },
     });
 
-    try std.testing.expect(fixture.agents.projectedStatus(fixture.pane.key()) == null);
+    try std.testing.expect(agent_status.projectedStatus(fixture.model, fixture.pane.key()) == null);
 }
 
 test "working to ready screen evidence publishes one generation-safe sound" {
@@ -245,13 +246,13 @@ test "working to ready screen evidence publishes one generation-safe sound" {
     try fixture.beginObservation();
     const identity = agent_identity.fromPane(fixture.pane);
     const process_id = nonShellProcessId(fixture.pane);
-    try std.testing.expect(fixture.agents.observeProcess(.{
+    try std.testing.expect(agent_status.observeProcess(fixture.model, .{
         .identity = identity,
         .provider = .codex,
         .process_id = process_id,
         .observed_at_ms = 1,
     }));
-    try std.testing.expect(fixture.agents.observeScreen(.{
+    try std.testing.expect(agent_status.observeScreen(fixture.model, .{
         .identity = identity,
         .signal = .{
             .provider = .codex,
@@ -276,7 +277,7 @@ test "working to ready screen evidence publishes one generation-safe sound" {
         },
     });
 
-    try std.testing.expectEqual(core.AgentStatus.done, fixture.agents.projectedStatus(identity.key).?);
+    try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(fixture.model, identity.key).?);
     try std.testing.expectEqualDeep(core.AgentSoundNotification{
         .pane_id = identity.key.id,
         .pane_generation = identity.key.generation,
@@ -291,8 +292,8 @@ test "a delayed screen completion cannot settle a newer Codex Stop or publish a 
     try fixture.beginObservation();
     const identity = agent_identity.fromPane(fixture.pane);
     const process_id = nonShellProcessId(fixture.pane);
-    _ = fixture.agents.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = process_id, .observed_at_ms = 100 });
-    _ = fixture.agents.observeReport(.{ .identity = identity, .state = .settling, .observed_at_ms = 300 });
+    _ = agent_status.observeProcess(fixture.model, .{ .identity = identity, .provider = .codex, .process_id = process_id, .observed_at_ms = 100 });
+    _ = agent_status.observeReport(fixture.model, .{ .identity = identity, .state = .settling, .observed_at_ms = 300 });
 
     try fixture.observed(.{
         .pane = fixture.pane.key(),
@@ -303,7 +304,7 @@ test "a delayed screen completion cannot settle a newer Codex Stop or publish a 
         .process_probe = .{ .cache = processCache(.codex, process_id, "Codex") },
     });
 
-    try std.testing.expectEqual(core.AgentStatus.working, fixture.agents.projectedStatus(identity.key).?);
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(fixture.model, identity.key).?);
     try std.testing.expect(fixture.sound() == null);
 }
 
@@ -315,7 +316,7 @@ test "Codex PTY frames and continuing Stop hooks publish exactly one final compl
     fixture.pane.history_observer.queueResize(size);
     const identity = agent_identity.fromPane(fixture.pane);
     const process_id = nonShellProcessId(fixture.pane);
-    _ = fixture.agents.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = process_id, .observed_at_ms = 50 });
+    _ = agent_status.observeProcess(fixture.model, .{ .identity = identity, .provider = .codex, .process_id = process_id, .observed_at_ms = 50 });
 
     const cases = [_]struct {
         report: ?core.AgentReportState,
@@ -334,7 +335,7 @@ test "Codex PTY frames and continuing Stop hooks publish exactly one final compl
     for (cases) |case| {
         fixture.request.clearResponses();
         if (case.report) |state| {
-            _ = fixture.agents.observeReport(.{ .identity = identity, .state = state, .observed_at_ms = case.now_ms });
+            _ = agent_status.observeReport(fixture.model, .{ .identity = identity, .state = state, .observed_at_ms = case.now_ms });
         }
 
         fixture.pane.queueHistoryOutput(.{ .bytes = case.output, .shell_foreground = false, .clock = .{ .real_ms = case.now_ms + 1, .awake_ns = @intCast(case.now_ms * 1_000_000) } });
@@ -342,7 +343,7 @@ test "Codex PTY frames and continuing Stop hooks publish exactly one final compl
         var stats: Stats = .{};
         fixture.pane.processHistoryObservation(.{ .size = size, .provider = .codex }, &stats);
         try fixture.observed(.{ .pane = fixture.pane.key(), .stats = stats, .process_probe = .{ .cache = processCache(.codex, process_id, "Codex") } });
-        try std.testing.expectEqual(case.status, fixture.agents.projectedStatus(identity.key).?);
+        try std.testing.expectEqual(case.status, agent_status.projectedStatus(fixture.model, identity.key).?);
         try std.testing.expectEqual(case.sound, fixture.sound() != null);
     }
 }
@@ -364,7 +365,7 @@ test "a pane-root agent keeps its resumed session and receives screen observatio
     try fixture.beginObservation();
     const key = fixture.pane.key();
     const session = try ResumeSession.init(.codex, try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 0));
-    try std.testing.expect(fixture.agents.restoreSession(key, session));
+    try std.testing.expect(agent_status.restoreSession(fixture.model, key, session));
     const root_id = std.math.cast(u32, fixture.pane.session.processId()).?;
 
     try fixture.observed(.{
@@ -376,8 +377,8 @@ test "a pane-root agent keeps its resumed session and receives screen observatio
         .process_probe = .{ .cache = processCache(.codex, root_id, "Codex"), .changed = true, .inspected = true },
     });
 
-    try std.testing.expect(!fixture.agents.awaitingResume(key));
-    try std.testing.expect(fixture.agents.resumeSession(key).?.eql(session));
-    try std.testing.expectEqual(core.AgentProvider.codex, fixture.agents.projectedProvider(key));
-    try std.testing.expectEqual(core.AgentStatus.working, fixture.agents.projectedStatus(key).?);
+    try std.testing.expect(!agent_status.awaitingResume(fixture.model, key));
+    try std.testing.expect(agent_status.resumeSession(fixture.model, key).?.eql(session));
+    try std.testing.expectEqual(core.AgentProvider.codex, agent_status.projectedProvider(fixture.model, key));
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(fixture.model, key).?);
 }

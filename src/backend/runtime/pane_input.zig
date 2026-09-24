@@ -1,6 +1,7 @@
 //! Semantic input reaches a pane's child: client keystrokes, control-API
 //! text and runtime responses queue on the pane and one bounded write per
 //! kind runs at a time.
+const agent_status = @import("agent_status.zig");
 
 const pacing = @import("pacing");
 const pane_observation = @import("pane_observation.zig");
@@ -64,7 +65,7 @@ pub fn sendText(model: *RuntimeModel, session: *Session, request: core.SendPaneT
     const bytes = switch (request.mode) {
         .raw => request.text,
         .prompt => prompt: {
-            if (model.agents.projectedStatus(key) == .blocked) {
+            if (agent_status.projectedStatus(model, key) == .blocked) {
                 return client_request.fail(session, request.request_id, .agent_blocked, "agent is waiting for a decision");
             }
 
@@ -179,7 +180,7 @@ fn forward(model: *RuntimeModel, pane: *Pane, bytes: []const u8) !void {
     }
 
     if (model.agent_description_options != null) {
-        _ = model.agents.observeInput(pane.key(), bytes);
+        _ = agent_status.observeInput(model, pane.key(), bytes);
     }
 
     core.mark(model.io, .foreground_start);

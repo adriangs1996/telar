@@ -11,7 +11,7 @@ projects this into the same bounded `AgentSnapshotEntry.last_event` used by term
 agents, so activity changes publish a sidebar revision without resetting the
 working duration. Previous turns and child output cannot replace that line.
 Before activity arrives, the row shows `Working`; when the turn settles, the
-card returns to the workspace branch. Tracker regression tests cover activity
+card returns to the workspace branch. Agent status regression tests cover activity
 updates, completion, turn isolation and UTF-8 bounds.
 
 The sidebar session title is independent of the tab label. Managed panes use

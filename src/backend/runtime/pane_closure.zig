@@ -1,6 +1,7 @@
 //! A pane closes when a client asks or its child exits. The authoritative
 //! exit revokes the pane's proxy credential; collection destroys the pane
 //! once no actor or attachment borrows it and removes a tab left empty.
+const agent_status = @import("agent_status.zig");
 
 const core = @import("telar-core");
 const std = @import("std");
@@ -41,7 +42,7 @@ pub fn finishExit(model: *RuntimeModel, completion: ExitCompletion) !void {
         return;
     };
 
-    _ = model.agents.remove(transition.pane.key());
+    _ = agent_status.remove(model, transition.pane.key());
     revokeCredential(model, transition.pane);
 
     if (transition.launch_aborting) {
@@ -76,7 +77,7 @@ pub fn collect(model: *RuntimeModel) void {
 
         const location = pane.location;
         _ = store.removeExitedAt(index);
-        _ = model.agents.remove(pane.key());
+        _ = agent_status.remove(model, pane.key());
 
         revokeCredential(model, pane);
         pane.destroy();

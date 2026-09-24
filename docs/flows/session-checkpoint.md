@@ -154,12 +154,12 @@ reports.
 
 The session title rides along with the reference. The checkpoint records a
 pane's title only when it is ready and generated, manual or agent-reported
-(`Tracker.durableTitle`);
+(`agent_status.durableTitle`);
 placeholders and a child's own window title are never written, and a ready
 title marks the checkpoint dirty like any other semantic change. On restore
 the title is handed over only together with a resume command, so a pane that
 comes back as a plain shell never wears the old agent's name. The restored
-pane has no agent aggregate yet, so `Tracker.restoreTitle` parks the title in
+pane has no agent aggregate yet, so `agent_status.restoreTitle` parks the title in
 `RestoredAgents`, keyed by the exact pane generation; the first aggregate
 with matching process evidence receives the ready title. An early report
 does not transfer the saved title to a different provider or session. The

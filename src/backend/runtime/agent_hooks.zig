@@ -1,6 +1,7 @@
 //! An agent's official lifecycle hooks report its state, session, shell
 //! commands and title from inside its pane. Official reports outrank
 //! inferred evidence.
+const agent_status = @import("agent_status.zig");
 
 const session_checkpoint = @import("session_checkpoint.zig");
 const core = @import("telar-core");
@@ -34,7 +35,7 @@ pub fn receiveSession(model: *RuntimeModel, session: *Session, report: core.Repo
     const reference = SessionReference.init(report.session, now_ms) catch {
         return client_request.fail(session, report.request_id, .invalid_request, "invalid session reference");
     };
-    const recorded = model.agents.observeSessionReference(agent_identity.fromPane(pane), reference);
+    const recorded = agent_status.observeSessionReference(model, agent_identity.fromPane(pane), reference);
     try client_request.complete(session, report.request_id);
 
     if (recorded) {
@@ -65,10 +66,10 @@ pub fn receive(model: *RuntimeModel, session: *Session, report: core.ReportAgent
             return client_request.fail(session, report.request_id, .invalid_request, "invalid session reference");
         };
     const identity = agent_identity.fromPane(pane);
-    const previous = model.agents.projectedStatus(identity.key);
-    const previous_session = model.agents.sessionReference(identity.key);
+    const previous = agent_status.projectedStatus(model, identity.key);
+    const previous_session = agent_status.sessionReference(model, identity.key);
 
-    const changed = model.agents.observeReport(.{
+    const changed = agent_status.observeReport(model, .{
         .identity = identity,
         .state = report.state,
         .blocked_reason = report.blocked_reason,
@@ -78,8 +79,8 @@ pub fn receive(model: *RuntimeModel, session: *Session, report: core.ReportAgent
         .session = reference,
         .session_file = .{ .kind = report.session_file_kind, .path = report.session_file },
     });
-    const current = model.agents.projectedStatus(identity.key);
-    const current_session = model.agents.sessionReference(identity.key);
+    const current = agent_status.projectedStatus(model, identity.key);
+    const current_session = agent_status.sessionReference(model, identity.key);
     try client_request.complete(session, report.request_id);
 
     const session_recorded = if (current_session) |recorded|
@@ -167,6 +168,6 @@ pub fn recordTitle(model: *RuntimeModel, key: PaneKey, title: []const u8) TitleR
         return .pane_not_found;
     }
 
-    const changed = model.agents.reportTitle(agent_identity.fromPane(pane), title) catch return .invalid_title;
+    const changed = agent_status.reportTitle(model, agent_identity.fromPane(pane), title) catch return .invalid_title;
     return if (changed) .recorded else .unchanged;
 }

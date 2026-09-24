@@ -1,5 +1,6 @@
 //! An agent's own session name is read from its session file on a worker,
 //! one due file per tick, and outranks a generated title.
+const agent_status = @import("agent_status.zig");
 
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -21,12 +22,12 @@ pub fn start(model: *RuntimeModel) void {
     }
 
     const now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
-    const watch = model.agents.nextSessionFileProbe(now_ms, probe_interval_ms) orelse return;
+    const watch = agent_status.nextSessionFileProbe(model, now_ms, probe_interval_ms) orelse return;
 
     model.session_name_probe_in_flight = true;
     model.select.concurrent(.session_name, readers.probe, .{Job{ .io = model.io, .watch = watch }}) catch {
         model.session_name_probe_in_flight = false;
-        _ = model.agents.finishSessionFileProbe(.{ .key = watch.key, .offset = watch.offset }, now_ms);
+        _ = agent_status.finishSessionFileProbe(model, .{ .key = watch.key, .offset = watch.offset }, now_ms);
     };
 }
 
@@ -39,7 +40,7 @@ pub fn finish(model: *RuntimeModel, completion: AgentCompletion) void {
     model.session_name_probe_in_flight = false;
     const now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
 
-    if (model.agents.finishSessionFileProbe(completion, now_ms)) {
+    if (agent_status.finishSessionFileProbe(model, completion, now_ms)) {
         session_checkpoint.noteChange(model);
     }
 }

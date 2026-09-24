@@ -3,7 +3,6 @@ const core = @import("telar-core");
 const RequestFixture = @import("RequestFixture.zig");
 const RuntimeModel = @import("../RuntimeModel.zig");
 const Pane = @import("../../pane/Pane.zig");
-const Tracker = @import("../../agent/Tracker.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const pty = @import("pty");
 const Command = pty.Command;
@@ -15,7 +14,6 @@ const EventFixture = @This();
 request: RequestFixture,
 model: *RuntimeModel,
 pane: *Pane,
-agents: *Tracker,
 metrics: *RuntimeMetrics,
 unavailable: std.Io.Select(event.Event),
 unavailable_storage: [1]event.Event,
@@ -27,7 +25,6 @@ pub fn init(self: *EventFixture) !void {
     try self.request.init();
     errdefer self.request.deinit();
     self.model = &self.request.runtime.model;
-    self.agents = &self.model.agents;
     self.metrics = &self.model.metrics;
     self.unavailable = .init(std.Io.failing, &self.unavailable_storage);
     const arguments = [_][*:0]const u8{ "/bin/sleep", "600" };

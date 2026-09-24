@@ -4,7 +4,6 @@ const Service = @import("../../history/Service.zig");
 const GraphicsBudget = @import("../../media/GraphicsBudget.zig");
 const Pane = @import("../../pane/Pane.zig");
 const AttachmentStore = @import("../attachment/AttachmentStore.zig");
-const Tracker = @import("../../agent/Tracker.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const pty = @import("pty");
 const Command = pty.Command;
@@ -23,7 +22,6 @@ history_service: Service = undefined,
 budget: GraphicsBudget = undefined,
 pane: *Pane = undefined,
 attachments: AttachmentStore = .{},
-agents: Tracker = .{},
 metrics: RuntimeMetrics = .{ .started_ns = 0 },
 
 /// Creates one running pane and one client attachment with independently

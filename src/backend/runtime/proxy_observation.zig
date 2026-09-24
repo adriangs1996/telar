@@ -1,5 +1,6 @@
 //! A proxy observation of a model exchange becomes agent evidence for the
 //! pane whose credential made the request.
+const agent_status = @import("agent_status.zig");
 
 const core = @import("telar-core");
 const Observation = @import("../proxy/Observation.zig");
@@ -33,7 +34,7 @@ pub fn receive(model: *RuntimeModel, result: anyerror!Observation) !void {
     }
 
     const observation = translate(event, pane) orelse return;
-    _ = model.agents.observeProxy(observation);
+    _ = agent_status.observeProxy(model, observation);
     agent_description.start(model);
 }
 

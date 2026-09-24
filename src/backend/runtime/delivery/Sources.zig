@@ -1,7 +1,7 @@
 const core = @import("telar-core");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const Workspaces = @import("../../workspace/Workspaces.zig");
-const Tracker = @import("../../agent/Tracker.zig");
+const Agents = @import("../../agent/Agents.zig");
 const hostmetrics = @import("hostmetrics");
 const Sampler = hostmetrics.Sampler;
 const ClientLayouts = @import("../ClientLayouts.zig");
@@ -9,7 +9,7 @@ const Sources = @This();
 
 panes: *const PaneStore,
 workspaces: *const Workspaces,
-agents: *const Tracker,
+agents: *const Agents,
 manifests: *const core.Table = &core.builtin_table,
 system_metrics: *const Sampler,
 proxy_active: bool,

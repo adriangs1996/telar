@@ -109,11 +109,15 @@ of them: every package imports the libraries it uses by name.
 ## Business rules that must move into flows, not into libraries
 
 - `src/backend/agent/tracker_support.zig` (resolved): measured, it was the
-  tracker's 60 scenario tests plus one enum, not a runtime flow. The enum
-  lives on `Tracker`, its one user, and the file is `tracker_tests.zig`.
-- `Agent.apply{Process,Proxy,Report,Screen}`, `expire` and `reproject`
-  decide what an agent status means; they become procedures of the agent
-  flows over the `agents` table.
+  tracker's 60 scenario tests plus one enum, not a runtime flow. They are
+  `runtime/tests/agent_status_test.zig`.
+- The agent tracker (resolved): `RuntimeModel.agents` was a `Tracker`, a
+  model nested inside the model. Its table (`Agents`), pending restores,
+  session-file watches and revisions are `RuntimeModel` fields, and its
+  methods are `runtime/agent_status.zig` procedures over `model`. `Agent`
+  keeps the transitions of its own row (`applyProcess`, `applyProxy`,
+  `reproject`...), as a pane record keeps `applyFrame`: they read and write
+  that one aggregate and no other table.
 - `src/backend/runtime/attachment/media_projection.zig` decides freeze and
   adoption across every client's attachment store; it belongs to the
   `pane_graphics` flow.

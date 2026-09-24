@@ -1,5 +1,6 @@
 //! An authorized plugin returns typed effects for a captured exchange:
 //! command history, agent evidence or notifications, validated before use.
+const agent_status = @import("agent_status.zig");
 
 const core = @import("telar-core");
 const std = @import("std");
@@ -78,7 +79,7 @@ fn observeEvidence(model: *RuntimeModel, evidence: AgentEvidence) bool {
         .exited => return false,
     };
 
-    return model.agents.observeScreen(.{
+    return agent_status.observeScreen(model, .{
         .identity = agent_identity.fromPane(pane),
         .signal = .{
             .status = status,

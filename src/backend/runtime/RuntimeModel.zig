@@ -17,7 +17,10 @@ const GenericState = @import("client/GenericState.zig").Type;
 const LifecycleState = @import("lifecycle/State.zig");
 const Workspaces = @import("../workspace/Workspaces.zig");
 const PaneStore = @import("../pane/PaneStore.zig");
-const Tracker = @import("../agent/Tracker.zig");
+const Agents = @import("../agent/Agents.zig");
+const RestoredAgents = @import("../agent/RestoredAgents.zig");
+const Watches = @import("../agent/Watches.zig");
+const agent_status = @import("agent_status.zig");
 const ClientLayouts = @import("ClientLayouts.zig");
 const hostmetrics = @import("hostmetrics");
 const Sampler = hostmetrics.Sampler;
@@ -53,7 +56,18 @@ client_admission: GenericState(localsocket.SocketChannel) = .{},
 shutdown: LifecycleState = .{},
 workspaces: Workspaces = .{},
 panes: PaneStore,
-agents: Tracker = .{},
+agents: Agents = .{},
+/// Titles and resumes restored from a checkpoint, waiting for their agent.
+restored_agents: RestoredAgents = .{},
+/// Session files watched for names an agent gives its session.
+agent_watches: Watches = .{},
+/// Advances when an agent appears, leaves, or changes status or title.
+agent_revision: u64 = 1,
+/// Advances when an agent's session reference changes; the reference names
+/// the change-review owner, which `agent_revision` does not cover.
+agent_session_revision: u64 = 0,
+/// Orders agent projections; zero is never handed out.
+agent_sequence: u64 = 0,
 client_layouts: ClientLayouts = .{},
 system_metrics: Sampler = .{},
 system_metrics_pending: bool = false,
@@ -159,7 +173,7 @@ test "runtime model tables start empty with configured graphics limits" {
     try std.testing.expectEqualDeep(graphics_limits, model.panes.graphics_limits);
 
     var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    try std.testing.expectEqual(@as(usize, 0), model.agents.snapshot(&entries, 0).len);
+    try std.testing.expectEqual(@as(usize, 0), agent_status.snapshot(&model.agents, &entries, 0).len);
 }
 
 test "the workspace table releases allocations retained by the runtime model" {

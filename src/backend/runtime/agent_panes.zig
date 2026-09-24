@@ -1,6 +1,7 @@
 //! A managed agent pane projects its provider's conversation: each change
 //! commits the newest bounded snapshot; a stopped provider exits the pane.
 //! The provider worker owns JSON and pipes.
+const agent_status = @import("agent_status.zig");
 const change_review = @import("change_review.zig");
 const std = @import("std");
 const Pane = @import("../pane/Pane.zig");
@@ -50,11 +51,11 @@ pub fn receive(model: *RuntimeModel, completion: Changed) !void {
         }
 
         const now = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
-        _ = model.agents.observeManaged(identity.fromPane(pane), ManagedState.fromSnapshot(snapshot, now));
+        _ = agent_status.observeManaged(model, identity.fromPane(pane), ManagedState.fromSnapshot(snapshot, now));
         if (metadata.revision != pane.session.agent.metadata_revision) {
             if (metadata.nameSlice()) |name| {
                 if (agent_hooks.recordTitle(model, pane.key(), name) == .recorded) {
-                    const title = model.agents.durableTitle(pane.key());
+                    const title = agent_status.durableTitle(model, pane.key());
                     _ = model.resources.history.service().setSessionTitle(model.io, .{
                         .id = pane.history_session_id,
                         .title = if (title) |*value| value.slice() else "",

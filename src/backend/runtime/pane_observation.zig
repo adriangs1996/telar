@@ -1,6 +1,7 @@
 //! An observation actor reads the pane's process tree and recent output
 //! off the interactive path; its result updates the pane's cwd and
 //! foreground and reconciles the agent evidence it carries.
+const agent_status = @import("agent_status.zig");
 
 const revisions = @import("../revisions.zig");
 const core = @import("telar-core");
@@ -45,9 +46,9 @@ pub fn start(model: *RuntimeModel, pane: *Pane) !void {
 /// try pane_observation.finish(model, completion);
 /// ```
 pub fn finish(model: *RuntimeModel, completion: ObservationCompletion) !void {
-    const previous = model.agents.resumeSession(completion.pane);
+    const previous = agent_status.resumeSession(model, completion.pane);
     defer {
-        const current = model.agents.resumeSession(completion.pane);
+        const current = agent_status.resumeSession(model, completion.pane);
         const changed = if (previous) |before|
             if (current) |after| !before.eql(after) else true
         else
@@ -111,7 +112,7 @@ fn reconcileProcess(model: *RuntimeModel, pane: *Pane, probe: Probe, transition:
     }
 
     if (probe.cache.provider != .unknown) {
-        _ = model.agents.observeProcess(.{
+        _ = agent_status.observeProcess(model, .{
             .identity = agent_identity.fromPane(pane),
             .provider = probe.cache.provider,
             .process_id = probe.cache.process_group_id.?,
@@ -121,16 +122,16 @@ fn reconcileProcess(model: *RuntimeModel, pane: *Pane, probe: Probe, transition:
     }
 
     if (transition.shell_foreground) {
-        if (model.agents.awaitingResume(pane.key())) {
+        if (agent_status.awaitingResume(model, pane.key())) {
             return;
         }
 
-        _ = model.agents.remove(pane.key());
+        _ = agent_status.remove(model, pane.key());
         return;
     }
 
     if (transition.previous_process.provider != .unknown) {
-        _ = model.agents.clearProcess(pane.key());
+        _ = agent_status.clearProcess(model, pane.key());
     }
 }
 
@@ -159,8 +160,8 @@ fn reconcileScreen(model: *RuntimeModel, pane: *Pane, stats: HistoryStats, shell
     }
 
     const identity = agent_identity.fromPane(pane);
-    const previous_status = model.agents.projectedStatus(identity.key);
-    const changed = model.agents.observeScreen(.{
+    const previous_status = agent_status.projectedStatus(model, identity.key);
+    const changed = agent_status.observeScreen(model, .{
         .identity = identity,
         .signal = observation.signal,
         .observed_at_ms = observation.observed_at_ms,
@@ -170,7 +171,7 @@ fn reconcileScreen(model: *RuntimeModel, pane: *Pane, stats: HistoryStats, shell
         return;
     }
 
-    const transition = sound.soundForTransition(previous_status, model.agents.projectedStatus(identity.key)) orelse return;
+    const transition = sound.soundForTransition(previous_status, agent_status.projectedStatus(model, identity.key)) orelse return;
     agent_sound.publish(model, .{
         .pane_id = identity.key.id,
         .pane_generation = identity.key.generation,

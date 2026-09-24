@@ -1,4 +1,5 @@
 //! Composition root for one long-lived backend runtime.
+const agent_status = @import("agent_status.zig");
 
 const bytecodec = @import("bytecodec");
 const session_checkpoint = @import("session_checkpoint.zig");
@@ -233,17 +234,17 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
     });
     const pane_id = pane.id;
     const pane_generation = pane.generation;
-    try std.testing.expect(first.model.agents.observeSessionReference(
+    try std.testing.expect(agent_status.observeSessionReference(&first.model, 
         agent_identity.fromPane(pane),
         try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 1_000),
     ));
-    try std.testing.expect(first.model.agents.observeProcess(.{
+    try std.testing.expect(agent_status.observeProcess(&first.model, .{
         .identity = agent_identity.fromPane(pane),
         .provider = .claude,
         .process_id = 99,
         .observed_at_ms = 1_000,
     }));
-    try std.testing.expect(try first.model.agents.setManualTitle(pane.key(), "Investigate proxy lifecycle"));
+    try std.testing.expect(try agent_status.setManualTitle(&first.model, pane.key(), "Investigate proxy lifecycle"));
     try std.testing.expect(first.model.checkpoint.dirty);
     first.deinit();
     try std.testing.expectEqual(@as(u64, 1), first.model.checkpoint.writes);
@@ -268,14 +269,14 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
         "claude --resume 0192aaaa-bbbb-cccc-dddd-eeeeffff0000\r",
         restored.input_queue.nextChunk().?,
     );
-    try std.testing.expect(second.model.agents.observeProcess(.{
+    try std.testing.expect(agent_status.observeProcess(&second.model, .{
         .identity = agent_identity.fromPane(restored),
         .provider = .claude,
         .process_id = 100,
         .observed_at_ms = 2_000,
     }));
     var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    const agents = second.model.agents.snapshot(&entries, 0);
+    const agents = agent_status.snapshot(&second.model.agents, &entries, 0);
     try std.testing.expectEqual(@as(usize, 1), agents.len);
     try std.testing.expectEqualStrings("Investigate proxy lifecycle", agents[0].session_title);
     try std.testing.expectEqual(core.AgentTitleSource.manual, agents[0].title_source);
@@ -414,11 +415,11 @@ test "repeated restarts preserve pending agent resumes and reject duplicate sess
         try std.testing.expectEqual(@as(u16, 1), runtime.model.checkpoint.resumed_agents);
         const pane = runtime.model.panes.find(@enumFromInt(1)).?;
         try std.testing.expectEqualStrings("claude --resume " ++ reference ++ "\r", pane.input_queue.nextChunk().?);
-        try std.testing.expectEqualStrings(reference, runtime.model.agents.resumeSession(pane.key()).?.reference.slice());
-        try std.testing.expectEqualStrings("Preserve pending resume", runtime.model.agents.checkpointTitle(pane.key()).?.slice());
+        try std.testing.expectEqualStrings(reference, agent_status.resumeSession(&runtime.model, pane.key()).?.reference.slice());
+        try std.testing.expectEqualStrings("Preserve pending resume", agent_status.checkpointTitle(&runtime.model, pane.key()).?.slice());
         try std.testing.expect(runtime.model.panes.find(@enumFromInt(2)).?.input_queue.nextChunk() == null);
         var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-        try std.testing.expectEqual(@as(usize, 0), runtime.model.agents.snapshot(&entries, 0).len);
+        try std.testing.expectEqual(@as(usize, 0), agent_status.snapshot(&runtime.model.agents, &entries, 0).len);
     }
 }
 
@@ -519,8 +520,8 @@ test "process observation checkpoints a session reported before provider detecti
         .launch_cwd = directory,
         .workspace_path = directory,
     });
-    try std.testing.expect(runtime.model.agents.observeSessionReference(agent_identity.fromPane(pane), try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 100)));
-    try std.testing.expect(runtime.model.agents.resumeSession(pane.key()) == null);
+    try std.testing.expect(agent_status.observeSessionReference(&runtime.model, agent_identity.fromPane(pane), try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 100)));
+    try std.testing.expect(agent_status.resumeSession(&runtime.model, pane.key()) == null);
 
     for ([_]bool{ true, false }) |agent_foreground| {
         session_checkpoint.writeNow(&runtime.model);
@@ -538,6 +539,6 @@ test "process observation checkpoints a session reported before provider detecti
             },
         } });
         try std.testing.expect(runtime.model.checkpoint.dirty);
-        try std.testing.expectEqual(agent_foreground, runtime.model.agents.resumeSession(pane.key()) != null);
+        try std.testing.expectEqual(agent_foreground, agent_status.resumeSession(&runtime.model, pane.key()) != null);
     }
 }

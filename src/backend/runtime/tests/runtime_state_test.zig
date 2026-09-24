@@ -4,7 +4,7 @@ const core = @import("telar-core");
 const Delivery = @import("../delivery/Delivery.zig");
 const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
-const Tracker = @import("../../agent/Tracker.zig");
+const Agents = @import("../../agent/Agents.zig");
 const hostmetrics = @import("hostmetrics");
 const Sampler = hostmetrics.Sampler;
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
@@ -76,7 +76,7 @@ const RuntimeStateFixture = struct {
     attachments: AttachmentStore = .{},
     panes: PaneStore = .{},
     workspaces: Workspaces = .{},
-    agents: Tracker = .{},
+    agents: Agents = .{},
     system_metrics: Sampler = .{},
     metrics: RuntimeMetrics = .{ .started_ns = 0 },
 

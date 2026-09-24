@@ -1,3 +1,4 @@
+const agent_status = @import("../agent_status.zig");
 const bytecodec = @import("bytecodec");
 const session_checkpoint = @import("../session_checkpoint.zig");
 const pane_launch = @import("../pane_launch.zig");
@@ -271,7 +272,7 @@ test "agent panes survive consecutive runtime checkpoints with their kind identi
     try std.testing.expectEqual(@as(u16, 100), restored.size.cols);
     try std.testing.expectEqual(@as(u16, 30), restored.size.rows);
     try std.testing.expectEqualStrings("Agent work", third.model.workspaces.tabLabel(location).?);
-    try std.testing.expectEqualStrings("Keep this title", third.model.agents.checkpointTitle(restored.key()).?.slice());
+    try std.testing.expectEqualStrings("Keep this title", agent_status.checkpointTitle(&third.model, restored.key()).?.slice());
     try std.testing.expectEqual(core.PaneKind.terminal, third.model.panes.find(terminal_id).?.kind);
     try std.testing.expectEqual(@as(u16, 1), third.model.checkpoint.resumed_agents);
     third.deinit();
@@ -286,7 +287,7 @@ test "agent panes survive consecutive runtime checkpoints with their kind identi
     try std.testing.expectEqual(core.PaneKind.agent, fresh_pane.kind);
     try std.testing.expect(!fresh_pane.agent_thread.?.resumed);
     try std.testing.expectEqual(@as(u16, 0), fresh.model.checkpoint.resumed_agents);
-    try std.testing.expect(fresh.model.agents.checkpointTitle(fresh_pane.key()) == null);
+    try std.testing.expect(agent_status.checkpointTitle(&fresh.model, fresh_pane.key()) == null);
 }
 
 test "agent checkpoint skips duplicate claims and retains empty panes when the provider is unavailable" {

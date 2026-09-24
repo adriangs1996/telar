@@ -16,7 +16,7 @@ telar.ts extension: session_info_changed { name }   (session_start carries the c
         |
 telar hook pi  -> mapPiTitle -> schema.report_agent_title
         |
-client_request.receive -> agent_hooks.receiveTitle -> Tracker.reportTitle -> Agent.reportTitle
+client_request.receive -> agent_hooks.receiveTitle -> agent_status.reportTitle -> Agent.reportTitle
         |
 agent snapshot revision bump; checkpoint dirty
 ```
@@ -40,15 +40,15 @@ telar hook claude -> mapClaudeTitle -> schema.report_agent_title   (same path as
 Claude appends {"type":"custom-title","customTitle":...,"sessionId":...} to transcript_path
         |
 every Claude hook: transcript_path rides on schema.report_agent as session_file, kind claude_transcript
-        -> agent_hooks.receive -> Tracker.observeReport -> Watches.put
+        -> agent_hooks.receive -> agent_status.observeReport -> Watches.put
         |
-agent_maintenance.tick -> agent_rename.start -> Tracker.nextSessionFileProbe (stalest due, one in flight)
+agent_maintenance.tick -> agent_rename.start -> agent_status.nextSessionFileProbe (stalest due, one in flight)
         -> select.concurrent(.session_name, session_readers.probe)   [observation path]
         |
 probe reads the bytes appended since the last offset (at most 64 KiB) and
 transcript.scan keeps the last custom-title line for the session
         |
-event session_name -> agent_rename.finish -> Tracker.finishSessionFileProbe
+event session_name -> agent_rename.finish -> agent_status.finishSessionFileProbe
         -> Agent.reportTitle; checkpoint dirty
 ```
 
@@ -83,15 +83,15 @@ Codex updates threads.name for the thread id in $CODEX_HOME/state_<n>.sqlite
         |
 every Codex hook: telar hook codex resolves the newest state_<n>.sqlite under
 CODEX_HOME (else ~/.codex) and sends it as session_file, kind codex_state
-        -> agent_hooks.receive -> Tracker.observeReport -> Watches.put
+        -> agent_hooks.receive -> agent_status.observeReport -> Watches.put
         |
-agent_maintenance.tick -> agent_rename.start -> Tracker.nextSessionFileProbe
+agent_maintenance.tick -> agent_rename.start -> agent_status.nextSessionFileProbe
         -> select.concurrent(.session_name, session_readers.probe)   [observation path]
         |
 probe opens the database read-only and runs
 SELECT name FROM threads WHERE id = ?1 for the hook's session id
         |
-event session_name -> agent_rename.finish -> Tracker.finishSessionFileProbe
+event session_name -> agent_rename.finish -> agent_status.finishSessionFileProbe
         -> Watch.remember drops an unchanged name -> Agent.reportTitle
 ```
 
@@ -130,7 +130,7 @@ the probe then degrades to reporting nothing.
 
 ## Validation
 
-- `src/backend/agent/Agent.zig` and `tracker_tests.zig` prove precedence, clearing,
+- `src/backend/agent/Agent.zig` and `agent_status_test.zig` prove precedence, clearing,
   durability, watch registration, single-flight probing, stale discard and
   that a re-read name never undoes a later manual title.
 - `src/backend/agent/session_file.zig` proves the bounded watch store and the

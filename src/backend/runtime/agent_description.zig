@@ -1,5 +1,6 @@
 //! An agent without a title of its own gets one generated from its first
 //! prompt by the configured description command, one job at a time.
+const agent_status = @import("agent_status.zig");
 
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -21,7 +22,7 @@ pub fn start(model: *RuntimeModel) void {
         return;
     }
 
-    var job = model.agents.nextDescriptionJob() orelse return;
+    var job = agent_status.nextDescriptionJob(model) orelse return;
     defer std.crypto.secureZero(u8, &job.query);
 
     const command: Command = .{ .arguments = options.arguments, .timeout_ms = options.timeout_ms };
@@ -50,7 +51,7 @@ pub fn finish(model: *RuntimeModel, result: AgentResult) void {
 }
 
 fn commit(model: *RuntimeModel, result: AgentResult) void {
-    const finished: DescriptionFinished = model.agents.finishDescription(&result) orelse return;
+    const finished: DescriptionFinished = agent_status.finishDescription(model, &result) orelse return;
     _ = model.resources.history.service().setSessionTitle(model.io, .{
         .id = finished.session_id,
         .title = finished.titleSlice(),

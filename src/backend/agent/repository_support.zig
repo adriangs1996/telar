@@ -5,7 +5,7 @@
 
 const core = @import("telar-core");
 const Identity = @import("Identity.zig");
-const Repository = @import("Repository.zig");
+const Agents = @import("Agents.zig");
 const std = @import("std");
 const Agent = @import("Agent.zig");
 
@@ -18,7 +18,7 @@ fn testIdentity(id: u32, generation: u64) !Identity {
 }
 
 test "an empty repository has no matches removals or iteration results" {
-    var repository: Repository = .{};
+    var repository: Agents = .{};
     const missing = (try testIdentity(1, 1)).key;
 
     try std.testing.expect(repository.find(missing) == null);
@@ -34,7 +34,7 @@ test "an empty repository has no matches removals or iteration results" {
 }
 
 test "insert stores and find returns the same aggregate" {
-    var repository: Repository = .{};
+    var repository: Agents = .{};
     const identity = try testIdentity(1, 1);
     const inserted = repository.insert(Agent.init(identity)) orelse return error.MissingInsertedAgent;
 
@@ -44,7 +44,7 @@ test "insert stores and find returns the same aggregate" {
 }
 
 test "one pane id holds one generation's aggregate at a time" {
-    var repository: Repository = .{};
+    var repository: Agents = .{};
     const first = try testIdentity(1, 1);
     const second = try testIdentity(1, 2);
 
@@ -59,7 +59,7 @@ test "one pane id holds one generation's aggregate at a time" {
 }
 
 test "insert rejects duplicate pane generations without consuming capacity" {
-    var repository: Repository = .{};
+    var repository: Agents = .{};
     const identity = try testIdentity(1, 1);
 
     _ = repository.insert(Agent.init(identity)) orelse return error.MissingInsertedAgent;
@@ -75,7 +75,7 @@ test "insert rejects duplicate pane generations without consuming capacity" {
 }
 
 test "insert rejects overflow without losing stored aggregates" {
-    var repository: Repository = .{};
+    var repository: Agents = .{};
 
     for (0..core.max_agent_snapshot_entries) |index| {
         const identity = try testIdentity(@intCast(index + 1), 1);
@@ -92,7 +92,7 @@ test "insert rejects overflow without losing stored aggregates" {
 }
 
 test "remove deletes only the exact pane generation and permits slot reuse" {
-    var repository: Repository = .{};
+    var repository: Agents = .{};
     const first = try testIdentity(1, 1);
     const second = try testIdentity(1, 2);
     const replacement = try testIdentity(2, 1);
@@ -109,7 +109,7 @@ test "remove deletes only the exact pane generation and permits slot reuse" {
 }
 
 test "mutable iteration can remove only its current aggregate" {
-    var repository: Repository = .{};
+    var repository: Agents = .{};
     const first = try testIdentity(1, 1);
     const second = try testIdentity(2, 1);
 

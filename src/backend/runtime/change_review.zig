@@ -1,4 +1,5 @@
 //! Review admission, worker completion and cooperative provider handoff.
+const agent_status = @import("agent_status.zig");
 const client_connection = @import("client_connection.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -185,8 +186,8 @@ pub fn discover(model: *RuntimeModel) void {
 /// conversation, the agent projection and session references, and each
 /// pane's current review binding.
 fn ownerStamp(model: *const RuntimeModel) u64 {
-    var hasher = std.hash.Wyhash.init(model.agents.revision);
-    std.hash.autoHash(&hasher, model.agents.session_revision);
+    var hasher = std.hash.Wyhash.init(model.agent_revision);
+    std.hash.autoHash(&hasher, model.agent_session_revision);
     for (model.panes.items) |entry| {
         const pane = entry orelse continue;
         std.hash.autoHash(&hasher, core.raw(pane.id));
@@ -265,8 +266,8 @@ fn owner(model: *RuntimeModel, key: PaneKey) !Context {
         const snapshot = pane.agent_thread orelse return error.AgentNotReady;
         return Context.init(key, .codex, snapshot.threadId());
     }
-    const provider = model.agents.projectedProvider(key);
-    const reference = model.agents.sessionReference(key) orelse return error.AgentNotReady;
+    const provider = agent_status.projectedProvider(model, key);
+    const reference = agent_status.sessionReference(model, key) orelse return error.AgentNotReady;
     return Context.init(key, provider, reference.slice());
 }
 
@@ -282,7 +283,7 @@ test "discovery binds a review owner when only its session reference changes" {
     const model = &fixture.runtime.model;
     const pane = try fixture.openPane();
 
-    try std.testing.expect(model.agents.observeProcess(.{
+    try std.testing.expect(agent_status.observeProcess(model, .{
         .identity = agent_identity.fromPane(pane),
         .provider = .claude,
         .process_id = 99,
@@ -294,7 +295,7 @@ test "discovery binds a review owner when only its session reference changes" {
     discover(model);
     try std.testing.expectEqual(stamp, model.review_owner_stamp);
 
-    try std.testing.expect(model.agents.observeSessionReference(
+    try std.testing.expect(agent_status.observeSessionReference(model, 
         agent_identity.fromPane(pane),
         try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 1_000),
     ));

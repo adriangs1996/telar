@@ -7,7 +7,7 @@ validation and sidebar presentation. The view owns no second semantic copy.
 ## End-to-end path
 
 ```text
-runtime tracker → runtime delivery → agent_snapshot
+agent_status → runtime delivery → agent_snapshot
   → runtime_messages.handleServerMessage
   → agent_snapshot.applyAgentSnapshot
       model.reconcileAgentSnapshot

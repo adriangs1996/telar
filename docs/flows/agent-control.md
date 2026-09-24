@@ -28,7 +28,7 @@ telar agent prompt 7 "run the tests"
 schema.send_pane_text{mode = prompt} -> client_request.receive -> pane_input.sendText
         |
 pane_input.sendText: PaneStore.resolveControl(exact generation)
-        |            Tracker.projectedStatus == blocked -> request_failed agent_blocked
+        |            agent_status.projectedStatus == blocked -> request_failed agent_blocked
         |            bracketed paste framing if the child enabled mode 2004, then Enter
         |
 pane_input.forward  (history observer first, then the PTY queue)

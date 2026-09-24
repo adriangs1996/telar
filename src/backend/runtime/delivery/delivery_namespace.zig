@@ -13,7 +13,7 @@ const Delivery = @import("Delivery.zig");
 const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
-const Tracker = @import("../../agent/Tracker.zig");
+const Agents = @import("../../agent/Agents.zig");
 const hostmetrics = @import("hostmetrics");
 const Sampler = hostmetrics.Sampler;
 const Sources = @import("Sources.zig");
@@ -280,7 +280,7 @@ test "delivery preserves management before resync wire order" {
     defer attachments.deinit();
     var panes: PaneStore = .{};
     var workspaces: Workspaces = .{};
-    var agents: Tracker = .{};
+    var agents: Agents = .{};
     var system_metrics: Sampler = .{};
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
     const workspace: core_module.WorkspaceLocation = .{
@@ -330,7 +330,7 @@ test "agent conversation delivery coalesces revisions independently for reconnec
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
     var panes: PaneStore = .{};
     var workspaces: Workspaces = .{};
-    var agents: Tracker = .{};
+    var agents: Agents = .{};
     var system_metrics: Sampler = .{};
     var snapshot: core_module.AgentThreadSnapshot = .{ .pane_id = @enumFromInt(5), .pane_generation = 8, .revision = 1, .status = .ready };
     var pane: Pane = undefined;

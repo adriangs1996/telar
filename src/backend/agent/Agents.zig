@@ -1,8 +1,10 @@
+//! The runtime's agents table: one aggregate per pane generation that has
+//! agent evidence, indexed by pane id.
 const std = @import("std");
 const core = @import("telar-core");
 const Agent = @import("Agent.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
-pub const Repository = @This();
+const Agents = @This();
 
 pub const capacity = core.max_agent_snapshot_entries;
 const Occupancy = std.bit_set.IntegerBitSet(capacity);
@@ -28,7 +30,7 @@ pub const ConstIterator = @import("ConstIterator.zig");
 /// ```zig
 /// const stored = repository.insert(Agent.init(identity)) orelse return;
 /// ```
-pub fn insert(self: *Repository, candidate: Agent) ?*Agent {
+pub fn insert(self: *Agents, candidate: Agent) ?*Agent {
     const key = candidate.paneKey();
     if (self.index.get(core.raw(key.id)) != null) {
         return null;
@@ -51,7 +53,7 @@ pub fn insert(self: *Repository, candidate: Agent) ?*Agent {
 /// ```zig
 /// const agent = repository.find(pane_key) orelse return;
 /// ```
-pub fn find(self: *Repository, key: PaneKey) ?*Agent {
+pub fn find(self: *Agents, key: PaneKey) ?*Agent {
     const index = self.indexOf(key) orelse return null;
     return &self.slots[index].?;
 }
@@ -61,7 +63,7 @@ pub fn find(self: *Repository, key: PaneKey) ?*Agent {
 /// ```zig
 /// const agent = repository.findConst(pane_key) orelse return;
 /// ```
-pub fn findConst(self: *const Repository, key: PaneKey) ?*const Agent {
+pub fn findConst(self: *const Agents, key: PaneKey) ?*const Agent {
     const index = self.indexOf(key) orelse return null;
     return &self.slots[index].?;
 }
@@ -71,26 +73,26 @@ pub fn findConst(self: *const Repository, key: PaneKey) ?*const Agent {
 /// ```zig
 /// _ = repository.remove(pane_key);
 /// ```
-pub fn remove(self: *Repository, key: PaneKey) bool {
+pub fn remove(self: *Agents, key: PaneKey) bool {
     const index = self.indexOf(key) orelse return false;
     self.release(index);
     return true;
 }
 
 /// Whether a slot holds an aggregate, without reading the aggregate.
-pub fn occupiedAt(self: *const Repository, index: usize) bool {
+pub fn occupiedAt(self: *const Agents, index: usize) bool {
     return self.occupied.isSet(index);
 }
 
 /// Empties one occupied slot. Iterators remove their current aggregate here.
-pub fn release(self: *Repository, index: usize) void {
+pub fn release(self: *Agents, index: usize) void {
     std.debug.assert(self.occupied.isSet(index));
     self.index.remove(core.raw(self.keys[index].id));
     self.slots[index] = null;
     self.occupied.unset(index);
 }
 
-fn indexOf(self: *const Repository, key: PaneKey) ?usize {
+fn indexOf(self: *const Agents, key: PaneKey) ?usize {
     const slot = self.index.get(core.raw(key.id)) orelse return null;
     if (self.keys[slot].generation != key.generation) {
         return null;
@@ -105,7 +107,7 @@ fn indexOf(self: *const Repository, key: PaneKey) ?usize {
 /// ```zig
 /// var iterator = repository.iterator();
 /// ```
-pub fn iterator(self: *Repository) Iterator {
+pub fn iterator(self: *Agents) Iterator {
     return .{ .repository = self };
 }
 
@@ -114,6 +116,6 @@ pub fn iterator(self: *Repository) Iterator {
 /// ```zig
 /// var iterator = repository.constIterator();
 /// ```
-pub fn constIterator(self: *const Repository) ConstIterator {
+pub fn constIterator(self: *const Agents) ConstIterator {
     return .{ .repository = self };
 }

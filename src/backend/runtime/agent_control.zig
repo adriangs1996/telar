@@ -1,5 +1,6 @@
 //! A client drives a managed agent pane through its structured interface:
 //! prompts, interrupts, approvals, resumed conversations and queries.
+const agent_status = @import("agent_status.zig");
 
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -105,7 +106,7 @@ fn command(model: *RuntimeModel, key: PaneKey, action: Action) !PaneKey {
     }
 
     if (action == .prompt and core.AgentCommand.parse(action.prompt.text) == null and model.agent_description_options != null) {
-        _ = model.agents.observeSubmittedPrompt(agent_identity.fromPane(pane), action.prompt.text);
+        _ = agent_status.observeSubmittedPrompt(model, agent_identity.fromPane(pane), action.prompt.text);
     }
 
     return pane.key();

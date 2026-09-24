@@ -5,6 +5,7 @@
 //! checkpoint dirty; the maintenance tick snapshots the model into an owned
 //! buffer and hands it to a worker that writes a temp file and renames it
 //! into place. Restore runs once, before the listener accepts clients.
+const agent_status = @import("agent_status.zig");
 
 const bytecodec = @import("bytecodec");
 const core = @import("telar-core");
@@ -378,7 +379,7 @@ fn restorePane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !vo
             try pane_input.sendRestored(model, pane, command);
         }
 
-        if (!model.agents.restoreSession(pane.key(), session)) {
+        if (!agent_status.restoreSession(model, pane.key(), session)) {
             return error.AgentCapacityExceeded;
         }
 
@@ -401,7 +402,7 @@ fn restoreAgentPane(model: *RuntimeModel, counters: Counters, record: PaneRecord
 
         const reference = try SessionReference.init(value.idSlice(), 0);
         if (ResumeSession.init(.codex, reference)) |session| {
-            if (model.agents.hasRestoredSession(session)) {
+            if (agent_status.hasRestoredSession(model, session)) {
                 return error.ConversationAlreadyOpen;
             }
         } else |_| {}
@@ -451,7 +452,7 @@ fn resumeForPane(model: *RuntimeModel, record: PaneRecord) ?ResumeSession {
 
     const reference = SessionReference.init(record.agent_session, 0) catch return null;
     const session = ResumeSession.init(@enumFromInt(record.agent_provider), reference) catch return null;
-    if (model.agents.hasRestoredSession(session) or (session.provider == .codex and managedConversationClaimed(model, record.agent_session))) {
+    if (agent_status.hasRestoredSession(model, session) or (session.provider == .codex and managedConversationClaimed(model, record.agent_session))) {
         return null;
     }
 
@@ -533,16 +534,16 @@ pub fn encode(model: *RuntimeModel, buffer: []u8) !usize {
         }
 
         const conversation = if (pane.kind == .agent) try pane.session.agent.session.checkpoint(model.io) else null;
-        const resumable = if (pane.kind == .terminal) model.agents.resumeSession(pane.key()) else null;
+        const resumable = if (pane.kind == .terminal) agent_status.resumeSession(model, pane.key()) else null;
         const title = if (conversation) |*value| title: {
             if (std.mem.eql(u8, pane.agent_thread.?.threadId(), value.idSlice())) {
-                if (model.agents.checkpointTitle(pane.key())) |saved| {
+                if (agent_status.checkpointTitle(model, pane.key())) |saved| {
                     break :title saved;
                 }
             }
 
             break :title if (value.title_len != 0) SessionTitle.init(value.titleSlice(), .agent) catch null else null;
-        } else if (resumable != null) model.agents.checkpointTitle(pane.key()) else null;
+        } else if (resumable != null) agent_status.checkpointTitle(model, pane.key()) else null;
         try encoder.pane(.{
             .kind = pane.kind,
             .pane_id = core.raw(pane.id),
@@ -587,7 +588,7 @@ fn nowNs(model: *RuntimeModel) u64 {
 /// session_checkpoint.restoreAgentTitle(model, pane, title);
 /// ```
 pub fn restoreAgentTitle(model: *RuntimeModel, pane: *const Pane, title: SessionTitle) void {
-    if (!model.agents.restoreTitle(pane.key(), title)) {
+    if (!agent_status.restoreTitle(model, pane.key(), title)) {
         return;
     }
 

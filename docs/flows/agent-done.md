@@ -12,7 +12,7 @@ runtime evidence: projected working -> evidence ready
         |
 Agent.visibleStatus  (seen = false)  -> AgentStatus.done
         |
-Tracker revision -> Delivery.prepare -> schema.agent_sound (working -> done)
+model.agent_revision -> Delivery.prepare -> schema.agent_sound (working -> done)
                                      -> schema.agent_snapshot
         |
 agent_snapshot.applyAgentSnapshot -> ClientModel.reconcileAgentSnapshot
@@ -25,7 +25,7 @@ model.to_runtime.push(acknowledge_agent) -> schema.AcknowledgeAgent
         |
 Runtime.update -> client_connection.receive -> client_request.receive -> agent_done.acknowledge
         |
-Tracker.acknowledge -> Agent.acknowledge (seen = true) -> reproject -> ready
+agent_status.acknowledge -> Agent.acknowledge (seen = true) -> reproject -> ready
         |
 next agent_snapshot -> sidebar shows ready
 ```
@@ -39,7 +39,7 @@ the next completion is reported again. Evidence precedence, expiry and
 authority are untouched: `done` is a presentation of `ready`, never a new
 evidence source.
 
-`Tracker.acknowledge` resolves the exact pane generation. An unknown or stale
+`agent_status.acknowledge` resolves the exact pane generation. An unknown or stale
 generation returns `unknown_agent` and the concrete runtime operation counts it as a stale
 client message. An agent that is already seen returns `unchanged` and the
 revision does not move. Only a real transition reprojects and bumps the

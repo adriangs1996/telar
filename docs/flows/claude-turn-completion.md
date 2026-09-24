@@ -17,7 +17,7 @@ ProxyTLS HTTP/1.1 or HTTP/2 relay
         |
 bounded incremental JSON classifier
         |
-request_started -> Agent Tracker -> working
+request_started -> agent_status -> working
         |
 Accept-Encoding: identity negotiation
         |
@@ -33,7 +33,7 @@ runtime event proxy_event
         |
 proxy_observation.receive
         |
-Tracker.observeProxy -> ProxyState
+agent_status.observeProxy -> ProxyState
         |
 no other model exchange remains
         |
@@ -77,7 +77,7 @@ continuation reasons such as `tool_use`.
 bounded proxy queue. `Proxy.receive` removes the credential and exposes the
 pane generation. The runtime receives it as the `proxy_event` event and
 delegates to `proxy_observation.receive`, which validates the live pane
-generation before calling `Tracker.observeProxy`.
+generation before calling `agent_status.observeProxy`.
 
 `ProxyState` closes only the matching protocol, connection, and stream. It
 projects `ready` when no model exchange remains. A later

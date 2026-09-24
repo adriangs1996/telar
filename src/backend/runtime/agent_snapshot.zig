@@ -2,6 +2,7 @@
 //! with each pane's tab, position, labels, cwd and title. Its revision
 //! follows the agents, panes and workspaces it reads, and it is built at most
 //! once per flush however many clients receive it.
+const agent_status = @import("agent_status.zig");
 
 const core = @import("telar-core");
 const std = @import("std");
@@ -20,7 +21,7 @@ const max_entries = core.max_agent_snapshot_entries;
 /// ```
 pub fn refresh(model: *RuntimeModel) void {
     const inputs = [_]u64{
-        model.agents.revision,
+        model.agent_revision,
         model.panes.revision,
         model.workspaces.revision,
         model.workspaces.label_revision,
@@ -61,7 +62,7 @@ pub fn wanted(model: *RuntimeModel) bool {
 /// const entries = agent_snapshot.project(sources, &model.agent_entries, &model.agent_display);
 /// ```
 pub fn project(sources: Sources, entries: *[max_entries]core.AgentSnapshotEntry, display: *[max_entries]AgentDisplayStorage) []const core.AgentSnapshotEntry {
-    const tracked = sources.agents.snapshot(entries, sources.now_ms);
+    const tracked = agent_status.snapshot(sources.agents, entries, sources.now_ms);
     var count: usize = 0;
     for (tracked) |entry| {
         const pane = sources.panes.resolveConst(.{
