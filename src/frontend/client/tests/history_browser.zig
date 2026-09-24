@@ -182,7 +182,7 @@ fn receiveCommand(harness: *TestHarness, command: []const u8) !usize {
     var buffer: [16384]u8 = undefined;
     var received: usize = 0;
     while (received < command.len) {
-        const message = try harness.nextClientMessage(&buffer);
+        const message = try harness.receiveClientMessage(&buffer);
         if (message != .pane_input) {
             continue;
         }

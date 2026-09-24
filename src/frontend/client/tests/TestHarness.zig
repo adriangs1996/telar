@@ -148,8 +148,18 @@ pub fn settleModelPresentation(self: *TestHarness) !void {
 
 /// Receives the next message the client sent to the runtime, first starting
 /// the write a direct client call left queued, as the event loop would.
+/// Example: `const message = try harness.nextClientMessage(&buffer);`
 pub fn nextClientMessage(self: *TestHarness, buffer: []u8) !core.ClientMessage {
     try host_effects.deliver(self.terminal);
+
+    return self.receiveClientMessage(buffer);
+}
+
+/// Receives the next message already on the runtime's side of the socket.
+/// It touches only the peer, so a concurrent reader may call it while the
+/// test thread drives the client with `settle`.
+/// Example: `const message = try harness.receiveClientMessage(&buffer);`
+pub fn receiveClientMessage(self: *TestHarness, buffer: []u8) !core.ClientMessage {
     const payload = try self.peer.receive(std.testing.io, buffer);
     return core.decodeClient(payload);
 }
