@@ -1,44 +1,16 @@
 //! Read-only adapter for the Codex thread-name database.
 
 const core = @import("telar-core");
+const agentfiles = @import("agentfiles");
 const Job = @import("Job.zig");
 const Completion = @import("../Completion.zig");
-const std = @import("std");
-const sqlite = @import("sqlite");
-const c = sqlite.c;
-const thread_name_sql = "SELECT name FROM threads WHERE id = ?1";
 
 /// Example: `probe(job, &completion);`.
-/// Reads the thread's current name with a read-only connection. Codex keeps
-/// the database in WAL mode, so a reader never blocks its writer; a busy or
-/// missing database, or a thread not yet inserted, reports nothing. A NULL
-/// name reports an empty title, which clears an earlier agent title.
+/// Reports the thread's current name; nothing when the database is busy or
+/// missing, or the thread is not inserted yet. A NULL name reports an empty
+/// title, which clears an earlier agent title.
 pub fn probe(job: Job, completion: *Completion) void {
-    var path_buffer: [core.max_agent_session_file_bytes + 1]u8 = undefined;
-    const path = std.fmt.bufPrintZ(&path_buffer, "{s}", .{job.watch.pathSlice()}) catch return;
-    var db: ?*c.sqlite3 = null;
-    const opened = if (c.sqlite3_open_v2(path.ptr, &db, c.SQLITE_OPEN_READONLY | c.SQLITE_OPEN_NOMUTEX, null) == c.SQLITE_OK) db else null;
-    defer if (db) |handle| {
-        _ = c.sqlite3_close(handle);
-    };
-    const connection = opened orelse return;
-    _ = c.sqlite3_busy_timeout(connection, 200);
-
-    var stmt: ?*c.sqlite3_stmt = null;
-    if (c.sqlite3_prepare_v2(connection, thread_name_sql, thread_name_sql.len, &stmt, null) != c.SQLITE_OK) {
-        return;
-    }
-    const statement = stmt orelse return;
-    defer _ = c.sqlite3_finalize(statement);
-    const session = job.watch.session.slice();
-    if (c.sqlite3_bind_text(statement, 1, session.ptr, @intCast(session.len), null) != c.SQLITE_OK) {
-        return;
-    }
-    if (c.sqlite3_step(statement) != c.SQLITE_ROW) {
-        return;
-    }
-
     var title_buffer: [core.max_agent_session_title_bytes]u8 = undefined;
-    const name = sqlite.columnSlice(statement, 0);
-    completion.setTitle(core.truncateSessionTitle(&title_buffer, name));
+    const name = agentfiles.codex.threadName(job.watch.pathSlice(), job.watch.session.slice(), &title_buffer) orelse return;
+    completion.setTitle(name);
 }

@@ -135,7 +135,7 @@ the probe then degrades to reporting nothing.
   that a re-read name never undoes a later manual title.
 - `src/backend/agent/session_file.zig` proves the bounded watch store and the
   last-name memory.
-- `src/backend/agent/transcript.zig` proves the scan: last line wins, partial
+- `lib/agentfiles/claude.zig` proves the scan: last line wins, partial
   lines wait, foreign sessions and malformed lines are skipped, long names are
   bounded.
 - `src/backend/agent/session_readers/session_readers.zig` proves both probes

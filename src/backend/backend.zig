@@ -55,7 +55,6 @@ test {
     _ = @import("agent/session_file.zig");
     _ = @import("agent/session_readers/session_readers.zig");
     _ = @import("agent/tracker_support.zig");
-    _ = @import("agent/transcript.zig");
     _ = @import("agent/types.zig");
     _ = @import("history/agent_detection.zig");
     _ = @import("history/channel_support.zig");

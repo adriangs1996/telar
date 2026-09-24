@@ -82,6 +82,11 @@ const specs = [_]Spec{
         .libc = true,
     },
     .{
+        .name = "agentfiles",
+        .imports = &.{"sqlite"},
+        .host_only = true,
+    },
+    .{
         .name = "imaging",
         .imports = &.{"wuffs"},
     },

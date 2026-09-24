@@ -220,6 +220,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `hostmetrics` | cpu, memory and battery of the host, without allocation |
 | `gitstatus` | a working tree's branch and whether it has changes |
 | `localsocket` | same-user Unix sockets and length-prefixed framing |
+| `agentfiles` | titles from Claude Code's JSONL transcript and Codex's thread database |
 
 A rule that decides what telar means stays in a flow even when it is pure;
 [`plans/libraries.md`](plans/libraries.md) lists what is still to move.

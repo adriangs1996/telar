@@ -1,10 +1,11 @@
 //! The session name Claude Code writes to its transcript. `/rename` fires no
 //! hook: the name only lands as a `custom-title` line in the JSONL file the
-//! hooks point at. This is the pure scan over appended bytes; the runtime
-//! owns the file I/O.
+//! hooks point at. `probe` reads what was appended since the last offset;
+//! `scan` is the pure pass over those bytes.
 
-const core = @import("telar-core");
 const std = @import("std");
+const utf8 = @import("utf8.zig");
+const TitleProbe = @import("TitleProbe.zig");
 
 /// Bytes one probe reads; a longer backlog continues on the next probe.
 pub const max_scan_bytes = 64 * 1024;
@@ -19,7 +20,7 @@ const title_prefix = "{\"type\":\"custom-title\"";
 /// ```zig
 /// const result = scan(bytes, "0192...", &title_buffer);
 /// ```
-pub fn scan(bytes: []const u8, session: []const u8, buffer: *[core.max_agent_session_title_bytes]u8) Scan {
+pub fn scan(bytes: []const u8, session: []const u8, buffer: []u8) Scan {
     var result: Scan = .{ .consumed = 0, .title = null };
     var rest = bytes;
 
@@ -38,14 +39,56 @@ pub fn scan(bytes: []const u8, session: []const u8, buffer: *[core.max_agent_ses
             continue;
         }
 
-        result.title = core.truncateSessionTitle(buffer, parsed.customTitle);
+        result.title = utf8.truncate(buffer, parsed.customTitle);
     }
 
     return result;
 }
 
+/// Probes the transcript at `path` for `session`. The first probe of a watch
+/// (`offset` null) only records where the file ends; later probes read at
+/// most `max_scan_bytes` past the offset and leave the rest for the next
+/// one. Claude Code creates the transcript lazily, so a file that does not
+/// exist yet is seeded at zero and read whole once it appears. A file shorter
+/// than the offset was rewritten and is read again. The title borrows
+/// `title_buffer`, cut at a UTF-8 boundary to its length.
+///
+/// ```zig
+/// const result = claude.probe(io, path, session, watch.offset, &title_buffer);
+/// ```
+pub fn probe(io: std.Io, path: []const u8, session: []const u8, offset: ?u64, title_buffer: []u8) TitleProbe {
+    const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch {
+        return .{ .offset = if (offset == null) 0 else null };
+    };
+    defer file.close(io);
+    const length = file.length(io) catch return .{};
+    const start = offset orelse return .{ .offset = length };
+    const from = if (length < start) 0 else start;
+    if (length == from) {
+        return .{ .offset = from };
+    }
+
+    const gpa = std.heap.page_allocator;
+    const buffer = gpa.alloc(u8, max_scan_bytes) catch return .{};
+    defer gpa.free(buffer);
+    var reader = file.reader(io, &.{});
+    reader.seekTo(from) catch return .{};
+    const len = reader.interface.readSliceShort(buffer) catch return .{};
+
+    const result = scan(buffer[0..len], session, title_buffer);
+    // A line longer than the whole window can never complete: skip it.
+    const consumed = if (result.consumed == 0 and len == buffer.len) len else result.consumed;
+    return .{
+        .offset = from + consumed,
+        .title = result.title,
+    };
+}
+
+/// The session title bound the tests cut against.
+const test_title_bytes = 96;
+
 test "scan keeps the last name for the session and leaves a partial line" {
-    var buffer: [core.max_agent_session_title_bytes]u8 = undefined;
+    var buffer: [test_title_bytes]u8 = undefined;
     const bytes =
         "{\"type\":\"custom-title\",\"customTitle\":\"first\",\"sessionId\":\"abc\"}\n" ++
         "{\"type\":\"user\",\"message\":{\"content\":\"{\\\"type\\\":\\\"custom-title\\\"}\"}}\n" ++
@@ -62,13 +105,13 @@ test "scan keeps the last name for the session and leaves a partial line" {
 }
 
 test "scan reports a cleared name as an empty title and bounds long names" {
-    var buffer: [core.max_agent_session_title_bytes]u8 = undefined;
+    var buffer: [test_title_bytes]u8 = undefined;
     const cleared = scan("{\"type\":\"custom-title\",\"customTitle\":\"\",\"sessionId\":\"abc\"}\n", "abc", &buffer);
     try std.testing.expectEqualStrings("", cleared.title.?);
 
     const long = "{\"type\":\"custom-title\",\"customTitle\":\"" ++ ("é" ** 60) ++ "\",\"sessionId\":\"abc\"}\n";
     const bounded = scan(long, "abc", &buffer);
-    try std.testing.expectEqual(@as(usize, 96), bounded.title.?.len);
+    try std.testing.expectEqual(@as(usize, test_title_bytes), bounded.title.?.len);
     try std.testing.expect(std.unicode.utf8ValidateSlice(bounded.title.?));
 }
 
