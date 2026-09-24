@@ -286,7 +286,7 @@ for `SessionEnd` and `Interrupt`.
 - `src/cli/integration_support.zig` proves idempotent install and selective removal
   for Claude Code, and rendering, marker detection and atomic owner-only
   installation for the Pi extension.
-- `src/backend/history/persistence/sqlite.zig` proves that native start/finish
+- `src/backend/history/persistence/history_sql.zig` proves that native start/finish
   updates one row and a later plugin observation with the same tool call id is
   deduplicated.
 - `src/core/schema_contract_test.zig` pins the `report_agent`,
