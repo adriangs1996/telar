@@ -26,6 +26,9 @@ pub const Router = GenericRouter(
         .max_keys = data.config_values.max_binding_keys,
         .input_capacity = chunk_size,
         .held_capacity = held_binding_bytes,
+        .max_physical_leases = data.keybind.max_physical_leases,
+        .escape_timeout_ns = data.keybind.default_escape_timeout_ns,
+        .sequence_timeout_ns = data.keybind.default_sequence_timeout_ns,
     },
 );
 

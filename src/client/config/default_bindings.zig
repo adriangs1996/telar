@@ -3,7 +3,7 @@ const keyinput = @import("keyinput");
 
 const data = @import("model");
 const Resolved = @import("Resolved.zig");
-const GenericKeymap = @import("../input/GenericKeymap.zig").Type;
+const GenericKeymap = keyinput.GenericKeymap;
 const std = @import("std");
 
 pub const count = 42;

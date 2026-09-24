@@ -152,7 +152,7 @@ different pane or the runtime event loop.
   targets under saturation and delivery failure.
 - `src/client/input/encoding_tests.zig` proves child-mode encoding, legacy and
   Kitty releases and paste framing.
-- `src/client/input/routing_tests.zig` proves paste replay and pointer
+- `lib/keyinput/routing_tests.zig` proves paste replay and pointer
   admission.
 - `src/frontend/client/tests/` (`input.zig`, `pane_lifecycle.zig`,
   `tab_lifecycle.zig`) proves captured target and framing, prompt and

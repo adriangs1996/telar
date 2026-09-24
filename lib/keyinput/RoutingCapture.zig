@@ -1,19 +1,20 @@
-const keyinput = @import("keyinput");
+const Control = @import("Control.zig").Control;
+const Key = @import("Key.zig");
 const routing_tests = @import("routing_tests.zig");
 const Capture = @This();
 
 actions: [8]routing_tests.Action = undefined,
 action_count: usize = 0,
-keys: [8]keyinput.Key = undefined,
+keys: [8]Key = undefined,
 key_count: usize = 0,
 
-pub fn action(self: *Capture, value: routing_tests.Action) !keyinput.Control {
+pub fn action(self: *Capture, value: routing_tests.Action) !Control {
     self.actions[self.action_count] = value;
     self.action_count += 1;
     return .continue_routing;
 }
 
-pub fn key(self: *Capture, value: keyinput.Key) !void {
+pub fn key(self: *Capture, value: Key) !void {
     self.keys[self.key_count] = value;
     self.key_count += 1;
 }
@@ -23,9 +24,9 @@ pub fn forward(_: *Capture, _: []const u8) !void {
 }
 
 const GenericRouter = @import("GenericRouter.zig").Type;
-const Router = GenericRouter(routing_tests.Action, .{ .max_bindings = 8, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 }, void);
+const Router = GenericRouter(routing_tests.Action, routing_tests.limits, void);
 
-pub fn apply(self: *Capture, decision: Router.Decision) !keyinput.Control {
+pub fn apply(self: *Capture, decision: Router.Decision) !Control {
     switch (decision) {
         .forward => |value| try self.key(value.key),
         .replay => |value| {

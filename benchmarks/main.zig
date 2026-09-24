@@ -315,6 +315,9 @@ pub const KeybindRouter = frontend.GenericRouter(KeybindAction, .{
     .max_keys = 4,
     .input_capacity = 64,
     .held_capacity = 32,
+    .max_physical_leases = data.keybind.max_physical_leases,
+    .escape_timeout_ns = data.keybind.default_escape_timeout_ns,
+    .sequence_timeout_ns = data.keybind.default_sequence_timeout_ns,
 });
 
 fn runKeybind(context: *KeybindContext, iterations: usize) !u64 {

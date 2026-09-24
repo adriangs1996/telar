@@ -178,7 +178,7 @@ delivery.
 
 - `src/model/input/key_routing.zig` proves capture authority.
 - `src/client/input/key_lease.zig` proves exact-owner leases, replacement and
-  saturation policy; `src/client/input/routing_tests.zig` proves binding
+  saturation policy; `lib/keyinput/routing_tests.zig` proves binding
   ownership through release and that repeats arm only after execution.
 - `src/frontend/input/keybind.zig` proves active editor capture before bindings,
   semantic replay, binding/application physical ownership, persistent prefix

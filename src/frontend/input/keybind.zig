@@ -24,10 +24,19 @@ const TerminalResponseCapture = @import("TerminalResponseCapture.zig");
 
 pub const TestAction = enum { detach, palette, next };
 const TestBinding = keyinput.GenericBinding(TestAction, 4);
-const TestRouter = GenericRouter(TestAction, .{ .max_bindings = 16, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 });
+const test_limits: keyinput.RouterLimits = .{
+    .max_bindings = 16,
+    .max_keys = 4,
+    .input_capacity = 64,
+    .held_capacity = 32,
+    .max_physical_leases = data.keybind.max_physical_leases,
+    .escape_timeout_ns = data.keybind.default_escape_timeout_ns,
+    .sequence_timeout_ns = data.keybind.default_sequence_timeout_ns,
+};
+const TestRouter = GenericRouter(TestAction, test_limits);
 
 test "terminal decoding and direct semantic input produce identical routing" {
-    const DirectRouter = client.GenericRouter(TestAction, .{ .max_bindings = 16, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 }, struct {});
+    const DirectRouter = keyinput.GenericRouter(TestAction, test_limits, struct {});
     const bindings = [_]TestBinding{
         try TestBinding.parse(&.{"up"}, .next),
         try TestBinding.parse(&.{ "left", "right" }, .detach),
@@ -134,7 +143,7 @@ test "keymap accepts sibling sequences with one shared prefix" {
 test "keymap action representation does not affect sequence identity" {
     const SmallAction = enum(u8) { detach, palette };
     const SmallBinding = keyinput.GenericBinding(SmallAction, 4);
-    const SmallRouter = GenericRouter(SmallAction, .{ .max_bindings = 16, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 });
+    const SmallRouter = GenericRouter(SmallAction, test_limits);
     const siblings = [_]SmallBinding{
         try .parse(&.{ "ctrl+b", "d" }, .detach),
         try .parse(&.{ "ctrl+b", "p" }, .palette),
@@ -660,7 +669,15 @@ test "an action may stop routing the rest of its input chunk" {
 }
 
 test "a full one-byte decoder preserves lone Escape until its deadline" {
-    const TinyRouter = GenericRouter(TestAction, .{ .max_bindings = 1, .max_keys = 1, .input_capacity = 1, .held_capacity = 1 });
+    const TinyRouter = GenericRouter(TestAction, .{
+        .max_bindings = 1,
+        .max_keys = 1,
+        .input_capacity = 1,
+        .held_capacity = 1,
+        .max_physical_leases = test_limits.max_physical_leases,
+        .escape_timeout_ns = test_limits.escape_timeout_ns,
+        .sequence_timeout_ns = test_limits.sequence_timeout_ns,
+    });
     var router = try TinyRouter.init(&.{});
     var input: TinyRouter.Feed = .{ .bytes = "\x1b", .now_ns = 7 };
     try std.testing.expect(router.next(&input) == null);

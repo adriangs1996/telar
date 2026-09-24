@@ -161,7 +161,7 @@ allocation or plugin work before an explicit binding is matched. Socket backpres
 drain, and transport completion resumes it.
 
 Proof lives in `src/gui/tests/navigation.zig`, the input capability tests and
-`src/client/input/routing_tests.zig`: all built-in actions resolve identically,
+`lib/keyinput/routing_tests.zig`: all built-in actions resolve identically,
 Ctrl-Space and modifier normalization match configured keys, paste stays with
 prompts, key ownership survives reload, child drag remains on its original pane,
 stale geometry and attachment generations cannot redirect input, hidden panes

@@ -92,7 +92,7 @@ which publishes `ClientModel.Version` and `PresentationIngress`. The latter cont
 and visible input-routing revisions. The presenter schedules a paced draw when
 any observed value changed.
 
-The routing implementation is in `src/client/input/GenericRouter.zig`. The TUI
+The routing implementation is in `lib/keyinput/GenericRouter.zig`. The TUI
 factory in `src/frontend/input/GenericRouter.zig` supplies `term.parse`; its
 specialized router's `next` method buffers
 split terminal sequences. Decoder-free adapters call `routeEvent` with semantic
