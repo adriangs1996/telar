@@ -80,7 +80,7 @@ silent.
 - `src/backend/runtime/tests/observation_events_test.zig` combines PTY
   frames with continuing Stop hooks and proves exactly one final sound. It
   also rejects a delayed ready result older than the current report.
-- `src/backend/agent/tracker_support.zig` covers active work versus settlement,
+- `src/backend/agent/tracker_tests.zig` covers active work versus settlement,
   monotonic ordering within a millisecond, stale evidence expiry, and model
   responses that finish before the agent turn, including Pi tools running
   beyond the report lifetime.

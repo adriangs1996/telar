@@ -108,11 +108,9 @@ of them: every package imports the libraries it uses by name.
 
 ## Business rules that must move into flows, not into libraries
 
-- `src/backend/agent/tracker_support.zig` (1,514 lines, bigger than
-  `Agent.zig`) coordinates observations, the aggregate and snapshot
-  publication: a runtime flow living under `agent/`. It moves to
-  `src/backend/runtime/`, and its import of `agent_panes/Transcript.zig`
-  becomes a parameter.
+- `src/backend/agent/tracker_support.zig` (resolved): measured, it was the
+  tracker's 60 scenario tests plus one enum, not a runtime flow. The enum
+  lives on `Tracker`, its one user, and the file is `tracker_tests.zig`.
 - `Agent.apply{Process,Proxy,Report,Screen}`, `expire` and `reproject`
   decide what an agent status means; they become procedures of the agent
   flows over the `agents` table.

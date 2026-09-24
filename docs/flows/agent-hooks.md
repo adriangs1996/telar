@@ -273,11 +273,11 @@ for `SessionEnd` and `Interrupt`.
 
 ## Validation
 
-- `src/backend/agent/tracker_support.zig` proves precedence over screen evidence,
+- `src/backend/agent/tracker_tests.zig` proves precedence over screen evidence,
   `exited` withdrawal and expiry.
 - `src/backend/runtime/agent_hooks.zig` holds the reply contracts for
   `report_agent`, `report_agent_command` and `report_agent_title`.
-- `src/backend/agent/tracker_support.zig` proves that an agent title outranks a
+- `src/backend/agent/tracker_tests.zig` proves that an agent title outranks a
   generated one, never clears a manual one, clears on an empty report and is
   durable.
 - `src/cli/hook.zig` proves the event mapping and subagent filtering for

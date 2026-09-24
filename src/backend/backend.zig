@@ -46,7 +46,7 @@ test {
     _ = @import("agent/restored_titles.zig");
     _ = @import("agent/session_file.zig");
     _ = @import("agent/session_readers/session_readers.zig");
-    _ = @import("agent/tracker_support.zig");
+    _ = @import("agent/tracker_tests.zig");
     _ = @import("agent/types.zig");
     _ = @import("history/agent_detection.zig");
     _ = @import("history/channel_support.zig");

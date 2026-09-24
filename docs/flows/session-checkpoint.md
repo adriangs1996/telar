@@ -180,7 +180,7 @@ the session volatile.
 - `src/backend/persistence/checkpoint.zig` proves the record round trip,
   version 1 compatibility, title validation and rejection of corrupt,
   truncated and foreign files.
-- `src/backend/agent/tracker_support.zig` and `src/backend/agent/restored_titles.zig`
+- `src/backend/agent/tracker_tests.zig` and `src/backend/agent/restored_titles.zig`
   prove that a restored title reaches only the resumed agent's generation,
   skips title generation and is dropped with its pane. Provider and session
   mismatches cannot transfer pending titles or authorize a different resume.

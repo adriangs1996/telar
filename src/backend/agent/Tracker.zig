@@ -9,7 +9,6 @@ const Identity = @import("Identity.zig");
 const SessionReference = @import("SessionReference.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const SessionTitle = @import("SessionTitle.zig");
-const tracker_support = @import("tracker_support.zig");
 const ProcessObservation = @import("ProcessObservation.zig");
 const ProxyObservation = @import("ProxyObservation.zig");
 const ScreenObservation = @import("ScreenObservation.zig");
@@ -23,6 +22,12 @@ const Agent = @import("Agent.zig");
 const description = @import("description.zig");
 const ManagedState = @import("ManagedState.zig");
 const Tracker = @This();
+
+pub const AcknowledgeResult = enum {
+    unknown_agent,
+    unchanged,
+    acknowledged,
+};
 
 repository: Repository = .{},
 restored_agents: RestoredAgents = .{},
@@ -195,7 +200,7 @@ pub fn restoreTitle(self: *Tracker, key: PaneKey, title: SessionTitle) bool {
 ///     pumpClients();
 /// }
 /// ```
-pub fn acknowledge(self: *Tracker, key: PaneKey, now_ms: i64) tracker_support.AcknowledgeResult {
+pub fn acknowledge(self: *Tracker, key: PaneKey, now_ms: i64) AcknowledgeResult {
     const agent = self.repository.find(key) orelse return .unknown_agent;
 
     if (!agent.acknowledge()) {

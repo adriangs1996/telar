@@ -1,7 +1,5 @@
-//! Runtime-owned coordinator for agent observations and projections.
-//!
-//! The tracker resolves observations to one pane generation, delegates every
-//! state transition to that aggregate, and publishes revisioned snapshots.
+//! Agent tracking scenarios: which evidence registers, settles, blocks or
+//! completes an agent, and how titles, sessions and resumes follow it.
 
 const core = @import("telar-core");
 const Identity = @import("Identity.zig");
@@ -17,12 +15,6 @@ const SessionTitle = @import("SessionTitle.zig");
 const SessionFile = @import("SessionFile.zig");
 const Completion = @import("Completion.zig");
 const Transcript = @import("../agent_panes/Transcript.zig");
-
-pub const AcknowledgeResult = enum {
-    unknown_agent,
-    unchanged,
-    acknowledged,
-};
 
 fn testIdentity() !Identity {
     return .{
