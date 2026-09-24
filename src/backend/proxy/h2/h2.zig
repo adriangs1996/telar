@@ -1,7 +1,6 @@
 //! Public HTTP/2 relay capability for intercepted TLS connections.
 
 const relay_mod = @import("relay.zig");
-const GenericConnectionPort = @import("GenericConnectionPort.zig").Type;
 const GenericConnection = @import("GenericConnection.zig").Type;
 const Rewrite = @import("../Rewrite.zig");
 const std = @import("std");
@@ -134,15 +133,7 @@ test "relay options map direction and peer settings" {
     try std.testing.expect(response.transformation.?.target_settings == &settings.child);
 }
 
-const integration_port: GenericConnectionPort(IntegrationContext) = .{
-    .io = IntegrationContext.io,
-    .relay_request = IntegrationContext.relayRequest,
-    .relay_response = IntegrationContext.relayResponse,
-    .record_decode_failure = IntegrationContext.recordDecodeFailure,
-    .settle = IntegrationContext.settle,
-};
-
-const IntegrationConnection = GenericConnection(IntegrationContext, integration_port);
+const IntegrationConnection = GenericConnection(IntegrationContext);
 
 test "HTTP2 connection composition relays both directions before settlement" {
     const settings_frame = "\x00\x00\x00\x04\x00\x00\x00\x00\x00";
@@ -159,7 +150,7 @@ test "HTTP2 connection composition relays both directions before settlement" {
         .request_done = &done,
     };
 
-    IntegrationConnection.run(&context);
+    IntegrationConnection.run(std.testing.io, &context);
 
     try std.testing.expectEqualStrings(request_wire, context.session.originOutput());
     try std.testing.expectEqualStrings(settings_frame, context.session.childOutput());

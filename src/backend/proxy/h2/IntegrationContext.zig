@@ -19,10 +19,6 @@ request_phase: ?middleware.Phase = null,
 decode_failures: u8 = 0,
 settlements: u8 = 0,
 
-pub fn io(_: *IntegrationContext) std.Io {
-    return std.testing.io;
-}
-
 pub fn relayRequest(self: *IntegrationContext, settings: *Settings) Stats {
     const stats = h2.relay(&self.session, h2.relayOptions(.request, settings, .{ .watched_routes = &watched_routes }), self);
     self.request_done.putOneUncancelable(std.testing.io, 0) catch unreachable;

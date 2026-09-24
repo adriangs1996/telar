@@ -16,10 +16,6 @@ response_stats: Stats = .{},
 steps: [3]connection.Step = undefined,
 step_len: usize = 0,
 
-pub fn io(_: *Capture) std.Io {
-    return std.testing.io;
-}
-
 pub fn relayRequest(self: *Capture, settings: *Settings) Stats {
     settings.child.max_frame_size.store(32 * 1024, .seq_cst);
 

@@ -99,11 +99,11 @@ recording headers or payloads. Their interpretation is documented in
 - `Claude request bodies refine route candidates before publication` (`tunnel/Http1Connection.zig`)
   covers startup, bodyless, and primary request classification at the service
   boundary.
-- `Claude request bodies refine interleaved route candidates per stream` (`tunnel/h2.zig`)
+- `Claude request bodies refine interleaved route candidates per stream` (`tunnel/RelayContext.zig`)
   covers concurrent body classification and stream identity.
 - `Claude inference requests negotiate identity encoding`
   (`provider/claude_transport.zig`) covers the provider rewrite, and
-  `only request heads with rewrites are transcoded` (`tunnel/h2.zig`) covers
+  `only request heads with rewrites are transcoded` (`tunnel/RelayContext.zig`) covers
   which directions receive it.
 - `Claude SSE completion is published after forwarded response activity`
   covers HTTP framing, byte forwarding, SSE parsing, provider interpretation,
@@ -113,7 +113,7 @@ recording headers or payloads. Their interpretation is documented in
   prove request-body and end-of-request delivery at arbitrary boundaries.
 - `HTTP2 observer exposes DATA payload across every two-chunk split` proves
   response payload delivery before transport completion.
-- `final DATA publishes Claude completion before transport completion` (`tunnel/h2.zig`)
+- `final DATA publishes Claude completion before transport completion` (`tunnel/RelayContext.zig`)
   covers provider interpretation, exact stream identity, publication, and
   stream cleanup.
 - `runtime provider turn completion updates Claude across HTTP protocols` covers

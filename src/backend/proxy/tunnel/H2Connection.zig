@@ -7,7 +7,6 @@ const Producer = @import("../capture/Producer.zig");
 const ResponseStreams = @import("../provider/ResponseStreams.zig");
 const Streams = @import("../provider/Streams.zig");
 const RelayContext = @import("RelayContext.zig");
-const h2 = @import("h2.zig");
 const Connection = @This();
 
 options: H2Options,
@@ -44,7 +43,7 @@ pub fn run(self: *Connection) void {
         .captures = options.captures,
     };
 
-    h2.RelayConnection.run(&relay);
+    relay.run();
 }
 
 const H2Options = struct {

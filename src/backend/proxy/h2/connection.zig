@@ -1,11 +1,9 @@
 //! Ownership of one bidirectional HTTP/2 relay.
 
-const GenericConnectionPort = @import("GenericConnectionPort.zig").Type;
 const GenericConnection = @import("GenericConnection.zig").Type;
 const Capture = @import("Capture.zig");
 const std = @import("std");
 
-const h2frames = @import("h2frames");
 
 pub const Step = enum {
     response_decode_failure,
@@ -13,15 +11,7 @@ pub const Step = enum {
     settle,
 };
 
-const test_port: GenericConnectionPort(Capture) = .{
-    .io = Capture.io,
-    .relay_request = Capture.relayRequest,
-    .relay_response = Capture.relayResponse,
-    .record_decode_failure = Capture.recordDecodeFailure,
-    .settle = Capture.settle,
-};
-
-const TestConnection = GenericConnection(Capture, test_port);
+const TestConnection = GenericConnection(Capture);
 
 test "response completion cancels the unfinished request relay before settlement" {
     var started_storage: [1]u8 = undefined;
@@ -33,7 +23,7 @@ test "response completion cancels the unfinished request relay before settlement
         .request_release = &release,
     };
 
-    TestConnection.run(&capture);
+    TestConnection.run(std.testing.io, &capture);
 
     try std.testing.expect(capture.response_saw_request);
     try std.testing.expect(capture.response_saw_shared_settings);
@@ -50,7 +40,7 @@ test "both decode failures are recorded before connection settlement" {
         .response_stats = .{ .decode_failed = true },
     };
 
-    TestConnection.run(&capture);
+    TestConnection.run(std.testing.io, &capture);
 
     try std.testing.expectEqualSlices(
         Step,
