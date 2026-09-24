@@ -677,7 +677,7 @@ test "copy mode round trip: enter, select, copy, leave" {
         keyinput.Control.continue_routing,
         try client_module.actions.executeAction(client, .enter_copy_mode, .effect),
     );
-    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expect(data.copy_mode.isActive(&client.model));
     try std.testing.expect(!data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)));
     try std.testing.expect(!client_module.name_prompt.openNamePrompt(&client.model, .rename_active_tab));
     try std.testing.expect(!client.model.name_prompt.active());
@@ -691,7 +691,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     try harness.settleModelPresentation();
     try std.testing.expect(terminal.presenter.compositor.copy != null);
     try std.testing.expectEqualDeep(
-        client.model.copyModeProjection().?.view,
+        data.copy_mode.currentProjection(&client.model).?.view,
         terminal.presenter.compositor.copy.?.view,
     );
     const painted_cursor_y = terminal.presenter.compositor.copy.?.view.cursor.y;
@@ -717,7 +717,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     try std.testing.expectEqual(mouse_version.copy + 1, client.model.version().copy);
     try std.testing.expectEqual(mouse_version.viewport + 1, client.model.version().viewport);
     try support.expectNonCopyOrViewportVersionEqual(mouse_version, client.model.version());
-    try std.testing.expectEqual(painted_cursor_y - 3, client.model.copyModeProjection().?.view.cursor.y);
+    try std.testing.expectEqual(painted_cursor_y - 3, data.copy_mode.currentProjection(&client.model).?.view.cursor.y);
     try std.testing.expectEqual(painted_cursor_y, terminal.presenter.compositor.copy.?.view.cursor.y);
 
     // While in copy mode, keys route to the selection, not the pane.
@@ -732,7 +732,7 @@ test "copy mode round trip: enter, select, copy, leave" {
 
     const version_before_copy = client.model.version();
     try host_inputs.key(terminal, try keyinput.chord.parseKey("enter"));
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try support.expectNonCopyOrViewportVersionEqual(version_before_copy, client.model.version());
     try std.testing.expectEqual(version_before_copy.copy + 1, client.model.version().copy);
     try std.testing.expectEqual(version_before_copy.viewport + 1, client.model.version().viewport);
@@ -775,7 +775,7 @@ test "copy-mode o opens a file URI in an editor tab without leaving the mode" {
     const version = client.model.version();
     try host_inputs.key(terminal, try keyinput.chord.parseKey("o"));
 
-    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expect(data.copy_mode.isActive(&client.model));
     try std.testing.expectEqualDeep(version, client.model.version());
     try harness.settle();
 
@@ -840,7 +840,7 @@ test "native action preflight retires copy mode before concrete delivery" {
     _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
     const version = client.model.version();
 
-    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expect(data.copy_mode.isActive(&client.model));
     try std.testing.expect(client.model.sidebar_visible);
     try std.testing.expectEqual(
         keyinput.Control.continue_routing,
@@ -850,7 +850,7 @@ test "native action preflight retires copy mode before concrete delivery" {
     var expected = version;
     expected.copy += 1;
     expected.chrome += 1;
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.sidebar_visible);
     try std.testing.expectEqualDeep(expected, client.model.version());
 }
@@ -871,14 +871,14 @@ test "copy-mode pointer consumes outside wheels and exits a missing target" {
         .kind = .scroll_up,
     });
 
-    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expect(data.copy_mode.isActive(&client.model));
     try std.testing.expectEqualDeep(active_version, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
     try std.testing.expect(data.tab_layout.removePane(&client.model, TestHarness.bootstrap_pane));
     try host_inputs.mouse(terminal, .{ .x = 0, .y = 0, .kind = .move });
 
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try support.expectNonCopyVersionEqual(active_version, client.model.version());
     try std.testing.expectEqual(active_version.copy + 1, client.model.version().copy);
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
@@ -904,8 +904,8 @@ test "a full outbox keeps copy mode and its selection active" {
         host_inputs.key(terminal, try keyinput.chord.parseKey("enter")),
     );
 
-    try std.testing.expect(client.model.copyModeActive());
-    try std.testing.expect(client.model.copyModeProjection().?.view.anchor != null);
+    try std.testing.expect(data.copy_mode.isActive(&client.model));
+    try std.testing.expect(data.copy_mode.currentProjection(&client.model).?.view.anchor != null);
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.model.to_runtime.len));
 }

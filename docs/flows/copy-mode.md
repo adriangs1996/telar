@@ -26,11 +26,11 @@ key_routing / copy_mode_pointer / actions.executeAction
         |
 copy_mode.applyCopyMode
         |
-ClientModel.planCopyMode
+copy_mode.planCommand
         |
 optional copy_selection effect before exit
         |
-ClientModel.commitCopyMode
+copy_mode.commitPlan
         |
 optional set_pane_viewport effect after commit
         |
@@ -64,9 +64,9 @@ snapshot, leaves copy mode before any action other than entry, then delegates
 the concrete action. A leave failure prevents that action; a later action
 failure retains the completed exit and restored entry viewport.
 
-`ClientModel.planCopyMode` applies the pure motion component to a local state
+`copy_mode.planCommand` applies the pure motion component to a local state
 copy. Unhandled keys and boundary motions return no plan and advance no
-revision. `commitCopyMode` accepts only the revision and exact prior state that
+revision. `copy_mode.commitPlan` accepts only the revision and exact prior state that
 were planned, so an obsolete plan cannot overwrite a newer command.
 
 `o` resolves the textual URI under the cursor through the bounded cell adapter.
@@ -75,7 +75,7 @@ the viewport or leaving the mode. See [Link opening](link-opening.md).
 
 Copy delivery is intentionally ordered before the exit commit:
 `copy_mode.applyCopyMode` pushes `copy_selection` into `model.to_runtime`
-before `commitCopyMode`. If that queue is full, the selection and copy-mode revision remain intact and the user can
+before `copy_mode.commitPlan`. If that queue is full, the selection and copy-mode revision remain intact and the user can
 retry. Viewport synchronization follows the commit. If that effect fails, the
 client retains the committed disposable state; reconnection or a later runtime
 frame repairs the operational projection. Copy mode uses the same
@@ -131,7 +131,7 @@ runtime_io.receiveRuntime -> handleServerMessage -> receivePaneFrame
         |
 pane_frame.receive
         |
-screen commit + ClientModel.reconcileCopyModeFrame -> copy_mode.onFrame
+screen commit + copy_mode.reconcileFrame -> copy_mode.onFrame
         |
 frame_revision always + copy_revision when copy state changed
 ```

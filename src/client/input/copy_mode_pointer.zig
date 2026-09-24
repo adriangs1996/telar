@@ -20,7 +20,7 @@ pub fn apply(client: *Client, tab: usize, event: keyinput.Mouse) !bool {
 
 fn resolve(model: *data.ClientModel, tab: usize, event: keyinput.Mouse) Authority {
     const area = data.workbench.region(model).area;
-    if (model.pointerSelection()) |selection| {
+    if (data.copy_mode.pointerSelection(model)) |selection| {
         const view = data.tab_layout.view(model, tab, selection.pane_id, area);
         const position: ?cellgrid.Point = if (view != null and view.?.content.w > 0 and view.?.content.h > 0) .{
             .x = @min(event.x -| view.?.content.x, view.?.content.w - 1),
@@ -30,7 +30,7 @@ fn resolve(model: *data.ClientModel, tab: usize, event: keyinput.Mouse) Authorit
         return .{ .selection = .{ .dragging = selection.dragging, .position = position } };
     }
 
-    const pane_id = model.copyModeTarget() orelse return .unowned;
+    const pane_id = data.copy_mode.targetPane(model) orelse return .unowned;
     if (model.panes.findIn(model.tabs.location[tab].tab_id, pane_id) == null) {
         return .target_missing;
     }

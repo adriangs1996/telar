@@ -1,3 +1,4 @@
+const copy_mode = @import("../../input/copy_mode.zig");
 const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
@@ -98,7 +99,7 @@ test "pane input planning yields ownership to prompts and copy mode" {
     try std.testing.expectEqualDeep(prompt_version, model.version());
 
     try std.testing.expect(model.name_prompt.apply(.cancel) == .cancelled);
-    try std.testing.expect(model.enterCopyMode());
+    try std.testing.expect(copy_mode.enter(&model));
     const copy_version = model.version();
     try std.testing.expect(model.planPaneInput(.{ .pane = pane_id }) == null);
     try std.testing.expectEqual(pane_id, model.planPaneInput(.{ .key_lease = pane_id }).?.pane_id);
@@ -246,11 +247,11 @@ test "pane paste release and copy mode keep one input owner" {
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     _ = model.beginPanePaste().?;
-    try std.testing.expect(!model.enterCopyMode());
+    try std.testing.expect(!copy_mode.enter(&model));
     try std.testing.expect(model.releasePanePaste(pane_id));
     try std.testing.expect(!model.releasePanePaste(pane_id));
 
-    try std.testing.expect(model.enterCopyMode());
+    try std.testing.expect(copy_mode.enter(&model));
     try std.testing.expect(model.beginPanePaste() == null);
 }
 
@@ -266,7 +267,7 @@ test "pane frame application commits screen copy state and one frame revision" {
     const pane = model.panes.find(pane_id).?;
     pane.scroll = .{ .total_rows = 4, .offset = 2 };
     pane.cursor = .{ .visible = true, .x = 0, .y = 1 };
-    try std.testing.expect(model.enterCopyMode());
+    try std.testing.expect(copy_mode.enter(&model));
     const cells = [_]cellgrid.Cell{
         .{ .bytes = [_]u8{'x'} ++ [_]u8{0} ** (cellgrid.Cell.max_bytes - 1) },
         .{},
@@ -301,7 +302,7 @@ test "pane frame application commits screen copy state and one frame revision" {
     try std.testing.expect(pane.input_modes.cursor_keys);
     try std.testing.expectEqual(@as(u64, 7), pane.applied_frame_id);
     try std.testing.expectEqual(@as(u64, 7), pane.pending_frame_id);
-    try std.testing.expectEqual(@as(u32, 2), model.copyModeProjection().?.view.cursor.y);
+    try std.testing.expectEqual(@as(u32, 2), copy_mode.currentProjection(&model).?.view.cursor.y);
     try std.testing.expectEqualDeep(Version{ .copy = 2, .frame = 1 }, model.version());
 }
 
@@ -569,7 +570,7 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
     try std.testing.expectEqualDeep(Version{ .viewport = 2 }, model.version());
 
     pane.scroll.offset = 10;
-    try std.testing.expect(model.enterCopyMode());
+    try std.testing.expect(copy_mode.enter(&model));
     const copy_version = model.version();
     try std.testing.expect(model.setPaneViewport(.{
         .pane_id = pane_id,
@@ -577,7 +578,7 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
     }) == null);
     try std.testing.expectEqualDeep(copy_version, model.version());
 
-    const copy_commit = model.commitCopyMode(model.planCopyMode(.{
+    const copy_commit = copy_mode.commitPlan(&model, copy_mode.planCommand(&model, .{
         .key = try keyinput.chord.parseKey("g"),
     }).?).?;
 
@@ -600,11 +601,11 @@ test "copy mode entry owns one independent model revision" {
     pane.scroll = .{ .total_rows = 15, .offset = 10 };
     pane.cursor = .{ .visible = true, .x = 4, .y = 2 };
 
-    try std.testing.expect(model.copyModeTarget() == null);
-    try std.testing.expect(model.enterCopyMode());
+    try std.testing.expect(copy_mode.targetPane(&model) == null);
+    try std.testing.expect(copy_mode.enter(&model));
 
-    try std.testing.expect(model.copyModeActive());
-    try std.testing.expectEqual(pane_id, model.copyModeTarget().?);
+    try std.testing.expect(copy_mode.isActive(&model));
+    try std.testing.expectEqual(pane_id, copy_mode.targetPane(&model).?);
     try std.testing.expectEqualDeep(CopyModeProjection{
         .pane_id = pane_id,
         .view = .{
@@ -612,17 +613,17 @@ test "copy mode entry owns one independent model revision" {
             .anchor = null,
             .linewise = false,
         },
-    }, model.copyModeProjection().?);
+    }, copy_mode.currentProjection(&model).?);
     try std.testing.expectEqualDeep(Version{ .copy = 1 }, model.version());
-    try std.testing.expect(!model.enterCopyMode());
+    try std.testing.expect(!copy_mode.enter(&model));
     try std.testing.expectEqualDeep(Version{ .copy = 1 }, model.version());
 
-    const leave = model.planCopyMode(.leave).?;
-    _ = model.commitCopyMode(leave).?;
+    const leave = copy_mode.planCommand(&model, .leave).?;
+    _ = copy_mode.commitPlan(&model, leave).?;
     model.name_prompt.begin(.create_workspace);
     const copy_revision = model.version().copy;
 
-    try std.testing.expect(!model.enterCopyMode());
+    try std.testing.expect(!copy_mode.enter(&model));
     try std.testing.expectEqual(copy_revision, model.version().copy);
 }
 
@@ -634,20 +635,20 @@ test "copy mode plans reject no-ops and stale commits" {
         .tab_id = @enumFromInt(1),
     };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    try std.testing.expect(model.enterCopyMode());
+    try std.testing.expect(copy_mode.enter(&model));
     const version = model.version();
 
-    try std.testing.expect(model.planCopyMode(.{ .key = try keyinput.chord.parseKey("left") }) == null);
-    try std.testing.expect(model.planCopyMode(.{ .key = try keyinput.chord.parseKey("z") }) == null);
+    try std.testing.expect(copy_mode.planCommand(&model, .{ .key = try keyinput.chord.parseKey("left") }) == null);
+    try std.testing.expect(copy_mode.planCommand(&model, .{ .key = try keyinput.chord.parseKey("z") }) == null);
     try std.testing.expectEqualDeep(version, model.version());
 
-    const first = model.planCopyMode(.{ .key = try keyinput.chord.parseKey("right") }).?;
-    const stale = model.planCopyMode(.{ .key = try keyinput.chord.parseKey("right") }).?;
-    const commit = model.commitCopyMode(first).?;
+    const first = copy_mode.planCommand(&model, .{ .key = try keyinput.chord.parseKey("right") }).?;
+    const stale = copy_mode.planCommand(&model, .{ .key = try keyinput.chord.parseKey("right") }).?;
+    const commit = copy_mode.commitPlan(&model, first).?;
 
     try std.testing.expect(commit.active);
     try std.testing.expectEqual(version.copy + 1, commit.copy_revision);
-    try std.testing.expect(model.commitCopyMode(stale) == null);
+    try std.testing.expect(copy_mode.commitPlan(&model, stale) == null);
     try std.testing.expectEqual(version.copy + 1, model.version().copy);
 }
 
@@ -664,17 +665,17 @@ test "copy mode plans the textual link under its cursor without mutation" {
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 2 }, .text = "file:///tmp/a%20b.txt", .style = .{} });
     pane.cursor = .{ .visible = true, .x = 12, .y = 2 };
-    try std.testing.expect(model.enterCopyMode());
+    try std.testing.expect(copy_mode.enter(&model));
     const version = model.version();
 
-    const plan = model.planCopyMode(.{ .key = try keyinput.chord.parseKey("o") }).?;
+    const plan = copy_mode.planCommand(&model, .{ .key = try keyinput.chord.parseKey("o") }).?;
 
     try std.testing.expectEqualStrings("file:///tmp/a%20b.txt", plan.open_link.?.uri());
     try std.testing.expectEqualDeep(version, model.version());
-    try std.testing.expect(model.planCopyMode(.{ .key = try keyinput.chord.parseKey("o") }) != null);
+    try std.testing.expect(copy_mode.planCommand(&model, .{ .key = try keyinput.chord.parseKey("o") }) != null);
 
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
-    try std.testing.expect(model.planCopyMode(.{ .key = try keyinput.chord.parseKey("o") }) == null);
+    try std.testing.expect(copy_mode.planCommand(&model, .{ .key = try keyinput.chord.parseKey("o") }) == null);
 }
 
 test "an active tab transition releases copy authority" {
@@ -691,7 +692,7 @@ test "an active tab transition releases copy authority" {
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model_data.tab_selection.select(&model, first.tab_id));
-    try std.testing.expect(model.enterCopyMode());
+    try std.testing.expect(copy_mode.enter(&model));
     const version = model.version();
 
     const selection = (try model.selectTab(.{ .tab_id = second.tab_id })).?;
@@ -699,7 +700,7 @@ test "an active tab transition releases copy authority" {
     try std.testing.expectEqualDeep(first, selection.previous);
     try std.testing.expectEqualDeep(second, selection.selected);
     try std.testing.expectEqual(model.version().copy, selection.copy_revision);
-    try std.testing.expect(!model.copyModeActive());
+    try std.testing.expect(!copy_mode.isActive(&model));
     try std.testing.expectEqual(version.active_tab + 1, model.version().active_tab);
     try std.testing.expectEqual(version.copy + 1, model.version().copy);
 }

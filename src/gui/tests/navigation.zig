@@ -135,7 +135,7 @@ test "native custom prefix navigates pane focus fullscreen and copy mode" {
     try customChord(session, "z");
     try std.testing.expect(!session.gui.app.model.tabs.layout[tab].isFullscreen());
     try customChord(session, "[");
-    try std.testing.expect(session.gui.app.model.copyModeActive());
+    try std.testing.expect(data.copy_mode.isActive(&session.gui.app.model));
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
 
@@ -193,7 +193,7 @@ test "native pointer rejects queued presses after geometry replacement" {
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 2, .x = 20, .y = 20 });
     try input_support.pump(session.gui);
     try session.settle();
-    try std.testing.expect(app.model.pointerSelection() == null);
+    try std.testing.expect(data.copy_mode.pointerSelection(&app.model) == null);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
 
@@ -279,7 +279,7 @@ test "native pointer rejects a newer layout even before a GPU flight starts" {
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 2, .x = 10, .y = 10 });
     try input_support.pump(session.gui);
     try session.settle();
-    try std.testing.expect(app.model.pointerSelection() == null);
+    try std.testing.expect(data.copy_mode.pointerSelection(&app.model) == null);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
 

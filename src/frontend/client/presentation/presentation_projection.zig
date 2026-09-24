@@ -1,6 +1,7 @@
 //! Immutable semantic projection and explicit presentation-owned resources for
 //! one synchronous client frame.
 
+const data = @import("model");
 const client_module = @import("telar-client");
 const TerminalAdapter = @import("../TerminalAdapter.zig");
 const Resources = @import("Resources.zig");
@@ -34,7 +35,7 @@ pub fn projection(terminal: *TerminalAdapter) client_module.Projection {
 
     return client_module.capture(&client.model, .{
         .presentation_ingress = presentationIngress(terminal),
-        .status_mode = terminal.host_input.statusMode(client.model.copyModeActive()),
+        .status_mode = terminal.host_input.statusMode(data.copy_mode.isActive(&client.model)),
         .geometry = client.geometry(),
     });
 }

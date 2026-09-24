@@ -36,7 +36,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
     const pending_updates_before_request = terminal.presenter.pending_updates;
     try host_inputs.forward(terminal, "mainx\r");
 
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualStrings("", client.model.workspaceName());
     try support.expectNonPromptVersionEqual(version_before_request, client.model.version());
@@ -111,7 +111,7 @@ test "pending workspace operation keeps the rename prompt without sending" {
     try std.testing.expect(client_module.name_prompt.openNamePrompt(&client.model, .rename_workspace));
     try host_inputs.forward(terminal, "x\r");
 
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
@@ -119,7 +119,7 @@ test "pending workspace operation keeps the rename prompt without sending" {
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
     try host_inputs.forward(terminal, "\x1b");
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.name_prompt.active());
 }
 
@@ -274,7 +274,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
 
     try host_inputs.forward(terminal, "x");
     try host_inputs.forward(terminal, "\r");
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualStrings("shell", data.tab_label.text(&client.model, client.model.tabs.active));
     try support.expectNonPromptVersionEqual(version_before_request, client.model.version());
@@ -424,7 +424,7 @@ test "pending tab operation keeps the rename prompt without sending" {
     ));
     try host_inputs.forward(terminal, "x\r");
 
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
@@ -432,7 +432,7 @@ test "pending tab operation keeps the rename prompt without sending" {
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
     try host_inputs.forward(terminal, "\x1b");
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.name_prompt.active());
 }
 
@@ -458,7 +458,7 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
 
     try std.testing.expectError(error.ClientOutboxFull, host_inputs.forward(terminal, "x\r"));
 
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expect(!client.model.request_lifecycle.tracker.has(.tab_operation));
     try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.model.to_runtime.len));
@@ -478,9 +478,9 @@ test "escaping the prompt editor closes model state without changing mode" {
 
     _ = try client_module.actions.executeAction(client, .new_workspace, .binding);
     try std.testing.expect(client.model.name_prompt.active());
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try host_inputs.forward(terminal, "\x1b");
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.name_prompt.active());
 }
 

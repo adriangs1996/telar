@@ -27,7 +27,7 @@ test "mouse selection spans Markdown code and messages and copies only displayed
     try std.testing.expect(std.mem.indexOf(u8, text, "Second answer with ") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "https://") == null);
     try std.testing.expect(std.mem.indexOf(u8, text, "```zig") == null);
-    try std.testing.expect(!gui.app.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&gui.app.model));
     try std.testing.expectEqualStrings("", gui.app.model.agentPane(Fixture.pane_id).?.composerSlice());
 }
 

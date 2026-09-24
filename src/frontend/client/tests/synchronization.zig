@@ -836,7 +836,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
     const model = client.model.tabs.active;
     try data.pane_split.split(&client.model, model, .{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = retired, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = terminal.view.workbench() });
     try client_module.pane_focus.synchronizeActivePane(client);
-    try std.testing.expect(client.model.enterCopyMode());
+    try std.testing.expect(data.copy_mode.enter(&client.model));
     try terminal.graphics_store.applyImage(.{
         .pane_id = retired,
         .revision = 1,
@@ -865,7 +865,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
 
     try std.testing.expect(client.model.panes.find(retired) == null);
     try std.testing.expect(!terminal.graphics_store.hasPaneGraphics(retired));
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expectEqual(@as(?core.PaneId, TestHarness.bootstrap_pane), support.reportedPaneId(client));
     try std.testing.expect(client.model.request_lifecycle.tracker.take(@enumFromInt(91)).? == .ignored);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);

@@ -149,7 +149,7 @@ test "shared routing queries distinguish key capture from eligible repetition" {
     _ = app.model.name_prompt.apply(.cancel);
     try std.testing.expectEqual(second, client.actions.repeatPane(app).?);
 
-    try std.testing.expect(app.model.enterCopyMode());
+    try std.testing.expect(data.copy_mode.enter(&app.model));
     try std.testing.expect(!data.key_routing.captures(client.key_routing.keyRoutingAuthority(app)));
     try std.testing.expect(client.actions.repeatPane(app) == null);
 }

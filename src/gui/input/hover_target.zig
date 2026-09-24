@@ -48,7 +48,7 @@ pub fn resolve(gui: *GuiAdapter, mouse: keyinput.Mouse, mods: u32) Target {
             }
 
             const base: Target = .{ .shape = if (pane.pointer_shape == .default) .text else pane.pointer_shape };
-            if (gui.app.model.copyModeActive() or gui.chrome.gesture_button != null or !pane.attached) {
+            if (data.copy_mode.isActive(&gui.app.model) or gui.chrome.gesture_button != null or !pane.attached) {
                 return base;
             }
 

@@ -226,7 +226,7 @@ pub fn deliverPaneInput(client: *Client, plan: data.PaneInputPlan, prepared: dat
     }
 
     if (prepared.source != .mouse) {
-        _ = client.model.clearPointerSelection();
+        _ = data.copy_mode.clearPointerSelection(&client.model);
     }
 
     if (prepared.source != .mouse and prepared.restore_viewport) {

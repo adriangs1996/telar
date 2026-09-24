@@ -13,7 +13,7 @@ const CopyProjection = @import("../workspace/CopyProjection.zig");
 pub fn capture(model: *data.ClientModel, context: Context) Projection {
     const tab = model.tabs.activeSlot();
     const layout: ?*const data.LayoutSnapshot = if (tab) |slot| data.tab_layout.snapshot(model, slot, context.geometry.area) else null;
-    const copy: ?CopyProjection = if (model.copyModeProjection()) |value|
+    const copy: ?CopyProjection = if (data.copy_mode.currentProjection(model)) |value|
         .{ .pane_id = value.pane_id, .view = value.view }
     else
         null;

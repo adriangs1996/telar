@@ -200,7 +200,7 @@ pub fn reportRetainedPaneMouse(client: *Client, report: data.ReportEffect) !void
 fn applyPaneMouseEffect(client: *Client, effect: data.PaneMouseEffect) !void {
     switch (effect) {
         .selection => |selection| {
-            _ = client.model.beginPointerSelection(
+            _ = data.copy_mode.beginPointerSelection(&client.model, 
                 .{
                     .pane_id = selection.plan.pane_id,
                     .position = .{

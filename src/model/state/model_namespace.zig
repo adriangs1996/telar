@@ -1,4 +1,5 @@
 //! Passive state owned by one disposable client.
+const copy_mode = @import("../input/copy_mode.zig");
 const core = @import("telar-core");
 const model_data = @import("../model.zig");
 
@@ -63,7 +64,7 @@ pub fn releaseInvalidCopyMode(model: *ClientModel) void {
         return;
     }
 
-    _ = model.releaseCopyMode(state.pane_id);
+    _ = copy_mode.release(model, state.pane_id);
 }
 
 pub fn captureWorkspace(model: *ClientModel) model_data.WorkspaceDeparture {
@@ -127,18 +128,18 @@ test "resizing a mouse-selected pane cancels coordinates but retains gesture own
     };
     const pane_id: core.PaneId = @enumFromInt(1);
     try workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    try std.testing.expect(model.beginPointerSelection(.{ .pane_id = pane_id, .position = .{ .x = 15, .y = 0 }, .now_ns = 0 }));
+    try std.testing.expect(copy_mode.beginPointerSelection(&model, .{ .pane_id = pane_id, .position = .{ .x = 15, .y = 0 }, .now_ns = 0 }));
     const version = model.version();
     const pane = model.panes.find(pane_id).?;
     try pane.buffer.resize(10, 5);
 
-    try std.testing.expect(model.reconcileCopyModeFrame(.{ .pane_id = pane_id, .previous_offset = 0, .scroll = pane.scroll }));
-    try std.testing.expect(model.copyModeProjection() == null);
+    try std.testing.expect(copy_mode.reconcileFrame(&model, .{ .pane_id = pane_id, .previous_offset = 0, .scroll = pane.scroll }));
+    try std.testing.expect(copy_mode.currentProjection(&model) == null);
     try std.testing.expectEqual(version.copy + 1, model.version().copy);
-    try std.testing.expectEqual(pane_id, model.pointerSelection().?.pane_id);
-    try std.testing.expect(model.pointerSelection().?.dragging);
-    model.finishPointerGesture();
-    try std.testing.expect(model.pointerSelection() == null);
+    try std.testing.expectEqual(pane_id, copy_mode.pointerSelection(&model).?.pane_id);
+    try std.testing.expect(copy_mode.pointerSelection(&model).?.dragging);
+    copy_mode.finishPointerGesture(&model);
+    try std.testing.expect(copy_mode.pointerSelection(&model) == null);
 }
 
 test "copy mode frame reconciliation and pane release are exact" {
@@ -153,29 +154,29 @@ test "copy mode frame reconciliation and pane release are exact" {
     const pane = model.panes.find(pane_id).?;
     pane.scroll = .{ .total_rows = 15, .offset = 10 };
     pane.cursor = .{ .visible = true, .x = 2, .y = 4 };
-    try std.testing.expect(model.enterCopyMode());
+    try std.testing.expect(copy_mode.enter(&model));
     const version = model.version();
 
-    try std.testing.expect(!model.reconcileCopyModeFrame(.{
+    try std.testing.expect(!copy_mode.reconcileFrame(&model, .{
         .pane_id = @enumFromInt(2),
         .previous_offset = 10,
         .scroll = .{ .total_rows = 10, .offset = 5 },
     }));
-    try std.testing.expect(model.reconcileCopyModeFrame(.{
+    try std.testing.expect(copy_mode.reconcileFrame(&model, .{
         .pane_id = pane_id,
         .previous_offset = 10,
         .scroll = .{ .total_rows = 10, .offset = 5 },
     }));
 
     try std.testing.expectEqual(version.copy + 1, model.version().copy);
-    try std.testing.expectEqual(@as(u32, 9), model.copyModeProjection().?.view.cursor.y);
-    try std.testing.expect(!model.reconcileCopyModeFrame(.{
+    try std.testing.expectEqual(@as(u32, 9), copy_mode.currentProjection(&model).?.view.cursor.y);
+    try std.testing.expect(!copy_mode.reconcileFrame(&model, .{
         .pane_id = pane_id,
         .previous_offset = 5,
         .scroll = .{ .total_rows = 10, .offset = 5 },
     }));
-    try std.testing.expect(!model.releaseCopyMode(@enumFromInt(2)));
-    try std.testing.expect(model.releaseCopyMode(pane_id));
-    try std.testing.expect(!model.copyModeActive());
+    try std.testing.expect(!copy_mode.release(&model, @enumFromInt(2)));
+    try std.testing.expect(copy_mode.release(&model, pane_id));
+    try std.testing.expect(!copy_mode.isActive(&model));
     try std.testing.expectEqual(version.copy + 2, model.version().copy);
 }

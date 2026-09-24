@@ -709,7 +709,7 @@ test "Lua expression paste uses pane modes and copy-mode authority" {
     const outbox_len = client.model.to_runtime.len;
     try std.testing.expectEqual(keyinput.Control.continue_routing, try client_module.actions.executeAction(client, configured, .binding));
 
-    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expect(data.copy_mode.isActive(&client.model));
     try std.testing.expectEqualDeep(copy_version, client.model.version());
     try std.testing.expectEqual(outbox_len, client.model.to_runtime.len);
 }

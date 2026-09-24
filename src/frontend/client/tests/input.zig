@@ -405,9 +405,9 @@ test "streamed pane paste excludes prompt and copy-mode ownership until finish" 
     _ = try client_module.paste_routing.start(client);
 
     try std.testing.expect(client.model.panePasteActive());
-    try std.testing.expect(!client.model.enterCopyMode());
+    try std.testing.expect(!data.copy_mode.enter(&client.model));
     try std.testing.expect(!client_module.name_prompt.openNamePrompt(&client.model, .rename_workspace));
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualDeep(version, client.model.version());
 
@@ -439,13 +439,13 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
 
     try host_inputs.key(terminal, try keyinput.chord.parseKey("escape"));
     try std.testing.expect(!client.model.name_prompt.active());
-    try std.testing.expect(client.model.enterCopyMode());
+    try std.testing.expect(data.copy_mode.enter(&client.model));
 
     _ = try client_module.paste_routing.start(client);
     _ = try client_module.paste_routing.content(client, "ignored");
     _ = try client_module.paste_routing.finish(client);
 
-    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expect(data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
@@ -651,7 +651,7 @@ test "focused scroll bindings target focus rather than hover and normal input re
     try std.testing.expectEqual(@as(u32, 7), pane.scroll.offset);
     try std.testing.expectEqual(@as(u32, 10), other.scroll.offset);
     try std.testing.expectEqual(focused, client.model.tabs.layout[model].focused().?);
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!terminal.graphics_store.paneVisible(focused));
     try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
     try std.testing.expectEqual(@as(usize, 1), client.model.to_runtime.len);
@@ -772,7 +772,7 @@ test "copy mode takes authority away from a held scroll binding" {
     _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
     const version = client.model.version();
     _ = try host_inputs.feed(terminal, .{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 * std.time.ns_per_ms });
-    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expect(data.copy_mode.isActive(&client.model));
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(u32, 97), pane.scroll.offset);
 }
@@ -798,7 +798,7 @@ test "focused scroll bindings emit unmodified SGR wheel reports in cells or pixe
             try testingHostInput(terminal, if (direction == .up) "\x02-" else "\x02=");
             try std.testing.expectEqualDeep(version, client.model.version());
             try std.testing.expectEqual(@as(u32, 2), pane.scroll.offset);
-            try std.testing.expect(!client.model.copyModeActive());
+            try std.testing.expect(!data.copy_mode.isActive(&client.model));
             try harness.settle();
             var buffer: [256]u8 = undefined;
             const message = try harness.nextClientMessage(&buffer);
@@ -946,7 +946,7 @@ test "focused scroll retires copy mode before moving the restored viewport" {
 
     try testingHostInput(terminal, "\x02-");
 
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expectEqual(@as(u32, 7), pane.scroll.offset);
     try harness.settle();
     const restored = try harness.nextClientMessage(&buffer);

@@ -1,3 +1,4 @@
+const copy_mode = @import("../../input/copy_mode.zig");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
@@ -332,7 +333,7 @@ test "workspace replacement captures invalid copy-mode release" {
         .tab_id = @enumFromInt(2),
     };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = previous, .size = .{ .cols = 20, .rows = 5 } });
-    try std.testing.expect(model.enterCopyMode());
+    try std.testing.expect(copy_mode.enter(&model));
     const version_before = model.version();
 
     const committed = try model.replaceWorkspace(.{
@@ -344,7 +345,7 @@ test "workspace replacement captures invalid copy-mode release" {
     try std.testing.expect(committed.activation.copy_released);
     try std.testing.expectEqual(version_before.copy, committed.activation.copy_revision_before);
     try std.testing.expectEqual(version_before.copy +% 1, committed.activation.copy_revision);
-    try std.testing.expect(!model.copyModeActive());
+    try std.testing.expect(!copy_mode.isActive(&model));
 }
 
 test "rejected workspace replacement preserves the occupied projection" {

@@ -8,7 +8,7 @@ then consumes the latest model independently of runtime patch publication.
 runtime_messages.handleServerMessage(.pane_frame)
   -> pane_frames.receivePaneFrame
      -> pane_frame.receive(model, frame)
-        -> Pane.applyFrame and ClientModel.reconcileCopyModeFrame
+        -> Pane.applyFrame and copy_mode.reconcileFrame
         -> detached: no effects
         -> resync: model.to_runtime request_snapshot
         -> applied: model.to_runtime frame_ack

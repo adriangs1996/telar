@@ -51,7 +51,7 @@ pub fn apply(client: *Client, event: keyinput.Mouse) !Outcome {
 }
 
 fn resolve(client: *Client, event: keyinput.Mouse) Authority {
-    const selection = client.model.pointerSelection();
+    const selection = data.copy_mode.pointerSelection(&client.model);
     const captured = if (selection) |value| value.dragging else false;
     if (client.model.name_prompt.active() and !captured) {
         return .unavailable;

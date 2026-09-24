@@ -221,7 +221,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .height = 1,
         .byte_len = 3,
     } });
-    try std.testing.expect(client.model.enterCopyMode());
+    try std.testing.expect(data.copy_mode.enter(&client.model));
     try std.testing.expect(terminal.graphics_store.hasPaneGraphics(@enumFromInt(20)));
     const version_before_close = client.model.version();
     const pending_updates_before_close = terminal.presenter.pending_updates;
@@ -245,7 +245,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try std.testing.expectEqual(version_before_close.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(pending_updates_before_close, terminal.presenter.pending_updates);
     try std.testing.expect(!terminal.graphics_store.hasPaneGraphics(@enumFromInt(20)));
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
 
     try presentation_lifecycle.observe(terminal);
 

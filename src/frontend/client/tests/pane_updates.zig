@@ -457,7 +457,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expect(requested == .close_pane);
     try std.testing.expectEqual(closing_pane, requested.close_pane.pane_id);
     try std.testing.expect(requested.close_pane.request_id != .none);
-    try std.testing.expect(!client.model.enterCopyMode());
+    try std.testing.expect(!data.copy_mode.enter(&client.model));
 
     var payload: [128]u8 = undefined;
     const exited = try core.encodePaneExited(&payload, .{
@@ -471,7 +471,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expectEqual(version_before_request.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_request, terminal.presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(?core.PaneId, TestHarness.bootstrap_pane), support.reportedPaneId(client));
     try std.testing.expect(!terminal.graphics_store.hasPaneGraphics(closing_pane));
@@ -504,7 +504,7 @@ test "an unrequested pane exit removes the pane silently" {
     try harness.bootstrap();
     const client = harness.client;
     const terminal = harness.terminal;
-    try std.testing.expect(client.model.enterCopyMode());
+    try std.testing.expect(data.copy_mode.enter(&client.model));
     try terminal.graphics_store.applyImage(.{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 1,
@@ -536,7 +536,7 @@ test "an unrequested pane exit removes the pane silently" {
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) == null);
     try std.testing.expectEqual(version_before_exit.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_exit, terminal.presenter.pending_updates);
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expectEqual(@as(?core.PaneId, null), support.reportedPaneId(client));
     try std.testing.expect(!terminal.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
     try std.testing.expect(!client.model.notification_scheduler.pending);

@@ -18,7 +18,7 @@ pub fn keyRoutingAuthority(client: *const Client) data.KeyRoutingAuthority {
     return .{
         .attachment_modal_active = if (client.attachments) |shelf| shelf.modalActive() else false,
         .prompt_active = client.model.name_prompt.active(),
-        .copy_mode_active = client.model.copyModeActive(),
+        .copy_mode_active = data.copy_mode.isActive(&client.model),
     };
 }
 

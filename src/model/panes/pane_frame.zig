@@ -1,6 +1,7 @@
 //! A pane frame arriving from the runtime: admission against the pane's
 //! applied base, cell replacement, and the acknowledgement or snapshot
 //! request that answers it.
+const copy_mode = @import("../input/copy_mode.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const ClientModel = @import("../state/ClientModel.zig");
@@ -40,7 +41,7 @@ pub fn receive(model: *ClientModel, frame: core.FrameView) !PaneFrameOutcome {
     const previous_scroll_offset = pane.scroll.offset;
     const applied = try pane.applyFrame(frame);
     pane.attach(generation);
-    _ = model.reconcileCopyModeFrame(.{
+    _ = copy_mode.reconcileFrame(model, .{
         .pane_id = frame.pane_id,
         .previous_offset = previous_scroll_offset,
         .scroll = frame.scroll,

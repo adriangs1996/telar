@@ -11,7 +11,7 @@ const Client = @import("../execution/Client.zig");
 /// Semantic actions include native conversation readers in copy-mode policy.
 /// Example: `_ = copy_mode.copyModeActive(client);`
 pub fn copyModeActive(client: *const Client) bool {
-    return client.model.copyModeActive() or client.host_input_source.threadCopyModeActive();
+    return data.copy_mode.isActive(&client.model) or client.host_input_source.threadCopyModeActive();
 }
 
 /// Leaves copy mode without copying the current selection.
@@ -26,11 +26,11 @@ pub fn leaveCopyMode(client: *Client) !data.CopyModeOutcome {
 pub fn applyCopyMode(client: *Client, command: data.CopyModeCommand) !data.CopyModeOutcome {
     defer {
         if (command == .cancel_pointer or (command == .pointer and command.pointer.release)) {
-            client.model.finishPointerGesture();
+            data.copy_mode.finishPointerGesture(&client.model);
         }
     }
 
-    const plan = client.model.planCopyMode(command) orelse return .unchanged;
+    const plan = data.copy_mode.planCommand(&client.model, command) orelse return .unchanged;
     if (plan.open_link) |target| {
         _ = try link_opening.openLink(client, target);
 
@@ -45,7 +45,7 @@ pub fn applyCopyMode(client: *Client, command: data.CopyModeCommand) !data.CopyM
         );
     }
 
-    const commit = client.model.commitCopyMode(plan) orelse return .unchanged;
+    const commit = data.copy_mode.commitPlan(&client.model, plan) orelse return .unchanged;
     if (commit.viewport) |viewport| {
         try pane_viewport.deliverPaneViewport(client, viewport);
     }
@@ -67,14 +67,14 @@ pub fn enterCopyMode(client: *Client) bool {
     const tab = client.model.tabs.activeSlot() orelse return false;
     const pane = data.tab_layout.focusedPaneConst(&client.model, tab) orelse return false;
     if (pane.kind == .agent) {
-        if (!pane.attached or client.model.copyModeActive() or client.model.name_prompt.active() or client.model.pane_paste != null) {
+        if (!pane.attached or data.copy_mode.isActive(&client.model) or client.model.name_prompt.active() or client.model.pane_paste != null) {
             return false;
         }
 
         return client.host_input_source.enterThreadCopyMode(pane.id);
     }
 
-    return client.model.enterCopyMode();
+    return data.copy_mode.enter(&client.model);
 }
 
 /// Applies one runtime search reply to the active copy-mode state.

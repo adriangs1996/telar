@@ -21,14 +21,14 @@ host_inputs.mouse (TUI) or GuiAdapter.dispatchPointer (GUI)
     -> view_interactions.apply: focus the clicked pane
     -> chrome.linkPointer / link_opening.inputLinkPointer: ordinary links retain priority
     -> pane_mouse_input.inputPaneMouse: choose selection or child report
-    -> ClientModel.beginPointerSelection
+    -> copy_mode.beginPointerSelection
 
 captured drag / release
     -> copy_mode_pointer.apply
     -> copy_mode.applyCopyMode
-    -> ClientModel.planCopyMode
+    -> copy_mode.planCommand
     -> copy_selection into model.to_runtime before commit, on release only
-    -> ClientModel.commitCopyMode
+    -> copy_mode.commitPlan
     -> copy_revision -> Presenter -> Compositor
 
 runtime copy_selection

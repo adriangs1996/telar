@@ -1,5 +1,6 @@
 //! Wires streamed host paste ownership to prompt and pane paste use cases.
 
+const data = @import("model");
 const Client = @import("../execution/Client.zig");
 const PasteRoutingAuthority = @import("PasteRoutingAuthority.zig");
 const Route = @import("Route.zig");
@@ -49,7 +50,7 @@ fn snapshot(client: *const Client) PasteRoutingAuthority {
         .attachment_modal_active = if (client.attachments) |shelf| shelf.modalActive() else false,
         .prompt_active = prompt != null,
         .prompt_pasting = if (prompt) |value| value.pasting else false,
-        .copy_mode_active = client.model.copyModeActive(),
+        .copy_mode_active = data.copy_mode.isActive(&client.model),
         .pane_paste_active = client.model.panePasteActive(),
     };
 }

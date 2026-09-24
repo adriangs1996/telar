@@ -65,7 +65,7 @@ pub fn agentReaders(comptime enter: fn (*Client) bool) !void {
     try std.testing.expect(received == null);
     pane.kind = .terminal;
     try std.testing.expect(enter(app));
-    try std.testing.expect(app.model.copyModeActive());
+    try std.testing.expect(data.copy_mode.isActive(&app.model));
     try std.testing.expect(received == null);
 }
 

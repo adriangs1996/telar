@@ -1,6 +1,16 @@
 //! Client-owned copy mode: cursor, selection, vim motions and frame
 //! reconciliation. Everything here is pure over a cell buffer and a scroll
 //! position; the client applies the returned effects.
+const CopyModeFrame = @import("../state/CopyModeFrame.zig");
+const CopyModeCommit = @import("../state/CopyModeCommit.zig");
+const cells_module = @import("../links/cells.zig");
+const CopyModePlan = @import("../state/CopyModePlan.zig");
+const CopyModeProjection = @import("../state/CopyModeProjection.zig");
+const PointerPress = @import("PointerPress.zig");
+const tab_layout = @import("../workspace/tab_layout.zig");
+const model_namespace = @import("../state/model_namespace.zig");
+const model_data = @import("../model.zig");
+const ClientModel = @import("../state/ClientModel.zig");
 const keyinput = @import("keyinput");
 
 const cellgrid = @import("cellgrid");
@@ -1187,4 +1197,333 @@ test "o asks the client to open the link under the cursor" {
 
     try std.testing.expect(effect.open_link);
     try std.testing.expect(!effect.exit);
+}
+
+/// Reports whether copy mode currently owns pane input.
+///
+/// ```zig
+/// if (isActive(model)) return;
+/// ```
+pub fn isActive(model: *const ClientModel) bool {
+    const state = model.copy_state orelse return false;
+
+    return state.pointer == null;
+}
+
+/// Returns the pointer gesture's stable owner without lending its state.
+/// Example: `const target = pointerSelection(model) orelse return;`.
+pub fn pointerSelection(model: *const ClientModel) ?struct { pane_id: core.PaneId, dragging: bool } {
+    if (model.selection_gesture) |pane_id| {
+        return .{ .pane_id = pane_id, .dragging = true };
+    }
+
+    const state = model.copy_state orelse return null;
+    if (state.pointer == null) {
+        return null;
+    }
+
+    return .{ .pane_id = state.pane_id, .dragging = false };
+}
+
+/// Releases physical capture even when copying fails or the pane retired.
+/// Example: `finishPointerGesture(model);`.
+pub fn finishPointerGesture(model: *ClientModel) void {
+    model.selection_gesture = null;
+}
+
+/// Clears disposable mouse highlighting before typing or pasting.
+/// Example: `_ = clearPointerSelection(model);`.
+pub fn clearPointerSelection(model: *ClientModel) bool {
+    const state = model.copy_state orelse return false;
+    if (state.pointer == null) {
+        return false;
+    }
+
+    return release(model, state.pane_id);
+}
+
+/// Starts selection only after routing has focused an attached pane.
+/// Example: `_ = beginPointerSelection(model, press);`.
+pub fn beginPointerSelection(model: *ClientModel, press: PointerPress) bool {
+    if (isActive(model) or model.name_prompt.active() or model.pane_paste != null) {
+        return false;
+    }
+
+    const slot = model.tabs.activeSlot() orelse return false;
+    const pane = tab_layout.focusedPane(model, slot) orelse return false;
+    if (pane.id != press.pane_id or !pane.attached or pane.kind != .terminal or
+        press.position.x >= pane.buffer.w or press.position.y >= pane.buffer.h)
+    {
+        return false;
+    }
+
+    if (model.selection_click_pane != pane.id) {
+        model.selection_clicks = .{};
+    }
+
+    model.selection_click_pane = pane.id;
+    const granularity = model.selection_clicks.press(press.position, press.now_ns);
+    var state = model_data.State.init(pane.id, .{
+        .x = press.position.x,
+        .y = pane.scroll.offset + press.position.y,
+    }, pane.scroll.offset);
+    state.beginPointer(granularity, .{ .buffer = &pane.buffer, .scroll = pane.scroll });
+    model.selection_gesture = pane.id;
+    model.copy_state = state;
+    model.copy_revision +%= 1;
+    return true;
+}
+
+/// Returns the pane captured by active copy mode.
+///
+/// ```zig
+/// const pane_id = targetPane(model) orelse return;
+/// ```
+pub fn targetPane(model: *const ClientModel) ?core.PaneId {
+    const state = model.copy_state orelse return null;
+
+    return state.pane_id;
+}
+
+/// Returns the immutable copy-mode projection consumed by presenters.
+///
+/// ```zig
+/// const projection = currentProjection(model) orelse return;
+/// ```
+pub fn currentProjection(model: *const ClientModel) ?CopyModeProjection {
+    const state = model.copy_state orelse return null;
+
+    return .{ .pane_id = state.pane_id, .view = state.view() };
+}
+
+/// Enters copy mode on the attached focused pane. An active prompt or
+/// paste, missing pane or repeated request leaves the copy revision intact.
+///
+/// ```zig
+/// if (enter(model)) observe(model.version());
+/// ```
+pub fn enter(model: *ClientModel) bool {
+    if (isActive(model) or model.name_prompt.active() or model.pane_paste != null) {
+        return false;
+    }
+
+    const slot = model.tabs.activeSlot() orelse return false;
+    const pane = tab_layout.focusedPane(model, slot) orelse return false;
+    if (!pane.attached or pane.kind != .terminal) {
+        return false;
+    }
+
+    const cursor: model_data.Point = if (pane.cursor.visible)
+        .{ .x = pane.cursor.x, .y = pane.scroll.offset + pane.cursor.y }
+    else
+        .{ .x = 0, .y = pane.scroll.offset + pane.buffer.h -| 1 };
+    model.copy_state = model_data.State.init(pane.id, cursor, pane.scroll.offset);
+    model.copy_revision +%= 1;
+    return true;
+}
+
+/// Plans one copy-mode command without mutating state or performing
+/// runtime effects. Missing targets plan a local exit.
+///
+/// ```zig
+/// const plan = planCommand(model, .{ .key = key }) orelse return;
+/// ```
+pub fn planCommand(model: *const ClientModel, command: model_data.CopyModeCommand) ?CopyModePlan {
+    const previous = model.copy_state orelse return null;
+    const pane = model.activePaneConst(previous.pane_id) orelse
+        return planExit(model, previous, null);
+    var next = previous;
+
+    switch (command) {
+        .key => |pressed| {
+            const effect = model_data.copy_mode.applyKey(&next, pressed, .{ .buffer = &pane.buffer, .scroll = pane.scroll });
+            if (!effect.handled) {
+                return null;
+            }
+            if (effect.search) |direction| {
+                return .{
+                    .expected_revision = model.copy_revision,
+                    .previous = previous,
+                    .next = next,
+                    .viewport = model_namespace.copyModeViewport(pane, next.viewport_offset),
+                    .search = direction,
+                };
+            }
+            if (effect.open_link) {
+                const target = cells_module.extract(&pane.buffer, pane.scroll, .{
+                    .x = next.cursor.x,
+                    .y = next.cursor.y,
+                }) orelse return null;
+
+                return .{
+                    .expected_revision = model.copy_revision,
+                    .previous = previous,
+                    .next = next,
+                    .open_link = target,
+                };
+            }
+            if (effect.exit) {
+                const selection: ?core.CopySelection = if (effect.copy and next.anchor != null) .{
+                    .pane_id = next.pane_id,
+                    .start_x = next.anchor.?.x,
+                    .start_y = next.anchor.?.y,
+                    .end_x = next.cursor.x,
+                    .end_y = next.cursor.y,
+                    .linewise = next.linewise,
+                } else null;
+
+                return planExit(model, previous, selection);
+            }
+        },
+        .pointer => |motion| {
+            if (previous.pointer == null or model.selection_gesture != previous.pane_id) {
+                return null;
+            }
+
+            next.movePointer(motion, .{ .buffer = &pane.buffer, .scroll = pane.scroll });
+            if (motion.release) {
+                const anchor = next.anchor orelse return planExit(model, previous, null);
+
+                return .{
+                    .expected_revision = model.copy_revision,
+                    .previous = previous,
+                    .next = next,
+                    .selection = .{
+                        .pane_id = next.pane_id,
+                        .start_x = anchor.x,
+                        .start_y = anchor.y,
+                        .end_x = next.cursor.x,
+                        .end_y = next.cursor.y,
+                        .linewise = next.linewise,
+                    },
+                };
+            }
+        },
+        .cancel_pointer => {
+            if (previous.pointer == null) {
+                return null;
+            }
+
+            return planExit(model, previous, null);
+        },
+        .vertical => |delta| next.vertical(delta, .{ .scroll = pane.scroll, .rows = pane.buffer.h }),
+        .matches => |found| {
+            if (found.pane_id != previous.pane_id or previous.pointer != null) {
+                return null;
+            }
+
+            next.applyMatches(found.matches, .{ .scroll = pane.scroll, .rows = pane.buffer.h });
+        },
+        .leave => return planExit(model, previous, null),
+    }
+
+    if (std.meta.eql(previous, next)) {
+        return null;
+    }
+
+    return .{
+        .expected_revision = model.copy_revision,
+        .previous = previous,
+        .next = next,
+        .viewport = model_namespace.copyModeViewport(pane, next.viewport_offset),
+    };
+}
+
+/// Commits a current copy-mode plan and returns the post-commit runtime
+/// synchronization. Stale plans leave state untouched.
+///
+/// ```zig
+/// const commit = commitPlan(model, plan) orelse return;
+/// ```
+pub fn commitPlan(model: *ClientModel, plan: CopyModePlan) ?CopyModeCommit {
+    if (model.copy_revision != plan.expected_revision) {
+        return null;
+    }
+
+    const current = model.copy_state orelse return null;
+    if (!std.meta.eql(current, plan.previous)) {
+        return null;
+    }
+
+    if (plan.next) |next| {
+        if (model.activePaneConst(next.pane_id) == null) {
+            return null;
+        }
+    }
+
+    var viewport_change: ?model_data.PaneViewportChange = null;
+    if (plan.viewport) |viewport| {
+        const slot = model.tabs.activeSlot() orelse return null;
+        const pane = model.panes.findIn(model.tabs.location[slot].tab_id, viewport.pane_id) orelse return null;
+        if (viewport.offset > pane.scroll.maxOffset(pane.buffer.h)) {
+            return null;
+        }
+
+        viewport_change = model_namespace.commitPaneViewport(model, pane, viewport.offset);
+    }
+
+    model.copy_state = plan.next;
+    model.copy_revision +%= 1;
+
+    return .{
+        .active = plan.next != null,
+        .viewport = viewport_change,
+        .copy_revision = model.copy_revision,
+    };
+}
+
+/// Releases copy mode only when it targets the retired pane.
+///
+/// ```zig
+/// _ = release(model, pane_id);
+/// ```
+pub fn release(model: *ClientModel, pane_id: core.PaneId) bool {
+    const state = model.copy_state orelse return false;
+    if (state.pane_id != pane_id) {
+        return false;
+    }
+
+    model.copy_state = null;
+    model.copy_revision +%= 1;
+    return true;
+}
+
+pub fn reconcileFrame(model: *ClientModel, command: CopyModeFrame) bool {
+    const state = model.copy_state orelse return false;
+    if (state.pane_id != command.pane_id) {
+        return false;
+    }
+
+    if (state.pointer) |pointer| {
+        const pane = model.activePaneConst(state.pane_id) orelse return release(model, state.pane_id);
+        if (pointer.cols != pane.buffer.w or pointer.rows != pane.buffer.h) {
+            return release(model, state.pane_id);
+        }
+    }
+
+    var next = state;
+    model_data.copy_mode.onFrame(&next, command.previous_offset, command.scroll);
+    if (std.meta.eql(state, next)) {
+        return false;
+    }
+
+    model.copy_state = next;
+    model.copy_revision +%= 1;
+    return true;
+}
+
+fn planExit(model: *const ClientModel, previous: model_data.State, selection: ?core.CopySelection) CopyModePlan {
+    const pane = model.activePaneConst(previous.pane_id);
+    const viewport = if (pane != null and previous.pointer == null)
+        model_namespace.copyModeViewport(pane.?, previous.entry_offset)
+    else
+        null;
+
+    return .{
+        .expected_revision = model.copy_revision,
+        .previous = previous,
+        .next = null,
+        .selection = selection,
+        .viewport = viewport,
+    };
 }

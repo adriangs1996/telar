@@ -65,7 +65,7 @@ pub fn applyPaneExit(client: *Client, exited: core.PaneExited) !data.PaneExit {
 
 /// Releases exact pane authorities before physical resources; repeated release is harmless.
 pub fn releasePaneResources(client: *Client, pane_id: core.PaneId) void {
-    _ = client.model.releaseCopyMode(pane_id);
+    _ = data.copy_mode.release(&client.model, pane_id);
     _ = client.model.releasePanePaste(pane_id);
     _ = client.model.releaseReportedPaneFocus(pane_id);
     client.graphics.clearPane(pane_id);

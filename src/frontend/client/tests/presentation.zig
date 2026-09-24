@@ -180,7 +180,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
     try harness.settleModelPresentation();
     try host_inputs.mouse(terminal, .{ .x = terminal.view.regions.workbench.x, .y = terminal.view.regions.workbench.y, .kind = .move });
     try host_inputs.key(terminal, .plain(.escape));
-    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(core.PointerShape.default, terminal.presenter.screen.presented_mouse_pointer.?);

@@ -1,3 +1,4 @@
+const copy_mode = @import("../../input/copy_mode.zig");
 const cellgrid = @import("cellgrid");
 const icons = @import("../../layout/icons.zig");
 const core = @import("telar-core");
@@ -329,7 +330,7 @@ test "tab creation captures invalid copy-mode release" {
         .tab_id = @enumFromInt(2),
     };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
-    try std.testing.expect(model.enterCopyMode());
+    try std.testing.expect(copy_mode.enter(&model));
     const version_before = model.version();
 
     const creation = try model.createTab(.{
@@ -345,7 +346,7 @@ test "tab creation captures invalid copy-mode release" {
     try std.testing.expect(creation.copy_released);
     try std.testing.expectEqual(version_before.copy, creation.copy_revision_before);
     try std.testing.expectEqual(version_before.copy +% 1, creation.copy_revision);
-    try std.testing.expect(!model.copyModeActive());
+    try std.testing.expect(!copy_mode.isActive(&model));
 }
 
 test "rejected tab creations preserve state and revisions" {
@@ -426,7 +427,7 @@ test "active tab removal advances collection and active identity revisions" {
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model_data.tab_selection.select(&model, first.tab_id));
-    try std.testing.expect(model.enterCopyMode());
+    try std.testing.expect(copy_mode.enter(&model));
     const version_before_removal = model.version();
 
     const removal = (try model.removeTab(.{
@@ -448,7 +449,7 @@ test "active tab removal advances collection and active identity revisions" {
     try std.testing.expectEqual(model.version().active_tab, removal.active_tab_revision);
     try std.testing.expectEqual(model.version().panes, removal.panes_revision);
     try std.testing.expectEqual(model.version().copy, removal.copy_revision);
-    try std.testing.expect(!model.copyModeActive());
+    try std.testing.expect(!copy_mode.isActive(&model));
     try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
     try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
     try std.testing.expectEqual(version_before_removal.copy +% 1, model.version().copy);

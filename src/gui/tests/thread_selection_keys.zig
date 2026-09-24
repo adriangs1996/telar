@@ -22,7 +22,7 @@ test "configured copy-mode action enters the agent reader without VT state or dr
     );
     try fixture.send(.{ .key = .{ .target_id = composer.id.target_id, .generation = composer.id.generation, .code = .{ .char = .init("q") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 61 } } });
     try std.testing.expect(client.copy_mode.copyModeActive(&gui.app));
-    try std.testing.expect(!gui.app.model.copyModeActive());
+    try std.testing.expect(!data.copy_mode.isActive(&gui.app.model));
     try std.testing.expect(gui.app.model.copy_state == null);
     try std.testing.expectEqual(.transcript, std.meta.activeTag(gui.widgets.dispatcher.focusedTarget().?.action));
     try fixture.send(.{ .key = .{ .target_id = composer.id.target_id, .generation = composer.id.generation, .code = .{ .char = .init("q") }, .physical = .{ .value = 61 }, .phase = .release } });

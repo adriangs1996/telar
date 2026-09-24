@@ -997,7 +997,7 @@ fn dispatchKey(self: *GuiAdapter, key: KeyInput) !void {
 fn readTerminalClipboard(self: *GuiAdapter) !void {
     const clipboard = &self.terminal_clipboard;
 
-    if (clipboard.request_id != 0 or self.app.model.name_prompt.active() or self.app.model.copyModeActive()) {
+    if (clipboard.request_id != 0 or self.app.model.name_prompt.active() or data.copy_mode.isActive(&self.app.model)) {
         return;
     }
 
@@ -1024,7 +1024,7 @@ fn takeTerminalClipboard(self: *GuiAdapter, result: ClipboardResult) bool {
 
     defer clipboard.request_id = 0;
 
-    if (result.status != .success or result.target_id != 0 or result.generation != clipboard.generation or self.app.model.name_prompt.active() or self.app.model.copyModeActive() or !self.focused) {
+    if (result.status != .success or result.target_id != 0 or result.generation != clipboard.generation or self.app.model.name_prompt.active() or data.copy_mode.isActive(&self.app.model) or !self.focused) {
         return false;
     }
 
@@ -1207,7 +1207,7 @@ fn dispatchPointer(self: *GuiAdapter, value: PointerSample) !void {
             .link => if (event.button == .right) .discarded else .link,
             .unavailable => .discarded,
             .pane => pane: {
-                if (app.model.pointerSelection()) |pointer_selection| {
+                if (data.copy_mode.pointerSelection(&app.model)) |pointer_selection| {
                     if (pointer_selection.dragging) {
                         break :pane .shared;
                     }
@@ -1276,7 +1276,7 @@ fn releasePointer(self: *GuiAdapter) !void {
         }
     }
 
-    if (app.model.pointerSelection()) |pointer_selection| {
+    if (data.copy_mode.pointerSelection(&app.model)) |pointer_selection| {
         if (pointer_selection.dragging) {
             if (app.model.tabs.activeSlot()) |tab| {
                 var released = pointer.last[@intFromEnum(PointerEvent.Button.left)];
@@ -1570,7 +1570,7 @@ fn cursorTarget(self: *GuiAdapter) CursorTarget {
 
     const tab = self.app.model.tabs.activeSlot() orelse return .{};
     const pane = shared_model.tab_layout.focusedPaneConst(&self.app.model, tab) orelse return .{};
-    const copy = self.app.model.copyModeProjection();
+    const copy = data.copy_mode.currentProjection(&self.app.model);
     const copy_view: ?shared_model.CopyModeView = if (copy) |value| if (value.pane_id == pane.id) value.view else null else null;
     const cursor = selection.cursor(pane, copy_view);
     const layout = shared_model.tab_layout.snapshot(&self.app.model, tab, shared_model.workbench.region(&self.app.model).area);

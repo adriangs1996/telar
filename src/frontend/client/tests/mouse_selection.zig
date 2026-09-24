@@ -24,9 +24,9 @@ test "mouse drag copies pane coordinates and keeps highlighting until typing" {
     const version = client.model.version();
 
     try host_inputs.mouse(terminal, .{ .x = content.x + 1, .y = content.y, .kind = .press });
-    try std.testing.expect(!client.model.copyModeActive());
-    try std.testing.expect(client.model.pointerSelection().?.dragging);
-    try std.testing.expect(client.model.copyModeProjection().?.view.anchor == null);
+    try std.testing.expect(!data.copy_mode.isActive(&client.model));
+    try std.testing.expect(data.copy_mode.pointerSelection(&client.model).?.dragging);
+    try std.testing.expect(data.copy_mode.currentProjection(&client.model).?.view.anchor == null);
     try host_inputs.mouse(terminal, .{ .x = content.x + 4, .y = content.y, .kind = .drag });
     try std.testing.expectEqual(version.copy + 2, client.model.version().copy);
     try std.testing.expect(terminal.presenter.compositor.copy == null);
@@ -35,8 +35,8 @@ test "mouse drag copies pane coordinates and keeps highlighting until typing" {
     try std.testing.expect(terminal.presenter.compositor.copy.?.view.selected(2, 10));
 
     try host_inputs.mouse(terminal, .{ .x = content.x + 4, .y = content.y, .kind = .release });
-    try std.testing.expect(!client.model.pointerSelection().?.dragging);
-    try std.testing.expect(client.model.copyModeProjection().?.view.selected(4, 10));
+    try std.testing.expect(!data.copy_mode.pointerSelection(&client.model).?.dragging);
+    try std.testing.expect(data.copy_mode.currentProjection(&client.model).?.view.selected(4, 10));
     try harness.settle();
     var buffer: [512]u8 = undefined;
     const copied = try harness.nextClientMessage(&buffer);
@@ -50,7 +50,7 @@ test "mouse drag copies pane coordinates and keeps highlighting until typing" {
     }, copied.copy_selection);
 
     try host_inputs.key(terminal, try keyinput.chord.parseKey("x"));
-    try std.testing.expect(client.model.copyModeProjection() == null);
+    try std.testing.expect(data.copy_mode.currentProjection(&client.model) == null);
     try harness.settle();
     const input = try harness.nextClientMessage(&buffer);
     try std.testing.expectEqualStrings("x", input.pane_input.bytes);
@@ -78,16 +78,16 @@ test "selection focuses its pane and owns drags and release outside its borders"
 
     try host_inputs.mouse(terminal, .{ .x = content.x + 2, .y = content.y + 1, .kind = .press });
     try std.testing.expectEqual(second, client.model.tabs.layout[model].focused().?);
-    try std.testing.expectEqual(second, client.model.pointerSelection().?.pane_id);
+    try std.testing.expectEqual(second, data.copy_mode.pointerSelection(&client.model).?.pane_id);
     // Even a child enabling mouse reporting mid-gesture cannot steal it.
     client.model.panes.findIn(client.model.tabs.location[model].tab_id, second).?.mouse = .{ .tracking = .any, .sgr = true };
     try host_inputs.mouse(terminal, .{ .x = 0, .y = 0, .kind = .drag });
     try host_inputs.mouse(terminal, .{ .x = 0, .y = 0, .kind = .release });
-    const selected = client.model.copyModeProjection().?;
+    const selected = data.copy_mode.currentProjection(&client.model).?;
     try std.testing.expectEqual(second, selected.pane_id);
     try std.testing.expectEqual(@as(u16, 0), selected.view.cursor.x);
     try std.testing.expectEqual(@as(u32, 0), selected.view.cursor.y);
-    try std.testing.expect(!client.model.pointerSelection().?.dragging);
+    try std.testing.expect(!data.copy_mode.pointerSelection(&client.model).?.dragging);
 }
 
 test "Shift selects child-tracked links instead of opening them or reporting the gesture" {
@@ -106,7 +106,7 @@ test "Shift selects child-tracked links instead of opening them or reporting the
 
     try host_inputs.mouse(terminal, .{ .x = content.x, .y = content.y, .kind = .press, .button = 4 });
     try std.testing.expect(!client.model.link_pointer.owned);
-    try std.testing.expect(client.model.pointerSelection().?.dragging);
+    try std.testing.expect(data.copy_mode.pointerSelection(&client.model).?.dragging);
     // Modifier changes cannot transfer an already captured gesture.
     try host_inputs.mouse(terminal, .{ .x = content.x + 5, .y = content.y, .kind = .drag, .button = 32 });
     try host_inputs.mouse(terminal, .{ .x = content.x + 5, .y = content.y, .kind = .release });
@@ -132,7 +132,7 @@ test "retiring a selected pane consumes its remaining gesture instead of reporti
     client.model.panes.findIn(client.model.tabs.location[model].tab_id, first).?.buffer.fill(client.model.panes.findIn(client.model.tabs.location[model].tab_id, first).?.buffer.area(), .{ .glyph = " ", .style = .{} });
     const content = data.tab_layout.view(&client.model, model, first, terminal.view.workbench()).?.content;
     try host_inputs.mouse(terminal, .{ .x = content.x, .y = content.y, .kind = .press });
-    try std.testing.expect(client.model.releaseCopyMode(first));
+    try std.testing.expect(data.copy_mode.release(&client.model, first));
     try std.testing.expect(data.tab_layout.removePane(&client.model, first));
     client.model.panes.findIn(client.model.tabs.location[model].tab_id, second).?.mouse = .{ .tracking = .any, .sgr = true };
     const queued = client.model.to_runtime.len;
@@ -140,6 +140,6 @@ test "retiring a selected pane consumes its remaining gesture instead of reporti
 
     try host_inputs.mouse(terminal, .{ .x = remaining.x, .y = remaining.y, .kind = .drag });
     try host_inputs.mouse(terminal, .{ .x = remaining.x, .y = remaining.y, .kind = .release });
-    try std.testing.expect(client.model.pointerSelection() == null);
+    try std.testing.expect(data.copy_mode.pointerSelection(&client.model) == null);
     try std.testing.expectEqual(queued, client.model.to_runtime.len);
 }

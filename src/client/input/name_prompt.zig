@@ -120,7 +120,7 @@ pub fn openNamePrompt(model: *data.ClientModel, intent: name_prompt_opening.Inte
         return false;
     }
     if (intent == .copy_search) {
-        if (!model.copyModeActive()) {
+        if (!data.copy_mode.isActive(model)) {
             return false;
         }
 
@@ -131,7 +131,7 @@ pub fn openNamePrompt(model: *data.ClientModel, intent: name_prompt_opening.Inte
         );
         return true;
     }
-    if (model.copyModeActive()) {
+    if (data.copy_mode.isActive(model)) {
         return false;
     }
 
@@ -409,7 +409,7 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
             }
         },
         .copy_search => blk: {
-            const pane_id = client.model.copyModeTarget() orelse break :blk true;
+            const pane_id = data.copy_mode.targetPane(&client.model) orelse break :blk true;
             const request_id = try client.model.request_lifecycle.nextId();
             var owned: data.OwnedSearch = .{
                 .request_id = request_id,
