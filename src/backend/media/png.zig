@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const ParkingMutex = @import("ParkingMutex.zig");
 const vt = @import("ghostty-vt");
 const std = @import("std");
-const wuffs = @import("wuffs");
+const imaging = @import("imaging");
 const GraphicsBudget = @import("GraphicsBudget.zig");
 const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
 
@@ -27,24 +27,28 @@ pub fn install() void {
     installed = true;
 }
 
+/// Decodes through `imaging`, which rejects dimensions beyond one screen of
+/// RGBA before Wuffs allocates. A PNG too large to hold is out of memory to
+/// the child, as it was when the quota refused the allocation.
 fn decode(allocator: std.mem.Allocator, bytes: []const u8) vt.sys.DecodeError!vt.sys.Image {
-    const image = wuffs.png.decode(allocator, bytes) catch |err| switch (err) {
-        error.OutOfMemory => return error.OutOfMemory,
-        error.WuffsError, error.Overflow => return error.InvalidData,
+    const image = imaging.png.decode(allocator, bytes, .{
+        .max_side = std.math.maxInt(u32),
+        .max_pixels = max_pixels,
+    }) catch |err| switch (err) {
+        error.OutOfMemory, error.PngTooLarge => return error.OutOfMemory,
+        error.NotPng, error.InvalidPngData => return error.InvalidData,
     };
-    errdefer allocator.free(image.data);
 
-    const metadata: core.Image = .{
-        .key = .{ .image_id = 1, .generation = 1 },
-        .format = .rgba,
+    return .{
         .width = image.width,
         .height = image.height,
-        .byte_len = image.data.len,
+        .data = image.pixels,
     };
-    _ = metadata.validate(core.max_image_bytes_per_screen) catch return error.InvalidData;
-
-    return .{ .width = image.width, .height = image.height, .data = image.data };
 }
+
+/// One screen of RGBA pixels.
+const max_pixels: u32 = @intCast(core.max_image_bytes_per_screen / rgba_bytes);
+const rgba_bytes = 4;
 
 const fixture = @embedFile("testdata/rgba.png");
 
@@ -94,8 +98,8 @@ test "PNG decoder charges workspace and rejects oversized pixels before allocati
     try expectDecoded(tracked.allocator());
     try std.testing.expectEqual(@as(usize, 0), budget.used);
 
-    // A valid IHDR declares almost 4 GiB of RGBA pixels. Wuffs must request
-    // those bytes through the quota allocator, never malloc or a page allocator.
+    // A valid IHDR declares almost 4 GiB of RGBA pixels. It is refused from
+    // the header, before Wuffs requests anything from the quota allocator.
     var oversized = fixture.*;
     std.mem.writeInt(u32, oversized[16..20], 32768, .big);
     std.mem.writeInt(u32, oversized[20..24], 32767, .big);

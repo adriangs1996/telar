@@ -51,7 +51,6 @@ pub fn addSuiteTest(self: Modules, b: *std.Build, suite: Suite) *std.Build.Step.
     if (self.gui) |gui| {
         tests.root_module.addImport("telar-gui", gui);
     }
-    tests.root_module.addImport("wuffs", self.wuffs);
     self.libraries.addImports(tests.root_module);
 
     if (suite.vt) {

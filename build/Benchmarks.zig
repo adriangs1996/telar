@@ -59,7 +59,6 @@ pub fn init(b: *std.Build, app: Application) @This() {
     });
     bench_backend.addImport("telar-core", bench_core);
     bench_backend.addImport("ghostty-vt", app.modules.ghostty_vt);
-    bench_backend.addImport("wuffs", app.modules.wuffs);
     bench_backend.addImport("tls", app.modules.tls);
     bench_backend.addImport("telar-lua", bench_lua);
     bench_libraries.addImports(bench_backend);

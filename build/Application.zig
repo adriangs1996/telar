@@ -144,7 +144,6 @@ pub fn init(b: *std.Build) ?@This() {
     backend.addImport("telar-lua", telar_lua);
     backend.addImport("lua-api", lua_api);
     backend.addImport("ghostty-vt", ghostty_vt);
-    backend.addImport("wuffs", wuffs);
     backend.addImport("tls", tls);
     libraries.addImports(backend);
     coverage.instrumentModule(backend);
