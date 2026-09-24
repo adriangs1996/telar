@@ -142,8 +142,9 @@ of them: every package imports the libraries it uses by name.
   credential gate and what its payload owns.
 - Two different types named `SessionTitle` (`history/`, `agent/`); rename the
   history one.
-- `src/core/select.zig` holds two unrelated features (click granularity for
-  the client, history filters for the runtime).
+- `src/core/select.zig` (resolved): the history filters had already left;
+  the selection model, `Range` and `ClickTracker` are `cellgrid.selection`,
+  `cellgrid.SelectionRange` and `cellgrid.ClickTracker`.
 - `src/model/types` holds 87 files averaging 13 lines; each folds into the
   flow or table that owns it.
 - `src/gui/experiments` is not reached by any build step.

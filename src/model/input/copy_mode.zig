@@ -17,12 +17,12 @@ const chord = keyinput.chord;
 
 pub const Direction = @import("../types/CopyModeDirection.zig").CopyModeDirection;
 
-pub fn pointerSpan(point: Point, granularity: core.Granularity, screen: Screen) [2]Point {
+pub fn pointerSpan(point: Point, granularity: cellgrid.selection.Granularity, screen: Screen) [2]Point {
     const local: cellgrid.Point = .{
         .x = point.x,
         .y = @intCast(point.y - screen.scroll.offset),
     };
-    var range = (core.Range{
+    var range = (cellgrid.SelectionRange{
         .anchor = local,
         .head = local,
         .granularity = granularity,

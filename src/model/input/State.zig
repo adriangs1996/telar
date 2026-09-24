@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const Point = @import("Point.zig");
 const PointerSelection = @import("PointerSelection.zig");
@@ -45,7 +46,7 @@ pub fn view(self: State) View {
 
 /// Captures a word or line boundary once; subsequent drags retain it.
 /// Example: `state.beginPointer(.word, screen);`.
-pub fn beginPointer(self: *State, granularity: core.Granularity, screen: Screen) void {
+pub fn beginPointer(self: *State, granularity: cellgrid.selection.Granularity, screen: Screen) void {
     const span = copy_mode.pointerSpan(
         self.cursor,
         granularity,

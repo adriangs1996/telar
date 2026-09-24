@@ -1,7 +1,6 @@
-const cellgrid = @import("cellgrid");
-const Point = cellgrid.Point;
-const select = @import("select.zig");
-const Buffer = cellgrid.Buffer;
+const Point = @import("Point.zig");
+const select = @import("selection.zig");
+const Buffer = @import("Buffer.zig");
 const Range = @This();
 
 anchor: Point,

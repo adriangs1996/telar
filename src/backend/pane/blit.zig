@@ -114,7 +114,7 @@ pub fn blit(operation: Operation) Stats {
     return stats;
 }
 
-fn highlightRow(target: RowTarget, range: core.Range) void {
+fn highlightRow(target: RowTarget, range: cellgrid.SelectionRange) void {
     const b = target.buffer;
     const area = target.area;
     const y = target.y;
@@ -146,7 +146,7 @@ fn highlightRow(target: RowTarget, range: core.Range) void {
 /// ```zig
 /// const text = try selectionText(gpa, terminal, range);
 /// ```
-pub fn selectionText(gpa: std.mem.Allocator, terminal: *vt.Terminal, range: core.Range) ![:0]const u8 {
+pub fn selectionText(gpa: std.mem.Allocator, terminal: *vt.Terminal, range: cellgrid.SelectionRange) ![:0]const u8 {
     const from, const to = range.ordered();
     const s = terminal.screens.active;
 
@@ -933,7 +933,7 @@ const Options = struct {
     /// belongs to the model: the emulator has a selection concept, but
     /// which drag the user is making, and whether it is even aimed at this
     /// pane, is not something it can know.
-    selection: ?core.Range = null,
+    selection: ?cellgrid.SelectionRange = null,
 
     /// Draw the pane's cursor. Off for unfocused panes: two visible cursors in
     /// one screen is worse than none, and the real cursor is placed by `term`.

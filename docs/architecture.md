@@ -212,7 +212,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `animate` | springs, transitions and the frame clock that advances them |
 | `gfx` | rectangles, colors, quads, the quad list a frame is built in, and one-axis layout |
 | `unicode` | grapheme widths from the emulator's tables; builds may bind another provider |
-| `cellgrid` | cells, styles and buffers, text laid out into them, damage rows and run diffing |
+| `cellgrid` | cells, styles and buffers, text laid out into them, damage rows and run diffing, selection by character, word or line |
 | `pacing` | the monotonic clock, replaceable deadlines and the frame pacer |
 | `vtscan` | byte-at-a-time scanners for OSC strings, typed input and Kitty graphics framing |
 | `sqlite` | the one SQLite binding, statement helpers, additive migrations, FTS5 quoting |

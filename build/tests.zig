@@ -178,7 +178,6 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     release_step.dependOn(&app.install.step);
 
     const suites = [_]Suite{
-        .{ .path = "src/core/select.zig" },
         // Only referenced through non-pub imports elsewhere, so their tests
         // never run unless they are their own suite roots.
         .{ .path = "src/core/graphics.zig" },

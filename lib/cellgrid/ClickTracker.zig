@@ -1,7 +1,6 @@
 const std = @import("std");
-const cellgrid = @import("cellgrid");
-const Point = cellgrid.Point;
-const select = @import("select.zig");
+const Point = @import("Point.zig");
+const select = @import("selection.zig");
 /// Turns a stream of presses into a granularity.
 ///
 /// Double and triple click are a *timing* fact, not a mouse fact: the terminal

@@ -79,7 +79,7 @@ soft-wrapped rows. Clipboard delivery still depends on host OSC 52 permission.
 
 ## Validation
 
-- `src/core/select.zig`: word boundaries, whitespace, wide glyph continuations
+- `lib/cellgrid/selection.zig`: word boundaries, whitespace, wide glyph continuations
   and saturated click counts.
 - `src/model/input/copy_mode.zig`: reverse word drags, clipping, wide glyph
   endpoints, bare clicks and retained-history reconciliation.

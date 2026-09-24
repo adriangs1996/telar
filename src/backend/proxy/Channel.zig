@@ -1,8 +1,10 @@
 const dropqueue = @import("dropqueue");
+const std = @import("std");
+
 const observation_queue = @import("observation_queue.zig");
 const MiddlewareEvent = @import("MiddlewareEvent.zig");
-const std = @import("std");
 const Registry = @import("Registry.zig");
+
 const QueueMetrics = dropqueue.QueueMetrics;
 const Events = dropqueue.GenericDropQueue(MiddlewareEvent, observation_queue.capacity);
 const Channel = @This();
