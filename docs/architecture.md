@@ -211,6 +211,7 @@ else. Consumers import the module once and alias its members
 | `cellgrid` | cells, styles and buffers, and text laid out into them |
 | `pacing` | the monotonic clock, replaceable deadlines and the frame pacer |
 | `vtscan` | byte-at-a-time scanners for OSC strings, typed input and Kitty graphics framing |
+| `sqlite` | the one SQLite binding, statement helpers, additive migrations, FTS5 quoting |
 
 A rule that decides what telar means stays in a flow even when it is pure;
 [`plans/libraries.md`](plans/libraries.md) lists what is still to move.

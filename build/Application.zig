@@ -145,7 +145,6 @@ pub fn init(b: *std.Build) ?@This() {
     backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ brotli_prefix, "include" }) });
     backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ brotli_prefix, "lib" }) });
     backend.linkSystemLibrary("brotlidec", .{});
-    backend.linkSystemLibrary("sqlite3", .{});
     coverage.instrumentModule(backend);
 
     const frontend = b.addModule("telar-frontend", .{

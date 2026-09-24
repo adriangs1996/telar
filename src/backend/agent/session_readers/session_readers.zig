@@ -9,9 +9,8 @@ const core = @import("telar-core");
 const Watch = @import("../Watch.zig");
 const SessionReference = @import("../SessionReference.zig");
 
-const c = @cImport({
-    @cInclude("sqlite3.h");
-});
+const sqlite = @import("sqlite");
+const c = sqlite.c;
 
 /// Runs on a worker: never touches runtime state.
 ///

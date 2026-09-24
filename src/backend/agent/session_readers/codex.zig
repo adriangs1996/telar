@@ -4,10 +4,8 @@ const core = @import("telar-core");
 const Job = @import("Job.zig");
 const Completion = @import("../Completion.zig");
 const std = @import("std");
-
-const c = @cImport({
-    @cInclude("sqlite3.h");
-});
+const sqlite = @import("sqlite");
+const c = sqlite.c;
 const thread_name_sql = "SELECT name FROM threads WHERE id = ?1";
 
 /// Example: `probe(job, &completion);`.
@@ -41,16 +39,6 @@ pub fn probe(job: Job, completion: *Completion) void {
     }
 
     var title_buffer: [core.max_agent_session_title_bytes]u8 = undefined;
-    const name = columnText(statement, 0);
+    const name = sqlite.columnSlice(statement, 0);
     completion.setTitle(core.truncateSessionTitle(&title_buffer, name));
-}
-
-fn columnText(statement: *c.sqlite3_stmt, column: c_int) []const u8 {
-    if (c.sqlite3_column_type(statement, column) == c.SQLITE_NULL) {
-        return "";
-    }
-
-    const pointer = c.sqlite3_column_text(statement, column) orelse return "";
-    const len: usize = @intCast(c.sqlite3_column_bytes(statement, column));
-    return pointer[0..len];
 }

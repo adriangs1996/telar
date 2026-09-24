@@ -54,7 +54,6 @@ pub fn init(b: *std.Build, app: Application) @This() {
     bench_backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ app.modules.brotli_prefix, "include" }) });
     bench_backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ app.modules.brotli_prefix, "lib" }) });
     bench_backend.linkSystemLibrary("brotlidec", .{});
-    bench_backend.linkSystemLibrary("sqlite3", .{});
     const bench_kitty_protocol = b.createModule(.{
         .root_source_file = b.path("src/kitty_protocol/kitty_protocol.zig"),
         .target = app.modules.target,

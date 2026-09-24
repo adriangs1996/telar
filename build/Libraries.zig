@@ -14,6 +14,10 @@ const Spec = struct {
     libc: bool = false,
     /// Built only for POSIX targets.
     posix: bool = false,
+    system_libraries: []const []const u8 = &.{},
+    /// Links its system libraries only for the host; other targets can still
+    /// analyze packages that import it, and portability checks skip it.
+    host_only: bool = false,
 };
 
 const specs = [_]Spec{
@@ -47,6 +51,12 @@ const specs = [_]Spec{
     },
     // Where column widths come from. The drawing layer names this module,
     // never the emulator behind it, so a build can bind another provider.
+    .{
+        .name = "sqlite",
+        .libc = true,
+        .system_libraries = &.{"sqlite3"},
+        .host_only = true,
+    },
     .{
         .name = "unicode",
         .imports = &.{"ghostty-vt"},
@@ -87,6 +97,12 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
         });
         for (spec.imports) |name| {
             module.addImport(name, find(externals, name) orelse self.built(name, index));
+        }
+
+        if (!spec.host_only or target.query.isNative()) {
+            for (spec.system_libraries) |name| {
+                module.linkSystemLibrary(name, .{});
+            }
         }
 
         self.modules[index] = module;
@@ -152,7 +168,7 @@ pub fn addTests(self: Libraries, b: *std.Build, coverage: Coverage, check_step: 
 /// ```
 pub fn addChecks(self: Libraries, b: *std.Build, step: *std.Build.Step, target: std.Build.ResolvedTarget) void {
     for (specs, self.modules) |spec, library| {
-        if (spec.posix and target.result.os.tag == .windows) {
+        if (spec.host_only or (spec.posix and target.result.os.tag == .windows)) {
             continue;
         }
 

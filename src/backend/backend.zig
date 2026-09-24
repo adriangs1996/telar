@@ -75,7 +75,7 @@ test {
     _ = @import("history/model.zig");
     _ = @import("history/observer_support.zig");
     _ = @import("history/osc.zig");
-    _ = @import("history/persistence/sqlite.zig");
+    _ = @import("history/persistence/history_sql.zig");
     _ = @import("history/prompt_scan.zig");
     _ = @import("history/query_result.zig");
     _ = @import("history/request_factory.zig");

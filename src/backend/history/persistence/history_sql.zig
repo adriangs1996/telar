@@ -1,7 +1,8 @@
-//! SQLite storage owned by the history worker.
+//! The history database: its schema, statements and row mapping.
 
 const core = @import("telar-core");
 const std = @import("std");
+const sqlite = @import("sqlite");
 const model = @import("../model.zig");
 const CommandFinished = @import("../CommandFinished.zig");
 const Entry = @import("../Entry.zig");
@@ -15,10 +16,6 @@ const QueryOrigin = @import("../QueryOrigin.zig");
 const Prune = @import("../Prune.zig");
 
 pub const entry_columns = "id, pane_id, started_at_ms, duration_ns, exit_code, status, command, cwd, workspace_path, author, origin, provider, command_truncated";
-
-pub const c = @cImport({
-    @cInclude("sqlite3.h");
-});
 
 pub const database_schema =
     \\PRAGMA journal_mode = WAL;
@@ -170,9 +167,9 @@ pub const insert_command_sql =
 
 /// Best effort: without FTS5 or the trigram tokenizer (SQLite < 3.34) the
 /// query path falls back to the `instr` scan; history stays functional.
-pub fn enableCommandSearchIndex(db: *c.sqlite3) bool {
-    if (!(tableExists(db, "command_fts") catch return false)) {
-        if (c.sqlite3_exec(
+pub fn enableCommandSearchIndex(db: *sqlite.c.sqlite3) bool {
+    if (!(sqlite.tableExists(db, "command_fts") catch return false)) {
+        if (sqlite.c.sqlite3_exec(
             db,
             "CREATE VIRTUAL TABLE command_fts USING fts5(" ++
                 "command, content='command', content_rowid='id', " ++
@@ -180,22 +177,22 @@ pub fn enableCommandSearchIndex(db: *c.sqlite3) bool {
             null,
             null,
             null,
-        ) != c.SQLITE_OK) {
+        ) != sqlite.c.SQLITE_OK) {
             return false;
         }
         // Backfill so history written before this index existed is found too.
-        if (c.sqlite3_exec(
+        if (sqlite.c.sqlite3_exec(
             db,
             "INSERT INTO command_fts(command_fts) VALUES('rebuild');",
             null,
             null,
             null,
-        ) != c.SQLITE_OK) {
-            _ = c.sqlite3_exec(db, "DROP TABLE command_fts;", null, null, null);
+        ) != sqlite.c.SQLITE_OK) {
+            _ = sqlite.c.sqlite3_exec(db, "DROP TABLE command_fts;", null, null, null);
             return false;
         }
     }
-    return c.sqlite3_exec(
+    return sqlite.c.sqlite3_exec(
         db,
         "CREATE TRIGGER IF NOT EXISTS command_fts_insert AFTER INSERT ON command BEGIN " ++
             "INSERT INTO command_fts(rowid, command) VALUES (new.id, new.command); " ++
@@ -210,105 +207,24 @@ pub fn enableCommandSearchIndex(db: *c.sqlite3) bool {
         null,
         null,
         null,
-    ) == c.SQLITE_OK;
-}
-
-fn tableExists(db: *c.sqlite3, name: []const u8) !bool {
-    const stmt = try prepare(
-        db,
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?;",
-    );
-    defer _ = c.sqlite3_finalize(stmt);
-    bindText(stmt, 1, name);
-    return switch (c.sqlite3_step(stmt)) {
-        c.SQLITE_ROW => true,
-        c.SQLITE_DONE => false,
-        else => error.HistorySchemaFailed,
-    };
-}
-
-/// FTS5 MATCH parses operators out of raw text; quoting the whole query (and
-/// doubling interior quotes) turns it into one literal phrase.
-pub fn ftsQuote(text: []const u8, buffer: []u8) []const u8 {
-    var len: usize = 0;
-    buffer[len] = '"';
-    len += 1;
-    for (text) |byte| {
-        if (byte == '"') {
-            buffer[len] = '"';
-            len += 1;
-        }
-        buffer[len] = byte;
-        len += 1;
-    }
-    buffer[len] = '"';
-    len += 1;
-    return buffer[0..len];
+    ) == sqlite.c.SQLITE_OK;
 }
 
 pub fn queryCharacters(text: []const u8) usize {
     return std.unicode.utf8CountCodepoints(text) catch text.len;
 }
 
-pub fn ensureColumn(db: *c.sqlite3, migration: ColumnMigration) !void {
-    var pragma_buffer: [64]u8 = undefined;
-    const pragma = try std.fmt.bufPrint(&pragma_buffer, "PRAGMA table_info({s});", .{migration.table});
-    const stmt = try prepare(db, pragma);
-    defer _ = c.sqlite3_finalize(stmt);
-    while (true) switch (c.sqlite3_step(stmt)) {
-        c.SQLITE_ROW => {
-            const len: usize = @intCast(c.sqlite3_column_bytes(stmt, 1));
-            const pointer = c.sqlite3_column_text(stmt, 1) orelse continue;
-            if (std.mem.eql(u8, pointer[0..len], migration.column)) {
-                return;
-            }
-        },
-        c.SQLITE_DONE => break,
-        else => return error.HistorySchemaFailed,
-    };
-    if (c.sqlite3_exec(db, migration.alter_sql.ptr, null, null, null) != c.SQLITE_OK) {
-        return error.HistorySchemaFailed;
-    }
-}
-
-pub fn prepare(db: *c.sqlite3, sql: []const u8) !*c.sqlite3_stmt {
-    var stmt: ?*c.sqlite3_stmt = null;
-    if (c.sqlite3_prepare_v2(db, sql.ptr, @intCast(sql.len), &stmt, null) != c.SQLITE_OK) {
-        return error.HistoryPrepareFailed;
-    }
-    return stmt orelse error.HistoryPrepareFailed;
-}
-
-pub fn stepDone(stmt: *c.sqlite3_stmt) !void {
-    if (c.sqlite3_step(stmt) != c.SQLITE_DONE) {
-        return error.HistoryWriteFailed;
-    }
-}
-
-pub fn reset(stmt: *c.sqlite3_stmt) void {
-    _ = c.sqlite3_reset(stmt);
-    _ = c.sqlite3_clear_bindings(stmt);
-}
-
-pub fn bindText(stmt: *c.sqlite3_stmt, index: c_int, value: []const u8) void {
-    _ = c.sqlite3_bind_text(stmt, index, value.ptr, @intCast(value.len), null);
-}
-
-pub fn bindBlob(stmt: *c.sqlite3_stmt, index: c_int, value: *const model.SessionId) void {
-    _ = c.sqlite3_bind_blob(stmt, index, value, value.len, null);
-}
-
-pub fn bindCommandSource(stmt: *c.sqlite3_stmt, value: *const CommandFinished) void {
-    _ = c.sqlite3_bind_int(stmt, 16, @intFromEnum(value.origin));
+pub fn bindCommandSource(stmt: *sqlite.c.sqlite3_stmt, value: *const CommandFinished) void {
+    _ = sqlite.c.sqlite3_bind_int(stmt, 16, @intFromEnum(value.origin));
     if (value.provider.len == 0) {
-        _ = c.sqlite3_bind_null(stmt, 17);
+        _ = sqlite.c.sqlite3_bind_null(stmt, 17);
     } else {
-        bindText(stmt, 17, value.provider);
+        sqlite.bindText(stmt, 17, value.provider);
     }
     if (value.tool_call_id.len == 0) {
-        _ = c.sqlite3_bind_null(stmt, 18);
+        _ = sqlite.c.sqlite3_bind_null(stmt, 18);
     } else {
-        bindText(stmt, 18, value.tool_call_id);
+        sqlite.bindText(stmt, 18, value.tool_call_id);
     }
 }
 
@@ -319,17 +235,17 @@ pub fn locationColumns(location: core.TabLocation) LocationColumns {
     };
 }
 
-pub fn readEntry(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt) !Entry {
-    const command = try columnText(gpa, stmt, 6);
+pub fn readEntry(gpa: std.mem.Allocator, stmt: *sqlite.c.sqlite3_stmt) !Entry {
+    const command = try sqlite.columnText(gpa, stmt, 6);
     errdefer gpa.free(command);
-    const cwd = try columnText(gpa, stmt, 7);
+    const cwd = try sqlite.columnText(gpa, stmt, 7);
     errdefer gpa.free(cwd);
-    const workspace_path = try columnText(gpa, stmt, 8);
+    const workspace_path = try sqlite.columnText(gpa, stmt, 8);
     errdefer gpa.free(workspace_path);
-    const provider = try columnText(gpa, stmt, 11);
+    const provider = try sqlite.columnText(gpa, stmt, 11);
     errdefer gpa.free(provider);
-    const raw_history_id = c.sqlite3_column_int64(stmt, 0);
-    const raw_pane = c.sqlite3_column_int64(stmt, 1);
+    const raw_history_id = sqlite.c.sqlite3_column_int64(stmt, 0);
+    const raw_pane = sqlite.c.sqlite3_column_int64(stmt, 1);
     if (raw_history_id <= 0 or raw_pane <= 0) {
         return error.InvalidHistoryId;
     }
@@ -344,47 +260,39 @@ pub fn readEntry(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt) !Entry {
     return .{
         .id = @intCast(raw_history_id),
         .pane_id = try core.pane(raw_pane_id),
-        .started_at_ms = c.sqlite3_column_int64(stmt, 2),
-        .duration_ns = c.sqlite3_column_int64(stmt, 3),
-        .exit_code = if (c.sqlite3_column_type(stmt, 4) == c.SQLITE_NULL)
+        .started_at_ms = sqlite.c.sqlite3_column_int64(stmt, 2),
+        .duration_ns = sqlite.c.sqlite3_column_int64(stmt, 3),
+        .exit_code = if (sqlite.c.sqlite3_column_type(stmt, 4) == sqlite.c.SQLITE_NULL)
             null
         else
-            c.sqlite3_column_int(stmt, 4),
-        .status = switch (c.sqlite3_column_int(stmt, 5)) {
+            sqlite.c.sqlite3_column_int(stmt, 4),
+        .status = switch (sqlite.c.sqlite3_column_int(stmt, 5)) {
             0 => .completed,
             1 => .interrupted,
             2 => .running,
             else => return error.InvalidHistoryStatus,
         },
-        .author = switch (c.sqlite3_column_int(stmt, 9)) {
+        .author = switch (sqlite.c.sqlite3_column_int(stmt, 9)) {
             0 => .human,
             1 => .agent,
             else => return error.InvalidHistoryAuthor,
         },
-        .origin = switch (c.sqlite3_column_int(stmt, 10)) {
+        .origin = switch (sqlite.c.sqlite3_column_int(stmt, 10)) {
             0 => .pane,
             1 => .hook,
             2 => .plugin,
             else => return error.InvalidHistoryOrigin,
         },
         .command = command,
-        .command_truncated = c.sqlite3_column_int(stmt, 12) != 0,
+        .command_truncated = sqlite.c.sqlite3_column_int(stmt, 12) != 0,
         .cwd = cwd,
         .workspace_path = workspace_path,
         .provider = provider,
     };
 }
 
-/// Borrows the row's command text for hashing/scoring; valid only until the
-/// next step or reset.
-pub fn columnSlice(stmt: *c.sqlite3_stmt, column: c_int) []const u8 {
-    const ptr = c.sqlite3_column_text(stmt, column) orelse return "";
-    const len: usize = @intCast(c.sqlite3_column_bytes(stmt, column));
-    return ptr[0..len];
-}
-
-pub fn commandHash(stmt: *c.sqlite3_stmt) u64 {
-    return std.hash.Wyhash.hash(0x74656c6172, columnSlice(stmt, 6));
+pub fn commandHash(stmt: *sqlite.c.sqlite3_stmt) u64 {
+    return std.hash.Wyhash.hash(0x74656c6172, sqlite.columnSlice(stmt, 6));
 }
 
 pub fn appendStatsFilters(sql: *std.Io.Writer, request: *const StatsQuery) !void {
@@ -399,30 +307,21 @@ pub fn appendStatsFilters(sql: *std.Io.Writer, request: *const StatsQuery) !void
     }
 }
 
-pub fn bindStatsFilters(stmt: *c.sqlite3_stmt, request: *const StatsQuery) void {
+pub fn bindStatsFilters(stmt: *sqlite.c.sqlite3_stmt, request: *const StatsQuery) void {
     var parameter: c_int = 1;
     if (request.since_ms != 0) {
-        _ = c.sqlite3_bind_int64(stmt, parameter, request.since_ms);
+        _ = sqlite.c.sqlite3_bind_int64(stmt, parameter, request.since_ms);
         parameter += 1;
     }
     switch (request.scope) {
         .global => {},
-        .cwd, .workspace => bindText(stmt, parameter, request.scopeSlice()),
-        .pane => _ = c.sqlite3_bind_int64(
+        .cwd, .workspace => sqlite.bindText(stmt, parameter, request.scopeSlice()),
+        .pane => _ = sqlite.c.sqlite3_bind_int64(
             stmt,
             parameter,
             @intCast(core.raw(request.pane_id)),
         ),
     }
-}
-
-pub fn columnText(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt, column: c_int) ![]u8 {
-    const len: usize = @intCast(c.sqlite3_column_bytes(stmt, column));
-    if (len == 0) {
-        return gpa.alloc(u8, 0);
-    }
-    const pointer = c.sqlite3_column_text(stmt, column) orelse return error.InvalidHistoryText;
-    return gpa.dupe(u8, pointer[0..len]);
 }
 
 test "persists sessions and filters command history" {
@@ -462,27 +361,27 @@ test "persists sessions and filters command history" {
         .cause = @constCast("InjectedLaunchFailure"),
     };
     try store.insertLaunchAttempt(&attempt);
-    try std.testing.expectError(error.HistoryWriteFailed, store.insertLaunchAttempt(&attempt));
+    try std.testing.expectError(error.SqliteStepFailed, store.insertLaunchAttempt(&attempt));
 
-    const attempt_stmt = try prepare(
+    const attempt_stmt = try sqlite.prepare(
         store.db,
         "SELECT pane_generation, phase, cause FROM launch_attempt WHERE pane_id = 7;",
     );
-    defer _ = c.sqlite3_finalize(attempt_stmt);
-    try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(attempt_stmt));
-    try std.testing.expectEqual(@as(c_longlong, 11), c.sqlite3_column_int64(attempt_stmt, 0));
+    defer _ = sqlite.c.sqlite3_finalize(attempt_stmt);
+    try std.testing.expectEqual(@as(c_int, sqlite.c.SQLITE_ROW), sqlite.c.sqlite3_step(attempt_stmt));
+    try std.testing.expectEqual(@as(c_longlong, 11), sqlite.c.sqlite3_column_int64(attempt_stmt, 0));
     try std.testing.expectEqual(
         @as(c_int, @intFromEnum(model.LaunchPhase.output_actor)),
-        c.sqlite3_column_int(attempt_stmt, 1),
+        sqlite.c.sqlite3_column_int(attempt_stmt, 1),
     );
-    const cause_len: usize = @intCast(c.sqlite3_column_bytes(attempt_stmt, 2));
-    const cause = c.sqlite3_column_text(attempt_stmt, 2)[0..cause_len];
+    const cause_len: usize = @intCast(sqlite.c.sqlite3_column_bytes(attempt_stmt, 2));
+    const cause = sqlite.c.sqlite3_column_text(attempt_stmt, 2)[0..cause_len];
     try std.testing.expectEqualStrings("InjectedLaunchFailure", cause);
 
-    const empty_session_stmt = try prepare(store.db, "SELECT count(*) FROM session;");
-    defer _ = c.sqlite3_finalize(empty_session_stmt);
-    try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(empty_session_stmt));
-    try std.testing.expectEqual(@as(c_longlong, 0), c.sqlite3_column_int64(empty_session_stmt, 0));
+    const empty_session_stmt = try sqlite.prepare(store.db, "SELECT count(*) FROM session;");
+    defer _ = sqlite.c.sqlite3_finalize(empty_session_stmt);
+    try std.testing.expectEqual(@as(c_int, sqlite.c.SQLITE_ROW), sqlite.c.sqlite3_step(empty_session_stmt));
+    try std.testing.expectEqual(@as(c_longlong, 0), sqlite.c.sqlite3_column_int64(empty_session_stmt, 0));
 
     const session: SessionStarted = .{
         .id = session_id,
@@ -500,23 +399,23 @@ test "persists sessions and filters command history" {
         .state = .ready,
     });
     try store.setSessionTitle(&session_title);
-    const title_stmt = try prepare(
+    const title_stmt = try sqlite.prepare(
         store.db,
         "SELECT title, title_source, title_state FROM session WHERE id = ?1;",
     );
-    defer _ = c.sqlite3_finalize(title_stmt);
-    bindBlob(title_stmt, 1, &session_id);
-    try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(title_stmt));
-    const title_len: usize = @intCast(c.sqlite3_column_bytes(title_stmt, 0));
-    const title = c.sqlite3_column_text(title_stmt, 0)[0..title_len];
+    defer _ = sqlite.c.sqlite3_finalize(title_stmt);
+    sqlite.bindBlob(title_stmt, 1, &session_id);
+    try std.testing.expectEqual(@as(c_int, sqlite.c.SQLITE_ROW), sqlite.c.sqlite3_step(title_stmt));
+    const title_len: usize = @intCast(sqlite.c.sqlite3_column_bytes(title_stmt, 0));
+    const title = sqlite.c.sqlite3_column_text(title_stmt, 0)[0..title_len];
     try std.testing.expectEqualStrings("Improve agent sidebar", title);
     try std.testing.expectEqual(
         @as(c_int, @intFromEnum(core.AgentTitleSource.generated)),
-        c.sqlite3_column_int(title_stmt, 1),
+        sqlite.c.sqlite3_column_int(title_stmt, 1),
     );
     try std.testing.expectEqual(
         @as(c_int, @intFromEnum(core.AgentTitleState.ready)),
-        c.sqlite3_column_int(title_stmt, 2),
+        sqlite.c.sqlite3_column_int(title_stmt, 2),
     );
 
     const successful: CommandFinished = .{
@@ -548,10 +447,10 @@ test "persists sessions and filters command history" {
     _ = try store.insertCommand(&failed);
     try store.finishSession(.{ .id = session_id, .finished_at_ms = 4_000 });
 
-    const tab_stmt = try prepare(store.db, "SELECT tab_id FROM command WHERE sequence = 1;");
-    defer _ = c.sqlite3_finalize(tab_stmt);
-    try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(tab_stmt));
-    try std.testing.expectEqual(@as(c_longlong, 2), c.sqlite3_column_int64(tab_stmt, 0));
+    const tab_stmt = try sqlite.prepare(store.db, "SELECT tab_id FROM command WHERE sequence = 1;");
+    defer _ = sqlite.c.sqlite3_finalize(tab_stmt);
+    try std.testing.expectEqual(@as(c_int, sqlite.c.SQLITE_ROW), sqlite.c.sqlite3_step(tab_stmt));
+    try std.testing.expectEqual(@as(c_longlong, 2), sqlite.c.sqlite3_column_int64(tab_stmt, 0));
 
     const request = try Query.init(.{
         .request_id = @enumFromInt(1),
@@ -722,10 +621,10 @@ test "agent command synthesis persists provenance and deduplicates tool calls" {
     plugin.sequence = 4;
     try std.testing.expect(!try store.insertCommand(&plugin));
 
-    const session_count = try prepare(store.db, "SELECT count(*) FROM session;");
-    defer _ = c.sqlite3_finalize(session_count);
-    try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(session_count));
-    try std.testing.expectEqual(@as(c_longlong, 1), c.sqlite3_column_int64(session_count, 0));
+    const session_count = try sqlite.prepare(store.db, "SELECT count(*) FROM session;");
+    defer _ = sqlite.c.sqlite3_finalize(session_count);
+    try std.testing.expectEqual(@as(c_int, sqlite.c.SQLITE_ROW), sqlite.c.sqlite3_step(session_count));
+    try std.testing.expectEqual(@as(c_longlong, 1), sqlite.c.sqlite3_column_int64(session_count, 0));
 
     const query = try Query.init(.{
         .request_id = @enumFromInt(1),
@@ -751,25 +650,25 @@ test "opening a version four database migrates command provenance to version fiv
     const directory_len = try temp.dir.realPath(io, &directory_buffer);
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrintZ(&path_buffer, "{s}/history.db", .{directory_buffer[0..directory_len]});
-    var db: ?*c.sqlite3 = null;
-    try std.testing.expectEqual(@as(c_int, c.SQLITE_OK), c.sqlite3_open_v2(path.ptr, &db, c.SQLITE_OPEN_READWRITE | c.SQLITE_OPEN_CREATE, null));
+    var db: ?*sqlite.c.sqlite3 = null;
+    try std.testing.expectEqual(@as(c_int, sqlite.c.SQLITE_OK), sqlite.c.sqlite3_open_v2(path.ptr, &db, sqlite.c.SQLITE_OPEN_READWRITE | sqlite.c.SQLITE_OPEN_CREATE, null));
     const opened = db.?;
     const legacy =
         "CREATE TABLE history_schema(version INTEGER NOT NULL); INSERT INTO history_schema VALUES(4);" ++
         "CREATE TABLE session(id BLOB PRIMARY KEY, pane_id INTEGER NOT NULL, location_kind INTEGER NOT NULL, location_id INTEGER NOT NULL, tab_id INTEGER NOT NULL, workspace_path TEXT NOT NULL, shell TEXT NOT NULL, started_at_ms INTEGER NOT NULL, finished_at_ms INTEGER, title TEXT, title_source INTEGER, title_state INTEGER);" ++
         "CREATE TABLE command(id INTEGER PRIMARY KEY, session_id BLOB NOT NULL REFERENCES session(id), pane_id INTEGER NOT NULL, location_kind INTEGER NOT NULL, location_id INTEGER NOT NULL, tab_id INTEGER NOT NULL, sequence INTEGER NOT NULL, command TEXT NOT NULL, command_truncated INTEGER NOT NULL DEFAULT 0, cwd TEXT NOT NULL, workspace_path TEXT NOT NULL, started_at_ms INTEGER NOT NULL, duration_ns INTEGER NOT NULL, exit_code INTEGER, status INTEGER NOT NULL, author INTEGER NOT NULL DEFAULT 0, UNIQUE(session_id, sequence));";
-    try std.testing.expectEqual(@as(c_int, c.SQLITE_OK), c.sqlite3_exec(opened, legacy, null, null, null));
-    _ = c.sqlite3_close(opened);
+    try std.testing.expectEqual(@as(c_int, sqlite.c.SQLITE_OK), sqlite.c.sqlite3_exec(opened, legacy, null, null, null));
+    _ = sqlite.c.sqlite3_close(opened);
 
     var store = try Store.open(path);
     defer store.close();
-    const version = try prepare(store.db, "SELECT version FROM history_schema;");
-    defer _ = c.sqlite3_finalize(version);
-    try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(version));
-    try std.testing.expectEqual(@as(c_int, 5), c.sqlite3_column_int(version, 0));
-    const columns = try prepare(store.db, "SELECT origin, provider, tool_call_id FROM command LIMIT 0;");
-    defer _ = c.sqlite3_finalize(columns);
-    try std.testing.expectEqual(@as(c_int, c.SQLITE_DONE), c.sqlite3_step(columns));
+    const version = try sqlite.prepare(store.db, "SELECT version FROM history_schema;");
+    defer _ = sqlite.c.sqlite3_finalize(version);
+    try std.testing.expectEqual(@as(c_int, sqlite.c.SQLITE_ROW), sqlite.c.sqlite3_step(version));
+    try std.testing.expectEqual(@as(c_int, 5), sqlite.c.sqlite3_column_int(version, 0));
+    const columns = try sqlite.prepare(store.db, "SELECT origin, provider, tool_call_id FROM command LIMIT 0;");
+    defer _ = sqlite.c.sqlite3_finalize(columns);
+    try std.testing.expectEqual(@as(c_int, sqlite.c.SQLITE_DONE), sqlite.c.sqlite3_step(columns));
 }
 
 test "delete and prune remove rows and keep the FTS index consistent" {
@@ -1051,20 +950,20 @@ pub fn appendQueryFilters(sql: *std.Io.Writer, request: *const Query) !void {
     }
 }
 
-pub fn bindQueryFilters(stmt: *c.sqlite3_stmt, parameter: *c_int, request: *const Query) void {
+pub fn bindQueryFilters(stmt: *sqlite.c.sqlite3_stmt, parameter: *c_int, request: *const Query) void {
     if (request.author != .all) {
         const author: core.HistoryAuthor = if (request.author == .human) .human else .agent;
-        _ = c.sqlite3_bind_int(stmt, parameter.*, @intFromEnum(author));
+        _ = sqlite.c.sqlite3_bind_int(stmt, parameter.*, @intFromEnum(author));
         parameter.* += 1;
     }
     switch (request.scope) {
         .global => {},
         .cwd, .workspace => {
-            bindText(stmt, parameter.*, request.scopeSlice());
+            sqlite.bindText(stmt, parameter.*, request.scopeSlice());
             parameter.* += 1;
         },
         .pane => {
-            _ = c.sqlite3_bind_int64(
+            _ = sqlite.c.sqlite3_bind_int64(
                 stmt,
                 parameter.*,
                 @intCast(core.raw(request.pane_id)),
@@ -1073,11 +972,5 @@ pub fn bindQueryFilters(stmt: *c.sqlite3_stmt, parameter: *c_int, request: *cons
         },
     }
 }
-
-const ColumnMigration = struct {
-    table: []const u8,
-    column: []const u8,
-    alter_sql: [:0]const u8,
-};
 
 const LocationColumns = struct { kind: c_int, id: u64 };
