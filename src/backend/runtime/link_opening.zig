@@ -1,6 +1,7 @@
 //! A client opens a local file link in an editor: a worker reuses an
 //! editor already running in a pane of the same tab when it can.
 
+const editorremote = @import("editorremote");
 const client_connection = @import("client_connection.zig");
 const core = @import("telar-core");
 const std = @import("std");
@@ -61,7 +62,7 @@ fn admit(model: *RuntimeModel, session: *Session, request: core.OpenEditor) !voi
         .result = .{ .request_id = request.request_id, .outcome = .unavailable },
     };
 
-    const kind = core.editor.identify(request.editor);
+    const kind = editorremote.editor.identify(request.editor);
     if (kind != .unsupported) {
         for (model.panes.items) |slot| {
             const pane = slot orelse continue;
@@ -69,14 +70,13 @@ fn admit(model: *RuntimeModel, session: *Session, request: core.OpenEditor) !voi
                 continue;
             }
 
-            if (core.editor.identify(pane.agent_process_cache.name()) != kind) {
+            if (editorremote.editor.identify(pane.agent_process_cache.name()) != kind) {
                 continue;
             }
 
             const group = pane.session.foregroundProcessGroup() orelse continue;
             const pid = std.math.cast(u32, group) orelse continue;
-            job.candidates[job.candidate_count] = .{ .pane = pane.key(), .process_group = pid };
-            job.candidate_count += 1;
+            job.addCandidate(pane.key(), pid);
         }
     }
 

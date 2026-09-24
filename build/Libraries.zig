@@ -75,6 +75,11 @@ const specs = [_]Spec{
         .imports = &.{"unicode"},
     },
     .{
+        .name = "editorremote",
+        .libc = true,
+        .posix = true,
+    },
+    .{
         .name = "gitstatus",
     },
     .{

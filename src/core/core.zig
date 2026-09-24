@@ -545,6 +545,5 @@ const editor_codec = @import("schema/messages/editor.zig");
 pub const encodeOpenEditor = editor_codec.encodeOpenEditor;
 pub const encodeEditorOpened = editor_codec.encodeEditorOpened;
 
-pub const editor = @import("editor.zig");
 
 pub const OwnedEditorOpen = @import("schema/messages/OwnedEditorOpen.zig");

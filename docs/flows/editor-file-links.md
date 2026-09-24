@@ -9,8 +9,9 @@ through the existing pane focus path.
 
 The runtime's `link_opening.start` admits the request: it checks the source
 generation and collects live terminal panes in the same tab.
-`editors/Job.zig` discovers servers and opens the file on an observation
-worker, and `link_opening.finish` delivers the reply. It never writes commands or simulated keys to a
+`editors/Job.zig` runs an `editorremote.Search` on an observation worker,
+which discovers servers and opens the file, and maps the accepting candidate
+back to its pane; `link_opening.finish` delivers the reply. It never writes commands or simulated keys to a
 PTY. Names only select candidates; the remote editor's process identity, and
 for Emacs the frame's terminal device, identify the destination.
 

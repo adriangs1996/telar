@@ -1,7 +1,7 @@
 //! Native editor protocols. No PTY keystrokes, screen heuristics or shell parsing.
 const std = @import("std");
-const core = @import("telar-core");
-const Job = @import("Job.zig");
+const Search = @import("Search.zig");
+const editor = @import("editor.zig");
 const expressions = @import("expressions.zig");
 const c = @cImport({
     @cInclude("sys/stat.h");
@@ -9,70 +9,70 @@ const c = @cImport({
 });
 
 /// Searches only bounded local endpoints and validates remote process identity.
-/// Example: `try remote.open(job);`
-pub fn open(job: *Job) !void {
-    if (job.candidate_count == 0) {
+/// Example: `try remote.open(search);`
+pub fn open(search: *Search) !void {
+    if (search.candidates.len == 0) {
         return;
     }
 
-    switch (core.editor.identify(job.request.editor())) {
-        .neovim => try neovim(job),
-        .vim => try vim(job),
-        .emacs => try emacs(job),
+    switch (editor.identify(search.editor)) {
+        .neovim => try neovim(search),
+        .vim => try vim(search),
+        .emacs => try emacs(search),
         .unsupported => {},
     }
 }
 
-fn neovim(job: *Job) !void {
-    if (job.environment.getPosix("XDG_RUNTIME_DIR")) |root| {
-        try scan(job, root, true);
+fn neovim(search: *Search) !void {
+    if (search.environment.getPosix("XDG_RUNTIME_DIR")) |root| {
+        try scan(search, root, true);
     }
 
-    if (job.result.outcome == .opened) {
+    if (search.opened != null) {
         return;
     }
 
-    const user = job.environment.getPosix("USER") orelse return;
+    const user = search.environment.getPosix("USER") orelse return;
     // USER is a directory component, never an arbitrary traversal path.
     if (std.mem.findScalar(u8, user, '/') != null or user.len == 0) {
         return;
     }
 
     var storage: [std.fs.max_path_bytes]u8 = undefined;
-    const temporary = job.environment.getPosix("TMPDIR") orelse "/tmp";
+    const temporary = search.environment.getPosix("TMPDIR") orelse "/tmp";
     const root = try std.fmt.bufPrint(&storage, "{s}/nvim.{s}", .{ temporary, user });
-    try scan(job, root, true);
-    if (job.result.outcome != .opened and !std.mem.eql(u8, temporary, "/tmp")) {
+    try scan(search, root, true);
+    if (search.opened == null and !std.mem.eql(u8, temporary, "/tmp")) {
         const fallback = try std.fmt.bufPrint(&storage, "/tmp/nvim.{s}", .{user});
-        try scan(job, fallback, true);
+        try scan(search, fallback, true);
     }
 }
 
-fn scan(job: *Job, root: []const u8, descend: bool) !void {
-    if (job.result.outcome == .opened or !ownedPath(root, .directory)) {
+fn scan(search: *Search, root: []const u8, descend: bool) !void {
+    if (search.opened != null or !ownedPath(root, .directory)) {
         return;
     }
 
-    var directory = std.Io.Dir.cwd().openDir(job.io, root, .{ .iterate = true, .follow_symlinks = false }) catch return;
-    defer directory.close(job.io);
+    var directory = std.Io.Dir.cwd().openDir(search.io, root, .{ .iterate = true, .follow_symlinks = false }) catch return;
+    defer directory.close(search.io);
     var entries = directory.iterate();
-    while (job.entries_left > 0 and job.endpoints_left > 0) {
-        const entry = try entries.next(job.io) orelse break;
-        job.entries_left -= 1;
+    while (search.entries_left > 0 and search.endpoints_left > 0) {
+        const entry = try entries.next(search.io) orelse break;
+        search.entries_left -= 1;
         var storage: [std.fs.max_path_bytes]u8 = undefined;
         const path = std.fmt.bufPrint(&storage, "{s}/{s}", .{ root, entry.name }) catch continue;
         if (entry.kind == .directory and descend) {
-            try scan(job, path, false);
+            try scan(search, path, false);
         } else if (entry.kind == .unix_domain_socket and ownedPath(path, .socket)) {
-            job.endpoints_left -= 1;
-            if (core.editor.identify(job.request.editor()) == .emacs) {
-                try emacsEndpoint(job, path);
+            search.endpoints_left -= 1;
+            if (editor.identify(search.editor) == .emacs) {
+                try emacsEndpoint(search, path);
             } else if (std.mem.startsWith(u8, entry.name, "nvim.")) {
-                try vimEndpoint(job, path);
+                try vimEndpoint(search, path);
             }
         }
 
-        if (job.result.outcome == .opened) {
+        if (search.opened != null) {
             return;
         }
     }
@@ -100,28 +100,28 @@ fn ownedPath(path: []const u8, kind: PathKind) bool {
     return stat.st_mode & c.S_IFMT == expected and stat.st_mode & 0o022 == 0;
 }
 
-fn vim(job: *Job) !void {
-    const output = job.command(&.{ job.request.editor(), "--serverlist" }) catch return;
-    defer Job.release(output);
+fn vim(search: *Search) !void {
+    const output = search.command(&.{ search.editor, "--serverlist" }) catch return;
+    defer Search.release(output);
     if (output.term != .exited or output.term.exited != 0) {
         return;
     }
 
     var names = std.mem.tokenizeAny(u8, output.stdout, "\r\n");
     while (names.next()) |name| {
-        if (job.endpoints_left == 0 or job.result.outcome == .opened) {
+        if (search.endpoints_left == 0 or search.opened != null) {
             return;
         }
 
-        job.endpoints_left -= 1;
-        try vimEndpoint(job, name);
+        search.endpoints_left -= 1;
+        try vimEndpoint(search, name);
     }
 }
 
-fn vimEndpoint(job: *Job, endpoint: []const u8) !void {
-    const server_option = if (core.editor.identify(job.request.editor()) == .neovim) "--server" else "--servername";
-    const identity = job.command(&.{ job.request.editor(), server_option, endpoint, "--remote-expr", "getpid() . \"\\n\" . hostname()" }) catch return;
-    defer Job.release(identity);
+fn vimEndpoint(search: *Search, endpoint: []const u8) !void {
+    const server_option = if (editor.identify(search.editor) == .neovim) "--server" else "--servername";
+    const identity = search.command(&.{ search.editor, server_option, endpoint, "--remote-expr", "getpid() . \"\\n\" . hostname()" }) catch return;
+    defer Search.release(identity);
     if (identity.term != .exited or identity.term.exited != 0) {
         return;
     }
@@ -139,24 +139,24 @@ fn vimEndpoint(job: *Job, endpoint: []const u8) !void {
         return;
     }
 
-    const candidate = job.find(pid) orelse return;
+    const index = search.find(pid) orelse return;
     var storage: [expressions.max_bytes]u8 = undefined;
-    const expression = try expressions.vim(&storage, .{ .pid = pid, .path = job.request.path(), .hostname = local_host });
-    const output = try job.command(&.{ job.request.editor(), server_option, endpoint, "--remote-expr", expression });
-    defer Job.release(output);
+    const expression = try expressions.vim(&storage, .{ .pid = pid, .path = search.path, .hostname = local_host });
+    const output = try search.command(&.{ search.editor, server_option, endpoint, "--remote-expr", expression });
+    defer Search.release(output);
     if (output.term != .exited or output.term.exited != 0 or !std.mem.eql(u8, std.mem.trim(u8, output.stdout, " \r\n"), "1")) {
         return error.EditorRejectedOpen;
     }
 
-    job.opened(candidate);
+    search.opened = index;
 }
 
-fn emacs(job: *Job) !void {
-    for (job.candidates[0..job.candidate_count]) |*candidate| {
+fn emacs(search: *Search) !void {
+    for (search.candidates) |*candidate| {
         var pid_storage: [16]u8 = undefined;
         const pid = try std.fmt.bufPrint(&pid_storage, "{d}", .{candidate.process_group});
-        const output = job.command(&.{ "/bin/ps", "-p", pid, "-o", "tty=" }) catch continue;
-        defer Job.release(output);
+        const output = search.command(&.{ "/bin/ps", "-p", pid, "-o", "tty=" }) catch continue;
+        defer Search.release(output);
         if (output.term != .exited or output.term.exited != 0) {
             continue;
         }
@@ -171,39 +171,39 @@ fn emacs(job: *Job) !void {
     }
 
     // Honor an explicit socket configured for emacsclient before discovery.
-    if (job.environment.getPosix("EMACS_SOCKET_NAME")) |socket| {
+    if (search.environment.getPosix("EMACS_SOCKET_NAME")) |socket| {
         if (ownedPath(socket, .socket)) {
-            try emacsEndpoint(job, socket);
+            try emacsEndpoint(search, socket);
         }
     }
 
     var storage: [std.fs.max_path_bytes]u8 = undefined;
-    if (job.environment.getPosix("XDG_RUNTIME_DIR")) |root| {
+    if (search.environment.getPosix("XDG_RUNTIME_DIR")) |root| {
         const directory = try std.fmt.bufPrint(&storage, "{s}/emacs", .{root});
-        try scan(job, directory, false);
+        try scan(search, directory, false);
     }
 
-    if (job.result.outcome == .opened) {
+    if (search.opened != null) {
         return;
     }
 
-    const temporary = job.environment.getPosix("TMPDIR") orelse "/tmp";
+    const temporary = search.environment.getPosix("TMPDIR") orelse "/tmp";
     const directory = try std.fmt.bufPrint(&storage, "{s}/emacs{d}", .{ temporary, c.getuid() });
-    try scan(job, directory, false);
-    if (job.result.outcome != .opened and !std.mem.eql(u8, temporary, "/tmp")) {
+    try scan(search, directory, false);
+    if (search.opened == null and !std.mem.eql(u8, temporary, "/tmp")) {
         const fallback = try std.fmt.bufPrint(&storage, "/tmp/emacs{d}", .{c.getuid()});
-        try scan(job, fallback, false);
+        try scan(search, fallback, false);
     }
 }
 
-fn emacsEndpoint(job: *Job, endpoint: []const u8) !void {
+fn emacsEndpoint(search: *Search, endpoint: []const u8) !void {
     var executable_storage: [std.fs.max_path_bytes]u8 = undefined;
-    const executable = if (std.fs.path.dirname(job.request.editor())) |directory|
+    const executable = if (std.fs.path.dirname(search.editor)) |directory|
         try std.fmt.bufPrint(&executable_storage, "{s}/emacsclient", .{directory})
     else
         "emacsclient";
-    const identity = job.command(&.{ executable, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", "(emacs-pid)" }) catch return;
-    defer Job.release(identity);
+    const identity = search.command(&.{ executable, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", "(emacs-pid)" }) catch return;
+    defer Search.release(identity);
     if (identity.term != .exited or identity.term.exited != 0) {
         return;
     }
@@ -214,22 +214,22 @@ fn emacsEndpoint(job: *Job, endpoint: []const u8) !void {
         return;
     }
 
-    for (job.candidates[0..job.candidate_count]) |candidate| {
+    for (search.candidates, 0..) |candidate, index| {
         if (candidate.tty_len == 0) {
             continue;
         }
 
         var storage: [expressions.max_bytes]u8 = undefined;
-        const expression = try expressions.emacs(&storage, .{ .pid = pid, .path = job.request.path(), .tty = candidate.tty(), .hostname = std.mem.sliceTo(&hostname, 0) });
-        const output = try job.command(&.{ executable, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", expression });
-        defer Job.release(output);
+        const expression = try expressions.emacs(&storage, .{ .pid = pid, .path = search.path, .tty = candidate.tty(), .hostname = std.mem.sliceTo(&hostname, 0) });
+        const output = try search.command(&.{ executable, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", expression });
+        defer Search.release(output);
         if (output.term != .exited or output.term.exited != 0) {
             return error.EditorRejectedOpen;
         }
 
         const result = std.mem.trim(u8, output.stdout, " \r\n");
         if (std.mem.eql(u8, result, "1")) {
-            job.opened(candidate);
+            search.opened = index;
             return;
         } else if (!std.mem.eql(u8, result, "0")) {
             return error.EditorRejectedOpen;

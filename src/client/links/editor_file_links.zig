@@ -1,5 +1,6 @@
 //! Editor file links: opens a file link in the editor pane of its tab,
 //! splitting one when none is reachable.
+const editorremote = @import("editorremote");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -45,12 +46,12 @@ fn openEditorPane(client: *Client, pane_id: core.PaneId, path: data.FilePath) !v
     };
 
     try request.setTarget(editor, path.slice());
-    const kind = core.editor.identify(editor);
+    const kind = editorremote.editor.identify(editor);
     var reusable = false;
     if (kind != .unsupported and source.pane_generation != 0) {
         var panes = client.model.panes.iterateConst(client.model.tabs.location[model].tab_id);
         while (panes.next()) |pane| {
-            reusable = reusable or core.editor.identify(pane.foregroundName()) == kind;
+            reusable = reusable or editorremote.editor.identify(pane.foregroundName()) == kind;
         }
     }
 

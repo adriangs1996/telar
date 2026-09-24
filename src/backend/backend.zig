@@ -196,5 +196,4 @@ test {
     _ = @import("runtime/tests/runtime_state_test.zig");
     _ = @import("runtime/tests/search_pane_test.zig");
     _ = @import("runtime/tests/shared_frame_test.zig");
-    _ = @import("editors/tests.zig");
 }
