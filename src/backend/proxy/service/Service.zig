@@ -139,7 +139,7 @@ fn run(self: *Service) anyerror!void {
     defer path.restore();
     try self.configuration.beginServing(self.io);
 
-    return service_support.ConnectionAdmission.run(self);
+    return service_support.acceptConnections(self);
 }
 
 /// Waits for the next live observation. Events for credentials revoked

@@ -11,7 +11,6 @@ const service_support = @import("service/service_support.zig");
 const pty = @import("pty");
 const Override = pty.Override;
 const std = @import("std");
-const connection_admission = @import("connection_admission.zig");
 const connect_authentication = @import("connect_authentication.zig");
 const root = @import("h2/h2.zig");
 const root_module = @import("http/http.zig");
@@ -195,7 +194,7 @@ test "proxy connection admission enforces the real worker limit" {
 
 test {
     std.testing.refAllDecls(ca);
-    std.testing.refAllDecls(connection_admission);
+    _ = @import("Slots.zig");
     std.testing.refAllDecls(connect_authentication);
     std.testing.refAllDecls(root);
     std.testing.refAllDecls(root_module);

@@ -1,8 +1,6 @@
 //! Runtime-owned loopback ProxyTLS service.
 
 const std = @import("std");
-const GenericConnectionAdmissionPort = @import("../GenericConnectionAdmissionPort.zig").Type;
-const GenericRunner = @import("../GenericRunner.zig").Type;
 const Tunnel = @import("../tunnel/Tunnel.zig");
 const Credential = @import("../Credential.zig");
 
@@ -18,27 +16,35 @@ pub const Worker = std.Io.Future(anyerror!void);
 
 pub const Service = @import("Service.zig");
 
-const connection_admission_port: GenericConnectionAdmissionPort(Service, std.Io.net.Stream) = .{
-    .accept = acceptConnection,
-    .acquire = acquireConnection,
-    .start = startConnection,
-    .release = releaseConnection,
-    .close = closeConnection,
-    .cancel = cancelConnections,
-};
+/// Accepts until cancellation or listener closure. A started connection owns
+/// its stream and its slot; a connection over the bound, or one that cannot
+/// be scheduled, is closed here after its slot is released. Transient accept
+/// failures are retried.
+///
+/// ```zig
+/// try service_support.acceptConnections(service);
+/// ```
+pub fn acceptConnections(service: *Service) anyerror!void {
+    var connections: std.Io.Group = .init;
+    defer connections.cancel(service.io);
 
-pub const ConnectionAdmission = GenericRunner(Service, std.Io.net.Stream, connection_admission_port);
+    while (true) {
+        const stream = service.listener.accept(service.io) catch |err| switch (err) {
+            error.Canceled => |canceled| return canceled,
+            error.SocketNotListening => return,
+            else => continue,
+        };
 
-fn acceptConnection(service: *Service) !std.Io.net.Stream {
-    return service.listener.accept(service.io);
-}
+        if (!service.connection_slots.acquire()) {
+            stream.close(service.io);
+            continue;
+        }
 
-fn acquireConnection(service: *Service) bool {
-    return service.connection_slots.acquire();
-}
-
-fn startConnection(service: *Service, connections: *std.Io.Group, stream: std.Io.net.Stream) !void {
-    try connections.concurrent(service.io, serveConnection, .{ service, stream });
+        connections.concurrent(service.io, serveConnection, .{ service, stream }) catch {
+            service.connection_slots.release();
+            stream.close(service.io);
+        };
+    }
 }
 
 fn serveConnection(service: *Service, stream: std.Io.net.Stream) std.Io.Cancelable!void {
@@ -59,18 +65,6 @@ fn serveConnection(service: *Service, stream: std.Io.net.Stream) std.Io.Cancelab
     });
 
     return tunnel.run();
-}
-
-fn releaseConnection(service: *Service) void {
-    service.connection_slots.release();
-}
-
-fn closeConnection(service: *Service, stream: std.Io.net.Stream) void {
-    stream.close(service.io);
-}
-
-fn cancelConnections(service: *Service, connections: *std.Io.Group) void {
-    connections.cancel(service.io);
 }
 
 pub fn observationCredentialIsLive(context: *anyopaque, credential: *const Credential) bool {

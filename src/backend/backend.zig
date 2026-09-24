@@ -88,7 +88,6 @@ test {
     _ = @import("proxy/capture/queue.zig");
     _ = @import("proxy/capture/table.zig");
     _ = @import("proxy/connect_authentication.zig");
-    _ = @import("proxy/connection_admission.zig");
     _ = @import("proxy/credential_registry.zig");
     _ = @import("proxy/h2/connection.zig");
     _ = @import("proxy/h2/h2.zig");

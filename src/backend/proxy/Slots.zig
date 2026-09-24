@@ -62,3 +62,28 @@ pub fn snapshot(self: *const Slots) SlotSnapshot {
         .limit_drops = self.limit_drops.load(.monotonic),
     };
 }
+
+test "connection slots never expose a count above their bound" {
+    var slots = Slots.init(2);
+
+    try std.testing.expect(slots.acquire());
+    try std.testing.expect(slots.acquire());
+    try std.testing.expect(!slots.acquire());
+    try std.testing.expectEqual(SlotSnapshot{ .active = 2, .limit_drops = 1 }, slots.snapshot());
+
+    slots.release();
+    try std.testing.expect(slots.acquire());
+    try std.testing.expectEqual(SlotSnapshot{ .active = 2, .limit_drops = 1 }, slots.snapshot());
+
+    slots.release();
+    slots.release();
+    try std.testing.expectEqual(SlotSnapshot{ .active = 0, .limit_drops = 1 }, slots.snapshot());
+}
+
+test "a zero connection limit rejects and counts every attempt" {
+    var slots = Slots.init(0);
+
+    try std.testing.expect(!slots.acquire());
+    try std.testing.expect(!slots.acquire());
+    try std.testing.expectEqual(SlotSnapshot{ .active = 0, .limit_drops = 2 }, slots.snapshot());
+}
