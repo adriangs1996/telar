@@ -1,12 +1,12 @@
 //! Projection from host mouse events to a focused pane's SGR protocol.
-const keyinput = @import("keyinput");
 
+const Mouse = @import("Mouse.zig");
+const MouseTracking = @import("MouseTracking.zig").MouseTracking;
 const cellgrid = @import("cellgrid");
-const core = @import("telar-core");
 const PixelProjection = @import("PixelProjection.zig");
 const std = @import("std");
 
-pub fn tracked(tracking: core.MouseTracking, kind: keyinput.Mouse.Kind) bool {
+pub fn tracked(tracking: MouseTracking, kind: Mouse.Kind) bool {
     return switch (tracking) {
         .none => false,
         .x10 => kind == .press,
@@ -44,7 +44,7 @@ pub fn encodeSgr(buffer: []u8, input: SgrInput) ![]const u8 {
 }
 
 const SgrInput = struct {
-    event: keyinput.Mouse,
+    event: Mouse,
     pane_position: cellgrid.Point,
     pixels: ?PixelProjection = null,
 };

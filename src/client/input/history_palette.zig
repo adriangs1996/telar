@@ -1,9 +1,9 @@
 //! History palette: queries, pages, pastes and deletes command history rows.
+const keyinput = @import("keyinput");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
 const history_browser = @import("history_browser.zig");
-const encoding_support = @import("encoding_support.zig");
 const name_prompt = @import("name_prompt.zig");
 const pane_input = @import("../panes/pane_input.zig");
 const Client = @import("../execution/Client.zig");
@@ -316,7 +316,7 @@ fn pasteHistoryCommand(client: *Client, text: []const u8, run: bool) !?data.Pane
     const plan = client.model.planPaneInput(.focused) orelse return null;
     try pane_input.validateHistoryText(text, plan.input_modes.bracketed_paste);
     var encoded: [core.max_history_command_bytes + 13]u8 = undefined;
-    const paste = try encoding_support.encodePaste(
+    const paste = try keyinput.encodePaste(
         &encoded,
         text,
         plan.input_modes,

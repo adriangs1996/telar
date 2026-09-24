@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const TextMetadataCapture = @import("../../pane/TextMetadataCapture.zig");
 const core = @import("telar-core");
@@ -16,7 +17,7 @@ acknowledged_text_revision: u64 = 0,
 acknowledged_text_projected: bool = false,
 acknowledged_cursor: core.Cursor = .{},
 acknowledged_mouse: core.Mouse = .{},
-acknowledged_input_modes: core.InputModes = .{},
+acknowledged_input_modes: keyinput.InputModes = .{},
 acknowledged_pointer_shape: core.PointerShape = .default,
 acknowledged_scroll: core.Scroll = .{ .total_rows = 1, .offset = 0 },
 projected: cellgrid.Buffer,

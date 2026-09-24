@@ -85,21 +85,21 @@ test "pane mouse reports preserve SGR buttons and pane-relative coordinates" {
     var buffer: [64]u8 = undefined;
     try std.testing.expectEqualStrings(
         "\x1b[<0;3;5M",
-        try client.encodeSgr(&buffer, .{
+        try keyinput.encodeSgr(&buffer, .{
             .event = .{ .x = 20, .y = 30, .kind = .press, .button = 0 },
             .pane_position = .{ .x = 2, .y = 4 },
         }),
     );
     try std.testing.expectEqualStrings(
         "\x1b[<0;3;5m",
-        try client.encodeSgr(&buffer, .{
+        try keyinput.encodeSgr(&buffer, .{
             .event = .{ .x = 20, .y = 30, .kind = .release, .button = 0 },
             .pane_position = .{ .x = 2, .y = 4 },
         }),
     );
     try std.testing.expectEqualStrings(
         "\x1b[<0;26;91M",
-        try client.encodeSgr(&buffer, .{
+        try keyinput.encodeSgr(&buffer, .{
             .event = .{ .x = 20, .y = 30, .kind = .press, .button = 0 },
             .pane_position = .{ .x = 2, .y = 4 },
             .pixels = .{ .cell = .{ .width = 10, .height = 20 } },
@@ -107,7 +107,7 @@ test "pane mouse reports preserve SGR buttons and pane-relative coordinates" {
     );
     try std.testing.expectEqualStrings(
         "\x1b[<0;8;10M",
-        try client.encodeSgr(&buffer, .{
+        try keyinput.encodeSgr(&buffer, .{
             .event = .{ .x = 20, .y = 30, .kind = .press, .button = 0 },
             .pane_position = .{ .x = 2, .y = 4 },
             .pixels = .{
@@ -116,8 +116,8 @@ test "pane mouse reports preserve SGR buttons and pane-relative coordinates" {
             },
         }),
     );
-    try std.testing.expect(client.tracked(.any, .move));
-    try std.testing.expect(!client.tracked(.button, .move));
-    try std.testing.expect(client.tracked(.x10, .press));
-    try std.testing.expect(!client.tracked(.x10, .release));
+    try std.testing.expect(keyinput.tracked(.any, .move));
+    try std.testing.expect(!keyinput.tracked(.button, .move));
+    try std.testing.expect(keyinput.tracked(.x10, .press));
+    try std.testing.expect(!keyinput.tracked(.x10, .release));
 }

@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const agent_options_module = @import("agent_options.zig");
 const std = @import("std");
@@ -24,7 +25,7 @@ attached: bool,
 attachment_generation: u64 = 0,
 cursor: core.Cursor = .{},
 mouse: core.Mouse = .{},
-input_modes: core.InputModes = .{},
+input_modes: keyinput.InputModes = .{},
 pointer_shape: core.PointerShape = .default,
 scroll: core.Scroll,
 applied_frame_id: u64 = 0,

@@ -148,7 +148,7 @@ wheel events.
 `pane_mouse_input.inputPaneMouse` selects the effect and
 `pane_mouse_input.applyPaneMouseEffect` delivers it through concrete viewport,
 copy-selection and pane-input procedures. Mouse encoding remains in
-`pane_mouse_inputs.encodeReport` and `mouse_protocol`; it does not mutate model
+`pane_mouse_inputs.encodeReport` and `keyinput.encodeSgr`; it does not mutate model
 state.
 
 ## Effects and coordinates
@@ -195,6 +195,6 @@ recomposes the affected projection. No use case requests a draw directly.
   telemetry, focus-before-press delivery, scrollback preservation, exact
   host-pixel delivery and pointer-local alternate-screen scrolling through the
   complete input entrypoint.
-- `src/client/input/mouse_protocol.zig`, [Pane input](pane-input.md) and
+- `lib/keyinput/mouse_protocol.zig`, [Pane input](pane-input.md) and
   [Pane viewport](pane-viewport.md) cover protocol encoding and the two
   downstream effects.

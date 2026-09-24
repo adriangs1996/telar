@@ -1,4 +1,5 @@
 //! Pane screen snapshots and patches for Telar's current protocol.
+const keyinput = @import("keyinput");
 
 const bytecodec = @import("bytecodec");
 const Cursor = @import("Cursor.zig");
@@ -14,7 +15,7 @@ const std = @import("std");
 const Decoder = bytecodec.Decoder;
 const FrameView = @import("FrameView.zig");
 const Mouse = @import("Mouse.zig");
-const InputModes = @import("InputModes.zig");
+const InputModes = keyinput.InputModes;
 const Scroll = @import("Scroll.zig");
 const Span = @import("Span.zig");
 const TextMetadataView = @import("../text_metadata/View.zig");
@@ -64,14 +65,6 @@ pub const PointerShape = enum(u8) {
     nwse_resize = 31,
     zoom_in = 32,
     zoom_out = 33,
-};
-
-pub const MouseTracking = enum(u8) {
-    none = 0,
-    x10 = 1,
-    normal = 2,
-    button = 3,
-    any = 4,
 };
 
 pub fn encodeBody(encoder: *Encoder, frame: Frame) !void {

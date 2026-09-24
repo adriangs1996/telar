@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const localsocket = @import("localsocket");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
@@ -2107,12 +2108,12 @@ test "modified Enter follows the compatibility profile and child keyboard negoti
                 continue;
             }
             var input_buffer: [64]u8 = undefined;
-            const shifted = try client_module.encodeKey(
+            const shifted = try keyinput.encodeKey(
                 &input_buffer,
                 frontend.parse("\x1b[13;2:1u").?.event.key,
                 frame.input_modes,
             );
-            const plain = try client_module.encodeKey(
+            const plain = try keyinput.encodeKey(
                 input_buffer[shifted.len..],
                 frontend.parse("\r").?.event.key,
                 frame.input_modes,

@@ -1,11 +1,10 @@
 //! Encodes pane-relative SGR mouse reports, including exact host pixels.
+const keyinput = @import("keyinput");
 
 const pacing = @import("pacing");
 const data = @import("model");
-const mouse_protocol = @import("mouse_protocol.zig");
 const std = @import("std");
-const PixelProjection = @import("PixelProjection.zig");
-const mouse_protocol_module = @import("mouse_protocol.zig");
+const PixelProjection = keyinput.PixelProjection;
 const pane_input = @import("../panes/pane_input.zig");
 const pane_viewport = @import("../panes/pane_viewport.zig");
 const Client = @import("../execution/Client.zig");
@@ -31,7 +30,7 @@ pub fn encodeReport(buffer: []u8, report: data.ReportEffect) ![]const u8 {
         .exact = if (exact_x != null and exact_y != null) .{ .x = exact_x.?, .y = exact_y.? } else null,
     } else null;
 
-    return mouse_protocol.encodeSgr(buffer, .{
+    return keyinput.encodeSgr(buffer, .{
         .event = command.event,
         .pane_position = .{
             .x = command.event.x - plan.content.x,
@@ -144,7 +143,7 @@ pub fn inputPaneMouse(client: *Client, tab: usize, command: data.PaneMouseComman
         else => null,
     };
 
-    const tracked = plan.protocol.sgr and mouse_protocol_module.tracked(plan.protocol.tracking, pointer.event.kind);
+    const tracked = plan.protocol.sgr and keyinput.tracked(plan.protocol.tracking, pointer.event.kind);
 
     if (wheel_delta) |delta| {
         if (!tracked) {

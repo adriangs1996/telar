@@ -2,12 +2,13 @@
 //!
 //! Host-terminal bytes never cross this boundary. Keys are parsed first and
 //! encoded against modes reported by the runtime-owned VT.
-const keyinput = @import("keyinput");
 
-const core = @import("telar-core");
+const Char = @import("Char.zig");
+const Key = @import("Key.zig");
+const InputModes = @import("InputModes.zig");
 const std = @import("std");
 
-pub fn encodeKey(buffer: []u8, key: keyinput.Key, modes: core.InputModes) ![]const u8 {
+pub fn encodeKey(buffer: []u8, key: Key, modes: InputModes) ![]const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
     const encoding: Encoding = .init(key, modes);
 
@@ -60,7 +61,7 @@ pub fn encodeKey(buffer: []u8, key: keyinput.Key, modes: core.InputModes) ![]con
     return writer.buffered();
 }
 
-fn encodeText(writer: *std.Io.Writer, key: keyinput.Key, encoding: Encoding) !bool {
+fn encodeText(writer: *std.Io.Writer, key: Key, encoding: Encoding) !bool {
     if (encoding.reportsAllKeys()) {
         return false;
     }
@@ -85,7 +86,7 @@ fn encodeText(writer: *std.Io.Writer, key: keyinput.Key, encoding: Encoding) !bo
     return true;
 }
 
-fn textCharacter(key: keyinput.Key, char: keyinput.Char) !keyinput.Char {
+fn textCharacter(key: Key, char: Char) !Char {
     if (key.mods.shift) {
         if (key.kitty) |codepoints| {
             if (codepoints.shifted) |shifted| {
@@ -103,7 +104,7 @@ fn textCharacter(key: keyinput.Key, char: keyinput.Char) !keyinput.Char {
 
 // Host flags 7 deliver text as UTF-8 or a shifted alternate, not as a Kitty
 // associated-text field. Reuse the legacy text choice, never the physical key.
-fn associatedCodepoint(key: keyinput.Key, encoding: Encoding) !?u21 {
+fn associatedCodepoint(key: Key, encoding: Encoding) !?u21 {
     if (encoding.kitty_flags & 0b10000 == 0 or key.phase == .release or key.mods.ctrl or key.mods.alt) {
         return null;
     }
@@ -128,7 +129,7 @@ fn associatedCodepoint(key: keyinput.Key, encoding: Encoding) !?u21 {
     return codepoint;
 }
 
-fn encodeKitty(writer: *std.Io.Writer, key: keyinput.Key, encoding: Encoding) !void {
+fn encodeKitty(writer: *std.Io.Writer, key: Key, encoding: Encoding) !void {
     const text = try associatedCodepoint(key, encoding);
     try writer.writeAll("\x1b[");
     try encodeKittyCodepoints(writer, key, encoding.kitty_flags);
@@ -148,7 +149,7 @@ fn encodeKitty(writer: *std.Io.Writer, key: keyinput.Key, encoding: Encoding) !v
     try writer.writeByte('u');
 }
 
-fn encodeKittyCodepoints(writer: *std.Io.Writer, key: keyinput.Key, flags: u5) !void {
+fn encodeKittyCodepoints(writer: *std.Io.Writer, key: Key, flags: u5) !void {
     if (key.kitty) |codepoints| {
         try writer.print("{d}", .{codepoints.primary});
         if (flags & 0b00100 != 0 and (codepoints.shifted != null or codepoints.base != null)) {
@@ -175,7 +176,7 @@ fn encodeKittyCodepoints(writer: *std.Io.Writer, key: keyinput.Key, flags: u5) !
     try writer.print("{d}", .{codepoint});
 }
 
-fn encodeLegacyCharacter(writer: *std.Io.Writer, char: keyinput.Char, key: keyinput.Key) !void {
+fn encodeLegacyCharacter(writer: *std.Io.Writer, char: Char, key: Key) !void {
     if (key.mods.alt) {
         try writer.writeByte(0x1b);
     }
@@ -204,7 +205,7 @@ fn encodeLegacyCharacter(writer: *std.Io.Writer, char: keyinput.Char, key: keyin
     try writer.writeByte(encoded);
 }
 
-pub fn encodePaste(buffer: []u8, text: []const u8, modes: core.InputModes) ![]const u8 {
+pub fn encodePaste(buffer: []u8, text: []const u8, modes: InputModes) ![]const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
     if (modes.bracketed_paste) {
         try writer.writeAll("\x1b[200~");
@@ -257,7 +258,7 @@ const Encoding = struct {
     event: ?u2,
     cursor_keys: bool,
 
-    pub fn init(key: keyinput.Key, modes: core.InputModes) Encoding {
+    pub fn init(key: Key, modes: InputModes) Encoding {
         const event_types = modes.kitty_keyboard_flags & 0b00010 != 0;
 
         return .{
@@ -275,7 +276,7 @@ const Encoding = struct {
         return self.kitty_flags & 0b01000 != 0;
     }
 
-    pub fn usesKittyFor(self: Encoding, key: keyinput.Key) bool {
+    pub fn usesKittyFor(self: Encoding, key: Key) bool {
         if (self.kitty_flags == 0) {
             return false;
         }

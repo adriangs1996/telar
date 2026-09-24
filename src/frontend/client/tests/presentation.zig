@@ -1,4 +1,5 @@
 //! Client integration tests for presentation.
+const keyinput = @import("keyinput");
 
 const cellgrid = @import("cellgrid");
 const client_module = @import("telar-client");
@@ -75,7 +76,7 @@ test "host input presentation state schedules only through observation" {
     const input_revision = terminal.host_input.presentationVersion();
     const pending_updates = terminal.presenter.pending_updates;
     var encoded: [32]u8 = undefined;
-    const prefix_bytes = try client_module.encodeKey(
+    const prefix_bytes = try keyinput.encodeKey(
         &encoded,
         terminal.host_input.router.prefix.?,
         .{},

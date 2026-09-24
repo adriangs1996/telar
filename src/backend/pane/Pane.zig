@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const revisions = @import("../revisions.zig");
 const pty = @import("pty");
@@ -79,7 +80,7 @@ damaged_rows: []bool,
 output_buffer: [pane_namespace.output_chunk_size]u8 = undefined,
 cursor: core.Cursor = .{},
 mouse: core.Mouse = .{},
-input_modes: core.InputModes = .{},
+input_modes: keyinput.InputModes = .{},
 pointer_shape: core.PointerShape = .default,
 foreground_override: ?vt.color.RGB = null,
 background_override: ?vt.color.RGB = null,
@@ -317,7 +318,7 @@ pub fn requestClose(self: *Pane) bool {
 
 pub fn mouseState(self: *const Pane) core.Mouse {
     const modes = &self.terminal.modes;
-    const tracking: core.MouseTracking = if (modes.get(.mouse_event_any))
+    const tracking: keyinput.MouseTracking = if (modes.get(.mouse_event_any))
         .any
     else if (modes.get(.mouse_event_button))
         .button
@@ -470,7 +471,7 @@ pub fn pointerShape(self: *const Pane) core.PointerShape {
     };
 }
 
-pub fn inputModeState(self: *const Pane) core.InputModes {
+pub fn inputModeState(self: *const Pane) keyinput.InputModes {
     const modes = &self.terminal.modes;
     return .{
         .cursor_keys = modes.get(.cursor_keys),

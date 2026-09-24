@@ -1,3 +1,4 @@
+const keyinput = @import("keyinput");
 const core = @import("telar-core");
 const Pane = @This();
 
@@ -6,6 +7,6 @@ start: usize,
 len: usize,
 cursor: core.Cursor,
 mouse: core.Mouse,
-input_modes: core.InputModes,
+input_modes: keyinput.InputModes,
 pointer_shape: core.PointerShape,
 scroll: core.Scroll,

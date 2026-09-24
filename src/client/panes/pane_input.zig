@@ -4,7 +4,6 @@ const pacing = @import("pacing");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const encoding_support = @import("../input/encoding_support.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
 const pane_viewport = @import("pane_viewport.zig");
 const Client = @import("../execution/Client.zig");
@@ -23,7 +22,7 @@ pub fn sendPaneInput(client: *Client, command: data.PaneInputCommand) !?data.Pan
         },
         .key => |value| .{
             .source = command.source,
-            .bytes = try encoding_support.encodeKey(
+            .bytes = try keyinput.encodeKey(
                 &encoded,
                 value,
                 plan.input_modes,
@@ -125,7 +124,7 @@ pub fn sendPaneKeys(client: *Client, target: data.PaneInputTarget, keys: []const
     var len: usize = 0;
     for (keys) |key| {
         var key_bytes: [32]u8 = undefined;
-        const bytes = try encoding_support.encodeKey(
+        const bytes = try keyinput.encodeKey(
             &key_bytes,
             key,
             plan.input_modes,
@@ -159,7 +158,7 @@ pub fn pasteExpression(client: *Client, text: []const u8) !?data.PaneInputDelive
     }
 
     var encoded: [data.input_limits.max_encoded_bytes]u8 = undefined;
-    const bytes = try encoding_support.encodePaste(
+    const bytes = try keyinput.encodePaste(
         &encoded,
         text,
         plan.input_modes,

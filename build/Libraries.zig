@@ -100,6 +100,7 @@ const specs = [_]Spec{
     },
     .{
         .name = "keyinput",
+        .imports = &.{"cellgrid"},
     },
     .{
         .name = "cellglyphs",
