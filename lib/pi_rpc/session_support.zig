@@ -9,11 +9,9 @@
 const std = @import("std");
 const types = @import("types.zig");
 const fakes = @import("testing.zig");
-const Response = @import("Response.zig");
+const Reply = @import("Reply.zig");
 
 pub const AskError = error{ Timeout, ReadFailed, Closed, Rejected, InvalidOutput, WriteFailed };
-
-pub const Request = @import("Request.zig");
 
 pub const Session = @import("Session.zig");
 
@@ -25,8 +23,8 @@ fn askOnce(io: std.Io, arguments: []const []const u8, timeout_ms: u32) !types.St
     const session = try Session.open(io, std.testing.allocator, fakes.options(arguments, timeout_ms, 60_000));
     defer session.close(io);
 
-    var response: Response = .{ .purpose = fakes.purpose, .status = .failed };
-    return session.ask(io, .{ .prompt = "Create a title", .response = &response });
+    var reply: Reply = .{};
+    return session.ask(io, "Create a title", &reply);
 }
 
 test "a session answers a prompt with the settled assistant text" {
@@ -34,13 +32,13 @@ test "a session answers a prompt with the settled assistant text" {
     const session = try Session.open(io, std.testing.allocator, fakes.options(&.{ "/bin/sh", "-c", fakes.fake_engine }, 5000, 60_000));
     defer session.close(io);
 
-    var response: Response = .{ .purpose = fakes.purpose, .status = .failed };
-    try std.testing.expectEqual(types.Status.success, session.ask(io, .{ .prompt = "Create a title", .response = &response }));
-    try std.testing.expectEqualStrings("Improve agent sidebar", response.textSlice());
+    var reply: Reply = .{};
+    try std.testing.expectEqual(types.Status.success, session.ask(io, "Create a title", &reply));
+    try std.testing.expectEqualStrings("Improve agent sidebar", reply.slice());
 
     // The same child answers again.
-    try std.testing.expectEqual(types.Status.success, session.ask(io, .{ .prompt = "Create a title", .response = &response }));
-    try std.testing.expectEqualStrings("Improve agent sidebar", response.textSlice());
+    try std.testing.expectEqual(types.Status.success, session.ask(io, "Create a title", &reply));
+    try std.testing.expectEqualStrings("Improve agent sidebar", reply.slice());
 }
 
 test "protocol failures map to a status" {

@@ -3,9 +3,8 @@ const Stream = @import("Stream.zig");
 const rpc = @import("rpc.zig");
 const Options = @import("Options.zig");
 const session_support = @import("session_support.zig");
-const Request = @import("Request.zig");
 const types = @import("types.zig");
-const Response = @import("Response.zig");
+const Reply = @import("Reply.zig");
 const Session = @This();
 
 gpa: std.mem.Allocator,
@@ -60,13 +59,13 @@ pub fn close(self: *Session, io: std.Io) void {
 }
 
 /// Sends one prompt and waits for the settled assistant text within the
-/// session deadline. The text is copied into `response` on success.
+/// session deadline. The text is copied into `reply` on success.
 ///
 /// ```zig
-/// response.status = session.ask(io, .{ .prompt = prompt.slice(), .response = &response });
+/// const status = session.ask(io, prompt.slice(), &reply);
 /// ```
-pub fn ask(self: *Session, io: std.Io, request: Request) types.Status {
-    self.exchange(io, request) catch |err| return switch (err) {
+pub fn ask(self: *Session, io: std.Io, prompt: []const u8, reply: *Reply) types.Status {
+    self.exchange(io, prompt, reply) catch |err| return switch (err) {
         error.Timeout => .timeout,
         error.InvalidOutput => .invalid_output,
         error.WriteFailed, error.ReadFailed, error.Closed, error.Rejected => .failed,
@@ -93,19 +92,19 @@ pub fn idleMs(self: *const Session, io: std.Io) i64 {
     return session_support.nowMs(io) - self.last_used_ms;
 }
 
-fn exchange(self: *Session, io: std.Io, request: Request) session_support.AskError!void {
+fn exchange(self: *Session, io: std.Io, prompt: []const u8, reply: *Reply) session_support.AskError!void {
     const timeout: std.Io.Timeout = .{ .deadline = .fromNow(io, .{
         .clock = .awake,
         .raw = .fromMilliseconds(self.timeout_ms),
     }) };
 
-    const prompt_line = try rpc.encodePrompt(&self.line_buffer, request.prompt);
+    const prompt_line = try rpc.encodePrompt(&self.line_buffer, prompt);
     try self.writeLine(io, prompt_line);
     try self.awaitSettled(timeout);
 
     const query_line = try rpc.encodeCommand(&self.line_buffer, "get_last_assistant_text");
     try self.writeLine(io, query_line);
-    try self.readLastText(timeout, request.response);
+    try self.readLastText(timeout, reply);
 }
 
 fn writeLine(self: *Session, io: std.Io, line: []const u8) session_support.AskError!void {
@@ -133,10 +132,10 @@ fn awaitSettled(self: *Session, timeout: std.Io.Timeout) session_support.AskErro
     }
 }
 
-/// Copies the `get_last_assistant_text` reply into `response`. Here an
+/// Copies the `get_last_assistant_text` reply into `reply`. Here an
 /// oversized record can only be the reply itself, so it is invalid
 /// output rather than noise.
-fn readLastText(self: *Session, timeout: std.Io.Timeout, response: *Response) session_support.AskError!void {
+fn readLastText(self: *Session, timeout: std.Io.Timeout, reply: *Reply) session_support.AskError!void {
     while (true) {
         var step = try self.stream.next(self.gpa, timeout);
         switch (step) {
@@ -153,8 +152,8 @@ fn readLastText(self: *Session, timeout: std.Io.Timeout, response: *Response) se
                     return error.InvalidOutput;
                 }
 
-                @memcpy(response.text[0..text.len], text);
-                response.text_len = @intCast(text.len);
+                @memcpy(reply.bytes[0..text.len], text);
+                reply.len = @intCast(text.len);
                 return;
             },
         }

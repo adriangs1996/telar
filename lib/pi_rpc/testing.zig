@@ -1,10 +1,7 @@
 //! Shell stand-ins for Pi used by the engine tests. Each one speaks just
 //! enough of the RPC contract to drive one outcome of a prompt.
 
-const types = @import("types.zig");
 const Options = @import("Options.zig");
-
-pub const purpose: types.Purpose = .{ .suggestion = .{ .client_id = 7, .client_generation = 2, .request_id = 3 } };
 
 /// Answers every prompt with a settled reply, and every text query with
 /// "Improve agent sidebar". It also emits the noise a real Pi produces.

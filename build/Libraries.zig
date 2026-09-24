@@ -28,6 +28,9 @@ const specs = [_]Spec{
         .name = "mailbox",
     },
     .{
+        .name = "pi_rpc",
+    },
+    .{
         .name = "pty",
         .libc = true,
         .posix = true,

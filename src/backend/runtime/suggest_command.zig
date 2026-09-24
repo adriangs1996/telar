@@ -5,10 +5,12 @@ const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const PendingSuggestion = @import("delivery/PendingSuggestion.zig");
-const EngineResponse = @import("../engine/Response.zig");
-const Prompt = @import("../engine/Prompt.zig");
+const pi_rpc = @import("pi_rpc");
+const EngineRuntime = @import("resources/EngineRuntime.zig");
+const EnginePurpose = @import("EnginePurpose.zig").EnginePurpose;
 const Sources = @import("Sources.zig");
-const engine_types = @import("../engine/types.zig");
+const EngineResponse = EngineRuntime.Service.Response;
+const Prompt = EngineRuntime.Service.Prompt;
 const suggestion = @import("suggestion.zig");
 
 /// Submits one bounded prompt to the engine, or replies at once when the
@@ -27,9 +29,9 @@ pub fn start(model: *RuntimeModel, session: *Session, request: core.SuggestComma
 
     var screen_storage: [core.max_pane_text_bytes]u8 = undefined;
     const dump = pane.dumpText(.{ .rows = suggestion.context_rows, .source = .screen }, &screen_storage);
-    var prompt_buffer: [engine_types.max_prompt_bytes]u8 = undefined;
+    var prompt_buffer: [pi_rpc.types.max_prompt_bytes]u8 = undefined;
     const prompt = suggestion.buildPrompt(pane.cwd.slice(), screen_storage[0..dump.len], request.text, &prompt_buffer);
-    const purpose: engine_types.Purpose = .{ .suggestion = .{
+    const purpose: EnginePurpose = .{ .suggestion = .{
         .client_id = session.key.id,
         .client_generation = session.key.generation,
         .request_id = core.raw(request.request_id),
@@ -64,7 +66,7 @@ pub fn stopIdleEngine(model: *RuntimeModel) void {
     service.requestIdleCheck(model.io);
 }
 
-fn deliver(model: *RuntimeModel, target: engine_types.Purpose.Suggestion, response: *const EngineResponse) void {
+fn deliver(model: *RuntimeModel, target: EnginePurpose.Suggestion, response: *const EngineResponse) void {
     const session = model.clients.resolve(.{ .id = target.client_id, .generation = target.client_generation }) orelse return;
     var pending: PendingSuggestion = .{
         .request_id = @enumFromInt(target.request_id),

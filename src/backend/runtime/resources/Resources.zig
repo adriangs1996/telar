@@ -12,7 +12,7 @@ const EngineRuntime = @import("EngineRuntime.zig");
 const Initialization = @import("../Initialization.zig");
 const resources_namespace = @import("resources_namespace.zig");
 const attachment = @import("../attachment/attachment_namespace.zig");
-const Service = @import("../../engine/Service.zig");
+const Service = EngineRuntime.Service;
 const PluginsService = @import("../../plugins/Service.zig");
 /// Owns runtime-wide physical resources acquired during startup.
 const Resources = @This();

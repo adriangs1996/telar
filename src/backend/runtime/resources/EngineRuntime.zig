@@ -1,13 +1,14 @@
 const std = @import("std");
-const types = @import("../../engine/types.zig");
-const Prompt = @import("../../engine/Prompt.zig");
+const pi_rpc = @import("pi_rpc");
+const EnginePurpose = @import("../EnginePurpose.zig").EnginePurpose;
+const GenericService = pi_rpc.GenericService;
 /// Owns the optional headless engine service at a stable heap address and
 /// the one actor that runs it. No child process starts until the first
 /// prompt; teardown stops the service before joining and destroying it.
 const EngineRuntime = @This();
 
-pub const Options = @import("../../engine/Options.zig");
-pub const Service = @import("../../engine/Service.zig");
+pub const Options = pi_rpc.Options;
+pub const Service = GenericService(EnginePurpose);
 
 const Worker = std.Io.Future(anyerror!void);
 
@@ -83,8 +84,8 @@ test "the engine runtime answers through its actor and stops cleanly" {
     var runtime = try EngineRuntime.init(io, std.testing.allocator, test_options);
     defer runtime.deinit();
 
-    const purpose: types.Purpose = .{ .suggestion = .{ .client_id = 1, .client_generation = 1, .request_id = 1 } };
-    try std.testing.expect(runtime.service().submit(io, .{ .prompt = try Prompt.init(purpose, "suggest") }));
+    const purpose: EnginePurpose = .{ .suggestion = .{ .client_id = 1, .client_generation = 1, .request_id = 1 } };
+    try std.testing.expect(runtime.service().submit(io, .{ .prompt = try Service.Prompt.init(purpose, "suggest") }));
     const response = try runtime.service().receiveResponse(io);
-    try std.testing.expectEqual(types.Status.unavailable, response.status);
+    try std.testing.expectEqual(pi_rpc.types.Status.unavailable, response.status);
 }

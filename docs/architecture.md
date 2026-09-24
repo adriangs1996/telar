@@ -202,6 +202,7 @@ else. Consumers import the module once and alias its members
 | Library | Provides |
 | --- | --- |
 | `pty` | spawning a command on a pseudo-terminal, its environment, resize and exit |
+| `pi_rpc` | a client for Pi's JSONL RPC mode, generic over who asked |
 | `console` | the controlling terminal: raw mode, resize notifications, writer, escape sequences |
 | `mailbox` | the bounded inbox between worker tasks and one consumer |
 | `animate` | springs, transitions and the frame clock that advances them |

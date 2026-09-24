@@ -7,13 +7,25 @@
 
 const std = @import("std");
 const fakes = @import("testing.zig");
-const Prompt = @import("Prompt.zig");
 const types = @import("types.zig");
+const GenericService = @import("GenericService.zig").Type;
 
-pub const Service = @import("Service.zig");
+/// The purpose is opaque to the service; any value round-trips.
+const Service = GenericService(u64);
+const Prompt = Service.Prompt;
+const purpose: u64 = 7;
 
 fn testService(arguments: []const []const u8, timeout_ms: u32, idle_timeout_ms: u32) !Service {
     return Service.init(std.testing.allocator, fakes.options(arguments, timeout_ms, idle_timeout_ms));
+}
+
+test "a prompt is bounded on both ends" {
+    try std.testing.expectError(error.InvalidPrompt, Prompt.init(purpose, ""));
+    try std.testing.expectError(error.InvalidPrompt, Prompt.init(purpose, &([_]u8{'a'} ** (types.max_prompt_bytes + 1))));
+
+    const prompt = try Prompt.init(purpose, "Create a title");
+    try std.testing.expectEqualStrings("Create a title", prompt.slice());
+    try std.testing.expectEqual(purpose, prompt.purpose);
 }
 
 test "the actor answers prompts over one child and reuses it" {
@@ -21,12 +33,12 @@ test "the actor answers prompts over one child and reuses it" {
     var service = try testService(&.{ "/bin/sh", "-c", fakes.fake_engine }, 5000, 60_000);
     defer service.deinit(io);
 
-    const prompt = try Prompt.init(fakes.purpose, "Create a title");
+    const prompt = try Prompt.init(purpose, "Create a title");
     service.handle(io, .{ .prompt = prompt });
     var response = try service.receiveResponse(io);
     try std.testing.expectEqual(types.Status.success, response.status);
     try std.testing.expectEqualStrings("Improve agent sidebar", response.textSlice());
-    try std.testing.expectEqual(@as(u64, 7), response.purpose.suggestion.client_id);
+    try std.testing.expectEqual(purpose, response.purpose);
     try std.testing.expect(service.child_alive.load(.acquire));
     const first = service.session.?;
 
@@ -45,7 +57,7 @@ test "an idle check kills a child past the idle interval" {
     var service = try testService(&.{ "/bin/sh", "-c", fakes.fake_engine }, 5000, 0);
     defer service.deinit(io);
 
-    service.handle(io, .{ .prompt = try Prompt.init(fakes.purpose, "Create a title") });
+    service.handle(io, .{ .prompt = try Prompt.init(purpose, "Create a title") });
     _ = try service.receiveResponse(io);
     try std.testing.expect(service.child_alive.load(.acquire));
 
@@ -63,7 +75,7 @@ test "an idle check kills a child past the idle interval" {
 
 test "a broken child is discarded and a bad reply keeps it" {
     const io = std.testing.io;
-    const prompt = try Prompt.init(fakes.purpose, "Create a title");
+    const prompt = try Prompt.init(purpose, "Create a title");
 
     var silent = try testService(&.{ "/bin/sh", "-c", fakes.silent_engine }, 100, 60_000);
     defer silent.deinit(io);
@@ -90,7 +102,7 @@ test "the ring refuses requests beyond its capacity and the loop drains it" {
     var service = try testService(&.{ "/bin/sh", "-c", fakes.fake_engine }, 5000, 60_000);
     defer service.deinit(io);
 
-    const prompt = try Prompt.init(fakes.purpose, "Create a title");
+    const prompt = try Prompt.init(purpose, "Create a title");
     for (0..types.max_pending_requests) |_| try std.testing.expect(service.submit(io, .{ .prompt = prompt }));
     try std.testing.expect(!service.submit(io, .{ .prompt = prompt }));
 

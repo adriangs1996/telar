@@ -4,9 +4,10 @@
 without opening a pane: Pi in RPC mode, or any command that speaks the same
 JSON-lines contract. Its only feature today is the
 [command suggestion](suggest-command.md) palette; session titles keep their
-own one-shot `agent_descriptions` command and never touch the engine. Every
-request carries a `Purpose` that says who asked, so replies route without
-runtime state.
+own one-shot `agent_descriptions` command and never touch the engine. The
+RPC client is the `pi_rpc` library (`lib/pi_rpc`), generic over the value
+that says who asked; the runtime instantiates it with `EnginePurpose`, so
+replies route without runtime state.
 
 ## End-to-end path
 
@@ -17,7 +18,7 @@ commands.parseEngine -> RuntimeSnapshot.engine (CommandSpec) + engine_idle_timeo
         |
 telar server: ServerLaunch.engine_options -> runtime Options.engine
         |
-Resources.engine (resources/EngineRuntime.zig) starts the engine Service actor
+Resources.engine (resources/EngineRuntime.zig) starts GenericService(EnginePurpose)
         |
 prefix+? in a client -> suggest_command -> client_request -> suggest_command.start
         |
@@ -36,7 +37,7 @@ command_suggestion pushed to that client's delivery.responses
 ## Ownership and budgets
 
 The runtime owns the engine: it survives every client and its replies are
-routed by the `Purpose` carried in each request, so the runtime keeps no
+routed by the `EnginePurpose` carried in each request, so the runtime keeps no
 per-request state. Prompts and replies are fixed-size (`max_prompt_bytes`,
 `max_reply_bytes`); the request and response rings hold
 `max_pending_requests` entries and `submit` refuses instead of blocking. A
@@ -71,12 +72,12 @@ working, and a Pi that renames one of these four degrades to a timeout.
 
 ## Validation
 
-- `src/backend/engine/rpc.zig` proves encoding, escaping and record
+- `lib/pi_rpc/rpc.zig` proves encoding, escaping and record
   classification.
-- `src/backend/engine/session_support.zig` proves the dialogue against a shell fake
+- `lib/pi_rpc/session_support.zig` proves the dialogue against a shell fake
   of the RPC contract: settled text, timeout, rejection, child exit, empty
   and oversized replies.
-- `src/backend/engine/service_support.zig` proves child reuse, idle kill, which
+- `lib/pi_rpc/service_tests.zig` proves prompt bounds, child reuse, idle kill, which
   failures discard the child, missing binary, ring capacity and actor
   shutdown.
 - `src/backend/runtime/resources/EngineRuntime.zig` proves ownership rollback

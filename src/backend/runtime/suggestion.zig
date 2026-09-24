@@ -7,7 +7,8 @@
 //! cap, and the user never sees more than one suggested line.
 
 const core = @import("telar-core");
-const types = @import("../engine/types.zig");
+const pi_rpc = @import("pi_rpc");
+const types = pi_rpc.types;
 const std = @import("std");
 
 /// Visible rows sent as context; the last rows hold the latest command and

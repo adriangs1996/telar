@@ -44,7 +44,7 @@ Cut: what must move or be parameterized before the library compiles alone.
 | --- | --- | --- |
 | `pty` (done) | `src/backend/pty` | std |
 | `console` (done) | `src/frontend/platform` (tty, raw mode, resize watcher, fast writer, escape sequences) | std |
-| `pi-rpc` | `src/backend/engine` (Pi's JSONL RPC mode) | std; the `Purpose` enum becomes a parameter |
+| `pi_rpc` (done) | `src/backend/engine` (Pi's JSONL RPC mode) | std; the `Purpose` enum became a parameter |
 | `sse` | `src/backend/proxy/{sse,Decoder,SseEvent}.zig` | std |
 | `h2-framing` | `src/backend/proxy/h2/{framing,Reader,streams,Tracker,HeaderField,HeaderBlock,PeerSettings,Settings}.zig` | std |
 | `local-ca` | `src/backend/proxy/{ca,Authority,AuthorityFiles,Pair,Resources,Roots,tls,Session,InterceptOptions}.zig` | std, tls |
@@ -55,7 +55,9 @@ Cut: what must move or be parameterized before the library compiles alone.
 A library's name is the alias every consumer declares, so it must not be a
 word the code already uses for values: `tty`, `inbox`, `animation` and
 `layout` name fields and locals in dozens of files, which is why those four
-became `console`, `mailbox`, `animate` and `gfx`.
+became `console`, `mailbox`, `animate` and `gfx`. For the same reason a name
+is a valid identifier (`pi_rpc`, not `pi-rpc`), so module, directory and
+alias are one word.
 
 ### Small cuts
 
@@ -140,10 +142,10 @@ vocabulary over `wire`, `cells`, `time` and `pacing`.
 ## Order
 
 1. Set the pattern with the libraries that need no cuts: `pty`, `console`,
-   `pi-rpc`, `mailbox`, `animate`, `gfx`. Each move adds `lib/<name>`, a
+   `pi_rpc`, `mailbox`, `animate`, `gfx`. Each move adds `lib/<name>`, a
    module and a test step in the build, and a boundary check that fails if
-   the library imports a telar module. Done except `pi-rpc`; the pattern
-   lives in `build/Libraries.zig`.
+   the library imports a telar module. Done; the pattern lives in
+   `build/Libraries.zig`.
 2. Shared low layers: `cells`, `time`, `pacing`, `vt-scan`, `sqlite`, and a
    decision on the PNG decoder.
 3. Backend mechanisms: `command-capture`, `history-store`, `kitty-media`,
