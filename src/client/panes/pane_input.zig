@@ -13,7 +13,7 @@ const Client = @import("../execution/Client.zig");
 pub fn sendPaneInput(client: *Client, command: data.PaneInputCommand) !?data.PaneInputDelivery {
     const started = core.now(client.io);
 
-    const plan = client.model.planPaneInput(command.target) orelse return null;
+    const plan = data.pane_input.planInput(&client.model, command.target) orelse return null;
     var encoded: [32]u8 = undefined;
     const prepared: data.PreparedPaneInput = switch (command.payload) {
         .bytes => |value| .{
@@ -41,9 +41,9 @@ pub fn sendPaneInput(client: *Client, command: data.PaneInputCommand) !?data.Pan
 /// Starts one pane-owned paste against the current focused target.
 /// Example: `_ = try pane_input.startPanePaste(app);`
 pub fn startPanePaste(client: *Client) !data.PanePasteOutcome {
-    const session = client.model.beginPanePaste() orelse return .ignored;
+    const session = data.pane_input.beginPaste(&client.model) orelse return .ignored;
     errdefer {
-        const rolled_back = client.model.finishPanePaste(session);
+        const rolled_back = data.pane_input.finishPaste(&client.model, session);
         std.debug.assert(rolled_back);
     }
 
@@ -60,7 +60,7 @@ pub fn startPanePaste(client: *Client) !data.PanePasteOutcome {
             },
         },
     )) {
-        const rolled_back = client.model.finishPanePaste(session);
+        const rolled_back = data.pane_input.finishPaste(&client.model, session);
         std.debug.assert(rolled_back);
         return .unavailable;
     }
@@ -90,7 +90,7 @@ pub fn appendPanePaste(client: *Client, text: []const u8) !data.PanePasteOutcome
 pub fn finishPanePaste(client: *Client) !data.PanePasteOutcome {
     const session = client.model.pane_paste orelse return .ignored;
     defer {
-        const finished = client.model.finishPanePaste(session);
+        const finished = data.pane_input.finishPaste(&client.model, session);
         std.debug.assert(finished);
     }
 
@@ -119,7 +119,7 @@ pub fn sendPaneKeys(client: *Client, target: data.PaneInputTarget, keys: []const
         return error.InvalidInputLength;
     }
 
-    const plan = client.model.planPaneInput(target) orelse return null;
+    const plan = data.pane_input.planInput(&client.model, target) orelse return null;
     var encoded: [data.input_limits.max_encoded_bytes]u8 = undefined;
     var len: usize = 0;
     for (keys) |key| {
@@ -151,7 +151,7 @@ pub fn sendPaneKeys(client: *Client, target: data.PaneInputTarget, keys: []const
 pub fn pasteExpression(client: *Client, text: []const u8) !?data.PaneInputDelivery {
     const started = core.now(client.io);
 
-    const plan = client.model.planPaneInput(.focused) orelse return null;
+    const plan = data.pane_input.planInput(&client.model, .focused) orelse return null;
     const framing_bytes: usize = if (plan.input_modes.bracketed_paste) 12 else 0;
     if (text.len > data.input_limits.max_encoded_bytes - framing_bytes) {
         return error.InvalidInputLength;
@@ -178,7 +178,7 @@ pub fn pasteExpression(client: *Client, text: []const u8) !?data.PaneInputDelive
 fn sendPasteMarker(client: *Client, session: data.PanePasteSession, boundary: data.PanePasteBoundary) !?data.PaneInputDelivery {
     const started = core.now(client.io);
 
-    const plan = client.model.planPaneInput(
+    const plan = data.pane_input.planInput(&client.model, 
         .{
             .paste_session = session,
         },

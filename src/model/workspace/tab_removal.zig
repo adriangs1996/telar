@@ -31,7 +31,7 @@ pub fn remove(model: *ClientModel, tab_id: core.TabId) bool {
 /// captures missing workspace or tab identities as an exact stale commit.
 ///
 /// ```zig
-/// const commit = try commitRemoval(model, command);
+/// const commit = try tab_removal.commitRemoval(model, command);
 /// ```
 pub fn commitRemoval(model: *ClientModel, command: RemoveTab) !model_data.TabRemovalCommit {
     const workspace = model.workspace orelse

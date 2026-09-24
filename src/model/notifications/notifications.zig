@@ -243,7 +243,7 @@ test {
 /// version. The center owns all borrowed text before this call returns.
 ///
 /// ```zig
-/// const publication = publish(model, now_ns, input);
+/// const publication = notifications.publish(model, now_ns, input);
 /// ```
 pub fn publish(model: *ClientModel, now_ns: u64, input: model_data.NotificationInput) model_data.NotificationPublication {
     const id = model.notification_center.push(now_ns, input);
@@ -258,7 +258,7 @@ pub fn publish(model: *ClientModel, now_ns: u64, input: model_data.NotificationI
 /// Advances notification lifecycles to one monotonic timestamp.
 ///
 /// ```zig
-/// const change = advance(model, now_ns) orelse return;
+/// const change = notifications.advance(model, now_ns) orelse return;
 /// ```
 pub fn advance(model: *ClientModel, now_ns: u64) ?model_data.NotificationChange {
     if (!model.notification_center.advance(now_ns)) {
@@ -273,7 +273,7 @@ pub fn advance(model: *ClientModel, now_ns: u64) ?model_data.NotificationChange 
 /// target. Missing and already exiting identities are stale no-ops.
 ///
 /// ```zig
-/// const activation = activate(model, id, now_ns) orelse return;
+/// const activation = notifications.activate(model, id, now_ns) orelse return;
 /// ```
 pub fn activate(model: *ClientModel, id: model_data.NotificationId, now_ns: u64) ?model_data.NotificationActivation {
     const target = model.notification_center.activate(id, now_ns) orelse return null;
@@ -288,7 +288,7 @@ pub fn activate(model: *ClientModel, id: model_data.NotificationId, now_ns: u64)
 /// Starts one notification's exit transition without activating it.
 ///
 /// ```zig
-/// const change = dismiss(model, id, now_ns) orelse return;
+/// const change = notifications.dismiss(model, id, now_ns) orelse return;
 /// ```
 pub fn dismiss(model: *ClientModel, id: model_data.NotificationId, now_ns: u64) ?model_data.NotificationChange {
     if (!model.notification_center.dismiss(id, now_ns)) {

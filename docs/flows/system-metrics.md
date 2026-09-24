@@ -17,7 +17,7 @@ schema.system_metrics
              |
 runtime_messages.handleServerMessage
              |
-ClientModel.reconcileSystemMetrics
+system_metrics.reconcile
              |
 SystemMetrics + Version.system_metrics
              |
@@ -42,7 +42,7 @@ which the metrics source omits.
 ## Client transaction
 
 `runtime_messages.handleServerMessage` translates the validated protocol message
-into the client domain value and calls `ClientModel.reconcileSystemMetrics`,
+into the client domain value and calls `system_metrics.reconcile`,
 which has no view or presenter dependency.
 
 `ClientModel` is the sole owner of the client replica. Revision zero and newer

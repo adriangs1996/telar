@@ -34,7 +34,7 @@ leases, viewport restoration, telemetry and transport delivery are visible in
 Only the latter two enter `pane_input.sendPaneInput`. See
 [Pane mouse input](pane-mouse-input.md) for target and coordinate rules.
 
-`ClientModel.planPaneInput` is a read-only query. Normal input resolves the
+`pane_input.planInput` is a read-only query. Normal input resolves the
 focused or explicit pane in the active tab. A physical key lease and a captured
 paste may resolve their exact pane outside the active tab after a focus or
 selection commit. Every target

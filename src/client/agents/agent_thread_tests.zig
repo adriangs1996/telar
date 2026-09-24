@@ -74,7 +74,7 @@ test "created agent tabs immediately expose the attached composer and preserve w
     try std.testing.expectEqual(core.PaneSurface.thread, model.tabs.layout[model.tabs.active].surface(agent_id));
     try std.testing.expectEqual(@as(u64, 7), model.agentPane(agent_id).?.pane_generation);
     try std.testing.expect(model.agentPane(pane_id) == null);
-    try std.testing.expect(model.editAgentComposer(agent_id, .{ .insert = "hello" }));
+    try std.testing.expect(data.agent_panes.editComposer(&model, agent_id, .{ .insert = "hello" }));
 }
 
 test "agent conversation survives receive reuse and rejects stale generations and revisions" {
@@ -84,9 +84,9 @@ test "agent conversation survives receive reuse and rejects stale generations an
     const handler = &model;
     var bytes: [4096]u8 = undefined;
     const snapshot = try readySnapshot(&bytes, 1);
-    try std.testing.expect(try handler.applyAgentThread(snapshot));
+    try std.testing.expect(try data.agent_panes.applyThread(handler, snapshot));
     const revision = model.version().panes;
-    try std.testing.expect(!try handler.applyAgentThread(snapshot));
+    try std.testing.expect(!try data.agent_panes.applyThread(handler, snapshot));
     try std.testing.expectEqual(revision, model.version().panes);
     @memset(&bytes, 0);
     const retained = model.agentPane(pane_id).?.agent_thread.?;
@@ -94,14 +94,14 @@ test "agent conversation survives receive reuse and rejects stale generations an
 
     var stale = try readySnapshot(&bytes, 2);
     stale.pane_generation = 8;
-    try std.testing.expect(!try handler.applyAgentThread(stale));
+    try std.testing.expect(!try data.agent_panes.applyThread(handler, stale));
     try std.testing.expectEqual(@as(u64, 1), retained.revision);
-    try std.testing.expect(model.planPaneInput(.focused) == null);
-    try std.testing.expect(model.planPaneInput(.{ .key_lease = pane_id }) == null);
-    try std.testing.expectEqual(core.PaneSurface.thread, model.togglePaneSurface().?);
+    try std.testing.expect(data.pane_input.planInput(&model, .focused) == null);
+    try std.testing.expect(data.pane_input.planInput(&model, .{ .key_lease = pane_id }) == null);
+    try std.testing.expectEqual(core.PaneSurface.thread, data.agent_panes.toggleSurface(&model).?);
 
     _ = data.workspace_handoff.depart(&model);
-    try std.testing.expect(!try handler.applyAgentThread(try readySnapshot(&bytes, 3)));
+    try std.testing.expect(!try data.agent_panes.applyThread(handler, try readySnapshot(&bytes, 3)));
 }
 
 test "independent clients retain activity identities and child status across snapshot replacement" {
@@ -126,8 +126,8 @@ test "independent clients retain activity identities and child status across sna
     snapshot.item_storage[0] = .{ .identity = 9, .turn_identity = 1, .role = .tool, .kind = .dispatch, .status = .completed, .complete = true, .title_len = 7 };
     snapshot.item_storage[1] = .{ .identity = 10, .turn_identity = 1, .parent_identity = 9, .role = .tool, .kind = .subagent, .status = .running, .reference_offset = 7, .reference_len = 6 };
     var view = (try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &snapshot))).agent_thread_snapshot;
-    try std.testing.expect(try first_handler.applyAgentThread(view));
-    try std.testing.expect(try second_handler.applyAgentThread(view));
+    try std.testing.expect(try data.agent_panes.applyThread(first_handler, view));
+    try std.testing.expect(try data.agent_panes.applyThread(second_handler, view));
     @memset(&bytes, 0);
     const first_thread = first.agentPane(pane_id).?.agent_thread.?;
     const second_thread = second.agentPane(pane_id).?.agent_thread.?;
@@ -140,15 +140,15 @@ test "independent clients retain activity identities and child status across sna
     snapshot.item_storage[1].status = .completed;
     snapshot.item_storage[1].complete = true;
     view = (try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &snapshot))).agent_thread_snapshot;
-    try std.testing.expect(!try first_handler.applyAgentThread(view));
-    try std.testing.expect(try second_handler.applyAgentThread(view));
+    try std.testing.expect(!try data.agent_panes.applyThread(first_handler, view));
+    try std.testing.expect(try data.agent_panes.applyThread(second_handler, view));
     @memset(&bytes, 0);
     try std.testing.expectEqual(core.agent_thread.ItemStatus.completed, second_thread.findItem(10).?.status);
     try std.testing.expectEqualStrings("Inspect", second_thread.findItem(9).?.title(second_thread));
 
     try bootstrap(first);
     view = (try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &snapshot))).agent_thread_snapshot;
-    try std.testing.expect(try first_handler.applyAgentThread(view));
+    try std.testing.expect(try data.agent_panes.applyThread(first_handler, view));
     try std.testing.expectEqualDeep(second_thread.items(), first.agentPane(pane_id).?.agent_thread.?.items());
 }
 
@@ -158,10 +158,10 @@ test "agent prompt acknowledgements preserve later edits and replacement attachm
     try bootstrap(&model);
     const handler = &model;
     var bytes: [4096]u8 = undefined;
-    _ = try handler.applyAgentThread(try readySnapshot(&bytes, 1));
-    try std.testing.expect(handler.planAgentPrompt(pane_id) == null);
-    try std.testing.expect(handler.editAgentComposer(pane_id, data.PromptCommand{ .insert = "Fix the tests\nKeep the API" }));
-    const prompt = handler.planAgentPrompt(pane_id).?;
+    _ = try data.agent_panes.applyThread(handler, try readySnapshot(&bytes, 1));
+    try std.testing.expect(data.agent_panes.planPrompt(handler, pane_id) == null);
+    try std.testing.expect(data.agent_panes.editComposer(handler, pane_id, data.PromptCommand{ .insert = "Fix the tests\nKeep the API" }));
+    const prompt = data.agent_panes.planPrompt(handler, pane_id).?;
     const operation: data.AgentOperation = .{
         .pane_id = pane_id,
         .pane_generation = prompt.pane_generation,
@@ -169,16 +169,16 @@ test "agent prompt acknowledgements preserve later edits and replacement attachm
         .location = location,
         .composer_content_revision = prompt.composer_content_revision,
     };
-    try std.testing.expect(handler.editAgentComposer(pane_id, .{ .insert = " stable" }));
-    try std.testing.expect(!handler.completeAgentPrompt(operation));
+    try std.testing.expect(data.agent_panes.editComposer(handler, pane_id, .{ .insert = " stable" }));
+    try std.testing.expect(!data.agent_panes.completePrompt(handler, operation));
     try std.testing.expectEqualStrings("Fix the tests\nKeep the API stable", model.agentPane(pane_id).?.composerSlice());
 
     var current = operation;
     current.composer_content_revision = model.agentPane(pane_id).?.composer_content_revision;
     current.attachment_generation += 1;
-    try std.testing.expect(!handler.completeAgentPrompt(current));
+    try std.testing.expect(!data.agent_panes.completePrompt(handler, current));
     current.attachment_generation = prompt.attachment_generation;
-    try std.testing.expect(handler.completeAgentPrompt(current));
+    try std.testing.expect(data.agent_panes.completePrompt(handler, current));
     try std.testing.expectEqualStrings("", model.agentPane(pane_id).?.composerSlice());
 }
 
@@ -187,17 +187,17 @@ test "composer editing is atomic at UTF-8 and capacity boundaries" {
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
-    try std.testing.expect(handler.editAgentComposer(pane_id, .{ .insert = "café\n" }));
+    try std.testing.expect(data.agent_panes.editComposer(handler, pane_id, .{ .insert = "café\n" }));
     const revision = model.agentPane(pane_id).?.composer_revision;
-    try std.testing.expect(!handler.editAgentComposer(pane_id, .{ .replace_range = .{ .range = .{ 4, 5 }, .text = "x" } }));
-    try std.testing.expect(!handler.editAgentComposer(pane_id, .{ .insert = "\xff" }));
-    try std.testing.expect(!handler.editAgentComposer(pane_id, .{ .insert = "bad\x00prompt" }));
-    try std.testing.expect(!handler.editAgentComposer(pane_id, .{ .replace_range = .{ .range = .{ 0, 5 }, .text = "bad\x00prompt" } }));
-    try std.testing.expect(!handler.editAgentComposer(pane_id, .{ .insert = "x" ** 4096 }));
+    try std.testing.expect(!data.agent_panes.editComposer(handler, pane_id, .{ .replace_range = .{ .range = .{ 4, 5 }, .text = "x" } }));
+    try std.testing.expect(!data.agent_panes.editComposer(handler, pane_id, .{ .insert = "\xff" }));
+    try std.testing.expect(!data.agent_panes.editComposer(handler, pane_id, .{ .insert = "bad\x00prompt" }));
+    try std.testing.expect(!data.agent_panes.editComposer(handler, pane_id, .{ .replace_range = .{ .range = .{ 0, 5 }, .text = "bad\x00prompt" } }));
+    try std.testing.expect(!data.agent_panes.editComposer(handler, pane_id, .{ .insert = "x" ** 4096 }));
     try std.testing.expectEqual(revision, model.agentPane(pane_id).?.composer_revision);
     try std.testing.expectEqualStrings("café\n", model.agentPane(pane_id).?.composerSlice());
-    try std.testing.expect(handler.editAgentComposer(pane_id, .backspace));
-    try std.testing.expect(handler.editAgentComposer(pane_id, .backspace));
+    try std.testing.expect(data.agent_panes.editComposer(handler, pane_id, .backspace));
+    try std.testing.expect(data.agent_panes.editComposer(handler, pane_id, .backspace));
     try std.testing.expectEqualStrings("caf", model.agentPane(pane_id).?.composerSlice());
 }
 
@@ -207,18 +207,18 @@ test "prompt acknowledgement clears unchanged content after cursor or selection 
     try bootstrap(&model);
     const handler = &model;
     var bytes: [4096]u8 = undefined;
-    _ = try handler.applyAgentThread(try readySnapshot(&bytes, 1));
-    try std.testing.expect(handler.editAgentComposer(pane_id, .{ .insert = "Fix the tests" }));
-    const prompt = handler.planAgentPrompt(pane_id).?;
+    _ = try data.agent_panes.applyThread(handler, try readySnapshot(&bytes, 1));
+    try std.testing.expect(data.agent_panes.editComposer(handler, pane_id, .{ .insert = "Fix the tests" }));
+    const prompt = data.agent_panes.planPrompt(handler, pane_id).?;
     const editor_revision = model.agentPane(pane_id).?.composer_revision;
 
-    try std.testing.expect(handler.editAgentComposer(pane_id, .{ .move_left = false }));
-    try std.testing.expect(handler.editAgentComposer(pane_id, .select_all));
-    try std.testing.expect(handler.editAgentComposer(pane_id, .{ .replace_range = .{ .range = .{ 0, 13 }, .text = "Fix the tests" } }));
+    try std.testing.expect(data.agent_panes.editComposer(handler, pane_id, .{ .move_left = false }));
+    try std.testing.expect(data.agent_panes.editComposer(handler, pane_id, .select_all));
+    try std.testing.expect(data.agent_panes.editComposer(handler, pane_id, .{ .replace_range = .{ .range = .{ 0, 13 }, .text = "Fix the tests" } }));
     const pane = model.agentPane(pane_id).?;
     try std.testing.expect(pane.composer_revision > editor_revision);
     try std.testing.expectEqual(prompt.composer_content_revision, pane.composer_content_revision);
-    try std.testing.expect(handler.completeAgentPrompt(.{
+    try std.testing.expect(data.agent_panes.completePrompt(handler, .{
         .pane_id = pane_id,
         .pane_generation = prompt.pane_generation,
         .attachment_generation = prompt.attachment_generation,
@@ -265,22 +265,22 @@ test "agent draft settings use the catalog and survive streaming without changin
     try bootstrap(&model);
     const handler = &model;
     var bytes: [4096]u8 = undefined;
-    _ = try handler.applyAgentThread(try readySnapshot(&bytes, 1));
+    _ = try data.agent_panes.applyThread(handler, try readySnapshot(&bytes, 1));
     const pane = model.agentPane(pane_id).?;
     const catalog = pane.catalog_revision;
     const revision = pane.options_revision;
-    try std.testing.expect(!handler.changeAgentOption(pane_id, .{ .model = "unavailable" }));
-    try std.testing.expect(!handler.changeAgentOption(pane_id, .{ .effort = try core.AgentEffort.init("ultra") }));
+    try std.testing.expect(!data.agent_panes.changeOption(handler, pane_id, .{ .model = "unavailable" }));
+    try std.testing.expect(!data.agent_panes.changeOption(handler, pane_id, .{ .effort = try core.AgentEffort.init("ultra") }));
     try std.testing.expectEqual(revision, pane.options_revision);
-    try std.testing.expect(handler.changeAgentOption(pane_id, .{ .effort = try core.AgentEffort.init("high") }));
-    try std.testing.expect(!handler.changeAgentOption(pane_id, .{ .model = "fake-model" }));
-    try std.testing.expect(handler.changeAgentOption(pane_id, .{ .access = .read_only }));
-    _ = try handler.applyAgentThread(try readySnapshot(&bytes, 2));
+    try std.testing.expect(data.agent_panes.changeOption(handler, pane_id, .{ .effort = try core.AgentEffort.init("high") }));
+    try std.testing.expect(!data.agent_panes.changeOption(handler, pane_id, .{ .model = "fake-model" }));
+    try std.testing.expect(data.agent_panes.changeOption(handler, pane_id, .{ .access = .read_only }));
+    _ = try data.agent_panes.applyThread(handler, try readySnapshot(&bytes, 2));
     try std.testing.expectEqual(catalog, pane.catalog_revision);
     try std.testing.expectEqualStrings("high", pane.agentOptions().effort.idSlice());
     try std.testing.expectEqual(core.AgentAccess.read_only, pane.agentOptions().access);
-    _ = handler.editAgentComposer(pane_id, .{ .insert = "hello" });
-    const prompt = handler.planAgentPrompt(pane_id).?;
+    _ = data.agent_panes.editComposer(handler, pane_id, .{ .insert = "hello" });
+    const prompt = data.agent_panes.planPrompt(handler, pane_id).?;
     try std.testing.expectEqual(core.AgentAccess.read_only, prompt.options.access);
     try std.testing.expectEqualStrings("high", prompt.options.effort.idSlice());
 }
@@ -292,7 +292,7 @@ fn historyModel() !*data.ClientModel {
     errdefer model.deinit();
     try bootstrap(model);
     var bytes: [4096]u8 = undefined;
-    _ = try model.applyAgentThread(try readySnapshot(&bytes, 1));
+    _ = try data.agent_panes.applyThread(model, try readySnapshot(&bytes, 1));
     const snapshot = model.agentPane(pane_id).?.agent_thread.?;
     snapshot.truncated = true;
     snapshot.metadata_len = 10;
@@ -443,7 +443,7 @@ test "a retained live tail follows snapshots at the bottom and pauses while read
     var update = pane.agent_thread.?.*;
     update.revision += 1;
     @memcpy(update.text_storage[0..5], "Later");
-    try std.testing.expect(try model.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &update))).agent_thread_snapshot));
+    try std.testing.expect(try data.agent_panes.applyThread(model, (try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &update))).agent_thread_snapshot));
     try std.testing.expectEqual(@as(u8, 2), window.count);
     try std.testing.expectEqualStrings("Earlier", window.pages[0].snapshot.items()[0].text(&window.pages[0].snapshot));
     try std.testing.expectEqualStrings("Later", window.pages[1].snapshot.items()[0].text(&window.pages[1].snapshot));
@@ -451,7 +451,7 @@ test "a retained live tail follows snapshots at the bottom and pauses while read
     pane.transcript_scroll = 0.125;
     update.revision += 1;
     @memcpy(update.text_storage[0..5], "Again");
-    _ = try model.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &update))).agent_thread_snapshot);
+    _ = try data.agent_panes.applyThread(model, (try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &update))).agent_thread_snapshot);
     try std.testing.expectEqualStrings("Later", window.pages[1].snapshot.items()[0].text(&window.pages[1].snapshot));
     pane.transcript_scroll = 0;
     try std.testing.expect(try reading.freeze(handler, pane_id, pane.attachment_generation));
@@ -462,7 +462,7 @@ test "a retained live tail follows snapshots at the bottom and pauses while read
     update.revision += 1;
     @memcpy(update.metadata_storage[0..4], "next");
     update.item_storage[0].identity += 1;
-    _ = try model.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &update))).agent_thread_snapshot);
+    _ = try data.agent_panes.applyThread(model, (try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &update))).agent_thread_snapshot);
     try std.testing.expectEqual(@as(u8, 2), window.count);
     try std.testing.expectEqualStrings("Earlier", window.pages[0].snapshot.items()[0].text(&window.pages[0].snapshot));
     try std.testing.expectEqualStrings("next", window.pages[1].snapshot.items()[0].sourceId(&window.pages[1].snapshot));
@@ -636,7 +636,7 @@ test "history ownership retains at most sixteen windows and evicts an inactive r
         var bytes: [4096]u8 = undefined;
         var response = try readySnapshot(&bytes, 1);
         response.pane_id = id;
-        _ = try model.applyAgentThread(response);
+        _ = try data.agent_panes.applyThread(model, response);
         model.panes.find(id).?.agent_thread.?.truncated = true;
         try std.testing.expect(reading.navigate(handler, id, .older));
         try std.testing.expect((try reading.begin(handler, id)) != null);
@@ -723,19 +723,19 @@ test "resumed snapshot loads history once and preserves a later composer draft" 
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
-    try std.testing.expect(handler.editAgentComposer(pane_id, .{ .insert = "Continue the parser work" }));
+    try std.testing.expect(data.agent_panes.editComposer(handler, pane_id, .{ .insert = "Continue the parser work" }));
     var snapshot: core.AgentThreadSnapshot = .{ .pane_id = pane_id, .pane_generation = 9, .revision = 1, .status = .ready, .resumed = true, .truncated = true };
     @memcpy(snapshot.thread_id[0..8], "previous");
     snapshot.thread_id_len = 8;
     var storage: [96 * 1024]u8 = undefined;
     const view = (try core.decodeServer(try core.encodeAgentThreadSnapshot(&storage, &snapshot))).agent_thread_snapshot;
-    try std.testing.expect(try handler.applyAgentThread(view));
+    try std.testing.expect(try data.agent_panes.applyThread(handler, view));
     const pane = model.panes.find(pane_id).?;
     try std.testing.expectEqualStrings("Continue the parser work", pane.composerSlice());
     try std.testing.expectEqual(.older, pane.history_intent.?);
     pane.history_intent = null;
     snapshot.revision += 1;
-    try std.testing.expect(try handler.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&storage, &snapshot))).agent_thread_snapshot));
+    try std.testing.expect(try data.agent_panes.applyThread(handler, (try core.decodeServer(try core.encodeAgentThreadSnapshot(&storage, &snapshot))).agent_thread_snapshot));
     try std.testing.expect(pane.history_intent == null);
 }
 
@@ -749,7 +749,7 @@ test "a new conversation retires old history requests while preserving the next 
     try std.testing.expect(reading.navigate(history, pane_id, .older));
     const query = (try reading.begin(history, pane_id)).?;
     const operation = historyOperation(model, query.view_generation);
-    try std.testing.expect(handler.editAgentComposer(pane_id, .{ .insert = "Next question" }));
+    try std.testing.expect(data.agent_panes.editComposer(handler, pane_id, .{ .insert = "Next question" }));
     var snapshot = pane.agent_thread.?.*;
     snapshot.revision += 1;
     @memcpy(snapshot.thread_id[0..3], "new");
@@ -757,7 +757,7 @@ test "a new conversation retires old history requests while preserving the next 
     snapshot.truncated = false;
     snapshot.item_count = 0;
     var bytes: [4096]u8 = undefined;
-    try std.testing.expect(try handler.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &snapshot))).agent_thread_snapshot));
+    try std.testing.expect(try data.agent_panes.applyThread(handler, (try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &snapshot))).agent_thread_snapshot));
     try std.testing.expect(pane.agent_history == null);
     try std.testing.expect(pane.history_intent == null);
     try std.testing.expectEqualStrings("Next question", pane.composerSlice());
@@ -770,20 +770,20 @@ test "image drafts survive failed admission later edits and stale acknowledgemen
     try bootstrap(&model);
     const handler = &model;
     var bytes: [4096]u8 = undefined;
-    _ = try handler.applyAgentThread(try readySnapshot(&bytes, 1));
-    try std.testing.expect(try handler.attachAgentImage(pane_id, "/tmp/first.png"));
-    const prompt = handler.planAgentPrompt(pane_id).?;
+    _ = try data.agent_panes.applyThread(handler, try readySnapshot(&bytes, 1));
+    try std.testing.expect(try data.agent_panes.attachImage(handler, pane_id, "/tmp/first.png"));
+    const prompt = data.agent_panes.planPrompt(handler, pane_id).?;
     try std.testing.expectEqualStrings("", prompt.text);
     try std.testing.expectEqual(@as(u8, 1), prompt.images.count);
     for (0..3) |_| {
-        try std.testing.expect(try handler.attachAgentImage(pane_id, "/tmp/next.png"));
+        try std.testing.expect(try data.agent_panes.attachImage(handler, pane_id, "/tmp/next.png"));
     }
 
-    try std.testing.expectError(error.TooManyAgentImages, handler.attachAgentImage(pane_id, "/tmp/overflow.png"));
+    try std.testing.expectError(error.TooManyAgentImages, data.agent_panes.attachImage(handler, pane_id, "/tmp/overflow.png"));
     var operation: data.AgentOperation = .{ .pane_id = pane_id, .pane_generation = prompt.pane_generation, .attachment_generation = prompt.attachment_generation, .location = location, .composer_content_revision = prompt.composer_content_revision };
-    try std.testing.expect(!handler.completeAgentPrompt(operation));
+    try std.testing.expect(!data.agent_panes.completePrompt(handler, operation));
     try std.testing.expectEqual(@as(u8, 4), model.agentPane(pane_id).?.composerImages().count);
     operation.composer_content_revision = model.agentPane(pane_id).?.composer_content_revision;
-    try std.testing.expect(handler.completeAgentPrompt(operation));
+    try std.testing.expect(data.agent_panes.completePrompt(handler, operation));
     try std.testing.expectEqual(@as(u8, 0), model.agentPane(pane_id).?.composerImages().count);
 }

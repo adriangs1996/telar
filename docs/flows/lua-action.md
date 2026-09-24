@@ -15,7 +15,7 @@ actions.executeAction -> lua_action.executeLuaAction
       |
 lua_action.evaluateLuaAction
       |
-ClientModel.callbackContext
+plugin_action.callbackContext
       |
 client-owned Generation.invokeCallback / invokeExpression
       |
@@ -28,7 +28,7 @@ client-owned Generation.invokeCallback / invokeExpression
       |
       +-- failure --> lua_action.publishLuaFailure -> client_diagnostic.replace
                                |
-                  ClientModel.replaceDiagnostic
+                  client_diagnostic.replace
                                |
                   ClientModel.diagnostic_revision
                                |
@@ -48,7 +48,7 @@ and closures for the active configuration generation. `config_adoption.completeC
 a complete replacement before swapping that pointer, registry and input router
 together. The VM never enters `ClientModel` or the presenter.
 
-`ClientModel.callbackContext` constructs the value passed to Lua from committed
+`plugin_action.callbackContext` constructs the value passed to Lua from committed
 client state. It contains sidebar visibility, tab count, active tab position,
 pane count and focused pane identity. Lua receives a read-only table built from
 that value. It cannot retain a Zig pointer or observe a half-applied model

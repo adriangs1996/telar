@@ -1,3 +1,4 @@
+const data = @import("model");
 const composer_menu = @import("composer_menu.zig");
 const event_module = @import("../../input/event.zig");
 const std = @import("std");
@@ -144,7 +145,7 @@ fn choose(gui: *GuiAdapter, index: u8, execute: bool) !void {
             break :blk try std.fmt.bufPrint(&buffer, "${s} ", .{snapshot.skills.entries[skill].name(&snapshot.skills)});
         },
     };
-    _ = gui.app.model.editAgentComposer(
+    _ = data.agent_panes.editComposer(&gui.app.model, 
         pane_id,
         .{
             .replace_range = .{
@@ -176,7 +177,7 @@ pub fn submit(gui: *GuiAdapter, pane_id: core.PaneId) !void {
         if (action.argument.len == 0) {
             switch (action.kind) {
                 .skills => {
-                    _ = gui.app.model.editAgentComposer(
+                    _ = data.agent_panes.editComposer(&gui.app.model, 
                         pane_id,
                         .{
                             .replace_range = .{
@@ -198,7 +199,7 @@ pub fn submit(gui: *GuiAdapter, pane_id: core.PaneId) !void {
                                 return;
                             }
 
-                            _ = gui.app.model.editAgentComposer(
+                            _ = data.agent_panes.editComposer(&gui.app.model, 
                                 pane_id,
                                 .{
                                     .replace_range = .{

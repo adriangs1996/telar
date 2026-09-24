@@ -543,7 +543,7 @@ fn command(gui: *GuiAdapter, value: data.name_prompt.Command) !void {
     if (!gui.app.model.name_prompt.active()) {
         if (gui.widgets.dispatcher.focusedTarget()) |target| {
             if (target.action == .composer and field(gui, target) != null) {
-                _ = gui.app.model.editAgentComposer(target.action.composer, value);
+                _ = data.agent_panes.editComposer(&gui.app.model, target.action.composer, value);
                 if (revision != editingRevision(gui)) {
                     gui.widgets.cancelComposition();
                 }
@@ -803,7 +803,7 @@ fn activateControl(gui: *GuiAdapter, target: Target) !void {
         .agent_control => |control| switch (control.kind) {
             .preview_image => image_preview.open(gui, target),
             .close_image => image_preview.close(gui),
-            .remove_image => _ = gui.app.model.removeAgentImage(
+            .remove_image => _ = data.agent_panes.removeImage(&gui.app.model, 
                 control.pane_id,
                 .{
                     .index = control.image_index,
@@ -836,7 +836,7 @@ fn activateControl(gui: *GuiAdapter, target: Target) !void {
                 gui.widgets.approval_review = if (closing) null else value;
                 gui.widgets.thread_anchor.cancel(control.pane_id);
                 gui.widgets.dispatcher.revision +%= 1;
-                _ = gui.app.model.scrollAgentThread(control.pane_id, if (closing) -65536 else 65536);
+                _ = data.agent_panes.scrollThread(&gui.app.model, control.pane_id, if (closing) -65536 else 65536);
             },
         },
         .prompt => |action| try command(gui, if (action == .submit) .submit else .cancel),

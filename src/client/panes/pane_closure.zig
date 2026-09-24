@@ -12,7 +12,7 @@ pub fn requestPaneClose(model: *data.ClientModel) !?data.PaneClosure {
         return null;
     }
 
-    const closure = model.planPaneClosure() orelse return null;
+    const closure = data.pane_closure.plan(model) orelse return null;
     const request_id = try model.request_lifecycle.nextId();
     try runtime_io.sendRuntimeRequest(
         model,
@@ -39,7 +39,7 @@ pub fn requestPaneClose(model: *data.ClientModel) !?data.PaneClosure {
 
 /// Commits authoritative retirement and performs idempotent cleanup for late exits.
 pub fn applyPaneExit(client: *Client, exited: core.PaneExited) !data.PaneExit {
-    const transition = client.model.retirePane(exited.pane_id);
+    const transition = data.pane_closure.retire(&client.model, exited.pane_id);
     _ = client.model.request_lifecycle.tracker.ignoreAttachment(exited.pane_id);
     _ = client.model.request_lifecycle.tracker.completePaneClose(exited.pane_id);
     releasePaneResources(client, exited.pane_id);
@@ -66,7 +66,7 @@ pub fn applyPaneExit(client: *Client, exited: core.PaneExited) !data.PaneExit {
 /// Releases exact pane authorities before physical resources; repeated release is harmless.
 pub fn releasePaneResources(client: *Client, pane_id: core.PaneId) void {
     _ = data.copy_mode.release(&client.model, pane_id);
-    _ = client.model.releasePanePaste(pane_id);
-    _ = client.model.releaseReportedPaneFocus(pane_id);
+    _ = data.pane_input.releasePaste(&client.model, pane_id);
+    _ = data.pane_focus.releaseReported(&client.model, pane_id);
     client.graphics.clearPane(pane_id);
 }

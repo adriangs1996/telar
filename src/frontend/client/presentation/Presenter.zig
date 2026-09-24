@@ -566,7 +566,7 @@ fn presentEmpty(self: *Presenter, projection: client.Projection, resources: Reso
 /// extra host write.
 fn syncWindowTitle(self: *Presenter, projection: client.Projection, writer: *std.Io.Writer) !void {
     const tab_label = if (projection.tab) |tab| data.tab_label.text(projection.model, tab) else "";
-    const pane_title = projection.model.focusedPaneTitle();
+    const pane_title = data.pane_title.focusedTitle(projection.model);
 
     try self.window_title.sync(writer, .{
         .template = projection.window_title_template,

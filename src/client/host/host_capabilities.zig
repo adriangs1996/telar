@@ -7,7 +7,7 @@ const Client = @import("../execution/Client.zig");
 /// Applies a semantic terminal response through the same resource policy.
 /// Example: `_ = try host_capabilities.observeHostCapability(client, observation);`
 pub fn observeHostCapability(client: *Client, observation: data.HostCapabilityObservation) !?data.HostCommit {
-    const commit = try client.model.observeHostCapability(observation) orelse return null;
+    const commit = try data.host_capabilities.observe(&client.model, observation) orelse return null;
 
     try host_resize.deliverHostCommit(client, commit);
 

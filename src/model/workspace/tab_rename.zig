@@ -25,7 +25,7 @@ pub fn rename(model: *ClientModel, tab_id: core.TabId, label: []const u8) !Chang
 /// Commits a runtime-confirmed label and advances the tab collection once.
 ///
 /// ```zig
-/// const change = try commitRename(model, command);
+/// const change = try tab_rename.commitRename(model, command);
 /// ```
 pub fn commitRename(model: *ClientModel, command: RenameTab) !model_data.Change {
     const current_workspace = model.workspace orelse return error.UnexpectedWorkspace;

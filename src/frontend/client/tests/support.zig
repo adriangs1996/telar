@@ -263,7 +263,7 @@ pub fn installTestingAttachmentProvider(client: *client_module.Client, generatio
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = generation,
     };
-    _ = try client.model.reconcileAgentSnapshot(.{
+    _ = try data.agent_snapshot.reconcile(&client.model, .{
         .revision = generation,
         .agents = &.{data.AgentInput{
             .key = .{

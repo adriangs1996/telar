@@ -50,7 +50,7 @@ pub fn completePluginAction(client: *Client, completion: data.PluginActionsCompl
                 };
             };
 
-            _ = client.model.clearDiagnostic();
+            _ = data.client_diagnostic.clear(&client.model);
             const disposition = try applyPluginBatch(client, result.batch);
             break :result switch (disposition) {
                 .continue_client => .applied,
@@ -229,7 +229,7 @@ pub fn runPluginCommand(client: *Client, reply: *core.ClientCommand) !void {
         .action = reply.target_id,
     };
     _ = try registry.resolve(requested);
-    switch (try startPluginAction(client, requested, client.model.callbackContext())) {
+    switch (try startPluginAction(client, requested, data.plugin_action.callbackContext(&client.model))) {
         .started => reply.status = .admitted,
         .busy => return error.PluginWorkerBusy,
         .unavailable => return error.PluginWorkerUnavailable,
@@ -260,7 +260,7 @@ pub fn startPluginAction(client: *Client, requested: data.PluginAction, callback
             },
         ),
     };
-    const execution = (try client.model.beginPluginExecution()) orelse
+    const execution = (try data.plugin_action.beginExecution(&client.model)) orelse
         return reportPluginStart(client, .busy);
     {
         errdefer {
@@ -331,7 +331,7 @@ fn publishPluginFailure(client: *Client, failure: data.FailurePublication) !void
         .{
             .level = .failure,
             .title = failure.title,
-            .message = client.model.diagnostic() orelse return error.ClientDiagnosticMissing,
+            .message = data.client_diagnostic.shown(&client.model) orelse return error.ClientDiagnosticMissing,
             .duration_ns = 7 * std.time.ns_per_s,
         },
     );

@@ -25,7 +25,7 @@ BarLayout -> ClientModel.bars
           |                 |
           |          Generation.invokeBar
           |                 |
-          |       ClientModel.updateBar
+          |       configurable_bars.update
           |                 |
           +------ Version.bars
                          |

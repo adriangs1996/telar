@@ -110,7 +110,7 @@ test "a selected pane cannot steal focus from another agent composer" {
     snapshot.pane_id = second;
     snapshot.pane_generation = 8;
     var bytes: [4096]u8 = undefined;
-    _ = try gui.app.model.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, snapshot))).agent_thread_snapshot);
+    _ = try data.agent_panes.applyThread(&gui.app.model, (try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, snapshot))).agent_thread_snapshot);
     _ = gui.app.model.tabs.layout[tab].focusPane(Fixture.pane_id);
     try fixture.publish();
     try fixture.drag(.{ try fixture.point(3, "Second"), try fixture.point(3, "words") });

@@ -167,7 +167,7 @@ fn restoreFocus(model: *ClientModel, slot: usize, snapshot: PaneSnapshot, pane_i
 /// Only visible active-tab changes advance the pane revision.
 ///
 /// ```zig
-/// const reconciliation = try reconcileTab(model, snapshot, workbench);
+/// const reconciliation = try tab_snapshot_reconciliation.reconcileTab(model, snapshot, workbench);
 /// ```
 pub fn reconcileTab(model: *ClientModel, snapshot: PaneSnapshot, area: cellgrid.Rect) !TabReconciliation {
     const tab = model.tabs.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;

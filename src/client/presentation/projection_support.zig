@@ -40,14 +40,14 @@ pub fn capture(model: *data.ClientModel, context: Context) Projection {
         .system_metrics = model.system_metrics,
         .bar_state = &model.bars,
         .status_mode = context.status_mode,
-        .diagnostic = model.diagnostic(),
+        .diagnostic = data.client_diagnostic.shown(model),
         .copy = copy,
         .sidebar_visible = model.sidebar_visible,
         .sidebar_width = model.sidebar_width,
         .workspace_list_collapsed = model.workspace_list_collapsed,
         .host_capabilities = model.host.host_capabilities,
         .host_size = model.host.host_size,
-        .window_title_template = model.windowTitleTemplate(),
+        .window_title_template = data.config_reload.windowTitleTemplate(model),
     };
 }
 

@@ -368,7 +368,7 @@ test "workspace handoff reserves its captured paste closing marker" {
         client_module.workspace_handoff.requestWorkspace(client, @enumFromInt(2)),
     );
 
-    try std.testing.expect(client.model.panePasteActive());
+    try std.testing.expect(data.pane_input.pasteActive(&client.model));
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
@@ -406,7 +406,7 @@ test "clicking a sidebar agent hands off directly to its pane" {
         .pane_id = bottom_right_pane,
         .tab_layout = saved_layout,
     });
-    _ = try client.model.reconcileAgentSnapshot(.{
+    _ = try data.agent_snapshot.reconcile(&client.model, .{
         .revision = 1,
         .agents = &.{agent},
     });
@@ -539,7 +539,7 @@ test "sidebar workspace round trip restores fullscreen in a previously inactive 
             .status = .working,
         },
     };
-    _ = try client.model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &destinations });
+    _ = try data.agent_snapshot.reconcile(&client.model, .{ .revision = 1, .agents = &destinations });
 
     for (destinations, 0..) |agent, turn| {
         try std.testing.expectEqual(.handoff_requested, try client_module.agent_navigation.navigateAgent(client, agent.key));
@@ -622,7 +622,7 @@ test "local agent navigation selects its tab before focusing its pane" {
         .pane_id = agent_pane,
         .pane_generation = 1,
     };
-    _ = try client.model.reconcileAgentSnapshot(.{
+    _ = try data.agent_snapshot.reconcile(&client.model, .{
         .revision = 1,
         .agents = &.{.{
             .key = key,
@@ -673,7 +673,7 @@ test "local sidebar agent navigation keeps fullscreen when targeting a different
     try std.testing.expect(client.model.tabs.layout[tab].focusPane(first));
     try std.testing.expect(client.model.tabs.layout[tab].toggleFullscreen());
     const key: data.AgentKey = .{ .pane_id = clicked, .pane_generation = 1 };
-    _ = try client.model.reconcileAgentSnapshot(.{
+    _ = try data.agent_snapshot.reconcile(&client.model, .{
         .revision = 1,
         .agents = &.{.{ .key = key, .location = location, .pane_index = 2, .provider = .codex, .status = .working }},
     });

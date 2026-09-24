@@ -7,7 +7,7 @@ labels and navigation.
 ```text
 runtime metadata cursors -> pane_cwd / pane_foreground
   -> runtime_messages.handleServerMessage
-  -> ClientModel.updatePaneMetadata
+  -> pane_metadata.update
      -> attached pane: Pane.setCwd / Pane.setForegroundName
      -> unattached foreground: tab_label.applyForegroundReport
   -> adapter observes pane_metadata / pane_foreground revisions

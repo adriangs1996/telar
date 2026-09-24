@@ -40,7 +40,7 @@ pub fn executeLuaAction(client: *Client, command: data.LuaActionCommand) !keyinp
 /// Evaluates one configured Lua action against a model value snapshot.
 fn evaluateLuaAction(client: *Client, command: data.LuaActionCommand) !data.LuaActionOutcome {
     var diagnostic: data.Diagnostic = .{};
-    const callback_context = client.model.callbackContext();
+    const callback_context = data.plugin_action.callbackContext(&client.model);
     const generation = client.lua_generation orelse return .unavailable;
 
     const invocation: data.LuaInvocation = switch (command) {
@@ -79,7 +79,7 @@ fn evaluateLuaAction(client: *Client, command: data.LuaActionCommand) !data.LuaA
             };
         },
         .expression => |decision| expression: {
-            _ = client.model.clearDiagnostic();
+            _ = data.client_diagnostic.clear(&client.model);
             break :expression .{
                 .input = decision,
             };
@@ -99,7 +99,7 @@ fn evaluateLuaAction(client: *Client, command: data.LuaActionCommand) !data.LuaA
                 },
             }
 
-            _ = client.model.clearDiagnostic();
+            _ = data.client_diagnostic.clear(&client.model);
             for (batch.slice()) |effect| {
                 if (try applyLuaEffect(client, effect) == .exit_client) {
                     break :callback .exit;
@@ -114,7 +114,7 @@ fn evaluateLuaAction(client: *Client, command: data.LuaActionCommand) !data.LuaA
 fn applyLuaEffect(client: *Client, effect: data.Action) !data.LuaDisposition {
     return switch (effect) {
         .plugin => |requested| plugin: {
-            _ = try plugin_actions.startPluginAction(client, requested, client.model.callbackContext());
+            _ = try plugin_actions.startPluginAction(client, requested, data.plugin_action.callbackContext(&client.model));
             break :plugin .continue_client;
         },
         .lua_callback, .lua_expr => error.InvalidCallbackResult,

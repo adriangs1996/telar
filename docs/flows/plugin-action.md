@@ -18,7 +18,7 @@ plugin_actions.startPluginAction
         |
 Registry.resolve + Registry.workerRequest
         |
-ClientModel.beginPluginExecution { id, configuration_generation }
+plugin_action.beginExecution { id, configuration_generation }
         |
 client.workers.start(.plugin) -> job_runner -> isolated one-shot worker
         |

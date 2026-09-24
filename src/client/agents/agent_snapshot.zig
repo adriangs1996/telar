@@ -41,7 +41,7 @@ pub fn applyAgentSnapshot(client: *Client, snapshot: core.AgentSnapshotView) !?d
         count += 1;
     }
 
-    const commit = try client.model.reconcileAgentSnapshot(
+    const commit = try data.agent_snapshot.reconcile(&client.model, 
         .{
             .revision = snapshot.revision,
             .agents = entries[0..count],

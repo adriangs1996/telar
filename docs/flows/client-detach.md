@@ -9,11 +9,11 @@ actions.executeAction(.detach)
   -> tab_removal.detachAllTabs
      -> capture bounded stable TabLocation list
      -> tab_removal.detachTab for each location
-        -> ClientModel.planTabDetachment
+        -> client_detach.planTabDetachment
         -> finish tab-owned paste
         -> tab-owned focus-out
         -> detach, retire pending correlation, hide graphics per pane
-        -> ClientModel.commitTabDetachment
+        -> client_detach.commitTabDetachment
   -> return keyinput.Control.stop to the event loop
 ```
 

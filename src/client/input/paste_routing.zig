@@ -51,7 +51,7 @@ fn snapshot(client: *const Client) PasteRoutingAuthority {
         .prompt_active = prompt != null,
         .prompt_pasting = if (prompt) |value| value.pasting else false,
         .copy_mode_active = data.copy_mode.isActive(&client.model),
-        .pane_paste_active = client.model.panePasteActive(),
+        .pane_paste_active = data.pane_input.pasteActive(&client.model),
     };
 }
 

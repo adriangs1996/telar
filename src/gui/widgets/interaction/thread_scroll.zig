@@ -1,5 +1,6 @@
 //! Native motion advances before projection; drawing and hit testing share the
 //! same model offset. Page delivery rebases the trajectory without an impulse.
+const data = @import("model");
 const pacing = @import("pacing");
 const routing = @import("routing.zig");
 const message_links = @import("message_links.zig");
@@ -151,7 +152,7 @@ fn apply(gui: *GuiAdapter, entry: *Entry) !void {
 
     const pane = gui.app.model.agentPane(entry.key.pane_id) orelse return;
     const next = entry.motion.spring.position / entry.step;
-    _ = gui.app.model.scrollAgentThread(pane.id, next - pane.transcript_scroll);
+    _ = data.agent_panes.scrollThread(&gui.app.model, pane.id, next - pane.transcript_scroll);
     entry.applied = pane.transcript_scroll;
 }
 

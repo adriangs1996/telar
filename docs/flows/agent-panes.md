@@ -309,8 +309,8 @@ retryable, without polling the provider on every rendered frame.
 | Trigger | Client entrypoint | Wire request | Runtime owner |
 | --- | --- | --- | --- |
 | `prefix + a` | `agent_control.createAgentTab` → `tab_creation.requestTabCreation` | `create_tab` with kind `agent` | `tab_creation.create`, `pane_launch.launch` |
-| Composer edit | GUI widget routing, `ClientModel.editAgentComposer` | none | client pane composer |
-| Model, effort or access choice | `ClientModel.changeAgentOption` | included in the next `agent_prompt` | client draft, then runtime/provider validation |
+| Composer edit | GUI widget routing, `agent_panes.editComposer` | none | client pane composer |
+| Model, effort or access choice | `agent_panes.changeOption` | included in the next `agent_prompt` | client draft, then runtime/provider validation |
 | Enter or Send | `agent_control.submitAgentPrompt` | `agent_prompt` | `client_request.receive`, `agent_control.send`, `agent_panes`, provider worker |
 | `/` or `$` completion | `completions`, `CompletionState`, `CompletionMenu` | none | client draft and delivered widget identities |
 | `/clear` or `/rename` | `completions.submit`, `agent_control.submitAgentPrompt` | `agent_prompt` | `Codex.runCommand`, provider response, retained snapshot |

@@ -313,7 +313,7 @@ pub fn completeHistoryPrune(model: *data.ClientModel, confirmation: core.History
 fn pasteHistoryCommand(client: *Client, text: []const u8, run: bool) !?data.PaneInputDelivery {
     const started = core.now(client.io);
 
-    const plan = client.model.planPaneInput(.focused) orelse return null;
+    const plan = data.pane_input.planInput(&client.model, .focused) orelse return null;
     try pane_input.validateHistoryText(text, plan.input_modes.bracketed_paste);
     var encoded: [core.max_history_command_bytes + 13]u8 = undefined;
     const paste = try keyinput.encodePaste(

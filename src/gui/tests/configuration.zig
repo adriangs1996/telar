@@ -155,7 +155,7 @@ test "GUI reload rejects Lua and native font failures without replacing the acti
         try std.testing.expectEqual(@as(u64, 1), session.gui.app.lua_generation.?.number);
         try std.testing.expectEqual(@as(f32, 15), session.gui.renderer.config.font.size);
         try std.testing.expectEqual(pixels, session.gui.renderer.atlas.?.pixels.ptr);
-        try std.testing.expect(session.gui.app.model.diagnostic() != null);
+        try std.testing.expect(data.client_diagnostic.shown(&session.gui.app.model) != null);
         try std.testing.expect(session.gui.app.reload.orphans.generation == null);
         try std.testing.expect(session.gui.app.reload.orphans.registry == null);
         try std.testing.expect(session.gui.app.reload.orphans.trust == null);
@@ -166,7 +166,7 @@ test "GUI reload rejects Lua and native font failures without replacing the acti
     try std.testing.expect(try reload.apply(session.gui, &session.gui.renderer));
     try std.testing.expectEqual(@as(u64, 2), session.gui.app.lua_generation.?.number);
     try std.testing.expectEqual(@as(f32, 19), session.gui.renderer.config.font.size);
-    try std.testing.expect(session.gui.app.model.diagnostic() == null);
+    try std.testing.expect(data.client_diagnostic.shown(&session.gui.app.model) == null);
 }
 
 test "GUI reload restages fonts for a changed viewport before adopting and joins on close" {

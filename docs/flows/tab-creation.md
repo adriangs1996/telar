@@ -6,7 +6,7 @@ current projection and adopts only a canonical reply.
 ```text
 actions.executeAction
   -> tab_creation.requestTabCreation
-     -> pending-operation gate, label_validation.validate, ClientModel.planTabCreation
+     -> pending-operation gate, label_validation.validate, tab_creation.planCreation
      -> tab_creation.sendCreateTabRequest -> owned create_tab entry in model.to_runtime
   -> runtime creates tab/root and returns tab_created
   -> runtime_messages.handleServerMessage

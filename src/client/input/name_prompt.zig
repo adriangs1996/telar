@@ -116,7 +116,7 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !data.PromptOutco
 /// Checks current input authority and initializes the prompt from canonical model state.
 /// Example: `const opened = name_prompt.openNamePrompt(app, .rename_active_tab);`
 pub fn openNamePrompt(model: *data.ClientModel, intent: name_prompt_opening.Intent) bool {
-    if (model.panePasteActive()) {
+    if (data.pane_input.pasteActive(model)) {
         return false;
     }
     if (intent == .copy_search) {
@@ -140,7 +140,7 @@ pub fn openNamePrompt(model: *data.ClientModel, intent: name_prompt_opening.Inte
             if (!model.request_lifecycle.tracker.isEmpty()) {
                 return false;
             }
-            if (model.planWorkspaceCreation() == null) {
+            if (data.workspace_creation.plan(model) == null) {
                 return false;
             }
 

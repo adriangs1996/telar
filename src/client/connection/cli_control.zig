@@ -99,7 +99,7 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
             }
 
             if (pane.kind == .agent) {
-                _ = client.model.scrollAgentThread(pane_id, @floatFromInt(delta));
+                _ = data.agent_panes.scrollThread(&client.model, pane_id, @floatFromInt(delta));
             } else {
                 _ = try pane_viewport.applyPaneViewport(
                     client,
@@ -364,7 +364,7 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
             const pane_id: core.PaneId = @enumFromInt(reply.target_id);
             const pane = client.model.agentPane(pane_id) orelse return error.AgentPaneNotAttached;
 
-            if (!try client.model.attachAgentImage(pane_id, reply.text())) {
+            if (!try data.agent_panes.attachImage(&client.model, pane_id, reply.text())) {
                 return error.DraftAttachmentRejected;
             }
 
@@ -388,7 +388,7 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
                 pane.composerSlice(),
                 reply.text(),
             )) {
-                if (!client.model.editAgentComposer(
+                if (!data.agent_panes.editComposer(&client.model, 
                     pane_id,
                     .{
                         .replace_range = .{

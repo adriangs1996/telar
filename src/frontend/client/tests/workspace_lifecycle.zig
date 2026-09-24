@@ -26,7 +26,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     try data.pane_split.split(&client.model, prior_model, .{ .existing_pane = top_right, .new_pane = bottom_right, .location = prior_location, .axis = .vertical, .area = workbench });
     client.model.panes.findIn(client.model.tabs.location[prior_model].tab_id, left).?.input_modes.focus_events = true;
     try std.testing.expect(client.model.tabs.layout[prior_model].focusPane(left));
-    _ = client.model.syncReportedPaneFocus().?;
+    _ = data.pane_focus.syncReported(&client.model).?;
     try std.testing.expect(client.model.tabs.layout[prior_model].focusPane(bottom_right));
     var expected_geometry: data.LayoutSnapshot = .{};
     client.model.tabs.layout[prior_model].snapshot(workbench, &expected_geometry);

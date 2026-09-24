@@ -1,3 +1,4 @@
+const pane_metadata = @import("../../panes/pane_metadata.zig");
 const workspace_handoff = @import("../../workspace/workspace_handoff.zig");
 const tab_snapshot_reconciliation = @import("../../workspace/tab_snapshot_reconciliation.zig");
 const tab_selection = @import("../../workspace/tab_selection.zig");
@@ -47,17 +48,17 @@ test "fresh workspace snapshots name inactive automatic tabs before pane attachm
     @memset(&name, 'x');
     try std.testing.expectEqualStrings("codex", model_data.tab_label.text(&model, inactive));
 
-    const changed = (try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(2), .name = "claude" } })).?;
+    const changed = (try pane_metadata.update(&model, .{ .foreground = .{ .pane_id = @enumFromInt(2), .name = "claude" } })).?;
     try std.testing.expect(changed.display_changed);
     try std.testing.expectEqualStrings("claude", model_data.tab_label.text(&model, inactive));
     try std.testing.expectEqual(@as(usize, 0), model.panes.countIn(model.tabs.location[inactive].tab_id));
-    try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(2), .name = "claude" } })) == null);
-    try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(3), .name = "nvim" } })) == null);
+    try std.testing.expect((try pane_metadata.update(&model, .{ .foreground = .{ .pane_id = @enumFromInt(2), .name = "claude" } })) == null);
+    try std.testing.expect((try pane_metadata.update(&model, .{ .foreground = .{ .pane_id = @enumFromInt(3), .name = "nvim" } })) == null);
     try std.testing.expectEqualStrings("logs", model_data.tab_label.text(&model, model.tabs.find(@enumFromInt(3)).?));
     try std.testing.expect(model_data.tab_label.icon(&model, model.tabs.find(@enumFromInt(3)).?) == null);
 
     _ = workspace_handoff.depart(&model);
-    try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(2), .name = "git" } })) == null);
+    try std.testing.expect((try pane_metadata.update(&model, .{ .foreground = .{ .pane_id = @enumFromInt(2), .name = "git" } })) == null);
 }
 
 test "workspace return names inactive tabs using each client's saved pane focus" {
@@ -78,7 +79,7 @@ test "workspace return names inactive tabs using each client's saved pane focus"
     _ = try tab_snapshot_reconciliation.reconcileTab(model, .{ .location = first, .panes = &.{@enumFromInt(1)} }, area);
     const inactive = try model_data.tab_creation.add(model, .{ .location = second, .position = 1, .label = "", .root_pane_id = @enumFromInt(2) }, size);
     try model_data.pane_split.split(model, inactive, .{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(3), .location = second, .axis = .horizontal, .area = area });
-    _ = try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(3), .name = "codex" } });
+    _ = try pane_metadata.update(model, .{ .foreground = .{ .pane_id = @enumFromInt(3), .name = "codex" } });
     try std.testing.expect(model_data.tab_selection.select(model, first.tab_id));
     _ = workspace_handoff.depart(model);
     _ = try workspace_handoff.arrive(model, .{ .pane_id = @enumFromInt(1), .location = first, .size = size });
@@ -104,7 +105,7 @@ test "workspace return names inactive tabs using each client's saved pane focus"
     _ = try tab_selection.commitSelection(model, .{ .tab_id = second.tab_id });
     _ = try tab_snapshot_reconciliation.reconcileTab(model, .{ .location = second, .panes = &.{ @enumFromInt(2), @enumFromInt(3) } }, area);
     try std.testing.expectEqualStrings("claude", model_data.tab_label.text(model, model.tabs.find(second.tab_id).?));
-    _ = try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(3), .name = "git" } });
+    _ = try pane_metadata.update(model, .{ .foreground = .{ .pane_id = @enumFromInt(3), .name = "git" } });
     try std.testing.expectEqualStrings("git", model_data.tab_label.text(model, model.tabs.find(second.tab_id).?));
 }
 
@@ -133,7 +134,7 @@ test "inactive automatic tabs publish foreground changes without changing canoni
     _ = try workspace_reconciliation.reconcile(&model, snapshot);
     const before = model.version();
 
-    _ = (try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = pane, .name = "nvim" } })).?;
+    _ = (try pane_metadata.update(&model, .{ .foreground = .{ .pane_id = pane, .name = "nvim" } })).?;
     try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
     try std.testing.expectEqualStrings("nvim", model_data.tab_label.text(&model, model.tabs.find(first.tab_id).?));
     try std.testing.expectEqual(before.pane_foreground + 1, model.version().pane_foreground);
@@ -144,7 +145,7 @@ test "inactive automatic tabs publish foreground changes without changing canoni
     try std.testing.expect(!repeated.tabs_changed);
     try std.testing.expectEqualDeep(foreground_version, model.version());
     try std.testing.expectEqualStrings("nvim", model_data.tab_label.text(&model, model.tabs.find(first.tab_id).?));
-    try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = pane, .name = "nvim" } })) == null);
+    try std.testing.expect((try pane_metadata.update(&model, .{ .foreground = .{ .pane_id = pane, .name = "nvim" } })) == null);
     try std.testing.expectEqualDeep(foreground_version, model.version());
 }
 

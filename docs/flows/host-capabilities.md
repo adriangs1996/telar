@@ -21,7 +21,7 @@ host_capabilities.translate
        |
 host_capabilities.observeHostCapability
        |
-ClientModel.observeHostCapability
+host_capabilities.observe
        |
 host_resize.deliverHostCommit
        |
@@ -41,7 +41,7 @@ host_capabilities.reconcileHostCapabilities
        |
 host_resize.applyHostUpdate
        |
-ClientModel.reconcileHost
+host_capabilities.reconcile
        |
 host_resize.deliverHostCommit
        |
@@ -80,7 +80,7 @@ mutates the model. Pixel observations also resolve the next
 `core.TerminalSize`. Explicit cell pixels take precedence over dimensions
 derived from window pixels and the current grid.
 
-`ClientModel.reconcileHost` validates the resolved geometry first, then commits
+`host_capabilities.reconcile` validates the resolved geometry first, then commits
 capabilities and geometry as one `HostCommit`. An invalid or oversized grid
 or a geometry inconsistent with its raw measurements changes neither value.
 Capability changes advance `Version.host_capabilities`; geometry changes

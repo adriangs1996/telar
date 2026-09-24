@@ -1,3 +1,13 @@
+const pane_focus = @import("../../workspace/pane_focus.zig");
+const pane_attachment = @import("../../panes/pane_attachment.zig");
+const agent_navigation = @import("../../agents/agent_navigation.zig");
+const system_metrics = @import("../system_metrics.zig");
+const sidebar_animation = @import("../../layout/sidebar_animation.zig");
+const proxy_status = @import("../proxy_status.zig");
+const pane_title = @import("../../panes/pane_title.zig");
+const pane_metadata = @import("../../panes/pane_metadata.zig");
+const agent_snapshot = @import("../../agents/agent_snapshot.zig");
+const agent_done = @import("../../agents/agent_done.zig");
 const notifications = @import("../../notifications/notifications.zig");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
@@ -11,11 +21,11 @@ test "proxy status reconciliation commits only changed runtime state" {
     var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
-    try std.testing.expect(model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = false }) == null);
+    try std.testing.expect(proxy_status.reconcile(&model, .{ .active = false, .scope = .exact, .system_trusted = false }) == null);
     try std.testing.expect(!model.proxy_tls_active);
     try std.testing.expectEqualDeep(Version{}, model.version());
 
-    const enabled = model.reconcileProxyStatus(.{ .active = true, .scope = .wildcard, .system_trusted = false }).?;
+    const enabled = proxy_status.reconcile(&model, .{ .active = true, .scope = .wildcard, .system_trusted = false }).?;
 
     try std.testing.expect(!enabled.previous);
     try std.testing.expect(enabled.active);
@@ -24,10 +34,10 @@ test "proxy status reconciliation commits only changed runtime state" {
     try std.testing.expectEqual(@as(u64, 1), enabled.proxy_status_revision);
     try std.testing.expect(model.proxy_tls_active);
     try std.testing.expectEqual(Version{ .proxy_status = 1 }, model.version());
-    try std.testing.expect(model.reconcileProxyStatus(.{ .active = true, .scope = .wildcard, .system_trusted = false }) == null);
+    try std.testing.expect(proxy_status.reconcile(&model, .{ .active = true, .scope = .wildcard, .system_trusted = false }) == null);
     try std.testing.expectEqual(Version{ .proxy_status = 1 }, model.version());
 
-    const disabled = model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = false }).?;
+    const disabled = proxy_status.reconcile(&model, .{ .active = false, .scope = .exact, .system_trusted = false }).?;
 
     try std.testing.expect(disabled.previous);
     try std.testing.expect(!disabled.active);
@@ -36,7 +46,7 @@ test "proxy status reconciliation commits only changed runtime state" {
     try std.testing.expect(!model.proxy_tls_active);
     try std.testing.expectEqual(Version{ .proxy_status = 2 }, model.version());
 
-    const trusted = model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = true }).?;
+    const trusted = proxy_status.reconcile(&model, .{ .active = false, .scope = .exact, .system_trusted = true }).?;
 
     try std.testing.expect(!trusted.previous_system_trusted);
     try std.testing.expect(trusted.system_trusted);
@@ -48,7 +58,7 @@ test "system metrics reconciliation owns the latest replica and one isolated rev
     var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const first = (try model.reconcileSystemMetrics(.{
+    const first = (try system_metrics.reconcile(&model, .{
         .runtime_revision = 4,
         .cpu_percent = 25,
         .memory_used_decigib = 123,
@@ -65,7 +75,7 @@ test "system metrics reconciliation owns the latest replica and one isolated rev
         .battery_percent = null,
     }, model.system_metrics.?);
 
-    try std.testing.expect((try model.reconcileSystemMetrics(.{
+    try std.testing.expect((try system_metrics.reconcile(&model, .{
         .runtime_revision = 3,
         .cpu_percent = 10,
         .memory_used_decigib = 20,
@@ -73,7 +83,7 @@ test "system metrics reconciliation owns the latest replica and one isolated rev
     })) == null);
     try std.testing.expectEqual(Version{ .system_metrics = 1 }, model.version());
 
-    const second = (try model.reconcileSystemMetrics(.{
+    const second = (try system_metrics.reconcile(&model, .{
         .runtime_revision = 5,
         .cpu_percent = 50,
         .memory_used_decigib = 10,
@@ -94,21 +104,21 @@ test "rejected system metrics preserve the latest replica and version" {
         .memory_used_decigib = 80,
         .battery_percent = null,
     };
-    _ = try model.reconcileSystemMetrics(initial);
+    _ = try system_metrics.reconcile(&model, initial);
 
-    try std.testing.expectError(error.InvalidMetricsRevision, model.reconcileSystemMetrics(.{
+    try std.testing.expectError(error.InvalidMetricsRevision, system_metrics.reconcile(&model, .{
         .runtime_revision = 0,
         .cpu_percent = 30,
         .memory_used_decigib = 80,
         .battery_percent = null,
     }));
-    try std.testing.expectError(error.InvalidMetricsValue, model.reconcileSystemMetrics(.{
+    try std.testing.expectError(error.InvalidMetricsValue, system_metrics.reconcile(&model, .{
         .runtime_revision = 2,
         .cpu_percent = 101,
         .memory_used_decigib = 80,
         .battery_percent = null,
     }));
-    try std.testing.expectError(error.InvalidMetricsValue, model.reconcileSystemMetrics(.{
+    try std.testing.expectError(error.InvalidMetricsValue, system_metrics.reconcile(&model, .{
         .runtime_revision = 3,
         .cpu_percent = 30,
         .memory_used_decigib = 80,
@@ -182,7 +192,7 @@ test "agent reconciliation owns labels versions and existing status transitions"
         .status = .working,
     };
 
-    const first = (try model.reconcileAgentSnapshot(.{
+    const first = (try agent_snapshot.reconcile(&model, .{
         .revision = 4,
         .agents = &.{agent},
     })).?;
@@ -196,11 +206,11 @@ test "agent reconciliation owns labels versions and existing status transitions"
     try std.testing.expectEqual(Version{ .agents = 1 }, model.version());
     try std.testing.expectEqualStrings("first", model.agent_snapshot.find(key).?.sessionTitle());
     try std.testing.expect(model.agent_snapshot.find(key) != null);
-    try std.testing.expect(model.sidebarAnimationActive());
+    try std.testing.expect(sidebar_animation.isActive(&model));
 
     agent.session_title = "second";
     agent.status = .ready;
-    const second = (try model.reconcileAgentSnapshot(.{
+    const second = (try agent_snapshot.reconcile(&model, .{
         .revision = 5,
         .agents = &.{agent},
     })).?;
@@ -214,8 +224,8 @@ test "agent reconciliation owns labels versions and existing status transitions"
     try std.testing.expectEqual(core.AgentStatus.ready, change.current);
     try std.testing.expectEqual(@as(u16, 3), change.pane_index);
     try std.testing.expectEqual(core.AgentProvider.codex, change.provider);
-    try std.testing.expect(!model.sidebarAnimationActive());
-    try std.testing.expect((try model.reconcileAgentSnapshot(.{
+    try std.testing.expect(!sidebar_animation.isActive(&model));
+    try std.testing.expect((try agent_snapshot.reconcile(&model, .{
         .revision = 5,
         .agents = &.{agent},
     })) == null);
@@ -235,16 +245,16 @@ test "sidebar animation advances its own revision only while active" {
         .provider = .codex,
         .status = .ready,
     };
-    _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &.{agent} });
+    _ = try agent_snapshot.reconcile(&model, .{ .revision = 1, .agents = &.{agent} });
 
-    try std.testing.expect(model.advanceSidebarAnimation() == null);
+    try std.testing.expect(sidebar_animation.advance(&model) == null);
     try std.testing.expectEqual(@as(u8, 0), model.sidebar_animation_frame);
     try std.testing.expectEqual(Version{ .agents = 1 }, model.version());
 
     agent.status = .working;
-    _ = try model.reconcileAgentSnapshot(.{ .revision = 2, .agents = &.{agent} });
-    const first = model.advanceSidebarAnimation().?;
-    const second = model.advanceSidebarAnimation().?;
+    _ = try agent_snapshot.reconcile(&model, .{ .revision = 2, .agents = &.{agent} });
+    const first = sidebar_animation.advance(&model).?;
+    const second = sidebar_animation.advance(&model).?;
 
     try std.testing.expectEqual(@as(u8, 1), first.frame);
     try std.testing.expectEqual(@as(u64, 1), first.sidebar_animation_revision);
@@ -270,14 +280,14 @@ test "rejected agent reconciliation preserves replica and version" {
         .provider = .codex,
         .status = .working,
     };
-    _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &.{agent} });
+    _ = try agent_snapshot.reconcile(&model, .{ .revision = 1, .agents = &.{agent} });
 
-    try std.testing.expectError(error.DuplicateAgent, model.reconcileAgentSnapshot(.{
+    try std.testing.expectError(error.DuplicateAgent, agent_snapshot.reconcile(&model, .{
         .revision = 2,
         .agents = &.{ agent, agent },
     }));
     const oversized: [core.max_agent_snapshot_entries + 1]model_data.AgentInput = @splat(agent);
-    try std.testing.expectError(error.TooManyAgents, model.reconcileAgentSnapshot(.{
+    try std.testing.expectError(error.TooManyAgents, agent_snapshot.reconcile(&model, .{
         .revision = 3,
         .agents = &oversized,
     }));
@@ -328,21 +338,21 @@ test "agent navigation and focused attachments derive from committed client stat
             .status = .working,
         },
     };
-    _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &agent_entries });
+    _ = try agent_snapshot.reconcile(&model, .{ .revision = 1, .agents = &agent_entries });
 
-    try std.testing.expectEqualDeep(local_key, model.focusedAttachmentAgent().?);
+    try std.testing.expectEqualDeep(local_key, pane_attachment.focusedAgent(&model).?);
     try std.testing.expectEqualDeep(model_data.AttachmentTarget{
         .pane_id = local_key.pane_id,
         .pane_generation = local_key.pane_generation,
-    }, model.focusedAttachmentTarget().?);
+    }, pane_attachment.focusedTarget(&model).?);
     try std.testing.expectEqualDeep(model_data.LocalAgentNavigation{
         .pane_id = local_key.pane_id,
         .select_tab = null,
-    }, model.planAgentNavigation(local_key).?.local);
+    }, agent_navigation.planMove(&model, local_key).?.local);
     try std.testing.expectEqualDeep(model_data.AgentHandoff{
         .pane_id = remote_key.pane_id,
         .fallback_workspace = @enumFromInt(3),
-    }, model.planAgentNavigation(remote_key).?.handoff);
+    }, agent_navigation.planMove(&model, remote_key).?.handoff);
 
     _ = try model_data.tab_creation.add(&model, .{
         .location = second,
@@ -351,13 +361,13 @@ test "agent navigation and focused attachments derive from committed client stat
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
 
-    try std.testing.expect(model.focusedAttachmentAgent() == null);
-    try std.testing.expect(model.focusedAttachmentTarget() == null);
+    try std.testing.expect(pane_attachment.focusedAgent(&model) == null);
+    try std.testing.expect(pane_attachment.focusedTarget(&model) == null);
     try std.testing.expectEqualDeep(model_data.LocalAgentNavigation{
         .pane_id = local_key.pane_id,
         .select_tab = first.tab_id,
-    }, model.planAgentNavigation(local_key).?.local);
-    try std.testing.expect(model.planAgentNavigation(.{
+    }, agent_navigation.planMove(&model, local_key).?.local);
+    try std.testing.expect(agent_navigation.planMove(&model, .{
         .pane_id = remote_key.pane_id,
         .pane_generation = remote_key.pane_generation + 1,
     }) == null);
@@ -382,25 +392,25 @@ test "focused done agent is acknowledged once per completion without a version c
         .provider = .claude,
         .status = .working,
     };
-    _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &.{entry} });
+    _ = try agent_snapshot.reconcile(&model, .{ .revision = 1, .agents = &.{entry} });
 
-    try std.testing.expect(model.takeAgentAcknowledgement() == null);
+    try std.testing.expect(agent_done.takeAcknowledgement(&model) == null);
 
     entry.status = .done;
-    _ = try model.reconcileAgentSnapshot(.{ .revision = 2, .agents = &.{entry} });
+    _ = try agent_snapshot.reconcile(&model, .{ .revision = 2, .agents = &.{entry} });
     const version = model.version();
 
-    try std.testing.expectEqualDeep(key, model.takeAgentAcknowledgement().?);
-    try std.testing.expect(model.takeAgentAcknowledgement() == null);
+    try std.testing.expectEqualDeep(key, agent_done.takeAcknowledgement(&model).?);
+    try std.testing.expect(agent_done.takeAcknowledgement(&model) == null);
     try std.testing.expectEqualDeep(version, model.version());
 
     entry.status = .ready;
-    _ = try model.reconcileAgentSnapshot(.{ .revision = 3, .agents = &.{entry} });
-    try std.testing.expect(model.takeAgentAcknowledgement() == null);
+    _ = try agent_snapshot.reconcile(&model, .{ .revision = 3, .agents = &.{entry} });
+    try std.testing.expect(agent_done.takeAcknowledgement(&model) == null);
 
     entry.status = .done;
-    _ = try model.reconcileAgentSnapshot(.{ .revision = 4, .agents = &.{entry} });
-    try std.testing.expectEqualDeep(key, model.takeAgentAcknowledgement().?);
+    _ = try agent_snapshot.reconcile(&model, .{ .revision = 4, .agents = &.{entry} });
+    try std.testing.expectEqualDeep(key, agent_done.takeAcknowledgement(&model).?);
 }
 
 test "an unfocused done agent is never acknowledged" {
@@ -423,14 +433,14 @@ test "an unfocused done agent is never acknowledged" {
         .provider = .codex,
         .status = .done,
     };
-    _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &.{entry} });
-    _ = model.focusPane(.{ .target = .{ .pane_id = second }, .area = area });
+    _ = try agent_snapshot.reconcile(&model, .{ .revision = 1, .agents = &.{entry} });
+    _ = pane_focus.focusPane(&model, .{ .target = .{ .pane_id = second }, .area = area });
 
-    try std.testing.expect(model.takeAgentAcknowledgement() == null);
+    try std.testing.expect(agent_done.takeAcknowledgement(&model) == null);
 
-    _ = model.focusPane(.{ .target = .{ .pane_id = first }, .area = area });
+    _ = pane_focus.focusPane(&model, .{ .target = .{ .pane_id = first }, .area = area });
 
-    try std.testing.expectEqualDeep(done_key, model.takeAgentAcknowledgement().?);
+    try std.testing.expectEqualDeep(done_key, agent_done.takeAcknowledgement(&model).?);
 }
 
 test "pane titles are stored per pane and exposed for the focused pane" {
@@ -442,18 +452,18 @@ test "pane titles are stored per pane and exposed for the focused pane" {
     };
     const pane: core.PaneId = @enumFromInt(1);
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane, .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    try std.testing.expectEqualStrings("", model.focusedPaneTitle());
+    try std.testing.expectEqualStrings("", pane_title.focusedTitle(&model));
 
-    const commit = (try model.updatePaneMetadata(.{ .title = .{ .pane_id = pane, .title = "vim" } })).?;
+    const commit = (try pane_metadata.update(&model, .{ .title = .{ .pane_id = pane, .title = "vim" } })).?;
 
     try std.testing.expectEqual(model_data.PaneMetadataKind.title, commit.kind);
     try std.testing.expect(commit.display_changed);
-    try std.testing.expectEqualStrings("vim", model.focusedPaneTitle());
-    try std.testing.expect(try model.updatePaneMetadata(.{ .title = .{ .pane_id = pane, .title = "vim" } }) == null);
-    try std.testing.expect(try model.updatePaneMetadata(.{ .title = .{ .pane_id = @enumFromInt(9), .title = "x" } }) == null);
+    try std.testing.expectEqualStrings("vim", pane_title.focusedTitle(&model));
+    try std.testing.expect(try pane_metadata.update(&model, .{ .title = .{ .pane_id = pane, .title = "vim" } }) == null);
+    try std.testing.expect(try pane_metadata.update(&model, .{ .title = .{ .pane_id = @enumFromInt(9), .title = "x" } }) == null);
 
-    _ = (try model.updatePaneMetadata(.{ .title = .{ .pane_id = pane, .title = "" } })).?;
-    try std.testing.expectEqualStrings("", model.focusedPaneTitle());
+    _ = (try pane_metadata.update(&model, .{ .title = .{ .pane_id = pane, .title = "" } })).?;
+    try std.testing.expectEqualStrings("", pane_title.focusedTitle(&model));
 }
 
 test "a host background report resolves the appearance by luminance" {

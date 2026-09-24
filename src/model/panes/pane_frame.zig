@@ -1,6 +1,7 @@
 //! A pane frame arriving from the runtime: admission against the pane's
 //! applied base, cell replacement, and the acknowledgement or snapshot
 //! request that answers it.
+const pane_attachment = @import("pane_attachment.zig");
 const copy_mode = @import("../input/copy_mode.zig");
 const core = @import("telar-core");
 const std = @import("std");
@@ -37,7 +38,7 @@ pub fn receive(model: *ClientModel, frame: core.FrameView) !PaneFrameOutcome {
         };
     }
 
-    const generation = if (pane.attachment_generation == 0) try model.allocateAttachmentGeneration() else pane.attachment_generation;
+    const generation = if (pane.attachment_generation == 0) try pane_attachment.allocateGeneration(model) else pane.attachment_generation;
     const previous_scroll_offset = pane.scroll.offset;
     const applied = try pane.applyFrame(frame);
     pane.attach(generation);

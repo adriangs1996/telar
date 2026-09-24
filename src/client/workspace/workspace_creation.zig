@@ -18,7 +18,7 @@ pub fn requestWorkspaceCreation(client: *Client, command: data.RequestWorkspaceC
 
     try data.label_validation.validate(command.name, .workspace);
     const cwd_source: ?core.PaneId = if (command.cwd.len == 0)
-        client.model.planWorkspaceCreation() orelse return false
+        data.workspace_creation.plan(&client.model) orelse return false
     else
         null;
     const request_id = try client.model.request_lifecycle.nextId();

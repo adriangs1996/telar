@@ -1,4 +1,5 @@
 //! Headless native reader fixture; no window or desktop input is created.
+const data = @import("model");
 const event_module = @import("../input/event.zig");
 const native = @import("../native/native.zig");
 const ClipboardResult = @import("../input/ClipboardResult.zig");
@@ -71,7 +72,7 @@ pub fn messages(self: *Fixture, texts: []const []const u8) !void {
     }
     snapshot.item_count = @intCast(texts.len);
     var bytes: [96 * 1024]u8 = undefined;
-    _ = try self.session.gui.app.model.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, snapshot))).agent_thread_snapshot);
+    _ = try data.agent_panes.applyThread(&self.session.gui.app.model, (try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, snapshot))).agent_thread_snapshot);
 }
 
 pub fn target(self: *const Fixture, field: enum { transcript, composer }) !Target {

@@ -73,7 +73,7 @@ pub fn restoreClientLayout(client: *Client, snapshot: core.ClientLayoutSnapshotV
 
         _ = data.workspace_list.setCollapsed(&client.model, snapshot.workspace_list_collapsed);
 
-        client.model.restoreClientLayouts(saved_layouts);
+        data.client_layout_persistence.restore(&client.model, saved_layouts);
         client.model.navigation_history = history;
     }
 

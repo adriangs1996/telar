@@ -7,14 +7,14 @@ Requesting closure does not predict when shutdown and output draining finish.
 actions.executeAction
   -> pane_closure.requestPaneClose
      -> pending pane-operation gate
-     -> ClientModel.planPaneClosure
+     -> pane_closure.plan
      -> runtime_io.sendRuntimeRequest(close_pane)
   -> runtime requests idempotent child shutdown
 
 runtime pane_exited
   -> runtime_messages.handleServerMessage
   -> pane_closure.applyPaneExit
-     -> ClientModel.retirePane
+     -> pane_closure.retire
      -> tracker.ignoreAttachment + tracker.completePaneClose
      -> pane_closure.releasePaneResources
      -> active: model.to_host.invalidate_placements, synchronizeActivePane
@@ -29,7 +29,7 @@ no immediate reply. Missing authority returns a correlated failure.
 
 The runtime reports exit after terminal ingestion and outstanding frame work
 finish. The client operation uses stable pane identity; process exit kind and
-value do not affect disposable cleanup. `ClientModel.retirePane` finds the pane
+value do not affect disposable cleanup. `pane_closure.retire` finds the pane
 in `model.panes`, requires its `location` to match its tab and removes it with
 `tab_layout.removePane`. Active retirement advances `panes_revision`; inactive
 retirement changes stored membership without a visible revision. Repeated exits

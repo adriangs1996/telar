@@ -6,7 +6,7 @@ size offers without changing runtime membership or destroying split geometry.
 ```text
 actions.executeAction
   -> pane_resize.togglePaneFullscreen
-     -> ClientModel.togglePaneFullscreen
+     -> pane_fullscreen.toggle
      -> pane_resize.deliverPaneGeometry: validate exact geometry commit
      -> model.to_host.invalidate_placements
      -> pane_resize.resizeAttachedPanes: visible attached panes only

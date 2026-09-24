@@ -131,7 +131,7 @@ test "failed opening paste marker rolls back the captured session" {
     try fillOutbox(client);
 
     try std.testing.expectError(error.ClientOutboxFull, api.pane_input.startPanePaste(client));
-    try std.testing.expect(!client.model.panePasteActive());
+    try std.testing.expect(!data.pane_input.pasteActive(&client.model));
 }
 
 test "failed closing paste marker releases the session without repeating it" {
@@ -149,7 +149,7 @@ test "failed closing paste marker releases the session without repeating it" {
     try fillOutbox(client);
 
     try std.testing.expectError(error.ClientOutboxFull, api.pane_input.finishPanePaste(client));
-    try std.testing.expect(!client.model.panePasteActive());
+    try std.testing.expect(!data.pane_input.pasteActive(&client.model));
     try std.testing.expectEqual(.ignored, try api.pane_input.finishPanePaste(client));
 }
 
@@ -164,7 +164,7 @@ test "retired paste target cannot redirect its remaining content" {
 
     try std.testing.expectEqual(.unavailable, try api.pane_input.appendPanePaste(client, "private text"));
     _ = try api.pane_input.finishPanePaste(client);
-    try std.testing.expect(!client.model.panePasteActive());
+    try std.testing.expect(!data.pane_input.pasteActive(&client.model));
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     try std.testing.expect(!client.model.to_runtime.inFlight());
 }

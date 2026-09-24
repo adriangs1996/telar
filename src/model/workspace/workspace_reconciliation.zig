@@ -1,5 +1,6 @@
 //! The runtime's canonical tab list for the client's workspace arrives
 //! (docs/flows/workspace-reconciliation.md).
+const pane_metadata = @import("../panes/pane_metadata.zig");
 const WorkspaceReconciliation = @import("../state/WorkspaceReconciliation.zig");
 const workspace_reconciliation = @import("workspace_reconciliation.zig");
 const tab_label = @import("tab_label.zig");
@@ -127,7 +128,7 @@ fn validate(model: *const ClientModel, snapshot: WorkspaceSnapshotInput) !void {
 /// semantic changes.
 ///
 /// ```zig
-/// const reconciliation = try reconcile(model, snapshot);
+/// const reconciliation = try workspace_reconciliation.reconcile(model, snapshot);
 /// ```
 pub fn reconcile(model: *ClientModel, snapshot: WorkspaceSnapshotInput) !WorkspaceReconciliation {
     const current_workspace = model.workspace orelse return error.UnexpectedWorkspace;
@@ -185,7 +186,7 @@ pub fn reconcile(model: *ClientModel, snapshot: WorkspaceSnapshotInput) !Workspa
         const slot = model.tabs.find(descriptor.tab_id).?;
         for (descriptor.foregrounds) |foreground| {
             if (model.panes.findIn(descriptor.tab_id, foreground.pane_id) != null) {
-                _ = try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = foreground.pane_id, .name = foreground.name } });
+                _ = try pane_metadata.update(model, .{ .foreground = .{ .pane_id = foreground.pane_id, .name = foreground.name } });
             }
         }
 

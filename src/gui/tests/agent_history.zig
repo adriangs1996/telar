@@ -299,7 +299,7 @@ fn historySession() !*Session {
     defer std.testing.allocator.destroy(live);
     live.pane_id = Session.pane_id;
     var bytes: [4096]u8 = undefined;
-    _ = try model.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, live))).agent_thread_snapshot);
+    _ = try data.agent_panes.applyThread(model, (try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, live))).agent_thread_snapshot);
     return session;
 }
 

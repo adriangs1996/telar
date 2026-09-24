@@ -27,7 +27,7 @@ physical lease / owner selection             binding authority / copy-mode prefl
       |                                                      |
 pane_input.sendPaneInput                  native / Lua / plugin action
       |                                                      |
-ClientModel.planPaneInput                                consumed by Telar
+pane_input.planInput                                consumed by Telar
       |
 keyinput.encodeKey
       |
@@ -182,7 +182,7 @@ application owner for the physical lifecycle; pane ownership stores the exact
 failure and `Ctrl+V` follow-up policy.
 
 `pane_input.sendPaneInput` resolves an attached target through
-`ClientModel.planPaneInput` and calls `keyinput.encodeKey` from
+`pane_input.planInput` and calls `keyinput.encodeKey` from
 `lib/keyinput/encoding.zig` for semantic keys. Encoding uses the pane's most
 recently applied cursor/application, modify-key and bracketed-paste modes, even
 while an older presentation is still in flight. Replayed

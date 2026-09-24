@@ -108,7 +108,7 @@ test "long names truncate on a codepoint boundary" {
 /// values preserve the chrome revision.
 ///
 /// ```zig
-/// const change = setCollapsed(model, true) orelse return;
+/// const change = workspace_list.setCollapsed(model, true) orelse return;
 /// ```
 pub fn setCollapsed(model: *ClientModel, collapsed: bool) ?WorkspaceListCollapse {
     if (model.workspace_list_collapsed == collapsed) {
@@ -127,7 +127,7 @@ pub fn setCollapsed(model: *ClientModel, collapsed: bool) ?WorkspaceListCollapse
 /// Toggles the workspace-list preference and advances only chrome.
 ///
 /// ```zig
-/// const change = toggle(model);
+/// const change = workspace_list.toggle(model);
 /// ```
 pub fn toggle(model: *ClientModel) WorkspaceListCollapse {
     return setCollapsed(model, !model.workspace_list_collapsed).?;

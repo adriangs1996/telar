@@ -6,7 +6,7 @@ per-attachment projection so it can return the requested history rows.
 ```text
 pane_input.sendPaneInput, inputPaneMouse or applyCopyMode
   -> pane_viewport.applyPaneViewport
-     -> ClientModel.setPaneViewport
+     -> pane_viewport.set
      -> pane_viewport.deliverPaneViewport
         -> validate exact committed pane, viewport and revision
         -> graphics.setPaneVisible
@@ -14,7 +14,7 @@ pane_input.sendPaneInput, inputPaneMouse or applyCopyMode
   -> adapter observes presentation revisions
 ```
 
-`ClientModel.setPaneViewport` resolves absolute, relative or bottom intents only for
+`pane_viewport.set` resolves absolute, relative or bottom intents only for
 an attached pane in the active tab. It clamps against retained history and
 advances only the viewport revision. Missing, inactive, detached and unchanged
 targets are no-ops. Copy mode owns its viewport transaction exclusively, so a

@@ -1,6 +1,7 @@
 //! Conversation controls resolve against the live attachment and stable item
 //! identity, even when input still refers to an older delivered frame.
 
+const data = @import("model");
 const pacing = @import("pacing");
 const client = @import("telar-client");
 const std = @import("std");
@@ -74,7 +75,7 @@ pub fn delivered(gui: *GuiAdapter) !void {
         return;
     }
 
-    _ = gui.app.model.scrollAgentThread(pane.id, resolution.scroll - request.baseline);
+    _ = data.agent_panes.scrollThread(&gui.app.model, pane.id, resolution.scroll - request.baseline);
 }
 
 /// Native failure never displays a successful copy. Example: `thread_items.copied(gui, result);`

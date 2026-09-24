@@ -37,7 +37,7 @@ test "pane focus commits before reports resize and presentation" {
     try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
 
-    _ = client.model.syncReportedPaneFocus().?;
+    _ = data.pane_focus.syncReported(&client.model).?;
     const version_before = client.model.version();
     const pending_updates_before = terminal.presenter.pending_updates;
 
@@ -345,7 +345,7 @@ test "mouse focus precedes forwarding its triggering press" {
     try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
 
-    _ = client.model.syncReportedPaneFocus().?;
+    _ = data.pane_focus.syncReported(&client.model).?;
     const first_view = data.tab_layout.view(&client.model, model, first, area).?;
     const point = keyinput.Mouse{
         .x = first_view.content.x,
@@ -1085,7 +1085,7 @@ test "tab detachment closes a captured bracketed paste before the pane detaches"
 
     try client_module.tab_removal.detachTab(client, client.model.tabs.location[client.model.tabs.active]);
 
-    try std.testing.expect(!client.model.panePasteActive());
+    try std.testing.expect(!data.pane_input.pasteActive(&client.model));
     try harness.settle();
     const closing = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(closing == .pane_input);
@@ -1392,7 +1392,7 @@ const FullscreenReattachment = struct {
     }
 
     pub fn expectInput(self: FullscreenReattachment, pane_id: core.PaneId) !void {
-        try std.testing.expectEqual(pane_id, self.harness.client.model.planPaneInput(.focused).?.pane_id);
+        try std.testing.expectEqual(pane_id, data.pane_input.planInput(&self.harness.client.model, .focused).?.pane_id);
         try host_inputs.key(self.harness.terminal, try keyinput.chord.parseKey("x"));
         try self.harness.settle();
         var buffer: [256]u8 = undefined;

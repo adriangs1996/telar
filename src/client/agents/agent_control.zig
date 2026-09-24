@@ -10,7 +10,7 @@ const Client = @import("../execution/Client.zig");
 /// Maps attachment limits to a visible failure without changing the existing draft.
 /// Example: `try agent_control.attachAgentImage(app, pane_id, path);`
 pub fn attachAgentImage(client: *Client, pane_id: core.PaneId, path: []const u8) !void {
-    _ = client.model.attachAgentImage(pane_id, path) catch |err| {
+    _ = data.agent_panes.attachImage(&client.model, pane_id, path) catch |err| {
         try notifications.publishNotificationNow(
             client,
             .{
@@ -34,7 +34,7 @@ pub fn submitAgentPrompt(model: *data.ClientModel, pane_id: core.PaneId) !void {
         return;
     }
 
-    const intent = model.planAgentPrompt(pane_id) orelse return;
+    const intent = data.agent_panes.planPrompt(model, pane_id) orelse return;
     const request_id = try model.request_lifecycle.nextId();
     try sendAgentPromptRequest(
         model,
@@ -216,7 +216,7 @@ pub fn completeAgentRequest(model: *data.ClientModel, reply: core.RequestComplet
     const continuation = model.request_lifecycle.tracker.take(reply.request_id) orelse return error.UnexpectedControlReply;
     switch (continuation) {
         .agent_prompt => |pending| {
-            _ = model.completeAgentPrompt(pending);
+            _ = data.agent_panes.completePrompt(model, pending);
         },
         .agent_control, .agent_query, .ignored => {},
         else => return error.UnexpectedControlReply,

@@ -12,7 +12,7 @@ const Client = @import("../execution/Client.zig");
 /// the committed state; the caller ends the client session.
 /// Example: `_ = try host_resize.applyHostUpdate(client, host_update);`
 pub fn applyHostUpdate(client: *Client, host_update: data.HostUpdate) !?data.HostCommit {
-    const commit = try client.model.reconcileHost(host_update) orelse return null;
+    const commit = try data.host_capabilities.reconcile(&client.model, host_update) orelse return null;
 
     try deliverHostCommit(client, commit);
 

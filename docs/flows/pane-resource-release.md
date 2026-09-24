@@ -7,8 +7,8 @@ operation. Callers pass a stable pane identity after committing canonical state.
 owning pane/tab/workspace operation
   -> pane_closure.releasePaneResources
      -> copy_mode.release
-     -> ClientModel.releasePanePaste
-     -> ClientModel.releaseReportedPaneFocus
+     -> pane_input.releasePaste
+     -> pane_focus.releaseReported
      -> graphics.clearPane
 ```
 

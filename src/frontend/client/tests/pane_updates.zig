@@ -374,7 +374,7 @@ test "pane foreground and focus update automatic tab labels through presentation
     try harness.settleModelPresentation();
     try expectBootstrapTab(&harness, "git", .app_git);
 
-    try std.testing.expect(client.model.focusPane(.{
+    try std.testing.expect(data.pane_focus.focusPane(&client.model, .{
         .target = .{ .pane_id = TestHarness.bootstrap_pane },
         .area = terminal.view.workbench(),
     }) != null);
@@ -428,8 +428,8 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expect(split.change == .changed);
     try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
-    _ = client.model.syncReportedPaneFocus().?;
-    try std.testing.expectEqual(closing_pane, client.model.beginPanePaste().?.pane_id);
+    _ = data.pane_focus.syncReported(&client.model).?;
+    try std.testing.expectEqual(closing_pane, data.pane_input.beginPaste(&client.model).?.pane_id);
     try terminal.graphics_store.applyImage(.{
         .pane_id = closing_pane,
         .revision = 1,
@@ -472,7 +472,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expectEqual(pending_updates_before_request, terminal.presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
-    try std.testing.expect(!client.model.panePasteActive());
+    try std.testing.expect(!data.pane_input.pasteActive(&client.model));
     try std.testing.expectEqual(@as(?core.PaneId, TestHarness.bootstrap_pane), support.reportedPaneId(client));
     try std.testing.expect(!terminal.graphics_store.hasPaneGraphics(closing_pane));
     try std.testing.expect(!client.model.notification_scheduler.pending);

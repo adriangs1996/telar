@@ -10,7 +10,7 @@ const AgentNavigationOutcome = enum { ignored, focused, handoff_requested };
 /// Resolves one sidebar agent key and applies its local navigation or handoff.
 /// Example: `_ = try agent_navigation.navigateAgent(app, key);`
 pub fn navigateAgent(client: *Client, key: data.AgentKey) !AgentNavigationOutcome {
-    const plan = client.model.planAgentNavigation(key) orelse return .ignored;
+    const plan = data.agent_navigation.planMove(&client.model, key) orelse return .ignored;
     return switch (plan) {
         .local => |local| local: {
             if (local.select_tab) |tab_id| {

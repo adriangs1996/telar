@@ -62,7 +62,7 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
         },
         .plugin => |requested| {
             std.debug.assert(origin == .binding);
-            _ = try plugin_actions.startPluginAction(client, requested, client.model.callbackContext());
+            _ = try plugin_actions.startPluginAction(client, requested, data.plugin_action.callbackContext(&client.model));
             return .continue_routing;
         },
         else => {},
@@ -74,7 +74,7 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
 
     switch (value) {
         .toggle_thread_view => {
-            _ = client.model.togglePaneSurface();
+            _ = data.agent_panes.toggleSurface(&client.model);
         },
         .scroll_pane => |direction| try pane_viewport.scrollPane(client, direction),
         .split_pane => |direction| _ = try pane_split.requestPaneSplit(

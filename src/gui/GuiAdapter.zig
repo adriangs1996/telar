@@ -432,11 +432,11 @@ pub fn windowTitle(self: *GuiAdapter, out: *native.WindowTitle) !bool {
             .set = copyWindowTitle,
         },
         .{
-            .template = model.windowTitleTemplate(),
+            .template = data.config_reload.windowTitleTemplate(model),
             .tokens = .{
                 .workspace = model.workspaceName(),
                 .tab = tab_label,
-                .pane_title = model.focusedPaneTitle(),
+                .pane_title = data.pane_title.focusedTitle(model),
                 .hostname = self.hostname[0..self.hostname_len],
             },
         },

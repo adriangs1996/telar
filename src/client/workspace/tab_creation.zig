@@ -14,7 +14,7 @@ pub fn requestTabCreation(client: *Client, command: data.RequestTabCreation) !bo
     }
 
     try data.label_validation.validate(command.label, .new_tab);
-    const plan = client.model.planTabCreation() orelse return false;
+    const plan = data.tab_creation.planCreation(&client.model) orelse return false;
     const request_id = try client.model.request_lifecycle.nextId();
     try sendCreateTabRequest(
         &client.model,

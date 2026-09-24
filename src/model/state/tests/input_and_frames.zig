@@ -1,3 +1,8 @@
+const pane_input = @import("../../panes/pane_input.zig");
+const pane_focus = @import("../../workspace/pane_focus.zig");
+const pane_viewport = @import("../../panes/pane_viewport.zig");
+const pane_metadata = @import("../../panes/pane_metadata.zig");
+const agent_panes = @import("../../panes/agent_panes.zig");
 const tab_selection = @import("../../workspace/tab_selection.zig");
 const pane_graphics = @import("../../panes/pane_graphics.zig");
 const copy_mode = @import("../../input/copy_mode.zig");
@@ -38,7 +43,7 @@ test "pane surface toggling needs a focused pane and advances the pane version" 
     defer model.deinit();
 
     const version = model.version();
-    try std.testing.expect(model.togglePaneSurface() == null);
+    try std.testing.expect(agent_panes.toggleSurface(&model) == null);
     try std.testing.expectEqualDeep(version, model.version());
 }
 
@@ -71,16 +76,16 @@ test "pane input planning resolves one attached active target without mutation" 
         .input_modes = pane.input_modes,
     };
 
-    try std.testing.expectEqualDeep(expected, model.planPaneInput(.focused).?);
-    try std.testing.expectEqualDeep(expected, model.planPaneInput(.{ .pane = pane_id }).?);
-    try std.testing.expect(model.planPaneInput(.{ .pane = inactive_pane }) == null);
-    try std.testing.expectEqual(inactive_pane, model.planPaneInput(.{ .key_lease = inactive_pane }).?.pane_id);
-    try std.testing.expect(model.planPaneInput(.{ .pane = @enumFromInt(9) }) == null);
-    try std.testing.expect(model.planPaneInput(.{ .key_lease = @enumFromInt(9) }) == null);
+    try std.testing.expectEqualDeep(expected, pane_input.planInput(&model, .focused).?);
+    try std.testing.expectEqualDeep(expected, pane_input.planInput(&model, .{ .pane = pane_id }).?);
+    try std.testing.expect(pane_input.planInput(&model, .{ .pane = inactive_pane }) == null);
+    try std.testing.expectEqual(inactive_pane, pane_input.planInput(&model, .{ .key_lease = inactive_pane }).?.pane_id);
+    try std.testing.expect(pane_input.planInput(&model, .{ .pane = @enumFromInt(9) }) == null);
+    try std.testing.expect(pane_input.planInput(&model, .{ .key_lease = @enumFromInt(9) }) == null);
     try std.testing.expectEqualDeep(version, model.version());
 
     pane.attached = false;
-    try std.testing.expect(model.planPaneInput(.focused) == null);
+    try std.testing.expect(pane_input.planInput(&model, .focused) == null);
     try std.testing.expectEqualDeep(version, model.version());
 }
 
@@ -96,15 +101,15 @@ test "pane input planning yields ownership to prompts and copy mode" {
 
     model.name_prompt.begin(.create_workspace);
     const prompt_version = model.version();
-    try std.testing.expect(model.planPaneInput(.focused) == null);
-    try std.testing.expectEqual(pane_id, model.planPaneInput(.{ .key_lease = pane_id }).?.pane_id);
+    try std.testing.expect(pane_input.planInput(&model, .focused) == null);
+    try std.testing.expectEqual(pane_id, pane_input.planInput(&model, .{ .key_lease = pane_id }).?.pane_id);
     try std.testing.expectEqualDeep(prompt_version, model.version());
 
     try std.testing.expect(model.name_prompt.apply(.cancel) == .cancelled);
     try std.testing.expect(copy_mode.enter(&model));
     const copy_version = model.version();
-    try std.testing.expect(model.planPaneInput(.{ .pane = pane_id }) == null);
-    try std.testing.expectEqual(pane_id, model.planPaneInput(.{ .key_lease = pane_id }).?.pane_id);
+    try std.testing.expect(pane_input.planInput(&model, .{ .pane = pane_id }) == null);
+    try std.testing.expectEqual(pane_id, pane_input.planInput(&model, .{ .key_lease = pane_id }).?.pane_id);
     try std.testing.expectEqualDeep(copy_version, model.version());
 }
 
@@ -120,7 +125,7 @@ test "reported pane focus derives protocol edges outside presentation versions" 
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const version = model.version();
 
-    const disabled = model.syncReportedPaneFocus().?;
+    const disabled = pane_focus.syncReported(&model).?;
 
     try std.testing.expectEqualDeep(ReportedPaneFocus{
         .pane_id = first,
@@ -129,17 +134,17 @@ test "reported pane focus derives protocol edges outside presentation versions" 
     try std.testing.expect(disabled.previous == null);
     try std.testing.expect(disabled.focus_out == null);
     try std.testing.expect(disabled.focus_in == null);
-    try std.testing.expect(model.syncReportedPaneFocus() == null);
+    try std.testing.expect(pane_focus.syncReported(&model) == null);
     try std.testing.expectEqualDeep(version, model.version());
 
     model.panes.find(first).?.input_modes.focus_events = true;
-    const enabled = model.syncReportedPaneFocus().?;
+    const enabled = pane_focus.syncReported(&model).?;
     try std.testing.expectEqual(first, enabled.focus_in.?);
     try std.testing.expect(enabled.focus_out == null);
 
     try model_data.pane_split.split(&model, model.tabs.active, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 20, .h = 5 } });
     model.panes.find(second).?.input_modes.focus_events = true;
-    const moved = model.syncReportedPaneFocus().?;
+    const moved = pane_focus.syncReported(&model).?;
 
     try std.testing.expectEqual(first, moved.focus_out.?);
     try std.testing.expectEqual(second, moved.focus_in.?);
@@ -150,7 +155,7 @@ test "reported pane focus derives protocol edges outside presentation versions" 
     try std.testing.expectEqualDeep(version, model.version());
 
     model.panes.find(second).?.input_modes.focus_events = false;
-    const opted_out = model.syncReportedPaneFocus().?;
+    const opted_out = pane_focus.syncReported(&model).?;
     try std.testing.expect(opted_out.focus_out == null);
     try std.testing.expect(opted_out.focus_in == null);
     try std.testing.expect(!model.reported_pane_focus.?.focus_events);
@@ -168,23 +173,23 @@ test "reported pane focus distinguishes intentional clear from stale retirement"
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const pane = model.panes.find(pane_id).?;
     pane.input_modes.focus_events = true;
-    _ = model.syncReportedPaneFocus().?;
+    _ = pane_focus.syncReported(&model).?;
     const version = model.version();
 
     pane.attached = false;
-    const clear = model.clearReportedPaneFocus().?;
+    const clear = pane_focus.clearReported(&model).?;
     try std.testing.expect(clear.focus_out == null);
     try std.testing.expect(model.reported_pane_focus == null);
-    try std.testing.expect(model.clearReportedPaneFocus() == null);
+    try std.testing.expect(pane_focus.clearReported(&model) == null);
 
-    _ = model.syncReportedPaneFocus().?;
-    try std.testing.expect(!model.releaseReportedPaneFocus(@enumFromInt(9)));
-    try std.testing.expect(model.releaseReportedPaneFocus(pane_id));
-    try std.testing.expect(!model.releaseReportedPaneFocus(pane_id));
+    _ = pane_focus.syncReported(&model).?;
+    try std.testing.expect(!pane_focus.releaseReported(&model, @enumFromInt(9)));
+    try std.testing.expect(pane_focus.releaseReported(&model, pane_id));
+    try std.testing.expect(!pane_focus.releaseReported(&model, pane_id));
 
-    _ = model.syncReportedPaneFocus().?;
-    try std.testing.expect(model.forgetReportedPaneFocus());
-    try std.testing.expect(!model.forgetReportedPaneFocus());
+    _ = pane_focus.syncReported(&model).?;
+    try std.testing.expect(pane_focus.forgetReported(&model));
+    try std.testing.expect(!pane_focus.forgetReported(&model));
     try std.testing.expectEqualDeep(version, model.version());
 }
 
@@ -201,15 +206,15 @@ test "pane paste captures one exact target and framing mode outside presentation
     pane.input_modes.bracketed_paste = true;
     const version = model.version();
 
-    const session = model.beginPanePaste().?;
+    const session = pane_input.beginPaste(&model).?;
 
     try std.testing.expectEqualDeep(model_data.PanePasteSession{
         .pane_id = pane_id,
         .bracketed_paste = true,
     }, session);
     try std.testing.expectEqualDeep(session, model.pane_paste.?);
-    try std.testing.expect(model.panePasteActive());
-    try std.testing.expect(model.beginPanePaste() == null);
+    try std.testing.expect(pane_input.pasteActive(&model));
+    try std.testing.expect(pane_input.beginPaste(&model) == null);
     try std.testing.expectEqualDeep(version, model.version());
 
     const other_location: core.TabLocation = .{
@@ -226,16 +231,16 @@ test "pane paste captures one exact target and framing mode outside presentation
 
     pane.input_modes.bracketed_paste = false;
     model.name_prompt.begin(.create_workspace);
-    try std.testing.expect(model.planPaneInput(.focused) == null);
-    const captured = model.planPaneInput(.{ .paste_session = session }).?;
+    try std.testing.expect(pane_input.planInput(&model, .focused) == null);
+    const captured = pane_input.planInput(&model, .{ .paste_session = session }).?;
     try std.testing.expectEqual(pane_id, captured.pane_id);
     try std.testing.expect(!captured.input_modes.bracketed_paste);
 
     const wrong = model_data.PanePasteSession{ .pane_id = pane_id, .bracketed_paste = false };
-    try std.testing.expect(!model.finishPanePaste(wrong));
-    try std.testing.expect(!model.releasePanePaste(@enumFromInt(9)));
-    try std.testing.expect(model.finishPanePaste(session));
-    try std.testing.expect(!model.panePasteActive());
+    try std.testing.expect(!pane_input.finishPaste(&model, wrong));
+    try std.testing.expect(!pane_input.releasePaste(&model, @enumFromInt(9)));
+    try std.testing.expect(pane_input.finishPaste(&model, session));
+    try std.testing.expect(!pane_input.pasteActive(&model));
 }
 
 test "pane paste release and copy mode keep one input owner" {
@@ -248,13 +253,13 @@ test "pane paste release and copy mode keep one input owner" {
     const pane_id: core.PaneId = @enumFromInt(1);
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
-    _ = model.beginPanePaste().?;
+    _ = pane_input.beginPaste(&model).?;
     try std.testing.expect(!copy_mode.enter(&model));
-    try std.testing.expect(model.releasePanePaste(pane_id));
-    try std.testing.expect(!model.releasePanePaste(pane_id));
+    try std.testing.expect(pane_input.releasePaste(&model, pane_id));
+    try std.testing.expect(!pane_input.releasePaste(&model, pane_id));
 
     try std.testing.expect(copy_mode.enter(&model));
-    try std.testing.expect(model.beginPanePaste() == null);
+    try std.testing.expect(pane_input.beginPaste(&model) == null);
 }
 
 test "pane frame application commits screen copy state and one frame revision" {
@@ -418,7 +423,7 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
     const pane_id: core.PaneId = @enumFromInt(1);
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
 
-    const visible = (try model.updatePaneMetadata(.{ .cwd = .{
+    const visible = (try pane_metadata.update(&model, .{ .cwd = .{
         .pane_id = pane_id,
         .path = "/work/telar",
     } })).?;
@@ -430,7 +435,7 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
     try std.testing.expectEqualStrings("/work/telar", model.panes.find(pane_id).?.cwdSlice());
     try std.testing.expectEqualDeep(Version{ .pane_metadata = 1 }, model.version());
 
-    const stored = (try model.updatePaneMetadata(.{ .cwd = .{
+    const stored = (try pane_metadata.update(&model, .{ .cwd = .{
         .pane_id = pane_id,
         .path = "/other/telar",
     } })).?;
@@ -439,16 +444,16 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
     try std.testing.expectEqual(@as(u64, 1), stored.pane_metadata_revision);
     try std.testing.expectEqualStrings("/other/telar", model.panes.find(pane_id).?.cwdSlice());
     try std.testing.expectEqualDeep(Version{ .pane_metadata = 1 }, model.version());
-    try std.testing.expect((try model.updatePaneMetadata(.{ .cwd = .{
+    try std.testing.expect((try pane_metadata.update(&model, .{ .cwd = .{
         .pane_id = pane_id,
         .path = "/other/telar",
     } })) == null);
-    try std.testing.expect((try model.updatePaneMetadata(.{ .cwd = .{
+    try std.testing.expect((try pane_metadata.update(&model, .{ .cwd = .{
         .pane_id = @enumFromInt(9),
         .path = "/missing",
     } })) == null);
 
-    _ = (try model.updatePaneMetadata(.{ .cwd = .{
+    _ = (try pane_metadata.update(&model, .{ .cwd = .{
         .pane_id = pane_id,
         .path = "/other/api",
     } })).?;
@@ -465,7 +470,7 @@ test "pane foreground metadata versions display changes independently" {
     const pane_id: core.PaneId = @enumFromInt(1);
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
 
-    const first = (try model.updatePaneMetadata(.{ .foreground = .{
+    const first = (try pane_metadata.update(&model, .{ .foreground = .{
         .pane_id = pane_id,
         .name = "zsh",
     } })).?;
@@ -479,16 +484,16 @@ test "pane foreground metadata versions display changes independently" {
         .pane_metadata = 1,
         .pane_foreground = 1,
     }, model.version());
-    try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{
+    try std.testing.expect((try pane_metadata.update(&model, .{ .foreground = .{
         .pane_id = pane_id,
         .name = "zsh",
     } })) == null);
-    try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{
+    try std.testing.expect((try pane_metadata.update(&model, .{ .foreground = .{
         .pane_id = @enumFromInt(9),
         .name = "bash",
     } })) == null);
 
-    _ = (try model.updatePaneMetadata(.{ .foreground = .{
+    _ = (try pane_metadata.update(&model, .{ .foreground = .{
         .pane_id = pane_id,
         .name = "bash",
     } })).?;
@@ -507,7 +512,7 @@ test "pane cwd allocation failure preserves metadata and revisions" {
     };
     const pane_id: core.PaneId = @enumFromInt(1);
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
-    _ = (try model.updatePaneMetadata(.{ .cwd = .{
+    _ = (try pane_metadata.update(&model, .{ .cwd = .{
         .pane_id = pane_id,
         .path = "/work/telar",
     } })).?;
@@ -515,7 +520,7 @@ test "pane cwd allocation failure preserves metadata and revisions" {
     const version = model.version();
     const original_gpa = pane.gpa;
     pane.gpa = std.testing.failing_allocator;
-    const result = model.updatePaneMetadata(.{ .cwd = .{
+    const result = pane_metadata.update(&model, .{ .cwd = .{
         .pane_id = pane_id,
         .path = "/work/api",
     } });
@@ -539,7 +544,7 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
     pane.scroll = .{ .total_rows = 20, .offset = 10 };
     pane.cursor = .{ .visible = true, .x = 2, .y = 4 };
 
-    const top = model.setPaneViewport(.{
+    const top = pane_viewport.set(&model, .{
         .pane_id = pane_id,
         .target = .{ .relative = -100 },
     }).?;
@@ -548,12 +553,12 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
     try std.testing.expect(!top.at_bottom);
     try std.testing.expectEqual(@as(u64, 1), top.viewport_revision);
     try std.testing.expectEqualDeep(Version{ .viewport = 1 }, model.version());
-    try std.testing.expect(model.setPaneViewport(.{
+    try std.testing.expect(pane_viewport.set(&model, .{
         .pane_id = pane_id,
         .target = .{ .absolute = 0 },
     }) == null);
 
-    const bottom = model.setPaneViewport(.{
+    const bottom = pane_viewport.set(&model, .{
         .pane_id = pane_id,
         .target = .{ .absolute = std.math.maxInt(u32) },
     }).?;
@@ -561,11 +566,11 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
     try std.testing.expectEqual(@as(u32, 15), bottom.offset);
     try std.testing.expect(bottom.at_bottom);
     try std.testing.expectEqual(@as(u64, 2), bottom.viewport_revision);
-    try std.testing.expect(model.setPaneViewport(.{
+    try std.testing.expect(pane_viewport.set(&model, .{
         .pane_id = pane_id,
         .target = .bottom,
     }) == null);
-    try std.testing.expect(model.setPaneViewport(.{
+    try std.testing.expect(pane_viewport.set(&model, .{
         .pane_id = @enumFromInt(9),
         .target = .bottom,
     }) == null);
@@ -574,7 +579,7 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
     pane.scroll.offset = 10;
     try std.testing.expect(copy_mode.enter(&model));
     const copy_version = model.version();
-    try std.testing.expect(model.setPaneViewport(.{
+    try std.testing.expect(pane_viewport.set(&model, .{
         .pane_id = pane_id,
         .target = .bottom,
     }) == null);

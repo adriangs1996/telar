@@ -19,7 +19,7 @@ schema.pane_title
         |
 runtime_messages.handleServerMessage
         |
-ClientModel.updatePaneMetadata(.title) -> Pane.setTitle
+pane_metadata.update(.title) -> Pane.setTitle
         |
 pane_metadata_revision
         |
@@ -53,7 +53,7 @@ per client model.
 
 `client.window_title` is a template with `{hostname}`, `{workspace}`, `{tab}`
 and `{pane_title}`. An empty template, the default, never touches the host
-title. The presenter renders it with `ClientModel.focusedPaneTitle`,
+title. The presenter renders it with `pane_title.focusedTitle`,
 `workspaceName` and `tab_label.text` on every presentation and writes OSC 0
 only when the rendered text differs from the last one sent; the bytes ride the
 frame flush already in progress.

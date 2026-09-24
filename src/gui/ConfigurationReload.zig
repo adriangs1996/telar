@@ -138,7 +138,7 @@ pub fn apply(self: *Reload, gui: *GuiAdapter, renderer: *Renderer) !bool {
     }
 
     if (outcome != null and outcome.? == .rejected) {
-        std.log.scoped(.gui_config).warn("GUI configuration unchanged: {s}", .{gui.app.model.diagnostic() orelse "reload rejected"});
+        std.log.scoped(.gui_config).warn("GUI configuration unchanged: {s}", .{data.client_diagnostic.shown(&gui.app.model) orelse "reload rejected"});
     }
 
     if (delivery_error) |err| {

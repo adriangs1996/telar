@@ -52,7 +52,7 @@ pub fn observeAttachmentInput(client: *Client, pane_id: core.PaneId, command: da
 
     const shelf = client.attachments orelse return false;
     const target = shelf.visibleTarget() orelse
-        client.model.focusedAttachmentTarget() orelse return false;
+        data.pane_attachment.focusedTarget(&client.model) orelse return false;
     if (target.pane_id != pane_id) {
         return false;
     }
@@ -87,7 +87,7 @@ pub fn observeAttachmentInput(client: *Client, pane_id: core.PaneId, command: da
 /// Resolves the marker policy of a target whose provider learns marker
 /// identities from committed frames.
 fn attachmentMarkerPolicy(model: *data.ClientModel, target: data.AttachmentTarget) ?data.AttachmentMarkerPolicy {
-    const markers = model.attachmentMarkers(target) orelse return null;
+    const markers = data.pane_attachment.markersFor(model, target) orelse return null;
     const policy = attachment_prompt.markerPolicy(markers);
 
     return if (policy.learnsIdentity()) policy else null;
@@ -193,11 +193,11 @@ fn attachmentMarkerAtCursor(client: *Client, deletion: data.AttachmentMarkerDele
 }
 
 fn pendingAttachmentMarkerAtCursor(client: *Client, deletion: data.AttachmentMarkerDeletion) bool {
-    const target = client.model.focusedAttachmentTarget() orelse return false;
+    const target = data.pane_attachment.focusedTarget(&client.model) orelse return false;
     const model = client.model.tabs.activeSlot() orelse return false;
     const pane = client.model.panes.findInConst(client.model.tabs.location[model].tab_id, target.pane_id) orelse return false;
 
-    const markers = client.model.attachmentMarkers(target) orelse return false;
+    const markers = data.pane_attachment.markersFor(&client.model, target) orelse return false;
 
     const shelf = client.attachments orelse return false;
     return shelf.pendingMarkerAtDeletion(
@@ -216,7 +216,7 @@ fn pendingAttachmentMarkerAtCursor(client: *Client, deletion: data.AttachmentMar
 /// submitting it: the agent's editor treats a trailing backslash as a
 /// newline request.
 fn attachmentPromptContinues(client: *Client, target: data.AttachmentTarget) bool {
-    const markers = client.model.attachmentMarkers(target) orelse return false;
+    const markers = data.pane_attachment.markersFor(&client.model, target) orelse return false;
     if (!attachment_prompt.backslashContinuesPrompt(attachment_prompt.markerPolicy(markers))) {
         return false;
     }

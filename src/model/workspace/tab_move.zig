@@ -28,7 +28,7 @@ pub fn move(model: *ClientModel, tab_id: core.TabId, position: u16) !Change {
 /// Commits a runtime-confirmed tab position and advances the model once.
 ///
 /// ```zig
-/// const change = try applyPosition(model, location, position);
+/// const change = try tab_move.applyPosition(model, location, position);
 /// ```
 pub fn applyPosition(model: *ClientModel, location: core.TabLocation, position: u16) !model_data.Change {
     const current_workspace = model.workspace orelse return error.UnexpectedWorkspace;

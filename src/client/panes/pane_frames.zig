@@ -51,7 +51,7 @@ pub fn receivePaneFrame(client: *Client, frame: core.FrameView) !data.PaneFrameO
 
 /// Stores one decoded terminal progress report and maintains animation liveness.
 pub fn applyPaneProgress(client: *Client, message: core.PaneProgress) !?data.PaneProgressCommit {
-    const commit = client.model.updatePaneProgress(message) orelse return null;
+    const commit = data.pane_metadata.updateProgress(&client.model, message) orelse return null;
     _ = try sidebar_animation.synchronizeSidebarAnimation(client);
     return commit;
 }

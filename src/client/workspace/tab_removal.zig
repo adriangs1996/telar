@@ -16,7 +16,7 @@ const TabCloseOutcome = enum { applied, ignored, exit };
 /// A failure preserves completed effects; the caller chooses recovery or exit.
 /// Example: `try tab_removal.detachTab(app, location);`
 pub fn detachTab(client: *Client, location: core.TabLocation) !void {
-    const plan = try client.model.planTabDetachment(location);
+    const plan = try data.client_detach.planTabDetachment(&client.model, location);
     if (plan.owns_paste) {
         const outcome = try pane_input.finishPanePaste(client);
         std.debug.assert(outcome != .ignored);
@@ -44,13 +44,13 @@ pub fn detachTab(client: *Client, location: core.TabLocation) !void {
         try client.graphics.setPaneVisible(pane.pane_id, false);
     }
 
-    try client.model.commitTabDetachment(plan);
+    try data.client_detach.commitTabDetachment(&client.model, plan);
 }
 
 /// Counts the deliveries needed to detach one tab, including pending attachments.
 /// Example: `const required = try tab_removal.tabDetachmentCapacity(app, location);`
 pub fn tabDetachmentCapacity(model: *const data.ClientModel, location: core.TabLocation) !usize {
-    const plan = try model.planTabDetachment(location);
+    const plan = try data.client_detach.planTabDetachment(model, location);
     var required = @as(usize, @intFromBool(plan.paste_marker_required));
     required += @intFromBool(plan.focus_out_required);
     for (plan.slice()) |pane| {
@@ -154,7 +154,7 @@ pub fn completeTabClose(client: *Client, closed: core.TabClosed) !TabCloseOutcom
     }
 
     if (removal.was_active) {
-        _ = client.model.forgetReportedPaneFocus();
+        _ = data.pane_focus.forgetReported(&client.model);
         if (removal.active) |location| {
             const active = client.model.tabs.find(location.tab_id) orelse return error.StaleTabRemoval;
             var panes = client.model.panes.iterate(client.model.tabs.location[active].tab_id);

@@ -12,7 +12,7 @@ neither the replica nor its transition rules.
 runtime proxy configuration → runtime delivery → proxy_status
   → runtime_messages.handleServerMessage
   → proxy_status.applyProxyStatus
-      ClientModel.reconcileProxyStatus
+      proxy_status.reconcile
       notifications.publishNotificationNow for a changed transition
   → presentation observation → top-bar projection
 ```

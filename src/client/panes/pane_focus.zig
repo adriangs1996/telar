@@ -22,7 +22,7 @@ pub fn synchronizeActivePane(client: *Client) !void {
 /// Commits focus before synchronizing attachments and child focus.
 /// Example: `_ = try pane_focus.applyPaneFocus(client, command);`
 pub fn applyPaneFocus(client: *Client, command: data.PaneFocusRequest) !?data.PaneFocus {
-    const focus = client.model.focusPane(command) orelse return null;
+    const focus = data.pane_focus.focusPane(&client.model, command) orelse return null;
     try deliverPaneFocus(client, focus, command.area);
 
     return focus;
@@ -55,7 +55,7 @@ pub fn navigatePane(client: *Client, direction: data.InputDirection) !void {
     const key = actions.navigationKey(direction);
     if (std.mem.eql(
         u8,
-        client.model.focusedPaneForeground(),
+        data.pane_title.focusedForeground(&client.model),
         "nvim",
     )) {
         _ = try pane_input.sendPaneInput(
@@ -90,7 +90,7 @@ pub fn navigatePane(client: *Client, direction: data.InputDirection) !void {
 /// Revalidates the source pane, applies the directional focus, and reports the
 /// result to the control connection through the runtime.
 pub fn completePaneFocusCommand(client: *Client, command: core.PaneFocusCommand) !void {
-    const current = client.model.planPaneInput(.focused);
+    const current = data.pane_input.planInput(&client.model, .focused);
     if (current == null or current.?.pane_id != command.pane_id) {
         return sendPaneFocusCompletion(
             &client.model,
@@ -158,7 +158,7 @@ fn paneFocusDirection(value: core.PaneDirection) data.LayoutDirection {
 
 /// Commits reporting ownership before emitting focus-out and focus-in. Example: `_ = try sync(client);`
 fn synchronizeReportedFocus(model: *data.ClientModel) !FocusReportOutcome {
-    const transition = model.syncReportedPaneFocus() orelse return .unchanged;
+    const transition = data.pane_focus.syncReported(model) orelse return .unchanged;
     if (transition.focus_out) |pane_id| {
         try runtime_io.sendRuntimeInput(
             model,
@@ -184,7 +184,7 @@ fn synchronizeReportedFocus(model: *data.ClientModel) !FocusReportOutcome {
 
 /// Clears focus ownership before detachment and sends the matching focus-out. Example: `_ = try clear(client);`
 pub fn clearReportedFocus(model: *data.ClientModel) !FocusReportOutcome {
-    const transition = model.clearReportedPaneFocus() orelse return .unchanged;
+    const transition = data.pane_focus.clearReported(model) orelse return .unchanged;
     if (transition.focus_out) |pane_id| {
         try runtime_io.sendRuntimeInput(
             model,

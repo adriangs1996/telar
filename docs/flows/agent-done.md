@@ -15,11 +15,11 @@ Agent.visibleStatus  (seen = false)  -> AgentStatus.done
 model.agent_revision -> Delivery.prepare -> schema.agent_sound (working -> done)
                                      -> schema.agent_snapshot
         |
-agent_snapshot.applyAgentSnapshot -> ClientModel.reconcileAgentSnapshot
+agent_snapshot.applyAgentSnapshot -> agent_snapshot.reconcile
         |
 pane_attachment.synchronizePaneAttachments
         |
-ClientModel.takeAgentAcknowledgement  (focused pane, status done, once)
+agent_done.takeAcknowledgement  (focused pane, status done, once)
         |
 model.to_runtime.push(acknowledge_agent) -> schema.AcknowledgeAgent
         |
@@ -54,7 +54,7 @@ until a client says otherwise.
 
 Focus is client state and never becomes runtime truth, so the acknowledgement
 is an explicit request rather than something the runtime infers from
-`update_client_layout`. `ClientModel.takeAgentAcknowledgement` resolves the
+`update_client_layout`. `agent_done.takeAcknowledgement` resolves the
 focused pane of the active tab to its agent and returns the key once per
 completion. `acknowledged_agent` is operational state with no presentation
 revision; it resets when the same agent leaves `done`, so a later completion is

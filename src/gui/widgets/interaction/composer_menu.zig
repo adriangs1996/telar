@@ -1,3 +1,4 @@
+const data = @import("model");
 const event_module = @import("../../input/event.zig");
 const std = @import("std");
 const client = @import("telar-client");
@@ -58,19 +59,19 @@ pub fn activate(gui: *GuiAdapter, target: Target) !void {
 
     switch (selector.kind) {
         .recent => try client.agent_control.resumeAgentConversation(&gui.app.model, selector.pane_id, choice.index),
-        .model => _ = gui.app.model.changeAgentOption(
+        .model => _ = data.agent_panes.changeOption(&gui.app.model, 
             selector.pane_id,
             .{
                 .model = thread.transcript.?.models()[choice.index].idSlice(),
             },
         ),
-        .effort => _ = gui.app.model.changeAgentOption(
+        .effort => _ = data.agent_panes.changeOption(&gui.app.model, 
             selector.pane_id,
             .{
                 .effort = thread.transcript.?.findModel(thread.options.modelSlice()).?.efforts()[choice.index],
             },
         ),
-        .access => _ = gui.app.model.changeAgentOption(
+        .access => _ = data.agent_panes.changeOption(&gui.app.model, 
             selector.pane_id,
             .{
                 .access = @enumFromInt(choice.index),

@@ -70,7 +70,7 @@ pub fn completeConfigReload(client: *Client, result: anyerror!config_reload.Conf
                 .{
                     .level = .failure,
                     .title = "Configuration rejected",
-                    .message = client.model.diagnostic() orelse return error.ClientDiagnosticMissing,
+                    .message = data.client_diagnostic.shown(&client.model) orelse return error.ClientDiagnosticMissing,
                     .duration_ns = 7 * std.time.ns_per_s,
                 },
             );
@@ -114,7 +114,7 @@ fn adoptConfiguration(client: *Client, adoption: Adoption) !data.ConfigurationCo
     var consumed = false;
     errdefer if (!consumed) adoption.deinit(client.gpa);
     const snapshot = &adoption.generation.snapshot;
-    const commit = try client.model.applyConfiguration(
+    const commit = try data.config_reload.apply(&client.model, 
         .{
             .generation = adoption.generation.number,
             .sidebar_visible = snapshot.sidebar_visible,
@@ -124,7 +124,7 @@ fn adoptConfiguration(client: *Client, adoption: Adoption) !data.ConfigurationCo
             .config = configFrom(snapshot),
         },
     );
-    _ = client.model.clearDiagnostic();
+    _ = data.client_diagnostic.clear(&client.model);
     std.debug.assert(adoption.generation.number == commit.generation);
     const previous_generation = client.lua_generation;
     const previous_registry = client.plugin_registry;
@@ -192,7 +192,7 @@ pub fn showConfiguration(client: *Client, reply: *core.ClientCommand) !void {
                 .sidebar_width = client.model.sidebar_width,
                 .workspace_list_collapsed = client.model.workspace_list_collapsed,
                 .pane_gaps = client.model.pane_gaps,
-                .window_title = client.model.windowTitleTemplate(),
+                .window_title = data.config_reload.windowTitleTemplate(&client.model),
                 .sound = generation.snapshot.sound,
                 .notification_delivery = generation.snapshot.notification_delivery,
                 .history_show_agent_commands = generation.snapshot.history_show_agent_commands,

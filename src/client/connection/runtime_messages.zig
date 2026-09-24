@@ -46,7 +46,7 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
             _ = try agent_history.applyAgentHistory(client, page);
         },
         .agent_thread_snapshot => |snapshot| {
-            _ = try client.model.applyAgentThread(snapshot);
+            _ = try data.agent_panes.applyThread(&client.model, snapshot);
         },
         .request_completed => |reply| {
             try agent_control.completeAgentRequest(&client.model, reply);
@@ -62,7 +62,7 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
         },
         .tab_moved => |moved| _ = try tab_move.completeTabMove(&client.model, moved),
         .pane_frame => |frame| _ = try pane_frames.receivePaneFrame(client, frame),
-        .pane_cwd => |cwd| _ = try client.model.updatePaneMetadata(
+        .pane_cwd => |cwd| _ = try data.pane_metadata.update(&client.model, 
             .{
                 .cwd = .{
                     .pane_id = cwd.pane_id,
@@ -70,7 +70,7 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
                 },
             },
         ),
-        .pane_foreground => |foreground| _ = try client.model.updatePaneMetadata(
+        .pane_foreground => |foreground| _ = try data.pane_metadata.update(&client.model, 
             .{
                 .foreground = .{
                     .pane_id = foreground.pane_id,
@@ -78,7 +78,7 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
                 },
             },
         ),
-        .pane_title => |title| _ = try client.model.updatePaneMetadata(
+        .pane_title => |title| _ = try data.pane_metadata.update(&client.model, 
             .{
                 .title = .{
                     .pane_id = title.pane_id,
@@ -119,7 +119,7 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
         .client_command_result, .client_list, .pane_text, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
         .proxy_status => |status| _ = try proxy_status.applyProxyStatus(client, status),
         .agent_snapshot => |snapshot| _ = try agent_snapshot.applyAgentSnapshot(client, snapshot),
-        .system_metrics => |metrics| _ = try client.model.reconcileSystemMetrics(
+        .system_metrics => |metrics| _ = try data.system_metrics.reconcile(&client.model, 
             .{
                 .runtime_revision = metrics.revision,
                 .cpu_percent = metrics.cpu_percent,

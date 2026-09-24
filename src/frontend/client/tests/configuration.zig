@@ -38,7 +38,7 @@ test "config reload outcomes that carry no new generation" {
     );
     try std.testing.expectEqual(@as(i128, 7), client.reload.mtime_ns);
     try std.testing.expect(client.model.notification_scheduler.pending);
-    try std.testing.expect(client.model.diagnostic() != null);
+    try std.testing.expect(data.client_diagnostic.shown(&client.model) != null);
     try harness.settle();
 }
 
@@ -76,7 +76,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
     const terminal = harness.terminal;
     var previous_diagnostic: data.Diagnostic = .{};
     previous_diagnostic.set("previous configuration failed", .{});
-    _ = try client.model.replaceDiagnostic(previous_diagnostic);
+    _ = try data.client_diagnostic.replace(&client.model, previous_diagnostic);
     const initial = try support.testingConfigAdoption(1, false);
     const initial_generation = initial.generation;
 
@@ -85,7 +85,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try std.testing.expectEqual(@as(u64, 1), first.generation);
     try std.testing.expect(client.lua_generation == initial_generation);
     try std.testing.expectEqual(@as(u64, 1), client.model.configuration_generation);
-    try std.testing.expect(client.model.diagnostic() == null);
+    try std.testing.expect(data.client_diagnostic.shown(&client.model) == null);
 
     try std.testing.expectEqualDeep(
         data.SoundRequestOutcome{ .start = .ready },
@@ -188,7 +188,7 @@ test "a configuration version alone schedules presenter observation" {
     const terminal = harness.terminal;
     const pending_updates = terminal.presenter.pending_updates;
 
-    _ = try client.model.applyConfiguration(.{
+    _ = try data.config_reload.apply(&client.model, .{
         .generation = 1,
         .sidebar_visible = true,
         .pane_gaps = true,
@@ -314,7 +314,7 @@ test "command completion from a replaced bar generation is discarded" {
     try std.testing.expectEqualStrings("new", slot.content.text(slot.content.slice()[0]));
     try std.testing.expect(client.model.bar_updates.command_execution == null);
     try std.testing.expectEqualDeep(version_after_reload, client.model.version());
-    try std.testing.expect(client.model.diagnostic() == null);
+    try std.testing.expect(data.client_diagnostic.shown(&client.model) == null);
 }
 
 test "plugin completion applies one authorized batch through model observation" {
@@ -325,7 +325,7 @@ test "plugin completion applies one authorized batch through model observation" 
     const client = harness.client;
     const terminal = harness.terminal;
     const installed = try support.installTestingPlugin(client);
-    const execution = (try client.model.beginPluginExecution()).?;
+    const execution = (try data.plugin_action.beginExecution(&client.model)).?;
     var batch: data.EffectBatch = .{};
     batch.items[0] = .toggle_workspace_list;
     batch.len = 1;
@@ -363,12 +363,12 @@ test "plugin completion from an old configuration is consumed without effects" {
     const client = harness.client;
     const terminal = harness.terminal;
     const installed = try support.installTestingPlugin(client);
-    const execution = (try client.model.beginPluginExecution()).?;
+    const execution = (try data.plugin_action.beginExecution(&client.model)).?;
     var batch: data.EffectBatch = .{};
     batch.items[0] = .toggle_workspace_list;
     batch.len = 1;
 
-    _ = try client.model.applyConfiguration(.{
+    _ = try data.config_reload.apply(&client.model, .{
         .generation = 1,
         .sidebar_visible = true,
         .pane_gaps = true,
@@ -390,7 +390,7 @@ test "plugin completion from an old configuration is consumed without effects" {
     try std.testing.expect(client.model.plugins.pluginExecution() == null);
     try std.testing.expect(!client.model.workspace_list_collapsed);
     try std.testing.expectEqualDeep(version_after_reload, client.model.version());
-    try std.testing.expect(client.model.diagnostic() == null);
+    try std.testing.expect(data.client_diagnostic.shown(&client.model) == null);
     try std.testing.expectEqual(pending_before, terminal.presenter.pending_updates);
 }
 
@@ -402,7 +402,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
     const client = harness.client;
     const terminal = harness.terminal;
     const installed = try support.installTestingPlugin(client);
-    const execution = (try client.model.beginPluginExecution()).?;
+    const execution = (try data.plugin_action.beginExecution(&client.model)).?;
     var batch: data.EffectBatch = .{};
     batch.items[0] = .close_pane;
     batch.len = 1;
@@ -426,7 +426,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
     try std.testing.expect(client.model.version().notifications > version_before.notifications);
     try std.testing.expect(std.mem.indexOf(
         u8,
-        client.model.diagnostic().?,
+        data.client_diagnostic.shown(&client.model).?,
         "CapabilityNotGranted",
     ) != null);
     try std.testing.expect(client.model.notification_scheduler.pending);
@@ -441,14 +441,14 @@ test "plugin worker failure and unmatched completion preserve lifecycle identity
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    const execution = (try client.model.beginPluginExecution()).?;
+    const execution = (try data.plugin_action.beginExecution(&client.model)).?;
 
     try std.testing.expect(!try client_module.plugin_actions.completePluginAction(client, .{
         .execution_id = @enumFromInt(@intFromEnum(execution.id) + 1),
         .result = error.TestPluginWorkerFailure,
     }));
     try std.testing.expectEqualDeep(execution, client.model.plugins.pluginExecution().?);
-    try std.testing.expect(client.model.diagnostic() == null);
+    try std.testing.expect(data.client_diagnostic.shown(&client.model) == null);
 
     try std.testing.expect(!try client_module.plugin_actions.completePluginAction(client, .{
         .execution_id = execution.id,
@@ -457,7 +457,7 @@ test "plugin worker failure and unmatched completion preserve lifecycle identity
     try std.testing.expect(client.model.plugins.pluginExecution() == null);
     try std.testing.expect(std.mem.indexOf(
         u8,
-        client.model.diagnostic().?,
+        data.client_diagnostic.shown(&client.model).?,
         "TestPluginWorkerFailure",
     ) != null);
     try std.testing.expect(client.model.notification_scheduler.pending);
@@ -469,7 +469,7 @@ test "busy plugin start skips resolution and a rejected action leaves no run" {
     defer harness.deinit();
     const client = harness.client;
     const installed = try support.installTestingPlugin(client);
-    const execution = (try client.model.beginPluginExecution()).?;
+    const execution = (try data.plugin_action.beginExecution(&client.model)).?;
 
     _ = try client_module.actions.executeAction(
         client,
@@ -497,7 +497,7 @@ test "busy plugin start skips resolution and a rejected action leaves no run" {
     try std.testing.expect(client.model.notification_scheduler.pending);
     try std.testing.expect(std.mem.indexOf(
         u8,
-        client.model.diagnostic().?,
+        data.client_diagnostic.shown(&client.model).?,
         "UnknownPluginAction",
     ) != null);
 }
@@ -567,7 +567,7 @@ test "Lua callback applies a validated batch through model observation" {
     );
     try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
-    _ = try client.model.setDiagnostic("old diagnostic", .{});
+    _ = try data.client_diagnostic.set(&client.model, "old diagnostic", .{});
     try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
     const version_before = client.model.version();
@@ -577,7 +577,7 @@ test "Lua callback applies a validated batch through model observation" {
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expect(client.model.workspace_list_collapsed);
-    try std.testing.expect(client.model.diagnostic() == null);
+    try std.testing.expect(data.client_diagnostic.shown(&client.model) == null);
     var expected = version_before;
     expected.chrome += 1;
     expected.diagnostic += 1;
@@ -623,7 +623,7 @@ test "Lua callback validates every plugin reference before native effects" {
     try std.testing.expect(client.model.sidebar_visible);
     try std.testing.expect(std.mem.indexOf(
         u8,
-        client.model.diagnostic().?,
+        data.client_diagnostic.shown(&client.model).?,
         "PluginNotConfigured",
     ) != null);
     var expected = version_before;
@@ -742,7 +742,7 @@ test "Lua callback failure commits one diagnostic without direct presentation" {
     try std.testing.expect(control == .continue_routing);
     try std.testing.expect(std.mem.indexOf(
         u8,
-        client.model.diagnostic().?,
+        data.client_diagnostic.shown(&client.model).?,
         "callback exploded",
     ) != null);
     var expected = version_before;
@@ -879,7 +879,7 @@ test "clipboard image from a retired agent target is consumed and freed" {
     const execution = (try client.model.clipboard.reserve(target)).?;
     const completed = try support.testingClipboardCapture(client, execution, "private png");
 
-    _ = try client.model.reconcileAgentSnapshot(.{ .revision = 2, .agents = &.{} });
+    _ = try data.agent_snapshot.reconcile(&client.model, .{ .revision = 2, .agents = &.{} });
     _ = try client_module.pane_attachment.synchronizePaneAttachments(client);
     try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
@@ -989,7 +989,7 @@ test "bar configuration excludes Lua sources from a different model generation" 
     const generation = client.lua_generation.?;
     try std.testing.expect(client_module.bar_updates.barConfiguration(client) == &generation.snapshot.bars);
     const snapshot = &generation.snapshot;
-    _ = try client.model.applyConfiguration(
+    _ = try data.config_reload.apply(&client.model, 
         .{
             .generation = generation.number + 1,
             .sidebar_visible = snapshot.sidebar_visible,

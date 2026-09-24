@@ -44,7 +44,7 @@ the order is stable across revisions. It is pure and allocation-free.
 
 `agent_snapshots.apply` is the protocol adapter. It maps borrowed wire entries
 to `AgentInput` values and invokes `ApplyAgentSnapshotHandler`.
-`ClientModel.reconcileAgentSnapshot` owns the transaction, while
+`agent_snapshot.reconcile` owns the transaction, while
 `agents.Snapshot.replace` performs atomic bounded storage. The resulting commit
 is validated and delivered by `DeliverAgentSnapshotHandler`, which owns
 attachment, alert and animation ordering. Replacement:
@@ -57,7 +57,7 @@ attachment, alert and animation ordering. Replacement:
 
 Task keys carry a generation so a delayed action cannot target a new task that
 reused an old numeric ID. A task may carry a `pane_id`; selecting it then uses
-`ClientModel.planAgentNavigation`, which returns either local tab and pane
+`agent_navigation.planMove`, which returns either local tab and pane
 focus or a runtime pane handoff. Input code never reads replica storage.
 
 ## Session titles

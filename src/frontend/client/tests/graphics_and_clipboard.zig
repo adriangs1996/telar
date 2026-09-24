@@ -1,5 +1,6 @@
 //! Client integration tests for graphics and clipboard.
 
+const data = @import("model");
 const core = @import("telar-core");
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
@@ -44,7 +45,7 @@ test "pane graphics commit their cell fallback before presenter observation" {
     try harness.bootstrap();
     const client = harness.client;
     const terminal = harness.terminal;
-    _ = try client.model.observeHostCapability(.{ .images = .unsupported });
+    _ = try data.host_capabilities.observe(&client.model, .{ .images = .unsupported });
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
@@ -82,7 +83,7 @@ test "presenter observes physical graphics without a semantic fallback" {
     try harness.bootstrap();
     const client = harness.client;
     const terminal = harness.terminal;
-    _ = try client.model.observeHostCapability(.{ .images = .supported });
+    _ = try data.host_capabilities.observe(&client.model, .{ .images = .supported });
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 

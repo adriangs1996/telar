@@ -93,7 +93,7 @@ pub fn applyWorkspaceSnapshot(client: *Client, snapshot: core.WorkspaceSnapshotV
 
     const active = client.model.tabs.activeSlot() orelse return error.StaleWorkspaceReconciliation;
     if (reconciliation.active_tab_changed) {
-        _ = client.model.forgetReportedPaneFocus();
+        _ = data.pane_focus.forgetReported(&client.model);
         var panes = client.model.panes.iterate(client.model.tabs.location[active].tab_id);
         while (panes.next()) |pane| {
             try client.graphics.setPaneVisible(pane.id, true);

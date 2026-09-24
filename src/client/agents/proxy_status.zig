@@ -7,7 +7,7 @@ const Client = @import("../execution/Client.zig");
 
 /// Commits one decoded proxy state and announces only semantic transitions.
 pub fn applyProxyStatus(client: *Client, message: core.ProxyStatus) !?data.ProxyStatusCommit {
-    const commit = client.model.reconcileProxyStatus(message) orelse return null;
+    const commit = data.proxy_status.reconcile(&client.model, message) orelse return null;
 
     const trust_only = commit.previous == commit.active and commit.previous_scope == commit.scope;
     try notifications.publishNotificationNow(

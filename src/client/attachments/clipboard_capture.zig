@@ -43,7 +43,7 @@ pub fn completeClipboardCapture(client: *Client, completion: data.Completion) !v
                 break :result .stale;
             }
 
-            const current = client.model.focusedAttachmentTarget() orelse
+            const current = data.pane_attachment.focusedTarget(&client.model) orelse
                 break :result .stale;
             if (!std.meta.eql(current, capture.target)) {
                 break :result .stale;
@@ -73,7 +73,7 @@ pub fn startClipboardCapture(model: *data.ClientModel) !clipboard_image.StartOut
         return .unsupported;
     }
 
-    const target = model.focusedAttachmentTarget() orelse return .no_target;
+    const target = data.pane_attachment.focusedTarget(model) orelse return .no_target;
     const capture = (try model.clipboard.reserve(target)) orelse return .busy;
     errdefer {
         const rolled_back = model.clipboard.finish(capture.id);
@@ -90,7 +90,7 @@ fn scheduleClipboardCapture(model: *data.ClientModel, capture: data.ClipboardCap
     const request: data.CaptureRequest = .{
         .target = capture.target,
         .sequence = @intFromEnum(capture.id),
-        .marker_policy = if (model.attachmentMarkers(capture.target)) |markers|
+        .marker_policy = if (data.pane_attachment.markersFor(model, capture.target)) |markers|
             attachment_prompt.markerPolicy(markers)
         else
             .ordered,

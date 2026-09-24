@@ -73,17 +73,17 @@ pub fn rejectStaleHostCommits(comptime deliver: fn (*Client, data.HostCommit) an
     );
     defer app.model.deinit();
 
-    const stale_capabilities = (try app.model.observeHostCapability(
+    const stale_capabilities = (try data.host_capabilities.observe(&app.model, 
         .{
             .images = .supported,
         },
     )).?;
-    _ = try app.model.observeHostCapability(
+    _ = try data.host_capabilities.observe(&app.model, 
         .{
             .pointer_pixels = .supported,
         },
     );
-    const stale_size = (try app.model.reconcileHost(
+    const stale_size = (try data.host_capabilities.reconcile(&app.model, 
         .{
             .capabilities = app.model.host.host_capabilities,
             .size = .{
@@ -92,7 +92,7 @@ pub fn rejectStaleHostCommits(comptime deliver: fn (*Client, data.HostCommit) an
             },
         },
     )).?;
-    _ = try app.model.reconcileHost(
+    _ = try data.host_capabilities.reconcile(&app.model, 
         .{
             .capabilities = app.model.host.host_capabilities,
             .size = .{

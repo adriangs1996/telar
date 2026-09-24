@@ -1,4 +1,5 @@
 //! Native conversation selection shares delivered geometry with keyboard copy mode.
+const data = @import("model");
 const pacing = @import("pacing");
 const event_module = @import("../../input/event.zig");
 const std = @import("std");
@@ -450,7 +451,7 @@ fn scroll(gui: *GuiAdapter, delta: i32) !void {
     const pane = gui.app.model.agentPane(owner.pane_id) orelse return;
     const next = std.math.clamp(pane.transcript_scroll + @as(f64, @floatFromInt(delta)), 0, target.scroll_limit);
     selection.blocked_edge = next == pane.transcript_scroll;
-    _ = gui.app.model.scrollAgentThread(owner.pane_id, next - pane.transcript_scroll);
+    _ = data.agent_panes.scrollThread(&gui.app.model, owner.pane_id, next - pane.transcript_scroll);
 }
 
 fn valid(gui: *const GuiAdapter, at: Position) bool {

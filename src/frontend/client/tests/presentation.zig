@@ -21,7 +21,7 @@ test "presentation folds repeated observations into one draw task" {
     const client = harness.client;
     const terminal = harness.terminal;
 
-    _ = try client.model.setDiagnostic("first revision", .{});
+    _ = try data.client_diagnostic.set(&client.model, "first revision", .{});
     try presentation_lifecycle.observe(terminal);
 
     try std.testing.expect(terminal.presenter.draw_pending);
@@ -32,7 +32,7 @@ test "presentation folds repeated observations into one draw task" {
     try std.testing.expect(terminal.presenter.draw_pending);
     try std.testing.expectEqual(@as(usize, 1), terminal.presenter.pending_updates);
 
-    _ = try client.model.setDiagnostic("second revision", .{});
+    _ = try data.client_diagnostic.set(&client.model, "second revision", .{});
     try presentation_lifecycle.observe(terminal);
 
     try std.testing.expect(terminal.presenter.draw_pending);
@@ -56,7 +56,7 @@ test "an observation with pacer credit presents inline without a draw task" {
     terminal.presenter.pacer = .{};
     const drawn_before = terminal.presenter.pacer.stats.drawn;
 
-    _ = try client.model.setDiagnostic("inline revision", .{});
+    _ = try data.client_diagnostic.set(&client.model, "inline revision", .{});
     try presentation_lifecycle.observe(terminal);
 
     try std.testing.expect(!terminal.presenter.draw_pending);
@@ -199,7 +199,7 @@ test "presentation flushes an explicit empty model before bootstrap" {
     const terminal = harness.terminal;
 
     try std.testing.expect(client.model.tabs.activeSlot() == null);
-    _ = try client.model.setDiagnostic("pre-bootstrap revision", .{});
+    _ = try data.client_diagnostic.set(&client.model, "pre-bootstrap revision", .{});
     try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
 
@@ -283,7 +283,7 @@ test "shared pane graphics reach the host inside the cell frame" {
     const client = harness.client;
     const terminal = harness.terminal;
     _ = try host_resizes.apply(terminal, .{ .cols = 80, .rows = 24, .width_px = 800, .height_px = 480 });
-    _ = try client.model.observeHostCapability(.{ .images = .supported });
+    _ = try data.host_capabilities.observe(&client.model, .{ .images = .supported });
     terminal.graphics_store.shared_memory = true;
     try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();

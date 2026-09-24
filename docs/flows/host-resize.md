@@ -18,7 +18,7 @@ SIGWINCH or Windows size poll
               |
       host_resize.applyHostUpdate
               |
-     ClientModel.reconcileHost
+     host_capabilities.reconcile
               |
      host_resize.deliverHostCommit
               |

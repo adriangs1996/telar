@@ -1,3 +1,11 @@
+const tab_creation = @import("../../workspace/tab_creation.zig");
+const pane_input = @import("../../panes/pane_input.zig");
+const pane_focus = @import("../../workspace/pane_focus.zig");
+const pane_attachment = @import("../../panes/pane_attachment.zig");
+const workspace_creation = @import("../../workspace/workspace_creation.zig");
+const pane_fullscreen = @import("../../workspace/pane_fullscreen.zig");
+const client_layout_persistence = @import("../../workspace/client_layout_persistence.zig");
+const client_detach = @import("../../workspace/client_detach.zig");
 const workspace_handoff = @import("../../workspace/workspace_handoff.zig");
 const tab_snapshot_reconciliation = @import("../../workspace/tab_snapshot_reconciliation.zig");
 const workspace_reconciliation = @import("../../workspace/workspace_reconciliation.zig");
@@ -18,7 +26,7 @@ test "workspace creation planning requires the attached focused pane" {
     var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
-    try std.testing.expect(model.planWorkspaceCreation() == null);
+    try std.testing.expect(workspace_creation.plan(&model) == null);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
@@ -26,9 +34,9 @@ test "workspace creation planning requires the attached focused pane" {
     const pane_id: core.PaneId = @enumFromInt(1);
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
-    try std.testing.expectEqual(pane_id, model.planWorkspaceCreation().?);
+    try std.testing.expectEqual(pane_id, workspace_creation.plan(&model).?);
     model.panes.find(pane_id).?.attached = false;
-    try std.testing.expect(model.planWorkspaceCreation() == null);
+    try std.testing.expect(workspace_creation.plan(&model) == null);
     try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
@@ -36,7 +44,7 @@ test "tab creation planning captures the workspace and attached focused pane" {
     var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
-    try std.testing.expect(model.planTabCreation() == null);
+    try std.testing.expect(tab_creation.planCreation(&model) == null);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
@@ -47,9 +55,9 @@ test "tab creation planning captures the workspace and attached focused pane" {
     try std.testing.expectEqualDeep(TabCreationPlan{
         .workspace = location.workspace,
         .cwd_source = pane_id,
-    }, model.planTabCreation().?);
+    }, tab_creation.planCreation(&model).?);
     model.panes.find(pane_id).?.attached = false;
-    try std.testing.expect(model.planTabCreation() == null);
+    try std.testing.expect(tab_creation.planCreation(&model) == null);
     try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
@@ -388,7 +396,7 @@ test "failed workspace replacement rolls back retained layouts" {
     const area: cellgrid.Rect = .{ .w = 40, .h = 10 };
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
     _ = try tab_snapshot_reconciliation.reconcileTab(&model, .{ .location = location, .panes = &.{pane_id} }, area);
-    _ = model.togglePaneFullscreen(.{ .area = area }).?;
+    _ = pane_fullscreen.toggle(&model, .{ .area = area }).?;
     const version = model.version();
     const saved_before = model.saved_layouts;
     var failing: std.testing.FailingAllocator = .init(std.testing.allocator, .{ .fail_index = 0 });
@@ -420,7 +428,7 @@ test "provisional arrivals cannot overwrite retained fullscreen layouts" {
     try std.testing.expect(saved.toggleFullscreen());
     var layouts: SavedLayouts = .{};
     try layouts.remember(.{ .location = location, .pane_id = first, .workspace_active = true, .layout = saved });
-    model.restoreClientLayouts(layouts);
+    client_layout_persistence.restore(&model, layouts);
     const arrival: model_data.WorkspaceArrival = .{ .pane_id = clicked, .location = location, .size = .{ .cols = area.w, .rows = area.h } };
     _ = try workspace_handoff.arrive(&model, arrival);
     _ = workspace_handoff.depart(&model);
@@ -751,13 +759,13 @@ test "pane attachment confirmation changes only active operational state" {
     try model_data.tab_snapshot_reconciliation.addDiscovered(&model, model.tabs.active, .{ .pane_id = discovered, .location = location, .area = .{ .w = 40, .h = 10 } });
     const attachment: model_data.PaneAttachment = .{ .pane_id = discovered, .location = location };
 
-    try std.testing.expect(model.needsPaneAttachment(attachment));
-    try std.testing.expectEqual(model_data.AttachmentConfirmation.confirmed, try model.confirmPaneAttachment(attachment));
-    try std.testing.expect(!model.needsPaneAttachment(attachment));
+    try std.testing.expect(pane_attachment.needsAttachment(&model, attachment));
+    try std.testing.expectEqual(model_data.AttachmentConfirmation.confirmed, try pane_attachment.confirm(&model, attachment));
+    try std.testing.expect(!pane_attachment.needsAttachment(&model, attachment));
     try std.testing.expect(model.panes.find(discovered).?.attached);
     try std.testing.expectEqualDeep(Version{}, model.version());
 
-    try std.testing.expectEqual(model_data.AttachmentConfirmation.stale, try model.confirmPaneAttachment(attachment));
+    try std.testing.expectEqual(model_data.AttachmentConfirmation.stale, try pane_attachment.confirm(&model, attachment));
     try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
@@ -780,17 +788,17 @@ test "pane attachment confirmation ignores inactive missing and wrong-location p
     try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
 
     const inactive: model_data.PaneAttachment = .{ .pane_id = discovered, .location = first };
-    try std.testing.expectEqual(model_data.AttachmentConfirmation.stale, try model.confirmPaneAttachment(inactive));
-    try std.testing.expect(!model.needsPaneAttachment(inactive));
+    try std.testing.expectEqual(model_data.AttachmentConfirmation.stale, try pane_attachment.confirm(&model, inactive));
+    try std.testing.expect(!pane_attachment.needsAttachment(&model, inactive));
     try std.testing.expect(!model.panes.find(discovered).?.attached);
 
     try std.testing.expect(model_data.tab_selection.select(&model, first.tab_id));
     const missing: model_data.PaneAttachment = .{ .pane_id = @enumFromInt(9), .location = first };
     const wrong_location: model_data.PaneAttachment = .{ .pane_id = discovered, .location = second };
-    try std.testing.expectEqual(model_data.AttachmentConfirmation.stale, try model.confirmPaneAttachment(missing));
-    try std.testing.expectEqual(model_data.AttachmentConfirmation.stale, try model.confirmPaneAttachment(wrong_location));
-    try std.testing.expect(!model.needsPaneAttachment(missing));
-    try std.testing.expect(!model.needsPaneAttachment(wrong_location));
+    try std.testing.expectEqual(model_data.AttachmentConfirmation.stale, try pane_attachment.confirm(&model, missing));
+    try std.testing.expectEqual(model_data.AttachmentConfirmation.stale, try pane_attachment.confirm(&model, wrong_location));
+    try std.testing.expect(!pane_attachment.needsAttachment(&model, missing));
+    try std.testing.expect(!pane_attachment.needsAttachment(&model, wrong_location));
     try std.testing.expect(!model.panes.find(discovered).?.attached);
     try std.testing.expectEqualDeep(Version{}, model.version());
 }
@@ -814,8 +822,8 @@ test "tab detachment plans exact operational state before a silent commit" {
     root_pane.pending_frame_id = 7;
     sibling_pane.attached = false;
     sibling_pane.pending_frame_id = 9;
-    _ = model.beginPanePaste().?;
-    _ = model.syncReportedPaneFocus().?;
+    _ = pane_input.beginPaste(&model).?;
+    _ = pane_focus.syncReported(&model).?;
     _ = try model_data.tab_creation.add(&model, .{
         .location = second,
         .position = 1,
@@ -823,7 +831,7 @@ test "tab detachment plans exact operational state before a silent commit" {
         .root_pane_id = @enumFromInt(3),
     }, .{ .cols = 20, .rows = 5 });
 
-    const plan = try model.planTabDetachment(first);
+    const plan = try client_detach.planTabDetachment(&model, first);
 
     try std.testing.expectEqual(@as(usize, 2), plan.slice().len);
     try std.testing.expectEqualDeep(PaneMembership{ .pane_id = root, .attached = true }, plan.slice()[0]);
@@ -835,27 +843,27 @@ test "tab detachment plans exact operational state before a silent commit" {
 
     var invalid = plan;
     invalid.panes[1] = invalid.panes[0];
-    try std.testing.expectError(error.InvalidTabDetachment, model.commitTabDetachment(invalid));
+    try std.testing.expectError(error.InvalidTabDetachment, client_detach.commitTabDetachment(&model, invalid));
 
     var unbounded = plan;
     unbounded.len = core.max_panes_per_tab + 1;
-    try std.testing.expectError(error.InvalidTabDetachment, model.commitTabDetachment(unbounded));
+    try std.testing.expectError(error.InvalidTabDetachment, client_detach.commitTabDetachment(&model, unbounded));
 
     root_pane.attached = false;
-    try std.testing.expectError(error.StaleTabDetachment, model.commitTabDetachment(plan));
+    try std.testing.expectError(error.StaleTabDetachment, client_detach.commitTabDetachment(&model, plan));
     root_pane.attached = true;
 
-    try model.commitTabDetachment(plan);
+    try client_detach.commitTabDetachment(&model, plan);
 
     try std.testing.expect(!root_pane.attached);
     try std.testing.expect(!sibling_pane.attached);
     try std.testing.expectEqual(@as(u64, 0), root_pane.pending_frame_id);
     try std.testing.expectEqual(@as(u64, 0), sibling_pane.pending_frame_id);
-    try std.testing.expect(model.panePasteActive());
+    try std.testing.expect(pane_input.pasteActive(&model));
     try std.testing.expect(model.reported_pane_focus != null);
     try std.testing.expectEqualDeep(Version{}, model.version());
 
-    try std.testing.expectError(error.UnexpectedTab, model.planTabDetachment(.{
+    try std.testing.expectError(error.UnexpectedTab, client_detach.planTabDetachment(&model, .{
         .workspace = workspace,
         .tab_id = @enumFromInt(9),
     }));

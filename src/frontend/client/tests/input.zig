@@ -371,7 +371,7 @@ test "streamed paste captures target and framing while restoring its live viewpo
     _ = try client_module.paste_routing.content(client, "pasted");
     _ = try client_module.paste_routing.finish(client);
 
-    try std.testing.expect(!client.model.panePasteActive());
+    try std.testing.expect(!data.pane_input.pasteActive(&client.model));
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
     try support.expectNonViewportVersionEqual(version, client.model.version());
@@ -404,7 +404,7 @@ test "streamed pane paste excludes prompt and copy-mode ownership until finish" 
 
     _ = try client_module.paste_routing.start(client);
 
-    try std.testing.expect(client.model.panePasteActive());
+    try std.testing.expect(data.pane_input.pasteActive(&client.model));
     try std.testing.expect(!data.copy_mode.enter(&client.model));
     try std.testing.expect(!client_module.name_prompt.openNamePrompt(&client.model, .rename_workspace));
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
@@ -413,7 +413,7 @@ test "streamed pane paste excludes prompt and copy-mode ownership until finish" 
 
     _ = try client_module.paste_routing.finish(client);
 
-    try std.testing.expect(!client.model.panePasteActive());
+    try std.testing.expect(!data.pane_input.pasteActive(&client.model));
     try std.testing.expect(client_module.name_prompt.openNamePrompt(&client.model, .rename_workspace));
 }
 
@@ -434,7 +434,7 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     const prompt = client.model.name_prompt.currentConst().?;
     try std.testing.expect(!prompt.pasting);
     try std.testing.expectEqualStrings("shell one ", prompt.field.text());
-    try std.testing.expect(!client.model.panePasteActive());
+    try std.testing.expect(!data.pane_input.pasteActive(&client.model));
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
     try host_inputs.key(terminal, try keyinput.chord.parseKey("escape"));
@@ -446,7 +446,7 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     _ = try client_module.paste_routing.finish(client);
 
     try std.testing.expect(data.copy_mode.isActive(&client.model));
-    try std.testing.expect(!client.model.panePasteActive());
+    try std.testing.expect(!data.pane_input.pasteActive(&client.model));
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
@@ -543,11 +543,11 @@ test "mouse reports preserve exact host pixels relative to pane content" {
     try harness.bootstrap();
     const client = harness.client;
     const terminal = harness.terminal;
-    _ = try client.model.observeHostCapability(.{ .cell_pixels = .{
+    _ = try data.host_capabilities.observe(&client.model, .{ .cell_pixels = .{
         .width = 10,
         .height = 20,
     } });
-    _ = try client.model.observeHostCapability(.{ .pointer_pixels = .supported });
+    _ = try data.host_capabilities.observe(&client.model, .{ .pointer_pixels = .supported });
     const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.mouse = .{ .tracking = .normal, .sgr = true, .pixels = true };
     const pane_view = data.tab_layout.view(
@@ -785,8 +785,8 @@ test "focused scroll bindings emit unmodified SGR wheel reports in cells or pixe
         try harness.bootstrap();
         const client = harness.client;
         const terminal = harness.terminal;
-        _ = try client.model.observeHostCapability(.{ .cell_pixels = .{ .width = 10, .height = 20 } });
-        _ = try client.model.observeHostCapability(.{ .pointer_pixels = .supported });
+        _ = try data.host_capabilities.observe(&client.model, .{ .cell_pixels = .{ .width = 10, .height = 20 } });
+        _ = try data.host_capabilities.observe(&client.model, .{ .pointer_pixels = .supported });
         const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
         pane.mouse = .{ .tracking = .normal, .sgr = true, .pixels = pixels };
         pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
@@ -992,12 +992,12 @@ test "canonical reported focus retirement is silent and idempotent" {
     try harness.bootstrap();
     const client = harness.client;
     client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
-    _ = client.model.syncReportedPaneFocus().?;
+    _ = data.pane_focus.syncReported(&client.model).?;
     const version = client.model.version();
     const outbox_len = client.model.to_runtime.len;
 
-    try std.testing.expect(client.model.forgetReportedPaneFocus());
-    try std.testing.expect(!client.model.forgetReportedPaneFocus());
+    try std.testing.expect(data.pane_focus.forgetReported(&client.model));
+    try std.testing.expect(!data.pane_focus.forgetReported(&client.model));
 
     try std.testing.expect(client.model.reported_pane_focus == null);
     try std.testing.expectEqualDeep(version, client.model.version());

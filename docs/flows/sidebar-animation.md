@@ -26,7 +26,7 @@ Message.sidebar_animation_tick -> Client.update
         |
 sidebar_animation.completeSidebarAnimationTick
         |
-ClientModel.advanceSidebarAnimation
+sidebar_animation.advance
         |
 frame + Version.sidebar_animation
         |
@@ -36,13 +36,13 @@ Presenter -> State.render(RenderInput.sidebar_animation_frame)
 ```
 
 `sidebar_animation.synchronizeSidebarAnimation` checks
-`ClientModel.sidebarAnimationActive` and asks the scheduler for a future tick
+`sidebar_animation.isActive` and asks the scheduler for a future tick
 without changing the frame. The scheduler's `pending` bit coalesces repeated
 agent snapshots and rearm attempts into one timer job. A host that reports no
 `model.host.animation_frame_ns` gets no timer.
 
 When the timer completes, `sidebar_animation.completeSidebarAnimationTick` first releases the
-pending token. `ClientModel.advanceSidebarAnimation` then advances the frame if
+pending token. `sidebar_animation.advance` then advances the frame if
 a working agent or a pane with active progress still exists, and the client
 rearms the scheduler. If none is left, the tick is a semantic no-op and the
 loop stops.

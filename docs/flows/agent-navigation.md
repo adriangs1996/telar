@@ -17,7 +17,7 @@ view_interactions.apply
        |
 agent_navigation.navigateAgent
        |
-ClientModel.planAgentNavigation
+agent_navigation.planMove
        |
        +-- local tab -> tab_selection.selectTab -> pane_focus.applyPaneFocus
        |

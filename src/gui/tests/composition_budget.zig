@@ -145,7 +145,7 @@ fn populateMultiplexer(fixture: *Fixture) !void {
         }
     }
 
-    _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &agents });
+    _ = try data.agent_snapshot.reconcile(model, .{ .revision = 1, .agents = &agents });
     for ([_][]const u8{ "Build complete", "Tests complete", "Format complete", "Integration complete" }) |title| {
         _ = data.notifications.publish(model, 0, .{ .title = title, .message = "All checks passed", .target = .{ .select_tab = Session.location.tab_id } });
     }

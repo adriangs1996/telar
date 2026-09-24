@@ -17,7 +17,7 @@ pub fn scrollPane(client: *Client, direction: data.ScrollDirection) !void {
 
 /// Commits a bounded viewport, then updates graphics and the runtime. Example: `_ = try apply(client, command);`
 pub fn applyPaneViewport(client: *Client, command: data.PaneViewportCommand) !?data.PaneViewportChange {
-    const change = client.model.setPaneViewport(command) orelse return null;
+    const change = data.pane_viewport.set(&client.model, command) orelse return null;
     try deliverPaneViewport(client, change);
 
     return change;

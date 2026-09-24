@@ -1,4 +1,5 @@
 //! A new pane splits an existing one (docs/flows/pane-split.md).
+const pane_attachment = @import("../panes/pane_attachment.zig");
 const RecoverPaneSplit = @import("../state/RecoverPaneSplit.zig");
 const PaneSplitCommitState = @import("../state/PaneSplitCommitState.zig");
 const CommitPaneSplit = @import("../state/CommitPaneSplit.zig");
@@ -53,7 +54,7 @@ test {
 /// model. Both provisional sizes inherit the current cell pixel geometry.
 ///
 /// ```zig
-/// const plan = planSplit(model, .{ .axis = .horizontal, .area = area }) orelse return;
+/// const plan = pane_split.planSplit(model, .{ .axis = .horizontal, .area = area }) orelse return;
 /// ```
 pub fn planSplit(model: *ClientModel, request: model_data.RequestPaneSplit) ?model_data.PaneSplitPlan {
     const slot = model.tabs.activeSlot() orelse return null;
@@ -90,7 +91,7 @@ pub fn planSplit(model: *ClientModel, request: model_data.RequestPaneSplit) ?mod
 /// unrepresented so the client adapter can detach its runtime attachment.
 ///
 /// ```zig
-/// const commit = try commitSplit(model, command);
+/// const commit = try pane_split.commitSplit(model, command);
 /// ```
 pub fn commitSplit(model: *ClientModel, command: CommitPaneSplit) !model_data.PaneSplitCommit {
     const stale = finishSplit(model, command, .{
@@ -116,7 +117,7 @@ pub fn commitSplit(model: *ClientModel, command: CommitPaneSplit) !model_data.Pa
 
         if (active) {
             if (!pane.attached) {
-                pane.attach(try model.allocateAttachmentGeneration());
+                pane.attach(try pane_attachment.allocateGeneration(model));
             }
         } else {
             model_namespace.detachPane(pane);
@@ -133,7 +134,7 @@ pub fn commitSplit(model: *ClientModel, command: CommitPaneSplit) !model_data.Pa
         try pane_split.split(model, tab, .{ .existing_pane = command.split.target_pane, .new_pane = command.new_pane, .location = command.split.location, .axis = command.split.axis, .area = command.split.area });
     } else {
         try tab_snapshot_reconciliation.addDiscovered(model, tab, .{ .pane_id = command.new_pane, .location = command.split.location, .area = command.split.area });
-        model.panes.find(command.new_pane).?.attach(try model.allocateAttachmentGeneration());
+        model.panes.find(command.new_pane).?.attach(try pane_attachment.allocateGeneration(model));
     }
 
     if (!active) {
@@ -153,7 +154,7 @@ pub fn commitSplit(model: *ClientModel, command: CommitPaneSplit) !model_data.Pa
 /// tab happens to be active when the response arrives.
 ///
 /// ```zig
-/// const recovery = recover(model, .{ .split = split, .area = area });
+/// const recovery = pane_split.recover(model, .{ .split = split, .area = area });
 /// ```
 pub fn recover(model: *ClientModel, command: RecoverPaneSplit) model_data.PaneSplitRecovery {
     const workspace = model.workspace orelse return .stale;

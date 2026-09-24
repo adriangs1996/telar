@@ -16,7 +16,7 @@ const PaneOpenOutcome = enum { workspace_arrived, workspace_created, pane_split,
 
 /// Acknowledges a completed agent and reconciles its focused attachment shelf. Example: `_ = try pane_attachment.synchronizePaneAttachments(client);`
 pub fn synchronizePaneAttachments(client: *Client) !bool {
-    if (client.model.takeAgentAcknowledgement()) |key| {
+    if (data.agent_done.takeAcknowledgement(&client.model)) |key| {
         try client.model.to_runtime.push(
             .{
                 .acknowledge_agent = .{
@@ -28,7 +28,7 @@ pub fn synchronizePaneAttachments(client: *Client) !bool {
     }
 
     const shelf = client.attachments orelse return false;
-    if (!shelf.syncTarget(client.model.focusedAttachmentTarget())) {
+    if (!shelf.syncTarget(data.pane_attachment.focusedTarget(&client.model))) {
         return false;
     }
 
@@ -82,7 +82,7 @@ pub fn attachVisiblePanes(model: *data.ClientModel, tab: usize, area: cellgrid.R
 
 /// A failed attachment repairs membership only while that pane is still detached.
 pub fn recoverPaneAttachment(model: *data.ClientModel, attachment: data.PaneAttachment) !bool {
-    if (!model.needsPaneAttachment(attachment)) {
+    if (!data.pane_attachment.needsAttachment(model, attachment)) {
         return false;
     }
 
@@ -169,7 +169,7 @@ fn confirmPaneAttachment(model: *data.ClientModel, confirmation: data.PaneAttach
         return error.UnexpectedPane;
     }
 
-    _ = try model.confirmPaneAttachment(confirmed);
+    _ = try data.pane_attachment.confirm(model, confirmed);
 }
 
 /// Sets runtime pane identity after the existing attachment flow commits.

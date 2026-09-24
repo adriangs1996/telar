@@ -154,7 +154,7 @@ pub fn requestWorkspaceSwitch(client: *Client, target: WorkspaceSwitchTarget, au
 /// Repairs the visible tab after a partial departure; callers preserve the original error.
 fn restoreDepartingWorkspace(client: *Client) !void {
     const location = client.model.activeTabLocation() orelse return;
-    const plan = try client.model.planTabDetachment(location);
+    const plan = try data.client_detach.planTabDetachment(&client.model, location);
     for (plan.slice()) |pane| {
         try client.graphics.setPaneVisible(pane.pane_id, true);
     }
@@ -245,7 +245,7 @@ pub fn releaseWorkspace(client: *Client, departure: *const data.WorkspaceDepartu
         pane_closure.releasePaneResources(client, pane_id);
     }
 
-    _ = client.model.forgetReportedPaneFocus();
+    _ = data.pane_focus.forgetReported(&client.model);
 }
 
 /// Validates the committed root before resuming input and requesting canonical snapshots.

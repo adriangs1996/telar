@@ -39,7 +39,7 @@ test "diagnostic commits valid text once" {
     try std.testing.expect(try replace(&model, .{ .diagnostic = diagnostic }) == .changed);
     try std.testing.expect(try replace(&model, .{ .diagnostic = diagnostic }) == .unchanged);
 
-    try std.testing.expectEqualStrings("plugin failed: denied", model.diagnostic().?);
+    try std.testing.expectEqualStrings("plugin failed: denied", data.client_diagnostic.shown(&model).?);
     try std.testing.expectEqual(model_data.Version{ .diagnostic = 1 }, model.version());
 }
 
@@ -52,7 +52,7 @@ test "diagnostic replaces an oversized value with an explicit fallback" {
         .invalid_fallback = formatted("configuration failed", .{}),
     }) == .changed);
 
-    try std.testing.expectEqualStrings("configuration failed", model.diagnostic().?);
+    try std.testing.expectEqualStrings("configuration failed", data.client_diagnostic.shown(&model).?);
     try std.testing.expectEqual(model_data.Version{ .diagnostic = 1 }, model.version());
 }
 
@@ -67,7 +67,7 @@ test "diagnostic preserves state when primary and fallback are malformed" {
         .invalid_fallback = invalidDiagnostic(),
     }));
 
-    try std.testing.expectEqualStrings("preserved", model.diagnostic().?);
+    try std.testing.expectEqualStrings("preserved", data.client_diagnostic.shown(&model).?);
     try std.testing.expectEqualDeep(version, model.version());
 }
 
@@ -76,18 +76,18 @@ test "diagnostic clears visible text once" {
     defer model.deinit();
     _ = try replace(&model, .{ .diagnostic = formatted("resolved", .{}) });
 
-    try std.testing.expect(model.clearDiagnostic() == .changed);
-    try std.testing.expect(model.clearDiagnostic() == .unchanged);
+    try std.testing.expect(data.client_diagnostic.clear(&model) == .changed);
+    try std.testing.expect(data.client_diagnostic.clear(&model) == .unchanged);
 
-    try std.testing.expect(model.diagnostic() == null);
+    try std.testing.expect(data.client_diagnostic.shown(&model) == null);
     try std.testing.expectEqual(model_data.Version{ .diagnostic = 2 }, model.version());
 }
 
 /// Validates replacement text before committing. Example: `_ = try replace(model, .{ .diagnostic = value });`.
 pub fn replace(model: *model_data.ClientModel, replacement: Replacement) !model_data.Change {
-    return model.replaceDiagnostic(replacement.diagnostic) catch |err| switch (err) {
+    return data.client_diagnostic.replace(model, replacement.diagnostic) catch |err| switch (err) {
         error.InvalidClientDiagnostic => if (replacement.invalid_fallback) |fallback|
-            model.replaceDiagnostic(fallback)
+            data.client_diagnostic.replace(model, fallback)
         else
             error.InvalidClientDiagnostic,
     };

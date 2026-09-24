@@ -1202,7 +1202,7 @@ test "o asks the client to open the link under the cursor" {
 /// Reports whether copy mode currently owns pane input.
 ///
 /// ```zig
-/// if (isActive(model)) return;
+/// if (copy_mode.isActive(model)) return;
 /// ```
 pub fn isActive(model: *const ClientModel) bool {
     const state = model.copy_state orelse return false;
@@ -1211,7 +1211,7 @@ pub fn isActive(model: *const ClientModel) bool {
 }
 
 /// Returns the pointer gesture's stable owner without lending its state.
-/// Example: `const target = pointerSelection(model) orelse return;`.
+/// Example: `const target = copy_mode.pointerSelection(model) orelse return;`.
 pub fn pointerSelection(model: *const ClientModel) ?struct { pane_id: core.PaneId, dragging: bool } {
     if (model.selection_gesture) |pane_id| {
         return .{ .pane_id = pane_id, .dragging = true };
@@ -1226,13 +1226,13 @@ pub fn pointerSelection(model: *const ClientModel) ?struct { pane_id: core.PaneI
 }
 
 /// Releases physical capture even when copying fails or the pane retired.
-/// Example: `finishPointerGesture(model);`.
+/// Example: `copy_mode.finishPointerGesture(model);`.
 pub fn finishPointerGesture(model: *ClientModel) void {
     model.selection_gesture = null;
 }
 
 /// Clears disposable mouse highlighting before typing or pasting.
-/// Example: `_ = clearPointerSelection(model);`.
+/// Example: `_ = copy_mode.clearPointerSelection(model);`.
 pub fn clearPointerSelection(model: *ClientModel) bool {
     const state = model.copy_state orelse return false;
     if (state.pointer == null) {
@@ -1243,7 +1243,7 @@ pub fn clearPointerSelection(model: *ClientModel) bool {
 }
 
 /// Starts selection only after routing has focused an attached pane.
-/// Example: `_ = beginPointerSelection(model, press);`.
+/// Example: `_ = copy_mode.beginPointerSelection(model, press);`.
 pub fn beginPointerSelection(model: *ClientModel, press: PointerPress) bool {
     if (isActive(model) or model.name_prompt.active() or model.pane_paste != null) {
         return false;
@@ -1277,7 +1277,7 @@ pub fn beginPointerSelection(model: *ClientModel, press: PointerPress) bool {
 /// Returns the pane captured by active copy mode.
 ///
 /// ```zig
-/// const pane_id = targetPane(model) orelse return;
+/// const pane_id = copy_mode.targetPane(model) orelse return;
 /// ```
 pub fn targetPane(model: *const ClientModel) ?core.PaneId {
     const state = model.copy_state orelse return null;
@@ -1288,7 +1288,7 @@ pub fn targetPane(model: *const ClientModel) ?core.PaneId {
 /// Returns the immutable copy-mode projection consumed by presenters.
 ///
 /// ```zig
-/// const projection = currentProjection(model) orelse return;
+/// const projection = copy_mode.currentProjection(model) orelse return;
 /// ```
 pub fn currentProjection(model: *const ClientModel) ?CopyModeProjection {
     const state = model.copy_state orelse return null;
@@ -1300,7 +1300,7 @@ pub fn currentProjection(model: *const ClientModel) ?CopyModeProjection {
 /// paste, missing pane or repeated request leaves the copy revision intact.
 ///
 /// ```zig
-/// if (enter(model)) observe(model.version());
+/// if (copy_mode.enter(model)) observe(model.version());
 /// ```
 pub fn enter(model: *ClientModel) bool {
     if (isActive(model) or model.name_prompt.active() or model.pane_paste != null) {
@@ -1326,7 +1326,7 @@ pub fn enter(model: *ClientModel) bool {
 /// runtime effects. Missing targets plan a local exit.
 ///
 /// ```zig
-/// const plan = planCommand(model, .{ .key = key }) orelse return;
+/// const plan = copy_mode.planCommand(model, .{ .key = key }) orelse return;
 /// ```
 pub fn planCommand(model: *const ClientModel, command: model_data.CopyModeCommand) ?CopyModePlan {
     const previous = model.copy_state orelse return null;
@@ -1433,7 +1433,7 @@ pub fn planCommand(model: *const ClientModel, command: model_data.CopyModeComman
 /// synchronization. Stale plans leave state untouched.
 ///
 /// ```zig
-/// const commit = commitPlan(model, plan) orelse return;
+/// const commit = copy_mode.commitPlan(model, plan) orelse return;
 /// ```
 pub fn commitPlan(model: *ClientModel, plan: CopyModePlan) ?CopyModeCommit {
     if (model.copy_revision != plan.expected_revision) {
@@ -1475,7 +1475,7 @@ pub fn commitPlan(model: *ClientModel, plan: CopyModePlan) ?CopyModeCommit {
 /// Releases copy mode only when it targets the retired pane.
 ///
 /// ```zig
-/// _ = release(model, pane_id);
+/// _ = copy_mode.release(model, pane_id);
 /// ```
 pub fn release(model: *ClientModel, pane_id: core.PaneId) bool {
     const state = model.copy_state orelse return false;

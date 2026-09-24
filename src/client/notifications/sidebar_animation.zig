@@ -16,14 +16,14 @@ const sidebar_animation_interval_ns = 120 * std.time.ns_per_ms;
 /// Example: `_ = try sidebar_animation.completeSidebarAnimationTick(client, result);`
 pub fn completeSidebarAnimationTick(client: *Client, result: anyerror!void) !?data.SidebarAnimationChange {
     try client.model.sidebar_animation_scheduler.complete(result);
-    const change = client.model.advanceSidebarAnimation() orelse return null;
+    const change = data.sidebar_animation.advance(&client.model) orelse return null;
     try scheduleSidebarAnimation(client);
     return change;
 }
 
 /// Ensures the current model has one future tick when animation is active.
 pub fn synchronizeSidebarAnimation(client: *Client) !Activity {
-    if (!client.model.sidebarAnimationActive()) {
+    if (!data.sidebar_animation.isActive(&client.model)) {
         return .inactive;
     }
 

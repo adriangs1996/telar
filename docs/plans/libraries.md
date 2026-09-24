@@ -123,10 +123,12 @@ of them: every package imports the libraries it uses by name.
   `pane_graphics` flow.
 - `Pane.queueGraphicsLimitResponse` builds a Kitty error reply by hand;
   that encoding belongs to `kitty-media`.
-- `ClientModel` keeps flow logic inline: copy mode (about 150 lines),
-  workspace list reconciliation, agent snapshot reconciliation,
-  configuration adoption, pane retirement, tab detachment. They move to
-  their flow files.
+- `ClientModel` kept flow logic inline (resolved): 110 of its functions
+  were flow procedures already taking `model`. They live in their flow
+  files (`copy_mode`, `pane_focus`, `pane_input`, `pane_attachment`,
+  `agent_panes`, `tab_creation`, `workspace_handoff` and the rest), and
+  `ClientModel.zig` went from 2,834 to 359 lines: the fields, their
+  construction, `version` and the lookups every flow shares.
 - Provider policy in the proxy (`proxy/provider/*`: which hosts are Claude or
   OpenAI, which routes are inference, what an Anthropic turn end looks like)
   stays in the app as business rules; the relay libraries receive it as data.

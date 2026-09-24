@@ -683,7 +683,7 @@ test "select tab closes captured paste before detaching and requesting the targe
     try std.testing.expect(!client.model.panes.find(second_pane).?.attached);
     try std.testing.expect(!terminal.graphics_store.paneVisible(TestHarness.bootstrap_pane));
     try std.testing.expect(terminal.graphics_store.paneVisible(second_pane));
-    try std.testing.expect(!client.model.panePasteActive());
+    try std.testing.expect(!data.pane_input.pasteActive(&client.model));
 
     try presentation_lifecycle.observe(terminal);
 
@@ -906,7 +906,7 @@ test "close tab reserves its captured paste closing marker" {
         client_module.actions.executeAction(client, .close_tab, .effect),
     );
 
-    try std.testing.expect(client.model.panePasteActive());
+    try std.testing.expect(data.pane_input.pasteActive(&client.model));
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);

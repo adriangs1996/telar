@@ -1,3 +1,7 @@
+const client_diagnostic = @import("../client_diagnostic.zig");
+const plugin_action = @import("../plugin_action.zig");
+const host_capabilities = @import("../host_capabilities.zig");
+const config_reload = @import("../../config/config_reload.zig");
 const workspace_list_snapshot = @import("../../workspace/workspace_list_snapshot.zig");
 const workspace_list = @import("../../workspace/workspace_list.zig");
 const sidebar = @import("../../layout/sidebar.zig");
@@ -36,7 +40,7 @@ test "configuration adoption commits generation sidebar and pane gaps once" {
     var model = ClientModel.initWithConfiguration(std.testing.allocator, true, 1);
     defer model.deinit();
 
-    const changed = try model.applyConfiguration(.{
+    const changed = try config_reload.apply(&model, .{
         .generation = 2,
         .sidebar_visible = false,
         .pane_gaps = false,
@@ -56,7 +60,7 @@ test "configuration adoption commits generation sidebar and pane gaps once" {
         .chrome = 1,
     }, model.version());
 
-    const semantic_noop = try model.applyConfiguration(.{
+    const semantic_noop = try config_reload.apply(&model, .{
         .generation = 3,
         .sidebar_visible = false,
         .pane_gaps = false,
@@ -76,7 +80,7 @@ test "configuration adoption rejects an old generation without partial state" {
     defer model.deinit();
     const version = model.version();
 
-    try std.testing.expectError(error.StaleConfiguration, model.applyConfiguration(.{
+    try std.testing.expectError(error.StaleConfiguration, config_reload.apply(&model, .{
         .generation = 4,
         .sidebar_visible = false,
         .pane_gaps = false,
@@ -92,16 +96,16 @@ test "client diagnostics publish only changed valid text" {
     var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
-    try std.testing.expect(model.diagnostic() == null);
-    try std.testing.expectEqual(model_data.Change.changed, try model.setDiagnostic(
+    try std.testing.expect(client_diagnostic.shown(&model) == null);
+    try std.testing.expectEqual(model_data.Change.changed, try client_diagnostic.set(&model, 
         "Lua failed: {s}",
         .{
             "boom",
         },
     ));
-    try std.testing.expectEqualStrings("Lua failed: boom", model.diagnostic().?);
+    try std.testing.expectEqualStrings("Lua failed: boom", client_diagnostic.shown(&model).?);
     try std.testing.expectEqual(Version{ .diagnostic = 1 }, model.version());
-    try std.testing.expectEqual(model_data.Change.unchanged, try model.setDiagnostic(
+    try std.testing.expectEqual(model_data.Change.unchanged, try client_diagnostic.set(&model, 
         "Lua failed: {s}",
         .{
             "boom",
@@ -112,14 +116,14 @@ test "client diagnostics publish only changed valid text" {
     var invalid: model_data.Diagnostic = .{};
     invalid.buffer[0] = 0xff;
     invalid.len = 1;
-    try std.testing.expectError(error.InvalidClientDiagnostic, model.replaceDiagnostic(invalid));
+    try std.testing.expectError(error.InvalidClientDiagnostic, client_diagnostic.replace(&model, invalid));
     invalid.len = invalid.buffer.len + 1;
-    try std.testing.expectError(error.InvalidClientDiagnostic, model.replaceDiagnostic(invalid));
-    try std.testing.expectEqualStrings("Lua failed: boom", model.diagnostic().?);
+    try std.testing.expectError(error.InvalidClientDiagnostic, client_diagnostic.replace(&model, invalid));
+    try std.testing.expectEqualStrings("Lua failed: boom", client_diagnostic.shown(&model).?);
 
-    try std.testing.expectEqual(model_data.Change.changed, model.clearDiagnostic());
-    try std.testing.expect(model.diagnostic() == null);
-    try std.testing.expectEqual(model_data.Change.unchanged, model.clearDiagnostic());
+    try std.testing.expectEqual(model_data.Change.changed, client_diagnostic.clear(&model));
+    try std.testing.expect(client_diagnostic.shown(&model) == null);
+    try std.testing.expectEqual(model_data.Change.unchanged, client_diagnostic.clear(&model));
     try std.testing.expectEqual(Version{ .diagnostic = 2 }, model.version());
 }
 
@@ -133,7 +137,7 @@ test "callback context is a value projection of committed client state" {
         .active_tab_index = 0,
         .pane_count = 0,
         .focused_pane_id = 0,
-    }, model.callbackContext());
+    }, plugin_action.callbackContext(&model));
 
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(3) },
@@ -149,25 +153,25 @@ test "callback context is a value projection of committed client state" {
         .active_tab_index = 0,
         .pane_count = 1,
         .focused_pane_id = core.raw(pane_id),
-    }, model.callbackContext());
+    }, plugin_action.callbackContext(&model));
 }
 
 test "plugin execution is single flight and completion matches its exact identity" {
     var model = ClientModel.initWithConfiguration(std.testing.allocator, true, 7);
     defer model.deinit();
 
-    const first = (try model.beginPluginExecution()).?;
+    const first = (try plugin_action.beginExecution(&model)).?;
 
     try std.testing.expectEqual(@as(u64, 1), @intFromEnum(first.id));
     try std.testing.expectEqual(@as(u64, 7), first.configuration_generation);
     try std.testing.expectEqualDeep(first, model.plugins.pluginExecution().?);
-    try std.testing.expect((try model.beginPluginExecution()) == null);
+    try std.testing.expect((try plugin_action.beginExecution(&model)) == null);
     try std.testing.expect(model.plugins.finishPluginExecution(@enumFromInt(99)) == null);
     try std.testing.expectEqualDeep(first, model.plugins.pluginExecution().?);
     try std.testing.expectEqualDeep(first, model.plugins.finishPluginExecution(first.id).?);
     try std.testing.expect(model.plugins.pluginExecution() == null);
 
-    const second = (try model.beginPluginExecution()).?;
+    const second = (try plugin_action.beginExecution(&model)).?;
 
     try std.testing.expectEqual(@as(u64, 2), @intFromEnum(second.id));
     try std.testing.expectEqualDeep(Version{}, model.version());
@@ -176,9 +180,9 @@ test "plugin execution is single flight and completion matches its exact identit
 test "plugin execution retains its launch generation across configuration reload" {
     var model = ClientModel.initWithConfiguration(std.testing.allocator, true, 3);
     defer model.deinit();
-    const execution = (try model.beginPluginExecution()).?;
+    const execution = (try plugin_action.beginExecution(&model)).?;
 
-    _ = try model.applyConfiguration(.{
+    _ = try config_reload.apply(&model, .{
         .generation = 4,
         .sidebar_visible = true,
         .pane_gaps = true,
@@ -193,11 +197,11 @@ test "plugin execution identity exhaustion cannot publish a partial reservation"
     defer model.deinit();
     model.plugins.next_plugin_execution_id = std.math.maxInt(u64);
 
-    const last = (try model.beginPluginExecution()).?;
+    const last = (try plugin_action.beginExecution(&model)).?;
 
     try std.testing.expectEqual(std.math.maxInt(u64), @intFromEnum(last.id));
     _ = model.plugins.finishPluginExecution(last.id);
-    try std.testing.expectError(error.PluginExecutionIdExhausted, model.beginPluginExecution());
+    try std.testing.expectError(error.PluginExecutionIdExhausted, plugin_action.beginExecution(&model));
     try std.testing.expect(model.plugins.pluginExecution() == null);
 }
 
@@ -280,7 +284,7 @@ test "host resize commits resolved geometry once" {
         .cell_height_px = 20,
     };
 
-    const commit = (try model.reconcileHost(.{
+    const commit = (try host_capabilities.reconcile(&model, .{
         .capabilities = model.host.host_capabilities,
         .size = resized,
     })).?.resize.?;
@@ -292,7 +296,7 @@ test "host resize commits resolved geometry once" {
     try std.testing.expectEqual(@as(u64, 1), commit.host_revision);
     try std.testing.expectEqualDeep(resized, model.host.host_size);
     try std.testing.expectEqual(Version{ .host = 1 }, model.version());
-    try std.testing.expect((try model.reconcileHost(.{
+    try std.testing.expect((try host_capabilities.reconcile(&model, .{
         .capabilities = model.host.host_capabilities,
         .size = resized,
     })) == null);
@@ -305,11 +309,11 @@ test "host resize rejects invalid and oversized grids without partial state" {
     const size = model.host.host_size;
     const version = model.version();
 
-    try std.testing.expectError(error.InvalidTerminalSize, model.reconcileHost(.{
+    try std.testing.expectError(error.InvalidTerminalSize, host_capabilities.reconcile(&model, .{
         .capabilities = model.host.host_capabilities,
         .size = .{ .cols = 0, .rows = 24 },
     }));
-    try std.testing.expectError(error.ScreenTooLarge, model.reconcileHost(.{
+    try std.testing.expectError(error.ScreenTooLarge, host_capabilities.reconcile(&model, .{
         .capabilities = model.host.host_capabilities,
         .size = .{
             .cols = std.math.maxInt(u16),
@@ -325,14 +329,14 @@ test "presentation capabilities commit independently without probe policy" {
     var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const graphics_commit = (try model.observeHostCapability(.{ .images = .supported })).?;
+    const graphics_commit = (try host_capabilities.observe(&model, .{ .images = .supported })).?;
     try std.testing.expect(graphics_commit.resize == null);
     try std.testing.expectEqual(model_data.EnvironmentSupport.supported, model.host.host_capabilities.images);
     try std.testing.expectEqual(model_data.EnvironmentSupport.unknown, model.host.host_capabilities.pointer_pixels);
 
-    _ = try model.observeHostCapability(.{ .pointer_pixels = .unsupported });
+    _ = try host_capabilities.observe(&model, .{ .pointer_pixels = .unsupported });
     const version = model.version();
-    try std.testing.expect((try model.observeHostCapability(.{ .pointer_pixels = .unsupported })) == null);
+    try std.testing.expect((try host_capabilities.observe(&model, .{ .pointer_pixels = .unsupported })) == null);
     try std.testing.expectEqualDeep(version, model.version());
 }
 
@@ -340,7 +344,7 @@ test "host pixel observations commit raw measurements and resolved geometry atom
     var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const window = (try model.observeHostCapability(.{ .window_pixels = .{
+    const window = (try host_capabilities.observe(&model, .{ .window_pixels = .{
         .width = 800,
         .height = 480,
     } })).?;
@@ -358,7 +362,7 @@ test "host pixel observations commit raw measurements and resolved geometry atom
         .host_capabilities = 1,
     }, model.version());
 
-    const cell = (try model.observeHostCapability(.{ .cell_pixels = .{
+    const cell = (try host_capabilities.observe(&model, .{ .cell_pixels = .{
         .width = 12,
         .height = 24,
     } })).?;
@@ -366,7 +370,7 @@ test "host pixel observations commit raw measurements and resolved geometry atom
     try std.testing.expectEqual(@as(u16, 12), model.host.host_size.cell_width_px);
     try std.testing.expectEqual(@as(u16, 24), model.host.host_size.cell_height_px);
 
-    const later_window = (try model.observeHostCapability(.{ .window_pixels = .{
+    const later_window = (try host_capabilities.observe(&model, .{ .window_pixels = .{
         .width = 1600,
         .height = 960,
     } })).?;
@@ -387,11 +391,11 @@ test "host reconciliation validates geometry before publishing capabilities" {
     const size = model.host.host_size;
     const version = model.version();
 
-    try std.testing.expectError(error.InconsistentHostGeometry, model.reconcileHost(.{
+    try std.testing.expectError(error.InconsistentHostGeometry, host_capabilities.reconcile(&model, .{
         .capabilities = capabilities,
         .size = size,
     }));
-    try std.testing.expectError(error.ScreenTooLarge, model.reconcileHost(.{
+    try std.testing.expectError(error.ScreenTooLarge, host_capabilities.reconcile(&model, .{
         .capabilities = capabilities,
         .size = .{
             .cols = std.math.maxInt(u16),

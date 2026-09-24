@@ -9,7 +9,7 @@ const Client = @import("../execution/Client.zig");
 
 /// Commits one split-edge move before delivering geometry. Example: `_ = try pane_resize.resizePane(client, command);`
 pub fn resizePane(client: *Client, command: data.ResizePaneRequest) !?data.PaneGeometryChange {
-    const change = client.model.resizePane(command) orelse return null;
+    const change = data.pane_resize.resizePane(&client.model, command) orelse return null;
     try deliverPaneGeometry(client, change);
 
     return change;
@@ -17,7 +17,7 @@ pub fn resizePane(client: *Client, command: data.ResizePaneRequest) !?data.PaneG
 
 /// Commits fullscreen state before delivering geometry. Example: `_ = try pane_resize.togglePaneFullscreen(client, command);`
 pub fn togglePaneFullscreen(client: *Client, command: data.TogglePaneFullscreenRequest) !?data.PaneGeometryChange {
-    const change = client.model.togglePaneFullscreen(command) orelse return null;
+    const change = data.pane_fullscreen.toggle(&client.model, command) orelse return null;
     try deliverPaneGeometry(client, change);
 
     return change;
@@ -71,6 +71,6 @@ fn deliverPaneGeometry(client: *Client, change: data.PaneGeometryChange) !void {
 
 /// Commits a membership-checked layout before delivering its geometry.
 pub fn applyPaneLayout(client: *Client, request: data.PaneLayoutRequest) !void {
-    const focus = try client.model.applyPaneLayout(request);
+    const focus = try data.tab_layout.applyPaneLayout(&client.model, request);
     try pane_focus.deliverPaneFocus(client, focus, request.area);
 }

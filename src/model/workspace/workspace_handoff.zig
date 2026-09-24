@@ -83,7 +83,7 @@ test "a failed root construction keeps the previous workspace" {
 /// An already empty model is an idempotent no-op.
 ///
 /// ```zig
-/// const departure = depart(model);
+/// const departure = workspace_handoff.depart(model);
 /// ```
 pub fn depart(model: *ClientModel) model_data.WorkspaceDeparture {
     const departure = model_namespace.captureWorkspace(model);
@@ -118,7 +118,7 @@ pub fn depart(model: *ClientModel) model_data.WorkspaceDeparture {
 /// version.
 ///
 /// ```zig
-/// const activation = try arrive(model, arrival);
+/// const activation = try workspace_handoff.arrive(model, arrival);
 /// ```
 pub fn arrive(model: *ClientModel, arrival: model_data.WorkspaceArrival) !model_data.WorkspaceActivation {
     if (model.tabs.count != 0 or model.workspace != null) {
@@ -154,7 +154,7 @@ pub fn arrive(model: *ClientModel, arrival: model_data.WorkspaceArrival) !model_
 /// previous workspace and every version.
 ///
 /// ```zig
-/// const replacement = try replace(model, arrival);
+/// const replacement = try workspace_handoff.replace(model, arrival);
 /// ```
 pub fn replace(model: *ClientModel, arrival: model_data.WorkspaceArrival) !WorkspaceReplacement {
     const departure = model_namespace.captureWorkspace(model);

@@ -6,7 +6,7 @@ the workspace geometry owner. Follow the action directly into the operation:
 ```text
 actions.executeAction
   -> pane_resize.resizePane
-     -> ClientModel.resizePane
+     -> pane_resize.resizePane
      -> pane_resize.deliverPaneGeometry: validate committed location,
         focus, fullscreen and pane revision
      -> model.to_host.invalidate_placements
@@ -15,7 +15,7 @@ actions.executeAction
   -> adapter observes presentation revisions
 ```
 
-`ClientModel.resizePane` moves the nearest split edge on the requested axis. Missing
+`pane_resize.resizePane` moves the nearest split edge on the requested axis. Missing
 axes, bounded ratios and rectangles without usable content produce no change.
 A commit advances the pane revision. Fullscreen keeps its split tree, so a
 resize while fullscreen changes the hidden tiled layout.

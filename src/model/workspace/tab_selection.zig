@@ -36,7 +36,7 @@ pub fn selectPosition(model: *ClientModel, position: usize) bool {
 /// Resolves one semantic target and returns the committed identity change.
 ///
 /// ```zig
-/// const selection = try commitSelection(model, .{ .position = 1 }) orelse return;
+/// const selection = try tab_selection.commitSelection(model, .{ .position = 1 }) orelse return;
 /// ```
 pub fn commitSelection(model: *ClientModel, target: model_data.TabSelectionTarget) !?model_data.TabSelection {
     const previous = model.tabs.activeSlot() orelse return error.NoActiveTab;

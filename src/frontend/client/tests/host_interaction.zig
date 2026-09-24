@@ -441,7 +441,7 @@ test "TUI inbox drains a finite FIFO batch and observes presentation once" {
     var heap = core.Heap.init(std.testing.allocator);
     const terminal = harness.terminal;
     const pending = terminal.presenter.pending_updates;
-    _ = try client.model.setDiagnostic("inbox batch", .{});
+    _ = try data.client_diagnostic.set(&client.model, "inbox batch", .{});
     for (0..40) |_| {
         try terminal.inbox.post(.{ .client = .{ .notified = {} } });
     }
@@ -463,7 +463,7 @@ test "client event dispatch skips observation after terminal input" {
     var heap = core.Heap.init(std.testing.allocator);
     const observed = terminal.presenter.presentation_state.observed.model;
     const pending_updates = terminal.presenter.pending_updates;
-    _ = try client.model.setDiagnostic("client is stopping", .{});
+    _ = try data.client_diagnostic.set(&client.model, "client is stopping", .{});
 
     const outcome = try client_events.handle(
         terminal,

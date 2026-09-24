@@ -7,7 +7,7 @@ each source reaches the same concrete operation.
 ```text
 host input -> actions.executeAction, view_interactions.apply or agent navigation
   -> pane_focus.applyPaneFocus
-     -> ClientModel.focusPane
+     -> pane_focus.focusPane
      -> pane_focus.deliverPaneFocus
         -> pane_focus.synchronizeActivePane
            -> synchronizePaneAttachments: shelf reservation and geometry
@@ -18,7 +18,7 @@ host input -> actions.executeAction, view_interactions.apply or agent navigation
 ```
 
 `pane_focus.applyPaneFocus` accepts a stable identity or direction and commits before
-resource delivery. `ClientModel.focusPane` resolves only within the active tab. An
+resource delivery. `pane_focus.focusPane` resolves only within the active tab. An
 absent target, repeated identity or direction without a candidate is a no-op.
 Tiled navigation uses spatial geometry. Fullscreen left/right follows displayed
 leaf order without wrapping; up/down does nothing. The split tree is retained.
@@ -40,7 +40,7 @@ presentation revision and its bytes are not counted as user input.
 Intentional tab detachment clears only that tab's report owner, before its
 `detach_pane` messages. Canonical pane retirement calls `pane_closure.releasePaneResources`
 and silently forgets that exact owner. Canonical tab/workspace replacement can
-forget the entire obsolete reporting context through `ClientModel.forgetReportedPaneFocus`.
+forget the entire obsolete reporting context through `pane_focus.forgetReported`.
 These paths do not send child input to a retired attachment.
 
 Tab, workspace, frame and snapshot operations call

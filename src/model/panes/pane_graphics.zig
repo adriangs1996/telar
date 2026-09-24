@@ -11,7 +11,7 @@ pub const Outcome = @import("../types/PaneGraphicsOutcome.zig").PaneGraphicsOutc
 /// Unknown panes and repeated values preserve the semantic revision.
 ///
 /// ```zig
-/// const commit = setFallback(model, pane_id, true) orelse return;
+/// const commit = pane_graphics.setFallback(model, pane_id, true) orelse return;
 /// ```
 pub fn setFallback(model: *ClientModel, pane_id: core.PaneId, visible: bool) ?model_data.PaneGraphicsFallbackCommit {
     const pane = model.panes.find(pane_id) orelse return null;

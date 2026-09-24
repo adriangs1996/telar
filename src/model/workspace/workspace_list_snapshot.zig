@@ -69,7 +69,7 @@ pub fn apply(model: *ClientModel, list: core.WorkspaceListView) !workspace_list_
 /// revisions preserve both the stored snapshot and its model version.
 ///
 /// ```zig
-/// const commit = try reconcile(model, input) orelse return;
+/// const commit = try workspace_list_snapshot.reconcile(model, input) orelse return;
 /// ```
 pub fn reconcile(model: *ClientModel, input: WorkspaceListInput) !?WorkspaceListCommit {
     if (!try model.workspace_list_snapshot.replace(input)) {
@@ -88,7 +88,7 @@ pub fn reconcile(model: *ClientModel, input: WorkspaceListInput) !?WorkspaceList
 /// Reports whether the latest runtime list contains one workspace.
 ///
 /// ```zig
-/// if (!knowsWorkspace(model, workspace)) return;
+/// if (!workspace_list_snapshot.knowsWorkspace(model, workspace)) return;
 /// ```
 pub fn knowsWorkspace(model: *const ClientModel, workspace: core.WorkspaceId) bool {
     return model.workspace_list_snapshot.indexOf(workspace) != null;

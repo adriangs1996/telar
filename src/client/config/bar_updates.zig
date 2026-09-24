@@ -159,7 +159,7 @@ fn callbackContext(client: *const Client, output: ?[]const u8) BarCallbackContex
     } else null;
 
     return .{
-        .client = client.model.callbackContext(),
+        .client = data.plugin_action.callbackContext(&client.model),
         .time = .{
             .unix_seconds = @intCast(std.Io.Timestamp.now(client.io, .real).toSeconds()),
             .year = local.year,
@@ -172,7 +172,7 @@ fn callbackContext(client: *const Client, output: ?[]const u8) BarCallbackContex
         },
         .metrics = metrics,
         .command_output = output,
-        .pane_title = client.model.focusedPaneTitle(),
+        .pane_title = data.pane_title.focusedTitle(&client.model),
     };
 }
 
@@ -224,7 +224,7 @@ fn startNextCommand(client: *Client) !void {
 }
 
 fn commitContent(model: *data.ClientModel, command: BarUpdateCommand, content: data.Content) !bar_update.Outcome {
-    const update_commit = model.updateBar(.{
+    const update_commit = data.configurable_bars.update(model, .{
         .generation = command.generation,
         .position = command.position,
         .content = content,

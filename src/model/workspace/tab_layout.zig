@@ -1,5 +1,7 @@
 //! The client-owned arrangement of one tab's panes: geometry, focus and
 //! pointer targets. `slot` is the tab's position in `model.tabs`.
+const tab_layout = @import("tab_layout.zig");
+const model_data = @import("../model.zig");
 const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
@@ -188,4 +190,28 @@ pub fn setPaneGaps(model: *ClientModel, enabled: bool) void {
     for (model.tabs.layout[0..model.tabs.count]) |*layout| {
         _ = layout.setPaneGaps(enabled);
     }
+}
+
+/// Replaces only a matching active tab layout after validating all members. Example: `const change = try tab_layout.applyPaneLayout(model, request);`
+pub fn applyPaneLayout(model: *ClientModel, request: model_data.PaneLayoutRequest) !model_data.PaneFocus {
+    const slot = model.tabs.activeSlot() orelse return error.NoActiveTab;
+    const location = model.tabs.location[slot];
+    if (!std.meta.eql(location, request.location)) {
+        return error.LayoutTabMismatch;
+    }
+
+    const previous = model.tabs.layout[slot].focused() orelse return error.NoFocusedPane;
+    for (request.panes.ids) |pane_id| {
+        const pane = model.panes.findInConst(location.tab_id, pane_id) orelse return error.LayoutPaneMismatch;
+        if (pane.kind == .agent and request.layout.surface(pane_id) != .thread) {
+            return error.InvalidAgentSurface;
+        }
+    }
+
+    if (!tab_layout.restoreSaved(model, slot, request.layout, request.panes)) {
+        return error.LayoutPaneMismatch;
+    }
+
+    model.panes_revision +%= 1;
+    return .{ .location = location, .previous = previous, .focused = request.panes.focused, .geometry_changed = true, .panes_revision = model.panes_revision };
 }

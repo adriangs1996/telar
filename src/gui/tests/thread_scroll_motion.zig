@@ -347,7 +347,7 @@ test "animated return to the live tail adopts the latest snapshot without anothe
     window.start(pane.agent_thread.?, pane.history_generation);
     window.pages[0].has_before = false;
     pane.agent_history = window;
-    _ = session.gui.app.model.scrollAgentThread(pane.id, 1);
+    _ = data.agent_panes.scrollThread(&session.gui.app.model, pane.id, 1);
     try publish(session);
 
     var snapshot = pane.agent_thread.?.*;
