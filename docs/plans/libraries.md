@@ -66,17 +66,17 @@ alias are one word.
 | `cellgrid` (done) | `src/core/ui` (cells, buffers, styles, geometry) | none; imports the `unicode` library, which replaced `src/core/unicode.zig` |
 | `pacing` (done) | `src/core/time`, `src/core/pacing` | none; one library, seven files |
 | `vtscan` (done) | `history/{KittyFramingCounter,OscScanner,InputScanner,escape,Event}.zig` | none; `osc.zig` holds `OscTracker` tests and stays for `command-capture` |
-| `command-capture` | `history/{terminal,TerminalTracker,OscTracker,agent_detection,codex_screen,prompt_scan,Sample}.zig` | detection phrases already come as data (`core.builtin_table`); pass the table in |
-| `history-store` | `history/persistence`, history worker and service | ids (`PaneId`, `RequestId`) become plain integers |
+| `cmdcapture` (done) | `history/{terminal,TerminalTracker,OscTracker,osc,Clock,Command,OscCompletion,TerminalTrackerConfig}.zig` | none; agent screen detection (`agent_detection`, `codex_screen`, `prompt_scan`, `Sample`) stays in history because it reads telar's agent manifests |
+| `history-store` (not a library) | `history/persistence`, history worker and service | its schema is telar's history model (panes, tabs, workspaces, authors, origins); only the SQLite binding was mechanism, and it is `sqlite` |
 | `sqlite` (done) | the three `@cImport("sqlite3.h")` in `history/persistence/sqlite.zig`, `agent/session_readers/codex.zig`, `agent/session_readers/session_readers.zig` | one binding plus the statement and migration helpers; the history schema and row mapping stay in `history/persistence/history_sql.zig`. A typed wrapper over the raw `c` calls in `Store.zig` is still open |
-| `transcripts` | `agent/transcript.zig`, `agent/session_readers`, `agent/description.zig` | uses `sqlite` |
-| `codex-app-server` | `src/backend/agent_panes` (protocol, normalizer, history pages, catalogs, session) | `Options.review_service` leaves the library; the flow passes it per call |
-| `kitty-media` | `src/backend/media` (processing, budgets, PNG through wuffs) | needs `vt-scan` |
-| `pane-render` | `pane/{blit,damage,text_search,Diff,Cursor,TextDump}.zig` | imports `ghostty-vt`, `cells` |
-| `checkpoint` | `src/backend/persistence` | telar enums become integers at the boundary |
-| `local-socket` | `transport/{LocalListener,local}.zig` (both sides) and `src/core/transport` | handshake stays in the app: it speaks telar's wire |
-| `editor-remote` | `editors/{remote,expressions,State,Job,Target,Candidate}.zig` | the two call sites that resolve a pane's cwd pass a resolved target |
-| `system-metrics`, `git-probe` | `runtime/observability/{Sampler,system_metrics,darwin,Raw,Values}.zig`, `runtime/resources/git_probe.zig` | ids and limits passed in |
+| `agentfiles` (done) | `agent/transcript.zig`, the Claude and Codex readers in `agent/session_readers` | the watch, job and completion stay; `agent/description.zig` generates titles with telar's prompt and stays |
+| `jsonl` (done) | `agent_panes/{Stream,OutputFrame}.zig` and the JSON helpers of `agent_panes/protocol.zig` | the rest of `agent_panes` translates Codex's protocol into telar's agent threads and stays |
+| `kitty-media` | `src/backend/media` (processing, budgets, PNG through wuffs) | produces `core.ImageKey`, `core.Image`, `ShmName` and the graphics limits of the protocol; waits for `wire` |
+| `pane-render` | `pane/{blit,damage,text_search,Diff,Cursor,TextDump}.zig` | encodes `core.Span` and cell sizes of the protocol; waits for `wire` |
+| `checkpoint` (not a library) | `src/backend/persistence` | it is telar's session format (pane kinds, providers, tab labels); its codec is `wire`'s |
+| `localsocket` (done) | `transport/{LocalListener,local}.zig` (both sides) and `src/core/transport` | none; the handshake stays in the app because it speaks telar's wire |
+| `editorremote` (done) | `editors/{remote,expressions,Target,Candidate}.zig`, `core/editor.zig` | the search works on its own candidates and reports an index; the runtime job keeps panes and the reply |
+| `hostmetrics`, `gitstatus` (done) | `runtime/observability/{Sampler,system_metrics,darwin,Raw,Values,SystemMetricsSample}.zig`, `runtime/resources/git_probe.zig` | the probe interval and the per-workspace completion stay in the runtime |
 | `imaging` (done) | `src/gui/image` decoders and box filter | PNG now decodes through Wuffs; sprites, attachments and the favicon worker stay in the GUI |
 | `box-glyphs` | `src/gui/text/{Box*,Block*,block_shapes,Braille*}.zig` | they emit into `render/QuadList.zig`, which imports `native/DiagramTexture.zig`; the quad list joins `layout` without the texture |
 | `markdown-spans` | `gui/widgets/{MessageSpan,MessageSpans,MessageSpanScope}.zig` | inline the URI extraction it borrows from core |
@@ -152,9 +152,11 @@ the libraries it uses by name.
    and `sqlite` are done, and PNG decoding settled on Wuffs in `imaging`.
    No package republishes a library member; consumers import each library
    directly, and `check-library-reexports` enforces it.
-3. Backend mechanisms: `command-capture`, `history-store`, `kitty-media`,
-   `pane-render`, `transcripts`, `codex-app-server`, `checkpoint`,
-   `local-socket`, `editor-remote`, `system-metrics`, `git-probe`.
+3. Backend mechanisms. Done: `hostmetrics`, `gitstatus`, `localsocket`,
+   `agentfiles`, `editorremote`, `cmdcapture`, `jsonl`. Measuring what each
+   candidate uses from core showed `history-store` and `checkpoint` persist
+   telar's own model, so they stay; `kitty-media` and `pane-render` build
+   protocol values and move after `wire`.
 4. Proxy: `sse`, `h2-framing`, `local-ca`, then `http-relay` and
    `capture-buffer` once the dialect and pane tags are parameters.
 5. `wire`, which touches both processes and every message.
