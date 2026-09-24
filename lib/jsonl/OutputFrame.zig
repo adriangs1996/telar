@@ -1,9 +1,11 @@
 const std = @import("std");
-const protocol = @import("protocol.zig");
+const json = @import("json.zig");
+const limits = @import("limits.zig");
 const OutputFrame = @This();
 
 pub const max_output_bytes = 8 * 1024;
-pub const marker = "\n[Output truncated by Telar]";
+/// Appended to a truncated field unless the owner names its own marker.
+pub const default_marker = "\n[Output truncated]";
 const Container = enum { object_first, object_key, object_value, array_first, array_value };
 const output_fields = std.StaticStringMap(void).initComptime(.{
     .{ "stdout", {} },           .{ "stderr", {} },           .{ "aggregated_output", {} },
@@ -12,7 +14,8 @@ const output_fields = std.StaticStringMap(void).initComptime(.{
     .{ "data", {} },
 });
 
-bytes: [protocol.max_line_bytes]u8 = undefined,
+marker: []const u8 = default_marker,
+bytes: [limits.max_line_bytes]u8 = undefined,
 writer: std.Io.Writer = undefined,
 containers: [64]Container = undefined,
 depth: usize = 0,
@@ -32,7 +35,7 @@ complete: bool = false,
 /// The scanner still validates discarded bytes; this scratch belongs to the observation actor.
 /// Example: `frame.reset(); try frame.consume(&scanner);`
 pub fn reset(self: *OutputFrame) void {
-    self.* = .{};
+    self.* = .{ .marker = self.marker };
     self.writer = .fixed(&self.bytes);
 }
 
@@ -171,7 +174,7 @@ fn endString(self: *OutputFrame) !void {
             }
         }
 
-        try std.json.Stringify.encodeJsonStringChars(marker, .{}, &self.writer);
+        try std.json.Stringify.encodeJsonStringChars(self.marker, .{}, &self.writer);
         self.truncated = true;
     }
 
@@ -204,10 +207,10 @@ test "output projection preserves JSON values across every input boundary" {
         try std.testing.expect(frame.complete and !frame.truncated);
         const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, frame.writer.buffered(), .{});
         defer parsed.deinit();
-        const params = protocol.field(parsed.value, "params");
-        try std.testing.expectEqualStrings("Señal 🧵 🧵 \n\"\\", protocol.string(protocol.field(params, "text")));
-        try std.testing.expectEqual(@as(i64, 9), protocol.field(parsed.value, "id").integer);
-        const items = protocol.field(params, "items").array.items;
+        const params = json.field(parsed.value, "params");
+        try std.testing.expectEqualStrings("Señal 🧵 🧵 \n\"\\", json.string(json.field(params, "text")));
+        try std.testing.expectEqual(@as(i64, 9), json.field(parsed.value, "id").integer);
+        const items = json.field(params, "items").array.items;
         try std.testing.expectEqual(@as(f64, -12500), items[0].float);
         try std.testing.expect(items[1].bool and !items[2].bool and items[3] == .null);
         try std.testing.expect(items[4] == .object and items[5] == .array);
@@ -233,10 +236,10 @@ test "output projection validates discarded escapes and keeps UTF8 preview bound
             try frame.consume(&scanner);
             const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, frame.writer.buffered(), .{});
             defer parsed.deinit();
-            const output = protocol.string(protocol.field(parsed.value, "aggregatedOutput"));
+            const output = json.string(json.field(parsed.value, "aggregatedOutput"));
             try std.testing.expect(frame.truncated);
-            try std.testing.expectEqualStrings(&padding ++ marker, output);
-            try std.testing.expectEqual(@as(i64, 7), protocol.field(parsed.value, "exitCode").integer);
+            try std.testing.expectEqualStrings(&padding ++ default_marker, output);
+            try std.testing.expectEqual(@as(i64, 7), json.field(parsed.value, "exitCode").integer);
         }
     }
 
@@ -271,4 +274,10 @@ test "output projection bounds metadata and nesting instead of truncating author
     var deep = std.json.Scanner.initCompleteInput(std.testing.allocator, "[" ** 65);
     defer deep.deinit();
     try std.testing.expectError(error.ProviderFrameTooDeep, frame.consume(&deep));
+}
+
+test "a reset keeps the owner's marker" {
+    var frame: OutputFrame = .{ .marker = "[cut]" };
+    frame.reset();
+    try std.testing.expectEqualStrings("[cut]", frame.marker);
 }

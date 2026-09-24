@@ -1,12 +1,12 @@
+const jsonl = @import("jsonl");
 const std = @import("std");
 const core = @import("telar-core");
 const Codex = @import("Codex.zig");
 const Prompt = @import("Prompt.zig");
-const protocol = @import("protocol.zig");
 
 fn receive(codex: *Codex, value: anytype) !?[]const u8 {
     var buffer: [8192]u8 = undefined;
-    const line = try protocol.encode(&buffer, value);
+    const line = try jsonl.encode(&buffer, value);
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, line, .{});
     defer parsed.deinit();
     return codex.receive(.{ .value = parsed.value });

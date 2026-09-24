@@ -39,6 +39,10 @@ const specs = [_]Spec{
         .name = "gfx",
     },
     .{
+        .name = "jsonl",
+        .libc = true,
+    },
+    .{
         .name = "localsocket",
         .libc = true,
         .posix = true,

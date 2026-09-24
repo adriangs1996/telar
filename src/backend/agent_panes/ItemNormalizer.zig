@@ -1,6 +1,6 @@
+const jsonl = @import("jsonl");
 const std = @import("std");
 const core = @import("telar-core");
-const protocol = @import("protocol.zig");
 const ItemUpdate = @import("ItemUpdate.zig");
 const ItemNormalizer = @This();
 
@@ -13,25 +13,25 @@ description: [2048]u8 = undefined,
 /// Normalizes only public provider item fields. The returned slices borrow this scratch.
 /// Example: `if (normalizer.item(value, true)) |update| transcript.update(update);`
 pub fn item(self: *ItemNormalizer, value: std.json.Value, complete: bool) ?ItemUpdate {
-    const kind = protocol.field(value, "type");
+    const kind = jsonl.field(value, "type");
     var result: ItemUpdate = .{
-        .id = protocol.string(protocol.field(value, "id")),
+        .id = jsonl.string(jsonl.field(value, "id")),
         .role = .tool,
         .complete = complete,
-        .status = status(protocol.field(value, "status"), complete),
+        .status = status(jsonl.field(value, "status"), complete),
     };
     var writer: std.Io.Writer = .fixed(self.body_buffer orelse &self.body);
-    if (protocol.is(kind, "agentMessage") or protocol.is(kind, "plan")) {
+    if (jsonl.is(kind, "agentMessage") or jsonl.is(kind, "plan")) {
         result.role = .assistant;
-        result.kind = if (protocol.is(kind, "plan")) .plan else .message;
+        result.kind = if (jsonl.is(kind, "plan")) .plan else .message;
         result.title = if (result.kind == .plan) "Plan" else "";
-        result.text = protocol.string(protocol.field(value, "text"));
-        result.phase = if (protocol.is(protocol.field(value, "phase"), "commentary")) .commentary else if (protocol.is(protocol.field(value, "phase"), "final_answer")) .final_answer else .unknown;
+        result.text = jsonl.string(jsonl.field(value, "text"));
+        result.phase = if (jsonl.is(jsonl.field(value, "phase"), "commentary")) .commentary else if (jsonl.is(jsonl.field(value, "phase"), "final_answer")) .final_answer else .unknown;
         return result;
-    } else if (protocol.is(kind, "userMessage")) {
+    } else if (jsonl.is(kind, "userMessage")) {
         result.role = .user;
         result.kind = .message;
-        const content = protocol.field(value, "content");
+        const content = jsonl.field(value, "content");
         if (content == .array) {
             var image_index: usize = 0;
             for (content.array.items, 0..) |part, index| {
@@ -41,53 +41,53 @@ pub fn item(self: *ItemNormalizer, value: std.json.Value, complete: bool) ?ItemU
                     };
                 }
 
-                const part_kind = protocol.field(part, "type");
-                if (protocol.is(part_kind, "text")) {
-                    writer.writeAll(protocol.string(protocol.field(part, "text"))) catch {
+                const part_kind = jsonl.field(part, "type");
+                if (jsonl.is(part_kind, "text")) {
+                    writer.writeAll(jsonl.string(jsonl.field(part, "text"))) catch {
                         result.truncated = true;
                     };
-                } else if (protocol.is(part_kind, "localImage") or protocol.is(part_kind, "image")) {
+                } else if (jsonl.is(part_kind, "localImage") or jsonl.is(part_kind, "image")) {
                     image_index += 1;
                     writer.print("[Image {d}]", .{image_index}) catch {
                         result.truncated = true;
                     };
                 } else {
-                    writer.print("[{s}] {f}", .{ protocol.string(part_kind), std.json.fmt(part, .{}) }) catch {
+                    writer.print("[{s}] {f}", .{ jsonl.string(part_kind), std.json.fmt(part, .{}) }) catch {
                         result.truncated = true;
                     };
                 }
             }
         }
-    } else if (protocol.is(kind, "reasoning")) {
+    } else if (jsonl.is(kind, "reasoning")) {
         result.role = .assistant;
         result.kind = .reasoning;
         result.title = "Reasoning summary";
-        const summary = protocol.field(value, "summary");
+        const summary = jsonl.field(value, "summary");
         if (summary == .array) {
             for (summary.array.items) |part| {
-                writer.print("{s}\n", .{protocol.string(part)}) catch {
+                writer.print("{s}\n", .{jsonl.string(part)}) catch {
                     result.truncated = true;
                     break;
                 };
             }
         }
-    } else if (protocol.is(kind, "commandExecution")) {
+    } else if (jsonl.is(kind, "commandExecution")) {
         result.kind = .command;
         result.title = "Command";
-        result.detail = std.fmt.bufPrint(&self.description, "{s}\n{s}", .{ protocol.string(protocol.field(value, "command")), protocol.string(protocol.field(value, "cwd")) }) catch protocol.string(protocol.field(value, "command"));
-        writer.print("$ {s}\n{s}", .{ protocol.string(protocol.field(value, "command")), protocol.string(protocol.field(value, "aggregatedOutput")) }) catch {
+        result.detail = std.fmt.bufPrint(&self.description, "{s}\n{s}", .{ jsonl.string(jsonl.field(value, "command")), jsonl.string(jsonl.field(value, "cwd")) }) catch jsonl.string(jsonl.field(value, "command"));
+        writer.print("$ {s}\n{s}", .{ jsonl.string(jsonl.field(value, "command")), jsonl.string(jsonl.field(value, "aggregatedOutput")) }) catch {
             result.truncated = true;
         };
-        const exit_code = protocol.field(value, "exitCode");
+        const exit_code = jsonl.field(value, "exitCode");
         if (exit_code == .integer) {
             writer.print("\nExit code: {d}\n", .{exit_code.integer}) catch {
                 result.truncated = true;
             };
         }
-    } else if (protocol.is(kind, "fileChange")) {
+    } else if (jsonl.is(kind, "fileChange")) {
         result.kind = .file_change;
         result.title = "File changes";
-        const changes = protocol.field(value, "changes");
+        const changes = jsonl.field(value, "changes");
         result.truncated = changes != .array;
         if (changes == .array) {
             result.truncated = changes.array.items.len == 0;
@@ -103,48 +103,48 @@ pub fn item(self: *ItemNormalizer, value: std.json.Value, complete: bool) ?ItemU
                 };
             }
         }
-    } else if (protocol.is(kind, "mcpToolCall") or protocol.is(kind, "dynamicToolCall")) {
-        result.kind = if (protocol.is(kind, "mcpToolCall")) .mcp else .dynamic_tool;
-        result.title = std.fmt.bufPrint(&self.heading, "{s} · {s}", .{ protocol.string(protocol.field(value, if (result.kind == .mcp) "server" else "namespace")), protocol.string(protocol.field(value, "tool")) }) catch protocol.string(protocol.field(value, "tool"));
-        writer.print("Arguments\n{f}\n", .{std.json.fmt(protocol.field(value, "arguments"), .{ .whitespace = .indent_2 })}) catch {
+    } else if (jsonl.is(kind, "mcpToolCall") or jsonl.is(kind, "dynamicToolCall")) {
+        result.kind = if (jsonl.is(kind, "mcpToolCall")) .mcp else .dynamic_tool;
+        result.title = std.fmt.bufPrint(&self.heading, "{s} · {s}", .{ jsonl.string(jsonl.field(value, if (result.kind == .mcp) "server" else "namespace")), jsonl.string(jsonl.field(value, "tool")) }) catch jsonl.string(jsonl.field(value, "tool"));
+        writer.print("Arguments\n{f}\n", .{std.json.fmt(jsonl.field(value, "arguments"), .{ .whitespace = .indent_2 })}) catch {
             result.truncated = true;
         };
-        const failure = protocol.field(value, "error");
+        const failure = jsonl.field(value, "error");
         if (failure != .null) {
             result.status = .failed;
-            writer.print("Error\n{s}\n", .{protocol.string(protocol.field(failure, "message"))}) catch {
+            writer.print("Error\n{s}\n", .{jsonl.string(jsonl.field(failure, "message"))}) catch {
                 result.truncated = true;
             };
         }
 
-        const output = protocol.field(value, if (result.kind == .mcp) "result" else "contentItems");
+        const output = jsonl.field(value, if (result.kind == .mcp) "result" else "contentItems");
         if (output != .null) {
             toolOutput(&writer, output) catch {
                 result.truncated = true;
             };
         }
 
-        if (protocol.field(value, "success") == .bool and !protocol.field(value, "success").bool) {
+        if (jsonl.field(value, "success") == .bool and !jsonl.field(value, "success").bool) {
             result.status = .failed;
         }
-    } else if (protocol.is(kind, "webSearch")) {
+    } else if (jsonl.is(kind, "webSearch")) {
         result.kind = .web_search;
         result.title = "Web search";
-        result.detail = protocol.string(protocol.field(value, "query"));
-        writer.print("{s}\n{f}\n", .{ protocol.string(protocol.field(value, "query")), std.json.fmt(protocol.field(value, "action"), .{}) }) catch {
+        result.detail = jsonl.string(jsonl.field(value, "query"));
+        writer.print("{s}\n{f}\n", .{ jsonl.string(jsonl.field(value, "query")), std.json.fmt(jsonl.field(value, "action"), .{}) }) catch {
             result.truncated = true;
         };
-        const results = protocol.field(value, "results");
+        const results = jsonl.field(value, "results");
         if (results != .null) {
             writer.print("{f}\n", .{std.json.fmt(results, .{})}) catch {
                 result.truncated = true;
             };
         }
-    } else if (protocol.is(kind, "collabAgentToolCall")) {
+    } else if (jsonl.is(kind, "collabAgentToolCall")) {
         result.kind = .dispatch;
-        result.title = dispatchTitle(protocol.string(protocol.field(value, "tool")));
-        result.detail = protocol.string(protocol.field(value, "prompt"));
-        writer.writeAll(protocol.string(protocol.field(value, "prompt"))) catch {
+        result.title = dispatchTitle(jsonl.string(jsonl.field(value, "tool")));
+        result.detail = jsonl.string(jsonl.field(value, "prompt"));
+        writer.writeAll(jsonl.string(jsonl.field(value, "prompt"))) catch {
             result.truncated = true;
         };
         if (self.include_history_details) {
@@ -152,7 +152,7 @@ pub fn item(self: *ItemNormalizer, value: std.json.Value, complete: bool) ?ItemU
                 result.truncated = true;
             };
         }
-    } else if (protocol.is(kind, "contextCompaction")) {
+    } else if (jsonl.is(kind, "contextCompaction")) {
         result.kind = .system;
         result.role = .system;
         result.title = "Context compacted";
@@ -166,33 +166,33 @@ pub fn item(self: *ItemNormalizer, value: std.json.Value, complete: bool) ?ItemU
 
 /// Example: `const state = ItemNormalizer.status(raw_status, completed);`
 pub fn status(value: std.json.Value, complete: bool) core.agent_thread.ItemStatus {
-    if (protocol.is(value, "failed")) {
+    if (jsonl.is(value, "failed")) {
         return .failed;
     }
-    if (protocol.is(value, "declined")) {
+    if (jsonl.is(value, "declined")) {
         return .declined;
     }
-    if (protocol.is(value, "interrupted")) {
+    if (jsonl.is(value, "interrupted")) {
         return .interrupted;
     }
-    return if (complete or protocol.is(value, "completed")) .completed else .running;
+    return if (complete or jsonl.is(value, "completed")) .completed else .running;
 }
 
 fn fileChange(writer: *std.Io.Writer, change: std.json.Value) !void {
     try knownFields(change, &.{ "path", "kind", "diff" });
-    const path = protocol.field(change, "path");
-    const diff = protocol.field(change, "diff");
-    const kind = protocol.field(change, "kind");
+    const path = jsonl.field(change, "path");
+    const diff = jsonl.field(change, "diff");
+    const kind = jsonl.field(change, "kind");
     try validPath(path);
     if (diff != .string or !std.unicode.utf8ValidateSlice(diff.string) or std.mem.indexOfScalar(u8, diff.string, 0) != null) {
         return error.UnsupportedFileChange;
     }
 
-    const change_type = protocol.field(kind, "type");
-    const is_update = protocol.is(change_type, "update");
+    const change_type = jsonl.field(kind, "type");
+    const is_update = jsonl.is(change_type, "update");
     try knownFields(kind, if (is_update) &.{ "type", "move_path" } else &.{"type"});
-    const label = if (is_update) "Updated" else if (protocol.is(change_type, "add")) "Added" else if (protocol.is(change_type, "delete")) "Deleted" else return error.UnsupportedFileChange;
-    const destination = protocol.field(kind, "move_path");
+    const label = if (is_update) "Updated" else if (jsonl.is(change_type, "add")) "Added" else if (jsonl.is(change_type, "delete")) "Deleted" else return error.UnsupportedFileChange;
+    const destination = jsonl.field(kind, "move_path");
     if (destination != .null) {
         try validPath(destination);
         try writer.writeAll("Moved ");
@@ -247,19 +247,19 @@ fn writePath(writer: *std.Io.Writer, path: []const u8) !void {
 }
 
 fn toolOutput(writer: *std.Io.Writer, output: std.json.Value) !void {
-    const content = if (output == .array) output else protocol.field(output, "content");
+    const content = if (output == .array) output else jsonl.field(output, "content");
     if (content == .array) {
         for (content.array.items) |part| {
-            const kind = protocol.field(part, "type");
-            if (protocol.is(kind, "text") or protocol.is(kind, "inputText")) {
-                try writer.print("{s}\n", .{protocol.string(protocol.field(part, "text"))});
+            const kind = jsonl.field(part, "type");
+            if (jsonl.is(kind, "text") or jsonl.is(kind, "inputText")) {
+                try writer.print("{s}\n", .{jsonl.string(jsonl.field(part, "text"))});
             } else {
-                try writer.print("[{s} result]\n", .{protocol.string(kind)});
+                try writer.print("[{s} result]\n", .{jsonl.string(kind)});
             }
         }
     }
 
-    const structured = protocol.field(output, "structuredContent");
+    const structured = jsonl.field(output, "structuredContent");
     if (structured != .null) {
         try writer.print("{f}\n", .{std.json.fmt(structured, .{ .whitespace = .indent_2 })});
     }
@@ -281,28 +281,28 @@ fn dispatchTitle(tool: []const u8) []const u8 {
 }
 
 fn collaborationDetails(writer: *std.Io.Writer, value: std.json.Value) !void {
-    const receivers = protocol.field(value, "receiverThreadIds");
+    const receivers = jsonl.field(value, "receiverThreadIds");
     if (receivers == .array) {
         try writer.writeAll("\nAgents\n");
         for (receivers.array.items) |receiver| {
-            try writer.print("{s}\n", .{protocol.string(receiver)});
+            try writer.print("{s}\n", .{jsonl.string(receiver)});
         }
     }
 
-    const states = protocol.field(value, "agentsStates");
+    const states = jsonl.field(value, "agentsStates");
     if (states == .object) {
         var iterator = states.object.iterator();
         while (iterator.next()) |entry| {
-            try writer.print("{s}: {s}\n", .{ entry.key_ptr.*, protocol.string(protocol.field(entry.value_ptr.*, "status")) });
-            const message = protocol.string(protocol.field(entry.value_ptr.*, "message"));
+            try writer.print("{s}: {s}\n", .{ entry.key_ptr.*, jsonl.string(jsonl.field(entry.value_ptr.*, "status")) });
+            const message = jsonl.string(jsonl.field(entry.value_ptr.*, "message"));
             if (message.len != 0) {
                 try writer.print("{s}\n", .{message});
             }
         }
     }
 
-    const model = protocol.string(protocol.field(value, "model"));
-    const effort = protocol.string(protocol.field(value, "reasoningEffort"));
+    const model = jsonl.string(jsonl.field(value, "model"));
+    const effort = jsonl.string(jsonl.field(value, "reasoningEffort"));
     if (model.len != 0 or effort.len != 0) {
         try writer.print("\nModel: {s}\nReasoning effort: {s}\n", .{ model, effort });
     }

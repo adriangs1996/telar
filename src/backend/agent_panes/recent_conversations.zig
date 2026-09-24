@@ -1,28 +1,28 @@
+const jsonl = @import("jsonl");
 const history_page = @import("history_page.zig");
 const std = @import("std");
 const core = @import("telar-core");
-const protocol = @import("protocol.zig");
 
 /// Publishes one bounded provider listing after validating its scope and IDs.
 /// Example: `try recent_conversations.load(snapshot, result, cwd);`
 pub fn load(snapshot: *core.AgentThreadSnapshot, result: std.json.Value, cwd: []const u8) !void {
-    const data = protocol.field(result, "data");
+    const data = jsonl.field(result, "data");
     if (data != .array or data.array.items.len > core.RecentConversations.capacity) {
         return error.InvalidConversationList;
     }
 
-    var recent: core.RecentConversations = .{ .phase = .ready, .has_more = protocol.string(protocol.field(result, "nextCursor")).len != 0 };
+    var recent: core.RecentConversations = .{ .phase = .ready, .has_more = jsonl.string(jsonl.field(result, "nextCursor")).len != 0 };
     for (data.array.items) |entry| {
-        const id = protocol.string(protocol.field(entry, "id"));
-        if (!protocol.is(protocol.field(entry, "cwd"), cwd)) {
+        const id = jsonl.string(jsonl.field(entry, "id"));
+        if (!jsonl.is(jsonl.field(entry, "cwd"), cwd)) {
             return error.InvalidConversationDirectory;
         }
-        if (std.mem.eql(u8, id, snapshot.threadId()) or protocol.field(entry, "parentThreadId") == .string or protocol.is(protocol.field(protocol.field(entry, "status"), "type"), "active")) {
+        if (std.mem.eql(u8, id, snapshot.threadId()) or jsonl.field(entry, "parentThreadId") == .string or jsonl.is(jsonl.field(jsonl.field(entry, "status"), "type"), "active")) {
             continue;
         }
 
-        const name = protocol.string(protocol.field(entry, "name"));
-        const raw = if (name.len != 0) name else protocol.string(protocol.field(entry, "preview"));
+        const name = jsonl.string(jsonl.field(entry, "name"));
+        const raw = if (name.len != 0) name else jsonl.string(jsonl.field(entry, "preview"));
         const prefix = history_page.prefix(raw, 160);
         var title: [160]u8 = undefined;
         for (prefix, 0..) |byte, index| {

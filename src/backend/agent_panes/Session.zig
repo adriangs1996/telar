@@ -1,3 +1,4 @@
+const jsonl = @import("jsonl");
 const command_module = @import("command.zig");
 const ReviewService = @import("../change_review/Service.zig");
 const ReviewContext = @import("../change_review/Context.zig");
@@ -6,13 +7,16 @@ const std = @import("std");
 const core = @import("telar-core");
 const Options = @import("Options.zig");
 const Codex = @import("Codex.zig");
-const Stream = @import("Stream.zig");
+const Stream = jsonl.Stream;
 const protocol = @import("protocol.zig");
 const Prompt = @import("Prompt.zig");
 const ThreadMetadata = @import("ThreadMetadata.zig");
 const HistoryOptions = @import("HistoryOptions.zig");
-const OutputFrame = @import("OutputFrame.zig");
+const OutputFrame = jsonl.OutputFrame;
 const Session = @This();
+
+/// What a user reads where Codex output was cut to the frame bound.
+const truncation_marker = "\n[Output truncated by Telar]";
 
 gpa: std.mem.Allocator,
 review_service: ?*ReviewService = null,
@@ -34,7 +38,7 @@ published: core.AgentThreadSnapshot,
 published_metadata: ThreadMetadata = .{},
 codex: Codex,
 stream: Stream = undefined,
-output_frame: OutputFrame = .{},
+output_frame: OutputFrame = .{ .marker = truncation_marker },
 json_storage: [protocol.max_json_bytes]u8 = undefined,
 
 /// Starts a bounded observation actor. Process spawn and JSON run on that actor.
@@ -320,7 +324,7 @@ fn runProvider(self: *Session, io: std.Io) !void {
             .line => |result| {
                 const line = try result;
                 var allocator: std.heap.FixedBufferAllocator = .init(&self.json_storage);
-                const parsed = try std.json.parseFromSlice(std.json.Value, allocator.allocator(), line, .{ .max_value_len = protocol.max_line_bytes });
+                const parsed = try std.json.parseFromSlice(std.json.Value, allocator.allocator(), line, .{ .max_value_len = jsonl.limits.max_line_bytes });
                 defer parsed.deinit();
                 if (try self.codex.receive(.{ .value = parsed.value, .truncated = self.stream.truncated })) |reply| {
                     try write(io, child.stdin.?, reply);
@@ -455,15 +459,15 @@ test {
 
 fn captureReview(self: *Session, io: std.Io, value: std.json.Value) void {
     const service = self.review_service orelse return;
-    if (!protocol.is(protocol.field(value, "method"), "item/completed") or self.codex.thread_id_len == 0) {
+    if (!jsonl.is(jsonl.field(value, "method"), "item/completed") or self.codex.thread_id_len == 0) {
         return;
     }
-    const params = protocol.field(value, "params");
-    const item = protocol.field(params, "item");
-    if (!protocol.is(protocol.field(item, "type"), "fileChange")) {
+    const params = jsonl.field(value, "params");
+    const item = jsonl.field(params, "item");
+    if (!jsonl.is(jsonl.field(item, "type"), "fileChange")) {
         return;
     }
-    const thread = protocol.string(protocol.field(params, "threadId"));
+    const thread = jsonl.string(jsonl.field(params, "threadId"));
     if (!std.mem.eql(u8, thread, self.codex.thread_id[0..self.codex.thread_id_len])) {
         return;
     }
@@ -475,7 +479,7 @@ fn captureReview(self: *Session, io: std.Io, value: std.json.Value) void {
         return;
     }
     const context = ReviewContext.init(.{ .id = self.published.pane_id, .generation = self.published.pane_generation }, .codex, thread) catch return;
-    const latest = service.recordProvider(io, .{ .context = context, .turn = protocol.string(protocol.field(params, "turnId")), .item = update.id, .patch = update.text }) catch {
+    const latest = service.recordProvider(io, .{ .context = context, .turn = jsonl.string(jsonl.field(params, "turnId")), .item = update.id, .patch = update.text }) catch {
         _ = service.dropped.fetchAdd(1, .monotonic);
         return;
     };

@@ -223,6 +223,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `agentfiles` | titles from Claude Code's JSONL transcript and Codex's thread database |
 | `editorremote` | reusing a terminal editor: identify it, reach its server, open a literal path |
 | `cmdcapture` | commands, directories, exit status and output tails read from a pane's terminal |
+| `jsonl` | bounded JSON-lines streams, in-place truncation of output fields, total value accessors |
 
 A rule that decides what telar means stays in a flow even when it is pure;
 [`plans/libraries.md`](plans/libraries.md) lists what is still to move.

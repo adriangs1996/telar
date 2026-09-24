@@ -1,3 +1,4 @@
+const jsonl = @import("jsonl");
 const recent_conversations = @import("recent_conversations.zig");
 const command_module = @import("command.zig");
 const std = @import("std");
@@ -49,7 +50,7 @@ write_buffer: [protocol.max_write_bytes]u8 = undefined,
 
 /// Example: `try transport.write(try codex.initialize());`
 pub fn initialize(self: *Codex) ![]const u8 {
-    return protocol.encode(&self.write_buffer, .{
+    return jsonl.encode(&self.write_buffer, .{
         .id = 1,
         .method = "initialize",
         .params = .{
@@ -69,8 +70,8 @@ pub fn receive(self: *Codex, frame: ProviderFrame) !?[]const u8 {
         return error.InvalidProviderFrame;
     }
 
-    const method = protocol.field(value, "method");
-    const id = protocol.field(value, "id");
+    const method = jsonl.field(value, "method");
+    const id = jsonl.field(value, "id");
     if (frame.truncated and (id != .null or method != .string)) {
         return error.ProviderControlTooLarge;
     }
@@ -83,7 +84,7 @@ pub fn receive(self: *Codex, frame: ProviderFrame) !?[]const u8 {
         if (std.mem.eql(u8, method.string, "skills/changed") and self.skills_request == null) {
             const request = self.allocateRequest();
             self.skills_request = request;
-            return try protocol.encode(
+            return try jsonl.encode(
                 &self.write_buffer,
                 .{
                     .id = request,
@@ -104,7 +105,7 @@ pub fn receive(self: *Codex, frame: ProviderFrame) !?[]const u8 {
     }
 
     const request_id: u64 = @intCast(id.integer);
-    const failure = protocol.field(value, "error");
+    const failure = jsonl.field(value, "error");
     if (failure != .null) {
         if (self.skills_request == request_id) {
             self.skills_request = null;
@@ -120,7 +121,7 @@ pub fn receive(self: *Codex, frame: ProviderFrame) !?[]const u8 {
             self.command_request = null;
             self.pending_options = null;
             self.transcript.value.status = .ready;
-            self.errorMessage(protocol.string(protocol.field(failure, "message")));
+            self.errorMessage(jsonl.string(jsonl.field(failure, "message")));
             return null;
         }
         if (request_id == recent_request_id) {
@@ -134,12 +135,12 @@ pub fn receive(self: *Codex, frame: ProviderFrame) !?[]const u8 {
 
             self.pending_resume_request = null;
             self.transcript.value.status = .ready;
-            self.errorMessage(protocol.string(protocol.field(failure, "message")));
+            self.errorMessage(jsonl.string(jsonl.field(failure, "message")));
             return null;
         }
 
         if (request_id <= 2) {
-            self.fail(protocol.string(protocol.field(failure, "message")));
+            self.fail(jsonl.string(jsonl.field(failure, "message")));
             return error.ProviderInitializationFailed;
         }
 
@@ -150,11 +151,11 @@ pub fn receive(self: *Codex, frame: ProviderFrame) !?[]const u8 {
             self.transcript.value.status = .ready;
         }
 
-        self.errorMessage(protocol.string(protocol.field(failure, "message")));
+        self.errorMessage(jsonl.string(jsonl.field(failure, "message")));
         return null;
     }
 
-    const result = protocol.field(value, "result");
+    const result = jsonl.field(value, "result");
     if (self.skills_request == request_id) {
         self.skills_request = null;
         self.skills.load(result, self.cwd) catch {
@@ -221,34 +222,34 @@ pub fn receive(self: *Codex, frame: ProviderFrame) !?[]const u8 {
     if (request_id == 0 and !self.catalog_loaded) {
         self.catalog_default = try model_catalog.load(&self.transcript.value, result);
         self.catalog_loaded = true;
-        if (protocol.string(protocol.field(result, "nextCursor")).len != 0) {
+        if (jsonl.string(jsonl.field(result, "nextCursor")).len != 0) {
             self.system("Codex has more models than this pane can display. This pane shows the first 16 models returned by Codex.");
         }
 
         try self.finishStartup();
     } else if (request_id == 2 and self.thread_id_len == 0) {
-        const thread_id = protocol.string(protocol.field(protocol.field(result, "thread"), "id"));
+        const thread_id = jsonl.string(jsonl.field(jsonl.field(result, "thread"), "id"));
         try copyId(&self.thread_id, thread_id);
         self.thread_id_len = @intCast(thread_id.len);
         self.children.setRoot(thread_id);
         @memcpy(self.transcript.value.thread_id[0..thread_id.len], thread_id);
         self.transcript.value.thread_id_len = @intCast(thread_id.len);
-        try self.transcript.value.options.setModel(protocol.string(protocol.field(result, "model")));
-        const effort = protocol.field(result, "reasoningEffort");
+        try self.transcript.value.options.setModel(jsonl.string(jsonl.field(result, "model")));
+        const effort = jsonl.field(result, "reasoningEffort");
         if (effort != .null) {
-            self.transcript.value.options.effort = try core.AgentEffort.init(protocol.string(effort));
+            self.transcript.value.options.effort = try core.AgentEffort.init(jsonl.string(effort));
         }
 
-        if (!protocol.is(protocol.field(result, "approvalPolicy"), "untrusted") or !protocol.is(protocol.field(result, "approvalsReviewer"), "user") or !protocol.is(protocol.field(protocol.field(result, "sandbox"), "type"), "workspaceWrite")) {
+        if (!jsonl.is(jsonl.field(result, "approvalPolicy"), "untrusted") or !jsonl.is(jsonl.field(result, "approvalsReviewer"), "user") or !jsonl.is(jsonl.field(jsonl.field(result, "sandbox"), "type"), "workspaceWrite")) {
             return error.UnexpectedProviderPermissions;
         }
 
-        self.observeName(protocol.field(result, "thread"), "name");
+        self.observeName(jsonl.field(result, "thread"), "name");
 
         try self.finishStartup();
     } else if (self.pending_turn_request == request_id) {
         self.pending_turn_request = null;
-        try self.startTurn(protocol.field(result, "turn"));
+        try self.startTurn(jsonl.field(result, "turn"));
     }
 
     return self.takeInterrupt();
@@ -267,7 +268,7 @@ pub fn command(self: *Codex, value: command_module.Command) !?[]const u8 {
             const request = self.allocateRequest();
             self.pending_resume_request = request;
             self.transcript.value.status = .starting;
-            return try protocol.encode(&self.write_buffer, .{
+            return try jsonl.encode(&self.write_buffer, .{
                 .id = request,
                 .method = "thread/resume",
                 .params = .{ .threadId = target.idSlice(), .cwd = self.cwd, .approvalPolicy = "untrusted", .approvalsReviewer = "user", .sandbox = "workspace-write", .excludeTurns = true },
@@ -406,7 +407,7 @@ fn finishStartup(self: *Codex) !void {
 }
 
 fn encodeTurn(self: *Codex, prompt: Prompt, sandbox_policy: anytype) ![]const u8 {
-    return protocol.encode(&self.write_buffer, .{
+    return jsonl.encode(&self.write_buffer, .{
         .id = self.pending_turn_request.?,
         .method = "turn/start",
         .params = .{
@@ -451,11 +452,11 @@ fn runCommand(self: *Codex, action: core.AgentCommand, options: core.AgentOption
     self.command_kind = action.kind;
     self.transcript.value.status = .starting;
     if (action.kind == .rename) {
-        return try protocol.encode(&self.write_buffer, .{ .id = request, .method = "thread/name/set", .params = .{ .threadId = self.thread(), .name = action.argument } });
+        return try jsonl.encode(&self.write_buffer, .{ .id = request, .method = "thread/name/set", .params = .{ .threadId = self.thread(), .name = action.argument } });
     }
 
     self.pending_options = options;
-    return try protocol.encode(&self.write_buffer, .{
+    return try jsonl.encode(&self.write_buffer, .{
         .id = request,
         .method = "thread/start",
         .params = .{
@@ -483,13 +484,13 @@ fn finishCommand(self: *Codex, result: std.json.Value) !void {
     }
 
     const options = self.pending_options orelse return error.InvalidProviderFrame;
-    const thread_value = protocol.field(result, "thread");
-    const id = protocol.string(protocol.field(thread_value, "id"));
+    const thread_value = jsonl.field(result, "thread");
+    const id = jsonl.string(jsonl.field(thread_value, "id"));
     if (id.len == 0 or std.mem.eql(u8, id, self.thread())) {
         return error.InvalidProviderFrame;
     }
-    const cwd = protocol.field(thread_value, "cwd");
-    if (cwd != .null and !protocol.is(cwd, self.cwd)) {
+    const cwd = jsonl.field(thread_value, "cwd");
+    if (cwd != .null and !jsonl.is(cwd, self.cwd)) {
         return error.InvalidProviderFrame;
     }
     const policy: []const u8 = if (options.access == .full_access) "never" else "untrusted";
@@ -498,7 +499,7 @@ fn finishCommand(self: *Codex, result: std.json.Value) !void {
         .workspace => "workspaceWrite",
         .full_access => "dangerFullAccess",
     };
-    if (!protocol.is(protocol.field(result, "approvalPolicy"), policy) or !protocol.is(protocol.field(result, "approvalsReviewer"), "user") or !protocol.is(protocol.field(protocol.field(result, "sandbox"), "type"), sandbox)) {
+    if (!jsonl.is(jsonl.field(result, "approvalPolicy"), policy) or !jsonl.is(jsonl.field(result, "approvalsReviewer"), "user") or !jsonl.is(jsonl.field(jsonl.field(result, "sandbox"), "type"), sandbox)) {
         return error.UnexpectedProviderPermissions;
     }
 
@@ -515,10 +516,10 @@ fn finishCommand(self: *Codex, result: std.json.Value) !void {
     value.resumed = false;
     value.pending_approval = null;
     value.options = options;
-    try value.options.setModel(protocol.string(protocol.field(result, "model")));
-    const effort = protocol.field(result, "reasoningEffort");
+    try value.options.setModel(jsonl.string(jsonl.field(result, "model")));
+    const effort = jsonl.field(result, "reasoningEffort");
     if (effort != .null) {
-        value.options.effort = try core.AgentEffort.init(protocol.string(effort));
+        value.options.effort = try core.AgentEffort.init(jsonl.string(effort));
     }
 
     self.transcript.id_lengths = @splat(0);
@@ -528,14 +529,14 @@ fn finishCommand(self: *Codex, result: std.json.Value) !void {
     self.children = .{};
     self.children.setRoot(id);
     self.metadata.review_latest_edition_id = 0;
-    self.metadata.applyName(protocol.field(thread_value, "name"));
+    self.metadata.applyName(jsonl.field(thread_value, "name"));
     self.command_request = null;
     self.pending_options = null;
     try self.finishStartup();
 }
 
 fn startTurn(self: *Codex, turn: std.json.Value) !void {
-    const id = protocol.string(protocol.field(turn, "id"));
+    const id = jsonl.string(jsonl.field(turn, "id"));
     try copyId(&self.turn_id, id);
     self.turn_id_len = @intCast(id.len);
     try self.transcript.setTurn(id);
@@ -553,7 +554,7 @@ fn takeInterrupt(self: *Codex) !?[]const u8 {
     }
 
     self.interrupt_pending = false;
-    return try protocol.encode(&self.write_buffer, .{
+    return try jsonl.encode(&self.write_buffer, .{
         .id = self.allocateRequest(),
         .method = "turn/interrupt",
         .params = .{ .threadId = self.thread(), .turnId = self.turn_id[0..self.turn_id_len] },
@@ -571,10 +572,10 @@ fn observeName(self: *Codex, object: std.json.Value, field: []const u8) void {
 }
 
 fn notification(self: *Codex, frame: ProviderFrame) !void {
-    const method = protocol.string(protocol.field(frame.value, "method"));
-    const params = protocol.field(frame.value, "params");
+    const method = jsonl.string(jsonl.field(frame.value, "method"));
+    const params = jsonl.field(frame.value, "params");
     if (std.mem.eql(u8, method, "thread/name/updated")) {
-        if (self.thread_id_len != 0 and protocol.is(protocol.field(params, "threadId"), self.thread())) {
+        if (self.thread_id_len != 0 and jsonl.is(jsonl.field(params, "threadId"), self.thread())) {
             self.observeName(params, "threadName");
         }
 
@@ -582,8 +583,8 @@ fn notification(self: *Codex, frame: ProviderFrame) !void {
     }
 
     if (std.mem.eql(u8, method, "thread/started")) {
-        const started = protocol.field(params, "thread");
-        if (self.thread_id_len != 0 and protocol.is(protocol.field(started, "id"), self.thread())) {
+        const started = jsonl.field(params, "thread");
+        if (self.thread_id_len != 0 and jsonl.is(jsonl.field(started, "id"), self.thread())) {
             self.observeName(started, "name");
             return;
         }
@@ -593,7 +594,7 @@ fn notification(self: *Codex, frame: ProviderFrame) !void {
         return;
     }
 
-    const thread_id = protocol.field(params, "threadId");
+    const thread_id = jsonl.field(params, "threadId");
     if (thread_id == .string and !std.mem.eql(u8, thread_id.string, self.thread())) {
         return;
     }
@@ -602,23 +603,23 @@ fn notification(self: *Codex, frame: ProviderFrame) !void {
         return;
     }
 
-    const turn_id = protocol.field(params, "turnId");
+    const turn_id = jsonl.field(params, "turnId");
     if (turn_id == .string and !std.mem.eql(u8, turn_id.string, self.turn_id[0..self.turn_id_len])) {
         return;
     }
 
     if (std.mem.eql(u8, method, "turn/started")) {
-        const started_id = protocol.string(protocol.field(protocol.field(params, "turn"), "id"));
+        const started_id = jsonl.string(jsonl.field(jsonl.field(params, "turn"), "id"));
         if (std.mem.eql(u8, started_id, self.completed_turn_id[0..self.completed_turn_id_len]) or (self.turn_id_len != 0 and !std.mem.eql(u8, started_id, self.turn_id[0..self.turn_id_len]))) {
             return;
         }
-        if (self.pending_turn_request == null and !protocol.is(protocol.field(protocol.field(params, "turn"), "id"), self.turn_id[0..self.turn_id_len])) {
+        if (self.pending_turn_request == null and !jsonl.is(jsonl.field(jsonl.field(params, "turn"), "id"), self.turn_id[0..self.turn_id_len])) {
             return;
         }
-        try self.startTurn(protocol.field(params, "turn"));
+        try self.startTurn(jsonl.field(params, "turn"));
     } else if (std.mem.eql(u8, method, "turn/completed")) {
-        const turn = protocol.field(params, "turn");
-        if (self.turn_id_len == 0 or !protocol.is(protocol.field(turn, "id"), self.turn_id[0..self.turn_id_len])) {
+        const turn = jsonl.field(params, "turn");
+        if (self.turn_id_len == 0 or !jsonl.is(jsonl.field(turn, "id"), self.turn_id[0..self.turn_id_len])) {
             return;
         }
 
@@ -634,21 +635,21 @@ fn notification(self: *Codex, frame: ProviderFrame) !void {
         for (self.transcript.value.item_storage[0..self.transcript.value.item_count]) |*entry| {
             if (entry.turn_identity == self.transcript.turn_identity and entry.kind != .subagent and !entry.complete) {
                 entry.complete = true;
-                entry.status = if (protocol.is(protocol.field(turn, "status"), "interrupted")) .interrupted else if (protocol.is(protocol.field(turn, "status"), "failed")) .failed else .completed;
+                entry.status = if (jsonl.is(jsonl.field(turn, "status"), "interrupted")) .interrupted else if (jsonl.is(jsonl.field(turn, "status"), "failed")) .failed else .completed;
             }
         }
 
-        const failure = protocol.field(turn, "error");
+        const failure = jsonl.field(turn, "error");
         if (failure != .null) {
-            self.errorMessage(protocol.string(protocol.field(failure, "message")));
-        } else if (protocol.is(protocol.field(turn, "status"), "interrupted")) {
+            self.errorMessage(jsonl.string(jsonl.field(failure, "message")));
+        } else if (jsonl.is(jsonl.field(turn, "status"), "interrupted")) {
             self.system("Turn interrupted.");
-        } else if (protocol.is(protocol.field(turn, "status"), "failed")) {
+        } else if (jsonl.is(jsonl.field(turn, "status"), "failed")) {
             self.system("Codex could not complete this turn.");
         }
     } else if (std.mem.eql(u8, method, "serverRequest/resolved")) {
         var id_buffer: [1024]u8 = undefined;
-        const id = try protocol.encode(&id_buffer, protocol.field(params, "requestId"));
+        const id = try jsonl.encode(&id_buffer, jsonl.field(params, "requestId"));
         for (self.approvals[0..self.approval_count], 0..) |*approval, index| {
             if (std.mem.eql(u8, approval.rpc_id[0..approval.rpc_id_len], std.mem.trimEnd(u8, id, "\n"))) {
                 self.removeApproval(index);
@@ -659,7 +660,7 @@ fn notification(self: *Codex, frame: ProviderFrame) !void {
         if (self.turn_id_len == 0) {
             return;
         }
-        const value = protocol.field(params, "item");
+        const value = jsonl.field(params, "item");
         var normalizer: ItemNormalizer = .{};
         if (normalizer.item(value, std.mem.eql(u8, method, "item/completed"))) |normalized| {
             var update = normalized;
@@ -675,49 +676,49 @@ fn notification(self: *Codex, frame: ProviderFrame) !void {
         self.children.item(&self.transcript, value);
     } else if (std.mem.eql(u8, method, "item/agentMessage/delta") or std.mem.eql(u8, method, "item/plan/delta")) {
         self.transcript.update(.{
-            .id = protocol.string(protocol.field(params, "itemId")),
+            .id = jsonl.string(jsonl.field(params, "itemId")),
             .role = .assistant,
             .kind = if (std.mem.eql(u8, method, "item/plan/delta")) .plan else .message,
-            .text = protocol.string(protocol.field(params, "delta")),
+            .text = jsonl.string(jsonl.field(params, "delta")),
             .append = true,
             .truncated = frame.truncated,
         });
     } else if (std.mem.eql(u8, method, "item/commandExecution/outputDelta")) {
         self.transcript.update(.{
-            .id = protocol.string(protocol.field(params, "itemId")),
+            .id = jsonl.string(jsonl.field(params, "itemId")),
             .role = .tool,
             .kind = .command,
-            .text = protocol.string(protocol.field(params, "delta")),
+            .text = jsonl.string(jsonl.field(params, "delta")),
             .append = true,
             .truncated = frame.truncated,
         });
     } else if (std.mem.eql(u8, method, "item/reasoning/summaryTextDelta")) {
         self.transcript.update(.{
-            .id = protocol.string(protocol.field(params, "itemId")),
+            .id = jsonl.string(jsonl.field(params, "itemId")),
             .role = .assistant,
             .kind = .reasoning,
             .title = "Reasoning summary",
-            .text = protocol.string(protocol.field(params, "delta")),
+            .text = jsonl.string(jsonl.field(params, "delta")),
             .append = true,
             .truncated = frame.truncated,
         });
     } else if (std.mem.eql(u8, method, "item/mcpToolCall/progress")) {
         self.transcript.update(.{
-            .id = protocol.string(protocol.field(params, "itemId")),
+            .id = jsonl.string(jsonl.field(params, "itemId")),
             .role = .tool,
             .kind = .mcp,
-            .detail = protocol.string(protocol.field(params, "message")),
+            .detail = jsonl.string(jsonl.field(params, "message")),
             .retain_text = true,
         });
     } else if (std.mem.eql(u8, method, "turn/plan/updated")) {
         self.updatePlan(params);
     } else if (std.mem.eql(u8, method, "error")) {
-        self.errorMessage(protocol.string(protocol.field(protocol.field(params, "error"), "message")));
+        self.errorMessage(jsonl.string(jsonl.field(jsonl.field(params, "error"), "message")));
     }
 }
 
 fn updatePlan(self: *Codex, params: std.json.Value) void {
-    const steps = protocol.field(params, "plan");
+    const steps = jsonl.field(params, "plan");
     if (steps != .array) {
         return;
     }
@@ -726,10 +727,10 @@ fn updatePlan(self: *Codex, params: std.json.Value) void {
     var truncated = false;
     var completed = true;
     for (steps.array.items) |step| {
-        const status = protocol.field(step, "status");
-        const done = protocol.is(status, "completed");
+        const status = jsonl.field(step, "status");
+        const done = jsonl.is(status, "completed");
         completed = completed and done;
-        writer.print("[{s}] {s}\n", .{ if (done) @as([]const u8, "x") else if (protocol.is(status, "inProgress")) ">" else " ", protocol.string(protocol.field(step, "step")) }) catch {
+        writer.print("[{s}] {s}\n", .{ if (done) @as([]const u8, "x") else if (jsonl.is(status, "inProgress")) ">" else " ", jsonl.string(jsonl.field(step, "step")) }) catch {
             truncated = true;
             break;
         };
@@ -742,7 +743,7 @@ fn updatePlan(self: *Codex, params: std.json.Value) void {
         .role = .assistant,
         .kind = .plan,
         .title = "Plan",
-        .detail = protocol.string(protocol.field(params, "explanation")),
+        .detail = jsonl.string(jsonl.field(params, "explanation")),
         .text = writer.buffered(),
         .truncated = truncated,
         .complete = completed,
@@ -753,24 +754,24 @@ fn updatePlan(self: *Codex, params: std.json.Value) void {
 }
 
 fn serverRequest(self: *Codex, value: std.json.Value) !?[]const u8 {
-    const method = protocol.field(value, "method");
-    const id = protocol.field(value, "id");
+    const method = jsonl.field(value, "method");
+    const id = jsonl.field(value, "id");
     if (id != .integer and id != .string) {
         return error.InvalidProviderRequest;
     }
 
-    const params = protocol.field(value, "params");
-    const command_request = protocol.is(method, "item/commandExecution/requestApproval");
-    const file_request = protocol.is(method, "item/fileChange/requestApproval");
+    const params = jsonl.field(value, "params");
+    const command_request = jsonl.is(method, "item/commandExecution/requestApproval");
+    const file_request = jsonl.is(method, "item/fileChange/requestApproval");
     if (!command_request and !file_request) {
         self.system("Codex requested an interaction that this agent pane does not support yet.");
-        return try protocol.encode(&self.write_buffer, .{ .id = id, .@"error" = .{ .code = -32601, .message = "This Telar client does not support this server request" } });
+        return try jsonl.encode(&self.write_buffer, .{ .id = id, .@"error" = .{ .code = -32601, .message = "This Telar client does not support this server request" } });
     }
 
-    if (!protocol.is(protocol.field(params, "threadId"), self.thread()) or
-        !protocol.is(protocol.field(params, "turnId"), self.turn_id[0..self.turn_id_len]))
+    if (!jsonl.is(jsonl.field(params, "threadId"), self.thread()) or
+        !jsonl.is(jsonl.field(params, "turnId"), self.turn_id[0..self.turn_id_len]))
     {
-        return try protocol.encode(&self.write_buffer, .{ .id = id, .result = .{ .decision = "decline" } });
+        return try jsonl.encode(&self.write_buffer, .{ .id = id, .result = .{ .decision = "decline" } });
     }
 
     if (self.approval_count == protocol.max_approvals) {
@@ -778,7 +779,7 @@ fn serverRequest(self: *Codex, value: std.json.Value) !?[]const u8 {
     }
 
     var approval: PendingApproval = .{ .value = .{ .id = self.next_approval, .kind = if (command_request) .command else .file_change } };
-    const encoded_id = try protocol.encode(&approval.rpc_id, id);
+    const encoded_id = try jsonl.encode(&approval.rpc_id, id);
     approval.rpc_id_len = @intCast(encoded_id.len - 1);
     const description: ApprovalDescription = .{ .params = params, .transcript = &self.transcript, .command_request = command_request };
     description.write(&approval.value) catch |err| return if (err == error.WriteFailed) error.ApprovalDescriptionTooLarge else err;
@@ -810,23 +811,23 @@ const skills_request_id: u64 = 2147483646;
 const recent_request_id = 2147483647;
 
 fn finishResume(self: *Codex, result: std.json.Value) !void {
-    const thread_value = protocol.field(result, "thread");
-    const id = protocol.string(protocol.field(thread_value, "id"));
-    if (!std.mem.eql(u8, id, self.resume_target.idSlice()) or !protocol.is(protocol.field(thread_value, "cwd"), self.cwd)) {
+    const thread_value = jsonl.field(result, "thread");
+    const id = jsonl.string(jsonl.field(thread_value, "id"));
+    if (!std.mem.eql(u8, id, self.resume_target.idSlice()) or !jsonl.is(jsonl.field(thread_value, "cwd"), self.cwd)) {
         return error.InvalidResumedConversation;
     }
-    if (!protocol.is(protocol.field(result, "approvalPolicy"), "untrusted") or !protocol.is(protocol.field(result, "approvalsReviewer"), "user") or !protocol.is(protocol.field(protocol.field(result, "sandbox"), "type"), "workspaceWrite")) {
+    if (!jsonl.is(jsonl.field(result, "approvalPolicy"), "untrusted") or !jsonl.is(jsonl.field(result, "approvalsReviewer"), "user") or !jsonl.is(jsonl.field(jsonl.field(result, "sandbox"), "type"), "workspaceWrite")) {
         return error.UnexpectedProviderPermissions;
     }
-    if (protocol.is(protocol.field(protocol.field(thread_value, "status"), "type"), "active")) {
+    if (jsonl.is(jsonl.field(jsonl.field(thread_value, "status"), "type"), "active")) {
         return error.ResumedConversationBusy;
     }
 
     var options: core.AgentOptions = .{};
-    try options.setModel(protocol.string(protocol.field(result, "model")));
-    const effort = protocol.field(result, "reasoningEffort");
+    try options.setModel(jsonl.string(jsonl.field(result, "model")));
+    const effort = jsonl.field(result, "reasoningEffort");
     if (effort != .null) {
-        options.effort = try core.AgentEffort.init(protocol.string(effort));
+        options.effort = try core.AgentEffort.init(jsonl.string(effort));
     }
 
     const previous = &self.transcript.value;
@@ -842,7 +843,7 @@ fn finishResume(self: *Codex, result: std.json.Value) !void {
     self.transcript.value.thread_id_len = @intCast(id.len);
     self.children = .{};
     self.children.setRoot(id);
-    const name = protocol.string(protocol.field(thread_value, "name"));
+    const name = jsonl.string(jsonl.field(thread_value, "name"));
     self.metadata.applyName(.{ .string = if (name.len != 0) name else self.resume_target.titleSlice() });
     self.pending_resume_request = null;
     try self.finishStartup();

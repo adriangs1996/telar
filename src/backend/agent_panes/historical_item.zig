@@ -1,5 +1,5 @@
+const jsonl = @import("jsonl");
 const std = @import("std");
-const protocol = @import("protocol.zig");
 const ItemUpdate = @import("ItemUpdate.zig");
 const ItemNormalizer = @import("ItemNormalizer.zig");
 
@@ -11,16 +11,16 @@ pub fn normalize(normalizer: *ItemNormalizer, item: std.json.Value) !ItemUpdate 
         return update;
     }
 
-    if (protocol.is(protocol.field(item, "type"), "subAgentActivity")) {
-        const kind = protocol.field(item, "kind");
+    if (jsonl.is(jsonl.field(item, "type"), "subAgentActivity")) {
+        const kind = jsonl.field(item, "kind");
         return .{
-            .id = protocol.string(protocol.field(item, "id")),
+            .id = jsonl.string(jsonl.field(item, "id")),
             .role = .tool,
             .kind = .subagent,
-            .title = std.fs.path.basename(protocol.string(protocol.field(item, "agentPath"))),
-            .detail = protocol.string(kind),
-            .reference = protocol.string(protocol.field(item, "agentThreadId")),
-            .status = if (protocol.is(kind, "completed")) .idle else if (protocol.is(kind, "interrupted")) .interrupted else .completed,
+            .title = std.fs.path.basename(jsonl.string(jsonl.field(item, "agentPath"))),
+            .detail = jsonl.string(kind),
+            .reference = jsonl.string(jsonl.field(item, "agentThreadId")),
+            .status = if (jsonl.is(kind, "completed")) .idle else if (jsonl.is(kind, "interrupted")) .interrupted else .completed,
             .complete = true,
         };
     }
@@ -28,11 +28,11 @@ pub fn normalize(normalizer: *ItemNormalizer, item: std.json.Value) !ItemUpdate 
     var writer: std.Io.Writer = .fixed(normalizer.body_buffer orelse &normalizer.body);
     std.json.Stringify.value(item, .{}, &writer) catch return error.HistoryItemNotRepresentable;
     return .{
-        .id = protocol.string(protocol.field(item, "id")),
+        .id = jsonl.string(jsonl.field(item, "id")),
         .role = .system,
         .kind = .system,
         .title = "Codex activity",
-        .detail = protocol.string(protocol.field(item, "type")),
+        .detail = jsonl.string(jsonl.field(item, "type")),
         .text = writer.buffered(),
         .complete = true,
     };

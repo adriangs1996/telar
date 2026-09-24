@@ -1,10 +1,10 @@
+const jsonl = @import("jsonl");
 const historical_item = @import("historical_item.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Request = @import("HistoryRequest.zig");
 const Position = @import("HistoryPosition.zig");
-const Stream = @import("Stream.zig");
-const protocol = @import("protocol.zig");
+const Stream = jsonl.Stream;
 const history_page = @import("history_page.zig");
 const LegacyHistory = @import("LegacyHistory.zig");
 const ItemNormalizer = @import("ItemNormalizer.zig");
@@ -103,11 +103,11 @@ fn exchange(self: *ProviderHistory) !*core.AgentHistoryPage {
     });
     try self.input.writeStreamingAll(self.io, "{\"method\":\"initialized\"}\n");
     const metadata = try self.rpc("thread/read", .{ .threadId = self.request_value.thread_id, .includeTurns = false });
-    const thread = protocol.field(metadata, "thread");
-    if (!protocol.is(protocol.field(thread, "id"), self.request_value.thread_id)) {
+    const thread = jsonl.field(metadata, "thread");
+    if (!jsonl.is(jsonl.field(thread, "id"), self.request_value.thread_id)) {
         return error.InvalidHistoryThread;
     }
-    if (!protocol.is(protocol.field(thread, "historyMode"), "paginated")) {
+    if (!jsonl.is(jsonl.field(thread, "historyMode"), "paginated")) {
         return self.loadLegacyPage();
     }
 
@@ -117,15 +117,15 @@ fn exchange(self: *ProviderHistory) !*core.AgentHistoryPage {
 fn rpc(self: *ProviderHistory, method: []const u8, params: anytype) !std.json.Value {
     const id = self.next_request;
     self.next_request += 1;
-    const bytes = protocol.encode(&self.write_buffer, .{ .id = id, .method = method, .params = params }) catch return error.HistoryCursorTooLarge;
+    const bytes = jsonl.encode(&self.write_buffer, .{ .id = id, .method = method, .params = params }) catch return error.HistoryCursorTooLarge;
     try self.input.writeStreamingAll(self.io, bytes);
     var skipped: usize = 0;
     while (skipped < 256) : (skipped += 1) {
         const line = self.stream.next(self.io) catch |err| return if (err == error.ProviderFrameTooLarge) error.HistoryResponseTooLarge else err;
         self.json.reset();
         const value = std.json.parseFromSliceLeaky(std.json.Value, self.json.allocator(), line, .{ .max_value_len = max_response_bytes }) catch return error.InvalidHistoryResponse;
-        const returned_id = protocol.field(value, "id");
-        if (protocol.field(value, "method") == .string) {
+        const returned_id = jsonl.field(value, "id");
+        if (jsonl.field(value, "method") == .string) {
             if (returned_id != .null) {
                 return error.UnexpectedHistoryServerRequest;
             }
@@ -135,12 +135,12 @@ fn rpc(self: *ProviderHistory, method: []const u8, params: anytype) !std.json.Va
         if (returned_id != .integer or returned_id.integer != id) {
             return error.InvalidHistoryResponse;
         }
-        if (protocol.field(value, "error") != .null) {
-            const code = protocol.field(protocol.field(value, "error"), "code");
+        if (jsonl.field(value, "error") != .null) {
+            const code = jsonl.field(jsonl.field(value, "error"), "code");
             return if (code == .integer and code.integer == -32601) error.HistoryPaginationUnsupported else error.ProviderHistoryRejected;
         }
 
-        const result = protocol.field(value, "result");
+        const result = jsonl.field(value, "result");
         if (result != .object) {
             return error.InvalidHistoryResponse;
         }
@@ -153,8 +153,8 @@ fn rpc(self: *ProviderHistory, method: []const u8, params: anytype) !std.json.Va
 
 fn loadLegacyPage(self: *ProviderHistory) !*core.AgentHistoryPage {
     const result = try self.rpc("thread/read", .{ .threadId = self.request_value.thread_id, .includeTurns = true });
-    const thread = protocol.field(result, "thread");
-    if (!protocol.is(protocol.field(thread, "id"), self.request_value.thread_id)) {
+    const thread = jsonl.field(result, "thread");
+    if (!jsonl.is(jsonl.field(thread, "id"), self.request_value.thread_id)) {
         return error.InvalidHistoryThread;
     }
 
@@ -201,7 +201,7 @@ fn loadPage(self: *ProviderHistory) !*core.AgentHistoryPage {
             .limit = 1,
             .sortDirection = if (older) @as([]const u8, "desc") else "asc",
         });
-        const data = protocol.field(response, "data");
+        const data = jsonl.field(response, "data");
         if (data != .array or data.array.items.len > 1) {
             return error.InvalidHistoryResponse;
         }
@@ -214,9 +214,9 @@ fn loadPage(self: *ProviderHistory) !*core.AgentHistoryPage {
         }
 
         const entry = data.array.items[0];
-        const raw_item = protocol.field(entry, "item");
-        const source = protocol.string(protocol.field(raw_item, "id"));
-        const turn = protocol.string(protocol.field(entry, "turnId"));
+        const raw_item = jsonl.field(entry, "item");
+        const source = jsonl.string(jsonl.field(raw_item, "id"));
+        const turn = jsonl.string(jsonl.field(entry, "turnId"));
         if (turn.len == 0 or turn.len > 128 or !std.unicode.utf8ValidateSlice(turn) or std.mem.indexOfScalar(u8, turn, 0) != null) {
             return error.InvalidHistoryItem;
         }
@@ -333,7 +333,7 @@ fn loadPage(self: *ProviderHistory) !*core.AgentHistoryPage {
 }
 
 fn responseCursor(value: std.json.Value, field: []const u8) !core.AgentHistoryCursor {
-    const cursor = protocol.field(value, field);
+    const cursor = jsonl.field(value, field);
     return switch (cursor) {
         .null => .{},
         .string => try core.AgentHistoryCursor.init(cursor.string),

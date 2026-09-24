@@ -1,7 +1,7 @@
+const jsonl = @import("jsonl");
 const historical_item = @import("historical_item.zig");
 const std = @import("std");
 const core = @import("telar-core");
-const protocol = @import("protocol.zig");
 const Position = @import("HistoryPosition.zig");
 const page = @import("history_page.zig");
 const Entry = @import("HistoricalItem.zig");
@@ -16,19 +16,19 @@ query: core.QueryAgentHistory,
 /// Indexes one bounded legacy response while its JSON storage remains alive.
 /// Example: `try history.load(thread);`
 pub fn load(self: *LegacyHistory, thread: std.json.Value) !void {
-    const turns = protocol.field(thread, "turns");
+    const turns = jsonl.field(thread, "turns");
     if (turns != .array or turns.array.items.len > self.entries.len) {
         return error.InvalidHistoryResponse;
     }
 
     for (turns.array.items) |turn| {
-        const items = protocol.field(turn, "items");
+        const items = jsonl.field(turn, "items");
         if (items != .array or items.array.items.len > self.entries.len - self.count) {
             return error.HistoryScanLimit;
         }
 
         for (items.array.items) |item| {
-            self.entries[self.count] = .{ .value = item, .turn = protocol.string(protocol.field(turn, "id")) };
+            self.entries[self.count] = .{ .value = item, .turn = jsonl.string(jsonl.field(turn, "id")) };
             self.count += 1;
         }
     }
@@ -52,7 +52,7 @@ pub fn fill(self: *LegacyHistory, output: *core.AgentHistoryPage, thread_id: []c
         }
     } else if (query.anchor.len != 0) {
         const anchor = for (self.entries[0..self.count], 0..) |entry, ordinal| {
-            if (protocol.is(protocol.field(entry.value, "id"), query.anchor) and std.mem.eql(u8, entry.turn, query.anchor_turn)) {
+            if (jsonl.is(jsonl.field(entry.value, "id"), query.anchor) and std.mem.eql(u8, entry.turn, query.anchor_turn)) {
                 break ordinal;
             }
         } else return error.HistoryAnchorUnavailable;

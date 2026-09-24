@@ -1,5 +1,6 @@
 const std = @import("std");
-const protocol = @import("protocol.zig");
+const json = @import("json.zig");
+const limits = @import("limits.zig");
 const OutputFrame = @import("OutputFrame.zig");
 const Stream = @This();
 
@@ -7,7 +8,7 @@ file: std.Io.File,
 buffer: [8192]u8 = undefined,
 offset: usize = 0,
 buffer_len: usize = 0,
-line: [protocol.max_line_bytes]u8 = undefined,
+line: [limits.max_line_bytes]u8 = undefined,
 external_line: ?[]u8 = null,
 output_frame: ?*OutputFrame = null,
 truncated: bool = false,
@@ -135,16 +136,16 @@ test "large provider outputs drain to newline with bounded memory and preserve f
     var stream: Stream = .{ .file = reader, .output_frame = &frame };
     const line = try stream.next(io);
     try std.testing.expect(stream.truncated);
-    try std.testing.expect(line.len < protocol.max_line_bytes);
+    try std.testing.expect(line.len < limits.max_line_bytes);
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, line, .{});
     defer parsed.deinit();
-    const params = protocol.field(parsed.value, "params");
-    const output = protocol.string(protocol.field(params, "stdout"));
+    const params = json.field(parsed.value, "params");
+    const output = json.string(json.field(params, "stdout"));
     try std.testing.expect(std.unicode.utf8ValidateSlice(output));
-    try std.testing.expect(std.mem.endsWith(u8, output, OutputFrame.marker));
-    try std.testing.expectEqualStrings(output, protocol.string(protocol.field(params, "aggregated_output")));
-    try std.testing.expectEqual(@as(i64, 7), protocol.field(params, "exit_code").integer);
-    try std.testing.expectEqualStrings("unchanged", protocol.string(protocol.field(parsed.value, "idAfterOutput")));
+    try std.testing.expect(std.mem.endsWith(u8, output, OutputFrame.default_marker));
+    try std.testing.expectEqualStrings(output, json.string(json.field(params, "aggregated_output")));
+    try std.testing.expectEqual(@as(i64, 7), json.field(params, "exit_code").integer);
+    try std.testing.expectEqualStrings("unchanged", json.string(json.field(parsed.value, "idAfterOutput")));
     try std.testing.expectEqualStrings("{\"id\":2}", try stream.next(io));
     try std.testing.expect(!stream.truncated);
     try std.testing.expectError(error.ProviderClosed, stream.next(io));
@@ -159,7 +160,7 @@ test "large provider output cannot hide malformed discarded content or missing n
     const io = std.testing.io;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
-    const prefix = "{\"text\":\"" ++ "a" ** (protocol.max_line_bytes + 1);
+    const prefix = "{\"text\":\"" ++ "a" ** (limits.max_line_bytes + 1);
     try temp.dir.writeFile(io, .{ .sub_path = "malformed", .data = prefix ++ "\\q\"}\n" });
     try temp.dir.writeFile(io, .{ .sub_path = "incomplete", .data = prefix });
     const malformed = try temp.dir.openFile(io, "malformed", .{});

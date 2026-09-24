@@ -1,6 +1,6 @@
+const jsonl = @import("jsonl");
 const std = @import("std");
 const core = @import("telar-core");
-const protocol = @import("protocol.zig");
 const Transcript = @import("Transcript.zig");
 const ChildAgent = @import("ChildAgent.zig");
 const ChildEvent = @import("ChildEvent.zig");
@@ -21,44 +21,44 @@ pub fn setRoot(self: *ChildAgents, id: []const u8) void {
 /// Registers explicit parent-side collaboration items after their dispatch row exists.
 /// Example: `children.item(&transcript, item);`
 pub fn item(self: *ChildAgents, transcript: *Transcript, value: std.json.Value) void {
-    const kind = protocol.field(value, "type");
-    if (protocol.is(kind, "subAgentActivity")) {
-        const path = protocol.string(protocol.field(value, "agentPath"));
+    const kind = jsonl.field(value, "type");
+    if (jsonl.is(kind, "subAgentActivity")) {
+        const path = jsonl.string(jsonl.field(value, "agentPath"));
         if (std.mem.eql(u8, path, "/root") or std.mem.eql(u8, path, "/")) {
             return;
         }
-        const child = self.register(transcript, protocol.string(protocol.field(value, "agentThreadId"))) orelse return;
+        const child = self.register(transcript, jsonl.string(jsonl.field(value, "agentThreadId"))) orelse return;
         setMetadata(child, .{ .name = if (child.name_len == 0) std.fs.path.basename(path) else "", .detail = if (child.detail_len == 0) path else "" });
-        const activity = protocol.field(value, "kind");
-        if (protocol.is(activity, "started") and child.status == .pending) {
+        const activity = jsonl.field(value, "kind");
+        if (jsonl.is(activity, "started") and child.status == .pending) {
             child.status = .running;
         }
-        if (protocol.is(activity, "interrupted") and child.status != .closed) {
+        if (jsonl.is(activity, "interrupted") and child.status != .closed) {
             child.status = .interrupted;
         }
-        if (protocol.is(activity, "completed") and child.status != .closed) {
+        if (jsonl.is(activity, "completed") and child.status != .closed) {
             child.status = .idle;
             child.turn_active = false;
         }
         // Merely sending a message to a child does not imply its turn restarted.
         publish(child, transcript, .{ .retain_text = true });
-    } else if (protocol.is(kind, "collabAgentToolCall")) {
-        const parent = transcript.identity(protocol.string(protocol.field(value, "id"))) orelse 0;
-        const receivers = protocol.field(value, "receiverThreadIds");
+    } else if (jsonl.is(kind, "collabAgentToolCall")) {
+        const parent = transcript.identity(jsonl.string(jsonl.field(value, "id"))) orelse 0;
+        const receivers = jsonl.field(value, "receiverThreadIds");
         if (receivers == .array) {
             for (receivers.array.items) |receiver| {
-                const child = self.register(transcript, protocol.string(receiver)) orelse continue;
+                const child = self.register(transcript, jsonl.string(receiver)) orelse continue;
                 if (child.parent_identity == 0) {
                     child.parent_identity = parent;
                 }
-                const prompt = protocol.string(protocol.field(value, "prompt"));
+                const prompt = jsonl.string(jsonl.field(value, "prompt"));
                 const retained = transcript.get(child.row_identity);
                 const has_content = child.message_len != 0 or if (retained) |row| row.text_len != 0 else false;
                 publish(child, transcript, .{ .text = prompt, .retain_text = prompt.len == 0 or has_content });
             }
         }
 
-        const states = protocol.field(value, "agentsStates");
+        const states = jsonl.field(value, "agentsStates");
         if (states == .object) {
             var iterator = states.object.iterator();
             while (iterator.next()) |entry| {
@@ -70,9 +70,9 @@ pub fn item(self: *ChildAgents, transcript: *Transcript, value: std.json.Value) 
                     continue;
                 }
                 child.last_dispatch_identity = parent;
-                child.last_dispatch_complete = !protocol.is(protocol.field(value, "status"), "inProgress");
-                child.status = agentStatus(protocol.field(entry.value_ptr.*, "status"));
-                const message = protocol.string(protocol.field(entry.value_ptr.*, "message"));
+                child.last_dispatch_complete = !jsonl.is(jsonl.field(value, "status"), "inProgress");
+                child.status = agentStatus(jsonl.field(entry.value_ptr.*, "status"));
+                const message = jsonl.string(jsonl.field(entry.value_ptr.*, "message"));
                 publish(child, transcript, .{ .text = message, .retain_text = message.len == 0 or child.message_len != 0 });
             }
         }
@@ -83,35 +83,35 @@ pub fn item(self: *ChildAgents, transcript: *Transcript, value: std.json.Value) 
 /// Example: `if (children.observe(&transcript, event)) return;`
 pub fn observe(self: *ChildAgents, transcript: *Transcript, event: ChildEvent) bool {
     if (std.mem.eql(u8, event.method, "thread/started")) {
-        const thread = protocol.field(event.params, "thread");
-        const source = protocol.field(protocol.field(protocol.field(thread, "source"), "subAgent"), "thread_spawn");
-        const parent = protocol.string(protocol.field(source, "parent_thread_id"));
+        const thread = jsonl.field(event.params, "thread");
+        const source = jsonl.field(jsonl.field(jsonl.field(thread, "source"), "subAgent"), "thread_spawn");
+        const parent = jsonl.string(jsonl.field(source, "parent_thread_id"));
         if (self.root_len == 0 or source != .object or parent.len == 0) {
             return false;
         }
         if (!std.mem.eql(u8, parent, self.root[0..self.root_len]) and self.find(parent) == null) {
             return false;
         }
-        const path = protocol.string(protocol.field(source, "agent_path"));
+        const path = jsonl.string(jsonl.field(source, "agent_path"));
         if (std.mem.eql(u8, path, "/root") or std.mem.eql(u8, path, "/")) {
             return true;
         }
-        const child = self.register(transcript, protocol.string(protocol.field(thread, "id"))) orelse return false;
-        const nickname = protocol.string(protocol.field(source, "agent_nickname"));
+        const child = self.register(transcript, jsonl.string(jsonl.field(thread, "id"))) orelse return false;
+        const nickname = jsonl.string(jsonl.field(source, "agent_nickname"));
         var buffer: [1024]u8 = undefined;
-        const details = std.fmt.bufPrint(&buffer, "{s}\n{s}", .{ path, protocol.string(protocol.field(source, "agent_role")) }) catch path;
+        const details = std.fmt.bufPrint(&buffer, "{s}\n{s}", .{ path, jsonl.string(jsonl.field(source, "agent_role")) }) catch path;
         setMetadata(child, .{ .name = if (nickname.len != 0) nickname else std.fs.path.basename(path), .detail = details });
         publish(child, transcript, .{ .retain_text = true });
         return true;
     }
 
-    const child = self.find(protocol.string(protocol.field(event.params, "threadId"))) orelse return false;
-    const turn_id = protocol.string(protocol.field(event.params, "turnId"));
+    const child = self.find(jsonl.string(jsonl.field(event.params, "threadId"))) orelse return false;
+    const turn_id = jsonl.string(jsonl.field(event.params, "turnId"));
     if (turn_id.len != 0 and child.turn_len != 0 and !std.mem.eql(u8, turn_id, child.turn[0..child.turn_len])) {
         return true;
     }
     if (std.mem.eql(u8, event.method, "turn/started")) {
-        const id = protocol.string(protocol.field(protocol.field(event.params, "turn"), "id"));
+        const id = jsonl.string(jsonl.field(jsonl.field(event.params, "turn"), "id"));
         if (id.len == 0 or id.len > child.turn.len) {
             transcript.value.truncated = true;
             return true;
@@ -128,25 +128,25 @@ pub fn observe(self: *ChildAgents, transcript: *Transcript, event: ChildEvent) b
         child.status = .running;
         publish(child, transcript, .{ .retain_text = true });
     } else if (std.mem.eql(u8, event.method, "turn/completed")) {
-        const turn = protocol.field(event.params, "turn");
-        if (!child.turn_active or !protocol.is(protocol.field(turn, "id"), child.turn[0..child.turn_len])) {
+        const turn = jsonl.field(event.params, "turn");
+        if (!child.turn_active or !jsonl.is(jsonl.field(turn, "id"), child.turn[0..child.turn_len])) {
             return true;
         }
         child.turn_active = false;
-        child.status = if (protocol.is(protocol.field(turn, "status"), "failed")) .failed else if (protocol.is(protocol.field(turn, "status"), "interrupted")) .interrupted else .idle;
+        child.status = if (jsonl.is(jsonl.field(turn, "status"), "failed")) .failed else if (jsonl.is(jsonl.field(turn, "status"), "interrupted")) .interrupted else .idle;
         publish(child, transcript, .{ .retain_text = true });
     } else if (std.mem.eql(u8, event.method, "thread/status/changed")) {
-        const status = protocol.field(protocol.field(event.params, "status"), "type");
-        child.status = if (protocol.is(status, "active")) .running else if (protocol.is(status, "idle")) .idle else if (protocol.is(status, "systemError")) .failed else child.status;
+        const status = jsonl.field(jsonl.field(event.params, "status"), "type");
+        child.status = if (jsonl.is(status, "active")) .running else if (jsonl.is(status, "idle")) .idle else if (jsonl.is(status, "systemError")) .failed else child.status;
         publish(child, transcript, .{ .retain_text = true });
     } else if (std.mem.eql(u8, event.method, "thread/closed")) {
         child.status = .closed;
         child.turn_active = false;
         publish(child, transcript, .{ .retain_text = true });
     } else if (std.mem.eql(u8, event.method, "item/started") or std.mem.eql(u8, event.method, "item/completed")) {
-        const value = protocol.field(event.params, "item");
-        if (protocol.is(protocol.field(value, "type"), "agentMessage") and child.turn_active) {
-            const id = protocol.string(protocol.field(value, "id"));
+        const value = jsonl.field(event.params, "item");
+        if (jsonl.is(jsonl.field(value, "type"), "agentMessage") and child.turn_active) {
+            const id = jsonl.string(jsonl.field(value, "id"));
             const completed = std.mem.eql(u8, event.method, "item/completed");
             if (id.len == 0 or id.len > child.message.len) {
                 return true;
@@ -157,7 +157,7 @@ pub fn observe(self: *ChildAgents, transcript: *Transcript, event: ChildEvent) b
             @memcpy(child.message[0..id.len], id);
             child.message_len = @intCast(id.len);
             child.message_complete = completed;
-            publish(child, transcript, .{ .text = protocol.string(protocol.field(value, "text")) });
+            publish(child, transcript, .{ .text = jsonl.string(jsonl.field(value, "text")) });
         } else if (child.turn_active) {
             var normalizer: ItemNormalizer = .{};
             if (normalizer.item(value, std.mem.eql(u8, event.method, "item/completed"))) |update| {
@@ -167,7 +167,7 @@ pub fn observe(self: *ChildAgents, transcript: *Transcript, event: ChildEvent) b
             }
         }
     } else if (std.mem.eql(u8, event.method, "item/agentMessage/delta")) {
-        const id = protocol.string(protocol.field(event.params, "itemId"));
+        const id = jsonl.string(jsonl.field(event.params, "itemId"));
         if (!child.turn_active or child.message_complete or id.len == 0 or id.len > child.message.len) {
             return true;
         }
@@ -177,7 +177,7 @@ pub fn observe(self: *ChildAgents, transcript: *Transcript, event: ChildEvent) b
         const first = child.message_len == 0;
         @memcpy(child.message[0..id.len], id);
         child.message_len = @intCast(id.len);
-        publish(child, transcript, .{ .text = protocol.string(protocol.field(event.params, "delta")), .append = !first });
+        publish(child, transcript, .{ .text = jsonl.string(jsonl.field(event.params, "delta")), .append = !first });
     }
 
     return true;
@@ -260,19 +260,19 @@ fn publish(child: *ChildAgent, transcript: *Transcript, content: struct { text: 
 }
 
 fn agentStatus(value: std.json.Value) core.agent_thread.ItemStatus {
-    if (protocol.is(value, "running")) {
+    if (jsonl.is(value, "running")) {
         return .running;
     }
-    if (protocol.is(value, "completed")) {
+    if (jsonl.is(value, "completed")) {
         return .idle;
     }
-    if (protocol.is(value, "interrupted")) {
+    if (jsonl.is(value, "interrupted")) {
         return .interrupted;
     }
-    if (protocol.is(value, "errored") or protocol.is(value, "notFound")) {
+    if (jsonl.is(value, "errored") or jsonl.is(value, "notFound")) {
         return .failed;
     }
-    if (protocol.is(value, "shutdown")) {
+    if (jsonl.is(value, "shutdown")) {
         return .closed;
     }
     return .pending;

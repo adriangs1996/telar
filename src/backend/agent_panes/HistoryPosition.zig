@@ -1,6 +1,6 @@
+const jsonl = @import("jsonl");
 const std = @import("std");
 const core = @import("telar-core");
-const protocol = @import("protocol.zig");
 const Position = @This();
 
 provider: core.AgentHistoryCursor = .{},
@@ -17,22 +17,22 @@ pub fn decode(bytes: []const u8, thread: []const u8) !Position {
     var storage: [16 * 1024]u8 = undefined;
     var allocator: std.heap.FixedBufferAllocator = .init(&storage);
     const value = std.json.parseFromSliceLeaky(std.json.Value, allocator.allocator(), bytes, .{}) catch return error.InvalidHistoryCursor;
-    if (!protocol.is(protocol.field(value, "thread"), thread) or protocol.field(value, "version") != .integer or protocol.field(value, "version").integer != 2) {
+    if (!jsonl.is(jsonl.field(value, "thread"), thread) or jsonl.field(value, "version") != .integer or jsonl.field(value, "version").integer != 2) {
         return error.InvalidHistoryCursor;
     }
 
-    const offset = protocol.field(value, "offset");
-    const after = protocol.field(value, "after");
+    const offset = jsonl.field(value, "offset");
+    const after = jsonl.field(value, "after");
     if (offset != .integer or offset.integer < 0 or offset.integer > std.math.maxInt(u32) or after != .bool) {
         return error.InvalidHistoryCursor;
     }
 
     var position: Position = .{
-        .provider = try core.AgentHistoryCursor.init(protocol.string(protocol.field(value, "provider"))),
+        .provider = try core.AgentHistoryCursor.init(jsonl.string(jsonl.field(value, "provider"))),
         .offset = @intCast(offset.integer),
         .after = after.bool,
     };
-    try position.setSource(protocol.string(protocol.field(value, "source")), protocol.string(protocol.field(value, "turn")));
+    try position.setSource(jsonl.string(jsonl.field(value, "source")), jsonl.string(jsonl.field(value, "turn")));
     if (position.provider.len == 0) {
         return error.InvalidHistoryCursor;
     }
