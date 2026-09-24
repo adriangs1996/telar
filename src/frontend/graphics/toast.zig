@@ -5,14 +5,15 @@
 //! KiB of encoded image data per media pass, and placement-only updates while
 //! animating. Any media failure removes every placement and leaves the cell
 //! renderer fully functional.
+const textraster = @import("textraster");
 
 const cellgrid = @import("cellgrid");
 const kitty_protocol = @import("kitty_protocol");
 const data = @import("model");
 const std = @import("std");
-const GraphicsColor = @import("Color.zig");
-const Metrics = @import("Metrics.zig");
-const Surface = @import("Surface.zig");
+const GraphicsColor = textraster.Color;
+const Metrics = textraster.Metrics;
+const Surface = textraster.Surface;
 const ToastRenderer = @import("ToastRenderer.zig");
 const kitty_codec = @import("kitty_codec.zig");
 

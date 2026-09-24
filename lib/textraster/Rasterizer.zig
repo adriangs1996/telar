@@ -13,10 +13,6 @@ shaping_font: *freetype.c.hb_font_t,
 shaping_buffer: *freetype.c.hb_buffer_t,
 pixel_height: u16 = 0,
 
-pub fn init() !Rasterizer {
-    return initFont(rasterizer_support.embedded_font);
-}
-
 /// `font` must outlive the rasterizer because FreeType keeps a borrowed
 /// pointer to memory-backed faces.
 pub fn initFont(font: []const u8) !Rasterizer {

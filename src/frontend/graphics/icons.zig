@@ -6,6 +6,8 @@
 //! telar mark keeps its own alpha, so it composes over any background the
 //! host paints, including one Telar does not know. Cell fallbacks remain
 //! underneath every placement.
+const imaging = @import("imaging");
+const textraster = @import("textraster");
 
 const data = @import("model");
 const assets = @import("assets");
@@ -14,10 +16,10 @@ const Mark = @import("../ui/Mark.zig");
 const IconsSlot = @import("IconsSlot.zig");
 const ui_icons = @import("../ui/icons.zig");
 const Placement = @import("Placement.zig");
-const Rasterizer = @import("Rasterizer.zig");
-const Surface = @import("Surface.zig");
-const Bitmap = @import("Bitmap.zig");
-const bitmap = @import("bitmap_support.zig");
+const Rasterizer = textraster.Rasterizer;
+const Surface = textraster.Surface;
+const Bitmap = imaging.Bitmap;
+const bitmap = imaging.bilinear;
 const IconsRenderer = @import("IconsRenderer.zig");
 
 pub const embedded_font: []const u8 = assets.nerd_icons;

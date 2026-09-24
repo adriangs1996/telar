@@ -1,13 +1,15 @@
 //! Sidebar media assets and rasterization, independent of the pane image store.
+const imaging = @import("imaging");
+const textraster = @import("textraster");
 
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const SidebarProviderPlacement = @import("SidebarProviderPlacement.zig");
 const std = @import("std");
-const Size = @import("Size.zig");
-const Bitmap = @import("Bitmap.zig");
+const Size = textraster.Size;
+const Bitmap = imaging.Bitmap;
 const KittySidebarRenderer = @import("KittySidebarRenderer.zig");
-const bitmap = @import("bitmap_support.zig");
+const bitmap = imaging.bilinear;
 const SidebarFocus = @import("SidebarFocus.zig");
 const SidebarContent = @import("SidebarContent.zig");
 const CellSize = @import("CellSize.zig");

@@ -1,14 +1,16 @@
+const assets = @import("assets");
+const textraster = @import("textraster");
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const SidebarRendererInput = @import("SidebarRendererInput.zig");
 const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
-const Rasterizer = @import("Rasterizer.zig");
+const Rasterizer = textraster.Rasterizer;
 const icon_graphics = @import("icons.zig");
 const toast = @import("toast.zig");
 const toast_module = @import("../widgets/toast.zig");
 const kitty_codec = @import("kitty_codec.zig");
-const Surface = @import("Surface.zig");
+const Surface = textraster.Surface;
 const Renderer = @This();
 
 gpa: std.mem.Allocator,
@@ -26,7 +28,7 @@ slots: [data.notifications.max_items]ToastSlot = @splat(.{}),
 pub fn init(gpa: std.mem.Allocator) Renderer {
     return .{
         .gpa = gpa,
-        .text = Rasterizer.init() catch null,
+        .text = Rasterizer.initFont(assets.jetbrains_mono) catch null,
         .icons = Rasterizer.initFont(icon_graphics.embedded_font) catch null,
     };
 }

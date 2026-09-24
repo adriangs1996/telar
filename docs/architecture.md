@@ -216,13 +216,14 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `pacing` | the monotonic clock, replaceable deadlines and the frame pacer |
 | `vtscan` | byte-at-a-time scanners for OSC strings, typed input and Kitty graphics framing |
 | `sqlite` | the one SQLite binding, statement helpers, additive migrations, FTS5 quoting |
-| `imaging` | PNG through Wuffs with limits checked first, ICO frames, box-filter resampling |
+| `imaging` | PNG through Wuffs with limits checked first, ICO frames, box-filter and bilinear resampling |
 | `hostmetrics` | cpu, memory and battery of the host, without allocation |
 | `gitstatus` | a working tree's branch and whether it has changes |
 | `localsocket` | same-user Unix sockets and length-prefixed framing |
 | `bytecodec` | bounds-checked little-endian encoding into caller buffers and decoding from borrowed bytes |
 | `urlscan` | classifying a URI by scheme and finding the URI under an offset in a line |
 | `keyinput` | keys, characters, modifiers and mouse events as values, chord parsing, binding order, bounded bindings and physical-key leases |
+| `textraster` | text shaped and rasterized into RGBA with FreeType and HarfBuzz in a caller's font, and rounded fills |
 | `kitty_protocol` | Kitty graphics transmission, placement and deletion commands written into a caller buffer |
 | `cellglyphs` | box drawing, block elements and Braille painted from geometry into a quad list |
 | `mdinline` | inline Markdown spans over borrowed text and bounded link destination decoding |

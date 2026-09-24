@@ -1,3 +1,4 @@
+const textraster = @import("textraster");
 const cellgrid = @import("cellgrid");
 const assets = @import("assets");
 const kitty_protocol = @import("kitty_protocol");
@@ -7,7 +8,7 @@ const SidebarContent = @import("SidebarContent.zig");
 const CellSize = @import("CellSize.zig");
 const kitty_sidebar = @import("kitty_sidebar.zig");
 const SidebarFocus = @import("SidebarFocus.zig");
-const rounded = @import("rounded_rectangle.zig");
+const rounded = textraster.rounded_rectangle;
 const kitty_codec = @import("kitty_codec.zig");
 /// Media assets for the hybrid sidebar. Cells retain the complete fallback,
 /// hover, text, and hit targets; graphics add only the rounded focus edge and

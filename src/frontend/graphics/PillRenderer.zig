@@ -1,16 +1,18 @@
+const assets = @import("assets");
+const textraster = @import("textraster");
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const SidebarRendererInput = @import("SidebarRendererInput.zig");
 const core = @import("telar-core");
 const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
-const Rasterizer = @import("Rasterizer.zig");
+const Rasterizer = textraster.Rasterizer;
 const Plan = @import("../presentation/Plan.zig");
 const pill = @import("pill.zig");
 const kitty_codec = @import("kitty_codec.zig");
 const labels = @import("../presentation/pane_labels.zig");
-const Surface = @import("Surface.zig");
-const rounded = @import("rounded_rectangle.zig");
+const Surface = textraster.Surface;
+const rounded = textraster.rounded_rectangle;
 const Renderer = @This();
 
 gpa: std.mem.Allocator,
@@ -322,7 +324,7 @@ fn rasterize(self: *Renderer, key: Key) !void {
             try self.gpa.realloc(self.pixels, len);
     }
     if (self.text == null) {
-        self.text = try Rasterizer.init();
+        self.text = try Rasterizer.initFont(assets.jetbrains_mono);
     }
 
     const text = &self.text.?;

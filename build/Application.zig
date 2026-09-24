@@ -81,10 +81,15 @@ pub fn init(b: *std.Build) ?@This() {
 
     // The width tables come from the emulator that renders the panes; the
     // drawing layer only names the `unicode` library, never its provider.
+    const freetype = freetype_build.add(b, .{ .target = target, .optimize = optimize, .disable_coverage = coverage.enabled });
     const libraries = Libraries.create(b, target, optimize, &.{
         .{
             .name = "ghostty-vt",
             .module = ghostty_vt,
+        },
+        .{
+            .name = "freetype",
+            .module = freetype,
         },
         .{
             .name = "wuffs",
@@ -150,7 +155,6 @@ pub fn init(b: *std.Build) ?@This() {
         .optimize = optimize,
         .link_libc = true,
     });
-    const freetype = freetype_build.add(b, .{ .target = target, .optimize = optimize, .disable_coverage = coverage.enabled });
     frontend.addImport("model", data);
     frontend.addImport("telar-core", core);
     frontend.addImport("telar-client", client);

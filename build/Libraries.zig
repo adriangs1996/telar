@@ -104,6 +104,11 @@ const specs = [_]Spec{
         .libc = true,
     },
     .{
+        .name = "textraster",
+        .imports = &.{"freetype"},
+        .libc = true,
+    },
+    .{
         .name = "cellglyphs",
         .imports = &.{"gfx"},
     },

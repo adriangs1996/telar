@@ -1,6 +1,5 @@
 const std = @import("std");
 const freetype_build = @import("freetype.zig");
-const assets_build = @import("assets.zig");
 const model_build = @import("model.zig");
 const Libraries = @import("Libraries.zig");
 
@@ -30,29 +29,19 @@ pub fn add(b: *std.Build) *std.Build.Step {
             .target = cross_target,
             .optimize = .Debug,
         });
-        const cross_libraries = Libraries.create(b, cross_target, .Debug, &.{.{
-            .name = "unicode",
-            .module = cross_unicode,
-        }}, &.{});
+        const cross_libraries = Libraries.create(b, cross_target, .Debug, &.{
+            .{
+                .name = "unicode",
+                .module = cross_unicode,
+            },
+            .{
+                .name = "freetype",
+                .module = freetype_build.add(b, .{ .target = cross_target, .optimize = .Debug, .disable_coverage = false }),
+            },
+        }, &.{});
         cross_libraries.addImports(cross_core);
         const cross_data = model_build.create(b, cross_core, cross_libraries);
         cross_libraries.addChecks(b, cross_step, cross_target);
-        const raster_check = b.addLibrary(.{
-            .name = b.fmt("text-rasterizer-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("src/frontend/graphics/rasterizer_support.zig"),
-                .target = cross_target,
-                .optimize = .Debug,
-                .link_libc = true,
-            }),
-            .linkage = .static,
-        });
-        raster_check.root_module.addImport(
-            "freetype",
-            freetype_build.add(b, .{ .target = cross_target, .optimize = .Debug, .disable_coverage = false }),
-        );
-        raster_check.root_module.addImport("assets", assets_build.add(b, cross_target, .Debug));
-        cross_step.dependOn(&raster_check.step);
         // Host services the client runs on every platform: sound, system
         // notices and the local clock.
         for ([_][]const u8{

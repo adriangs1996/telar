@@ -1,7 +1,9 @@
 //! Reproducible benchmarks for telar's interactive path.
+const assets = @import("assets");
 const keyinput = @import("keyinput");
 
 const pacing = @import("pacing");
+const textraster = @import("textraster");
 const vtscan = @import("vtscan");
 const cellgrid = @import("cellgrid");
 const profile_options = @import("profile_options");
@@ -527,12 +529,12 @@ fn runSharedFrameFreeze(context: *SharedFrameContext, iterations: usize) !u64 {
 }
 
 fn runTextRaster(context: *TextRasterContext, iterations: usize) !u64 {
-    const surface: frontend.Surface = .{
+    const surface: textraster.Surface = .{
         .pixels = context.pixels,
         .width = TextRasterContext.width,
         .height = TextRasterContext.height,
     };
-    const color: frontend.Color = .{
+    const color: textraster.Color = .{
         .red = 220,
         .green = 230,
         .blue = 240,
@@ -1030,11 +1032,11 @@ const TextRasterContext = struct {
     pub const height = 80;
 
     gpa: std.mem.Allocator,
-    rasterizer: frontend.Rasterizer,
+    rasterizer: textraster.Rasterizer,
     pixels: []u8,
 
     pub fn init(gpa: std.mem.Allocator) !TextRasterContext {
-        var rasterizer = try frontend.Rasterizer.init();
+        var rasterizer = try textraster.Rasterizer.initFont(assets.jetbrains_mono);
         errdefer rasterizer.deinit();
         try rasterizer.setPixelHeight(15);
         const pixels = try gpa.alloc(u8, width * height * 4);

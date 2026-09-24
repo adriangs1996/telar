@@ -12,7 +12,7 @@ const one: u64 = 1 << 16;
 
 /// The straight-alpha color of destination pixel `point` when the bitmap's
 /// square is scaled to `size` pixels a side.
-/// For example: `const rgba = bitmap.sample(source, .{ .x = 3, .y = 4 }, 20);`.
+/// For example: `const rgba = imaging.bilinear.sample(source, .{ .x = 3, .y = 4 }, 20);`.
 pub fn sample(source: Bitmap, point: BitmapPoint, size: u32) [4]u8 {
     const x = axis(point.x, size, source.side);
     const y = axis(point.y, size, source.side);

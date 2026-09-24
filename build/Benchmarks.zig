@@ -19,10 +19,15 @@ pub fn init(b: *std.Build, app: Application) @This() {
         .ReleaseFast
     else
         app.modules.optimize;
+    const bench_freetype = freetype_build.add(b, .{ .target = app.modules.target, .optimize = bench_optimize, .disable_coverage = false });
     const bench_libraries = Libraries.create(b, app.modules.target, bench_optimize, &.{
         .{
             .name = "ghostty-vt",
             .module = app.modules.ghostty_vt,
+        },
+        .{
+            .name = "freetype",
+            .module = bench_freetype,
         },
         .{
             .name = "wuffs",
@@ -77,7 +82,6 @@ pub fn init(b: *std.Build, app: Application) @This() {
         .optimize = bench_optimize,
         .link_libc = true,
     });
-    const bench_freetype = freetype_build.add(b, .{ .target = app.modules.target, .optimize = bench_optimize, .disable_coverage = false });
     bench_frontend.addImport("telar-core", bench_core);
     bench_frontend.addImport("telar-client", bench_client);
     bench_frontend.addImport("model", bench_data);
@@ -85,7 +89,8 @@ pub fn init(b: *std.Build, app: Application) @This() {
     bench_frontend.addImport("telar-lua", bench_lua);
     bench_frontend.addImport("freetype", bench_freetype);
     bench_libraries.addImports(bench_frontend);
-    bench_frontend.addImport("assets", assets_build.add(b, app.modules.target, bench_optimize));
+    const bench_assets = assets_build.add(b, app.modules.target, bench_optimize);
+    bench_frontend.addImport("assets", bench_assets);
 
     const benchmarks = b.addExecutable(.{
         .name = "telar-benchmarks",
@@ -101,6 +106,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
     benchmarks.root_module.addImport("telar-frontend", bench_frontend);
     benchmarks.root_module.addImport("telar-client", bench_client);
     benchmarks.root_module.addImport("model", bench_data);
+    benchmarks.root_module.addImport("assets", bench_assets);
     bench_libraries.addImports(benchmarks.root_module);
 
     const echo_probe = b.addExecutable(.{
