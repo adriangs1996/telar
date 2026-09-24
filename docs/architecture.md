@@ -212,6 +212,7 @@ else. Consumers import the module once and alias its members
 | `pacing` | the monotonic clock, replaceable deadlines and the frame pacer |
 | `vtscan` | byte-at-a-time scanners for OSC strings, typed input and Kitty graphics framing |
 | `sqlite` | the one SQLite binding, statement helpers, additive migrations, FTS5 quoting |
+| `imaging` | PNG through Wuffs with limits checked first, ICO frames, box-filter resampling |
 
 A rule that decides what telar means stays in a flow even when it is pure;
 [`plans/libraries.md`](plans/libraries.md) lists what is still to move.

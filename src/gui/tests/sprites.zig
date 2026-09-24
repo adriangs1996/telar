@@ -15,8 +15,6 @@ const quad = gfx.Quad;
 
 test {
     _ = SpritePage;
-    _ = @import("../image/box_filter.zig");
-    _ = @import("../image/png.zig");
 }
 
 /// Quads sampling the sprite page.
@@ -210,7 +208,8 @@ test "a warm repaint with sprites shapes rasterizes and allocates nothing" {
 }
 
 const Favicons = @import("../widgets/Favicons.zig");
-const png = @import("../image/png.zig");
+const imaging = @import("imaging");
+const png = imaging.png;
 const favicon_worker = @import("../image/favicon_worker.zig");
 
 fn cellImage(side: u16, value: u8) !*client.FaviconImage {
@@ -328,7 +327,7 @@ test "a workspace favicon reaches the card one frame after the worker completes"
 }
 
 test "the reported root favicon.ico reaches the agent card through the worker inbox" {
-    try expectFaviconCard("favicon.ico", @embedFile("../image/testdata/telar.ico"));
+    try expectFaviconCard("favicon.ico", imaging.testing.telar_ico);
 }
 
 test "a 16-bit RGB workspace favicon reaches the agent card through the worker inbox" {

@@ -19,10 +19,16 @@ pub fn init(b: *std.Build, app: Application) @This() {
         .ReleaseFast
     else
         app.modules.optimize;
-    const bench_libraries = Libraries.create(b, app.modules.target, bench_optimize, &.{.{
-        .name = "ghostty-vt",
-        .module = app.modules.ghostty_vt,
-    }});
+    const bench_libraries = Libraries.create(b, app.modules.target, bench_optimize, &.{
+        .{
+            .name = "ghostty-vt",
+            .module = app.modules.ghostty_vt,
+        },
+        .{
+            .name = "wuffs",
+            .module = app.modules.wuffs,
+        },
+    });
     const bench_lua_api = lua_build.add(b, .{ .target = app.modules.target, .optimize = bench_optimize, .name = "lua-bench" });
     const bench_lua = b.createModule(.{
         .root_source_file = b.path("src/lua/lua.zig"),

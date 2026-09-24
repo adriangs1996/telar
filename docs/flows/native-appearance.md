@@ -212,7 +212,7 @@ page and asks `client/workspace/favicons.request` for a lookup job for the next
 wanted workspace (the TUI never asks). The GUI runs that job as
 `image/favicon_worker.execute` on an inbox task: the shared `favicon_lookup` reads
 `favicon.png`, `favicon.ico`, then `.telar/icon.png` under the workspace root (regular files,
-1 MiB at most). `image/ico` inspects at most 64 directory entries without
+1 MiB at most). `imaging.ico` inspects at most 64 directory entries without
 allocation and selects the smallest supported image covering the sprite cell,
 or the largest available if all are smaller. ICO payloads support PNG and
 uncompressed 32-bit BITMAPINFOHEADER images, bounded to 256 x 256 pixels.
@@ -220,15 +220,13 @@ The bitmap decoder reverses bottom-up BGRA rows and preserves alpha, using
 the padded AND mask when every alpha byte is zero, following the
 [ICO alpha convention](https://devblogs.microsoft.com/oldnewthing/20101021-00/?p=12483).
 SVG and other ICO bitmap encodings are unsupported.
-`image/png` decodes non-interlaced RGB/RGBA at 8 or 16 bits per sample and
-8-bit palette files under `PngLimits` (4096 px a side, 1 Mi pixels) into a
-bounded scanline buffer. Filtering reconstructs every sample byte before
-16-bit samples reduce to their high byte for RGBA8 output. The raw scanlines
-use at most 8 MiB plus 4096 filter bytes; decoded pixels use at most 4 MiB.
-Inflation uses a separate 64 KiB history window and requires EOF after the
-exact scanline length, accepting empty final DEFLATE blocks while rejecting
-short or excess output.
-`image/box_filter` area-averages the result into one
+`imaging.png` reads the IHDR, which must be the first chunk, checks its CRC
+and rejects dimensions beyond `PngLimits` (4096 px a side, 1 Mi pixels)
+before Wuffs allocates anything. Wuffs then decodes every standard PNG
+(interlaced, grayscale, palette, 1 to 16 bits) into straight RGBA8 of
+exactly the checked size, at most 4 MiB, and rejects a zlib stream that
+ends short or carries more data than the image needs.
+`imaging.box_filter` area-averages the result into one
 cell. One lookup is in flight at a time; a completion for another execution
 is released unread, a missing file is silent and an unusable one logs once
 under the `favicons` scope. A full sheet or a failed lookup keeps the generic

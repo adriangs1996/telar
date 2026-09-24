@@ -3,9 +3,10 @@
 //! one sprite cell. Allocates freely; it never touches the interactive path.
 const std = @import("std");
 const client = @import("telar-client");
-const png = @import("png.zig");
-const ico = @import("ico.zig");
-const box_filter = @import("box_filter.zig");
+const imaging = @import("imaging");
+const png = imaging.png;
+const ico = imaging.ico;
+const box_filter = imaging.box_filter;
 
 /// Example: `try inbox.start(.favicon, .{ favicon_worker.execute, .{ io, gpa, job } });`
 pub fn execute(io: std.Io, gpa: std.mem.Allocator, job: client.FaviconJob) client.FaviconCompletion {

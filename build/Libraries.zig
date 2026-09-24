@@ -6,10 +6,14 @@ const Coverage = @import("Coverage.zig");
 const External = @import("LibraryExternal.zig");
 const Libraries = @This();
 
+/// Imports a spec may declare.
+const max_imports = 4;
+
 const Spec = struct {
     /// Module name, directory under `lib/` and the alias consumers import it as.
     name: []const u8,
     /// Libraries listed earlier in `specs`, or externals the caller provides.
+    /// A library whose external is not provided is left out of that graph.
     imports: []const []const u8 = &.{},
     libc: bool = false,
     /// Built only for POSIX targets.
@@ -49,14 +53,14 @@ const specs = [_]Spec{
         .libc = true,
         .posix = true,
     },
-    // Where column widths come from. The drawing layer names this module,
-    // never the emulator behind it, so a build can bind another provider.
     .{
         .name = "sqlite",
         .libc = true,
         .system_libraries = &.{"sqlite3"},
         .host_only = true,
     },
+    // Where column widths come from. The drawing layer names this module,
+    // never the emulator behind it, so a build can bind another provider.
     .{
         .name = "unicode",
         .imports = &.{"ghostty-vt"},
@@ -65,9 +69,14 @@ const specs = [_]Spec{
         .name = "cellgrid",
         .imports = &.{"unicode"},
     },
+    .{
+        .name = "imaging",
+        .imports = &.{"wuffs"},
+    },
 };
 
-modules: [specs.len]*std.Build.Module,
+/// Null for a library whose external dependency this graph does not provide.
+modules: [specs.len]?*std.Build.Module,
 externals: []const External,
 
 /// Builds every library for one target, the way `Application` and the
@@ -89,26 +98,36 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
             continue;
         }
 
-        const module = b.createModule(.{
-            .root_source_file = b.path(b.pathJoin(&.{ "lib", spec.name, "root.zig" })),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = spec.libc,
-        });
-        for (spec.imports) |name| {
-            module.addImport(name, find(externals, name) orelse self.built(name, index));
+        self.modules[index] = null;
+        var dependencies: [max_imports]*std.Build.Module = undefined;
+        for (spec.imports, 0..) |name, position| {
+            dependencies[position] = find(externals, name) orelse self.declared(name, index) orelse break;
+        } else {
+            self.modules[index] = build(b, spec, target, optimize, dependencies[0..spec.imports.len]);
         }
-
-        if (!spec.host_only or target.query.isNative()) {
-            for (spec.system_libraries) |name| {
-                module.linkSystemLibrary(name, .{});
-            }
-        }
-
-        self.modules[index] = module;
     }
 
     return self;
+}
+
+fn build(b: *std.Build, spec: Spec, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, dependencies: []const *std.Build.Module) *std.Build.Module {
+    const module = b.createModule(.{
+        .root_source_file = b.path(b.pathJoin(&.{ "lib", spec.name, "root.zig" })),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = spec.libc,
+    });
+    for (spec.imports, dependencies) |name, dependency| {
+        module.addImport(name, dependency);
+    }
+
+    if (!spec.host_only or target.query.isNative()) {
+        for (spec.system_libraries) |name| {
+            module.linkSystemLibrary(name, .{});
+        }
+    }
+
+    return module;
 }
 
 /// Makes every library importable from `module`.
@@ -118,7 +137,9 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
 /// ```
 pub fn addImports(self: Libraries, module: *std.Build.Module) void {
     for (specs, self.modules) |spec, library| {
-        module.addImport(spec.name, library);
+        if (library) |available| {
+            module.addImport(spec.name, available);
+        }
     }
 }
 
@@ -128,7 +149,7 @@ pub fn addImports(self: Libraries, module: *std.Build.Module) void {
 /// const cellgrid = libraries.get("cellgrid");
 /// ```
 pub fn get(self: Libraries, name: []const u8) *std.Build.Module {
-    return self.built(name, specs.len);
+    return self.declared(name, specs.len) orelse std.debug.panic("library {s} is not built in this graph", .{name});
 }
 
 /// Registers each library's tests under `test-libraries`, `test` and
@@ -141,7 +162,8 @@ pub fn get(self: Libraries, name: []const u8) *std.Build.Module {
 /// ```
 pub fn addTests(self: Libraries, b: *std.Build, coverage: Coverage, check_step: *std.Build.Step) *std.Build.Step {
     const step = b.step("test-libraries", "Run the standalone library tests");
-    for (specs, self.modules) |spec, library| {
+    for (specs, self.modules) |spec, maybe_library| {
+        const library = maybe_library orelse std.debug.panic("library {s} lacks an external", .{spec.name});
         for (library.import_table.values()) |dependency| {
             if (!self.contains(dependency)) {
                 std.debug.panic("library {s} imports a module outside lib/", .{spec.name});
@@ -167,7 +189,8 @@ pub fn addTests(self: Libraries, b: *std.Build, coverage: Coverage, check_step: 
 /// Libraries.create(b, windows, .Debug, externals).addChecks(b, cross_step, windows);
 /// ```
 pub fn addChecks(self: Libraries, b: *std.Build, step: *std.Build.Step, target: std.Build.ResolvedTarget) void {
-    for (specs, self.modules) |spec, library| {
+    for (specs, self.modules) |spec, maybe_library| {
+        const library = maybe_library orelse continue;
         if (spec.host_only or (spec.posix and target.result.os.tag == .windows)) {
             continue;
         }
@@ -191,18 +214,19 @@ fn contains(self: Libraries, module: *std.Build.Module) bool {
         }
     }
 
-    return std.mem.indexOfScalar(*std.Build.Module, &self.modules, module) != null;
+    return std.mem.indexOfScalar(?*std.Build.Module, &self.modules, module) != null;
 }
 
-/// A library declared before position `limit` in `specs`.
-fn built(self: Libraries, name: []const u8, limit: usize) *std.Build.Module {
+/// A library declared before position `limit` in `specs`, or null when it,
+/// or an external it needs, is missing from this graph.
+fn declared(self: Libraries, name: []const u8, limit: usize) ?*std.Build.Module {
     for (specs[0..limit], 0..) |spec, index| {
         if (std.mem.eql(u8, spec.name, name)) {
             return self.modules[index];
         }
     }
 
-    std.debug.panic("library {s} is not declared before its importer", .{name});
+    return null;
 }
 
 fn find(externals: []const External, name: []const u8) ?*std.Build.Module {

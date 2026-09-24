@@ -8,8 +8,9 @@ const std = @import("std");
 const core = @import("telar-core");
 const assets = @import("assets");
 const Sprite = @import("Sprite.zig");
-const ImageView = @import("ImageView.zig");
-const box_filter = @import("box_filter.zig");
+const imaging = @import("imaging");
+const ImageView = imaging.ImageView;
+const box_filter = imaging.box_filter;
 const SpritePage = @This();
 
 /// One page, square, in texels.

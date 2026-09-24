@@ -77,7 +77,7 @@ alias are one word.
 | `local-socket` | `transport/{LocalListener,local}.zig` (both sides) and `src/core/transport` | handshake stays in the app: it speaks telar's wire |
 | `editor-remote` | `editors/{remote,expressions,State,Job,Target,Candidate}.zig` | the two call sites that resolve a pane's cwd pass a resolved target |
 | `system-metrics`, `git-probe` | `runtime/observability/{Sampler,system_metrics,darwin,Raw,Values}.zig`, `runtime/resources/git_probe.zig` | ids and limits passed in |
-| `image` | `src/gui/image` decoders and box filter | decide one PNG decoder (see below) |
+| `imaging` (done) | `src/gui/image` decoders and box filter | PNG now decodes through Wuffs; sprites, attachments and the favicon worker stay in the GUI |
 | `box-glyphs` | `src/gui/text/{Box*,Block*,block_shapes,Braille*}.zig` | they emit into `render/QuadList.zig`, which imports `native/DiagramTexture.zig`; the quad list joins `layout` without the texture |
 | `markdown-spans` | `gui/widgets/{MessageSpan,MessageSpans,MessageSpanScope}.zig` | inline the URI extraction it borrows from core |
 | `key-capture` | `client/input/{GenericRouter,GenericKeymap,Capture,key_support,action_routing,edit,mouse_protocol}.zig` and `frontend/input` | the keymap types become parameters |
@@ -123,10 +123,10 @@ vocabulary over `wire`, `cells`, `time` and `pacing`.
 
 ## Duplicates and misplacements found
 
-- Two PNG decoders: `src/backend/media/png.zig` (wuffs, allocation
-  accounted) and `src/gui/image/png.zig` (hand-written over
-  `std.compress.flate`, for favicons). Favicons are untrusted input; one
-  library on wuffs removes a parser to keep safe.
+- Two PNG decoders (resolved): `src/gui/image/png.zig` was a hand-written
+  decoder over `std.compress.flate`; `imaging.png` now reads only the IHDR
+  to enforce limits and hands decoding to Wuffs, the decoder the runtime
+  already installs into the emulator from `src/backend/media/png.zig`.
 - Three SQLite bindings (listed above).
 - `src/backend/proxy/Channel.zig` and `src/backend/proxy/capture/Channel.zig`
   are the same credential-gated bounded queue over two payload types; one
@@ -147,7 +147,8 @@ vocabulary over `wire`, `cells`, `time` and `pacing`.
    the library imports a telar module. Done; the pattern lives in
    `build/Libraries.zig`.
 2. Shared low layers: `cellgrid`, `pacing`, `vt-scan`, `sqlite`, and a
-   decision on the PNG decoder. `cellgrid`, `unicode`, `pacing`, `vtscan` and `sqlite` are done;
+   decision on the PNG decoder. `cellgrid`, `unicode`, `pacing`, `vtscan` and `sqlite` are done, and PNG
+   decoding settled on Wuffs in `imaging`;
    `telar-core` re-exports them, so its consumers did not change.
 3. Backend mechanisms: `command-capture`, `history-store`, `kitty-media`,
    `pane-render`, `transcripts`, `codex-app-server`, `checkpoint`,

@@ -81,12 +81,18 @@ pub fn init(b: *std.Build) ?@This() {
 
     // The width tables come from the emulator that renders the panes; the
     // drawing layer only names the `unicode` library, never its provider.
-    const libraries = Libraries.create(b, target, optimize, &.{.{
-        .name = "ghostty-vt",
-        .module = ghostty_vt,
-    }});
+    const libraries = Libraries.create(b, target, optimize, &.{
+        .{
+            .name = "ghostty-vt",
+            .module = ghostty_vt,
+        },
+        .{
+            .name = "wuffs",
+            .module = wuffs,
+        },
+    });
     for (libraries.modules) |library| {
-        coverage.instrumentModule(library);
+        coverage.instrumentModule(library.?);
     }
 
     const kitty_protocol = b.addModule("kitty_protocol", .{

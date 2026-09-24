@@ -1,7 +1,8 @@
 //! Local attachment I/O and decoding run only on the bounded media worker.
 const core = @import("telar-core");
 const builtin = @import("builtin");
-const png = @import("png.zig");
+const imaging = @import("imaging");
+const png = imaging.png;
 const std = @import("std");
 const Image = @import("../diagrams/Image.zig");
 const native = @cImport({
