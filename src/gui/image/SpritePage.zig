@@ -132,14 +132,7 @@ fn add(self: *SpritePage, image: ImageView) !Sprite {
     for (0..self.cell) |row| {
         const destination = self.pixels[((top + row) * side + left) * 4 ..][0 .. self.cell * 4];
         for (0..self.cell) |column| {
-            const rgba = image.pixel(@intCast(column), @intCast(row));
-            const alpha: u32 = rgba[3];
-            const out = destination[column * 4 ..][0..4];
-            inline for (0..3) |channel| {
-                out[channel] = @intCast((@as(u32, rgba[channel]) * alpha + 127) / 255);
-            }
-
-            out[3] = rgba[3];
+            destination[column * 4 ..][0..4].* = imaging.premultiply.pixel(image.pixel(@intCast(column), @intCast(row)));
         }
     }
 

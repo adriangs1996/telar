@@ -9,6 +9,7 @@ pub const bilinear = @import("bilinear.zig");
 pub const box_filter = @import("box_filter.zig");
 pub const ico = @import("ico.zig");
 pub const png = @import("png.zig");
+pub const premultiply = @import("premultiply.zig");
 pub const testing = @import("testing.zig");
 
 test {
@@ -22,4 +23,5 @@ test {
     _ = @import("box_filter.zig");
     _ = @import("ico.zig");
     _ = @import("png.zig");
+    _ = @import("premultiply.zig");
 }

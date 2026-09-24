@@ -53,12 +53,7 @@ pub fn decode(allocator: std.mem.Allocator, bytes: []const u8) !Image {
     }
 
     var decoded = try png.decode(allocator, bytes, .{ .max_side = 2048, .max_pixels = Image.max_pixels });
-    for (0..@as(usize, decoded.width) * decoded.height) |index| {
-        const pixel = decoded.pixels[index * 4 ..][0..4];
-        for (pixel[0..3]) |*channel| {
-            channel.* = @intCast((@as(u16, channel.*) * pixel[3] + 127) / 255);
-        }
-    }
+    imaging.premultiply.inPlace(decoded.pixels[0 .. @as(usize, decoded.width) * decoded.height * 4]);
 
     return .{ .width = decoded.width, .height = decoded.height, .logical_width = @floatFromInt(decoded.width), .logical_height = @floatFromInt(decoded.height), .pixels = decoded.pixels };
 }
