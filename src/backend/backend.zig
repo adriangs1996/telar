@@ -117,11 +117,9 @@ test {
     _ = @import("proxy/service/observations_support.zig");
     _ = @import("proxy/service/service_namespace.zig");
     _ = @import("proxy/service/service_test.zig");
-    _ = @import("proxy/tls_tunnel.zig");
     _ = @import("proxy/tunnel/exchange_support.zig");
     _ = @import("proxy/tunnel/h2.zig");
     _ = @import("proxy/tunnel/http1.zig");
-    _ = @import("proxy/tunnel/tls.zig");
     _ = @import("proxy/tunnel/tunnel_namespace.zig");
     _ = @import("proxy_test.zig");
     _ = @import("runtime/RuntimeModel.zig");

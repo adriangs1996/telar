@@ -22,7 +22,6 @@ const eventstream = @import("eventstream");
 const sse = eventstream.sse;
 const localca = @import("localca");
 const tls = localca.tls;
-const tls_tunnel = @import("tls_tunnel.zig");
 
 const ca = localca.ca;
 
@@ -205,7 +204,6 @@ test {
     std.testing.refAllDecls(service_mod);
     std.testing.refAllDecls(sse);
     std.testing.refAllDecls(tls);
-    std.testing.refAllDecls(tls_tunnel);
 }
 
 const ProxyTestFiles = struct {
