@@ -1,12 +1,12 @@
 //! Tokens supply color, while the existing grapheme iterator owns cell geometry.
+const syntaxhl = @import("syntaxhl");
 const cellgrid = @import("cellgrid");
-const data = @import("model");
 const Canvas = @import("Canvas.zig");
 const Fragment = @import("SyntaxFragment.zig");
 const Self = @This();
 
 source: []const u8 = "",
-roles: ?[]const data.role.Role = null,
+roles: ?[]const syntaxhl.Role = null,
 
 /// Draws a borrowed fragment from retained source, including wrapped token tails.
 /// Token boundaries cannot split combining sequences or change glyph positions.

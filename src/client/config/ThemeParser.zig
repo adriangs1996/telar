@@ -1,4 +1,5 @@
 //! One preset with optional chrome and terminal color overrides.
+const syntaxhl = @import("syntaxhl");
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const lua_api = @import("lua-api");
@@ -95,7 +96,7 @@ fn syntax(self: Parser, theme: *data.ColorTheme) !void {
     lua_api.c.lua_pushnil(self.state);
     while (lua_api.c.lua_next(self.state, index) != 0) {
         const key = value.string(self.state, -2) orelse return self.invalid("theme.syntax roles must be strings");
-        const role = std.meta.stringToEnum(data.role.Role, key) orelse {
+        const role = std.meta.stringToEnum(syntaxhl.Role, key) orelse {
             self.diagnostic.set("unknown syntax role '{s}'", .{key});
             return error.InvalidConfig;
         };

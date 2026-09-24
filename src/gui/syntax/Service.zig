@@ -1,9 +1,10 @@
 //! One inbox observation task per GUI. Shutdown joins it before releasing state.
+const syntaxhl = @import("syntaxhl");
 const gui_event = @import("../gui_event.zig");
 const std = @import("std");
-const Store = @import("Store.zig");
-const Job = @import("Job.zig");
-const Result = @import("Result.zig");
+const Store = syntaxhl.Store;
+const Job = syntaxhl.Job;
+const Result = syntaxhl.Result;
 const DiffHighlighter = @import("DiffHighlighter.zig");
 const Self = @This();
 

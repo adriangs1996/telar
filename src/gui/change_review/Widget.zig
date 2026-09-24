@@ -1,4 +1,5 @@
 //! Reusable native change-review surface. Runtime and experiments supply editions.
+const syntaxhl = @import("syntaxhl");
 const data = @import("model");
 const event_module = @import("../input/event.zig");
 const std = @import("std");
@@ -9,7 +10,6 @@ const Route = @import("../widgets/interaction/Route.zig");
 const Key = @import("../input/KeyInput.zig");
 const native = @import("../native/native.zig");
 const Services = @import("../host/Services.zig");
-const syntax_limits = @import("../syntax/limits.zig");
 const Paint = @import("Paint.zig");
 const Input = @import("input.zig");
 const Editor = @import("editor.zig");
@@ -35,7 +35,7 @@ read_only: bool = false,
 delivery: enum { idle, queued, pending, sending, sent, failed } = .idle,
 live_status: [320]u8 = undefined,
 model: client.ChangeReviewModel = .{},
-roles: [2][syntax_limits.source_bytes]data.role.Role = undefined,
+roles: [2][syntaxhl.limits.source_bytes]syntaxhl.Role = undefined,
 theme: data.theme_support.Builtin = .shade,
 widgets: ?*State = null,
 generation: u64 = 1,

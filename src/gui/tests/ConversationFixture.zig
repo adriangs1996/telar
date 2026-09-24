@@ -1,3 +1,4 @@
+const syntaxhl = @import("syntaxhl");
 const gfx = @import("gfx");
 const data = @import("model");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
@@ -5,8 +6,8 @@ const assets = @import("assets");
 const QuadList = gfx.QuadList;
 const std = @import("std");
 const Fixture = @This();
-const SyntaxStore = @import("../syntax/Store.zig");
-const SyntaxResult = @import("../syntax/Result.zig");
+const SyntaxStore = syntaxhl.Store;
+const SyntaxResult = syntaxhl.Result;
 const DiffHighlighter = @import("../syntax/DiffHighlighter.zig");
 const animate = @import("animate");
 const FrameClock = animate.FrameClock;

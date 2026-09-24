@@ -1,10 +1,10 @@
-const data = @import("model");
+const syntaxhl = @import("syntaxhl");
 const gui_event = @import("../gui_event.zig");
 const std = @import("std");
 const client = @import("telar-client");
-const Store = @import("Store.zig");
+const Store = syntaxhl.Store;
 const Service = @import("Service.zig");
-const Result = @import("Result.zig");
+const Result = syntaxhl.Result;
 const DiffHighlighter = @import("DiffHighlighter.zig");
 const limits = @import("limits.zig");
 
@@ -16,31 +16,23 @@ test "new language extensions select bundled grammars and project keyword captur
     const keywords = .{ "package", "public", "public", "fun", "func", "return", "return", "@implementation" };
     inline for (files, lines, keywords) |file, line, keyword| {
         const text = "Updated " ++ file ++ "\n@@ -0,0 +1 @@\n+" ++ line ++ "\n";
-        var roles: [text.len]data.role.Role = undefined;
+        var roles: [text.len]syntaxhl.Role = undefined;
         var worker: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text, .roles = &roles };
         try worker.run();
-        try std.testing.expectEqual(data.role.Role.keyword, roles[std.mem.indexOf(u8, text, keyword).?]);
-    }
-}
-
-test "language aliases keep C and C++ case-sensitive and ambiguous headers explicit" {
-    const paths = .{ "review.csx", "review.kts", "review.h", "review.C", "review.cc", "review.cxx", "review.c++", "review.hh", "review.hpp", "review.hxx", "review.h++", "review.H", "review.mm", "review.unknown" };
-    const languages = [_]client.syntax_language.Language{ .c_sharp, .kotlin, .c, .cpp, .cpp, .cpp, .cpp, .cpp, .cpp, .cpp, .cpp, .cpp, .plain, .plain };
-    inline for (paths, languages) |path, language| {
-        try std.testing.expectEqual(language, client.syntax_language.fromPath(path));
+        try std.testing.expectEqual(syntaxhl.Role.keyword, roles[std.mem.indexOf(u8, text, keyword).?]);
     }
 }
 
 test "Tree-sitter captures map to original diff bytes with independent versions and hunks" {
     const text = "Updated main.ts\n@@ -1,2 +1 @@\n-/* old comment\n-let stale = true; */\n+const fresh = 1;\n@@ -20 +20 @@\n-old\n+const next = 2;\n";
-    var roles: [text.len]data.role.Role = undefined;
+    var roles: [text.len]syntaxhl.Role = undefined;
     var worker: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text, .roles = &roles };
     try worker.run();
-    try std.testing.expectEqual(data.role.Role.comment, roles[std.mem.indexOf(u8, text, "stale").?]);
-    try std.testing.expectEqual(data.role.Role.keyword, roles[std.mem.indexOf(u8, text, "const fresh").?]);
-    try std.testing.expectEqual(data.role.Role.keyword, roles[std.mem.indexOf(u8, text, "const next").?]);
-    try std.testing.expectEqual(data.role.Role.plain, roles[0]);
-    try std.testing.expectEqual(data.role.Role.plain, roles[std.mem.indexOf(u8, text, "+const").?]);
+    try std.testing.expectEqual(syntaxhl.Role.comment, roles[std.mem.indexOf(u8, text, "stale").?]);
+    try std.testing.expectEqual(syntaxhl.Role.keyword, roles[std.mem.indexOf(u8, text, "const fresh").?]);
+    try std.testing.expectEqual(syntaxhl.Role.keyword, roles[std.mem.indexOf(u8, text, "const next").?]);
+    try std.testing.expectEqual(syntaxhl.Role.plain, roles[0]);
+    try std.testing.expectEqual(syntaxhl.Role.plain, roles[std.mem.indexOf(u8, text, "+const").?]);
 }
 
 test "syntax cache retains tokens without jobs on repaint and owns immutable input" {
@@ -60,35 +52,9 @@ test "syntax cache retains tokens without jobs on repaint and owns immutable inp
     for (0..3) |_| {
         store.beginFrame();
         const roles = store.request(source).?;
-        try std.testing.expectEqual(data.role.Role.parameter, roles[parameter]);
+        try std.testing.expectEqual(syntaxhl.Role.parameter, roles[parameter]);
         try std.testing.expect(store.nextJob() == null);
     }
-}
-
-test "syntax cache ignores stale completions and does not retry failed immutable content" {
-    const store = try std.testing.allocator.create(Store);
-    defer std.testing.allocator.destroy(store);
-    store.* = .{};
-    _ = store.request(source);
-    const old = store.nextJob().?;
-    var buffer: [32]u8 = undefined;
-    for (0..limits.cache_entries) |index| {
-        store.beginFrame();
-        const text = try std.fmt.bufPrint(&buffer, "replacement {d}", .{index});
-        _ = store.request(text);
-    }
-
-    var result: Result = .{ .id = old.id };
-    @memset(&result.roles, .keyword);
-    store.finish(&result);
-    const replacement = try std.fmt.bufPrint(&buffer, "replacement {d}", .{limits.cache_entries - 1});
-    try std.testing.expect(store.request(replacement) == null);
-    const current = store.nextJob().?;
-    result.id = current.id;
-    result.status = error.SyntaxUnavailable;
-    store.finish(&result);
-    try std.testing.expect(store.request(replacement) == null);
-    try std.testing.expect(store.nextJob() == null);
 }
 
 test "syntax service adopts only notified results and rolls back closed inbox admission" {
@@ -115,13 +81,13 @@ test "syntax service adopts only notified results and rolls back closed inbox ad
 
 test "syntax worker rejects allocator failure and oversized jobs without publishing partial colors" {
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    var roles: [source.len]data.role.Role = undefined;
+    var roles: [source.len]syntaxhl.Role = undefined;
     var worker: DiffHighlighter = .{ .allocator = failing.allocator(), .io = std.testing.io, .text = source, .roles = &roles };
     try std.testing.expectError(error.OutOfMemory, worker.run());
     const store = try std.testing.allocator.create(Store);
     defer std.testing.allocator.destroy(store);
     store.* = .{};
-    const oversized: [limits.source_bytes + 1]u8 = @splat('x');
+    const oversized: [syntaxhl.limits.source_bytes + 1]u8 = @splat('x');
     try std.testing.expect(store.request(&oversized) == null);
     try std.testing.expect(store.nextJob() == null);
 }

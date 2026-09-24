@@ -116,6 +116,9 @@ const specs = [_]Spec{
         .name = "urlscan",
     },
     .{
+        .name = "syntaxhl",
+    },
+    .{
         .name = "mdinline",
         .imports = &.{"urlscan"},
     },

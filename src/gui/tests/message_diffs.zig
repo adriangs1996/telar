@@ -1,3 +1,4 @@
+const syntaxhl = @import("syntaxhl");
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
@@ -159,7 +160,7 @@ test "syntax painting preserves grapheme positions and wrapped string roles" {
     const original = try std.testing.allocator.dupe(Quad, fixture.quads.items());
     defer std.testing.allocator.free(original);
     fixture.quads.clear();
-    var roles: [code.len]data.role.Role = @splat(.plain);
+    var roles: [code.len]syntaxhl.Role = @splat(.plain);
     const offset = std.mem.indexOf(u8, code, "e\u{301}").?;
     @memset(roles[offset .. code.len - 2], .string);
     var paint: SyntaxPaint = .{ .source = code, .roles = &roles };
@@ -192,7 +193,7 @@ test "syntax painting applies theme italics and bold through the existing text r
     defer std.testing.allocator.free(expected);
     fixture.quads.clear();
     const shapes = fixture.atlas.shape_calls;
-    const roles: [code.len]data.role.Role = @splat(.string);
+    const roles: [code.len]syntaxhl.Role = @splat(.string);
     var paint: SyntaxPaint = .{ .source = code, .roles = &roles };
     try paint.draw(&canvas, .{ .bounds = area, .text = code });
     try std.testing.expectEqualDeep(expected, fixture.quads.items());

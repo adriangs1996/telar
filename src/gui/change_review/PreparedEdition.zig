@@ -1,5 +1,5 @@
 //! Worker-owned immutable diff index. Visible source lives until its slot retires.
-const data = @import("model");
+const syntaxhl = @import("syntaxhl");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -11,7 +11,7 @@ edition: u64 = 0,
 source: [core.change_review.max_patch_bytes]u8 = undefined,
 len: usize = 0,
 revision: client.ChangeReviewRevision = .{},
-roles: [core.change_review.max_patch_bytes]data.role.Role = undefined,
+roles: [core.change_review.max_patch_bytes]syntaxhl.Role = undefined,
 failure: ?anyerror = null,
 
 /// Runs only in the observation worker, never while forwarding native input.

@@ -1,4 +1,5 @@
 //! Public entrypoint for telar-client.
+const syntaxhl = @import("syntaxhl");
 
 const data = @import("model");
 const localsocket = @import("localsocket");
@@ -26,7 +27,6 @@ pub const BarMetrics = @import("config/BarMetrics.zig");
 pub const BarUpdatesCompletion = @import("bars/BarUpdatesCompletion.zig");
 pub const BarUpdatesJob = @import("bars/BarUpdatesJob.zig");
 pub const ClientInit = @import("ClientInit.zig");
-pub const syntax_language = @import("syntax/language.zig");
 pub const ConfigAdoption = @import("resources/Adoption.zig");
 pub const ConfigReload = config_reload.ConfigReload;
 pub const ConfigReloadState = @import("resources/ConfigReloadState.zig");

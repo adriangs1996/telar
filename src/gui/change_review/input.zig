@@ -1,3 +1,4 @@
+const syntaxhl = @import("syntaxhl");
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const event_module = @import("../input/event.zig");
@@ -7,7 +8,6 @@ const Editor = @import("editor.zig");
 const Route = @import("../widgets/interaction/Route.zig");
 const Target = @import("../widgets/interaction/Target.zig");
 const actions = @import("action.zig");
-const syntax_limits = @import("../syntax/limits.zig");
 
 pub fn apply(w: *Widget, event: event_module.Event, route: Route) !bool {
     if (event == .focus and !event.focus) {
@@ -349,7 +349,7 @@ fn copy(w: *Widget) !void {
     const selection = w.copy_range orelse return;
     const first = @min(selection[0], selection[1]);
     const last = @max(selection[0], selection[1]);
-    var buffer: [syntax_limits.source_bytes]u8 = undefined;
+    var buffer: [syntaxhl.limits.source_bytes]u8 = undefined;
     var length: usize = 0;
     var started = false;
     const revision = w.model.current();

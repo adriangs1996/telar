@@ -40,7 +40,6 @@ pub const name_prompt = @import("state/name_prompt.zig");
 pub const notifications = @import("notifications/notifications.zig");
 pub const outbox_support = @import("connection/outbox_support.zig");
 pub const request_failure = @import("connection/request_failure.zig");
-pub const role = @import("syntax/role.zig");
 pub const sidebar = @import("layout/sidebar.zig");
 pub const GridRegions = @import("layout/GridRegions.zig");
 pub const workbench = @import("workspace/workbench.zig");

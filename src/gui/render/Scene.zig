@@ -1,4 +1,5 @@
 //! Composes and draws one widget list during a synchronous semantic-model borrow.
+const syntaxhl = @import("syntaxhl");
 const core = @import("telar-core");
 const data = @import("model");
 const view_module = @import("../diagrams/view.zig");
@@ -10,7 +11,7 @@ const Target = @import("../widgets/interaction/Target.zig");
 const client = @import("telar-client");
 const Canvas = @import("../widgets/Canvas.zig");
 const Composition = @import("../widgets/Composition.zig");
-const SyntaxStore = @import("../syntax/Store.zig");
+const SyntaxStore = syntaxhl.Store;
 const ReviewWidget = @import("../change_review/Widget.zig");
 const TerminalRenderer = @import("TerminalRenderer.zig");
 const Chrome = @import("../widgets/Chrome.zig");

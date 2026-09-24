@@ -1,10 +1,10 @@
 //! Called only by the observation worker. Rendering consumes retained roles.
-const data = @import("model");
+const syntaxhl = @import("syntaxhl");
 const core = @import("telar-core");
 const std = @import("std");
 const client = @import("telar-client");
 const SourceSide = @import("SourceSide.zig");
-const captures = @import("captures.zig");
+const captures = syntaxhl.captures;
 const limits = @import("limits.zig");
 const Self = @This();
 
@@ -15,9 +15,9 @@ extern fn telar_syntax_prepare(language: [*:0]const u8) u32;
 allocator: std.mem.Allocator,
 io: std.Io,
 text: []const u8,
-roles: []data.role.Role,
+roles: []syntaxhl.Role,
 spans: []CapturedSpan = &.{},
-language: client.syntax_language.Language = .plain,
+language: syntaxhl.language.Language = .plain,
 started: std.Io.Timestamp = .{ .nanoseconds = 0 },
 fragments: usize = 0,
 
@@ -25,14 +25,14 @@ fragments: usize = 0,
 /// Missing lines are never invented; full-file review snapshots can use the
 /// same FFI directly instead. Example: `try worker.run();`
 pub fn run(self: *Self) !void {
-    if (self.text.len > limits.source_bytes or self.roles.len != self.text.len) {
+    if (self.text.len > syntaxhl.limits.source_bytes or self.roles.len != self.text.len) {
         return error.SyntaxLimit;
     }
 
     @memset(self.roles, .plain);
     try self.prepareLanguages();
     self.started = std.Io.Clock.awake.now(self.io);
-    self.spans = try self.allocator.alloc(CapturedSpan, limits.source_bytes);
+    self.spans = try self.allocator.alloc(CapturedSpan, syntaxhl.limits.source_bytes);
     defer self.allocator.free(self.spans);
     var before: SourceSide = .{ .allocator = self.allocator, .origin = @intFromPtr(self.text.ptr), .old = true };
     defer before.deinit();
@@ -47,7 +47,7 @@ pub fn run(self: *Self) !void {
                 before.clear();
                 after.clear();
                 if (line.kind == .file) {
-                    self.language = client.syntax_language.fromPath(line.text);
+                    self.language = syntaxhl.language.fromPath(line.text);
                 }
             },
             .removed => try before.append(line),
@@ -73,7 +73,7 @@ fn prepareLanguages(self: *Self) !void {
             continue;
         }
 
-        const language = client.syntax_language.fromPath(line.text);
+        const language = syntaxhl.language.fromPath(line.text);
         if (language == .plain) {
             continue;
         }

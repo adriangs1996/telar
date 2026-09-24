@@ -2,6 +2,12 @@ const std = @import("std");
 
 pub const Language = enum { plain, zig, ruby, python, javascript, typescript, tsx, json, rust, bash, go, c_sharp, java, kotlin, swift, c, cpp, objc };
 
+/// The grammar a file's extension selects; C and C++ extensions are case
+/// sensitive and unknown ones are plain.
+///
+/// ```zig
+/// const grammar = language.fromPath("review.cpp");
+/// ```
 pub fn fromPath(path: []const u8) Language {
     const extension = std.fs.path.extension(path);
     const extensions = .{ .zig, .rb, .py, .js, .mjs, .cjs, .jsx, .ts, .tsx, .json, .jsonc, .rs, .sh, .bash, .go, .cs, .csx, .java, .kt, .kts, .swift, .c, .h, .cc, .cpp, .cxx, .@"c++", .C, .hh, .hpp, .hxx, .@"h++", .H, .m };
