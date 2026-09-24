@@ -18,6 +18,9 @@ const Spec = struct {
 
 const specs = [_]Spec{
     .{
+        .name = "vtscan",
+    },
+    .{
         .name = "animate",
     },
     .{

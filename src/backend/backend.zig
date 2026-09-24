@@ -22,7 +22,8 @@ pub const FileQueryView = @import("media/FileQueryView.zig");
 pub const GraphicsLimits = @import("media/GraphicsLimits.zig");
 pub const IngestTestGate = @import("runtime/IngestTestGate.zig");
 pub const Initialization = @import("runtime/Initialization.zig");
-pub const InputScanner = @import("history/InputScanner.zig");
+const vtscan = @import("vtscan");
+pub const InputScanner = vtscan.InputScanner;
 pub const LaunchPhase = model.LaunchPhase;
 pub const LaunchTestFault = @import("runtime/LaunchTestFault.zig");
 pub const LocalListener = @import("transport/LocalListener.zig");
@@ -69,7 +70,6 @@ test {
     _ = @import("history/agent_detection.zig");
     _ = @import("history/channel_support.zig");
     _ = @import("history/codex_screen.zig");
-    _ = @import("history/escape.zig");
     _ = @import("history/history_tests.zig");
     _ = @import("history/metrics.zig");
     _ = @import("history/model.zig");

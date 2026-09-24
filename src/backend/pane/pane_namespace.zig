@@ -84,7 +84,8 @@ pub const PtyOutputReadResult = enum {
     finished,
 };
 
-pub const KittyFramingCounter = @import("../history/KittyFramingCounter.zig");
+const vtscan = @import("vtscan");
+pub const KittyFramingCounter = vtscan.KittyFramingCounter;
 
 pub const CwdState = @import("CwdState.zig");
 

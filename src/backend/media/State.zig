@@ -1,4 +1,5 @@
-const KittyFramingCounter = @import("../history/KittyFramingCounter.zig");
+const vtscan = @import("vtscan");
+const KittyFramingCounter = vtscan.KittyFramingCounter;
 const PreparedTransfers = @import("PreparedTransfers.zig");
 const Queue = @import("Queue.zig");
 const std = @import("std");

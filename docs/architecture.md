@@ -210,6 +210,7 @@ else. Consumers import the module once and alias its members
 | `unicode` | grapheme widths from the emulator's tables; builds may bind another provider |
 | `cellgrid` | cells, styles and buffers, and text laid out into them |
 | `pacing` | the monotonic clock, replaceable deadlines and the frame pacer |
+| `vtscan` | byte-at-a-time scanners for OSC strings, typed input and Kitty graphics framing |
 
 A rule that decides what telar means stays in a flow even when it is pure;
 [`plans/libraries.md`](plans/libraries.md) lists what is still to move.

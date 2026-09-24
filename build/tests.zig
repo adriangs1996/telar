@@ -184,7 +184,6 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         // root collects their tests without narrowing Zig's module path.
         .{ .path = "src/frontend/frontend.zig", .libc = true, .frontend = true },
         .{ .path = "src/client/transport/local.zig", .libc = true, .transport = true },
-        .{ .path = "src/backend/history/escape.zig" },
         .{ .path = "src/backend/runtime/observability/system_metrics.zig" },
         .{ .path = "src/backend/proxy_test.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pane/blit.zig", .vt = true, .libc = true },

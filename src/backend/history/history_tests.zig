@@ -1,6 +1,5 @@
 test {
     _ = @import("agent_detection.zig");
-    _ = @import("escape.zig");
     _ = @import("model.zig");
     _ = @import("observer_support.zig");
     _ = @import("osc.zig");

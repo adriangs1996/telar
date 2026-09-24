@@ -1,4 +1,5 @@
-const InputScanner = @import("../history/InputScanner.zig");
+const vtscan = @import("vtscan");
+const InputScanner = vtscan.InputScanner;
 const description = @import("description.zig");
 const std = @import("std");
 const Capture = @This();

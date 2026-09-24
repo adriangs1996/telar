@@ -2,7 +2,8 @@
 
 const std = @import("std");
 const vt = @import("ghostty-vt");
-const InputScanner = @import("InputScanner.zig");
+const vtscan = @import("vtscan");
+const InputScanner = vtscan.InputScanner;
 const TerminalTracker = @import("TerminalTracker.zig");
 const Command = @import("Command.zig");
 const osc = @import("osc.zig");

@@ -1,4 +1,5 @@
-const OscScanner = @import("OscScanner.zig");
+const vtscan = @import("vtscan");
+const OscScanner = vtscan.OscScanner;
 const osc_ops = @import("osc.zig");
 const std = @import("std");
 const builtin = @import("builtin");
