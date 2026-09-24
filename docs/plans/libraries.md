@@ -129,9 +129,10 @@ the libraries it uses by name.
   to enforce limits and hands decoding to Wuffs, the decoder the runtime
   already installs into the emulator from `src/backend/media/png.zig`.
 - Three SQLite bindings (listed above).
-- `src/backend/proxy/Channel.zig` and `src/backend/proxy/capture/Channel.zig`
-  are the same credential-gated bounded queue over two payload types; one
-  generic queue.
+- The two proxy channels (resolved): `src/backend/proxy/Channel.zig` and
+  `src/backend/proxy/capture/Channel.zig` duplicated one bounded queue over
+  two payload types. The queue is `dropqueue`; each channel keeps only the
+  credential gate and what its payload owns.
 - Two different types named `SessionTitle` (`history/`, `agent/`); rename the
   history one.
 - `src/core/select.zig` holds two unrelated features (click granularity for
@@ -179,9 +180,9 @@ the libraries it uses by name.
    - C. The HTTP/1.1 and HTTP/2 relays and header rules move to
      `lib/httprelay` (done); the capture buffer moves to
      `lib/exchangecapture`, generic over the owner metadata telar attaches
-     (done); one bounded queue generic over its payload moves to `lib/`,
-     and the credential gate on it stays in telar.
-   B1 to B6 are done.
+     (done); the bounded queue both proxy channels duplicated moves to
+     `lib/dropqueue`, and the credential gate on it stays in telar (done).
+   Step 4 is done.
 5. `wire`, which touches both processes and every message.
 6. Client and GUI: `key-capture`, `screen-diff`, `kitty-render`, `image`,
    `box-glyphs`, `markdown-spans`, `syntax`, `diagram-client`.

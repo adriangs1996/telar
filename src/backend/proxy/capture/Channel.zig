@@ -1,18 +1,17 @@
+const dropqueue = @import("dropqueue");
 const owned = @import("owned.zig");
 const queue = @import("queue.zig");
 const std = @import("std");
 const Registry = @import("../Registry.zig");
 const Credential = @import("../Credential.zig");
 const Half = owned.Half;
+const QueueMetrics = dropqueue.QueueMetrics;
+const Envelopes = dropqueue.GenericDropQueue(Envelope, queue.capacity);
 const Channel = @This();
 
-storage: [queue.capacity]Envelope = undefined,
-events: std.Io.Queue(Envelope) = undefined,
+envelopes: Envelopes = undefined,
 /// Live pane credentials, checked at publication and again at delivery.
 credentials: *Registry = undefined,
-queued: std.atomic.Value(u64) = .init(0),
-high_water: std.atomic.Value(u64) = .init(0),
-dropped: std.atomic.Value(u64) = .init(0),
 
 /// Initializes fixed queue storage over the registry whose live
 /// credentials admit halves at publication and delivery time.
@@ -21,8 +20,8 @@ dropped: std.atomic.Value(u64) = .init(0),
 /// channel.init(&registry);
 /// ```
 pub fn init(self: *Channel, credentials: *Registry) void {
-    self.* = .{ .credentials = credentials };
-    self.events = .init(&self.storage);
+    self.credentials = credentials;
+    self.envelopes.init();
 }
 
 /// Attempts a zero-deadline ownership transfer and frees rejected halves.
@@ -36,23 +35,17 @@ pub fn publish(self: *Channel, io: std.Io, publication: QueuePublication) bool {
         return false;
     }
 
-    const depth = self.reserve() orelse {
-        _ = self.dropped.fetchAdd(1, .monotonic);
-        publication.half.deinit();
-        return false;
+    var envelope: Envelope = .{
+        .credential = publication.credential,
+        .half = publication.half,
     };
-    var envelope: Envelope = .{ .credential = publication.credential, .half = publication.half };
     defer std.crypto.secureZero(u8, &envelope.credential.token);
-    const published = self.events.put(io, &.{envelope}, 0) catch 0;
 
-    if (published == 0) {
-        self.release();
-        _ = self.dropped.fetchAdd(1, .monotonic);
+    if (!self.envelopes.publish(io, envelope)) {
         publication.half.deinit();
         return false;
     }
 
-    _ = self.high_water.fetchMax(depth, .monotonic);
     return true;
 }
 
@@ -63,9 +56,8 @@ pub fn publish(self: *Channel, io: std.Io, publication: QueuePublication) bool {
 /// ```
 pub fn receive(self: *Channel, io: std.Io) anyerror!*Half {
     while (true) {
-        var envelope = try self.events.getOne(io);
+        var envelope = try self.envelopes.receive(io);
         defer std.crypto.secureZero(u8, &envelope.credential.token);
-        self.release();
 
         if (self.credentials.contains(io, &envelope.credential)) {
             return envelope.half;
@@ -81,19 +73,12 @@ pub fn receive(self: *Channel, io: std.Io) anyerror!*Half {
 /// channel.close(io);
 /// ```
 pub fn close(self: *Channel, io: std.Io) void {
-    self.events.close(io);
+    self.envelopes.close(io);
 
-    while (true) {
-        var envelopes: [1]Envelope = undefined;
-        const count = self.events.getUncancelable(io, &envelopes, 0) catch break;
-        if (count == 0) {
-            break;
-        }
-
-        var envelope = envelopes[0];
+    while (self.envelopes.tryReceive(io)) |received| {
+        var envelope = received;
         std.crypto.secureZero(u8, &envelope.credential.token);
         envelope.half.deinit();
-        self.release();
     }
 }
 
@@ -103,31 +88,7 @@ pub fn close(self: *Channel, io: std.Io) void {
 /// const metrics = channel.metrics();
 /// ```
 pub fn metrics(self: *const Channel) QueueMetrics {
-    return .{
-        .queued = self.queued.load(.monotonic),
-        .high_water = self.high_water.load(.monotonic),
-        .dropped = self.dropped.load(.monotonic),
-    };
-}
-
-fn reserve(self: *Channel) ?u64 {
-    var current = self.queued.load(.monotonic);
-
-    while (current < queue.capacity) {
-        if (self.queued.cmpxchgWeak(current, current + 1, .monotonic, .monotonic)) |observed| {
-            current = observed;
-            continue;
-        }
-
-        return current + 1;
-    }
-
-    return null;
-}
-
-fn release(self: *Channel) void {
-    const previous = self.queued.fetchSub(1, .monotonic);
-    std.debug.assert(previous != 0);
+    return self.envelopes.metrics();
 }
 
 const QueuePublication = struct {
@@ -138,10 +99,4 @@ const QueuePublication = struct {
 const Envelope = struct {
     credential: Credential,
     half: *Half,
-};
-
-const QueueMetrics = struct {
-    queued: u64,
-    high_water: u64,
-    dropped: u64,
 };

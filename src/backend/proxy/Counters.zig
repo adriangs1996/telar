@@ -1,7 +1,7 @@
+const dropqueue = @import("dropqueue");
 const std = @import("std");
 const metrics = @import("metrics.zig");
 const SlotSnapshot = @import("SlotSnapshot.zig");
-const ObservationQueueMetrics = @import("ObservationQueueMetrics.zig");
 const CaptureMetrics = @import("capture/CaptureMetrics.zig");
 const Snapshot = @import("Snapshot.zig");
 const Counters = @This();
@@ -89,6 +89,6 @@ pub fn snapshot(self: *const Counters, live: LiveState) Snapshot {
 
 const LiveState = struct {
     connections: SlotSnapshot,
-    observations: ObservationQueueMetrics,
+    observations: dropqueue.QueueMetrics,
     captures: CaptureMetrics = .{},
 };

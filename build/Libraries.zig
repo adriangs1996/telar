@@ -96,6 +96,9 @@ const specs = [_]Spec{
         .libc = true,
     },
     .{
+        .name = "dropqueue",
+    },
+    .{
         .name = "exchangecapture",
         .libc = true,
         .system_libraries = &.{"brotlidec"},
