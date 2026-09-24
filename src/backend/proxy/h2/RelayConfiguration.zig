@@ -1,6 +1,6 @@
-const types = @import("../../agent/types.zig");
+const RouteMatch = @import("../RouteMatch.zig");
 const Transform = @import("Transform.zig");
 const RelayConfiguration = @This();
 
-dialect: types.ApiDialect,
+watched_routes: []const RouteMatch = &.{},
 transformation: ?Transform = null,

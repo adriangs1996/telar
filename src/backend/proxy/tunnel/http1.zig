@@ -67,14 +67,14 @@ fn relayRequestHead(connection: *Http1Connection) ?RequestHead {
             .to = .origin,
             .is_response = false,
             .response_to_head = false,
-            .dialect = connection.exchange.dialect,
+            .watched_routes = request_support.inferenceRoutes(connection.exchange.dialect),
         },
         .rewrites = connection.request_rewrites,
         .capture = connection.request_capture,
     }) orelse return null;
 
     return .{
-        .classification = parsed.classification,
+        .watched = parsed.watched,
         .body = parsed.framing,
         .response_context = if (parsed.message.head_request) .head_request else .normal,
     };
@@ -193,10 +193,10 @@ fn publishRequest(connection: *Http1Connection, request: RequestHead) void {
         return;
     }
 
-    const classification: request_support.RequestClass = if (connection.exchange.dialect == .anthropic_messages and request.classification == .inference)
+    const classification: request_support.RequestClass = if (connection.exchange.dialect == .anthropic_messages and request.watched)
         .auxiliary
     else
-        request.classification;
+        requestClass(request);
     connection.exchange.publish(exchange_mod.requestPhase(classification), 0);
     if (!request.body.hasBody()) {
         finishCapture(connection, .request, .finished);
@@ -204,7 +204,12 @@ fn publishRequest(connection: *Http1Connection, request: RequestHead) void {
 }
 
 fn shouldClassifyRequest(connection: *const Http1Connection, request: RequestHead) bool {
-    return connection.exchange.dialect == .anthropic_messages and request.classification == .inference and request.body.hasBody();
+    return connection.exchange.dialect == .anthropic_messages and request.watched and request.body.hasBody();
+}
+
+/// A watched route is an inference route of the tunnel's dialect.
+fn requestClass(request: RequestHead) request_support.RequestClass {
+    return if (request.watched) .inference else .auxiliary;
 }
 
 fn publishResponse(connection: *Http1Connection, response: ResponseHead) void {
@@ -229,7 +234,7 @@ fn upgrade(connection: *Http1Connection) void {
 }
 
 fn shouldInspectResponse(request: RequestHead, head: Head) bool {
-    return request.classification == .inference and
+    return request.watched and
         head.sse_body and
         head.message.status_code >= 200 and head.message.status_code < 300;
 }
@@ -284,7 +289,7 @@ test "Claude request bodies refine route candidates before publication" {
     });
     defer connection.request.deinit();
     const candidate: RequestHead = .{
-        .classification = .inference,
+        .watched = true,
         .body = .{ .content_length = claude_startup_request.len },
         .response_context = .normal,
     };
@@ -297,7 +302,7 @@ test "Claude request bodies refine route candidates before publication" {
     connection.request.deinit();
 
     publishRequest(&connection, .{
-        .classification = .inference,
+        .watched = true,
         .body = .none,
         .response_context = .normal,
     });
@@ -323,20 +328,20 @@ test "Claude request bodies refine route candidates before publication" {
 
 test "only successful inference SSE responses are inspected" {
     const request: RequestHead = .{
-        .classification = .inference,
+        .watched = true,
         .body = .none,
         .response_context = .normal,
     };
     const successful: Head = .{
         .message = .{ .status_code = 200 },
         .framing = .none,
-        .classification = .auxiliary,
+        .watched = false,
         .sse_body = true,
     };
 
     try std.testing.expect(shouldInspectResponse(request, successful));
     try std.testing.expect(!shouldInspectResponse(.{
-        .classification = .auxiliary,
+        .watched = false,
         .body = .none,
         .response_context = .normal,
     }, successful));
@@ -373,14 +378,14 @@ test "Claude SSE completion is published after forwarded response activity" {
         .to = .origin,
         .is_response = false,
         .response_to_head = false,
-        .dialect = harness.exchange.dialect,
+        .watched_routes = request_support.inferenceRoutes(harness.exchange.dialect),
     }).?;
     const request: RequestHead = .{
-        .classification = parsed_request.classification,
+        .watched = parsed_request.watched,
         .body = parsed_request.framing,
         .response_context = .normal,
     };
-    harness.exchange.publish(exchange_mod.requestPhase(request.classification), 0);
+    harness.exchange.publish(exchange_mod.requestPhase(requestClass(request)), 0);
 
     const parsed_response = http.relayHead(&session, .{
         .from = .origin,
@@ -421,7 +426,7 @@ test "response metadata preserves final routing semantics" {
     const informational = semanticResponse(.{
         .message = .{ .status_code = 100, .informational = true },
         .framing = .none,
-        .classification = .auxiliary,
+        .watched = false,
         .sse_body = false,
     });
     try std.testing.expectEqual(types.ResponseKind.informational, informational.kind);
@@ -430,7 +435,7 @@ test "response metadata preserves final routing semantics" {
     const upgraded = semanticResponse(.{
         .message = .{ .status_code = 101, .upgrade = true },
         .framing = .none,
-        .classification = .auxiliary,
+        .watched = false,
         .sse_body = false,
     });
     try std.testing.expectEqual(types.ResponseKind.upgrade, upgraded.kind);
@@ -438,7 +443,7 @@ test "response metadata preserves final routing semantics" {
     const closing = semanticResponse(.{
         .message = .{ .status_code = 200, .closes = true },
         .framing = .until_close,
-        .classification = .auxiliary,
+        .watched = false,
         .sse_body = false,
     });
     try std.testing.expectEqual(types.ResponseKind.final, closing.kind);

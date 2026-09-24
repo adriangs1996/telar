@@ -2,87 +2,58 @@
 
 const types = @import("../../agent/types.zig");
 const std = @import("std");
+const RouteMatch = @import("../RouteMatch.zig");
 
 pub const ApiDialect = types.ApiDialect;
 
-pub const Request = @import("Request.zig");
+/// Routes that carry Anthropic Messages inference.
+pub const anthropic_inference = [_]RouteMatch{.{ .method = "POST", .paths = &.{"/v1/messages"} }};
 
-/// Routes that carry Anthropic Messages inference, without their query.
-pub const anthropic_inference_paths = [_][]const u8{"/v1/messages"};
+/// Routes that carry OpenAI Responses inference.
+pub const openai_inference = [_]RouteMatch{.{ .method = "POST", .paths = &.{ "/v1/responses", "/backend-api/codex/responses" } }};
 
-/// Routes that carry OpenAI Responses inference, without their query.
-pub const openai_inference_paths = [_][]const u8{ "/v1/responses", "/backend-api/codex/responses" };
+/// The routes a tunnel to `dialect` watches as inference; every other
+/// request is auxiliary.
+///
+/// ```zig
+/// const watched = request_support.inferenceRoutes(exchange.dialect);
+/// ```
+pub fn inferenceRoutes(dialect: types.ApiDialect) []const RouteMatch {
+    return switch (dialect) {
+        .anthropic_messages => &anthropic_inference,
+        .openai_responses => &openai_inference,
+        .unknown => &.{},
+    };
+}
 
 pub const RequestClass = enum {
     inference,
     auxiliary,
 };
 
-/// Classifies a request route for `dialect`. For Anthropic Messages,
-/// `.inference` is a candidate which the request-body observer must refine
-/// before publication. Query parameters do not change route ownership.
-/// Unknown dialects and cross-dialect routes are always auxiliary.
-///
-/// ```zig
-/// const class = classify(.anthropic_messages, .{ .method = "POST", .target = "/v1/messages" });
-/// ```
-pub fn classify(dialect: types.ApiDialect, request: Request) RequestClass {
-    if (!std.ascii.eqlIgnoreCase(request.method, "POST")) {
-        return .auxiliary;
-    }
-
-    const path = request.target[0 .. std.mem.indexOfScalar(u8, request.target, '?') orelse request.target.len];
-    const paths: []const []const u8 = switch (dialect) {
-        .anthropic_messages => &anthropic_inference_paths,
-        .openai_responses => &openai_inference_paths,
-        .unknown => &.{},
-    };
-
-    for (paths) |inference| {
-        if (std.mem.eql(u8, path, inference)) {
-            return .inference;
-        }
-    }
-
-    return .auxiliary;
+/// Whether a request of this method and target is inference for `dialect`.
+fn isInference(dialect: types.ApiDialect, method: []const u8, target: []const u8) bool {
+    return RouteMatch.matchesAny(method, target, inferenceRoutes(dialect));
 }
 
 test "request classification enforces dialect route ownership" {
-    try std.testing.expectEqual(RequestClass.inference, classify(.anthropic_messages, .{
-        .method = "POST",
-        .target = "/v1/messages?beta=true",
-    }));
-    try std.testing.expectEqual(RequestClass.inference, classify(.openai_responses, .{
-        .method = "post",
-        .target = "/v1/responses",
-    }));
-    try std.testing.expectEqual(RequestClass.inference, classify(.openai_responses, .{
-        .method = "POST",
-        .target = "/backend-api/codex/responses?stream=true",
-    }));
+    try std.testing.expect(isInference(.anthropic_messages, "POST", "/v1/messages?beta=true"));
+    try std.testing.expect(isInference(.openai_responses, "post", "/v1/responses"));
+    try std.testing.expect(isInference(.openai_responses, "POST", "/backend-api/codex/responses?stream=true"));
 
-    try std.testing.expectEqual(RequestClass.auxiliary, classify(.anthropic_messages, .{
-        .method = "POST",
-        .target = "/v1/responses",
-    }));
-    try std.testing.expectEqual(RequestClass.auxiliary, classify(.openai_responses, .{
-        .method = "POST",
-        .target = "/v1/messages",
-    }));
-    try std.testing.expectEqual(RequestClass.auxiliary, classify(.unknown, .{
-        .method = "POST",
-        .target = "/v1/messages",
-    }));
+    try std.testing.expect(!isInference(.anthropic_messages, "POST", "/v1/responses"));
+    try std.testing.expect(!isInference(.openai_responses, "POST", "/v1/messages"));
+    try std.testing.expect(!isInference(.unknown, "POST", "/v1/messages"));
 }
 
 test "request classification rejects non-generation variants" {
     inline for (.{
-        Request{ .method = "GET", .target = "/v1/messages" },
-        Request{ .method = "POST", .target = "/v1/messages/count_tokens?beta=true" },
-        Request{ .method = "POST", .target = "/api/event_logging/v2/batch" },
-        Request{ .method = "POST", .target = "/V1/MESSAGES" },
-        Request{ .method = "POST", .target = "/v1/messages#fragment" },
+        .{ "GET", "/v1/messages" },
+        .{ "POST", "/v1/messages/count_tokens?beta=true" },
+        .{ "POST", "/api/event_logging/v2/batch" },
+        .{ "POST", "/V1/MESSAGES" },
+        .{ "POST", "/v1/messages#fragment" },
     }) |request| {
-        try std.testing.expectEqual(RequestClass.auxiliary, classify(.anthropic_messages, request));
+        try std.testing.expect(!isInference(.anthropic_messages, request[0], request[1]));
     }
 }

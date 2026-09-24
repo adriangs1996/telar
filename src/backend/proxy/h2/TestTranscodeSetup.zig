@@ -1,4 +1,4 @@
-const types = @import("../../agent/types.zig");
+const RouteMatch = @import("../RouteMatch.zig");
 const relay = @import("relay.zig");
 const localca = @import("localca");
 const Session = localca.Session;
@@ -7,7 +7,7 @@ const PeerSettings = h2frames.PeerSettings;
 const Rewrite = @import("../Rewrite.zig");
 const TestTranscodeSetup = @This();
 
-dialect: types.ApiDialect,
+watched_routes: []const RouteMatch = &.{},
 direction: relay.Direction,
 to: Session.Side,
 source_settings: *PeerSettings,

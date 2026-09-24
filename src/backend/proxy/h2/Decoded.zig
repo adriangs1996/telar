@@ -2,15 +2,18 @@ const Decoded = @This();
 
 status_code: u16 = 0,
 request: bool = false,
-inference_method: bool = false,
-inference_route: bool = false,
+/// Bit `i` set: watched route `i` matched the `:method` field.
+method_routes: u64 = 0,
+/// Bit `i` set: watched route `i` matched the `:path` field.
+path_routes: u64 = 0,
 content_type_seen: bool = false,
 event_stream: bool = false,
 identity_encoding: bool = true,
 metadata_valid: bool = true,
 
-pub fn isInference(self: Decoded) bool {
-    return self.request and self.inference_method and self.inference_route;
+/// A request whose method and path both match one watched route.
+pub fn isWatched(self: Decoded) bool {
+    return self.request and self.method_routes & self.path_routes != 0;
 }
 
 pub fn hasObservableSseBody(self: Decoded) bool {

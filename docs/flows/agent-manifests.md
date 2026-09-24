@@ -113,7 +113,8 @@ installs them from `cli/integration.zig` and `telar hook` parses them in
 ## API dialect
 
 The proxy never names an agent. `provider/dialect.zig` identifies the dialect
-of a CONNECT host and `request_support.classify` decides inference routes per dialect.
+of a CONNECT host and `request_support.inferenceRoutes` names the inference
+routes per dialect; the relay only reports whether a request matched them.
 Observations carry the dialect to the runtime, where
 `ProxyObservation.impliedProvider` maps it to the native built-in agent
 (`anthropic_messages` to Claude Code, `openai_responses` to Codex). That

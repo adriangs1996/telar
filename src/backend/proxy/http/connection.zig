@@ -15,7 +15,6 @@ const ExchangeState = @import("ExchangeState.zig");
 const std = @import("std");
 const ExchangeCapture = @import("ExchangeCapture.zig");
 const ConnectionCapture = @import("ConnectionCapture.zig");
-const request_support = @import("../provider/request_support.zig");
 
 pub const ExchangeOutcome = union(enum) {
     complete: ResponseHead,
@@ -30,7 +29,7 @@ pub const Event = union(enum) {
 
 fn testingRequest(body: types.BodyPlan) RequestHead {
     return .{
-        .classification = .inference,
+        .watched = true,
         .body = body,
         .response_context = .normal,
     };
@@ -180,7 +179,7 @@ test "a keep-alive response permits the next exchange" {
     var capture: ConnectionCapture = .{};
     capture.requests[0] = testingRequest(.none);
     capture.requests[1] = .{
-        .classification = .auxiliary,
+        .watched = false,
         .body = .none,
         .response_context = .normal,
     };
@@ -200,7 +199,7 @@ test "a keep-alive response permits the next exchange" {
         .exchange,
         .publish_response,
     });
-    try std.testing.expectEqual(request_support.RequestClass.auxiliary, capture.published_class.?);
+    try std.testing.expectEqual(false, capture.published_watched.?);
     try std.testing.expectEqual(@as(u16, 204), capture.published_status.?);
 }
 

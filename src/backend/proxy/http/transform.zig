@@ -11,7 +11,7 @@ const head = @import("head_support.zig");
 const std = @import("std");
 const middleware = @import("../middleware.zig");
 const Rewrite = @import("../Rewrite.zig");
-const request_support = @import("../provider/request_support.zig");
+const RouteMatch = @import("../RouteMatch.zig");
 
 pub const Decision = union(enum) {
     preserve,
@@ -54,7 +54,7 @@ pub fn decide(input: Input) Decision {
         return .preserve;
     }
 
-    transformed.classification = original_head.classification;
+    transformed.watched = original_head.watched;
     return .{ .replace = .{ .head = transformed, .len = len } };
 }
 
@@ -184,6 +184,9 @@ fn append(output: []u8, len: *usize, bytes: []const u8) ?void {
     len.* += bytes.len;
 }
 
+/// The routes the tests watch.
+const test_routes = [_]RouteMatch{.{ .method = "POST", .paths = &.{"/v1/messages"} }};
+
 fn testDecision(input: TestDecisionInput) Decision {
     const original = input.original;
     const is_response = input.is_response;
@@ -193,7 +196,7 @@ fn testDecision(input: TestDecisionInput) Decision {
         .original_head = head.analyze(original, .{
             .is_response = is_response,
             .response_to_head = false,
-            .dialect = if (is_response) .unknown else .anthropic_messages,
+            .watched_routes = if (is_response) &.{} else &test_routes,
         }).?,
         .is_response = is_response,
         .response_to_head = false,
@@ -269,7 +272,7 @@ test "an encoded head that exceeds the output bound is preserved" {
     try std.testing.expectEqual(Decision.preserve, testDecision(.{ .original = original, .is_response = false, .rewrites = &head_rewrites, .output = &output }));
 }
 
-test "request classification remains tied to the original route" {
+test "a rewritten request stays watched by its original route" {
     const head_rewrites = [_]Rewrite{.{
         .effects = &.{
             .{ .set = .{ .name = ":method", .value = "PUT", .sensitive = false } },
@@ -283,7 +286,7 @@ test "request classification remains tied to the original route" {
         .preserve => return error.ExpectedReplacement,
         .replace => |value| value,
     };
-    try std.testing.expectEqual(request_support.RequestClass.inference, replacement.head.classification);
+    try std.testing.expect(replacement.head.watched);
     try std.testing.expect(std.mem.startsWith(
         u8,
         output[0..replacement.len],

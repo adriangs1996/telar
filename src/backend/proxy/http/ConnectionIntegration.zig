@@ -1,5 +1,5 @@
 const FakeSession = @import("FakeSession.zig");
-const request_support = @import("../provider/request_support.zig");
+const RouteMatch = @import("../RouteMatch.zig");
 const std = @import("std");
 const RequestHead = @import("RequestHead.zig");
 const http = @import("http.zig");
@@ -9,8 +9,10 @@ const ResponseHead = @import("ResponseHead.zig");
 const connection_module = @import("connection.zig");
 const ConnectionIntegration = @This();
 
+const watched_routes = [_]RouteMatch{.{ .method = "POST", .paths = &.{"/v1/messages"} }};
+
 session: FakeSession,
-request_classes: [2]request_support.RequestClass = undefined,
+watched: [2]bool = undefined,
 request_count: usize = 0,
 response_statuses: [2]u16 = undefined,
 response_count: usize = 0,
@@ -27,11 +29,11 @@ pub fn readRequest(self: *ConnectionIntegration) ?RequestHead {
         .to = .origin,
         .is_response = false,
         .response_to_head = false,
-        .dialect = .anthropic_messages,
+        .watched_routes = &watched_routes,
     }) orelse return null;
 
     return .{
-        .classification = parsed.classification,
+        .watched = parsed.watched,
         .body = parsed.framing,
         .response_context = if (parsed.message.head_request) .head_request else .normal,
     };
@@ -80,7 +82,7 @@ pub fn exchange(self: *ConnectionIntegration, request: RequestHead) connection_m
 }
 
 pub fn publishRequest(self: *ConnectionIntegration, request: RequestHead) void {
-    self.request_classes[self.request_count] = request.classification;
+    self.watched[self.request_count] = request.watched;
     self.request_count += 1;
 }
 

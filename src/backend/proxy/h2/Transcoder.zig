@@ -1,5 +1,5 @@
 const relay = @import("relay.zig");
-const types = @import("../../agent/types.zig");
+const RouteMatch = @import("../RouteMatch.zig");
 const TranscodeConfiguration = @import("TranscodeConfiguration.zig");
 const h2frames = @import("h2frames");
 const Reader = h2frames.Reader;
@@ -7,7 +7,6 @@ const Tracker = h2frames.Tracker;
 const std = @import("std");
 const Headers = @import("../Headers.zig");
 const rewrites = @import("../rewrites.zig");
-const provider = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
 const framing_module = h2frames.framing;
 const PeerSettings = h2frames.PeerSettings;
@@ -16,7 +15,8 @@ const Transcoder = @This();
 inflater: ?*relay.c.nghttp2_hd_inflater = null,
 deflater: ?*relay.c.nghttp2_hd_deflater = null,
 failed: bool = false,
-dialect: types.ApiDialect,
+/// Request routes to report as watched.
+watched_routes: []const RouteMatch,
 configuration: TranscodeConfiguration,
 applied_table_size: u32 = 4096,
 applied_inflate_table_size: u32 = relay.max_header_block_bytes,
@@ -38,8 +38,8 @@ setting: [6]u8 = undefined,
 setting_len: u8 = 0,
 streams: Tracker = .{},
 
-pub fn init(dialect: types.ApiDialect, configuration: TranscodeConfiguration) Transcoder {
-    var transcoder: Transcoder = .{ .dialect = dialect, .configuration = configuration };
+pub fn init(watched_routes: []const RouteMatch, configuration: TranscodeConfiguration) Transcoder {
+    var transcoder: Transcoder = .{ .watched_routes = watched_routes, .configuration = configuration };
     if (relay.c.nghttp2_hd_inflate_new(&transcoder.inflater) != 0 or
         relay.c.nghttp2_hd_inflate_change_table_size(
             transcoder.inflater,
@@ -307,10 +307,11 @@ fn finishHeaderBlock(self: *Transcoder, port: anytype) bool {
         self.streams.startRequest(self.block_stream))
     {
         port.emit(.{ .lifecycle = .{
-            .phase = if (provider.classify(self.dialect, .{
-                .method = original.find(":method") orelse "",
-                .target = original.find(":path") orelse "",
-            }) == .inference)
+            .phase = if (RouteMatch.matchesAny(
+                original.find(":method") orelse "",
+                original.find(":path") orelse "",
+                self.watched_routes,
+            ))
                 .request_started
             else
                 .auxiliary_request_started,

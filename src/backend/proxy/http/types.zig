@@ -3,7 +3,6 @@
 //! These types own no buffers and borrow no network data. They may outlive the
 //! scratch storage used to parse or transform an HTTP message head.
 
-const provider = @import("../provider/request_support.zig");
 const std = @import("std");
 
 /// How an HTTP message body is delimited on the wire.
@@ -21,8 +20,6 @@ pub const BodyPlan = union(enum) {
         };
     }
 };
-
-pub const RequestClass = provider.RequestClass;
 
 /// Information from the forwarded request needed to parse its response.
 pub const ResponseContext = enum {

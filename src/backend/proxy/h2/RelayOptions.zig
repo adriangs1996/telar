@@ -1,8 +1,8 @@
 const H2Route = @import("H2Route.zig");
-const types = @import("../../agent/types.zig");
+const RouteMatch = @import("../RouteMatch.zig");
 const Transformation = @import("Transformation.zig");
 const RelayOptions = @This();
 
 route: H2Route,
-dialect: types.ApiDialect,
+watched_routes: []const RouteMatch = &.{},
 transformation: ?Transformation = null,

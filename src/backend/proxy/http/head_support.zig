@@ -9,8 +9,7 @@ const localca = @import("localca");
 const Session = localca.Session;
 const std = @import("std");
 const middleware = @import("../middleware.zig");
-const types_module = @import("../../agent/types.zig");
-const provider = @import("../provider/request_support.zig");
+const RouteMatch = @import("../RouteMatch.zig");
 const FakeSessionType = @import("FakeSession.zig");
 
 pub const max_bytes = 32 * 1024;
@@ -51,15 +50,15 @@ pub fn read(session: anytype, side: Session.Side, buffer: []u8) ?usize {
 ///
 /// `options.response_to_head` identifies a response to a `HEAD` request. Such
 /// a response has no body even when its headers describe the body a `GET`
-/// would have returned. Request classification uses the provider that owns the
-/// connection and always describes the original, untransformed start line.
+/// would have returned. `watched` compares the original, untransformed start
+/// line with the caller's watched routes.
 /// Invalid or ambiguous framing returns `null`.
 ///
 /// ```zig
 /// const parsed = analyze(bytes, .{
 ///     .is_response = false,
 ///     .response_to_head = false,
-///     .dialect = .anthropic_messages,
+///     .watched_routes = &inference_routes,
 /// });
 /// ```
 pub fn analyze(bytes: []const u8, options: AnalyzeOptions) ?Head {
@@ -84,10 +83,7 @@ pub fn analyze(bytes: []const u8, options: AnalyzeOptions) ?Head {
             },
         },
         .framing = framing,
-        .classification = if (options.is_response)
-            .auxiliary
-        else
-            classifyRequest(start_line, options.dialect),
+        .watched = !options.is_response and watchedRequest(start_line, options.watched_routes),
         .sse_body = options.is_response and hasObservableSseBody(bytes),
     };
 }
@@ -132,17 +128,14 @@ fn onlyChunkedCoding(value: []const u8) bool {
     return coding.len != 0 and std.ascii.eqlIgnoreCase(coding, "chunked") and tokens.next() == null;
 }
 
-fn classifyRequest(start_line: []const u8, dialect: types_module.ApiDialect) provider.RequestClass {
-    const method_end = std.mem.indexOfScalar(u8, start_line, ' ') orelse return .auxiliary;
-    const version_start = std.mem.lastIndexOfScalar(u8, start_line, ' ') orelse return .auxiliary;
+fn watchedRequest(start_line: []const u8, routes: []const RouteMatch) bool {
+    const method_end = std.mem.indexOfScalar(u8, start_line, ' ') orelse return false;
+    const version_start = std.mem.lastIndexOfScalar(u8, start_line, ' ') orelse return false;
     if (method_end == version_start) {
-        return .auxiliary;
+        return false;
     }
 
-    return provider.classify(dialect, .{
-        .method = start_line[0..method_end],
-        .target = start_line[method_end + 1 .. version_start],
-    });
+    return RouteMatch.matchesAny(start_line[0..method_end], start_line[method_end + 1 .. version_start], routes);
 }
 
 fn framingOf(bytes: []const u8, is_response: bool, bodyless: bool) ?types.BodyPlan {
@@ -258,11 +251,14 @@ fn parseStatus(line: []const u8) ?u16 {
     return if (status >= 100 and status <= 599) status else null;
 }
 
-fn analyzeRequest(bytes: []const u8, dialect: types_module.ApiDialect) ?Head {
+/// The routes the tests watch.
+const test_routes = [_]RouteMatch{.{ .method = "POST", .paths = &.{"/v1/messages"} }};
+
+fn analyzeRequest(bytes: []const u8, routes: []const RouteMatch) ?Head {
     return analyze(bytes, .{
         .is_response = false,
         .response_to_head = false,
-        .dialect = dialect,
+        .watched_routes = routes,
     });
 }
 
@@ -376,7 +372,7 @@ test "SSE response metadata rejects ambiguous non-SSE and encoded payloads" {
 test "request content type never assigns response SSE metadata" {
     const parsed = analyzeRequest(
         "POST /v1/messages HTTP/1.1\r\nContent-Type: text/event-stream\r\nContent-Length: 0\r\n\r\n",
-        .anthropic_messages,
+        &test_routes,
     ).?;
 
     try std.testing.expect(!parsed.sse_body);
@@ -421,29 +417,29 @@ test "response status must be exactly three digits in the HTTP range" {
     }
 }
 
-test "request classification uses the dialect that owns the connection" {
-    try std.testing.expectEqual(provider.RequestClass.inference, analyzeRequest(
+test "a request is watched when its original start line matches a watched route" {
+    try std.testing.expect(analyzeRequest(
         "POST /v1/messages?beta=true HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
-        .anthropic_messages,
-    ).?.classification);
-    try std.testing.expectEqual(provider.RequestClass.auxiliary, analyzeRequest(
+        &test_routes,
+    ).?.watched);
+    try std.testing.expect(!analyzeRequest(
         "POST /v1/messages HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
-        .openai_responses,
-    ).?.classification);
-    try std.testing.expectEqual(provider.RequestClass.auxiliary, analyzeRequest(
+        &.{},
+    ).?.watched);
+    try std.testing.expect(!analyzeRequest(
         "POST /v1/messages/count_tokens?beta=true HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
-        .anthropic_messages,
-    ).?.classification);
-    try std.testing.expectEqual(provider.RequestClass.auxiliary, analyzeRequest(
+        &test_routes,
+    ).?.watched);
+    try std.testing.expect(!analyzeRequest(
         "POST /api/event_logging/v2/batch HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
-        .anthropic_messages,
-    ).?.classification);
+        &test_routes,
+    ).?.watched);
 }
 
 test "a HEAD request is identified without assigning response metadata" {
     const parsed = analyzeRequest(
         "HEAD /v1/messages HTTP/1.1\r\nHost: example.test\r\n\r\n",
-        .anthropic_messages,
+        &test_routes,
     ).?;
     try std.testing.expect(parsed.message.head_request);
     try std.testing.expectEqual(@as(u16, 0), parsed.message.status_code);

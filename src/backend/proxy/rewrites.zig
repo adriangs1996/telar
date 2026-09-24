@@ -41,26 +41,10 @@ fn matches(rewrite: Rewrite, head: Head, headers: *const Headers) bool {
         }
     }
 
-    if (rewrite.method) |method| {
-        const actual = uniqueValue(headers, ":method") orelse return false;
-        if (!std.ascii.eqlIgnoreCase(actual, method)) {
-            return false;
-        }
-    }
-
-    if (rewrite.paths.len == 0) {
-        return true;
-    }
-
+    const route = rewrite.route orelse return true;
+    const method = uniqueValue(headers, ":method") orelse return false;
     const target = uniqueValue(headers, ":path") orelse return false;
-    const path = target[0 .. std.mem.indexOfScalar(u8, target, '?') orelse target.len];
-    for (rewrite.paths) |wanted| {
-        if (std.mem.eql(u8, path, wanted)) {
-            return true;
-        }
-    }
-
-    return false;
+    return route.matches(method, target);
 }
 
 /// The value of `name` when exactly one field carries it.
@@ -90,8 +74,7 @@ const Head = struct {
 const identity_request: Rewrite = .{
     .direction = .request,
     .kind = .request,
-    .method = "POST",
-    .paths = &.{"/v1/messages"},
+    .route = .{ .method = "POST", .paths = &.{"/v1/messages"} },
     .effects = &.{.{ .set = .{ .name = "accept-encoding", .value = "identity", .sensitive = false } }},
 };
 

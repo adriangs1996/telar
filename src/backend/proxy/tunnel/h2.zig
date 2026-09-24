@@ -84,7 +84,7 @@ fn relayOptions(context: *RelayContext, settings: *Settings, direction: relay_mo
     };
 
     return h2.relayOptions(direction, settings, .{
-        .dialect = context.exchange.dialect,
+        .watched_routes = request_support.inferenceRoutes(context.exchange.dialect),
         .transformation = if (rewrites.len == 0) null else .{ .rewrites = rewrites },
     });
 }

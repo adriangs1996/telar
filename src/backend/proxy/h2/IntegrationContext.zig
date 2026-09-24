@@ -1,6 +1,7 @@
 const localca = @import("localca");
 const Session = localca.Session;
 const std = @import("std");
+const RouteMatch = @import("../RouteMatch.zig");
 const middleware = @import("../middleware.zig");
 const h2frames = @import("h2frames");
 const Settings = h2frames.Settings;
@@ -8,6 +9,8 @@ const Stats = @import("Stats.zig");
 const h2 = @import("h2.zig");
 const relay_module = @import("relay.zig");
 const IntegrationContext = @This();
+
+const watched_routes = [_]RouteMatch{.{ .method = "POST", .paths = &.{"/v1/messages"} }};
 
 session: FakeSession,
 request_done: *std.Io.Queue(u8),
@@ -21,14 +24,14 @@ pub fn io(_: *IntegrationContext) std.Io {
 }
 
 pub fn relayRequest(self: *IntegrationContext, settings: *Settings) Stats {
-    const stats = h2.relay(&self.session, h2.relayOptions(.request, settings, .{ .dialect = .anthropic_messages }), self);
+    const stats = h2.relay(&self.session, h2.relayOptions(.request, settings, .{ .watched_routes = &watched_routes }), self);
     self.request_done.putOneUncancelable(std.testing.io, 0) catch unreachable;
     return stats;
 }
 
 pub fn relayResponse(self: *IntegrationContext, settings: *Settings) Stats {
     _ = self.request_done.getOne(std.testing.io) catch return .{ .decode_failed = true };
-    return h2.relay(&self.session, h2.relayOptions(.response, settings, .{ .dialect = .anthropic_messages }), self);
+    return h2.relay(&self.session, h2.relayOptions(.response, settings, .{ .watched_routes = &watched_routes }), self);
 }
 
 pub fn recordDecodeFailure(self: *IntegrationContext, _: relay_module.Direction) void {

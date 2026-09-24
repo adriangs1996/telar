@@ -1,6 +1,5 @@
 const RequestHead = @import("RequestHead.zig");
 const connection = @import("connection.zig");
-const request_support = @import("../provider/request_support.zig");
 const std = @import("std");
 const ResponseHead = @import("ResponseHead.zig");
 const ConnectionCapture = @This();
@@ -12,7 +11,7 @@ outcomes: [3]connection.ExchangeOutcome = undefined,
 outcome_index: usize = 0,
 steps: [16]connection.Step = undefined,
 step_len: usize = 0,
-published_class: ?request_support.RequestClass = null,
+published_watched: ?bool = null,
 published_status: ?u16 = null,
 
 fn record(self: *ConnectionCapture, step: connection.Step) void {
@@ -40,7 +39,7 @@ pub fn exchange(self: *ConnectionCapture, _: RequestHead) connection.ExchangeOut
 
 pub fn publishRequest(self: *ConnectionCapture, request: RequestHead) void {
     self.record(.publish_request);
-    self.published_class = request.classification;
+    self.published_watched = request.watched;
 }
 
 pub fn publishResponse(self: *ConnectionCapture, final: ResponseHead) void {

@@ -14,10 +14,8 @@ const claude = @import("claude.zig");
 
 pub const ApiDialect = types.ApiDialect;
 
-pub const Request = @import("Request.zig");
 pub const RequestClass = request.RequestClass;
 pub const identify = dialect_mod.identify;
-pub const classify = request.classify;
 
 pub const max_concurrent_responses = 128;
 

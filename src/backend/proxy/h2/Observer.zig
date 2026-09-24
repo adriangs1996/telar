@@ -1,18 +1,18 @@
 const relay = @import("relay.zig");
-const types = @import("../../agent/types.zig");
+const RouteMatch = @import("../RouteMatch.zig");
 const h2frames = @import("h2frames");
 const Reader = h2frames.Reader;
 const Tracker = h2frames.Tracker;
 const std = @import("std");
 const Decoded = @import("Decoded.zig");
 const HeaderField = h2frames.HeaderField;
-const provider = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
 const Observer = @This();
 
 inflater: ?*relay.c.nghttp2_hd_inflater = null,
 failed: bool = false,
-dialect: types.ApiDialect,
+/// Request routes to report as watched; at most 64.
+watched_routes: []const RouteMatch,
 direction: relay.Direction,
 
 framing: Reader = .{},
@@ -26,8 +26,9 @@ block: [relay.max_header_block_bytes]u8 = undefined,
 block_len: usize = 0,
 streams: Tracker = .{},
 
-pub fn init(dialect: types.ApiDialect, direction: relay.Direction) Observer {
-    var observer: Observer = .{ .dialect = dialect, .direction = direction };
+pub fn init(watched_routes: []const RouteMatch, direction: relay.Direction) Observer {
+    std.debug.assert(watched_routes.len <= 64);
+    var observer: Observer = .{ .watched_routes = watched_routes, .direction = direction };
     if (relay.c.nghttp2_hd_inflate_new(&observer.inflater) != 0 or
         relay.c.nghttp2_hd_inflate_change_table_size(
             observer.inflater,
@@ -186,7 +187,7 @@ fn finishFrame(self: *Observer, sink: anytype) void {
                     .request => {
                         if (decoded.request and self.streams.startRequest(self.block_stream)) {
                             sink.emit(.{ .lifecycle = .{
-                                .phase = if (decoded.isInference())
+                                .phase = if (decoded.isWatched())
                                     .request_started
                                 else
                                     .auxiliary_request_started,
@@ -355,13 +356,18 @@ fn decodeBlock(self: *Observer, sink: anytype) Decoded {
             }
             if (std.mem.eql(u8, name, ":method")) {
                 decoded.request = true;
-                decoded.inference_method = std.ascii.eqlIgnoreCase(value, "POST");
+                for (self.watched_routes, 0..) |route, index| {
+                    if (route.matchesMethod(value)) {
+                        decoded.method_routes |= @as(u64, 1) << @intCast(index);
+                    }
+                }
             }
             if (std.mem.eql(u8, name, ":path")) {
-                decoded.inference_route = provider.classify(self.dialect, .{
-                    .method = "POST",
-                    .target = value,
-                }) == .inference;
+                for (self.watched_routes, 0..) |route, index| {
+                    if (route.matchesPath(value)) {
+                        decoded.path_routes |= @as(u64, 1) << @intCast(index);
+                    }
+                }
             }
             if (std.ascii.eqlIgnoreCase(name, "content-type")) {
                 if (decoded.content_type_seen) {

@@ -7,7 +7,7 @@ const Rewrite = @import("../Rewrite.zig");
 const std = @import("std");
 const localca = @import("localca");
 const Session = localca.Session;
-const types = @import("../../agent/types.zig");
+const RouteMatch = @import("../RouteMatch.zig");
 const IntegrationContext = @import("IntegrationContext.zig");
 const middleware = @import("../middleware.zig");
 const connection = @import("connection.zig");
@@ -37,7 +37,7 @@ pub const RelayConfiguration = @import("RelayConfiguration.zig");
 /// Builds the route and crossed peer settings for one relay direction.
 ///
 /// ```zig
-/// const request = relayOptions(.request, &settings, .{ .dialect = .anthropic_messages });
+/// const request = relayOptions(.request, &settings, .{ .watched_routes = &inference_routes });
 /// ```
 pub fn relayOptions(direction: relay_mod.Direction, settings: *Settings, configuration: RelayConfiguration) RelayOptions {
     const route: Route = switch (direction) {
@@ -51,7 +51,7 @@ pub fn relayOptions(direction: relay_mod.Direction, settings: *Settings, configu
 
     return .{
         .route = route,
-        .dialect = configuration.dialect,
+        .watched_routes = configuration.watched_routes,
         .transformation = if (configuration.transformation) |selected| .{
             .source_settings = source_settings,
             .target_settings = target_settings,
@@ -67,7 +67,7 @@ pub fn relayOptions(direction: relay_mod.Direction, settings: *Settings, configu
 /// ```zig
 /// const stats = relay(session, .{
 ///     .route = .{ .from = .child, .to = .origin, .direction = .request },
-///     .dialect = .anthropic_messages,
+///     .watched_routes = &inference_routes,
 /// }, &sink);
 /// ```
 pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
@@ -78,7 +78,7 @@ pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
             .from = route.from,
             .to = route.to,
             .direction = route.direction,
-            .dialect = options.dialect,
+            .watched_routes = options.watched_routes,
         },
         sink,
     );
@@ -90,7 +90,7 @@ pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
                 .from = route.from,
                 .to = route.to,
                 .direction = route.direction,
-                .dialect = options.dialect,
+                .watched_routes = options.watched_routes,
             },
             .source_settings = transformation.source_settings,
             .target_settings = transformation.target_settings,
@@ -104,33 +104,32 @@ test "relay options map direction and peer settings" {
     var settings: Settings = .{};
     const no_rewrites: []const Rewrite = &.{};
 
-    const observed_request = relayOptions(.request, &settings, .{ .dialect = .unknown });
+    const watched = [_]RouteMatch{.{ .method = "POST", .paths = &.{"/v1/messages"} }};
+    const observed_request = relayOptions(.request, &settings, .{});
     try std.testing.expectEqual(Session.Side.child, observed_request.route.from);
     try std.testing.expectEqual(Session.Side.origin, observed_request.route.to);
-    try std.testing.expectEqual(types.ApiDialect.unknown, observed_request.dialect);
+    try std.testing.expectEqual(@as(usize, 0), observed_request.watched_routes.len);
     try std.testing.expect(observed_request.transformation == null);
 
     const request = relayOptions(.request, &settings, .{
-        .dialect = .anthropic_messages,
+        .watched_routes = &watched,
         .transformation = .{
             .rewrites = no_rewrites,
         },
     });
     try std.testing.expectEqual(Session.Side.child, request.route.from);
     try std.testing.expectEqual(Session.Side.origin, request.route.to);
-    try std.testing.expectEqual(types.ApiDialect.anthropic_messages, request.dialect);
+    try std.testing.expect(request.watched_routes.ptr == &watched);
     try std.testing.expect(request.transformation.?.source_settings == &settings.child);
     try std.testing.expect(request.transformation.?.target_settings == &settings.origin);
 
     const response = relayOptions(.response, &settings, .{
-        .dialect = .openai_responses,
         .transformation = .{
             .rewrites = no_rewrites,
         },
     });
     try std.testing.expectEqual(Session.Side.origin, response.route.from);
     try std.testing.expectEqual(Session.Side.child, response.route.to);
-    try std.testing.expectEqual(types.ApiDialect.openai_responses, response.dialect);
     try std.testing.expect(response.transformation.?.source_settings == &settings.origin);
     try std.testing.expect(response.transformation.?.target_settings == &settings.child);
 }

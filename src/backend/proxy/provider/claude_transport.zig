@@ -14,8 +14,7 @@ const middleware = @import("../middleware.zig");
 const identity_encoding = [_]Rewrite{.{
     .direction = .request,
     .kind = .request,
-    .method = "POST",
-    .paths = &request_support.anthropic_inference_paths,
+    .route = request_support.anthropic_inference[0],
     .effects = &.{.{ .set = .{ .name = "accept-encoding", .value = "identity", .sensitive = false } }},
 }};
 

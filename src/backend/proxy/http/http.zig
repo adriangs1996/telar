@@ -7,7 +7,6 @@
 const head = @import("head_support.zig");
 const body = @import("body.zig");
 const types = @import("types.zig");
-const provider = @import("../provider/request_support.zig");
 const connection = @import("connection.zig");
 const GenericExchangePort = @import("GenericExchangePort.zig").Type;
 const GenericExchange = @import("GenericExchange.zig").Type;
@@ -26,7 +25,6 @@ pub const Framing = types.BodyPlan;
 pub const Head = @import("Head.zig");
 pub const BodyRoute = @import("Route.zig");
 pub const BodyPlan = types.BodyPlan;
-pub const RequestClass = provider.RequestClass;
 pub const ResponseContext = types.ResponseContext;
 pub const ResponseKind = types.ResponseKind;
 pub const ConnectionPolicy = types.ConnectionPolicy;
@@ -79,7 +77,7 @@ pub fn relayHead(session: anytype, route: MessageRoute) ?Head {
     return head.analyze(buffer[0..len], .{
         .is_response = route.is_response,
         .response_to_head = route.response_to_head,
-        .dialect = route.dialect,
+        .watched_routes = route.watched_routes,
     });
 }
 
@@ -107,7 +105,7 @@ pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform) ?He
     const original_head = head.analyze(original[0..original_len], .{
         .is_response = transformation.route.is_response,
         .response_to_head = transformation.route.response_to_head,
-        .dialect = transformation.route.dialect,
+        .watched_routes = transformation.route.watched_routes,
     }) orelse return null;
 
     var encoded: [head.max_bytes]u8 = undefined;
@@ -274,7 +272,7 @@ test "HTTP connection composition relays keep-alive exchanges and publishes fina
 
     try std.testing.expectEqualStrings(requests, context.session.originOutput());
     try std.testing.expectEqualStrings(responses, context.session.childOutput());
-    try std.testing.expectEqualSlices(provider.RequestClass, &.{ .inference, .auxiliary }, context.request_classes[0..context.request_count]);
+    try std.testing.expectEqualSlices(bool, &.{ true, false }, context.watched[0..context.request_count]);
     try std.testing.expectEqualSlices(u16, &.{ 200, 404 }, context.response_statuses[0..context.response_count]);
     try std.testing.expectEqual(@as(usize, 0), context.failure_count);
     try std.testing.expect(!context.upgraded);
