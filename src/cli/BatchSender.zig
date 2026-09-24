@@ -1,3 +1,4 @@
+const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const std = @import("std");
 const history = @import("history.zig");
@@ -8,7 +9,7 @@ const BatchSender = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,
-connection: *core.SocketChannel,
+connection: *localsocket.SocketChannel,
 source: []const u8,
 entries: [core.max_import_entries]core.ImportEntry = undefined,
 storage: [history.max_batch_payload]u8 = undefined,

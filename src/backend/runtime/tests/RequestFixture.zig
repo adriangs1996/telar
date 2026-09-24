@@ -1,3 +1,4 @@
+const localsocket = @import("localsocket");
 const response_queue = @import("../delivery/response_queue.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -11,7 +12,7 @@ temporary: std.testing.TmpDir,
 endpoint_buffer: [std.fs.max_path_bytes]u8,
 runtime: *Runtime,
 session: *Session,
-peers: [3]?core.SocketChannel,
+peers: [3]?localsocket.SocketChannel,
 peer_count: usize,
 
 /// Keeps runtime state stable and its client writer busy so replies remain inspectable.
@@ -47,9 +48,9 @@ pub fn addClient(self: *RequestFixture) !*Session {
         return error.SocketPairFailed;
     }
 
-    var connection = core.SocketChannel.init(.{ .socket = .{ .handle = sockets[0], .address = .{ .ip4 = .loopback(0) } } });
+    var connection = localsocket.SocketChannel.init(.{ .socket = .{ .handle = sockets[0], .address = .{ .ip4 = .loopback(0) } } });
     errdefer connection.deinit(std.testing.io);
-    var peer: core.SocketChannel = .init(.{ .socket = .{ .handle = sockets[1], .address = .{ .ip4 = .loopback(0) } } });
+    var peer: localsocket.SocketChannel = .init(.{ .socket = .{ .handle = sockets[1], .address = .{ .ip4 = .loopback(0) } } });
     errdefer peer.deinit(std.testing.io);
     const session = try self.runtime.model.clients.add(std.testing.allocator, connection);
     self.peers[self.peer_count] = peer;

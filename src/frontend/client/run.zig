@@ -1,6 +1,7 @@
 //! Client process adapter: opens the real terminal, constructs and starts one
 //! client, then lends each completed event to the dispatcher.
 
+const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const client_module = @import("telar-client");
 const TerminalAdapter = @import("TerminalAdapter.zig");
@@ -12,7 +13,7 @@ const host_resizes = @import("host/host_resizes.zig");
 const client_startup = @import("session/client_startup.zig");
 const client_events = @import("events.zig");
 
-pub fn run(init: std.process.Init, connection: *core.SocketChannel, options: client_module.Options) !u8 {
+pub fn run(init: std.process.Init, connection: *localsocket.SocketChannel, options: client_module.Options) !u8 {
     const io = init.io;
     var heap = core.Heap.init(init.gpa);
     const gpa = heap.allocator();

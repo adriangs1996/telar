@@ -1,12 +1,12 @@
 //! Adopts the CLI-prepared runtime connection and native client configuration.
+const localsocket = @import("localsocket");
 const std = @import("std");
-const core = @import("telar-core");
 const client = @import("telar-client");
 const GuiAdapter = @import("GuiAdapter.zig");
 const WindowIdentity = @import("WindowIdentity.zig");
 
 /// Opens a native terminal session. Example: `const status = try run(init, connection, options);`
-pub fn run(init: std.process.Init, connection: *core.SocketChannel, options: client.Options) !u8 {
+pub fn run(init: std.process.Init, connection: *localsocket.SocketChannel, options: client.Options) !u8 {
     var adopted = false;
     errdefer if (!adopted) {
         if (options.lua_generation) |generation| {

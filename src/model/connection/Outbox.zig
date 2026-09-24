@@ -670,10 +670,13 @@ fn pushAck(self: *Outbox, ack: core.FrameAck) !void {
     try self.append(.{ .frame_ack = ack });
 }
 
+/// Bootstrap messages are small; a real sender encodes into a whole frame.
+const bootstrap_send_bytes = 64 * 1024;
+
 test "runtime bootstrap queues colors before subscribing to the initial layout" {
     var outbox: Outbox = try .init(std.testing.allocator);
     defer outbox.deinit(std.testing.allocator);
-    var buffer: [core.max_frame_size]u8 = undefined;
+    var buffer: [bootstrap_send_bytes]u8 = undefined;
 
     try outbox.pushBootstrap(.{
         .graphics_shared = true,

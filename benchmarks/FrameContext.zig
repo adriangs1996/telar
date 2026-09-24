@@ -1,3 +1,4 @@
+const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
 const DamageContext = @import("DamageContext.zig");
@@ -12,7 +13,7 @@ encode_buffer: []u8,
 pub fn init(gpa: std.mem.Allocator, fixture: *const Fixture) !FrameContext {
     var damage = try DamageContext.init(gpa, fixture, .fragmented);
     errdefer damage.deinit();
-    const encode_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const encode_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     return .{ .damage = damage, .encode_buffer = encode_buffer };
 }
 

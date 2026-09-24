@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const localsocket = @import("localsocket");
 const std = @import("std");
 const transport_integration_test = @import("transport_integration_test.zig");
 /// Runtime integration reads must fail instead of hanging the whole test
@@ -6,7 +6,7 @@ const transport_integration_test = @import("transport_integration_test.zig");
 /// have consumed part of a frame, so the failure path shuts the channel down.
 const RuntimeTestChannel = @This();
 
-channel: core.SocketChannel,
+channel: localsocket.SocketChannel,
 
 pub fn send(self: *RuntimeTestChannel, io: std.Io, payload: []const u8) !void {
     return self.channel.send(io, payload);

@@ -1,3 +1,4 @@
+const localsocket = @import("localsocket");
 const Workspaces = @import("../../workspace/Workspaces.zig");
 const core = @import("telar-core");
 const ReviewResult = @import("../../change_review/Result.zig");
@@ -46,7 +47,7 @@ clipboard_pane: core.PaneId = .invalid,
 clipboard_pending: bool = false,
 
 pub fn init(gpa: std.mem.Allocator) !Delivery {
-    return .{ .send_buffer = try gpa.alloc(u8, core.max_frame_size) };
+    return .{ .send_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size) };
 }
 
 pub fn deinit(self: *Delivery, gpa: std.mem.Allocator) void {

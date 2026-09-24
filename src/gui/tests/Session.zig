@@ -1,4 +1,5 @@
 //! Native adapter fixture using the production controllers and owned outbox.
+const localsocket = @import("localsocket");
 const cellgrid = @import("cellgrid");
 const std = @import("std");
 const core = @import("telar-core");
@@ -9,8 +10,8 @@ const workers = @import("../workers.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const Session = @This();
 
-connection: core.SocketChannel,
-peer: core.SocketChannel,
+connection: localsocket.SocketChannel,
+peer: localsocket.SocketChannel,
 gui: *GuiAdapter,
 pending: ?[]const u8 = null,
 opened_link: ?data.LinkTarget = null,
@@ -68,7 +69,7 @@ pub fn init() !*Session {
 /// Opens a production adapter over `connection` with the fixture's window
 /// size, before any test seam is set.
 /// Example: `const gui = try Session.openAdapter(&session.connection);`
-pub fn openAdapter(connection: *core.SocketChannel) !*GuiAdapter {
+pub fn openAdapter(connection: *localsocket.SocketChannel) !*GuiAdapter {
     var measurement = Renderer.init(std.testing.allocator);
     defer measurement.deinit();
     const size = try measurement.measure(

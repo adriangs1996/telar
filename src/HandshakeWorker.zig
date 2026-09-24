@@ -1,10 +1,11 @@
+const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
 const std = @import("std");
 const HandshakeWorker = @This();
 
 io: std.Io,
-connection: *core.SocketChannel,
+connection: *localsocket.SocketChannel,
 supported: core.SchemaId,
 response: ?core.ServerResponse = null,
 failure: ?anyerror = null,

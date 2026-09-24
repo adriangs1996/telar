@@ -1,9 +1,10 @@
+const localsocket = @import("localsocket");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
 const State = @This();
 
-connection: *core.SocketChannel,
+connection: *localsocket.SocketChannel,
 send_buffer: []u8,
 receive_buffer: []u8,
 read_buffer: []u8,
@@ -57,12 +58,12 @@ pub fn send(self: *State, io: std.Io, bytes: []const u8) !void {
 /// ```zig
 /// var state = try State.init(gpa, connection);
 /// ```
-pub fn init(gpa: std.mem.Allocator, connection: *core.SocketChannel) !State {
-    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
+pub fn init(gpa: std.mem.Allocator, connection: *localsocket.SocketChannel) !State {
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     errdefer gpa.free(receive_buffer);
-    const read_buffer = try gpa.alloc(u8, core.read_buffer_size);
+    const read_buffer = try gpa.alloc(u8, localsocket.transport.read_buffer_size);
     errdefer gpa.free(read_buffer);
-    const send_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const send_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     connection.bindReadBuffer(read_buffer);
 
     return .{

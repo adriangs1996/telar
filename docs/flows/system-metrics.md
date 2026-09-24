@@ -70,7 +70,7 @@ runtime's fresh delivery cursor supplies the current sample.
 
 ## Validation
 
-- `src/backend/runtime/observability/system_metrics.zig` proves bounded sampling, visible
+- `lib/hostmetrics/system_metrics.zig` proves bounded sampling, visible
   change detection and platform value reduction.
 - `src/backend/runtime/delivery/` proves per-client latest-state delivery.
 - `src/core/schema/schema.zig` proves wire validation and optional-battery

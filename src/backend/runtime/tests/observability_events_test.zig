@@ -2,7 +2,8 @@
 const std = @import("std");
 const RequestFixture = @import("RequestFixture.zig");
 const EventFixture = @import("EventFixture.zig");
-const Sampler = @import("../observability/Sampler.zig");
+const hostmetrics = @import("hostmetrics");
+const Sampler = hostmetrics.Sampler;
 
 test "runtime metric timer and scheduler failures leave sampling admission available" {
     var fixture: EventFixture = undefined;

@@ -1,7 +1,7 @@
 //! Public entrypoint for telar-client.
 
 const data = @import("model");
-const local = @import("transport/local.zig");
+const localsocket = @import("localsocket");
 const loader = @import("config/loader.zig");
 const plugins = @import("plugins/plugins.zig");
 const plugin_action = @import("input/plugin_action.zig");
@@ -63,7 +63,6 @@ pub const change_review_limits = @import("change_review/view/limits.zig");
 pub const WorkerRequest = @import("plugins/WorkerRequest.zig");
 pub const client_layouts = @import("resources/client_layouts.zig");
 pub const config_reload = @import("resources/config_reload.zig");
-pub const connect = local.connect;
 pub const bar_updates = @import("config/bar_updates.zig");
 pub const copy_mode_pointer = @import("input/copy_mode_pointer.zig");
 pub const favicons = @import("workspace/favicons.zig");
@@ -189,7 +188,6 @@ test {
     _ = @import("presentation/lifecycle.zig");
     _ = @import("presentation/window_title.zig");
     _ = @import("resources/config_reload.zig");
-    _ = @import("transport/local.zig");
     _ = @import("resources/local_time.zig");
     _ = @import("workspace/metrics_tests.zig");
     _ = @import("workspace/navigation.zig");

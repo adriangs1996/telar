@@ -19,7 +19,7 @@ pub fn explicit(endpoint_path: []const u8) !Local {
 }
 
 /// Builds `<base>/<directory_name>/runtime.sock`. Only the final directory
-/// belongs to telar; the bootstrap must never chmod `base` itself.
+/// belongs to the caller; it must never chmod `base` itself.
 pub fn managed(base: []const u8, directory_name: []const u8) !Local {
     if (!std.fs.path.isAbsolute(base)) {
         return error.RelativePath;

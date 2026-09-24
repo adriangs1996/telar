@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const localsocket = @import("localsocket");
 const store_support = @import("store_support.zig");
 const Session = @import("Session.zig");
 const std = @import("std");
@@ -29,7 +29,7 @@ pub fn hasCapacity(self: *const Store) bool {
 /// ```zig
 /// const session = try store.add(gpa, connection);
 /// ```
-pub fn add(self: *Store, gpa: std.mem.Allocator, connection: core.SocketChannel) !*Session {
+pub fn add(self: *Store, gpa: std.mem.Allocator, connection: localsocket.SocketChannel) !*Session {
     if (!self.hasCapacity()) {
         return error.ClientLimitReached;
     }

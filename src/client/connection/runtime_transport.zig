@@ -1,13 +1,13 @@
 //! Owns one client's bounded I/O lifecycle with the runtime process.
 
+const localsocket = @import("localsocket");
 const data = @import("model");
-const core_module = @import("telar-core");
 const std = @import("std");
 const RuntimeTransportState = @import("RuntimeTransportState.zig");
 const mailbox = @import("mailbox");
 const GenericInbox = mailbox.GenericInbox;
 
-fn testingSocketPair() ![2]core_module.SocketChannel {
+fn testingSocketPair() ![2]localsocket.SocketChannel {
     var sockets: [2]std.c.fd_t = undefined;
     if (std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets) != 0) {
         return error.SocketPairFailed;
@@ -26,13 +26,13 @@ fn testingSocketPair() ![2]core_module.SocketChannel {
 }
 
 fn initWithTestingAllocator(gpa: std.mem.Allocator) !void {
-    var connection: core_module.SocketChannel = undefined;
+    var connection: localsocket.SocketChannel = undefined;
     var state = try RuntimeTransportState.init(gpa, &connection);
     defer state.deinit(gpa);
 }
 
 test "read reservation survives duplicate scheduling and releases on error" {
-    var connection: core_module.SocketChannel = undefined;
+    var connection: localsocket.SocketChannel = undefined;
     var state = try RuntimeTransportState.init(std.testing.allocator, &connection);
     defer state.deinit(std.testing.allocator);
     try std.testing.expect(state.beginRead());

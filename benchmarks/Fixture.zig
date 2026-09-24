@@ -1,3 +1,4 @@
+const localsocket = @import("localsocket");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const std = @import("std");
@@ -30,21 +31,21 @@ pub fn init(gpa: std.mem.Allocator) !Fixture {
     main.fillEditor(cells_a, 0);
     main.fillEditor(cells_b, 1);
 
-    const encode_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const encode_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     errdefer gpa.free(encode_buffer);
-    const terminal_output = try gpa.alloc(u8, core.max_frame_size);
+    const terminal_output = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     errdefer gpa.free(terminal_output);
-    const sparse_storage_a = try gpa.alloc(u8, core.max_frame_size);
+    const sparse_storage_a = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     errdefer gpa.free(sparse_storage_a);
-    const sparse_storage_b = try gpa.alloc(u8, core.max_frame_size);
+    const sparse_storage_b = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     errdefer gpa.free(sparse_storage_b);
-    const fragmented_storage_a = try gpa.alloc(u8, core.max_frame_size);
+    const fragmented_storage_a = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     errdefer gpa.free(fragmented_storage_a);
-    const fragmented_storage_b = try gpa.alloc(u8, core.max_frame_size);
+    const fragmented_storage_b = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     errdefer gpa.free(fragmented_storage_b);
-    const full_storage_a = try gpa.alloc(u8, core.max_frame_size);
+    const full_storage_a = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     errdefer gpa.free(full_storage_a);
-    const full_storage_b = try gpa.alloc(u8, core.max_frame_size);
+    const full_storage_b = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     errdefer gpa.free(full_storage_b);
 
     const middle: u32 = @intCast(main.cell_count / 2);

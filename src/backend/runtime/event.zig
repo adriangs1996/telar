@@ -1,4 +1,5 @@
 //! Events delivered to the runtime loop and their execution-budget class.
+const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const EditorJob = @import("../editors/Job.zig");
 
@@ -19,7 +20,8 @@ const Result = @import("../plugins/Result.zig");
 const AgentResult = @import("../agent/Result.zig");
 const EngineRuntime = @import("resources/EngineRuntime.zig");
 const Response = EngineRuntime.Service.Response;
-const SystemMetricsSample = @import("observability/SystemMetricsSample.zig");
+const hostmetrics = @import("hostmetrics");
+const SystemMetricsSample = hostmetrics.SystemMetricsSample;
 const Completion = @import("resources/Completion.zig");
 const AgentCompletion = @import("../agent/Completion.zig");
 const std = @import("std");
@@ -28,7 +30,7 @@ const Job = @import("../change_review/Job.zig");
 const AgentHistoryJob = @import("AgentHistoryJob.zig");
 
 pub const Event = union(enum) {
-    accepted: anyerror!core.SocketChannel,
+    accepted: anyerror!localsocket.SocketChannel,
     handshaken: anyerror!void,
     client_message: ClientMessage,
     client_sent: ClientSent,

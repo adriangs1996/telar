@@ -1,3 +1,4 @@
+const localsocket = @import("localsocket");
 const data = @import("model");
 const core = @import("telar-core");
 const client_module = @import("telar-client");
@@ -8,8 +9,8 @@ const host_effects = @import("../host/host_effects.zig");
 const view_chrome = @import("../presentation/view_chrome.zig");
 const TestHarness = @This();
 
-connection: core.SocketChannel,
-peer: core.SocketChannel,
+connection: localsocket.SocketChannel,
+peer: localsocket.SocketChannel,
 input_read: std.Io.File,
 input_write: std.Io.File,
 sink: std.Io.Writer.Discarding,

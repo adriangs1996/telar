@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const localsocket = @import("localsocket");
 const std = @import("std");
 const Entry = @import("Entry.zig");
 const model = @import("model.zig");
@@ -27,7 +27,7 @@ pub fn deinit(self: *Accumulator) void {
 pub fn append(self: *Accumulator, owned: Entry) !bool {
     var entry = owned;
     const bytes = model.encoded_entry_overhead_bytes + entry.command.len + entry.cwd.len + entry.workspace_path.len + entry.provider.len;
-    if (self.entries.items.len == self.limit or bytes > core.max_frame_size - self.encoded_bytes) {
+    if (self.entries.items.len == self.limit or bytes > localsocket.transport.max_frame_size - self.encoded_bytes) {
         entry.deinit(self.gpa);
         self.has_more = true;
         return false;

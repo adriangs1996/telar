@@ -19,7 +19,7 @@ pub const IngestTestGate = @import("runtime/IngestTestGate.zig");
 pub const Initialization = @import("runtime/Initialization.zig");
 pub const LaunchPhase = model.LaunchPhase;
 pub const LaunchTestFault = @import("runtime/LaunchTestFault.zig");
-pub const LocalListener = @import("transport/LocalListener.zig");
+const localsocket = @import("localsocket");
 pub const Pipeline = @import("media/Pipeline.zig");
 pub const ProxyCaptureConfig = @import("proxy/capture/Config.zig");
 pub const Resources = @import("proxy/Resources.zig");
@@ -181,7 +181,6 @@ test {
     _ = @import("runtime/lifecycle/stop_signal.zig");
     _ = @import("runtime/Loop.zig");
     _ = @import("runtime/Sources.zig");
-    _ = @import("runtime/observability/system_metrics.zig");
     _ = @import("runtime/observability/telemetry.zig");
     _ = @import("runtime/resources/EngineRuntime.zig");
     _ = @import("runtime/resources/git_probe.zig");
@@ -198,6 +197,5 @@ test {
     _ = @import("runtime/tests/runtime_state_test.zig");
     _ = @import("runtime/tests/search_pane_test.zig");
     _ = @import("runtime/tests/shared_frame_test.zig");
-    _ = @import("transport/local.zig");
     _ = @import("editors/tests.zig");
 }

@@ -1,3 +1,4 @@
+const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const std = @import("std");
@@ -10,7 +11,7 @@ const Params = @This();
 
 gpa: std.mem.Allocator,
 io: std.Io,
-connection: *core.SocketChannel,
+connection: *localsocket.SocketChannel,
 input_file: std.Io.File,
 writer: *std.Io.Writer,
 async_output: bool = false,

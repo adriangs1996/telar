@@ -1,8 +1,8 @@
 //! Composition of the interactive Telar client process.
 
+const localsocket = @import("localsocket");
 const gui = @import("telar-gui");
 const client = @import("telar-client");
-const core = @import("telar-core");
 const frontend = @import("telar-frontend");
 const std = @import("std");
 const builtin = @import("builtin");
@@ -40,7 +40,7 @@ pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
 
 /// One presentation adapter's entrypoint: it adopts the resources `Options`
 /// carries and runs until the user leaves.
-pub const Adapter = *const fn (std.process.Init, *core.SocketChannel, client.Options) anyerror!u8;
+pub const Adapter = *const fn (std.process.Init, *localsocket.SocketChannel, client.Options) anyerror!u8;
 
 fn launch(init: std.process.Init, options: RunOptions, adapter: Adapter) !u8 {
     var forward: ?Forward = null;

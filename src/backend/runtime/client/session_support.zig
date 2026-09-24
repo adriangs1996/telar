@@ -1,5 +1,6 @@
 //! One disposable runtime-side client connection and its delivery state.
 
+const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const Session = @import("Session.zig");
 const ClientKey = @import("../../history/ClientKey.zig");
@@ -47,6 +48,6 @@ test "Session keeps its bounded buffers outside client store storage" {
     }
 
     try std.testing.expectEqual(@as(u64, 1), session.key.id);
-    try std.testing.expectEqual(core.max_frame_size, session.receive_buffer.len);
-    try std.testing.expectEqual(core.max_frame_size, session.delivery.send_buffer.len);
+    try std.testing.expectEqual(localsocket.transport.max_frame_size, session.receive_buffer.len);
+    try std.testing.expectEqual(localsocket.transport.max_frame_size, session.delivery.send_buffer.len);
 }

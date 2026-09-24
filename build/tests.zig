@@ -161,6 +161,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     compression_step.dependOn(&compression_run.step);
 
     const transport_test_step = b.step("test-transport", "Run the local transport tests");
+    transport_test_step.dependOn(app.modules.libraries.addTestRun(b, "localsocket"));
     const schema_test_step = b.step("test-schema", "Run the shared protocol schema tests");
     const wire_test_step = b.step("test-wire", "Run wire contracts without PTY integration tests");
     const frontend_test_step = b.step("test-frontend", "Run the frontend package tests");
@@ -182,7 +183,6 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         // never run unless they are their own suite roots.
         .{ .path = "src/core/graphics.zig" },
         .{ .path = "src/core/schema/wire.zig", .schema = true },
-        .{ .path = "src/core/transport/transport.zig", .transport = true },
         .{ .path = "src/core/diagnostics.zig" },
         .{ .path = "src/core/ProfileStore.zig", .libc = true },
         .{ .path = "src/core/schema/handshake.zig", .schema = true },
@@ -192,14 +192,11 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         // Capability roots can import sibling capabilities, so the package
         // root collects their tests without narrowing Zig's module path.
         .{ .path = "src/frontend/frontend.zig", .libc = true, .frontend = true },
-        .{ .path = "src/client/transport/local.zig", .libc = true, .transport = true },
-        .{ .path = "src/backend/runtime/observability/system_metrics.zig" },
         .{ .path = "src/backend/proxy_test.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pane/blit.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pane/damage.zig" },
         .{ .path = "src/backend/history/history_tests.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/backend.zig", .vt = true, .libc = true },
-        .{ .path = "src/backend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/main.zig", .vt = true, .libc = true },
         .{
             .path = "src/transport_integration_test.zig",

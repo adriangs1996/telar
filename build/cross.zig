@@ -76,22 +76,6 @@ pub fn add(b: *std.Build) *std.Build.Step {
 
             cross_step.dependOn(&service_check.step);
         }
-
-        if (query.os_tag.? == .linux) {
-            // Compile the tests so their calls analyze listener bodies too.
-            // An object containing only unused public functions misses errors.
-            const local_transport_check = b.addTest(.{
-                .name = b.fmt("local-transport-linux-{s}", .{@tagName(query.cpu_arch.?)}),
-                .root_module = b.createModule(.{
-                    .root_source_file = b.path("src/backend/transport/local.zig"),
-                    .target = cross_target,
-                    .optimize = .Debug,
-                    .link_libc = true,
-                }),
-            });
-            local_transport_check.root_module.addImport("telar-core", cross_core);
-            cross_step.dependOn(&local_transport_check.step);
-        }
     }
     return cross_step;
 }

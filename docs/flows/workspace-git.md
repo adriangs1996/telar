@@ -43,7 +43,7 @@ subprocess is only consulted for cleanliness.
 
 - `src/backend/runtime/workspace_git.zig` proves probe reservation, stale
   results, bounded storage and change detection.
-- `src/backend/runtime/resources/git_probe.zig` proves `HEAD` resolution.
+- `lib/gitstatus/probe.zig` proves `HEAD` resolution.
 - `src/core/schema_contract_test.zig` pins the extended workspace list bytes.
 
 ## Worktrees from the CLI

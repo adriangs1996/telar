@@ -1,11 +1,12 @@
 //! Socket admission and send completion contracts through Runtime.update.
+const localsocket = @import("localsocket");
 const std = @import("std");
 const core = @import("telar-core");
 const ClientKey = @import("../../history/ClientKey.zig");
 const RequestFixture = @import("RequestFixture.zig");
 const client_delivery = @import("../client_delivery.zig");
 
-fn socketPair() ![2]core.SocketChannel {
+fn socketPair() ![2]localsocket.SocketChannel {
     var sockets: [2]std.c.fd_t = undefined;
     if (std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets) != 0) {
         return error.SocketPairFailed;
@@ -17,7 +18,7 @@ fn socketPair() ![2]core.SocketChannel {
     };
 }
 
-fn expectPeerClosed(peer: *core.SocketChannel) !void {
+fn expectPeerClosed(peer: *localsocket.SocketChannel) !void {
     var byte: [1]u8 = undefined;
     const received = std.c.recv(peer.stream.socket.handle, &byte, byte.len, std.c.MSG.DONTWAIT);
     try std.testing.expectEqual(@as(isize, 0), received);

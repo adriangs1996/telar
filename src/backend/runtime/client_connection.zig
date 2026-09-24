@@ -9,7 +9,8 @@ const Session = @import("client/Session.zig");
 const ClientKey = @import("../history/ClientKey.zig");
 const ClientMessage = @import("events/ClientMessage.zig");
 const ClientSent = @import("events/ClientSent.zig");
-const LocalListener = @import("../transport/LocalListener.zig");
+const localsocket = @import("localsocket");
+const LocalListener = localsocket.LocalListener;
 const Sources = @import("Sources.zig");
 const client_control = @import("client_control.zig");
 const client_request = @import("client_request.zig");
@@ -23,7 +24,7 @@ const request_role = @import("client/request_role.zig");
 /// ```zig
 /// try client_connection.accept(model, result, &resources.listener);
 /// ```
-pub fn accept(model: *RuntimeModel, result: anyerror!core.SocketChannel, listener: *LocalListener) !void {
+pub fn accept(model: *RuntimeModel, result: anyerror!localsocket.SocketChannel, listener: *LocalListener) !void {
     var sources = Sources.init(model.io, model.select);
     var accepted = result catch {
         try sources.acceptClient(listener);
@@ -269,7 +270,7 @@ fn startRead(model: *RuntimeModel, session: *Session) !void {
     };
 }
 
-fn negotiate(io: std.Io, connection: *core.SocketChannel) anyerror!void {
+fn negotiate(io: std.Io, connection: *localsocket.SocketChannel) anyerror!void {
     const response = try handshake.perform(io, connection);
 
     if (response == .rejected) {
@@ -292,13 +293,13 @@ fn send(write: Write) ClientSent {
 const Write = struct {
     io: std.Io,
     key: ClientKey,
-    connection: *core.SocketChannel,
+    connection: *localsocket.SocketChannel,
     payload: []const u8,
 };
 
 const Read = struct {
     io: std.Io,
     key: ClientKey,
-    connection: *core.SocketChannel,
+    connection: *localsocket.SocketChannel,
     buffer: []u8,
 };

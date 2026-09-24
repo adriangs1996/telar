@@ -1,3 +1,4 @@
+const localsocket = @import("localsocket");
 const std = @import("std");
 const RuntimeConnector = @import("RuntimeConnector.zig");
 const Snapshot = @import("Snapshot.zig");
@@ -11,7 +12,7 @@ const Session = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,
-connection: core.SocketChannel,
+connection: localsocket.SocketChannel,
 receive_buffer: []u8,
 next_request: u64 = 1,
 review_failure: ?[]const u8 = null,
@@ -42,10 +43,10 @@ pub fn attach(init: std.process.Init, socket: ?[*:0]const u8) !Session {
     return adopt(init, try connector.connect());
 }
 
-fn adopt(init: std.process.Init, connection: core.SocketChannel) !Session {
+fn adopt(init: std.process.Init, connection: localsocket.SocketChannel) !Session {
     var owned = connection;
     errdefer owned.deinit(init.io);
-    const receive_buffer = try init.gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try init.gpa.alloc(u8, localsocket.transport.max_frame_size);
 
     return .{
         .io = init.io,
@@ -71,7 +72,7 @@ fn requestId(self: *Session) core.RequestId {
 pub fn exchange(self: *Session, comptime encode: anytype, request_value: anytype) !core.ServerMessage {
     var request = request_value;
     request.request_id = self.requestId();
-    const buffer = try self.gpa.alloc(u8, core.max_frame_size);
+    const buffer = try self.gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer self.gpa.free(buffer);
     try self.connection.send(self.io, try encode(buffer, request));
 

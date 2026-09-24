@@ -4,8 +4,9 @@
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Sources = @import("Sources.zig");
-const SystemMetricsSample = @import("observability/SystemMetricsSample.zig");
-const sampler = @import("observability/system_metrics.zig");
+const hostmetrics = @import("hostmetrics");
+const SystemMetricsSample = hostmetrics.SystemMetricsSample;
+const sampler = hostmetrics.system_metrics;
 
 /// Rearms the tick and admits at most one sampling job.
 ///

@@ -1,4 +1,4 @@
-const core = @import("telar-core");
+const localsocket = @import("localsocket");
 const client = @import("telar-client");
 const std = @import("std");
 const runtime_connection = @import("runtime_connection.zig");
@@ -6,7 +6,7 @@ const RuntimeConfigSelection = @import("RuntimeConfigSelection.zig");
 const RuntimeConnector = @This();
 
 process: std.process.Init,
-endpoint: core.Local,
+endpoint: localsocket.Local,
 
 /// Resolves the local runtime endpoint from an explicit socket or the
 /// process environment. It does not access the filesystem or connect yet.
@@ -69,8 +69,8 @@ pub fn prepareServerDirectory(self: *const RuntimeConnector) !void {
 /// var connection = try connector.connect();
 /// defer connection.deinit(process_init.io);
 /// ```
-pub fn connect(self: *const RuntimeConnector) !core.SocketChannel {
-    const connection = try client.connect(self.process.io, self.endpoint.path());
+pub fn connect(self: *const RuntimeConnector) !localsocket.SocketChannel {
+    const connection = try localsocket.connect(self.process.io, self.endpoint.path());
     return self.finishHandshake(connection);
 }
 
@@ -81,8 +81,8 @@ pub fn connect(self: *const RuntimeConnector) !core.SocketChannel {
 /// var connection = try connector.connectOrStart(.{});
 /// defer connection.deinit(process_init.io);
 /// ```
-pub fn connectOrStart(self: *const RuntimeConnector, config: RuntimeConfigSelection) !core.SocketChannel {
-    const first = client.connect(self.process.io, self.endpoint.path()) catch |err| switch (err) {
+pub fn connectOrStart(self: *const RuntimeConnector, config: RuntimeConfigSelection) !localsocket.SocketChannel {
+    const first = localsocket.connect(self.process.io, self.endpoint.path()) catch |err| switch (err) {
         error.PermissionDenied,
         error.NotDir,
         error.SymLinkLoop,
@@ -105,7 +105,7 @@ pub fn connectOrStart(self: *const RuntimeConnector, config: RuntimeConfigSelect
     try self.prepareServerDirectory();
     try self.startRuntime(config);
     for (0..runtime_connection.runtime_start_attempts) |_| {
-        if (client.connect(self.process.io, self.endpoint.path())) |connection| {
+        if (localsocket.connect(self.process.io, self.endpoint.path())) |connection| {
             return self.finishHandshake(connection);
         } else |_| {
             self.process.io.sleep(.fromMilliseconds(runtime_connection.runtime_start_interval_ms), .awake) catch {};
@@ -157,7 +157,7 @@ fn startRuntime(self: *const RuntimeConnector, config: RuntimeConfigSelection) !
     }
 }
 
-fn finishHandshake(self: *const RuntimeConnector, connection: core.SocketChannel) !core.SocketChannel {
+fn finishHandshake(self: *const RuntimeConnector, connection: localsocket.SocketChannel) !localsocket.SocketChannel {
     var result = connection;
     errdefer result.deinit(self.process.io);
 

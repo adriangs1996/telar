@@ -1,3 +1,4 @@
+const localsocket = @import("localsocket");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
@@ -16,7 +17,7 @@ pub const TestReceiveEvent = union(enum) {
     expired: anyerror!void,
 };
 
-pub fn receiveRuntimeFrame(io: std.Io, connection: *core.SocketChannel, buffer: []u8) anyerror![]u8 {
+pub fn receiveRuntimeFrame(io: std.Io, connection: *localsocket.SocketChannel, buffer: []u8) anyerror![]u8 {
     return connection.receive(io, buffer);
 }
 
@@ -51,14 +52,14 @@ test "frontend and backend exchange framed messages over a local socket" {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/transport.sock", .{directory});
 
-    var listener = try backend.LocalListener.listen(io, path);
+    var listener = try localsocket.LocalListener.listen(io, path);
     defer listener.deinit(io);
 
     const stat = try std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
     try std.testing.expectEqual(std.Io.File.Kind.unix_domain_socket, stat.kind);
     try std.testing.expectEqual(@as(u32, 0o600), stat.permissions.toMode() & 0o777);
 
-    var client = try client_module.connect(io, path);
+    var client = try localsocket.connect(io, path);
     defer client.deinit(io);
     var peer = try listener.accept(io);
     defer peer.deinit(io);
@@ -92,15 +93,15 @@ test "a second backend cannot replace a live endpoint" {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/transport.sock", .{directory});
 
-    var listener = try backend.LocalListener.listen(io, path);
+    var listener = try localsocket.LocalListener.listen(io, path);
     defer listener.deinit(io);
 
     try std.testing.expectError(
         error.AddressInUse,
-        backend.LocalListener.listen(io, path),
+        localsocket.LocalListener.listen(io, path),
     );
 
-    var client = try client_module.connect(io, path);
+    var client = try localsocket.connect(io, path);
     client.deinit(io);
 }
 
@@ -115,9 +116,9 @@ test "frontend and backend accept the same schema" {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/handshake.sock", .{directory});
 
-    var listener = try backend.LocalListener.listen(io, path);
+    var listener = try localsocket.LocalListener.listen(io, path);
     defer listener.deinit(io);
-    var client = try client_module.connect(io, path);
+    var client = try localsocket.connect(io, path);
     defer client.deinit(io);
     var peer = try listener.accept(io);
     defer peer.deinit(io);
@@ -153,9 +154,9 @@ test "backend explains an incompatible schema" {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/handshake.sock", .{directory});
 
-    var listener = try backend.LocalListener.listen(io, path);
+    var listener = try localsocket.LocalListener.listen(io, path);
     defer listener.deinit(io);
-    var client = try client_module.connect(io, path);
+    var client = try localsocket.connect(io, path);
     defer client.deinit(io);
     var peer = try listener.accept(io);
     defer peer.deinit(io);
@@ -480,7 +481,7 @@ test "runtime destroys a pane after its shell exits" {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(receive_buffer);
     var cells: [40 * 8]cellgrid.Cell = @splat(.{});
     var pane_id: schema.PaneId = .invalid;
@@ -603,7 +604,7 @@ test "the last pane closes only its tab when the workspace has another tab" {
     var connection = try connectRuntimeForTest(io, path);
     defer connection.deinit(io);
     var send_buffer: [4096]u8 = undefined;
-    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(receive_buffer);
 
     try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
@@ -765,7 +766,7 @@ test "one client drives two attached panes and closes either one" {
     var connection = try connectRuntimeForTest(io, path);
     defer connection.deinit(io);
     var send_buffer: [1024]u8 = undefined;
-    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(receive_buffer);
 
     const first_arguments = [_][]const u8{
@@ -944,7 +945,7 @@ test "pane keeps running while its client is disconnected" {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(receive_buffer);
     var original_pane_id: schema.PaneId = .invalid;
     while (original_pane_id == .invalid) {
@@ -1845,7 +1846,7 @@ test "an identical pane resize does not emit another snapshot" {
         .launch = .{ .cwd = directory, .arguments = &.{ "/bin/sleep", "600" } },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(receive_buffer);
     var pane_id: schema.PaneId = .invalid;
     var location: ?schema.TabLocation = null;
@@ -1951,7 +1952,7 @@ test "runtime persists terminal-edited commands without shell integration" {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(receive_buffer);
     var pane_id: schema.PaneId = .invalid;
     var input_sent = false;
@@ -2081,7 +2082,7 @@ test "modified Enter follows the compatibility profile and child keyboard negoti
         .{ .marker = "XTERM_READY", .expected = "\x1b[27;2;13~\r" },
         .{ .marker = "LEGACY_READY", .expected = "\r\r" },
     };
-    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(receive_buffer);
     var cells: [40 * 8]cellgrid.Cell = @splat(.{});
     var stage: usize = 0;
@@ -2195,7 +2196,7 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(receive_buffer);
     var pane_id: schema.PaneId = .invalid;
     while (pane_id == .invalid) switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
@@ -2302,7 +2303,7 @@ fn expectGraphicsRoundtrip(comptime transmission: []const u8) !void {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(receive_buffer);
     var store = frontend.Store.init(gpa);
     defer store.deinit();
@@ -2410,7 +2411,7 @@ test "a silent connection cannot starve later clients" {
     var probe = try connectRuntimeForTest(io, path);
     probe.deinit(io);
     var silent = while (true) {
-        if (client_module.connect(io, path)) |connection| {
+        if (localsocket.connect(io, path)) |connection| {
             break connection;
         } else |_| {
             try io.sleep(.fromMilliseconds(1), .awake);
@@ -2466,7 +2467,7 @@ test "input to one pane flows while another pane's PTY is wedged" {
     var connection = try connectRuntimeForTest(io, path);
     defer connection.deinit(io);
     var send_buffer: [core.max_input_bytes + 512]u8 = undefined;
-    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(receive_buffer);
 
     // Pane A: raw mode, then stopped. Its PTY input queue fills and the
@@ -2588,7 +2589,7 @@ test "two clients observe one pane with independent frame acknowledgement" {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const first_receive = try gpa.alloc(u8, core.max_frame_size);
+    const first_receive = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(first_receive);
     var first_cells: [40 * 8]cellgrid.Cell = @splat(.{});
     var pane_id: schema.PaneId = .invalid;
@@ -2622,7 +2623,7 @@ test "two clients observe one pane with independent frame acknowledgement" {
         .size = .{ .cols = 80, .rows = 20 },
         .launch = null,
     }));
-    const second_receive = try gpa.alloc(u8, core.max_frame_size);
+    const second_receive = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(second_receive);
     var second_cells: [40 * 8]cellgrid.Cell = @splat(.{});
     var second_opened = false;
@@ -2777,7 +2778,7 @@ test "a stale attachment command does not disconnect the client" {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(receive_buffer);
     for (0..32) |_| switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
         .pane_opened => |opened| {
@@ -2860,7 +2861,7 @@ test "runtime broadcasts a bounded notification and acknowledges delivery" {
 
 pub fn connectRuntimeForTest(io: std.Io, path: []const u8) !RuntimeTestChannel {
     for (0..200) |_| {
-        var connection = client_module.connect(io, path) catch {
+        var connection = localsocket.connect(io, path) catch {
             try io.sleep(.fromMilliseconds(1), .awake);
             continue;
         };

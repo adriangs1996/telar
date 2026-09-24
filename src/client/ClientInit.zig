@@ -1,3 +1,4 @@
+const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const std = @import("std");
 const Options = @import("Options.zig");
@@ -8,7 +9,7 @@ const ClientInit = @This();
 
 gpa: std.mem.Allocator,
 io: std.Io,
-connection: *core.SocketChannel,
+connection: *localsocket.SocketChannel,
 host_size: core.TerminalSize,
 window_width_px: u32 = 0,
 window_height_px: u32 = 0,

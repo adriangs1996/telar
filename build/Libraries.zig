@@ -39,6 +39,11 @@ const specs = [_]Spec{
         .name = "gfx",
     },
     .{
+        .name = "localsocket",
+        .libc = true,
+        .posix = true,
+    },
+    .{
         .name = "mailbox",
     },
     .{
@@ -68,6 +73,13 @@ const specs = [_]Spec{
     .{
         .name = "cellgrid",
         .imports = &.{"unicode"},
+    },
+    .{
+        .name = "gitstatus",
+    },
+    .{
+        .name = "hostmetrics",
+        .libc = true,
     },
     .{
         .name = "imaging",
@@ -192,6 +204,19 @@ pub fn addTests(self: Libraries, b: *std.Build, coverage: Coverage, check_step: 
     }
 
     return step;
+}
+
+/// Runs one library's tests for a step narrower than `test-libraries`.
+///
+/// ```zig
+/// transport_step.dependOn(libraries.addTestRun(b, "localsocket"));
+/// ```
+pub fn addTestRun(self: Libraries, b: *std.Build, name: []const u8) *std.Build.Step {
+    const tests = b.addTest(.{
+        .name = b.fmt("lib-{s}", .{name}),
+        .root_module = self.get(name),
+    });
+    return &b.addRunArtifact(tests).step;
 }
 
 /// Analyzes every library that supports `target`, tests included, so each

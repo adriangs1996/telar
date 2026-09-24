@@ -1,3 +1,4 @@
+const localsocket = @import("localsocket");
 const pacing = @import("pacing");
 const headless_event = @import("headless_event.zig");
 const model_data = @import("model");
@@ -21,8 +22,8 @@ const Fixture = @This();
 
 app: Client,
 model: *model_data.ClientModel,
-connection: core.SocketChannel,
-peer: core.SocketChannel,
+connection: localsocket.SocketChannel,
+peer: localsocket.SocketChannel,
 pending: ?[]const u8 = null,
 inbox: GenericInbox(headless_event.Message),
 receive_buffer: [64 * 1024]u8 = undefined,

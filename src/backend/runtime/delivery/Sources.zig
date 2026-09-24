@@ -2,7 +2,8 @@ const core = @import("telar-core");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const Workspaces = @import("../../workspace/Workspaces.zig");
 const Tracker = @import("../../agent/Tracker.zig");
-const Sampler = @import("../observability/Sampler.zig");
+const hostmetrics = @import("hostmetrics");
+const Sampler = hostmetrics.Sampler;
 const ClientLayouts = @import("../ClientLayouts.zig");
 const Sources = @This();
 

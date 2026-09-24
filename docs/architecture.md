@@ -217,6 +217,9 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `vtscan` | byte-at-a-time scanners for OSC strings, typed input and Kitty graphics framing |
 | `sqlite` | the one SQLite binding, statement helpers, additive migrations, FTS5 quoting |
 | `imaging` | PNG through Wuffs with limits checked first, ICO frames, box-filter resampling |
+| `hostmetrics` | cpu, memory and battery of the host, without allocation |
+| `gitstatus` | a working tree's branch and whether it has changes |
+| `localsocket` | same-user Unix sockets and length-prefixed framing |
 
 A rule that decides what telar means stays in a flow even when it is pure;
 [`plans/libraries.md`](plans/libraries.md) lists what is still to move.

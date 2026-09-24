@@ -1,3 +1,4 @@
+const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const ClientKey = @import("../../history/ClientKey.zig");
 const AttachmentStore = @import("../attachment/AttachmentStore.zig");
@@ -11,7 +12,7 @@ const PendingClientCommand = @import("PendingClientCommand.zig");
 const Session = @This();
 
 key: ClientKey,
-connection: core.SocketChannel,
+connection: localsocket.SocketChannel,
 receive_buffer: []u8,
 read_buffer: []u8,
 attachments: AttachmentStore = .{},
@@ -71,10 +72,10 @@ pub fn acceptsFocusCompletion(self: *const Session, sender: ClientKey, reply: co
 /// ```zig
 /// const session = try Session.create(gpa, key, connection);
 /// ```
-pub fn create(gpa: std.mem.Allocator, key: ClientKey, connection: core.SocketChannel) !*Session {
-    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
+pub fn create(gpa: std.mem.Allocator, key: ClientKey, connection: localsocket.SocketChannel) !*Session {
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     errdefer gpa.free(receive_buffer);
-    const read_buffer = try gpa.alloc(u8, core.read_buffer_size);
+    const read_buffer = try gpa.alloc(u8, localsocket.transport.read_buffer_size);
     errdefer gpa.free(read_buffer);
 
     var delivery = try Delivery.init(gpa);

@@ -1,6 +1,7 @@
 //! The `telar api schema` command: prints the exact wire contract the running
 //! binary speaks so agents and scripts can check compatibility.
 
+const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const std = @import("std");
 const ApiOptions = @import("arguments/ApiOptions.zig");
@@ -26,7 +27,7 @@ pub fn run(init: std.process.Init, options: ApiOptions) !void {
 }
 
 const bounds = [_]Bound{
-    .{ .name = "max_frame_bytes", .value = core.max_frame_size },
+    .{ .name = "max_frame_bytes", .value = localsocket.transport.max_frame_size },
     .{ .name = "max_agent_snapshot_entries", .value = core.max_agent_snapshot_entries },
     .{ .name = "max_pane_text_rows", .value = core.max_pane_text_rows },
     .{ .name = "max_pane_text_bytes", .value = core.max_pane_text_bytes },

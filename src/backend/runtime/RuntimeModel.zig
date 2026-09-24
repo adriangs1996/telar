@@ -1,3 +1,4 @@
+const localsocket = @import("localsocket");
 const pacing = @import("pacing");
 const core = @import("telar-core");
 const std = @import("std");
@@ -18,7 +19,8 @@ const Workspaces = @import("../workspace/Workspaces.zig");
 const PaneStore = @import("../pane/PaneStore.zig");
 const Tracker = @import("../agent/Tracker.zig");
 const ClientLayouts = @import("ClientLayouts.zig");
-const Sampler = @import("observability/Sampler.zig");
+const hostmetrics = @import("hostmetrics");
+const Sampler = hostmetrics.Sampler;
 const RuntimeMetrics = @import("observability/RuntimeMetrics.zig");
 const CheckpointWriter = @import("CheckpointWriter.zig");
 const AgentHistoryJobs = @import("AgentHistoryJobs.zig");
@@ -47,7 +49,7 @@ launch_fault: ?*LaunchTestFault = null,
 ingest_gate: ?*IngestTestGate = null,
 clients: Store = .{},
 /// The one accepted connection whose handshake actor is in flight.
-client_admission: GenericState(core.SocketChannel) = .{},
+client_admission: GenericState(localsocket.SocketChannel) = .{},
 shutdown: LifecycleState = .{},
 workspaces: Workspaces = .{},
 panes: PaneStore,

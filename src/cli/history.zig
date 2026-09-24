@@ -1,5 +1,6 @@
 //! The `telar history` command and its terminal-safe text presentation.
 
+const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const std = @import("std");
 const HistoryOptions = @import("arguments/HistoryOptions.zig");
@@ -60,7 +61,7 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
         .limit = options.limit,
     }));
 
-    const receive_buffer = try init.gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try init.gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer init.gpa.free(receive_buffer);
     const response = try core.decodeServer(try connection.receive(init.io, receive_buffer));
     switch (response) {
@@ -358,7 +359,7 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
             .failed_only = options.failed_only,
             .limit = core.max_history_results,
         }));
-        const receive_buffer = try init.gpa.alloc(u8, core.max_frame_size);
+        const receive_buffer = try init.gpa.alloc(u8, localsocket.transport.max_frame_size);
         defer init.gpa.free(receive_buffer);
         const response = try core.decodeServer(try connection.receive(init.io, receive_buffer));
         const results = switch (response) {
@@ -429,7 +430,7 @@ test "history prune confirmation rejects any other line" {
     try std.testing.expect(!confirmPrune(&empty));
 }
 
-fn receivePruned(init: std.process.Init, connection: *core.SocketChannel) !u64 {
+fn receivePruned(init: std.process.Init, connection: *localsocket.SocketChannel) !u64 {
     var receive_buffer: [1024]u8 = undefined;
     const response = try core.decodeServer(try connection.receive(init.io, &receive_buffer));
     return switch (response) {
@@ -454,7 +455,7 @@ fn runShow(init: std.process.Init, options: HistoryOptions) !void {
         .id = options.delete_id,
     }));
 
-    const receive_buffer = try init.gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try init.gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer init.gpa.free(receive_buffer);
     const response = try core.decodeServer(try connection.receive(init.io, receive_buffer));
     const output = switch (response) {
@@ -509,7 +510,7 @@ fn runStats(init: std.process.Init, options: HistoryOptions) !void {
         .since_ms = since_ms,
     }));
 
-    const receive_buffer = try init.gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try init.gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer init.gpa.free(receive_buffer);
     const response = try core.decodeServer(try connection.receive(init.io, receive_buffer));
     const stats = switch (response) {

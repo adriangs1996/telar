@@ -1,5 +1,6 @@
 //! The `telar notification show` command.
 
+const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const std = @import("std");
 const NotificationOptions = @import("arguments/NotificationOptions.zig");
@@ -28,7 +29,7 @@ pub fn run(init: std.process.Init, options: NotificationOptions) !void {
     var send_buffer: [request_buffer_size]u8 = undefined;
     try connection.send(init.io, try core.encodeShowNotification(&send_buffer, request(options)));
 
-    const receive_buffer = try init.gpa.alloc(u8, core.max_frame_size);
+    const receive_buffer = try init.gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer init.gpa.free(receive_buffer);
     const response = try core.decodeServer(try connection.receive(init.io, receive_buffer));
     switch (response) {

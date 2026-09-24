@@ -1,4 +1,5 @@
 //! Cancellation owns completed results until they are released or retained by the model.
+const localsocket = @import("localsocket");
 const client_connection = @import("../client_connection.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -31,7 +32,7 @@ fn finishCapture(result: *Half) anyerror!*Half {
     return result;
 }
 
-fn finishAccept(result: core.SocketChannel) anyerror!core.SocketChannel {
+fn finishAccept(result: localsocket.SocketChannel) anyerror!localsocket.SocketChannel {
     return result;
 }
 
@@ -93,9 +94,9 @@ test "loop cancellation releases every transferred result already queued by comp
 
     var sockets: [2]std.c.fd_t = undefined;
     try std.testing.expectEqual(@as(c_int, 0), std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets));
-    var peer: core.SocketChannel = .init(.{ .socket = .{ .handle = sockets[1], .address = .{ .ip4 = .loopback(0) } } });
+    var peer: localsocket.SocketChannel = .init(.{ .socket = .{ .handle = sockets[1], .address = .{ .ip4 = .loopback(0) } } });
     defer peer.deinit(std.testing.io);
-    const accepted: core.SocketChannel = .init(.{ .socket = .{ .handle = sockets[0], .address = .{ .ip4 = .loopback(0) } } });
+    const accepted: localsocket.SocketChannel = .init(.{ .socket = .{ .handle = sockets[0], .address = .{ .ip4 = .loopback(0) } } });
     try loop.select.concurrent(.accepted, finishAccept, .{accepted});
     // Awaiting this group leaves the completed values in Select's queue.
     try loop.select.group.await(std.testing.io);
