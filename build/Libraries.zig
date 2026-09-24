@@ -96,6 +96,10 @@ const specs = [_]Spec{
         .libc = true,
     },
     .{
+        .name = "cellglyphs",
+        .imports = &.{"gfx"},
+    },
+    .{
         .name = "urlscan",
     },
     .{

@@ -46,6 +46,9 @@ pub const atlas_texture: f32 = 0;
 pub const sprite_texture: f32 = 1;
 pub const diagram_texture: f32 = 2;
 
+/// Diagram slots follow `diagram_texture`: textures 2 through 9.
+pub const diagram_slot_count = 8;
+
 comptime {
     const std = @import("std");
     std.debug.assert(@sizeOf(Quad) == stride);

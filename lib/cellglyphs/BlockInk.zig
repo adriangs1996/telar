@@ -2,11 +2,11 @@
 //! ink meets every cell edge regardless of line height or letter spacing.
 const std = @import("std");
 const gfx = @import("gfx");
+const Color = gfx.Color;
+const QuadList = gfx.QuadList;
 const Rect = gfx.Rect;
 const Block = @import("BlockElement.zig");
 const block_shapes = @import("block_shapes.zig");
-const QuadList = @import("../render/QuadList.zig");
-const TextRun = @import("TextRun.zig");
 const BlockSlab = @import("BlockSlab.zig");
 const Ink = @This();
 
@@ -39,17 +39,17 @@ pub fn init(cell: Rect, block: Block) !Ink {
     return ink;
 }
 
-/// Uses local cell coordinates; bold and italic do not deform the geometry.
-/// Example: `try ink.paint(run, list);`
-pub fn paint(self: *const Ink, run: TextRun, list: *QuadList) !void {
-    const bounds = run.cell_bounds orelse return error.MissingCellBounds;
-    var color = run.color;
-    color.a *= self.coverage;
+/// Places the rectangles in `cell`, the cell's rectangle in device pixels;
+/// bold and italic do not deform the geometry.
+/// Example: `try ink.paint(cell, color, list);`
+pub fn paint(self: *const Ink, cell: Rect, color: Color, list: *QuadList) !void {
+    var shaded = color;
+    shaded.a *= self.coverage;
     for (self.rects[0..self.count]) |rect| {
         var placed = rect;
-        placed.x += run.x + bounds.x;
-        placed.y += run.y + bounds.y;
-        try list.pushRect(placed, color);
+        placed.x += cell.x;
+        placed.y += cell.y;
+        try list.pushRect(placed, shaded);
     }
 }
 
@@ -237,10 +237,21 @@ test "shades cover the whole cell at 25 50 and 75 percent with one even quad per
         try std.testing.expectEqual(coverage, ink.coverage);
         try std.testing.expectEqual(@as(f32, 11 * 29), ink.area());
         list.clear();
-        var run: TextRun = .{ .text = "", .x = 4, .y = 30, .color = .{ .r = 0.2, .g = 0.4, .b = 0.6, .a = 0.8 }, .pixel_height = 16, .cell_bounds = .{ .x = 0, .y = -22, .width = 11, .height = 29 } };
-        try ink.paint(run, &list);
-        run.x += 11;
-        try ink.paint(run, &list);
+        const color: Color = .{
+            .r = 0.2,
+            .g = 0.4,
+            .b = 0.6,
+            .a = 0.8,
+        };
+        var cell: Rect = .{
+            .x = 4,
+            .y = 8,
+            .width = 11,
+            .height = 29,
+        };
+        try ink.paint(cell, color, &list);
+        cell.x += 11;
+        try ink.paint(cell, color, &list);
         const first = list.items()[0];
         const second = list.items()[1];
         try std.testing.expectEqual(@as(f32, 0.8 * coverage), first.a);
@@ -249,8 +260,4 @@ test "shades cover the whole cell at 25 50 and 75 percent with one even quad per
         try std.testing.expectEqual(first.x + first.width, second.x);
         try std.testing.expectEqual([_]f32{ first.y, first.width, first.height, first.a }, [_]f32{ second.y, second.width, second.height, second.a });
     }
-}
-
-test {
-    _ = @import("block_atlas_test.zig");
 }

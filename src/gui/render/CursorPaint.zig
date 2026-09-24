@@ -2,7 +2,7 @@ const client = @import("telar-client");
 const gfx = @import("gfx");
 const Color = gfx.Color;
 const Rect = gfx.Rect;
-const QuadList = @import("QuadList.zig");
+const QuadList = gfx.QuadList;
 const Paint = @This();
 
 rect: Rect,

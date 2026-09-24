@@ -3,7 +3,7 @@ const cellgrid = @import("cellgrid");
 const freetype = @import("freetype");
 const font_id = @import("../text/font_id.zig");
 const std = @import("std");
-const QuadList = @import("../render/QuadList.zig");
+const QuadList = gfx.QuadList;
 const gfx = @import("gfx");
 const Quad = gfx.Quad.Quad;
 

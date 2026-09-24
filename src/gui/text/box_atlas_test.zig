@@ -1,9 +1,10 @@
 //! Resource ownership and fallback proofs for procedural box glyphs.
+const gfx = @import("gfx");
 const assets = @import("assets");
 const std = @import("std");
 const Atlas = @import("GlyphAtlas.zig");
 const Cache = @import("BoxCache.zig");
-const QuadList = @import("../render/QuadList.zig");
+const QuadList = gfx.QuadList;
 const TextRun = @import("TextRun.zig");
 
 fn makeAtlas() !Atlas {

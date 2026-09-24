@@ -1,10 +1,11 @@
+const gfx = @import("gfx");
 const assets = @import("assets");
 const std = @import("std");
 const builtin = @import("builtin");
 const freetype = @import("freetype");
 const Atlas = @import("../text/GlyphAtlas.zig");
 const MacRasterizer = @import("../text/MacRasterizer.zig");
-const QuadList = @import("../render/QuadList.zig");
+const QuadList = gfx.QuadList;
 const TextRun = @import("../text/TextRun.zig");
 
 test "macOS optical weight controls alpha coverage without writing outside the reserved glyph" {

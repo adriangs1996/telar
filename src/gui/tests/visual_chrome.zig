@@ -1,7 +1,7 @@
 //! Slice 5 of the GUI visual language: pixel chrome bands, the tab strip,
 //! attention dots and rings, pane headers and the toast policy.
 const cellgrid = @import("cellgrid");
-const QuadList = @import("../render/QuadList.zig");
+const QuadList = gfx.QuadList;
 const frame_widget = @import("../widgets/frame_widget.zig");
 const data = @import("model");
 const std = @import("std");

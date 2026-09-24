@@ -1,10 +1,10 @@
 //! Disjoint rectangles for box strokes, so faint intersections blend only once.
 const std = @import("std");
 const gfx = @import("gfx");
+const Color = gfx.Color;
+const QuadList = gfx.QuadList;
 const Rect = gfx.Rect;
 const Grid = @import("BoxGrid.zig");
-const QuadList = @import("../render/QuadList.zig");
-const TextRun = @import("TextRun.zig");
 const BoxDrawing = @import("BoxDrawing.zig");
 const Ink = @This();
 
@@ -80,15 +80,15 @@ fn append(self: *Ink, rect: Rect) !void {
     self.count += 1;
 }
 
-/// Uses local cell coordinates; Unicode weight wins over bold/italic font flags.
-/// Example: `try ink.paint(run, list);`
-pub fn paint(self: *const Ink, run: TextRun, list: *QuadList) !void {
-    const bounds = run.cell_bounds orelse return error.MissingCellBounds;
+/// Places the strokes in `cell`, the cell's rectangle in device pixels;
+/// Unicode weight wins over bold/italic font flags.
+/// Example: `try ink.paint(cell, color, list);`
+pub fn paint(self: *const Ink, cell: Rect, color: Color, list: *QuadList) !void {
     for (self.rects[0..self.count]) |rect| {
         var placed = rect;
-        placed.x += run.x + bounds.x;
-        placed.y += run.y + bounds.y;
-        try list.pushRect(placed, run.color);
+        placed.x += cell.x;
+        placed.y += cell.y;
+        try list.pushRect(placed, color);
     }
 }
 

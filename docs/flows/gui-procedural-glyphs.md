@@ -9,6 +9,11 @@ the existing font and shaping path. Mixed text separates spans at grapheme
 boundaries; combining and variation-selector clusters remain intact on the font
 path.
 
+The geometry lives in `lib/cellglyphs`: `GlyphAtlas` resolves the cell's
+rectangle in device pixels and the color, and each glyph paints into the
+`gfx.QuadList`. Curved box strokes, their raster cache and the atlas stay in
+the GUI.
+
 ## Braille
 
 Braille encodes eight positions in the low byte of its codepoint:

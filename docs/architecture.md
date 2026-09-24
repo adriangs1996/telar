@@ -210,7 +210,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `console` | the controlling terminal: raw mode, resize notifications, writer, escape sequences |
 | `mailbox` | the bounded inbox between worker tasks and one consumer |
 | `animate` | springs, transitions and the frame clock that advances them |
-| `gfx` | rectangles, colors, quads and one-axis layout |
+| `gfx` | rectangles, colors, quads, the quad list a frame is built in, and one-axis layout |
 | `unicode` | grapheme widths from the emulator's tables; builds may bind another provider |
 | `cellgrid` | cells, styles and buffers, and text laid out into them |
 | `pacing` | the monotonic clock, replaceable deadlines and the frame pacer |
@@ -222,6 +222,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `localsocket` | same-user Unix sockets and length-prefixed framing |
 | `bytecodec` | bounds-checked little-endian encoding into caller buffers and decoding from borrowed bytes |
 | `urlscan` | classifying a URI by scheme and finding the URI under an offset in a line |
+| `cellglyphs` | box drawing, block elements and Braille painted from geometry into a quad list |
 | `mdinline` | inline Markdown spans over borrowed text and bounded link destination decoding |
 | `cellcodec` | runs of cells with a packed header, styles written on change and colors sized by kind |
 | `agentfiles` | titles from Claude Code's JSONL transcript and Codex's thread database |

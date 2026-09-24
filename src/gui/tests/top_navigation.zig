@@ -1,5 +1,5 @@
 const data = @import("model");
-const QuadList = @import("../render/QuadList.zig");
+const QuadList = gfx.QuadList;
 const gfx = @import("gfx");
 const Quad_module = gfx.Quad;
 const std = @import("std");

@@ -2,7 +2,7 @@
 //! the terminal size, scaled by `gui.chrome.scale`, shaped side by side in
 //! one atlas without touching the cell grid.
 const data = @import("model");
-const QuadList = @import("../render/QuadList.zig");
+const QuadList = gfx.QuadList;
 const label_size = @import("../widgets/label_size.zig");
 const std = @import("std");
 const Fixture = @import("CanvasFixture.zig");

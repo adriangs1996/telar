@@ -1,6 +1,7 @@
 //! System font fallback: graphemes no embedded face covers are looked up
 //! once through the native port, loaded into a bounded pool and painted
 //! fitted to the cell; misses and a full pool keep the replacement glyph.
+const gfx = @import("gfx");
 const FontSource = @import("../text/FontSource.zig");
 const font_id = @import("../text/font_id.zig");
 const std = @import("std");
@@ -9,7 +10,7 @@ const assets = @import("assets");
 const Atlas = @import("../text/GlyphAtlas.zig");
 const FontMatch = @import("../native/FontMatch.zig").FontMatch;
 const FallbackPool = @import("../text/FallbackPool.zig");
-const QuadList = @import("../render/QuadList.zig");
+const QuadList = gfx.QuadList;
 const TextRun = @import("../text/TextRun.zig");
 const ShapingKey = @import("../text/ShapingKey.zig");
 

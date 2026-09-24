@@ -16,7 +16,7 @@ pub const Frame = extern struct {
     sprites: ?[*]const u8 = null,
     sprites_side: u32 = 0,
     sprites_version: u32 = 0,
-    diagrams: [diagram.slot_count]diagram.DiagramTexture = @splat(.{}),
+    diagrams: [gfx.Quad.diagram_slot_count]diagram.DiagramTexture = @splat(.{}),
     background: [4]f32,
     background_blur: u32 = 0,
     titlebar: u32 = 1,

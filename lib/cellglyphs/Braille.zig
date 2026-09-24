@@ -1,8 +1,10 @@
 //! Procedural Unicode Braille patterns; each bit owns one dot in a 2 by 4 cell.
 const std = @import("std");
-const TextRun = @import("TextRun.zig");
+const gfx = @import("gfx");
 const Grid = @import("BrailleGrid.zig");
-const QuadList = @import("../render/QuadList.zig");
+const Color = gfx.Color;
+const QuadList = gfx.QuadList;
+const Rect = gfx.Rect;
 const Braille = @This();
 
 dots: u8,
@@ -17,15 +19,13 @@ pub fn parse(text: []const u8) ?Braille {
     return .{ .dots = ((text[1] & 3) << 6) | (text[2] & 63) };
 }
 
-/// Uses the caller's cell bounds relative to its baseline; no font or atlas lookup.
-/// Example: `_ = try pattern.paint(run, quads);`
-pub fn paint(self: Braille, run: TextRun, list: *QuadList) !f32 {
-    var bounds = run.cell_bounds orelse return error.MissingCellBounds;
-    bounds.x += run.x;
-    bounds.y += run.y;
-    const grid = try Grid.init(bounds);
+/// Places the dots in `cell`, the cell's rectangle in device pixels, and
+/// returns its advance; no font or atlas lookup.
+/// Example: `_ = try pattern.paint(cell, color, quads);`
+pub fn paint(self: Braille, cell: Rect, color: Color, list: *QuadList) !f32 {
+    const grid = try Grid.init(cell);
     if (grid.diameter == 0) {
-        return bounds.width;
+        return cell.width;
     }
 
     const columns = [_]u1{ 0, 0, 0, 1, 1, 1, 0, 1 };
@@ -35,14 +35,13 @@ pub fn paint(self: Braille, run: TextRun, list: *QuadList) !f32 {
             continue;
         }
 
-        try list.pushRect(.{ .x = grid.x[column], .y = grid.y[row], .width = grid.diameter, .height = grid.diameter }, run.color);
+        try list.pushRect(.{ .x = grid.x[column], .y = grid.y[row], .width = grid.diameter, .height = grid.diameter }, color);
     }
 
-    return bounds.width;
+    return cell.width;
 }
 
 test "all 256 patterns encode the Unicode dot order with solid quads" {
-    const gfx = @import("gfx");
     const quad = gfx.Quad;
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
@@ -55,7 +54,19 @@ test "all 256 patterns encode the Unicode dot order with solid quads" {
         const pattern = parse(bytes[0..length]).?;
         try std.testing.expectEqual(@as(u8, @intCast(mask)), pattern.dots);
         list.clear();
-        const advance = try pattern.paint(.{ .text = bytes[0..length], .x = 8.5, .y = 40.25, .color = .{ .r = 0.3, .g = 0.5, .b = 0.7, .a = 0.4 }, .pixel_height = 28, .cell_bounds = .{ .x = 0.5, .y = -19.25, .width = 16, .height = 32 } }, &list);
+        const cell: Rect = .{
+            .x = 9,
+            .y = 21,
+            .width = 16,
+            .height = 32,
+        };
+        const color: Color = .{
+            .r = 0.3,
+            .g = 0.5,
+            .b = 0.7,
+            .a = 0.4,
+        };
+        const advance = try pattern.paint(cell, color, &list);
         try std.testing.expectEqual(@as(f32, 16), advance);
         try std.testing.expectEqual(@as(usize, @popCount(pattern.dots)), list.items().len);
         var index: usize = 0;
@@ -86,12 +97,17 @@ test "only complete bare Braille graphemes bypass text shaping" {
 test "blank and zero-area Braille produce no ink" {
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
-    var run: TextRun = .{ .text = "", .x = 0, .y = 0, .color = .white, .pixel_height = 16, .cell_bounds = .{ .x = 0, .y = 0, .width = 16, .height = 32 } };
-    try std.testing.expectEqual(@as(f32, 16), try (Braille{ .dots = 0 }).paint(run, &list));
-    run.cell_bounds.?.height = 0;
-    try std.testing.expectEqual(@as(f32, 16), try (Braille{ .dots = 255 }).paint(run, &list));
-    run.cell_bounds.?.height = 32;
-    run.cell_bounds.?.width = 0;
-    try std.testing.expectEqual(@as(f32, 0), try (Braille{ .dots = 255 }).paint(run, &list));
+    var cell: Rect = .{
+        .x = 0,
+        .y = 0,
+        .width = 16,
+        .height = 32,
+    };
+    try std.testing.expectEqual(@as(f32, 16), try (Braille{ .dots = 0 }).paint(cell, .white, &list));
+    cell.height = 0;
+    try std.testing.expectEqual(@as(f32, 16), try (Braille{ .dots = 255 }).paint(cell, .white, &list));
+    cell.height = 32;
+    cell.width = 0;
+    try std.testing.expectEqual(@as(f32, 0), try (Braille{ .dots = 255 }).paint(cell, .white, &list));
     try std.testing.expectEqual(@as(usize, 0), list.items().len);
 }

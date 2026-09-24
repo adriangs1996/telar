@@ -7,7 +7,7 @@ const Session = @import("Session.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const CellMesh = @import("../render/CellMesh.zig");
-const QuadList = @import("../render/QuadList.zig");
+const QuadList = gfx.QuadList;
 const Quad = gfx.Quad.Quad;
 
 test "terminal box borders join adjacent cells for light heavy double and mixed strokes" {

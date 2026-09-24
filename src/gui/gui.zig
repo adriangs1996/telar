@@ -7,7 +7,6 @@ const event = @import("input/event.zig");
 pub const GuiAdapter = @import("GuiAdapter.zig");
 const gfx = @import("gfx");
 pub const GlyphAtlas = @import("text/GlyphAtlas.zig");
-pub const QuadList = @import("render/QuadList.zig");
 pub const TextRun = @import("text/TextRun.zig");
 pub const cell_colors = @import("render/cell_colors.zig");
 pub const run = run_module.run;
@@ -60,6 +59,7 @@ test {
     _ = @import("tests/configuration.zig");
     _ = @import("tests/font_thicken.zig");
     _ = @import("tests/font_fallback.zig");
+    _ = @import("text/block_atlas_test.zig");
     _ = @import("text/font_id.zig");
     _ = @import("text/GraphemeMisses.zig");
     _ = @import("tests/braille.zig");
@@ -85,6 +85,5 @@ test {
     _ = @import("InputQueue.zig");
     _ = @import("CursorClock.zig");
     _ = GlyphAtlas;
-    _ = QuadList;
     _ = cell_colors;
 }

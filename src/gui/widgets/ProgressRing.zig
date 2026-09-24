@@ -1,7 +1,7 @@
 //! A circular progress stroke composed from bounded, antialiased round quads.
 const cellgrid = @import("cellgrid");
 const data = @import("model");
-const QuadList = @import("../render/QuadList.zig");
+const QuadList = gfx.QuadList;
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const gfx = @import("gfx");

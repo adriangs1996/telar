@@ -5,15 +5,16 @@
 //! three chrome sizes shape and rasterize side by side without invalidating
 //! one another. Texel (0, 0) stays opaque white so solid rectangles are
 //! quads too. Configured and fallback faces share the page.
+const cellglyphs = @import("cellglyphs");
 const cellgrid = @import("cellgrid");
-const BoxInk = @import("BoxInk.zig");
+const BoxInk = cellglyphs.BoxInk;
 const GlyphRaster = @import("../native/GlyphRaster.zig");
 const assets = @import("assets");
 const builtin = @import("builtin");
 const font_id = @import("font_id.zig");
 const std = @import("std");
 const freetype = @import("freetype");
-const QuadList = @import("../render/QuadList.zig");
+const QuadList = gfx.QuadList;
 const gfx = @import("gfx");
 const quad = gfx.Quad;
 const AtlasOptions = @import("AtlasOptions.zig");
@@ -28,14 +29,14 @@ const FontRuns = @import("FontRuns.zig");
 const FontRun = @import("FontRun.zig");
 const ShapedText = @import("ShapedText.zig");
 const GlyphFailures = @import("GlyphFailures.zig");
-const Braille = @import("Braille.zig");
+const Braille = cellglyphs.Braille;
 const AsciiGlyph = @import("AsciiGlyph.zig");
 const AsciiGlyphs = @import("AsciiGlyphs.zig");
-const Box = @import("BoxDrawing.zig");
-const Block = @import("BlockElement.zig");
-const BlockInk = @import("BlockInk.zig");
-const BoxGrid = @import("BoxGrid.zig");
-const BoxCurve = @import("BoxCurve.zig");
+const Box = cellglyphs.BoxDrawing;
+const Block = cellglyphs.BlockElement;
+const BlockInk = cellglyphs.BlockInk;
+const BoxGrid = cellglyphs.BoxGrid;
+const BoxCurve = cellglyphs.BoxCurve;
 const BoxCache = @import("BoxCache.zig");
 const Rect = gfx.Rect;
 const FontSize = @import("FontSize.zig");
@@ -184,9 +185,7 @@ pub fn place(self: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
 
 fn placeShaped(self: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
     if (Braille.parse(run.text)) |pattern| {
-        var current = run;
-        current.cell_bounds = try self.gridBounds(run);
-        return pattern.paint(current, list);
+        return pattern.paint(placedCell(run, try self.gridBounds(run)), run.color, list);
     }
 
     if (Box.parse(run.text) != null) {
@@ -217,10 +216,7 @@ fn placeShaped(self: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
             .box => try self.paintBox(current, list),
             .block => try self.paintBlock(current, list),
             .font => try self.paint(.{ .run = current, .shaped = try self.shape(part, run.pixel_height) }, list),
-            .braille => |pattern| braille: {
-                current.cell_bounds = try self.gridBounds(current);
-                break :braille try pattern.paint(current, list);
-            },
+            .braille => |pattern| try pattern.paint(placedCell(current, try self.gridBounds(current)), current.color, list),
         };
     }
 
@@ -397,9 +393,7 @@ fn initBoxFallback(self: *GlyphAtlas) !void {
 
 fn paintBox(self: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
     const box = Box.parse(run.text).?;
-    var current = run;
     const bounds = try self.gridBounds(run);
-    current.cell_bounds = bounds;
     const face = self.fonts.primary.face.*;
     const thickness: f32 = if (face.units_per_EM == 0 or face.underline_thickness <= 0)
         @max(1, @ceil(@as(f32, @floatFromInt(run.pixel_height)) / 16))
@@ -444,7 +438,7 @@ fn paintBox(self: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
     } else {
         grid.draw(box);
         const ink = try BoxInk.init(&grid);
-        try ink.paint(current, list);
+        try ink.paint(placedCell(run, bounds), run.color, list);
     }
 
     return bounds.width;
@@ -453,12 +447,21 @@ fn paintBox(self: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
 // Block elements are solid rectangles of the cell: no raster, cache or atlas work.
 fn paintBlock(self: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
     const block = Block.parse(run.text).?;
-    var current = run;
     const bounds = try self.gridBounds(run);
-    current.cell_bounds = bounds;
     const ink = try BlockInk.init(bounds, block);
-    try ink.paint(current, list);
+    try ink.paint(placedCell(run, bounds), run.color, list);
     return bounds.width;
+}
+
+/// The cell's rectangle in device pixels: `bounds` is relative to the run's
+/// baseline origin.
+fn placedCell(run: TextRun, bounds: Rect) Rect {
+    return .{
+        .x = run.x + bounds.x,
+        .y = run.y + bounds.y,
+        .width = bounds.width,
+        .height = bounds.height,
+    };
 }
 
 fn rasterBox(self: *GlyphAtlas, grid: BoxGrid, curve_index: u3) !GlyphSlot {

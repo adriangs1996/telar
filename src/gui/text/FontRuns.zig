@@ -1,13 +1,14 @@
 //! Groups whole graphemes by face, retaining contextual shaping within each span.
+const cellglyphs = @import("cellglyphs");
 const cellgrid = @import("cellgrid");
 const GlyphAtlas = @import("GlyphAtlas.zig");
 const assets = @import("assets");
 const font_id = @import("font_id.zig");
 const FontSet = @import("FontSet.zig");
 const FontRun = @import("FontRun.zig");
-const Box = @import("BoxDrawing.zig");
-const Block = @import("BlockElement.zig");
-const Braille = @import("Braille.zig");
+const Box = cellglyphs.BoxDrawing;
+const Block = cellglyphs.BlockElement;
+const Braille = cellglyphs.Braille;
 const FontRuns = @This();
 
 fonts: *const FontSet,

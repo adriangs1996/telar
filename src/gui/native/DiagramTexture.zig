@@ -1,8 +1,9 @@
 //! Borrowed premultiplied RGBA8 pixels, immutable until frame completion.
 //! Empty slots have all-zero fields; populated slots use nonzero content versions.
+const gfx = @import("gfx");
 const std = @import("std");
+const quad = gfx.Quad;
 
-pub const slot_count = 8;
 pub const max_side = 4096;
 pub const max_pixels = 4 * 1024 * 1024;
 pub const max_frame_pixels = 8 * 1024 * 1024;
@@ -36,7 +37,7 @@ pub const DiagramTexture = extern struct {
     }
 
     /// Validates all slots without reading their pixels. Example: `try DiagramTexture.validate(&frame.diagrams)`.
-    pub fn validate(textures: *const [slot_count]DiagramTexture) !void {
+    pub fn validate(textures: *const [quad.diagram_slot_count]DiagramTexture) !void {
         var total: u32 = 0;
         for (textures) |texture| {
             total += try texture.pixelCount();
@@ -50,7 +51,7 @@ pub const DiagramTexture = extern struct {
 
 test "diagram descriptors reject malformed dimensions and per-frame overflow without reading pixels" {
     const pixel = [_]u8{ 0, 0, 0, 0 };
-    var slots: [slot_count]DiagramTexture = @splat(.{});
+    var slots: [quad.diagram_slot_count]DiagramTexture = @splat(.{});
     try DiagramTexture.validate(&slots);
     for ([_]DiagramTexture{
         .{ .width = 1 },
