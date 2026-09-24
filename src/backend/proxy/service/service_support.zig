@@ -54,7 +54,7 @@ fn serveConnection(service: *Service, stream: std.Io.net.Stream) std.Io.Cancelab
         .dependencies = .{
             .tls = service.interception.tunnelResources(&service.telemetry),
             .credentials = &service.credentials,
-            .pipeline = service.observations.pipeline(),
+            .observations = &service.observations,
             .transforms = configuration.transforms,
             .has_custom_transformers = configuration.has_custom_transformers,
             .connection_ids = &service.next_connection_id,

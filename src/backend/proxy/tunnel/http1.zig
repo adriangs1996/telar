@@ -23,8 +23,7 @@ const middleware = @import("../middleware.zig");
 const localca = @import("localca");
 const Session = localca.Session;
 const core = @import("telar-core");
-const MiddlewareEvent = @import("../MiddlewareEvent.zig");
-const Pipeline = @import("../Pipeline.zig");
+const Channel = @import("../Channel.zig");
 const Counters = @import("../Counters.zig");
 const identity = @import("../identity.zig");
 const Snapshot = @import("../Snapshot.zig");
@@ -32,6 +31,7 @@ const FakeSessionType = @import("../http/FakeSession.zig");
 const Producer = @import("../capture/Producer.zig");
 const Config = @import("../capture/Config.zig");
 const Registry = @import("../Registry.zig");
+const Credential = @import("../Credential.zig");
 const Observer = @import("../provider/Observer.zig");
 
 const exchange_port: GenericExchangePort(Http1Connection) = .{
@@ -303,7 +303,7 @@ test "Claude request bodies refine route candidates before publication" {
     const observer: RequestBodyObserver = .{ .request = &connection.request };
 
     publishRequest(&connection, candidate);
-    try std.testing.expectEqual(@as(usize, 0), harness.capture.len);
+    try std.testing.expectEqual(@as(u64, 0), harness.observations.metrics().queued);
     observer.observe(.{ .payload = claude_startup_request, .forwarded_bytes = claude_startup_request.len });
     finishRequest(&connection);
     connection.request.deinit();
@@ -475,14 +475,19 @@ fn testCaptureProducer(producer: *Producer, registry: *Registry, config: Config)
     });
 }
 
-/// A registry holding the credential `Http1TestHarness` authenticates with.
-fn harnessRegistry() !Registry {
-    var registry: Registry = .{};
-    try registry.register(std.testing.io, &.{
+/// The credential `Http1TestHarness` authenticates with.
+fn harnessCredential() !Credential {
+    return .{
         .pane_id = try core.pane(7),
         .pane_generation = 11,
         .token = .{0x42} ** identity.token_bytes,
-    });
+    };
+}
+
+/// A registry holding the harness credential.
+fn harnessRegistry() !Registry {
+    var registry: Registry = .{};
+    try registry.register(std.testing.io, &try harnessCredential());
     return registry;
 }
 
@@ -670,34 +675,36 @@ const ResponseBodyObserver = struct {
 };
 
 const Http1TestHarness = struct {
-    capture: Http1Capture = .{},
-    pipeline: Pipeline = .{},
+    registry: Registry = .{},
+    observations: Channel = undefined,
     counters: Counters = .{},
     exchange: Exchange = undefined,
 
+    /// Builds the harness at its final address: the channel borrows the
+    /// registry and the exchange borrows the channel.
     pub fn init(self: *Http1TestHarness) !void {
-        try self.pipeline.add(.{ .context = &self.capture, .observe = Http1Capture.observe });
+        const credential = try harnessCredential();
+        try self.registry.register(std.testing.io, &credential);
+        self.observations.init(&self.registry);
         self.exchange = .{
             .io = std.testing.io,
-            .pipeline = &self.pipeline,
+            .observations = &self.observations,
             .telemetry = &self.counters,
-            .credential = .{
-                .pane_id = try core.pane(7),
-                .pane_generation = 11,
-                .token = .{0x42} ** identity.token_bytes,
-            },
+            .credential = credential,
             .dialect = .anthropic_messages,
             .connection_id = 19,
             .protocol = .http11,
         };
     }
 
-    pub fn expectPhases(self: *const Http1TestHarness, expected: []const middleware.Phase) !void {
-        try std.testing.expectEqual(expected.len, self.capture.len);
-
-        for (expected, self.capture.events[0..self.capture.len]) |phase, event| {
+    /// Drains every queued observation and compares its phase in order.
+    pub fn expectPhases(self: *Http1TestHarness, expected: []const middleware.Phase) !void {
+        for (expected) |phase| {
+            const event = self.observations.tryReceive(std.testing.io) orelse return error.MissingObservation;
             try std.testing.expectEqual(phase, event.phase);
         }
+
+        try std.testing.expect(self.observations.tryReceive(std.testing.io) == null);
     }
 
     pub fn snapshot(self: *const Http1TestHarness) Snapshot {
@@ -706,17 +713,6 @@ const Http1TestHarness = struct {
             .observations = .{ .queued = 0, .high_water = 0, .dropped = 0 },
         });
     }
-
-    const Http1Capture = struct {
-        events: [16]MiddlewareEvent = undefined,
-        len: usize = 0,
-
-        pub fn observe(context: *anyopaque, _: std.Io, event: MiddlewareEvent) void {
-            const observed: *Http1Capture = @ptrCast(@alignCast(context));
-            observed.events[observed.len] = event;
-            observed.len += 1;
-        }
-    };
 };
 
 const RequestBodyObserver = struct {

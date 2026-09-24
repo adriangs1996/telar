@@ -1,7 +1,7 @@
 const core = @import("telar-core");
 const Resources = @import("Resources.zig");
 const Registry = @import("../Registry.zig");
-const Pipeline = @import("../Pipeline.zig");
+const Channel = @import("../Channel.zig");
 const TransformPipeline = @import("../TransformPipeline.zig");
 const Producer = @import("../capture/Producer.zig");
 const std = @import("std");
@@ -64,7 +64,7 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
     const target = authenticated.target;
     var exchange: Exchange = .{
         .io = io,
-        .pipeline = dependencies.pipeline,
+        .observations = dependencies.observations,
         .telemetry = dependencies.tls.telemetry,
         .credential = authenticated.credential,
         .dialect = dialect_module.identify(target.host.bytes),
@@ -141,7 +141,7 @@ const TunnelOptions = struct {
 const Dependencies = struct {
     tls: Resources,
     credentials: *Registry,
-    pipeline: *const Pipeline,
+    observations: *Channel,
     transforms: *const TransformPipeline,
     has_custom_transformers: bool,
     connection_ids: *std.atomic.Value(u64),

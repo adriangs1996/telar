@@ -3,13 +3,13 @@
 const core = @import("telar-core");
 const request_support = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
-const Pipeline = @import("../Pipeline.zig");
+const Channel = @import("../Channel.zig");
+const Registry = @import("../Registry.zig");
 const Counters = @import("../Counters.zig");
 const Exchange = @import("Exchange.zig");
 const Credential = @import("../Credential.zig");
 const identity = @import("../identity.zig");
 const std = @import("std");
-const MiddlewareEvent = @import("../MiddlewareEvent.zig");
 const types = @import("../../agent/types.zig");
 
 /// Maps provider request classification to the lifecycle phase shared by
@@ -25,16 +25,20 @@ pub fn requestPhase(classification: request_support.RequestClass) middleware.Pha
     };
 }
 
-fn testExchange(pipeline: *const Pipeline, counters: *Counters) !Exchange {
-    const credential: Credential = .{
+fn testCredential() !Credential {
+    return .{
         .pane_id = try core.pane(7),
         .pane_generation = 11,
         .token = .{0x42} ** identity.token_bytes,
     };
+}
+
+fn testExchange(observations: *Channel, counters: *Counters) !Exchange {
+    const credential = try testCredential();
 
     return .{
         .io = std.testing.io,
-        .pipeline = pipeline,
+        .observations = observations,
         .telemetry = counters,
         .credential = credential,
         .dialect = .anthropic_messages,
@@ -44,11 +48,12 @@ fn testExchange(pipeline: *const Pipeline, counters: *Counters) !Exchange {
 }
 
 test "published status carries authenticated exchange identity" {
-    var capture: ExchangeCapture = .{};
+    var registry: Registry = .{};
+    try registry.register(std.testing.io, &try testCredential());
+    var observations: Channel = undefined;
+    observations.init(&registry);
     var counters: Counters = .{};
-    var pipeline: Pipeline = .{};
-    try pipeline.add(.{ .context = &capture, .observe = ExchangeCapture.observe });
-    var exchange = try testExchange(&pipeline, &counters);
+    var exchange = try testExchange(&observations, &counters);
 
     exchange.publishStatus(.{
         .phase = .response_finished,
@@ -56,8 +61,8 @@ test "published status carries authenticated exchange identity" {
         .status_code = 204,
     });
 
-    try std.testing.expectEqual(@as(usize, 1), capture.len);
-    const event = capture.events[0];
+    const event = observations.tryReceive(std.testing.io).?;
+    try std.testing.expect(observations.tryReceive(std.testing.io) == null);
     try std.testing.expect(std.meta.eql(exchange.credential, event.credential));
     try std.testing.expectEqual(types.ApiDialect.anthropic_messages, event.dialect);
     try std.testing.expectEqual(middleware.Phase.response_finished, event.phase);
@@ -68,11 +73,12 @@ test "published status carries authenticated exchange identity" {
 }
 
 test "only lifecycle evidence for Claude increments Claude counters" {
-    var capture: ExchangeCapture = .{};
+    var registry: Registry = .{};
+    try registry.register(std.testing.io, &try testCredential());
+    var observations: Channel = undefined;
+    observations.init(&registry);
     var counters: Counters = .{};
-    var pipeline: Pipeline = .{};
-    try pipeline.add(.{ .context = &capture, .observe = ExchangeCapture.observe });
-    var exchange = try testExchange(&pipeline, &counters);
+    var exchange = try testExchange(&observations, &counters);
 
     inline for (.{
         middleware.Phase.auxiliary_request_started,
@@ -109,14 +115,3 @@ test "request classification maps to one lifecycle phase" {
     try std.testing.expectEqual(middleware.Phase.request_started, requestPhase(.inference));
     try std.testing.expectEqual(middleware.Phase.auxiliary_request_started, requestPhase(.auxiliary));
 }
-
-const ExchangeCapture = struct {
-    events: [8]MiddlewareEvent = undefined,
-    len: usize = 0,
-
-    pub fn observe(context: *anyopaque, _: std.Io, event: MiddlewareEvent) void {
-        const capture: *ExchangeCapture = @ptrCast(@alignCast(context));
-        capture.events[capture.len] = event;
-        capture.len += 1;
-    }
-};

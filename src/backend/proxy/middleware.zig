@@ -82,12 +82,6 @@ test "observable SSE headers require one event-stream type and identity bytes" {
     try std.testing.expect(!hasObservableSseBody(&missing));
 }
 
-pub const Observer = @import("Observer.zig");
-
-pub const max_observers = 8;
-
-pub const Pipeline = @import("Pipeline.zig");
-
 pub const max_header_fields = 256;
 pub const max_header_bytes = 128 * 1024;
 pub const max_transformers = 8;

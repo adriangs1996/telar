@@ -159,8 +159,8 @@ test "non-whitelisted CONNECT relays bytes with a saturated observation queue" {
         .connection_id = 1,
         .observed_at_ms = 1,
     };
-    for (0..observation_queue.capacity) |_| service.observations.pipeline().publish(io, observation);
-    service.observations.pipeline().publish(io, observation);
+    for (0..observation_queue.capacity) |_| service.observations.publish(io, observation);
+    service.observations.publish(io, observation);
     const observation_metrics = service.observations.metrics();
 
     try std.testing.expectEqual(
@@ -314,7 +314,7 @@ test "receive discards observations queued before pane revocation" {
 
     var current = try service.registerPane(.{ .id = try core.pane(7), .generation = 2 });
     defer std.crypto.secureZero(u8, &current.token);
-    service.observations.pipeline().publish(io, .{
+    service.observations.publish(io, .{
         .credential = current,
         .dialect = .openai_responses,
         .phase = .request_started,
@@ -325,7 +325,7 @@ test "receive discards observations queued before pane revocation" {
     service.unregisterPane(.{ .id = current.pane_id, .generation = current.pane_generation });
     var next = try service.registerPane(.{ .id = current.pane_id, .generation = 3 });
     defer std.crypto.secureZero(u8, &next.token);
-    service.observations.pipeline().publish(io, .{
+    service.observations.publish(io, .{
         .credential = next,
         .dialect = .openai_responses,
         .phase = .request_started,

@@ -2,7 +2,6 @@ const observation_queue = @import("observation_queue.zig");
 const MiddlewareEvent = @import("MiddlewareEvent.zig");
 const std = @import("std");
 const Registry = @import("Registry.zig");
-const Observer = @import("Observer.zig");
 const ObservationQueueMetrics = @import("ObservationQueueMetrics.zig");
 const Channel = @This();
 
@@ -25,15 +24,6 @@ pub fn init(self: *Channel, credentials: *Registry) void {
     self.events = .init(&self.storage);
 }
 
-/// Returns the observer registered in the immutable proxy pipeline.
-///
-/// ```zig
-/// try pipeline.add(channel.observer());
-/// ```
-pub fn observer(self: *Channel) Observer {
-    return .{ .context = self, .observe = observe };
-}
-
 /// Returns the next observation whose credential is still live.
 /// Revoked observations are scrubbed and consumed without escaping.
 /// Queue closure is reported after every already-buffered event is read.
@@ -47,6 +37,29 @@ pub fn receive(self: *Channel, io: std.Io) anyerror!MiddlewareEvent {
         defer std.crypto.secureZero(u8, &event.credential.token);
         self.release();
 
+        if (self.credentials.contains(io, &event.credential)) {
+            return event;
+        }
+    }
+}
+
+/// Returns the next buffered observation whose credential is still live,
+/// or null when none is buffered. Never waits.
+///
+/// ```zig
+/// while (channel.tryReceive(io)) |event| consume(event);
+/// ```
+pub fn tryReceive(self: *Channel, io: std.Io) ?MiddlewareEvent {
+    while (true) {
+        var events: [1]MiddlewareEvent = undefined;
+        const count = self.events.getUncancelable(io, &events, 0) catch return null;
+        if (count == 0) {
+            return null;
+        }
+
+        var event = events[0];
+        defer std.crypto.secureZero(u8, &event.credential.token);
+        self.release();
         if (self.credentials.contains(io, &event.credential)) {
             return event;
         }
@@ -76,11 +89,12 @@ pub fn metrics(self: *const Channel) ObservationQueueMetrics {
     };
 }
 
-fn observe(context: *anyopaque, io: std.Io, event: MiddlewareEvent) void {
-    const channel: *Channel = @ptrCast(@alignCast(context));
-    channel.publish(io, event);
-}
-
+/// Queues one observation whose credential is live, without waiting: a full
+/// queue drops it and counts the loss.
+///
+/// ```zig
+/// channel.publish(io, event);
+/// ```
 pub fn publish(self: *Channel, io: std.Io, event: MiddlewareEvent) void {
     if (!self.credentials.contains(io, &event.credential)) {
         return;

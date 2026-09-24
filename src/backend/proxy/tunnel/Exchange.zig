@@ -1,5 +1,5 @@
 const std = @import("std");
-const Pipeline = @import("../Pipeline.zig");
+const Channel = @import("../Channel.zig");
 const Counters = @import("../Counters.zig");
 const Credential = @import("../Credential.zig");
 const types = @import("../../agent/types.zig");
@@ -9,7 +9,7 @@ const TransformContext = @import("../TransformContext.zig");
 const Exchange = @This();
 
 io: std.Io,
-pipeline: *const Pipeline,
+observations: *Channel,
 telemetry: *Counters,
 credential: Credential,
 dialect: types.ApiDialect,
@@ -56,7 +56,7 @@ pub fn publishStatus(self: *Exchange, status: Status) void {
         }
     }
 
-    self.pipeline.publish(self.io, .{
+    self.observations.publish(self.io, .{
         .credential = self.credential,
         .dialect = self.dialect,
         .phase = status.phase,

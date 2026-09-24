@@ -18,8 +18,7 @@ const request_support = @import("../provider/request_support.zig");
 const exchange_mod = @import("exchange_support.zig");
 const ResponseBody = @import("../h2/ResponseBody.zig");
 const core = @import("telar-core");
-const MiddlewareEvent = @import("../MiddlewareEvent.zig");
-const Pipeline = @import("../Pipeline.zig");
+const Channel = @import("../Channel.zig");
 const Counters = @import("../Counters.zig");
 const identity = @import("../identity.zig");
 const Snapshot = @import("../Snapshot.zig");
@@ -28,6 +27,7 @@ const TransformPipeline = @import("../TransformPipeline.zig");
 const ResponseStreams = @import("../provider/ResponseStreams.zig");
 const Producer = @import("../capture/Producer.zig");
 const Registry = @import("../Registry.zig");
+const Credential = @import("../Credential.zig");
 const HeaderField = h2frames.HeaderField;
 const Joiner = @import("../capture/Joiner.zig");
 
@@ -156,7 +156,7 @@ test "Claude request bodies refine interleaved route candidates per stream" {
 
     observer.emit(.{ .lifecycle = .{ .phase = .request_started, .stream_id = 63, .status_code = 0 } });
     observer.emit(.{ .lifecycle = .{ .phase = .request_started, .stream_id = 65, .status_code = 0 } });
-    try std.testing.expectEqual(@as(usize, 0), harness.capture.len);
+    try std.testing.expectEqual(@as(u64, 0), harness.observations.metrics().queued);
 
     const primary_split = claude_primary_request.len / 2;
     const startup_split = claude_startup_request.len / 2;
@@ -386,35 +386,41 @@ test "HTTP2 capture keeps interleaved streams independent for unknown dialects" 
 }
 
 const H2TestHarness = struct {
-    capture: H2Capture = .{},
-    pipeline: Pipeline = .{},
+    registry: Registry = .{},
+    observations: Channel = undefined,
     counters: Counters = .{},
     exchange: Exchange = undefined,
 
+    /// Builds the harness at its final address: the channel borrows the
+    /// registry and the exchange borrows the channel.
     pub fn init(self: *H2TestHarness) !void {
-        try self.pipeline.add(.{ .context = &self.capture, .observe = H2Capture.observe });
+        const credential: Credential = .{
+            .pane_id = try core.pane(13),
+            .pane_generation = 17,
+            .token = .{0x24} ** identity.token_bytes,
+        };
+        try self.registry.register(std.testing.io, &credential);
+        self.observations.init(&self.registry);
         self.exchange = .{
             .io = std.testing.io,
-            .pipeline = &self.pipeline,
+            .observations = &self.observations,
             .telemetry = &self.counters,
-            .credential = .{
-                .pane_id = try core.pane(13),
-                .pane_generation = 17,
-                .token = .{0x24} ** identity.token_bytes,
-            },
+            .credential = credential,
             .dialect = .anthropic_messages,
             .connection_id = 29,
             .protocol = .h2,
         };
     }
 
-    pub fn expectObservations(self: *const H2TestHarness, expected: []const ExpectedObservation) !void {
-        try std.testing.expectEqual(expected.len, self.capture.len);
-
-        for (expected, self.capture.events[0..self.capture.len]) |wanted, event| {
+    /// Drains every queued observation and compares it in order.
+    pub fn expectObservations(self: *H2TestHarness, expected: []const ExpectedObservation) !void {
+        for (expected) |wanted| {
+            const event = self.observations.tryReceive(std.testing.io) orelse return error.MissingObservation;
             try std.testing.expectEqual(wanted.phase, event.phase);
             try std.testing.expectEqual(wanted.stream_id, event.stream_id);
         }
+
+        try std.testing.expect(self.observations.tryReceive(std.testing.io) == null);
     }
 
     pub fn snapshot(self: *const H2TestHarness) Snapshot {
@@ -423,17 +429,6 @@ const H2TestHarness = struct {
             .observations = .{ .queued = 0, .high_water = 0, .dropped = 0 },
         });
     }
-
-    const H2Capture = struct {
-        events: [16]MiddlewareEvent = undefined,
-        len: usize = 0,
-
-        pub fn observe(context: *anyopaque, _: std.Io, event: MiddlewareEvent) void {
-            const observed: *H2Capture = @ptrCast(@alignCast(context));
-            observed.events[observed.len] = event;
-            observed.len += 1;
-        }
-    };
 };
 
 const ExpectedObservation = struct {

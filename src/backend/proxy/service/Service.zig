@@ -4,7 +4,7 @@ const Listener = @import("Listener.zig");
 const Interception = @import("Interception.zig");
 const Registry = @import("../Registry.zig");
 const Configuration = @import("Configuration.zig");
-const Observations = @import("Observations.zig");
+const Channel = @import("../Channel.zig");
 const Producer = @import("../capture/Producer.zig");
 const Slots = @import("../Slots.zig");
 const service_support = @import("service_support.zig");
@@ -25,7 +25,8 @@ listener: Listener,
 interception: Interception,
 credentials: Registry = .{},
 configuration: Configuration,
-observations: Observations = undefined,
+/// Lifecycle observations on their way to the runtime.
+observations: Channel = undefined,
 captures: Producer = undefined,
 connection_slots: Slots = .init(service_support.max_connections),
 telemetry: Counters = .{},
@@ -60,7 +61,7 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
         .configuration = configuration,
         .observations = undefined,
     };
-    try service.observations.init(&service.credentials);
+    service.observations.init(&service.credentials);
     try service.captures.init(gpa, .{
         .config = paths.capture,
         .credentials = &service.credentials,
