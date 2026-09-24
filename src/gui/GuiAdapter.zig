@@ -236,12 +236,14 @@ pub fn run(self: *GuiAdapter, title: [*:0]const u8) !u8 {
             .theme = self.app.options.theme.terminal,
         },
     );
+
     self.renderer.deinit();
     self.renderer = renderer;
     self.renderer.sidebar_request = self.sidebar.request(self.app.model.sidebar_visible);
     const hostname = std.posix.gethostname(&self.hostname) catch "";
     self.hostname_len = hostname.len;
     const callbacks = native_callbacks.bind(self);
+
     const result = native.telar_gui_run(
         title,
         self,

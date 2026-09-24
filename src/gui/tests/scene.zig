@@ -18,7 +18,7 @@ test "native theme backgrounds share window opacity across bands and pane header
     var overlays: Overlays = .{};
     var scene: Scene = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = model_data.theme_support.builtin(.vesper) };
 
-    for ([_]model_data.theme_support.Builtin{ .vesper, .shade, .catppuccin, .tokyo_night, .terminal }) |theme| {
+    for ([_]model_data.theme_support.Builtin{ .vesper, .shade, .catppuccin, .tokyo_night, .pierre_dark, .pierre_dark_soft, .terminal }) |theme| {
         scene.theme = model_data.theme_support.builtin(theme);
         for ([_]f32{ 1, 0.95, 0.5, 0, 1 }) |opacity| {
             renderer.config.window.background_opacity = opacity;
@@ -62,7 +62,7 @@ test "agent and terminal panes share the configured theme background opacity and
     var overlays: Overlays = .{};
     var scene: Scene = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = model_data.theme_support.builtin(.vesper) };
     renderer.config.window.background_blur = 40;
-    for ([_]model_data.theme_support.Builtin{ .vesper, .shade, .catppuccin, .tokyo_night, .terminal }) |theme| {
+    for ([_]model_data.theme_support.Builtin{ .vesper, .shade, .catppuccin, .tokyo_night, .pierre_dark, .pierre_dark_soft, .terminal }) |theme| {
         scene.theme = model_data.theme_support.builtin(theme);
         if (theme == .terminal) {
             scene.theme.terminal.background = .{ 17, 43, 71 };

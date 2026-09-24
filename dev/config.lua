@@ -151,7 +151,8 @@ end
 return telar.config({
 	api_version = 2,
 
-	theme = require("osaka-jade"),
+	-- theme = require("osaka-jade"),
+	theme = "pierre-dark-soft",
 
 	gui = {
 		window = {

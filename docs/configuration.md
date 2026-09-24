@@ -178,9 +178,11 @@ theme = "shade"
 
 Each preset defines Telar's chrome roles and the native terminal's foreground,
 background, ANSI palette and cursor colors. Built-ins are `shade` (the default),
-`vesper`, `catppuccin` (Mocha), `tokyo-night`, and `terminal`. Shade combines
-Vesper's neutral grays and terminal palette with green chrome accents. The old
-names `osaka-jade`, `osaka_jade`, and `osakajade` remain aliases for Shade.
+`vesper`, `catppuccin` (Mocha), `tokyo-night`, `pierre-dark`,
+`pierre-dark-soft`, and `terminal`. The Pierre presets use the dark and dark-soft
+palettes from Adrian's Neovim theme, including syntax and ANSI colors. Shade
+combines Vesper's neutral grays and terminal palette with green chrome accents.
+The old names `osaka-jade`, `osaka_jade`, and `osakajade` remain aliases for Shade.
 Shade's `panel_bg` is `default`:
 the chrome takes the terminal background, so the TUI keeps its host background
 and the GUI paints `#101010`. The TUI uses the chrome roles
@@ -212,10 +214,10 @@ table with `fg`, `italic` and `bold`. Omitted fields inherit their current
 values; selecting a new preset replaces the complete theme. Colors accept
 `#RRGGBB` or `"default"`.
 
-Shade defines explicit syntax styles from the Osaka Jade Neovim palette:
-gray keywords, green functions, pale green types, peach numbers and italic
-mint parameters. Other presets derive unspecified roles from their chrome
-palette. Explicit `syntax` values take precedence over these defaults.
+Shade and both Pierre presets define explicit syntax styles from their Neovim
+palettes. Shade uses gray keywords, green functions, pale green types, peach
+numbers and italic mint parameters. Other presets derive unspecified roles from
+their chrome palette. Explicit `syntax` values take precedence over these defaults.
 The native diff viewer uses bundled Tree-sitter grammars and highlight queries.
 Available categories depend on each language's query; defining a style does
 not enable LSP semantic analysis. Theme changes recolor retained tokens.

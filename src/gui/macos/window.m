@@ -51,12 +51,19 @@ int telar_gui_run(const char *title, void *context,
     view.backgroundView = background;
     window.contentView = background;
     window.delegate = view;
+
     [view startWakeSource];
+
     [window makeFirstResponder:view];
+
     [window center];
+
     [window makeKeyAndOrderFront:nil];
+
     [NSApp activateIgnoringOtherApps:YES];
+
     [NSApp run];
+
     window.delegate = nil;
     [window close];
 

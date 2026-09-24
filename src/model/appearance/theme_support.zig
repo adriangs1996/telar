@@ -9,6 +9,8 @@ pub const Builtin = enum {
     vesper,
     catppuccin,
     tokyo_night,
+    pierre_dark,
+    pierre_dark_soft,
     terminal,
 
     pub fn canonicalName(self: Builtin) []const u8 {
@@ -17,6 +19,8 @@ pub const Builtin = enum {
             .vesper => "vesper",
             .catppuccin => "catppuccin",
             .tokyo_night => "tokyo-night",
+            .pierre_dark => "pierre-dark",
+            .pierre_dark_soft => "pierre-dark-soft",
             .terminal => "terminal",
         };
     }
@@ -43,6 +47,12 @@ pub fn fromName(name: []const u8) ?Theme {
     }
     if (eql(name, "tokyo-night") or eql(name, "tokyonight") or eql(name, "tokyo_night")) {
         return builtin(.tokyo_night);
+    }
+    if (eql(name, "pierre-dark")) {
+        return builtin(.pierre_dark);
+    }
+    if (eql(name, "pierre-dark-soft")) {
+        return builtin(.pierre_dark_soft);
     }
     if (eql(name, "terminal") or eql(name, "default")) {
         return builtin(.terminal);
@@ -124,6 +134,42 @@ pub fn builtin(name: Builtin) Theme {
                 .teal = rgb(125, 207, 255),
                 .peach = rgb(255, 158, 100),
             },
+            .pierre_dark => .{
+                .accent = rgb24c(0x009fff),
+                .panel_bg = rgb24c(0x101010),
+                .surface0 = rgb24c(0x1d1d1d),
+                .surface1 = rgb24c(0x262626),
+                .surface_dim = rgb24c(0x0a0a0a),
+                .overlay0 = rgb24c(0x636363),
+                .overlay1 = rgb24c(0x737373),
+                .text = rgb24c(0xe5e5e5),
+                .subtext0 = rgb24c(0xa3a3a3),
+                .mauve = rgb24c(0x7b43f8),
+                .green = rgb24c(0x07c480),
+                .yellow = rgb24c(0xffca00),
+                .red = rgb24c(0xff2e3f),
+                .blue = rgb24c(0x009fff),
+                .teal = rgb24c(0x08c0ef),
+                .peach = rgb24c(0xffa359),
+            },
+            .pierre_dark_soft => .{
+                .accent = rgb24c(0x69b1ff),
+                .panel_bg = rgb24c(0x101010),
+                .surface0 = rgb24c(0x262626),
+                .surface1 = rgb24c(0x2c2c2c),
+                .surface_dim = rgb24c(0x171717),
+                .overlay0 = rgb24c(0x525252),
+                .overlay1 = rgb24c(0x636363),
+                .text = rgb24c(0xd4d4d4),
+                .subtext0 = rgb24c(0x8a8a8a),
+                .mauve = rgb24c(0x9d6afb),
+                .green = rgb24c(0x60d199),
+                .yellow = rgb24c(0xffd452),
+                .red = rgb24c(0xff6762),
+                .blue = rgb24c(0x69b1ff),
+                .teal = rgb24c(0x68cdf2),
+                .peach = rgb24c(0xffba82),
+            },
             .terminal => .{
                 .accent = indexed(4),
                 .panel_bg = .default,
@@ -148,15 +194,15 @@ pub fn builtin(name: Builtin) Theme {
 
 fn syntax(name: Builtin) Theme.SyntaxStyles {
     var result: Theme.SyntaxStyles = .initFill(null);
-    if (name != .shade) {
-        return result;
-    }
-
-    // Adrian's osaka-jade syntax palette; ANSI and chrome remain independent.
     const roles = .{ .plain, .keyword, .string, .number, .comment, .constant, .builtin_constant, .builtin, .func, .type, .parameter, .property, .namespace, .operator, .punctuation };
-    const colors = [_]u24{ 0xd1d1cf, 0xa0a0a0, 0x91b99a, 0xe6b99d, 0x304a39, 0xc3cea0, 0xe6b99d, 0xa8c98c, 0xa8c98c, 0xc3cea0, 0xadd0c5, 0xbbc8b5, 0xc4b3c5, 0xa0a0a0, 0xa0a0a0 };
+    const colors: [roles.len]u24 = switch (name) {
+        .shade => .{ 0xd1d1cf, 0xa0a0a0, 0x91b99a, 0xe6b99d, 0x304a39, 0xc3cea0, 0xe6b99d, 0xa8c98c, 0xa8c98c, 0xc3cea0, 0xadd0c5, 0xbbc8b5, 0xc4b3c5, 0xa0a0a0, 0xa0a0a0 },
+        .pierre_dark => .{ 0xe5e5e5, 0xff678d, 0x5ecc71, 0x68cdf2, 0x737373, 0xffd452, 0x68cdf2, 0xffab16, 0x9d6afb, 0xd568ea, 0xffa359, 0xffd452, 0xffab16, 0x08c0ef, 0x636363 },
+        .pierre_dark_soft => .{ 0xd4d4d4, 0xff91a8, 0x8cda94, 0x96d9f6, 0x636363, 0xffde80, 0x96d9f6, 0xffde80, 0xba8ffd, 0xe290f0, 0xffba82, 0xffde80, 0xffde80, 0x68cdf2, 0x737373 },
+        else => return result,
+    };
     inline for (roles, colors) |role, color| {
-        result.set(role, .{ .color = rgb24c(color), .italic = role == .parameter });
+        result.set(role, .{ .color = rgb24c(color), .italic = name == .shade and role == .parameter });
     }
 
     return result;
@@ -192,6 +238,16 @@ fn terminal(name: Builtin) TerminalTheme {
             .palette = ansi(.{
                 0x15161e, 0xf7768e, 0x9ece6a, 0xe0af68, 0x7aa2f7, 0xbb9af7, 0x7dcfff, 0xa9b1d6,
                 0x414868, 0xff899d, 0x9fe044, 0xfaba4a, 0x8db0ff, 0xc7a9ff, 0xa4daff, 0xc0caf5,
+            }),
+        },
+        .pierre_dark, .pierre_dark_soft => .{
+            .foreground = rgb24(if (name == .pierre_dark) 0xe5e5e5 else 0xd4d4d4),
+            .background = rgb24(if (name == .pierre_dark) 0x0a0a0a else 0x171717),
+            .cursor_color = rgb24(if (name == .pierre_dark) 0x009fff else 0x69b1ff),
+            .cursor_text_color = rgb24(if (name == .pierre_dark) 0x0a0a0a else 0x171717),
+            .palette = ansi(.{
+                0x171717, 0xff2e3f, 0x0dbe4e, 0xffca00, 0x009fff, 0xe130ac, 0x08c0ef, 0xbcbcbc,
+                0x171717, 0xff2e3f, 0x86c427, 0xffca00, 0x009fff, 0xe130ac, 0x08c0ef, 0xbcbcbc,
             }),
         },
         .terminal => .{},
@@ -278,6 +334,10 @@ test "built-in theme names accept stable aliases" {
     try std.testing.expectEqual(Builtin.shade, fromName("OsakaJade").?.base);
     try std.testing.expectEqual(Builtin.catppuccin, fromName("catppuccin-mocha").?.base);
     try std.testing.expectEqual(Builtin.tokyo_night, fromName("TokyoNight").?.base);
+    try std.testing.expectEqualStrings("pierre-dark", Builtin.pierre_dark.canonicalName());
+    try std.testing.expectEqualStrings("pierre-dark-soft", Builtin.pierre_dark_soft.canonicalName());
+    try std.testing.expectEqual(Builtin.pierre_dark, fromName("pierre-dark").?.base);
+    try std.testing.expectEqual(Builtin.pierre_dark_soft, fromName("Pierre-Dark-Soft").?.base);
     try std.testing.expectEqual(Builtin.terminal, fromName("default").?.base);
     try std.testing.expect(fromName("unknown") == null);
 }
@@ -290,6 +350,28 @@ test "bundled palettes keep their defining colors" {
     const tokyo_night = builtin(.tokyo_night).palette;
     try std.testing.expectEqualDeep(rgb(122, 162, 247), tokyo_night.accent);
     try std.testing.expectEqualDeep(rgb(26, 27, 38), tokyo_night.panel_bg);
+}
+
+test "Pierre variants preserve Neovim chrome syntax and ANSI colors" {
+    const dark = builtin(.pierre_dark);
+    const soft = builtin(.pierre_dark_soft);
+    try std.testing.expectEqualDeep(rgb24c(0x009fff), dark.palette.accent);
+    try std.testing.expectEqualDeep(rgb24c(0x69b1ff), soft.palette.accent);
+    try std.testing.expectEqualDeep(rgb24c(0x0a0a0a), dark.palette.surface_dim);
+    try std.testing.expectEqualDeep(rgb24c(0x171717), soft.palette.surface_dim);
+    try std.testing.expectEqualDeep(rgb24c(0xff678d), dark.syntax(.keyword));
+    try std.testing.expectEqualDeep(rgb24c(0xff91a8), soft.syntax(.keyword));
+    try std.testing.expectEqualDeep(rgb24c(0x9d6afb), dark.syntax(.func));
+    try std.testing.expectEqualDeep(rgb24c(0xba8ffd), soft.syntax(.func));
+    try std.testing.expectEqualDeep(rgb24c(0x68cdf2), dark.syntax(.builtin_constant));
+    try std.testing.expectEqualDeep(rgb24c(0x96d9f6), soft.syntax(.builtin_constant));
+    try std.testing.expectEqualDeep(rgb24(0x0a0a0a), dark.terminal.background);
+    try std.testing.expectEqualDeep(rgb24(0x171717), soft.terminal.background);
+    try std.testing.expectEqualDeep(rgb24(0x009fff), dark.terminal.cursor_color.?);
+    try std.testing.expectEqualDeep(rgb24(0x69b1ff), soft.terminal.cursor_color.?);
+    try std.testing.expectEqualDeep(dark.terminal.palette, soft.terminal.palette);
+    try std.testing.expectEqualDeep(rgb24(0x0dbe4e), dark.terminal.palette[2]);
+    try std.testing.expectEqualDeep(rgb24(0x86c427), dark.terminal.palette[10]);
 }
 
 test "overrides replace only the requested color roles" {

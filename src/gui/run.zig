@@ -23,6 +23,7 @@ pub fn run(init: std.process.Init, connection: *core.SocketChannel, options: cli
     };
     var identity = try WindowIdentity.acquire(init.io, options.endpoint);
     defer identity.deinit(init.io);
+
     const app = try GuiAdapter.init(.{
         .gpa = init.gpa,
         .io = init.io,
@@ -31,6 +32,7 @@ pub fn run(init: std.process.Init, connection: *core.SocketChannel, options: cli
         .client_identity = identity.value,
         .options = options,
     });
+
     adopted = true;
     defer app.deinit();
     return app.run("Telar");

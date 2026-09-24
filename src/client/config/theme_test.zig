@@ -5,9 +5,9 @@ const Generation = @import("Generation.zig");
 const GuiConfig = @import("GuiConfig.zig");
 
 test "one theme name supplies chrome terminal palette and cursor defaults" {
-    const names = [_][]const u8{ "shade", "vesper", "catppuccin", "tokyo-night", "terminal" };
-    const backgrounds = [_][3]u8{ .{ 16, 16, 16 }, .{ 16, 16, 16 }, .{ 30, 30, 46 }, .{ 26, 27, 38 }, .{ 24, 24, 27 } };
-    const red = [_][3]u8{ .{ 245, 161, 145 }, .{ 245, 161, 145 }, .{ 243, 139, 168 }, .{ 247, 118, 142 }, .{ 205, 49, 49 } };
+    const names = [_][]const u8{ "shade", "vesper", "catppuccin", "tokyo-night", "pierre-dark", "pierre-dark-soft", "terminal" };
+    const backgrounds = [_][3]u8{ .{ 16, 16, 16 }, .{ 16, 16, 16 }, .{ 30, 30, 46 }, .{ 26, 27, 38 }, .{ 10, 10, 10 }, .{ 23, 23, 23 }, .{ 24, 24, 27 } };
+    const red = [_][3]u8{ .{ 245, 161, 145 }, .{ 245, 161, 145 }, .{ 243, 139, 168 }, .{ 247, 118, 142 }, .{ 255, 46, 63 }, .{ 255, 46, 63 }, .{ 205, 49, 49 } };
     for (names, backgrounds, red) |name, background, ansi_red| {
         var buffer: [128]u8 = undefined;
         const source = try std.fmt.bufPrint(&buffer, "return {{ api_version = 2, theme = '{s}' }}", .{name});
