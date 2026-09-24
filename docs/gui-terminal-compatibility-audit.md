@@ -96,7 +96,7 @@ Referencias locales: [documentación KGP](kitty-graphics.md),
 [pruebas de enlaces](../src/gui/tests/links.zig),
 [progreso nativo](../src/gui/widgets/PaneProgress.zig),
 [pruebas del panel](../src/backend/pane/pane_namespace.zig),
-[blit de colores](../src/backend/pane/blit.zig).
+[blit de colores](../lib/vtgrid/blit.zig).
 
 ## Fuera de la lista de carencias frente a Ghostty
 

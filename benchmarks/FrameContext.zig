@@ -1,3 +1,4 @@
+const vtgrid = @import("vtgrid");
 const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
@@ -23,12 +24,17 @@ pub fn deinit(self: *FrameContext) void {
 }
 
 pub fn encode(self: *FrameContext) ![]const u8 {
-    const diff = backend.collectSpans(.{
-        .current = self.damage.current,
-        .acknowledged = self.damage.acknowledged,
-        .cols = main.cols,
-        .damaged_rows = self.damage.damaged_rows,
-    }, self.damage.spans);
+    const diff = vtgrid.collectSpans(
+        core.Span,
+        .{
+            .current = self.damage.current,
+            .acknowledged = self.damage.acknowledged,
+            .cols = main.cols,
+            .damaged_rows = self.damage.damaged_rows,
+            .span_header_size = core.span_header_size,
+        },
+        self.damage.spans,
+    );
     return core.encodePaneFrame(
         self.encode_buffer,
         main.frame(2, self.damage.spans[0..diff.span_count]),

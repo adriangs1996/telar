@@ -121,7 +121,7 @@ color query.
   and replay only after pane activation.
 - `src/backend/pane/pane_namespace.zig`: child query fragments, overrides, resets and deferred
   latest-value updates during ingestion.
-- `src/backend/pane/blit.zig`: semantic defaults and explicit RGB cell backgrounds.
+- `lib/vtgrid/blit.zig`: semantic defaults and explicit RGB cell backgrounds.
 - `src/backend/runtime/terminal_colors.zig` and `src/backend/runtime/geometry_lease.zig`: ownership, spectators, lease transfer,
   disconnect retention and generation-safe lookup.
 - `src/core/schema_contract_test.zig`: wire fingerprint, truncation, optional colors

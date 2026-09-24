@@ -2,7 +2,7 @@
 
 const PaneFixture = @import("PaneFixture.zig");
 const std = @import("std");
-const CursorType = @import("../../pane/Cursor.zig");
+const CursorType = @import("../../pane/text_search.zig").Search;
 
 test "search turns are bounded, wait for VT ownership and reject changed history" {
     var fixture: PaneFixture = .{};

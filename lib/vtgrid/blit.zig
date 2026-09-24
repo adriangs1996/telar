@@ -1,8 +1,7 @@
 const cellgrid = @import("cellgrid");
-const core = @import("telar-core");
 const std = @import("std");
 const vt = @import("ghostty-vt");
-const BlitPane = @import("BlitPane.zig");
+const TestPane = @import("TestPane.zig");
 
 // Copying an emulated screen into our cell grid.
 //
@@ -38,7 +37,6 @@ const BlitPane = @import("BlitPane.zig");
 /// _ = blit(.{ .buffer = buffer, .area = area, .terminal = terminal, .state = state, .options = options });
 /// ```
 pub fn blit(operation: Operation) Stats {
-    core.profiling.add(.runtime_blit, 1);
     const b = operation.buffer;
     const area = operation.area;
     const terminal = operation.terminal;
@@ -413,7 +411,7 @@ test "the attribute word crosses as a bitcast, so its layout must match" {
 
 test "text lands in the cells the emulator put it in" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 3);
+    var pane = try TestPane.init(gpa, 10, 3);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 20, 5);
     defer buf.deinit();
@@ -430,7 +428,7 @@ test "text lands in the cells the emulator put it in" {
 
 test "a wide character owns two columns" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 2);
+    var pane = try TestPane.init(gpa, 10, 2);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 2);
     defer buf.deinit();
@@ -449,7 +447,7 @@ test "a wide character owns two columns" {
 
 test "a grapheme cluster stays one cell" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 2);
+    var pane = try TestPane.init(gpa, 10, 2);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 2);
     defer buf.deinit();
@@ -467,7 +465,7 @@ test "a grapheme cluster stays one cell" {
 
 test "attributes survive the crossing" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 2);
+    var pane = try TestPane.init(gpa, 10, 2);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 2);
     defer buf.deinit();
@@ -485,7 +483,7 @@ test "attributes survive the crossing" {
 
 test "unmodified colours defer to the outer terminal theme" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 2);
+    var pane = try TestPane.init(gpa, 10, 2);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 2);
     defer buf.deinit();
@@ -501,7 +499,7 @@ test "unmodified colours defer to the outer terminal theme" {
 
 test "host query defaults do not turn semantic cells into opaque RGB backgrounds" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 2);
+    var pane = try TestPane.init(gpa, 10, 2);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 2);
     defer buf.deinit();
@@ -518,7 +516,7 @@ test "host query defaults do not turn semantic cells into opaque RGB backgrounds
 
 test "OSC default colour overrides stay inside the pane" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 2);
+    var pane = try TestPane.init(gpa, 10, 2);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 2);
     defer buf.deinit();
@@ -537,7 +535,7 @@ test "OSC default colour overrides stay inside the pane" {
 
 test "default colours refresh across reverse mode and OSC changes including padding" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 4, 2);
+    var pane = try TestPane.init(gpa, 4, 2);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 6, 3);
     defer buf.deinit();
@@ -593,7 +591,7 @@ test "default colours refresh across reverse mode and OSC changes including padd
 
 test "palette colours are resolved with the pane's own palette" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 2);
+    var pane = try TestPane.init(gpa, 10, 2);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 2);
     defer buf.deinit();
@@ -611,7 +609,7 @@ test "palette colours are resolved with the pane's own palette" {
 
 test "clean rows are skipped and the caller can override that" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 4);
+    var pane = try TestPane.init(gpa, 10, 4);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 4);
     defer buf.deinit();
@@ -635,7 +633,7 @@ test "clean rows are skipped and the caller can override that" {
 
 test "only the rows that changed are copied" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 4);
+    var pane = try TestPane.init(gpa, 10, 4);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 4);
     defer buf.deinit();
@@ -661,7 +659,7 @@ test "only the rows that changed are copied" {
 
 test "a pane smaller than its rectangle leaves nothing stale behind" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 4, 2);
+    var pane = try TestPane.init(gpa, 4, 2);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 5);
     defer buf.deinit();
@@ -681,7 +679,7 @@ test "a pane smaller than its rectangle leaves nothing stale behind" {
 
 test "the cursor inverts the cell it sits on rather than hiding it" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 2);
+    var pane = try TestPane.init(gpa, 10, 2);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 2);
     defer buf.deinit();
@@ -698,7 +696,7 @@ test "the cursor inverts the cell it sits on rather than hiding it" {
 
 test "an unfocused pane draws no cursor" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 2);
+    var pane = try TestPane.init(gpa, 10, 2);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 2);
     defer buf.deinit();
@@ -710,7 +708,7 @@ test "an unfocused pane draws no cursor" {
 
 test "a pane wider than its rectangle is clipped, not wrapped" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 20, 2);
+    var pane = try TestPane.init(gpa, 20, 2);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 20, 4);
     defer buf.deinit();
@@ -734,7 +732,7 @@ test "a steady frame allocates nothing" {
     // storage and the grapheme arenas. What must not allocate is the
     // hundredth frame of an agent printing into a screen it has already sized.
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 40, 12);
+    var pane = try TestPane.init(gpa, 40, 12);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 40, 12);
     defer buf.deinit();
@@ -759,7 +757,7 @@ test "a selected pane copies the agent's line, not the wrapped one" {
     // in the agent's output, and pasting it puts a newline in the middle of a
     // command.
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 20, 4);
+    var pane = try TestPane.init(gpa, 20, 4);
     defer pane.deinit();
 
     const long = "cargo test --workspace --all-features";
@@ -780,7 +778,7 @@ test "a real line break is kept" {
     // The other half of the same claim. Unwrapping everything would join two
     // lines the agent deliberately separated.
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 20, 4);
+    var pane = try TestPane.init(gpa, 20, 4);
     defer pane.deinit();
     try pane.write("uno\r\ndos");
 
@@ -794,7 +792,7 @@ test "a real line break is kept" {
 
 test "highlighting a selection does not disturb the characters" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 3);
+    var pane = try TestPane.init(gpa, 10, 3);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 3);
     defer buf.deinit();
@@ -821,7 +819,7 @@ test "dragging a selection repaints rows the emulator calls clean" {
     // so the emulator marks nothing dirty and the highlight would freeze where
     // the drag started.
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 4);
+    var pane = try TestPane.init(gpa, 10, 4);
     defer pane.deinit();
     var buf = try cellgrid.Buffer.init(gpa, 10, 4);
     defer buf.deinit();
@@ -850,7 +848,7 @@ test "dragging a selection repaints rows the emulator calls clean" {
 
 test "a selection outside the pane is refused rather than guessed at" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 10, 3);
+    var pane = try TestPane.init(gpa, 10, 3);
     defer pane.deinit();
     try pane.write("hola");
 
@@ -862,7 +860,7 @@ test "a selection outside the pane is refused rather than guessed at" {
 
 test "direct ASCII rows match cells written through setCell" {
     const gpa = std.testing.allocator;
-    var pane = try BlitPane.init(gpa, 12, 3);
+    var pane = try TestPane.init(gpa, 12, 3);
     defer pane.deinit();
     try pane.write("ab\x1b[1;38;5;3mcd\x1b[48;2;1;2;3m e\x1b[0m界f\r\n\x1b[4:3;58;5;9mxy\u{301}z\x1b[0m~\r\n\x1b[7m 0123456789");
 

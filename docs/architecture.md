@@ -232,6 +232,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `cellcodec` | runs of cells with a packed header, styles written on change and colors sized by kind |
 | `agentfiles` | titles from Claude Code's JSONL transcript and Codex's thread database |
 | `editorremote` | reusing a terminal editor: identify it, reach its server, open a literal path |
+| `vtgrid` | a ghostty-vt terminal as cells: render state onto a `cellgrid` buffer, damaged rows into cost-aware spans, incremental scrollback search |
 | `cmdcapture` | commands, directories, exit status and output tails read from a pane's terminal |
 | `jsonl` | bounded JSON-lines streams, in-place truncation of output fields, total value accessors |
 | `eventstream` | incremental, bounded Server-Sent Events decoding |

@@ -1,3 +1,4 @@
+const vtgrid = @import("vtgrid");
 const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const TextMetadataCapture = @import("../../pane/TextMetadataCapture.zig");
@@ -6,10 +7,8 @@ const vt = @import("ghostty-vt");
 const std = @import("std");
 const Pane = @import("../../pane/Pane.zig");
 const pane_mod = @import("../../pane/pane_namespace.zig");
-const blit_module = @import("../../pane/blit.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
-const Diff = @import("../../pane/Diff.zig");
-const damage_module = @import("../../pane/damage.zig");
+const Diff = vtgrid.Diff;
 const Sync = @This();
 
 acknowledged: cellgrid.Buffer,
@@ -178,7 +177,8 @@ pub fn project(self: *Sync, pane: *Pane, force: bool) !Projection {
             try self.projected_state.update(self.gpa, &pane.terminal);
         }
         try self.projected_text_metadata.update(self.gpa, &self.projected_state);
-        _ = blit_module.blit(.{
+        core.profiling.add(.runtime_blit, 1);
+        _ = vtgrid.blit(.{
             .buffer = &self.projected,
             .area = self.projected.area(),
             .terminal = &pane.terminal,
@@ -236,15 +236,25 @@ pub fn prepare(self: *Sync, preparation: Preparation) !?[]const u8 {
     const source = projection.buffer;
     var span_storage: [core.max_span_count]core.Span = undefined;
     var snapshot = force_snapshot;
-    const diff = if (snapshot)
-        Diff{}
-    else
-        damage_module.collectSpans(.{
-            .current = source.cells,
-            .acknowledged = self.acknowledged.cells,
-            .cols = source.w,
-            .damaged_rows = projection.damaged_rows,
-        }, &span_storage);
+    const diff = if (snapshot) Diff{} else collect: {
+        const collected = vtgrid.collectSpans(
+            core.Span,
+            .{
+                .current = source.cells,
+                .acknowledged = self.acknowledged.cells,
+                .cols = source.w,
+                .damaged_rows = projection.damaged_rows,
+                .span_header_size = core.span_header_size,
+            },
+            &span_storage,
+        );
+
+        core.profiling.add(.runtime_damage, 1);
+        core.profiling.add(.runtime_rows, collected.damaged_rows);
+        core.profiling.add(.runtime_scanned_cells, collected.scanned_cells);
+        core.profiling.add(.runtime_equal, collected.comparisons);
+        break :collect collected;
+    };
     var span_count = diff.span_count;
     snapshot = snapshot or diff.snapshot_required;
 

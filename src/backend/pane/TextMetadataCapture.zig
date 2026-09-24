@@ -1,7 +1,7 @@
 //! Captures links before blit consumes dirty flags or the VT can move its pages.
+const vtgrid = @import("vtgrid");
 const cellgrid = @import("cellgrid");
 const revisions = @import("../revisions.zig");
-const blit = @import("blit.zig");
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
@@ -129,7 +129,7 @@ fn rowFlags(state: *const vt.RenderState, y: usize) core.TextRowFlags {
 }
 
 test "text metadata preserves explicit OSC 8 identity and wide-cell runs" {
-    const BlitPane = @import("BlitPane.zig");
+    const BlitPane = vtgrid.TestPane;
     var pane = try BlitPane.init(std.testing.allocator, 24, 4);
     defer pane.deinit();
     var capture = try TextMetadataCapture.init(std.testing.allocator, 4);
@@ -147,7 +147,7 @@ test "text metadata preserves explicit OSC 8 identity and wide-cell runs" {
 }
 
 test "text metadata captures soft wrap and wide padding before blit clears damage" {
-    const BlitPane = @import("BlitPane.zig");
+    const BlitPane = vtgrid.TestPane;
     var pane = try BlitPane.init(std.testing.allocator, 12, 4);
     defer pane.deinit();
     var capture = try TextMetadataCapture.init(std.testing.allocator, 4);
@@ -162,7 +162,7 @@ test "text metadata captures soft wrap and wide padding before blit clears damag
     try std.testing.expect(!view.rows[2].continuation);
     var buffer = try cellgrid.Buffer.init(std.testing.allocator, 12, 4);
     defer buffer.deinit();
-    _ = blit.blit(.{ .buffer = &buffer, .area = buffer.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
+    _ = vtgrid.blit(.{ .buffer = &buffer, .area = buffer.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
     try std.testing.expectEqual(.false, pane.state.dirty);
     const revision = capture.revision;
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
@@ -172,7 +172,7 @@ test "text metadata captures soft wrap and wide padding before blit clears damag
 }
 
 test "text metadata drops an over-quota link table whole and recovers without allocation" {
-    const BlitPane = @import("BlitPane.zig");
+    const BlitPane = vtgrid.TestPane;
     var pane = try BlitPane.init(std.testing.allocator, 32, 10);
     defer pane.deinit();
     var capture = try TextMetadataCapture.init(std.testing.allocator, 10);

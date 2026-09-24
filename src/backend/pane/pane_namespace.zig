@@ -3,6 +3,7 @@
 //! Split out of `runtime.zig`; ownership rules are unchanged. The runtime
 //! event loop drives these panes through `PaneStore`. Actor results cross back
 //! into that owner as `PaneKey` values, never as mutable pane pointers.
+const text_search = @import("text_search.zig");
 
 const bytecodec = @import("bytecodec");
 const cellgrid = @import("cellgrid");
@@ -16,8 +17,6 @@ const model_module = @import("../history/model.zig");
 const pty = @import("pty");
 const Command = pty.Command;
 
-pub const blit = @import("blit.zig");
-pub const damage = @import("damage.zig");
 
 pub const shared_transfer = @import("../media/shared_transfer.zig");
 
@@ -116,7 +115,7 @@ pub fn sanitizeTitle(storage: *[core.max_pane_title_bytes]u8, raw: []const u8) u
 
 pub const LaunchRecord = @import("LaunchRecord.zig");
 
-pub const TextSearch = @import("Cursor.zig");
+pub const TextSearch = text_search.Search;
 
 pub const SearchResult = @import("SearchResult.zig");
 

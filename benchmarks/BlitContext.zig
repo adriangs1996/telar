@@ -1,5 +1,6 @@
 //! A VT screen shaped like a syntax-highlighted editor, blitted in full into
 //! the runtime's cell buffer: the per-cell cost of `vt.RenderState` to `Cell`.
+const vtgrid = @import("vtgrid");
 const cellgrid = @import("cellgrid");
 const backend = @import("telar-backend");
 const std = @import("std");
@@ -54,7 +55,7 @@ pub fn deinit(self: *BlitContext) void {
 
 /// Copies every row regardless of damage. Example: `const copied = context.blitAll();`
 pub fn blitAll(self: *BlitContext) u64 {
-    const stats = backend.blit(.{
+    const stats = vtgrid.blit(.{
         .buffer = &self.buffer,
         .area = self.buffer.area(),
         .terminal = &self.terminal,

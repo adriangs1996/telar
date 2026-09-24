@@ -1,3 +1,4 @@
+const vtgrid = @import("vtgrid");
 const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const revisions = @import("../revisions.zig");
@@ -27,7 +28,8 @@ const LaunchRecord = @import("LaunchRecord.zig");
 const TextRequest = @import("TextRequest.zig");
 const TextDump = @import("TextDump.zig");
 const SearchResult = @import("SearchResult.zig");
-const PaneCursor = @import("Cursor.zig");
+const text_search = @import("text_search.zig");
+const PaneCursor = text_search.Search;
 const PaneKey = @import("PaneKey.zig");
 const MediaProcessingBorrow = @import("MediaProcessingBorrow.zig");
 const Stats = @import("../media/Stats.zig");
@@ -39,7 +41,6 @@ const HistoryObservationCompletion = @import("HistoryObservationCompletion.zig")
 const agent_process = @import("../process/process.zig");
 const HistoryStats = @import("../history/Stats.zig");
 const cwd_module = @import("../process/cwd.zig");
-const blit = @import("blit.zig");
 const ReviewAvailability = @import("../change_review/Availability.zig");
 pub const Pane = @This();
 
@@ -1253,7 +1254,8 @@ pub fn render(self: *Pane, force: bool) !void {
     }
     try self.text_metadata.update(self.gpa, &self.render_state);
     const force_all = force or self.semantic_colors_dirty;
-    _ = blit.blit(.{
+    core.profiling.add(.runtime_blit, 1);
+    _ = vtgrid.blit(.{
         .buffer = &self.screen,
         .area = self.screen.area(),
         .terminal = &self.terminal,

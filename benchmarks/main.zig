@@ -1,4 +1,5 @@
 //! Reproducible benchmarks for telar's interactive path.
+const vtgrid = @import("vtgrid");
 const assets = @import("assets");
 const keyinput = @import("keyinput");
 
@@ -233,12 +234,17 @@ fn runDamage(context: *DamageContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         context.current[context.changed_index].bytes[0] = if (iteration & 1 == 0) '0' else '1';
-        const diff = backend.collectSpans(.{
-            .current = context.current,
-            .acknowledged = context.acknowledged,
-            .cols = cols,
-            .damaged_rows = context.damaged_rows,
-        }, context.spans);
+        const diff = vtgrid.collectSpans(
+            core.Span,
+            .{
+                .current = context.current,
+                .acknowledged = context.acknowledged,
+                .cols = cols,
+                .damaged_rows = context.damaged_rows,
+                .span_header_size = core.span_header_size,
+            },
+            context.spans,
+        );
         checksum +%= diff.scanned_cells + diff.span_count;
     }
     return checksum;

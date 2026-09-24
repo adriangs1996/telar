@@ -1,6 +1,6 @@
 const vt = @import("ghostty-vt");
 const std = @import("std");
-/// A pane, driven by writing to it the way an agent would.
+/// A terminal for tests, driven by writing to it the way a program would.
 ///
 /// No pty and no process: the emulator takes bytes, so a test can produce any
 /// screen state a real agent could by writing the same escape sequences.

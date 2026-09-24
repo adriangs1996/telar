@@ -155,6 +155,10 @@ const specs = [_]Spec{
         .libc = true,
     },
     .{
+        .name = "vtgrid",
+        .imports = &.{ "ghostty-vt", "cellgrid", "cellcodec" },
+    },
+    .{
         .name = "cmdcapture",
         .imports = &.{ "ghostty-vt", "vtscan" },
     },

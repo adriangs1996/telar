@@ -1,3 +1,4 @@
+//! What one damage scan found and what coalescing saved.
 const Diff = @This();
 
 span_count: usize = 0,
@@ -7,3 +8,5 @@ coalesced_spans: usize = 0,
 bridged_cells: usize = 0,
 bytes_saved: usize = 0,
 snapshot_required: bool = false,
+/// Cell comparisons made, for callers that profile the scan.
+comparisons: u64 = 0,
