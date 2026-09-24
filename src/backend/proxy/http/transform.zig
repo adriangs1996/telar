@@ -9,7 +9,7 @@ const Headers = @import("../Headers.zig");
 const rewrites = @import("../rewrites.zig");
 const head = @import("head_support.zig");
 const std = @import("std");
-const middleware = @import("../middleware.zig");
+const header_rules = @import("../header_rules.zig");
 const Rewrite = @import("../Rewrite.zig");
 const RouteMatch = @import("../RouteMatch.zig");
 
@@ -40,7 +40,7 @@ pub fn decide(input: Input) Decision {
 
     var headers: Headers = .{};
     const start_line = parseHeaders(original, is_response, &headers) orelse return .preserve;
-    const direction: middleware.Direction = if (is_response) .response else .request;
+    const direction: header_rules.Direction = if (is_response) .response else .request;
     if (!rewrites.apply(input.rewrites, .{ .direction = direction, .kind = if (is_response) .response else .request }, &headers)) {
         return .preserve;
     }
@@ -91,7 +91,7 @@ fn parseHeaders(bytes: []const u8, is_response: bool, headers: *Headers) ?[]cons
         const colon = std.mem.indexOfScalar(u8, line, ':') orelse return null;
         const name = std.mem.trim(u8, line[0..colon], " \t");
         const value = std.mem.trim(u8, line[colon + 1 ..], " \t");
-        headers.append(.{ .name = name, .value = value, .sensitive = middleware.isSensitiveName(name) }) catch return null;
+        headers.append(.{ .name = name, .value = value, .sensitive = header_rules.isSensitiveName(name) }) catch return null;
     }
     return start_line;
 }

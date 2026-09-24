@@ -7,7 +7,7 @@ const Tracker = h2frames.Tracker;
 const std = @import("std");
 const Headers = @import("../Headers.zig");
 const rewrites = @import("../rewrites.zig");
-const middleware = @import("../middleware.zig");
+const header_rules = @import("../header_rules.zig");
 const framing_module = h2frames.framing;
 const PeerSettings = h2frames.PeerSettings;
 const Transcoder = @This();
@@ -329,7 +329,7 @@ fn finishHeaderBlock(self: *Transcoder, port: anytype) bool {
         }
         self.applied_table_size = table_size;
     }
-    var nv: [middleware.max_header_fields]relay.c.nghttp2_nv = undefined;
+    var nv: [header_rules.max_header_fields]relay.c.nghttp2_nv = undefined;
     for (transformed.fields[0..transformed.len], 0..) |field, index| nv[index] = .{
         .name = @constCast(transformed.name(field).ptr),
         .value = @constCast(transformed.value(field).ptr),
@@ -361,7 +361,7 @@ fn finishHeaderBlock(self: *Transcoder, port: anytype) bool {
         _ = self.streams.setResponse(.{
             .stream_id = self.block_stream,
             .status_code = status_code,
-            .sse_body = middleware.hasObservableSseBody(&original),
+            .sse_body = header_rules.hasObservableSseBody(&original),
         });
     }
 

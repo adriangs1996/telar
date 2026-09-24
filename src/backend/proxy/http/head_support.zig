@@ -8,7 +8,7 @@ const types = @import("types.zig");
 const localca = @import("localca");
 const Session = localca.Session;
 const std = @import("std");
-const middleware = @import("../middleware.zig");
+const header_rules = @import("../header_rules.zig");
 const RouteMatch = @import("../RouteMatch.zig");
 const FakeSessionType = @import("FakeSession.zig");
 
@@ -106,10 +106,10 @@ fn hasObservableSseBody(bytes: []const u8) bool {
             }
 
             content_type_seen = true;
-            event_stream = middleware.isEventStreamContentType(value);
+            event_stream = header_rules.isEventStreamContentType(value);
         }
 
-        if (std.ascii.eqlIgnoreCase(name, "content-encoding") and !middleware.isIdentityContentEncoding(value)) {
+        if (std.ascii.eqlIgnoreCase(name, "content-encoding") and !header_rules.isIdentityContentEncoding(value)) {
             identity_encoding = false;
         }
 

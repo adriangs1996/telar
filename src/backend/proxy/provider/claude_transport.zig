@@ -6,7 +6,7 @@ const Rewrite = @import("../Rewrite.zig");
 const rewrites = @import("../rewrites.zig");
 const request_support = @import("request_support.zig");
 const types = @import("../../agent/types.zig");
-const middleware = @import("../middleware.zig");
+const header_rules = @import("../header_rules.zig");
 
 /// Asks Claude inference routes for identity-encoded SSE, so the proxy can
 /// read the stream it forwards. Auxiliary routes, responses and other
@@ -69,8 +69,8 @@ test "Claude identity negotiation preserves unrelated traffic" {
 
 const RewriteCase = struct {
     dialect: types.ApiDialect = .anthropic_messages,
-    direction: middleware.Direction = .request,
-    kind: middleware.HeaderKind = .request,
+    direction: header_rules.Direction = .request,
+    kind: header_rules.HeaderKind = .request,
     method: []const u8 = "POST",
     target: []const u8 = "/v1/messages",
     encoding: ?[]const u8 = "gzip, br",

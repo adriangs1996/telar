@@ -1,13 +1,13 @@
-const middleware = @import("middleware.zig");
+const header_rules = @import("header_rules.zig");
 const HeaderField = @import("HeaderField.zig");
 const HeaderView = @import("HeaderView.zig");
 const std = @import("std");
 /// Fixed owned header storage. Offsets remain valid when the value moves.
 const Headers = @This();
 
-fields: [middleware.max_header_fields]HeaderField = undefined,
+fields: [header_rules.max_header_fields]HeaderField = undefined,
 len: u16 = 0,
-bytes: [middleware.max_header_bytes]u8 = undefined,
+bytes: [header_rules.max_header_bytes]u8 = undefined,
 bytes_len: usize = 0,
 
 /// Copies one validated header into bounded owned storage.
@@ -19,8 +19,8 @@ pub fn append(self: *Headers, header: HeaderView) !void {
     const header_name = header.name;
     const header_value = header.value;
 
-    try middleware.validateName(header_name);
-    try middleware.validateValue(header_value);
+    try header_rules.validateName(header_name);
+    try header_rules.validateValue(header_value);
     if (self.len == self.fields.len) {
         return error.TooManyHeaders;
     }
@@ -38,7 +38,7 @@ pub fn append(self: *Headers, header: HeaderView) !void {
         .name_len = @intCast(header_name.len),
         .value_start = @intCast(value_start),
         .value_len = @intCast(header_value.len),
-        .sensitive = header.sensitive or middleware.isSensitiveName(header_name),
+        .sensitive = header.sensitive or header_rules.isSensitiveName(header_name),
     };
     self.len += 1;
 }
@@ -71,7 +71,7 @@ pub fn copyFrom(self: *Headers, source: *const Headers) void {
     );
 }
 
-pub fn views(self: *const Headers, storage: *[middleware.max_header_fields]HeaderView) []const HeaderView {
+pub fn views(self: *const Headers, storage: *[header_rules.max_header_fields]HeaderView) []const HeaderView {
     for (self.fields[0..self.len], 0..) |field, index| storage[index] = .{
         .name = self.name(field),
         .value = self.value(field),
@@ -80,23 +80,23 @@ pub fn views(self: *const Headers, storage: *[middleware.max_header_fields]Heade
     return storage[0..self.len];
 }
 
-pub fn apply(self: *Headers, effects: []const middleware.Effect) !void {
+pub fn apply(self: *Headers, effects: []const header_rules.Effect) !void {
     if (effects.len == 0) {
         return;
     }
 
-    if (effects.len > middleware.max_effects) {
+    if (effects.len > header_rules.max_effects) {
         return error.TooManyHeaderEffects;
     }
 
     var replacement: Headers = .{};
-    var inserted: [middleware.max_effects]bool = @splat(false);
+    var inserted: [header_rules.max_effects]bool = @splat(false);
 
     for (self.fields[0..self.len]) |field| {
         const field_name = self.name(field);
         var last_match: ?usize = null;
         for (effects, 0..) |effect, effect_index| {
-            if (std.ascii.eqlIgnoreCase(field_name, middleware.effectName(effect))) {
+            if (std.ascii.eqlIgnoreCase(field_name, header_rules.effectName(effect))) {
                 last_match = effect_index;
             }
         }
@@ -128,7 +128,7 @@ pub fn apply(self: *Headers, effects: []const middleware.Effect) !void {
         .set => |set_effect| if (!inserted[effect_index]) {
             var superseded = false;
             for (effects[effect_index + 1 ..]) |later|
-                if (std.ascii.eqlIgnoreCase(set_effect.name, middleware.effectName(later))) {
+                if (std.ascii.eqlIgnoreCase(set_effect.name, header_rules.effectName(later))) {
                     superseded = true;
                     break;
                 };

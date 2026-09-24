@@ -1,6 +1,6 @@
 //! Applying header rewrites to one decoded head.
 const std = @import("std");
-const middleware = @import("middleware.zig");
+const header_rules = @import("header_rules.zig");
 const Headers = @import("Headers.zig");
 const Rewrite = @import("Rewrite.zig");
 
@@ -67,8 +67,8 @@ fn uniqueValue(headers: *const Headers, name: []const u8) ?[]const u8 {
 
 /// Where a head travels and which head it is.
 const Head = struct {
-    direction: middleware.Direction,
-    kind: middleware.HeaderKind,
+    direction: header_rules.Direction,
+    kind: header_rules.HeaderKind,
 };
 
 const identity_request: Rewrite = .{
@@ -108,8 +108,8 @@ test "a duplicated pseudo-header matches no path rewrite" {
 }
 
 test "a rewrite with more effects than a batch holds leaves the head alone" {
-    const effect: middleware.Effect = .{ .set = .{ .name = "x-many", .value = "1", .sensitive = false } };
-    const too_many = [_]Rewrite{.{ .effects = &([_]middleware.Effect{effect} ** (middleware.max_effects + 1)) }};
+    const effect: header_rules.Effect = .{ .set = .{ .name = "x-many", .value = "1", .sensitive = false } };
+    const too_many = [_]Rewrite{.{ .effects = &([_]header_rules.Effect{effect} ** (header_rules.max_effects + 1)) }};
     var headers = try requestHeaders("POST", "/v1/messages");
     try std.testing.expect(!apply(&too_many, .{ .direction = .request, .kind = .request }, &headers));
     try std.testing.expect(headers.find("x-many") == null);

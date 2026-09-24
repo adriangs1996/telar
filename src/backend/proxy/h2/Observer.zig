@@ -6,7 +6,7 @@ const Tracker = h2frames.Tracker;
 const std = @import("std");
 const Decoded = @import("Decoded.zig");
 const HeaderField = h2frames.HeaderField;
-const middleware = @import("../middleware.zig");
+const header_rules = @import("../header_rules.zig");
 const Observer = @This();
 
 inflater: ?*relay.c.nghttp2_hd_inflater = null,
@@ -372,11 +372,11 @@ fn decodeBlock(self: *Observer, sink: anytype) Decoded {
                     decoded.metadata_valid = false;
                 } else {
                     decoded.content_type_seen = true;
-                    decoded.event_stream = middleware.isEventStreamContentType(value);
+                    decoded.event_stream = header_rules.isEventStreamContentType(value);
                 }
             }
             if (std.ascii.eqlIgnoreCase(name, "content-encoding") and
-                !middleware.isIdentityContentEncoding(value))
+                !header_rules.isIdentityContentEncoding(value))
             {
                 decoded.identity_encoding = false;
             }

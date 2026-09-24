@@ -13,7 +13,7 @@ const std = @import("std");
 const TranscodeConfiguration = @import("TranscodeConfiguration.zig");
 const Transcoder = @import("Transcoder.zig");
 const Headers = @import("../Headers.zig");
-const middleware = @import("../middleware.zig");
+const header_rules = @import("../header_rules.zig");
 const HeaderEmission = @import("HeaderEmission.zig");
 const BodyCollector = @import("BodyCollector.zig");
 const TestTranscodeSetup = @import("TestTranscodeSetup.zig");
@@ -178,7 +178,7 @@ pub fn relayTransformed(session: anytype, transformed_route: TransformedRoute, s
     return .{ .decode_failed = transcoder.failed };
 }
 
-pub fn headerKind(block_type: u8, headers: *const Headers) middleware.HeaderKind {
+pub fn headerKind(block_type: u8, headers: *const Headers) header_rules.HeaderKind {
     if (block_type == frame_push_promise) {
         return .push_promise;
     }
@@ -195,7 +195,7 @@ pub fn parseStatusHeader(headers: *const Headers) u16 {
     return std.fmt.parseInt(u16, headers.find(":status") orelse return 0, 10) catch 0;
 }
 
-pub fn validH2Headers(headers: *const Headers, kind: middleware.HeaderKind) bool {
+pub fn validH2Headers(headers: *const Headers, kind: header_rules.HeaderKind) bool {
     var regular_seen = false;
     var method_seen = false;
     var scheme_seen = false;
@@ -260,7 +260,7 @@ pub fn validH2Headers(headers: *const Headers, kind: middleware.HeaderKind) bool
     };
 }
 
-fn pseudoAllowed(kind: middleware.HeaderKind, name: []const u8) bool {
+fn pseudoAllowed(kind: header_rules.HeaderKind, name: []const u8) bool {
     return switch (kind) {
         .request, .push_promise => std.mem.eql(u8, name, ":method") or
             std.mem.eql(u8, name, ":scheme") or
@@ -272,7 +272,7 @@ fn pseudoAllowed(kind: middleware.HeaderKind, name: []const u8) bool {
     };
 }
 
-fn requestPseudosValid(headers: *const Headers, kind: middleware.HeaderKind) bool {
+fn requestPseudosValid(headers: *const Headers, kind: header_rules.HeaderKind) bool {
     const method = headers.find(":method") orelse return false;
     if (!validToken(method)) {
         return false;
@@ -351,7 +351,7 @@ fn validStatus(value: []const u8) bool {
     return status >= 100 and status <= 599 and status != 101;
 }
 
-pub fn compatibleH2Headers(original: *const Headers, transformed: *const Headers, kind: middleware.HeaderKind) bool {
+pub fn compatibleH2Headers(original: *const Headers, transformed: *const Headers, kind: header_rules.HeaderKind) bool {
     if (!validH2Headers(transformed, kind) or
         !sameHeaderValues(original, transformed, "content-length"))
     {
