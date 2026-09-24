@@ -12,8 +12,6 @@ const pty = @import("pty");
 const Override = pty.Override;
 const std = @import("std");
 const connect_authentication = @import("connect_authentication.zig");
-const root = @import("h2/h2.zig");
-const root_module = @import("http/http.zig");
 const identity = @import("identity.zig");
 const observation_queue = @import("observation_queue.zig");
 const provider_provider = @import("provider/provider.zig");
@@ -195,8 +193,6 @@ test {
     std.testing.refAllDecls(ca);
     _ = @import("Slots.zig");
     std.testing.refAllDecls(connect_authentication);
-    std.testing.refAllDecls(root);
-    std.testing.refAllDecls(root_module);
     std.testing.refAllDecls(identity);
     std.testing.refAllDecls(middleware);
     std.testing.refAllDecls(observation_queue);

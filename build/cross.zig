@@ -33,7 +33,7 @@ pub fn add(b: *std.Build) *std.Build.Step {
         const cross_libraries = Libraries.create(b, cross_target, .Debug, &.{.{
             .name = "unicode",
             .module = cross_unicode,
-        }});
+        }}, &.{});
         cross_libraries.addImports(cross_core);
         const cross_data = model_build.create(b, cross_core, cross_libraries);
         cross_libraries.addChecks(b, cross_step, cross_target);

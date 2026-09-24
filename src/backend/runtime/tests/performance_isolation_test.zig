@@ -1,5 +1,6 @@
 //! Paired mechanism probes; timings are diagnostic, never correctness thresholds.
 
+const httprelay = @import("httprelay");
 const core = @import("telar-core");
 const std = @import("std");
 const PaneFixture = @import("PaneFixture.zig");
@@ -8,11 +9,11 @@ const Cursor = @import("../../pane/Cursor.zig");
 const attachment_mod = @import("../attachment/attachment_namespace.zig");
 const Stats = @import("../../media/Stats.zig");
 const RequestFixture = @import("RequestFixture.zig");
-const FakeSession = @import("../../proxy/http/FakeSession.zig");
+const FakeSession = httprelay.http1.FakeSession;
 const localca = @import("localca");
 const Session = localca.Session;
-const Fragment = @import("../../proxy/http/Fragment.zig");
-const body = @import("../../proxy/http/body.zig");
+const Fragment = httprelay.http1.Fragment;
+const body = httprelay.http1.body;
 const Service = @import("../../history/Service.zig");
 const Query = @import("../../history/Query.zig");
 const model_module = @import("../../history/model.zig");

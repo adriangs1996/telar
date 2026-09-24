@@ -4,6 +4,7 @@
 const std = @import("std");
 const Coverage = @import("Coverage.zig");
 const External = @import("LibraryExternal.zig");
+const Prefix = @import("LibraryPrefix.zig");
 const Libraries = @This();
 
 /// Imports a spec may declare.
@@ -95,6 +96,12 @@ const specs = [_]Spec{
         .libc = true,
     },
     .{
+        .name = "httprelay",
+        .imports = &.{ "localca", "h2frames" },
+        .libc = true,
+        .system_libraries = &.{"nghttp2"},
+    },
+    .{
         .name = "gitstatus",
     },
     .{
@@ -125,9 +132,9 @@ externals: []const External,
 /// library replaces it, as the portability checks do with the width table.
 ///
 /// ```zig
-/// const libraries = Libraries.create(b, target, optimize, &.{.{ .name = "ghostty-vt", .module = ghostty_vt }});
+/// const libraries = Libraries.create(b, target, optimize, &.{.{ .name = "ghostty-vt", .module = ghostty_vt }}, &.{});
 /// ```
-pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, externals: []const External) Libraries {
+pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, externals: []const External, prefixes: []const Prefix) Libraries {
     var self: Libraries = .{
         .modules = undefined,
         .externals = b.allocator.dupe(External, externals) catch @panic("OOM"),
@@ -145,6 +152,7 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
             dependencies[position] = find(externals, name) orelse self.declared(name, index) orelse break;
         } else {
             self.modules[index] = build(b, spec, target, optimize, dependencies[0..spec.imports.len]);
+            addPrefixes(b, self.modules[index].?, spec, prefixes);
         }
     }
 
@@ -252,7 +260,7 @@ pub fn addTestRun(self: Libraries, b: *std.Build, name: []const u8) *std.Build.S
 /// operating-system branch compiles somewhere. Replaced libraries are skipped.
 ///
 /// ```zig
-/// Libraries.create(b, windows, .Debug, externals).addChecks(b, cross_step, windows);
+/// Libraries.create(b, windows, .Debug, externals, &.{}).addChecks(b, cross_step, windows);
 /// ```
 pub fn addChecks(self: Libraries, b: *std.Build, step: *std.Build.Step, target: std.Build.ResolvedTarget) void {
     for (specs, self.modules) |spec, maybe_library| {
@@ -293,6 +301,19 @@ fn declared(self: Libraries, name: []const u8, limit: usize) ?*std.Build.Module 
     }
 
     return null;
+}
+
+fn addPrefixes(b: *std.Build, module: *std.Build.Module, spec: Spec, prefixes: []const Prefix) void {
+    for (spec.system_libraries) |library| {
+        for (prefixes) |prefix| {
+            if (!std.mem.eql(u8, prefix.library, library)) {
+                continue;
+            }
+
+            module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ prefix.path, "include" }) });
+            module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ prefix.path, "lib" }) });
+        }
+    }
 }
 
 fn find(externals: []const External, name: []const u8) ?*std.Build.Module {

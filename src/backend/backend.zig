@@ -87,15 +87,6 @@ test {
     _ = @import("proxy/capture/table.zig");
     _ = @import("proxy/connect_authentication.zig");
     _ = @import("proxy/credential_registry.zig");
-    _ = @import("proxy/h2/connection.zig");
-    _ = @import("proxy/h2/h2.zig");
-    _ = @import("proxy/h2/relay.zig");
-    _ = @import("proxy/http/body.zig");
-    _ = @import("proxy/http/connection.zig");
-    _ = @import("proxy/http/head_support.zig");
-    _ = @import("proxy/http/http.zig");
-    _ = @import("proxy/http/transform.zig");
-    _ = @import("proxy/http/types.zig");
     _ = @import("proxy/identity.zig");
     _ = @import("proxy/interception_policy.zig");
     _ = @import("proxy/metrics.zig");

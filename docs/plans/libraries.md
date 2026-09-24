@@ -177,8 +177,9 @@ the libraries it uses by name.
    - B6. `middleware.zig` splits into HTTP header rules, which go with the
      relay, and telar's phases and protocols.
    - C. The HTTP/1.1 and HTTP/2 relays and header rules move to
-     `lib/httprelay`; the capture buffer, keyed by an owner id, and one
-     credential-gated queue generic over its payload move to `lib/`.
+     `lib/httprelay` (done); the capture buffer, keyed by an owner id, and
+     one credential-gated queue generic over its payload move to `lib/`.
+   B1 to B6 are done.
 5. `wire`, which touches both processes and every message.
 6. Client and GUI: `key-capture`, `screen-diff`, `kitty-render`, `image`,
    `box-glyphs`, `markdown-spans`, `syntax`, `diagram-client`.

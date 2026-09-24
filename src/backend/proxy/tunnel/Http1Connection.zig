@@ -2,8 +2,9 @@
 //! the connection and calls these methods for each step, which classify
 //! requests by the exchange's dialect, publish lifecycle phases and feed
 //! capture.
+const httprelay = @import("httprelay");
 const std = @import("std");
-const Rewrite = @import("../Rewrite.zig");
+const Rewrite = httprelay.Rewrite;
 const localca = @import("localca");
 const Session = localca.Session;
 const Exchange = @import("Exchange.zig");
@@ -11,16 +12,16 @@ const Producer = @import("../capture/Producer.zig");
 const Observer = @import("../provider/Observer.zig");
 const Half = @import("../capture/Half.zig");
 const StartOptions = @import("../capture/StartOptions.zig");
-const RequestHead = @import("../http/RequestHead.zig");
-const http = @import("../http/http.zig");
-const connection_module = @import("../http/connection.zig");
-const types = @import("../http/types.zig");
+const RequestHead = httprelay.http1.RequestHead;
+const http = httprelay.http1;
+const connection_module = httprelay.http1;
+const types = httprelay.http1;
 const exchange_mod = @import("exchange_support.zig");
 const buffer_support = @import("../capture/buffer_support.zig");
-const ResponseHead = @import("../http/ResponseHead.zig");
+const ResponseHead = httprelay.http1.ResponseHead;
 const ResponseObserver = @import("../provider/ResponseObserver.zig");
-const Fragment = @import("../http/Fragment.zig");
-const Head = @import("../http/Head.zig");
+const Fragment = httprelay.http1.Fragment;
+const Head = httprelay.http1.Head;
 const request_support = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
 const core = @import("telar-core");
@@ -28,12 +29,12 @@ const Channel = @import("../Channel.zig");
 const Counters = @import("../Counters.zig");
 const identity = @import("../identity.zig");
 const Snapshot = @import("../Snapshot.zig");
-const FakeSessionType = @import("../http/FakeSession.zig");
+const FakeSessionType = httprelay.http1.FakeSession;
 const Config = @import("../capture/Config.zig");
 const Registry = @import("../Registry.zig");
 const Credential = @import("../Credential.zig");
-const GenericConnection = @import("../http/GenericConnection.zig").Type;
-const GenericExchange = @import("../http/GenericExchange.zig").Type;
+const GenericConnection = httprelay.http1.GenericConnection;
+const GenericExchange = httprelay.http1.GenericExchange;
 const Connection = @This();
 
 const RelayConnection = GenericConnection(Connection);

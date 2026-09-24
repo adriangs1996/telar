@@ -1,7 +1,7 @@
 //! Public HTTP/2 relay capability for intercepted TLS connections.
 
 const relay_mod = @import("relay.zig");
-const GenericConnection = @import("GenericConnection.zig").Type;
+pub const GenericConnection = @import("GenericConnection.zig").Type;
 const Rewrite = @import("../Rewrite.zig");
 const std = @import("std");
 const localca = @import("localca");

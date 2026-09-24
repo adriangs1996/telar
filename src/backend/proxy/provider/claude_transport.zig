@@ -1,12 +1,13 @@
 //! HTTP negotiation required to observe Claude's streaming protocol.
 
+const httprelay = @import("httprelay");
 const std = @import("std");
-const Headers = @import("../Headers.zig");
-const Rewrite = @import("../Rewrite.zig");
-const rewrites = @import("../rewrites.zig");
+const Headers = httprelay.Headers;
+const Rewrite = httprelay.Rewrite;
+const rewrites = httprelay.rewrites;
 const request_support = @import("request_support.zig");
 const types = @import("../../agent/types.zig");
-const header_rules = @import("../header_rules.zig");
+const header_rules = httprelay.header_rules;
 
 /// Asks Claude inference routes for identity-encoded SSE, so the proxy can
 /// read the stream it forwards. Auxiliary routes, responses and other

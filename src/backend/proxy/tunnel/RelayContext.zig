@@ -1,8 +1,9 @@
 //! HTTP/2 for one intercepted CONNECT exchange: the generic relay drives
 //! both directions and calls these methods, which install provider
 //! observers, capture streams and rewrites for the exchange's dialect.
+const httprelay = @import("httprelay");
 const std = @import("std");
-const Rewrite = @import("../Rewrite.zig");
+const Rewrite = httprelay.Rewrite;
 const localca = @import("localca");
 const Session = localca.Session;
 const Exchange = @import("Exchange.zig");
@@ -11,12 +12,12 @@ const Streams = @import("../provider/Streams.zig");
 const Producer = @import("../capture/Producer.zig");
 const h2frames = @import("h2frames");
 const Settings = h2frames.Settings;
-const Stats = @import("../h2/Stats.zig");
+const Stats = httprelay.http2.Stats;
 const CaptureStreams = @import("CaptureStreams.zig");
 const EventObserver = @import("EventObserver.zig");
-const h2 = @import("../h2/h2.zig");
-const relay_module = @import("../h2/relay.zig");
-const RelayOptions = @import("../h2/RelayOptions.zig");
+const h2 = httprelay.http2;
+const relay_module = httprelay.http2;
+const RelayOptions = httprelay.http2.RelayOptions;
 const middleware = @import("../middleware.zig");
 const request_support = @import("../provider/request_support.zig");
 const core = @import("telar-core");
@@ -29,7 +30,7 @@ const Registry = @import("../Registry.zig");
 const Credential = @import("../Credential.zig");
 const HeaderField = h2frames.HeaderField;
 const Joiner = @import("../capture/Joiner.zig");
-const GenericConnection = @import("../h2/GenericConnection.zig").Type;
+const GenericConnection = httprelay.http2.GenericConnection;
 const RelayContext = @This();
 
 const RelayConnection = GenericConnection(RelayContext);

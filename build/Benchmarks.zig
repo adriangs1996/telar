@@ -32,7 +32,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
             .name = "tls",
             .module = app.modules.tls,
         },
-    });
+    }, &.{.{ .library = "nghttp2", .path = app.modules.nghttp2_prefix }});
     const bench_lua_api = lua_build.add(b, .{ .target = app.modules.target, .optimize = bench_optimize, .name = "lua-bench" });
     const bench_lua = b.createModule(.{
         .root_source_file = b.path("src/lua/lua.zig"),
@@ -58,9 +58,6 @@ pub fn init(b: *std.Build, app: Application) @This() {
     bench_backend.addImport("tls", app.modules.tls);
     bench_backend.addImport("telar-lua", bench_lua);
     bench_libraries.addImports(bench_backend);
-    bench_backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ app.modules.nghttp2_prefix, "include" }) });
-    bench_backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ app.modules.nghttp2_prefix, "lib" }) });
-    bench_backend.linkSystemLibrary("nghttp2", .{});
     bench_backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ app.modules.brotli_prefix, "include" }) });
     bench_backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ app.modules.brotli_prefix, "lib" }) });
     bench_backend.linkSystemLibrary("brotlidec", .{});

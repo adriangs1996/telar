@@ -1,3 +1,4 @@
+const httprelay = @import("httprelay");
 const core = @import("telar-core");
 const Resources = @import("Resources.zig");
 const Registry = @import("../Registry.zig");
@@ -5,7 +6,7 @@ const Channel = @import("../Channel.zig");
 const claude_transport = @import("../provider/claude_transport.zig");
 const Producer = @import("../capture/Producer.zig");
 const std = @import("std");
-const head_support = @import("../http/head_support.zig");
+const http1 = httprelay.http1;
 const tunnel_namespace = @import("tunnel_namespace.zig");
 const connect_authentication = @import("../connect_authentication.zig");
 const Exchange = @import("Exchange.zig");
@@ -45,7 +46,7 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
     const io = dependencies.tls.io;
     defer self.child.close(io);
 
-    var head: [head_support.max_bytes]u8 = undefined;
+    var head: [http1.max_head_bytes]u8 = undefined;
     defer std.crypto.secureZero(u8, &head);
     const head_len = tunnel_namespace.readConnectHead(io, self.child, &head) orelse return;
     var authenticated = switch (connect_authentication.authenticate(self.dependencies.tls.io, self.dependencies.credentials, head[0..head_len])) {

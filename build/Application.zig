@@ -94,7 +94,7 @@ pub fn init(b: *std.Build) ?@This() {
             .name = "tls",
             .module = tls,
         },
-    });
+    }, &.{.{ .library = "nghttp2", .path = nghttp2_prefix }});
     for (libraries.modules) |library| {
         coverage.instrumentModule(library.?);
     }
@@ -149,9 +149,6 @@ pub fn init(b: *std.Build) ?@This() {
     backend.addImport("wuffs", wuffs);
     backend.addImport("tls", tls);
     libraries.addImports(backend);
-    backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
-    backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
-    backend.linkSystemLibrary("nghttp2", .{});
     backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ brotli_prefix, "include" }) });
     backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ brotli_prefix, "lib" }) });
     backend.linkSystemLibrary("brotlidec", .{});

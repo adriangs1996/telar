@@ -55,9 +55,6 @@ pub fn addSuiteTest(self: Modules, b: *std.Build, suite: Suite) *std.Build.Step.
     }
     tests.root_module.addImport("wuffs", self.wuffs);
     self.libraries.addImports(tests.root_module);
-    tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ self.nghttp2_prefix, "include" }) });
-    tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ self.nghttp2_prefix, "lib" }) });
-    tests.root_module.linkSystemLibrary("nghttp2", .{});
     tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ self.brotli_prefix, "include" }) });
     tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ self.brotli_prefix, "lib" }) });
     tests.root_module.linkSystemLibrary("brotlidec", .{});

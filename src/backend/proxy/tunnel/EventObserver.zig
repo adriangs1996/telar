@@ -1,14 +1,15 @@
+const httprelay = @import("httprelay");
 const std = @import("std");
 const middleware = @import("../middleware.zig");
 const Exchange = @import("Exchange.zig");
 const ResponseStreams = @import("../provider/ResponseStreams.zig");
 const Streams = @import("../provider/Streams.zig");
 const CaptureStreams = @import("CaptureStreams.zig");
-const relay = @import("../h2/relay.zig");
+const relay = httprelay.http2;
 const request_support = @import("../provider/request_support.zig");
 const exchange_mod = @import("exchange_support.zig");
-const ResponseBody = @import("../h2/ResponseBody.zig");
-const Lifecycle = @import("../h2/Lifecycle.zig");
+const ResponseBody = httprelay.http2.ResponseBody;
+const Lifecycle = httprelay.http2.Lifecycle;
 const EventObserver = @This();
 
 exchange: *Exchange,

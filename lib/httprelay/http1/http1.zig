@@ -5,19 +5,23 @@
 //! and `body.zig` relays bodies without changing their wire representation.
 
 const head = @import("head_support.zig");
-const body = @import("body.zig");
+pub const body = @import("body.zig");
 const types = @import("types.zig");
 const connection = @import("connection.zig");
-const GenericExchange = @import("GenericExchange.zig").Type;
-const GenericConnection = @import("GenericConnection.zig").Type;
+pub const GenericExchange = @import("GenericExchange.zig").Type;
+pub const GenericConnection = @import("GenericConnection.zig").Type;
 const transform = @import("transform.zig");
 const std = @import("std");
-const FakeSession = @import("FakeSession.zig");
+/// A scripted session for tests of code built on the relay.
+pub const FakeSession = @import("FakeSession.zig");
 const IgnoreTestObserver = @import("IgnoreTestObserver.zig");
 const Rewrite = @import("../Rewrite.zig");
 const ConnectionIntegration = @import("ConnectionIntegration.zig");
 
 pub const max_chunk_line_bytes = body.max_chunk_line_bytes;
+/// The longest head the relay reads.
+pub const max_head_bytes = head.max_bytes;
+pub const Fragment = @import("Fragment.zig");
 pub const Message = @import("Message.zig");
 pub const Framing = types.BodyPlan;
 pub const Head = @import("Head.zig");

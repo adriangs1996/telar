@@ -1,5 +1,6 @@
+const httprelay = @import("httprelay");
 const std = @import("std");
-const Rewrite = @import("../Rewrite.zig");
+const Rewrite = httprelay.Rewrite;
 const localca = @import("localca");
 const Session = localca.Session;
 const Exchange = @import("Exchange.zig");

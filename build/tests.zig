@@ -268,7 +268,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     const fake_libraries = Libraries.create(b, app.modules.target, app.modules.optimize, &.{.{
         .name = "unicode",
         .module = unicode_fake,
-    }});
+    }}, &.{});
     const substitution = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("lib/unicode/substitution_test.zig"),

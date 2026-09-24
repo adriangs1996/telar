@@ -1,8 +1,9 @@
 //! Request classification by API dialect.
 
+const httprelay = @import("httprelay");
 const types = @import("../../agent/types.zig");
 const std = @import("std");
-const RouteMatch = @import("../RouteMatch.zig");
+const RouteMatch = httprelay.RouteMatch;
 
 pub const ApiDialect = types.ApiDialect;
 
