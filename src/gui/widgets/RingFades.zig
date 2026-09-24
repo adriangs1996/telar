@@ -3,7 +3,8 @@ const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const RingFade = @import("RingFade.zig");
-const FrameClock = @import("../animation/FrameClock.zig");
+const animate = @import("animate");
+const FrameClock = animate.FrameClock;
 const RingFades = @This();
 
 pub const duration_ns = 360 * std.time.ns_per_ms;

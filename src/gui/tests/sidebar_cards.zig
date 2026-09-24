@@ -13,8 +13,9 @@ const BandHitMap = @import("../widgets/BandHitMap.zig");
 const AgentCard = @import("../widgets/AgentCard.zig");
 const CardGeometry = @import("../widgets/CardGeometry.zig");
 const Sidebar = @import("../widgets/Sidebar.zig");
-const Quad = @import("../render/Quad.zig").Quad;
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Quad = gfx.Quad.Quad;
+const Rect = gfx.Rect;
 const sprites = @import("sprites.zig");
 const SidebarState = @import("../widgets/SidebarState.zig");
 

@@ -1,5 +1,6 @@
 const revisions = @import("../revisions.zig");
-const Session = @import("../pty/Session.zig");
+const pty = @import("pty");
+const Session = pty.Session;
 const Session_module = @import("../agent_panes/Session.zig");
 const core = @import("telar-core");
 const process = @import("process.zig");
@@ -12,7 +13,7 @@ const PaneMediaAllocator = @import("../media/PaneMediaAllocator.zig");
 const std = @import("std");
 const PaneInputQueue = @import("PaneInputQueue.zig");
 const State = @import("../media/State.zig");
-const exit_module = @import("../pty/exit.zig");
+const exit_module = pty.exit;
 const Service = @import("../history/Service.zig");
 const Observer = @import("../history/Observer.zig");
 const Cache = @import("../process/Cache.zig");

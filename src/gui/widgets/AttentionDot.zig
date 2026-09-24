@@ -1,6 +1,7 @@
 const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const AttentionDot = @This();
 
 area: Rect,

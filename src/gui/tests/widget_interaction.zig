@@ -17,7 +17,8 @@ const ScrollEvent = @import("../input/ScrollEvent.zig");
 const ComposerSelector = @import("../widgets/interaction/ComposerSelector.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const ThreadPane = @import("../widgets/ThreadPane.zig");
-const FrameClock = @import("../animation/FrameClock.zig");
+const animate = @import("animate");
+const FrameClock = animate.FrameClock;
 
 fn control(value: u64, x: f32) Target {
     return .{ .bounds = .{ .x = x, .y = 0, .width = 10, .height = 10 }, .action = .{ .custom = value } };

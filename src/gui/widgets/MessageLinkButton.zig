@@ -1,7 +1,8 @@
 //! One visible Markdown link fragment with owned source coordinates.
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Label = @import("Label.zig");
 const MessageLinkControl = @import("interaction/MessageLinkControl.zig");
 const Target = @import("interaction/Target.zig");

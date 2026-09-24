@@ -2,11 +2,12 @@
 //! the backend never sees a stale quad.
 const DiagramTexture = @import("../native/DiagramTexture.zig");
 const std = @import("std");
-const Color = @import("Color.zig");
-const Rect = @import("Rect.zig");
-const RoundedRect = @import("RoundedRect.zig");
-const SpriteQuad = @import("SpriteQuad.zig");
-const quad = @import("Quad.zig");
+const gfx = @import("gfx");
+const Color = gfx.Color;
+const Rect = gfx.Rect;
+const RoundedRect = gfx.RoundedRect;
+const SpriteQuad = gfx.SpriteQuad;
+const quad = gfx.Quad;
 const OpacityWave = @import("OpacityWave.zig");
 const Quad = quad.Quad;
 const QuadList = @This();

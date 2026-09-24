@@ -6,9 +6,11 @@ const Session = @import("Session.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const PaneProgress = @import("../widgets/PaneProgress.zig");
 const ProgressMotions = @import("../widgets/ProgressMotions.zig");
-const FrameClock = @import("../animation/FrameClock.zig");
-const Rect = @import("../render/Rect.zig");
-const Quad = @import("../render/Quad.zig").Quad;
+const animate = @import("animate");
+const FrameClock = animate.FrameClock;
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
+const Quad = gfx.Quad.Quad;
 
 test "native progress capsules retain labels and stay inside narrow and high DPI bounds" {
     var fixture = try Fixture.init();

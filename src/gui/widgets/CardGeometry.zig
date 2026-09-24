@@ -1,7 +1,8 @@
 //! Device-pixel geometry of one agent card: a small context row, a regular title
 //! row and a small event row, each as tall as its text role's line box.
 const std = @import("std");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Metrics = @import("../TerminalMetrics.zig");
 const ChromeMetrics = @import("ChromeMetrics.zig");
 const CardGeometry = @This();

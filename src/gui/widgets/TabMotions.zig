@@ -1,10 +1,12 @@
 //! Bounded position transitions, keyed by tab identity rather than strip index.
 const std = @import("std");
 const core = @import("telar-core");
-const Clock = @import("../animation/FrameClock.zig");
+const animate = @import("animate");
+const Clock = animate.FrameClock;
 const Slot = @import("TabSlot.zig");
-const Rect = @import("../render/Rect.zig");
-const Transition = @import("../animation/Transition.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
+const Transition = animate.Transition;
 const TabMotions = @This();
 
 entries: [core.max_tabs_per_workspace]Motion = undefined,

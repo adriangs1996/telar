@@ -1,5 +1,6 @@
 //! A chrome control in device pixels with one semantic intent.
-const alignment_module = @import("../layout/alignment.zig");
+const gfx = @import("gfx");
+const alignment_module = gfx.alignment;
 const label_face = @import("label_face.zig");
 const label_size = @import("label_size.zig");
 const action_module = @import("action.zig");
@@ -9,9 +10,9 @@ const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
 const Label = @import("Label.zig");
 const AttentionDot = @import("AttentionDot.zig");
-const Layout = @import("../layout/Layout.zig");
-const Item = @import("../layout/Item.zig");
-const Rect = @import("../render/Rect.zig");
+const Layout = gfx.Layout;
+const Item = gfx.Item;
+const Rect = gfx.Rect;
 const PixelButton = @This();
 
 context: *const Context,

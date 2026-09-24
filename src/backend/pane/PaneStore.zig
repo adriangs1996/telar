@@ -5,7 +5,8 @@ const GraphicsLimits = @import("../media/GraphicsLimits.zig");
 const GraphicsBudget = @import("../media/GraphicsBudget.zig");
 const std = @import("std");
 const PaneKey = @import("PaneKey.zig");
-const exit_module = @import("../pty/exit.zig");
+const pty = @import("pty");
+const exit_module = pty.exit;
 const PaneExitTransition = @import("PaneExitTransition.zig");
 const PaneStore = @This();
 

@@ -1,5 +1,6 @@
 //! The viewport shared by sidebar entries and their clipped pointer targets.
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const SidebarList = @This();
 
 bounds: Rect,

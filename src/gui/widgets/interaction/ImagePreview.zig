@@ -1,7 +1,8 @@
 //! A disposable preview owns its path and the exact draft control that opened it.
 const std = @import("std");
 const core = @import("telar-core");
-const Rect = @import("../../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const AgentControl = @import("AgentControl.zig");
 const ImagePreviewSource = @import("ImagePreviewSource.zig");
 const Request = @import("../../diagrams/Request.zig");

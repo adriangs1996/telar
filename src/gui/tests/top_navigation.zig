@@ -1,13 +1,14 @@
 const data = @import("model");
 const QuadList = @import("../render/QuadList.zig");
-const Quad_module = @import("../render/Quad.zig");
+const gfx = @import("gfx");
+const Quad_module = gfx.Quad;
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
 const Session = @import("Session.zig");
-const Quad = @import("../render/Quad.zig").Quad;
-const Rect = @import("../render/Rect.zig");
+const Quad = gfx.Quad.Quad;
+const Rect = gfx.Rect;
 const Canvas = @import("../widgets/Canvas.zig");
 const Label = @import("../widgets/Label.zig");
 

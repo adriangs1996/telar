@@ -9,8 +9,9 @@ const client = @import("telar-client");
 const CanvasFixture = @import("CanvasFixture.zig");
 const Session = @import("Session.zig");
 const SpritePage = @import("../image/SpritePage.zig");
-const Quad = @import("../render/Quad.zig").Quad;
-const quad = @import("../render/Quad.zig");
+const gfx = @import("gfx");
+const Quad = gfx.Quad.Quad;
+const quad = gfx.Quad;
 
 test {
     _ = SpritePage;

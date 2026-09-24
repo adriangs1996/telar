@@ -8,7 +8,8 @@ const Fixture = @import("ChromeFixture.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const Composition = @import("../widgets/Composition.zig");
 const FrameWidget = @import("../widgets/frame_widget.zig");
-const Quad = @import("../render/Quad.zig").Quad;
+const gfx = @import("gfx");
+const Quad = gfx.Quad.Quad;
 const LinkHit = @import("../input/LinkHit.zig");
 
 test "projection composes terminal thread link chrome notifications and modal before drawing" {

@@ -5,7 +5,8 @@
 //! the painter and the pointer all read the same numbers.
 const std = @import("std");
 const client = @import("telar-client");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const SidebarRequest = @import("SidebarRequest.zig");
 const SidebarFit = @import("SidebarFit.zig");
 const SidebarBand = @This();

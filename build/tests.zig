@@ -3,7 +3,7 @@ const Application = @import("Application.zig");
 const Benchmarks = @import("Benchmarks.zig");
 const Suite = @import("Suite.zig");
 
-const source_roots: []const []const u8 = &.{ "build.zig", "build", "src", "examples", "benchmarks", "test", "linters" };
+const source_roots: []const []const u8 = &.{ "build.zig", "build", "lib", "src", "examples", "benchmarks", "test", "linters" };
 
 /// Register tests/checks and return the parallel-test barrier: `tests.add(b, app, bench)`.
 pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
@@ -47,6 +47,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     // ZLS uses "check" on save. Test artifacts are analyzed without codegen;
     // source validators run separately and never execute application tests.
     const check_step = b.step("check", "Analyze test suites and validate source organization");
+    test_step.dependOn(app.modules.libraries.addTests(b, app.coverage, check_step));
     const inventory_tests = b.addSystemCommand(&.{ "python3", b.pathFromRoot("tools/test_compare_zig_tests.py") });
     inventory_tests.setEnvironmentVariable("PYTHONDONTWRITEBYTECODE", "1");
     test_step.dependOn(&inventory_tests.step);
@@ -63,9 +64,9 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     const check_client = b.step("check-client", "Semantic-analyze only the shared client");
     check_client.dependOn(&client_check.step);
     check_client.dependOn(&client_boundaries.step);
-    // The shared client depends on model, core and the Lua modules; the checker
-    // in tools/ enforces the same set at source level.
-    std.debug.assert(app.modules.client.import_table.count() == 4 and app.modules.client.import_table.get("telar-core").? == app.modules.core);
+    // The shared client depends on model, core, the Lua modules and the
+    // libraries; the checker in tools/ enforces the same set at source level.
+    std.debug.assert(app.modules.client.import_table.count() == 4 + app.modules.libraries.modules.len and app.modules.client.import_table.get("telar-core").? == app.modules.core);
     std.debug.assert(app.modules.client.import_table.get("telar-lua").? == app.modules.telar_lua and app.modules.client.import_table.get("lua-api").? == app.modules.lua_api);
 
     std.debug.assert(app.modules.client.import_table.get("model").? == app.modules.data);
@@ -192,7 +193,6 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         .{ .path = "src/backend/pane/blit.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pane/damage.zig" },
         .{ .path = "src/backend/history/history_tests.zig", .vt = true, .libc = true },
-        .{ .path = "src/backend/pty/pty_tests.zig", .libc = true },
         .{ .path = "src/backend/backend.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/main.zig", .vt = true, .libc = true },

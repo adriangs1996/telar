@@ -1,9 +1,10 @@
 //! Pane process ownership: terminal sessions own a PTY; agent sessions own pipes.
-const exit = @import("../pty/exit.zig");
+const pty = @import("pty");
+const exit = pty.exit;
 const std = @import("std");
-const Terminal = @import("../pty/Session.zig");
+const Terminal = pty.Session;
 const AgentProcess = @import("AgentProcess.zig");
-const Size = @import("../pty/Size.zig");
+const Size = pty.Size;
 
 pub const Process = union(enum) {
     terminal: Terminal,

@@ -18,7 +18,8 @@ const PointerEvent = @import("../input/PointerEvent.zig");
 const BandCommand = @import("BandCommand.zig");
 const GenericPresentedState = @import("../render/GenericPresentedState.zig").Type;
 const ProgressMotions = @import("ProgressMotions.zig");
-const FrameClock = @import("../animation/FrameClock.zig");
+const animate = @import("animate");
+const FrameClock = animate.FrameClock;
 const PixelScroll = @import("PixelScroll.zig");
 const Chrome = @This();
 

@@ -1,7 +1,8 @@
 //! Resolved colors passed as data to the isolated diagram renderer.
 const data = @import("model");
 const colors = @import("../render/cell_colors.zig");
-const Color = @import("../render/Color.zig");
+const gfx = @import("gfx");
+const Color = gfx.Color;
 const Theme = @This();
 
 bg: [3]u8,

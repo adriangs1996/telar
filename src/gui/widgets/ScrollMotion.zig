@@ -1,7 +1,8 @@
 //! Physical-pixel scroll motion owned by one visible pane. Native gestures
 //! remain direct; discrete input and hosts without inertia use one scalar spring.
 const std = @import("std");
-const Spring = @import("../animation/Spring.zig");
+const animate = @import("animate");
+const Spring = animate.Spring;
 const ScrollEvent = @import("../input/ScrollEvent.zig");
 const ScrollMotion = @This();
 

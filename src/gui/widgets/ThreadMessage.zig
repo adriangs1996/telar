@@ -1,7 +1,8 @@
 //! Sent prompts and assistant prose have distinct, quiet conversation surfaces.
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const MessageText = @import("MessageText.zig");
 const ThreadItemView = @import("ThreadItemView.zig");
 const MessageHeightKey = @import("MessageHeightKey.zig");

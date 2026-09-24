@@ -1,6 +1,7 @@
 //! A filled rounded surface, usable in any frame's widget union.
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const RoundedFill = @import("RoundedFill.zig");
 const Surface = @This();
 

@@ -5,8 +5,10 @@ const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
 const Session = @import("Session.zig");
 const RingFades = @import("../widgets/RingFades.zig");
-const FrameClock = @import("../animation/FrameClock.zig");
-const Quad = @import("../render/Quad.zig").Quad;
+const animate = @import("animate");
+const FrameClock = animate.FrameClock;
+const gfx = @import("gfx");
+const Quad = gfx.Quad.Quad;
 
 test "a blocked pane animates without working agents and folds a rejected and late frame" {
     var fixture = try Fixture.init();

@@ -1,7 +1,8 @@
 //! Solid rectangles for one block element, measured from the complete cell so
 //! ink meets every cell edge regardless of line height or letter spacing.
 const std = @import("std");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Block = @import("BlockElement.zig");
 const block_shapes = @import("block_shapes.zig");
 const QuadList = @import("../render/QuadList.zig");

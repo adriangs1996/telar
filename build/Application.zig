@@ -1,6 +1,7 @@
 const std = @import("std");
 const Coverage = @import("Coverage.zig");
 const Modules = @import("Modules.zig");
+const Libraries = @import("Libraries.zig");
 const lua_build = @import("lua.zig");
 const freetype_build = @import("freetype.zig");
 const assets_build = @import("assets.zig");
@@ -78,6 +79,11 @@ pub fn init(b: *std.Build) ?@This() {
     else
         "/usr";
 
+    const libraries = Libraries.create(b, target, optimize);
+    for (libraries.modules) |library| {
+        coverage.instrumentModule(library);
+    }
+
     // The width tables, behind a module name so the drawing layer never names
     // its provider. Everything that draws imports `unicode`; only this line
     // decides which implementation answers, which is what keeps the drawing
@@ -122,6 +128,7 @@ pub fn init(b: *std.Build) ?@This() {
                 .api = lua_api,
                 .telar = telar_lua,
             },
+            .libraries = libraries,
         },
     );
     coverage.instrumentModule(client);
@@ -138,6 +145,7 @@ pub fn init(b: *std.Build) ?@This() {
     backend.addImport("ghostty-vt", ghostty_vt);
     backend.addImport("wuffs", wuffs);
     backend.addImport("tls", tls);
+    libraries.addImports(backend);
     backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
     backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
     backend.linkSystemLibrary("nghttp2", .{});
@@ -161,6 +169,7 @@ pub fn init(b: *std.Build) ?@This() {
     frontend.addImport("telar-lua", telar_lua);
     frontend.addImport("lua-api", lua_api);
     frontend.addImport("freetype", freetype);
+    libraries.addImports(frontend);
     const assets = assets_build.add(b, target, optimize);
     frontend.addImport("assets", assets);
     if (target.result.os.tag == .macos) {
@@ -190,6 +199,7 @@ pub fn init(b: *std.Build) ?@This() {
     exe.root_module.addImport("model", data);
     exe.root_module.addImport("telar-core", core);
     exe.root_module.addImport("ghostty-vt", ghostty_vt);
+    libraries.addImports(exe.root_module);
     const diagnostics_enabled = b.option(
         bool,
         "diagnostics",
@@ -221,6 +231,7 @@ pub fn init(b: *std.Build) ?@This() {
     b.step("run", "Run telar").dependOn(&run_exe.step);
 
     const modules: Modules = .{
+        .libraries = libraries,
         .unicode = unicode,
         .data = data,
         .core = core,

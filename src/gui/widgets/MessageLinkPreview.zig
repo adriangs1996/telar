@@ -1,7 +1,8 @@
 //! An owned hover destination; no message bytes survive the synchronous borrow.
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const WrappedLines = @import("overlays/WrappedLines.zig");
 const MessageLinkControl = @import("interaction/MessageLinkControl.zig");
 const MessageLinkDestination = @import("MessageLinkDestination.zig");

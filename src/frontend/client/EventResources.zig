@@ -1,5 +1,6 @@
 const core = @import("telar-core");
-const platform = @import("../platform/platform.zig");
+const console = @import("console");
+const platform = console.platform;
 const EventResources = @This();
 
 tty: *const platform.Tty,

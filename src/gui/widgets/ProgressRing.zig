@@ -4,7 +4,8 @@ const QuadList = @import("../render/QuadList.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const ProgressRing = @This();
 
 pub const segments = 64;

@@ -1,4 +1,5 @@
-const Quad = @import("../render/Quad.zig");
+const gfx = @import("gfx");
+const Quad = gfx.Quad;
 const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
@@ -8,7 +9,7 @@ const Fixture = @import("ChromeFixture.zig");
 const Session = @import("Session.zig");
 const HitMap = @import("../widgets/HitMap.zig");
 const bar_regions = @import("../widgets/bar_regions.zig");
-const Rect = @import("../render/Rect.zig");
+const Rect = gfx.Rect;
 
 test "native pane frames use the smaller pixel gutter on both axes" {
     var fixture = try Fixture.init();

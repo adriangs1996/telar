@@ -1,7 +1,8 @@
 //! Reader status occupies the existing footer rather than obscuring selectable text.
 const core = @import("telar-core");
 const TextFit = @import("TextFit.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Canvas = @import("Canvas.zig");
 const Label = @import("Label.zig");
 const Status = @This();

@@ -1,5 +1,6 @@
 const EditorDisplay = @import("interaction/EditorDisplay.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const EditorFont = @import("interaction/EditorFont.zig");
 
 display: *const EditorDisplay,

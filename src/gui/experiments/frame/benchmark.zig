@@ -1,6 +1,7 @@
 //! Array composition only. Mutation and byte-for-byte verification are untimed.
 const std = @import("std");
-const quad = @import("../../render/Quad.zig");
+const gfx = @import("gfx");
+const quad = gfx.Quad;
 const problem = @import("problem.zig");
 const Block = @import("Block.zig");
 const Frame = @import("Frame.zig");

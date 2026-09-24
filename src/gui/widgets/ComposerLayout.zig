@@ -1,4 +1,5 @@
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Canvas = @import("Canvas.zig");
 const Layout = @This();
 

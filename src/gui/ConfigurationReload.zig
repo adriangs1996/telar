@@ -1,6 +1,7 @@
 //! One off-thread Lua/font preparation and one pending adoption. Only the
 //! window thread resolves client state, after native frame consumers finish.
 const gui_event = @import("gui_event.zig");
+const mailbox = @import("mailbox");
 const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
@@ -13,7 +14,7 @@ const Reload = @This();
 
 io: std.Io,
 inbox: *gui_event.Inbox = undefined,
-ticket: ?client.InboxProducerTicket = null,
+ticket: ?mailbox.ProducerTicket = null,
 worker: ?std.Io.Future(void) = null,
 ready: std.atomic.Value(bool) = .init(false),
 scheduled: ?client.ConfigWaitArgs = null,

@@ -1,6 +1,7 @@
 //! A generation-scoped conversation control clipped to the visible transcript.
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const ThreadItemControl = @import("interaction/ThreadItemControl.zig");
 const Target = @import("interaction/Target.zig");
 const Button = @This();

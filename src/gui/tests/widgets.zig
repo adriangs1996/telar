@@ -1,11 +1,12 @@
 const SpritePage = @import("../image/SpritePage.zig");
-const Quad = @import("../render/Quad.zig");
+const gfx = @import("gfx");
+const Quad = gfx.Quad;
 const std = @import("std");
 const Canvas = @import("../widgets/Canvas.zig");
 const GenericWidgetList = @import("../widgets/GenericWidgetList.zig").Type;
 const CanvasFixture = @import("CanvasFixture.zig");
 const Surface = @import("../widgets/Surface.zig");
-const Rect = @import("../render/Rect.zig");
+const Rect = gfx.Rect;
 const Label = @import("../widgets/Label.zig");
 const SpritePaint = @import("../widgets/SpritePaint.zig");
 

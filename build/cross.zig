@@ -1,9 +1,8 @@
 const std = @import("std");
-const lua_build = @import("lua.zig");
 const freetype_build = @import("freetype.zig");
 const assets_build = @import("assets.zig");
 const model_build = @import("model.zig");
-const client_build = @import("client.zig");
+const Libraries = @import("Libraries.zig");
 
 /// Register portability checks: `cross.add(b)`.
 pub fn add(b: *std.Build) *std.Build.Step {
@@ -30,44 +29,9 @@ pub fn add(b: *std.Build) *std.Build.Step {
             .optimize = .Debug,
         });
         cross_core.addImport("unicode", cross_unicode);
-        // Platform code publishes shared client values such as `LocalTime`, and
-        // sound policy is shared configuration, so both checks need the client
-        // module and, through it, the vendored Lua for that target.
-        const cross_lua_api = lua_build.add(b, .{
-            .target = cross_target,
-            .optimize = .Debug,
-            .name = b.fmt("lua-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),
-        });
-        const cross_telar_lua = b.createModule(.{
-            .root_source_file = b.path("src/lua/lua.zig"),
-            .target = cross_target,
-            .optimize = .Debug,
-            .link_libc = true,
-        });
-        cross_telar_lua.addImport("lua-api", cross_lua_api);
+        const cross_libraries = Libraries.create(b, cross_target, .Debug);
         const cross_data = model_build.create(b, cross_core);
-        const cross_client = client_build.add(
-            b,
-            .{
-                .core = cross_core,
-                .data = cross_data,
-                .lua = .{
-                    .api = cross_lua_api,
-                    .telar = cross_telar_lua,
-                },
-            },
-        );
-        const check = b.addObject(.{
-            .name = b.fmt("platform-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("src/frontend/platform/platform.zig"),
-                .target = cross_target,
-                .optimize = .Debug,
-            }),
-        });
-        check.root_module.addImport("telar-client", cross_client);
-        check.root_module.addImport("model", cross_data);
-        cross_step.dependOn(&check.step);
+        cross_libraries.addChecks(b, cross_step, cross_target);
         const raster_check = b.addLibrary(.{
             .name = b.fmt("text-rasterizer-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),
             .root_module = b.createModule(.{

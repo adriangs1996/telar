@@ -4,7 +4,8 @@ const Context = @import("Context.zig");
 const SidebarState = @import("SidebarState.zig");
 const WorkspaceRow = @import("WorkspaceRow.zig");
 const SidebarList = @import("SidebarList.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const WorkspaceList = @This();
 
 context: *const Context,

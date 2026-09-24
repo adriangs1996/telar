@@ -3,7 +3,8 @@ const TextFit = @import("TextFit.zig");
 const Canvas = @import("Canvas.zig");
 const Target = @import("interaction/Target.zig");
 const Selector = @import("interaction/ComposerSelector.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Label = @import("Label.zig");
 const Trigger = @This();
 

@@ -1,6 +1,7 @@
 //! Disjoint rectangles for box strokes, so faint intersections blend only once.
 const std = @import("std");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Grid = @import("BoxGrid.zig");
 const QuadList = @import("../render/QuadList.zig");
 const TextRun = @import("TextRun.zig");

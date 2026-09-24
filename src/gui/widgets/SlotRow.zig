@@ -2,7 +2,8 @@
 //! row lent to the status bar's pixel band.
 const data = @import("model");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const LentRow = @import("LentRow.zig");
 const SlotPainter = @import("SlotPainter.zig");
 const bar_regions = @import("bar_regions.zig");

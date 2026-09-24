@@ -3,6 +3,7 @@
 //! state in place, then binds every host port to this heap-stable value.
 
 const client_module = @import("telar-client");
+const mailbox = @import("mailbox");
 const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
@@ -47,7 +48,7 @@ const TerminalAdapter = @This();
 app: client_module.Client,
 writer: *std.Io.Writer,
 output: ?Output = null,
-inbox: client_module.GenericInbox(ClientEvent),
+inbox: mailbox.GenericInbox(ClientEvent),
 host_negotiation: HostNegotiation = .{},
 presenter: Presenter,
 view: PresentationState,

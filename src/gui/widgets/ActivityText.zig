@@ -6,9 +6,11 @@ const assets = @import("assets");
 const QuadList = @import("../render/QuadList.zig");
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Label = @import("Label.zig");
-const FrameClock = @import("../animation/FrameClock.zig");
+const animate = @import("animate");
+const FrameClock = animate.FrameClock;
 const ActivityText = @This();
 
 bounds: Rect,

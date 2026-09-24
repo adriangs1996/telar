@@ -42,7 +42,8 @@ pub fn paint(self: Braille, run: TextRun, list: *QuadList) !f32 {
 }
 
 test "all 256 patterns encode the Unicode dot order with solid quads" {
-    const quad = @import("../render/Quad.zig");
+    const gfx = @import("gfx");
+    const quad = gfx.Quad;
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
     try list.reserve(8);

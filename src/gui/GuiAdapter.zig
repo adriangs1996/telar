@@ -1,5 +1,6 @@
 //! One native connection's shared model and disposable host resources.
 const gui_event = @import("gui_event.zig");
+const mailbox = @import("mailbox");
 const favicon_worker = @import("image/favicon_worker.zig");
 const event_module = @import("input/event.zig");
 const graphics_delivery = @import("graphics_delivery.zig");
@@ -55,7 +56,8 @@ const host_context = @import("widgets/interaction/host_context.zig");
 
 const FramePacer = @import("FramePacer.zig");
 const CursorClock = @import("CursorClock.zig");
-const FrameClock = @import("animation/FrameClock.zig");
+const animate = @import("animate");
+const FrameClock = animate.FrameClock;
 const native_callbacks = @import("native/window_callbacks.zig");
 const TestSession = @import("tests/Session.zig");
 const input_test_support = @import("tests/input_support.zig");
@@ -706,7 +708,7 @@ fn drainInput(self: *GuiAdapter) !void {
         return;
     }
 
-    var budget = client.DrainBudget.begin(app.io, pending_input.len + pending_input.recovery.len);
+    var budget = mailbox.DrainBudget.begin(app.io, pending_input.len + pending_input.recovery.len);
     const pending = self.router.prefixPending();
 
     while (!self.stopped and pending_input.len != 0 and app.model.to_runtime.availableCapacity() >= @intFromEnum(InputLimit.minimum_outbox_slots) and budget.take(app.io)) {

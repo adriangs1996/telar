@@ -9,7 +9,8 @@ const Target = @import("../widgets/interaction/Target.zig");
 const Entry = @import("../widgets/interaction/ThreadScrollMotion.zig");
 const Event = @import("../input/ScrollEvent.zig");
 const scroll = @import("../widgets/interaction/thread_scroll.zig");
-const FrameClock = @import("../animation/FrameClock.zig");
+const animate = @import("animate");
+const FrameClock = animate.FrameClock;
 const second_pane_id: core.PaneId = @enumFromInt(20);
 
 fn fixture() !*Session {

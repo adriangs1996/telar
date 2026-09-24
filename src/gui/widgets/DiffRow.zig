@@ -1,5 +1,6 @@
 const core = @import("telar-core");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 
 line: core.ChangeReviewDiffLine,
 fragment: []const u8,

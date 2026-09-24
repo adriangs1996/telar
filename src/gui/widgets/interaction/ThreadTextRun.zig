@@ -1,6 +1,7 @@
 //! Synchronous paint input; text is borrowed only while geometry is appended.
 const MessageLayoutOwner = @import("../MessageLayoutOwner.zig");
-const Rect = @import("../../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Label = @import("../Label.zig");
 
 owner: MessageLayoutOwner,

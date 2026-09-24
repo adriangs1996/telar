@@ -1,6 +1,7 @@
 const core = @import("telar-core");
 const PaneKey = @import("PaneKey.zig");
-const Command = @import("../pty/Command.zig");
+const pty = @import("pty");
+const Command = pty.Command;
 const GraphicsLimits = @import("../media/GraphicsLimits.zig");
 const CreationRequest = @This();
 

@@ -1,9 +1,10 @@
 //! List viewports travel with the delivered hit map, never the pending frame.
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Bands = @import("Bands.zig");
 const Canvas = @import("Canvas.zig");
-const Layout = @import("../layout/Layout.zig");
-const LayoutItem = @import("../layout/Item.zig");
+const Layout = gfx.Layout;
+const LayoutItem = gfx.Item;
 const WorkspaceRow = @import("WorkspaceRow.zig");
 const SidebarRegions = @This();
 

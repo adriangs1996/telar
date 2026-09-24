@@ -1,6 +1,7 @@
 const data = @import("model");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const FormButton = @import("FormButton.zig");
 const ChangeReviewButton = @This();
 

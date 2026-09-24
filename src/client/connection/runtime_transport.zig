@@ -4,7 +4,8 @@ const data = @import("model");
 const core_module = @import("telar-core");
 const std = @import("std");
 const RuntimeTransportState = @import("RuntimeTransportState.zig");
-const GenericInbox = @import("../execution/GenericInbox.zig").Type;
+const mailbox = @import("mailbox");
+const GenericInbox = mailbox.GenericInbox;
 
 fn testingSocketPair() ![2]core_module.SocketChannel {
     var sockets: [2]std.c.fd_t = undefined;

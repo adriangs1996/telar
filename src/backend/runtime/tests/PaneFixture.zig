@@ -6,7 +6,8 @@ const Pane = @import("../../pane/Pane.zig");
 const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const Tracker = @import("../../agent/Tracker.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
-const Command = @import("../../pty/Command.zig");
+const pty = @import("pty");
+const Command = pty.Command;
 const support = @import("support.zig");
 const PaneFixture = @This();
 

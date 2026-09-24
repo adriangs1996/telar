@@ -1,4 +1,5 @@
-const quad = @import("../../render/Quad.zig");
+const gfx = @import("gfx");
+const quad = gfx.Quad;
 const Stamp = @import("Stamp.zig");
 
 pub const max_blocks = 8;

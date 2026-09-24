@@ -8,8 +8,9 @@ const FontSource = @import("../text/FontSource.zig");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
 const SpritePage = @import("../image/SpritePage.zig");
 const QuadList = @import("QuadList.zig");
-const Color = @import("Color.zig");
-const Rect = @import("Rect.zig");
+const gfx = @import("gfx");
+const Color = gfx.Color;
+const Rect = gfx.Rect;
 const colors = @import("cell_colors.zig");
 const Metrics = @import("../TerminalMetrics.zig");
 const ChromeMetrics = @import("../widgets/ChromeMetrics.zig");
@@ -23,7 +24,7 @@ const CellMesh = @import("CellMesh.zig");
 const CursorPaint = @import("CursorPaint.zig");
 const copy_selection = @import("copy_selection.zig");
 const InkTarget = @import("InkTarget.zig");
-const Quad = @import("Quad.zig").Quad;
+const Quad = gfx.Quad.Quad;
 
 allocator: std.mem.Allocator,
 /// Reads discovered fallback font files; `configured` sets it, and a

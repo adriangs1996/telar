@@ -14,7 +14,8 @@ const KeyInput = @import("../../input/KeyInput.zig");
 const ThreadSelectionCopy = @import("ThreadSelectionCopy.zig");
 const Owner = @import("../../host/Owner.zig");
 const ClipboardResult = @import("../../input/ClipboardResult.zig");
-const Rect = @import("../../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 
 /// Enters through the semantic action port, preserving configured bindings.
 /// Example: `_ = thread_selection.enter(gui, pane_id);`

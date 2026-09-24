@@ -91,7 +91,8 @@ test "agent and terminal panes share the configured theme background opacity and
 
 // Samples premultiplied color away from glyphs, rounded corners and frame strokes.
 fn backgroundColor(renderer: *const TerminalRenderer, point: [2]f32) ![4]f32 {
-    const quad = @import("../render/Quad.zig");
+    const gfx = @import("gfx");
+    const quad = gfx.Quad;
     var color = renderer.frame(1).background;
     for (color[0..3]) |*component| {
         component.* *= color[3];

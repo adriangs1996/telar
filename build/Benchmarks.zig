@@ -5,6 +5,7 @@ const freetype_build = @import("freetype.zig");
 const assets_build = @import("assets.zig");
 const model_build = @import("model.zig");
 const client_build = @import("client.zig");
+const Libraries = @import("Libraries.zig");
 
 benchmarks: *std.Build.Step.Compile,
 echo_probe: *std.Build.Step.Compile,
@@ -18,6 +19,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
         .ReleaseFast
     else
         app.modules.optimize;
+    const bench_libraries = Libraries.create(b, app.modules.target, bench_optimize);
     const bench_lua_api = lua_build.add(b, .{ .target = app.modules.target, .optimize = bench_optimize, .name = "lua-bench" });
     const bench_lua = b.createModule(.{
         .root_source_file = b.path("src/lua/lua.zig"),
@@ -48,6 +50,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
     bench_backend.addImport("wuffs", app.modules.wuffs);
     bench_backend.addImport("tls", app.modules.tls);
     bench_backend.addImport("telar-lua", bench_lua);
+    bench_libraries.addImports(bench_backend);
     bench_backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ app.modules.nghttp2_prefix, "include" }) });
     bench_backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ app.modules.nghttp2_prefix, "lib" }) });
     bench_backend.linkSystemLibrary("nghttp2", .{});
@@ -70,6 +73,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
                 .api = bench_lua_api,
                 .telar = bench_lua,
             },
+            .libraries = bench_libraries,
         },
     );
     const bench_frontend = b.createModule(.{
@@ -86,6 +90,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
     bench_frontend.addImport("lua-api", bench_lua_api);
     bench_frontend.addImport("telar-lua", bench_lua);
     bench_frontend.addImport("freetype", bench_freetype);
+    bench_libraries.addImports(bench_frontend);
     bench_frontend.addImport("assets", assets_build.add(b, app.modules.target, bench_optimize));
 
     const benchmarks = b.addExecutable(.{
@@ -102,6 +107,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
     benchmarks.root_module.addImport("telar-frontend", bench_frontend);
     benchmarks.root_module.addImport("telar-client", bench_client);
     benchmarks.root_module.addImport("model", bench_data);
+    bench_libraries.addImports(benchmarks.root_module);
 
     const echo_probe = b.addExecutable(.{
         .name = "echo-probe",
@@ -123,6 +129,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
             },
         }),
     });
+    bench_libraries.addImports(echo_probe.root_module);
     b.step("echo-probe", "Build the echo VT oracle and minimal interposition controls").dependOn(&b.addInstallArtifact(echo_probe, .{}).step);
     benchmarks.root_module.addImport("ghostty-vt", app.modules.ghostty_vt);
     benchmarks.root_module.addOptions("profile_options", app.modules.build_options);

@@ -2,7 +2,8 @@
 const core = @import("telar-core");
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Label = @import("Label.zig");
 const Caption = @This();
 

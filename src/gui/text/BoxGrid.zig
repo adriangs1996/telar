@@ -23,7 +23,8 @@
 const box_lines = @import("box_lines.zig");
 const BoxLines = @import("BoxLines.zig");
 const std = @import("std");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Box = @import("BoxDrawing.zig");
 const Grid = @This();
 

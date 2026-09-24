@@ -1,7 +1,7 @@
 // The whole contract between Zig and a native backend: a frame is a quad
 // buffer, one alpha page and one RGBA sprite page, and the backend calls
 // back for each paint.
-// These mirror `render/Quad.zig`, `native/Frame.zig` and `native/Viewport.zig`
+// These mirror `lib/gfx/Quad.zig`, `native/Frame.zig` and `native/Viewport.zig`
 // field for field.
 #ifndef TELAR_GUI_H
 #define TELAR_GUI_H

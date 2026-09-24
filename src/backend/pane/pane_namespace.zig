@@ -10,7 +10,8 @@ const Clock = @import("../history/Clock.zig");
 const vt = @import("ghostty-vt");
 const Service = @import("../history/Service.zig");
 const model_module = @import("../history/model.zig");
-const Command = @import("../pty/Command.zig");
+const pty = @import("pty");
+const Command = pty.Command;
 
 pub const blit = @import("blit.zig");
 pub const damage = @import("damage.zig");

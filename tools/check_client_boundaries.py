@@ -26,6 +26,12 @@ def imports(source):
     return calls(source, "import")
 
 
+def libraries(root):
+    """Standalone libraries under lib/, which any package may import."""
+    folder = root.parent.parent / "lib"
+    return {p.name for p in folder.iterdir() if (p / "root.zig").is_file()} if folder.is_dir() else set()
+
+
 def violations(root):
     root = root.resolve()
     files = {p.relative_to(root).as_posix() for p in root.rglob("*.zig") if p.is_file()}
@@ -49,7 +55,7 @@ def violations(root):
             continue
         for imported in paths:
             if not imported.endswith(".zig"):
-                if imported not in ALLOWED_MODULES:
+                if imported not in ALLOWED_MODULES | libraries(root):
                     errors.append(f"{source}: forbidden module {imported}")
                 continue
             destination = (source.parent / imported).resolve()

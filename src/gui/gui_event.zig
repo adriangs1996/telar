@@ -1,4 +1,5 @@
 const client = @import("telar-client");
+const mailbox = @import("mailbox");
 const PresentationResult = @import("PresentationResult.zig");
 
 pub const Message = union(enum) {
@@ -14,4 +15,4 @@ pub const Message = union(enum) {
     change_review_ready,
 };
 
-pub const Inbox = client.GenericInbox(Message);
+pub const Inbox = mailbox.GenericInbox(Message);

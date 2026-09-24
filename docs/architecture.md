@@ -188,6 +188,27 @@ is one index probe, not a walk through nested structs.
 
 Backend and client packages never import each other; both import core. The
 TUI and GUI never import each other; what both embed lives in `assets`.
+
+### Libraries
+
+Mechanism that holds no telar state and decides no telar policy is a
+library under `lib/<name>/`, with a `root.zig`, its own tests and its own
+module named after the directory. A library imports only `std`, external
+dependencies and other libraries; `build/Libraries.zig` registers it, makes it
+importable from every package and fails the build if it imports anything
+else. Consumers import the module once and alias its members
+(`const gfx = @import("gfx");` then `const Rect = gfx.Rect;`).
+
+| Library | Provides |
+| --- | --- |
+| `pty` | spawning a command on a pseudo-terminal, its environment, resize and exit |
+| `console` | the controlling terminal: raw mode, resize notifications, writer, escape sequences |
+| `mailbox` | the bounded inbox between worker tasks and one consumer |
+| `animate` | springs, transitions and the frame clock that advances them |
+| `gfx` | rectangles, colors, quads and one-axis layout |
+
+A rule that decides what telar means stays in a flow even when it is pure;
+[`plans/libraries.md`](plans/libraries.md) lists what is still to move.
 `src/main.zig` selects a CLI entrypoint.
 
 The path a byte takes through one pane is drawn in [`AGENTS.md`](../AGENTS.md#one-pane-end-to-end).

@@ -1,4 +1,5 @@
-const ChildEnvironment = @import("../pty/ChildEnvironment.zig");
+const pty = @import("pty");
+const ChildEnvironment = pty.ChildEnvironment;
 /// Ephemeral child environment. Its proxy credential is scrubbed by
 /// `pty.ChildEnvironment.deinit`; the runtime must not retain or inspect it.
 const PaneEnvironment = @This();

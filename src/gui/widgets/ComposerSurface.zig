@@ -1,5 +1,6 @@
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Surface = @This();
 
 bounds: Rect,

@@ -8,9 +8,10 @@
 const std = @import("std");
 const Paint = @import("CellPaint.zig");
 const Metadata = @import("CellMetadata.zig");
-const Quad = @import("Quad.zig").Quad;
-const Color = @import("Color.zig");
-const Rect = @import("Rect.zig");
+const gfx = @import("gfx");
+const Quad = gfx.Quad.Quad;
+const Color = gfx.Color;
+const Rect = gfx.Rect;
 const core = @import("telar-core");
 const Mesh = @This();
 

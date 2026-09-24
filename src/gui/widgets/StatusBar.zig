@@ -1,10 +1,11 @@
 //! Configured widgets occupy the bottom band. Prefix and copy mode replace
 //! them with key hints, while the reserved TLS badge remains visible.
 const Context = @import("Context.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const ModeBar = @import("ModeBar.zig");
 const Canvas = @import("Canvas.zig");
-const Layout = @import("../layout/Layout.zig");
+const Layout = gfx.Layout;
 const SlotPainter = @import("SlotPainter.zig");
 const SlotRow = @import("SlotRow.zig");
 const LentRow = @import("LentRow.zig");

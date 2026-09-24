@@ -5,9 +5,10 @@ const client = @import("telar-client");
 const Session = @import("Session.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const QuadList = @import("../render/QuadList.zig");
-const Quad = @import("../render/Quad.zig").Quad;
+const gfx = @import("gfx");
+const Quad = gfx.Quad.Quad;
 const CellMesh = @import("../render/CellMesh.zig");
-const Rect = @import("../render/Rect.zig");
+const Rect = gfx.Rect;
 const Atlas = @import("../text/GlyphAtlas.zig");
 
 test "DejaVu italic New preserves rasterized overhang without font thickening" {

@@ -2,8 +2,9 @@
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const Transition = @import("../animation/Transition.zig");
-const FrameClock = @import("../animation/FrameClock.zig");
+const animate = @import("animate");
+const Transition = animate.Transition;
+const FrameClock = animate.FrameClock;
 const ProgressMotions = @This();
 
 // The previous visible set and its replacement coexist until end prunes it.

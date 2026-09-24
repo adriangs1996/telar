@@ -1,7 +1,8 @@
 //! A folder completion carrying the listing revision that produced its label.
 const Canvas = @import("../Canvas.zig");
 const Target = @import("../interaction/Target.zig");
-const Rect = @import("../../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const TextFit = @import("../TextFit.zig");
 const PathCompletionChoice = @import("../interaction/PathCompletionChoice.zig");
 const Label = @import("../Label.zig");

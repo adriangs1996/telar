@@ -2,7 +2,8 @@
 //! length and expire on grid resize or destruction.
 const Metadata = @import("CellMetadata.zig");
 const Mesh = @import("CellMesh.zig");
-const Quad = @import("Quad.zig").Quad;
+const gfx = @import("gfx");
+const Quad = gfx.Quad.Quad;
 const Row = @This();
 
 metadata: []Metadata,

@@ -5,10 +5,11 @@ const Fixture = @import("ConversationFixture.zig");
 const Text = @import("../widgets/MessageText.zig");
 const Paint = @import("../widgets/DiffPaint.zig");
 const Canvas = @import("../widgets/Canvas.zig");
-const Color = @import("../render/Color.zig");
+const gfx = @import("gfx");
+const Color = gfx.Color;
 const colors = @import("../render/cell_colors.zig");
-const Rect = @import("../render/Rect.zig");
-const Quad = @import("../render/Quad.zig").Quad;
+const Rect = gfx.Rect;
+const Quad = gfx.Quad.Quad;
 const SyntaxPaint = @import("../widgets/SyntaxPaint.zig");
 const ThreadItemView = @import("../widgets/ThreadItemView.zig");
 

@@ -1,7 +1,8 @@
 //! A retained diagram image with the same measured geometry at every scale.
 const view_module = @import("../diagrams/view.zig");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Ready = @import("../diagrams/Ready.zig");
 const Request = @import("../diagrams/Request.zig");
 const Mermaid = @This();

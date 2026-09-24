@@ -16,8 +16,9 @@ const TabStrip = @import("../widgets/TabStrip.zig");
 const Overlays = @import("../widgets/overlays/Overlays.zig");
 const Notifications = @import("../widgets/overlays/Notifications.zig");
 const PaneDecorations = @import("../widgets/PaneDecorations.zig");
-const Rect = @import("../render/Rect.zig");
-const Quad = @import("../render/Quad.zig").Quad;
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
+const Quad = gfx.Quad.Quad;
 
 const second_tab: core.TabId = @enumFromInt(2);
 const second_location: core.TabLocation = .{ .workspace = Session.location.workspace, .tab_id = second_tab };

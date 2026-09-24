@@ -8,7 +8,8 @@ const Session = @import("Session.zig");
 const Chrome = @import("../widgets/Chrome.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const SidebarBand = @import("../widgets/SidebarBand.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Fixture = @This();
 
 session: *Session,

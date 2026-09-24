@@ -1,7 +1,8 @@
 //! Extra metadata appears once; output retains the full original tool result.
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const ThreadItemView = @import("ThreadItemView.zig");
 const MessageText = @import("MessageText.zig");
 const Details = @This();

@@ -5,7 +5,8 @@ const std = @import("std");
 const Mesh = @import("CellMesh.zig");
 const Metadata = @import("CellMetadata.zig");
 const Paint = @import("CellPaint.zig");
-const Quad = @import("Quad.zig").Quad;
+const gfx = @import("gfx");
+const Quad = gfx.Quad.Quad;
 const Row = @import("CellRow.zig");
 const Grid = @This();
 

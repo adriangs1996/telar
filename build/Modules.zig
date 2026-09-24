@@ -1,7 +1,9 @@
 const std = @import("std");
 const Suite = @import("Suite.zig");
+const Libraries = @import("Libraries.zig");
 const Modules = @This();
 
+libraries: Libraries,
 unicode: *std.Build.Module,
 core: *std.Build.Module,
 data: *std.Build.Module,
@@ -54,6 +56,7 @@ pub fn addSuiteTest(self: Modules, b: *std.Build, suite: Suite) *std.Build.Step.
         tests.root_module.addImport("telar-gui", gui);
     }
     tests.root_module.addImport("wuffs", self.wuffs);
+    self.libraries.addImports(tests.root_module);
     tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ self.nghttp2_prefix, "include" }) });
     tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ self.nghttp2_prefix, "lib" }) });
     tests.root_module.linkSystemLibrary("nghttp2", .{});

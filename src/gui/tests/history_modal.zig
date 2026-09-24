@@ -8,7 +8,8 @@ const client = @import("telar-client");
 const Session = @import("Session.zig");
 const Target = @import("../widgets/interaction/Target.zig");
 const Fixture = @import("OverlayFixture.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 
 const entries = [_]core.HistoryEntry{
     .{ .id = 9, .pane_id = Session.pane_id, .started_at_ms = 1000, .duration_ns = 1000000, .exit_code = 0, .status = .completed, .command = "zig build", .cwd = "/work", .workspace_path = "/work" },

@@ -1,7 +1,8 @@
 //! Measured table columns and wrapped cells share the message text painter.
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Table = @import("MessageTable.zig");
 const Blocks = @import("MessageBlocks.zig");
 const MessageLayoutOwner = @import("MessageLayoutOwner.zig");

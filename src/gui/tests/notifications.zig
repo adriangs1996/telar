@@ -3,9 +3,11 @@ const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const Fixture = @import("OverlayFixture.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Text = @import("../widgets/overlays/NotificationText.zig");
-const Clock = @import("../animation/FrameClock.zig");
+const animate = @import("animate");
+const Clock = animate.FrameClock;
 
 test "notification motion samples host time without squeezing text or changing the model" {
     const fixture = try Fixture.init();

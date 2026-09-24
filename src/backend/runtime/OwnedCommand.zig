@@ -1,7 +1,8 @@
-const Command = @import("../pty/Command.zig");
+const pty = @import("pty");
+const Command = pty.Command;
 const std = @import("std");
 const core = @import("telar-core");
-const ChildEnvironment = @import("../pty/ChildEnvironment.zig");
+const ChildEnvironment = pty.ChildEnvironment;
 const OwnedCommand = @This();
 
 command: Command,

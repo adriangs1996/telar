@@ -9,6 +9,7 @@ root through `b.path`, even from these support files.
 | --- | --- |
 | Shipped module graph, dependencies, build options, default install and `run` | [Application.zig](Application.zig) |
 | Shared resolved modules and consistent test-suite imports | [Modules.zig](Modules.zig) |
+| Standalone libraries under `lib/`, their tests, boundary and cross checks | [Libraries.zig](Libraries.zig) |
 | Optimized benchmark graph, `bench`, `echo-probe`, browser verification | [Benchmarks.zig](Benchmarks.zig) |
 | Native GUI modules, `gui`, GUI tests | [gui.zig](gui.zig) |
 | macOS adapter sources, Objective-C flags and frameworks shared by app and window test | [macos_gui.zig](macos_gui.zig) |

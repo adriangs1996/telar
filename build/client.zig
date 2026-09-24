@@ -15,5 +15,6 @@ pub fn add(b: *std.Build, modules: ClientModules) *std.Build.Module {
     client.addImport("model", modules.data);
     client.addImport("telar-lua", modules.lua.telar);
     client.addImport("lua-api", modules.lua.api);
+    modules.libraries.addImports(client);
     return client;
 }

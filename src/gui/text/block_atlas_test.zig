@@ -4,8 +4,9 @@ const std = @import("std");
 const Atlas = @import("GlyphAtlas.zig");
 const QuadList = @import("../render/QuadList.zig");
 const TextRun = @import("TextRun.zig");
-const quad = @import("../render/Quad.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const quad = gfx.Quad;
+const Rect = gfx.Rect;
 
 fn makeAtlas() !Atlas {
     return Atlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });

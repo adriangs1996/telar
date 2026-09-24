@@ -1,7 +1,7 @@
 # Client event dispatch
 
 Input, IPC, deadlines and worker completions enter a client-owned inbox. The
-TUI, GUI and headless test driver use `client/execution/GenericInbox`. Their
+TUI, GUI and headless test driver use `mailbox.GenericInbox` (`lib/mailbox`). Their
 consumers classify messages and delegate to existing operations. Only that
 consumer may mutate the client model or prepare a presentation.
 
@@ -127,7 +127,7 @@ the native endpoint can coalesce several signals into one host callback.
 
 ## Validation
 
-- `execution/inbox_tests.zig`: full reservations, failed admission, stale and
+- `lib/mailbox/inbox_tests.zig`: full reservations, failed admission, stale and
   duplicate tickets, finite drains, time budgets, coalescing, concurrent
   publication, wake delivery and shutdown with a saturated queue.
 - `connection/runtime_transport.zig`: a non-reading socket blocks TX while RX

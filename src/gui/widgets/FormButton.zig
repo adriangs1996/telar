@@ -2,7 +2,8 @@
 const Canvas = @import("Canvas.zig");
 const Target = @import("interaction/Target.zig");
 const Label = @import("Label.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const FormButton = @This();
 
 bounds: Rect,

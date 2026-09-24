@@ -1,7 +1,8 @@
 //! Synchronous row layout. The tallest wrapped cell determines the row height.
 const MessageTable = @import("MessageTable.zig");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Flow = @import("MessageTextFlow.zig");
 const MessageTablePaint = @import("MessageTablePaint.zig");
 const MessageTableRowOptions = @import("MessageTableRowOptions.zig");

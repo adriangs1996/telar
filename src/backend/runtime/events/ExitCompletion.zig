@@ -1,5 +1,6 @@
 const PaneKey = @import("../../pane/PaneKey.zig");
-const exit = @import("../../pty/exit.zig");
+const pty = @import("pty");
+const exit = pty.exit;
 const Completion = @This();
 
 pane: PaneKey,

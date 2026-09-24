@@ -3,11 +3,13 @@ const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Label = @import("Label.zig");
 const ProgressRing = @import("ProgressRing.zig");
 const ProgressMotions = @import("ProgressMotions.zig");
-const Clock = @import("../animation/FrameClock.zig");
+const animate = @import("animate");
+const Clock = animate.FrameClock;
 const Progress = @This();
 
 pane: *const data.Pane,

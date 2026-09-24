@@ -1,5 +1,6 @@
 const ComposerSelector = @import("ComposerSelector.zig");
-const Rect = @import("../../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 
 const Menu = @This();
 

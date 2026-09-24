@@ -1,4 +1,5 @@
-const Quad = @import("../render/Quad.zig");
+const gfx = @import("gfx");
+const Quad = gfx.Quad;
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");

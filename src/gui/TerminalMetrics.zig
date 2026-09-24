@@ -1,7 +1,8 @@
 const native = @import("native/native.zig");
 const std = @import("std");
 const core = @import("telar-core");
-const Rect = @import("render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Metrics = @This();
 
 cell_width: u16,

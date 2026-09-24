@@ -1,9 +1,10 @@
 //! Pixel layout for the new-context form, with bounded directory suggestions.
 const client = @import("telar-client");
 const Canvas = @import("../Canvas.zig");
-const Rect = @import("../../render/Rect.zig");
-const Layout = @import("../../layout/Layout.zig");
-const Item = @import("../../layout/Item.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
+const Layout = gfx.Layout;
+const Item = gfx.Item;
 const Form = @This();
 
 viewport: Rect,

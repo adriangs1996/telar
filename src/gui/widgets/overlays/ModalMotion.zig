@@ -1,7 +1,8 @@
 //! One disposable entrance transition for the active modal generation.
 const std = @import("std");
-const FrameClock = @import("../../animation/FrameClock.zig");
-const Transition = @import("../../animation/Transition.zig");
+const animate = @import("animate");
+const FrameClock = animate.FrameClock;
+const Transition = animate.Transition;
 const ModalMotion = @This();
 
 pub const duration_ns = 220 * std.time.ns_per_ms;

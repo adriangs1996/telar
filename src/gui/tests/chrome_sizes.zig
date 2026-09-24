@@ -10,8 +10,9 @@ const Renderer = @import("../render/TerminalRenderer.zig");
 const ChromeMetrics = @import("../widgets/ChromeMetrics.zig");
 const CardGeometry = @import("../widgets/CardGeometry.zig");
 const Canvas = @import("../widgets/Canvas.zig");
-const Quad = @import("../render/Quad.zig").Quad;
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Quad = gfx.Quad.Quad;
+const Rect = gfx.Rect;
 
 const roles = [_]label_size.Size{ .terminal, .title, .body, .small };
 

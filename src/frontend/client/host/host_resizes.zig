@@ -4,10 +4,11 @@ const client_module = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
 const TerminalAdapter = @import("../TerminalAdapter.zig");
-const platform = @import("../../platform/platform.zig");
+const console = @import("console");
+const platform = console.platform;
 const host_capabilities = @import("host_capabilities.zig");
 const std = @import("std");
-const Size = @import("../../platform/Size.zig");
+const Size = console.Size;
 
 /// Registers the next platform resize observation for this client.
 ///

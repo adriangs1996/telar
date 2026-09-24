@@ -1,5 +1,6 @@
 //! Stable pixel layout: replacing a result page never moves the search field.
-const Rect = @import("../../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Metrics = @import("HistoryModalMetrics.zig");
 const Layout = @This();
 

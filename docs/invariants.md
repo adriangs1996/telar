@@ -210,6 +210,6 @@ better median never hides a worse tail.
   the composer's keystroke echo may pass through the media path while its p99
   stays under one pacer interval on local transport. A session that misses
   the gate falls back to the cell renderer; remote clients always use cells.
-- **Windows resize** (`src/frontend/platform/WindowsResizeWatcher.zig`): one
+- **Windows resize** (`lib/console/WindowsResizeWatcher.zig`): one
   constant-cost poll per client, independent of pane count, until console
   records are translated centrally.

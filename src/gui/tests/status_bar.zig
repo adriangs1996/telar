@@ -3,8 +3,9 @@ const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
-const Rect = @import("../render/Rect.zig");
-const Color = @import("../render/Color.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
+const Color = gfx.Color;
 const colors = @import("../render/cell_colors.zig");
 
 test "native bottom widgets preserve configured positions and legacy top content" {

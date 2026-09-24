@@ -2,7 +2,8 @@
 //! Input revisions are trusted; inputs never alias output. Output survives calls.
 //! No allocation, no reordering, no borrowing input pointers, no writes in flight.
 //! Edit solve. rebuild is the independent reference. See README.md for examples.
-const quad = @import("../../render/Quad.zig");
+const gfx = @import("gfx");
+const quad = gfx.Quad;
 const Block = @import("Block.zig");
 const Frame = @import("Frame.zig");
 const Cost = @import("Cost.zig");

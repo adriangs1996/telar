@@ -1,5 +1,6 @@
 const std = @import("std");
-const Override = @import("../pty/Override.zig");
+const pty = @import("pty");
+const Override = pty.Override;
 const PaneEnvironmentOptions = @This();
 
 inherited: std.process.Environ,

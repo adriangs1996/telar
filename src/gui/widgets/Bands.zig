@@ -2,7 +2,8 @@
 //! across the window, the sidebar band down the left and the status bar along
 //! the bottom. They are derived from the same origin the grid and the
 //! pointer use, so a band never overlaps a cell.
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Canvas = @import("Canvas.zig");
 const Bands = @This();
 

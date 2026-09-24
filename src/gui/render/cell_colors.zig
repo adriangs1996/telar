@@ -3,7 +3,8 @@
 //! fallback the caller names.
 const data = @import("model");
 const core = @import("telar-core");
-const Color = @import("Color.zig");
+const gfx = @import("gfx");
+const Color = gfx.Color;
 
 /// Resolves a palette entry. Example: `const bg = cell_colors.resolve(palette.panel_bg, Color.black);`
 pub fn resolve(color: core.Color, fallback: Color) Color {

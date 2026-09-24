@@ -8,7 +8,8 @@ const Session = @import("Session.zig");
 const Scene = @import("../render/Scene.zig");
 const Overlays = @import("../widgets/overlays/Overlays.zig");
 const Canvas = @import("../widgets/Canvas.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 
 test "native composed multiplexer scenes keep warm allocation shaping and cell work at zero" {
     var fixture = try Fixture.init();

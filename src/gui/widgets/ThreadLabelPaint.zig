@@ -1,4 +1,5 @@
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Label = @import("Label.zig");
 
 bounds: Rect,

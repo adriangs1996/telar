@@ -1,6 +1,7 @@
 //! Delivered hit geometry owns only coordinates and offsets, never source bytes.
 const MessageLayoutOwner = @import("../MessageLayoutOwner.zig");
-const Rect = @import("../../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 
 row: u16,
 section: @FieldType(MessageLayoutOwner, "section"),

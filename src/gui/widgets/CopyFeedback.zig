@@ -2,7 +2,8 @@
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Label = @import("Label.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Result = @import("../input/ClipboardResult.zig");
 const CopyFeedback = @This();
 

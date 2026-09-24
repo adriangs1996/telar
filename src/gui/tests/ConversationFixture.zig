@@ -7,7 +7,8 @@ const Fixture = @This();
 const SyntaxStore = @import("../syntax/Store.zig");
 const SyntaxResult = @import("../syntax/Result.zig");
 const DiffHighlighter = @import("../syntax/DiffHighlighter.zig");
-const FrameClock = @import("../animation/FrameClock.zig");
+const animate = @import("animate");
+const FrameClock = animate.FrameClock;
 const State = @import("../widgets/interaction/State.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 

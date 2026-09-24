@@ -6,7 +6,8 @@ const std = @import("std");
 const Fixture = @import("ConfigurationFixture.zig");
 const Session = @import("Session.zig");
 const client = @import("telar-client");
-const Quad = @import("../render/Quad.zig").Quad;
+const gfx = @import("gfx");
+const Quad = gfx.Quad.Quad;
 
 test "named theme reload changes chrome terminal colors and cursor without replacing the atlas" {
     var fixture = try Fixture.init("return { api_version = 2, theme = 'vesper' }", null);

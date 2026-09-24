@@ -2,7 +2,8 @@
 //! the RGBA sprite page and bounded diagram textures they sample. Mirrors `telar_gui_frame` in
 //! `native/telar_gui.h`.
 const diagram = @import("DiagramTexture.zig");
-const Quad = @import("../render/Quad.zig").Quad;
+const gfx = @import("gfx");
+const Quad = gfx.Quad.Quad;
 
 pub const Frame = extern struct {
     // Zero defers submission until another consumer wake or viewport change.

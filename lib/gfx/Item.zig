@@ -1,6 +1,6 @@
 //! A measured child and the rectangle assigned by its parent container.
 const length = @import("length.zig");
-const Rect = @import("../render/Rect.zig");
+const Rect = @import("Rect.zig");
 
 width: length.Length = .fill,
 height: length.Length = .fill,

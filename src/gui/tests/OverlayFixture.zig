@@ -7,7 +7,8 @@ const Renderer = @import("../render/TerminalRenderer.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const Overlays = @import("../widgets/overlays/Overlays.zig");
 const State = @import("../widgets/interaction/State.zig");
-const FrameClock = @import("../animation/FrameClock.zig");
+const animate = @import("animate");
+const FrameClock = animate.FrameClock;
 const PointerEvent = @import("../input/PointerEvent.zig");
 const Fixture = @This();
 

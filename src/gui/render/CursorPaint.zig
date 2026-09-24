@@ -1,6 +1,7 @@
 const client = @import("telar-client");
-const Color = @import("Color.zig");
-const Rect = @import("Rect.zig");
+const gfx = @import("gfx");
+const Color = gfx.Color;
+const Rect = gfx.Rect;
 const QuadList = @import("QuadList.zig");
 const Paint = @This();
 

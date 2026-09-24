@@ -1,5 +1,5 @@
 const core = @import("telar-core");
-const client = @import("telar-client");
+const mailbox = @import("mailbox");
 const data = @import("model");
 const Snapshot = @This();
 
@@ -13,7 +13,7 @@ pending_updates: usize,
 draw_pending: bool,
 media_pending: bool,
 outbox: data.OutboxSnapshot,
-inbox: client.InboxSnapshot = .{},
+inbox: mailbox.InboxSnapshot = .{},
 capabilities: data.HostCapabilities,
 zlib_support: data.EnvironmentSupport = .unknown,
 sidebar_rendering: data.ResolvedSidebarRendering,

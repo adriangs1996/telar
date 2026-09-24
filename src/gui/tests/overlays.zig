@@ -1,5 +1,6 @@
 const HistoryModalLayout = @import("../widgets/overlays/HistoryModalLayout.zig");
-const Quad = @import("../render/Quad.zig");
+const gfx = @import("gfx");
+const Quad = gfx.Quad;
 const HistoryModalMetrics = @import("../widgets/overlays/HistoryModalMetrics.zig");
 const data = @import("model");
 const std = @import("std");

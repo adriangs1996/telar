@@ -4,10 +4,11 @@ const font_id = @import("../text/font_id.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const QuadList = @import("../render/QuadList.zig");
-const Quad = @import("../render/Quad.zig").Quad;
+const gfx = @import("gfx");
+const Quad = gfx.Quad.Quad;
 
 const Fixture = @import("CanvasFixture.zig");
-const Color = @import("../render/Color.zig");
+const Color = gfx.Color;
 
 test "plain fills keep the textured quad path bit for bit" {
     var fixture = try Fixture.init();

@@ -1,6 +1,7 @@
 //! Native geometry needed by both the history painter and its scroll controller.
 const Canvas = @import("../Canvas.zig");
-const Rect = @import("../../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const ChromeMetrics = @import("../ChromeMetrics.zig");
 const TerminalMetrics = @import("../../TerminalMetrics.zig");
 const Metrics = @This();

@@ -1,5 +1,6 @@
 const data = @import("model");
-const Quad_module = @import("../render/Quad.zig");
+const gfx = @import("gfx");
+const Quad_module = gfx.Quad;
 const std = @import("std");
 const core = @import("telar-core");
 const Session = @import("Session.zig");
@@ -7,7 +8,7 @@ const Renderer = @import("../render/TerminalRenderer.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const CellMesh = @import("../render/CellMesh.zig");
 const QuadList = @import("../render/QuadList.zig");
-const Quad = @import("../render/Quad.zig").Quad;
+const Quad = gfx.Quad.Quad;
 
 test "terminal box borders join adjacent cells for light heavy double and mixed strokes" {
     const session = try Session.init();

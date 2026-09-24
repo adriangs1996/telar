@@ -1,7 +1,8 @@
 const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Target = @import("interaction/Target.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const AgentControl = @import("interaction/AgentControl.zig");
 const Control = @This();
 

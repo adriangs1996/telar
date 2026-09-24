@@ -1,6 +1,7 @@
 const core = @import("telar-core");
 const HistoryModalMetrics = @import("HistoryModalMetrics.zig");
-const Rect = @import("../../render/Rect.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const NotificationHits = @import("NotificationHits.zig");
 const PaletteHits = @import("PaletteHits.zig");
 

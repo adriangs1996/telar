@@ -1,5 +1,6 @@
 const builtin = @import("builtin");
-const Quad_module = @import("../render/Quad.zig");
+    const gfx = @import("gfx");
+const Quad_module = gfx.Quad;
 const CellMesh = @import("../render/CellMesh.zig");
 const data = @import("model");
 const input_support = @import("input_support.zig");
@@ -314,7 +315,7 @@ test "native terminal acknowledges received patches while presentation is busy o
     try session.settle();
     try std.testing.expectEqual(@as(usize, 1), session.ack_count);
     const retry = try session.draw();
-    const Quad = @import("../render/Quad.zig").Quad;
+    const Quad = gfx.Quad.Quad;
     const frozen = try std.testing.allocator.dupe(Quad, session.gui.renderer.quads.items());
     defer std.testing.allocator.free(frozen);
     for (2..34) |frame| {
@@ -496,7 +497,7 @@ fn present(session: *Session) !void {
 }
 
 fn expectFullRedraw(session: *Session) !void {
-    const Quad = @import("../render/Quad.zig").Quad;
+    const Quad = gfx.Quad.Quad;
     const expected = try std.testing.allocator.dupe(Quad, session.gui.renderer.quads.items());
     defer std.testing.allocator.free(expected);
     session.gui.renderer.retained.invalidate();

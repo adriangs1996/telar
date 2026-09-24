@@ -1,8 +1,9 @@
 //! One line of text to place: UTF-8 bytes, a baseline origin in device pixels
 //! and a color.
 const font_id = @import("font_id.zig");
-const Color = @import("../render/Color.zig");
-const Rect = @import("../render/Rect.zig");
+const gfx = @import("gfx");
+const Color = gfx.Color;
+const Rect = gfx.Rect;
 
 text: []const u8,
 x: f32,
