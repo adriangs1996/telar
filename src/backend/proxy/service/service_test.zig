@@ -78,10 +78,9 @@ test "running service leaves exchange capture inert when disabled" {
     try fixture.init(std.testing.io, std.testing.allocator);
     defer fixture.deinit();
     const service = fixture.service.?;
-    var worker = try service.start();
+    try service.start();
 
-    service.cancel(&worker);
-    service.close();
+    service.stop();
 
     const snapshot = service.metrics();
     try std.testing.expectEqual(@as(u64, 0), snapshot.capture_started);
@@ -173,8 +172,8 @@ test "non-whitelisted CONNECT relays bytes with a saturated observation queue" {
         observation_metrics.high_water,
     );
     try std.testing.expectEqual(@as(u64, 1), observation_metrics.dropped);
-    var worker = try service.start();
-    defer service.cancel(&worker);
+    try service.start();
+    defer service.stop();
 
     const proxy_address = try std.Io.net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
     const client = try proxy_address.connect(io, .{ .mode = .stream });
@@ -242,8 +241,8 @@ test "intercepted CONNECT publishes and counts an upstream TLS failure" {
 
     var credential = try service.registerPane(.{ .id = try core.pane(9), .generation = 4 });
     defer std.crypto.secureZero(u8, &credential.token);
-    var worker = try service.start();
-    defer service.cancel(&worker);
+    try service.start();
+    defer service.stop();
 
     const proxy_address = try std.Io.net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
     const client = try proxy_address.connect(io, .{ .mode = .stream });
@@ -358,8 +357,8 @@ test "loopback service maps CONNECT authentication and target rejections" {
         .bundle = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
     });
     defer service.destroy();
-    var worker = try service.start();
-    defer service.cancel(&worker);
+    try service.start();
+    defer service.stop();
 
     const address = try std.Io.net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
     const client = try address.connect(io, .{ .mode = .stream });

@@ -14,7 +14,7 @@ const Snapshot = @import("Snapshot.zig");
 const Proxy = @This();
 
 gpa: std.mem.Allocator,
-lifecycle: proxy_namespace.ServiceLifecycle,
+service: *Service,
 
 /// Creates and starts the complete proxy capability.
 ///
@@ -35,9 +35,11 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
         .capture = config.capture,
     });
 
+    errdefer service.destroy();
+    try service.start();
     proxy.* = .{
         .gpa = gpa,
-        .lifecycle = try proxy_namespace.ServiceLifecycle.start(service),
+        .service = service,
     };
 
     return proxy;
@@ -52,7 +54,8 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
 /// ```
 pub fn destroy(self: *Proxy) void {
     const gpa = self.gpa;
-    self.lifecycle.deinit();
+    self.service.stop();
+    self.service.destroy();
     gpa.destroy(self);
 }
 
@@ -62,7 +65,7 @@ pub fn destroy(self: *Proxy) void {
 /// const half = try proxy.receiveCapture(io);
 /// ```
 pub fn receiveCapture(self: *Proxy, io: std.Io) anyerror!*Half {
-    return self.lifecycle.service.receiveCapture(io);
+    return self.service.receiveCapture(io);
 }
 
 /// Decodes one captured body on the runtime observation path.
@@ -71,7 +74,7 @@ pub fn receiveCapture(self: *Proxy, io: std.Io) anyerror!*Half {
 /// proxy.decodeCapture(half);
 /// ```
 pub fn decodeCapture(self: *Proxy, half: *Half) void {
-    self.lifecycle.service.decodeCapture(half);
+    self.service.decodeCapture(half);
 }
 
 /// Registers one pane generation and returns its owned child environment.
@@ -84,7 +87,7 @@ pub fn decodeCapture(self: *Proxy, half: *Half) void {
 /// ```
 pub fn registerPane(self: *Proxy, key: PaneKey, options: PaneEnvironmentOptions) !PaneEnvironment {
     std.debug.assert(options.overrides.len <= proxy_namespace.max_pane_overrides);
-    const service = self.lifecycle.service;
+    const service = self.service;
     var credential = try service.registerPane(.{ .id = key.id, .generation = key.generation });
     defer std.crypto.secureZero(u8, &credential.token);
     errdefer service.unregisterCredential(&credential);
@@ -113,7 +116,7 @@ pub fn registerPane(self: *Proxy, key: PaneKey, options: PaneEnvironmentOptions)
 /// proxy.revokePane(key);
 /// ```
 pub fn revokePane(self: *Proxy, key: PaneKey) void {
-    self.lifecycle.service.unregisterPane(.{ .id = key.id, .generation = key.generation });
+    self.service.unregisterPane(.{ .id = key.id, .generation = key.generation });
 }
 
 /// Revocation rejects new tunnels and filters both queued and subsequent
@@ -123,7 +126,7 @@ pub fn revokePane(self: *Proxy, key: PaneKey) void {
 /// const observation = try proxy.receive(io);
 /// ```
 pub fn receive(self: *Proxy, io: std.Io) anyerror!Observation {
-    var event = try self.lifecycle.service.receive(io);
+    var event = try self.service.receive(io);
     defer std.crypto.secureZero(u8, &event.credential.token);
     return .{
         .pane = .{
@@ -146,11 +149,11 @@ pub fn receive(self: *Proxy, io: std.Io) anyerror!Observation {
 /// const snapshot = proxy.metrics();
 /// ```
 pub fn metrics(self: *const Proxy) Snapshot {
-    return self.lifecycle.service.metrics();
+    return self.service.metrics();
 }
 
 pub fn address(self: *const Proxy) std.Io.net.IpAddress {
-    const client = self.lifecycle.service.clientConfiguration();
+    const client = self.service.clientConfiguration();
 
     return std.Io.net.IpAddress.parse("127.0.0.1", client.port) catch unreachable;
 }

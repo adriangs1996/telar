@@ -30,6 +30,8 @@ captures: Producer = undefined,
 connection_slots: Slots = .init(service_support.max_connections),
 telemetry: Counters = .{},
 next_connection_id: std.atomic.Value(u64) = .init(1),
+/// The accept loop while the service runs; `stop` joins it.
+worker: ?service_support.Worker = null,
 
 /// Builds the loopback listener and every bounded dependency without
 /// starting concurrent traffic. Ownership transfers to the returned
@@ -74,13 +76,13 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
 }
 
 /// Releases the stopped service and scrubs its in-memory authority and
-/// credentials. Call `cancel` and `close` before destroying a started
-/// service.
+/// credentials. A started service must be stopped first.
 ///
 /// ```zig
 /// service.destroy();
 /// ```
 pub fn destroy(self: *Service) void {
+    std.debug.assert(self.worker == null);
     const gpa = self.gpa;
     self.listener.deinit(self.io);
     self.interception.deinit();
@@ -88,33 +90,30 @@ pub fn destroy(self: *Service) void {
     gpa.destroy(self);
 }
 
-/// Starts the listener worker. The returned worker owns the running accept
-/// loop until it is passed to `cancel`.
+/// Starts the accept loop.
 ///
 /// ```zig
-/// var worker = try service.start();
-/// defer service.cancel(&worker);
+/// try service.start();
+/// defer service.stop();
 /// ```
-pub fn start(self: *Service) !service_support.Worker {
-    return self.io.concurrent(run, .{self});
+pub fn start(self: *Service) !void {
+    std.debug.assert(self.worker == null);
+    self.worker = try self.io.concurrent(run, .{self});
 }
 
-/// Cancels and joins the listener worker before service resources are
-/// released.
+/// Stops traffic, then delivery: joins the accept loop, which cancels every
+/// tunnel, and only then closes the observation and capture queues, so no
+/// producer outlives them.
 ///
 /// ```zig
-/// service.cancel(&worker);
+/// service.stop();
 /// ```
-pub fn cancel(self: *Service, worker: *service_support.Worker) void {
-    _ = worker.cancel(self.io) catch {};
-}
+pub fn stop(self: *Service) void {
+    if (self.worker) |*worker| {
+        _ = worker.cancel(self.io) catch {};
+        self.worker = null;
+    }
 
-/// Closes observation delivery after the listener worker has stopped.
-///
-/// ```zig
-/// service.close();
-/// ```
-pub fn close(self: *Service) void {
     self.observations.close(self.io);
     self.captures.close(self.io);
 }

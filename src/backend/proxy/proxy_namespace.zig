@@ -6,10 +6,8 @@
 const core = @import("telar-core");
 const middleware = @import("middleware.zig");
 const types = @import("../agent/types.zig");
-const GenericLifecyclePort = @import("GenericLifecyclePort.zig").Type;
 const Service = @import("service/Service.zig");
 const service_support = @import("service/service_support.zig");
-const GenericLifecycle = @import("GenericLifecycle.zig").Type;
 const pty = @import("pty");
 const Override = pty.Override;
 const std = @import("std");
@@ -18,7 +16,6 @@ const connect_authentication = @import("connect_authentication.zig");
 const root = @import("h2/h2.zig");
 const root_module = @import("http/http.zig");
 const identity = @import("identity.zig");
-const lifecycle_mod = @import("lifecycle.zig");
 const observation_queue = @import("observation_queue.zig");
 const provider_provider = @import("provider/provider.zig");
 const service_mod = @import("service/service_namespace.zig");
@@ -40,15 +37,6 @@ pub const Observation = @import("Observation.zig");
 pub const PaneEnvironment = @import("PaneEnvironment.zig");
 
 pub const PaneEnvironmentOptions = @import("PaneEnvironmentOptions.zig");
-
-const lifecycle_port: GenericLifecyclePort(Service, service_support.Worker) = .{
-    .start = Service.start,
-    .cancel = Service.cancel,
-    .close = Service.close,
-    .destroy = Service.destroy,
-};
-
-pub const ServiceLifecycle = GenericLifecycle(Service, service_support.Worker, lifecycle_port);
 
 pub const Proxy = @import("Proxy.zig");
 
@@ -212,7 +200,6 @@ test {
     std.testing.refAllDecls(root);
     std.testing.refAllDecls(root_module);
     std.testing.refAllDecls(identity);
-    std.testing.refAllDecls(lifecycle_mod);
     std.testing.refAllDecls(middleware);
     std.testing.refAllDecls(observation_queue);
     std.testing.refAllDecls(provider_provider);

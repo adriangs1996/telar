@@ -101,7 +101,6 @@ test {
     _ = @import("proxy/http/types.zig");
     _ = @import("proxy/identity.zig");
     _ = @import("proxy/interception_policy.zig");
-    _ = @import("proxy/lifecycle.zig");
     _ = @import("proxy/metrics.zig");
     _ = @import("proxy/middleware.zig");
     _ = @import("proxy/observation_queue.zig");
