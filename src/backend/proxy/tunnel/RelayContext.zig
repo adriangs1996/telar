@@ -1,6 +1,7 @@
 //! HTTP/2 for one intercepted CONNECT exchange: the generic relay drives
 //! both directions and calls these methods, which install provider
 //! observers, capture streams and rewrites for the exchange's dialect.
+const owned = @import("../capture/owned.zig");
 const httprelay = @import("httprelay");
 const std = @import("std");
 const Rewrite = httprelay.Rewrite;
@@ -29,7 +30,7 @@ const claude_transport = @import("../provider/claude_transport.zig");
 const Registry = @import("../Registry.zig");
 const Credential = @import("../Credential.zig");
 const HeaderField = h2frames.HeaderField;
-const Joiner = @import("../capture/Joiner.zig");
+const Joiner = owned.Joiner;
 const GenericConnection = httprelay.http2.GenericConnection;
 const RelayContext = @This();
 

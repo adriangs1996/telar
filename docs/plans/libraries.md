@@ -88,8 +88,8 @@ alias are one word.
 
 | Library | From | Cut |
 | --- | --- | --- |
-| `http-relay` | `proxy/http`, `proxy/h2/{relay,connection,Observer,Transcoder}.zig` | every file tags events with `agent/types.ApiDialect` and `middleware.Phase`; the tag becomes a comptime parameter or an opaque integer |
-| `capture-buffer` | `proxy/capture` | `Half` embeds a telar pane and credential; becomes an owner id plus a gate |
+| `httprelay` (done) | `proxy/http`, `proxy/h2/{relay,connection,Observer,Transcoder}.zig` | every file tagged events with `agent/types.ApiDialect` and `middleware.Phase`; the relay now reports neutral stages and telar maps them to phases |
+| `exchangecapture` (done) | `proxy/capture` | `Half` embedded a telar pane and credential; it now carries the caller's comptime `Meta`, and the credential gate stays in telar's `Channel` |
 | `wire` | `src/core/schema` (192 files) | it reaches back into core's root 56 times for shared value types; those move down into `wire` or into `cells` |
 | `syntax`, `diagram-client` | `gui/syntax`, `gui/diagrams` worker and protocol | the capture-to-role mapping and the image decode path become library dependencies |
 
@@ -177,8 +177,10 @@ the libraries it uses by name.
    - B6. `middleware.zig` splits into HTTP header rules, which go with the
      relay, and telar's phases and protocols.
    - C. The HTTP/1.1 and HTTP/2 relays and header rules move to
-     `lib/httprelay` (done); the capture buffer, keyed by an owner id, and
-     one credential-gated queue generic over its payload move to `lib/`.
+     `lib/httprelay` (done); the capture buffer moves to
+     `lib/exchangecapture`, generic over the owner metadata telar attaches
+     (done); one bounded queue generic over its payload moves to `lib/`,
+     and the credential gate on it stays in telar.
    B1 to B6 are done.
 5. `wire`, which touches both processes and every message.
 6. Client and GUI: `key-capture`, `screen-diff`, `kitty-render`, `image`,

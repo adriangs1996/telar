@@ -1,8 +1,9 @@
+const owned = @import("owned.zig");
 const queue = @import("queue.zig");
 const std = @import("std");
 const Registry = @import("../Registry.zig");
 const Credential = @import("../Credential.zig");
-const Half = @import("Half.zig");
+const Half = owned.Half;
 const Channel = @This();
 
 storage: [queue.capacity]Envelope = undefined,

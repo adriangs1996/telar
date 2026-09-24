@@ -1,17 +1,19 @@
 //! Length-delimited protocol between the runtime and one tap worker.
 
+const exchangecapture = @import("exchangecapture");
+const owned = @import("../proxy/capture/owned.zig");
 const core = @import("telar-core");
 const ExchangeIdentity = @import("ExchangeIdentity.zig");
-const Exchange = @import("../proxy/capture/Exchange.zig");
+const Exchange = owned.Exchange;
 const std = @import("std");
 const ExchangeType = @import("Exchange.zig");
 const middleware = @import("../proxy/middleware.zig");
 const types = @import("../agent/types.zig");
 const Batch = @import("Batch.zig");
 const effects = @import("effects.zig");
-const Half = @import("../proxy/capture/Half.zig");
+const Half = owned.Half;
 const HalfType = @import("Half.zig");
-const buffer_support = @import("../proxy/capture/buffer_support.zig");
+const buffer_support = exchangecapture.buffer_support;
 
 pub const prefix_bytes = 4;
 pub const overhead_bytes = 64 * 1024;
@@ -27,10 +29,10 @@ pub fn encodeExchange(buffer: []u8, identity: ExchangeIdentity, captured: *const
     try writer.writeByte(1);
     try writeInt(&writer, u64, identity.id);
     try writeInt(&writer, u64, identity.generation);
-    try writeInt(&writer, u64, core.raw(representative.pane.id));
-    try writeInt(&writer, u64, representative.pane.generation);
-    try writer.writeByte(@intFromEnum(representative.protocol));
-    try writer.writeByte(@intFromEnum(representative.dialect));
+    try writeInt(&writer, u64, core.raw(representative.meta.pane.id));
+    try writeInt(&writer, u64, representative.meta.pane.generation);
+    try writer.writeByte(@intFromEnum(representative.meta.protocol));
+    try writer.writeByte(@intFromEnum(representative.meta.dialect));
     try writeInt(&writer, u64, representative.key.connection_id);
     try writeInt(&writer, u32, representative.key.stream_id);
     try writeSized(&writer, representative.host());

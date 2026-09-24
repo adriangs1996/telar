@@ -1,8 +1,9 @@
 //! Runtime tap actor set: one bounded sequential worker per trusted plugin.
 
+const owned = @import("../proxy/capture/owned.zig");
 const core = @import("telar-core");
 const ServiceSpec = @import("ServiceSpec.zig");
-const Exchange = @import("../proxy/capture/Exchange.zig");
+const Exchange = owned.Exchange;
 const Service = @import("Service.zig");
 const Result = @import("Result.zig");
 const std = @import("std");

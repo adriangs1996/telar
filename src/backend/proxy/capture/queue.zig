@@ -1,9 +1,11 @@
 //! Bounded pointer-transfer queue for captured exchange halves.
 
+const exchangecapture = @import("exchangecapture");
+const owned = @import("owned.zig");
 const Credential = @import("../Credential.zig");
 const identity = @import("../identity.zig");
-const Quota = @import("Quota.zig");
-const Half = @import("Half.zig");
+const Quota = exchangecapture.Quota;
+const Half = owned.Half;
 const std = @import("std");
 const Channel = @import("Channel.zig");
 const Registry = @import("../Registry.zig");
@@ -35,9 +37,14 @@ fn testHalf(quota: *Quota, credential: Credential, stream_id: u32) *Half {
             .max_exchange_bytes = 2,
             .max_total_bytes = capacity + 1,
         },
-        .credential = credential,
-        .dialect = .unknown,
-        .protocol = .h2,
+        .meta = .{
+            .pane = .{
+                .id = credential.pane_id,
+                .generation = credential.pane_generation,
+            },
+            .dialect = .unknown,
+            .protocol = .h2,
+        },
         .key = .{ .connection_id = 1, .stream_id = stream_id },
         .side = .request,
         .host = "example.test",

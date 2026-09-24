@@ -2,9 +2,10 @@
 //! half; the runtime decodes it, joins it with its partner and submits the
 //! whole exchange to the plugin tap. Traffic never waits for any of it.
 
+const owned = @import("../proxy/capture/owned.zig");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
-const Half = @import("../proxy/capture/Half.zig");
+const Half = owned.Half;
 const PaneKey = @import("../pane/PaneKey.zig");
 const Sources = @import("Sources.zig");
 
@@ -20,7 +21,7 @@ pub fn receive(model: *RuntimeModel, result: anyerror!*Half) !void {
     var sources = Sources.init(model.io, model.select);
     try sources.receiveProxyCapture(&model.resources.proxy);
 
-    const key: PaneKey = .{ .id = half.pane.id, .generation = half.pane.generation };
+    const key: PaneKey = .{ .id = half.meta.pane.id, .generation = half.meta.pane.generation };
     if (model.panes.resolve(key) == null) {
         half.deinit();
         return;

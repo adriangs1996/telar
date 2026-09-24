@@ -96,6 +96,11 @@ const specs = [_]Spec{
         .libc = true,
     },
     .{
+        .name = "exchangecapture",
+        .libc = true,
+        .system_libraries = &.{"brotlidec"},
+    },
+    .{
         .name = "httprelay",
         .imports = &.{ "localca", "h2frames" },
         .libc = true,

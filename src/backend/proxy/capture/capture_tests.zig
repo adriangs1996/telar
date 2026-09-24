@@ -1,9 +1,11 @@
 //! Supported namespace for bounded ProxyTLS exchange capture.
 
-const buffer = @import("buffer_support.zig");
-const decode_mod = @import("decode.zig");
+const exchangecapture = @import("exchangecapture");
+const owned = @import("owned.zig");
+const buffer = exchangecapture.buffer_support;
+const decode_mod = exchangecapture.decode;
 const queue = @import("queue.zig");
-const table = @import("table.zig");
+const table = owned.Joiner;
 const Producer = @import("Producer.zig");
 const std = @import("std");
 const Credential = @import("../Credential.zig");

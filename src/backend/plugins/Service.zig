@@ -1,10 +1,11 @@
+const owned = @import("../proxy/capture/owned.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const service_support = @import("service_support.zig");
 const Worker = @import("Worker.zig");
 const Result = @import("Result.zig");
 const ServiceSpec = @import("ServiceSpec.zig");
-const Exchange = @import("../proxy/capture/Exchange.zig");
+const Exchange = owned.Exchange;
 const ExchangeIdentity = @import("ExchangeIdentity.zig");
 const Frame = @import("Frame.zig");
 const protocol = @import("protocol.zig");
@@ -119,8 +120,8 @@ fn encodeFrame(self: *Service, captured: *const Exchange, identity: ExchangeIden
     frame.* = .{
         .gpa = self.gpa,
         .event_id = identity.id,
-        .pane = representative.pane.id,
-        .pane_generation = representative.pane.generation,
+        .pane = representative.meta.pane.id,
+        .pane_generation = representative.meta.pane.generation,
         .storage = bytes,
         .len = payload.len,
     };

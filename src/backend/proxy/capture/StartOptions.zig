@@ -1,8 +1,9 @@
+const exchangecapture = @import("exchangecapture");
 const Credential = @import("../Credential.zig");
 const types = @import("../../agent/types.zig");
 const middleware = @import("../middleware.zig");
-const Key = @import("Key.zig");
-const buffer_support = @import("buffer_support.zig");
+const Key = exchangecapture.Key;
+const buffer_support = exchangecapture.buffer_support;
 const StartOptions = @This();
 
 credential: Credential,

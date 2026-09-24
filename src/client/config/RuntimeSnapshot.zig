@@ -1,7 +1,11 @@
 const data = @import("model");
 const core = @import("telar-core");
 const CommandSpec = @import("CommandSpec.zig");
+const exchangecapture = @import("exchangecapture");
 const RuntimeSnapshot = @This();
+
+/// Capture bounds when the configuration names none.
+const default_capture: exchangecapture.Config = .{};
 
 graphics_pane_bytes: usize = core.max_image_bytes_per_pane,
 graphics_global_bytes: usize = core.max_image_bytes_global,
@@ -12,10 +16,10 @@ proxy_ca_dir_bytes: [data.config_values.max_proxy_path_bytes]u8 = undefined,
 proxy_ca_dir_len: u16 = 0,
 proxy_intercept_hosts: data.ProxyInterceptHosts = data.config_values.defaultProxyInterceptHosts(),
 proxy_capture_enabled: bool = false,
-proxy_capture_max_part_bytes: usize = core.default_capture_part_bytes,
-proxy_capture_max_exchange_bytes: usize = core.default_capture_exchange_bytes,
-proxy_capture_max_total_bytes: usize = core.default_capture_total_bytes,
-proxy_capture_join_timeout_ms: u32 = core.default_capture_join_timeout_ms,
+proxy_capture_max_part_bytes: usize = default_capture.max_part_bytes,
+proxy_capture_max_exchange_bytes: usize = default_capture.max_exchange_bytes,
+proxy_capture_max_total_bytes: usize = default_capture.max_total_bytes,
+proxy_capture_join_timeout_ms: u32 = default_capture.join_timeout_ms,
 agent_descriptions: CommandSpec = .{},
 engine: CommandSpec = .{},
 engine_idle_timeout_ms: u32 = data.config_values.default_engine_idle_timeout_ms,

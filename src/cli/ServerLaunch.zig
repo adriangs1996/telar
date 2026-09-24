@@ -1,4 +1,5 @@
 const pi_rpc = @import("pi_rpc");
+const exchangecapture = @import("exchangecapture");
 const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -46,7 +47,7 @@ proxy_cert_buffer: [std.fs.max_path_bytes]u8 = undefined,
 proxy_bundle_buffer: [std.fs.max_path_bytes]u8 = undefined,
 proxy_options: ?backend.Config = null,
 proxy_system_trusted: bool = false,
-proxy_capture: backend.ProxyCaptureConfig = .{},
+proxy_capture: exchangecapture.Config = .{},
 tap_specs: [backend.max_workers]backend.ServiceSpec = undefined,
 tap_spec_count: u8 = 0,
 tap_snapshot_buffer: [std.fs.max_path_bytes]u8 = undefined,

@@ -1,3 +1,4 @@
+const owned = @import("../capture/owned.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const Listener = @import("Listener.zig");
@@ -11,7 +12,7 @@ const Counters = @import("../Counters.zig");
 const Paths = @import("Paths.zig");
 const ClientConfiguration = @import("ClientConfiguration.zig");
 const MiddlewareEvent = @import("../MiddlewareEvent.zig");
-const Half = @import("../capture/Half.zig");
+const Half = owned.Half;
 const Snapshot = @import("../Snapshot.zig");
 const Credential = @import("../Credential.zig");
 const identity = @import("../identity.zig");

@@ -1,4 +1,5 @@
-const buffer_support = @import("../proxy/capture/buffer_support.zig");
+const exchangecapture = @import("exchangecapture");
+const buffer_support = exchangecapture.buffer_support;
 const Half = @This();
 
 head: []const u8,

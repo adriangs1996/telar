@@ -1,13 +1,15 @@
+const exchangecapture = @import("exchangecapture");
+const owned = @import("owned.zig");
 const std = @import("std");
-const Config = @import("Config.zig");
-const Quota = @import("Quota.zig");
+const Config = exchangecapture.Config;
+const Quota = exchangecapture.Quota;
 const Channel = @import("Channel.zig");
 const Registry = @import("../Registry.zig");
 const StartOptions = @import("StartOptions.zig");
-const Half = @import("Half.zig");
+const Half = owned.Half;
 const Credential = @import("../Credential.zig");
-const decode_mod = @import("decode.zig");
-const buffer = @import("buffer_support.zig");
+const decode_mod = exchangecapture.decode;
+const buffer = exchangecapture.buffer_support;
 const CaptureMetrics = @import("CaptureMetrics.zig");
 const Producer = @This();
 
@@ -45,9 +47,14 @@ pub fn start(self: *Producer, options: StartOptions) ?*Half {
         .gpa = self.gpa,
         .quota = &self.quota,
         .config = self.config,
-        .credential = options.credential,
-        .dialect = options.dialect,
-        .protocol = options.protocol,
+        .meta = .{
+            .pane = .{
+                .id = options.credential.pane_id,
+                .generation = options.credential.pane_generation,
+            },
+            .dialect = options.dialect,
+            .protocol = options.protocol,
+        },
         .key = options.key,
         .side = options.side,
         .host = options.host,

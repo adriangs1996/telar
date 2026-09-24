@@ -1,10 +1,12 @@
+const exchangecapture = @import("exchangecapture");
+const owned = @import("../capture/owned.zig");
 const Producer = @import("../capture/Producer.zig");
 const Exchange = @import("Exchange.zig");
-const buffer_support = @import("../capture/buffer_support.zig");
+const buffer_support = exchangecapture.buffer_support;
 const h2frames = @import("h2frames");
 const HeaderBlock = h2frames.HeaderBlock;
 const std = @import("std");
-const Half = @import("../capture/Half.zig");
+const Half = owned.Half;
 const CaptureStreams = @This();
 
 producer: *Producer,

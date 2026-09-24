@@ -228,6 +228,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `h2frames` | HTTP/2 frames, SETTINGS, header blocks and stream states, without a connection |
 | `localca` | a local certificate authority, per-host leaves, system roots and intercepted TLS sessions |
 | `httprelay` | HTTP/1.1 and HTTP/2 relays that forward bytes unchanged, rewrite heads by data and report what they forwarded |
+| `exchangecapture` | bounded capture of relayed exchanges: heads and de-framed bodies within a shared quota, halves paired by key, bodies decoded |
 
 A rule that decides what telar means stays in a flow even when it is pure;
 [`plans/libraries.md`](plans/libraries.md) lists what is still to move.

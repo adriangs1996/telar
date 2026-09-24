@@ -1,4 +1,5 @@
-const Config = @import("../capture/Config.zig");
+const exchangecapture = @import("exchangecapture");
+const Config = exchangecapture.Config;
 const Paths = @This();
 
 key: []const u8,

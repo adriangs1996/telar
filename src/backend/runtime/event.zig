@@ -1,4 +1,5 @@
 //! Events delivered to the runtime loop and their execution-budget class.
+const owned = @import("../proxy/capture/owned.zig");
 const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const EditorJob = @import("../editors/Job.zig");
@@ -15,7 +16,7 @@ const MediaCompletion = @import("events/MediaCompletion.zig");
 const ExitCompletion = @import("events/ExitCompletion.zig");
 const Wake = @import("events/Wake.zig");
 const Observation = @import("../proxy/Observation.zig");
-const Half = @import("../proxy/capture/Half.zig");
+const Half = owned.Half;
 const Result = @import("../plugins/Result.zig");
 const AgentResult = @import("../agent/Result.zig");
 const EngineRuntime = @import("resources/EngineRuntime.zig");

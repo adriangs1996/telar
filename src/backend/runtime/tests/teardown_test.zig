@@ -1,4 +1,6 @@
 //! Cancellation owns completed results until they are released or retained by the model.
+const exchangecapture = @import("exchangecapture");
+const capture_owned = @import("../../proxy/capture/owned.zig");
 const localsocket = @import("localsocket");
 const client_connection = @import("../client_connection.zig");
 const std = @import("std");
@@ -12,8 +14,8 @@ const StatsResult = @import("../../history/StatsResult.zig");
 const Entry = @import("../../history/Entry.zig");
 const StatsTop = @import("../../history/StatsTop.zig");
 const PluginResult = @import("../../plugins/Result.zig");
-const Half = @import("../../proxy/capture/Half.zig");
-const Quota = @import("../../proxy/capture/Quota.zig");
+const Half = capture_owned.Half;
+const Quota = exchangecapture.Quota;
 const ReviewJob = @import("../../change_review/Job.zig");
 const ReviewResult = @import("../../change_review/Result.zig");
 const RequestFixture = @import("RequestFixture.zig");
@@ -80,9 +82,11 @@ test "loop cancellation releases every transferred result already queued by comp
     capture.* = .{
         .gpa = gpa,
         .reservation = quota.reserve(16).?,
-        .pane = .{ .id = @enumFromInt(1), .generation = 1 },
-        .dialect = .unknown,
-        .protocol = .http11,
+        .meta = .{
+            .pane = .{ .id = @enumFromInt(1), .generation = 1 },
+            .dialect = .unknown,
+            .protocol = .http11,
+        },
         .key = .{ .connection_id = 1, .stream_id = 0 },
         .side = .request,
         .head = .init(gpa, 16),

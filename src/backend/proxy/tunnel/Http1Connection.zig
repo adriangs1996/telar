@@ -2,6 +2,8 @@
 //! the connection and calls these methods for each step, which classify
 //! requests by the exchange's dialect, publish lifecycle phases and feed
 //! capture.
+const exchangecapture = @import("exchangecapture");
+const owned = @import("../capture/owned.zig");
 const httprelay = @import("httprelay");
 const std = @import("std");
 const Rewrite = httprelay.Rewrite;
@@ -10,14 +12,14 @@ const Session = localca.Session;
 const Exchange = @import("Exchange.zig");
 const Producer = @import("../capture/Producer.zig");
 const Observer = @import("../provider/Observer.zig");
-const Half = @import("../capture/Half.zig");
+const Half = owned.Half;
 const StartOptions = @import("../capture/StartOptions.zig");
 const RequestHead = httprelay.http1.RequestHead;
 const http = httprelay.http1;
 const connection_module = httprelay.http1;
 const types = httprelay.http1;
 const exchange_mod = @import("exchange_support.zig");
-const buffer_support = @import("../capture/buffer_support.zig");
+const buffer_support = exchangecapture.buffer_support;
 const ResponseHead = httprelay.http1.ResponseHead;
 const ResponseObserver = @import("../provider/ResponseObserver.zig");
 const Fragment = httprelay.http1.Fragment;
@@ -30,7 +32,7 @@ const Counters = @import("../Counters.zig");
 const identity = @import("../identity.zig");
 const Snapshot = @import("../Snapshot.zig");
 const FakeSessionType = httprelay.http1.FakeSession;
-const Config = @import("../capture/Config.zig");
+const Config = exchangecapture.Config;
 const Registry = @import("../Registry.zig");
 const Credential = @import("../Credential.zig");
 const GenericConnection = httprelay.http1.GenericConnection;
