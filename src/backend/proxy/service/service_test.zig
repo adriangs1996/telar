@@ -4,7 +4,6 @@ const core = @import("telar-core");
 const std = @import("std");
 const Credential = @import("../Credential.zig");
 const Pane = @import("Pane.zig");
-const Headers = @import("../Headers.zig");
 const Service = @import("Service.zig");
 const MiddlewareEvent = @import("../MiddlewareEvent.zig");
 const observation_queue = @import("../observation_queue.zig");
@@ -42,35 +41,6 @@ test "pane registration creates one live capability for the requested generation
     service.unregisterCredential(&credential);
 
     try std.testing.expect(!service.credentials.contains(io, &credential));
-}
-
-test "service negotiates identity encoding for Claude message requests" {
-    var fixture: TestServiceFixture = .{};
-    try fixture.init(std.testing.io, std.testing.allocator);
-    defer fixture.deinit();
-    const service = fixture.service.?;
-    var headers: Headers = .{};
-    try headers.append(.{ .name = ":method", .value = "POST" });
-    try headers.append(.{ .name = ":path", .value = "/v1/messages" });
-    try headers.append(.{ .name = "accept-encoding", .value = "gzip, br" });
-
-    const changed = service.configuration.view().transforms.apply(.{
-        .io = std.testing.io,
-        .context = .{
-            .pane_id = @enumFromInt(1),
-            .pane_generation = 1,
-            .dialect = .anthropic_messages,
-            .protocol = .http11,
-            .direction = .request,
-            .kind = .request,
-            .connection_id = 1,
-            .stream_id = 0,
-        },
-        .headers = &headers,
-    });
-
-    try std.testing.expect(changed);
-    try std.testing.expectEqualStrings("identity", headers.find("accept-encoding").?);
 }
 
 test "running service leaves exchange capture inert when disabled" {

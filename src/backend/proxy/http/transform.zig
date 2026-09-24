@@ -1,16 +1,16 @@
 //! Header transformation for HTTP/1.1 messages.
 //!
 //! This module never reads or writes a session. It converts a complete head to
-//! middleware headers, applies the bounded pipeline, re-encodes the result, and
+//! middleware headers, applies the matching rewrites, re-encodes the result, and
 //! accepts it only when HTTP framing and connection semantics stay unchanged.
 
 const Head = @import("Head.zig");
 const Headers = @import("../Headers.zig");
+const rewrites = @import("../rewrites.zig");
 const head = @import("head_support.zig");
 const std = @import("std");
 const middleware = @import("../middleware.zig");
-const Transformation = @import("../Transformation.zig");
-const TransformPipeline = @import("../TransformPipeline.zig");
+const Rewrite = @import("../Rewrite.zig");
 const request_support = @import("../provider/request_support.zig");
 
 pub const Decision = union(enum) {
@@ -40,7 +40,8 @@ pub fn decide(input: Input) Decision {
 
     var headers: Headers = .{};
     const start_line = parseHeaders(original, is_response, &headers) orelse return .preserve;
-    if (!input.pipeline.apply(.{ .io = input.io, .context = input.context, .headers = &headers })) {
+    const direction: middleware.Direction = if (is_response) .response else .request;
+    if (!rewrites.apply(input.rewrites, .{ .direction = direction, .kind = if (is_response) .response else .request }, &headers)) {
         return .preserve;
     }
 
@@ -196,27 +197,21 @@ fn testDecision(input: TestDecisionInput) Decision {
         }).?,
         .is_response = is_response,
         .response_to_head = false,
-        .pipeline = input.pipeline,
-        .io = std.testing.io,
-        .context = undefined,
+        .rewrites = input.rewrites,
         .output = input.output,
     });
 }
 
 test "a safe header transformation produces a replacement" {
-    const AddHeader = struct {
-        fn apply(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
-            transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = AddHeader.apply });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{
+            .{ .set = .{ .name = "x-telar", .value = "enabled", .sensitive = false } },
+        },
+    }};
     const original = "GET / HTTP/1.1\r\nHost: example.test\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
 
-    const replacement = switch (testDecision(.{ .original = original, .is_response = false, .pipeline = &pipeline, .output = &output })) {
+    const replacement = switch (testDecision(.{ .original = original, .is_response = false, .rewrites = &head_rewrites, .output = &output })) {
         .preserve => return error.ExpectedReplacement,
         .replace => |value| value,
     };
@@ -229,83 +224,62 @@ test "a safe header transformation produces a replacement" {
 }
 
 test "a transformer without effects preserves the original" {
-    const NoEffects = struct {
-        fn apply(_: *anyopaque, _: Transformation) middleware.TransformStatus {
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = NoEffects.apply });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{},
+    }};
     const original = "GET / HTTP/1.1\r\nHost: example.test\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
 
-    try std.testing.expectEqual(Decision.preserve, testDecision(.{ .original = original, .is_response = false, .pipeline = &pipeline, .output = &output }));
+    try std.testing.expectEqual(Decision.preserve, testDecision(.{ .original = original, .is_response = false, .rewrites = &head_rewrites, .output = &output }));
 }
 
 test "a transformation cannot change body framing" {
-    const ChangeLength = struct {
-        fn apply(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
-            transformation.effects.set(.{ .name = "content-length", .value = "5" }) catch return .preserve;
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = ChangeLength.apply });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{
+            .{ .set = .{ .name = "content-length", .value = "5", .sensitive = false } },
+        },
+    }};
     const original = "POST /upload HTTP/1.1\r\nHost: example.test\r\nContent-Length: 4\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
 
-    try std.testing.expectEqual(Decision.preserve, testDecision(.{ .original = original, .is_response = false, .pipeline = &pipeline, .output = &output }));
+    try std.testing.expectEqual(Decision.preserve, testDecision(.{ .original = original, .is_response = false, .rewrites = &head_rewrites, .output = &output }));
 }
 
 test "invalid transformed request lines preserve the original" {
-    const InvalidMethod = struct {
-        fn apply(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
-            transformation.effects.set(.{ .name = ":method", .value = "NOT VALID" }) catch return .preserve;
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = InvalidMethod.apply });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{
+            .{ .set = .{ .name = ":method", .value = "NOT VALID", .sensitive = false } },
+        },
+    }};
     const original = "GET / HTTP/1.1\r\nHost: example.test\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
 
-    try std.testing.expectEqual(Decision.preserve, testDecision(.{ .original = original, .is_response = false, .pipeline = &pipeline, .output = &output }));
+    try std.testing.expectEqual(Decision.preserve, testDecision(.{ .original = original, .is_response = false, .rewrites = &head_rewrites, .output = &output }));
 }
 
 test "an encoded head that exceeds the output bound is preserved" {
-    const AddHeader = struct {
-        fn apply(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
-            transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = AddHeader.apply });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{
+            .{ .set = .{ .name = "x-telar", .value = "enabled", .sensitive = false } },
+        },
+    }};
     const original = "GET / HTTP/1.1\r\nHost: example.test\r\n\r\n";
     var output: [8]u8 = undefined;
 
-    try std.testing.expectEqual(Decision.preserve, testDecision(.{ .original = original, .is_response = false, .pipeline = &pipeline, .output = &output }));
+    try std.testing.expectEqual(Decision.preserve, testDecision(.{ .original = original, .is_response = false, .rewrites = &head_rewrites, .output = &output }));
 }
 
 test "request classification remains tied to the original route" {
-    const RewriteRoute = struct {
-        fn apply(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
-            transformation.effects.set(.{ .name = ":method", .value = "PUT" }) catch return .preserve;
-            transformation.effects.set(.{ .name = ":path", .value = "/v1/responses" }) catch return .preserve;
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = RewriteRoute.apply });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{
+            .{ .set = .{ .name = ":method", .value = "PUT", .sensitive = false } },
+            .{ .set = .{ .name = ":path", .value = "/v1/responses", .sensitive = false } },
+        },
+    }};
     const original = "POST /v1/messages HTTP/1.1\r\nHost: example.test\r\nContent-Length: 0\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
 
-    const replacement = switch (testDecision(.{ .original = original, .is_response = false, .pipeline = &pipeline, .output = &output })) {
+    const replacement = switch (testDecision(.{ .original = original, .is_response = false, .rewrites = &head_rewrites, .output = &output })) {
         .preserve => return error.ExpectedReplacement,
         .replace => |value| value,
     };
@@ -327,6 +301,6 @@ const Encoding = struct {
 const TestDecisionInput = struct {
     original: []const u8,
     is_response: bool,
-    pipeline: *const TransformPipeline,
+    rewrites: []const Rewrite,
     output: []u8,
 };

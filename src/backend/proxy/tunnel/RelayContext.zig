@@ -1,5 +1,5 @@
 const std = @import("std");
-const TransformPipeline = @import("../TransformPipeline.zig");
+const Rewrite = @import("../Rewrite.zig");
 const localca = @import("localca");
 const Session = localca.Session;
 const Exchange = @import("Exchange.zig");
@@ -9,8 +9,8 @@ const Producer = @import("../capture/Producer.zig");
 const RelayContext = @This();
 
 io: std.Io,
-transforms: *const TransformPipeline,
-has_custom_transformers: bool,
+/// Rewrites applied to request heads; responses keep theirs.
+request_rewrites: []const Rewrite,
 session: *Session,
 exchange: *Exchange,
 responses: ?*ResponseStreams,

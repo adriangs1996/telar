@@ -9,6 +9,8 @@
 const types = @import("../agent/types.zig");
 
 const std = @import("std");
+const Rewrite = @import("Rewrite.zig");
+const rewrites = @import("rewrites.zig");
 
 pub const Phase = enum {
     request_started,
@@ -84,18 +86,13 @@ test "observable SSE headers require one event-stream type and identity bytes" {
 
 pub const max_header_fields = 256;
 pub const max_header_bytes = 128 * 1024;
-pub const max_transformers = 8;
+/// Effects one rewrite may apply to a head.
 pub const max_effects = 32;
-pub const max_effect_bytes = 8 * 1024;
 
 pub const HeaderKind = enum { request, response, trailers, push_promise };
 pub const Direction = enum { request, response };
 
-pub const TransformContext = @import("TransformContext.zig");
-
 pub const HeaderView = @import("HeaderView.zig");
-
-pub const HeaderSnapshot = @import("HeaderSnapshot.zig");
 
 pub const Effect = union(enum) {
     remove: struct { name: []const u8 },
@@ -105,17 +102,6 @@ pub const Effect = union(enum) {
         sensitive: bool,
     },
 };
-
-pub const EffectBatch = @import("EffectBatch.zig");
-
-pub const TransformStatus = enum {
-    apply,
-    preserve,
-};
-
-pub const Transformation = @import("Transformation.zig");
-
-pub const Transformer = @import("Transformer.zig");
 
 pub const HeaderField = @import("HeaderField.zig");
 
@@ -161,8 +147,6 @@ pub fn effectName(effect: Effect) []const u8 {
     };
 }
 
-pub const TransformPipeline = @import("TransformPipeline.zig");
-
 pub fn validateName(name: []const u8) !void {
     if (name.len == 0) {
         return error.InvalidHeaderName;
@@ -205,13 +189,13 @@ test "header effect batches are atomic and preserve pseudo-header order" {
     try headers.append(.{ .name = ":path", .value = "/v1/messages" });
     try headers.append(.{ .name = "authorization", .value = "secret", .sensitive = true });
 
-    var effects: EffectBatch = .{};
-    try effects.set(.{ .name = ":path", .value = "/v1/responses" });
-    try effects.remove("authorization");
-    try effects.set(.{ .name = "x-telar", .value = "enabled" });
-    try effects.set(.{ .name = "x-order", .value = "first" });
-    try effects.remove("x-order");
-    try headers.apply(effects.effects[0..effects.len]);
+    try headers.apply(&.{
+        .{ .set = .{ .name = ":path", .value = "/v1/responses", .sensitive = false } },
+        .{ .remove = .{ .name = "authorization" } },
+        .{ .set = .{ .name = "x-telar", .value = "enabled", .sensitive = false } },
+        .{ .set = .{ .name = "x-order", .value = "first", .sensitive = false } },
+        .{ .remove = .{ .name = "x-order" } },
+    });
 
     try std.testing.expectEqualStrings("POST", headers.find(":method").?);
     try std.testing.expectEqualStrings("/v1/responses", headers.find(":path").?);
@@ -221,18 +205,12 @@ test "header effect batches are atomic and preserve pseudo-header order" {
 }
 
 test "invalid complete effect batch preserves the original headers" {
-    const TransformerImpl = struct {
-        fn transform(_: *anyopaque, transformation: Transformation) TransformStatus {
-            transformation.effects.set(.{ .name = ":new", .value = "invalid" }) catch return .preserve;
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = TransformerImpl.transform });
+    const invalid = [_]Rewrite{.{
+        .effects = &.{.{ .set = .{ .name = ":new", .value = "invalid", .sensitive = false } }},
+    }};
     var headers: Headers = .{};
     try headers.append(.{ .name = ":method", .value = "GET" });
-    try std.testing.expect(!pipeline.apply(.{ .io = std.testing.io, .context = undefined, .headers = &headers }));
+    try std.testing.expect(!rewrites.apply(&invalid, .{ .direction = .request, .kind = .request }, &headers));
     try std.testing.expectEqual(@as(u16, 1), headers.len);
     try std.testing.expectEqualStrings("GET", headers.find(":method").?);
 }
@@ -242,8 +220,6 @@ test "known secret headers remain sensitive regardless of transformer flags" {
     try headers.append(.{ .name = "Authorization", .value = "Bearer secret" });
     try std.testing.expect(headers.fields[0].sensitive);
 
-    var effects: EffectBatch = .{};
-    try effects.set(.{ .name = "authorization", .value = "Bearer replacement" });
-    try headers.apply(effects.effects[0..effects.len]);
+    try headers.apply(&.{.{ .set = .{ .name = "authorization", .value = "Bearer replacement", .sensitive = false } }});
     try std.testing.expect(headers.fields[0].sensitive);
 }

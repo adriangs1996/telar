@@ -17,9 +17,7 @@ const transform = @import("transform.zig");
 const std = @import("std");
 const FakeSession = @import("FakeSession.zig");
 const IgnoreTestObserver = @import("IgnoreTestObserver.zig");
-const Transformation = @import("../Transformation.zig");
-const middleware = @import("../middleware.zig");
-const TransformPipeline = @import("../TransformPipeline.zig");
+const Rewrite = @import("../Rewrite.zig");
 const ConnectionIntegration = @import("ConnectionIntegration.zig");
 
 pub const max_chunk_line_bytes = body.max_chunk_line_bytes;
@@ -95,7 +93,7 @@ pub fn relayHead(session: anytype, route: MessageRoute) ?Head {
 /// const head = relayHeadTransformed(session, transformation);
 /// ```
 pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform) ?Head {
-    if (transformation.pipeline.len == 0) {
+    if (transformation.rewrites.len == 0) {
         var route = transformation.route;
         route.capture = transformation.capture;
         return relayHead(session, route);
@@ -119,9 +117,7 @@ pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform) ?He
         .original_head = original_head,
         .is_response = transformation.route.is_response,
         .response_to_head = transformation.route.response_to_head,
-        .pipeline = transformation.pipeline,
-        .io = transformation.io,
-        .context = transformation.context,
+        .rewrites = transformation.rewrites,
         .output = &encoded,
     })) {
         .preserve => original[0..original_len],
@@ -180,15 +176,11 @@ test "request head is forwarded before its body is consumed" {
 }
 
 test "transformed head selection is the only head written" {
-    const AddHeader = struct {
-        fn apply(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
-            transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = AddHeader.apply });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{
+            .{ .set = .{ .name = "x-telar", .value = "enabled", .sensitive = false } },
+        },
+    }};
     const request = "POST /upload HTTP/1.1\r\nHost: example.test\r\nContent-Length: 4\r\n\r\ndata";
     var fake: FakeSession = .{ .child_input = request };
 
@@ -199,9 +191,7 @@ test "transformed head selection is the only head written" {
             .is_response = false,
             .response_to_head = false,
         },
-        .pipeline = &pipeline,
-        .io = std.testing.io,
-        .context = undefined,
+        .rewrites = &head_rewrites,
     }).?;
 
     try std.testing.expectEqualDeep(types.BodyPlan{ .content_length = 4 }, parsed.framing);
@@ -210,14 +200,9 @@ test "transformed head selection is the only head written" {
 }
 
 test "a preserved transformation forwards the original head exactly" {
-    const NoEffects = struct {
-        fn apply(_: *anyopaque, _: Transformation) middleware.TransformStatus {
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = NoEffects.apply });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{},
+    }};
     const request = "GET / HTTP/1.1\r\nhOsT:\texample.test\r\nX-Duplicate: one\r\nX-Duplicate: two\r\n\r\n";
     var fake: FakeSession = .{ .child_input = request };
 
@@ -228,9 +213,7 @@ test "a preserved transformation forwards the original head exactly" {
             .is_response = false,
             .response_to_head = false,
         },
-        .pipeline = &pipeline,
-        .io = std.testing.io,
-        .context = undefined,
+        .rewrites = &head_rewrites,
     }).?;
 
     try std.testing.expectEqualStrings(request, fake.originOutput());

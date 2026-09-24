@@ -3,7 +3,6 @@ const std = @import("std");
 const Listener = @import("Listener.zig");
 const Interception = @import("Interception.zig");
 const Registry = @import("../Registry.zig");
-const Configuration = @import("Configuration.zig");
 const Channel = @import("../Channel.zig");
 const Producer = @import("../capture/Producer.zig");
 const Slots = @import("../Slots.zig");
@@ -24,7 +23,6 @@ gpa: std.mem.Allocator,
 listener: Listener,
 interception: Interception,
 credentials: Registry = .{},
-configuration: Configuration,
 /// Lifecycle observations on their way to the runtime.
 observations: Channel = undefined,
 captures: Producer = undefined,
@@ -49,8 +47,6 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
     var listener = try Listener.bind(io);
     errdefer listener.deinit(io);
 
-    const configuration = try Configuration.init();
-
     const service = try gpa.create(Service);
     errdefer gpa.destroy(service);
     service.* = .{
@@ -58,7 +54,6 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
         .gpa = gpa,
         .listener = listener,
         .interception = interception,
-        .configuration = configuration,
         .observations = undefined,
     };
     service.observations.init(&service.credentials);
@@ -132,7 +127,6 @@ pub fn clientConfiguration(self: *const Service) ClientConfiguration {
 fn run(self: *Service) anyerror!void {
     const path = core.enter(.observation);
     defer path.restore();
-    try self.configuration.beginServing(self.io);
 
     return service_support.acceptConnections(self);
 }

@@ -1,12 +1,10 @@
 const h2frames = @import("h2frames");
 const PeerSettings = h2frames.PeerSettings;
-const TransformPipeline = @import("../TransformPipeline.zig");
-const std = @import("std");
-const TransformContext = @import("../TransformContext.zig");
+const Rewrite = @import("../Rewrite.zig");
+/// Header transcoding for one direction: the peer settings that bound its
+/// output and the rewrites applied to its heads.
 const Transformation = @This();
 
 source_settings: *PeerSettings,
 target_settings: *PeerSettings,
-pipeline: *const TransformPipeline,
-io: std.Io,
-context: TransformContext,
+rewrites: []const Rewrite,

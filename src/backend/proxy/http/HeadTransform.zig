@@ -1,12 +1,9 @@
 const MessageRoute = @import("MessageRoute.zig");
-const TransformPipeline = @import("../TransformPipeline.zig");
-const std = @import("std");
-const TransformContext = @import("../TransformContext.zig");
+const Rewrite = @import("../Rewrite.zig");
 const Half = @import("../capture/Half.zig");
+/// One head relay with the rewrites that apply to it.
 const HeadTransform = @This();
 
 route: MessageRoute,
-pipeline: *const TransformPipeline,
-io: std.Io,
-context: TransformContext,
+rewrites: []const Rewrite,
 capture: ?*Half = null,

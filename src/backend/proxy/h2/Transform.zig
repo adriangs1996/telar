@@ -1,8 +1,5 @@
-const TransformPipeline = @import("../TransformPipeline.zig");
-const std = @import("std");
-const TransformContext = @import("../TransformContext.zig");
+const Rewrite = @import("../Rewrite.zig");
+/// The rewrites one direction applies to its heads.
 const Transform = @This();
 
-pipeline: *const TransformPipeline,
-io: std.Io,
-context: TransformContext,
+rewrites: []const Rewrite,

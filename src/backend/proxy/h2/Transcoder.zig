@@ -6,6 +6,7 @@ const Reader = h2frames.Reader;
 const Tracker = h2frames.Tracker;
 const std = @import("std");
 const Headers = @import("../Headers.zig");
+const rewrites = @import("../rewrites.zig");
 const provider = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
 const framing_module = h2frames.framing;
@@ -291,18 +292,18 @@ fn finishHeaderBlock(self: *Transcoder, port: anytype) bool {
     }
     var transformed: Headers = undefined;
     transformed.copyFrom(&original);
-    var context = configuration.transform_context;
-    context.stream_id = if (self.block_type == relay.frame_push_promise)
-        relay.promisedStreamId(self)
-    else
-        self.block_stream;
-    context.kind = kind;
-    _ = configuration.pipeline.apply(.{ .io = configuration.io, .context = context, .headers = &transformed });
-    if (!relay.compatibleH2Headers(&original, &transformed, context.kind)) {
+    _ = rewrites.apply(configuration.rewrites, .{
+        .direction = switch (direction) {
+            .request => .request,
+            .response => .response,
+        },
+        .kind = kind,
+    }, &transformed);
+    if (!relay.compatibleH2Headers(&original, &transformed, kind)) {
         transformed.copyFrom(&original);
     }
 
-    if (direction == .request and context.kind == .request and
+    if (direction == .request and kind == .request and
         self.streams.startRequest(self.block_stream))
     {
         port.emit(.{ .lifecycle = .{

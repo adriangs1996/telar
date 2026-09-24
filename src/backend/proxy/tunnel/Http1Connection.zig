@@ -1,5 +1,5 @@
 const std = @import("std");
-const TransformPipeline = @import("../TransformPipeline.zig");
+const Rewrite = @import("../Rewrite.zig");
 const localca = @import("localca");
 const Session = localca.Session;
 const Exchange = @import("Exchange.zig");
@@ -11,7 +11,8 @@ const StartOptions = @import("../capture/StartOptions.zig");
 const Connection = @This();
 
 io: std.Io,
-transforms: *const TransformPipeline,
+/// Rewrites applied to request heads; responses keep theirs.
+request_rewrites: []const Rewrite,
 session: *Session,
 exchange: *Exchange,
 captures: ?*Producer,
@@ -19,8 +20,8 @@ request: Observer = .{},
 request_capture: ?*Half = null,
 response_capture: ?*Half = null,
 
-/// Binds an intercepted TLS session to its exchange and immutable header
-/// transformation pipeline.
+/// Binds an intercepted TLS session to its exchange and the rewrites its
+/// request heads receive.
 ///
 /// ```zig
 /// var connection = Connection.init(options);
@@ -28,7 +29,7 @@ response_capture: ?*Half = null,
 pub fn init(options: Http1Options) Connection {
     return .{
         .io = options.io,
-        .transforms = options.transforms,
+        .request_rewrites = options.request_rewrites,
         .session = options.session,
         .exchange = options.exchange,
         .captures = options.captures,
@@ -80,7 +81,7 @@ pub fn beginCapture(self: *Connection) void {
 
 const Http1Options = struct {
     io: std.Io,
-    transforms: *const TransformPipeline,
+    request_rewrites: []const Rewrite,
     session: *Session,
     exchange: *Exchange,
     captures: ?*Producer = null,

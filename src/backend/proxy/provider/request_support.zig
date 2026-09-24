@@ -7,6 +7,12 @@ pub const ApiDialect = types.ApiDialect;
 
 pub const Request = @import("Request.zig");
 
+/// Routes that carry Anthropic Messages inference, without their query.
+pub const anthropic_inference_paths = [_][]const u8{"/v1/messages"};
+
+/// Routes that carry OpenAI Responses inference, without their query.
+pub const openai_inference_paths = [_][]const u8{ "/v1/responses", "/backend-api/codex/responses" };
+
 pub const RequestClass = enum {
     inference,
     auxiliary,
@@ -26,14 +32,19 @@ pub fn classify(dialect: types.ApiDialect, request: Request) RequestClass {
     }
 
     const path = request.target[0 .. std.mem.indexOfScalar(u8, request.target, '?') orelse request.target.len];
-    const inference = switch (dialect) {
-        .anthropic_messages => std.mem.eql(u8, path, "/v1/messages"),
-        .openai_responses => std.mem.eql(u8, path, "/v1/responses") or
-            std.mem.eql(u8, path, "/backend-api/codex/responses"),
-        .unknown => false,
+    const paths: []const []const u8 = switch (dialect) {
+        .anthropic_messages => &anthropic_inference_paths,
+        .openai_responses => &openai_inference_paths,
+        .unknown => &.{},
     };
 
-    return if (inference) .inference else .auxiliary;
+    for (paths) |inference| {
+        if (std.mem.eql(u8, path, inference)) {
+            return .inference;
+        }
+    }
+
+    return .auxiliary;
 }
 
 test "request classification enforces dialect route ownership" {

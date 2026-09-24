@@ -1,5 +1,5 @@
 const std = @import("std");
-const TransformPipeline = @import("../TransformPipeline.zig");
+const Rewrite = @import("../Rewrite.zig");
 const localca = @import("localca");
 const Session = localca.Session;
 const Exchange = @import("Exchange.zig");
@@ -12,8 +12,8 @@ const Connection = @This();
 
 options: H2Options,
 
-/// Binds an HTTP/2 TLS session to its exchange and immutable transform
-/// configuration.
+/// Binds an HTTP/2 TLS session to its exchange and the rewrites its request
+/// heads receive.
 ///
 /// ```zig
 /// var connection = Connection.init(options);
@@ -36,8 +36,7 @@ pub fn run(self: *Connection) void {
     defer requests.deinit();
     var relay: RelayContext = .{
         .io = options.io,
-        .transforms = options.transforms,
-        .has_custom_transformers = options.has_custom_transformers,
+        .request_rewrites = options.request_rewrites,
         .session = options.session,
         .exchange = options.exchange,
         .responses = if (options.exchange.dialect == .anthropic_messages) &responses else null,
@@ -51,8 +50,7 @@ pub fn run(self: *Connection) void {
 const H2Options = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
-    transforms: *const TransformPipeline,
-    has_custom_transformers: bool,
+    request_rewrites: []const Rewrite,
     session: *Session,
     exchange: *Exchange,
     captures: ?*Producer = null,

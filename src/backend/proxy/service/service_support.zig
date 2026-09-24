@@ -48,15 +48,12 @@ pub fn acceptConnections(service: *Service) anyerror!void {
 
 fn serveConnection(service: *Service, stream: std.Io.net.Stream) std.Io.Cancelable!void {
     defer service.connection_slots.release();
-    const configuration = service.configuration.view();
 
     var tunnel = Tunnel.init(.{
         .dependencies = .{
             .tls = service.interception.tunnelResources(&service.telemetry),
             .credentials = &service.credentials,
             .observations = &service.observations,
-            .transforms = configuration.transforms,
-            .has_custom_transformers = configuration.has_custom_transformers,
             .connection_ids = &service.next_connection_id,
             .captures = &service.captures,
         },

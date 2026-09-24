@@ -101,9 +101,10 @@ recording headers or payloads. Their interpretation is documented in
   boundary.
 - `Claude request bodies refine interleaved route candidates per stream` (`tunnel/h2.zig`)
   covers concurrent body classification and stream identity.
-- `Claude inference requests negotiate identity encoding` and
-  `service negotiates identity encoding for Claude message requests` cover the
-  provider rule and its installation in the live transform pipeline.
+- `Claude inference requests negotiate identity encoding`
+  (`provider/claude_transport.zig`) covers the provider rewrite, and
+  `only request heads with rewrites are transcoded` (`tunnel/h2.zig`) covers
+  which directions receive it.
 - `Claude SSE completion is published after forwarded response activity`
   covers HTTP framing, byte forwarding, SSE parsing, provider interpretation,
   publication, and queue delivery.

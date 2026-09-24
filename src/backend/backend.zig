@@ -109,7 +109,6 @@ test {
     _ = @import("proxy/provider/request_body.zig");
     _ = @import("proxy/provider/request_support.zig");
     _ = @import("proxy/proxy_namespace.zig");
-    _ = @import("proxy/service/configuration_support.zig");
     _ = @import("proxy/service/interception_support.zig");
     _ = @import("proxy/service/listener_support.zig");
     _ = @import("proxy/service/service_namespace.zig");

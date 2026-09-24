@@ -3,8 +3,7 @@
 const relay_mod = @import("relay.zig");
 const GenericConnectionPort = @import("GenericConnectionPort.zig").Type;
 const GenericConnection = @import("GenericConnection.zig").Type;
-const TransformPipeline = @import("../TransformPipeline.zig");
-const TransformContext = @import("../TransformContext.zig");
+const Rewrite = @import("../Rewrite.zig");
 const std = @import("std");
 const localca = @import("localca");
 const Session = localca.Session;
@@ -56,9 +55,7 @@ pub fn relayOptions(direction: relay_mod.Direction, settings: *Settings, configu
         .transformation = if (configuration.transformation) |selected| .{
             .source_settings = source_settings,
             .target_settings = target_settings,
-            .pipeline = selected.pipeline,
-            .io = selected.io,
-            .context = selected.context,
+            .rewrites = selected.rewrites,
         } else null,
     };
 }
@@ -97,9 +94,7 @@ pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
             },
             .source_settings = transformation.source_settings,
             .target_settings = transformation.target_settings,
-            .pipeline = transformation.pipeline,
-            .io = transformation.io,
-            .transform_context = transformation.context,
+            .rewrites = transformation.rewrites,
         },
         sink,
     );
@@ -107,8 +102,7 @@ pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
 
 test "relay options map direction and peer settings" {
     var settings: Settings = .{};
-    var pipeline: TransformPipeline = .{};
-    const context: TransformContext = undefined;
+    const no_rewrites: []const Rewrite = &.{};
 
     const observed_request = relayOptions(.request, &settings, .{ .dialect = .unknown });
     try std.testing.expectEqual(Session.Side.child, observed_request.route.from);
@@ -119,9 +113,7 @@ test "relay options map direction and peer settings" {
     const request = relayOptions(.request, &settings, .{
         .dialect = .anthropic_messages,
         .transformation = .{
-            .pipeline = &pipeline,
-            .io = std.testing.io,
-            .context = context,
+            .rewrites = no_rewrites,
         },
     });
     try std.testing.expectEqual(Session.Side.child, request.route.from);
@@ -133,9 +125,7 @@ test "relay options map direction and peer settings" {
     const response = relayOptions(.response, &settings, .{
         .dialect = .openai_responses,
         .transformation = .{
-            .pipeline = &pipeline,
-            .io = std.testing.io,
-            .context = context,
+            .rewrites = no_rewrites,
         },
     });
     try std.testing.expectEqual(Session.Side.origin, response.route.from);

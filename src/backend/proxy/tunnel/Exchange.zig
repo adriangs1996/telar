@@ -5,7 +5,6 @@ const Credential = @import("../Credential.zig");
 const types = @import("../../agent/types.zig");
 const middleware = @import("../middleware.zig");
 const metrics = @import("../metrics.zig");
-const TransformContext = @import("../TransformContext.zig");
 const Exchange = @This();
 
 io: std.Io,
@@ -68,29 +67,6 @@ pub fn publishStatus(self: *Exchange, status: Status) void {
     });
 }
 
-/// Builds the immutable identity and routing context passed to one header
-/// transformation.
-///
-/// ```zig
-/// const context = exchange.transformContext(.{
-///     .direction = .request,
-///     .kind = .request,
-///     .stream_id = 0,
-/// });
-/// ```
-pub fn transformContext(self: *const Exchange, target: TransformTarget) TransformContext {
-    return .{
-        .pane_id = self.credential.pane_id,
-        .pane_generation = self.credential.pane_generation,
-        .dialect = self.dialect,
-        .protocol = self.protocol,
-        .direction = target.direction,
-        .kind = target.kind,
-        .connection_id = self.connection_id,
-        .stream_id = target.stream_id,
-    };
-}
-
 /// Records one outcome detected by a protocol adapter.
 ///
 /// ```zig
@@ -99,12 +75,6 @@ pub fn transformContext(self: *const Exchange, target: TransformTarget) Transfor
 pub fn record(self: *Exchange, counter: metrics.Counter) void {
     self.telemetry.record(counter);
 }
-
-const TransformTarget = struct {
-    direction: middleware.Direction,
-    kind: middleware.HeaderKind,
-    stream_id: u32,
-};
 
 const Status = struct {
     phase: middleware.Phase,

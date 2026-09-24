@@ -84,6 +84,11 @@ pub fn apply(self: *Headers, effects: []const middleware.Effect) !void {
     if (effects.len == 0) {
         return;
     }
+
+    if (effects.len > middleware.max_effects) {
+        return error.TooManyHeaderEffects;
+    }
+
     var replacement: Headers = .{};
     var inserted: [middleware.max_effects]bool = @splat(false);
 

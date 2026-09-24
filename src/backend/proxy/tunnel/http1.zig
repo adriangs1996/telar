@@ -69,13 +69,7 @@ fn relayRequestHead(connection: *Http1Connection) ?RequestHead {
             .response_to_head = false,
             .dialect = connection.exchange.dialect,
         },
-        .pipeline = connection.transforms,
-        .io = connection.io,
-        .context = connection.exchange.transformContext(.{
-            .direction = .request,
-            .kind = .request,
-            .stream_id = 0,
-        }),
+        .rewrites = connection.request_rewrites,
         .capture = connection.request_capture,
     }) orelse return null;
 
@@ -143,13 +137,7 @@ fn relayResponse(connection: *Http1Connection, request: RequestHead) ?ResponseHe
                 .is_response = true,
                 .response_to_head = request.response_context == .head_request,
             },
-            .pipeline = connection.transforms,
-            .io = connection.io,
-            .context = connection.exchange.transformContext(.{
-                .direction = .response,
-                .kind = .response,
-                .stream_id = 0,
-            }),
+            .rewrites = &.{},
             .capture = connection.response_capture,
         }) orelse return null;
 
@@ -290,7 +278,7 @@ test "Claude request bodies refine route candidates before publication" {
     try harness.init();
     var connection = Http1Connection.init(.{
         .io = std.testing.io,
-        .transforms = undefined,
+        .request_rewrites = &.{},
         .session = undefined,
         .exchange = &harness.exchange,
     });

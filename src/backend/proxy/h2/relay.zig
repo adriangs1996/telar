@@ -7,7 +7,6 @@
 
 const h2frames = @import("h2frames");
 const framing = h2frames.framing;
-const stream_state = h2frames.streams;
 const GenericTranscodePort = @import("GenericTranscodePort.zig").Type;
 const Observer = @import("Observer.zig");
 const std = @import("std");
@@ -18,8 +17,7 @@ const middleware = @import("../middleware.zig");
 const HeaderEmission = @import("HeaderEmission.zig");
 const BodyCollector = @import("BodyCollector.zig");
 const TestTranscodeSetup = @import("TestTranscodeSetup.zig");
-const Transformation = @import("../Transformation.zig");
-const TransformPipeline = @import("../TransformPipeline.zig");
+const Rewrite = @import("../Rewrite.zig");
 const localca = @import("localca");
 const Session = localca.Session;
 
@@ -141,9 +139,7 @@ pub fn relayTransformed(session: anytype, transformed_route: TransformedRoute, s
         .to = route.to,
         .source_settings = transformed_route.source_settings,
         .target_settings = transformed_route.target_settings,
-        .pipeline = transformed_route.pipeline,
-        .io = transformed_route.io,
-        .transform_context = transformed_route.transform_context,
+        .rewrites = transformed_route.rewrites,
     };
     var transcoder = Transcoder.init(route.dialect, configuration);
     defer transcoder.deinit();
@@ -859,9 +855,7 @@ fn initTestTranscoder(setup: TestTranscodeSetup) Transcoder {
         .to = setup.to,
         .source_settings = setup.source_settings,
         .target_settings = setup.target_settings,
-        .pipeline = setup.pipeline,
-        .io = std.testing.io,
-        .transform_context = undefined,
+        .rewrites = setup.rewrites,
     });
 }
 
@@ -898,15 +892,11 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
         compressed[0..@intCast(compressed_len)],
     );
 
-    const AddHeader = struct {
-        fn transform(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
-            transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = AddHeader.transform });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{
+            .{ .set = .{ .name = "x-telar", .value = "enabled", .sensitive = false } },
+        },
+    }};
     var session: FakeWriteSession = .{};
     const Collector = struct {
         session: *const FakeWriteSession,
@@ -931,7 +921,7 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
     target_settings.header_table_size.store(8192, .seq_cst);
-    var transcoder = initTestTranscoder(.{ .dialect = .openai_responses, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .openai_responses, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .rewrites = &head_rewrites });
     defer transcoder.deinit();
     for (frame[0 .. framing.header_bytes + @as(usize, @intCast(compressed_len))]) |byte|
         try std.testing.expect(transcoder.process(
@@ -1005,14 +995,9 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
     try std.testing.expectEqual(@as(c_int, 0), c.nghttp2_hd_inflate_new(&output_inflater));
     defer c.nghttp2_hd_inflate_del(output_inflater);
 
-    const Identity = struct {
-        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{},
+    }};
     const Collector = struct {
         completed: usize = 0,
         pub fn emit(self: *@This(), event: Event) void {
@@ -1027,7 +1012,7 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .rewrites = &head_rewrites });
     defer transcoder.deinit();
 
     for (1..3) |stream_id| {
@@ -1138,14 +1123,9 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
         first = false;
     }
 
-    const Identity = struct {
-        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{},
+    }};
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
     };
@@ -1153,7 +1133,7 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .rewrites = &head_rewrites });
     defer transcoder.deinit();
     var input_offset: usize = 0;
     while (input_offset < input_len) {
@@ -1207,14 +1187,9 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
 }
 
 test "HTTP2 SETTINGS update the opposite encoder bounds without changing wire bytes" {
-    const Identity = struct {
-        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{},
+    }};
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
     };
@@ -1222,7 +1197,7 @@ test "HTTP2 SETTINGS update the opposite encoder bounds without changing wire by
     var session: FakeWriteSession = .{};
     var child_settings: PeerSettings = .{};
     var origin_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &child_settings, .target_settings = &origin_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &child_settings, .target_settings = &origin_settings, .rewrites = &head_rewrites });
     defer transcoder.deinit();
 
     var settings_frame: [framing.header_bytes + 12]u8 = undefined;
@@ -1265,19 +1240,14 @@ test "HTTP2 transform mode carries SSE response metadata into DATA events" {
     writeFrameHeader(data[0..framing.header_bytes], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 19 });
     @memcpy(data[framing.header_bytes..], payload);
 
-    const Identity = struct {
-        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{},
+    }};
     var collector: BodyCollector = .{};
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .rewrites = &head_rewrites });
     defer transcoder.deinit();
 
     try std.testing.expect(transcoder.process(
@@ -1301,14 +1271,9 @@ test "HTTP2 transform mode carries SSE response metadata into DATA events" {
 }
 
 test "HTTP2 transform mode exposes unpadded response DATA without changing wire bytes" {
-    const Identity = struct {
-        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{},
+    }};
 
     const payload = "event: message_delta\ndata: transformed\n\n";
     var wire: [framing.header_bytes + payload.len]u8 = undefined;
@@ -1320,7 +1285,7 @@ test "HTTP2 transform mode exposes unpadded response DATA without changing wire 
         var session: FakeWriteSession = .{};
         var source_settings: PeerSettings = .{};
         var target_settings: PeerSettings = .{};
-        var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+        var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .rewrites = &head_rewrites });
         defer transcoder.deinit();
 
         try std.testing.expect(transcoder.process(
@@ -1340,14 +1305,9 @@ test "HTTP2 transform mode exposes unpadded response DATA without changing wire 
 }
 
 test "HTTP2 transform mode exposes request DATA without changing wire bytes" {
-    const Identity = struct {
-        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{},
+    }};
 
     const payload = "{\"stream\":true}";
     var wire: [framing.header_bytes + payload.len]u8 = undefined;
@@ -1359,7 +1319,7 @@ test "HTTP2 transform mode exposes request DATA without changing wire bytes" {
         var session: FakeWriteSession = .{};
         var source_settings: PeerSettings = .{};
         var target_settings: PeerSettings = .{};
-        var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+        var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .rewrites = &head_rewrites });
         defer transcoder.deinit();
 
         try std.testing.expect(transcoder.process(
@@ -1382,14 +1342,9 @@ test "HTTP2 transform mode exposes request DATA without changing wire bytes" {
 }
 
 test "HTTP2 transform mode excludes DATA padding under single-byte reads" {
-    const Identity = struct {
-        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{},
+    }};
 
     const payload = "payload";
     const padding_len = 3;
@@ -1405,7 +1360,7 @@ test "HTTP2 transform mode excludes DATA padding under single-byte reads" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .rewrites = &head_rewrites });
     defer transcoder.deinit();
 
     for (wire) |byte| {
@@ -1421,14 +1376,9 @@ test "HTTP2 transform mode excludes DATA padding under single-byte reads" {
 }
 
 test "HTTP2 transform mode relays DATA and control frames byte for byte" {
-    const Identity = struct {
-        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{},
+    }};
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
     };
@@ -1436,7 +1386,7 @@ test "HTTP2 transform mode relays DATA and control frames byte for byte" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .rewrites = &head_rewrites });
     defer transcoder.deinit();
 
     var wire: [3 * framing.header_bytes + 17]u8 = undefined;
@@ -1491,16 +1441,12 @@ test "HTTP2 invalid transform effects preserve the original semantic head" {
         compressed[0..@intCast(compressed_len)],
     );
 
-    const Invalid = struct {
-        fn transform(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
-            transformation.effects.remove(":scheme") catch return .preserve;
-            transformation.effects.set(.{ .name = "content-length", .value = "9" }) catch return .preserve;
-            return .apply;
-        }
-    };
-    var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &ignored, .transform = Invalid.transform });
+    const head_rewrites = [_]Rewrite{.{
+        .effects = &.{
+            .{ .remove = .{ .name = ":scheme" } },
+            .{ .set = .{ .name = "content-length", .value = "9", .sensitive = false } },
+        },
+    }};
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
     };
@@ -1508,7 +1454,7 @@ test "HTTP2 invalid transform effects preserve the original semantic head" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .rewrites = &head_rewrites });
     defer transcoder.deinit();
     try std.testing.expect(transcoder.process(
         frame[0 .. framing.header_bytes + @as(usize, @intCast(compressed_len))],
@@ -1528,7 +1474,7 @@ test "HTTP2 invalid transform effects preserve the original semantic head" {
     try std.testing.expectEqualStrings("4", decoded.find("content-length").?);
 }
 
-test "HTTP2 PUSH_PROMISE exposes the promised stream to transformers" {
+test "HTTP2 PUSH_PROMISE heads match push-promise rewrites" {
     var input_deflater: ?*c.nghttp2_hd_deflater = null;
     try std.testing.expectEqual(@as(c_int, 0), c.nghttp2_hd_deflate_new(&input_deflater, 4096));
     defer c.nghttp2_hd_deflate_del(input_deflater);
@@ -1558,19 +1504,12 @@ test "HTTP2 PUSH_PROMISE exposes the promised stream to transformers" {
         compressed[0..@intCast(compressed_len)],
     );
 
-    const Capture = struct {
-        stream_id: u32 = 0,
-        kind: middleware.HeaderKind = .trailers,
-        fn transform(raw: *anyopaque, transformation: Transformation) middleware.TransformStatus {
-            const self: *@This() = @ptrCast(@alignCast(raw));
-            self.stream_id = transformation.snapshot.context.stream_id;
-            self.kind = transformation.snapshot.context.kind;
-            return .preserve;
-        }
-    };
-    var capture: Capture = .{};
-    var pipeline: TransformPipeline = .{};
-    try pipeline.add(.{ .context = &capture, .transform = Capture.transform });
+    const head_rewrites = [_]Rewrite{.{
+        .kind = .push_promise,
+        .effects = &.{
+            .{ .set = .{ .name = "x-promised", .value = "yes", .sensitive = false } },
+        },
+    }};
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
     };
@@ -1578,19 +1517,27 @@ test "HTTP2 PUSH_PROMISE exposes the promised stream to transformers" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .rewrites = &head_rewrites });
     defer transcoder.deinit();
     try std.testing.expect(transcoder.process(
         frame[0 .. framing.header_bytes + 4 + @as(usize, @intCast(compressed_len))],
         transcodePort(&session, &collector),
     ));
-    try std.testing.expectEqual(@as(u32, 2), capture.stream_id);
-    try std.testing.expectEqual(middleware.HeaderKind.push_promise, capture.kind);
     try std.testing.expectEqual(@as(u32, 2), std.mem.readInt(
         u32,
         session.output[framing.header_bytes..][0..4],
         .big,
     ));
+    const output_len = (@as(usize, session.output[0]) << 16) |
+        (@as(usize, session.output[1]) << 8) | session.output[2];
+    var output_inflater: ?*c.nghttp2_hd_inflater = null;
+    try std.testing.expectEqual(@as(c_int, 0), c.nghttp2_hd_inflate_new(&output_inflater));
+    defer c.nghttp2_hd_inflate_del(output_inflater);
+    const decoded = try decodeTestHeaderBlock(
+        output_inflater.?,
+        session.output[framing.header_bytes + 4 ..][0 .. output_len - 4],
+    );
+    try std.testing.expectEqualStrings("yes", decoded.find("x-promised").?);
 }
 
 const FakeWriteSession = struct {

@@ -2,7 +2,7 @@ const core = @import("telar-core");
 const Resources = @import("Resources.zig");
 const Registry = @import("../Registry.zig");
 const Channel = @import("../Channel.zig");
-const TransformPipeline = @import("../TransformPipeline.zig");
+const claude_transport = @import("../provider/claude_transport.zig");
 const Producer = @import("../capture/Producer.zig");
 const std = @import("std");
 const head_support = @import("../http/head_support.zig");
@@ -112,8 +112,7 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
         var connection = H2Connection.init(.{
             .io = io,
             .gpa = dependencies.tls.gpa,
-            .transforms = dependencies.transforms,
-            .has_custom_transformers = dependencies.has_custom_transformers,
+            .request_rewrites = claude_transport.requestRewrites(exchange.dialect),
             .session = session,
             .exchange = &exchange,
             .captures = dependencies.captures,
@@ -125,7 +124,7 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
 
     var connection = Http1Connection.init(.{
         .io = io,
-        .transforms = dependencies.transforms,
+        .request_rewrites = claude_transport.requestRewrites(exchange.dialect),
         .session = session,
         .exchange = &exchange,
         .captures = dependencies.captures,
@@ -142,8 +141,6 @@ const Dependencies = struct {
     tls: Resources,
     credentials: *Registry,
     observations: *Channel,
-    transforms: *const TransformPipeline,
-    has_custom_transformers: bool,
     connection_ids: *std.atomic.Value(u64),
     captures: *Producer,
 };

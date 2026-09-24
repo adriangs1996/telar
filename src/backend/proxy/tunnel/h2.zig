@@ -23,7 +23,7 @@ const Counters = @import("../Counters.zig");
 const identity = @import("../identity.zig");
 const Snapshot = @import("../Snapshot.zig");
 const Streams = @import("../provider/Streams.zig");
-const TransformPipeline = @import("../TransformPipeline.zig");
+const claude_transport = @import("../provider/claude_transport.zig");
 const ResponseStreams = @import("../provider/ResponseStreams.zig");
 const Producer = @import("../capture/Producer.zig");
 const Registry = @import("../Registry.zig");
@@ -78,35 +78,15 @@ fn relayResponse(context: *RelayContext, settings: *Settings) Stats {
 }
 
 fn relayOptions(context: *RelayContext, settings: *Settings, direction: relay_module.Direction) RelayOptions {
-    const kind: middleware.HeaderKind = switch (direction) {
-        .request => .request,
-        .response => .response,
-    };
-    const transform_direction: middleware.Direction = switch (direction) {
-        .request => .request,
-        .response => .response,
+    const rewrites = switch (direction) {
+        .request => context.request_rewrites,
+        .response => &.{},
     };
 
     return h2.relayOptions(direction, settings, .{
         .dialect = context.exchange.dialect,
-        .transformation = if (!shouldTransform(context, direction)) null else .{
-            .pipeline = context.transforms,
-            .io = context.io,
-            .context = context.exchange.transformContext(.{
-                .direction = transform_direction,
-                .kind = kind,
-                .stream_id = 0,
-            }),
-        },
+        .transformation = if (rewrites.len == 0) null else .{ .rewrites = rewrites },
     });
-}
-
-fn shouldTransform(context: *const RelayContext, direction: relay_module.Direction) bool {
-    if (context.has_custom_transformers) {
-        return true;
-    }
-
-    return context.exchange.dialect == .anthropic_messages and direction == .request;
 }
 
 fn recordDecodeFailure(context: *RelayContext, _: relay_module.Direction) void {
@@ -201,30 +181,25 @@ test "payload inspection requires a successful SSE response body" {
     }));
 }
 
-test "built-in Claude negotiation transforms only request heads" {
+test "only request heads with rewrites are transcoded" {
     var harness: H2TestHarness = .{};
     try harness.init();
-    var transforms: TransformPipeline = .{};
+    var settings: Settings = .{};
     var context: RelayContext = .{
         .io = std.testing.io,
-        .transforms = &transforms,
-        .has_custom_transformers = false,
+        .request_rewrites = claude_transport.requestRewrites(.anthropic_messages),
         .session = undefined,
         .exchange = &harness.exchange,
         .responses = null,
         .requests = null,
     };
 
-    try std.testing.expect(shouldTransform(&context, .request));
-    try std.testing.expect(!shouldTransform(&context, .response));
+    try std.testing.expect(relayOptions(&context, &settings, .request).transformation != null);
+    try std.testing.expect(relayOptions(&context, &settings, .response).transformation == null);
 
-    harness.exchange.dialect = .openai_responses;
-    try std.testing.expect(!shouldTransform(&context, .request));
-    try std.testing.expect(!shouldTransform(&context, .response));
-
-    context.has_custom_transformers = true;
-    try std.testing.expect(shouldTransform(&context, .request));
-    try std.testing.expect(shouldTransform(&context, .response));
+    context.request_rewrites = claude_transport.requestRewrites(.openai_responses);
+    try std.testing.expect(relayOptions(&context, &settings, .request).transformation == null);
+    try std.testing.expect(relayOptions(&context, &settings, .response).transformation == null);
 }
 
 test "final DATA publishes Claude completion before transport completion" {
@@ -275,11 +250,9 @@ test "final DATA publishes Claude completion before transport completion" {
 test "decode failure increments only the HTTP2 counter" {
     var harness: H2TestHarness = .{};
     try harness.init();
-    var transforms: TransformPipeline = .{};
     var context: RelayContext = .{
         .io = std.testing.io,
-        .transforms = &transforms,
-        .has_custom_transformers = false,
+        .request_rewrites = &.{},
         .session = undefined,
         .exchange = &harness.exchange,
         .responses = null,

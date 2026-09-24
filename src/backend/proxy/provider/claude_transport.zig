@@ -1,170 +1,74 @@
 //! HTTP negotiation required to observe Claude's streaming protocol.
 
-const Transformer = @import("../Transformer.zig");
-const Transformation = @import("../Transformation.zig");
-const middleware = @import("../middleware.zig");
-const request = @import("request_support.zig");
-const HeaderView = @import("../HeaderView.zig");
 const std = @import("std");
+const Headers = @import("../Headers.zig");
+const Rewrite = @import("../Rewrite.zig");
+const rewrites = @import("../rewrites.zig");
+const request_support = @import("request_support.zig");
 const types = @import("../../agent/types.zig");
-const EffectBatch = @import("../EffectBatch.zig");
+const middleware = @import("../middleware.zig");
 
-var stateless_context: u8 = 0;
+/// Asks Claude inference routes for identity-encoded SSE, so the proxy can
+/// read the stream it forwards. Auxiliary routes, responses and other
+/// providers keep their headers.
+const identity_encoding = [_]Rewrite{.{
+    .direction = .request,
+    .kind = .request,
+    .method = "POST",
+    .paths = &request_support.anthropic_inference_paths,
+    .effects = &.{.{ .set = .{ .name = "accept-encoding", .value = "identity", .sensitive = false } }},
+}};
 
-/// Returns the header transformer that requests identity-encoded Claude SSE.
-/// It changes only Claude `POST /v1/messages` request headers; auxiliary
-/// routes, responses, and other providers are preserved.
+/// The request rewrites a tunnel to `dialect` hands its relay.
 ///
 /// ```zig
-/// try pipeline.add(claude_transport.requestTransformer());
+/// const request_rewrites = claude_transport.requestRewrites(exchange.dialect);
 /// ```
-pub fn requestTransformer() Transformer {
-    return .{ .context = &stateless_context, .transform = transform };
+pub fn requestRewrites(dialect: types.ApiDialect) []const Rewrite {
+    return switch (dialect) {
+        .anthropic_messages => &identity_encoding,
+        .openai_responses, .unknown => &.{},
+    };
 }
 
-fn transform(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
-    const snapshot = transformation.snapshot;
-
-    if (snapshot.context.dialect != .anthropic_messages or
-        snapshot.context.direction != .request or
-        snapshot.context.kind != .request)
-    {
-        return .preserve;
-    }
-
-    const method = uniqueHeader(snapshot.fields, ":method") orelse return .preserve;
-    const target = uniqueHeader(snapshot.fields, ":path") orelse return .preserve;
-    if (request.classify(.anthropic_messages, .{ .method = method, .target = target }) != .inference) {
-        return .preserve;
-    }
-
-    transformation.effects.set(.{
-        .name = "accept-encoding",
-        .value = "identity",
-    }) catch return .preserve;
-    return .apply;
-}
-
-fn uniqueHeader(fields: []const HeaderView, wanted: []const u8) ?[]const u8 {
-    var found: ?[]const u8 = null;
-
-    for (fields) |field| {
-        if (!std.ascii.eqlIgnoreCase(field.name, wanted)) {
-            continue;
-        }
-
-        if (found != null) {
-            return null;
-        }
-
-        found = field.value;
-    }
-
-    return found;
-}
-
-fn apply(case: TransformCase, effects: *EffectBatch) middleware.TransformStatus {
-    var fields: [3]HeaderView = undefined;
-    fields[0] = .{ .name = ":method", .value = case.method };
-    fields[1] = .{ .name = ":path", .value = case.target };
-    var len: usize = 2;
-
+fn rewritten(case: RewriteCase) !Headers {
+    var headers: Headers = .{};
+    try headers.append(.{ .name = ":method", .value = case.method });
+    try headers.append(.{ .name = ":path", .value = case.target });
     if (case.encoding) |encoding| {
-        fields[len] = .{ .name = "accept-encoding", .value = encoding };
-        len += 1;
+        try headers.append(.{ .name = "accept-encoding", .value = encoding });
     }
 
-    return transform(&stateless_context, .{
-        .io = std.testing.io,
-        .snapshot = .{
-            .context = .{
-                .pane_id = @enumFromInt(1),
-                .pane_generation = 1,
-                .dialect = case.dialect,
-                .protocol = .http11,
-                .direction = case.direction,
-                .kind = case.kind,
-                .connection_id = 1,
-                .stream_id = 0,
-            },
-            .fields = fields[0..len],
-        },
-        .effects = effects,
-    });
-}
-
-fn expectIdentityEffect(effects: *const EffectBatch) !void {
-    try std.testing.expectEqual(@as(u8, 1), effects.len);
-
-    switch (effects.effects[0]) {
-        .set => |header| {
-            try std.testing.expectEqualStrings("accept-encoding", header.name);
-            try std.testing.expectEqualStrings("identity", header.value);
-            try std.testing.expect(!header.sensitive);
-        },
-        .remove => return error.ExpectedSetEffect,
-    }
+    _ = rewrites.apply(requestRewrites(case.dialect), .{ .direction = case.direction, .kind = case.kind }, &headers);
+    return headers;
 }
 
 test "Claude inference requests negotiate identity encoding" {
     inline for (.{
-        TransformCase{},
-        TransformCase{ .target = "/v1/messages?beta=true" },
-        TransformCase{ .encoding = null },
+        RewriteCase{},
+        RewriteCase{ .target = "/v1/messages?beta=true" },
+        RewriteCase{ .encoding = null },
     }) |case| {
-        var effects: EffectBatch = .{};
-
-        try std.testing.expectEqual(middleware.TransformStatus.apply, apply(case, &effects));
-        try expectIdentityEffect(&effects);
+        const headers = try rewritten(case);
+        try std.testing.expectEqualStrings("identity", headers.find("accept-encoding").?);
     }
 }
 
 test "Claude identity negotiation preserves unrelated traffic" {
     inline for (.{
-        TransformCase{ .dialect = .openai_responses },
-        TransformCase{ .direction = .response },
-        TransformCase{ .kind = .trailers },
-        TransformCase{ .method = "GET" },
-        TransformCase{ .target = "/v1/messages/count_tokens" },
-        TransformCase{ .target = "/api/event_logging/v2/batch" },
+        RewriteCase{ .dialect = .openai_responses },
+        RewriteCase{ .direction = .response },
+        RewriteCase{ .kind = .trailers },
+        RewriteCase{ .method = "GET" },
+        RewriteCase{ .target = "/v1/messages/count_tokens" },
+        RewriteCase{ .target = "/api/event_logging/v2/batch" },
     }) |case| {
-        var effects: EffectBatch = .{};
-
-        try std.testing.expectEqual(middleware.TransformStatus.preserve, apply(case, &effects));
-        try std.testing.expectEqual(@as(u8, 0), effects.len);
+        const headers = try rewritten(case);
+        try std.testing.expectEqualStrings("gzip, br", headers.find("accept-encoding").?);
     }
 }
 
-test "Claude identity negotiation rejects ambiguous pseudo headers" {
-    const fields = [_]HeaderView{
-        .{ .name = ":method", .value = "POST" },
-        .{ .name = ":path", .value = "/v1/messages" },
-        .{ .name = ":path", .value = "/v1/messages" },
-    };
-    var effects: EffectBatch = .{};
-    const status = transform(&stateless_context, .{
-        .io = std.testing.io,
-        .snapshot = .{
-            .context = .{
-                .pane_id = @enumFromInt(1),
-                .pane_generation = 1,
-                .dialect = .anthropic_messages,
-                .protocol = .h2,
-                .direction = .request,
-                .kind = .request,
-                .connection_id = 1,
-                .stream_id = 1,
-            },
-            .fields = &fields,
-        },
-        .effects = &effects,
-    });
-
-    try std.testing.expectEqual(middleware.TransformStatus.preserve, status);
-    try std.testing.expectEqual(@as(u8, 0), effects.len);
-}
-
-const TransformCase = struct {
+const RewriteCase = struct {
     dialect: types.ApiDialect = .anthropic_messages,
     direction: middleware.Direction = .request,
     kind: middleware.HeaderKind = .request,

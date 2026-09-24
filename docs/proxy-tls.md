@@ -2,9 +2,11 @@
 
 ProxyTLS is an opt-in runtime service that observes HTTPS request lifecycles
 without depending on Codex or Claude Code harness hooks. Its first consumer is
-agent state in the sidebar. The native proxy also has a bounded semantic
-request-head transformation boundary for future extensions. Production does
-not install a transformer today, so enabling ProxyTLS alone never alters HTTP.
+agent state in the sidebar. The native proxy also rewrites heads by data:
+bounded `set` and `remove` effects that apply to the heads they match.
+Production installs one rewrite, identity encoding on Claude inference
+requests, so the proxy can read the SSE stream it forwards; every other head
+passes unchanged.
 
 Enable it in `config.lua` and restart the long-lived runtime:
 
@@ -77,8 +79,8 @@ downstream. It supports HTTP/1.1 and HTTP/2.
 In HTTP/1.1, the default path relays each head and framed body unchanged.
 Request bodies and origin responses run concurrently, so `100 Continue`, `103
 Early Hints`, and final responses that reject an unfinished upload reach the
-child without deadlock. A registered transformer may change the method,
-request target, status, or headers. Telar validates and reserializes the whole
+child without deadlock. A matching rewrite may change the method, request
+target, status, or headers. Telar validates and reserializes the whole
 head. An invalid effect, an oversized result, changed body framing, changed
 upgrade semantics, or changed connection-close semantics preserves the exact
 original head bytes.
@@ -88,7 +90,7 @@ copy of each bounded header block through an independent nghttp2 HPACK inflater
 per direction. Invalid framing, an HPACK error, or an oversized header block
 disables metadata inspection for that direction; traffic continues unchanged.
 
-Installing a transformer selects the semantic-head path. Each direction then
+A direction with rewrites takes the semantic-head path. Each direction then
 owns an independent HPACK inflater and deflater. Telar buffers only HEADERS,
 PUSH_PROMISE, and CONTINUATION blocks, validates their pseudo-headers, applies
 one atomic effect batch at a time, and emits a new bounded header block that
@@ -102,24 +104,23 @@ re-encodes them through the proxy's current HPACK context. Once that context
 has diverged from the source, a malformed or oversized compressed block cannot
 be copied safely to the receiver. The transformed connection therefore fails
 explicitly instead of forwarding bytes against the wrong dynamic table. This
-failure mode exists only when a transformer has been registered.
+failure mode exists only on a direction that has rewrites.
 
-## Transformation contract
+## Rewrite contract
 
-The native boundary accepts at most eight immutable transformers. A callback
-receives an owned, immutable snapshot with pane identity and generation, API
-dialect, protocol, direction, header kind, connection ID, stream ID, and header
-fields.
-It returns no more than 32 typed `set` or `remove` effects using at most 8 KiB.
+A rewrite is data: the direction and header kind it matches, and for request
+heads an optional method and set of paths (compared without the query), plus
+no more than 32 typed `set` or `remove` effects. The tunnel chooses its
+rewrites from the API dialect before relaying; the relay never sees pane
+identity. Every matching rewrite applies as one atomic batch, in order; an
+invalid batch applies nothing from that rewrite.
 The shared representation is bounded to 256 fields and 128 KiB. HTTP/1.1 heads
 have a stricter 32 KiB wire limit; encoded HTTP/2 output is bounded to 256 KiB.
-HPACK dynamic tables are capped at 128 KiB per direction. A callback error or
-invalid complete batch applies nothing from that callback. Pipelines become
-immutable before the listener starts.
+HPACK dynamic tables are capped at 128 KiB per direction.
 
 HTTP/2 transformations enforce lowercase field names, pseudo-header order and
 uniqueness, CONNECT rules, response status syntax, forbidden connection
-headers, and `te: trailers`. A transformer cannot insert a new pseudo-header;
+headers, and `te: trailers`. A rewrite cannot insert a new pseudo-header;
 it can replace or remove an existing one only when the final head remains
 valid. `content-length` values remain unchanged because bodies are not part of
 this contract. Response status changes must retain their informational,
@@ -128,16 +129,14 @@ bodyless, or regular response semantics.
 Header values are not persisted or copied to the lifecycle observation queue.
 When exchange capture is explicitly enabled, original heads and de-framed
 bodies are copied into a separate bounded capture queue. Bodies still stream
-unchanged and are not exposed to transformers. Arbitrary body mutation,
+unchanged and are not exposed to rewrites. Arbitrary body mutation,
 especially a change in length, is a different capability: HTTP/2 would have to
 terminate flow control, and Lua exposure would first need explicit secret
 redaction, retention, timeout, and memory policies.
 
 Known secret names such as `authorization`, `cookie`, and `x-api-key` remain
-marked sensitive even if a native transformer says otherwise, so HPACK never
-indexes a replacement accidentally. Native transformers are trusted runtime
-code and can see the live snapshot. The `proxy.tap` capability is also full
-trust: it receives unredacted headers and bodies, including
+marked sensitive even if a rewrite says otherwise, so HPACK never indexes a
+replacement accidentally. The `proxy.tap` capability is full trust: it receives unredacted headers and bodies, including
 authorization and cookie values. Grant it only to plugin code that may read all
 intercepted traffic.
 
