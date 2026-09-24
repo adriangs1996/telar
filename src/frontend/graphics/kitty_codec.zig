@@ -76,10 +76,7 @@ fn writePlacementAtZ(writer: *std.Io.Writer, placement: PlacementCommand) std.Io
 
 fn protocolImage(image: core.Image) kitty_protocol.Image {
     return .{
-        .format = switch (image.format) {
-            .rgb => .rgb,
-            .rgba => .rgba,
-        },
+        .format = image.format,
         .width = image.width,
         .height = image.height,
     };

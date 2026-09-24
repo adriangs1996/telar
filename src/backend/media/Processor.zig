@@ -1,3 +1,4 @@
+const kitty_protocol = @import("kitty_protocol");
 const core = @import("telar-core");
 const State = @import("State.zig");
 const Pipeline = @import("Pipeline.zig");
@@ -71,7 +72,7 @@ pub fn prepareSharedTransfers(self: *Processor, stats: *Stats) void {
         if (self.state.prepared_transfers.covers(image_key)) {
             continue;
         }
-        const format: core.Format = switch (image.format) {
+        const format: kitty_protocol.Format = switch (image.format) {
             .rgb => .rgb,
             .rgba => .rgba,
             else => continue,

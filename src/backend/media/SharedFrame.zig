@@ -1,3 +1,4 @@
+const kitty_protocol = @import("kitty_protocol");
 const core = @import("telar-core");
 const SharedFrameKey = @import("SharedFrameKey.zig");
 const media = @import("media.zig");
@@ -12,7 +13,7 @@ payload_start: usize,
 payload_end: usize,
 key: SharedFrameKey,
 byte_len: usize,
-format: core.Format,
+format: kitty_protocol.Format,
 width: u32,
 height: u32,
 medium: media.Medium,

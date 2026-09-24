@@ -1,3 +1,4 @@
+const kitty_protocol = @import("kitty_protocol");
 const core = @import("telar-core");
 const media = @import("media.zig");
 /// One complete shared-memory frame the filter selected, handed to a sink
@@ -15,7 +16,7 @@ apc_end: usize,
 encoded_name: []const u8,
 image_id: u32,
 placement_id: u32,
-format: core.Format,
+format: kitty_protocol.Format,
 width: u32,
 height: u32,
 byte_len: usize,

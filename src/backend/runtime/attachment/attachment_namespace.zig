@@ -2,6 +2,7 @@
 //!
 //! `Attachment` is the supported seam. Cell projection and graphics transfer
 //! remain private synchronization modules with independent state and budgets.
+const kitty_protocol = @import("kitty_protocol");
 
 const core = @import("telar-core");
 const std = @import("std");
@@ -324,7 +325,7 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
         if (knowsImage(attachment, key)) {
             continue;
         }
-        const format: core.Format = switch (image.format) {
+        const format: kitty_protocol.Format = switch (image.format) {
             .rgb => .rgb,
             .rgba => .rgba,
             // Formats an internal decode path may store but the wire schema

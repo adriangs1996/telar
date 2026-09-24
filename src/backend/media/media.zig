@@ -5,6 +5,7 @@
 //! only durable product is graphics storage. Feeding all output, not only APC
 //! payloads, keeps cursor-relative placements and scroll pins equivalent to
 //! the interactive terminal without sharing mutable emulator state.
+const kitty_protocol = @import("kitty_protocol");
 
 const core = @import("telar-core");
 const png_test = @import("png_test.zig");
@@ -581,7 +582,7 @@ test "a sink that loads shared frames itself receives the parsed frame instead o
     try std.testing.expectEqualStrings("L3B4LTE=", view.encoded_name);
     try std.testing.expectEqual(@as(u32, 7), view.image_id);
     try std.testing.expectEqual(@as(u32, 3), view.placement_id);
-    try std.testing.expectEqual(core.Format.rgba, view.format);
+    try std.testing.expectEqual(kitty_protocol.Format.rgba, view.format);
     try std.testing.expectEqual(@as(u32, 2), view.width);
     try std.testing.expectEqual(@as(usize, 8), view.byte_len);
 }

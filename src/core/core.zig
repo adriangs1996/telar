@@ -87,7 +87,6 @@ pub const Digest = plugin.Digest;
 pub const EnvironmentMode = types.EnvironmentMode;
 pub const FailureCode = types.FailureCode;
 pub const Filters = @import("Filters.zig");
-pub const Format = graphics.Format;
 pub const Frame = @import("schema/Frame.zig");
 pub const FrameAck = @import("schema/messages/FrameAck.zig");
 pub const FrameView = @import("schema/FrameView.zig");

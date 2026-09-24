@@ -26,18 +26,6 @@ pub const max_chunks_per_image: usize = 4096;
 /// bytes, so the wire and both processes agree on that bound.
 pub const max_shm_name_bytes: usize = 31;
 
-pub const Format = enum(u8) {
-    rgb = 24,
-    rgba = 32,
-
-    pub fn bytesPerPixel(self: Format) usize {
-        return switch (self) {
-            .rgb => 3,
-            .rgba => 4,
-        };
-    }
-};
-
 /// Clips a scaled placement in pixel coordinates while preserving the source
 /// rectangle. Integer division rounds inward, so no source pixel can escape
 /// the destination boundary even for non-integral scaling ratios.
