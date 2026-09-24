@@ -1,8 +1,8 @@
 //! Keeps early user input until a pane exists while delivering host replies
 //! through the normal presentation parser. Storage saturation fails explicitly.
+const console = @import("console");
 
 const StartupInput = @import("StartupInput.zig");
-const term = @import("../../presentation/screen_support.zig");
 const std = @import("std");
 
 test "startup preserves typing and partial escapes at every reply boundary" {
@@ -43,7 +43,7 @@ fn collect(state: *StartupInput, bytes: []const u8, capture: *Capture) !void {
 const Capture = struct {
     replies: usize = 0,
 
-    pub fn terminalResponse(self: *Capture, _: term.Event.TerminalResponse) !void {
+    pub fn terminalResponse(self: *Capture, _: console.Event.TerminalResponse) !void {
         self.replies += 1;
     }
 };

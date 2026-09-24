@@ -1,5 +1,6 @@
 //! Terminal implementations of the client's host service ports. Each port
 //! binds one heap-stable client so workers complete through its event loop.
+const console = @import("console");
 const keyinput = @import("keyinput");
 
 const tab_drag = @import("../input/tab_drag.zig");
@@ -8,7 +9,6 @@ const data = @import("model");
 const core = @import("telar-core");
 const TerminalAdapter = @import("../TerminalAdapter.zig");
 const history_inspection = @import("../presentation/history_inspection.zig");
-const term = @import("../../presentation/screen_support.zig");
 
 /// Example: `client.graphics = host_ports.graphicsRetention(terminal);`.
 pub fn graphicsRetention(terminal: *TerminalAdapter) client_module.GraphicsRetention {
@@ -226,7 +226,7 @@ fn routePromptBytes(context: *anyopaque, bytes: []const u8) !void {
     const client = &terminal.app;
     var offset: usize = 0;
     while (offset < bytes.len) {
-        const parsed = term.parse(bytes[offset..]) orelse {
+        const parsed = console.parse(bytes[offset..]) orelse {
             const prompt = client.model.name_prompt.currentConst() orelse return;
             if (prompt.pasting) {
                 _ = try client_module.name_prompt.inputPrompt(

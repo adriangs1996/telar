@@ -115,7 +115,7 @@ color query.
   and probe overlap.
 - `src/frontend/client/session/startup_input.zig`: fragmented replies, preserved
   typing, paste, partial escapes and explicit saturation failure.
-- `src/frontend/presentation/screen_support.zig`: OSC 10/11 parsing, terminators
+- `lib/console/host_input.zig`: OSC 10/11 parsing, terminators
   and malformed RGB.
 - `src/frontend/client/tests/transport.zig`: ordered bootstrap, timeout fallback
   and replay only after pane activation.

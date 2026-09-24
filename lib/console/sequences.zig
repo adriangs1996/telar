@@ -1,6 +1,7 @@
 //! Terminal mode sequences shared by host platform adapters.
 
-const reset_pointer = "\x1b]22;default\x1b\\";
+/// Returns the host pointer to its default shape (OSC 22).
+pub const reset_pointer = "\x1b]22;default\x1b\\";
 
 pub const enter =
     "\x1b[?1049h" ++

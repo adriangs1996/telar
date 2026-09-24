@@ -1,9 +1,8 @@
+const console = @import("console");
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const pointer = @import("pointer.zig");
-const screen_support = @import("screen_support.zig");
 /// Two buffers and the difference between them.
 ///
 /// `back` is what was just drawn; `front` is what the terminal is currently
@@ -139,7 +138,7 @@ pub fn flush(self: *Screen, w: *std.Io.Writer) !Stats {
     if (self.presented_mouse_pointer == null or
         self.presented_mouse_pointer.? != self.mouse_pointer)
     {
-        try w.writeAll(pointer.sequence(self.mouse_pointer));
+        try w.writeAll(console.pointer.sequence(self.mouse_pointer));
     }
 
     var last_style: ?cellgrid.Style = null;
@@ -171,11 +170,11 @@ pub fn flush(self: *Screen, w: *std.Io.Writer) !Stats {
             // unchanged screen this is where the bytes are saved.
             const contiguous = cursor != null and cursor.?.y == y and cursor.?.x == x;
             if (!contiguous) {
-                try screen_support.writeCursorPosition(w, .{ @as(u32, y) + 1, @as(u32, x) + 1 });
+                try console.writeCursorPosition(w, .{ @as(u32, y) + 1, @as(u32, x) + 1 });
             }
 
             if (last_style == null or !last_style.?.eql(next.style)) {
-                try screen_support.writeStyle(w, next.style);
+                try console.writeStyle(w, next.style);
                 last_style = next.style;
             }
 
@@ -194,7 +193,7 @@ pub fn flush(self: *Screen, w: *std.Io.Writer) !Stats {
     // The cursor is placed after the diff, so it ends up where the caller
     // asked rather than wherever the last cell happened to be.
     if (self.cursor) |at| {
-        try screen_support.writeCursorPosition(w, .{ @as(u32, at.y) + 1, @as(u32, at.x) + 1 });
+        try console.writeCursorPosition(w, .{ @as(u32, at.y) + 1, @as(u32, at.x) + 1 });
         try w.writeAll("\x1b[?25h");
     } else {
         try w.writeAll("\x1b[?25l");

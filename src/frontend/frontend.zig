@@ -1,7 +1,5 @@
 //! Public entrypoint for telar-frontend.
-
 const run = @import("client/run.zig");
-const screen_support = @import("presentation/screen_support.zig");
 const goto_picker = @import("widgets/goto_picker.zig");
 const context_support = @import("widgets/context_support.zig");
 const kitty_delivery = @import("graphics/kitty_delivery.zig");
@@ -17,11 +15,9 @@ pub const CompositionResult = @import("workspace/CompositionResult.zig");
 pub const Compositor = @import("workspace/Compositor.zig");
 pub const Context = @import("widgets/Context.zig");
 pub const Entry = @import("widgets/Entry.zig");
-pub const Event = screen_support.Event;
 pub const Field = goto_picker.Field;
 pub const GenericFocus = @import("ui/GenericFocus.zig").Type;
 pub const GenericHits = @import("ui/GenericHits.zig").Type;
-pub const GenericInput = @import("presentation/GenericInput.zig").Type;
 pub const GenericRouter = @import("input/GenericRouter.zig").Type;
 pub const Hits = context_support.Hits;
 pub const KittyGraphicsWriter = @import("graphics/KittyGraphicsWriter.zig");
@@ -33,13 +29,11 @@ pub const Store = kitty_delivery.Store;
 pub const Surface = @import("graphics/Surface.zig");
 pub const apply = frame.apply;
 pub const invalidatePlacements = kitty_delivery.invalidatePlacements;
-pub const parse = screen_support.parse;
 pub const query = capabilities.query;
 pub const render = history_browser.render;
 pub const settledCapabilities = host_negotiation.settledCapabilities;
 pub const timeout_ns = capabilities.timeout_ns;
 pub const translate = host_capabilities.translate;
-pub const writeClipboard = screen_support.writeClipboard;
 
 test {
     _ = @import("attachments/attachments.zig");
@@ -86,8 +80,7 @@ test {
     _ = @import("presentation/diff.zig");
     _ = @import("presentation/frame.zig");
     _ = @import("presentation/pane_labels.zig");
-    _ = @import("presentation/pointer.zig");
-    _ = @import("presentation/screen_support.zig");
+    _ = @import("presentation/screen_tests.zig");
     _ = @import("presentation/window_title.zig");
     _ = @import("ui/focus.zig");
     _ = @import("ui/hits.zig");

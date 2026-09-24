@@ -17,7 +17,6 @@ const Plan = @import("../../ui/Plan.zig");
 const PresentationPlan = @import("../../presentation/Plan.zig");
 const std = @import("std");
 const attachment_preview_module = @import("../../widgets/attachment_preview.zig");
-const screen_support = @import("../../presentation/screen_support.zig");
 const view_ops = @import("view.zig");
 const Screen = @import("../../presentation/Screen.zig");
 const RenderInput = @import("RenderInput.zig");

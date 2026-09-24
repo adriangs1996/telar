@@ -207,7 +207,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | --- | --- |
 | `pty` | spawning a command on a pseudo-terminal, its environment, resize and exit |
 | `pi_rpc` | a client for Pi's JSONL RPC mode, generic over who asked |
-| `console` | the controlling terminal: raw mode, resize notifications, writer, escape sequences |
+| `console` | the controlling terminal: raw mode, resize notifications, writer, escape sequences, and decoding the keys, mouse reports and replies it sends |
 | `mailbox` | the bounded inbox between worker tasks and one consumer |
 | `animate` | springs, transitions and the frame clock that advances them |
 | `gfx` | rectangles, colors, quads, the quad list a frame is built in, and one-axis layout |

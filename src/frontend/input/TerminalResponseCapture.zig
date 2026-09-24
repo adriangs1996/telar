@@ -1,6 +1,6 @@
+const console = @import("console");
 const keyinput = @import("keyinput");
 const keybind = @import("keybind.zig");
-const term = @import("../presentation/screen_support.zig");
 const TerminalResponseCapture = @This();
 
 forwarded: usize = 0,
@@ -17,7 +17,7 @@ pub fn action(self: *TerminalResponseCapture, _: keybind.TestAction) !keyinput.C
     return .continue_routing;
 }
 
-pub fn terminalResponse(self: *TerminalResponseCapture, response: term.Event.TerminalResponse) !void {
+pub fn terminalResponse(self: *TerminalResponseCapture, response: console.Event.TerminalResponse) !void {
     switch (response) {
         .kitty_graphics => |kitty| self.supported = kitty.supported,
         else => {},

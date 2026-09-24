@@ -179,7 +179,7 @@ presentation state, never semantic authority inside the model's `Pane`.
   `model.to_runtime`, and graphics visibility and runtime viewport
   synchronization for both normal input and copy mode
   (`deliverPaneViewport`).
-- `src/frontend/presentation/screen_support.zig` proves exact OSC 52 encoding,
+- `lib/console/host_output.zig` proves exact OSC 52 encoding,
   multi-chunk payloads and the terminal-side size bound.
 - `src/frontend/client/tests/` proves key and pointer routing,
   outside-wheel consumption, missing-target exit, source-independent

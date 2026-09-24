@@ -1,3 +1,4 @@
+const console = @import("console");
 const keyinput = @import("keyinput");
 const localsocket = @import("localsocket");
 const cellgrid = @import("cellgrid");
@@ -2110,12 +2111,12 @@ test "modified Enter follows the compatibility profile and child keyboard negoti
             var input_buffer: [64]u8 = undefined;
             const shifted = try keyinput.encodeKey(
                 &input_buffer,
-                frontend.parse("\x1b[13;2:1u").?.event.key,
+                console.parse("\x1b[13;2:1u").?.event.key,
                 frame.input_modes,
             );
             const plain = try keyinput.encodeKey(
                 input_buffer[shifted.len..],
-                frontend.parse("\r").?.event.key,
+                console.parse("\r").?.event.key,
                 frame.input_modes,
             );
             const bytes = input_buffer[0 .. shifted.len + plain.len];

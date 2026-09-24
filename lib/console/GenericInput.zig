@@ -1,4 +1,4 @@
-const screen_support = @import("screen_support.zig");
+const host_input = @import("host_input.zig");
 const std = @import("std");
 
 /// Bytes in, events out, losing none.
@@ -41,9 +41,9 @@ pub fn Type(comptime capacity: usize) type {
         }
 
         /// The next complete event, or null if more bytes are needed.
-        pub fn next(self: *Self) ?screen_support.Event {
+        pub fn next(self: *Self) ?host_input.Event {
             while (self.len > 0) {
-                const parsed = screen_support.parse(self.pending[0..self.len]) orelse return null;
+                const parsed = host_input.parse(self.pending[0..self.len]) orelse return null;
                 if (parsed.len == 0) {
                     // Needs more bytes - unless there is no more room for them,
                     // in which case the buffer holds something that will never

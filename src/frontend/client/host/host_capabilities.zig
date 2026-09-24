@@ -1,4 +1,5 @@
 //! Adapts terminal protocol replies and probe expiry to client host state.
+const console = @import("console");
 
 const pacing = @import("pacing");
 const client_module = @import("telar-client");
@@ -6,7 +7,6 @@ const data = @import("model");
 const TerminalAdapter = @import("../TerminalAdapter.zig");
 const capabilities_module = @import("../../graphics/capabilities.zig");
 const negotiation = @import("host_negotiation.zig");
-const term = @import("../../presentation/screen_support.zig");
 const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
 const std = @import("std");
 
@@ -75,7 +75,7 @@ pub fn handleExpiry(terminal: *TerminalAdapter, result: anyerror!void) !?data.Ho
 /// ```zig
 /// _ = try observe(terminal, response);
 /// ```
-pub fn observe(terminal: *TerminalAdapter, response: term.Event.TerminalResponse) !?data.HostCommit {
+pub fn observe(terminal: *TerminalAdapter, response: console.Event.TerminalResponse) !?data.HostCommit {
     const client = &terminal.app;
 
     const color: ?negotiation.Color = switch (response) {
@@ -121,7 +121,7 @@ pub fn expire(terminal: *TerminalAdapter) !?data.HostCommit {
 /// ```zig
 /// const observation = translate(response) orelse return;
 /// ```
-pub fn translate(response: term.Event.TerminalResponse) ?data.HostCapabilityObservation {
+pub fn translate(response: console.Event.TerminalResponse) ?data.HostCapabilityObservation {
     return switch (response) {
         .kitty_graphics => |reply| if (reply.image_id == capabilities_module.query_image_id)
             .{ .images = support(reply.supported) }

@@ -1,13 +1,13 @@
+const console = @import("console");
 const keyinput = @import("keyinput");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const std = @import("std");
-const term = @import("../presentation/screen_support.zig");
 
 test "line-feed shortcuts preserve LF when encoded for a legacy child" {
     var buffer: [32]u8 = undefined;
-    try std.testing.expectEqualStrings("\n", try keyinput.encodeKey(&buffer, term.parse("\n").?.event.key, .{}));
-    try std.testing.expectEqualStrings("\r", try keyinput.encodeKey(&buffer, term.parse("\r").?.event.key, .{}));
+    try std.testing.expectEqualStrings("\n", try keyinput.encodeKey(&buffer, console.parse("\n").?.event.key, .{}));
+    try std.testing.expectEqualStrings("\r", try keyinput.encodeKey(&buffer, console.parse("\r").?.event.key, .{}));
 }
 
 test "Kitty child event types preserve a modified character lifecycle" {
@@ -20,14 +20,14 @@ test "Kitty child event types preserve a modified character lifecycle" {
     };
 
     for (cases) |case| {
-        const key = term.parse(case.host).?.event.key;
+        const key = console.parse(case.host).?.event.key;
         try std.testing.expectEqualStrings(case.expected, try keyinput.encodeKey(&buffer, key, modes));
     }
 }
 
 test "Kitty alternate codepoints are forwarded only when the child requests them" {
     var buffer: [32]u8 = undefined;
-    const key = term.parse("\x1b[47:63:47;6:1u").?.event.key;
+    const key = console.parse("\x1b[47:63:47;6:1u").?.event.key;
 
     try std.testing.expectEqualStrings(
         "\x1b[47:63:47;6u",
@@ -43,17 +43,17 @@ test "Kitty functional keys preserve repeat and release suffixes" {
     var buffer: [32]u8 = undefined;
     const modes: keyinput.InputModes = .{ .kitty_keyboard_flags = 2 };
 
-    const pressed_up = term.parse("\x1b[1;1:1A").?.event.key;
+    const pressed_up = console.parse("\x1b[1;1:1A").?.event.key;
     try std.testing.expectEqualStrings("\x1b[A", try keyinput.encodeKey(&buffer, pressed_up, .{
         .kitty_keyboard_flags = 2,
         .cursor_keys = true,
     }));
 
-    const repeated_up = term.parse("\x1b[1;5:2A").?.event.key;
+    const repeated_up = console.parse("\x1b[1;5:2A").?.event.key;
     try std.testing.expectEqualStrings("\x1b[1;5:2A", try keyinput.encodeKey(&buffer, repeated_up, modes));
     try std.testing.expectEqualStrings("\x1b[1;5A", try keyinput.encodeKey(&buffer, repeated_up, .{}));
 
-    const released_delete = term.parse("\x1b[3;5:3~").?.event.key;
+    const released_delete = console.parse("\x1b[3;5:3~").?.event.key;
     try std.testing.expectEqualStrings("\x1b[3;5:3~", try keyinput.encodeKey(&buffer, released_delete, modes));
     try std.testing.expectEqualStrings("", try keyinput.encodeKey(&buffer, released_delete, .{}));
 }
@@ -74,11 +74,11 @@ test "Kitty associated text follows the produced character rather than the physi
     };
 
     for (cases) |case| {
-        const key = term.parse(case.host).?.event.key;
+        const key = console.parse(case.host).?.event.key;
         try std.testing.expectEqualStrings(case.expected, try keyinput.encodeKey(&buffer, key, .{ .kitty_keyboard_flags = 27 }));
     }
 
-    const shifted = term.parse("\x1b[97:65:113;2u").?.event.key;
+    const shifted = console.parse("\x1b[97:65:113;2u").?.event.key;
     try std.testing.expectEqualStrings("\x1b[97:65:113;2;65u", try keyinput.encodeKey(&buffer, shifted, .{ .kitty_keyboard_flags = 31 }));
     try std.testing.expectEqualStrings("\x1b[97;2;65u", try keyinput.encodeKey(&buffer, shifted, .{ .kitty_keyboard_flags = 19 }));
     try std.testing.expectEqualStrings("A", try keyinput.encodeKey(&buffer, shifted, .{}));
@@ -97,7 +97,7 @@ test "Kitty associated text never turns shortcuts controls or releases into text
         const flags: u5 = @intCast(bits);
 
         for (non_text) |host| {
-            const key = term.parse(host).?.event.key;
+            const key = console.parse(host).?.event.key;
             const baseline = try keyinput.encodeKey(&baseline_buffer, key, .{ .kitty_keyboard_flags = flags });
             try std.testing.expectEqualStrings(baseline, try keyinput.encodeKey(&buffer, key, .{ .kitty_keyboard_flags = flags | 16 }));
         }
@@ -119,7 +119,7 @@ test "Kitty associated text never turns shortcuts controls or releases into text
 
 test "associated text preserves legacy text and paste and requires its own flag" {
     var buffer: [64]u8 = undefined;
-    const key = term.parse("a").?.event.key;
+    const key = console.parse("a").?.event.key;
 
     for (0..32) |bits| {
         const flags: u5 = @intCast(bits);
@@ -134,7 +134,7 @@ test "associated text preserves legacy text and paste and requires its own flag"
 }
 
 test "associated text respects the output buffer bound" {
-    const key = term.parse("a").?.event.key;
+    const key = console.parse("a").?.event.key;
     var buffer: [10]u8 = undefined;
 
     for (0..buffer.len) |len| {

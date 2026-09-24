@@ -107,9 +107,9 @@ the selected shape without affecting input or cell output.
 - `src/frontend/client/tests/presentation.zig`: decoded snapshots and zero-span pointer
   patches reach host presentation without pointer movement; chrome takes over
   on hover, and leaving copy mode cannot restore stale hover.
-- `src/frontend/presentation/pointer.zig` and
-  `src/frontend/presentation/screen_support.zig`: bounded static CSS
-  sequences, unchanged-shape suppression, output invalidation and re-emission.
+- `lib/console/pointer.zig` and `src/frontend/presentation/screen_tests.zig`:
+  bounded static CSS sequences for every wire shape, unchanged-shape
+  suppression, output invalidation and re-emission.
 
 Run `zig build test` for these contracts. Upgrading a running installation
 requires matching runtime and client binaries. Restarting the runtime ends its

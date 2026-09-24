@@ -1,4 +1,5 @@
 //! Owns one client's host-TTY read, native router and replaceable deadlines.
+const console = @import("console");
 const keyinput = @import("keyinput");
 
 const pacing = @import("pacing");
@@ -9,7 +10,6 @@ const TerminalAdapter = @import("../TerminalAdapter.zig");
 const GenericRouter = @import("../../input/GenericRouter.zig").Type;
 const std = @import("std");
 const Chunk = @import("Chunk.zig");
-const term = @import("../../presentation/screen_support.zig");
 const host_capabilities = @import("../host/host_capabilities.zig");
 const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
@@ -290,7 +290,7 @@ pub fn mouse(terminal: *TerminalAdapter, event: keyinput.Mouse) !void {
 /// ```zig
 /// try host_inputs.terminalResponse(terminal, response);
 /// ```
-pub fn terminalResponse(terminal: *TerminalAdapter, response: term.Event.TerminalResponse) !void {
+pub fn terminalResponse(terminal: *TerminalAdapter, response: console.Event.TerminalResponse) !void {
     _ = try host_capabilities.observe(terminal, response);
     switch (response) {
         .kitty_graphics => |reply| {

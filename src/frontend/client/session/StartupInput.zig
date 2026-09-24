@@ -1,5 +1,5 @@
+const console = @import("console");
 const std = @import("std");
-const term = @import("../../presentation/screen_support.zig");
 const StartupInput = @This();
 
 pub const capacity = 8192;
@@ -11,7 +11,7 @@ paste: bool = false,
 
 /// Retain early user input and yield host replies one at a time.
 /// Example: `while (try state.next(&bytes)) |reply| try observe(reply);`
-pub fn next(self: *StartupInput, incoming: *[]const u8) !?term.Event.TerminalResponse {
+pub fn next(self: *StartupInput, incoming: *[]const u8) !?console.Event.TerminalResponse {
     while (true) {
         const count = @min(incoming.len, self.pending.len - self.pending_len);
         @memcpy(self.pending[self.pending_len..][0..count], incoming.*[0..count]);
@@ -38,7 +38,7 @@ pub fn next(self: *StartupInput, incoming: *[]const u8) !?term.Event.TerminalRes
             if (bytes.len == 1 and bytes[0] == 0x1b) {
                 break;
             }
-            const parsed = term.parse(bytes) orelse break;
+            const parsed = console.parse(bytes) orelse break;
             if (parsed.len == 0) {
                 break;
             }

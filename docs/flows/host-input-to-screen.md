@@ -14,7 +14,7 @@ host TTY bytes
 host_inputs.handleOwnedRead
       |
       v
-host_inputs.feed -> Router.next -> term.parse -> Router.routeEvent
+host_inputs.feed -> Router.next -> console.parse -> Router.routeEvent
       |
       +---------------- configured sequence ----------------+
       |                                                      |
@@ -93,7 +93,7 @@ and visible input-routing revisions. The presenter schedules a paced draw when
 any observed value changed.
 
 The routing implementation is in `lib/keyinput/GenericRouter.zig`. The TUI
-factory in `src/frontend/input/GenericRouter.zig` supplies `term.parse`; its
+factory in `src/frontend/input/GenericRouter.zig` supplies `console.parse`; its
 specialized router's `next` method buffers
 split terminal sequences. Decoder-free adapters call `routeEvent` with semantic
 keys. Both paths use the same compiled keymap. A fixed physical-key lease
@@ -548,7 +548,7 @@ connection. Native hosts without the callback retain their local cadence.
 - `mouse pointer distinguishes clickable chrome panes and sidebar resizing` in
   `src/frontend/client/presentation/view.zig` proves the semantic hover mapping.
 - `mouse pointer changes fold until a shape or recovery changes` in
-  `src/frontend/presentation/screen_support.zig` proves OSC 22 coalescence and recovery;
+  `src/frontend/presentation/screen_tests.zig` proves OSC 22 coalescence and recovery;
   the platform sequence test proves exit restores the default before leaving
   the alternate screen.
 - `host pointer shape follows semantic hover through paced presentation` in

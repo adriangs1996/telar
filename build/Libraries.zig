@@ -33,10 +33,6 @@ const specs = [_]Spec{
         .name = "animate",
     },
     .{
-        .name = "console",
-        .libc = true,
-    },
-    .{
         .name = "gfx",
     },
     .{
@@ -101,6 +97,11 @@ const specs = [_]Spec{
     .{
         .name = "keyinput",
         .imports = &.{"cellgrid"},
+    },
+    .{
+        .name = "console",
+        .imports = &.{ "cellgrid", "keyinput" },
+        .libc = true,
     },
     .{
         .name = "cellglyphs",

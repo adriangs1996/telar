@@ -1,4 +1,5 @@
 //! Delivers the host requests the shared client left in `model.to_host`.
+const console = @import("console");
 
 const client_module = @import("telar-client");
 const data = @import("model");
@@ -6,7 +7,6 @@ const std = @import("std");
 const TerminalAdapter = @import("../TerminalAdapter.zig");
 const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
 const capture_module = @import("../../attachments/capture.zig");
-const term = @import("../../presentation/screen_support.zig");
 const host_inputs = @import("../input/host_inputs.zig");
 
 /// Drains every pending host request after one event, then starts the
@@ -53,11 +53,11 @@ fn deliverRequests(terminal: *TerminalAdapter) !void {
     while (effects.pop()) |effect| {
         switch (effect) {
             .clipboard => {
-                try term.writeClipboard(terminal.writer, effects.clipboard.items);
+                try console.writeClipboard(terminal.writer, effects.clipboard.items);
                 try terminal.writer.flush();
             },
             .terminal_notification => |payload| {
-                try term.writeHostNotification(terminal.writer, payload.titleSlice(), payload.messageSlice());
+                try console.writeHostNotification(terminal.writer, payload.titleSlice(), payload.messageSlice());
                 try terminal.writer.flush();
             },
             .capture => |request| startCapture(terminal, request) catch |err| {

@@ -1,149 +1,14 @@
+//! Decodes what a host terminal sends: legacy, xterm and Kitty keys,
+//! modifyOtherKeys, SGR mouse reports, bracketed paste, and the replies to
+//! color, pixel-size, graphics and device-attribute queries.
+//!
+//! Terminal input is a stream, not a sequence of messages: `parse` reads one
+//! event from the front of the bytes and reports an incomplete sequence with
+//! a length of zero so the caller keeps them.
 const keyinput = @import("keyinput");
-const cellgrid = @import("cellgrid");
-const GenericInput = @import("GenericInput.zig").Type;
 const std = @import("std");
+const GenericInput = @import("GenericInput.zig").Type;
 const KittyModifierEvent = @import("KittyModifierEvent.zig");
-const pointer = @import("pointer.zig");
-
-// The half of a TUI that speaks the terminal's language: the diff, the escape
-// sequences it turns into, and the parser for what comes back.
-//
-// Portable, all of it. Bytes in and bytes out - not a syscall in the file, and
-// no idea which operating system is on the other end. Opening the terminal,
-// putting it into raw mode and noticing it resized are the parts that actually
-// differ, and they live in `platform.zig`.
-//
-// `ui.zig` in turn knows none of *this*. The split is not tidiness: it is what
-// lets layout and drawing be tested with no pty in sight, the same reason
-// herdr keeps `AppState` free of PTYs and `render()` free of mutation.
-
-// ---------------------------------------------------------------------------
-// Rendering
-// ---------------------------------------------------------------------------
-
-pub const Screen = @import("Screen.zig");
-
-pub const PatchSink = @import("PatchSink.zig");
-
-pub fn writeStyle(w: *std.Io.Writer, style: cellgrid.Style) !void {
-    // Reset first: turning attributes off individually needs one code per
-    // attribute and a memory of which were on. Resetting costs four bytes.
-    try w.writeAll("\x1b[0");
-    const f = style.flags;
-    if (f.bold) {
-        try w.writeAll(";1");
-    }
-    if (f.faint) {
-        try w.writeAll(";2");
-    }
-    if (f.italic) {
-        try w.writeAll(";3");
-    }
-    if (f.blink) {
-        try w.writeAll(";5");
-    }
-    if (f.inverse) {
-        try w.writeAll(";7");
-    }
-    if (f.invisible) {
-        try w.writeAll(";8");
-    }
-    if (f.strikethrough) {
-        try w.writeAll(";9");
-    }
-    if (f.overline) {
-        try w.writeAll(";53");
-    }
-    // SGR 4:n rather than plain 4, so a curly underline stays curly. Terminals
-    // that do not know the sub-parameter form fall back to a plain underline,
-    // which is the right degradation.
-    if (f.underline != .none) {
-        try w.print(";4:{d}", .{@intFromEnum(f.underline)});
-    }
-    try writeColor(w, style.fg, .foreground);
-    try writeColor(w, style.bg, .background);
-    // Only when there is an underline to colour. Emitting SGR 58 unconditionally
-    // costs bytes on every run and confuses terminals that parse it loosely.
-    if (f.underline != .none) {
-        try writeColor(w, style.underline_color, .underline);
-    }
-    try w.writeAll("m");
-}
-
-// ---------------------------------------------------------------------------
-// The clipboard
-// ---------------------------------------------------------------------------
-
-/// The largest payload we will try to send.
-///
-/// There is no standard limit, and terminals pick their own; a sequence past
-/// whatever a given one accepts is silently ignored, which looks exactly like a
-/// copy that did nothing. Refusing loudly at a known size is better than
-/// succeeding on some machines.
-pub const max_clipboard_bytes = 64 * 1024;
-
-pub const ClipboardError = error{TooLarge};
-
-/// Puts `payload` on the system clipboard with OSC 52.
-///
-/// The point of doing it this way rather than shelling out to `pbcopy` or
-/// `xclip`: OSC 52 is *bytes on the same stream as everything else*, so it
-/// works through SSH, through tmux, and inside a container, none of which have
-/// access to the clipboard of the machine the human is sitting at.
-///
-/// Two things a caller should know. Some terminals ship with this disabled,
-/// because a program that can write your clipboard is a program that can put a
-/// command there - so a copy can legitimately do nothing and there is no reply
-/// to check. And that is why the terminal's own Shift-drag selection has to
-/// keep working: it is the fallback for exactly this case.
-/// Writes one OSC 9 host notification. Callers pass pre-sanitized text with
-/// no control bytes.
-///
-/// ```zig
-/// try writeHostNotification(writer, "Agent done", "Claude in pane 2");
-/// ```
-pub fn writeHostNotification(w: *std.Io.Writer, title: []const u8, message: []const u8) std.Io.Writer.Error!void {
-    try w.writeAll("\x1b]9;");
-    try w.writeAll(title);
-    if (message.len != 0) {
-        try w.writeAll(": ");
-        try w.writeAll(message);
-    }
-    try w.writeAll("\x07");
-}
-
-pub fn writeClipboard(w: *std.Io.Writer, payload: []const u8) (ClipboardError || std.Io.Writer.Error)!void {
-    if (payload.len > max_clipboard_bytes) {
-        return error.TooLarge;
-    }
-
-    // `c` is the selection name: the clipboard proper rather than the X11
-    // primary selection, which is the one that pastes on middle click and is
-    // not what a user means by "copy".
-    try w.writeAll("\x1b]52;c;");
-
-    const Encoder = std.base64.standard.Encoder;
-    var chunk: [3 * 512]u8 = undefined;
-    var encoded: [4 * 512]u8 = undefined;
-    var at: usize = 0;
-    while (at < payload.len) {
-        // In multiples of three, so each chunk encodes independently: base64
-        // pads at the end of its input, and padding in the middle of a stream
-        // decodes to garbage.
-        const take = @min(chunk.len, payload.len - at);
-        @memcpy(chunk[0..take], payload[at..][0..take]);
-        try w.writeAll(Encoder.encode(encoded[0..Encoder.calcSize(take)], chunk[0..take]));
-        at += take;
-    }
-
-    // BEL rather than ST: both terminate an OSC, and BEL is the form every
-    // terminal understands.
-    try w.writeAll("\x07");
-}
-
-// ---------------------------------------------------------------------------
-// Input
-// ---------------------------------------------------------------------------
 
 pub const Event = union(enum) {
     key: keyinput.Key,
@@ -181,7 +46,7 @@ pub const Event = union(enum) {
 
 };
 
-pub const Parsed = @import("Parsed.zig");
+const Parsed = @import("Parsed.zig");
 
 /// Reads one event from the front of `input`.
 ///
@@ -813,10 +678,6 @@ fn parseMouse(input: []const u8) ?Parsed {
     return .{ .event = .incomplete, .len = 0 };
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 const KeyCode = keyinput.Key.Code;
 
 fn expectMouse(input: []const u8, expected: keyinput.Mouse) !void {
@@ -827,129 +688,6 @@ fn expectMouse(input: []const u8, expected: keyinput.Mouse) !void {
     try std.testing.expectEqual(expected.kind, parsed.event.mouse.kind);
 }
 
-/// SGR parameters introducing an extended color for each styled layer.
-const ColorLayer = enum(u8) {
-    foreground = 38,
-    background = 48,
-    underline = 58,
-};
-
-/// Longest extended color parameter: `;38;2;255;255;255`.
-const max_color_len = 17;
-
-/// Longest cursor position: `ESC [ 4294967295 ; 4294967295 H`.
-const max_cursor_position_len = 2 + 10 + 1 + 10 + 1;
-
-fn writeColor(w: *std.Io.Writer, color: cellgrid.Color, comptime layer: ColorLayer) !void {
-    const prefix = std.fmt.comptimePrint(";{d}", .{@intFromEnum(layer)});
-    const channels = color.value;
-    if (color.kind == .default) {
-        return;
-    }
-
-    if (w.unusedCapacityLen() < max_color_len) {
-        switch (color.kind) {
-            .default => unreachable,
-            .indexed => try w.print(prefix ++ ";5;{d}", .{channels[0]}),
-            .rgb => try w.print(prefix ++ ";2;{d};{d};{d}", .{ channels[0], channels[1], channels[2] }),
-        }
-
-        return;
-    }
-
-    const out = w.unusedCapacitySlice();
-    var len: usize = 0;
-    len += appendLiteral(out[len..], prefix);
-    if (color.kind == .indexed) {
-        len += appendLiteral(out[len..], ";5;");
-        len += appendDecimal(out[len..], channels[0]);
-    } else {
-        len += appendLiteral(out[len..], ";2;");
-        len += appendDecimal(out[len..], channels[0]);
-        len += appendLiteral(out[len..], ";");
-        len += appendDecimal(out[len..], channels[1]);
-        len += appendLiteral(out[len..], ";");
-        len += appendDecimal(out[len..], channels[2]);
-    }
-
-    w.advance(len);
-}
-
-/// Moves the host cursor to a one-based `row` and `column`, formatting the
-/// digits in place instead of through `std.fmt`: every run of changed cells
-/// starts with one. Example: `try screen_support.writeCursorPosition(w, .{ y + 1, x + 1 });`
-pub fn writeCursorPosition(w: *std.Io.Writer, position: [2]u32) !void {
-    if (w.unusedCapacityLen() < max_cursor_position_len) {
-        try w.print("\x1b[{d};{d}H", .{ position[0], position[1] });
-        return;
-    }
-
-    const out = w.unusedCapacitySlice();
-    var len = appendLiteral(out, "\x1b[");
-    len += appendDecimal(out[len..], position[0]);
-    len += appendLiteral(out[len..], ";");
-    len += appendDecimal(out[len..], position[1]);
-    len += appendLiteral(out[len..], "H");
-    w.advance(len);
-}
-
-fn appendLiteral(out: []u8, comptime literal: []const u8) usize {
-    out[0..literal.len].* = literal[0..literal.len].*;
-    return literal.len;
-}
-
-fn appendDecimal(out: []u8, value: u32) usize {
-    var digits: [10]u8 = undefined;
-    var remaining = value;
-    var start: usize = digits.len;
-    while (true) {
-        start -= 1;
-        digits[start] = '0' + @as(u8, @intCast(remaining % 10));
-        remaining /= 10;
-        if (remaining == 0) {
-            break;
-        }
-    }
-
-    const len = digits.len - start;
-    @memcpy(out[0..len], digits[start..]);
-    return len;
-}
-
-test "direct escape formatting matches std.fmt at every boundary" {
-    var direct_storage: [64]u8 = undefined;
-    var formatted_storage: [64]u8 = undefined;
-    for ([_]u32{ 0, 1, 9, 10, 99, 100, 999, 65535, 65536, std.math.maxInt(u32) }) |row| {
-        for ([_]u32{ 1, 10, 255, 65536 }) |column| {
-            var direct = std.Io.Writer.fixed(&direct_storage);
-            var formatted = std.Io.Writer.fixed(&formatted_storage);
-            try writeCursorPosition(&direct, .{ row, column });
-            try formatted.print("\x1b[{d};{d}H", .{ row, column });
-            try std.testing.expectEqualStrings(formatted.buffered(), direct.buffered());
-        }
-    }
-
-    for ([_]cellgrid.Color{ .default, .indexed(0), .indexed(7), .indexed(255), .rgb(.{ 0, 9, 10 }), .rgb(.{ 255, 255, 255 }) }) |color| {
-        var direct = std.Io.Writer.fixed(&direct_storage);
-        try writeColor(&direct, color, .underline);
-        var formatted = std.Io.Writer.fixed(&formatted_storage);
-        switch (color.kind) {
-            .default => {},
-            .indexed => try formatted.print(";58;5;{d}", .{color.value[0]}),
-            .rgb => try formatted.print(";58;2;{d};{d};{d}", .{ color.value[0], color.value[1], color.value[2] }),
-        }
-
-        try std.testing.expectEqualStrings(formatted.buffered(), direct.buffered());
-    }
-}
-
-test "direct escape formatting falls back near the end of a fixed buffer" {
-    var storage: [9]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&storage);
-    try writeCursorPosition(&writer, .{ 12, 34 });
-    try std.testing.expectEqualStrings("\x1b[12;34H", writer.buffered());
-    try std.testing.expectError(error.WriteFailed, writeCursorPosition(&writer, .{ 1, 1 }));
-}
 test "mouse reports are parsed and converted to zero based coordinates" {
     // Terminals count from one. Getting this wrong puts every click one cell
     // down and to the right, which looks like a layout bug for a long time.
@@ -1067,133 +805,6 @@ test "an unknown escape sequence is consumed rather than desynchronising" {
     const parsed = parse("\x1b[6;12R").?;
     try std.testing.expectEqual(@as(usize, 7), parsed.len);
     try std.testing.expectEqual(Event.incomplete, parsed.event);
-}
-
-test "the diff sends only what changed" {
-    const gpa = std.testing.allocator;
-    var screen = try Screen.init(gpa, 40, 10);
-    defer screen.deinit();
-
-    var out: [16 * 1024]u8 = undefined;
-
-    { // First frame: everything is new.
-        var w = std.Io.Writer.fixed(&out);
-        screen.buffer().clear(.{});
-        _ = screen.buffer().writeText(screen.buffer().area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "hello", .style = .{} });
-        const stats = try screen.flush(&w);
-        try std.testing.expectEqual(@as(usize, 40 * 10), stats.cells);
-        try std.testing.expectEqual(@as(usize, 40 * 10), stats.scanned);
-    }
-
-    { // Redrawing the same thing costs nothing at all.
-        var w = std.Io.Writer.fixed(&out);
-        screen.buffer().clear(.{});
-        _ = screen.buffer().writeText(screen.buffer().area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "hello", .style = .{} });
-        const stats = try screen.flush(&w);
-        try std.testing.expectEqual(@as(usize, 0), stats.cells);
-        try std.testing.expectEqual(@as(usize, 40 * 10), stats.scanned);
-    }
-
-    { // One changed word costs one word.
-        var w = std.Io.Writer.fixed(&out);
-        screen.buffer().clear(.{});
-        _ = screen.buffer().writeText(screen.buffer().area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "world", .style = .{} });
-        const stats = try screen.flush(&w);
-        try std.testing.expectEqual(@as(usize, 4), stats.cells); // h,e,l,l -> w,o,r,l
-    }
-}
-
-test "a resize forces a full repaint" {
-    // Otherwise the diff compares against a screen the terminal no longer has,
-    // and the result is the half drawn window everyone recognises.
-    const gpa = std.testing.allocator;
-    var screen = try Screen.init(gpa, 10, 3);
-    defer screen.deinit();
-
-    var out: [8 * 1024]u8 = undefined;
-    var w = std.Io.Writer.fixed(&out);
-    screen.buffer().clear(.{});
-    _ = try screen.flush(&w);
-
-    try screen.resize(12, 4);
-    var w2 = std.Io.Writer.fixed(&out);
-    screen.buffer().clear(.{});
-    const stats = try screen.flush(&w2);
-    try std.testing.expectEqual(@as(usize, 12 * 4), stats.cells);
-    try std.testing.expectEqual(@as(usize, 12 * 4), stats.scanned);
-}
-
-test "a protocol patch scans only its damaged cells" {
-    const gpa = std.testing.allocator;
-    var screen = try Screen.init(gpa, 10, 3);
-    defer screen.deinit();
-
-    var out: [8 * 1024]u8 = undefined;
-    var initial = std.Io.Writer.fixed(&out);
-    _ = try screen.flush(&initial);
-
-    const patch = try screen.patchCells(12, 2);
-    patch[0].bytes[0] = 'x';
-    patch[1].bytes[0] = 'y';
-
-    var writer = std.Io.Writer.fixed(&out);
-    const stats = try screen.flush(&writer);
-    try std.testing.expectEqual(@as(usize, 2), stats.scanned);
-    try std.testing.expectEqual(@as(usize, 2), stats.cells);
-}
-
-test "damage accumulates as one conservative range per row" {
-    const gpa = std.testing.allocator;
-    var screen = try Screen.init(gpa, 10, 2);
-    defer screen.deinit();
-
-    var out: [8 * 1024]u8 = undefined;
-    var initial = std.Io.Writer.fixed(&out);
-    _ = try screen.flush(&initial);
-
-    const left = try screen.patchCells(1, 1);
-    left[0].bytes[0] = 'x';
-    const right = try screen.patchCells(8, 1);
-    right[0].bytes[0] = 'y';
-
-    var writer = std.Io.Writer.fixed(&out);
-    const stats = try screen.flush(&writer);
-    try std.testing.expectEqual(@as(usize, 8), stats.scanned);
-    try std.testing.expectEqual(@as(usize, 2), stats.cells);
-}
-
-test "a patch crossing rows keeps exact damage on both" {
-    const gpa = std.testing.allocator;
-    var screen = try Screen.init(gpa, 10, 2);
-    defer screen.deinit();
-
-    var out: [8 * 1024]u8 = undefined;
-    var initial = std.Io.Writer.fixed(&out);
-    _ = try screen.flush(&initial);
-
-    const patch = try screen.patchCells(8, 4);
-    for (patch, 0..) |*cell, index| cell.bytes[0] = @intCast('a' + index);
-
-    var writer = std.Io.Writer.fixed(&out);
-    const stats = try screen.flush(&writer);
-    try std.testing.expectEqual(@as(usize, 4), stats.scanned);
-    try std.testing.expectEqual(@as(usize, 4), stats.cells);
-}
-
-test "a cursor-only frame scans no cells" {
-    const gpa = std.testing.allocator;
-    var screen = try Screen.init(gpa, 10, 2);
-    defer screen.deinit();
-
-    var out: [8 * 1024]u8 = undefined;
-    var initial = std.Io.Writer.fixed(&out);
-    _ = try screen.flush(&initial);
-
-    screen.cursor = .{ .x = 3, .y = 1 };
-    var writer = std.Io.Writer.fixed(&out);
-    const stats = try screen.flush(&writer);
-    try std.testing.expectEqual(@as(usize, 0), stats.scanned);
-    try std.testing.expectEqual(@as(usize, 0), stats.cells);
 }
 
 test "tab and shift-tab are their own keys" {
@@ -1476,59 +1087,6 @@ test "page keys use their numbered CSI forms" {
     try std.testing.expectEqual(keyinput.Key.Code.page_down, parse("\x1b[6~").?.event.key.code);
 }
 
-test "the real cursor is placed only when a field asks for it" {
-    // A hardware cursor parked wherever the last write landed is a
-    // distraction, so the default is hidden. A text field is the exception,
-    // and it is the only thing a screen reader or an input method can follow.
-    const gpa = std.testing.allocator;
-    var screen = try Screen.init(gpa, 10, 3);
-    defer screen.deinit();
-
-    var out: [4096]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&out);
-
-    _ = try screen.flush(&writer);
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b[?25l") != null);
-
-    writer = .fixed(&out);
-    screen.cursor = .{ .x = 4, .y = 1 };
-    _ = try screen.flush(&writer);
-    // One based, row first, and shown.
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b[2;5H") != null);
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b[?25h") != null);
-}
-
-test "mouse pointer changes fold until a shape or recovery changes" {
-    const gpa = std.testing.allocator;
-    var screen = try Screen.init(gpa, 10, 3);
-    defer screen.deinit();
-
-    var out: [4096]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&out);
-
-    _ = try screen.flush(&writer);
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.default)) != null);
-
-    writer = .fixed(&out);
-    screen.mouse_pointer = .pointer;
-    _ = try screen.flush(&writer);
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.pointer)) != null);
-
-    writer = .fixed(&out);
-    _ = try screen.flush(&writer);
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b]22;") == null);
-
-    writer = .fixed(&out);
-    screen.mouse_pointer = .ew_resize;
-    _ = try screen.flush(&writer);
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.ew_resize)) != null);
-
-    writer = .fixed(&out);
-    screen.invalidate();
-    _ = try screen.flush(&writer);
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.ew_resize)) != null);
-}
-
 test "no byte is lost when a read does not fit in what is left" {
     // The bug this type exists for. A buffer holding unparsed bytes gets a read
     // larger than its free space; the old code took what fit and discarded the
@@ -1645,69 +1203,6 @@ test "a legacy alt-prefixed arrow is one modified key" {
     try std.testing.expectEqual(KeyCode.escape, alt_escape.event.key.code);
     try std.testing.expect(alt_escape.event.key.mods.alt);
     try std.testing.expectEqual(@as(usize, 2), alt_escape.len);
-}
-
-test "a failed flush forgets nothing the terminal did not receive" {
-    // Regression: the diff committed cells into `front` while emitting them,
-    // so a writer error mid-flush left the screen claiming cells the terminal
-    // never got, and the retry emitted nothing.
-    const gpa = std.testing.allocator;
-    var screen = try Screen.init(gpa, 10, 2);
-    defer screen.deinit();
-    var out: [8 * 1024]u8 = undefined;
-    var initial = std.Io.Writer.fixed(&out);
-    screen.buffer().clear(.{});
-    _ = try screen.flush(&initial);
-
-    screen.buffer().clear(.{});
-    _ = screen.buffer().writeText(screen.buffer().area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "hola", .style = .{} });
-    var tiny: [24]u8 = undefined;
-    var failing = std.Io.Writer.fixed(&tiny);
-    try std.testing.expectError(error.WriteFailed, screen.flush(&failing));
-
-    var retry = std.Io.Writer.fixed(&out);
-    const stats = try screen.flush(&retry);
-    try std.testing.expect(stats.cells >= 4);
-}
-
-test "a copy is one osc 52 sequence with the text in base64" {
-    var out: [256]u8 = undefined;
-    var w: std.Io.Writer = .fixed(&out);
-    try writeClipboard(&w, "hola");
-
-    // `c` is the clipboard proper, not the X11 primary selection - which pastes
-    // on middle click and is not what anybody means by "copy".
-    try std.testing.expectEqualStrings("\x1b]52;c;aG9sYQ==\x07", w.buffered());
-}
-
-test "a payload longer than one chunk still decodes" {
-    // Encoded in pieces to bound the stack, and base64 pads at the end of its
-    // input - so a chunk that is not a multiple of three would put padding in
-    // the middle of the stream and everything after it would decode to garbage.
-    var payload: [4000]u8 = undefined;
-    for (&payload, 0..) |*byte, i| byte.* = @intCast('a' + i % 26);
-
-    var out: [8192]u8 = undefined;
-    var w: std.Io.Writer = .fixed(&out);
-    try writeClipboard(&w, &payload);
-
-    const written = w.buffered();
-    const body = written["\x1b]52;c;".len .. written.len - 1];
-    const Decoder = std.base64.standard.Decoder;
-    var decoded: [4000]u8 = undefined;
-    try Decoder.decode(&decoded, body);
-    try std.testing.expectEqualSlices(u8, &payload, &decoded);
-}
-
-test "an oversized copy fails rather than silently doing nothing" {
-    // Terminals ignore a sequence past whatever size they accept, with no
-    // reply. Succeeding here would produce a copy that works on one machine and
-    // not another, with nothing to look at.
-    var out: [64]u8 = undefined;
-    var w: std.Io.Writer = .fixed(&out);
-    var huge: [max_clipboard_bytes + 1]u8 = undefined;
-    @memset(&huge, 'x');
-    try std.testing.expectError(error.TooLarge, writeClipboard(&w, &huge));
 }
 
 test "OSC 10 supports both terminators and validates all color digits" {
