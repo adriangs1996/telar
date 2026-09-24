@@ -528,7 +528,7 @@ connection. Native hosts without the callback retain their local cadence.
   outbox admission, suppressed releases, local shortcuts, outbox rejection
   and older GPU completion without retiring newer damage or duplicating ACKs.
 
-- `src/core/time/deadline_timer.zig` proves replacement, removal,
+- `lib/pacing/deadline_timer.zig` proves replacement, removal,
   parking, wakeup and token release for successful and failed workers.
 - `src/frontend/client/input/host_inputs.zig` proves owned timeout configuration,
   router replacement without duplicate workers and prefix-status projection.

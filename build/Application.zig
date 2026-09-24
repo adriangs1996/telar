@@ -79,22 +79,15 @@ pub fn init(b: *std.Build) ?@This() {
     else
         "/usr";
 
-    const libraries = Libraries.create(b, target, optimize);
+    // The width tables come from the emulator that renders the panes; the
+    // drawing layer only names the `unicode` library, never its provider.
+    const libraries = Libraries.create(b, target, optimize, &.{.{
+        .name = "ghostty-vt",
+        .module = ghostty_vt,
+    }});
     for (libraries.modules) |library| {
         coverage.instrumentModule(library);
     }
-
-    // The width tables, behind a module name so the drawing layer never names
-    // its provider. Everything that draws imports `unicode`; only this line
-    // decides which implementation answers, which is what keeps the drawing
-    // core liftable into a build with no emulator in it.
-    const unicode = b.createModule(.{
-        .root_source_file = b.path("src/core/unicode.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    unicode.addImport("ghostty-vt", ghostty_vt);
-    coverage.instrumentModule(unicode);
 
     const kitty_protocol = b.addModule("kitty_protocol", .{
         .root_source_file = b.path("src/kitty_protocol/kitty_protocol.zig"),
@@ -110,7 +103,7 @@ pub fn init(b: *std.Build) ?@This() {
         .target = target,
         .optimize = optimize,
     });
-    core.addImport("unicode", unicode);
+    libraries.addImports(core);
     coverage.instrumentModule(core);
     const data = model_build.create(b, core);
     b.modules.put(
@@ -232,7 +225,6 @@ pub fn init(b: *std.Build) ?@This() {
 
     const modules: Modules = .{
         .libraries = libraries,
-        .unicode = unicode,
         .data = data,
         .core = core,
         .backend = backend,

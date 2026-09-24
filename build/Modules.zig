@@ -4,7 +4,6 @@ const Libraries = @import("Libraries.zig");
 const Modules = @This();
 
 libraries: Libraries,
-unicode: *std.Build.Module,
 core: *std.Build.Module,
 data: *std.Build.Module,
 backend: *std.Build.Module,
@@ -40,7 +39,6 @@ pub fn addSuiteTest(self: Modules, b: *std.Build, suite: Suite) *std.Build.Step.
         tests.root_module.addOptions("build_options", self.build_options);
     }
 
-    tests.root_module.addImport("unicode", self.unicode);
     tests.root_module.addImport("telar-core", self.core);
     tests.root_module.addImport("telar-backend", self.backend);
     tests.root_module.addImport("telar-frontend", self.frontend);

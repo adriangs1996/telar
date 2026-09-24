@@ -209,7 +209,7 @@ new notifications after reconciliation.
   diagnostic publication, host delivery, outbound action translation,
   delivery correlation, timer event ordering and the mapping from model
   deadlines to `model.notification_scheduler`.
-- `src/core/time/deadline_timer.zig` proves deadline replacement,
+- `lib/pacing/deadline_timer.zig` proves deadline replacement,
   removal, parking and pending-token release after successful and failed
   completions.
 - `src/frontend/client/presentation/view.zig` proves immutable rendering, ID-only intents

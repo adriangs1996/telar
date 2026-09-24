@@ -5,8 +5,9 @@ const InputModes = @import("InputModes.zig");
 const frame_support = @import("frame_support.zig");
 const Scroll = @import("Scroll.zig");
 const Decoder = @import("Decoder.zig");
-const Style = @import("../ui/Style.zig");
-const Cell = @import("../ui/Cell.zig");
+const cellgrid = @import("cellgrid");
+const Style = cellgrid.Style;
+const Cell = cellgrid.Cell;
 const View = @import("../text_metadata/View.zig");
 const FrameView = @This();
 

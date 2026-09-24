@@ -19,12 +19,13 @@
 //!
 //! No terminal and no buffer ownership: a range is four numbers and a mode.
 
-const Point = @import("ui/Point.zig");
-const Cell = @import("ui/Cell.zig");
-const Buffer = @import("ui/Buffer.zig");
+const cellgrid = @import("cellgrid");
+const Point = cellgrid.Point;
+const Cell = cellgrid.Cell;
+const Buffer = cellgrid.Buffer;
 const Range = @import("Range.zig");
 const std = @import("std");
-const text_module = @import("ui/text.zig");
+const text_module = cellgrid.text;
 const ClickTracker = @import("ClickTracker.zig");
 
 /// Reading order, which is what makes a range comparable at all: a selection

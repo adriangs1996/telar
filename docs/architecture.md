@@ -179,7 +179,7 @@ is one index probe, not a walk through nested structs.
 
 | Package | Owns |
 | --- | --- |
-| `telar-core` | cells, buffers, geometry and wire values shared by both processes |
+| `telar-core` | wire values shared by both processes, re-exporting `cellgrid` and `pacing` |
 | `telar-backend` | the runtime: children, PTYs, emulation, agents, history, proxy |
 | `model` | client state and its procedures, with no I/O, Lua or host access |
 | `telar-client` | `Client` and the client flows: runtime socket, Lua VM, job queue, inbox |
@@ -207,6 +207,9 @@ else. Consumers import the module once and alias its members
 | `mailbox` | the bounded inbox between worker tasks and one consumer |
 | `animate` | springs, transitions and the frame clock that advances them |
 | `gfx` | rectangles, colors, quads and one-axis layout |
+| `unicode` | grapheme widths from the emulator's tables; builds may bind another provider |
+| `cellgrid` | cells, styles and buffers, and text laid out into them |
+| `pacing` | the monotonic clock, replaceable deadlines and the frame pacer |
 
 A rule that decides what telar means stays in a flow even when it is pure;
 [`plans/libraries.md`](plans/libraries.md) lists what is still to move.

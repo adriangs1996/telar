@@ -1,7 +1,8 @@
 //! Pane screen snapshots and patches for Telar's current protocol.
 
 const Cursor = @import("Cursor.zig");
-const Cell = @import("../ui/Cell.zig");
+const cellgrid = @import("cellgrid");
+const Cell = cellgrid.Cell;
 const transport = @import("../transport/transport.zig");
 const Encoder = @import("Encoder.zig");
 const Frame = @import("Frame.zig");
@@ -12,8 +13,8 @@ const FrameView = @import("FrameView.zig");
 const Mouse = @import("Mouse.zig");
 const InputModes = @import("InputModes.zig");
 const Scroll = @import("Scroll.zig");
-const Style = @import("../ui/Style.zig");
-const cell_support = @import("../ui/cell_support.zig");
+const Style = cellgrid.Style;
+const cell_support = cellgrid.cell_support;
 const Span = @import("Span.zig");
 const TextMetadataView = @import("../text_metadata/View.zig");
 const text_metadata_limits = @import("../text_metadata/limits.zig");

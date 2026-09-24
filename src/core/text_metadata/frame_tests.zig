@@ -5,7 +5,8 @@ const limits = @import("limits.zig");
 const frame = @import("../schema/frame_support.zig");
 const pane = @import("../schema/messages/pane.zig");
 const messages = @import("../schema/messages/messages.zig");
-const Cell = @import("../ui/Cell.zig");
+const cellgrid = @import("cellgrid");
+const Cell = cellgrid.Cell;
 const Span = @import("../schema/Span.zig");
 
 const metadata_length_offset = 1 + frame.body_header_size - @sizeOf(u32);

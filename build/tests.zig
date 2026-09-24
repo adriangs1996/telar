@@ -2,6 +2,7 @@ const std = @import("std");
 const Application = @import("Application.zig");
 const Benchmarks = @import("Benchmarks.zig");
 const Suite = @import("Suite.zig");
+const Libraries = @import("Libraries.zig");
 
 const source_roots: []const []const u8 = &.{ "build.zig", "build", "lib", "src", "examples", "benchmarks", "test", "linters" };
 
@@ -166,12 +167,8 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
 
     const suites = [_]Suite{
         .{ .path = "src/kitty_protocol/kitty_protocol.zig" },
-        .{ .path = "src/core/ui/ui_tests.zig" },
         .{ .path = "src/core/select.zig" },
         .{ .path = "src/core/link.zig" },
-        .{ .path = "src/core/pacing/pace.zig" },
-        .{ .path = "src/core/time/deadline_timer.zig", .libc = true },
-        .{ .path = "src/core/time/clock.zig", .libc = true },
         // Only referenced through non-pub imports elsewhere, so their tests
         // never run unless they are their own suite roots.
         .{ .path = "src/core/graphics.zig" },
@@ -256,22 +253,26 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
 
     // The same drawing code against a width table that answers nonsense, so
     // the module seam is proven rather than asserted. Only this file's tests
-    // run: the ones inside `ui/root.zig` assert real widths and cannot pass here.
+    // run: the ones inside `cellgrid` assert real widths and cannot pass here.
     const unicode_fake = b.createModule(.{
-        .root_source_file = b.path("src/core/unicode_fake.zig"),
+        .root_source_file = b.path("lib/unicode/fake.zig"),
         .target = app.modules.target,
         .optimize = app.modules.optimize,
     });
     app.coverage.instrumentModule(unicode_fake);
+    const fake_libraries = Libraries.create(b, app.modules.target, app.modules.optimize, &.{.{
+        .name = "unicode",
+        .module = unicode_fake,
+    }});
     const substitution = b.addTest(.{
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/core/unicode_substitution_test.zig"),
+            .root_source_file = b.path("lib/unicode/substitution_test.zig"),
             .target = app.modules.target,
             .optimize = app.modules.optimize,
         }),
         .filters = &.{"injected table"},
     });
-    substitution.root_module.addImport("unicode", unicode_fake);
+    substitution.root_module.addImport("cellgrid", fake_libraries.get("cellgrid"));
     app.coverage.instrumentTest(substitution);
     parallel_test_prerequisites.dependOn(&b.addRunArtifact(substitution).step);
 

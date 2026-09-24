@@ -1,5 +1,6 @@
 const std = @import("std");
-const Point = @import("ui/Point.zig");
+const cellgrid = @import("cellgrid");
+const Point = cellgrid.Point;
 const select = @import("select.zig");
 /// Turns a stream of presses into a granularity.
 ///

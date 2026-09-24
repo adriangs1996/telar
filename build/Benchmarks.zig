@@ -19,7 +19,10 @@ pub fn init(b: *std.Build, app: Application) @This() {
         .ReleaseFast
     else
         app.modules.optimize;
-    const bench_libraries = Libraries.create(b, app.modules.target, bench_optimize);
+    const bench_libraries = Libraries.create(b, app.modules.target, bench_optimize, &.{.{
+        .name = "ghostty-vt",
+        .module = app.modules.ghostty_vt,
+    }});
     const bench_lua_api = lua_build.add(b, .{ .target = app.modules.target, .optimize = bench_optimize, .name = "lua-bench" });
     const bench_lua = b.createModule(.{
         .root_source_file = b.path("src/lua/lua.zig"),
@@ -27,18 +30,12 @@ pub fn init(b: *std.Build, app: Application) @This() {
         .optimize = bench_optimize,
     });
     bench_lua.addImport("lua-api", bench_lua_api);
-    const bench_unicode = b.createModule(.{
-        .root_source_file = b.path("src/core/unicode.zig"),
-        .target = app.modules.target,
-        .optimize = bench_optimize,
-    });
-    bench_unicode.addImport("ghostty-vt", app.modules.ghostty_vt);
     const bench_core = b.createModule(.{
         .root_source_file = b.path("src/core/core.zig"),
         .target = app.modules.target,
         .optimize = bench_optimize,
     });
-    bench_core.addImport("unicode", bench_unicode);
+    bench_libraries.addImports(bench_core);
     const bench_backend = b.createModule(.{
         .root_source_file = b.path("src/backend/backend.zig"),
         .target = app.modules.target,

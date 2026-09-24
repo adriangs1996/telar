@@ -63,8 +63,8 @@ alias are one word.
 
 | Library | From | Cut |
 | --- | --- | --- |
-| `cells` | `src/core/ui` (cells, buffers, styles, geometry) | none; imports `unicode` |
-| `time` / `pacing` | `src/core/time`, `src/core/pacing` | none |
+| `cellgrid` (done) | `src/core/ui` (cells, buffers, styles, geometry) | none; imports the `unicode` library, which replaced `src/core/unicode.zig` |
+| `pacing` (done) | `src/core/time`, `src/core/pacing` | none; one library, seven files |
 | `vt-scan` | `history/{KittyFramingCounter,OscScanner,InputScanner,escape,osc}.zig` | used by history, media and pane; moving them out breaks the history → pane → media tangle |
 | `command-capture` | `history/{terminal,TerminalTracker,OscTracker,agent_detection,codex_screen,prompt_scan,Sample}.zig` | detection phrases already come as data (`core.builtin_table`); pass the table in |
 | `history-store` | `history/persistence`, history worker and service | ids (`PaneId`, `RequestId`) become plain integers |
@@ -146,8 +146,9 @@ vocabulary over `wire`, `cells`, `time` and `pacing`.
    module and a test step in the build, and a boundary check that fails if
    the library imports a telar module. Done; the pattern lives in
    `build/Libraries.zig`.
-2. Shared low layers: `cells`, `time`, `pacing`, `vt-scan`, `sqlite`, and a
-   decision on the PNG decoder.
+2. Shared low layers: `cellgrid`, `pacing`, `vt-scan`, `sqlite`, and a
+   decision on the PNG decoder. `cellgrid`, `unicode` and `pacing` are done;
+   `telar-core` re-exports them, so its consumers did not change.
 3. Backend mechanisms: `command-capture`, `history-store`, `kitty-media`,
    `pane-render`, `transcripts`, `codex-app-server`, `checkpoint`,
    `local-socket`, `editor-remote`, `system-metrics`, `git-probe`.

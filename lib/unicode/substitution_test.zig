@@ -1,13 +1,14 @@
 //! Proof that the width provider is a seam and not a comment.
 //!
-//! This target builds `ui/root.zig` against `unicode_fake.zig` instead of the
-//! emulator's tables. Nothing in `ui/root.zig` changes; only the module binding in
-//! `build.zig` does. Every assertion here would fail against the real tables,
+//! This target builds `cellgrid` against `fake.zig` instead of the
+//! emulator's tables. Nothing in `cellgrid` changes; only the module binding in
+//! `build/tests.zig` does. Every assertion here would fail against the real tables,
 //! which is the point: it can only pass if the substitution took effect.
 
 const std = @import("std");
-const Buffer = @import("ui/Buffer.zig");
-const text_module = @import("ui/text.zig");
+const cellgrid = @import("cellgrid");
+const Buffer = cellgrid.Buffer;
+const text_module = cellgrid.text;
 
 test "layout follows the injected table, not the bytes" {
     const gpa = std.testing.allocator;

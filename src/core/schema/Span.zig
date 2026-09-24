@@ -1,4 +1,5 @@
-const Cell = @import("../ui/Cell.zig");
+const cellgrid = @import("cellgrid");
+const Cell = cellgrid.Cell;
 const Span = @This();
 
 start: u32,

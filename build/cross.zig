@@ -18,8 +18,10 @@ pub fn add(b: *std.Build) *std.Build.Step {
         .{ .os_tag = .linux, .cpu_arch = .aarch64, .abi = .gnu },
     }) |query| {
         const cross_target = b.resolveTargetQuery(query);
+        // No emulator is built for these targets; the fake width table
+        // stands in for the `unicode` library.
         const cross_unicode = b.createModule(.{
-            .root_source_file = b.path("src/core/unicode_fake.zig"),
+            .root_source_file = b.path("lib/unicode/fake.zig"),
             .target = cross_target,
             .optimize = .Debug,
         });
@@ -28,8 +30,11 @@ pub fn add(b: *std.Build) *std.Build.Step {
             .target = cross_target,
             .optimize = .Debug,
         });
-        cross_core.addImport("unicode", cross_unicode);
-        const cross_libraries = Libraries.create(b, cross_target, .Debug);
+        const cross_libraries = Libraries.create(b, cross_target, .Debug, &.{.{
+            .name = "unicode",
+            .module = cross_unicode,
+        }});
+        cross_libraries.addImports(cross_core);
         const cross_data = model_build.create(b, cross_core);
         cross_libraries.addChecks(b, cross_step, cross_target);
         const raster_check = b.addLibrary(.{
