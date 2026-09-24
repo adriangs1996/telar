@@ -78,11 +78,11 @@ alias are one word.
 | `editorremote` (done) | `editors/{remote,expressions,Target,Candidate}.zig`, `core/editor.zig` | the search works on its own candidates and reports an index; the runtime job keeps panes and the reply |
 | `hostmetrics`, `gitstatus` (done) | `runtime/observability/{Sampler,system_metrics,darwin,Raw,Values,SystemMetricsSample}.zig`, `runtime/resources/git_probe.zig` | the probe interval and the per-workspace completion stay in the runtime |
 | `imaging` (done) | `src/gui/image` decoders and box filter | PNG now decodes through Wuffs; sprites, attachments and the favicon worker stay in the GUI |
-| `box-glyphs` | `src/gui/text/{Box*,Block*,block_shapes,Braille*}.zig` | they emit into `render/QuadList.zig`, which imports `native/DiagramTexture.zig`; the quad list joins `layout` without the texture |
-| `markdown-spans` | `gui/widgets/{MessageSpan,MessageSpans,MessageSpanScope}.zig` | inline the URI extraction it borrows from core |
-| `key-capture` | `client/input/{GenericRouter,GenericKeymap,Capture,key_support,action_routing,edit,mouse_protocol}.zig` and `frontend/input` | the keymap types become parameters |
-| `screen-diff` | `frontend/presentation/{Screen,diff,screen_support,GenericInput,Parsed,pointer}.zig` | `frame.zig` stops returning `model` types |
-| `kitty-render` | the model-free half of `frontend/graphics` (codec, bitmap, rasterizer, compression) | split from the renderers that read `model` |
+| `cellglyphs` (done) | `src/gui/text/{Box*,Block*,block_shapes,Braille*}.zig` | `QuadList` joined `gfx`, which owns the quad format and now the diagram slot count; the ink paints a cell rectangle and a color instead of telar's `TextRun`. The box raster cache and the atlas stay |
+| `mdinline` (done) | `gui/widgets/{MessageSpan,MessageSpans,MessageSpanScope,MessageLinkDestination}.zig` | the URI recognizer it borrowed from core became `urlscan` instead of being inlined, since the model and client use it too |
+| `keyinput` (done) | the key values in `model/input`, `client/input/{GenericRouter,GenericKeymap,encoding_support,mouse_protocol,PixelProjection}.zig`, `core`'s `InputModes` and `MouseTracking` | the key types moved instead of becoming parameters; the lease cap and timeouts joined `RouterLimits`, and telar's defaults stay in `model/input/keybind.zig`. `action_routing` is telar's repeat policy and stays; `edit.zig` tested the text field, now `textfield` |
+| `console` additions (done) | `frontend/presentation/{Screen,screen_support,GenericInput,Parsed,KittyModifierEvent,pointer,PatchSink,Position}.zig` | the host input decoder and escape writers joined `console`; `Screen` became `GenericScreen` over the pointer enum, the model's damage rows and `diff.syncRow` joined `cellgrid`, and the Presenter counts flushes. `frame.zig` adapts protocol frames and stays |
+| `kitty_protocol`, `textraster` (done) | `src/kitty_protocol` and the rasterizer, surface and rounded fill of `frontend/graphics` | the rasterizer takes the caller's font and `freetype` is an external; bilinear sampling and premultiplication joined `imaging`. The codec keeps telar's byte budget and z limits, and the renderers read the model, so both stay |
 
 ### Larger cuts
 
@@ -92,7 +92,8 @@ alias are one word.
 | `exchangecapture` (done) | `proxy/capture` | `Half` embedded a telar pane and credential; it now carries the caller's comptime `Meta`, and the credential gate stays in telar's `Channel` |
 | `bytecodec` (done) | `schema/{Encoder,Decoder,wire}.zig` | none |
 | `cellcodec` (done) | the cell run half of `schema/frame_support.zig` and `FrameView`'s cell iterator | the frame's size budget becomes a limit the caller passes |
-| `syntax`, `diagram-client` | `gui/syntax`, `gui/diagrams` worker and protocol | the capture-to-role mapping and the image decode path become library dependencies |
+| `syntaxhl` (done) | `model/syntax/role.zig`, `client/syntax/language.zig`, `gui/syntax/{captures,Store,Entry,Job,Result}.zig` | none; the diff highlighter over change review lines, the Rust highlighter behind `telar_syntax_*` and the GUI service stay |
+| `diagram-client` (not a library) | `gui/diagrams` | the renderer protocol is telar's own, spoken with its own `telar-diagram-renderer` helper, and the store is keyed by telar's message layout; only premultiplication was shared, and it is `imaging`'s |
 
 What stays in `telar-core` after the cuts: agent manifests and providers,
 plugin manifests and capabilities, proxy and editor protocol values, history
@@ -192,8 +193,11 @@ of them: every package imports the libraries it uses by name.
 5. The protocol's mechanism: `bytecodec` (the bounded little-endian
    encoder and decoder) and `cellcodec` (cell runs). The messages stay in
    core as telar's protocol. Done.
-6. Client and GUI: `key-capture`, `screen-diff`, `kitty-render`, `image`,
-   `box-glyphs`, `markdown-spans`, `syntax`, `diagram-client`.
+6. Client and GUI. Done: `urlscan`, `mdinline`, `cellglyphs`,
+   `kitty_protocol`, `keyinput`, the `console` additions, `textraster`,
+   `syntaxhl`, `textfield`. Measuring each candidate first changed several
+   cuts; the table records what moved and what stays. `pane-render` and
+   `kitty-media` from step 3 remain open.
 7. In parallel with any of the above: the business rules listed in the
    previous section move into flows.
 
