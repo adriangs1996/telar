@@ -1,7 +1,10 @@
 const core = @import("telar-core");
 const model = @import("model.zig");
 const std = @import("std");
-const SessionTitle = @This();
+/// The title history persists for one agent session, with the state of its
+/// generation; a pending or failed placeholder is stored too. The durable
+/// title a checkpoint carries is `agent/SessionTitle`.
+const StoredSessionTitle = @This();
 
 pub const Definition = @import("Definition.zig");
 
@@ -14,9 +17,9 @@ state: core.AgentTitleState,
 /// Validates and owns the fixed-size representation persisted by history.
 ///
 /// ```zig
-/// const title = try SessionTitle.init(.{ .id = id, .title = "Fix tests", .source = .generated, .state = .ready });
+/// const title = try StoredSessionTitle.init(.{ .id = id, .title = "Fix tests", .source = .generated, .state = .ready });
 /// ```
-pub fn init(definition: Definition) !SessionTitle {
+pub fn init(definition: Definition) !StoredSessionTitle {
     const id = definition.id;
     const title_value = definition.title;
     const source = definition.source;
@@ -37,7 +40,7 @@ pub fn init(definition: Definition) !SessionTitle {
         // A child's own window title is never persisted as a session title.
         .terminal => return error.InvalidAgentTitle,
     }
-    var value: SessionTitle = .{
+    var value: StoredSessionTitle = .{
         .id = id,
         .title_len = @intCast(title_value.len),
         .source = source,
@@ -47,6 +50,6 @@ pub fn init(definition: Definition) !SessionTitle {
     return value;
 }
 
-pub fn titleSlice(self: *const SessionTitle) []const u8 {
+pub fn titleSlice(self: *const StoredSessionTitle) []const u8 {
     return self.title[0..self.title_len];
 }

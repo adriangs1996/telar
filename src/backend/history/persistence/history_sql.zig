@@ -10,7 +10,7 @@ const StatsQuery = @import("../StatsQuery.zig");
 const Store = @import("Store.zig");
 const LaunchAttempt = @import("../LaunchAttempt.zig");
 const SessionStarted = @import("../SessionStarted.zig");
-const SessionTitle = @import("../SessionTitle.zig");
+const StoredSessionTitle = @import("../StoredSessionTitle.zig");
 const Query = @import("../Query.zig");
 const QueryOrigin = @import("../QueryOrigin.zig");
 const Prune = @import("../Prune.zig");
@@ -392,7 +392,7 @@ test "persists sessions and filters command history" {
         .shell = @constCast("/bin/zsh"),
     };
     try store.startSession(&session);
-    const session_title = try SessionTitle.init(.{
+    const session_title = try StoredSessionTitle.init(.{
         .id = session_id,
         .title = "Improve agent sidebar",
         .source = .generated,

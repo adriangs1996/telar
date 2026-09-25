@@ -8,7 +8,7 @@ const LaunchAttempt = @import("LaunchAttempt.zig");
 const SessionStartRequest = @import("SessionStartRequest.zig");
 const SessionStarted = @import("SessionStarted.zig");
 const Definition = @import("Definition.zig");
-const SessionTitle = @import("SessionTitle.zig");
+const StoredSessionTitle = @import("StoredSessionTitle.zig");
 const ImportBatch = @import("ImportBatch.zig");
 const CommandRecord = @import("CommandRecord.zig");
 const CommandFinished = @import("CommandFinished.zig");
@@ -81,7 +81,7 @@ pub fn sessionStarted(gpa: std.mem.Allocator, input: SessionStartRequest) !model
 /// const request = try sessionTitle(definition);
 /// ```
 pub fn sessionTitle(definition: Definition) !model.Request {
-    return .{ .session_title = try SessionTitle.init(definition) };
+    return .{ .session_title = try StoredSessionTitle.init(definition) };
 }
 
 /// Copies one decoded wire batch before its borrowed transport buffer is

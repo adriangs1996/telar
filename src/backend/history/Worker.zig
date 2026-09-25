@@ -8,7 +8,7 @@ const worker_support = @import("worker_support.zig");
 const LaunchAttempt = @import("LaunchAttempt.zig");
 const SessionStarted = @import("SessionStarted.zig");
 const SessionFinished = @import("SessionFinished.zig");
-const SessionTitle = @import("SessionTitle.zig");
+const StoredSessionTitle = @import("StoredSessionTitle.zig");
 const CommandFinished = @import("CommandFinished.zig");
 const ImportBatch = @import("ImportBatch.zig");
 const StatsQuery = @import("StatsQuery.zig");
@@ -188,7 +188,7 @@ fn writeSessionFinish(self: *Worker, context: Context, value: SessionFinished) v
     context.metrics.observeWrite(worker_support.elapsedSince(context.io, started), result);
 }
 
-fn writeSessionTitle(self: *Worker, context: Context, value: SessionTitle) void {
+fn writeSessionTitle(self: *Worker, context: Context, value: StoredSessionTitle) void {
     const started = std.Io.Timestamp.now(context.io, .awake);
     const result = if (self.database) |*database|
         database.setSessionTitle(&value)

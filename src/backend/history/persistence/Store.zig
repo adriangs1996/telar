@@ -8,7 +8,7 @@ const CommandFinished = @import("../CommandFinished.zig");
 const Delete = @import("../Delete.zig");
 const OutputResult = @import("../OutputResult.zig");
 const SessionFinished = @import("../SessionFinished.zig");
-const SessionTitle = @import("../SessionTitle.zig");
+const StoredSessionTitle = @import("../StoredSessionTitle.zig");
 const Query = @import("../Query.zig");
 const QueryResult = @import("../QueryResult.zig");
 const FuzzyPage = @import("../FuzzyPage.zig");
@@ -293,7 +293,7 @@ pub fn finishSession(self: *Store, value: SessionFinished) !void {
     try sqlite.stepDone(stmt);
 }
 
-pub fn setSessionTitle(self: *Store, value: *const SessionTitle) !void {
+pub fn setSessionTitle(self: *Store, value: *const StoredSessionTitle) !void {
     const stmt = self.set_session_title;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.id);

@@ -1,7 +1,7 @@
 //! Owned values exchanged with the history worker.
 
 const core = @import("telar-core");
-const SessionTitle = @import("SessionTitle.zig");
+const StoredSessionTitle = @import("StoredSessionTitle.zig");
 const std = @import("std");
 const Query = @import("Query.zig");
 const QueryOrigin = @import("QueryOrigin.zig");
@@ -37,19 +37,19 @@ pub const CommandStatus = enum(u8) {
 
 test "session titles validate text and source authority before persistence" {
     const session_id = [_]u8{1} ** 16;
-    _ = try SessionTitle.init(.{ .id = session_id, .title = "Improve sidebar", .source = .generated, .state = .ready });
-    _ = try SessionTitle.init(.{ .id = session_id, .title = "", .source = .telar, .state = .failed });
+    _ = try StoredSessionTitle.init(.{ .id = session_id, .title = "Improve sidebar", .source = .generated, .state = .ready });
+    _ = try StoredSessionTitle.init(.{ .id = session_id, .title = "", .source = .telar, .state = .failed });
     try std.testing.expectError(
         error.InvalidAgentTitle,
-        SessionTitle.init(.{ .id = session_id, .title = "bad\ntitle", .source = .generated, .state = .ready }),
+        StoredSessionTitle.init(.{ .id = session_id, .title = "bad\ntitle", .source = .generated, .state = .ready }),
     );
     try std.testing.expectError(
         error.InvalidAgentTitle,
-        SessionTitle.init(.{ .id = session_id, .title = "", .source = .generated, .state = .ready }),
+        StoredSessionTitle.init(.{ .id = session_id, .title = "", .source = .generated, .state = .ready }),
     );
     try std.testing.expectError(
         error.InvalidAgentTitle,
-        SessionTitle.init(.{ .id = session_id, .title = "manual", .source = .manual, .state = .pending }),
+        StoredSessionTitle.init(.{ .id = session_id, .title = "manual", .source = .manual, .state = .pending }),
     );
 }
 
@@ -127,7 +127,7 @@ pub const Request = union(enum) {
     launch_attempt: *LaunchAttempt,
     session_started: *SessionStarted,
     session_finished: SessionFinished,
-    session_title: SessionTitle,
+    session_title: StoredSessionTitle,
     command_finished: *CommandFinished,
     query: Query,
     import: *ImportBatch,
