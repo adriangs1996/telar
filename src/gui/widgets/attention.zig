@@ -34,6 +34,13 @@ pub fn paneAgent(projection: *const client.Projection, location: core.TabLocatio
     return projection.agents.find(key);
 }
 
+/// The status colour of the agent in one pane when it needs the person; null
+/// for a plain shell or an agent that is working, done or idle.
+/// Example: `const dot = attention.paneDot(projection, palette, location, pane_id);`
+pub fn paneDot(projection: *const client.Projection, palette: data.Palette, location: core.TabLocation, pane_id: core.PaneId) ?cellgrid.Color {
+    return dotColor(palette, paneAgent(projection, location, pane_id));
+}
+
 /// The status colour of a tab's most urgent agent when that agent needs the
 /// person; null when nothing in the tab is blocked or failed.
 /// Example: `const dot = attention.tabDot(projection, palette, tab.location);`

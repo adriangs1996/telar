@@ -11,6 +11,7 @@ const Rect = gfx.Rect;
 const TabSurface = @import("TabSurface.zig");
 const PaneProgress = @import("PaneProgress.zig");
 const attention = @import("attention.zig");
+const application_mark = @import("application_mark.zig");
 const TabEntry = @import("TabEntry.zig");
 const StripFit = @import("StripFit.zig");
 const Canvas = @import("Canvas.zig");
@@ -165,7 +166,7 @@ fn tab(self: TabStrip, canvas: *Canvas, entry: TabEntry) !void {
     label.width = @max(0, bounds.width - 2 * label_inset - dot_space);
     if (data.tab_label.icon(model, index)) |icon| {
         const side = @max(0, @min(label.height, @min(label.width, canvas.iconSize(.{ .text = "", .size = .body }))));
-        try drawIcon(canvas, icon, .{ .x = label.x, .y = label.y + (label.height - side) / 2, .width = side, .height = side });
+        try application_mark.draw(canvas, icon, .{ .x = label.x, .y = label.y + (label.height - side) / 2, .width = side, .height = side }, false);
         const icon_space = @min(label.width, side + chrome.px(6));
         label.x += icon_space;
         label.width -= icon_space;
@@ -201,21 +202,6 @@ fn width(self: TabStrip, canvas: *Canvas, index: usize) !f32 {
     const dot = attention.tabDot(self.context.projection, canvas.theme.palette, model.tabs.location[index]);
     const dot_space: f32 = if (dot != null) chrome.px(AttentionDot.diameter + AttentionDot.gap) else 0;
     return @ceil(std.math.clamp(measured + icon_space + 2 * chrome.px(inset) + dot_space, chrome.px(96), chrome.px(180)));
-}
-
-fn drawIcon(canvas: *Canvas, icon: data.icons.Icon, bounds: Rect) !void {
-    const provider: core.AgentProvider = switch (icon) {
-        .provider_claude => .claude,
-        .provider_codex => .codex,
-        .provider_pi => .pi,
-        else => .unknown,
-    };
-    if (canvas.providerMark(provider)) |mark| {
-        try canvas.spriteTintedAt(bounds, .{ .sprite = mark, .color = if (provider == .codex) canvas.theme.palette.text else .default });
-        return;
-    }
-
-    try canvas.iconAt(bounds, .{ .text = icon.nerdGlyph(), .color = canvas.theme.palette.subtext0, .face = .sans, .size = .body });
 }
 
 fn text(storage: []u8, model: *const data.ClientModel, index: usize) []const u8 {

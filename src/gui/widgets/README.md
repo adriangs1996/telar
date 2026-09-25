@@ -214,8 +214,9 @@ visible geometry's scroll bound.
 ## Animation and invalidation
 
 Child progress uses `PaneProgress` capsules in pane headers and a compact ring
-in the active tab for a single pane. Fullscreen keeps the indicator beside the
-pane selector. Percentages ease between reports over 240 ms; unknown progress
+in the active tab for a single pane. Fullscreen keeps the indicator in the
+bottom band, beside the change-review button and the leave control
+(`FullscreenStrip`). Percentages ease between reports over 240 ms; unknown progress
 uses a rotating arc sampled from the presentation clock at 60 Hz. Pause and
 error have distinct marks and stop animation. Removing progress clears the
 indicator immediately, since removal can also mean interruption.

@@ -15,6 +15,9 @@ pub const Intent = union(enum) {
     rename_tab: core.TabId,
     /// The strip's `+` control: the same request the `create_tab` action sends.
     create_tab,
+    /// The fullscreen band's leave control: the same toggle the
+    /// `toggle_pane_fullscreen` action performs.
+    toggle_pane_fullscreen,
     select_workspace: core.WorkspaceId,
     notification_activate: model_data.NotificationId,
     notification_dismiss: model_data.NotificationId,

@@ -176,7 +176,7 @@ test "native tabs always retain the active tab when their row overflows" {
     try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }) == null);
 }
 
-test "native fullscreen labels keep hidden panes reachable without covering terminal content" {
+test "native fullscreen band keeps hidden panes and the leave control reachable below the content" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const tab = fixture.session.gui.app.model.tabs.active;
@@ -185,12 +185,21 @@ test "native fullscreen labels keep hidden panes reachable without covering term
     _ = fixture.session.gui.app.model.tabs.layout[tab].toggleFullscreen();
     const projection = fixture.projection();
     try fixture.paint(projection);
-    const target = fixture.target(.{ .focus_pane = Session.pane_id }).?;
-    try std.testing.expectEqualDeep(client.Intent{ .focus_pane = Session.pane_id }, fixture.click(target, 0).intent);
-    try std.testing.expect(fixture.target(.{ .focus_pane = second }) != null);
+    // Splitting focuses the new pane, so fullscreen shows `second` and hides the first.
+    const target = fixture.target(.{ .focus_pane = second }).?;
+    try std.testing.expectEqualDeep(client.Intent{ .focus_pane = second }, fixture.click(target, 0).intent);
     var layout: data.LayoutSnapshot = .{};
     fixture.session.gui.app.model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
+    try std.testing.expectEqual(second, layout.views()[0].pane_id);
     const content = fixture.session.gui.renderer.metrics.rect(fixture.session.gui.renderer.origin, layout.views()[0].content);
+    const hidden = fixture.bandTarget(.{ .focus_pane = Session.pane_id }).?;
+    try std.testing.expectEqualDeep(client.Intent{ .focus_pane = Session.pane_id }, fixture.clickBand(hidden, 0).intent);
+    const leave = fixture.bandTarget(.toggle_pane_fullscreen).?;
+    try std.testing.expectEqualDeep(client.Intent.toggle_pane_fullscreen, fixture.clickBand(leave, 0).intent);
+    // The band lives on the bottom border row: both controls sit below the content.
+    try std.testing.expect(hidden.y >= content.y + content.height);
+    try std.testing.expect(leave.y >= content.y + content.height);
+    try std.testing.expect(hidden.x + hidden.width <= leave.x);
     for (fixture.session.gui.renderer.quads.items()) |quad| {
         if (quad.a == 0 and quad.border > 0) {
             // A frame ring paints only its stroke: the content must sit inside it.

@@ -12,7 +12,7 @@ const attention = @import("attention.zig");
 const Canvas = @import("Canvas.zig");
 const PaneProgress = @import("PaneProgress.zig");
 const ChangeReviewButton = @import("ChangeReviewButton.zig");
-const AgentAges = @import("AgentAges.zig");
+const StatusChip = @import("StatusChip.zig");
 const PaneHeader = @This();
 
 context: *const Context,
@@ -37,13 +37,8 @@ pub fn draw(self: PaneHeader, canvas: *Canvas) !void {
     var index_storage: [8]u8 = undefined;
     const index_text = std.fmt.bufPrint(&index_storage, "{d}", .{self.index}) catch unreachable;
     const index_width = try canvas.measure(.{ .text = index_text, .bold = true, .face = .sans, .size = .body });
-    var chip_storage: [32]u8 = undefined;
-    const chip_text = self.chip(&chip_storage);
-    var chip_width: f32 = 0;
-    if (chip_text.len != 0) {
-        chip_width = @ceil(try canvas.measure(.{ .text = chip_text, .face = .sans, .size = .body }) + 2 * chrome.px(6));
-    }
-
+    var chip: StatusChip = .{ .context = self.context, .agent = self.agent, .area = band };
+    var chip_width = try chip.width(canvas);
     var progress: PaneProgress = .{ .pane = self.pane, .area = band, .motions = self.context.progress };
     var progress_width = try progress.width(canvas);
     const reserved = index_width + chip_width + chrome.px(12);
@@ -73,64 +68,6 @@ pub fn draw(self: PaneHeader, canvas: *Canvas) !void {
         return;
     }
 
-    const chip_height = @min(band.height, chrome.px(16));
-    const chip_bounds: Rect = .{ .x = end - chip_width, .y = band.y + @floor((band.height - chip_height) / 2), .width = chip_width, .height = chip_height };
-    try canvas.fillRoundedAt(chip_bounds, .{ .radius = chrome.px(4), .color = attention.statusColor(palette, self.agent.?.status) });
-    _ = try canvas.textAt(.{ .x = chip_bounds.x + chrome.px(6), .y = band.y, .width = chip_width - 2 * chrome.px(6), .height = band.height }, .{ .text = chip_text, .color = palette.surface_dim, .face = .sans, .size = .body });
-}
-
-fn chip(self: PaneHeader, storage: []u8) []const u8 {
-    const agent = self.agent orelse return "";
-    return switch (agent.status) {
-        .blocked => switch (agent.blockedReason()) {
-            .permission => "permission",
-            .question => "question",
-            .plan => "plan",
-            .none, .other => "blocked",
-        },
-        .working => workingLabel(storage, self.context.statusAge(agent)),
-        .done => "done",
-        .failed => "failed",
-        .ready => "ready",
-        .unknown => "",
-    };
-}
-
-fn workingLabel(storage: []u8, seconds: u32) []const u8 {
-    var age_storage: [16]u8 = undefined;
-    const age = attention.ageLabel(&age_storage, seconds);
-    return std.fmt.bufPrint(storage, "working {s}", .{age}) catch "working";
-}
-
-test "pane header duration advances with the card clock between runtime reports" {
-    var agents: data.AgentSnapshot = .{};
-    const input: data.AgentInput = .{
-        .key = .{
-            .pane_id = @enumFromInt(1),
-            .pane_generation = 1,
-        },
-        .location = .{
-            .workspace = .{
-                .workspace = @enumFromInt(1),
-            },
-            .tab_id = @enumFromInt(1),
-        },
-        .pane_index = 1,
-        .provider = .codex,
-        .status = .working,
-        .status_age_s = 5,
-    };
-    _ = try agents.replace(.{ .revision = 1, .agents = &.{input} });
-    var ages: AgentAges = .{};
-    const context: Context = .{ .hits = undefined, .bands = undefined, .projection = undefined, .hovered = null, .ages = &ages };
-    const header: PaneHeader = .{ .context = &context, .pane = undefined, .agent = &agents.slice()[0], .index = 1, .area = .{ .x = 0, .y = 0, .width = 0, .height = 0 } };
-    var storage: [32]u8 = undefined;
-    ages.observe(&agents, 100 * std.time.ns_per_s);
-    try std.testing.expectEqualStrings("working 5s", header.chip(&storage));
-    ages.observe(&agents, 101 * std.time.ns_per_s);
-    try std.testing.expectEqualStrings("working 6s", header.chip(&storage));
-
-    _ = try agents.replace(.{ .revision = 2, .agents = &.{input} });
-    ages.observe(&agents, 101 * std.time.ns_per_s);
-    try std.testing.expectEqualStrings("working 6s", header.chip(&storage));
+    chip.area = .{ .x = end - chip_width, .y = band.y, .width = chip_width, .height = band.height };
+    try chip.draw(canvas);
 }

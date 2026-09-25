@@ -36,14 +36,32 @@ is invented for `pane_resize`.
 ## Fullscreen presentation
 
 The fullscreen pane keeps its border, including when it is the only pane.
-Exiting fullscreen with one pane restores borderless content. Its top edge
-lists pane indices and foreground names in the same order used by navigation. The active label uses
-the theme's accent background; other labels use subdued text. The strip
-truncates names at grapheme boundaries before hiding labels, and always keeps
-the active label visible when space permits. It uses fixed storage bounded by
-`core.max_panes_per_tab`, does O(panes + label bytes) work only when the border
-is drawn and adds no content row or persistent state. The focused pane's
-progress indicator uses the remaining border space.
+Exiting fullscreen with one pane restores borderless content. In the TUI, its
+top edge lists pane indices and foreground names in the same order used by
+navigation. The active label uses the theme's accent background; other labels
+use subdued text. The strip truncates names at grapheme boundaries before
+hiding labels, and always keeps the active label visible when space permits.
+It uses fixed storage bounded by `core.max_panes_per_tab`, does
+O(panes + label bytes) work only when the border is drawn and adds no content
+row or persistent state. The focused pane's progress indicator uses the
+remaining border space.
+
+The GUI keeps the top border row plain and draws `FullscreenStrip` on the
+bottom border row instead, inside the same `ChromeMetrics.pane_header` band
+the pane header uses. The focused pane keeps its header entry: application
+mark, index in bold, name in `subtext0` and the `StatusChip` of its agent.
+The hidden panes follow in display order with the tab strip's label
+composition (mark, index, name) and no tab surface, in `overlay1` with the
+mark at 0.6 alpha, the way an unfocused pane is dimmed; hovering one lifts it
+to `text`. A hidden agent that is blocked or failed keeps its `AttentionDot`.
+The right end holds the progress capsule, the change-review button and a
+`pane_fullscreen` control that sends the `toggle_pane_fullscreen` intent,
+the same toggle as `prefix z`. Nothing in the band uses `accent`; the frame
+ring alone marks focus. When the entries do not fit, hidden names give way to
+mark-plus-index first, then the row scrolls around the focused entry with
+`TabStrip.firstVisible`, so the focused pane stays visible at any width.
+Hidden entries and the leave control are pixel band targets; the focused pane
+stays reachable through its frame bands.
 
 With KGP and RGB label colors, all pane labels use embedded JetBrains Mono
 Regular. The selected pill is 75 percent of the cell height, vertically centered

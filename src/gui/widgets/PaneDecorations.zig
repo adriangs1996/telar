@@ -5,7 +5,8 @@
 //! is two logical pixels inside the border in the status colour, only for a
 //! pane whose agent is blocked or failed and only while it is not focused;
 //! it fades in through `RingFades`. Unfocused panes get one quad of the
-//! terminal background at 0.15 over their content.
+//! terminal background at 0.15 over their content. A fullscreen pane keeps
+//! its top row plain and carries the `FullscreenStrip` on its bottom row.
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const Context = @import("Context.zig");
@@ -47,12 +48,11 @@ pub fn draw(self: PaneDecorations, canvas: *Canvas) !void {
         const pane = model.panes.findInConst(location.tab_id, view.pane_id) orelse continue;
         const agent = attention.paneAgent(projection, location, view.pane_id);
         try self.border(canvas, view);
-        const title = view.outer.row(0);
         if (model.tabs.layout[tab].isFullscreen()) {
-            const strip: FullscreenStrip = .{ .context = context, .model = model, .tab = tab, .area = title };
+            const strip: FullscreenStrip = .{ .context = context, .tab = tab, .area = canvas.rect(view.outer.row(view.outer.h -| 1)) };
             try strip.draw(canvas);
         } else {
-            const header: PaneHeader = .{ .context = context, .pane = pane, .agent = agent, .index = view.display_index, .area = canvas.rect(title) };
+            const header: PaneHeader = .{ .context = context, .pane = pane, .agent = agent, .index = view.display_index, .area = canvas.rect(view.outer.row(0)) };
             try header.draw(canvas);
         }
 

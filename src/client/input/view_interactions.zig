@@ -102,6 +102,12 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
                 .{},
             );
         },
+        .toggle_pane_fullscreen => _ = try pane_resize.togglePaneFullscreen(
+            client,
+            .{
+                .area = client.geometry().area,
+            },
+        ),
         .select_workspace => |workspace| _ = try workspace_handoff.selectWorkspace(
             client,
             .{

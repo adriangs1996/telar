@@ -22,6 +22,7 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
             .toggle_sidebar => "Toggle sidebar",
             .toggle_workspace_list => "Toggle workspace list",
             .create_tab => "Create tab",
+            .toggle_pane_fullscreen => "Leave fullscreen",
             .move_tab => "Move tab",
             .select_tab, .rename_tab => |id| blk: {
                 if (projection.model.tabs.find(id)) |tab| {
