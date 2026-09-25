@@ -555,6 +555,7 @@ pub fn update(self: *GuiAdapter) !?u8 {
     self.refreshPointer();
     self.exit_status = status;
     const now_ns = self.now();
+
     if (self.observed_input_revision != self.input_revision) {
         self.observed_input_revision = self.input_revision;
         self.cursor_clock.focused = self.focused;
@@ -564,6 +565,7 @@ pub fn update(self: *GuiAdapter) !?u8 {
     self.cursor_clock.observe(self.cursorTarget(), now_ns);
     _ = self.app.presentation.observe(self.observation());
     self.needs_draw = false;
+
     if (self.app.presentation.active == null) {
         const animation_due = self.chrome.animation.requestPreparation(now_ns);
         self.needs_draw = self.app.presentation.needsPreparation() or animation_due or
