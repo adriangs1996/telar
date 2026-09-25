@@ -1,7 +1,5 @@
-const core = @import("telar-core");
 const PaneRecord = @This();
 
-kind: core.PaneKind = .terminal,
 pane_id: u64,
 workspace_id: u64,
 tab_id: u64,

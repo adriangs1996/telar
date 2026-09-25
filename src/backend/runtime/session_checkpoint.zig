@@ -136,14 +136,7 @@ pub fn start(model: *RuntimeModel) !void {
     const job: WriteJob = prepared: {
         const buffer = try model.gpa.alloc(u8, snapshot_bytes);
         errdefer model.gpa.free(buffer);
-        const len = encode(model, buffer) catch |err| switch (err) {
-            error.AgentBusy => {
-                model.gpa.free(buffer);
-                return;
-            },
-            else => return err,
-        };
-
+        const len = try encode(model, buffer);
         break :prepared .{ .io = model.io, .path = path, .buffer = buffer, .len = len };
     };
     try model.checkpoint.startWrite(.{ .allocator = model.gpa, .job = job }, model.select);
@@ -321,10 +314,6 @@ fn restorePane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !vo
     }
     const workspace_path = reader.workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
 
-    if (record.kind == .agent) {
-        return restoreAgentPane(model, counters, record);
-    }
-
     var argument_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
     var encoder = bytecodec.Encoder.init(&argument_buffer);
     const resumable = resumeForPane(model, record);
@@ -390,61 +379,6 @@ fn restorePane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !vo
     }
 }
 
-fn restoreAgentPane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !void {
-    const conversation = if (model.checkpoint.resume_agents and record.agent_session.len != 0)
-        try core.RecentConversation.init(record.agent_session, record.agent_title)
-    else
-        null;
-    if (conversation) |value| {
-        if (managedConversationClaimed(model, value.idSlice())) {
-            return error.ConversationAlreadyOpen;
-        }
-
-        const reference = try SessionReference.init(value.idSlice(), 0);
-        if (ResumeSession.init(.codex, reference)) |session| {
-            if (agent_status.hasRestoredSession(model, session)) {
-                return error.ConversationAlreadyOpen;
-            }
-        } else |_| {}
-    }
-
-    const location: core.TabLocation = .{
-        .workspace = .{ .workspace = try core.workspace(record.workspace_id) },
-        .tab_id = try core.tab(record.tab_id),
-    };
-    const workspace_path = model.workspaces.workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
-    try model.panes.reserveRestoredKey(record.pane_id, counters.next_pane_generation);
-    const pane = try pane_launch.launch(model, .{
-        .location = location,
-        .kind = .agent,
-        .restore_conversation = conversation,
-        .size = .{ .cols = if (record.cols == 0) 80 else record.cols, .rows = if (record.rows == 0) 24 else record.rows },
-        .launch = .{ .cwd = record.cwd, .argument_count = 0, .encoded_arguments = "", .environment_mode = .inherit_runtime, .environment_count = 0, .encoded_environment = "" },
-        .launch_cwd = record.cwd,
-        .workspace_path = workspace_path,
-    });
-    model.checkpoint.restored_panes +|= 1;
-    if (conversation != null) {
-        model.checkpoint.resumed_agents +|= 1;
-        if (restoredTitle(record)) |title| {
-            restoreAgentTitle(model, pane, title);
-        }
-    }
-}
-
-fn managedConversationClaimed(model: *RuntimeModel, id: []const u8) bool {
-    for (model.panes.items) |slot| {
-        const pane = slot orelse continue;
-        if (pane.agent_thread) |snapshot| {
-            if (std.mem.eql(u8, snapshot.threadId(), id)) {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
 fn resumeForPane(model: *RuntimeModel, record: PaneRecord) ?ResumeSession {
     if (!model.checkpoint.resume_agents) {
         return null;
@@ -452,7 +386,7 @@ fn resumeForPane(model: *RuntimeModel, record: PaneRecord) ?ResumeSession {
 
     const reference = SessionReference.init(record.agent_session, 0) catch return null;
     const session = ResumeSession.init(@enumFromInt(record.agent_provider), reference) catch return null;
-    if (agent_status.hasRestoredSession(model, session) or (session.provider == .codex and managedConversationClaimed(model, record.agent_session))) {
+    if (agent_status.hasRestoredSession(model, session)) {
         return null;
     }
 
@@ -529,33 +463,23 @@ pub fn encode(model: *RuntimeModel, buffer: []u8) !usize {
         if (!pane.launch_state.discoverable() or pane.close_requested or pane.exit != null) {
             continue;
         }
-        if (pane.kind == .terminal and !pane.launch_record.restorable()) {
+        if (!pane.launch_record.restorable()) {
             continue;
         }
 
-        const conversation = if (pane.kind == .agent) try pane.session.agent.session.checkpoint(model.io) else null;
-        const resumable = if (pane.kind == .terminal) agent_status.resumeSession(model, pane.key()) else null;
-        const title = if (conversation) |*value| title: {
-            if (std.mem.eql(u8, pane.agent_thread.?.threadId(), value.idSlice())) {
-                if (agent_status.checkpointTitle(model, pane.key())) |saved| {
-                    break :title saved;
-                }
-            }
-
-            break :title if (value.title_len != 0) SessionTitle.init(value.titleSlice(), .agent) catch null else null;
-        } else if (resumable != null) agent_status.checkpointTitle(model, pane.key()) else null;
+        const resumable = agent_status.resumeSession(model, pane.key());
+        const title = if (resumable != null) agent_status.checkpointTitle(model, pane.key()) else null;
         try encoder.pane(.{
-            .kind = pane.kind,
             .pane_id = core.raw(pane.id),
             .workspace_id = core.raw(pane.location.workspace.workspace),
             .tab_id = core.raw(pane.location.tab_id),
             .cwd = pane.cwd.slice(),
             .cols = pane.size.cols,
             .rows = pane.size.rows,
-            .arguments = if (pane.kind == .agent) "" else pane.launch_record.slice(),
-            .argument_count = if (pane.kind == .agent) 0 else pane.launch_record.count,
-            .agent_provider = if (pane.kind == .agent) @intFromEnum(core.AgentProvider.codex) else if (resumable) |session| @intFromEnum(session.provider) else 0,
-            .agent_session = if (conversation) |*value| value.idSlice() else if (resumable) |session| session.reference.slice() else "",
+            .arguments = pane.launch_record.slice(),
+            .argument_count = pane.launch_record.count,
+            .agent_provider = if (resumable) |session| @intFromEnum(session.provider) else 0,
+            .agent_session = if (resumable) |session| session.reference.slice() else "",
             .agent_title = if (title) |value| value.slice() else "",
             .agent_title_source = if (title) |value| @intFromEnum(value.source) else 0,
         });

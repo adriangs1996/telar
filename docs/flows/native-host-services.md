@@ -31,14 +31,12 @@ its `.link_opened` message reaches `link_opening.completeLinkOpening` through
 macOS and `xdg-open` on Linux, with a five-second timeout and 4 KiB limits for
 each output stream. The TUI starts the same job; commands and failure behavior
 are the same on both. File links continue to use the
-configured editor in a shared command tab; agent message files open beside their
-source pane.
+configured editor in a shared command tab.
 
 Right-clicking a terminal link copies its URI without keyboard modifiers. The
 native chrome port resolves the target only from delivered pane content and
 queues the existing bounded clipboard write. `GuiAdapter.dispatchPointer` consumes drag and
-release without forwarding them to the child. Agent message links use their
-snapshot-validated destination and the same clipboard service. The TUI dispatches
+release without forwarding them to the child. The TUI dispatches
 right-button link gestures through `link_opening.inputLinkPointer`, which
 queues the URI in `model.to_host` for `host/host_effects.deliver`.
 `link_regressions.zig` verifies copying without opening or child mouse reports.
@@ -53,8 +51,6 @@ requests cannot display a confirmation.
 
 Hovering a terminal URI shows the hand cursor even without modifiers. Opening
 still uses the existing platform modifier and child mouse-reporting policy.
-Agent message links resolve the delivered widget and current snapshot before
-showing the same hand; stale links, modals and pointer departure remove it.
 
 `zig build test-gui-clipboard` on Linux verifies snapshot ownership, saturation,
 closed consumers, polling failure, late publication and cancellation of a stalled

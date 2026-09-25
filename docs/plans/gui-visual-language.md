@@ -34,7 +34,7 @@ Nothing blinks forever.
 | 6 | Status is an icon in its color, not a word: `⚠` permission, `?` question, `◌` working (with elapsed time), `✓` done unseen, `✕` failed, `·` idle. The word goes in the tooltip and the pane header. |
 | 7 | The top bar right side shows the selected workspace's location (worktree or cwd, with branch). No search field; the palette opens by key. The pane header no longer shows the cwd. |
 | 8 | The status bar shows the mode chip and prefix hints only. |
-| 9 | Agent mode is out of scope: it will be a specialized pane, not a mode that replaces the chrome. `docs/plans/agent-mode.md` stays as vocabulary and keymap reference. |
+| 9 | Agent mode is out of scope. Telar later removed its agent panes; agents run in terminal panes. |
 | 10 | Creating a context (workspace) asks for two fields: name and working directory, with path autocompletion. |
 | 11 | System metrics are a Lua bar slot in the sidebar footer, `metrics` by default. Same slot mechanism as the bottom bar. |
 | 12 | The command palette covers actions and agents/panes. History keeps its own modal with its inspector. |

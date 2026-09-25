@@ -11,7 +11,6 @@ const client = @import("telar-client");
 const Fixture = @import("OverlayFixture.zig");
 const Modal = @import("../widgets/overlays/Modal.zig");
 const WrappedLines = @import("../widgets/overlays/WrappedLines.zig");
-const ThreadPane = @import("../widgets/ThreadPane.zig");
 const PointerEvent = @import("../input/PointerEvent.zig");
 
 test "native history keeps the visible page while a replacement query is pending" {
@@ -347,7 +346,7 @@ test "native new-context form paints both fields, the completion list and the co
     try std.testing.expect(fixture.model.name_prompt.currentConst().?.form().?.confirm_create);
 }
 
-test "native suggestion states and thread surface stay within their assigned rectangles" {
+test "native suggestion states stay within their assigned rectangles" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     fixture.model.name_prompt.begin(.suggest_palette);
@@ -356,17 +355,6 @@ test "native suggestion states and thread surface stay within their assigned rec
     try fixture.paint();
     try std.testing.expect(fixture.model.suggestion.apply(.{ .request_id = @enumFromInt(12), .status = .ready, .text = "ls -la" }));
     try fixture.paint();
-
-    fixture.renderer.quads.clear();
-    var canvas = fixture.canvas();
-    const area: cellgrid.Rect = .{ .x = 3, .y = 2, .w = 30, .h = 8 };
-    try (ThreadPane{ .area = area, .thread = .{ .pane_id = @enumFromInt(1), .agent = null, .composer = "a draft\x1b[2J" } }).draw(&canvas);
-    const bounds = canvas.rect(area);
-    for (fixture.renderer.quads.items()) |quad| {
-        try std.testing.expect(quad.x >= bounds.x and quad.y >= bounds.y);
-        try std.testing.expect(quad.x + quad.width <= bounds.x + bounds.width);
-        try std.testing.expect(quad.y + quad.height <= bounds.y + bounds.height);
-    }
 }
 
 test "native context layout ignores terminal cell geometry and reuses its warm draw" {

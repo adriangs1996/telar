@@ -75,7 +75,7 @@ attaches or selects a pane. The contract test uses tab IDs whose numeric order
 differs from their positions.
 
 `telar tab get ID [--workspace ID] [--json]` requests `tab_snapshot` and returns
-the tab's panel identities, generations, kinds and lifecycle states. `--current`
+the tab's panel identities, generations and lifecycle states. `--current`
 resolves `TELAR_TAB_ID`. A mismatched workspace or tab in the response fails;
 querying never obtains a geometry lease or attaches to a terminal.
 
@@ -93,80 +93,11 @@ sends `move_tab`. Without an anchor it moves one position; with an anchor it
 inserts before or after that tab. Output reports the absolute zero-based
 position confirmed by `tab_moved`, including a successful no-op at an edge.
 
-## Managed agents
+## Agents
 
-`telar agent interrupt TARGET [--json]` resolves an agent ID, unique title or
-`--current` through the existing agent snapshot, then sends `agent_interrupt`
-with the exact pane generation. It waits for the correlated acceptance; this
-means the runtime admitted the interrupt, not that provider shutdown completed.
-Terminal panes and stale generations retain the runtime's explicit rejection.
-The socket test asserts the generation and acknowledgement boundary.
-
-`telar agent thread TARGET [--json]` sends `query_agent_thread`, waits for
-acceptance and copies the exact pane generation's `agent_thread_snapshot` into
-bounded owned storage. Output preserves item identities, parent relationships,
-provider references, phases, fragment boundaries, tool lifecycle and pending
-approval details. A truncation flag distinguishes a retained window from a
-complete transcript. No terminal text scraping or UI attachment is involved.
-
-`telar agent models TARGET [--json]` reads the native thread catalog and reports
-the selected model, effort and access alongside provider-advertised model IDs,
-labels, supported efforts and defaults. Effort identifiers are not hardcoded.
-
-`telar agent skills TARGET [--json]` reports the provider skill catalog with
-revision, loading/ready/failed phase, truncation, names, labels, descriptions
-and scopes. Empty/loading catalogs are not reported as a successful discovery.
-
-`telar agent conversations TARGET [--json]` lists stable provider conversation
-IDs and titles, catalog phase, whether more entries exist and whether this
-pane can resume a conversation. It does not expose unstable catalog indices.
-
-`telar agent approvals TARGET [--json]` returns the pending approval identity,
-kind and description, or an empty array. Querying never answers the approval.
-
-`telar agent approve TARGET APPROVAL_ID [--json]` sends an explicit positive
-approval decision with the observed pane generation and waits for runtime
-admission. The provider remains responsible for rejecting stale approval IDs.
-
-`telar agent reject TARGET APPROVAL_ID [--json]` sends the negative decision
-through the same generation-checked path. `accepted` in CLI output means the
-runtime admitted the command, not that the user approved the provider action.
-
-`telar agent prompt TARGET TEXT` resolves the exact pane kind through its tab
-snapshot. Managed panes receive `agent_prompt` with their live model, effort
-and access selection; terminal agents retain `send_pane_text`. A missing or
-changed generation fails before submission, with no fallback or duplicate send.
-
-`agent prompt --image /absolute/path.png` accepts up to four image paths using
-the existing protocol validator. An empty text argument supports image-only
-submissions. Paths refer to the runtime machine; the provider performs image
-loading. Terminal panes reject image submissions before sending any text.
-
-`agent prompt --model ID --effort ID --access MODE` validates model/effort
-against the live catalog before submission. Selecting a model uses its default
-effort unless overridden; omitted options retain the current selection. Access
-is `read_only`, `workspace` or `full_access`. Terminal panes reject these flags.
-
-`telar agent clear TARGET [--json]` submits the existing native `/clear`
-conversation command with current provider options. It starts a new conversation
-in that pane; it does not erase history or restart the pane process. Output
-acknowledges admission; provider completion remains asynchronous.
-
-`telar agent rename TARGET TITLE [--json]` validates the existing bounded title
-contract and submits native `/rename`. This renames the provider conversation;
-reporting a sidebar title is a separate operation.
-
-`telar agent history TARGET [--cursor TOKEN | --anchor ID --anchor-turn ID]
-[--direction older|newer] [--json]` reads one correlated provider page. JSON
-includes opaque before/after cursors and availability flags alongside structured
-thread data. A request cannot mix a cursor with an item/turn anchor. The pane
-and view generations are checked before output; reading does not alter live state.
-
-`telar agent watch TARGET [--jsonl] [--count N]` streams the initial native
-thread and later runtime revisions as JSON Lines. It filters other panes, stale
-generations and duplicate revisions; updates may be coalesced by the runtime.
-There is no polling or idle timeout. Removal and resync require an explicit
-restart; runtime shutdown ends the stream. Each record flushes immediately.
+`telar agent prompt TARGET TEXT` types the prompt into the agent's pane through
+`send_pane_text`, pinned to the exact pane generation. A missing or changed
+generation fails before submission, with no fallback or duplicate send.
 
 `telar agent report-title TARGET TITLE [--json]` reports the agent-owned title
 to the runtime; an empty title clears the report. `--current` uses both pane
@@ -188,26 +119,11 @@ then queries agent state on the same ordered connection. It returns the observed
 state only after the marker was processed; a stale generation or unchanged done
 state fails. It does not approve pending tools or send input.
 
-`telar agent resume TARGET CONVERSATION_ID [--json]` resolves a stable ID in the
-current native catalog and requires an unused, ready conversation. The request
-pins the snapshot revision; runtime authority rejects changed state before
-reserving the provider conversation. UI resume sends the same precondition.
-This changes the wire schema to generation 59 with a new golden fingerprint.
-The control remains bounded and allocation-free in the runtime request path;
-CLI snapshot storage is bounded and released on every outcome. Runtime control tests
-cover stale revisions, stale pane generations and duplicate open conversations.
-
-Validation: CLI socket contracts and `test-runtime`, `test-wire`, `test-client`,
-`test-gui` pass. The broad `test-schema` command also includes PTY transport
-integration; that separate run stalled and was terminated. No transport pass
-is claimed. Provider startup now honors the supplied runtime PATH, which
-restores the existing managed-checkpoint regression test on Zig 0.16.
-
 ## Pane topology
 
 `telar pane list [--workspace ID [--tab ID]] [--json]` walks workspace and tab
-snapshots and lists every terminal and managed pane with its location, position,
-generation, kind and lifecycle. Queries attach to no PTY and start no runtime.
+snapshots and lists every pane with its location, position, generation and
+lifecycle. Queries attach to no PTY and start no runtime.
 The catalog owns copied IDs before issuing another request and is bounded by
 the runtime pane limit. Concurrent removal fails explicitly; this is not an
 atomic cross-workspace snapshot. Output begins only after enumeration succeeds.
@@ -315,15 +231,11 @@ apply, and the returned value reports the width actually committed.
 
 `workspace-list collapse`: Collapses the workspace list idempotently in client model and host chrome.
 
-`agent create`: Creates a managed Codex pane in a new tab using a client that supports native
-agent panes. Unsupported hosts fail explicitly. Success acknowledges admission
-to the existing tab creation flow, including its launch gate and geometry.
-
 `client open goto`: Opens the existing goto selector through its prompt admission controller.
 
 `client open history`: Opens the history palette and queues its initial query. Result delivery remains asynchronous.
 
-`client copy-mode`: Enters terminal or native conversation copy mode through shared admission.
+`client copy-mode`: Enters terminal copy mode through shared admission.
 An already active copy mode is a successful no-op; unsupported or blocked panes fail.
 
 `notification dismiss 5`: Dismisses one current notification and rearms its expiration timer. Missing identities fail.
@@ -333,29 +245,6 @@ Success means the bounded link-opening worker job or tab request was admitted.
 
 `client clipboard copy copied ü`: Queues bounded UTF-8 text as a clipboard write on the selected client's
 `model.to_host`. The host may complete the clipboard write asynchronously, so the CLI reports admission.
-
-`agent draft get`: Reads the entire bounded composer text and attachment count from an attached
-native agent pane. This is client draft state, independent of runtime conversation history.
-
-`agent draft set`: Atomically replaces the composer’s text through the existing editor/model
-handler. Empty text clears the draft; images remain attached. Invalid UTF-8,
-NUL or capacity failure cannot partially replace the draft.
-
-`agent draft attach`: Attaches an absolute image path to the client draft through the existing agent
-handler. Existing image format/count bounds and errors apply. This does not
-submit the draft or upload it to the provider.
-
-`agent view expand` sets one visible GUI disclosure idempotently by stable item
-identity from `agent thread`. `--work` targets the item’s work-group header.
-It uses delivered targets and the existing scroll-anchor transaction; hidden,
-missing or stale targets fail, and hosts without native disclosure support fail
-explicitly. Expand a folded work group before expanding one of its hidden items.
-
-`agent view collapse` sets one visible GUI disclosure idempotently by stable item
-identity from `agent thread`. `--work` targets the item’s work-group header.
-It uses delivered targets and the existing scroll-anchor transaction; hidden,
-missing or stale targets fail, and hosts without native disclosure support fail
-explicitly. Expand a folded work group before expanding one of its hidden items.
 
 `pane copy` requests an inclusive terminal text selection in absolute history
 coordinates and delivers it to the selected client’s clipboard. It uses the
@@ -458,7 +347,7 @@ Validated with Zig 0.16.0:
 
 - `zig build test-runtime test-wire test-client test-gui test-cli --summary all -j4`:
   3,131 passed, one skipped; all 65 build steps succeeded.
-- `python3 tools/test_cli_control.py`: 95 socket contract and failure tests.
+- `python3 tools/test_cli_control.py`: 72 socket contract and failure tests.
 - `python3 tools/test_cli_live.py`: two integration tests against isolated real
   runtimes, including a PTY-hosted TUI and the isolated plugin worker.
 - Formatting and `codestyle` passed for all 125 changed Zig files; the client

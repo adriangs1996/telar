@@ -8,7 +8,6 @@ const CompositionResult = @import("CompositionResult.zig");
 const RenderStats = @import("RenderStats.zig");
 const multiplexer = @import("multiplexer.zig");
 const Screen = @import("../presentation/terminal_screen.zig").Screen;
-const thread_surface = @import("thread_surface.zig");
 /// Presentation-owned cache for one active tab. It borrows an immutable
 /// multiplexer model during composition and returns the exact model work that
 /// may be committed only after the host flush succeeds.
@@ -27,8 +26,6 @@ fullscreen_labels: Plan = .{},
 panes: [core.max_panes_per_tab]PaneProjection = undefined,
 pane_count: u8 = 0,
 progress_animation_frame: u8 = 0,
-agents_revision: u64 = 0,
-thread_surfaces: bool = false,
 invalidated: bool = true,
 
 /// Creates an empty composition cache. Buffer allocation is deferred
@@ -121,10 +118,6 @@ pub fn render(self: *Compositor, composition: Composition) !CompositionResult {
     if (self.paneProjectionChanged(model, tab)) {
         self.invalidated = true;
     }
-    if (self.thread_surfaces and self.agents_revision != options.agents_revision) {
-        self.invalidated = true;
-    }
-    self.agents_revision = options.agents_revision;
     const target = &self.composed.?;
     const commit = data.presentation_delivery.capture(model, tab);
     const stats = if (self.invalidated) full: {
@@ -150,12 +143,6 @@ pub fn render(self: *Compositor, composition: Composition) !CompositionResult {
 
             target.pushClip(view.content);
             defer target.popClip();
-            if (view.surface == .thread) {
-                if (client.ThreadView.capture(model, options.agents, pane.id)) |thread| {
-                    thread_surface.paint(target, view.content, .{ .view = thread, .palette = options.palette });
-                }
-                continue;
-            }
             const rows = @min(view.content.h, pane.buffer.h);
             const cols = @min(view.content.w, pane.buffer.w);
             var y: u16 = 0;
@@ -278,9 +265,6 @@ fn composeIncremental(self: *Compositor, context: *IncrementalComposition) !Rend
     for (self.layout_snapshot.views()) |view| {
         const pane = context.model.panes.findInConst(context.model.tabs.location[context.tab].tab_id, view.pane_id) orelse continue;
         stats.panes += 1;
-        if (view.surface == .thread) {
-            continue;
-        }
         const rows = @min(view.content.h, pane.buffer.h);
         const cols = @min(view.content.w, pane.buffer.w);
         if (context.copy_changed) {
@@ -404,7 +388,6 @@ fn paneProjectionChanged(self: *Compositor, model: *const data.ClientModel, tab:
         const pane = model.panes.findInConst(model.tabs.location[tab].tab_id, view.pane_id) orelse continue;
         next[next_count] = .{
             .pane_id = pane.id,
-            .surface = view.surface,
             .cols = pane.buffer.w,
             .rows = pane.buffer.h,
             .scroll_offset = multiplexer.highlightedScrollOffset(self.copy, pane),
@@ -426,18 +409,11 @@ fn paneProjectionChanged(self: *Compositor, model: *const data.ClientModel, tab:
     }
     @memcpy(self.panes[0..next_count], next[0..next_count]);
     self.pane_count = next_count;
-    self.thread_surfaces = false;
-    for (next[0..next_count]) |projection| {
-        if (projection.surface == .thread) {
-            self.thread_surfaces = true;
-        }
-    }
     return changed;
 }
 
 const PaneProjection = struct {
     pane_id: core.PaneId,
-    surface: core.PaneSurface,
     cols: u16,
     rows: u16,
     scroll_offset: u32,
@@ -486,7 +462,4 @@ const CompositionInput = struct {
     bottom_reservation: ?data.PaneBottomReservation = null,
     progress_animation_frame: u8 = 0,
     force: bool = false,
-    /// Agents shown by thread surfaces and the revision that invalidates them.
-    agents: ?*const data.AgentSnapshot = null,
-    agents_revision: u64 = 0,
 };

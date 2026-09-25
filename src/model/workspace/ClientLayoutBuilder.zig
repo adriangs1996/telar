@@ -22,7 +22,6 @@ pub fn build(self: *ClientLayoutBuilder, parent: ?layout_support.NodeIndex) !lay
                 .node = .{
                     .leaf = pane.id,
                 },
-                .surface = pane.surface,
             };
             self.layout.pane_count += 1;
         },

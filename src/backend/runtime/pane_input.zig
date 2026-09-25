@@ -32,7 +32,7 @@ pub fn send(model: *RuntimeModel, session: *Session, input: core.PaneInput) !voi
         return;
     };
     const pane = attachment.pane;
-    if (pane.kind == .agent or pane.exit != null) {
+    if (pane.exit != null) {
         model.metrics.stale_client_messages += 1;
         return;
     }
@@ -52,10 +52,6 @@ pub fn sendText(model: *RuntimeModel, session: *Session, request: core.SendPaneT
     const pane = model.panes.resolveControl(key) orelse {
         return client_request.fail(session, request.request_id, .pane_not_found, "pane not found");
     };
-
-    if (pane.kind == .agent) {
-        return client_request.fail(session, request.request_id, .invalid_request, "agent panes require structured agent commands");
-    }
 
     if (pane.exit != null) {
         return client_request.fail(session, request.request_id, .pane_exited, "pane already exited");

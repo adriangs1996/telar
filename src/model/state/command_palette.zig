@@ -35,7 +35,6 @@ pub const entries = [_]CommandEntry{
     .{ .action = .rename_workspace, .label = "Rename context" },
     .{ .action = .toggle_sidebar, .label = "Toggle sidebar" },
     .{ .action = .toggle_workspace_list, .label = "Toggle context list" },
-    .{ .action = .toggle_thread_view, .label = "Toggle agent thread" },
     .{ .action = .enter_copy_mode, .label = "Enter copy mode" },
     .{ .action = .history_palette, .label = "Search command history" },
 };

@@ -12,7 +12,7 @@ rectangle. `render/Scene.zig` borrows that projection for one preparation:
 
 1. `TerminalRenderer.begin()` resets the quad list and prepares retained resources.
 2. `widgets/Composition.render()` builds one bounded `frame_widget.List` from
-   the projection without drawing. It selects terminal and thread panes, the
+   the projection without drawing. It selects terminal panes, the
    hovered link, navigation, status bar, sidebar, pane decorations, focus,
    notifications and the active modal. `Chrome.compose` and `Overlays.compose`
    append their widgets to this list.
@@ -114,7 +114,6 @@ router. Some useful default suffixes are:
 | `g`, `?` | Command palette prefixed `@` (agents and panes) or `?` (suggest a command); `>` lists actions |
 | `/` | History palette |
 | `[` | Enter copy mode |
-| `a` | Toggle agent thread surface |
 | `d` | Detach client |
 
 Chrome hit maps retain stable pane, tab, workspace and agent identities. Cell

@@ -20,8 +20,6 @@ const ForegroundProjection = @import("ForegroundProjection.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const Attachments = @import("../attachment/Attachments.zig");
 const PaneKey = @import("../../pane/PaneKey.zig");
-const AgentThreadProjection = @import("AgentThreadProjection.zig");
-const OwnedAgentHistoryPage = @import("OwnedAgentHistoryPage.zig");
 const Delivery = @This();
 
 send_buffer: []u8,
@@ -37,8 +35,6 @@ client_layout_sent: bool = false,
 proxy_status_sent: bool = false,
 agent_revision_sent: u64 = 0,
 agent_snapshot_requested: bool = false,
-agent_threads_sent: [PaneStore.capacity]?AgentThreadProjection = @splat(null),
-requested_agent_thread: ?PaneKey = null,
 system_metrics_revision_sent: u64 = 0,
 workspace_list_revision_sent: u64 = 0,
 foregrounds_sent: [PaneStore.capacity]?ForegroundProjection = @splat(null),
@@ -68,15 +64,6 @@ pub fn enqueue(self: *Delivery, response: response_queue.PendingResponse) !void 
 pub fn requestWorkspaceResync(self: *Delivery, workspace: core.WorkspaceLocation, previous_workspace: ?core.WorkspaceId) void {
     self.responses.resync_workspace = workspace;
     self.responses.resync_previous_workspace = previous_workspace;
-}
-
-/// Forces a current thread snapshot after a generation-checked query.
-///
-/// ```zig
-/// delivery.requestAgentThread(pane.key());
-/// ```
-pub fn requestAgentThread(self: *Delivery, key: PaneKey) void {
-    self.requested_agent_thread = key;
 }
 
 /// Schedules one agent snapshot for a client that holds no runtime-state
@@ -172,7 +159,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         var history_result: ?*QueryResult = null;
         var history_output: ?*OutputResult = null;
         var history_stats: ?*StatsResult = null;
-        var agent_history: ?*OwnedAgentHistoryPage = null;
         var change_review: ?*ReviewResult = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,
@@ -181,7 +167,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_result = &history_result,
             .history_output = &history_output,
             .history_stats = &history_stats,
-            .agent_history = &agent_history,
             .change_review = &change_review,
         }, entry.response);
         return self.stage(payload, .{ .response = .{
@@ -189,7 +174,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_result = history_result,
             .history_output = history_output,
             .history_stats = history_stats,
-            .agent_history = agent_history,
             .change_review = change_review,
         } });
     }
@@ -257,32 +241,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             }),
             .{ .agent_revision = revision },
         );
-    }
-
-    if (self.runtime_state_requested or self.requested_agent_thread != null) {
-        for (sources.panes.items, 0..) |entry, slot| {
-            const pane = entry orelse continue;
-            const snapshot = pane.agent_thread orelse continue;
-            if (pane.close_requested or pane.exit != null) {
-                continue;
-            }
-            const requested = if (self.requested_agent_thread) |key| std.meta.eql(key, pane.key()) else false;
-            if (!self.runtime_state_requested and !requested) {
-                continue;
-            }
-            if (!requested) {
-                if (self.agent_threads_sent[slot]) |previous| {
-                    if (std.meta.eql(previous.key, pane.key()) and previous.revision >= snapshot.revision) {
-                        continue;
-                    }
-                }
-            }
-            return self.stage(try core.encodeAgentThreadSnapshot(buffer, snapshot), .{ .agent_thread = .{
-                .key = pane.key(),
-                .revision = snapshot.revision,
-                .slot = @intCast(slot),
-            } });
-        }
     }
 
     if (self.runtime_state_requested) {
@@ -358,7 +316,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         var history_result: ?*QueryResult = null;
         var history_output: ?*OutputResult = null;
         var history_stats: ?*StatsResult = null;
-        var agent_history: ?*OwnedAgentHistoryPage = null;
         var change_review: ?*ReviewResult = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,
@@ -367,7 +324,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_result = &history_result,
             .history_output = &history_output,
             .history_stats = &history_stats,
-            .agent_history = &agent_history,
             .change_review = &change_review,
         }, entry.response);
         return self.stage(payload, .{ .response = .{
@@ -375,7 +331,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_result = history_result,
             .history_output = history_output,
             .history_stats = history_stats,
-            .agent_history = agent_history,
             .change_review = change_review,
         } });
     }
@@ -413,9 +368,6 @@ pub fn commit(self: *Delivery, operation: Commit) void {
             if (response.history_stats) |result| {
                 result.deinit();
             }
-            if (response.agent_history) |result| {
-                result.deinit();
-            }
             if (response.change_review) |result| {
                 result.deinit();
             }
@@ -431,14 +383,6 @@ pub fn commit(self: *Delivery, operation: Commit) void {
         .clipboard => self.clipboard_pending = false,
         .client_layout => self.client_layout_sent = true,
         .proxy_status => self.proxy_status_sent = true,
-        .agent_thread => |projection| {
-            self.agent_threads_sent[projection.slot] = projection;
-            if (self.requested_agent_thread) |key| {
-                if (std.meta.eql(key, projection.key)) {
-                    self.requested_agent_thread = null;
-                }
-            }
-        },
         .agent_revision => |revision| {
             self.agent_revision_sent = revision;
             self.agent_snapshot_requested = false;

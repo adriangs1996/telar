@@ -32,8 +32,6 @@ pub const serve = instance.serve;
 
 test {
     _ = @import("change_review/Service.zig");
-    _ = @import("agent_panes/HistoryOptions.zig");
-    _ = @import("runtime/AgentHistoryJobs.zig");
     _ = @import("agent/Agent.zig");
     _ = @import("agent/description.zig");
     _ = @import("agent/EventLine.zig");
@@ -107,7 +105,6 @@ test {
     _ = @import("runtime/terminal_colors.zig");
     _ = @import("runtime/client_request.zig");
     _ = @import("runtime/agent_hooks.zig");
-    _ = @import("runtime/agent_control.zig");
     _ = @import("runtime/command_history.zig");
     _ = @import("runtime/client_control.zig");
     _ = @import("runtime/tab_creation.zig");

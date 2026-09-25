@@ -4,7 +4,6 @@ const core = @import("telar-core");
 const std = @import("std");
 const ReviewJobs = @import("../change_review/Jobs.zig");
 const ReviewService = @import("../change_review/Service.zig");
-const AdmittedReview = @import("../change_review/Admitted.zig");
 const EditorOpenState = @import("../editors/State.zig");
 const event = @import("event.zig");
 const Resources = @import("resources/Resources.zig");
@@ -27,7 +26,6 @@ const hostmetrics = @import("hostmetrics");
 const Sampler = hostmetrics.Sampler;
 const RuntimeMetrics = @import("observability/RuntimeMetrics.zig");
 const CheckpointWriter = @import("CheckpointWriter.zig");
-const AgentHistoryJobs = @import("AgentHistoryJobs.zig");
 const AgentDisplayStorage = @import("delivery/AgentDisplayStorage.zig");
 /// The authoritative state of one running runtime: singletons as fields and
 /// repeating entities as tables. Physical resources stay in `Resources`.
@@ -76,10 +74,8 @@ system_metrics_pending: bool = false,
 metrics: RuntimeMetrics,
 checkpoint: CheckpointWriter = .{},
 session_name_probe_in_flight: bool = false,
-agent_history_jobs: AgentHistoryJobs = .{},
 review_jobs: ReviewJobs = .{},
 review_service: ?*ReviewService = null,
-review_admitted: [PaneStore.capacity]?AdmittedReview = @splat(null),
 /// The agent snapshot's revision and the input revisions it last covered.
 agent_snapshot_revision: u64 = 1,
 agent_snapshot_inputs: [4]u64 = @splat(0),
@@ -145,7 +141,6 @@ pub fn init(model: *RuntimeModel, resources: *Resources, select: *std.Io.Select(
 pub fn deinit(model: *RuntimeModel) void {
     model.attachments.deinit(model.gpa);
     model.panes.deinit();
-    model.agent_history_jobs.deinitJoined();
     model.review_jobs.deinitJoined();
     if (model.review_service) |service| {
         service.deinit();

@@ -3,7 +3,6 @@ const core = @import("telar-core");
 const PresentationIngress = @import("PresentationIngress.zig");
 const hints_support = @import("../input/hints_support.zig");
 const CopyProjection = @import("../workspace/CopyProjection.zig");
-const ThreadView = @import("ThreadView.zig");
 const Projection = @This();
 
 version: data.Version,
@@ -39,27 +38,3 @@ host_capabilities: data.HostCapabilities,
 host_size: core.TerminalSize,
 /// Configured host window title template; empty leaves the host alone.
 window_title_template: []const u8 = "",
-
-/// Borrows the thread view for one pane of the active model.
-///
-/// ```zig
-/// const thread = projection.threadView(pane_id) orelse return;
-/// ```
-pub fn threadView(self: *const Projection, pane_id: core.PaneId) ?ThreadView {
-    const slot = self.tab orelse return null;
-    const model = self.model;
-    const pane = model.panes.findInConst(model.tabs.location[slot].tab_id, pane_id) orelse return null;
-    var thread = ThreadView.capture(model, self.agents, pane_id) orelse return null;
-    const workspace_id = switch (pane.location.workspace) {
-        .workspace => |id| id,
-        .worktree => return thread,
-    };
-    for (0..self.workspaces.count) |index| {
-        if (self.workspaces.workspaceAt(index) == workspace_id) {
-            thread.branch = self.workspaces.branchAt(index);
-            break;
-        }
-    }
-
-    return thread;
-}

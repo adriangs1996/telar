@@ -6,12 +6,6 @@ const history_action = @import("history_action.zig");
 const Id = @import("Id.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
-const ThreadItemControl = @import("ThreadItemControl.zig");
-const MessageLinkControl = @import("MessageLinkControl.zig");
-const AgentControl = @import("AgentControl.zig");
-const ComposerSelector = @import("ComposerSelector.zig");
-const ComposerChoice = @import("ComposerChoice.zig");
-const CompletionChoice = @import("CompletionChoice.zig");
 const PathCompletionChoice = @import("PathCompletionChoice.zig");
 const Target = @This();
 
@@ -26,41 +20,15 @@ accepts_pointer: bool = true,
 role: u8 = 2,
 scroll_limit: f64 = 0,
 scroll_step: f32 = 0,
-thread_header_offset: f32 = 0,
-thread_first_key: u64 = 0,
-thread_last_key: u64 = 0,
-thread_first_offset: f32 = 0,
-thread_last_offset: f32 = 0,
-thread_window_revision: u64 = 0,
-thread_live_revision: u64 = 0,
-thread_history_generation: u64 = 0,
-thread_scroll_value: f64 = 0,
-thread_anchor_revision: u64 = 0,
-thread_resolved_scroll: f64 = 0,
-thread_reanchor: bool = false,
-thread_skip_folded: bool = false,
-thread_prefetch: ?core.agent_history.Direction = null,
-thread_has_older: bool = false,
-thread_has_newer: bool = false,
 label: [128]u8 = undefined,
 label_len: u8 = 0,
-/// Editors with a domain-specific Tab action can opt out of traversal.
-traverse_tab: bool = true,
 
 pub const Field = enum { name, directory };
 pub const PromptAction = enum { submit, cancel };
 pub const Action = union(enum) {
     intent: client.Intent,
     text_field: Field,
-    composer: core.PaneId,
     change_review: core.PaneId,
-    transcript: core.PaneId,
-    thread_item: ThreadItemControl,
-    message_link: MessageLinkControl,
-    agent_control: AgentControl,
-    composer_selector: ComposerSelector,
-    composer_choice: ComposerChoice,
-    composer_completion: CompletionChoice,
     prompt: PromptAction,
     complete_path: PathCompletionChoice,
     history: history_action.Action,
@@ -71,13 +39,7 @@ pub const Action = union(enum) {
 /// Example: `const pane_id = target.paneId() orelse return;`
 pub fn paneId(self: Target) ?core.PaneId {
     return switch (self.action) {
-        .composer, .transcript, .change_review => |id| id,
-        .agent_control => |control| control.pane_id,
-        .thread_item => |control| control.pane_id,
-        .message_link => |control| control.owner.pane_id,
-        .composer_selector => |selector| selector.pane_id,
-        .composer_choice => |choice| choice.selector.pane_id,
-        .composer_completion => |choice| choice.pane_id,
+        .change_review => |id| id,
         else => null,
     };
 }
@@ -85,7 +47,7 @@ pub fn paneId(self: Target) ?core.PaneId {
 /// Example: `if (target.activatable()) exposePressAction();`
 pub fn activatable(self: Target) bool {
     return switch (self.action) {
-        .change_review, .intent, .prompt, .complete_path, .history, .agent_control, .composer_selector, .composer_choice, .composer_completion, .thread_item => true,
+        .change_review, .intent, .prompt, .complete_path, .history => true,
         else => false,
     };
 }

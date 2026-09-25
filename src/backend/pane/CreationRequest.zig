@@ -7,9 +7,7 @@ const CreationRequest = @This();
 
 identity: PaneKey,
 location: core.TabLocation,
-command: ?*const Command = null,
-kind: core.PaneKind = .terminal,
-restore_conversation: ?core.RecentConversation = null,
+command: *const Command,
 launch_cwd: []const u8,
 workspace_path: []const u8,
 size: core.TerminalSize,

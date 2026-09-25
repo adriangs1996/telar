@@ -28,7 +28,6 @@ const EventLine = @import("EventLine.zig");
 const Agent = @This();
 
 pub const ProjectionContext = @import("ProjectionContext.zig");
-const ManagedState = @import("ManagedState.zig");
 
 pub const ProjectionResult = enum {
     no_evidence,
@@ -57,7 +56,6 @@ agent_process_id: ?u32 = null,
 session_id: [16]u8,
 authority: core.AgentAuthority = .candidate,
 process: ?Evidence = null,
-managed: ?Evidence = null,
 proxy: ProxyState = .{},
 screen: ?Evidence = null,
 /// Official lifecycle report; outranks every other evidence while valid.
@@ -336,10 +334,6 @@ pub fn applyScreen(self: *Agent, observation: ScreenObservation) bool {
 /// }
 /// ```
 pub fn expire(self: *Agent, now_ms: i64) bool {
-    if (self.managed != null) {
-        return false;
-    }
-
     _ = self.proxy.clearExpired(now_ms);
 
     if (self.screen) |evidence| {
@@ -521,17 +515,6 @@ pub fn observeInput(self: *Agent, bytes: []const u8) bool {
 
     self.title.phase = .waiting_work;
     return true;
-}
-
-/// Queues title generation for an accepted composer submission even if lifecycle updates coalesce.
-/// Example: `_ = agent.observeSubmittedPrompt("Fix tests\nKeep behavior", true);`.
-pub fn observeSubmittedPrompt(self: *Agent, text: []const u8, can_queue: bool) bool {
-    if (self.title.phase != .waiting_query or !self.title.capture.submit(text)) {
-        return false;
-    }
-
-    self.title.phase = .waiting_work;
-    return self.advanceTitle(.working, can_queue);
 }
 
 /// Reports whether this aggregate currently owns the sole running description
@@ -747,10 +730,6 @@ fn refreshEvent(self: *Agent, evidence: Evidence) bool {
 }
 
 fn provider(self: *const Agent) core.AgentProvider {
-    if (self.managed) |evidence| {
-        return evidence.provider;
-    }
-
     if (self.process) |evidence| {
         return evidence.provider;
     }
@@ -769,10 +748,6 @@ fn provider(self: *const Agent) core.AgentProvider {
 }
 
 fn chooseEvidence(self: *const Agent, now_ms: i64) ?Evidence {
-    if (self.managed) |evidence| {
-        return evidence;
-    }
-
     const process = self.process;
     const screen = if (self.screen) |value|
         if (!value.isExpired(now_ms)) value else null
@@ -1188,39 +1163,6 @@ test "new proxy work resumes an obscured agent" {
     }));
     try std.testing.expectEqual(core.AgentAuthority.resumed, agent.authority);
     try std.testing.expect(agent.screen == null);
-}
-
-/// Applies official state from an app-server owned by this runtime.
-/// Example: `agent.applyManaged(.{ .status = .working, .observed_at_ms = now });`.
-pub fn applyManaged(self: *Agent, state: ManagedState) void {
-    self.managed = .{
-        .provider = .codex,
-        .status = state.status,
-        .source = .lifecycle_report,
-        .confidence = 100,
-        .observed_at_ms = state.observed_at_ms,
-        .expires_at_ms = std.math.maxInt(i64),
-    };
-    self.authority = .active;
-    self.report_detail.blocked_reason = if (state.status == .blocked) .permission else .none;
-    self.report_detail.event = state.event;
-}
-
-test "managed official state persists idle and stronger authority cannot be replaced by heuristics" {
-    const identity = try testIdentity();
-    var agent = init(identity);
-    agent.applyManaged(.{ .status = .blocked, .observed_at_ms = 10 });
-    try std.testing.expect(!agent.expire(std.math.maxInt(i64)));
-    try std.testing.expectEqual(ProjectionResult.changed, agent.reproject(.{ .sequence = 1, .now_ms = 20, .can_queue_description = false }));
-    try std.testing.expectEqual(core.AgentProvider.codex, agent.projected.provider);
-    try std.testing.expectEqual(core.AgentStatus.blocked, agent.projected.status);
-    try std.testing.expectEqual(core.AgentSource.lifecycle_report, agent.projected.source);
-    agent.applyManaged(.{ .status = .working, .observed_at_ms = 30 });
-    _ = agent.reproject(.{ .sequence = 2, .now_ms = 30, .can_queue_description = false });
-    try std.testing.expectEqual(core.AgentStatus.working, agent.projected.status);
-    agent.applyManaged(.{ .status = .ready, .observed_at_ms = 40 });
-    _ = agent.reproject(.{ .sequence = 3, .now_ms = 40, .can_queue_description = false });
-    try std.testing.expectEqual(core.AgentStatus.done, agent.projected.status);
 }
 
 /// What a lifecycle report says beyond its state: why the agent is blocked

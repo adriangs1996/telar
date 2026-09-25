@@ -57,7 +57,7 @@ _Avoid_: UI, widgets, decorations
 
 **Telar view**:
 Content Telar composes from client and runtime projections instead of from a
-PTY, such as a thread view, a composer or a history browser. The layout may
+PTY, such as a history browser or a change review. The layout may
 place it beside terminal panes; its state never lives in the adapter.
 _Avoid_: GUI pane, virtual pane, widget pane
 
@@ -82,7 +82,7 @@ left with no tabs.
 _Avoid_: Tab close (for the committed fact), Pane close
 
 **Pane launch**:
-The act of starting a new runtime-owned terminal or agent pane. It ends when
+The act of starting a new runtime-owned pane. It ends when
 the runtime owns a usable pane, independently of any client's attachment.
 _Avoid_: Pane creation, pane spawn
 
@@ -233,7 +233,7 @@ _Avoid_: Running agent, busy process
 An open agent waiting for user input with no current work in progress.
 _Avoid_: Idle process
 
-## Threads
+## Agents
 
 **Project**:
 A git repository identified by its common directory, so every worktree of
@@ -241,51 +241,10 @@ that repository belongs to the same project. A directory that is not a
 repository is its own project, keyed by path.
 _Avoid_: Repo, workspace path
 
-**Thread**:
-The durable record of one agent conversation: provider, the agent's own
-session reference, project, titles, status history and where its transcript
-lives. It outlives its pane and has zero or one open agent.
-_Avoid_: Session, conversation, hilo (prose only)
-
-**Thread item**:
-One normalized entry of a thread's transcript, such as a user prompt, an
-assistant message, a tool call, its result or a compaction boundary. telar
-indexes it with a preview; the text stays in the agent's file.
-_Avoid_: Message, turn record
-
-**Thread registry**:
-The runtime-owned collection of threads, live and closed, that both client
-modes read.
-_Avoid_: Session list, history of agents
-
 **Blocked reason**:
 What a blocked agent is asking for, as an official hook reported it. Screen
 evidence never provides one.
 _Avoid_: Permission text, prompt text
-
-**Pane surface**:
-How a layout leaf shows its pane: the terminal cells, or the thread surface of
-the agent running in it. Presentation does not change the pane's kind.
-_Avoid_: View mode, agent view
-
-**Pane kind**:
-The kind of work a pane owns, either a terminal process or a managed agent.
-It belongs to the pane's lifetime and survives clients disconnecting.
-_Avoid_: Pane surface, agent mode
-
-**Agent pane**:
-A pane that owns a managed agent conversation and accepts prompts and approval
-decisions through that agent's structured interface.
-_Avoid_: Chat window, terminal agent
-
-**Thread surface**:
-The Telar view of a pane's agent, containing its header, transcript and composer.
-_Avoid_: Chat pane, conversation panel, GUI pane
-
-**Composer**:
-The client widget inside a thread surface where the user writes a prompt for
-the agent in that pane and, later, chooses the provider options of a new thread.
-_Avoid_: Prompt box, chat input, editor
 
 **Provider option**:
 A configurable value a provider's manifest declares, such as model, effort or
@@ -302,9 +261,9 @@ _Avoid_: Slash command, remote setting
 ## Change review
 
 **Directed session**:
-A synchronous collaboration in an agent pane where the user directs project
-changes through natural language, contextual code review and optional direct
-editing, taking exclusive collaboration turns with one managed agent. The
+A synchronous collaboration in a pane where the user directs project changes
+through natural language, contextual code review and optional direct editing,
+taking exclusive collaboration turns with one agent. The
 agent works without subagents in a working tree that other agents do not share.
 _Avoid_: Permission mode
 

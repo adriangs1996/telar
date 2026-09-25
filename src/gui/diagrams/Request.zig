@@ -1,11 +1,8 @@
 //! A synchronous source borrow; the store copies it before returning.
-const source_kind = @import("source_kind.zig");
-const MessageLayoutOwner = @import("../widgets/MessageLayoutOwner.zig");
-const Theme = @import("Theme.zig");
-owner: MessageLayoutOwner,
-block_offset: u32,
+const mermaid = @import("mermaid");
+/// Identifies the content that shows the diagram, chosen by the caller, so
+/// equal sources in different places keep their own slots.
+owner: u64,
 text: []const u8,
-theme: Theme,
+theme: mermaid.Theme,
 scale: f32,
-
-kind: source_kind.Kind = .mermaid,

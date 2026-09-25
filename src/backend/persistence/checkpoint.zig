@@ -19,9 +19,9 @@ const Counters = @import("Counters.zig");
 
 pub const magic: *const [8]u8 = "TELARCKP";
 /// Version 2 added pane titles; version 3 permits automatic tab labels.
-/// Version 4 adds pane kinds and permits agent panes without launch arguments.
+/// Version 4 added pane kinds for agent panes; version 5 drops them again.
 /// Older labels remain explicit because their naming intent was not recorded.
-pub const version: u16 = 4;
+pub const version: u16 = 5;
 pub const oldest_readable_version: u16 = 1;
 pub const max_file_bytes = 4 * 1024 * 1024;
 pub const max_launch_arguments = 32;
@@ -32,6 +32,15 @@ pub const Record = union(enum) {
     tab: TabRecord,
     pane: PaneRecord,
     layout: LayoutRecord,
+};
+
+/// The only version whose pane records end with a kind byte. Its agent
+/// panes are skipped on restore.
+pub const pane_kind_version: u16 = 4;
+
+pub const LegacyPaneKind = enum(u8) {
+    terminal = 0,
+    agent = 1,
 };
 
 pub const Kind = enum(u8) {
@@ -57,25 +66,6 @@ pub fn validateTitle(title: []const u8, source: u8) !void {
     switch (std.enums.fromInt(core.AgentTitleSource, source) orelse return error.InvalidCheckpoint) {
         .generated, .manual, .agent => {},
         .telar, .terminal => return error.InvalidCheckpoint,
-    }
-}
-
-/// Rejects terminal launches without argv and agent records carrying executable authority.
-/// Example: `try checkpoint.validatePaneKind(record);`
-pub fn validatePaneKind(record: PaneRecord) !void {
-    switch (record.kind) {
-        .terminal => if (record.argument_count == 0) {
-            return error.InvalidCheckpoint;
-        },
-        .agent => {
-            if (record.argument_count != 0 or record.arguments.len != 0 or record.agent_provider != @intFromEnum(core.AgentProvider.codex) or !std.fs.path.isAbsolute(record.cwd)) {
-                return error.InvalidCheckpoint;
-            }
-
-            if (record.agent_session.len != 0) {
-                _ = core.RecentConversation.init(record.agent_session, "") catch return error.InvalidCheckpoint;
-            }
-        },
     }
 }
 
@@ -271,70 +261,36 @@ test "corrupt, truncated and foreign checkpoints are rejected" {
     try std.testing.expectError(error.UnsupportedCheckpointVersion, Reader.init(flipped[0..bytes.len]));
 }
 
-test "agent pane checkpoints round trip empty and known conversations without executable arguments" {
-    const counters: Counters = .{ .next_workspace_id = 2, .next_tab_id = 2, .next_pane_id = 2, .next_pane_generation = 2 };
-    for ([_][]const u8{ "", "saved-thread" }) |reference| {
-        var buffer: [1024]u8 = undefined;
-        var encoder = try Encoder.init(&buffer, counters);
-        try encoder.pane(.{
-            .kind = .agent,
-            .pane_id = 1,
-            .workspace_id = 1,
-            .tab_id = 1,
-            .cwd = "/work",
-            .cols = 80,
-            .rows = 24,
-            .arguments = "",
-            .argument_count = 0,
-            .agent_provider = @intFromEnum(core.AgentProvider.codex),
-            .agent_session = reference,
-        });
-        const bytes = try encoder.finish();
-        var reader = try Reader.init(bytes);
-        const pane = (try reader.next()).?.pane;
-        try std.testing.expectEqual(core.PaneKind.agent, pane.kind);
-        try std.testing.expectEqualStrings(reference, pane.agent_session);
-        try std.testing.expectEqual(@as(u16, 0), pane.argument_count);
-        try std.testing.expectEqualStrings("", pane.arguments);
-        try std.testing.expect(try reader.next() == null);
-
-        buffer[bytes.len - 2] = 255;
-        reader = try Reader.init(bytes);
-        try std.testing.expectError(error.InvalidCheckpoint, reader.next());
-    }
-}
-
-test "agent pane checkpoint rejects argv unsupported providers and unsafe references" {
-    const base: PaneRecord = .{
-        .kind = .agent,
-        .pane_id = 1,
+test "version 4 agent pane records are skipped while terminal records restore" {
+    var buffer: [1024]u8 = undefined;
+    var encoder = try Encoder.init(&buffer, .{ .next_workspace_id = 2, .next_tab_id = 2, .next_pane_id = 3, .next_pane_generation = 2 });
+    std.mem.writeInt(u16, buffer[magic.len..][0..2], pane_kind_version, .little);
+    const terminal: PaneRecord = .{
+        .pane_id = 2,
         .workspace_id = 1,
         .tab_id = 1,
         .cwd = "/work",
         .cols = 80,
         .rows = 24,
-        .arguments = "",
-        .argument_count = 0,
-        .agent_provider = @intFromEnum(core.AgentProvider.codex),
+        .arguments = "/bin/sh\x00",
+        .argument_count = 1,
     };
-    var record = base;
-    record.arguments = "/bin/sh\x00";
-    record.argument_count = 1;
-    try std.testing.expectError(error.InvalidCheckpoint, validatePaneKind(record));
-    record = base;
-    record.agent_provider = @intFromEnum(core.AgentProvider.claude);
-    try std.testing.expectError(error.InvalidCheckpoint, validatePaneKind(record));
-    record = base;
-    record.cwd = "relative";
-    try std.testing.expectError(error.InvalidCheckpoint, validatePaneKind(record));
-    for ([_][]const u8{ "--option", "bad;command", "bad\x00id" }) |reference| {
-        record = base;
-        record.agent_session = reference;
-        try std.testing.expectError(error.InvalidCheckpoint, validatePaneKind(record));
-    }
+    var agent = terminal;
+    agent.pane_id = 1;
+    try encoder.pane(agent);
+    try encoder.inner.writeByte(@intFromEnum(LegacyPaneKind.agent));
+    try encoder.pane(terminal);
+    try encoder.inner.writeByte(@intFromEnum(LegacyPaneKind.terminal));
+    const bytes = try encoder.finish();
+
+    var reader = try Reader.init(bytes);
+    const pane = (try reader.next()).?.pane;
+    try std.testing.expectEqual(@as(u64, 2), pane.pane_id);
+    try std.testing.expectEqualStrings("/bin/sh\x00", pane.arguments);
+    try std.testing.expect(try reader.next() == null);
 }
 
-test "version 3 pane records restore as terminals without a kind byte" {
+test "version 3 pane records restore without a kind byte" {
     var buffer: [512]u8 = undefined;
     var encoder = try Encoder.init(&buffer, .{ .next_workspace_id = 2, .next_tab_id = 2, .next_pane_id = 2, .next_pane_generation = 2 });
     try encoder.pane(.{
@@ -351,10 +307,8 @@ test "version 3 pane records restore as terminals without a kind byte" {
     });
     const bytes = try encoder.finish();
     std.mem.writeInt(u16, buffer[magic.len..][0..2], 3, .little);
-    // The terminal kind byte is zero, so it becomes the legacy end marker.
-    var reader = try Reader.init(bytes[0 .. bytes.len - 1]);
+    var reader = try Reader.init(bytes);
     const pane = (try reader.next()).?.pane;
-    try std.testing.expectEqual(core.PaneKind.terminal, pane.kind);
     try std.testing.expectEqualStrings("Legacy title", pane.agent_title);
     try std.testing.expectEqualStrings("/bin/sh\x00", pane.arguments);
     try std.testing.expect(try reader.next() == null);

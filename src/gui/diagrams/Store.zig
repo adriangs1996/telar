@@ -107,7 +107,7 @@ pub fn request(self: *Store, input: Request) view_module.View {
     const entry = empty orelse return .{ .failed = .limit };
     const source = self.allocator.dupe(u8, input.text) catch return .{ .failed = .limit };
     self.release(entry);
-    entry.* = .{ .source = source, .kind = input.kind, .owner = input.owner, .block_offset = input.block_offset, .theme = input.theme, .scale = input.scale, .id = self.next_id, .frame = self.frame };
+    entry.* = .{ .source = source, .owner = input.owner, .theme = input.theme, .scale = input.scale, .id = self.next_id, .frame = self.frame };
     self.next_id += 1;
     return .pending;
 }
@@ -123,7 +123,7 @@ pub fn nextJob(self: *Store) ?Job {
         if (entry.source == null or entry.status != .pending or entry.frame != self.frame) {
             continue;
         }
-        var job: Job = .{ .id = entry.id, .kind = entry.kind, .slot = @intCast(slot), .len = @intCast(entry.source.?.len), .theme = entry.theme, .scale = entry.scale };
+        var job: Job = .{ .id = entry.id, .slot = @intCast(slot), .len = @intCast(entry.source.?.len), .theme = entry.theme, .scale = entry.scale };
         @memcpy(job.source[0..job.len], entry.source.?);
         entry.status = .running;
         self.active = entry.id;
@@ -216,11 +216,7 @@ pub fn finish(self: *Store, completion: Completion) bool {
 
 fn matches(entry: *const Entry, input: Request) bool {
     const source = entry.source orelse return false;
-    const a = entry.owner;
-    const b = input.owner;
-    return entry.kind == input.kind and a.pane_id == b.pane_id and a.attachment_generation == b.attachment_generation and a.pane_generation == b.pane_generation and
-        a.item_identity == b.item_identity and a.section == b.section and entry.block_offset == input.block_offset and
-        entry.scale == input.scale and std.meta.eql(entry.theme, input.theme) and std.mem.eql(u8, source, input.text);
+    return entry.owner == input.owner and entry.scale == input.scale and std.meta.eql(entry.theme, input.theme) and std.mem.eql(u8, source, input.text);
 }
 
 fn view(entry: *const Entry, slot: u8) view_module.View {

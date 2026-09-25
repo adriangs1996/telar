@@ -92,5 +92,4 @@ test {
     _ = @import("widgets/top_bar.zig");
     _ = @import("workspace/fullscreen_tabs.zig");
     _ = @import("workspace/multiplexer.zig");
-    _ = @import("workspace/thread_surface.zig");
 }

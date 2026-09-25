@@ -36,7 +36,6 @@ pub const Generation = @import("config/Generation.zig");
 pub const GraphicsCredit = @import("graphics/Credit.zig");
 pub const GraphicsRetention = @import("graphics/GraphicsRetention.zig");
 pub const HostChrome = @import("presentation/HostChrome.zig");
-pub const ThreadExpansion = @import("input/ThreadExpansion.zig");
 pub const HostInputSource = @import("input/HostInputSource.zig");
 pub const LocalTime = @import("resources/LocalTime.zig");
 pub const Options = @import("Options.zig");
@@ -52,7 +51,6 @@ pub const Registry = @import("plugins/Registry.zig");
 pub const RouterConfig = @import("input/RouterConfig.zig");
 pub const TelemetryMetrics = @import("resources/Metrics.zig");
 pub const TelemetryState = @import("resources/TelemetryState.zig");
-pub const ThreadView = @import("presentation/ThreadView.zig");
 pub const ChangeReviewModel = @import("change_review/view/Model.zig");
 pub const ChangeReviewRevision = @import("change_review/view/Revision.zig");
 pub const ChangeReviewAnchor = @import("change_review/view/Anchor.zig");
@@ -133,7 +131,6 @@ pub const validateDefaultBindings = default_bindings.validate;
 test {
     _ = @import("change_review/view/Model.zig");
     _ = @import("change_review/view/Revision.zig");
-    _ = @import("agents/agent_thread_tests.zig");
     _ = @import("agents/attention.zig");
     _ = @import("agents/agent_snapshot_delivery.zig");
     _ = @import("config/bar_update.zig");
@@ -178,8 +175,6 @@ test {
     _ = @import("resources/local_time.zig");
     _ = @import("workspace/metrics_tests.zig");
     _ = @import("workspace/navigation.zig");
-    _ = @import("agents/agent_control.zig");
-    _ = @import("agents/agent_history.zig");
     _ = @import("agents/agent_navigation.zig");
     _ = @import("agents/agent_snapshot.zig");
     _ = @import("agents/agent_sound.zig");
@@ -238,13 +233,10 @@ pub const GuiCursor = @import("config/GuiCursor.zig");
 pub const FontFamily = @import("config/FontFamily.zig");
 
 pub const presentation_delivery = @import("connection/presentation_delivery.zig");
-pub const agent_reading = @import("agents/agent_reading.zig");
 pub const history_browser = @import("input/history_browser.zig");
 pub const client_diagnostic = @import("config/client_diagnostic.zig");
 
 pub const TabDrag = @import("workspace/TabDrag.zig");
-pub const agent_control = @import("agents/agent_control.zig");
-pub const agent_history = @import("agents/agent_history.zig");
 pub const agent_navigation = @import("agents/agent_navigation.zig");
 pub const agent_sound = @import("agents/agent_sound.zig");
 pub const clipboard_capture = @import("attachments/clipboard_capture.zig");

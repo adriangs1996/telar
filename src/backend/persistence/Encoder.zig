@@ -50,7 +50,7 @@ pub fn tab(self: *Encoder, record: TabRecord) !void {
 
 pub fn pane(self: *Encoder, record: PaneRecord) !void {
     try checkpoint.validatePath(record.cwd);
-    if (record.argument_count > checkpoint.max_launch_arguments or record.arguments.len > checkpoint.max_launch_bytes or (record.kind == .terminal and record.argument_count == 0)) {
+    if (record.argument_count > checkpoint.max_launch_arguments or record.arguments.len > checkpoint.max_launch_bytes or record.argument_count == 0) {
         return error.InvalidLaunchRecord;
     }
     try self.inner.writeByte(@intFromEnum(checkpoint.Kind.pane));
@@ -70,8 +70,6 @@ pub fn pane(self: *Encoder, record: PaneRecord) !void {
     try checkpoint.validateTitle(record.agent_title, record.agent_title_source);
     try self.inner.writeSized16(record.agent_title);
     try self.inner.writeByte(record.agent_title_source);
-    try checkpoint.validatePaneKind(record);
-    try self.inner.writeByte(@intFromEnum(record.kind));
 }
 
 pub fn layout(self: *Encoder, record: LayoutRecord) !void {

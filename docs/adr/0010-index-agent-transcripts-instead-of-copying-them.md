@@ -1,8 +1,12 @@
 ---
-status: accepted
+status: superseded
 ---
 
 # Index agent transcripts instead of copying them
+
+Superseded: the conversation view this index served went away with agent
+panes, before the index was built. Session readers still read agent files for
+titles.
 
 [ADR 0015](0015-own-agent-panes-in-the-runtime.md) adds official app-server
 events as the live source for managed agent panes, with a bounded memory cache.

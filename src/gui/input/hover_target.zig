@@ -43,7 +43,7 @@ pub fn resolve(gui: *GuiAdapter, mouse: keyinput.Mouse, mods: u32) Target {
             const tab = gui.app.model.tabs.activeSlot() orelse return .{};
             const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, id) orelse return .{};
             const view = data.tab_layout.view(&gui.app.model, tab, id, data.workbench.region(&gui.app.model).area) orelse return .{};
-            if (view.surface != .terminal or !view.content.contains(mouse.x, mouse.y)) {
+            if (!view.content.contains(mouse.x, mouse.y)) {
                 return .{};
             }
 

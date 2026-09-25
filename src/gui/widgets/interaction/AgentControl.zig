@@ -1,6 +1,0 @@
-const core = @import("telar-core");
-pane_id: core.PaneId,
-kind: enum { submit, interrupt, approve, decline, review, remove_image, preview_image, close_image },
-approval_id: u64 = 0,
-image_index: u8 = 0,
-composer_revision: u64 = 0,

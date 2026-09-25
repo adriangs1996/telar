@@ -3,7 +3,6 @@ const core = @import("telar-core");
 const View = @This();
 
 pane_id: core.PaneId,
-surface: core.PaneSurface = .terminal,
 outer: cellgrid.Rect,
 content: cellgrid.Rect,
 focused: bool,

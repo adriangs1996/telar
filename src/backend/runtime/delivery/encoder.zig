@@ -9,7 +9,6 @@ const PaneStore = @import("../../pane/PaneStore.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
 const Workspaces = @import("../../workspace/Workspaces.zig");
-const OwnedAgentHistoryPage = @import("OwnedAgentHistoryPage.zig");
 
 /// Encodes one queued response against the *current* stores. A response can
 /// outlive what it describes - the workspace of a queued snapshot may close
@@ -87,7 +86,6 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
             .position = created.position,
             .label = created.labelSlice(),
             .root_pane_id = created.root_pane_id,
-            .kind = created.kind,
             .pane_generation = created.pane_generation,
         }),
         .tab_renamed => |*renamed| try core.encodeTabRenamed(buffer, .{
@@ -112,22 +110,6 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
             }
             @memcpy(buffer[0..result.len], result.bytes[0..result.len]);
             break :payload buffer[0..result.len];
-        },
-        .agent_history_page => |result| payload: {
-            if (context.agent_history) |owned| {
-                owned.* = result;
-            }
-
-            const page = result.value;
-            if (panes.resolveControlConst(.{ .id = page.snapshot.pane_id, .generation = page.snapshot.pane_generation }) == null) {
-                break :payload try core.encodeRequestFailed(buffer, .{
-                    .request_id = page.request_id,
-                    .code = .pane_not_found,
-                    .message = "agent pane closed before its history was sent",
-                });
-            }
-
-            break :payload try core.encodeAgentHistoryPage(buffer, page);
         },
         .history_result => |result| payload: {
             history_result.* = result;
@@ -287,7 +269,5 @@ const EncodeContext = struct {
     history_result: *?*QueryResult,
     history_output: *?*OutputResult,
     history_stats: *?*StatsResult,
-    agent_history: ?*?*OwnedAgentHistoryPage = null,
-
     change_review: ?*?*ReviewResult = null,
 };

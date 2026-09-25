@@ -178,7 +178,7 @@ fn inspect(session: *Session, options: PaneOptions, context: ExecutionContext) !
     if (options.json) {
         try context.writer.writeByte('[');
     } else {
-        try context.writer.writeAll("WORKSPACE\tTAB\tPANE\tGENERATION\tKIND\tLIFECYCLE\n");
+        try context.writer.writeAll("WORKSPACE\tTAB\tPANE\tGENERATION\tLIFECYCLE\n");
     }
 
     for (catalog.entries[0..catalog.count], 0..) |*entry, index| {

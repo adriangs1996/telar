@@ -70,12 +70,7 @@ runs the configured argv command in parallel and outside the interactive path.
 The request is written to stdin and never appears in process arguments or
 history storage.
 
-Agent-mode panes use the same generator and title tracker. Their first accepted
-composer message supplies already-submitted text, preserving every line when
-normalizing it for the generator. They queue the job at admission because the
-provider can complete a turn before the runtime observes a `working` snapshot.
-Codex thread names and root rename notifications enter the existing reported-title
-path; routine output never reapplies an older name. The sidebar session title
+The sidebar session title
 remains separate from the tab label and survives GUI detach and reconnect.
 
 The queue admits eight pending jobs and one active child. Output is capped at

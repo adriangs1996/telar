@@ -1,8 +1,11 @@
-# Reusing terminal editors for agent file links
+# Reusing terminal editors for file links
 
-A completed click on an agent message's local file link enters
-`editor_file_links.openMessageFile`. The client looks for the configured editor in
-that source tab. If there is a candidate, `open_editor` asks the runtime to open
+`editor_file_links.openFile(client, pane_id, path)` opens a local file linked
+from a pane. Nothing calls it yet: terminal file links still open the editor in
+a new tab through `link_opening.openLinkFile`. It is the entry point for giving
+every pane this behavior.
+
+The client looks for the configured editor in the source pane's tab. If there is a candidate, `open_editor` asks the runtime to open
 the file in an existing instance. `editor_opened` reports the exact pane and
 runtime generation; `editor_file_links.completeEditorOpen` focuses that pane
 through the existing pane focus path.
@@ -11,8 +14,8 @@ The runtime's `link_opening.start` admits the request: it checks the source
 generation and collects live terminal panes in the same tab.
 `editors/Job.zig` runs an `editorremote.Search` on an observation worker,
 which discovers servers and opens the file, and maps the accepting candidate
-back to its pane; `link_opening.finish` delivers the reply. It never writes commands or simulated keys to a
-PTY. Names only select candidates; the remote editor's process identity, and
+back to its pane; `link_opening.finish` delivers the reply. It never writes
+commands or simulated keys to a PTY. Names only select candidates; the remote editor's process identity, and
 for Emacs the frame's terminal device, identify the destination.
 
 ## Supported connections
@@ -68,7 +71,6 @@ the editor process.
 `zig build test-editors` checks the wire corpus, path validation and quoting,
 real Neovim identity and file opening when Neovim is installed, runtime tab
 selection, admission bounds and stale sources. When the GUI adapter is enabled,
-it also runs the relevant GUI tests. `zig build test-gui` runs the full GUI suite,
-which exercises
-actual message-link clicks through `model.to_runtime` and reply dispatch,
+it also runs the relevant GUI tests. `zig build test-gui` calls `openFile`
+directly and follows the request through `model.to_runtime` and reply dispatch,
 including fallback, duplicate replies, Nano and replaced pane identities.

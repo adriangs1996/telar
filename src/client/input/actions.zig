@@ -4,7 +4,6 @@ const keyinput = @import("keyinput");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const agent_control = @import("../agents/agent_control.zig");
 const cli_control = @import("../connection/cli_control.zig");
 const copy_mode = @import("copy_mode.zig");
 const history_palette = @import("history_palette.zig");
@@ -73,9 +72,6 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
     }
 
     switch (value) {
-        .toggle_thread_view => {
-            _ = data.agent_panes.toggleSurface(&client.model);
-        },
         .scroll_pane => |direction| try pane_viewport.scrollPane(client, direction),
         .split_pane => |direction| _ = try pane_split.requestPaneSplit(
             client,
@@ -144,7 +140,6 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
             client,
             .{},
         ),
-        .new_agent_tab => try agent_control.createAgentTab(client),
         .select_tab_offset => |offset| _ = try tab_selection.selectTab(
             client,
             .{

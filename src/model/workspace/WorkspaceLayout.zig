@@ -80,7 +80,6 @@ pub fn clientLayoutNodes(self: *const Layout, output: *[core.max_client_layout_n
             .leaf => |pane_id| .{
                 .pane = .{
                     .id = pane_id,
-                    .surface = slot.surface,
                 },
             },
             .split => |branch| encoded: {
@@ -488,35 +487,6 @@ pub fn resizeFocused(self: *Layout, direction: layout_support.Direction, area: c
     return true;
 }
 
-/// Returns how the leaf showing `pane_id` presents it. Unknown panes are
-/// terminals.
-///
-/// ```zig
-/// if (layout.surface(pane_id) == .thread) paintThread();
-/// ```
-pub fn surface(self: *const Layout, pane_id: core.PaneId) core.PaneSurface {
-    const index = self.findLeaf(pane_id) orelse return .terminal;
-
-    return self.nodes[index].surface;
-}
-
-/// Changes how one leaf shows its pane. An unknown leaf or an unchanged
-/// surface leaves the revision intact.
-///
-/// ```zig
-/// if (layout.setSurface(pane_id, .thread)) recompose();
-/// ```
-pub fn setSurface(self: *Layout, pane_id: core.PaneId, value: core.PaneSurface) bool {
-    const index = self.findLeaf(pane_id) orelse return false;
-    if (self.nodes[index].surface == value) {
-        return false;
-    }
-
-    self.nodes[index].surface = value;
-    self.changed();
-    return true;
-}
-
 pub fn toggleFullscreen(self: *Layout) bool {
     if (self.pane_count == 0) {
         return false;
@@ -569,7 +539,6 @@ pub fn snapshot(self: *const Layout, area: cellgrid.Rect, output: *LayoutSnapsho
     output.append(
         .{
             .pane_id = pane_id,
-            .surface = self.surface(pane_id),
             .outer = area,
             .content = area.inner(self.metrics.border),
             .focused = true,
@@ -606,7 +575,6 @@ fn snapshotTiled(self: *const Layout, area: cellgrid.Rect, output: *LayoutSnapsh
                 output.append(
                     .{
                         .pane_id = pane_id,
-                        .surface = self.nodes[pending.node].surface,
                         .outer = pending.area,
                         .content = if (self.hasBorders())
                             pending.area.inner(self.metrics.border)
@@ -767,74 +735,3 @@ fn changed(self: *Layout) void {
     }
 }
 
-test "surface changes advance the revision and reach the wire and the snapshot" {
-    var layout: Layout = .{};
-    try layout.addRoot(@enumFromInt(1));
-    try layout.split(
-        .{
-            .existing_pane = @enumFromInt(1),
-            .new_pane = @enumFromInt(2),
-            .axis = .horizontal,
-        },
-    );
-    const before = layout.currentRevision();
-
-    try std.testing.expect(!layout.setSurface(@enumFromInt(3), .thread));
-    try std.testing.expectEqual(before, layout.currentRevision());
-    try std.testing.expect(layout.setSurface(@enumFromInt(2), .thread));
-    try std.testing.expect(!layout.setSurface(@enumFromInt(2), .thread));
-    try std.testing.expect(layout.currentRevision() != before);
-    try std.testing.expectEqual(core.PaneSurface.thread, layout.surface(@enumFromInt(2)));
-    try std.testing.expectEqual(core.PaneSurface.terminal, layout.surface(@enumFromInt(1)));
-
-    var nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
-    const encoded = layout.clientLayoutNodes(&nodes);
-    try std.testing.expectEqual(@as(usize, 3), encoded.len);
-    try std.testing.expectEqual(core.PaneSurface.terminal, encoded[1].pane.surface);
-    try std.testing.expectEqual(core.PaneSurface.thread, encoded[2].pane.surface);
-
-    var geometry: LayoutSnapshot = .{};
-    layout.snapshot(
-        .{
-            .w = 40,
-            .h = 10,
-        },
-        &geometry,
-    );
-    try std.testing.expectEqual(core.PaneSurface.thread, geometry.find(@enumFromInt(2)).?.surface);
-    try std.testing.expect(layout.toggleFullscreen());
-    layout.snapshot(
-        .{
-            .w = 40,
-            .h = 10,
-        },
-        &geometry,
-    );
-    try std.testing.expectEqual(core.PaneSurface.thread, geometry.views()[0].surface);
-}
-
-test "splitting and closing a sibling preserves the existing agent surface" {
-    var layout: Layout = .{};
-    try layout.addRoot(@enumFromInt(1));
-    try std.testing.expect(layout.setSurface(@enumFromInt(1), .thread));
-    try layout.split(
-        .{
-            .existing_pane = @enumFromInt(1),
-            .new_pane = @enumFromInt(2),
-            .axis = .horizontal,
-        },
-    );
-    try std.testing.expectEqual(core.PaneSurface.thread, layout.surface(@enumFromInt(1)));
-    try std.testing.expectEqual(core.PaneSurface.terminal, layout.surface(@enumFromInt(2)));
-    var geometry: LayoutSnapshot = .{};
-    layout.snapshot(
-        .{
-            .w = 100,
-            .h = 40,
-        },
-        &geometry,
-    );
-    try std.testing.expectEqual(core.PaneSurface.thread, geometry.find(@enumFromInt(1)).?.surface);
-    try std.testing.expect(layout.remove(@enumFromInt(2)));
-    try std.testing.expectEqual(core.PaneSurface.thread, layout.surface(@enumFromInt(1)));
-}

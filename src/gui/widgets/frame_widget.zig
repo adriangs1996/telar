@@ -5,7 +5,6 @@ const modal_widget = @import("overlays/modal_widget.zig");
 const Canvas = @import("Canvas.zig");
 const GenericWidgetList = @import("GenericWidgetList.zig").Type;
 const TerminalPane = @import("TerminalPane.zig");
-const ThreadPane = @import("ThreadPane.zig");
 const HoveredLink = @import("HoveredLink.zig");
 const TopBar = @import("TopBar.zig");
 const StatusBar = @import("StatusBar.zig");
@@ -19,7 +18,6 @@ pub const List = GenericWidgetList(Widget, capacity);
 
 pub const Widget = union(enum) {
     terminal_pane: TerminalPane,
-    thread: ThreadPane,
     link: HoveredLink,
     top_bar: TopBar,
     status: StatusBar,

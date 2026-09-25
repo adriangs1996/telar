@@ -208,10 +208,6 @@ better median never hides a worse tail.
 
 ## Recorded exceptions
 
-- **Composer raster** ([ADR 0011](adr/0011-rasterize-the-composer-editor-behind-a-latency-gate.md)):
-  the composer's keystroke echo may pass through the media path while its p99
-  stays under one pacer interval on local transport. A session that misses
-  the gate falls back to the cell renderer; remote clients always use cells.
 - **Windows resize** (`lib/console/WindowsResizeWatcher.zig`): one
   constant-cost poll per client, independent of pane count, until console
   records are translated centrally.

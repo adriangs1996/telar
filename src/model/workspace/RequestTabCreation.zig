@@ -1,7 +1,4 @@
-const core = @import("telar-core");
 const RequestTabCreation = @This();
-
-kind: core.PaneKind = .terminal,
 
 /// Empty asks the runtime aggregate to generate its canonical label.
 label: []const u8 = "",

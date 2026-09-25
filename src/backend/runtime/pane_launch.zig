@@ -8,7 +8,6 @@ const session_checkpoint = @import("session_checkpoint.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
-const agent_panes = @import("agent_panes.zig");
 const pty = @import("pty");
 const command_support = pty.command_support;
 const proxy_mod = @import("../proxy/proxy_namespace.zig");
@@ -23,10 +22,6 @@ const ChildEnvironment = pty.ChildEnvironment;
 const OutputCompletion = @import("events/OutputCompletion.zig");
 const ExitCompletion = @import("events/ExitCompletion.zig");
 const terminal_colors = @import("terminal_colors.zig");
-
-/// Managed agent panes each own a provider process; the bound keeps a
-/// runaway client from exhausting them before the pane table fills.
-const max_agent_panes = 16;
 
 comptime {
     std.debug.assert(core.max_argument_count <= command_support.max_args);
@@ -46,10 +41,7 @@ const Failure = struct {
 /// const pane = try pane_launch.launch(model, .{ .location = location, .size = size, .launch = view, .launch_cwd = cwd, .workspace_path = path });
 /// ```
 pub fn launch(model: *RuntimeModel, request: LaunchRequest) !*Pane {
-    const fresh = if (request.kind == .agent)
-        try launchAgent(model, request)
-    else
-        try launchTerminal(model, request);
+    const fresh = try launchTerminal(model, request);
 
     session_checkpoint.noteChange(model);
     return fresh;
@@ -123,10 +115,8 @@ fn launchTerminal(model: *RuntimeModel, request: LaunchRequest) !*Pane {
         .io = model.io,
         .gpa = model.gpa,
         .history_service = model.resources.history.service(),
-        .review_service = model.review_service,
         .graphics_budget = &model.panes.graphics_budget,
         .manifests = &model.resources.agent_manifests,
-        .environment = model.inherited_environment,
     }, .{
         .identity = pane_key,
         .location = request.location,
@@ -185,53 +175,6 @@ fn launchTerminal(model: *RuntimeModel, request: LaunchRequest) !*Pane {
     fresh.commitLaunch(shell);
     proxy_registered = false;
     return fresh;
-}
-
-fn launchAgent(model: *RuntimeModel, request: LaunchRequest) !*Pane {
-    var managed_count: usize = 0;
-    for (model.panes.items) |slot| {
-        const pane = slot orelse continue;
-        if (pane.kind == .agent) {
-            managed_count += 1;
-        }
-    }
-
-    if (managed_count >= max_agent_panes) {
-        return error.PaneLimitReached;
-    }
-
-    const key = try model.panes.allocateKey();
-    const pane = try Pane.create(.{
-        .io = model.io,
-        .gpa = model.gpa,
-        .history_service = model.resources.history.service(),
-        .review_service = model.review_service,
-        .graphics_budget = &model.panes.graphics_budget,
-        .manifests = &model.resources.agent_manifests,
-        .environment = model.inherited_environment,
-    }, .{
-        .identity = key,
-        .location = request.location,
-        .kind = .agent,
-        .restore_conversation = request.restore_conversation,
-        .launch_cwd = request.launch_cwd,
-        .workspace_path = request.workspace_path,
-        .size = request.size,
-        .graphics_limits = model.panes.graphics_limits,
-        .terminal_colors = terminal_colors.ofWorkspace(model, request.location.workspace),
-    });
-    model.panes.insert(pane) catch |err| {
-        pane.destroy();
-        return err;
-    };
-    errdefer model.panes.removeAndDestroy(pane);
-
-    _ = pane.beginExitWait();
-    errdefer pane.cancelExitWait();
-
-    try model.select.concurrent(.agent_thread_changed, agent_panes.waitForChange, .{ model.io, pane });
-    pane.commitLaunch("codex app-server");
-    return pane;
 }
 
 fn injectFault(model: *RuntimeModel, phase: history_model.LaunchPhase) !void {

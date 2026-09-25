@@ -3,7 +3,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const agent_reading = @import("../agents/agent_reading.zig");
 const builtin = @import("builtin");
 const change_review = @import("../change_review/change_review.zig");
 const notifications = @import("../notifications/notifications.zig");
@@ -23,20 +22,6 @@ pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !Request
 
     if (continuation == .ignored) {
         change_review.retireChangeReview(&client.model, failure.request_id);
-        agent_reading.retired(&client.model);
-    }
-
-    if (continuation == .agent_history) {
-        defer agent_reading.retired(
-            &client.model,
-        );
-        if (!agent_reading.failed(
-            &client.model,
-            continuation.agent_history,
-            failure.message,
-        )) {
-            return .ignored;
-        }
     }
 
     switch (continuation) {
@@ -96,10 +81,6 @@ pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !Request
         .rename_tab,
         .move_tab,
         .notification,
-        .agent_prompt,
-        .agent_control,
-        .agent_query,
-        .agent_history,
         .change_review_query,
         .change_review_command,
         .editor_open,

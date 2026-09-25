@@ -1004,28 +1004,6 @@ test "canonical reported focus retirement is silent and idempotent" {
     try std.testing.expectEqual(outbox_len, client.model.to_runtime.len);
 }
 
-test "native thread view action flips the focused pane surface" {
-    var harness: TestHarness = undefined;
-    try harness.init();
-    defer harness.deinit();
-    try harness.bootstrap();
-
-    const client = harness.client;
-    var expected_version = client.model.version();
-    const active = client.model.tabs.active;
-    const focused = client.model.tabs.layout[active].focused().?;
-    try std.testing.expectEqual(core.PaneSurface.terminal, client.model.tabs.layout[active].surface(focused));
-
-    for ([_]core.PaneSurface{ .thread, .terminal }) |expected_surface| {
-        const control = try client_module.actions.executeAction(client, .toggle_thread_view, .effect);
-
-        expected_version.panes +%= 1;
-        try std.testing.expectEqual(keyinput.Control.continue_routing, control);
-        try std.testing.expectEqual(expected_surface, client.model.tabs.layout[active].surface(focused));
-        try std.testing.expectEqualDeep(expected_version, client.model.version());
-    }
-}
-
 test "one host batch observes a prompt opened by its preceding binding" {
     var harness: TestHarness = undefined;
     try harness.init();

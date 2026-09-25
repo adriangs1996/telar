@@ -223,10 +223,6 @@ pub fn prepare(self: *Renderer, projection: client.Projection) !data.Presentatio
         .location = if (model.panes.countIn(location.tab_id) == 0) null else location,
     };
     for (layout.views()) |view| {
-        if (view.surface != .terminal) {
-            continue;
-        }
-
         const pane = model.panes.findInConst(location.tab_id, view.pane_id) orelse continue;
         try self.drawPane(.{
             .pane = pane,

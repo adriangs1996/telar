@@ -24,7 +24,6 @@ const Hit = @import("input/LinkHit.zig");
 const PointerSample = @import("input/PointerSample.zig");
 const PointerCapture = @import("input/PointerCapture.zig");
 const TerminalClipboard = @import("host/TerminalClipboard.zig");
-const WidgetId = @import("widgets/interaction/Id.zig");
 const Renderer = @import("render/TerminalRenderer.zig");
 const native = @import("native/native.zig");
 const selection = @import("render/copy_selection.zig");
@@ -49,11 +48,6 @@ const DiagramService = @import("diagrams/Service.zig");
 const ClipboardOwner = @import("host/Owner.zig");
 const CursorTarget = @import("CursorTarget.zig");
 const Scene = @import("render/Scene.zig");
-const message_links = @import("widgets/interaction/message_links.zig");
-const thread_selection = @import("widgets/interaction/thread_selection.zig");
-const thread_items = @import("widgets/interaction/thread_items.zig");
-const thread_history = @import("widgets/interaction/thread_history.zig");
-const thread_scroll = @import("widgets/interaction/thread_scroll.zig");
 const host_context = @import("widgets/interaction/host_context.zig");
 
 const FramePacer = @import("FramePacer.zig");
@@ -106,7 +100,6 @@ pane_input_time: ?u64 = null,
 /// Receives every job in place of `workers.start`; tests set it to capture
 /// runtime writes and link opens.
 job_hook: ?JobHook = null,
-binding_target: ?WidgetId = null,
 binding_revision: u64 = 0,
 pointer: PointerState = .{},
 terminal_clipboard: TerminalClipboard = .{},
@@ -168,7 +161,6 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.input_queue = .{};
     gui.router = router;
     gui.binding_timeout = .{};
-    gui.binding_target = null;
     gui.binding_revision = 0;
     gui.pane_input_time = null;
     gui.job_hook = null;
@@ -223,7 +215,6 @@ pub fn deinit(self: *GuiAdapter) void {
     self.graphics_store.deinit();
     self.diagrams.deinit();
     self.chrome.favicons.deinit(gpa);
-    self.widgets.deinit();
     gpa.destroy(self.review);
     self.app.deinit();
     gpa.destroy(self);
@@ -400,7 +391,7 @@ pub fn frameDelayNs(self: *GuiAdapter) u64 {
     if (model.tabs.activeSlot()) |tab| {
         const layout = shared_model.tab_layout.snapshot(model, tab, shared_model.workbench.region(model).area);
         for (layout.views()) |view| {
-            if (view.surface != .terminal or view.content.w == 0 or view.content.h == 0) {
+            if (view.content.w == 0 or view.content.h == 0) {
                 continue;
             }
 
@@ -462,7 +453,6 @@ fn start(self: *GuiAdapter, colors: core.TerminalColors) !void {
     capabilities.terminal_colors = colors;
     capabilities.images = .unsupported;
     capabilities.pointer_pixels = .supported;
-    capabilities.agent_panes = true;
 
     _ = try client.host_resize.applyHostUpdate(
         &self.app,
@@ -643,7 +633,6 @@ pub fn adoptBindings(self: *GuiAdapter, config: client.RouterConfig) void {
 
     replacement.inheritPhysicalLeases(&self.router);
     self.router = replacement;
-    self.binding_target = null;
     self.binding_revision +%= 1;
     _ = self.binding_timeout.update(self.app.io, null);
 }
@@ -652,7 +641,6 @@ pub fn adoptBindings(self: *GuiAdapter, config: client.RouterConfig) void {
 /// Held physical keys retain their leases. Example: `gui.cancelBinding();`
 pub fn cancelBinding(self: *GuiAdapter) void {
     self.router.cancelSequence();
-    self.binding_target = null;
 }
 
 fn statusMode(self: *const GuiAdapter) client.Mode {
@@ -843,12 +831,6 @@ fn drainInput(self: *GuiAdapter) !void {
 pub fn routeKey(self: *GuiAdapter, event: input_routing.Type.KeyInput) !keyinput.Control {
     errdefer self.router.eventFailed(event.key);
 
-    defer {
-        if (self.router.bindingDeadline() == null and !self.router.prefixPending()) {
-            self.binding_target = null;
-        }
-    }
-
     const decision = self.router.routeEvent(
         event,
         .{
@@ -907,18 +889,6 @@ fn applyInputDecision(self: *GuiAdapter, decision: input_routing.Type.Decision) 
 }
 
 fn deliverKey(self: *GuiAdapter, value: keyinput.Key) !void {
-    if (self.binding_target) |owner| {
-        if (value.phase == .press) {
-            try widget_routing.replayBindingKey(
-                self,
-                owner,
-                value,
-            );
-
-            return;
-        }
-    }
-
     _ = try client.key_routing.routeKeyInput(
         &self.app,
         .{
@@ -927,17 +897,11 @@ fn deliverKey(self: *GuiAdapter, value: keyinput.Key) !void {
     );
 }
 
-/// Agent scrolling uses delivered transcript geometry. The goto and suggest
-/// keys open the native palette already prefixed, and sidebar resize uses
-/// this window's pixel preference. Other actions keep the shared routing.
-/// Copy mode retires first, as the shared native action policy does.
+/// The goto and suggest keys open the native palette already prefixed, and
+/// sidebar resize uses this window's pixel preference. Other actions keep the
+/// shared routing. Copy mode retires first, as the shared native action
+/// policy does.
 fn executeAction(self: *GuiAdapter, value: shared_model.actions.Action) !keyinput.Control {
-    if (value == .scroll_pane) {
-        if (try widget_routing.scrollFocusedThread(self, value.scroll_pane)) {
-            return .continue_routing;
-        }
-    }
-
     const prefix: shared_model.command_palette.Prefix = switch (value) {
         .goto_picker => .goto,
         .suggest_command => .suggest,
@@ -1376,10 +1340,6 @@ fn dispatchScroll(self: *GuiAdapter, sample: *ScrollSample) !bool {
 fn finishInput(self: *GuiAdapter, pending: bool) !void {
     const app = &self.app;
 
-    if (self.router.bindingDeadline() == null and !self.router.prefixPending()) {
-        self.binding_target = null;
-    }
-
     if (pending != self.router.prefixPending()) {
         self.binding_revision +%= 1;
     }
@@ -1529,10 +1489,7 @@ fn focus(self: *GuiAdapter, focused: bool) !void {
     self.focused = focused;
 
     if (!focused) {
-        self.widgets.thread_scroll.clear();
         self.widgets.tab_drag.cancel();
-        message_links.clear(self);
-        thread_selection.cancel(self);
     }
 
     self.input_revision +%= 1;
@@ -1577,7 +1534,7 @@ fn cursorTarget(self: *GuiAdapter) CursorTarget {
     const cursor = selection.cursor(pane, copy_view);
     const layout = shared_model.tab_layout.snapshot(&self.app.model, tab, shared_model.workbench.region(&self.app.model).area);
     for (layout.views()) |view| {
-        if (view.pane_id == pane.id and view.surface == .terminal and cursor.x < view.content.w and cursor.y < view.content.h) {
+        if (view.pane_id == pane.id and cursor.x < view.content.w and cursor.y < view.content.h) {
             return .{
                 .pane_id = pane.id,
                 .generation = pane.attachment_generation,
@@ -1634,7 +1591,6 @@ pub fn resize(self: *GuiAdapter, size: core.TerminalSize, theme: shared_model.Te
     capabilities.cell_height_px = size.cell_height_px;
     capabilities.images = .unsupported;
     capabilities.pointer_pixels = .supported;
-    capabilities.agent_panes = true;
     capabilities.terminal_colors = .{
         .foreground = theme.foreground,
         .background = theme.background,
@@ -1672,13 +1628,6 @@ fn complete(self: *GuiAdapter, token: u64, delivered: bool) !void {
     self.pointer.hover.present(delivered);
     const delivery = self.app.presentation.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
     try client.presentation_delivery.apply(&self.app.model, delivery.commit);
-
-    if (delivered) {
-        try thread_items.delivered(self);
-        try thread_history.delivered(self);
-        thread_scroll.delivered(self);
-        thread_selection.delivered(self);
-    }
 }
 
 /// Applies runtime graphics commands to this connection's retained resources.
@@ -1709,8 +1658,6 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
     }
 
     self.chrome.now_ns = pacing.clock.monotonic(self.app.io);
-    try thread_scroll.advance(self, self.chrome.now_ns);
-    try thread_selection.prepare(self);
     self.diagrams.beginFrame();
     self.syntax.beginFrame();
     try self.review.synchronize(&self.app);
@@ -1837,7 +1784,6 @@ fn resolveFavicons(self: *GuiAdapter, renderer: *Renderer) !void {
 fn refreshPointer(self: *GuiAdapter) void {
     self.pointer.hover.refresh(self);
     self.pointer.link_gesture.validate(self.pointer.hover.link, self.app.model.version());
-    message_links.refresh(self);
 }
 
 /// Captures semantic state plus adapter-owned routing and interaction revisions.

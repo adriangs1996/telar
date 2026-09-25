@@ -3,8 +3,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const pane_graphics = @import("../panes/pane_graphics.zig");
-const agent_control = @import("../agents/agent_control.zig");
-const agent_history = @import("../agents/agent_history.zig");
 const agent_snapshot = @import("../agents/agent_snapshot.zig");
 const agent_sound = @import("../agents/agent_sound.zig");
 const proxy_status = @import("../agents/proxy_status.zig");
@@ -42,14 +40,11 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
         .editor_opened => |reply| {
             try editor_file_links.completeEditorOpen(client, reply);
         },
-        .agent_history_page => |page| {
-            _ = try agent_history.applyAgentHistory(client, page);
-        },
-        .agent_thread_snapshot => |snapshot| {
-            _ = try data.agent_panes.applyThread(&client.model, snapshot);
-        },
         .request_completed => |reply| {
-            try agent_control.completeAgentRequest(&client.model, reply);
+            const continuation = client.model.request_lifecycle.tracker.take(reply.request_id) orelse return error.UnexpectedControlReply;
+            if (continuation != .ignored) {
+                return error.UnexpectedControlReply;
+            }
         },
         .pane_opened => |opened| _ = try pane_attachment.completePaneOpen(client, opened),
         .tab_snapshot => |snapshot| _ = try tab_snapshot.applyTabSnapshot(client, snapshot),

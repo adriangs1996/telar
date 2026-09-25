@@ -4,9 +4,7 @@
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
-const agent_control = @import("agent_control.zig");
 const agent_done = @import("agent_done.zig");
-const agent_history = @import("agent_history.zig");
 const agent_hooks = @import("agent_hooks.zig");
 const change_review = @import("change_review.zig");
 const client_control = @import("client_control.zig");
@@ -84,12 +82,6 @@ pub fn receive(model: *RuntimeModel, session: *Session, message: core.ClientMess
         .query_change_review => |request| change_review.start(model, session, request),
         .change_review_command => |request| change_review.start(model, session, request),
         .report_change_review_sample => |request| change_review.start(model, session, request),
-        .agent_prompt => |request| agent_control.send(model, session, request),
-        .agent_interrupt => |request| agent_control.send(model, session, request),
-        .agent_resume => |request| agent_control.send(model, session, request),
-        .agent_approval => |request| agent_control.send(model, session, request),
-        .query_agent_thread => |request| agent_control.send(model, session, request),
-        .query_agent_history => |request| agent_history.start(model, session, request),
         .query_agents => session.delivery.requestAgentSnapshot(),
         .acknowledge_agent => |request| agent_done.acknowledge(model, request),
         .report_agent_session => |request| agent_hooks.receiveSession(model, session, request),

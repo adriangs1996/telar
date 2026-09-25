@@ -429,15 +429,6 @@ test "privileged plugin effects require a digest-bound capability grant" {
         }));
     }
 
-    batch.items[0] = .toggle_thread_view;
-
-    try std.testing.expectError(error.InvalidPluginEffect, registry.authorizeBatch(.{
-        .package_index = 0,
-        .plugin_id = core.stableId(manifest.id()),
-        .digest = digest,
-        .batch = &batch,
-    }));
-
     const stale_digest: core.Digest = @splat(8);
     try std.testing.expectError(
         error.StalePluginWorker,

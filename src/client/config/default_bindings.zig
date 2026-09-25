@@ -6,13 +6,11 @@ const Resolved = @import("Resolved.zig");
 const GenericKeymap = keyinput.GenericKeymap;
 const std = @import("std");
 
-pub const count = 42;
+pub const count = 41;
 pub const Binding = keyinput.GenericBinding(data.Action, data.config_values.max_binding_keys);
 
 pub fn load(prefix: keyinput.Key) ![count]Binding {
     return .{
-        try prefixed(prefix, "a", .new_agent_tab),
-
         try prefixed(prefix, "-", .{ .scroll_pane = .up }),
         try prefixed(prefix, "=", .{ .scroll_pane = .down }),
 
@@ -123,39 +121,6 @@ pub fn validate(prefix: keyinput.Key, configured: []const Binding) !void {
 
 fn prefixed(prefix: keyinput.Key, suffix: []const u8, action_value: data.Action) !Binding {
     return .init(&.{ prefix, try keyinput.chord.parseKey(suffix) }, action_value);
-}
-
-test "agent tab creation uses configured prefix key and allows overrides" {
-    const testing = std.testing;
-    const prefix = try keyinput.chord.parseKey("ctrl+s");
-    const expected = try prefixed(prefix, "a", .new_agent_tab);
-    const resolved = try resolve(prefix, &.{});
-    var found: usize = 0;
-
-    for (resolved.slice()) |*binding| {
-        if (binding.sameSequence(&expected)) {
-            try testing.expectEqualDeep(expected.action, binding.action);
-            found += 1;
-        }
-    }
-
-    try testing.expectEqual(@as(usize, 1), found);
-
-    try validate(prefix, &.{});
-
-    const replacement = try prefixed(prefix, "a", .detach);
-    const overridden = try resolve(prefix, &.{replacement});
-    found = 0;
-
-    for (overridden.slice()) |*binding| {
-        if (binding.sameSequence(&replacement)) {
-            try testing.expectEqualDeep(replacement.action, binding.action);
-            found += 1;
-        }
-    }
-
-    try testing.expectEqual(@as(usize, 1), found);
-    try validate(prefix, &.{replacement});
 }
 
 test "focused scroll defaults use the configured prefix and can be overridden" {

@@ -11,7 +11,6 @@ pane_observation (foreground process)  -> agent_status.observeProcess
 proxy_observation (model request)       -> agent_status.observeProxy
 pane_observation / proxy_tap (screen)   -> agent_status.observeScreen
 agent_hooks (lifecycle report)          -> agent_status.observeReport
-agent_panes (managed conversation)      -> agent_status.observeManaged
   -> ensure: the pane generation's row in model.agents, created from
      identity evidence and seeded from model.restored_agents
   -> Agent.apply* on that row

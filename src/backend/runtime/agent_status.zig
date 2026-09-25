@@ -25,7 +25,6 @@ const Watch = @import("../agent/Watch.zig");
 const Completion = @import("../agent/Completion.zig");
 const Agent = @import("../agent/Agent.zig");
 const description = @import("../agent/description.zig");
-const ManagedState = @import("../agent/ManagedState.zig");
 
 
 pub const AcknowledgeResult = enum {
@@ -430,18 +429,6 @@ pub fn observeInput(model: *RuntimeModel, key: PaneKey, bytes: []const u8) bool 
     return agent.observeInput(bytes);
 }
 
-/// Captures the first accepted managed prompt when the caller opted into title generation.
-/// Example: `_ = agent_status.observeSubmittedPrompt(model, identity, "Fix tests\nKeep behavior");`.
-pub fn observeSubmittedPrompt(model: *RuntimeModel, identity: Identity, text: []const u8) bool {
-    const agent = ensure(model, identity) orelse return false;
-    if (!agent.observeSubmittedPrompt(text, pendingDescriptionCount(model) < description.max_pending_jobs)) {
-        return false;
-    }
-
-    bumpRevision(model);
-    return true;
-}
-
 /// Starts one bounded job at a time. Invalid captured input deterministically
 /// becomes a failed placeholder and is never retried.
 ///
@@ -653,12 +640,4 @@ fn nextSequence(model: *RuntimeModel) u64 {
 
 fn bumpRevision(model: *RuntimeModel) void {
     revisions.advance(&model.agent_revision);
-}
-
-/// Updates the lifecycle projection for one runtime-owned provider session.
-/// Example: `_ = agent_status.observeManaged(model, identity, state);`.
-pub fn observeManaged(model: *RuntimeModel, identity: Identity, state: ManagedState) bool {
-    const agent = ensure(model, identity) orelse return false;
-    agent.applyManaged(state);
-    return reproject(model, agent, state.observed_at_ms);
 }

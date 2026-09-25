@@ -29,18 +29,12 @@ pub const text =
     \\         telar sidebar resize COLUMNS --client ID [--json] [--socket PATH]
     \\         telar workspace-list expand --client ID [--json] [--socket PATH]
     \\         telar workspace-list collapse --client ID [--json] [--socket PATH]
-    \\         telar agent create --client ID [--label TEXT] [--json] [--socket PATH]
     \\         telar client open goto --client ID [--json] [--socket PATH]
     \\         telar client open history --client ID [--json] [--socket PATH]
     \\         telar client copy-mode --client ID [--json] [--socket PATH]
     \\         telar notification dismiss ID --client ID [--json] [--socket PATH]
     \\         telar client open-link URI --client ID [--json] [--socket PATH]
     \\         telar client clipboard copy TEXT --client ID [--json] [--socket PATH]
-    \\         telar agent draft get ID --client ID [--json] [--socket PATH]
-    \\         telar agent draft set ID TEXT --client ID [--json] [--socket PATH]
-    \\         telar agent draft attach ID IMAGE_PATH --client ID [--json] [--socket PATH]
-    \\         telar agent view expand PANE_ID ITEM_ID --client ID [--work] [--json] [--socket PATH]
-    \\         telar agent view collapse PANE_ID ITEM_ID --client ID [--work] [--json] [--socket PATH]
     \\         telar pane copy ID X1,Y1:X2,Y2 --client ID [--json] [--socket PATH]
     \\         telar layout get --client ID [--json] [--socket PATH]
     \\         telar layout apply TOKEN --client ID [--json] [--socket PATH]
@@ -73,23 +67,10 @@ pub const text =
     \\       telar history stats [--period today|week|month|year|all]
     \\       telar notification show <title> [options]
     \\       telar agent list|get|wait|prompt|read [target] [options]
-    \\       telar agent interrupt <pane|title|--current> [--json] [--socket PATH]
     \\       telar agent acknowledge <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent clear <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent rename <pane|title|--current> TITLE [--json] [--socket PATH]
-    \\       telar agent resume <pane|title|--current> CONVERSATION_ID [--json] [--socket PATH]
     \\       telar agent report-title <pane|title|--current> TITLE [--json] [--socket PATH]
     \\       telar agent report-command <pane|title|--current> started|finished COMMAND --provider NAME [--tool-call ID] [--cwd PATH] [--session ID] [--exit-code N] [--json] [--socket PATH]
     \\       telar agent report-state <pane|title|--current> working|blocked|ready|exited|settling [--blocked-reason REASON] [--event TEXT] [--session ID] [--session-file PATH] [--session-file-kind KIND] [--json] [--socket PATH]
-    \\       telar agent thread <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent watch <pane|title|--current> [--jsonl] [--count N] [--socket PATH]
-    \\       telar agent history <pane|title|--current> [--cursor TOKEN | --anchor ID --anchor-turn ID] [--direction older|newer] [--json] [--socket PATH]
-    \\       telar agent models <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent skills <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent conversations <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent approvals <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent approve <pane|title|--current> APPROVAL_ID [--json] [--socket PATH]
-    \\       telar agent reject <pane|title|--current> APPROVAL_ID [--json] [--socket PATH]
     \\       telar pane read|send-keys <pane|--current> [options]
     \\         telar pane list [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\         telar pane get <id|--current> [--workspace ID [--tab ID]] [--json] [--socket PATH]
@@ -175,10 +156,6 @@ pub const text =
     \\  --until STATUS   done, ready, blocked, working, failed (wait)
     \\  --timeout SECS   Give up after SECS seconds (wait, prompt --wait)
     \\  --wait           Wait for the agent to finish after prompting
-    \\    --image PATH     Attach an absolute PNG path to a managed prompt (repeatable, maximum 4)
-    \\    --model ID       Select an advertised model for a managed prompt
-    \\    --effort ID      Select a provider-advertised effort level
-    \\    --access MODE    read_only, workspace, full_access (managed prompt)
     \\  --lines N        Rows to read (default 40, maximum 200)
     \\  --source KIND    recent (scrollback + screen) or screen
     \\  --enter          Append Enter after the sent text

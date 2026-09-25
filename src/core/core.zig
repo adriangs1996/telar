@@ -27,9 +27,6 @@ const echo_trace = @import("echo_trace.zig");
 const localsocket = @import("localsocket");
 const transport = localsocket.transport;
 const fuzzy = @import("fuzzy.zig");
-const pane_kind = @import("schema/pane_kind.zig");
-const agent_thread_messages = @import("schema/messages/agent_thread.zig");
-const agent_history_module = @import("schema/messages/agent_history.zig");
 const clients = @import("schema/messages/clients.zig");
 const client_actions = @import("schema/messages/client_actions.zig");
 const client_commands = @import("schema/messages/client_commands.zig");
@@ -138,7 +135,6 @@ pub const PaneOpened = @import("schema/messages/PaneOpened.zig");
 pub const PaneProgress = @import("schema/messages/PaneProgress.zig");
 pub const PaneProgressState = pane_module.PaneProgressState;
 pub const PaneResize = @import("schema/messages/PaneResize.zig");
-pub const PaneSurface = types.PaneSurface;
 pub const PaneTarget = types.PaneTarget;
 pub const PaneTextMode = types.PaneTextMode;
 pub const PaneTextSource = types.PaneTextSource;
@@ -416,7 +412,6 @@ test {
     _ = ProfileStore;
     _ = ProfileCounters;
     _ = ProfileHistogram;
-    _ = @import("AgentSkills.zig");
     _ = @import("agent_manifest.zig");
     _ = @import("diagnostics.zig");
     _ = @import("echo_trace.zig");
@@ -441,49 +436,6 @@ pub const TextRowFlags = @import("text_metadata/RowFlags.zig").RowFlags;
 pub const TextLinkRun = @import("text_metadata/LinkRun.zig");
 pub const TextLinkRuns = @import("text_metadata/Runs.zig");
 pub const text_metadata_limits = @import("text_metadata/limits.zig");
-
-pub const PaneKind = pane_kind.PaneKind;
-pub const AgentThreadSnapshot = @import("AgentThreadSnapshot.zig");
-pub const AgentModel = @import("AgentModel.zig");
-pub const AgentEffort = @import("AgentEffort.zig");
-pub const AgentAccess = agent_thread.Access;
-pub const AgentOptions = @import("AgentOptions.zig");
-pub const AgentImagePaths = @import("AgentImagePaths.zig");
-pub const AgentImages = @import("AgentImages.zig");
-pub const AgentSubmission = @import("AgentSubmission.zig");
-pub const AgentThreadItem = @import("AgentThreadItem.zig");
-pub const AgentApprovalRequest = @import("AgentApprovalRequest.zig");
-pub const AgentApprovalDecision = @import("AgentApprovalDecision.zig");
-pub const AgentPrompt = @import("schema/messages/AgentPrompt.zig");
-pub const encodeAgentPrompt = agent_thread_messages.encodeAgentPrompt;
-pub const AgentInterrupt = @import("schema/messages/AgentInterrupt.zig");
-pub const AgentResume = @import("schema/messages/AgentResume.zig");
-pub const encodeAgentInterrupt = agent_thread_messages.encodeAgentInterrupt;
-pub const encodeAgentResume = agent_thread_messages.encodeAgentResume;
-pub const AgentApproval = @import("schema/messages/AgentApproval.zig");
-pub const encodeAgentApproval = agent_thread_messages.encodeAgentApproval;
-pub const QueryAgentThread = @import("schema/messages/QueryAgentThread.zig");
-pub const encodeQueryAgentThread = agent_thread_messages.encodeQueryAgentThread;
-pub const encodeAgentThreadSnapshot = agent_thread_messages.encodeAgentThreadSnapshot;
-
-pub const AgentThreadSnapshotView = @import("schema/messages/AgentThreadSnapshotView.zig");
-
-pub const agent_thread = @import("agent_thread.zig");
-
-pub const agent_history = @import("agent_history.zig");
-pub const AgentHistoryCursor = @import("AgentHistoryCursor.zig");
-pub const AgentHistoryPage = @import("AgentHistoryPage.zig");
-pub const QueryAgentHistory = @import("schema/messages/QueryAgentHistory.zig");
-pub const AgentHistoryPageView = @import("schema/messages/AgentHistoryPageView.zig");
-pub const encodeQueryAgentHistory = agent_history_module.encodeQueryAgentHistory;
-pub const encodeAgentHistoryPage = agent_history_module.encodeAgentHistoryPage;
-
-pub const RecentConversation = @import("RecentConversation.zig");
-pub const RecentConversations = @import("RecentConversations.zig");
-
-pub const AgentSkills = @import("AgentSkills.zig");
-pub const AgentSkill = @import("AgentSkill.zig");
-pub const AgentCommand = @import("AgentCommand.zig");
 
 pub const ClientDescriptor = @import("ClientDescriptor.zig");
 pub const ClientList = @import("ClientList.zig");

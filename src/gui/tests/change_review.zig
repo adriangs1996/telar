@@ -22,7 +22,7 @@ pub fn base() !*Session {
     );
     try session.gui.resize(size, session.gui.renderer.theme);
     session.gui.pointer.configure(session.gui.renderer.origin, size);
-    _ = session.gui.app.model.panes.find(Session.pane_id).?.identify(.terminal, 77);
+    _ = session.gui.app.model.panes.find(Session.pane_id).?.identify(77);
     try session.settle();
     return session;
 }

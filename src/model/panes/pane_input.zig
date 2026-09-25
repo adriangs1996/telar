@@ -101,7 +101,7 @@ pub fn planInput(model: *const ClientModel, target: model_data.PaneInputTarget) 
         .key_lease, .pointer_lease => |pane_id| model.panes.findConst(pane_id) orelse return null,
         .paste_session => |session| model.panes.findConst(session.pane_id) orelse return null,
     };
-    if (!pane.attached or pane.kind == .agent) {
+    if (!pane.attached) {
         return null;
     }
 

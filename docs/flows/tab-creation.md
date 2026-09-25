@@ -15,7 +15,6 @@ actions.executeAction
      -> tab_creation.create -> tab_creation.add
      -> tab_removal.detachTab(previous)
      -> pane_focus.synchronizeActivePane
-     -> request agent conversation when applicable
   -> adapter observes presentation revisions
 ```
 

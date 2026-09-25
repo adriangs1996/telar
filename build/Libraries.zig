@@ -171,6 +171,11 @@ const specs = [_]Spec{
         .name = "imaging",
         .imports = &.{"wuffs"},
     },
+    .{
+        .name = "mermaid",
+        .libc = true,
+        .posix = true,
+    },
 };
 
 /// Null for a library whose external dependency this graph does not provide.

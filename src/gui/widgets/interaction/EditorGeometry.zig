@@ -3,7 +3,6 @@
 const Id = @import("Id.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
-const EditorFont = @import("EditorFont.zig");
 
 id: Id,
 bounds: Rect,
@@ -12,4 +11,3 @@ cell_width: f32,
 preferred: bool = false,
 multiline: bool = false,
 line_height: f32 = 1,
-font: ?EditorFont = null,

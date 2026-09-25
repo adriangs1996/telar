@@ -236,9 +236,9 @@ fn key(self: *Dispatcher, event: Key, navigate: bool) Route {
     }
     if (navigate and event.phase == .press and self.window_focused) {
         const target = self.focusedTarget();
-        if ((event.code == .tab or event.code == .back_tab) and (target != null or self.maps.presented().modal_layer != 0) and (target == null or target.?.traverse_tab)) {
+        if ((event.code == .tab or event.code == .back_tab) and (target != null or self.maps.presented().modal_layer != 0) ) {
             result = .{ .consumed = true, .focus_changed = self.traverse(event.code == .back_tab or event.mods.shift) };
-        } else if (event.code == .escape and target != null and target.?.action != .transcript and self.maps.presented().modal_layer == 0) {
+        } else if (event.code == .escape and target != null and self.maps.presented().modal_layer == 0) {
             result = .{ .consumed = true, .focus_changed = self.focus(null) };
         }
     }

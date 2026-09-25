@@ -140,7 +140,6 @@ pub fn descriptorsAt(self: *const PaneStore, location: core.TabLocation, output:
         output[len] = .{
             .pane_id = pane.id,
             .lifecycle = .running,
-            .kind = pane.kind,
             .pane_generation = pane.generation,
         };
         len += 1;

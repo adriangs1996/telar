@@ -1,6 +1,5 @@
 const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
-const agent_options_module = @import("agent_options.zig");
 const std = @import("std");
 const builtin = @import("builtin");
 const DamageRow = cellgrid.DamageRow;
@@ -10,10 +9,7 @@ const damage = cellgrid.damage;
 const pane_support = @import("pane_support.zig");
 const Pane = @This();
 const core = @import("telar-core");
-pub const ImageRemoval = @import("ComposerImageRemoval.zig");
 const ChangeReviewAvailability = @import("ChangeReviewAvailability.zig");
-
-const Composer = @import("Composer.zig");
 
 gpa: std.mem.Allocator,
 id: core.PaneId,
@@ -37,29 +33,10 @@ foreground_name_len: u8 = 0,
 progress_state: core.PaneProgressState = .remove,
 progress_percent: ?u8 = null,
 title: []u8 = &.{},
-/// What the user is writing for the agent in this pane, allocated on first
-/// use and owned like the title.
-composer: ?*Composer = null,
-/// Advances on every composer edit, including selection moves.
-composer_revision: u64 = 0,
-/// Advances only when the composer's text or images change.
-composer_content_revision: u64 = 0,
-kind: core.PaneKind = .terminal,
 pane_generation: u64 = 0,
 change_review: ChangeReviewAvailability = .{},
-agent_thread: ?*core.AgentThreadSnapshot = null,
-agent_history: ?*AgentHistoryWindow = null,
-history_intent: ?core.agent_history.Direction = null,
-history_generation: u64 = 0,
-transcript_scroll: f64 = 0,
-transcript_anchor_revision: u64 = 0,
-agent_options: ?*core.AgentOptions = null,
-options_revision: u64 = 0,
-catalog_revision: u64 = 0,
-resume_history_requested: bool = false,
 
 pub const Initial = @import("Initial.zig");
-const AgentHistoryWindow = @import("AgentHistoryWindow.zig");
 
 /// Reserves cells and row damage for one validated pane. Example: var pane = try Pane.init(gpa, initial);
 pub fn init(gpa: std.mem.Allocator, initial: Initial) !Pane {
@@ -92,16 +69,6 @@ pub fn init(gpa: std.mem.Allocator, initial: Initial) !Pane {
 pub fn deinit(self: *Pane) void {
     self.gpa.free(self.cwd);
     self.gpa.free(self.title);
-    if (self.composer) |composer| {
-        self.gpa.destroy(composer);
-    }
-    if (self.agent_thread) |thread| {
-        self.gpa.destroy(thread);
-    }
-    self.clearHistory();
-    if (self.agent_options) |options| {
-        self.gpa.destroy(options);
-    }
     self.gpa.free(self.damage_rows);
     self.text_metadata.deinit(self.gpa);
     self.gpa.destroy(self.text_metadata);
@@ -263,58 +230,6 @@ pub fn titleSlice(self: *const Pane) []const u8 {
     return self.title;
 }
 
-pub const max_composer_bytes = Composer.max_bytes;
-
-/// Replaces the composer draft the thread surface shows.
-///
-/// ```zig
-/// try pane.setComposer("fix the failing test");
-/// ```
-pub fn setComposer(self: *Pane, text: []const u8) !void {
-    if (text.len > max_composer_bytes) {
-        return error.ComposerTooLong;
-    }
-
-    if (!std.unicode.utf8ValidateSlice(text)) {
-        return error.InvalidUtf8;
-    }
-
-    if (std.mem.indexOfScalar(u8, text, 0) != null) {
-        return error.InvalidComposerText;
-    }
-
-    const content_changed = !std.mem.eql(u8, self.composerSlice(), text);
-    if (self.composer == null and text.len == 0) {
-        return;
-    }
-
-    const field = &(try self.ensureComposer()).field;
-    if (field.replace(.{ 0, @intCast(field.len) }, text)) {
-        self.composer_revision +%= 1;
-        if (content_changed) {
-            self.composer_content_revision +%= 1;
-        }
-    }
-}
-
-pub fn composerSlice(self: *const Pane) []const u8 {
-    const composer = self.composer orelse return "";
-    return composer.field.text();
-}
-
-/// The composer, allocated on first use.
-/// Example: `const composer = try pane.ensureComposer();`
-pub fn ensureComposer(self: *Pane) !*Composer {
-    if (self.composer) |composer| {
-        return composer;
-    }
-
-    const composer = try self.gpa.create(Composer);
-    composer.* = .{};
-    self.composer = composer;
-    return composer;
-}
-
 /// Installs a client attachment, preserving notices received before its first frame.
 /// Example: `pane.attach(generation);`
 pub fn attach(self: *Pane, generation: u64) void {
@@ -328,7 +243,7 @@ pub fn attach(self: *Pane, generation: u64) void {
     self.attachment_generation = generation;
 }
 
-/// Retains availability for ordinary terminals and managed agent panes alike.
+/// Retains availability for the exact attached pane lifetime.
 /// Example: `_ = pane.applyChangeReview(notification);`
 pub fn applyChangeReview(self: *Pane, notification: core.ChangeReviewChanged) bool {
     if (!self.attached or self.pane_generation == 0 or self.id != notification.pane_id or self.pane_generation != notification.pane_generation) {
@@ -345,287 +260,13 @@ pub fn hasChangeReview(self: *const Pane) bool {
 }
 
 /// Installs the runtime identity and retires cached state for another lifetime.
-/// Example: `_ = pane.identify(.agent, generation);`
-pub fn identify(self: *Pane, kind: core.PaneKind, generation: u64) bool {
-    if (self.kind == kind and self.pane_generation == generation) {
+/// Example: `_ = pane.identify(generation);`
+pub fn identify(self: *Pane, generation: u64) bool {
+    if (self.pane_generation == generation) {
         return false;
     }
 
-    if (self.agent_thread) |thread| {
-        self.gpa.destroy(thread);
-        self.agent_thread = null;
-    }
-    self.clearHistory();
-
-    self.kind = kind;
     self.pane_generation = generation;
     self.change_review = .{};
-    self.transcript_scroll = 0;
-    if (self.agent_options) |options| {
-        self.gpa.destroy(options);
-        self.agent_options = null;
-    }
-    self.catalog_revision = 0;
-    self.resume_history_requested = false;
-    self.options_revision +%= 1;
     return true;
-}
-
-/// Copies a validated snapshot only for this attached runtime lifetime.
-/// Example: `_ = try pane.applyAgentThread(snapshot);`
-pub fn applyAgentThread(self: *Pane, snapshot: core.AgentThreadSnapshotView) !bool {
-    if (!self.attached or self.kind != .agent or self.id != snapshot.pane_id or self.pane_generation != snapshot.pane_generation) {
-        return false;
-    }
-
-    if (self.agent_thread) |previous| {
-        if (snapshot.revision <= previous.revision) {
-            return false;
-        }
-
-        const old_id = previous.thread_id;
-        const old_len = previous.thread_id_len;
-        try snapshot.copyTo(previous);
-        if (!std.mem.eql(u8, old_id[0..old_len], previous.threadId())) {
-            self.clearHistory();
-            self.transcript_scroll = 0;
-            self.resume_history_requested = false;
-        }
-    } else {
-        const replacement = try self.gpa.create(core.AgentThreadSnapshot);
-        errdefer self.gpa.destroy(replacement);
-        try snapshot.copyTo(replacement);
-        self.agent_thread = replacement;
-    }
-
-    const retained = self.agent_thread.?;
-    self.change_review.retainSession(retained.threadId());
-    self.catalog_revision = catalogRevision(retained);
-    if (retained.resumed and !self.resume_history_requested) {
-        self.clearHistory();
-        self.history_intent = .older;
-        self.resume_history_requested = true;
-    }
-
-    _ = self.followAgentThread();
-    if (self.agent_options == null or !retained.accepts(self.agent_options.?.*)) {
-        if (retained.accepts(retained.options)) {
-            if (self.agent_options == null) {
-                self.agent_options = try self.gpa.create(core.AgentOptions);
-            }
-            self.agent_options.?.* = retained.options;
-            self.options_revision +%= 1;
-        }
-    }
-
-    return true;
-}
-
-/// Borrows a draft's settings through an owned value. Empty values mean startup is incomplete. Example: `const options = pane.agentOptions();`
-pub fn agentOptions(self: *const Pane) core.AgentOptions {
-    return if (self.agent_options) |options| options.* else .{};
-}
-
-/// Applies one catalog-backed draft choice without changing another client's settings. Example: `_ = pane.changeAgentOption(.{ .access = .read_only });`
-pub fn changeAgentOption(self: *Pane, change: agent_options_module.Change) bool {
-    const snapshot = self.agent_thread orelse return false;
-    var options = self.agentOptions();
-    switch (change) {
-        .model => |id| {
-            if (std.mem.eql(u8, options.modelSlice(), id)) {
-                return false;
-            }
-
-            const model = snapshot.findModel(id) orelse return false;
-            options.setModel(model.idSlice()) catch return false;
-            options.effort = model.default_effort;
-        },
-        .effort => |effort| options.effort = effort,
-        .access => |access| options.access = access,
-    }
-    if (!snapshot.accepts(options) or options.eql(self.agentOptions())) {
-        return false;
-    }
-
-    const draft = self.agent_options orelse return false;
-    draft.* = options;
-    self.options_revision +%= 1;
-    return true;
-}
-
-fn catalogRevision(snapshot: *const core.AgentThreadSnapshot) u64 {
-    var hash = std.hash.Wyhash.init(0);
-    hash.update(&.{snapshot.model_count});
-    for (snapshot.models()) |model| {
-        hash.update(&.{ model.id_len, model.label_len, model.effort_count });
-        hash.update(model.idSlice());
-        hash.update(model.labelSlice());
-        for (model.efforts()) |effort| {
-            hash.update(&.{effort.id_len});
-            hash.update(effort.idSlice());
-        }
-        hash.update(&.{model.default_effort.id_len});
-        hash.update(model.default_effort.idSlice());
-    }
-    return hash.final();
-}
-
-/// Borrows image references without allocating storage for empty terminal panes.
-/// Example: `const images = pane.composerImages();`
-pub fn composerImages(self: *const Pane) *const core.AgentImages {
-    const composer = self.composer orelse return &empty_composer_images;
-    return &composer.images;
-}
-
-const empty_composer_images: core.AgentImages = .{};
-
-/// Changes bounded draft attachments and invalidates pending paste/send revisions.
-/// Example: `try pane.attachComposerImage("/private/tmp/image.png");`
-pub fn attachComposerImage(self: *Pane, path: []const u8) !void {
-    try core.AgentImages.validatePath(path);
-    const composer = try self.ensureComposer();
-    try composer.images.append(path);
-    self.composer_revision +%= 1;
-    self.composer_content_revision +%= 1;
-}
-
-/// Rejects stale removal controls after another edit. Example: `_ = pane.removeComposerImage(.{ .index = 0, .revision = revision });`
-pub fn removeComposerImage(self: *Pane, removal: ImageRemoval) bool {
-    const composer = self.composer orelse return false;
-    if (removal.revision != self.composer_revision or !composer.images.remove(removal.index)) {
-        return false;
-    }
-
-    self.composer_revision +%= 1;
-    self.composer_content_revision +%= 1;
-    return true;
-}
-
-/// Clears exactly the draft accepted by the runtime. Example: `_ = pane.acceptComposer(revision);`
-pub fn acceptComposer(self: *Pane, revision: u64) bool {
-    if (self.composer_content_revision != revision) {
-        return false;
-    }
-
-    self.setComposer("") catch unreachable;
-    if (self.composerImages().count != 0) {
-        self.composer.?.images = .{};
-        self.composer_revision +%= 1;
-        self.composer_content_revision +%= 1;
-    }
-
-    self.clearHistory();
-    self.transcript_scroll = 0;
-    return true;
-}
-
-/// Retires the disposable reading window; pending generations become stale.
-/// Example: `pane.clearHistory();`
-pub fn clearHistory(self: *Pane) void {
-    if (self.agent_history) |window| {
-        self.gpa.destroy(window);
-        self.agent_history = null;
-    }
-    self.history_intent = null;
-    self.history_generation +%= 1;
-}
-
-/// Refreshes the live tail only while the reader remains at its end.
-/// Example: `_ = pane.followAgentThread();`
-pub fn followAgentThread(self: *Pane) bool {
-    if (self.transcript_scroll != 0) {
-        return false;
-    }
-
-    const window = self.agent_history orelse return false;
-    const live = self.agent_thread orelse return false;
-    return window.followLive(live);
-}
-
-/// Resolves delivered history controls without falling through to newer bytes.
-/// Example: `const snapshot = pane.threadItemSource(identity) orelse return;`
-pub fn threadItemSource(self: *const Pane, identity: u64) ?*const core.AgentThreadSnapshot {
-    if (self.agent_history) |window| {
-        return window.findItem(identity);
-    }
-    const snapshot = self.agent_thread orelse return null;
-    return if (snapshot.findItem(identity) != null) snapshot else null;
-}
-
-/// Retains bounded client navigation from the end of the transcript.
-/// Example: `_ = pane.scrollConversation(3);`
-pub fn scrollConversation(self: *Pane, delta: f64) bool {
-    if (!std.math.isFinite(delta)) {
-        return false;
-    }
-
-    const next = std.math.clamp(self.transcript_scroll + delta, 0, @as(f64, std.math.maxInt(u32)));
-    if (next == self.transcript_scroll) {
-        return false;
-    }
-
-    self.transcript_scroll = next;
-    return true;
-}
-
-/// Applies bounded editor input without allocating. Example: `_ = pane.editComposer(.backspace);`
-pub fn editComposer(self: *Pane, command: anytype) bool {
-    const field = &(self.ensureComposer() catch return false).field;
-    const previous = .{ field.len, field.head, field.anchor };
-    const content_changed = switch (command) {
-        .insert => |text| replacementChangesText(field, .{ @intCast(@min(field.head, field.anchor)), @intCast(@max(field.head, field.anchor)) }, text),
-        .replace_range => |replacement| replacementChangesText(field, replacement.range, replacement.text),
-        .backspace, .delete => true,
-        else => false,
-    };
-    const changed = switch (command) {
-        .insert => |text| if (std.mem.indexOfScalar(u8, text, 0) != null) false else field.replace(.{ @intCast(@min(field.head, field.anchor)), @intCast(@max(field.head, field.anchor)) }, text),
-        .replace_range => |replacement| if (std.mem.indexOfScalar(u8, replacement.text, 0) != null) false else field.replace(replacement.range, replacement.text),
-        .select_range => |range| field.selectRange(range),
-        .select_all => action: {
-            field.selectAll();
-            break :action !std.meta.eql(previous, .{ field.len, field.head, field.anchor });
-        },
-        .backspace => action: {
-            field.backspace();
-            break :action field.len != previous[0];
-        },
-        .delete => action: {
-            field.delete();
-            break :action field.len != previous[0];
-        },
-        .move_left => |extend| action: {
-            field.moveLeft(extend);
-            break :action !std.meta.eql(previous, .{ field.len, field.head, field.anchor });
-        },
-        .move_right => |extend| action: {
-            field.moveRight(extend);
-            break :action !std.meta.eql(previous, .{ field.len, field.head, field.anchor });
-        },
-        .home => |extend| action: {
-            field.home(extend);
-            break :action !std.meta.eql(previous, .{ field.len, field.head, field.anchor });
-        },
-        .end => |extend| action: {
-            field.end(extend);
-            break :action !std.meta.eql(previous, .{ field.len, field.head, field.anchor });
-        },
-        else => false,
-    };
-    if (changed) {
-        self.composer_revision +%= 1;
-        if (content_changed) {
-            self.composer_content_revision +%= 1;
-        }
-    }
-
-    return changed;
-}
-
-fn replacementChangesText(field: *const Composer.Field, range: [2]u32, text: []const u8) bool {
-    if (range[0] > range[1] or range[1] > field.len) {
-        return false;
-    }
-
-    return !std.mem.eql(u8, field.text()[range[0]..range[1]], text);
 }

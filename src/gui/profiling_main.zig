@@ -11,7 +11,6 @@ const gfx = @import("gfx");
 const Quad = gfx.Quad;
 const Canvas = @import("widgets/Canvas.zig");
 const Widget = @import("change_review/Widget.zig");
-const ThreadFlow = @import("widgets/ThreadFlow.zig");
 const State = @import("widgets/interaction/State.zig");
 const AgentCard = @import("widgets/AgentCard.zig");
 const CardGeometry = @import("widgets/CardGeometry.zig");
@@ -37,7 +36,6 @@ pub fn main(init: std.process.Init) !void {
     var probe: Probe = .{ .io = init.io, .gpa = init.gpa, .writer = &output.interface };
     probe.terminal_only = init.environ_map.get("DOD_TERMINAL_ONLY") != null;
     probe.chrome_only = init.environ_map.get("DOD_CHROME_ONLY") != null;
-    probe.agent_only = init.environ_map.get("DOD_AGENT_ONLY") != null;
     probe.terminal_mode = init.environ_map.get("DOD_MODE");
     probe.verify = init.environ_map.get("DOD_VERIFY") != null;
     if (init.environ_map.get("DOD_SAMPLES")) |value| {
@@ -58,14 +56,11 @@ const Probe = struct {
     const iterations = 1000;
     const warmup = 200;
     const Mode = enum { retained, sparse, full, theme, resize, selection, font, two_one_active, two_all_active, cursor, focus, reattach };
-    /// `repeated` stays inside the shaping cache; `distinct` gives every word its own text, as long transcripts do.
-    const Transcript = enum { repeated, distinct };
 
     io: std.Io,
     gpa: std.mem.Allocator,
     writer: *std.Io.Writer,
     terminal_only: bool = false,
-    agent_only: bool = false,
     chrome_only: bool = false,
     terminal_mode: ?[]const u8 = null,
     sample_count: ?usize = null,
@@ -75,7 +70,7 @@ const Probe = struct {
 
     /// Reports sizes and runs validated fixed workloads. Example: `try probe.run();`
     pub fn run(self: *Probe) !void {
-        inline for (.{ cellgrid.Cell, data.Pane, data.Tabs, data.Panes, client.Client, Renderer, CellMesh, Quad.Quad, ThreadFlow, Widget, core.ProfileStore }) |T| {
+        inline for (.{ cellgrid.Cell, data.Pane, data.Tabs, data.Panes, client.Client, Renderer, CellMesh, Quad.Quad, Widget, core.ProfileStore }) |T| {
             try self.writer.print("{{\"type\":\"layout\",\"name\":\"{s}\",\"size\":{d},\"alignment\":{d},\"fields\":[", .{ @typeName(T), @sizeOf(T), @alignOf(T) });
             inline for (std.meta.fields(T), 0..) |field, index| {
                 try self.writer.print("{s}{{\"name\":\"{s}\",\"offset\":{d},\"size\":{d}}}", .{ if (index == 0) "" else ",", field.name, @offsetOf(T, field.name), @sizeOf(field.type) });
@@ -95,12 +90,6 @@ const Probe = struct {
             return;
         }
 
-        if (self.agent_only) {
-            try self.conversation(.repeated);
-            try self.conversation(.distinct);
-            return;
-        }
-
         for ([_]u16{ 80, 160 }) |cols| {
             inline for (std.meta.tags(Mode)) |mode| {
                 if (self.terminal_mode == null or std.mem.eql(u8, self.terminal_mode.?, @tagName(mode))) {
@@ -115,8 +104,6 @@ const Probe = struct {
         for ([_]usize{ 1, 8, 64 }) |count| {
             try self.workspace(count);
         }
-        try self.conversation(.repeated);
-        try self.conversation(.distinct);
         for ([_]usize{ 100, 1000, 10000 }) |lines| {
             try self.review(lines);
         }
@@ -377,65 +364,6 @@ const Probe = struct {
             return error.EmptyReviewWorkload;
         }
         try self.writer.print("{{\"type\":\"workload\",\"name\":\"review/search/{d}\",\"iterations\":{d},\"warmup\":{d},\"elapsed_ns\":{d},\"checksum\":{d},", .{ lines, iterations, warmup, std.Io.Clock.awake.now(self.io).nanoseconds - started, checksum });
-        try self.counts(before);
-    }
-
-    fn conversation(self: *Probe, transcript: Transcript) !void {
-        const snapshot = try self.gpa.create(core.AgentThreadSnapshot);
-        defer self.gpa.destroy(snapshot);
-        snapshot.* = .{ .pane_id = @enumFromInt(1), .pane_generation = 1, .status = .working };
-        const message = "A deterministic reply with **bold text** and `code`.\n";
-        var len: usize = 0;
-        var word: usize = 0;
-        for (0..32) |index| {
-            const start = len;
-            switch (transcript) {
-                .repeated => {
-                    @memcpy(snapshot.text_storage[len..][0..message.len], message);
-                    len += message.len;
-                },
-                .distinct => while (len - start < 600) : (word += 1) {
-                    len += (try std.fmt.bufPrint(snapshot.text_storage[len..], "word{d}x ", .{word})).len;
-                },
-            }
-
-            snapshot.item_storage[index] = .{ .identity = index + 1, .turn_identity = index + 1, .role = .assistant, .status = .completed, .text_offset = @intCast(start), .text_len = @intCast(len - start) };
-        }
-
-        snapshot.item_count = 32;
-        snapshot.text_len = @intCast(len);
-        var renderer = Renderer.init(self.gpa);
-        defer renderer.deinit();
-        _ = try renderer.measure(.{ .width = 1200, .height = 900, .scale = 1 });
-        var canvas = makeCanvas(&renderer);
-        const state = try self.gpa.create(State);
-        defer self.gpa.destroy(state);
-        state.* = .{};
-        defer state.deinit();
-        canvas.widgets = state;
-        const flow = try self.gpa.create(ThreadFlow);
-        defer self.gpa.destroy(flow);
-        flow.* = .{ .bounds = .{ .x = 0, .y = 0, .width = 800, .height = 700 }, .thread = .{ .pane_id = snapshot.pane_id, .agent = null, .composer = "", .transcript = snapshot } };
-        var before: core.ProfileCounters = .{};
-        var started: i96 = 0;
-        var checksum: usize = 0;
-        for (0..warmup + iterations) |index| {
-            if (index == warmup) {
-                before = core.profiling.snapshot();
-                started = std.Io.Clock.awake.now(self.io).nanoseconds;
-            }
-            renderer.begin();
-            state.begin(false);
-            try flow.resolve(&canvas);
-            try flow.draw(&canvas);
-            state.seal();
-            state.present(true);
-            checksum +%= renderer.quads.items().len;
-        }
-        if (checksum == 0 or flow.len != 32) {
-            return error.InvalidConversationWorkload;
-        }
-        try self.writer.print("{{\"type\":\"workload\",\"name\":\"agent/32-messages/{s}\",\"iterations\":{d},\"warmup\":{d},\"elapsed_ns\":{d},\"checksum\":{d},", .{ @tagName(transcript), iterations, warmup, std.Io.Clock.awake.now(self.io).nanoseconds - started, checksum });
         try self.counts(before);
     }
 

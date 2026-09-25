@@ -3,9 +3,6 @@
 //! The handshake selects this schema before either peer calls these decoders.
 //! Every function borrows input and caller-owned output memory; none allocates.
 
-const pane_kind = @import("pane_kind.zig");
-const agent_thread_messages = @import("messages/agent_thread.zig");
-const agent_history_module = @import("messages/agent_history.zig");
 const clients = @import("messages/clients.zig");
 const client_actions = @import("messages/client_actions.zig");
 const client_commands = @import("messages/client_commands.zig");
@@ -131,7 +128,6 @@ pub const ProxyScope = types.ProxyScope;
 pub const ClientLayoutAxis = types.ClientLayoutAxis;
 pub const ClientLayoutSplit = @import("ClientLayoutSplit.zig");
 pub const ClientLayoutPane = @import("ClientLayoutPane.zig");
-pub const PaneSurface = types.PaneSurface;
 pub const ClientLayoutNode = types.ClientLayoutNode;
 pub const ClientTabLayout = @import("ClientTabLayout.zig");
 pub const ClientLayoutUpdate = @import("ClientLayoutUpdate.zig");
@@ -363,40 +359,6 @@ pub const encodeGraphicsImageChunk = messages_graphics.encodeGraphicsImageChunk;
 pub const encodeGraphicsPlacement = messages_graphics.encodeGraphicsPlacement;
 pub const encodeGraphicsDeleteImage = messages_graphics.encodeGraphicsDeleteImage;
 pub const encodeGraphicsDeletePlacement = messages_graphics.encodeGraphicsDeletePlacement;
-
-pub const PaneKind = pane_kind.PaneKind;
-pub const agent_thread = @import("../agent_thread.zig");
-pub const AgentThreadSnapshot = @import("../AgentThreadSnapshot.zig");
-pub const AgentModel = @import("../AgentModel.zig");
-pub const AgentEffort = @import("../AgentEffort.zig");
-pub const AgentAccess = agent_thread.Access;
-pub const AgentOptions = @import("../AgentOptions.zig");
-pub const AgentImagePaths = @import("../AgentImagePaths.zig");
-pub const AgentImages = @import("../AgentImages.zig");
-pub const AgentSubmission = @import("../AgentSubmission.zig");
-pub const AgentThreadItem = @import("../AgentThreadItem.zig");
-pub const AgentApprovalRequest = @import("../AgentApprovalRequest.zig");
-pub const AgentApprovalDecision = @import("../AgentApprovalDecision.zig");
-pub const AgentPrompt = @import("messages/AgentPrompt.zig");
-pub const AgentInterrupt = @import("messages/AgentInterrupt.zig");
-pub const AgentResume = @import("messages/AgentResume.zig");
-pub const AgentApproval = @import("messages/AgentApproval.zig");
-pub const QueryAgentThread = @import("messages/QueryAgentThread.zig");
-pub const AgentThreadSnapshotView = @import("messages/AgentThreadSnapshotView.zig");
-pub const encodeAgentPrompt = agent_thread_messages.encodeAgentPrompt;
-pub const encodeAgentInterrupt = agent_thread_messages.encodeAgentInterrupt;
-pub const encodeAgentResume = agent_thread_messages.encodeAgentResume;
-pub const encodeAgentApproval = agent_thread_messages.encodeAgentApproval;
-pub const encodeQueryAgentThread = agent_thread_messages.encodeQueryAgentThread;
-pub const encodeAgentThreadSnapshot = agent_thread_messages.encodeAgentThreadSnapshot;
-
-pub const agent_history = @import("../agent_history.zig");
-pub const AgentHistoryCursor = @import("../AgentHistoryCursor.zig");
-pub const AgentHistoryPage = @import("../AgentHistoryPage.zig");
-pub const QueryAgentHistory = @import("messages/QueryAgentHistory.zig");
-pub const AgentHistoryPageView = @import("messages/AgentHistoryPageView.zig");
-pub const encodeQueryAgentHistory = agent_history_module.encodeQueryAgentHistory;
-pub const encodeAgentHistoryPage = agent_history_module.encodeAgentHistoryPage;
 
 pub const ClientDescriptor = @import("../ClientDescriptor.zig");
 pub const ClientList = @import("../ClientList.zig");

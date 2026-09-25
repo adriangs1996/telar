@@ -4,7 +4,6 @@ const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const agent_control = @import("../agents/agent_control.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
 const pane_resize = @import("pane_resize.zig");
 const pane_split = @import("pane_split.zig");
@@ -144,7 +143,7 @@ pub fn completePaneOpen(client: *Client, opened: core.PaneOpened) !PaneOpenOutco
     };
 
     if (outcome != .ignored) {
-        try identifyOpenedPane(&client.model, opened);
+        _ = client.model.identifyPane(opened);
     }
 
     return outcome;
@@ -172,9 +171,3 @@ fn confirmPaneAttachment(model: *data.ClientModel, confirmation: data.PaneAttach
     _ = try data.pane_attachment.confirm(model, confirmed);
 }
 
-/// Sets runtime pane identity after the existing attachment flow commits.
-fn identifyOpenedPane(model: *data.ClientModel, opened_pane: core.PaneOpened) !void {
-    if (model.identifyPane(opened_pane) and opened_pane.kind == .agent) {
-        try agent_control.queryAgentThread(model, opened_pane.pane_id);
-    }
-}

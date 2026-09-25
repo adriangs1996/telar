@@ -2,17 +2,14 @@
 
 The native GUI shows one **Review changes** action per visible pane with recorded
 editions. It lives in the pane header, or the **±** button in the top bar when
-the layout has no pane header. Empty panes have no review action. The same
-surface reviews managed-agent patches and changes observed by hooks in an
-ordinary terminal pane. The standalone `zig build run-widget` remains a fixture
+the layout has no pane header. Empty panes have no review action. It reviews
+changes that agent hooks observe in a terminal pane. The standalone `zig build run-widget` remains a fixture
 bench for the presentation code; production code imports no experiment bridge.
 
 ## Ownership and data flow
 
 ```text
-managed Codex fileChange ──> provider observation worker ─┐
-                                                       ├─> runtime review service
-ordinary pane Pre/PostToolUse ──> telar hook ──> IPC ────┘
+pane Pre/PostToolUse ──> telar hook ──> IPC ──> runtime review service
                                                               │
                                      immutable edition + durable comments
                                                               │
@@ -20,8 +17,6 @@ native Review changes <── change_review_snapshot <── query_change_review
          │
          └── change_review_command ──> save draft / save comment / submit
                                                               │
-                      managed Session.submit <── formatted review
-                                  or
                       official hook additionalContext / cooperative CLI
 ```
 
@@ -48,7 +43,7 @@ The runtime's `change_review.start` translates IPC values and correlated
 errors, and resolves the exact pane generation and provider conversation
 before admitting a copied request. A bounded observation job calls the runtime
 service. `change_review.finish` rechecks that authority before delivering the
-result or submitting feedback. The service never retains a pointer into a client or pane.
+result. The service never retains a pointer into a client or pane.
 
 ## Interaction
 
@@ -83,29 +78,23 @@ runtime. Bytes typed immediately before a client crash may not yet be durable.
 
 ## Capture and delivery contracts
 
-Managed Codex capture uses complete official `fileChange` items before transcript
-eviction. It does not infer ownership from the working-tree diff. Hooks instead
-capture bounded before/after samples for paths declared by the edit tool, with
+Hooks capture bounded before/after samples for paths declared by the edit tool, with
 the tool-call and conversation identity. The UI identifies the evidence source.
 Concurrent writes between hook samples can be present in an observed snapshot;
 that source is evidence of the observed file transition, not proof of authorship.
 
-Automatic ordinary-pane adapters currently cover Claude `Write`/`Edit` and Codex
+Automatic adapters currently cover Claude `Write`/`Edit` and Codex
 `apply_patch`. Shell-generated edits are not attributed. Pi can use the
 cooperative review commands; its queued extension does not provide a reliable
 before-edit sample. See [agent hooks](agent-hooks.md) for registration and limits.
 
-Managed feedback enters the existing runtime `Session.submit` path. If the agent
-is busy, the review remains pending and **Retry delivery** retries admission.
-Ordinary panes receive feedback through the provider's official hook context or
+Panes receive feedback through the provider's official hook context or
 `telar review feedback` followed by `telar review ack`. Telar does not paste
-feedback into a normal pane's PTY.
+feedback into a pane's PTY.
 
 Repeated submission of an already submitted edition does not recreate its
-feedback. The managed runtime tracks accepted handoffs while it is alive. An
-abrupt runtime crash between provider acceptance and the durable acknowledgment
-is not an exactly-once transaction. Hook delivery is also at least once if its
-output succeeds but its acknowledgment is lost. Feedback carries an identity so
+feedback. Hook delivery is at least once if its output succeeds but its
+acknowledgment is lost. Feedback carries an identity so
 cooperative consumers can deduplicate it.
 
 ## Budgets and failure behavior
@@ -154,9 +143,6 @@ earlier version 1 files are rejected with a storage-validation error.
 
 - `zig build test-client test-gui test-widget check-client-boundaries codestyle`
   covers correlated requests, retained drafts, native ownership and presentation.
-- `python3 tools/gui_review_availability.py zig-out/bin/telar /tmp/review-buttons`
-  uses a fake provider and native accessibility controls to verify empty panes,
-  one action per pane with editions, split/fullscreen layouts and reconnect.
 - `zig build build-widget` followed by
   `python3 tools/gui_review_navigation.py zig-out/bin/run-widget /tmp/review-navigation`
   exercises Vim navigation, native UTF-8 search and range comments in the
@@ -166,8 +152,3 @@ earlier version 1 files are rejected with a storage-validation error.
   exercises the real runtime and ordinary-pane hooks with a deterministic
   provider fixture, including restart, stale requests and feedback acknowledgments.
 - Add `--provider claude` to exercise the Claude adapter.
-- `python3 tools/gui_review_runtime.py zig-out/bin/telar /tmp/review-native`
-  uses native AppKit input and an authenticated Codex CLI. It makes real model
-  calls to edit a disposable `slug.py`, saves a range draft, closes and reopens
-  the GUI, submits feedback and checks the correction in the same agent session.
-  The helper closes its windows and runtime afterward.

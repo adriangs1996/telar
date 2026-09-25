@@ -104,13 +104,6 @@ pub const ClientLayoutAxis = enum(u8) {
     vertical = 1,
 };
 
-/// How one layout leaf shows its pane: the terminal cells, or the Telar view
-/// of the agent running in it.
-pub const PaneSurface = enum(u8) {
-    terminal = 0,
-    thread = 1,
-};
-
 /// One node in a pre-order binary pane-layout tree. Split children immediately
 /// follow their parent, so the wire never carries disposable client indices.
 pub const ClientLayoutNode = union(enum) {

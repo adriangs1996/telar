@@ -64,7 +64,6 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
     try std.testing.expect(app.model.startup.phase == .opening);
     try std.testing.expect(app.runtime_transport.receive_pending);
     try std.testing.expectEqualDeep(colors, app.model.host.host_capabilities.terminal_colors);
-    try std.testing.expect(app.model.host.host_capabilities.agent_panes);
     try std.testing.expectEqual(data.environment.Support.supported, app.model.host.host_capabilities.pointer_pixels);
     const graphics = try core.decodeClient(session.pending.?);
     try std.testing.expect(graphics == .configure_graphics);

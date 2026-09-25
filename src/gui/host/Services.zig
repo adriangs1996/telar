@@ -18,13 +18,6 @@ pub fn read(self: *Services, owner: Owner) !u64 {
     return request.id;
 }
 
-/// Requests an image with ordinary text fallback. Example: `try host.readImage(owner);`
-pub fn readImage(self: *Services, owner: Owner) !u64 {
-    const request = try self.reserve(.read_image);
-    request.owner = owner;
-    return request.id;
-}
-
 /// Example: `try host.write(selected_utf8);`
 pub fn write(self: *Services, bytes: []const u8) !u64 {
     return self.writeOwned(.{}, bytes);

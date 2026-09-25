@@ -5,8 +5,6 @@ const Slot = @This();
 
 parent: ?layout_support.NodeIndex = null,
 node: LayoutNode = .empty,
-/// Meaningful for leaves only: how the pane is shown.
-surface: core.PaneSurface = .terminal,
 
 const LayoutNode = union(enum) {
     empty,

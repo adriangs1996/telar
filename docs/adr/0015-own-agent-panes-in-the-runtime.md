@@ -1,8 +1,11 @@
 ---
-status: accepted
+status: superseded
 ---
 
 # Own agent panes in the runtime
+
+Superseded: telar removed agent panes. Agents run in terminal panes, and telar
+follows them through official hooks, process, proxy and screen evidence.
 
 An agent pane owns a structured conversation, separate from a terminal pane's
 PTY. The runtime starts Codex app-server with pipes, retains its latest bounded

@@ -2,12 +2,10 @@ const sidebar = @import("../layout/sidebar.zig");
 const copy_mode = @import("../input/copy_mode.zig");
 const pacing = @import("pacing");
 const cellgrid = @import("cellgrid");
-const agent_options = @import("../panes/agent_options.zig");
 const core = @import("telar-core");
 const model_data = @import("../model.zig");
 const EntryInput = @import("../workspace/EntryInput.zig");
-const AgentPromptIntent = @import("../agents/AgentPromptIntent.zig");
-const AgentPane = @import("../panes/Pane.zig");
+const Pane = @import("../panes/Pane.zig");
 const model_namespace = @import("model_namespace.zig");
 const Tabs = @import("../workspace/Tabs.zig");
 const Config = @import("Config.zig");
@@ -242,13 +240,6 @@ pub fn deinit(model: *ClientModel) void {
     model.saved_layouts = .{};
 }
 
-/// Captures an attached agent pane without granting mutation authority.
-/// Example: `const pane = model.agentPane(pane_id) orelse return;`
-pub fn agentPane(model: *const ClientModel, pane_id: core.PaneId) ?*const AgentPane {
-    const pane = model.panes.findConst(pane_id) orelse return null;
-    return if (pane.attached and pane.kind == .agent) pane else null;
-}
-
 /// Installs runtime pane identity after a correlated attachment succeeds.
 /// Example: `_ = model.identifyPane(opened);`
 pub fn identifyPane(model: *ClientModel, opened: core.PaneOpened) bool {
@@ -257,11 +248,11 @@ pub fn identifyPane(model: *ClientModel, opened: core.PaneOpened) bool {
         return false;
     }
 
-    const slot = model.tabs.find(pane.location.tab_id) orelse return false;
-    const changed = pane.identify(opened.kind, opened.pane_generation);
-    const surface_changed = if (pane.kind == .agent) model.tabs.layout[slot].setSurface(pane.id, .thread) else false;
+    if (model.tabs.find(pane.location.tab_id) == null) {
+        return false;
+    }
 
-    if (changed or surface_changed) {
+    if (pane.identify(opened.pane_generation)) {
         model.panes_revision +%= 1;
     }
 
@@ -333,7 +324,7 @@ pub fn activeTabLocation(model: *const ClientModel) ?core.TabLocation {
 /// ```zig
 /// const pane = model.activePaneConst(pane_id) orelse return;
 /// ```
-pub fn activePaneConst(model: *const ClientModel, pane_id: core.PaneId) ?*const AgentPane {
+pub fn activePaneConst(model: *const ClientModel, pane_id: core.PaneId) ?*const Pane {
     const slot = model.tabs.activeSlot() orelse return null;
     return model.panes.findInConst(model.tabs.location[slot].tab_id, pane_id);
 }

@@ -1,8 +1,11 @@
 ---
-status: accepted
+status: superseded
 ---
 
 # Rasterize the composer editor behind a latency gate
+
+Superseded: the composer went away with agent panes, and so did its
+proportional editor. Text fields draw in cells again.
 
 The graphics invariant says cells keep every function and KGP only enriches.
 The composer, where the user writes prompts to agents, is the one surface

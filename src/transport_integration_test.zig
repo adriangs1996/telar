@@ -2905,7 +2905,3 @@ fn applyFrameCells(cells: []cellgrid.Cell, frame: core.FrameView) !void {
         while (try source.next()) |cell| : (index += 1) cells[index] = cell;
     }
 }
-
-test {
-    _ = @import("agent_pane_integration_test.zig");
-}

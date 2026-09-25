@@ -5,5 +5,3 @@ const PaneLaunched = @This();
 
 key: PaneKey,
 location: core.TabLocation,
-
-kind: core.PaneKind = .terminal,

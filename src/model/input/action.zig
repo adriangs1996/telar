@@ -17,7 +17,6 @@ pub const TabMove = @import("ActionTabMove.zig").ActionTabMove;
 pub const ScrollDirection = @import("ScrollDirection.zig").ScrollDirection;
 
 pub const Action = union(enum) {
-    toggle_thread_view,
     split_pane: SplitDirection,
     focus_pane: Direction,
     navigate_pane: Direction,
@@ -31,7 +30,6 @@ pub const Action = union(enum) {
     select_workspace: u8,
     close_pane,
     new_tab,
-    new_agent_tab,
     select_tab_offset: i8,
     select_tab: u8,
     rename_tab,
@@ -263,13 +261,6 @@ pub const Action = union(enum) {
             "new-tab",
         )) {
             return .new_tab;
-        }
-        if (std.mem.eql(
-            u8,
-            name,
-            "new-agent-tab",
-        )) {
-            return .new_agent_tab;
         }
         if (std.mem.eql(
             u8,

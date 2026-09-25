@@ -10,11 +10,8 @@ const Snapshot = @import("Snapshot.zig");
 const PaneRef = @import("PaneRef.zig");
 const ControlAgent = @import("ControlAgent.zig");
 const Text = @import("Text.zig");
-const ManagedAgent = @import("ManagedAgent.zig");
-const AgentWatch = @import("AgentWatch.zig");
 const AgentReports = @import("AgentReports.zig");
 const core = @import("telar-core");
-const agent_output = @import("agent_output.zig");
 
 const poll_interval_ms = 250;
 const prompt_start_grace_ms = 5_000;
@@ -45,7 +42,6 @@ pub fn run(init: std.process.Init, options: AgentOptions) !u8 {
         std.debug.print("telar agent: {s}\n", .{control.describe(err)});
         return switch (err) {
             error.AgentNotFound, error.PaneNotFound, error.PaneExited => exit_not_found,
-            error.RuntimeTimeout => exit_timeout,
             else => exit_failure,
         };
     };
@@ -91,61 +87,6 @@ fn execute(session: *Session, options: AgentOptions, output: ExecutionContext) !
         },
         .wait => return waitFor(session, options, output),
         .prompt => return prompt(session, options, output),
-        .interrupt, .clear, .rename, .resume_conversation => {
-            const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
-            var managed: ManagedAgent = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } };
-            if (options.action == .resume_conversation) {
-                try managed.resumeConversation(std.mem.span(options.text.?));
-            } else if (options.action == .rename) {
-                const text = try std.fmt.allocPrint(session.gpa, "/rename {s}", .{std.mem.span(options.text.?)});
-                defer session.gpa.free(text);
-                try managed.prompt(.{ .text = text });
-            } else if (options.action == .clear) {
-                try managed.prompt(.{ .text = "/clear" });
-            } else {
-                try managed.interrupt();
-            }
-
-            try writeAcknowledgement(output.writer, managed.pane, options.json);
-            return exit_ok;
-        },
-        .approve, .reject => {
-            const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
-            var managed: ManagedAgent = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } };
-            try managed.decide(.{ .id = options.approval_id.?, .accepted = options.action == .approve });
-            try writeAcknowledgement(output.writer, managed.pane, options.json);
-            return exit_ok;
-        },
-        .thread, .models, .skills, .conversations, .approvals => {
-            const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
-            var managed: ManagedAgent = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } };
-            const thread = try session.gpa.create(core.AgentThreadSnapshot);
-            defer session.gpa.destroy(thread);
-            try managed.read(thread);
-            switch (options.action) {
-                .approvals => try agent_output.approvals(output.writer, thread, options.json),
-                .conversations => try agent_output.conversations(output.writer, thread, options.json),
-                .skills => try agent_output.skills(output.writer, thread, options.json),
-                .models => try agent_output.models(output.writer, thread, options.json),
-                else => try agent_output.thread(output.writer, thread, options.json),
-            }
-            return exit_ok;
-        },
-        .watch => {
-            const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
-            var watch: AgentWatch = .{ .managed = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } }, .writer = output.writer, .count = options.count };
-            try watch.run();
-            return exit_ok;
-        },
-        .history => {
-            const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
-            var managed: ManagedAgent = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } };
-            const page = try session.gpa.create(core.AgentHistoryPage);
-            defer session.gpa.destroy(page);
-            try managed.history(options.history, page);
-            try agent_output.history(output.writer, page, options.json);
-            return exit_ok;
-        },
         .report_session => {
             const agent = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
             try session.reportSession(.{
@@ -163,15 +104,6 @@ fn execute(session: *Session, options: AgentOptions, output: ExecutionContext) !
             try writeText(output.writer, text, options.json);
             return exit_ok;
         },
-    }
-}
-
-fn writeAcknowledgement(writer: *std.Io.Writer, pane: PaneRef, json: bool) !void {
-    if (json) {
-        try std.json.Stringify.value(.{ .pane_id = pane.pane_id, .pane_generation = pane.pane_generation, .accepted = true }, .{}, writer);
-        try writer.writeByte('\n');
-    } else {
-        try writer.print("request accepted for agent pane {d}\n", .{pane.pane_id});
     }
 }
 
@@ -207,20 +139,7 @@ fn prompt(session: *Session, options: AgentOptions, output: ExecutionContext) !u
         .pane_id = target.pane_id,
         .pane_generation = target.pane_generation,
     };
-    if (try isManaged(session, target)) {
-        var managed: ManagedAgent = .{ .session = session, .pane = pane };
-        try managed.prompt(.{ .text = std.mem.span(options.text.?), .images = options.images, .model = options.model, .effort = options.effort, .access = options.access });
-    } else {
-        if (options.model != null or options.effort != null or options.access != null) {
-            return error.OptionsRequireManagedAgent;
-        }
-
-        if (options.images.count != 0) {
-            return error.ImagesRequireManagedAgent;
-        }
-
-        try session.sendText(pane, .{ .mode = .prompt, .text = std.mem.span(options.text.?) });
-    }
+    try session.sendText(pane, .{ .mode = .prompt, .text = std.mem.span(options.text.?) });
 
     if (!options.wait_after_prompt) {
         return exit_ok;
@@ -303,21 +222,4 @@ fn writeText(writer: *std.Io.Writer, text: Text, json: bool) !void {
     if (text.truncated) {
         std.debug.print("telar agent: older rows were omitted\n", .{});
     }
-}
-
-fn isManaged(session: *Session, target: *const ControlAgent) !bool {
-    const location: core.TabLocation = .{ .workspace = .{ .workspace = try core.workspace(target.workspace_id) }, .tab_id = try core.tab(target.tab_id) };
-    const response = try session.exchange(core.encodeRequestTabSnapshot, core.RequestTabSnapshot{ .request_id = .none, .location = location });
-    if (response != .tab_snapshot or !std.meta.eql(response.tab_snapshot.location, location)) {
-        return error.UnexpectedRuntimeResponse;
-    }
-
-    var panes = response.tab_snapshot.panes();
-    while (try panes.next()) |pane| {
-        if (core.raw(pane.pane_id) == target.pane_id and pane.pane_generation == target.pane_generation) {
-            return pane.kind == .agent;
-        }
-    }
-
-    return error.PaneNotFound;
 }

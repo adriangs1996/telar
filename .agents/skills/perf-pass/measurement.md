@@ -19,7 +19,6 @@ append its case at the end of `cases` and of `execute` (`case_index` order).
 | Variable | Effect |
 | --- | --- |
 | `DOD_TERMINAL_ONLY=1` | only terminal renderer modes |
-| `DOD_AGENT_ONLY=1` | only agent transcript workloads (`repeated`, `distinct`) |
 | `DOD_MODE=<mode>` | one terminal mode: retained, sparse, full, theme, resize, selection, font, two_one_active, two_all_active, cursor, focus, reattach |
 | `DOD_SAMPLES`, `DOD_WARMUP` | measured and warmup iterations |
 | `DOD_VERIFY=1` | per-frame SHA-256 of quads and atlas (oracle, not timing) |

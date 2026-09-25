@@ -12,18 +12,16 @@ const gfx = @import("gfx");
 const Quad = gfx.Quad.Quad;
 const LinkHit = @import("../input/LinkHit.zig");
 
-test "projection composes terminal thread link chrome notifications and modal before drawing" {
+test "projection composes split terminals link chrome notifications and modal before drawing" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const session = fixture.session;
     const gui = session.gui;
     const model = &gui.app.model;
     const tab = model.tabs.active;
-    const thread_id: core.PaneId = @enumFromInt(20);
-    try data.pane_split.split(model, tab, .{ .existing_pane = Session.pane_id, .new_pane = thread_id, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&gui.app.model).area });
-    try std.testing.expect(model.tabs.layout[tab].setSurface(thread_id, .thread));
+    const sibling_id: core.PaneId = @enumFromInt(20);
+    try data.pane_split.split(model, tab, .{ .existing_pane = Session.pane_id, .new_pane = sibling_id, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&gui.app.model).area });
     _ = model.tabs.layout[tab].focusPane(Session.pane_id);
-    try model.panes.find(thread_id).?.setComposer("Borrowed thread draft");
     const pane = model.panes.find(Session.pane_id).?;
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "https://example.com", .style = .{} });
     pane.cursor = .{ .x = 0, .y = 0, .visible = true, .appearance = .{ .shape = .bar } };
@@ -35,7 +33,7 @@ test "projection composes terminal thread link chrome notifications and modal be
     var canvas = begin(&fixture, &projection);
     var composition: Composition = .{ .chrome = &gui.chrome, .overlays = &gui.overlays, .canvas = &canvas, .link = &hit };
     const widgets = try composition.render(&projection);
-    const expected = [_]std.meta.Tag(FrameWidget.Widget){ .terminal_pane, .thread, .link, .top_bar, .status, .sidebar, .panes, .chrome_focus, .notification, .modal };
+    const expected = [_]std.meta.Tag(FrameWidget.Widget){ .terminal_pane, .terminal_pane, .link, .top_bar, .status, .sidebar, .panes, .chrome_focus, .notification, .modal };
     try std.testing.expectEqual(expected.len, widgets.len);
     for (widgets.storage[0..widgets.len], expected) |widget, tag| {
         try std.testing.expectEqual(tag, std.meta.activeTag(widget));
@@ -44,12 +42,11 @@ test "projection composes terminal thread link chrome notifications and modal be
     try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.quads.items().len);
     try std.testing.expectEqual(@as(u8, 2), composition.commit.len);
     try std.testing.expectEqual(Session.pane_id, composition.commit.panes[0].pane_id);
-    try std.testing.expectEqual(thread_id, composition.commit.panes[1].pane_id);
+    try std.testing.expectEqual(sibling_id, composition.commit.panes[1].pane_id);
     try std.testing.expect(widgets.storage[0].terminal_pane.paint.hide_cursor);
     try std.testing.expectEqual(&composition.context, widgets.storage[3].top_bar.context);
     try std.testing.expectEqual(&projection, composition.context.projection);
-    try std.testing.expectEqual(model.panes.find(thread_id).?.composerSlice().ptr, widgets.storage[1].thread.thread.composer.ptr);
-    try std.testing.expectEqualStrings("Borrowed thread draft", widgets.storage[1].thread.thread.composer);
+    try std.testing.expectEqual(sibling_id, widgets.storage[1].terminal_pane.paint.pane.id);
     try std.testing.expect(widgets.storage[widgets.len - 1].modal == .name_prompt);
     try widgets.draw(&canvas);
     session.gui.renderer.seal();

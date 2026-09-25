@@ -352,7 +352,7 @@ pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*data.ClientMod
         },
     );
     const pane = model.panes.find(pane_id).?;
-    _ = pane.identify(.terminal, 3);
+    _ = pane.identify(3);
     try open_session(&app.model, pane_id);
     try std.testing.expect(change_review.isChangeReviewAttached(&app.model));
     const pending_owner = try operation(&app.model, 0);
@@ -407,7 +407,7 @@ pub fn retainReviewAvailability(comptime open_session: fn (*data.ClientModel, co
         },
     );
     const pane = model.panes.find(pane_id).?;
-    _ = pane.identify(.terminal, 3);
+    _ = pane.identify(3);
     var notification: core.ChangeReviewChanged = .{
         .pane_id = pane_id,
         .pane_generation = 3,
@@ -441,8 +441,8 @@ pub fn retainReviewAvailability(comptime open_session: fn (*data.ClientModel, co
 }
 
 /// Owned request deliveries roll back only their own correlation when the outbox is full.
-/// Example: `try client_tests.rollBackFullOutbox(sendTabRenameRequest, sendCreateTabRequest, sendAgentPromptRequest);`
-pub fn rollBackFullOutbox(comptime rename_tab: fn (*data.ClientModel, core.RenameTab, data.RequestsContinuation) anyerror!void, comptime create_tab: fn (*data.ClientModel, core.CreateTab) anyerror!void, comptime prompt: fn (*data.ClientModel, core.AgentPrompt, data.AgentOperation) anyerror!void) !void {
+/// Example: `try client_tests.rollBackFullOutbox(sendTabRenameRequest, sendCreateTabRequest);`
+pub fn rollBackFullOutbox(comptime rename_tab: fn (*data.ClientModel, core.RenameTab, data.RequestsContinuation) anyerror!void, comptime create_tab: fn (*data.ClientModel, core.CreateTab) anyerror!void) !void {
     const app = try std.testing.allocator.create(Client);
     defer std.testing.allocator.destroy(app);
     app.model = data.ClientModel.init(std.testing.allocator, true);
@@ -477,13 +477,7 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*data.ClientModel, core.Renam
 
     const queued = app.model.to_runtime.len;
 
-    var options: core.AgentOptions = .{
-        .effort = try core.AgentEffort.init("test-effort"),
-    };
-
-    try options.setModel("test-model");
-
-    const Delivery = enum { tab_rename, workspace_rename, tab_create, agent_prompt, notification };
+    const Delivery = enum { tab_rename, workspace_rename, tab_create, notification };
     for (std.enums.values(Delivery)) |delivery| {
         const request_id = try app.model.request_lifecycle.nextId();
         const location = tab_location;
@@ -520,22 +514,6 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*data.ClientModel, core.Renam
                         .cwd = "/",
                         .arguments = &.{},
                     },
-                },
-            ),
-            .agent_prompt => prompt(
-                &app.model,
-                .{
-                    .request_id = request_id,
-                    .pane_id = pane_id,
-                    .pane_generation = 1,
-                    .text = "review the changes",
-                    .options = options,
-                },
-                .{
-                    .pane_id = pane_id,
-                    .pane_generation = 1,
-                    .attachment_generation = 1,
-                    .location = location,
                 },
             ),
             .notification => block: {

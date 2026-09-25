@@ -26,9 +26,7 @@ const SystemMetricsSample = hostmetrics.SystemMetricsSample;
 const Completion = @import("resources/Completion.zig");
 const AgentCompletion = @import("../agent/Completion.zig");
 const std = @import("std");
-const AgentThreadChanged = @import("events/AgentThreadChanged.zig");
 const Job = @import("../change_review/Job.zig");
-const AgentHistoryJob = @import("AgentHistoryJob.zig");
 
 pub const Event = union(enum) {
     accepted: anyerror!localsocket.SocketChannel,
@@ -53,9 +51,7 @@ pub const Event = union(enum) {
     agent_tick: anyerror!void,
     agent_description: AgentResult,
     engine_response: anyerror!Response,
-    agent_thread_changed: AgentThreadChanged,
     change_review_completed: *Job,
-    agent_history_completed: *AgentHistoryJob,
     metrics_tick: anyerror!void,
     metrics_sampled: SystemMetricsSample,
     checkpoint_written: anyerror!void,
@@ -89,7 +85,7 @@ pub fn discard(completed: Event, io: std.Io) void {
             effects.deinit();
         },
         // These pointers name slots still retained by RuntimeModel.
-        .change_review_completed, .agent_history_completed, .editor_opened => {},
+        .change_review_completed, .editor_opened => {},
         // Other events contain values or borrows whose owners outlive the join.
         .handshaken,
         .client_message,
@@ -109,7 +105,6 @@ pub fn discard(completed: Event, io: std.Io) void {
         .agent_tick,
         .agent_description,
         .engine_response,
-        .agent_thread_changed,
         .metrics_tick,
         .metrics_sampled,
         .checkpoint_written,
@@ -150,8 +145,6 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) core.Path {
         .agent_tick,
         .agent_description,
         .engine_response,
-        .agent_thread_changed,
-        .agent_history_completed,
         .change_review_completed,
         .metrics_tick,
         .metrics_sampled,
@@ -199,8 +192,6 @@ test "observation events use the observation budget" {
         .agent_tick,
         .agent_description,
         .engine_response,
-        .agent_thread_changed,
-        .agent_history_completed,
         .change_review_completed,
         .metrics_tick,
         .metrics_sampled,

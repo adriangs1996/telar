@@ -1,4 +1,4 @@
-const Image = @import("Image.zig");
+const mermaid = @import("mermaid");
 
 id: u64,
-result: anyerror!Image,
+result: anyerror!mermaid.Image,

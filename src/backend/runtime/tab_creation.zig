@@ -57,14 +57,12 @@ fn createTab(model: *RuntimeModel, session: *Session, request: core.CreateTabVie
 
     const pane = pane_launch.launch(model, .{
         .location = created,
-        .kind = request.kind,
         .size = request.size,
         .launch = request.launch,
         .launch_cwd = cwd,
         .workspace_path = workspaces.path[slot],
     }) catch |err| return pane_launch.requestError(err);
     const root_pane_id = pane.id;
-    const kind = pane.kind;
     const pane_generation = pane.generation;
 
     workspaces.recordTabCreated(tab_id);
@@ -83,7 +81,6 @@ fn createTab(model: *RuntimeModel, session: *Session, request: core.CreateTabVie
         .label = undefined,
         .label_len = @intCast(label.len),
         .root_pane_id = root_pane_id,
-        .kind = kind,
         .pane_generation = pane_generation,
     };
     @memcpy(pending.label[0..label.len], label);

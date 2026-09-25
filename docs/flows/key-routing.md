@@ -32,7 +32,7 @@ TUI: host_inputs.handleRead → feed → router.next → decoded
            actionCompleted(post-action policy)   pane_input.sendPaneInput
 ```
 
-`GuiAdapter.executeAction` also applies native palette, sidebar and transcript behavior.
+`GuiAdapter.executeAction` also applies native palette and sidebar behavior.
 `InputQueue` owns bounded event storage, payload pools and retained releases.
 `GuiAdapter` owns the router, binding target, timer and binding presentation revision.
 The queue has no application argument or owner pointer. `GuiAdapter.drainInput` borrows
@@ -53,8 +53,7 @@ repetition. The pure `action_routing.repeatPolicy(action, eligible_pane)` receiv
 never an application pointer. GUI and TUI re-read eligibility after each action
 so a focus or mode change takes effect before the next repeat.
 
-A failed widget chord replays to its original widget identity; it cannot type
-into a newly focused composer. TUI mouse, paste and terminal responses are
+TUI mouse, paste and terminal responses are
 handled explicitly in `host_inputs.decoded`. Startup input similarly yields
 host responses while retaining early user input, without a callback object.
 
@@ -110,10 +109,8 @@ passes it to `router.actionCompleted`. Only native
 as their owner token. Prompts, attachment modals, copy mode and
 missing or detached panes deny repeat authority. The initial action runs
 normally before repeat authority is captured, so scroll can first exit copy
-mode through the existing native action dispatch. In the GUI, agent pane scroll
-bindings use the delivered transcript's wheel policy, including its scroll
-limit, disclosure-anchor cancellation and history navigation. Both taps and
-held bindings target the focused pane and leave its composer unchanged.
+mode through the existing native action dispatch. Both taps and held bindings
+target the focused pane.
 
 The client router retains one owned action, its final physical key and chord,
 its policy and its last execution timestamp. A matching binding-owned repeat
@@ -191,8 +188,5 @@ delivery.
   changed focus and copy-mode capture through the router and real adapters.
 - `src/client/input/action_routing.zig` proves that only
   native scroll actions receive a repeat policy and exact-pane owner token.
-- `src/gui/tests/widget_interaction.zig` proves agent scroll bindings through
-  the native input entrypoint, paced repetition, transcript bounds, stale
-  attachment rejection and preservation of composer text.
 - `name-prompt.md`, `copy-mode.md`, `pane-input.md` and `clipboard-image.md`
   prove each downstream owner and effect.

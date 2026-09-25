@@ -20,9 +20,10 @@ pub fn editorExecutable(client: *const Client) []const u8 {
     return client.options.editor;
 }
 
-/// Reuses a reachable editor in the source tab, otherwise creates a sibling pane.
-/// Example: `_ = try editor_file_links.openMessageFile(app, pane_id, path);`
-pub fn openMessageFile(client: *Client, pane_id: core.PaneId, path: data.FilePath) !bool {
+/// Opens a file linked from `pane_id`: reuses a reachable editor in the same
+/// tab, otherwise creates a sibling pane.
+/// Example: `_ = try editor_file_links.openFile(app, pane_id, path);`
+pub fn openFile(client: *Client, pane_id: core.PaneId, path: data.FilePath) !bool {
     openEditorPane(client, pane_id, path) catch |err| {
         try link_opening.reportLinkFailure(client, err);
         return false;

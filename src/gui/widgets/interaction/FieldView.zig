@@ -29,35 +29,13 @@ pub fn capture(prompt: *const shared_model.Prompt, target: Target) ?FieldView {
 /// Resolves a delivered editor against its current prompt or pane attachment.
 /// Example: `const field = FieldView.captureClient(app, target) orelse return;`
 pub fn captureClient(app: *const client.Client, target: Target) ?FieldView {
-    if (target.action == .composer) {
-        if (app.model.name_prompt.active()) {
-            return null;
-        }
-
-        const tab = app.model.tabs.activeSlot() orelse return null;
-        const pane = app.model.panes.findInConst(app.model.tabs.location[tab].tab_id, target.action.composer) orelse return null;
-        if (!pane.attached or pane.kind != .agent or pane.attachment_generation != target.id.generation) {
-            return null;
-        }
-
-        const composer = pane.composer orelse return .{ .text = "", .head = 0, .anchor = 0 };
-        const value = &composer.field;
-        return .{ .text = value.text(), .head = @intCast(value.head), .anchor = @intCast(value.anchor) };
-    }
-
     const prompt = app.model.name_prompt.currentConst() orelse return null;
     return capture(prompt, target);
 }
 
-/// Reads the edit revision in the same owner scope used to capture text.
-/// Example: `const revision = FieldView.revision(app, target);`
-pub fn revision(app: *const client.Client, target: Target) u64 {
-    if (target.action == .composer) {
-        const tab = app.model.tabs.activeSlot() orelse return 0;
-        const pane = app.model.panes.findInConst(app.model.tabs.location[tab].tab_id, target.action.composer) orelse return 0;
-        return if (pane.attachment_generation == target.id.generation) pane.composer_revision else 0;
-    }
-
+/// Reads the edit revision of the prompt whose text `captureClient` borrows.
+/// Example: `const revision = FieldView.revision(app);`
+pub fn revision(app: *const client.Client) u64 {
     return app.model.name_prompt.version();
 }
 

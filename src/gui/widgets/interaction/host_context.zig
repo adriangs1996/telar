@@ -5,7 +5,6 @@ const EditorDisplay = @import("EditorDisplay.zig");
 const GuiAdapter = @import("../../GuiAdapter.zig");
 const native = @import("../../native/native.zig");
 const FieldView = @import("FieldView.zig");
-const MultilineLayout = @import("MultilineLayout.zig");
 
 /// Uses current committed text and the delivered editor's geometry. Preedit
 /// is intentionally excluded from surrounding text sent to the native IME.
@@ -22,22 +21,20 @@ pub fn text(gui: *GuiAdapter, output: *native.TextContext) bool {
     const preedit = if (gui.widgets.preedit.owner) |owner| if (owner.eql(target.id)) &gui.widgets.preedit else null else null;
     var display = EditorDisplay.capture(current, preedit);
     const view = display.field.view(geometry.columns);
-    const multiline: MultilineLayout = .{ .text = display.field.text(), .head = @intCast(display.field.head), .columns = geometry.columns, .rows = @intFromFloat(@max(1, @floor(geometry.bounds.height / geometry.line_height))), .font = geometry.font };
-    const caret = if (geometry.multiline) multiline.position(@intCast(display.field.head)) else [2]u32{ view.cursor, 0 };
     output.* = .{
         .target_id = target.id.target_id,
         .generation = target.id.generation,
-        .revision = FieldView.revision(&gui.app, target) +% gui.widgets.dispatcher.revision,
+        .revision = FieldView.revision(&gui.app) +% gui.widgets.dispatcher.revision,
         .enabled = 1,
         .composition_active = @intFromBool(preedit != null),
         .text = current.text.ptr,
         .len = current.text.len,
         .selection_start = current.anchor,
         .selection_end = current.head,
-        .x = geometry.bounds.x + @as(f64, @floatFromInt(@min(caret[0], geometry.columns -| 1))) * geometry.cell_width,
-        .y = geometry.bounds.y + (if (geometry.multiline) @as(f64, @floatFromInt(caret[1] -| multiline.firstRow())) * geometry.line_height else 0),
+        .x = geometry.bounds.x + @as(f64, @floatFromInt(@min(view.cursor, geometry.columns -| 1))) * geometry.cell_width,
+        .y = geometry.bounds.y,
         .width = 1,
-        .height = if (geometry.multiline) @min(geometry.line_height, geometry.bounds.height) else geometry.bounds.height,
+        .height = geometry.bounds.height,
     };
     return true;
 }
@@ -69,11 +66,11 @@ pub fn accessibility(gui: *GuiAdapter, output: *native.AccessibilityTree) bool {
             .label = &target.label,
             .label_len = target.label_len,
         };
-        if (target.action == .text_field or target.action == .composer) {
+        if (target.action == .text_field) {
             const current = FieldView.captureClient(&gui.app, target.*) orelse continue;
             node.flags |= 8;
             node.actions |= 4 | 8 | 64 | 128 | 256 | 512;
-            node.text_revision = FieldView.revision(&gui.app, target.*);
+            node.text_revision = FieldView.revision(&gui.app);
             node.value = current.text.ptr;
             node.value_len = current.text.len;
             node.selection_start = current.anchor;
