@@ -420,6 +420,50 @@ test "running shell command survives input and output on alternate screen" {
     try std.testing.expectEqual(@as(?i32, 0), fixture.collected.exit_code);
 }
 
+test "marker history preserves command text and exit code across every completion split" {
+    const completion = "ok\r\n\x1b]133;D;7\x07\x1b]133;A\x07$ \x1b]133;B\x07";
+    for (0..completion.len + 1) |split| {
+        for ([_]bool{ false, true }) |markers| {
+            var fixture: TypeAheadFixture = undefined;
+            try fixture.init(std.testing.allocator);
+            defer fixture.deinit(std.testing.allocator);
+
+            fixture.output("\x1b]133;A\x07$ \x1b]133;B\x07");
+            try std.testing.expect(fixture.tracker.aux.markers_ready);
+            fixture.typedForeground("printf oX\x7fk\r", if (markers) null else true);
+            fixture.stream.nextSlice("printf ok\r\n");
+            try std.testing.expect(try fixture.tracker.captureSubmitted(&fixture.terminal));
+            fixture.outputForeground("\x1b]133;C\x07", if (markers) null else false);
+            fixture.typedForeground("child input\r", if (markers) null else false);
+            try std.testing.expectEqual(@as(usize, 0), fixture.collected.count);
+            fixture.outputForeground(completion[0..split], if (markers) null else true);
+            fixture.outputForeground(completion[split..], if (markers) null else true);
+
+            try std.testing.expectEqual(@as(usize, 1), fixture.collected.count);
+            try std.testing.expectEqualStrings("printf ok", fixture.command());
+            if (markers) {
+                try std.testing.expectEqual(@as(?i32, 7), fixture.collected.exit_code);
+            } else {
+                try std.testing.expect(fixture.collected.exit_code == null or fixture.collected.exit_code == 7);
+            }
+        }
+    }
+}
+
+test "marker history leaves input unknown until prompt and input markers arrive" {
+    var fixture: TypeAheadFixture = undefined;
+    try fixture.init(std.testing.allocator);
+    defer fixture.deinit(std.testing.allocator);
+
+    fixture.typedForeground("orphaned\r", null);
+    fixture.outputForeground("\x1b]133;B\x07", null);
+    fixture.typedForeground("still unknown\r", null);
+    try std.testing.expectEqual(TerminalTracker.Phase.idle, fixture.tracker.phase);
+    fixture.outputForeground("\x1b]133;A\x07$ \x1b]133;B\x07", null);
+    fixture.typedForeground("next", null);
+    try std.testing.expectEqual(TerminalTracker.Phase.editing, fixture.tracker.phase);
+}
+
 const TypeAheadFixture = struct {
     /// The observer replays output into the emulator before the tracker sees it.
     terminal: vt.Terminal,
@@ -457,23 +501,31 @@ const TypeAheadFixture = struct {
     }
 
     pub fn typed(self: *TypeAheadFixture, bytes: []const u8) void {
+        self.typedForeground(bytes, true);
+    }
+
+    pub fn typedForeground(self: *TypeAheadFixture, bytes: []const u8, foreground: ?bool) void {
         self.clock.awake_ns += 1;
         _ = self.tracker.observeInput(.{
             .terminal = &self.terminal,
             .bytes = bytes,
-            .shell_foreground = true,
+            .shell_foreground = foreground,
             .clock = self.clock,
         }, &self.collected);
     }
 
     pub fn output(self: *TypeAheadFixture, bytes: []const u8) void {
+        self.outputForeground(bytes, true);
+    }
+
+    pub fn outputForeground(self: *TypeAheadFixture, bytes: []const u8, foreground: ?bool) void {
         self.clock.awake_ns += 1;
         self.stream.nextSlice(bytes);
         self.tracker.observeOutput(.{
             .terminal = &self.terminal,
             .bytes = bytes,
             .clock = self.clock,
-            .shell_foreground = true,
+            .shell_foreground = foreground,
         }, &self.collected);
     }
 
@@ -491,6 +543,7 @@ const TypeAheadFixture = struct {
 };
 
 const TerminalCollected = struct {
+    count: usize = 0,
     bytes: [256]u8 = undefined,
     len: usize = 0,
     cwd: [256]u8 = undefined,
@@ -498,6 +551,7 @@ const TerminalCollected = struct {
     exit_code: ?i32 = null,
 
     pub fn emit(self: *TerminalCollected, command: Command) void {
+        self.count += 1;
         self.len = @min(command.bytes.len, self.bytes.len);
         @memcpy(self.bytes[0..self.len], command.bytes[0..self.len]);
         self.cwd_len = @min(command.cwd.len, self.cwd.len);

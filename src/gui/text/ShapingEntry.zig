@@ -4,7 +4,7 @@ const ShapedRun = @import("ShapedRun.zig");
 const Entry = @This();
 
 pub const max_bytes = 64;
-pub const max_glyphs = 32;
+pub const max_glyphs = max_bytes;
 
 text: [max_bytes]u8 = undefined,
 len: u8 = 0,

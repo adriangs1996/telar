@@ -6,6 +6,7 @@ captured: u64 = 0,
 dropped: u64 = 0,
 reset: bool = false,
 failed: bool = false,
+shell_markers: bool = false,
 agent_observation: ?struct {
     signal: core.Signal,
     observed_at_ms: i64,

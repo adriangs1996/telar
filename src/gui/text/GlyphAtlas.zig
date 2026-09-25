@@ -1107,6 +1107,41 @@ test "shaping cache eviction and size changes match uncached geometry" {
     }
 }
 
+test "labels through 64 glyphs reuse shaping with exact uncached geometry" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
+    defer atlas.deinit();
+    var reference = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
+    defer reference.deinit();
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    var expected = QuadList.init(std.testing.allocator);
+    defer expected.deinit();
+    const text = "Investigate terminal rendering and agent history performance today";
+    for (32..66) |len| {
+        for ([_]u16{ 13, 15, 20 }) |height| {
+            var run: TextRun = .{ .text = text[0..len], .face = .sans, .x = 5, .y = 20, .color = .white, .pixel_height = height };
+            list.clear();
+            _ = try atlas.measure(run);
+            _ = try atlas.place(run, &list);
+            expected.clear();
+            _ = try reference.measure(run);
+            _ = try reference.place(run, &expected);
+            const calls = atlas.shape_calls;
+            run.x = 17;
+            run.color = .black;
+            run.bold = true;
+            run.italic = true;
+            list.clear();
+            expected.clear();
+            reference.shaping_cache.clear();
+            try std.testing.expectEqual(try reference.measure(run), try atlas.measure(run));
+            try std.testing.expectEqual(try reference.place(run, &expected), try atlas.place(run, &list));
+            try std.testing.expectEqualSlices(quad.Quad, expected.items(), list.items());
+            try std.testing.expectEqual(calls + @as(usize, if (len <= 64) 0 else 2), atlas.shape_calls);
+        }
+    }
+}
+
 test "single ASCII glyphs remain cached while Unicode runs replace hashed entries" {
     var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();

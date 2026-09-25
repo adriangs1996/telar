@@ -13,6 +13,13 @@ const Canvas = @import("widgets/Canvas.zig");
 const Widget = @import("change_review/Widget.zig");
 const ThreadFlow = @import("widgets/ThreadFlow.zig");
 const State = @import("widgets/interaction/State.zig");
+const AgentCard = @import("widgets/AgentCard.zig");
+const CardGeometry = @import("widgets/CardGeometry.zig");
+const Context = @import("widgets/Context.zig");
+const HitMap = @import("widgets/HitMap.zig");
+const BandHitMap = @import("widgets/BandHitMap.zig");
+const ShapingEntry = @import("text/ShapingEntry.zig");
+const ShapingCache = @import("text/ShapingCache.zig");
 
 pub const telar_profile_counts = options.profile_counts;
 pub const telar_profile_timing = options.profile_timing;
@@ -29,6 +36,7 @@ pub fn main(init: std.process.Init) !void {
     var output = std.Io.File.stdout().writer(init.io, &buffer);
     var probe: Probe = .{ .io = init.io, .gpa = init.gpa, .writer = &output.interface };
     probe.terminal_only = init.environ_map.get("DOD_TERMINAL_ONLY") != null;
+    probe.chrome_only = init.environ_map.get("DOD_CHROME_ONLY") != null;
     probe.agent_only = init.environ_map.get("DOD_AGENT_ONLY") != null;
     probe.terminal_mode = init.environ_map.get("DOD_MODE");
     probe.verify = init.environ_map.get("DOD_VERIFY") != null;
@@ -58,6 +66,7 @@ const Probe = struct {
     writer: *std.Io.Writer,
     terminal_only: bool = false,
     agent_only: bool = false,
+    chrome_only: bool = false,
     terminal_mode: ?[]const u8 = null,
     sample_count: ?usize = null,
     warmup_count: ?usize = null,
@@ -72,6 +81,18 @@ const Probe = struct {
                 try self.writer.print("{s}{{\"name\":\"{s}\",\"offset\":{d},\"size\":{d}}}", .{ if (index == 0) "" else ",", field.name, @offsetOf(T, field.name), @sizeOf(field.type) });
             }
             try self.writer.writeAll("]}\n");
+        }
+
+        if (self.chrome_only) {
+            for ([_]usize{ 1, 8, 16 }) |count| {
+                for ([_]usize{ 32, 40, 64, 65 }) |bytes| {
+                    for ([_]u32{ 280, 480 }) |width| {
+                        try self.chrome(count, bytes, width);
+                    }
+                }
+            }
+
+            return;
         }
 
         if (self.agent_only) {
@@ -213,6 +234,97 @@ const Probe = struct {
         }
         try self.writer.print("{{\"type\":\"workload\",\"name\":\"terminal/{s}/{d}x{d}\",\"iterations\":{d},\"warmup\":{d},\"elapsed_ns\":{d},\"checksum\":{d},\"live_requested_bytes\":{d},\"retained_length\":{d},\"retained_capacity\":{d},\"last_frame_quads\":{d},\"measured_allocations\":{d},", .{ @tagName(mode), size.cols, size.rows, samples, preheat, elapsed, checksum, accounting.allocated_bytes - accounting.freed_bytes, renderer.retained.entries.items.len, renderer.retained.entries.capacity, renderer.quads.items().len, accounting.allocations - allocated });
         try self.counts(before);
+    }
+
+    fn chrome(self: *Probe, count: usize, title_bytes: usize, width: u32) !void {
+        const samples = self.sample_count orelse iterations;
+        const preheat = self.warmup_count orelse warmup;
+        if (samples == 0) {
+            return error.EmptyChromeWorkload;
+        }
+
+        var accounting = std.testing.FailingAllocator.init(self.gpa, .{});
+        var renderer = Renderer.init(accounting.allocator());
+        defer renderer.deinit();
+        _ = try renderer.measure(.{ .width = width, .height = 1600, .scale = 1 });
+        var canvas = makeCanvas(&renderer);
+        const geometry = CardGeometry.derive(renderer.chrome, renderer.metrics);
+        const model = try self.gpa.create(data.ClientModel);
+        defer self.gpa.destroy(model);
+        model.* = .init(self.gpa, true);
+        defer model.deinit();
+        var titles: [16][65]u8 = undefined;
+        var entries: [16]data.AgentInput = undefined;
+        for (entries[0..count], 0..) |*entry, index| {
+            const title = "Investigate terminal rendering and agent history performance today";
+            @memcpy(&titles[index], title[0..65]);
+            _ = try std.fmt.bufPrint(titles[index][0..3], "{d:0>3}", .{index});
+            entry.* = .{
+                .key = .{ .pane_id = @enumFromInt(index + 1), .pane_generation = 1 },
+                .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
+                .pane_index = @intCast(index + 1),
+                .provider = .codex,
+                .status = .working,
+                .workspace_label = "telar",
+                .session_title = titles[index][0..title_bytes],
+                .last_event = "Running tests",
+            };
+        }
+
+        _ = try model.agent_snapshot.replace(.{ .revision = 1, .agents = entries[0..count] });
+        var projection = client.capture(model, .{ .geometry = data.workbench.region(model) });
+        var hits: HitMap = .{};
+        var bands: BandHitMap = .{};
+        const context: Context = .{ .hits = &hits, .bands = &bands, .projection = &projection, .hovered = null };
+        const timings = try self.gpa.alloc(u64, samples);
+        defer self.gpa.free(timings);
+        var shapes: usize = 0;
+        var allocations: usize = 0;
+        var rasters: usize = 0;
+        var checksum: usize = 0;
+        for (0..preheat + samples) |index| {
+            if (index == preheat) {
+                shapes = renderer.atlas.?.shape_calls;
+                allocations = accounting.allocations;
+                rasters = renderer.atlas.?.raster_attempts;
+            }
+
+            projection.sidebar_animation_frame = @truncate(index);
+            const started = std.Io.Clock.awake.now(self.io).nanoseconds;
+            renderer.begin();
+            for (model.agent_snapshot.slice(), 0..) |*agent, row| {
+                const card: AgentCard = .{
+                    .context = &context,
+                    .bounds = .{ .x = 0, .y = @as(f32, @floatFromInt(row)) * geometry.pitch(), .width = @floatFromInt(width), .height = geometry.height() },
+                    .agent = agent,
+                    .geometry = geometry,
+                    .age_s = 30,
+                };
+                try card.draw(&canvas);
+            }
+
+            const elapsed = std.Io.Clock.awake.now(self.io).nanoseconds - started;
+            if (index >= preheat) {
+                timings[index - preheat] = @intCast(elapsed);
+            }
+
+            checksum +%= renderer.quads.items().len;
+            if (self.verify) {
+                var quads: [32]u8 = undefined;
+                var atlas: [32]u8 = undefined;
+                std.crypto.hash.sha2.Sha256.hash(std.mem.sliceAsBytes(renderer.quads.items()), &quads, .{});
+                std.crypto.hash.sha2.Sha256.hash(renderer.atlas.?.pixels, &atlas, .{});
+                try self.writer.print("{{\"type\":\"frame\",\"mode\":\"chrome\",\"cards\":{d},\"title_bytes\":{d},\"width\":{d},\"index\":{d},\"quads\":\"{s}\",\"atlas\":\"{s}\"}}\n", .{ count, title_bytes, width, index, std.fmt.bytesToHex(quads, .lower), std.fmt.bytesToHex(atlas, .lower) });
+            }
+        }
+
+        var elapsed: u64 = 0;
+        for (timings) |ns| {
+            elapsed += ns;
+        }
+
+        std.mem.sort(u64, timings, {}, std.sort.asc(u64));
+        try self.writer.print("{{\"type\":\"workload\",\"name\":\"chrome/{d}/{d}/{d}\",\"iterations\":{d},\"elapsed_ns\":{d},\"p50_ns\":{d},\"p95_ns\":{d},\"p99_ns\":{d},\"shape_calls\":{d},\"raster_attempts\":{d},\"measured_allocations\":{d},\"shaping_cache_bytes\":{d},\"checksum\":{d}}}\n", .{ count, title_bytes, width, samples, elapsed, timings[samples / 2], timings[samples * 95 / 100], timings[samples * 99 / 100], renderer.atlas.?.shape_calls - shapes, renderer.atlas.?.raster_attempts - rasters, accounting.allocations - allocations, @sizeOf(ShapingEntry) * ShapingCache.capacity, checksum });
     }
 
     fn review(self: *Probe, lines: usize) !void {

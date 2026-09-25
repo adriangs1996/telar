@@ -15,6 +15,7 @@ const PaneStore = @This();
 pub const capacity = core.max_panes_per_tab;
 
 items: [capacity]?*Pane = [_]?*Pane{null} ** capacity,
+shell_markers: [capacity]bool = @splat(false),
 count: usize = 0,
 /// Panes whose child has exited but which have not been collected yet.
 /// `collectFinished` runs on every event; this makes the common case -
@@ -251,6 +252,7 @@ pub fn insert(self: *PaneStore, pane: *Pane) !void {
     for (&self.items, 0..) |*slot, position| {
         if (slot.* == null) {
             slot.* = pane;
+            self.shell_markers[position] = false;
             self.index.put(core.raw(pane.id), position);
             self.count += 1;
             revisions.advance(&self.revision);

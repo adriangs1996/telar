@@ -54,11 +54,12 @@ pub fn receive(model: *RuntimeModel, completion: OutputCompletion) !void {
     }
 
     const bytes = pane.output_buffer[0..output_len];
-    const shell_foreground = pane.session.shellForeground();
+    const slot = model.panes.index.get(core.raw(pane.id)).?;
+    const shell_foreground = if (model.panes.shell_markers[slot] and pane.progress_state == .remove) null else pane.session.shellForeground();
     pane.expireProgress(shell_foreground orelse false);
     pane.queueHistoryOutput(.{
         .bytes = bytes,
-        .shell_foreground = shell_foreground,
+        .shell_foreground = if (model.panes.shell_markers[slot]) null else shell_foreground,
         .clock = pane_namespace.historyClock(model.io),
     });
     try pane_observation.start(model, pane);

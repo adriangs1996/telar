@@ -90,7 +90,7 @@ pub fn deinit(self: *Tracker, terminal: *vt.Terminal) void {
 pub fn observeInput(self: *Tracker, observation: TerminalInputObservation, sink: anytype) usize {
     const terminal = observation.terminal;
     const bytes = observation.bytes;
-    const shell_foreground = observation.shell_foreground;
+    const shell_foreground = observation.shell_foreground orelse (self.aux.markers_ready and self.aux.zone == .input);
     const clock = observation.clock;
 
     _ = self.aux.input(bytes);
@@ -534,6 +534,6 @@ const TerminalOutputObservation = struct {
 const TerminalInputObservation = struct {
     terminal: *vt.Terminal,
     bytes: []const u8,
-    shell_foreground: bool,
+    shell_foreground: ?bool,
     clock: Clock,
 };

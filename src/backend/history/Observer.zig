@@ -166,6 +166,7 @@ pub fn processSealed(self: *Observer, processing: Processing, sink: anytype) voi
 
     const index = self.worker orelse return;
     const batch = &self.batches[index];
+    defer stats.shell_markers = self.enabled and self.tracker.aux.markers_ready;
     var latest_clock: ?Clock = null;
     if (batch.reset_before) {
         const reset_cwd = cwd orelse if (self.enabled)

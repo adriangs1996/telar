@@ -315,7 +315,7 @@ const CodexTestSink = struct {
 const Input = struct {
     offset: u32,
     len: u32,
-    shell_foreground: bool,
+    shell_foreground: ?bool,
     clock: Clock,
 };
 

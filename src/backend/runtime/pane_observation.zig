@@ -64,6 +64,8 @@ pub fn finish(model: *RuntimeModel, completion: ObservationCompletion) !void {
     };
 
     const transition = pane.completeHistoryObservation(completion.process_probe.cache);
+    const slot = model.panes.index.get(core.raw(pane.id)).?;
+    model.panes.shell_markers[slot] = completion.stats.shell_markers and !completion.stats.failed;
     if (transition.cwd_changed) {
         revisions.advance(&model.panes.revision);
     }

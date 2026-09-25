@@ -184,7 +184,8 @@ fn forward(model: *RuntimeModel, pane: *Pane, bytes: []const u8) !void {
     }
 
     core.mark(model.io, .foreground_start);
-    const foreground = pane.session.shellForeground() orelse false;
+    const slot = model.panes.index.get(core.raw(pane.id)).?;
+    const foreground: ?bool = if (model.panes.shell_markers[slot]) null else pane.session.shellForeground() orelse false;
     core.mark(model.io, .foreground_done);
     pane.queueHistoryInput(.{
         .bytes = bytes,

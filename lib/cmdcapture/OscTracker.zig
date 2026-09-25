@@ -18,6 +18,7 @@ command_truncated: bool = false,
 cwd: [std.fs.max_path_bytes]u8 = undefined,
 cwd_len: usize = 0,
 running: bool = false,
+markers_ready: bool = false,
 started_at_ms: i64 = 0,
 started_awake_ns: i64 = 0,
 prompt_markers: u64 = 0,
@@ -152,6 +153,7 @@ fn semantic(self: *Tracker, observation: SemanticObservation, sink: anytype) voi
         if (comptime builtin.mode == .Debug) {
             self.input_markers += 1;
         }
+        self.markers_ready = self.markers_ready or self.zone == .prompt;
         self.zone = .input;
         self.resetCommand();
     } else if (std.mem.eql(u8, action, "C")) {
