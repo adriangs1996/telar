@@ -117,7 +117,7 @@ pub fn nextObserver(self: *Attachments, pane_id: core.PaneId, observers: *u8) ?*
 /// ```
 pub fn cellDeadline(self: *const Attachments, client: usize) ?u64 {
     var earliest: ?u64 = null;
-    for (self.record[client]) |slot| {
+    for (&self.record[client]) |slot| {
         const attachment = slot orelse continue;
         const deadline = attachment.cell_deadline_ns orelse continue;
 
@@ -138,7 +138,7 @@ pub fn cellDeadline(self: *const Attachments, client: usize) ?u64 {
 /// ```
 pub fn availableGraphicsCredit(self: *const Attachments, client: usize) usize {
     var outstanding: usize = 0;
-    for (self.record[client]) |slot| {
+    for (&self.record[client]) |slot| {
         const attachment = slot orelse continue;
         outstanding +|= core.max_image_bytes_per_pane -
             @min(attachment.graphicsCredit(), core.max_image_bytes_per_pane);

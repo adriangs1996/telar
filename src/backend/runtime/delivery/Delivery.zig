@@ -532,7 +532,7 @@ fn pendingAttachments(preparation: Preparation) u64 {
     comptime std.debug.assert(Attachments.capacity == @bitSizeOf(u64));
 
     var pending: u64 = 0;
-    for (preparation.attachments.record[preparation.client], 0..) |slot, index| {
+    for (&preparation.attachments.record[preparation.client], 0..) |slot, index| {
         const attachment = slot orelse continue;
         if (attachment.hasDelivery()) {
             pending |= @as(u64, 1) << @intCast(index);
@@ -542,22 +542,20 @@ fn pendingAttachments(preparation: Preparation) u64 {
     return pending;
 }
 
+/// Offers the lane to the pending attachments only, in round-robin order
+/// from the attachment after the last one delivered.
 fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane, pending: u64) !?Prepared {
-    const attachments = preparation.attachments;
+    if (std.debug.runtime_safety) {
+        try self.assertIdle(preparation, lane, pending);
+    }
 
-    var checked: usize = 0;
-    while (checked < Attachments.capacity) : (checked += 1) {
-        const index = (self.next_attachment + checked) % Attachments.capacity;
-        const attachment = attachments.at(preparation.client, index) orelse continue;
-        if (pending & (@as(u64, 1) << @intCast(index)) == 0) {
-            // Safe builds prove the skip exact: an idle attachment's lane
-            // yields nothing and changes nothing.
-            if (std.debug.runtime_safety) {
-                std.debug.assert(try self.candidate(preparation, attachment, lane) == null);
-            }
-
-            continue;
-        }
+    const start: u6 = @intCast(self.next_attachment);
+    var remaining = std.math.rotr(u64, pending, start);
+    while (remaining != 0) {
+        const offset = @ctz(remaining);
+        remaining &= remaining - 1;
+        const index = (@as(usize, start) + offset) % Attachments.capacity;
+        const attachment = preparation.attachments.at(preparation.client, index).?;
 
         if (try self.candidate(preparation, attachment, lane)) |attachment_prepared| {
             return self.stage(
@@ -566,7 +564,19 @@ fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane, pend
             );
         }
     }
+
     return null;
+}
+
+/// Proves the skip exact in safe builds: every attachment left out of the
+/// pending mask yields nothing on this lane and changes nothing.
+fn assertIdle(self: *Delivery, preparation: Preparation, lane: Lane, pending: u64) !void {
+    for (&preparation.attachments.record[preparation.client], 0..) |slot, index| {
+        const attachment = slot orelse continue;
+        if (pending & (@as(u64, 1) << @intCast(index)) == 0) {
+            std.debug.assert(try self.candidate(preparation, attachment, lane) == null);
+        }
+    }
 }
 
 fn candidate(self: *Delivery, preparation: Preparation, attachment: *Attachment, lane: Lane) !?PreparedType {

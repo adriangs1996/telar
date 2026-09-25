@@ -62,7 +62,7 @@ pub fn configure(model: *RuntimeModel, session: *Session, request: core.Configur
     }
 
     session.shared_graphics = request.shared;
-    for (model.attachments.record[session.slot]) |slot| {
+    for (&model.attachments.record[session.slot]) |slot| {
         const attachment = slot orelse continue;
         attachment.configureGraphics(request.shared);
     }

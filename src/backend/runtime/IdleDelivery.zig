@@ -210,7 +210,7 @@ fn drain(self: *IdleDelivery, session: *Session) !void {
 }
 
 fn acknowledgeFrames(self: *IdleDelivery, session: *Session) void {
-    for (self.runtime.model.attachments.record[session.slot]) |slot| {
+    for (&self.runtime.model.attachments.record[session.slot]) |slot| {
         const attachment = slot orelse continue;
         const frame_id = attachment.outstandingFrameId();
         if (frame_id != 0) {

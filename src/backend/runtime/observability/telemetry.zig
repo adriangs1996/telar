@@ -113,7 +113,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
         }
     }
     if (clients.attachments) |attachments| {
-        for (attachments.record, attachments.count) |row, count| {
+        for (&attachments.record, attachments.count) |*row, count| {
             attachment_count += count;
             for (row) |slot| {
                 const active = slot orelse continue;
