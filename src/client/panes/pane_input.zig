@@ -14,7 +14,7 @@ pub fn sendPaneInput(client: *Client, command: data.PaneInputCommand) !?data.Pan
     const started = core.now(client.io);
 
     const plan = data.pane_input.planInput(&client.model, command.target) orelse return null;
-    var encoded: [32]u8 = undefined;
+    var encoded: [keyinput.max_key_bytes]u8 = undefined;
     const prepared: data.PreparedPaneInput = switch (command.payload) {
         .bytes => |value| .{
             .source = command.source,
@@ -22,11 +22,16 @@ pub fn sendPaneInput(client: *Client, command: data.PaneInputCommand) !?data.Pan
         },
         .key => |value| .{
             .source = command.source,
-            .bytes = try keyinput.encodeKey(
+            .bytes = keyinput.encodeKey(
                 &encoded,
                 value,
                 plan.input_modes,
-            ),
+            ) catch |err| switch (err) {
+                // A key the child's keyboard protocol cannot express is
+                // dropped; it never ends the client.
+                error.UnencodableKey => return null,
+                else => return err,
+            },
             .restore_viewport = value.phase != .release,
             .empty_is_noop = true,
         },
@@ -123,7 +128,7 @@ pub fn sendPaneKeys(client: *Client, target: data.PaneInputTarget, keys: []const
     var encoded: [data.input_limits.max_encoded_bytes]u8 = undefined;
     var len: usize = 0;
     for (keys) |key| {
-        var key_bytes: [32]u8 = undefined;
+        var key_bytes: [keyinput.max_key_bytes]u8 = undefined;
         const bytes = try keyinput.encodeKey(
             &key_bytes,
             key,

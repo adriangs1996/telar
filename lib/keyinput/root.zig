@@ -26,6 +26,7 @@ pub const RouterLimits = @import("RouterLimits.zig");
 pub const chord = @import("chord.zig");
 pub const keybind = @import("keybind.zig");
 pub const encodeKey = encoding.encodeKey;
+pub const max_key_bytes = encoding.max_key_bytes;
 pub const encodePaste = encoding.encodePaste;
 pub const encodeSgr = mouse_protocol.encodeSgr;
 pub const tracked = mouse_protocol.tracked;

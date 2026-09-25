@@ -118,3 +118,63 @@ test "modified Enter encoding reports insufficient output space" {
     var xterm_buffer: [9]u8 = undefined;
     try std.testing.expectError(error.WriteFailed, encoding.encodeKey(&xterm_buffer, pressed, .{ .modify_other_keys_2 = true }));
 }
+
+test "legacy Ctrl characters follow kitty's C0 table and fall back to the text" {
+    var buffer: [32]u8 = undefined;
+    const ctrl: Key.Mods = .{ .ctrl = true };
+    const cases = [_]struct { text: []const u8, expected: []const u8 }{
+        .{ .text = "2", .expected = "\x00" },
+        .{ .text = "3", .expected = "\x1b" },
+        .{ .text = "4", .expected = "\x1c" },
+        .{ .text = "5", .expected = "\x1d" },
+        .{ .text = "6", .expected = "\x1e" },
+        .{ .text = "7", .expected = "\x1f" },
+        .{ .text = "8", .expected = "\x7f" },
+        .{ .text = "/", .expected = "\x1f" },
+        .{ .text = "~", .expected = "\x1e" },
+        .{ .text = "c", .expected = "\x03" },
+        .{ .text = "[", .expected = "\x1b" },
+        .{ .text = "1", .expected = "1" },
+        .{ .text = "9", .expected = "9" },
+        .{ .text = ".", .expected = "." },
+        .{ .text = "=", .expected = "=" },
+        .{ .text = "ñ", .expected = "ñ" },
+    };
+
+    for (cases) |case| {
+        const key: Key = .{ .code = .{ .char = .init(case.text) }, .mods = ctrl };
+        try std.testing.expectEqualStrings(case.expected, try encoding.encodeKey(&buffer, key, .{}));
+    }
+
+    const alt_ctrl: Key = .{ .code = .{ .char = .init("1") }, .mods = .{ .ctrl = true, .alt = true } };
+    try std.testing.expectEqualStrings("\x1b1", try encoding.encodeKey(&buffer, alt_ctrl, .{}));
+}
+
+test "no printable ASCII key with Ctrl is unencodable for a legacy child" {
+    var buffer: [32]u8 = undefined;
+    for (0x20..0x7f) |byte| {
+        const text = [_]u8{@intCast(byte)};
+        const key: Key = .{ .code = .{ .char = .init(&text) }, .mods = .{ .ctrl = true } };
+        const encoded = try encoding.encodeKey(&buffer, key, .{});
+        try std.testing.expectEqual(@as(usize, 1), encoded.len);
+    }
+}
+
+test "the longest kitty key fits max_key_bytes" {
+    var buffer: [encoding.max_key_bytes]u8 = undefined;
+    const key: Key = .{
+        .code = .{ .char = .init("a") },
+        .mods = .{ .shift = true },
+        .phase = .repeat,
+        .kitty = .{
+            .primary = std.math.maxInt(u32),
+            .shifted = 0x10ffff,
+            .base = std.math.maxInt(u32),
+        },
+    };
+    const all_kitty_flags = std.math.maxInt(u5);
+
+    const encoded = try encoding.encodeKey(&buffer, key, .{ .kitty_keyboard_flags = all_kitty_flags });
+
+    try std.testing.expectEqualStrings("\x1b[4294967295:1114111:4294967295;2:2;1114111u", encoded);
+}

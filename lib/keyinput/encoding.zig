@@ -8,6 +8,13 @@ const Key = @import("Key.zig");
 const InputModes = @import("InputModes.zig");
 const std = @import("std");
 
+/// The longest sequence `encodeKey` writes: a kitty key carrying every
+/// codepoint field, modifiers, an event type and associated text. A buffer
+/// this long never fails with `error.WriteFailed`.
+pub const max_key_bytes = "\x1b[".len + 3 * decimalDigits(u32) + ":".len * 2 +
+    ";".len + decimalDigits(u8) + ":".len + decimalDigits(u2) + ";".len + decimalDigits(u21) + "u".len;
+
+/// Example: `var encoded: [max_key_bytes]u8 = undefined; const bytes = try encodeKey(&encoded, key, modes);`
 pub fn encodeKey(buffer: []u8, key: Key, modes: InputModes) ![]const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
     const encoding: Encoding = .init(key, modes);
@@ -180,29 +187,39 @@ fn encodeLegacyCharacter(writer: *std.Io.Writer, char: Char, key: Key) !void {
     if (key.mods.alt) {
         try writer.writeByte(0x1b);
     }
-    if (!key.mods.ctrl) {
-        try writer.writeAll(char.slice());
+    const control = if (key.mods.ctrl) controlByte(char) else null;
+    if (control) |byte| {
+        try writer.writeByte(byte);
 
         return;
     }
+
+    try writer.writeAll(char.slice());
+}
+
+/// The C0 byte a legacy child expects for Ctrl plus one character, from
+/// kitty's table. A character without one is sent as its own text, as
+/// kitty and ghostty do, so Ctrl never makes a key unencodable.
+fn controlByte(char: Char) ?u8 {
     if (char.len != 1) {
-        return error.UnencodableControlKey;
+        return null;
     }
 
     const byte = char.bytes[0];
-    const encoded: u8 = if (std.ascii.isAlphabetic(byte))
-        std.ascii.toUpper(byte) & 0x1f
-    else switch (byte) {
-        ' ', '@' => @as(u8, 0),
-        '[' => 0x1b,
-        '\\' => 0x1c,
-        ']' => 0x1d,
-        '^' => 0x1e,
-        '_' => 0x1f,
-        '?' => 0x7f,
-        else => return error.UnencodableControlKey,
+    if (std.ascii.isAlphabetic(byte)) {
+        return std.ascii.toUpper(byte) & 0x1f;
+    }
+
+    return switch (byte) {
+        ' ', '@', '2' => 0,
+        '[', '3' => 0x1b,
+        '\\', '4' => 0x1c,
+        ']', '5' => 0x1d,
+        '^', '~', '6' => 0x1e,
+        '_', '/', '7' => 0x1f,
+        '?', '8' => 0x7f,
+        else => null,
     };
-    try writer.writeByte(encoded);
 }
 
 pub fn encodePaste(buffer: []u8, text: []const u8, modes: InputModes) ![]const u8 {
@@ -290,3 +307,7 @@ const Encoding = struct {
         };
     }
 };
+
+fn decimalDigits(comptime T: type) usize {
+    return std.fmt.count("{d}", .{std.math.maxInt(T)});
+}
