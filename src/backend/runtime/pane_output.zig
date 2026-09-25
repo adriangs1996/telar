@@ -5,6 +5,7 @@
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
+const pane_closure = @import("pane_closure.zig");
 const Pane = @import("../pane/Pane.zig");
 const PaneIngestStats = @import("../pane/PaneIngestStats.zig");
 const pane_namespace = @import("../pane/pane_namespace.zig");
@@ -97,7 +98,7 @@ pub fn finishIngest(model: *RuntimeModel, completion: IngestCompletion) !void {
 
     pane.completeOutputIngest();
     const stats = completion.result catch {
-        _ = pane.requestClose();
+        _ = pane_closure.requestClose(model, pane);
         pane.finishPtyOutput();
         return;
     };
@@ -107,7 +108,7 @@ pub fn finishIngest(model: *RuntimeModel, completion: IngestCompletion) !void {
     }
 
     pane.applyPendingResize() catch {
-        _ = pane.requestClose();
+        _ = pane_closure.requestClose(model, pane);
     };
     try pane_observation.start(model, pane);
     try pane_graphics.startMedia(model, pane);

@@ -44,6 +44,7 @@ pub fn receive(model: *RuntimeModel, completion: Changed) !void {
         const session_changed = !std.mem.eql(u8, previous_id[0..previous_len], snapshot.threadId());
         if (session_changed) {
             session_checkpoint.noteChange(model);
+            model.review_owner_revision +%= 1;
         }
         if (session_changed or metadata.review_latest_edition_id != pane.session.agent.review_latest_edition_id) {
             change_review.publish(model, .{ .pane_id = pane.id, .pane_generation = pane.generation, .session = snapshot.threadId(), .latest_edition_id = if (session_changed) 0 else metadata.review_latest_edition_id });

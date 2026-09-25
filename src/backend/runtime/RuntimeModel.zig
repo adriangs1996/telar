@@ -86,8 +86,14 @@ agent_snapshot_inputs: [4]u64 = @splat(0),
 /// Storage the snapshot is built into, once per flush that sends it.
 agent_entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined,
 agent_display: [core.max_agent_snapshot_entries]AgentDisplayStorage = undefined,
-/// The pane and owner state change-review discovery last ran against.
+/// The owner hash discovery last ran against; only safe builds keep it, to
+/// check that `review_owner_inputs` covers every owner input.
 review_owner_stamp: u64 = 0,
+/// Advances when a pane's review owner may change without a table
+/// revision: a close request, a review binding or an agent session id.
+review_owner_revision: u64 = 0,
+/// The pane, agent and review-owner revisions discovery last ran against.
+review_owner_inputs: [4]u64 = @splat(0),
 /// Discovery skipped a pane because every job slot was busy; retry it.
 review_discovery_blocked: bool = false,
 editor_open: EditorOpenState = .{},

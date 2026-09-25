@@ -135,6 +135,7 @@ pub fn publish(model: *RuntimeModel, change: core.ChangeReviewChanged) void {
 
     const pane = model.panes.resolve(key) orelse return;
     pane.review_availability.record(context, change.latest_edition_id);
+    model.review_owner_revision +%= 1;
 }
 
 /// Rebinds each pane's review owner and starts bounded, one-shot durable
@@ -147,7 +148,13 @@ pub fn discover(model: *RuntimeModel) void {
     }
 
     const service = model.review_service orelse return;
-    if (!model.review_discovery_blocked and ownerStamp(model) == model.review_owner_stamp) {
+    const inputs = ownerInputs(model);
+    if (!model.review_discovery_blocked and std.mem.eql(u64, &inputs, &model.review_owner_inputs)) {
+        // Safe builds prove the revisions cover every owner input.
+        if (std.debug.runtime_safety) {
+            std.debug.assert(ownerStamp(model) == model.review_owner_stamp);
+        }
+
         return;
     }
 
@@ -178,11 +185,26 @@ pub fn discover(model: *RuntimeModel) void {
     }
 
     model.review_discovery_blocked = blocked;
-    model.review_owner_stamp = ownerStamp(model);
+    model.review_owner_inputs = ownerInputs(model);
+    if (std.debug.runtime_safety) {
+        model.review_owner_stamp = ownerStamp(model);
+    }
+}
+
+/// The revisions that advance whenever an owner input can change: panes
+/// added, exited or removed, agents and their session references, and
+/// close requests, review bindings and agent session ids.
+fn ownerInputs(model: *const RuntimeModel) [4]u64 {
+    return .{
+        model.panes.revision,
+        model.agent_revision,
+        model.agent_session_revision,
+        model.review_owner_revision,
+    };
 }
 
 /// Summarizes everything a pane's review owner depends on, in one pass
-/// without agent lookups: pane identity and lifecycle, the managed
+/// without agent lookups; safe builds check `ownerInputs` against it: pane identity and lifecycle, the managed
 /// conversation, the agent projection and session references, and each
 /// pane's current review binding.
 fn ownerStamp(model: *const RuntimeModel) u64 {

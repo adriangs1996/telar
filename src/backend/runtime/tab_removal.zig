@@ -20,6 +20,7 @@ pub fn remove(model: *RuntimeModel, session: *Session, request: core.CloseTab) !
     };
 
     model.panes.closeAt(removed.location);
+    model.review_owner_revision +%= 1;
     session_checkpoint.noteChange(model);
     resync_required.notify(model, .{
         .origin = session.key,
