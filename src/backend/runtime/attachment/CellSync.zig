@@ -24,6 +24,8 @@ projected_damage: []bool,
 projected_state: vt.RenderState = .empty,
 projected_text_metadata: TextMetadataCapture,
 viewport_pin: ?*vt.Pin = null,
+/// The pane render the pinned viewport last caught up with.
+projected_revision: u64 = 0,
 viewport_screen: vt.ScreenSet.Key,
 observed_revision: u64 = 0,
 next_frame_id: u64 = 1,
@@ -171,6 +173,15 @@ pub fn project(self: *Sync, pane: *Pane, force: bool) !Projection {
         }
         screen.scroll(.{ .pin = pin.* });
         defer screen.scroll(.{ .active = {} });
+        if (self.projected_revision != pane.cell_revision) {
+            // RenderState assumes it is the only consumer of the terminal's
+            // dirty flags, and the pane's own render clears them first. A
+            // zero row count makes the next update rebuild the whole pinned
+            // viewport; it restores the count without reallocating rows.
+            self.projected_state.rows = 0;
+            self.projected_revision = pane.cell_revision;
+        }
+
         {
             const terminal_allocations = core.enterTerminalAllocations();
             defer terminal_allocations.restore();

@@ -566,6 +566,56 @@ test "attachments keep independent scrollback viewports" {
         pane.screen.h >= pane.terminal.screens.active.pages.scrollbar().total);
 }
 
+test "a scrolled attachment sees rows the pane's own render already consumed" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var service = try Service.init(gpa, .{ .database_path = ":memory:" });
+    defer {
+        service.stop(io);
+        service.deinit(io);
+    }
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
+    const args = [_][*:0]const u8{ "/bin/sleep", "600" };
+    const command = try Command.fromArgv(&args);
+    const pane = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = try core.pane(1), .generation = 1 },
+        .location = .{
+            .workspace = .{ .workspace = try core.workspace(1) },
+            .tab_id = try core.tab(1),
+        },
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/",
+        .size = .{ .cols = 8, .rows = 3 },
+        .graphics_limits = .{},
+    });
+    defer {
+        pane.session.shutdown();
+        pane.destroy();
+    }
+    _ = try pane.ingest(io, "zero\r\none\r\ntwo\r\nthree\r\nfour\r\nfive\r\n");
+    try pane.render(false);
+
+    var attachment = try Attachment.init(gpa, pane);
+    defer attachment.deinit();
+    const scrollbar = pane.terminal.screens.active.pages.scrollbar();
+    _ = try attachment.setViewport(@intCast(scrollbar.total - pane.screen.h - 1));
+    const before = try attachment.cells.project(pane, true);
+    const last_row = @as(usize, pane.screen.h - 1) * pane.screen.w;
+    try std.testing.expectEqualStrings("f", before.buffer.cells[last_row].text());
+
+    _ = try pane.ingest(io, "\x1b[1A\rFIVE");
+    try pane.render(false);
+    const after = try attachment.cells.project(pane, false);
+
+    try std.testing.expectEqualStrings("F", after.buffer.cells[last_row].text());
+}
+
 test "an unsupported stored image degrades graphics sync instead of killing it" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
