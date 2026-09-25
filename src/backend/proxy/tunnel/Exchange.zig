@@ -1,7 +1,7 @@
 const std = @import("std");
 const Channel = @import("../Channel.zig");
 const Counters = @import("../Counters.zig");
-const Credential = @import("../Credential.zig");
+const CredentialId = @import("../CredentialId.zig");
 const types = @import("../../agent/types.zig");
 const middleware = @import("../middleware.zig");
 const metrics = @import("../metrics.zig");
@@ -10,7 +10,8 @@ const Exchange = @This();
 io: std.Io,
 observations: *Channel,
 telemetry: *Counters,
-credential: Credential,
+/// The authenticated credential, by identity; the tunnel never keeps the token.
+owner: CredentialId,
 dialect: types.ApiDialect,
 connection_id: u64,
 protocol: middleware.Protocol,
@@ -56,7 +57,7 @@ pub fn publishStatus(self: *Exchange, status: Status) void {
     }
 
     self.observations.publish(self.io, .{
-        .credential = self.credential,
+        .owner = self.owner,
         .dialect = self.dialect,
         .phase = status.phase,
         .protocol = self.protocol,

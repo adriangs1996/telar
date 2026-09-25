@@ -41,9 +41,9 @@ pub const Decision = union(enum) {
 
 /// Authenticates before revealing target validity. Only an exact
 /// `CONNECT authority HTTP/1.1` line with a bounded hostname and a nonzero
-/// decimal port is accepted. A successful value owns a credential copy whose
-/// token the caller must securely erase; its validated hostname borrows from
-/// `head`.
+/// decimal port is accepted. A successful value names the credential by its
+/// non-secret identity, so the token never outlives this call; its validated
+/// hostname borrows from `head`.
 ///
 /// ```zig
 /// const decision = connect_authentication.authenticate(io, &registry, head);
@@ -52,13 +52,10 @@ pub fn authenticate(io: std.Io, credentials: *Registry, head: []const u8) Decisi
     var credential = identity.parseProxyAuthorization(head) orelse return rejectInvalidAuthorization();
     defer std.crypto.secureZero(u8, &credential.token);
 
-    if (!credentials.contains(io, &credential)) {
-        return rejectUnknownCredential();
-    }
-
+    const owner = credentials.identify(io, &credential) orelse return rejectUnknownCredential();
     const target = parseTarget(head) orelse return rejectInvalidTarget();
     return .{ .authenticated = .{
-        .credential = credential,
+        .owner = owner,
         .target = target,
     } };
 }
@@ -262,13 +259,12 @@ test "a live credential and valid CONNECT target produce authenticated input" {
     const head = try requestHead("CONNECT api.openai.com:443 HTTP/1.1", &head_buffer);
     var registry = try testRegistry(true);
 
-    var authenticated = switch (execute(&registry, head)) {
+    const authenticated = switch (execute(&registry, head)) {
         .authenticated => |value| value,
         .rejected => return error.ExpectedAuthenticatedConnect,
     };
-    defer std.crypto.secureZero(u8, &authenticated.credential.token);
 
-    try std.testing.expect(std.meta.eql(testCredential(), authenticated.credential));
+    try std.testing.expectEqualDeep(registry.identify(std.testing.io, &testCredential()).?, authenticated.owner);
     try std.testing.expectEqualStrings("api.openai.com", authenticated.target.host.bytes);
     try std.testing.expectEqual(@as(u16, 443), authenticated.target.port);
 }

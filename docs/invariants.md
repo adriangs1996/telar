@@ -159,7 +159,9 @@ analytics.
   system trust is an explicit reversible CLI action with a separate 30-day CA
   whose fingerprint is recorded.
 - A proxy credential never leaves the proxy. The runtime registers and revokes
-  by pane key.
+  by pane key. Its token lives only in the registry and in the CONNECT head
+  being authenticated; tunnels and queues carry the credential's non-secret
+  `CredentialId`, so no connection or queue slot retains a secret.
 
 ## Lua and plugins
 

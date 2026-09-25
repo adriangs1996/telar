@@ -49,7 +49,7 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
     var head: [http1.max_head_bytes]u8 = undefined;
     defer std.crypto.secureZero(u8, &head);
     const head_len = tunnel_namespace.readConnectHead(io, self.child, &head) orelse return;
-    var authenticated = switch (connect_authentication.authenticate(self.dependencies.tls.io, self.dependencies.credentials, head[0..head_len])) {
+    const authenticated = switch (connect_authentication.authenticate(self.dependencies.tls.io, self.dependencies.credentials, head[0..head_len])) {
         .authenticated => |value| value,
         .rejected => |rejection| {
             if (rejection.metric) |metric| {
@@ -60,20 +60,18 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
             return;
         },
     };
-    defer std.crypto.secureZero(u8, &authenticated.credential.token);
 
     const target = authenticated.target;
     var exchange: Exchange = .{
         .io = io,
         .observations = dependencies.observations,
         .telemetry = dependencies.tls.telemetry,
-        .credential = authenticated.credential,
+        .owner = authenticated.owner,
         .dialect = dialect_module.identify(target.host.bytes),
         .connection_id = dependencies.connection_ids.fetchAdd(1, .monotonic),
         .protocol = .http11,
         .host = target.host,
     };
-    defer std.crypto.secureZero(u8, &exchange.credential.token);
 
     const upstream = tunnel_namespace.connectUpstream(target.host, io, target.port) catch {
         dependencies.tls.telemetry.record(.upstream_connect_failure);

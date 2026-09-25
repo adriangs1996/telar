@@ -1,9 +1,9 @@
-const Credential = @import("Credential.zig");
+const CredentialId = @import("CredentialId.zig");
 const types = @import("../agent/types.zig");
 const middleware = @import("middleware.zig");
 const Event = @This();
 
-credential: Credential,
+owner: CredentialId,
 dialect: types.ApiDialect,
 phase: middleware.Phase,
 protocol: middleware.Protocol,

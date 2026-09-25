@@ -72,7 +72,7 @@ fn ensure(self: *CaptureStreams, stream_id: u32) ?*Half {
 
     const index = self.empty() orelse return null;
     const half = self.producer.start(.{
-        .credential = self.exchange.credential,
+        .owner = self.exchange.owner,
         .dialect = self.exchange.dialect,
         .protocol = self.exchange.protocol,
         .key = .{ .connection_id = self.exchange.connection_id, .stream_id = stream_id },
@@ -109,7 +109,7 @@ fn empty(self: *const CaptureStreams) ?usize {
 fn publish(self: *CaptureStreams, half: *Half, outcome: buffer_support.Outcome) void {
     half.finish(outcome, std.Io.Timestamp.now(self.exchange.io, .real).toMilliseconds());
     self.producer.publish(self.exchange.io, .{
-        .credential = self.exchange.credential,
+        .owner = self.exchange.owner,
         .half = half,
     });
 }

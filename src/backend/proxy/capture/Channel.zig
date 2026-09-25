@@ -3,7 +3,7 @@ const owned = @import("owned.zig");
 const queue = @import("queue.zig");
 const std = @import("std");
 const Registry = @import("../Registry.zig");
-const Credential = @import("../Credential.zig");
+const CredentialId = @import("../CredentialId.zig");
 const Half = owned.Half;
 const QueueMetrics = dropqueue.QueueMetrics;
 const Envelopes = dropqueue.GenericDropQueue(Envelope, queue.capacity);
@@ -11,6 +11,8 @@ const Channel = @This();
 
 envelopes: Envelopes = undefined,
 /// Live pane credentials, checked at publication and again at delivery.
+/// Envelopes name their credential by identity, so the ring never holds a
+/// token.
 credentials: *Registry = undefined,
 
 /// Initializes fixed queue storage over the registry whose live
@@ -27,19 +29,18 @@ pub fn init(self: *Channel, credentials: *Registry) void {
 /// Attempts a zero-deadline ownership transfer and frees rejected halves.
 ///
 /// ```zig
-/// _ = channel.publish(io, .{ .credential = credential, .half = half });
+/// _ = channel.publish(io, .{ .owner = exchange.owner, .half = half });
 /// ```
 pub fn publish(self: *Channel, io: std.Io, publication: QueuePublication) bool {
-    if (!self.credentials.contains(io, &publication.credential)) {
+    if (!self.credentials.holds(io, publication.owner)) {
         publication.half.deinit();
         return false;
     }
 
-    var envelope: Envelope = .{
-        .credential = publication.credential,
+    const envelope: Envelope = .{
+        .owner = publication.owner,
         .half = publication.half,
     };
-    defer std.crypto.secureZero(u8, &envelope.credential.token);
 
     if (!self.envelopes.publish(io, envelope)) {
         publication.half.deinit();
@@ -56,10 +57,9 @@ pub fn publish(self: *Channel, io: std.Io, publication: QueuePublication) bool {
 /// ```
 pub fn receive(self: *Channel, io: std.Io) anyerror!*Half {
     while (true) {
-        var envelope = try self.envelopes.receive(io);
-        defer std.crypto.secureZero(u8, &envelope.credential.token);
+        const envelope = try self.envelopes.receive(io);
 
-        if (self.credentials.contains(io, &envelope.credential)) {
+        if (self.credentials.holds(io, envelope.owner)) {
             return envelope.half;
         }
 
@@ -75,9 +75,7 @@ pub fn receive(self: *Channel, io: std.Io) anyerror!*Half {
 pub fn close(self: *Channel, io: std.Io) void {
     self.envelopes.close(io);
 
-    while (self.envelopes.tryReceive(io)) |received| {
-        var envelope = received;
-        std.crypto.secureZero(u8, &envelope.credential.token);
+    while (self.envelopes.tryReceive(io)) |envelope| {
         envelope.half.deinit();
     }
 }
@@ -92,11 +90,11 @@ pub fn metrics(self: *const Channel) QueueMetrics {
 }
 
 const QueuePublication = struct {
-    credential: Credential,
+    owner: CredentialId,
     half: *Half,
 };
 
 const Envelope = struct {
-    credential: Credential,
+    owner: CredentialId,
     half: *Half,
 };

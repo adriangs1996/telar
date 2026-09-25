@@ -33,11 +33,11 @@ test "register, lookup, exact revocation, and duplicate rejection" {
     const credential = try testCredential(7, 2, 0x5a);
 
     try registry.register(io, &credential);
-    try std.testing.expect(registry.contains(io, &credential));
+    try std.testing.expect(registry.identify(io, &credential) != null);
     try std.testing.expectError(error.DuplicateProxyCredential, registry.register(io, &credential));
 
     registry.remove(io, &credential);
-    try std.testing.expect(!registry.contains(io, &credential));
+    try std.testing.expect(registry.identify(io, &credential) == null);
 }
 
 test "pane revocation removes every credential for only that generation" {
@@ -53,9 +53,9 @@ test "pane revocation removes every credential for only that generation" {
 
     registry.removePane(io, .{ .id = current_a.pane_id, .generation = current_a.pane_generation });
 
-    try std.testing.expect(!registry.contains(io, &current_a));
-    try std.testing.expect(!registry.contains(io, &current_b));
-    try std.testing.expect(registry.contains(io, &next));
+    try std.testing.expect(registry.identify(io, &current_a) == null);
+    try std.testing.expect(registry.identify(io, &current_b) == null);
+    try std.testing.expect(registry.identify(io, &next) != null);
 }
 
 test "pane identity and generation participate in credential identity" {
@@ -68,9 +68,9 @@ test "pane identity and generation participate in credential identity" {
 
     try registry.register(io, &registered);
 
-    try std.testing.expect(!registry.contains(io, &wrong_pane));
-    try std.testing.expect(!registry.contains(io, &wrong_generation));
-    try std.testing.expect(!registry.contains(io, &wrong_token));
+    try std.testing.expect(registry.identify(io, &wrong_pane) == null);
+    try std.testing.expect(registry.identify(io, &wrong_generation) == null);
+    try std.testing.expect(registry.identify(io, &wrong_token) == null);
 }
 
 test "registry rejects insertion beyond its fixed capacity" {
@@ -84,4 +84,23 @@ test "registry rejects insertion beyond its fixed capacity" {
 
     const overflow = try testCredential(7, core.max_agent_snapshot_entries, 0xff);
     try std.testing.expectError(error.TooManyProxyCredentials, registry.register(io, &overflow));
+}
+
+test "a revoked identity stays dead when its slot holds a new credential" {
+    const io = std.testing.io;
+    var registry: Registry = .{};
+    const revoked = try testCredential(7, 2, 0x5a);
+    const next = try testCredential(7, 3, 0x6b);
+
+    try registry.register(io, &revoked);
+    const revoked_id = registry.identify(io, &revoked).?;
+    try std.testing.expect(registry.holds(io, revoked_id));
+
+    registry.removePane(io, .{ .id = revoked.pane_id, .generation = revoked.pane_generation });
+    try registry.register(io, &next);
+    const next_id = registry.identify(io, &next).?;
+
+    try std.testing.expect(!registry.holds(io, revoked_id));
+    try std.testing.expect(registry.holds(io, next_id));
+    try std.testing.expect(revoked_id.serial != next_id.serial);
 }

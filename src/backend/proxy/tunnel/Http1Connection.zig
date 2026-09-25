@@ -97,7 +97,7 @@ pub fn beginCapture(self: *Connection) void {
     const producer = self.captures orelse return;
     const started_at_ms = std.Io.Timestamp.now(self.io, .real).toMilliseconds();
     const base: StartOptions = .{
-        .credential = self.exchange.credential,
+        .owner = self.exchange.owner,
         .dialect = self.exchange.dialect,
         .protocol = self.exchange.protocol,
         .key = .{ .connection_id = self.exchange.connection_id, .stream_id = 0 },
@@ -195,7 +195,7 @@ fn finishCapture(self: *Connection, side: buffer_support.Side, outcome: buffer_s
     slot.* = null;
     half.finish(outcome, std.Io.Timestamp.now(self.io, .real).toMilliseconds());
     producer.publish(self.io, .{
-        .credential = self.exchange.credential,
+        .owner = self.exchange.owner,
         .half = half,
     });
 }
@@ -584,7 +584,7 @@ test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
         harness.exchange.host = try std.Io.net.HostName.init("example.test");
 
         const request_half = producer.start(.{
-            .credential = harness.exchange.credential,
+            .owner = harness.exchange.owner,
             .dialect = harness.exchange.dialect,
             .protocol = .http11,
             .key = .{ .connection_id = harness.exchange.connection_id, .stream_id = 0 },
@@ -605,10 +605,10 @@ test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
             .framing = parsed_request.framing,
         }, RequestBodyObserver{ .request = &request_observer, .capture_half = request_half }));
         request_half.finish(.finished, 2);
-        producer.publish(std.testing.io, .{ .credential = harness.exchange.credential, .half = request_half });
+        producer.publish(std.testing.io, .{ .owner = harness.exchange.owner, .half = request_half });
 
         const response_half = producer.start(.{
-            .credential = harness.exchange.credential,
+            .owner = harness.exchange.owner,
             .dialect = harness.exchange.dialect,
             .protocol = .http11,
             .key = .{ .connection_id = harness.exchange.connection_id, .stream_id = 0 },
@@ -634,7 +634,7 @@ test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
         response_observer.deinit();
         response_half.status_code = parsed_response.message.status_code;
         response_half.finish(.finished, 3);
-        producer.publish(std.testing.io, .{ .credential = harness.exchange.credential, .half = response_half });
+        producer.publish(std.testing.io, .{ .owner = harness.exchange.owner, .half = response_half });
 
         const captured_request = try producer.receive(std.testing.io);
         defer captured_request.deinit();
@@ -666,7 +666,7 @@ test "capture truncation never truncates HTTP1 forwarding" {
     var harness: Http1TestHarness = .{};
     try harness.init();
     var half = producer.start(.{
-        .credential = harness.exchange.credential,
+        .owner = harness.exchange.owner,
         .dialect = .unknown,
         .protocol = .http11,
         .key = .{ .connection_id = 1, .stream_id = 0 },
@@ -760,7 +760,7 @@ const Http1TestHarness = struct {
             .io = std.testing.io,
             .observations = &self.observations,
             .telemetry = &self.counters,
-            .credential = credential,
+            .owner = self.registry.identify(std.testing.io, &credential).?,
             .dialect = .anthropic_messages,
             .connection_id = 19,
             .protocol = .http11,

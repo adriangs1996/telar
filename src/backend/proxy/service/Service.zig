@@ -136,8 +136,7 @@ fn run(self: *Service) anyerror!void {
 /// while queued are discarded before this method returns.
 ///
 /// ```zig
-/// var event = try service.receive(io);
-/// defer std.crypto.secureZero(u8, &event.credential.token);
+/// const event = try service.receive(io);
 /// ```
 pub fn receive(self: *Service, io: std.Io) anyerror!MiddlewareEvent {
     return self.observations.receive(io);

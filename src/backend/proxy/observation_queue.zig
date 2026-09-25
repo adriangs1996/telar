@@ -6,6 +6,7 @@ const identity = @import("identity.zig");
 const std = @import("std");
 const Credential = @import("Credential.zig");
 const Registry = @import("Registry.zig");
+const CredentialId = @import("CredentialId.zig");
 const QueueMetrics = dropqueue.QueueMetrics;
 
 pub const capacity = 256;
@@ -33,9 +34,19 @@ fn replaceGeneration(registry: *Registry, revoked: u64, next: u64) !void {
     try registry.register(std.testing.io, &testCredential(next));
 }
 
-fn testEvent(generation: u64, connection_id: u64) MiddlewareEvent {
+/// The identity of the test pane's credential for `generation`; one never
+/// registered carries a serial the registry has not issued.
+fn testOwner(registry: *Registry, generation: u64) CredentialId {
+    return registry.identify(std.testing.io, &testCredential(generation)) orelse .{
+        .pane_id = @enumFromInt(7),
+        .pane_generation = generation,
+        .serial = registry.next_serial,
+    };
+}
+
+fn testEvent(owner: CredentialId, connection_id: u64) MiddlewareEvent {
     return .{
-        .credential = testCredential(generation),
+        .owner = owner,
         .dialect = .anthropic_messages,
         .phase = .request_started,
         .protocol = .http11,
@@ -49,7 +60,7 @@ test "publication rejects revoked credentials without consuming capacity" {
     var channel: Channel = undefined;
     channel.init(&registry);
 
-    channel.publish(std.testing.io, testEvent(2, 1));
+    channel.publish(std.testing.io, testEvent(testOwner(&registry, 2), 1));
 
     try std.testing.expectEqualDeep(QueueMetrics{ .queued = 0, .high_water = 0, .dropped = 0 }, channel.metrics());
 }
@@ -59,12 +70,11 @@ test "delivery discards events revoked after publication" {
     var channel: Channel = undefined;
     channel.init(&registry);
 
-    channel.publish(std.testing.io, testEvent(1, 1));
+    channel.publish(std.testing.io, testEvent(testOwner(&registry, 1), 1));
     try replaceGeneration(&registry, 1, 2);
-    channel.publish(std.testing.io, testEvent(2, 2));
+    channel.publish(std.testing.io, testEvent(testOwner(&registry, 2), 2));
 
-    var event = try channel.receive(std.testing.io);
-    defer std.crypto.secureZero(u8, &event.credential.token);
+    const event = try channel.receive(std.testing.io);
 
     try std.testing.expectEqual(@as(u64, 2), event.connection_id);
     try std.testing.expectEqualDeep(QueueMetrics{

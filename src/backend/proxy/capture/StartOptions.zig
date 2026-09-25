@@ -1,12 +1,12 @@
 const exchangecapture = @import("exchangecapture");
-const Credential = @import("../Credential.zig");
+const CredentialId = @import("../CredentialId.zig");
 const types = @import("../../agent/types.zig");
 const middleware = @import("../middleware.zig");
 const Key = exchangecapture.Key;
 const buffer_support = exchangecapture.buffer_support;
 const StartOptions = @This();
 
-credential: Credential,
+owner: CredentialId,
 dialect: types.ApiDialect,
 protocol: middleware.Protocol,
 key: Key,

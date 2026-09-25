@@ -36,11 +36,11 @@ test "pane registration creates one live capability for the requested generation
 
     try std.testing.expectEqual(pane.id, credential.pane_id);
     try std.testing.expectEqual(pane.generation, credential.pane_generation);
-    try std.testing.expect(service.credentials.contains(io, &credential));
+    try std.testing.expect(service.credentials.identify(io, &credential) != null);
 
     service.unregisterCredential(&credential);
 
-    try std.testing.expect(!service.credentials.contains(io, &credential));
+    try std.testing.expect(service.credentials.identify(io, &credential) == null);
 }
 
 test "running service leaves exchange capture inert when disabled" {
@@ -122,7 +122,7 @@ test "non-whitelisted CONNECT relays bytes with a saturated observation queue" {
     var credential = try service.registerPane(.{ .id = try core.pane(7), .generation = 12 });
     defer std.crypto.secureZero(u8, &credential.token);
     const observation: MiddlewareEvent = .{
-        .credential = credential,
+        .owner = service.credentials.identify(io, &credential).?,
         .dialect = .openai_responses,
         .phase = .response_activity,
         .protocol = .http11,
@@ -246,12 +246,11 @@ test "intercepted CONNECT publishes and counts an upstream TLS failure" {
     try writer.interface.flush();
     try origin_worker.await(io);
 
-    var event = try service.receive(io);
-    defer std.crypto.secureZero(u8, &event.credential.token);
+    const event = try service.receive(io);
     try std.testing.expectEqual(middleware.Phase.request_failed, event.phase);
     try std.testing.expectEqual(middleware.Protocol.http11, event.protocol);
     try std.testing.expectEqual(@as(u32, 0), event.stream_id);
-    try std.testing.expect(std.meta.eql(credential, event.credential));
+    try std.testing.expectEqualDeep(service.credentials.identify(io, &credential).?, event.owner);
     try std.testing.expectEqual(
         @as(u64, 1),
         service.metrics().tls_upstream_handshake_failures,
@@ -285,7 +284,7 @@ test "receive discards observations queued before pane revocation" {
     var current = try service.registerPane(.{ .id = try core.pane(7), .generation = 2 });
     defer std.crypto.secureZero(u8, &current.token);
     service.observations.publish(io, .{
-        .credential = current,
+        .owner = service.credentials.identify(io, &current).?,
         .dialect = .openai_responses,
         .phase = .request_started,
         .protocol = .http11,
@@ -295,8 +294,9 @@ test "receive discards observations queued before pane revocation" {
     service.unregisterPane(.{ .id = current.pane_id, .generation = current.pane_generation });
     var next = try service.registerPane(.{ .id = current.pane_id, .generation = 3 });
     defer std.crypto.secureZero(u8, &next.token);
+    const next_owner = service.credentials.identify(io, &next).?;
     service.observations.publish(io, .{
-        .credential = next,
+        .owner = next_owner,
         .dialect = .openai_responses,
         .phase = .request_started,
         .protocol = .http11,
@@ -304,9 +304,8 @@ test "receive discards observations queued before pane revocation" {
         .observed_at_ms = 2,
     });
 
-    var received = try service.receive(io);
-    defer std.crypto.secureZero(u8, &received.credential.token);
-    try std.testing.expect(std.meta.eql(next, received.credential));
+    const received = try service.receive(io);
+    try std.testing.expectEqualDeep(next_owner, received.owner);
     try std.testing.expectEqual(@as(u64, 0), service.observations.metrics().queued);
 }
 

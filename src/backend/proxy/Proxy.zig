@@ -127,12 +127,11 @@ pub fn revokePane(self: *Proxy, key: PaneKey) void {
 /// const observation = try proxy.receive(io);
 /// ```
 pub fn receive(self: *Proxy, io: std.Io) anyerror!Observation {
-    var event = try self.service.receive(io);
-    defer std.crypto.secureZero(u8, &event.credential.token);
+    const event = try self.service.receive(io);
     return .{
         .pane = .{
-            .id = event.credential.pane_id,
-            .generation = event.credential.pane_generation,
+            .id = event.owner.pane_id,
+            .generation = event.owner.pane_generation,
         },
         .dialect = event.dialect,
         .phase = event.phase,

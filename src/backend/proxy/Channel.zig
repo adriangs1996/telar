@@ -11,6 +11,8 @@ const Channel = @This();
 
 events: Events = undefined,
 /// Live pane credentials, checked at publication and again at delivery.
+/// Events name their credential by identity, so the ring never holds a
+/// token.
 credentials: *Registry = undefined,
 
 /// Initializes queue storage at its final address over the registry whose
@@ -25,7 +27,7 @@ pub fn init(self: *Channel, credentials: *Registry) void {
 }
 
 /// Returns the next observation whose credential is still live.
-/// Revoked observations are scrubbed and consumed without escaping.
+/// Revoked observations are consumed without escaping.
 /// Queue closure is reported after every already-buffered event is read.
 ///
 /// ```zig
@@ -33,10 +35,9 @@ pub fn init(self: *Channel, credentials: *Registry) void {
 /// ```
 pub fn receive(self: *Channel, io: std.Io) anyerror!MiddlewareEvent {
     while (true) {
-        var event = try self.events.receive(io);
-        defer std.crypto.secureZero(u8, &event.credential.token);
+        const event = try self.events.receive(io);
 
-        if (self.credentials.contains(io, &event.credential)) {
+        if (self.credentials.holds(io, event.owner)) {
             return event;
         }
     }
@@ -49,11 +50,8 @@ pub fn receive(self: *Channel, io: std.Io) anyerror!MiddlewareEvent {
 /// while (channel.tryReceive(io)) |event| consume(event);
 /// ```
 pub fn tryReceive(self: *Channel, io: std.Io) ?MiddlewareEvent {
-    while (self.events.tryReceive(io)) |received| {
-        var event = received;
-        defer std.crypto.secureZero(u8, &event.credential.token);
-
-        if (self.credentials.contains(io, &event.credential)) {
+    while (self.events.tryReceive(io)) |event| {
+        if (self.credentials.holds(io, event.owner)) {
             return event;
         }
     }
@@ -87,7 +85,7 @@ pub fn metrics(self: *const Channel) QueueMetrics {
 /// channel.publish(io, event);
 /// ```
 pub fn publish(self: *Channel, io: std.Io, event: MiddlewareEvent) void {
-    if (!self.credentials.contains(io, &event.credential)) {
+    if (!self.credentials.holds(io, event.owner)) {
         return;
     }
 

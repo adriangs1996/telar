@@ -1,6 +1,6 @@
-const Credential = @import("Credential.zig");
+const CredentialId = @import("CredentialId.zig");
 const Target = @import("Target.zig");
 const Authenticated = @This();
 
-credential: Credential,
+owner: CredentialId,
 target: Target,

@@ -38,8 +38,9 @@ Part, exchange, and global byte quotas are fixed by validated runtime config.
 Allocation failure and quota exhaustion stop capture for the affected data but
 do not stop forwarding. Decompression supports at most two reverse-ordered
 codings and caps its output. Unknown or invalid encodings retain raw captured
-bytes. The pane token exists only in the queue envelope and is erased after
-publication or delivery; retained halves carry only pane ID and generation.
+bytes. Queue envelopes name the pane credential by its non-secret `CredentialId`,
+checked against the registry at publication and delivery; the token never
+enters the queue, and retained halves carry only pane ID and generation.
 
 ## Validation
 

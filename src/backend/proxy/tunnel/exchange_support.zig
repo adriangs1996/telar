@@ -40,7 +40,7 @@ fn testExchange(observations: *Channel, counters: *Counters) !Exchange {
         .io = std.testing.io,
         .observations = observations,
         .telemetry = counters,
-        .credential = credential,
+        .owner = observations.credentials.identify(std.testing.io, &credential).?,
         .dialect = .anthropic_messages,
         .connection_id = 17,
         .protocol = .h2,
@@ -63,7 +63,7 @@ test "published status carries authenticated exchange identity" {
 
     const event = observations.tryReceive(std.testing.io).?;
     try std.testing.expect(observations.tryReceive(std.testing.io) == null);
-    try std.testing.expect(std.meta.eql(exchange.credential, event.credential));
+    try std.testing.expectEqualDeep(exchange.owner, event.owner);
     try std.testing.expectEqual(types.ApiDialect.anthropic_messages, event.dialect);
     try std.testing.expectEqual(middleware.Phase.response_finished, event.phase);
     try std.testing.expectEqual(middleware.Protocol.h2, event.protocol);

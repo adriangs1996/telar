@@ -35,7 +35,7 @@ test "disabled capture does not allocate or reserve quota" {
     defer producer.close(std.testing.io);
 
     try std.testing.expect(producer.start(.{
-        .credential = credential,
+        .owner = registry.identify(std.testing.io, &credential).?,
         .dialect = .unknown,
         .protocol = .http11,
         .key = .{ .connection_id = 1, .stream_id = 0 },

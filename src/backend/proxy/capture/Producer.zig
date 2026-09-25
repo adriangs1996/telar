@@ -7,7 +7,7 @@ const Channel = @import("Channel.zig");
 const Registry = @import("../Registry.zig");
 const StartOptions = @import("StartOptions.zig");
 const Half = owned.Half;
-const Credential = @import("../Credential.zig");
+const CredentialId = @import("../CredentialId.zig");
 const decode_mod = exchangecapture.decode;
 const buffer = exchangecapture.buffer_support;
 const CaptureMetrics = @import("CaptureMetrics.zig");
@@ -49,8 +49,8 @@ pub fn start(self: *Producer, options: StartOptions) ?*Half {
         .config = self.config,
         .meta = .{
             .pane = .{
-                .id = options.credential.pane_id,
-                .generation = options.credential.pane_generation,
+                .id = options.owner.pane_id,
+                .generation = options.owner.pane_generation,
             },
             .dialect = options.dialect,
             .protocol = options.protocol,
@@ -77,7 +77,7 @@ pub fn start(self: *Producer, options: StartOptions) ?*Half {
 /// Transfers a finished half to the runtime or frees it when delivery fails.
 ///
 /// ```zig
-/// producer.publish(io, .{ .credential = credential, .half = half });
+/// producer.publish(io, .{ .owner = exchange.owner, .half = half });
 /// ```
 pub fn publish(self: *Producer, io: std.Io, publication: CapturePublication) void {
     if (publication.half.head.truncated or publication.half.body.truncated) {
@@ -85,7 +85,7 @@ pub fn publish(self: *Producer, io: std.Io, publication: CapturePublication) voi
     }
 
     _ = self.channel.publish(io, .{
-        .credential = publication.credential,
+        .owner = publication.owner,
         .half = publication.half,
     });
 }
@@ -185,6 +185,6 @@ const InitOptions = struct {
 };
 
 const CapturePublication = struct {
-    credential: Credential,
+    owner: CredentialId,
     half: *Half,
 };
