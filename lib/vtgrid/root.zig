@@ -7,6 +7,7 @@ const blit_module = @import("blit.zig");
 const damage = @import("damage.zig");
 
 pub const Diff = @import("Diff.zig");
+pub const Counting = @import("Counting.zig").Counting;
 pub const GenericSearch = @import("GenericSearch.zig").Type;
 pub const SearchLimits = @import("SearchLimits.zig");
 pub const TestPane = @import("TestPane.zig");
@@ -15,6 +16,7 @@ pub const collectSpans = damage.collectSpans;
 pub const selectionText = blit_module.selectionText;
 
 test {
+    _ = @import("Counting.zig");
     _ = @import("Diff.zig");
     _ = @import("GenericSearch.zig");
     _ = @import("SearchLimits.zig");

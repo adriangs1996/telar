@@ -26,6 +26,7 @@ pub fn deinit(self: *FrameContext) void {
 pub fn encode(self: *FrameContext) ![]const u8 {
     const diff = vtgrid.collectSpans(
         core.Span,
+        .off,
         .{
             .current = self.damage.current,
             .acknowledged = self.damage.acknowledged,

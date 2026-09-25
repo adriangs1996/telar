@@ -8,5 +8,5 @@ coalesced_spans: usize = 0,
 bridged_cells: usize = 0,
 bytes_saved: usize = 0,
 snapshot_required: bool = false,
-/// Cell comparisons made, for callers that profile the scan.
+/// Cell comparisons made; zero unless the scan counted them.
 comparisons: u64 = 0,

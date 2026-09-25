@@ -3,6 +3,7 @@
 const cellcodec = @import("cellcodec");
 const cellgrid = @import("cellgrid");
 const Diff = @import("Diff.zig");
+const Counting = @import("Counting.zig").Counting;
 const std = @import("std");
 
 /// Compares only rows which RenderState reported as dirty.
@@ -11,11 +12,12 @@ const std = @import("std");
 /// screen after several PTY writes cancel each other out. Runs on the same row
 /// share a span when encoding their unchanged gap costs no more than another
 /// span header. Adjacent runs across a row boundary also remain one span.
+/// `Diff.comparisons` is filled only when `counting` is `.comparisons`.
 ///
 /// ```zig
-/// const diff = collectSpans(Span, .{ .current = current, .acknowledged = acknowledged, .cols = cols, .damaged_rows = damaged, .span_header_size = 12 }, storage);
+/// const diff = collectSpans(Span, .off, .{ .current = current, .acknowledged = acknowledged, .cols = cols, .damaged_rows = damaged, .span_header_size = 12 }, storage);
 /// ```
-pub fn collectSpans(comptime Span: type, input: Input, storage: []Span) Diff {
+pub fn collectSpans(comptime Span: type, comptime counting: Counting, input: Input, storage: []Span) Diff {
     const current = input.current;
     const acknowledged = input.acknowledged;
     const cols = input.cols;
@@ -38,7 +40,10 @@ pub fn collectSpans(comptime Span: type, input: Input, storage: []Span) Diff {
         const row_end = index + cols;
         while (index < row_end) {
             if (compare: {
-                result.comparisons += 1;
+                if (counting == .comparisons) {
+                    result.comparisons += 1;
+                }
+
                 break :compare current[index].eqlPublic(&acknowledged[index]);
             }) {
                 index += 1;
@@ -48,7 +53,10 @@ pub fn collectSpans(comptime Span: type, input: Input, storage: []Span) Diff {
             const start = index;
             while (index < row_end and
                 compare: {
-                    result.comparisons += 1;
+                    if (counting == .comparisons) {
+                        result.comparisons += 1;
+                    }
+
                     break :compare !current[index].eqlPublic(&acknowledged[index]);
                 })
             {
@@ -115,7 +123,7 @@ test "damage limits patch generation to dirty rows" {
     const damaged_rows = [_]bool{ true, false, false };
     var spans: [4]TestSpan = undefined;
 
-    const diff = collectSpans(TestSpan, .{ .current = &current, .acknowledged = &acknowledged, .cols = 4, .damaged_rows = &damaged_rows, .span_header_size = test_span_header_size }, &spans);
+    const diff = collectSpans(TestSpan, .off, .{ .current = &current, .acknowledged = &acknowledged, .cols = 4, .damaged_rows = &damaged_rows, .span_header_size = test_span_header_size }, &spans);
     try std.testing.expectEqual(@as(usize, 1), diff.damaged_rows);
     try std.testing.expectEqual(@as(usize, 4), diff.scanned_cells);
     try std.testing.expectEqual(@as(usize, 1), diff.span_count);
@@ -131,7 +139,7 @@ test "damage from separate rows accumulates without scanning the gap" {
     const damaged_rows = [_]bool{ true, false, true };
     var spans: [4]TestSpan = undefined;
 
-    const diff = collectSpans(TestSpan, .{ .current = &current, .acknowledged = &acknowledged, .cols = 4, .damaged_rows = &damaged_rows, .span_header_size = test_span_header_size }, &spans);
+    const diff = collectSpans(TestSpan, .off, .{ .current = &current, .acknowledged = &acknowledged, .cols = 4, .damaged_rows = &damaged_rows, .span_header_size = test_span_header_size }, &spans);
     try std.testing.expectEqual(@as(usize, 2), diff.damaged_rows);
     try std.testing.expectEqual(@as(usize, 8), diff.scanned_cells);
     try std.testing.expectEqual(@as(usize, 2), diff.span_count);
@@ -147,7 +155,7 @@ test "adjacent damage across rows stays one span" {
     const damaged_rows = [_]bool{ true, true };
     var spans: [2]TestSpan = undefined;
 
-    const diff = collectSpans(TestSpan, .{ .current = &current, .acknowledged = &acknowledged, .cols = 4, .damaged_rows = &damaged_rows, .span_header_size = test_span_header_size }, &spans);
+    const diff = collectSpans(TestSpan, .off, .{ .current = &current, .acknowledged = &acknowledged, .cols = 4, .damaged_rows = &damaged_rows, .span_header_size = test_span_header_size }, &spans);
     try std.testing.expectEqual(@as(usize, 1), diff.span_count);
     try std.testing.expectEqual(@as(u32, 3), spans[0].start);
     try std.testing.expectEqual(@as(usize, 2), spans[0].cells.len);
@@ -161,7 +169,7 @@ test "short unchanged gaps share a cheaper span" {
     const damaged_rows = [_]bool{true};
     var spans: [2]TestSpan = undefined;
 
-    const diff = collectSpans(TestSpan, .{ .current = &current, .acknowledged = &acknowledged, .cols = 8, .damaged_rows = &damaged_rows, .span_header_size = test_span_header_size }, &spans);
+    const diff = collectSpans(TestSpan, .off, .{ .current = &current, .acknowledged = &acknowledged, .cols = 8, .damaged_rows = &damaged_rows, .span_header_size = test_span_header_size }, &spans);
     try std.testing.expectEqual(@as(usize, 1), diff.span_count);
     try std.testing.expectEqual(@as(usize, 1), diff.coalesced_spans);
     try std.testing.expectEqual(@as(usize, 2), diff.bridged_cells);
@@ -184,7 +192,7 @@ test "an expensive gap keeps separate spans" {
     const damaged_rows = [_]bool{true};
     var spans: [2]TestSpan = undefined;
 
-    const diff = collectSpans(TestSpan, .{ .current = &current, .acknowledged = &acknowledged, .cols = 32, .damaged_rows = &damaged_rows, .span_header_size = test_span_header_size }, &spans);
+    const diff = collectSpans(TestSpan, .off, .{ .current = &current, .acknowledged = &acknowledged, .cols = 32, .damaged_rows = &damaged_rows, .span_header_size = test_span_header_size }, &spans);
     try std.testing.expectEqual(@as(usize, 2), diff.span_count);
     try std.testing.expectEqual(@as(usize, 0), diff.coalesced_spans);
     try std.testing.expectEqual(@as(usize, 0), diff.bridged_cells);
@@ -198,8 +206,50 @@ test "too many damaged runs request a snapshot" {
     const damaged_rows = [_]bool{true};
     var spans: [1]TestSpan = undefined;
 
-    const diff = collectSpans(TestSpan, .{ .current = &current, .acknowledged = &acknowledged, .cols = 32, .damaged_rows = &damaged_rows, .span_header_size = test_span_header_size }, &spans);
+    const diff = collectSpans(TestSpan, .off, .{ .current = &current, .acknowledged = &acknowledged, .cols = 32, .damaged_rows = &damaged_rows, .span_header_size = test_span_header_size }, &spans);
     try std.testing.expect(diff.snapshot_required);
+}
+
+test "counting comparisons leaves every span and statistic unchanged" {
+    const cols = 16;
+    const rows = 6;
+    var prng = std.Random.DefaultPrng.init(0x7e1a);
+    const random = prng.random();
+
+    for (0..200) |_| {
+        var acknowledged: [cols * rows]cellgrid.Cell = @splat(.{});
+        var current = acknowledged;
+        var damaged_rows: [rows]bool = undefined;
+        for (&damaged_rows) |*damaged| {
+            damaged.* = random.boolean();
+        }
+
+        for (&current) |*cell| {
+            if (random.uintLessThan(u8, 4) == 0) {
+                cell.bytes[0] = 'a' + random.uintLessThan(u8, 3);
+            }
+        }
+
+        var counted_spans: [8]TestSpan = undefined;
+        var plain_spans: [8]TestSpan = undefined;
+        const input: Input = .{
+            .current = &current,
+            .acknowledged = &acknowledged,
+            .cols = cols,
+            .damaged_rows = &damaged_rows,
+            .span_header_size = test_span_header_size,
+        };
+        const counted = collectSpans(TestSpan, .comparisons, input, &counted_spans);
+        const plain = collectSpans(TestSpan, .off, input, &plain_spans);
+
+        var expected = counted;
+        expected.comparisons = 0;
+        try std.testing.expectEqualDeep(expected, plain);
+        try std.testing.expectEqualDeep(counted_spans[0..counted.span_count], plain_spans[0..plain.span_count]);
+        if (!counted.snapshot_required) {
+            try std.testing.expect(counted.comparisons >= counted.scanned_cells);
+        }
+    }
 }
 
 const Input = struct {

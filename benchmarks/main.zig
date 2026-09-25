@@ -236,6 +236,7 @@ fn runDamage(context: *DamageContext, iterations: usize) !u64 {
         context.current[context.changed_index].bytes[0] = if (iteration & 1 == 0) '0' else '1';
         const diff = vtgrid.collectSpans(
             core.Span,
+            .off,
             .{
                 .current = context.current,
                 .acknowledged = context.acknowledged,

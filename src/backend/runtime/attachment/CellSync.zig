@@ -239,6 +239,7 @@ pub fn prepare(self: *Sync, preparation: Preparation) !?[]const u8 {
     const diff = if (snapshot) Diff{} else collect: {
         const collected = vtgrid.collectSpans(
             core.Span,
+            if (core.profiling.enabled) .comparisons else .off,
             .{
                 .current = source.cells,
                 .acknowledged = self.acknowledged.cells,
