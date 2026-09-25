@@ -90,7 +90,8 @@ pub fn shutdownDelivered(model: *const RuntimeModel) bool {
 }
 
 /// The runtime state every client's delivery reads in this flush.
-fn deliverySources(model: *RuntimeModel) Sources {
+/// Example: `const sources = client_delivery.deliverySources(model);`.
+pub fn deliverySources(model: *RuntimeModel) Sources {
     return .{
         .panes = &model.panes,
         .workspaces = &model.workspaces,

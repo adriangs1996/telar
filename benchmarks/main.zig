@@ -29,6 +29,8 @@ const GraphicsContext = @import("GraphicsContext.zig");
 const TransmitContext = @import("TransmitContext.zig");
 const KgpIngestContext = @import("KgpIngestContext.zig");
 const SharedFrameContext = @import("SharedFrameContext.zig");
+const IdleDeliveryContext = @import("IdleDeliveryContext.zig");
+const IdleDeliveryShape = @import("IdleDeliveryShape.zig");
 const Fixture = @import("Fixture.zig");
 const Config = @import("Config.zig");
 const client_storage = @import("client_storage.zig");
@@ -136,6 +138,14 @@ const cases = [_]Case{
         .p99_budget_ns = std.time.ns_per_ms,
     },
     .{ .name = "backend.blit.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
+    .{ .name = "backend.delivery.flush_idle_2x8", .work_per_op = 1, .work_unit = "flushes" },
+    .{ .name = "backend.delivery.flush_idle_1x32", .work_per_op = 1, .work_unit = "flushes" },
+};
+
+/// A TUI and a GUI on one eight-pane tab, and one client on a crowded tab.
+const idle_delivery_shapes = [_]IdleDeliveryShape{
+    .{ .clients = 2, .panes = 8, .size = .{ .cols = cols, .rows = rows } },
+    .{ .clients = 1, .panes = 32, .size = .{ .cols = cols, .rows = rows } },
 };
 
 fn timestamp(io: std.Io) u64 {
@@ -249,6 +259,18 @@ fn runDamage(context: *DamageContext, iterations: usize) !u64 {
         checksum +%= diff.scanned_cells + diff.span_count;
     }
     return checksum;
+}
+
+fn runIdleDelivery(context: *IdleDeliveryContext, iterations: usize) !u64 {
+    for (0..iterations) |_| {
+        try context.idle.flush();
+    }
+
+    if (!context.idle.quiet()) {
+        return error.IdleDeliveryStartedWrite;
+    }
+
+    return iterations;
 }
 
 fn runFrame(context: *FrameContext, iterations: usize) !u64 {
@@ -816,6 +838,17 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
             try measure(.{ .io = io, .config = config, .context = &context }, runBlit),
         );
     }
+
+    for (idle_delivery_shapes) |shape| {
+        const case = cases[case_index];
+        case_index += 1;
+        if (config.includes(case.name)) {
+            var context: IdleDeliveryContext = undefined;
+            try context.init(io, gpa, resources.environ, shape);
+            defer context.deinit();
+            try result_writer.write(case, try measure(.{ .io = io, .config = config, .context = &context }, runIdleDelivery));
+        }
+    }
     std.debug.assert(case_index == cases.len);
 }
 
@@ -899,7 +932,7 @@ pub fn main(init: std.process.Init) !void {
     var fixture = try Fixture.init(gpa.allocator());
     defer fixture.deinit();
 
-    try execute(.{ .writer = writer, .config = config }, .{ .io = init.io, .gpa = gpa.allocator() }, &fixture);
+    try execute(.{ .writer = writer, .config = config }, .{ .io = init.io, .gpa = gpa.allocator(), .environ = init.minimal.environ }, &fixture);
     try writer.flush();
 }
 
@@ -1015,6 +1048,7 @@ const Measurement = struct {
 const ExecutionResources = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
+    environ: std.process.Environ,
 };
 
 const OutboxContext = struct {

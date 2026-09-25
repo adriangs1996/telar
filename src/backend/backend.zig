@@ -12,6 +12,7 @@ pub const ca_identity = @import("proxy/ca_identity.zig");
 pub const Config = @import("proxy/Config.zig");
 pub const FileQueryView = @import("media/FileQueryView.zig");
 pub const GraphicsLimits = @import("media/GraphicsLimits.zig");
+pub const IdleDelivery = @import("runtime/IdleDelivery.zig");
 pub const IngestTestGate = @import("runtime/IngestTestGate.zig");
 pub const Initialization = @import("runtime/Initialization.zig");
 pub const LaunchPhase = model.LaunchPhase;
