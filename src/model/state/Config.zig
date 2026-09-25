@@ -1,6 +1,6 @@
 //! Client settings adopted from the active configuration generation. Startup
 //! and every reload write it the same way, so no setting waits for a reload.
-const NotificationDelivery = @import("../types/NotificationDelivery.zig").NotificationDelivery;
+const NotificationDelivery = @import("../notifications/NotificationDelivery.zig").NotificationDelivery;
 const AppearanceThemes = @import("../appearance/AppearanceThemes.zig");
 const SidebarRendering = @import("../config/sidebar_rendering.zig").SidebarRendering;
 const Config = @This();

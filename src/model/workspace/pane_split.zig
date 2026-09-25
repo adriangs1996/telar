@@ -14,6 +14,7 @@ const ClientModel = @import("../state/ClientModel.zig");
 const PaneSplit = @import("PaneSplit.zig");
 const multiplexer = @import("multiplexer.zig");
 const tab_layout = @import("tab_layout.zig");
+const core = @import("telar-core");
 
 /// Adds `request.new_pane` beside `request.existing_pane` in tab `slot`.
 /// Example: `try pane_split.split(model, slot, request);`
@@ -156,7 +157,7 @@ pub fn commitSplit(model: *ClientModel, command: CommitPaneSplit) !model_data.Pa
 /// ```zig
 /// const recovery = pane_split.recover(model, .{ .split = split, .area = area });
 /// ```
-pub fn recover(model: *ClientModel, command: RecoverPaneSplit) model_data.PaneSplitRecovery {
+pub fn recover(model: *ClientModel, command: RecoverPaneSplit) PaneSplitRecovery {
     const workspace = model.workspace orelse return .stale;
     if (!std.meta.eql(workspace, command.split.location.workspace)) {
         return .stale;
@@ -192,3 +193,9 @@ fn finishSplit(model: *const ClientModel, command: CommitPaneSplit, state: PaneS
         .panes_revision = model.panes_revision,
     };
 }
+
+const PaneSplitRecovery = union(enum) {
+    resize: core.PaneResize,
+    not_required,
+    stale,
+};

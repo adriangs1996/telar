@@ -24,7 +24,7 @@ pub fn Type(comptime Delivery: type) type {
             width: u32,
             height: u32,
             marker_policy: model_data.AttachmentMarkerPolicy,
-            marker: ?model_data.AttachmentMarkerIdentity = null,
+            marker: ?AttachmentMarkerIdentity = null,
             retire_pending: bool = false,
 
             pub fn markerNumber(self: *const Slot) ?u16 {
@@ -608,4 +608,9 @@ pub fn Type(comptime Delivery: type) type {
 const PendingDeletion = struct {
     target: data.AttachmentTarget,
     frames: u8,
+};
+
+const AttachmentMarkerIdentity = union(enum) {
+    number: u16,
+    path: model_data.attachments_path_marker.Uuid,
 };

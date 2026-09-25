@@ -147,14 +147,22 @@ of them: every package imports the libraries it uses by name.
   `src/backend/proxy/capture/Channel.zig` duplicated one bounded queue over
   two payload types. The queue is `dropqueue`; each channel keeps only the
   credential gate and what its payload owns.
-- Two different types named `SessionTitle` (`history/`, `agent/`); rename the
-  history one.
+- Two different types named `SessionTitle` (resolved): history's row, with
+  its session id and pending or failed placeholders, is `StoredSessionTitle`;
+  the durable title a checkpoint carries stays `agent/SessionTitle`.
 - `src/core/select.zig` (resolved): the history filters had already left;
   the selection model, `Range` and `ClickTracker` are `cellgrid.selection`,
   `cellgrid.SelectionRange` and `cellgrid.ClickTracker`.
-- `src/model/types` holds 87 files averaging 13 lines; each folds into the
-  flow or table that owns it.
-- `src/gui/experiments` is not reached by any build step.
+- `src/model/types` (resolved): its 86 files are gone. Measured by who names
+  each type, three had no user and were deleted; 31 had one user and are
+  private declarations in it, 18 of them in the client flow that was their
+  only reader; 51 that several files name live beside the flow or table that
+  owns them, and `Action` is declared in `input/action.zig`, the module that
+  already published it.
+- `src/gui/experiments` (resolved): measured, `frame/` is reached, since
+  `run_widget.zig` builds the frame composition lab from it; `review/` lost
+  its entry point when `run-widget` moved to that lab, nothing compiled or
+  tested it since, and it is gone.
 
 ## Order
 

@@ -1,5 +1,5 @@
 //! Fixed-depth playback state for one disposable client.
-const SoundRequestOutcome = @import("../types/SoundRequestOutcome.zig").SoundRequestOutcome;
+const SoundRequestOutcome = @import("SoundRequestOutcome.zig").SoundRequestOutcome;
 
 const core = @import("telar-core");
 const Playback = @import("SoundPlayback.zig");

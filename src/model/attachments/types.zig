@@ -13,6 +13,6 @@ pub const max_removal_keys: usize = 256;
 /// key. The child may publish an unrelated frame before it redraws its editor.
 pub const deletion_watch_frames: u8 = 3;
 
-pub const Id = @import("../types/AttachmentId.zig").AttachmentId;
+pub const Id = @import("AttachmentId.zig").AttachmentId;
 
-pub const MarkerDeletion = @import("../types/AttachmentMarkerDeletion.zig").AttachmentMarkerDeletion;
+pub const MarkerDeletion = @import("AttachmentMarkerDeletion.zig").AttachmentMarkerDeletion;

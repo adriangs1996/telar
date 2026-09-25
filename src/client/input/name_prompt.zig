@@ -84,7 +84,7 @@ pub fn chooseDirectory(client: *Client, index: u16, revision: u64) !void {
 /// submissions close the prompt after delivery; blocked or failed
 /// effects leave the prompt intact.
 /// Example: `_ = try name_prompt.inputPrompt(app, input);`
-pub fn inputPrompt(client: *Client, input: name_prompts.Input) !data.PromptOutcome {
+pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
     const before = promptListSnapshot(&client.model.name_prompt);
     const directory_before = promptDirectoryVersion(&client.model.name_prompt);
     const command = name_prompts.commandFor(input);
@@ -427,7 +427,7 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
     };
 }
 
-fn applyPromptCommand(client: *Client, command: data.PromptCommand) !data.PromptOutcome {
+fn applyPromptCommand(client: *Client, command: data.PromptCommand) !PromptOutcome {
     return switch (client.model.name_prompt.apply(command)) {
         .unchanged => .unchanged,
         .routing_changed => .routing_changed,
@@ -443,3 +443,18 @@ fn applyPromptCommand(client: *Client, command: data.PromptCommand) !data.Prompt
         },
     };
 }
+
+const PromptOutcome = enum {
+    unchanged,
+    routing_changed,
+    changed,
+    cancelled,
+    /// The palette asked to delete its selected entry; the controller owns
+    /// the wire effect.
+    removed,
+    /// The directory field asked for its selected completion; the
+    /// controller owns the completion list.
+    completion_requested,
+    blocked,
+    finished,
+};

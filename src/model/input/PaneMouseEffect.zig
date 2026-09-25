@@ -1,5 +1,5 @@
-const ScrollEffect = @import("../input/ScrollEffect.zig");
-const ReportEffect = @import("../input/ReportEffect.zig");
+const ScrollEffect = @import("ScrollEffect.zig");
+const ReportEffect = @import("ReportEffect.zig");
 
 pub const PaneMouseEffect = union(enum) {
     viewport: ScrollEffect,

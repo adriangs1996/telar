@@ -9,7 +9,7 @@ const std = @import("std");
 const CommandEntry = @import("CommandEntry.zig");
 const CommandResults = @import("CommandResults.zig");
 
-pub const Prefix = @import("../types/CommandPalettePrefix.zig").CommandPalettePrefix;
+pub const Prefix = @import("CommandPalettePrefix.zig").CommandPalettePrefix;
 
 /// Built-in actions in palette order. Every entry routes through the same
 /// action dispatch as its key binding; there is no palette-only side effect.

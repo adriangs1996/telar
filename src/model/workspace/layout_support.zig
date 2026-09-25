@@ -17,11 +17,9 @@ pub const default_split_ratio: u16 = core.client_layout_ratio_scale / 2;
 
 pub const resize_step: u16 = core.client_layout_ratio_scale / 20;
 
-pub const Axis = @import("../types/LayoutAxis.zig").LayoutAxis;
+pub const Axis = @import("LayoutAxis.zig").LayoutAxis;
 
-pub const Direction = @import("../types/LayoutDirection.zig").LayoutDirection;
-
-pub const Node = @import("../types/LayoutNode.zig").LayoutNode;
+pub const Direction = @import("LayoutDirection.zig").LayoutDirection;
 
 pub fn splitArea(geometry: SplitGeometry) [2]cellgrid.Rect {
     std.debug.assert(geometry.ratio <= core.client_layout_ratio_scale);

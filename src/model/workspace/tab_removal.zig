@@ -7,6 +7,8 @@ const model_namespace = @import("../state/model_namespace.zig");
 const model_data = @import("../model.zig");
 const core = @import("telar-core");
 const ClientModel = @import("../state/ClientModel.zig");
+const TabRemoval = @import("../state/TabRemoval.zig");
+const StaleTabRemoval = @import("../state/StaleTabRemoval.zig");
 
 /// Removes one tab and its panes, keeping the active tab when it survives.
 /// Removing the last tab leaves no workspace.
@@ -33,7 +35,7 @@ pub fn remove(model: *ClientModel, tab_id: core.TabId) bool {
 /// ```zig
 /// const commit = try tab_removal.commitRemoval(model, command);
 /// ```
-pub fn commitRemoval(model: *ClientModel, command: RemoveTab) !model_data.TabRemovalCommit {
+pub fn commitRemoval(model: *ClientModel, command: RemoveTab) !TabRemovalCommit {
     const workspace = model.workspace orelse
         return staleRemoval(model, command.location, .workspace);
     if (!std.meta.eql(workspace, command.location.workspace)) {
@@ -86,7 +88,7 @@ pub fn commitRemoval(model: *ClientModel, command: RemoveTab) !model_data.TabRem
     } };
 }
 
-fn staleRemoval(model: *const ClientModel, location: core.TabLocation, absence: model_data.TabRemovalAbsence) model_data.TabRemovalCommit {
+fn staleRemoval(model: *const ClientModel, location: core.TabLocation, absence: model_data.TabRemovalAbsence) TabRemovalCommit {
     return .{ .stale = .{
         .location = location,
         .absence = absence,
@@ -97,3 +99,8 @@ fn staleRemoval(model: *const ClientModel, location: core.TabLocation, absence: 
         .copy_revision = model.copy_revision,
     } };
 }
+
+const TabRemovalCommit = union(enum) {
+    removed: TabRemoval,
+    stale: StaleTabRemoval,
+};

@@ -1,6 +1,10 @@
-const PaneInputTarget = @import("../types/PaneInputTarget.zig").PaneInputTarget;
-const PanePasteMarker = @import("../types/PanePasteMarker.zig").PanePasteMarker;
+const PaneInputTarget = @import("PaneInputTarget.zig").PaneInputTarget;
 const PasteMarkerCommand = @This();
 
 target: PaneInputTarget,
 marker: PanePasteMarker,
+
+const PanePasteMarker = enum {
+    start,
+    finish,
+};

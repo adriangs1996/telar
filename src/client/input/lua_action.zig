@@ -10,7 +10,7 @@ const pane_input = @import("../panes/pane_input.zig");
 const plugin_actions = @import("../plugins/plugin_actions.zig");
 const Client = @import("../execution/Client.zig");
 
-pub fn executeLuaAction(client: *Client, command: data.LuaActionCommand) !keyinput.Control {
+pub fn executeLuaAction(client: *Client, command: LuaActionCommand) !keyinput.Control {
     const copy_mode_active = copy_mode.copyModeActive(client);
     const outcome = try evaluateLuaAction(client, command);
     switch (outcome) {
@@ -38,7 +38,7 @@ pub fn executeLuaAction(client: *Client, command: data.LuaActionCommand) !keyinp
 }
 
 /// Evaluates one configured Lua action against a model value snapshot.
-fn evaluateLuaAction(client: *Client, command: data.LuaActionCommand) !data.LuaActionOutcome {
+fn evaluateLuaAction(client: *Client, command: LuaActionCommand) !LuaActionOutcome {
     var diagnostic: data.Diagnostic = .{};
     const callback_context = data.plugin_action.callbackContext(&client.model);
     const generation = client.lua_generation orelse return .unavailable;
@@ -111,7 +111,7 @@ fn evaluateLuaAction(client: *Client, command: data.LuaActionCommand) !data.LuaA
     };
 }
 
-fn applyLuaEffect(client: *Client, effect: data.Action) !data.LuaDisposition {
+fn applyLuaEffect(client: *Client, effect: data.Action) !LuaDisposition {
     return switch (effect) {
         .plugin => |requested| plugin: {
             _ = try plugin_actions.startPluginAction(client, requested, data.plugin_action.callbackContext(&client.model));
@@ -139,3 +139,22 @@ fn publishLuaFailure(model: *data.ClientModel, failure: data.Failure) !void {
         },
     );
 }
+
+const LuaActionCommand = union(enum) {
+    callback: data.InputCallbackRef,
+    expression: data.InputCallbackRef,
+};
+
+const LuaActionOutcome = union(enum) {
+    applied,
+    exit,
+    input: data.effects.InputDecision,
+    unavailable,
+    invocation_failed: anyerror,
+    validation_failed: anyerror,
+};
+
+const LuaDisposition = enum {
+    continue_client,
+    exit_client,
+};

@@ -14,7 +14,7 @@ const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 const Client = @import("../execution/Client.zig");
 
 /// Recovers the correlated operation before publishing its failure notification.
-pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !data.RequestFailureOutcome {
+pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !RequestFailureOutcome {
     const continuation = client.model.request_lifecycle.tracker.take(failure.request_id) orelse {
         reportRuntimeFailure(failure.message);
 
@@ -128,3 +128,10 @@ fn reportRuntimeFailure(message: []const u8) void {
         },
     );
 }
+
+const RequestFailureOutcome = enum {
+    ignored,
+    recovered,
+    notified,
+    fatal,
+};

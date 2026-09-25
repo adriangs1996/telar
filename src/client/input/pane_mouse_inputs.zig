@@ -91,7 +91,7 @@ test "pane mouse pixel reports use cell centers without exact host pixels" {
 /// Resolves a pointer event or focused scroll without exposing pane storage
 /// or child mouse modes to the caller.
 /// Example: `_ = try pane_mouse_input.inputPaneMouse(app, tab, command);`
-pub fn inputPaneMouse(client: *Client, tab: usize, command: data.PaneMouseCommand) !data.PaneMouseOutcome {
+pub fn inputPaneMouse(client: *Client, tab: usize, command: PaneMouseCommand) !PaneMouseOutcome {
     const area = client.geometry().area;
     const resolved: data.Resolved = switch (command) {
         .pointer => |pointer| .{
@@ -264,3 +264,16 @@ fn deliverPaneMouseReport(client: *Client, report: data.ReportEffect, retained: 
         },
     );
 }
+
+const PaneMouseCommand = union(enum) {
+    pointer: data.PointerCommand,
+    focused_scroll: data.actions.ScrollDirection,
+};
+
+const PaneMouseOutcome = enum {
+    ignored,
+    viewport_selected,
+    alternate_scroll_selected,
+    report_selected,
+    selection_started,
+};

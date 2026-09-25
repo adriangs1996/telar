@@ -3,6 +3,8 @@
 const model_data = @import("../model.zig");
 const sidebar = @import("../layout/sidebar.zig");
 const ClientModel = @import("../state/ClientModel.zig");
+const LocalAgentNavigation = @import("../state/LocalAgentNavigation.zig");
+const AgentHandoff = @import("../state/AgentHandoff.zig");
 
 /// Resolves a sidebar identity into local focus or a runtime handoff
 /// without exposing agent replica storage to the input adapter.
@@ -10,7 +12,7 @@ const ClientModel = @import("../state/ClientModel.zig");
 /// ```zig
 /// const plan = agent_navigation.planMove(model, key) orelse return;
 /// ```
-pub fn planMove(model: *const ClientModel, key: model_data.AgentKey) ?model_data.AgentNavigationPlan {
+pub fn planMove(model: *const ClientModel, key: model_data.AgentKey) ?AgentNavigationPlan {
     const agent = model.agent_snapshot.find(key) orelse return null;
     if (model.panes.findConst(key.pane_id)) |pane| {
         const active = model.tabs.activeSlot() orelse return null;
@@ -30,3 +32,8 @@ pub fn planMove(model: *const ClientModel, key: model_data.AgentKey) ?model_data
         },
     } };
 }
+
+const AgentNavigationPlan = union(enum) {
+    local: LocalAgentNavigation,
+    handoff: AgentHandoff,
+};

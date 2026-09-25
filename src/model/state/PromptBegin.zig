@@ -1,6 +1,6 @@
 const core = @import("telar-core");
 const copy_mode = @import("../input/copy_mode.zig");
-const command_palette = @import("../state/command_palette.zig");
+const command_palette = @import("command_palette.zig");
 
 pub const PromptBegin = union(enum) {
     copy_search: copy_mode.Direction,

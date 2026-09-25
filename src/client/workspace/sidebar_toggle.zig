@@ -14,7 +14,7 @@ pub fn toggleSidebar(client: *Client) !data.SidebarLayout {
 
 /// Changes the exact or stepped width. Example: `_ = try resize(client, .{ .exact = 73 });`.
 /// Example: `_ = try sidebar_toggle.resizeSidebar(app, requested);`
-pub fn resizeSidebar(client: *Client, requested: data.SidebarResize) !?data.SidebarLayout {
+pub fn resizeSidebar(client: *Client, requested: SidebarResize) !?data.SidebarLayout {
     const change = switch (requested) {
         .exact => |width| data.sidebar.setWidth(&client.model, width),
         .direction => |direction| data.sidebar.stepWidth(&client.model, direction),
@@ -41,3 +41,8 @@ pub fn deliverSidebarLayout(client: *Client, change: data.SidebarLayout) !void {
 test "sidebar projection rejects changes that are not the current model commit" {
     try client_tests.rejectStaleSidebarCommits(deliverSidebarLayout);
 }
+
+const SidebarResize = union(enum) {
+    exact: u16,
+    direction: data.sidebar.Direction,
+};

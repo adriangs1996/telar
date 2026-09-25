@@ -1,11 +1,11 @@
 const core = @import("telar-core");
-const AgentHistoryOperation = @import("../connection/AgentHistoryOperation.zig");
-const AgentOperation = @import("../connection/AgentOperation.zig");
-const InitialOpen = @import("../connection/InitialOpen.zig");
-const Split = @import("../connection/Split.zig");
-const PaneOperation = @import("../connection/PaneOperation.zig");
-const CreateTab = @import("../connection/CreateTab.zig");
-const ChangeReviewOperation = @import("../connection/ChangeReviewOperation.zig");
+const AgentHistoryOperation = @import("AgentHistoryOperation.zig");
+const AgentOperation = @import("AgentOperation.zig");
+const InitialOpen = @import("InitialOpen.zig");
+const Split = @import("Split.zig");
+const PaneOperation = @import("PaneOperation.zig");
+const CreateTab = @import("CreateTab.zig");
+const ChangeReviewOperation = @import("ChangeReviewOperation.zig");
 const Group = @import("RequestsGroup.zig").RequestsGroup;
 
 pub const RequestsContinuation = union(enum) {

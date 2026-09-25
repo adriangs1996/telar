@@ -9,7 +9,7 @@ pub const default_width: u16 = minimum_width;
 pub const minimum_workbench_width: u16 = 20;
 pub const resize_step: u16 = 2;
 
-pub const Direction = @import("../types/SidebarDirection.zig").SidebarDirection;
+pub const Direction = @import("SidebarDirection.zig").SidebarDirection;
 
 /// Returns the visible width while retaining the caller's preferred width.
 ///

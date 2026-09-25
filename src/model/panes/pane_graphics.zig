@@ -3,9 +3,7 @@
 const model_data = @import("../model.zig");
 const core = @import("telar-core");
 const ClientModel = @import("../state/ClientModel.zig");
-pub const Command = @import("../types/PaneGraphicsCommand.zig").PaneGraphicsCommand;
-
-pub const Outcome = @import("../types/PaneGraphicsOutcome.zig").PaneGraphicsOutcome;
+pub const Command = @import("PaneGraphicsCommand.zig").PaneGraphicsCommand;
 
 /// Commits whether one pane needs a cell fallback for host graphics.
 /// Unknown panes and repeated values preserve the semantic revision.

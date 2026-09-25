@@ -1,5 +1,5 @@
-const FieldReplacement = @import("../state/FieldReplacement.zig");
-const WorkspaceForm = @import("../state/WorkspaceForm.zig");
+const FieldReplacement = @import("FieldReplacement.zig");
+const WorkspaceForm = @import("WorkspaceForm.zig");
 
 pub const PromptCommand = union(enum) {
     focus_field: WorkspaceForm.Focus,

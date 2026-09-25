@@ -1,4 +1,4 @@
-const SoundRequestOutcome = @import("../types/SoundRequestOutcome.zig").SoundRequestOutcome;
+const SoundRequestOutcome = @import("SoundRequestOutcome.zig").SoundRequestOutcome;
 const core = @import("telar-core");
 const SoundPolicy = @import("../config/SoundPolicy.zig");
 const playback_support = @import("sound_playback.zig");

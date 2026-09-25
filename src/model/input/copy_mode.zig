@@ -25,7 +25,7 @@ const std = @import("std");
 const View = @import("CopyModeView.zig");
 const chord = keyinput.chord;
 
-pub const Direction = @import("../types/CopyModeDirection.zig").CopyModeDirection;
+pub const Direction = @import("CopyModeDirection.zig").CopyModeDirection;
 
 pub fn pointerSpan(point: Point, granularity: cellgrid.selection.Granularity, screen: Screen) [2]Point {
     const local: cellgrid.Point = .{

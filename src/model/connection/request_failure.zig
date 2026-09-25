@@ -7,8 +7,6 @@ const std = @import("std");
 const client_requests = @import("requests.zig");
 const notifications = @import("../notifications/notifications.zig");
 
-pub const Outcome = @import("../types/RequestFailureOutcome.zig").RequestFailureOutcome;
-
 pub fn notification(command: Command) NotificationInput {
     return .{
         .level = .failure,

@@ -14,7 +14,7 @@ const Center = @import("Center.zig");
 const Input = @import("NotificationInput.zig");
 
 /// Where a published notice is surfaced besides the in-app center.
-pub const Delivery = @import("../types/NotificationDelivery.zig").NotificationDelivery;
+pub const Delivery = @import("NotificationDelivery.zig").NotificationDelivery;
 
 pub const max_items = 4;
 
@@ -25,16 +25,14 @@ pub const transition_duration_ns: u64 = 200 * std.time.ns_per_ms;
 pub const default_duration_ns: u64 = core.default_notification_duration_ms *
     std.time.ns_per_ms;
 
-pub const Id = @import("../types/NotificationId.zig").NotificationId;
+pub const Id = @import("NotificationId.zig").NotificationId;
 
-pub const Level = @import("../types/NotificationLevel.zig").NotificationLevel;
+pub const Level = @import("NotificationLevel.zig").NotificationLevel;
 
 /// A click target is a semantic client action, never a callback or pointer.
 /// The input router resolves it against current state and safely ignores stale
 /// pane, tab, or workspace ids.
-pub const Target = @import("../types/NotificationTarget.zig").NotificationTarget;
-
-pub const Phase = @import("../types/NotificationPhase.zig").NotificationPhase;
+pub const Target = @import("NotificationTarget.zig").NotificationTarget;
 
 pub fn sameNotification(left: *const Item, right: *const Item) bool {
     return left.level == right.level and

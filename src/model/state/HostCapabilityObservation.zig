@@ -1,4 +1,4 @@
-const PixelSize = @import("../state/PixelSize.zig");
+const PixelSize = @import("PixelSize.zig");
 const HostCapabilitySupport = @import("HostCapabilitySupport.zig").HostCapabilitySupport;
 
 pub const HostCapabilityObservation = union(enum) {

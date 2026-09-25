@@ -1,6 +1,6 @@
 //! Configured sidebar renderer and its resolution against host graphics support.
 
-const EnvironmentSupport = @import("../types/EnvironmentSupport.zig").EnvironmentSupport;
+const EnvironmentSupport = @import("../environment/EnvironmentSupport.zig").EnvironmentSupport;
 const std = @import("std");
 
 pub const SidebarRendering = enum {

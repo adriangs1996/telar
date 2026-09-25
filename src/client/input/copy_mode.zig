@@ -16,14 +16,14 @@ pub fn copyModeActive(client: *const Client) bool {
 
 /// Leaves copy mode without copying the current selection.
 /// Example: `_ = try copy_mode.leaveCopyMode(client);`
-pub fn leaveCopyMode(client: *Client) !data.CopyModeOutcome {
+pub fn leaveCopyMode(client: *Client) !CopyModeOutcome {
     const outcome = try applyCopyMode(client, .leave);
     const native = client.host_input_source.leaveThreadCopyMode();
     return if (outcome == .unchanged and native) .exited else outcome;
 }
 
 /// Example: `_ = try copy_mode.applyCopyMode(client, command);`
-pub fn applyCopyMode(client: *Client, command: data.CopyModeCommand) !data.CopyModeOutcome {
+pub fn applyCopyMode(client: *Client, command: data.CopyModeCommand) !CopyModeOutcome {
     defer {
         if (command == .cancel_pointer or (command == .pointer and command.pointer.release)) {
             data.copy_mode.finishPointerGesture(&client.model);
@@ -78,7 +78,7 @@ pub fn enterCopyMode(client: *Client) bool {
 }
 
 /// Applies one runtime search reply to the active copy-mode state.
-pub fn applyPaneMatches(client: *Client, view: core.PaneMatchesView) !data.CopyModeOutcome {
+pub fn applyPaneMatches(client: *Client, view: core.PaneMatchesView) !CopyModeOutcome {
     var storage: [core.max_search_matches]core.SearchMatch = undefined;
     var count: usize = 0;
     var iterator = view.matches();
@@ -104,3 +104,9 @@ pub fn applyPaneMatches(client: *Client, view: core.PaneMatchesView) !data.CopyM
 test "copy mode delegates agent readers after admission and preserves terminal behavior" {
     try copy_mode_tests.agentReaders(enterCopyMode);
 }
+
+const CopyModeOutcome = enum {
+    unchanged,
+    changed,
+    exited,
+};

@@ -1,4 +1,4 @@
-const PaneInputSource = @import("../types/PaneInputSource.zig").PaneInputSource;
+const PaneInputSource = @import("PaneInputSource.zig").PaneInputSource;
 const limits = @import("limits.zig");
 const PreparedPaneInput = @This();
 

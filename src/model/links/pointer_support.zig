@@ -4,8 +4,6 @@ const Pointer = @import("Pointer.zig");
 const LinkTarget = @import("LinkTarget.zig");
 const std = @import("std");
 
-pub const Kind = @import("../types/PointerSupportKind.zig").PointerSupportKind;
-
 test "a link press owns its drag and release" {
     var pointer: Pointer = .{};
     const target = try LinkTarget.init("https://example.com");

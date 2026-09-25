@@ -4,7 +4,7 @@ const tab_move = @import("tab_move.zig");
 const model_data = @import("../model.zig");
 const core = @import("telar-core");
 const ClientModel = @import("../state/ClientModel.zig");
-const Change = @import("../types/Change.zig").Change;
+const Change = @import("../state/Change.zig").Change;
 
 /// Applies a canonical runtime position while keeping the active tab.
 /// Example: `const change = try tab_move.move(model, tab_id, 1);`

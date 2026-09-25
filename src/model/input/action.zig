@@ -6,14 +6,398 @@
 
 const CommandTab = @import("CommandTab.zig");
 const std = @import("std");
+const Notification = @import("Notification.zig");
+const CallbackRef = @import("CallbackRef.zig");
+const PluginAction = @import("PluginAction.zig");
 
-pub const SplitDirection = @import("../types/SplitDirection.zig").SplitDirection;
-pub const Direction = @import("../types/InputDirection.zig").InputDirection;
-pub const SidebarDirection = @import("../types/ActionSidebarDirection.zig").ActionSidebarDirection;
-pub const TabMove = @import("../types/ActionTabMove.zig").ActionTabMove;
-pub const ScrollDirection = @import("../types/ScrollDirection.zig").ScrollDirection;
+pub const SplitDirection = @import("SplitDirection.zig").SplitDirection;
+pub const Direction = @import("InputDirection.zig").InputDirection;
+pub const SidebarDirection = @import("ActionSidebarDirection.zig").ActionSidebarDirection;
+pub const TabMove = @import("ActionTabMove.zig").ActionTabMove;
+pub const ScrollDirection = @import("ScrollDirection.zig").ScrollDirection;
 
-pub const Action = @import("../types/Action.zig").Action;
+pub const Action = union(enum) {
+    toggle_thread_view,
+    split_pane: SplitDirection,
+    focus_pane: Direction,
+    navigate_pane: Direction,
+    resize_pane: Direction,
+    toggle_pane_fullscreen,
+    toggle_sidebar,
+    resize_sidebar: SidebarDirection,
+    toggle_workspace_list,
+    new_workspace,
+    rename_workspace,
+    select_workspace: u8,
+    close_pane,
+    new_tab,
+    new_agent_tab,
+    select_tab_offset: i8,
+    select_tab: u8,
+    rename_tab,
+    close_tab,
+    move_tab: TabMove,
+    detach,
+    goto_picker,
+    history_palette,
+    suggest_command,
+    enter_copy_mode,
+    command_tab: CommandTab,
+    notification: Notification,
+    lua_callback: CallbackRef,
+    lua_expr: CallbackRef,
+    plugin: PluginAction,
+    scroll_pane: ScrollDirection,
+
+    /// Parses stable built-in action names used by configuration and tests.
+    pub fn parse(name: []const u8) !Action {
+        if (std.mem.eql(
+            u8,
+            name,
+            "scroll-pane-up",
+        )) {
+            return .{
+                .scroll_pane = .up,
+            };
+        }
+
+        if (std.mem.eql(
+            u8,
+            name,
+            "scroll-pane-down",
+        )) {
+            return .{
+                .scroll_pane = .down,
+            };
+        }
+
+        if (std.mem.eql(
+            u8,
+            name,
+            "split-horizontal",
+        )) {
+            return .{
+                .split_pane = .horizontal,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "split-vertical",
+        )) {
+            return .{
+                .split_pane = .vertical,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "focus-left",
+        )) {
+            return .{
+                .focus_pane = .left,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "focus-right",
+        )) {
+            return .{
+                .focus_pane = .right,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "focus-up",
+        )) {
+            return .{
+                .focus_pane = .up,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "focus-down",
+        )) {
+            return .{
+                .focus_pane = .down,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "navigate-left",
+        )) {
+            return .{
+                .navigate_pane = .left,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "navigate-right",
+        )) {
+            return .{
+                .navigate_pane = .right,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "navigate-up",
+        )) {
+            return .{
+                .navigate_pane = .up,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "navigate-down",
+        )) {
+            return .{
+                .navigate_pane = .down,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "resize-left",
+        )) {
+            return .{
+                .resize_pane = .left,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "resize-right",
+        )) {
+            return .{
+                .resize_pane = .right,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "resize-up",
+        )) {
+            return .{
+                .resize_pane = .up,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "resize-down",
+        )) {
+            return .{
+                .resize_pane = .down,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "toggle-pane-fullscreen",
+        )) {
+            return .toggle_pane_fullscreen;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "toggle-sidebar",
+        )) {
+            return .toggle_sidebar;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "resize-sidebar-left",
+        )) {
+            return .{
+                .resize_sidebar = .left,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "resize-sidebar-right",
+        )) {
+            return .{
+                .resize_sidebar = .right,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "toggle-workspace-list",
+        )) {
+            return .toggle_workspace_list;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "new-workspace",
+        )) {
+            return .new_workspace;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "rename-workspace",
+        )) {
+            return .rename_workspace;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "close-pane",
+        )) {
+            return .close_pane;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "new-tab",
+        )) {
+            return .new_tab;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "new-agent-tab",
+        )) {
+            return .new_agent_tab;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "next-tab",
+        )) {
+            return .{
+                .select_tab_offset = 1,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "previous-tab",
+        )) {
+            return .{
+                .select_tab_offset = -1,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "rename-tab",
+        )) {
+            return .rename_tab;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "close-tab",
+        )) {
+            return .close_tab;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "move-tab-previous",
+        )) {
+            return .{
+                .move_tab = .previous,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "move-tab-next",
+        )) {
+            return .{
+                .move_tab = .next,
+            };
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "detach",
+        )) {
+            return .detach;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "copy-mode",
+        )) {
+            return .enter_copy_mode;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "goto-picker",
+        )) {
+            return .goto_picker;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "history-palette",
+        )) {
+            return .history_palette;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "suggest-command",
+        )) {
+            return .suggest_command;
+        }
+
+        const prefix = "select-tab-";
+        if (std.mem.startsWith(
+            u8,
+            name,
+            prefix,
+        )) {
+            const one_based = std.fmt.parseUnsigned(
+                u8,
+                name[prefix.len..],
+                10,
+            ) catch
+                return error.UnknownAction;
+            if (one_based == 0) {
+                return error.UnknownAction;
+            }
+            return .{
+                .select_tab = one_based - 1,
+            };
+        }
+        const workspace_prefix = "select-workspace-";
+        if (std.mem.startsWith(
+            u8,
+            name,
+            workspace_prefix,
+        )) {
+            const one_based = std.fmt.parseUnsigned(
+                u8,
+                name[workspace_prefix.len..],
+                10,
+            ) catch
+                return error.UnknownAction;
+            if (one_based == 0) {
+                return error.UnknownAction;
+            }
+            return .{
+                .select_workspace = one_based - 1,
+            };
+        }
+        return error.UnknownAction;
+    }
+};
 
 test "built-in names compile to parameterized actions" {
     try std.testing.expectEqualDeep(

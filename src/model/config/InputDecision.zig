@@ -1,5 +1,5 @@
-const InputKeys = @import("../config/InputKeys.zig");
-const InputPaste = @import("../config/InputPaste.zig");
+const InputKeys = @import("InputKeys.zig");
+const InputPaste = @import("InputPaste.zig");
 
 pub const InputDecision = union(enum) {
     consume,

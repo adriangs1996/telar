@@ -76,7 +76,7 @@ pub fn requestNotificationDelivery(model: *data.ClientModel, notification: *cons
 }
 
 /// Consumes one correlated runtime delivery report and applies its policy.
-pub fn completeNotificationDelivery(client: *Client, shown: core.NotificationShown) !data.NotificationDeliveryOutcome {
+pub fn completeNotificationDelivery(client: *Client, shown: core.NotificationShown) !NotificationDeliveryOutcome {
     const continuation = client.model.request_lifecycle.tracker.take(shown.request_id) orelse
         return error.UnexpectedNotificationReply;
     if (continuation != .notification) {
@@ -221,3 +221,8 @@ fn scheduleNotificationTimer(client: *Client) !void {
         },
     }
 }
+
+const NotificationDeliveryOutcome = enum {
+    delivered,
+    undelivered,
+};

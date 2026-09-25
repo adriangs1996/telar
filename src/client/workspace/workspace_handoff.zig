@@ -19,7 +19,7 @@ const WorkspaceRecovery = enum { retried, unrecoverable };
 
 /// Selects a known inactive workspace only while this connection is idle.
 /// Example: `_ = try workspace_handoff.selectWorkspace(app, .{ .position = 1 });`
-pub fn selectWorkspace(client: *Client, target: data.WorkspaceSelectionTarget) !bool {
+pub fn selectWorkspace(client: *Client, target: WorkspaceSelectionTarget) !bool {
     if (!client.model.request_lifecycle.tracker.isEmpty()) {
         return false;
     }
@@ -277,3 +277,8 @@ pub fn activateWorkspace(client: *Client, activation: data.WorkspaceActivation) 
     try workspace_list_snapshot.requestWorkspaceSnapshot(&client.model, activation.location.workspace);
     try tab_snapshot.requestTabSnapshot(&client.model, activation.location);
 }
+
+const WorkspaceSelectionTarget = union(enum) {
+    position: usize,
+    workspace: core.WorkspaceId,
+};

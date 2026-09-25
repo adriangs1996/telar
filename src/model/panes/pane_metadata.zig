@@ -7,6 +7,7 @@ const tab_label = @import("../workspace/tab_label.zig");
 const model_data = @import("../model.zig");
 const core = @import("telar-core");
 const ClientModel = @import("../state/ClientModel.zig");
+const PaneMetadataKind = @import("PaneMetadataKind.zig").PaneMetadataKind;
 
 /// Stores one runtime-owned pane metadata fact. Stale pane reports and
 /// exact repeats are ignored. Cwd moves that retain the same bounded
@@ -15,7 +16,7 @@ const ClientModel = @import("../state/ClientModel.zig");
 /// ```zig
 /// const commit = try pane_metadata.update(model, command);
 /// ```
-pub fn update(model: *ClientModel, command: model_data.PaneMetadataCommand) !?PaneMetadataCommit {
+pub fn update(model: *ClientModel, command: PaneMetadataCommand) !?PaneMetadataCommit {
     const pane_id = switch (command) {
         .cwd => |cwd| cwd.pane_id,
         .foreground => |foreground| foreground.pane_id,
@@ -82,3 +83,21 @@ pub fn updateProgress(model: *ClientModel, progress: core.PaneProgress) ?model_d
         .pane_progress_revision = model.pane_progress_revision,
     };
 }
+
+const PaneMetadataCommand = union(PaneMetadataKind) {
+    cwd: struct {
+        pane_id: core.PaneId,
+        /// Borrowed only for the synchronous transition.
+        path: []const u8,
+    },
+    foreground: struct {
+        pane_id: core.PaneId,
+        /// Borrowed only for the synchronous transition.
+        name: []const u8,
+    },
+    title: struct {
+        pane_id: core.PaneId,
+        /// Borrowed only for the synchronous transition; empty clears it.
+        title: []const u8,
+    },
+};

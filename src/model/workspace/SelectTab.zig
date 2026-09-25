@@ -1,4 +1,4 @@
-const TabSelectionTarget = @import("../types/TabSelectionTarget.zig").TabSelectionTarget;
+const TabSelectionTarget = @import("TabSelectionTarget.zig").TabSelectionTarget;
 const SelectTab = @This();
 
 target: TabSelectionTarget,

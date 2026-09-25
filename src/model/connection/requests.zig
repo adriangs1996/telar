@@ -8,9 +8,9 @@ const core = @import("telar-core");
 const Tracker = @import("Tracker.zig");
 const std = @import("std");
 
-pub const Continuation = @import("../types/RequestsContinuation.zig").RequestsContinuation;
+pub const Continuation = @import("RequestsContinuation.zig").RequestsContinuation;
 
-pub const Group = @import("../types/RequestsGroup.zig").RequestsGroup;
+pub const Group = @import("RequestsGroup.zig").RequestsGroup;
 
 test "request success consumes its typed continuation once" {
     var tracker: Tracker = .{};

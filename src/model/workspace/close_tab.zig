@@ -2,7 +2,7 @@
 
 const ApplyTabRemoval = @import("ApplyTabRemoval.zig");
 
-pub const RemovalTrigger = @import("../types/TabCloseRemovalTrigger.zig").TabCloseRemovalTrigger;
+pub const RemovalTrigger = @import("TabCloseRemovalTrigger.zig").TabCloseRemovalTrigger;
 
 pub fn validateWorkspaceTransition(command: ApplyTabRemoval) !void {
     if (!command.workspace_removed and command.previous_workspace != null) {

@@ -6,13 +6,9 @@ const keybind = @import("keybind.zig");
 const KeyRoutingAuthority = @import("KeyRoutingAuthority.zig");
 const std = @import("std");
 
-pub const Command = @import("../types/KeyRoutingCommand.zig").KeyRoutingCommand;
+pub const Command = @import("KeyRoutingCommand.zig").KeyRoutingCommand;
 
-pub const Owner = @import("../types/KeyRoutingOwner.zig").KeyRoutingOwner;
-
-pub const PaneTarget = @import("../types/KeyRoutingPaneTarget.zig").KeyRoutingPaneTarget;
-
-pub const LeaseOwner = @import("../types/KeyRoutingLeaseOwner.zig").KeyRoutingLeaseOwner;
+pub const LeaseOwner = @import("KeyRoutingLeaseOwner.zig").KeyRoutingLeaseOwner;
 
 pub const Leases = GenericTable(LeaseOwner, keybind.max_physical_leases);
 
@@ -32,10 +28,6 @@ pub fn requestsClipboardPreview(command: Command) bool {
         .key => |key| key.phase == .press and key.isCtrl('v') and !key.mods.alt and !key.mods.shift,
     };
 }
-
-pub const Event = @import("../types/KeyRoutingEvent.zig").KeyRoutingEvent;
-
-pub const Failure = @import("../types/KeyRoutingFailure.zig").KeyRoutingFailure;
 
 test "key routing captures only modal and prompt authority" {
     try std.testing.expect(captures(

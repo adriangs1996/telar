@@ -1,6 +1,6 @@
 const keyinput = @import("keyinput");
 const Key = keyinput.Key;
-const PointerMotion = @import("../input/PointerMotion.zig");
+const PointerMotion = @import("PointerMotion.zig");
 const CopyModeMatches = @import("../state/CopyModeMatches.zig");
 
 pub const CopyModeCommand = union(enum) {

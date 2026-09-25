@@ -1,5 +1,5 @@
-const EffectBatch = @import("../config/EffectBatch.zig");
-const effects_module = @import("../config/effects.zig");
+const EffectBatch = @import("EffectBatch.zig");
+const effects_module = @import("effects.zig");
 const Failure = @import("../input/Failure.zig");
 
 pub const LuaInvocation = union(enum) {

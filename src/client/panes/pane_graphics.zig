@@ -44,7 +44,7 @@ pub fn applyResources(graphics: GraphicsRetention, command: data.PaneGraphicsCom
 }
 
 /// Reconciles physical graphics and semantic fallback, recovering bounded ingress failures.
-pub fn applyPaneGraphics(client: *Client, command: data.PaneGraphicsCommand) !data.PaneGraphicsOutcome {
+pub fn applyPaneGraphics(client: *Client, command: data.PaneGraphicsCommand) !PaneGraphicsOutcome {
     if (comptime core.enabled) {
         switch (command) {
             .image, .shared_image => client.telemetry.metrics.graphics_images += 1,
@@ -114,3 +114,15 @@ pub fn applyPaneGraphics(client: *Client, command: data.PaneGraphicsCommand) !da
         },
     };
 }
+
+const PaneGraphicsApplied = struct {
+    pane_id: core.PaneId,
+    fallback: ?data.PaneGraphicsFallbackCommit,
+};
+
+const PaneGraphicsOutcome = union(enum) {
+    unchanged,
+    applied: PaneGraphicsApplied,
+    resync_requested: core.PaneId,
+    shared_disabled: core.PaneId,
+};

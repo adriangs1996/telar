@@ -24,7 +24,7 @@ pub fn invocationFailure(diagnostic: *data.Diagnostic, reason: anyerror) data.Lu
 
 /// Checks all plugin references and rejects recursive Lua effects before any effect runs.
 /// Example: `const validation = lua_actions.validateBatch(registry, &batch, &diagnostic);`
-pub fn validateBatch(registry: ?*Registry, batch: *const data.EffectBatch, diagnostic: *data.Diagnostic) data.LuaValidation {
+pub fn validateBatch(registry: ?*Registry, batch: *const data.EffectBatch, diagnostic: *data.Diagnostic) LuaValidation {
     for (batch.slice()) |effect| {
         switch (effect) {
             .plugin => |requested| {
@@ -56,9 +56,14 @@ pub fn validateBatch(registry: ?*Registry, batch: *const data.EffectBatch, diagn
 
     return .valid;
 }
-fn validationFailure(diagnostic: *data.Diagnostic, reason: anyerror) data.LuaValidation {
+fn validationFailure(diagnostic: *data.Diagnostic, reason: anyerror) LuaValidation {
     return .{ .failed = .{
         .reason = reason,
         .diagnostic = diagnostic.*,
     } };
 }
+
+const LuaValidation = union(enum) {
+    valid,
+    failed: data.Failure,
+};

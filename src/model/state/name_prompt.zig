@@ -12,15 +12,13 @@ pub const Field = GenericField(core.max_tab_label_bytes);
 /// The working-directory field of the new-context form.
 pub const DirectoryField = GenericField(core.max_cwd_bytes);
 
-pub const Target = @import("../types/PromptTarget.zig").PromptTarget;
+pub const Target = @import("PromptTarget.zig").PromptTarget;
 
-pub const Begin = @import("../types/PromptBegin.zig").PromptBegin;
+pub const Begin = @import("PromptBegin.zig").PromptBegin;
 
-pub const HistoryScope = @import("../types/PromptHistoryScope.zig").PromptHistoryScope;
+pub const HistoryScope = @import("PromptHistoryScope.zig").PromptHistoryScope;
 
-pub const Command = @import("../types/PromptCommand.zig").PromptCommand;
-
-pub const Transition = @import("../types/PromptTransition.zig").PromptTransition;
+pub const Command = @import("PromptCommand.zig").PromptCommand;
 
 /// Targets whose prompt drives a list selection instead of a plain name.
 /// The suggestion palette lists one row, so Enter on an empty field can

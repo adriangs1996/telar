@@ -1,8 +1,8 @@
 const core = @import("telar-core");
 const root = @import("../environment/environment.zig");
-const HostAppearance = @import("../types/HostAppearance.zig").HostAppearance;
-const HostCapabilityObservation = @import("../types/HostCapabilityObservation.zig").HostCapabilityObservation;
-const HostCapabilitySupport = @import("../types/HostCapabilitySupport.zig").HostCapabilitySupport;
+const HostAppearance = @import("HostAppearance.zig").HostAppearance;
+const HostCapabilityObservation = @import("HostCapabilityObservation.zig").HostCapabilityObservation;
+const HostCapabilitySupport = @import("HostCapabilitySupport.zig").HostCapabilitySupport;
 const std = @import("std");
 const HostCapabilities = @This();
 

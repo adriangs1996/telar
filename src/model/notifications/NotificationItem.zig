@@ -10,7 +10,7 @@ title_buffer: [core.max_notification_title_bytes]u8 = undefined,
 title_len: u8,
 message_buffer: [core.max_notification_message_bytes]u8 = undefined,
 message_len: u8,
-phase: notifications.Phase = .entering,
+phase: NotificationPhase = .entering,
 /// Linear position within the transition. Rendering maps it through a
 /// continuous smoothstep curve, keeping time and presentation separate.
 transition_position_ns: u64 = 0,
@@ -107,3 +107,9 @@ pub fn nextDeadline(self: *const Item, now_ns: u64, frame_interval_ns: u64) u64 
         ),
     };
 }
+
+const NotificationPhase = enum {
+    entering,
+    visible,
+    exiting,
+};

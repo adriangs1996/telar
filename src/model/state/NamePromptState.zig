@@ -4,6 +4,7 @@ const name_prompt = @import("name_prompt.zig");
 const std = @import("std");
 const History = @import("History.zig");
 const FieldPosition = @import("FieldPosition.zig");
+const Submission = @import("Submission.zig");
 const State = @This();
 
 value: ?Prompt = null,
@@ -165,7 +166,7 @@ pub fn version(self: *const State) u64 {
 /// ```zig
 /// const transition = prompt.apply(.backspace);
 /// ```
-pub fn apply(self: *State, command: name_prompt.Command) name_prompt.Transition {
+pub fn apply(self: *State, command: name_prompt.Command) PromptTransition {
     const prompt = self.mutable() orelse return .unchanged;
     switch (command) {
         .focus_field => |focus| {
@@ -408,7 +409,7 @@ fn directoryFocused(prompt: *const Prompt) bool {
     return prompt.mode == .create_workspace and prompt.mode.create_workspace.focus == .directory;
 }
 
-fn editField(self: *State, command: name_prompt.Command) name_prompt.Transition {
+fn editField(self: *State, command: name_prompt.Command) PromptTransition {
     const prompt = self.mutable() orelse return .unchanged;
     if (directoryFocused(prompt)) {
         return self.editDirectory(command);
@@ -427,7 +428,7 @@ fn editField(self: *State, command: name_prompt.Command) name_prompt.Transition 
     return .changed;
 }
 
-fn editDirectory(self: *State, command: name_prompt.Command) name_prompt.Transition {
+fn editDirectory(self: *State, command: name_prompt.Command) PromptTransition {
     const prompt = self.mutable() orelse return .unchanged;
     const before: FieldPosition = .capture(&prompt.directory);
     applyEdit(&prompt.directory, prompt.pasting, command);
@@ -484,8 +485,21 @@ test "pasted line breaks become spaces while typed text is inserted verbatim" {
     var state: State = .{};
     state.begin(.create_workspace);
 
-    try std.testing.expectEqual(name_prompt.Transition.routing_changed, state.apply(.paste_start));
-    try std.testing.expectEqual(name_prompt.Transition.changed, state.apply(.{ .insert = "one\r\ntwo\nthree\r" }));
-    try std.testing.expectEqual(name_prompt.Transition.routing_changed, state.apply(.paste_end));
+    try std.testing.expectEqual(PromptTransition.routing_changed, state.apply(.paste_start));
+    try std.testing.expectEqual(PromptTransition.changed, state.apply(.{ .insert = "one\r\ntwo\nthree\r" }));
+    try std.testing.expectEqual(PromptTransition.routing_changed, state.apply(.paste_end));
     try std.testing.expectEqualStrings("one two three ", state.currentConst().?.field.text());
 }
+
+const PromptTransition = union(enum) {
+    unchanged,
+    routing_changed,
+    changed,
+    cancelled,
+    /// The history palette asked to delete its selected entry.
+    removed: u16,
+    /// The directory field asked for its selected completion; the
+    /// controller owns the list and answers with `replaceDirectory`.
+    completion_requested,
+    submitted: Submission,
+};

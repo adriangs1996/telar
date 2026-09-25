@@ -5,7 +5,7 @@ const model_data = @import("../model.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const ClientModel = @import("../state/ClientModel.zig");
-const Change = @import("../types/Change.zig").Change;
+const Change = @import("../state/Change.zig").Change;
 const label_validation = @import("label_validation.zig");
 
 /// Stores one validated canonical label and reports whether it changed.

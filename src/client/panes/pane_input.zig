@@ -40,7 +40,7 @@ pub fn sendPaneInput(client: *Client, command: data.PaneInputCommand) !?data.Pan
 
 /// Starts one pane-owned paste against the current focused target.
 /// Example: `_ = try pane_input.startPanePaste(app);`
-pub fn startPanePaste(client: *Client) !data.PanePasteOutcome {
+pub fn startPanePaste(client: *Client) !PanePasteOutcome {
     const session = data.pane_input.beginPaste(&client.model) orelse return .ignored;
     errdefer {
         const rolled_back = data.pane_input.finishPaste(&client.model, session);
@@ -70,7 +70,7 @@ pub fn startPanePaste(client: *Client) !data.PanePasteOutcome {
 
 /// Delivers one host paste chunk to the captured target.
 /// Example: `_ = try pane_input.appendPanePaste(app, text);`
-pub fn appendPanePaste(client: *Client, text: []const u8) !data.PanePasteOutcome {
+pub fn appendPanePaste(client: *Client, text: []const u8) !PanePasteOutcome {
     const session = client.model.pane_paste orelse return .ignored;
     const delivered = try deliverPanePaste(
         client,
@@ -87,7 +87,7 @@ pub fn appendPanePaste(client: *Client, text: []const u8) !data.PanePasteOutcome
 
 /// Finishes the current pane paste and releases its captured identity.
 /// Example: `_ = try pane_input.finishPanePaste(app);`
-pub fn finishPanePaste(client: *Client) !data.PanePasteOutcome {
+pub fn finishPanePaste(client: *Client) !PanePasteOutcome {
     const session = client.model.pane_paste orelse return .ignored;
     defer {
         const finished = data.pane_input.finishPaste(&client.model, session);
@@ -175,7 +175,7 @@ pub fn pasteExpression(client: *Client, text: []const u8) !?data.PaneInputDelive
 }
 
 /// Delivers one explicit marker for an exact model-owned paste session.
-fn sendPasteMarker(client: *Client, session: data.PanePasteSession, boundary: data.PanePasteBoundary) !?data.PaneInputDelivery {
+fn sendPasteMarker(client: *Client, session: data.PanePasteSession, boundary: PanePasteBoundary) !?data.PaneInputDelivery {
     const started = core.now(client.io);
 
     const plan = data.pane_input.planInput(&client.model, 
@@ -254,7 +254,7 @@ pub fn deliverPaneInput(client: *Client, plan: data.PaneInputPlan, prepared: dat
     };
 }
 
-fn deliverPanePaste(client: *Client, delivery: data.PanePasteDelivery) !bool {
+fn deliverPanePaste(client: *Client, delivery: PanePasteDelivery) !bool {
     const result = switch (delivery) {
         .marker => |marker| try sendPasteMarker(client, marker.session, marker.boundary),
         .content => |content_delivery| try sendPaneInput(
@@ -306,3 +306,26 @@ test "history paste cannot smuggle terminal keys or escape its bracketed boundar
     try std.testing.expectError(error.UnsafeHistoryText, validateHistoryText("echo x\x03", false));
     try std.testing.expectError(error.UnsafeHistoryText, validateHistoryText("echo \xc2\x9b", true));
 }
+
+const PanePasteBoundary = enum {
+    start,
+    finish,
+};
+
+const PanePasteDelivery = union(enum) {
+    marker: struct {
+        session: data.PanePasteSession,
+        boundary: PanePasteBoundary,
+    },
+    content: struct {
+        session: data.PanePasteSession,
+        /// Borrowed only for the synchronous delivery effect.
+        text: []const u8,
+    },
+};
+
+const PanePasteOutcome = enum {
+    applied,
+    unavailable,
+    ignored,
+};
