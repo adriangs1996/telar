@@ -45,9 +45,9 @@ Cut: what must move or be parameterized before the library compiles alone.
 | `pty` (done) | `src/backend/pty` | std |
 | `console` (done) | `src/frontend/platform` (tty, raw mode, resize watcher, fast writer, escape sequences) | std |
 | `pi_rpc` (done) | `src/backend/engine` (Pi's JSONL RPC mode) | std; the `Purpose` enum became a parameter |
-| `sse` | `src/backend/proxy/{sse,Decoder,SseEvent}.zig` | std |
-| `h2-framing` | `src/backend/proxy/h2/{framing,Reader,streams,Tracker,HeaderField,HeaderBlock,PeerSettings,Settings}.zig` | std |
-| `local-ca` | `src/backend/proxy/{ca,Authority,AuthorityFiles,Pair,Resources,Roots,tls,Session,InterceptOptions}.zig` | std, tls |
+| `eventstream` (done) | `src/backend/proxy/{sse,Decoder,SseEvent}.zig` | std |
+| `h2frames` (done) | `src/backend/proxy/h2/{framing,Reader,streams,Tracker,HeaderField,HeaderBlock,PeerSettings,Settings}.zig` | std |
+| `localca` (done) | `src/backend/proxy/{ca,Authority,AuthorityFiles,Pair,Resources,Roots,tls,Session,InterceptOptions}.zig` | std, tls |
 | `mailbox` (done) | `src/client/execution/{GenericInbox,DrainBudget,Wakeup,ProducerTicket,InboxSnapshot}.zig` | std |
 | `animate` (done) | `src/gui/animation` (springs, transitions, frame clock) | std |
 | `gfx` (done) | `src/gui/layout` and `src/gui/render/{Rect,Color,Quad,RoundedRect,SpriteQuad}.zig` | std |
@@ -118,11 +118,14 @@ of them: every package imports the libraries it uses by name.
   keeps the transitions of its own row (`applyProcess`, `applyProxy`,
   `reproject`...), as a pane record keeps `applyFrame`: they read and write
   that one aggregate and no other table.
-- `src/backend/runtime/attachment/media_projection.zig` decides freeze and
-  adoption across every client's attachment store; it belongs to the
-  `pane_graphics` flow.
-- `Pane.queueGraphicsLimitResponse` builds a Kitty error reply by hand;
-  that encoding belongs to `kitty-media`.
+- `src/backend/runtime/attachment/media_projection.zig` (resolved): it
+  decided freeze and adoption across every client's attachment store. It is
+  `pane_graphics.synchronize` and `discardUnwanted`, and its private
+  `wanted` was a second copy of `Consumers.wants`.
+- `Pane.queueGraphicsLimitResponse` (resolved): measured, it was a dead copy
+  of the reply the media processor sends; that reply is
+  `kitty_protocol.writeError`, whose detail is comptime and holds no control
+  bytes.
 - `ClientModel` kept flow logic inline (resolved): 110 of its functions
   were flow procedures already taking `model`. They live in their flow
   files (`copy_mode`, `pane_focus`, `pane_input`, `pane_attachment`,
