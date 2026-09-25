@@ -2,6 +2,8 @@
 
 const core = @import("telar-core");
 const std = @import("std");
+const RuntimeModel = @import("../RuntimeModel.zig");
+const Session = @import("Session.zig");
 
 pub const CwdSourceScope = union(enum) {
     any,
@@ -13,11 +15,11 @@ pub const CwdSourceScope = union(enum) {
 /// live pane attached to this client, enforcing the requested container scope.
 ///
 /// ```zig
-/// const cwd = try resolveLaunchCwd(&attachments, launch, .{ .workspace = workspace });
+/// const cwd = try resolveLaunchCwd(model, session, launch, .{ .workspace = workspace });
 /// ```
-pub fn resolveLaunchCwd(attachments: anytype, launch: core.LaunchView, scope: CwdSourceScope) ![]const u8 {
+pub fn resolveLaunchCwd(model: *RuntimeModel, session: *const Session, launch: core.LaunchView, scope: CwdSourceScope) ![]const u8 {
     const source_id = launch.cwd_source orelse return launch.cwd;
-    const attachment = attachments.find(source_id) orelse
+    const attachment = model.attachments.find(session.slot, source_id) orelse
         return error.CwdSourcePaneUnavailable;
     const pane = attachment.pane;
 

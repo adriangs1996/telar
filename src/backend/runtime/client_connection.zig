@@ -15,6 +15,7 @@ const Sources = @import("Sources.zig");
 const client_control = @import("client_control.zig");
 const client_request = @import("client_request.zig");
 const geometry_lease = @import("geometry_lease.zig");
+const pane_attachment = @import("pane_attachment.zig");
 const handshake = @import("../transport/handshake.zig");
 const request_role = @import("client/request_role.zig");
 
@@ -78,6 +79,7 @@ pub fn finishHandshake(model: *RuntimeModel, result: anyerror!void) void {
     }
 
     const session = model.clients.add(model.gpa, negotiated) catch return;
+    std.debug.assert(model.attachments.len(session.slot) == 0);
     connection_owned = false;
     startRead(model, session) catch {
         drop(model, session.key);
@@ -160,7 +162,7 @@ pub fn finishSend(model: *RuntimeModel, event: ClientSent) void {
     }
 
     if (completion.detach_pane) |detach| {
-        _ = session.attachments.detach(detach);
+        _ = pane_attachment.release(model, session, detach);
     }
 
     if (session.delivery.shouldCloseAfterReply() and !model.shutdown.isRequested()) {
@@ -200,7 +202,7 @@ pub fn drop(model: *RuntimeModel, key: ClientKey) void {
         client_control.abandon(model, key);
         session.closing = true;
         session.connection.shutdown(model.io);
-        session.attachments.deinit();
+        pane_attachment.clear(model, session);
         session.delivery.close();
         geometry_lease.releaseAll(model, key);
     }

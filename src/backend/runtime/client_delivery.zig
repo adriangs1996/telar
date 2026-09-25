@@ -130,12 +130,13 @@ fn pump(model: *RuntimeModel, session: *Session, sources: Sources) !void {
 
     const pending = try session.delivery.prepare(.{
         .io = model.io,
-        .attachments = &session.attachments,
+        .attachments = &model.attachments,
+        .client = session.slot,
         .sources = sources,
         .metrics = &model.metrics,
     });
     const prepared = pending orelse {
-        session.cell_deadline_ns = session.attachments.cellDeadline();
+        session.cell_deadline_ns = model.attachments.cellDeadline(session.slot);
         return;
     };
     errdefer session.delivery.abort(prepared);
@@ -143,7 +144,8 @@ fn pump(model: *RuntimeModel, session: *Session, sources: Sources) !void {
     try client_connection.startSend(model, session, prepared.payload);
     session.delivery.commit(.{
         .prepared = prepared,
-        .attachments = &session.attachments,
+        .attachments = &model.attachments,
+        .client = session.slot,
         .metrics = &model.metrics,
     });
 }
@@ -183,9 +185,7 @@ fn settleDamage(model: *RuntimeModel, pane: *Pane) void {
     }
 
     var observers = pane.observers;
-    while (model.clients.nextObserver(&observers)) |session| {
-        const attachment = session.attachments.find(pane.id) orelse continue;
-
+    while (model.attachments.nextObserver(pane.id, &observers)) |attachment| {
         if (attachment.observedCellRevision() != pane.cell_revision) {
             return;
         }

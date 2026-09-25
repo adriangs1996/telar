@@ -10,7 +10,7 @@ const Transaction = @import("Transaction.zig");
 const Completion = @import("Completion.zig");
 const std = @import("std");
 const Delivery = @import("Delivery.zig");
-const AttachmentStore = @import("../attachment/AttachmentStore.zig");
+const Attachments = @import("../attachment/Attachments.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const Agents = @import("../../agent/Agents.zig");
@@ -52,14 +52,17 @@ pub const Phase = union(enum) {
     closed,
 };
 
+/// The one client every delivery test prepares for.
+const test_client = 0;
+
 test "agent history page stays reserved until send commit or failed client cleanup" {
     const core = @import("telar-core");
     const OwnedPage = @import("OwnedAgentHistoryPage.zig");
     for ([_]bool{ false, true }) |abort| {
         var delivery = try Delivery.init(std.testing.allocator);
         defer delivery.deinit(std.testing.allocator);
-        var attachments: AttachmentStore = .{};
-        defer attachments.deinit();
+        var attachments: Attachments = .{};
+        defer attachments.deinit(std.testing.allocator);
         var metrics: RuntimeMetrics = .{ .started_ns = 0 };
         const page = try std.testing.allocator.create(core.AgentHistoryPage);
         page.* = .{
@@ -85,7 +88,7 @@ test "agent history page stays reserved until send commit or failed client clean
             try std.testing.expect(delivery.responses.hasAgentHistory());
             delivery.close();
         } else {
-            delivery.commit(.{ .prepared = prepared, .attachments = &attachments, .metrics = &metrics });
+            delivery.commit(.{ .prepared = prepared, .attachments = &attachments, .client = test_client, .metrics = &metrics });
             _ = delivery.complete({});
         }
 
@@ -97,8 +100,8 @@ test "review response remains reserved across a prepared send until commit or cl
     for ([_]bool{ false, true }) |abort| {
         var delivery = try Delivery.init(std.testing.allocator);
         defer delivery.deinit(std.testing.allocator);
-        var attachments: AttachmentStore = .{};
-        defer attachments.deinit();
+        var attachments: Attachments = .{};
+        defer attachments.deinit(std.testing.allocator);
         var metrics: RuntimeMetrics = .{ .started_ns = 0 };
         const result = try ReviewResult.init(std.testing.allocator);
         try delivery.enqueue(.{ .change_review = result });
@@ -117,7 +120,7 @@ test "review response remains reserved across a prepared send until commit or cl
             try std.testing.expect(delivery.responses.hasChangeReview());
             delivery.close();
         } else {
-            delivery.commit(.{ .prepared = prepared, .attachments = &attachments, .metrics = &metrics });
+            delivery.commit(.{ .prepared = prepared, .attachments = &attachments, .client = test_client, .metrics = &metrics });
             _ = delivery.complete({});
         }
 
@@ -250,14 +253,14 @@ test "clipboard accepts exactly the wire byte limit" {
 test "delivery commits one logical send transaction before completion" {
     var delivery = try Delivery.init(std.testing.allocator);
     defer delivery.deinit(std.testing.allocator);
-    var attachments: AttachmentStore = .{};
-    defer attachments.deinit();
+    var attachments: Attachments = .{};
+    defer attachments.deinit(std.testing.allocator);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
 
     delivery.requestStop();
     const prepared = delivery.stage("stopping", .stopping);
     try std.testing.expect(delivery.stopping());
-    delivery.commit(.{ .prepared = prepared, .attachments = &attachments, .metrics = &metrics });
+    delivery.commit(.{ .prepared = prepared, .attachments = &attachments, .client = test_client, .metrics = &metrics });
     try std.testing.expect(delivery.stopping());
     const completion = delivery.complete({});
     try std.testing.expect(completion.stopping_delivered);
@@ -276,8 +279,8 @@ test "delivery abort closes a prepared transaction" {
 test "delivery preserves management before resync wire order" {
     var delivery = try Delivery.init(std.testing.allocator);
     defer delivery.deinit(std.testing.allocator);
-    var attachments: AttachmentStore = .{};
-    defer attachments.deinit();
+    var attachments: Attachments = .{};
+    defer attachments.deinit(std.testing.allocator);
     var panes: PaneStore = .{};
     var workspaces: Workspaces = .{};
     var agents: Agents = .{};
@@ -304,16 +307,18 @@ test "delivery preserves management before resync wire order" {
     const first = (try delivery.prepare(.{
         .io = std.testing.io,
         .attachments = &attachments,
+        .client = test_client,
         .sources = sources,
         .metrics = &metrics,
     })).?;
     try std.testing.expect((try core_module.decodeServer(first.payload)) == .request_failed);
-    delivery.commit(.{ .prepared = first, .attachments = &attachments, .metrics = &metrics });
+    delivery.commit(.{ .prepared = first, .attachments = &attachments, .client = test_client, .metrics = &metrics });
     _ = delivery.complete({});
 
     const second = (try delivery.prepare(.{
         .io = std.testing.io,
         .attachments = &attachments,
+        .client = test_client,
         .sources = sources,
         .metrics = &metrics,
     })).?;
@@ -325,8 +330,8 @@ test "agent conversation delivery coalesces revisions independently for reconnec
     defer first.deinit(std.testing.allocator);
     var second = try Delivery.init(std.testing.allocator);
     defer second.deinit(std.testing.allocator);
-    var attachments: AttachmentStore = .{};
-    defer attachments.deinit();
+    var attachments: Attachments = .{};
+    defer attachments.deinit(std.testing.allocator);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
     var panes: PaneStore = .{};
     var workspaces: Workspaces = .{};
@@ -352,21 +357,21 @@ test "agent conversation delivery coalesces revisions independently for reconnec
     first.client_layout_sent = true;
     first.proxy_status_sent = true;
     first.agent_revision_sent = std.math.maxInt(u64);
-    const initial = (try first.prepare(.{ .io = std.testing.io, .attachments = &attachments, .sources = sources, .metrics = &metrics })).?;
+    const initial = (try first.prepare(.{ .io = std.testing.io, .attachments = &attachments, .client = test_client, .sources = sources, .metrics = &metrics })).?;
     try std.testing.expectEqual(@as(u64, 1), (try core_module.decodeServer(initial.payload)).agent_thread_snapshot.revision);
-    first.commit(.{ .prepared = initial, .attachments = &attachments, .metrics = &metrics });
+    first.commit(.{ .prepared = initial, .attachments = &attachments, .client = test_client, .metrics = &metrics });
     snapshot.revision = 15;
     _ = first.complete({});
-    const newest = (try first.prepare(.{ .io = std.testing.io, .attachments = &attachments, .sources = sources, .metrics = &metrics })).?;
+    const newest = (try first.prepare(.{ .io = std.testing.io, .attachments = &attachments, .client = test_client, .sources = sources, .metrics = &metrics })).?;
     try std.testing.expectEqual(@as(u64, 15), (try core_module.decodeServer(newest.payload)).agent_thread_snapshot.revision);
-    first.commit(.{ .prepared = newest, .attachments = &attachments, .metrics = &metrics });
+    first.commit(.{ .prepared = newest, .attachments = &attachments, .client = test_client, .metrics = &metrics });
     _ = first.complete({});
     second.requestAgentThread(pane.key());
-    const recovered = (try second.prepare(.{ .io = std.testing.io, .attachments = &attachments, .sources = sources, .metrics = &metrics })).?;
+    const recovered = (try second.prepare(.{ .io = std.testing.io, .attachments = &attachments, .client = test_client, .sources = sources, .metrics = &metrics })).?;
     try std.testing.expectEqual(@as(u64, 15), (try core_module.decodeServer(recovered.payload)).agent_thread_snapshot.revision);
     try std.testing.expectEqual(@as(u64, 15), first.agent_threads_sent[0].?.revision);
     try std.testing.expect(second.agent_threads_sent[0] == null);
-    second.commit(.{ .prepared = recovered, .attachments = &attachments, .metrics = &metrics });
+    second.commit(.{ .prepared = recovered, .attachments = &attachments, .client = test_client, .metrics = &metrics });
     _ = second.complete({});
     try std.testing.expect(second.requested_agent_thread == null);
 }

@@ -8,7 +8,7 @@ test "an OSC 0 title is captured once and delivered to the attachment" {
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     var buffer: [512]u8 = undefined;
 
     _ = try fixture.pane.ingest(std.testing.io, "\x1b]0;vim README.md\x07");
@@ -30,7 +30,7 @@ test "control bytes are dropped and a cleared title is delivered as empty" {
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     var buffer: [512]u8 = undefined;
 
     _ = try fixture.pane.ingest(std.testing.io, "\x1b]2;a\x01b\x7fc\x07");

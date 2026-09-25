@@ -25,7 +25,7 @@ pub fn notify(model: *RuntimeModel, change: WorkspaceChange) void {
             continue;
         }
 
-        if (session.attachments.observes(change.workspace)) {
+        if (session.observes(change.workspace)) {
             session.delivery.requestWorkspaceResync(change.workspace, change.previous_workspace);
         }
     }

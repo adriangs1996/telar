@@ -13,20 +13,22 @@ const selection = @import("attachment/selection.zig");
 /// copy_mode.copy(model, session, request);
 /// ```
 pub fn copy(model: *RuntimeModel, session: *Session, request: core.CopySelection) void {
+    const attachment = model.attachments.find(session.slot, request.pane_id) orelse {
+        model.metrics.stale_client_messages += 1;
+        return;
+    };
+
     var scratch: [selection.scratch_bytes]u8 = undefined;
-    const result = session.attachments.copySelection(request.pane_id, .{
-        .range = .{
+    const result = attachment.copySelection(
+        .{
             .start_x = request.start_x,
             .start_y = request.start_y,
             .end_x = request.end_x,
             .end_y = request.end_y,
             .linewise = request.linewise,
         },
-        .scratch = &scratch,
-    }) orelse {
-        model.metrics.stale_client_messages += 1;
-        return;
-    };
+        &scratch,
+    );
 
     switch (result) {
         .copied => |bytes| {

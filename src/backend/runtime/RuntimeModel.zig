@@ -17,6 +17,7 @@ const GenericState = @import("client/GenericState.zig").Type;
 const LifecycleState = @import("lifecycle/State.zig");
 const Workspaces = @import("../workspace/Workspaces.zig");
 const PaneStore = @import("../pane/PaneStore.zig");
+const Attachments = @import("attachment/Attachments.zig");
 const Agents = @import("../agent/Agents.zig");
 const RestoredAgents = @import("../agent/RestoredAgents.zig");
 const Watches = @import("../agent/Watches.zig");
@@ -56,6 +57,7 @@ client_admission: GenericState(localsocket.SocketChannel) = .{},
 shutdown: LifecycleState = .{},
 workspaces: Workspaces = .{},
 panes: PaneStore,
+attachments: Attachments = .{},
 agents: Agents = .{},
 /// Titles and resumes restored from a checkpoint, waiting for their agent.
 restored_agents: RestoredAgents = .{},
@@ -131,9 +133,11 @@ pub fn init(model: *RuntimeModel, resources: *Resources, select: *std.Io.Select(
     };
 }
 
-/// Releases pane, job and workspace state after every actor has joined.
+/// Releases attachment, pane, job and workspace state after every actor has
+/// joined.
 /// Example: `runtime.loop.cancel(); client_connection.releaseAll(model); model.deinit();`.
 pub fn deinit(model: *RuntimeModel) void {
+    model.attachments.deinit(model.gpa);
     model.panes.deinit();
     model.agent_history_jobs.deinitJoined();
     model.review_jobs.deinitJoined();

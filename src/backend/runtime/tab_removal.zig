@@ -45,7 +45,7 @@ pub fn announce(model: *RuntimeModel, removed: TabRemoved) void {
     for (&model.clients.items) |*slot| {
         const client = slot.* orelse continue;
 
-        if (!client.active() or !client.attachments.observes(removed.location.workspace)) {
+        if (!client.active() or !client.observes(removed.location.workspace)) {
             continue;
         }
 

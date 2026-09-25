@@ -4,7 +4,6 @@
 
 const core = @import("telar-core");
 const std = @import("std");
-const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const PaneFixture = @import("PaneFixture.zig");
 const StatsType = @import("../../media/Stats.zig");
 const attachment_namespace = @import("../attachment/attachment_namespace.zig");
@@ -32,11 +31,11 @@ test "shared transport clients are counted on the pane for the media actor" {
     defer fixture.deinit();
 
     try std.testing.expectEqual(@as(u8, 0), fixture.pane.media_ingestion.shared_transport_clients.load(.acquire));
-    _ = fixture.attachments.configureGraphics(true);
+    fixture.attachment().configureGraphics(true);
     try std.testing.expectEqual(@as(u8, 1), fixture.pane.media_ingestion.shared_transport_clients.load(.acquire));
-    _ = fixture.attachments.configureGraphics(true);
+    fixture.attachment().configureGraphics(true);
     try std.testing.expectEqual(@as(u8, 1), fixture.pane.media_ingestion.shared_transport_clients.load(.acquire));
-    _ = fixture.attachments.configureGraphics(false);
+    fixture.attachment().configureGraphics(false);
     try std.testing.expectEqual(@as(u8, 0), fixture.pane.media_ingestion.shared_transport_clients.load(.acquire));
 }
 
@@ -47,7 +46,7 @@ test "a generation the media actor froze is adopted without a runtime-thread cop
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    _ = fixture.attachments.configureGraphics(true);
+    fixture.attachment().configureGraphics(true);
     try fixture.addRgbaImage(7);
     const key = liveKey(&fixture, 7);
 
@@ -58,11 +57,10 @@ test "a generation the media actor froze is adopted without a runtime-thread cop
     try std.testing.expect(fixture.pane.media_ingestion.prepared_transfers.holds(key));
     const used_before = fixture.pane.media_allocator.used;
     fixture.pane.refreshGraphicsProjection();
-    const stores = [_]*AttachmentStore{&fixture.attachments};
 
-    const projection = synchronize(fixture.pane, &stores, false);
+    const projection = synchronize(&fixture.attachments, fixture.pane, false);
 
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     try std.testing.expectEqual(@as(u64, 1), projection.staged);
     try std.testing.expect(attachment.hasFrozenGraphics());
     const transfer = attachment.graphics.transfer.?;
@@ -87,7 +85,7 @@ test "a replaced generation releases the object the actor parked for it" {
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    _ = fixture.attachments.configureGraphics(true);
+    fixture.attachment().configureGraphics(true);
     try fixture.addRgbaImage(7);
     var first: StatsType = .{};
     fixture.pane.prepareSharedTransfers(&first);
@@ -120,10 +118,10 @@ test "parked generations every client already knows are released at synchronizat
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    _ = fixture.attachments.configureGraphics(true);
+    fixture.attachment().configureGraphics(true);
     try fixture.addRgbaImage(7);
     const key = liveKey(&fixture, 7);
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     try attachment_namespace.rememberImage(attachment, key);
     fixture.pane.refreshGraphicsProjection();
     attachment.graphics.observed_revision = fixture.pane.graphics_revision;
@@ -131,9 +129,8 @@ test "parked generations every client already knows are released at synchronizat
     var stats: StatsType = .{};
     fixture.pane.prepareSharedTransfers(&stats);
     const parked_name = fixture.pane.media_ingestion.prepared_transfers.items[0].?.name;
-    const stores = [_]*AttachmentStore{&fixture.attachments};
 
-    const projection = synchronize(fixture.pane, &stores, false);
+    const projection = synchronize(&fixture.attachments, fixture.pane, false);
 
     try std.testing.expectEqual(@as(u64, 0), projection.staged);
     try std.testing.expect(!attachment.hasFrozenGraphics());
@@ -148,13 +145,12 @@ test "detach releases a parked fallback and its quota before another consumer ar
     defer fixture.deinit();
     try fixture.addRgbaImage(63);
     fixture.pane.refreshGraphicsProjection();
-    const stores = [_]*AttachmentStore{&fixture.attachments};
-    _ = synchronize(fixture.pane, &stores, false);
+    _ = synchronize(&fixture.attachments, fixture.pane, false);
     fixture.processMedia();
     const parked_bytes = fixture.pane.media_allocator.used;
     try std.testing.expect(fixture.pane.media_ingestion.transfer_preparation.entries[0] != null);
-    _ = fixture.attachments.detach(fixture.pane.id);
-    _ = synchronize(fixture.pane, &stores, false);
+    _ = fixture.attachments.remove(fixture.attachment_allocator.allocator(), PaneFixture.client, fixture.pane.id);
+    _ = synchronize(&fixture.attachments, fixture.pane, false);
     try std.testing.expectEqual(parked_bytes - 4, fixture.pane.media_allocator.used);
     for (fixture.pane.media_ingestion.transfer_preparation.entries) |entry| {
         try std.testing.expect(entry == null);
@@ -184,18 +180,16 @@ test "a media reset invalidates every attached client before staging" {
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    var second: AttachmentStore = .{};
-    _ = try second.attach(std.testing.allocator, fixture.pane);
-    defer second.deinit();
-    const stores = [_]*AttachmentStore{ &fixture.attachments, &second };
+    const second_client = PaneFixture.client + 1;
+    const second = try fixture.attachments.add(fixture.attachment_allocator.allocator(), second_client, fixture.pane);
 
-    const stats = synchronize(fixture.pane, &stores, true);
+    const stats = synchronize(&fixture.attachments, fixture.pane, true);
 
     try std.testing.expectEqual(@as(u64, 0), stats.staged);
-    try std.testing.expect(fixture.attachments.find(fixture.pane.id).?.hasGraphicsWork());
-    try std.testing.expect(second.find(fixture.pane.id).?.hasGraphicsWork());
-    try std.testing.expect(!fixture.attachments.find(fixture.pane.id).?.hasFrozenGraphics());
-    try std.testing.expect(!second.find(fixture.pane.id).?.hasFrozenGraphics());
+    try std.testing.expect(fixture.attachment().hasGraphicsWork());
+    try std.testing.expect(second.hasGraphicsWork());
+    try std.testing.expect(!fixture.attachment().hasFrozenGraphics());
+    try std.testing.expect(!second.hasFrozenGraphics());
 }
 
 test "one idle-boundary pass freezes at most one transfer per client" {
@@ -204,14 +198,13 @@ test "one idle-boundary pass freezes at most one transfer per client" {
     defer fixture.deinit();
     try fixture.addRgbaImage(7);
     fixture.pane.refreshGraphicsProjection();
-    const stores = [_]*AttachmentStore{&fixture.attachments};
 
-    try std.testing.expectEqual(@as(u64, 0), synchronize(fixture.pane, &stores, false).staged);
+    try std.testing.expectEqual(@as(u64, 0), synchronize(&fixture.attachments, fixture.pane, false).staged);
     fixture.processMedia();
-    const first = synchronize(fixture.pane, &stores, false);
-    const second = synchronize(fixture.pane, &stores, false);
+    const first = synchronize(&fixture.attachments, fixture.pane, false);
+    const second = synchronize(&fixture.attachments, fixture.pane, false);
 
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     try std.testing.expectEqual(@as(u64, 1), first.staged);
     try std.testing.expectEqual(@as(u64, 0), second.staged);
     try std.testing.expect(attachment.hasFrozenGraphics());
@@ -224,13 +217,12 @@ test "a failed freeze abandons only its client graphics projection" {
     try fixture.addRgbaImage(7);
     fixture.pane.refreshGraphicsProjection();
     fixture.failNextAttachmentAllocation();
-    const stores = [_]*AttachmentStore{&fixture.attachments};
-    _ = synchronize(fixture.pane, &stores, false);
+    _ = synchronize(&fixture.attachments, fixture.pane, false);
     fixture.processMedia();
 
-    const stats = synchronize(fixture.pane, &stores, false);
+    const stats = synchronize(&fixture.attachments, fixture.pane, false);
 
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     try std.testing.expectEqual(@as(u64, 0), stats.staged);
     try std.testing.expect(!attachment.hasFrozenGraphics());
     try std.testing.expect(attachment.graphicsCaughtUp());

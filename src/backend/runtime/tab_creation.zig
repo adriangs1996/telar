@@ -10,6 +10,7 @@ const PendingTabCreated = @import("delivery/PendingTabCreated.zig");
 const client_request = @import("client_request.zig");
 const geometry_lease = @import("geometry_lease.zig");
 const launch_cwd = @import("client/launch_cwd.zig");
+const pane_attachment = @import("pane_attachment.zig");
 const pane_launch = @import("pane_launch.zig");
 const resync_required = @import("resync_required.zig");
 
@@ -44,7 +45,7 @@ fn createTab(model: *RuntimeModel, session: *Session, request: core.CreateTabVie
         return error.GeometryUnavailable;
     }
 
-    const cwd = launch_cwd.resolveLaunchCwd(&session.attachments, request.launch, .{ .workspace = request.workspace }) catch return error.InvalidLaunchCwd;
+    const cwd = launch_cwd.resolveLaunchCwd(model, session, request.launch, .{ .workspace = request.workspace }) catch return error.InvalidLaunchCwd;
     const tab_id = try workspaces.nextTabId();
     const position = try workspaces.addTab(slot, tab_id, request.label);
     const created: core.TabLocation = .{ .workspace = request.workspace, .tab_id = tab_id };
@@ -72,7 +73,7 @@ fn createTab(model: *RuntimeModel, session: *Session, request: core.CreateTabVie
     resync_required.notify(model, .{ .origin = session.key, .workspace = request.workspace });
 
     const running = model.panes.findRunning(root_pane_id) orelse return error.LaunchedPaneUnavailable;
-    _ = try session.attachments.attach(model.gpa, running);
+    _ = try pane_attachment.attach(model, session, running);
 
     const label = workspaces.labelAt(slot, position);
     var pending: PendingTabCreated = .{

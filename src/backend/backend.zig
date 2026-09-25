@@ -117,7 +117,7 @@ test {
     _ = @import("runtime/pane_closure.zig");
     _ = @import("runtime/suggestion.zig");
     _ = @import("runtime/attachment/attachment_namespace.zig");
-    _ = @import("runtime/attachment/AttachmentStore.zig");
+    _ = @import("runtime/attachment/Attachments.zig");
     _ = @import("runtime/change_review.zig");
     _ = @import("revisions.zig");
     _ = @import("runtime/agent_snapshot.zig");

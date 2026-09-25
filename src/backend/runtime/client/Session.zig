@@ -1,7 +1,6 @@
 const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const ClientKey = @import("../../history/ClientKey.zig");
-const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const Delivery = @import("../delivery/Delivery.zig");
 const session_support = @import("session_support.zig");
 const PendingPaneFocus = @import("PendingPaneFocus.zig");
@@ -15,7 +14,14 @@ key: ClientKey,
 connection: localsocket.SocketChannel,
 receive_buffer: []u8,
 read_buffer: []u8,
-attachments: AttachmentStore = .{},
+/// The client's position in `RuntimeModel.clients`: its row in
+/// `RuntimeModel.attachments` and its bit in `Pane.observers`.
+slot: usize = 0,
+/// The workspace the client views, kept after its last attachment until
+/// lifecycle events that depend on it are published.
+workspace: ?core.WorkspaceLocation = null,
+/// Graphics transport for existing and future attachments.
+shared_graphics: bool = false,
 delivery: Delivery,
 role: session_support.Role = .undecided,
 read_pending: bool = false,
@@ -38,6 +44,11 @@ pub fn setTerminalColors(self: *Session, colors: core.TerminalColors) bool {
 
     self.terminal_colors = colors;
     return true;
+}
+
+/// Example: `if (!session.observes(workspace)) { continue; }`.
+pub fn observes(self: *const Session, workspace: core.WorkspaceLocation) bool {
+    return self.workspace != null and std.meta.eql(self.workspace.?, workspace);
 }
 
 /// Reserves one correlated focus exchange before its command is delivered.
@@ -102,8 +113,8 @@ pub fn active(self: *const Session) bool {
     return !self.closing and self.connection.isActive();
 }
 
-/// Releases connection, attachment and buffer ownership after all socket
-/// operations have completed.
+/// Releases connection and buffer ownership after all socket operations
+/// have completed and the client's attachments are gone.
 ///
 /// ```zig
 /// session.deinit(io, gpa);
@@ -112,7 +123,6 @@ pub fn active(self: *const Session) bool {
 pub fn deinit(self: *Session, io: std.Io, gpa: std.mem.Allocator) void {
     std.debug.assert(!self.read_pending and !self.send_pending);
     self.connection.deinit(io);
-    self.attachments.deinit();
     self.delivery.deinit(gpa);
     gpa.free(self.receive_buffer);
     gpa.free(self.read_buffer);

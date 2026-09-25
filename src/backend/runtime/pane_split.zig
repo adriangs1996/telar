@@ -8,6 +8,7 @@ const Pane = @import("../pane/Pane.zig");
 const client_request = @import("client_request.zig");
 const geometry_lease = @import("geometry_lease.zig");
 const launch_cwd = @import("client/launch_cwd.zig");
+const pane_attachment = @import("pane_attachment.zig");
 const pane_launch = @import("pane_launch.zig");
 const resync_required = @import("resync_required.zig");
 
@@ -52,7 +53,7 @@ fn launchSibling(model: *RuntimeModel, session: *Session, request: core.CreatePa
         return error.GeometryUnavailable;
     }
 
-    const cwd = launch_cwd.resolveLaunchCwd(&session.attachments, request.launch, .{ .tab = request.location }) catch return error.InvalidLaunchCwd;
+    const cwd = launch_cwd.resolveLaunchCwd(model, session, request.launch, .{ .tab = request.location }) catch return error.InvalidLaunchCwd;
     const workspace_path = workspaces.workspacePath(request.location.workspace) orelse return error.TabNotFound;
     const launched = pane_launch.launch(model, .{
         .location = request.location,
@@ -63,6 +64,6 @@ fn launchSibling(model: *RuntimeModel, session: *Session, request: core.CreatePa
     }) catch |err| return pane_launch.requestError(err);
 
     resync_required.notify(model, .{ .origin = session.key, .workspace = launched.location.workspace });
-    _ = try session.attachments.attach(model.gpa, launched);
+    _ = try pane_attachment.attach(model, session, launched);
     return launched;
 }

@@ -6,13 +6,12 @@ const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const Pane = @import("../pane/Pane.zig");
-const AttachmentStore = @import("attachment/AttachmentStore.zig");
+const Attachments = @import("attachment/Attachments.zig");
 const MediaCompletion = @import("events/MediaCompletion.zig");
 const MediaStats = @import("../media/Stats.zig");
 const attachment_namespace = @import("attachment/attachment_namespace.zig");
 const pane_input = @import("pane_input.zig");
 const std = @import("std");
-const store_support = @import("client/store_support.zig");
 
 /// Replaces the client's graphics baseline for one pane.
 ///
@@ -20,29 +19,53 @@ const store_support = @import("client/store_support.zig");
 /// pane_graphics.snapshot(model, session, request);
 /// ```
 pub fn snapshot(model: *RuntimeModel, session: *Session, request: core.RequestGraphicsSnapshot) void {
-    if (!session.attachments.requestGraphicsSnapshot(request.pane_id)) {
+    const attachment = model.attachments.find(session.slot, request.pane_id) orelse {
         model.metrics.stale_client_messages += 1;
-    }
+        return;
+    };
+
+    attachment.requestGraphicsSnapshot();
 }
 
-/// Returns graphics bytes the client consumed from one attachment.
+/// Returns graphics bytes the client consumed from one attachment. An
+/// amount the attachment never spent leaves all credit unchanged.
 ///
 /// ```zig
 /// pane_graphics.returnCredit(model, session, credit);
 /// ```
 pub fn returnCredit(model: *RuntimeModel, session: *Session, credit: core.GraphicsCredit) void {
-    if (session.attachments.returnGraphicsCredit(credit) != .returned) {
+    const attachment = model.attachments.find(session.slot, credit.pane_id) orelse {
+        model.metrics.stale_client_messages += 1;
+        return;
+    };
+
+    const bytes = std.math.cast(usize, credit.bytes) orelse {
+        model.metrics.stale_client_messages += 1;
+        return;
+    };
+
+    if (!attachment.returnGraphicsCredit(bytes)) {
         model.metrics.stale_client_messages += 1;
     }
 }
 
-/// Selects shared-memory or inline graphics transport for the client.
+/// Selects shared-memory or inline graphics transport for the client's
+/// existing and future attachments. Repeating the active transport leaves
+/// every attachment intact.
 ///
 /// ```zig
-/// pane_graphics.configure(session, request);
+/// pane_graphics.configure(model, session, request);
 /// ```
-pub fn configure(session: *Session, request: core.ConfigureGraphics) void {
-    _ = session.attachments.configureGraphics(request.shared);
+pub fn configure(model: *RuntimeModel, session: *Session, request: core.ConfigureGraphics) void {
+    if (session.shared_graphics == request.shared) {
+        return;
+    }
+
+    session.shared_graphics = request.shared;
+    for (model.attachments.record[session.slot]) |slot| {
+        const attachment = slot orelse continue;
+        attachment.configureGraphics(request.shared);
+    }
 }
 
 /// Starts the pane's media actor when media work is pending and none runs.
@@ -78,15 +101,7 @@ pub fn finishMedia(model: *RuntimeModel, completion: MediaCompletion) !void {
     attachment_namespace.enforceGraphicsQuotas(model.io, pane);
     pane.refreshGraphicsProjection();
 
-    var stores: [store_support.max_clients]*AttachmentStore = undefined;
-    var count: usize = 0;
-    var observers = pane.observers;
-    while (model.clients.nextObserver(&observers)) |client| {
-        stores[count] = &client.attachments;
-        count += 1;
-    }
-
-    const projection = synchronize(pane, stores[0..count], completion.stats.reset);
+    const projection = synchronize(&model.attachments, pane, completion.stats.reset);
     if (comptime core.enabled) {
         model.metrics.graphics_transfers_staged +|= projection.staged;
     }
@@ -99,24 +114,28 @@ pub fn finishMedia(model: *RuntimeModel, completion: MediaCompletion) !void {
 /// only that disposable client projection.
 ///
 /// ```zig
-/// const stats = pane_graphics.synchronize(pane, attachment_stores, media_reset);
+/// const stats = pane_graphics.synchronize(&model.attachments, pane, media_reset);
 /// ```
-pub fn synchronize(pane: *Pane, stores: []const *AttachmentStore, media_reset: bool) ProjectionStats {
+pub fn synchronize(attachments: *Attachments, pane: *Pane, media_reset: bool) ProjectionStats {
     if (media_reset) {
-        for (stores) |store| {
-            _ = store.requestGraphicsSnapshot(pane.id);
+        var observers = pane.observers;
+        while (attachments.nextObserver(pane.id, &observers)) |attachment| {
+            attachment.requestGraphicsSnapshot();
         }
     }
 
     var stats: ProjectionStats = .{};
-    for (stores) |store| {
-        const attachment = store.find(pane.id) orelse continue;
+    var observers = pane.observers;
+    while (observers != 0) {
+        const client = @ctz(observers);
+        observers &= observers - 1;
+        const attachment = attachments.find(client, pane.id) orelse continue;
 
         if (attachment.hasFrozenGraphics() or attachment.graphicsCaughtUp()) {
             continue;
         }
 
-        const staged = attachment.stageGraphics(store.availableGraphicsCredit()) catch {
+        const staged = attachment.stageGraphics(attachments.availableGraphicsCredit(client)) catch {
             attachment.abandonGraphics();
             continue;
         };
@@ -124,8 +143,12 @@ pub fn synchronize(pane: *Pane, stores: []const *AttachmentStore, media_reset: b
             stats.staged +|= 1;
         }
     }
-    discardUnwanted(pane, stores);
-    pane.media_ingestion.transfer_preparation.retain(Consumers{ .pane_id = pane.id, .stores = stores }, &pane.media_allocator);
+    const consumers: Consumers = .{
+        .attachments = attachments,
+        .pane = pane,
+    };
+    discardUnwanted(pane, consumers);
+    pane.media_ingestion.transfer_preparation.retain(consumers, &pane.media_allocator);
 
     return stats;
 }
@@ -134,8 +157,7 @@ pub fn synchronize(pane: *Pane, stores: []const *AttachmentStore, media_reset: b
 /// client can still adopt: each such client either knows the image already
 /// or holds that very generation frozen. Keeping them would pin pane quota
 /// until the next generation replaced them.
-fn discardUnwanted(pane: *Pane, stores: []const *AttachmentStore) void {
-    const consumers: Consumers = .{ .pane_id = pane.id, .stores = stores };
+fn discardUnwanted(pane: *Pane, consumers: Consumers) void {
     for (pane.media_ingestion.prepared_transfers.items) |slot| {
         const parked = slot orelse continue;
         if (consumers.wants(parked.metadata.key, true)) {
@@ -189,13 +211,13 @@ const ProjectionStats = struct {
 };
 
 const Consumers = struct {
-    pane_id: core.PaneId,
-    stores: []const *AttachmentStore,
+    attachments: *Attachments,
+    pane: *const Pane,
 
     /// Example: `const needed = consumers.wants(key, true);`.
     pub fn wants(self: Consumers, key: core.ImageKey, shared: bool) bool {
-        for (self.stores) |store| {
-            const attachment = store.find(self.pane_id) orelse continue;
+        var observers = self.pane.observers;
+        while (self.attachments.nextObserver(self.pane.id, &observers)) |attachment| {
             if (attachment.graphics.shared_transport != shared or attachment_namespace.knowsImage(attachment, key)) {
                 continue;
             }

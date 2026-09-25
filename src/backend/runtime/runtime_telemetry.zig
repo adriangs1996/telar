@@ -4,11 +4,9 @@
 
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
-const AttachmentStore = @import("attachment/AttachmentStore.zig");
 const ClientSample = @import("observability/ClientSample.zig");
 const Sources = @import("Sources.zig");
 const TelemetryState = @import("observability/State.zig");
-const store_support = @import("client/store_support.zig");
 const telemetry = @import("observability/telemetry.zig");
 
 /// Rearms the tick and schedules one sample write unless one is in flight.
@@ -61,20 +59,17 @@ fn write(io: std.Io, sink: *TelemetryState, bytes: []const u8) anyerror!void {
 }
 
 fn format(model: *RuntimeModel, buffer: []u8) ![]const u8 {
-    var attachment_stores: [store_support.max_clients]*const AttachmentStore = undefined;
-    var attachment_count: usize = 0;
-    var clients: ClientSample = .{ .count = model.clients.count };
+    var clients: ClientSample = .{
+        .count = model.clients.count,
+        .attachments = &model.attachments,
+    };
 
     for (&model.clients.items) |*slot| {
         const session = slot.* orelse continue;
-        attachment_stores[attachment_count] = &session.attachments;
-        attachment_count += 1;
         clients.response_queue_depth += session.delivery.responses.len;
         clients.response_queue_high_water += session.delivery.responses.high_water;
         clients.response_queue_dropped +|= session.delivery.responses.dropped;
     }
-
-    clients.attachment_stores = attachment_stores[0..attachment_count];
 
     const proxy_metrics = model.resources.proxy.metrics();
     const workspaces = &model.workspaces;

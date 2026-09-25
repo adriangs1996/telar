@@ -15,6 +15,15 @@ tab_snapshot.applyTabSnapshot / host resize / pane geometry or focus change
   -> pane_attachment.confirmPaneAttachment -> pane_attachment.confirm
 ```
 
+On the runtime, `pane_attachment.open` resolves the target and
+`pane_attachment.attach` adds the row to `RuntimeModel.attachments`: one row
+per client slot, one heap record per attached pane, and the client's bit in
+`Pane.observers` as the table's reverse index, so a pane reaches its
+attachments without visiting sessions. The workspace the client views and its
+graphics transport are `Session` fields. `pane_attachment.release` keeps that
+view after the last pane so lifecycle events still reach the client;
+`leaveWorkspace` ends it, and `clear` removes every row of the client.
+
 `pane_attachment.completePaneOpen` consumes correlation once and routes its typed
 continuation. Confirmation requires the same pane and tab, and `created=false`.
 The model accepts only a still-detached pane in the active tab. A switched tab,

@@ -27,7 +27,7 @@ const prompt_overhead = paste_start.len + paste_end.len + enter.len;
 /// try pane_input.send(model, session, input);
 /// ```
 pub fn send(model: *RuntimeModel, session: *Session, input: core.PaneInput) !void {
-    const attachment = session.attachments.find(input.pane_id) orelse {
+    const attachment = model.attachments.find(session.slot, input.pane_id) orelse {
         model.metrics.stale_client_messages += 1;
         return;
     };

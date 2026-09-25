@@ -124,8 +124,10 @@ that touches it.
    geometry lease as a column; the agent repository is indexed by pane id and
    the agent snapshot is projected once per flush from table revisions;
    `HOME` is read once; `Pane.observers` masks which clients a pane visits;
-   change-review discovery is keyed by an owner stamp. Pending: attachments
-   are still one store per client session rather than a runtime table; the
+   change-review discovery is keyed by an owner stamp; attachments are
+   `RuntimeModel.attachments`, one row per client slot of heap records
+   instead of a 2.7 MB store inside every session, with the client's
+   workspace view and graphics transport on `Session`. Pending: the
    proxy service keeps its lifecycle port, whose fakes prove its
    cancel-close-destroy order; panes still borrow `io`, `gpa` and history
    services because their actors run on worker threads.

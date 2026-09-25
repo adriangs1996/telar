@@ -79,7 +79,7 @@ test "runtime dispatch preserves a committed pane when its reply queue is full" 
         .launch = try RequestFixture.sleepLaunch(&launch_buffer),
     } }));
     try std.testing.expectEqual(count + 1, fixture.runtime.model.panes.count);
-    try std.testing.expectEqual(@as(usize, 2), fixture.session.attachments.count);
+    try std.testing.expectEqual(@as(usize, 2), fixture.runtime.model.attachments.len(fixture.session.slot));
 }
 
 test "runtime dispatch retains tab rename after response backpressure" {
@@ -102,7 +102,7 @@ test "runtime dispatch validates graphics credits against exact outstanding byte
     try fixture.init();
     defer fixture.deinit();
     const pane = try fixture.openPane();
-    const attachment = fixture.session.attachments.find(pane.id).?;
+    const attachment = fixture.runtime.model.attachments.find(fixture.session.slot, pane.id).?;
     const capacity = core.max_image_bytes_per_pane;
     attachment.graphics.credit = capacity - 16;
     try fixture.send(.{ .graphics_credit = .{ .pane_id = pane.id, .bytes = 16 } });
@@ -121,11 +121,11 @@ test "runtime dispatch keeps graphics configuration scoped to one connection" {
     const pane = try fixture.openPane();
     const other = try fixture.addClient();
     try fixture.send(.{ .configure_graphics = .{ .shared = true } });
-    try std.testing.expect(fixture.session.attachments.shared_graphics);
-    try std.testing.expect(!other.attachments.shared_graphics);
-    try std.testing.expect(fixture.session.attachments.find(pane.id) != null);
+    try std.testing.expect(fixture.session.shared_graphics);
+    try std.testing.expect(!other.shared_graphics);
+    try std.testing.expect(fixture.runtime.model.attachments.find(fixture.session.slot, pane.id) != null);
     try fixture.send(.{ .configure_graphics = .{ .shared = false } });
-    try std.testing.expect(!fixture.session.attachments.shared_graphics);
+    try std.testing.expect(!fixture.session.shared_graphics);
     try std.testing.expectEqual(@as(u64, 0), fixture.runtime.model.metrics.stale_client_messages);
 }
 
@@ -154,7 +154,7 @@ test "runtime dispatch admits multiple viewers but preserves one geometry owner"
         .size = requested_size,
         .launch = null,
     } });
-    try std.testing.expect(other.attachments.find(pane.id) != null);
+    try std.testing.expect(fixture.runtime.model.attachments.find(other.slot, pane.id) != null);
     try std.testing.expectEqualDeep(initial_size, pane.size);
     try fixture.sendTo(other, .{ .pane_resize = .{ .pane_id = pane.id, .size = requested_size } });
     try std.testing.expectEqual(@as(u64, 1), fixture.runtime.model.metrics.geometry_rejections);
@@ -205,7 +205,7 @@ test "runtime dispatch rolls back a tab when post-spawn registration fails" {
     try std.testing.expectEqual(initial_tabs, reader.totalTabs());
     try std.testing.expectEqual(initial_revision, reader.revision);
     try std.testing.expectEqual(@as(usize, 1), fixture.runtime.model.panes.count);
-    try std.testing.expectEqual(@as(usize, 1), fixture.session.attachments.count);
+    try std.testing.expectEqual(@as(usize, 1), fixture.runtime.model.attachments.len(fixture.session.slot));
 }
 
 test "runtime dispatch reserves notification confirmation before publishing" {

@@ -17,7 +17,7 @@ const Completion = @import("Completion.zig");
 const PreparedType = @import("../attachment/Prepared.zig");
 const ForegroundProjection = @import("ForegroundProjection.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
-const AttachmentStore = @import("../attachment/AttachmentStore.zig");
+const Attachments = @import("../attachment/Attachments.zig");
 const PaneKey = @import("../../pane/PaneKey.zig");
 const AgentThreadProjection = @import("AgentThreadProjection.zig");
 const OwnedAgentHistoryPage = @import("OwnedAgentHistoryPage.zig");
@@ -151,7 +151,7 @@ pub fn setClipboard(self: *Delivery, pane_id: core.PaneId, bytes: []const u8) bo
 /// its logical effect until the caller starts the socket write.
 ///
 /// ```zig
-/// const prepared = try delivery.prepare(.{ .io = io, .attachments = attachments, .sources = sources, .metrics = metrics });
+/// const prepared = try delivery.prepare(.{ .io = io, .attachments = &model.attachments, .client = session.slot, .sources = sources, .metrics = metrics });
 /// ```
 pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
     const sources = preparation.sources;
@@ -383,7 +383,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
 /// Commits one staged delivery immediately before its socket write begins.
 ///
 /// ```zig
-/// delivery.commit(.{ .prepared = prepared, .attachments = attachments, .metrics = metrics });
+/// delivery.commit(.{ .prepared = prepared, .attachments = &model.attachments, .client = session.slot, .metrics = metrics });
 /// ```
 pub fn commit(self: *Delivery, operation: Commit) void {
     const prepared = operation.prepared;
@@ -445,7 +445,7 @@ pub fn commit(self: *Delivery, operation: Commit) void {
         .workspace_list_revision => |revision| self.workspace_list_revision_sent = revision,
         .foreground => |projection| self.foregrounds_sent[projection.slot] = projection,
         .attachment => |work| {
-            const attachment = attachments.at(work.index) orelse unreachable;
+            const attachment = attachments.at(operation.client, work.index) orelse unreachable;
             const effect = attachment.commitPrepared(work.prepared);
             completion.detach_pane = effect.detach_after_send;
             if (comptime core.enabled) {
@@ -459,7 +459,7 @@ pub fn commit(self: *Delivery, operation: Commit) void {
                     metrics.graphics_freeze.merge(effect.graphics.freeze);
                 }
             }
-            self.next_attachment = (work.index + 1) % AttachmentStore.capacity;
+            self.next_attachment = (work.index + 1) % Attachments.capacity;
         },
     }
     self.phase = .{ .in_flight = completion };
@@ -499,7 +499,7 @@ fn prepareForeground(self: *Delivery, preparation: Preparation) !?Prepared {
             continue;
         }
 
-        if (preparation.attachments.find(pane.id) != null) {
+        if (preparation.attachments.find(preparation.client, pane.id) != null) {
             continue;
         }
 
@@ -524,9 +524,9 @@ fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane) !?Pr
     const buffer = self.send_buffer;
 
     var checked: usize = 0;
-    while (checked < AttachmentStore.capacity) : (checked += 1) {
-        const index = (self.next_attachment + checked) % AttachmentStore.capacity;
-        const attachment = attachments.at(index) orelse continue;
+    while (checked < Attachments.capacity) : (checked += 1) {
+        const index = (self.next_attachment + checked) % Attachments.capacity;
+        const attachment = attachments.at(preparation.client, index) orelse continue;
         const candidate: ?PreparedType = switch (lane) {
             .cwd => try attachment.prepareCwd(buffer),
             .foreground => try attachment.prepareForeground(buffer),
@@ -551,7 +551,7 @@ fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane) !?Pr
                 }
                 break :graphics attachment.prepareNextGraphics(.{
                     .buffer = buffer,
-                    .global_credit = attachments.availableGraphicsCredit(),
+                    .global_credit = attachments.availableGraphicsCredit(preparation.client),
                     .live_storage_available = attachment.pane.media.worker == null,
                 }) catch {
                     attachment.abandonGraphics();
@@ -581,13 +581,15 @@ pub fn stage(self: *Delivery, payload: []const u8, effect: delivery_namespace.Ef
 
 const Commit = struct {
     prepared: Prepared,
-    attachments: *AttachmentStore,
+    attachments: *Attachments,
+    client: usize,
     metrics: *RuntimeMetrics,
 };
 
 const Preparation = struct {
     io: std.Io,
-    attachments: *AttachmentStore,
+    attachments: *Attachments,
+    client: usize,
     sources: Sources,
     metrics: *RuntimeMetrics,
 };

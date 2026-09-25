@@ -20,7 +20,6 @@ const Service = @import("../../history/Service.zig");
 const GraphicsBudget = @import("../../media/GraphicsBudget.zig");
 const pty = @import("pty");
 const Command = pty.Command;
-const AttachmentStore = @import("AttachmentStore.zig");
 const support_module = @import("../tests/support.zig");
 const CellPreparation = @import("CellPreparation.zig");
 const graphics = @import("graphics.zig");
@@ -28,22 +27,6 @@ const graphics = @import("graphics.zig");
 pub fn initSharedFreezeNonce(io: std.Io) void {
     shared_transfer.initSharedFreezeNonce(io);
 }
-
-pub const ViewportUpdate = enum {
-    changed,
-    unchanged,
-};
-
-pub const GraphicsCreditUpdate = enum {
-    returned,
-    pane_not_attached,
-    invalid_amount,
-};
-
-pub const GraphicsConfigurationUpdate = enum {
-    changed,
-    unchanged,
-};
 
 pub fn enforceGraphicsQuotas(io: std.Io, pane: *Pane) void {
     // The allocator has already reserved every VT and frozen-transfer byte
@@ -478,85 +461,6 @@ pub fn findPlacement(storage: *vt.kitty.graphics.ImageStorage, virtual_id: u64) 
 
 fn placementValue(pane: *Pane, source: PlacementSource) ?core.Placement {
     return media_mod.placementValue(&pane.media.terminal, source);
-}
-
-test "attachment store reports and commits workspace departure on the last pane" {
-    const io = std.testing.io;
-    const gpa = std.testing.allocator;
-    var service = try Service.init(gpa, .{ .database_path = ":memory:" });
-    defer {
-        service.stop(io);
-        service.deinit(io);
-    }
-    var budget = GraphicsBudget.init(core.max_image_bytes_global);
-    const args = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try Command.fromArgv(&args);
-    const workspace: core.WorkspaceLocation = .{ .workspace = try core.workspace(1) };
-    const first = try Pane.create(.{
-        .io = io,
-        .gpa = gpa,
-        .history_service = &service,
-        .graphics_budget = &budget,
-    }, .{
-        .identity = .{ .id = try core.pane(1), .generation = 1 },
-        .location = .{ .workspace = workspace, .tab_id = try core.tab(1) },
-        .command = &command,
-        .launch_cwd = "/",
-        .workspace_path = "/",
-        .size = .{ .cols = 8, .rows = 3 },
-        .graphics_limits = .{},
-    });
-    defer {
-        first.session.shutdown();
-        first.destroy();
-    }
-    const second = try Pane.create(.{
-        .io = io,
-        .gpa = gpa,
-        .history_service = &service,
-        .graphics_budget = &budget,
-    }, .{
-        .identity = .{ .id = try core.pane(2), .generation = 2 },
-        .location = .{ .workspace = workspace, .tab_id = try core.tab(1) },
-        .command = &command,
-        .launch_cwd = "/",
-        .workspace_path = "/",
-        .size = .{ .cols = 8, .rows = 3 },
-        .graphics_limits = .{},
-    });
-    defer {
-        second.session.shutdown();
-        second.destroy();
-    }
-    first.commitLaunch("/bin/sleep");
-    second.commitLaunch("/bin/sleep");
-    var store: AttachmentStore = .{};
-    defer store.deinit();
-    _ = try store.attach(gpa, first);
-    _ = try store.attach(gpa, second);
-
-    try std.testing.expect(!store.leaveWorkspace(workspace));
-    try std.testing.expect(store.detach(try core.pane(99)) == null);
-
-    const first_detached = store.detach(first.id).?;
-
-    try std.testing.expectEqual(first.id, first_detached.pane_id);
-    try std.testing.expectEqualDeep(workspace, first_detached.workspace);
-    try std.testing.expect(!first_detached.last_attachment);
-    try std.testing.expectEqual(@as(usize, 1), store.len());
-    try std.testing.expect(store.observes(workspace));
-    try std.testing.expect(store.find(first.id) == null);
-    try std.testing.expect(store.find(second.id) != null);
-
-    const second_detached = store.detach(second.id).?;
-
-    try std.testing.expect(second_detached.last_attachment);
-    try std.testing.expectEqual(@as(usize, 0), store.len());
-    try std.testing.expect(store.observes(workspace));
-    try std.testing.expect(!store.leaveWorkspace(.{ .workspace = try core.workspace(2) }));
-    try std.testing.expect(store.leaveWorkspace(workspace));
-    try std.testing.expect(store.currentWorkspace() == null);
-    try std.testing.expect(!store.observes(workspace));
 }
 
 test "pointer-only frames coalesce independently and survive snapshot recovery" {

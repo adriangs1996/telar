@@ -10,6 +10,7 @@ const Pane = @import("../pane/Pane.zig");
 const client_request = @import("client_request.zig");
 const geometry_lease = @import("geometry_lease.zig");
 const launch_cwd = @import("client/launch_cwd.zig");
+const pane_attachment = @import("pane_attachment.zig");
 const pane_launch = @import("pane_launch.zig");
 const resync_required = @import("resync_required.zig");
 
@@ -41,7 +42,7 @@ pub fn create(model: *RuntimeModel, session: *Session, request: core.CreateWorks
 }
 
 fn createWorkspace(model: *RuntimeModel, session: *Session, request: core.CreateWorkspaceView) !*Pane {
-    const cwd = launch_cwd.resolveLaunchCwd(&session.attachments, request.launch, .any) catch return error.InvalidLaunchCwd;
+    const cwd = launch_cwd.resolveLaunchCwd(model, session, request.launch, .any) catch return error.InvalidLaunchCwd;
     if (request.create_cwd and request.launch.cwd_source == null) {
         launch_cwd.createLaunchDirectory(model.io, cwd) catch return error.LaunchCwdCreateFailed;
     }
@@ -79,13 +80,13 @@ fn createWorkspace(model: *RuntimeModel, session: *Session, request: core.Create
     resync_required.notify(model, .{ .origin = session.key, .workspace = location.workspace });
 
     const pane = model.panes.findRunning(root_pane_id) orelse return error.LaunchedPaneUnavailable;
-    const previous_workspace = session.attachments.currentWorkspace();
-    session.attachments.clearAttachments();
+    const previous_workspace = session.workspace;
+    pane_attachment.clear(model, session);
     if (previous_workspace) |previous| {
         geometry_lease.release(model, session.key, previous);
     }
 
-    const attachment = try session.attachments.attach(model.gpa, pane);
+    const attachment = try pane_attachment.attach(model, session, pane);
     _ = try attachment.resizeIfNeeded();
     return pane;
 }

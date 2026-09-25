@@ -45,6 +45,7 @@ test {
     std_module.testing.refAllDecls(@This());
     _ = cell_publication_test;
     _ = @import("tests/requests_test.zig");
+    _ = @import("tests/pane_attachment_test.zig");
     _ = @import("tests/events_test.zig");
     _ = @import("tests/cell_projection_test.zig");
     _ = @import("tests/pane_title_test.zig");

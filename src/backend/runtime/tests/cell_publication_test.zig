@@ -64,7 +64,7 @@ test "cell publication folds output before rendering and delivers the final fram
     try fixture.init();
     defer fixture.deinit();
 
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     var buffer: [frame_buffer_size]u8 = undefined;
     try establishBaseline(&fixture, attachment, &buffer);
     deferPublication(attachment);
@@ -74,11 +74,11 @@ test "cell publication folds output before rendering and delivers the final fram
 
     _ = try fixture.pane.ingest(std.testing.io, "first");
     try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
-    const deadline = fixture.attachments.cellDeadline().?;
+    const deadline = fixture.attachments.cellDeadline(PaneFixture.client).?;
 
     _ = try fixture.pane.ingest(std.testing.io, "\x1b[Hfinal");
     try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
-    try std.testing.expectEqual(deadline, fixture.attachments.cellDeadline().?);
+    try std.testing.expectEqual(deadline, fixture.attachments.cellDeadline(PaneFixture.client).?);
     try std.testing.expect(fixture.pane.render_pending);
     try std.testing.expectEqual(observed, attachment.observedCellRevision());
     try std.testing.expectEqual(next_frame_id, attachment.cells.next_frame_id);
@@ -94,7 +94,7 @@ test "cell publication folds output before rendering and delivers the final fram
     try acknowledge(attachment, frame);
 
     try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
-    try std.testing.expect(fixture.attachments.cellDeadline() == null);
+    try std.testing.expect(fixture.attachments.cellDeadline(PaneFixture.client) == null);
 }
 
 test "cell snapshot recovery bypasses an exhausted publication budget" {
@@ -102,7 +102,7 @@ test "cell snapshot recovery bypasses an exhausted publication budget" {
     try fixture.init();
     defer fixture.deinit();
 
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     var buffer: [frame_buffer_size]u8 = undefined;
     try establishBaseline(&fixture, attachment, &buffer);
     deferPublication(attachment);
@@ -123,7 +123,7 @@ test "pane EOF publishes deferred cells before its exit message" {
     try fixture.init();
     defer fixture.deinit();
 
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     var buffer: [frame_buffer_size]u8 = undefined;
     try establishBaseline(&fixture, attachment, &buffer);
     deferPublication(attachment);
@@ -139,7 +139,7 @@ test "pane EOF publishes deferred cells before its exit message" {
     try acknowledge(attachment, frame);
 
     try std.testing.expect((try attachment.prepareExit(&buffer)) != null);
-    try std.testing.expect(fixture.attachments.cellDeadline() == null);
+    try std.testing.expect(fixture.attachments.cellDeadline(PaneFixture.client) == null);
 }
 
 test "clients pace independently and an unacknowledged frame never advances its baseline" {
@@ -147,7 +147,7 @@ test "clients pace independently and an unacknowledged frame never advances its 
     try fixture.init();
     defer fixture.deinit();
 
-    const deferred = fixture.attachments.find(fixture.pane.id).?;
+    const deferred = fixture.attachment();
     var ready = try Attachment.init(std.testing.allocator, fixture.pane);
     defer ready.deinit();
     var deferred_buffer: [frame_buffer_size]u8 = undefined;
@@ -182,35 +182,35 @@ test "publication deadlines park during ingest and outstanding acknowledgement" 
     try fixture.init();
     defer fixture.deinit();
 
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     var buffer: [frame_buffer_size]u8 = undefined;
     try establishBaseline(&fixture, attachment, &buffer);
     deferPublication(attachment);
     _ = try fixture.pane.ingest(std.testing.io, "pending");
     try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
-    const deadline = fixture.attachments.cellDeadline().?;
+    const deadline = fixture.attachments.cellDeadline(PaneFixture.client).?;
 
     fixture.pane.ingest_pending = true;
     defer fixture.pane.ingest_pending = false;
 
-    try std.testing.expect(fixture.attachments.cellDeadline() == null);
+    try std.testing.expect(fixture.attachments.cellDeadline(PaneFixture.client) == null);
     try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
     try std.testing.expect(attachment.cell_deadline_ns == null);
     try std.testing.expect(fixture.pane.render_pending);
     fixture.pane.ingest_pending = false;
 
     try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
-    try std.testing.expectEqual(deadline, fixture.attachments.cellDeadline().?);
+    try std.testing.expectEqual(deadline, fixture.attachments.cellDeadline(PaneFixture.client).?);
     expirePublication(attachment);
     const frame = (try nextFrame(&fixture, attachment, &buffer)).?;
     attachment.cell_deadline_ns = deadline;
-    try std.testing.expect(fixture.attachments.cellDeadline() == null);
+    try std.testing.expect(fixture.attachments.cellDeadline(PaneFixture.client) == null);
     try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
     try std.testing.expect(attachment.cell_deadline_ns == null);
     try std.testing.expectEqual(frame.frame_id, attachment.outstandingFrameId());
     try acknowledge(attachment, frame);
 
-    try std.testing.expect(fixture.attachments.cellDeadline() == null);
+    try std.testing.expect(fixture.attachments.cellDeadline(PaneFixture.client) == null);
 }
 
 test "reattaching a deferred pane starts with a fresh publication budget and snapshot" {
@@ -218,17 +218,17 @@ test "reattaching a deferred pane starts with a fresh publication budget and sna
     try fixture.init();
     defer fixture.deinit();
 
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     var buffer: [frame_buffer_size]u8 = undefined;
     try establishBaseline(&fixture, attachment, &buffer);
     deferPublication(attachment);
     _ = try fixture.pane.ingest(std.testing.io, "reconnect");
     try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
-    try std.testing.expect(fixture.attachments.cellDeadline() != null);
+    try std.testing.expect(fixture.attachments.cellDeadline(PaneFixture.client) != null);
 
-    try std.testing.expect(fixture.attachments.detach(fixture.pane.id) != null);
-    try std.testing.expect(fixture.attachments.cellDeadline() == null);
-    const reattached = try fixture.attachments.attach(std.testing.allocator, fixture.pane);
+    try std.testing.expect(fixture.attachments.remove(fixture.attachment_allocator.allocator(), PaneFixture.client, fixture.pane.id));
+    try std.testing.expect(fixture.attachments.cellDeadline(PaneFixture.client) == null);
+    const reattached = try fixture.attachments.add(fixture.attachment_allocator.allocator(), PaneFixture.client, fixture.pane);
     try std.testing.expect(reattached.cell_deadline_ns == null);
     try std.testing.expect(reattached.cell_pacer.anchor_ns == null);
     const frame = (try nextFrame(&fixture, reattached, &buffer)).?;
@@ -241,7 +241,7 @@ test "a deferred no-op projection clears its deadline without more output" {
     try fixture.init();
     defer fixture.deinit();
 
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     var buffer: [frame_buffer_size]u8 = undefined;
     try establishBaseline(&fixture, attachment, &buffer);
     deferPublication(attachment);
@@ -252,7 +252,7 @@ test "a deferred no-op projection clears its deadline without more output" {
 
     _ = try fixture.pane.ingest(std.testing.io, "\x07");
     try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
-    try std.testing.expect(fixture.attachments.cellDeadline() != null);
+    try std.testing.expect(fixture.attachments.cellDeadline(PaneFixture.client) != null);
     try std.testing.expectEqual(observed, attachment.observedCellRevision());
     expirePublication(attachment);
 
@@ -262,9 +262,9 @@ test "a deferred no-op projection clears its deadline without more output" {
     try std.testing.expect(!fixture.pane.render_pending);
     try std.testing.expect(!attachment.cells.hasOutstanding());
     try std.testing.expectEqual(next_frame_id, attachment.cells.next_frame_id);
-    try std.testing.expect(fixture.attachments.cellDeadline() == null);
+    try std.testing.expect(fixture.attachments.cellDeadline(PaneFixture.client) == null);
     try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
-    try std.testing.expect(fixture.attachments.cellDeadline() == null);
+    try std.testing.expect(fixture.attachments.cellDeadline(PaneFixture.client) == null);
 }
 
 test "successive no-op projections consume publication credit and defer further rendering" {
@@ -272,7 +272,7 @@ test "successive no-op projections consume publication credit and defer further 
     try fixture.init();
     defer fixture.deinit();
 
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     var buffer: [frame_buffer_size]u8 = undefined;
     try establishBaseline(&fixture, attachment, &buffer);
     attachment.cell_pacer = .{
@@ -302,7 +302,7 @@ test "successive no-op projections consume publication credit and defer further 
     try std.testing.expect(fixture.pane.render_pending);
     try std.testing.expectEqual(observed_after_noop, attachment.observedCellRevision());
     try std.testing.expectEqual(preparations_after_noop, attachment.cell_pacer.stats.drawn);
-    try std.testing.expect(fixture.attachments.cellDeadline() != null);
+    try std.testing.expect(fixture.attachments.cellDeadline(PaneFixture.client) != null);
     try std.testing.expect(!attachment.cells.hasOutstanding());
     try std.testing.expectEqual(next_frame_id, attachment.cells.next_frame_id);
 
@@ -311,5 +311,5 @@ test "successive no-op projections consume publication credit and defer further 
     try std.testing.expectEqual(@as(u64, @intFromEnum(PreparationBudget.single)), attachment.cell_pacer.stats.drawn - preparations_after_noop);
     try std.testing.expect(attachment.observedCellRevision() != observed_after_noop);
     try std.testing.expect(!fixture.pane.render_pending);
-    try std.testing.expect(fixture.attachments.cellDeadline() == null);
+    try std.testing.expect(fixture.attachments.cellDeadline(PaneFixture.client) == null);
 }

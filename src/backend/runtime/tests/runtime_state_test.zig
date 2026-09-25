@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const Delivery = @import("../delivery/Delivery.zig");
-const AttachmentStore = @import("../attachment/AttachmentStore.zig");
+const Attachments = @import("../attachment/Attachments.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const Agents = @import("../../agent/Agents.zig");
 const hostmetrics = @import("hostmetrics");
@@ -34,7 +34,7 @@ test "runtime-state foreground updates reach panes without cell attachments" {
         }
     }
     try std.testing.expect(foreground_received);
-    try std.testing.expect(fixture.attachments.find(panes.pane.id) == null);
+    try std.testing.expect(fixture.attachments.find(RuntimeStateFixture.client, panes.pane.id) == null);
 
     panes.pane.agent_process_cache.setName("less");
     panes.pane.foreground_revision += 1;
@@ -44,7 +44,7 @@ test "runtime-state foreground updates reach panes without cell attachments" {
     try std.testing.expectEqualStrings("git", latest.name);
     try std.testing.expect((try fixture.next()) == null);
 
-    _ = try fixture.attachments.attach(std.testing.allocator, panes.pane);
+    _ = try fixture.attachments.add(std.testing.allocator, RuntimeStateFixture.client, panes.pane);
     foreground_received = false;
     while (try fixture.next()) |message| {
         if (message == .pane_foreground) {
@@ -54,7 +54,7 @@ test "runtime-state foreground updates reach panes without cell attachments" {
         }
     }
     try std.testing.expect(foreground_received);
-    fixture.attachments.deinit();
+    fixture.attachments.deinit(std.testing.allocator);
 
     const replacement = try panes.createPane(@enumFromInt(8));
     defer {
@@ -72,8 +72,11 @@ test "runtime-state foreground updates reach panes without cell attachments" {
 }
 
 const RuntimeStateFixture = struct {
+    /// The fixture client's row in `attachments`.
+    const client = 0;
+
     delivery: Delivery,
-    attachments: AttachmentStore = .{},
+    attachments: Attachments = .{},
     panes: PaneStore = .{},
     workspaces: Workspaces = .{},
     agents: Agents = .{},
@@ -99,7 +102,7 @@ const RuntimeStateFixture = struct {
     }
 
     pub fn destroy(self: *RuntimeStateFixture) void {
-        self.attachments.deinit();
+        self.attachments.deinit(std.testing.allocator);
         self.delivery.deinit(std.testing.allocator);
         std.testing.allocator.destroy(self);
     }
@@ -119,6 +122,7 @@ const RuntimeStateFixture = struct {
         const prepared = (try self.delivery.prepare(.{
             .io = std.testing.io,
             .attachments = &self.attachments,
+            .client = client,
             .sources = self.sources(),
             .metrics = &self.metrics,
         })) orelse return null;
@@ -126,6 +130,7 @@ const RuntimeStateFixture = struct {
         self.delivery.commit(.{
             .prepared = prepared,
             .attachments = &self.attachments,
+            .client = client,
             .metrics = &self.metrics,
         });
         _ = self.delivery.complete({});

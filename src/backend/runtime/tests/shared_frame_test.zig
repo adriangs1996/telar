@@ -8,7 +8,6 @@ const PaneFixture = @import("PaneFixture.zig");
 const Stats = @import("../../media/Stats.zig");
 const shared_transfer_module = @import("../../media/shared_transfer.zig");
 const Frame = @import("Frame.zig");
-const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const pane_graphics = @import("../pane_graphics.zig");
 
 pub fn createChildObject(name: [:0]const u8, pixels: []const u8) !void {
@@ -71,7 +70,7 @@ test "a shared frame is copied once into the object that becomes emulator storag
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    _ = fixture.attachments.configureGraphics(true);
+    fixture.attachment().configureGraphics(true);
     const pixels = [_]u8{ 1, 2, 3, 255, 4, 5, 6, 255 };
     var frame: Frame = .{};
     try frame.publish(1, &pixels);
@@ -105,9 +104,8 @@ test "a shared frame is copied once into the object that becomes emulator storag
 
     // The attachment adopts the parked object without another copy.
     fixture.pane.refreshGraphicsProjection();
-    const stores = [_]*AttachmentStore{&fixture.attachments};
-    const projection = pane_graphics.synchronize(fixture.pane, &stores, false);
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const projection = pane_graphics.synchronize(&fixture.attachments, fixture.pane, false);
+    const attachment = fixture.attachment();
     try std.testing.expectEqual(@as(u64, 1), projection.staged);
     try std.testing.expectEqual(@as(u32, 1), attachment.graphics.adopted);
     try std.testing.expectEqualStrings(parked.name.slice(), attachment.graphics.transfer.?.shared_name.?.slice());
@@ -122,7 +120,7 @@ test "replacing a direct frame unmaps the previous object and keeps quota flat" 
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    _ = fixture.attachments.configureGraphics(true);
+    fixture.attachment().configureGraphics(true);
     const first_pixels = [_]u8{ 1, 2, 3, 255, 4, 5, 6, 255 };
     const second_pixels = [_]u8{ 9, 9, 9, 255, 8, 8, 8, 255 };
     var first: Frame = .{};
@@ -156,7 +154,7 @@ test "a frame published through a validated file loads with one copy and leaves 
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    _ = fixture.attachments.configureGraphics(true);
+    fixture.attachment().configureGraphics(true);
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
     var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;

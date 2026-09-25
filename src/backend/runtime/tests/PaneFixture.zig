@@ -3,7 +3,8 @@ const std = @import("std");
 const Service = @import("../../history/Service.zig");
 const GraphicsBudget = @import("../../media/GraphicsBudget.zig");
 const Pane = @import("../../pane/Pane.zig");
-const AttachmentStore = @import("../attachment/AttachmentStore.zig");
+const Attachments = @import("../attachment/Attachments.zig");
+const Attachment = @import("../attachment/Attachment.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const pty = @import("pty");
 const Command = pty.Command;
@@ -11,6 +12,8 @@ const support = @import("support.zig");
 const PaneFixture = @This();
 
 pub const initial_size: core.TerminalSize = .{ .cols = 20, .rows = 5 };
+/// The fixture client's row in `attachments`.
+pub const client = 0;
 pub const location: core.TabLocation = .{
     .workspace = .{ .workspace = @enumFromInt(2) },
     .tab_id = @enumFromInt(5),
@@ -21,7 +24,7 @@ attachment_allocator: std.testing.FailingAllocator = undefined,
 history_service: Service = undefined,
 budget: GraphicsBudget = undefined,
 pane: *Pane = undefined,
-attachments: AttachmentStore = .{},
+attachments: Attachments = .{},
 metrics: RuntimeMetrics = .{ .started_ns = 0 },
 
 /// Creates one running pane and one client attachment with independently
@@ -51,7 +54,16 @@ pub fn init(self: *PaneFixture) !void {
         self.pane.destroy();
     }
 
-    _ = try self.attachments.attach(self.attachment_allocator.allocator(), self.pane);
+    _ = try self.attachments.add(self.attachment_allocator.allocator(), client, self.pane);
+}
+
+/// The fixture client's attachment to the fixture pane.
+///
+/// ```zig
+/// const attachment = fixture.attachment();
+/// ```
+pub fn attachment(self: *PaneFixture) *Attachment {
+    return self.attachments.find(client, self.pane.id).?;
 }
 
 /// Releases attachments before destroying their panes and backing services.
@@ -62,7 +74,7 @@ pub fn init(self: *PaneFixture) !void {
 pub fn deinit(self: *PaneFixture) void {
     const io = std.testing.io;
 
-    self.attachments.deinit();
+    self.attachments.deinit(self.attachment_allocator.allocator());
     self.pane.session.shutdown();
     self.pane.destroy();
     self.history_service.stop(io);

@@ -13,6 +13,7 @@ const pty = @import("pty");
 const exit_module = pty.exit;
 const client_request = @import("client_request.zig");
 const geometry_lease = @import("geometry_lease.zig");
+const pane_attachment = @import("pane_attachment.zig");
 const pane_observation = @import("pane_observation.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
 const tab_removal = @import("tab_removal.zig");
@@ -20,10 +21,10 @@ const tab_removal = @import("tab_removal.zig");
 /// Requests closure of an attached pane. The pane stays until its exit.
 ///
 /// ```zig
-/// try pane_closure.close(session, request);
+/// try pane_closure.close(model, session, request);
 /// ```
-pub fn close(session: *Session, request: core.ClosePane) !void {
-    const attachment = session.attachments.find(request.pane_id) orelse {
+pub fn close(model: *RuntimeModel, session: *Session, request: core.ClosePane) !void {
+    const attachment = model.attachments.find(session.slot, request.pane_id) orelse {
         return client_request.fail(session, request.request_id, .pane_not_found, "pane not attached");
     };
 
@@ -114,14 +115,7 @@ fn leaveEmptyWorkspace(model: *RuntimeModel, workspace: core.WorkspaceLocation) 
     for (&model.clients.items) |*slot| {
         const session = slot.* orelse continue;
 
-        if (session.attachments.len() != 0 or !session.attachments.observes(workspace)) {
-            continue;
-        }
-
-        const left_workspace = session.attachments.leaveWorkspace(workspace);
-        std.debug.assert(left_workspace);
-
-        if (left_workspace) {
+        if (pane_attachment.leaveWorkspace(model, session, workspace)) {
             geometry_lease.release(model, session.key, workspace);
         }
     }

@@ -124,9 +124,7 @@ pub fn finishIngest(model: *RuntimeModel, completion: IngestCompletion) !void {
 
 fn hasOutstandingFrame(model: *RuntimeModel, pane: *Pane) bool {
     var observers = pane.observers;
-    while (model.clients.nextObserver(&observers)) |client| {
-        const attachment = client.attachments.find(pane.id) orelse continue;
-
+    while (model.attachments.nextObserver(pane.id, &observers)) |attachment| {
         if (attachment.outstandingFrameId() != 0) {
             return true;
         }
@@ -138,7 +136,7 @@ fn hasOutstandingFrame(model: *RuntimeModel, pane: *Pane) bool {
 fn refreshAttachments(model: *RuntimeModel, pane: *Pane) void {
     var observers = pane.observers;
     while (model.clients.nextObserver(&observers)) |client| {
-        const attachment = client.attachments.find(pane.id) orelse continue;
+        const attachment = model.attachments.find(client.slot, pane.id) orelse continue;
 
         _ = attachment.resizeIfNeeded() catch {
             _ = pane_attachment.detachPane(model, client, pane.id);

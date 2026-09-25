@@ -16,7 +16,7 @@ const pane_input = @import("pane_input.zig");
 /// try pane_resize.resize(model, session, request);
 /// ```
 pub fn resize(model: *RuntimeModel, session: *Session, request: core.PaneResize) !void {
-    const attachment = session.attachments.find(request.pane_id) orelse {
+    const attachment = model.attachments.find(session.slot, request.pane_id) orelse {
         model.metrics.stale_client_messages += 1;
         return;
     };

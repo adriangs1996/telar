@@ -51,7 +51,7 @@ pub fn add(self: *Store, gpa: std.mem.Allocator, connection: localsocket.SocketC
         }
 
         const session = try Session.create(gpa, key, connection);
-        session.attachments.observer = @as(u8, 1) << @intCast(index);
+        session.slot = index;
         slot.* = session;
         self.next_id += 1;
         self.next_generation += 1;

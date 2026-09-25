@@ -31,7 +31,7 @@ test "a no-op projection advances its observed revision and is not prepared twic
     try fixture.init();
     defer fixture.deinit();
 
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     var buffer: [16 * 1024]u8 = undefined;
     try establishBaseline(&fixture, attachment, &buffer);
     @memset(fixture.pane.damaged_rows, false);
@@ -73,7 +73,7 @@ test "a current attachment skips retained damage while a stale attachment receiv
     try fixture.init();
     defer fixture.deinit();
 
-    const current = fixture.attachments.find(fixture.pane.id).?;
+    const current = fixture.attachment();
     var stale = try Attachment.init(std.testing.allocator, fixture.pane);
     defer stale.deinit();
     var current_buffer: [16 * 1024]u8 = undefined;
@@ -111,7 +111,7 @@ test "text metadata replacements follow each client's acknowledged frame without
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    const current = fixture.attachments.find(fixture.pane.id).?;
+    const current = fixture.attachment();
     var other = try Attachment.init(std.testing.allocator, fixture.pane);
     defer other.deinit();
     var current_buffer: [16 * 1024]u8 = undefined;
@@ -144,7 +144,7 @@ test "historical text metadata stays client-local and snapshots restore the acti
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    const attachment = fixture.attachment();
     _ = try fixture.pane.ingest(std.testing.io, "\x1b]8;;https://history.example\x1b\\old\x1b]8;;\x1b\\\r\none\r\ntwo\r\nthree\r\nfour\r\nfive\r\nsix\r\nseven\r\n");
     try fixture.pane.render(false);
     try std.testing.expectEqual(@as(u16, 0), fixture.pane.text_metadata.current.view().link_count);

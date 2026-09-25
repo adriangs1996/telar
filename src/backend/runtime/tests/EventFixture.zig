@@ -2,6 +2,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const RequestFixture = @import("RequestFixture.zig");
 const RuntimeModel = @import("../RuntimeModel.zig");
+const pane_attachment = @import("../pane_attachment.zig");
 const Pane = @import("../../pane/Pane.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const pty = @import("pty");
@@ -49,7 +50,7 @@ pub fn init(self: *EventFixture) !void {
         self.pane.destroy();
         return err;
     };
-    _ = try self.request.session.attachments.attach(std.testing.allocator, self.pane);
+    _ = try pane_attachment.attach(self.model, self.request.session, self.pane);
 }
 
 pub fn deinit(self: *EventFixture) void {

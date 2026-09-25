@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const ClientKey = @import("../../history/ClientKey.zig");
 const RequestFixture = @import("RequestFixture.zig");
 const client_delivery = @import("../client_delivery.zig");
+const pane_attachment = @import("../pane_attachment.zig");
 
 fn socketPair() ![2]localsocket.SocketChannel {
     var sockets: [2]std.c.fd_t = undefined;
@@ -30,7 +31,8 @@ fn commitQueuedResponse(fixture: *RequestFixture) !void {
     try session.delivery.responses.push(.{ .request_completed = .{ .request_id = @enumFromInt(41) } });
     const prepared = (try session.delivery.prepare(.{
         .io = std.testing.io,
-        .attachments = &session.attachments,
+        .attachments = &model.attachments,
+        .client = session.slot,
         .sources = .{
             .panes = &model.panes,
             .workspaces = &model.workspaces,
@@ -43,7 +45,8 @@ fn commitQueuedResponse(fixture: *RequestFixture) !void {
     })).?;
     session.delivery.commit(.{
         .prepared = prepared,
-        .attachments = &session.attachments,
+        .attachments = &model.attachments,
+        .client = session.slot,
         .metrics = &model.metrics,
     });
 }
@@ -195,26 +198,28 @@ test "runtime update defers pane detachment until its exit publication is writte
         pane.output_done = initial_output_done;
         pane.render_pending = initial_render_pending;
     }
+    const model = &fixture.runtime.model;
     const session = fixture.session;
-    const attachment = session.attachments.find(pane.id).?;
+    const attachment = model.attachments.find(session.slot, pane.id).?;
     attachment.cells.snapshot_pending = false;
     attachment.cells.observed_revision = pane.cell_revision;
     const publication = (try attachment.prepareExit(session.delivery.send_buffer)).?;
     const prepared = session.delivery.stage(publication.bytes, .{ .attachment = .{
-        .index = session.attachments.index.get(core.raw(pane.id)).?,
+        .index = model.attachments.index[session.slot].get(core.raw(pane.id)).?,
         .prepared = publication,
     } });
     session.delivery.commit(.{
         .prepared = prepared,
-        .attachments = &session.attachments,
-        .metrics = &fixture.runtime.model.metrics,
+        .attachments = &model.attachments,
+        .client = session.slot,
+        .metrics = &model.metrics,
     });
     try std.testing.expect(attachment.exit_sent);
-    try std.testing.expect(session.attachments.find(pane.id) != null);
+    try std.testing.expect(model.attachments.find(session.slot, pane.id) != null);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .client_sent = .{ .client = session.key, .result = {} } }));
-    try std.testing.expect(session.attachments.find(pane.id) == null);
-    try std.testing.expectEqual(@as(usize, 0), session.attachments.count);
+    try std.testing.expect(model.attachments.find(session.slot, pane.id) == null);
+    try std.testing.expectEqual(@as(usize, 0), model.attachments.len(session.slot));
     try std.testing.expect(!session.send_pending);
     try std.testing.expect(session.active());
 }
@@ -254,7 +259,7 @@ test "runtime update delivers a workspace resync to other observers in the same 
     defer fixture.deinit();
     const pane = try fixture.openPane();
     const observer = try fixture.addClient();
-    _ = try observer.attachments.attach(fixture.runtime.model.gpa, pane);
+    _ = try pane_attachment.attach(&fixture.runtime.model, observer, pane);
     observer.send_pending = false;
 
     var wire: [64]u8 = undefined;

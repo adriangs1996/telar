@@ -11,7 +11,12 @@ const Session = @import("client/Session.zig");
 /// pane_frame.acknowledge(model, session, ack);
 /// ```
 pub fn acknowledge(model: *RuntimeModel, session: *Session, ack: core.FrameAck) void {
-    const elapsed = session.attachments.acknowledgeFrame(ack, core.now(model.io)) orelse {
+    const attachment = model.attachments.find(session.slot, ack.pane_id) orelse {
+        model.metrics.stale_client_messages += 1;
+        return;
+    };
+
+    const elapsed = attachment.acknowledgeFrame(ack.frame_id, core.now(model.io)) orelse {
         model.metrics.stale_client_messages += 1;
         return;
     };
@@ -27,7 +32,10 @@ pub fn acknowledge(model: *RuntimeModel, session: *Session, ack: core.FrameAck) 
 /// pane_frame.snapshot(model, session, request);
 /// ```
 pub fn snapshot(model: *RuntimeModel, session: *Session, request: core.RequestSnapshot) void {
-    if (!session.attachments.requestCellSnapshot(request.pane_id)) {
+    const attachment = model.attachments.find(session.slot, request.pane_id) orelse {
         model.metrics.stale_client_messages += 1;
-    }
+        return;
+    };
+
+    attachment.requestCellSnapshot();
 }

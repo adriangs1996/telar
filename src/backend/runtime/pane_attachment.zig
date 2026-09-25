@@ -8,6 +8,7 @@ const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const Pane = @import("../pane/Pane.zig");
+const Attachment = @import("attachment/Attachment.zig");
 const PaneDetached = @import("attachment/PaneDetached.zig");
 const client_request = @import("client_request.zig");
 const geometry_lease = @import("geometry_lease.zig");
@@ -68,14 +69,14 @@ pub fn detach(model: *RuntimeModel, session: *Session, request: core.DetachPane)
 /// const detached = pane_attachment.detachPane(model, session, pane_id) orelse return;
 /// ```
 pub fn detachPane(model: *RuntimeModel, session: *Session, pane_id: core.PaneId) ?PaneDetached {
-    const detached = session.attachments.detach(pane_id) orelse return null;
+    const detached = release(model, session, pane_id) orelse return null;
     std.debug.assert(detached.pane_id == pane_id);
 
     if (!detached.last_attachment) {
         return detached;
     }
 
-    const left_workspace = session.attachments.leaveWorkspace(detached.workspace);
+    const left_workspace = leaveWorkspace(model, session, detached.workspace);
     std.debug.assert(left_workspace);
 
     if (left_workspace) {
@@ -83,6 +84,86 @@ pub fn detachPane(model: *RuntimeModel, session: *Session, pane_id: core.PaneId)
     }
 
     return detached;
+}
+
+/// Attaches the client to a running pane of the workspace it views, or of
+/// any workspace when it views none yet. A pane already attached is
+/// returned as it is.
+///
+/// ```zig
+/// const attachment = try pane_attachment.attach(model, session, pane);
+/// ```
+pub fn attach(model: *RuntimeModel, session: *Session, pane: *Pane) !*Attachment {
+    std.debug.assert(pane.launch_state == .running);
+    if (model.attachments.find(session.slot, pane.id)) |existing| {
+        return existing;
+    }
+
+    if (session.workspace) |workspace| {
+        if (!std.meta.eql(workspace, pane.location.workspace)) {
+            return error.WorkspaceMismatch;
+        }
+    }
+
+    const attachment = try model.attachments.add(model.gpa, session.slot, pane);
+    attachment.configureGraphics(session.shared_graphics);
+    if (session.workspace == null) {
+        session.workspace = pane.location.workspace;
+    }
+
+    return attachment;
+}
+
+/// Removes one attachment while the client keeps viewing its workspace. The
+/// caller may need that view to publish lifecycle events before completing
+/// departure with `leaveWorkspace`.
+///
+/// ```zig
+/// const detached = pane_attachment.release(model, session, pane_id) orelse return;
+/// if (detached.last_attachment) {
+///     _ = pane_attachment.leaveWorkspace(model, session, detached.workspace);
+/// }
+/// ```
+pub fn release(model: *RuntimeModel, session: *Session, pane_id: core.PaneId) ?PaneDetached {
+    const attachment = model.attachments.find(session.slot, pane_id) orelse return null;
+    const workspace = attachment.pane.location.workspace;
+    std.debug.assert(session.observes(workspace));
+
+    _ = model.attachments.remove(model.gpa, session.slot, pane_id);
+
+    return .{
+        .pane_id = pane_id,
+        .workspace = workspace,
+        .last_attachment = model.attachments.len(session.slot) == 0,
+    };
+}
+
+/// Ends the client's view of a workspace it no longer attaches. A different
+/// workspace, or one the client still attaches, is left unchanged.
+///
+/// ```zig
+/// if (pane_attachment.leaveWorkspace(model, session, workspace)) {
+///     geometry_lease.release(model, session.key, workspace);
+/// }
+/// ```
+pub fn leaveWorkspace(model: *RuntimeModel, session: *Session, workspace: core.WorkspaceLocation) bool {
+    if (model.attachments.len(session.slot) != 0 or !session.observes(workspace)) {
+        return false;
+    }
+
+    session.workspace = null;
+    return true;
+}
+
+/// Removes every attachment of the client and ends its workspace view,
+/// keeping its graphics transport for the next workspace.
+///
+/// ```zig
+/// pane_attachment.clear(model, session);
+/// ```
+pub fn clear(model: *RuntimeModel, session: *Session) void {
+    model.attachments.clear(model.gpa, session.slot);
+    session.workspace = null;
 }
 
 fn attachTarget(model: *RuntimeModel, session: *Session, request: core.OpenPaneView, created: *bool) !*Pane {
@@ -110,7 +191,7 @@ fn attachTarget(model: *RuntimeModel, session: *Session, request: core.OpenPaneV
         try pane_graphics.startMedia(model, active);
     }
 
-    const attachment = try session.attachments.attach(model.gpa, active);
+    const attachment = try attach(model, session, active);
     _ = try attachment.resizeIfNeeded();
     return active;
 }
@@ -126,7 +207,7 @@ fn findOpenPane(model: *RuntimeModel, pane_id: core.PaneId) ?*Pane {
 
 fn openDefault(model: *RuntimeModel, session: *Session, request: core.OpenPaneView, created: *bool) !*Pane {
     const launch = request.launch orelse return error.InvalidOpenRequest;
-    const cwd = launch_cwd.resolveLaunchCwd(&session.attachments, launch, .any) catch return error.InvalidLaunchCwd;
+    const cwd = launch_cwd.resolveLaunchCwd(model, session, launch, .any) catch return error.InvalidLaunchCwd;
     var proposal: ?usize = null;
     defer if (proposal) |slot| {
         model.workspaces.rollback(model.gpa, slot);

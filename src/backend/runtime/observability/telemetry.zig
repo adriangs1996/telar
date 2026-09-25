@@ -112,18 +112,20 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
             }
         }
     }
-    for (clients.attachment_stores) |attachments| {
-        attachment_count += attachments.len();
-        var iterator = attachments.iterator();
-        while (iterator.next()) |active| {
-            if (active.pane.ingest_pending) {
-                continue;
-            }
-            const transfer_bytes = active.graphicsTransferBytes();
-            graphics_transfer_bytes += transfer_bytes;
-            graphics_resident_bytes += transfer_bytes;
-            if (active.outstandingFrameId() != 0) {
-                outstanding_frames += 1;
+    if (clients.attachments) |attachments| {
+        for (attachments.record, attachments.count) |row, count| {
+            attachment_count += count;
+            for (row) |slot| {
+                const active = slot orelse continue;
+                if (active.pane.ingest_pending) {
+                    continue;
+                }
+                const transfer_bytes = active.graphicsTransferBytes();
+                graphics_transfer_bytes += transfer_bytes;
+                graphics_resident_bytes += transfer_bytes;
+                if (active.outstandingFrameId() != 0) {
+                    outstanding_frames += 1;
+                }
             }
         }
     }

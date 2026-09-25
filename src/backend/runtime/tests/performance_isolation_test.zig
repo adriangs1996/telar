@@ -94,7 +94,7 @@ test "performance probe measures runtime staging of a 4K RGBA transfer" {
         .data = .{ .complete = pixels },
     });
     pane.refreshGraphicsProjection();
-    const attachment = fixture.attachments.find(pane.id).?;
+    const attachment = fixture.attachments.find(PaneFixture.client, pane.id).?;
     var stage_times: [20]u64 = undefined;
     var total_times: [20]u64 = undefined;
     for (&stage_times, &total_times) |*stage, *total| {

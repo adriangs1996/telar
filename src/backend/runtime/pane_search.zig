@@ -3,6 +3,7 @@
 const client_connection = @import("client_connection.zig");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
+const Attachments = @import("attachment/Attachments.zig");
 const PaneStore = @import("../pane/PaneStore.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const Pane = @import("../pane/Pane.zig");
@@ -16,7 +17,7 @@ const Matches = @import("delivery/Matches.zig");
 /// Starts a search, replacing only this client's previous search.
 /// Example: `try start(model, session, request);`.
 pub fn start(model: *RuntimeModel, session: *Session, request: core.SearchPane) !void {
-    const pane = resolveTarget(&model.panes, session, request.pane_id) orelse {
+    const pane = resolveTarget(&model.panes, &model.attachments, session, request.pane_id) orelse {
         return client_request.fail(session, request.request_id, .pane_not_found, "pane is not available for this search");
     };
     if (session.pending_search) |previous| {
@@ -59,7 +60,7 @@ pub fn advance(model: *RuntimeModel, completion: Wake) !void {
         try fail(session, wake.request_id, "Pane search target exited");
         return;
     };
-    if (session.role != .control and session.attachments.find(pane.id) == null) {
+    if (session.role != .control and model.attachments.find(session.slot, pane.id) == null) {
         session.pending_search = null;
         try fail(session, wake.request_id, "Pane search target detached");
         return;
@@ -115,7 +116,7 @@ fn yield(io: std.Io, wake: Wake, busy: bool) Wake {
     return result;
 }
 
-fn resolveTarget(panes: *PaneStore, session: *Session, pane_id: core.PaneId) ?PaneKey {
+fn resolveTarget(panes: *PaneStore, attachments: *Attachments, session: *Session, pane_id: core.PaneId) ?PaneKey {
     if (session.role == .control) {
         const pane = panes.findRunning(pane_id) orelse return null;
         if (pane.exit != null) {
@@ -125,7 +126,7 @@ fn resolveTarget(panes: *PaneStore, session: *Session, pane_id: core.PaneId) ?Pa
         return pane.key();
     }
 
-    const attachment = session.attachments.find(pane_id) orelse return null;
+    const attachment = attachments.find(session.slot, pane_id) orelse return null;
     return attachment.pane.key();
 }
 
@@ -142,12 +143,13 @@ test "headless searches capture a generation without granting UI attachment auth
     panes.index.put(7, 0);
     var session: Session = undefined;
     session.role = .ui;
-    session.attachments = .{};
-    try std.testing.expect(resolveTarget(&panes, &session, pane.id) == null);
+    session.slot = 0;
+    var attachments: Attachments = .{};
+    try std.testing.expect(resolveTarget(&panes, &attachments, &session, pane.id) == null);
     session.role = .control;
-    const selected = resolveTarget(&panes, &session, pane.id).?;
+    const selected = resolveTarget(&panes, &attachments, &session, pane.id).?;
     try std.testing.expectEqual(@as(u64, 9), selected.generation);
     pane.generation = 10;
     try std.testing.expect(panes.resolve(selected) == null);
-    try std.testing.expect(resolveTarget(&panes, &session, @enumFromInt(99)) == null);
+    try std.testing.expect(resolveTarget(&panes, &attachments, &session, @enumFromInt(99)) == null);
 }

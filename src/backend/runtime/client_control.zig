@@ -82,7 +82,7 @@ pub fn list(model: *RuntimeModel, session: *Session, query: core.QueryClients) !
             .id = client.key.id,
             .generation = client.key.generation,
             .identity = @intFromEnum(client.delivery.client_identity),
-            .attachments = @intCast(client.attachments.count),
+            .attachments = @intCast(model.attachments.len(client.slot)),
             .last_input_pane = core.raw(client.last_input_pane),
             .last_input_sequence = client.last_input_sequence,
         };
@@ -230,7 +230,7 @@ fn focusOrigin(model: *RuntimeModel, pane_key: PaneKey) ?*Session {
             continue;
         }
 
-        const attachment = client.attachments.find(pane_key.id) orelse continue;
+        const attachment = model.attachments.find(client.slot, pane_key.id) orelse continue;
         if (!std.meta.eql(attachment.pane.key(), pane_key)) {
             continue;
         }
