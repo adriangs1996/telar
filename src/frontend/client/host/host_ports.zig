@@ -251,8 +251,8 @@ fn routePromptBytes(context: *anyopaque, bytes: []const u8) !void {
             .mouse, .terminal_response, .incomplete => continue,
         };
         switch (try client_module.name_prompt.inputPrompt(client, input)) {
-            .cancelled, .blocked, .finished, .removed => return,
-            .unchanged, .routing_changed, .changed, .completion_requested => {},
+            .cancelled, .blocked, .finished, .removed, .pane_requested => return,
+            .unchanged, .routing_changed, .changed, .completion_requested, .copied => {},
         }
     }
 }

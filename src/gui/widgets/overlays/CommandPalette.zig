@@ -185,7 +185,7 @@ fn actionRow(self: CommandPalette, index: u8, storage: *[key_label.max_bytes]u8)
     const entry = data.command_palette.entries[index];
     const hint: []const u8 = if (self.router) |router| blk: {
         const key = router.prefixedKeyForAction(entry.action) orelse break :blk "";
-        break :blk key_label.chord(storage, router.prefix, key);
+        break :blk key_label.chord(storage, router.prefix, key, key_label.host_style);
     } else "";
     return .{ .icon = "»", .primary = entry.label, .hint = hint };
 }

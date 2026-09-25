@@ -249,6 +249,7 @@ pub const host_resize = @import("host/host_resize.zig");
 pub const actions = @import("input/actions.zig");
 pub const copy_mode = @import("input/copy_mode.zig");
 pub const history_palette = @import("input/history_palette.zig");
+pub const HistoryFilters = @import("input/HistoryFilters.zig");
 pub const key_routing = @import("input/key_routing.zig");
 pub const name_prompt = @import("input/name_prompt.zig");
 pub const pane_mouse_input = @import("input/pane_mouse_inputs.zig");

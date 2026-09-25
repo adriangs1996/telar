@@ -12,6 +12,8 @@ len: u8 = 0,
 phase: enum { idle, loading, ready, failed } = .idle,
 has_page: bool = false,
 now_ms: i64 = 0,
+/// Minutes east of UTC when the page landed; rows and day groups use it.
+utc_offset_min: i16 = 0,
 enter_runs: bool = false,
 match_fuzzy: bool = true,
 effective_scope: core.HistoryScope = .global,
@@ -116,6 +118,7 @@ pub fn acceptPageResult(self: *State, result: PageResult) bool {
     self.has_page = true;
     self.has_more = result.has_more;
     self.now_ms = result.now_ms;
+    self.utc_offset_min = result.utc_offset_min;
     self.pending_request = 0;
     self.revision +%= 1;
     return true;
@@ -223,12 +226,14 @@ fn applyEntries(self: *State, request_id: u64, entries: []const core.HistoryEntr
             .id = entry.id,
             .status = entry.status,
             .author = entry.author,
+            .origin = entry.origin,
             .exit_code = entry.exit_code,
             .pane_id = entry.pane_id,
             .started_at_ms = entry.started_at_ms,
             .duration_ns = entry.duration_ns,
             .captured_truncated = entry.command_truncated,
         };
+        stored.provider_len = @intCast(history_palette.copyBounded(&stored.provider, entry.provider));
         if (entry.command.len <= history_palette.max_command_bytes) {
             stored.command_complete = true;
         } else if (self.storage) |storage| {
@@ -308,10 +313,10 @@ pub fn applyOutput(self: *State, reply: core.HistoryOutput) bool {
     }
 
     const storage = self.storage orelse return false;
-    const len = @min(reply.content.len, storage.output.len);
-    @memcpy(storage.output[0..len], reply.content[0..len]);
-    self.output_len = @intCast(len);
-    self.output_truncated = reply.truncated or len != reply.content.len;
+    // The tail is raw VT bytes; the inspector shows readable text only.
+    const text = core.plainText(reply.content, &storage.output);
+    self.output_len = @intCast(text.len);
+    self.output_truncated = reply.truncated or reply.content.len > storage.output.len;
     self.output_phase = .ready;
     self.revision +%= 1;
     return true;

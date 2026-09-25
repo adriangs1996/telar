@@ -431,6 +431,14 @@ fn editor(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
 }
 
 fn shortcut(gui: *GuiAdapter, target: Target, key: Key) !bool {
+    // ⌘⌫ deletes the selected history command, as it removes a Finder item.
+    if (key.code == .backspace and key.mods.super and historyPrompt(gui)) {
+        if (key.phase == .press) {
+            try command(gui, .remove_entry);
+        }
+
+        return true;
+    }
     if (key.code != .char or key.code.char.len != 1 or (!key.mods.ctrl and !key.mods.super)) {
         return false;
     }
@@ -443,7 +451,9 @@ fn shortcut(gui: *GuiAdapter, target: Target, key: Key) !bool {
 
     switch (std.ascii.toLower(key.code.char.bytes[0])) {
         'a' => try command(gui, .select_all),
-        'c' => gui.requestClipboardWrite(current.text[selected[0]..selected[1]]) catch return true,
+        // With nothing selected in the search field, copy takes the
+        // selected command instead of an empty string.
+        'c' => if (selected[0] == selected[1] and historyPrompt(gui)) try command(gui, .copy_entry) else gui.requestClipboardWrite(current.text[selected[0]..selected[1]]) catch return true,
         'x' => {
             try beginCut(gui, target, selected);
         },
@@ -452,6 +462,11 @@ fn shortcut(gui: *GuiAdapter, target: Target, key: Key) !bool {
     }
 
     return true;
+}
+
+fn historyPrompt(gui: *const GuiAdapter) bool {
+    const prompt = gui.app.model.name_prompt.currentConst() orelse return false;
+    return prompt.target() == .history;
 }
 
 fn activated(event: event_module.Event) bool {
@@ -512,14 +527,21 @@ fn activateControl(gui: *GuiAdapter, target: Target) !void {
 
             switch (action) {
                 .select => |choice| try client.history_palette.selectHistoryRow(&gui.app, choice.index, choice.revision),
-                .submit => |choice| {
+                .submit, .submit_alternate => |choice| {
                     const history = &gui.app.model.history_palette;
                     if (history.phase == .ready and history.version() == choice.revision and prompt.selection() == choice.index) {
-                        try command(gui, .submit);
+                        try command(gui, if (action == .submit) .submit else .submit_alternate);
                     }
                 },
                 .cycle_scope => try command(gui, .tab),
+                .select_scope => |scope| try command(gui, .{ .select_scope = scope }),
+                .select_author => |author| try command(gui, .{ .select_author = author }),
+                .toggle_failed => try command(gui, .toggle_failed),
                 .toggle_inspection => try command(gui, .toggle_inspection),
+                .page_older => try command(gui, .page_up),
+                .copy => try command(gui, .copy_entry),
+                .remove => try command(gui, .remove_entry),
+                .visit_pane => try command(gui, .visit_pane),
             }
         },
         .intent => |intent| try dispatchIntent(gui, intent),

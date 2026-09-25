@@ -23,7 +23,7 @@ pub fn commandFor(input: Input) ?data.PromptCommand {
         .paste_end => .paste_end,
         .paste_text => |text| .{ .insert = text },
         .key => |key| switch (key.code) {
-            .enter => if (key.mods.shift) .submit_alternate else .submit,
+            .enter => if (key.mods.alt) .visit_pane else if (key.mods.shift) .submit_alternate else .submit,
             .escape => .cancel,
             .backspace => .backspace,
             .delete => .delete,
@@ -43,6 +43,8 @@ pub fn commandFor(input: Input) ?data.PromptCommand {
                 .remove_entry
             else if (key.mods.ctrl and !key.mods.alt and char.slice().len == 1 and char.slice()[0] == 'o')
                 .toggle_inspection
+            else if (key.mods.ctrl and !key.mods.alt and char.slice().len == 1 and char.slice()[0] == 'c')
+                .copy_entry
             else
                 null,
         },

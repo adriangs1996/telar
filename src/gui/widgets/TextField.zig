@@ -21,6 +21,8 @@ focused: bool = true,
 label: []const u8 = "Text",
 /// Form controls use chrome-sized text, padding and a thin insertion caret.
 form_control: bool = false,
+/// A bare form control paints no box of its own; its owner draws the band.
+bare: bool = false,
 placeholder: []const u8 = "",
 layer: u8 = 1,
 multiline: bool = false,
@@ -61,8 +63,10 @@ pub fn draw(self: TextField, canvas: *Canvas) !void {
         content.width = @max(0, content.width - 2 * inset);
         content.height = if (self.multiline) content.height - @min(canvas.chrome.px(20), content.height / 3) else @min(@as(f32, @floatFromInt(painter.metrics.cell_height)), content.height - @min(canvas.chrome.px(8), content.height / 3));
         content.y += @floor((self.bounds.height - content.height) / 2);
-        try canvas.fillRoundedAt(self.bounds, .{ .color = palette.surface0, .radius = canvas.chrome.px(7) });
-        try canvas.ringAt(self.bounds, .{ .color = if (self.focused) palette.accent else palette.overlay0, .radius = canvas.chrome.px(7), .width = canvas.chrome.px(if (self.focused) 1.5 else 1), .alpha = if (self.focused) 0.9 else 0.45 });
+        if (!self.bare) {
+            try canvas.fillRoundedAt(self.bounds, .{ .color = palette.surface0, .radius = canvas.chrome.px(7) });
+            try canvas.ringAt(self.bounds, .{ .color = if (self.focused) palette.accent else palette.overlay0, .radius = canvas.chrome.px(7), .width = canvas.chrome.px(if (self.focused) 1.5 else 1), .alpha = if (self.focused) 0.9 else 0.45 });
+        }
     } else {
         try canvas.fillAt(self.bounds, if (self.focused) palette.surface0 else palette.surface_dim);
     }

@@ -251,6 +251,7 @@ pub const PresentationCommit = @import("panes/PresentationCommit.zig");
 pub const Prompt = @import("state/Prompt.zig");
 pub const PromptBegin = @import("state/PromptBegin.zig").PromptBegin;
 pub const PromptCommand = @import("state/PromptCommand.zig").PromptCommand;
+pub const PromptHistoryScope = @import("state/PromptHistoryScope.zig").PromptHistoryScope;
 pub const PromptListSnapshot = @import("state/PromptListSnapshot.zig");
 pub const ProspectiveSplit = @import("workspace/ProspectiveSplit.zig");
 pub const ProxyInterceptHosts = @import("config/ProxyInterceptHosts.zig");

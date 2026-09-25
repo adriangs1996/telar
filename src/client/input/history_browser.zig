@@ -4,9 +4,10 @@
 const data = @import("model");
 const std = @import("std");
 
-pub fn begin(model: *data.ClientModel, options: struct { enter_runs: bool, match_fuzzy: bool }) void {
+pub fn begin(model: *data.ClientModel, options: struct { enter_runs: bool, match_fuzzy: bool, show_agent_commands: bool }) void {
     model.history_palette.begin();
     model.history_palette.configure(.{ .enter_runs = options.enter_runs, .match_fuzzy = options.match_fuzzy });
+    model.name_prompt.updateHistory(.{ .author = if (options.show_agent_commands) .all else .human });
 }
 
 pub fn restart(model: *data.ClientModel) void {

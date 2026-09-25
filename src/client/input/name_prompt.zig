@@ -110,6 +110,12 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
     if (outcome == .removed and before.kind == .history) {
         try history_palette.deleteHistorySelection(&client.model, before.selection);
     }
+    if (outcome == .copied and before.kind == .history) {
+        try history_palette.copyHistorySelection(client, before.selection);
+    }
+    if (outcome == .pane_requested and before.kind == .history) {
+        try history_palette.visitHistoryPane(client, before.selection);
+    }
     return outcome;
 }
 
@@ -218,6 +224,10 @@ pub fn promptListSnapshot(prompt_state: *const data.NamePromptState) data.Prompt
 
     snapshot.selection = prompt.selection();
     snapshot.scope = prompt.scope();
+    if (prompt.mode == .history) {
+        snapshot.author = prompt.mode.history.author;
+        snapshot.failed_only = prompt.mode.history.failed_only;
+    }
     const text = prompt.paletteQuery();
     snapshot.len = @intCast(text.len);
     @memcpy(snapshot.text[0..text.len], text);
@@ -274,7 +284,8 @@ fn refreshPromptHistory(model: *data.ClientModel, before: data.PromptListSnapsho
     }
 
     const text = prompt.field.text();
-    if (before.kind == .history and before.scope == prompt.scope() and
+    const history = prompt.mode.history;
+    if (before.kind == .history and before.scope == history.scope and before.author == history.author and before.failed_only == history.failed_only and
         std.mem.eql(
             u8,
             before.textSlice(),
@@ -434,6 +445,8 @@ fn applyPromptCommand(client: *Client, command: data.PromptCommand) !PromptOutco
         .changed => .changed,
         .cancelled => .cancelled,
         .removed => .removed,
+        .copied => .copied,
+        .pane_requested => .pane_requested,
         .completion_requested => .completion_requested,
         .submitted => |submission| if (!try submitPrompt(client, submission))
             .blocked
@@ -452,6 +465,10 @@ const PromptOutcome = enum {
     /// The palette asked to delete its selected entry; the controller owns
     /// the wire effect.
     removed,
+    /// The palette asked to copy its selected command to the clipboard.
+    copied,
+    /// The palette asked to leave for the pane its selected command ran in.
+    pane_requested,
     /// The directory field asked for its selected completion; the
     /// controller owns the completion list.
     completion_requested,

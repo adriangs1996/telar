@@ -1,4 +1,6 @@
+const core = @import("telar-core");
 const FieldReplacement = @import("FieldReplacement.zig");
+const PromptHistoryScope = @import("PromptHistoryScope.zig").PromptHistoryScope;
 const WorkspaceForm = @import("WorkspaceForm.zig");
 
 pub const PromptCommand = union(enum) {
@@ -14,9 +16,20 @@ pub const PromptCommand = union(enum) {
     /// Tab: cycles the history scope, moves the new-context form from the
     /// name to the directory or asks for the selected path completion.
     tab,
-    /// Shift+Tab: moves the new-context form back to the previous field.
+    /// Shift+Tab: moves the new-context form back to the previous field or
+    /// cycles the history author filter.
     back_tab,
+    /// A chip click: one exact history scope instead of the Tab cycle.
+    select_scope: PromptHistoryScope,
+    /// A chip click: one exact history author filter.
+    select_author: core.HistoryAuthorFilter,
+    /// Shows only failed commands, or all of them again.
+    toggle_failed,
     remove_entry,
+    /// Puts the selected command on the host clipboard.
+    copy_entry,
+    /// Leaves the palette on the pane the selected command ran in.
+    visit_pane,
     toggle_inspection,
     page_up,
     page_down,

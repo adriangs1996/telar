@@ -195,21 +195,43 @@ host validation commands.
 
 ## Command history
 
-`HistoryModal` uses a pixel layout, `DialogSurface`, a native search field and
-rounded result rows. Commands and captured output retain their terminal font;
-headings, scope and secondary metadata use the chrome typography. The layout
-stays fixed while queries replace a page and adapts to the viewport and font
-metrics. A wide inspector shares the dialog with the list; a narrow one uses
-the available result area.
+`HistoryModal` is a panel above the status bar: the search field at its foot
+where the shell prompt was, the filter chips above the field, the newest
+command right above the chips and older ones growing upward under day
+headings (`history_labels.dayLabel`), an inspector beside the list and the
+host's key hints in the footer (`key_label.host_style` prints `⌃O` on macOS
+and `Ctrl+O` elsewhere). Commands and captured output keep the terminal face;
+headings, chips and facts use the chrome face. The layout is fixed for
+fourteen rows so replacing a page never moves the field; a viewport under
+1000 logical pixels lets the inspector replace the list. `DialogSurface`
+dims the window at 0.25 and draws a 12 px radius with a hairline edge.
 
-A row click selects without submitting. Rows and the primary action carry the
-delivered history revision, so a replaced or pending page cannot run an unseen
-command. Scope, inspection and submission use the shared history controllers.
-The search field retains keyboard and IME focus. The TUI keeps its own layout.
+Rows are one line: a status glyph in the meaning's color (failure red,
+running teal, interrupted yellow, success quiet), the command with the match
+highlighted, and facts right-aligned that drop from the right when the row is
+narrow: time, then duration, then directory; an agent's provider mark
+survives last. Directory and pane scopes hide the directory column. Under a
+day heading the time column is the local clock; while searching it is the
+date. The page's `utc_offset_min`, read by the client when the reply lands,
+turns timestamps into local days.
 
-The inspector's wrapped line count uses the same native layout as painting.
-Its metrics travel with `HitState`, so failed presentations preserve the
-visible geometry's scroll bound.
+The chips are the scope segmented control (`select_scope`), the author
+control (`select_author`) and the failed toggle (`toggle_failed`); a leading
+`!` in the field is the failed filter too. Footer hints with an action are
+clickable controls, so the pointer reaches paste, run, details, copy, delete
+and close without buttons; the inspector adds a button row (paste, run, copy,
+delete, go to pane). The row above the oldest command asks for the previous
+page. A row click selects without submitting. Rows and every submit control
+carry the delivered history revision, so a replaced or pending page cannot
+run an unseen command. The search field retains keyboard and IME focus. The
+TUI keeps its own layout.
+
+The inspector walks `HistoryDetails.lines`: the wrapped command, its facts
+(local time and age, duration, exit, directory, pane with its tab or
+`closed`, author with provider and origin) and the captured output, stripped
+of escape sequences when the reply landed (`core.plainText`). Painting and
+the scroll bound count the same lines. Its metrics travel with `HitState`,
+so failed presentations preserve the visible geometry's scroll bound.
 
 ## Animation and invalidation
 

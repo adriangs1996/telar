@@ -177,7 +177,7 @@ test "native history inspection and scope controls keep query ownership" {
     try send(session, .{ .key = .{ .code = .escape } });
     try std.testing.expect(!gui.app.model.name_prompt.currentConst().?.inspecting());
     try publish(session);
-    try click(session, try targetFor(session, .{ .history = .cycle_scope }));
+    try click(session, try targetFor(session, .{ .history = .{ .select_scope = .workspace } }));
     try std.testing.expect(editor.id.eql(gui.widgets.dispatcher.focused.?));
     try std.testing.expect(gui.app.model.history_palette.phase == .loading);
     try std.testing.expect(gui.app.model.name_prompt.active());

@@ -389,6 +389,8 @@ test "native context layout ignores terminal cell geometry and reuses its warm d
     try std.testing.expectEqual(@as(usize, 0), failing.allocated_bytes);
 }
 
+// A pending page dims the visible rows; their geometry and colors stay, so
+// the comparison ignores the alpha the dimming changes.
 fn historyRows(fixture: *Fixture) ![]Quad.Quad {
     const canvas = fixture.canvas();
     const layout = HistoryModalLayout.measure(HistoryModalMetrics.fromCanvas(&canvas), false);
@@ -396,7 +398,9 @@ fn historyRows(fixture: *Fixture) ![]Quad.Quad {
     errdefer result.deinit(std.testing.allocator);
     for (fixture.renderer.quads.items()) |quad| {
         if (quad.y >= layout.results.y and quad.y + quad.height <= layout.results.y + layout.results.height) {
-            try result.append(std.testing.allocator, quad);
+            var row = quad;
+            row.a = 1;
+            try result.append(std.testing.allocator, row);
         }
     }
 

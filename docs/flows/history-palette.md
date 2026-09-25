@@ -3,7 +3,9 @@
 The approved compact design opens with `prefix+/`. Search stays below the
 results, with the best/newest result nearest the prompt. Rows show duration,
 relative time and exit status when the terminal has enough columns. The selected
-row's cwd, author and pane appear above the search field.
+row's cwd, author and pane appear above the search field. The native GUI keeps
+the same order in its own panel above the status bar, with day headings, filter
+chips and an inspector (see `src/gui/widgets/README.md`, "Command history").
 
 ## Ownership and delivery
 
@@ -35,11 +37,18 @@ runtime's history worker.
 ## Query and pagination
 
 Opening starts globally, filtered to human commands unless
-`client.history.show_agent_commands = true`. Tab cycles global, workspace, cwd
-and pane. Unavailable context falls back to global, and the displayed scope is
-the effective scope. Every query or scope edit resets pagination and selection.
-Only the newest request can replace visible results. Loading results cannot be
-pasted or deleted.
+`client.history.show_agent_commands = true`; that setting is only the initial
+author filter. Tab cycles global, workspace, cwd and pane; Shift+Tab cycles the
+author filter (you, agents, both); a leading `!` in the field, or the GUI's
+failed chip, asks for failed commands only (`QueryHistory.failed_only`). The
+filters live on the prompt (`Prompt.mode.history`), and
+`history_palette.historyFilters` turns the field and the prompt into the wire
+query. Unavailable context falls back to global, and the displayed scope is
+the effective scope. Every query, scope or filter edit resets pagination and
+selection. Only the newest request can replace visible results. Loading
+results cannot be pasted or deleted. Each page records `utc_offset_min`, read
+from the client's zone when the reply lands, so rows and day headings show
+local time without the model reading a clock.
 
 One resident page contains at most 100 executions. Repeated commands remain
 separate executions so their timestamps, outcomes and output stay meaningful.
@@ -104,7 +113,17 @@ mode so paste-only cannot become key input. Captured output is display-only and
 passes through the cell renderer's control-byte sanitization.
 
 Ctrl+D requests `delete_history` for one selected ID. The row disappears only
-after the matching `history_pruned` acknowledgement and a fresh query.
+after the matching `history_pruned` acknowledgement and a fresh query. The GUI
+also accepts ⌘⌫ on macOS.
+
+Ctrl+C (⌘C in the GUI when the search field has no selection) copies the
+complete selected command to the host clipboard through `HostEffects.clipboard`;
+a truncated capture copies nothing and says why. Alt+Enter closes the browser
+and lands on the pane the command ran in: a pane of the active workspace gets
+local tab and pane focus, any other goes through the workspace handoff, whose
+failure names a pane that no longer exists. The inspector says whether the pane
+is open. Captured output is reduced to readable text when the reply lands
+(`core.plainText` drops escape sequences and control bytes).
 
 ## Compatibility and verification
 

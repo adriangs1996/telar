@@ -6,6 +6,11 @@ const std = @import("std");
 const history_browser = @import("history_browser.zig");
 const name_prompt = @import("name_prompt.zig");
 const pane_input = @import("../panes/pane_input.zig");
+const pane_focus = @import("../panes/pane_focus.zig");
+const tab_selection = @import("../workspace/tab_selection.zig");
+const workspace_handoff = @import("../workspace/workspace_handoff.zig");
+const local_time = @import("../resources/local_time.zig");
+const HistoryFilters = @import("HistoryFilters.zig");
 const Client = @import("../execution/Client.zig");
 
 /// Blocks incomplete or oversized pastes while keeping the browser open.
@@ -151,6 +156,72 @@ pub fn deleteHistorySelection(model: *data.ClientModel, selection: u16) !void {
     );
 }
 
+/// Puts the complete selected command on the host clipboard. A loading page
+/// or a truncated capture copies nothing and says why, like a paste would.
+/// Example: `try history_palette.copyHistorySelection(client, selection);`
+pub fn copyHistorySelection(client: *Client, selection: u16) !void {
+    const palette = &client.model.history_palette;
+    const command = palette.commandAt(selection) orelse {
+        palette.setError(if (palette.phase == .loading) "Searching..." else "Command unavailable or capture truncated; cannot copy");
+        return;
+    };
+
+    try client.model.to_host.writeClipboard(client.gpa, command);
+}
+
+/// Closes the palette and lands on the pane the selected command ran in. A
+/// pane of the active workspace gets local tab and pane focus; any other
+/// pane goes through the workspace handoff, whose failure reply names a
+/// pane that no longer exists.
+/// Example: `try history_palette.visitHistoryPane(client, selection);`
+pub fn visitHistoryPane(client: *Client, selection: u16) !void {
+    const model = &client.model;
+    const palette = &model.history_palette;
+    if (palette.phase != .ready or palette.len == 0) {
+        return;
+    }
+
+    const pane_id = palette.slice()[@min(selection, palette.len - 1)].pane_id;
+    if (!model.name_prompt.finish(.history)) {
+        return;
+    }
+
+    if (model.panes.findConst(pane_id)) |pane| {
+        const active = model.tabs.activeSlot() orelse return;
+        if (model.tabs.location[active].tab_id != pane.location.tab_id) {
+            if (try tab_selection.selectTab(client, .{ .target = .{ .tab_id = pane.location.tab_id } }) == null) {
+                return;
+            }
+        }
+
+        _ = try pane_focus.applyPaneFocus(client, .{ .target = .{ .pane_id = pane_id }, .area = client.geometry().area });
+        return;
+    }
+
+    if (!model.request_lifecycle.tracker.isEmpty()) {
+        return;
+    }
+
+    _ = workspace_handoff.requestWorkspacePane(client, pane_id, null) catch |err| switch (err) {
+        error.TerminalTooSmall => return,
+        else => return err,
+    };
+}
+
+/// The wire filters one palette query means: a leading `!` asks for failed
+/// commands only and stays out of the search text, the author chip picks
+/// whose commands are listed and the failed chip adds to the prefix.
+/// Example: `const filters = history_palette.historyFilters(prompt, text);`
+pub fn historyFilters(prompt: ?*const data.Prompt, text: []const u8) HistoryFilters {
+    const failed_prefix = text.len != 0 and text[0] == '!';
+    const history = if (prompt) |value| (if (value.mode == .history) value.mode.history else null) else null;
+    return .{
+        .query = if (failed_prefix) std.mem.trimStart(u8, text[1..], " ") else text,
+        .author = if (history) |mode| mode.author else .human,
+        .failed_only = failed_prefix or (if (history) |mode| mode.failed_only else false),
+    };
+}
+
 /// Opens the palette and requests the unfiltered newest history.
 pub fn beginHistoryPalette(model: *data.ClientModel) !bool {
     if (!name_prompt.openNamePrompt(model, .history_palette)) {
@@ -162,19 +233,23 @@ pub fn beginHistoryPalette(model: *data.ClientModel) !bool {
         .{
             .enter_runs = model.config.history_enter_runs,
             .match_fuzzy = !model.config.history_match_fts,
+            .show_agent_commands = model.config.history_show_agent_commands,
         },
     );
     try queryHistory(model, "");
     return true;
 }
 
-fn requestHistoryPage(model: *data.ClientModel, query: []const u8) !void {
+fn requestHistoryPage(model: *data.ClientModel, text: []const u8) !void {
     const request_id = try model.request_lifecycle.nextId();
+    const filters = historyFilters(model.name_prompt.currentConst(), text);
+    const query = filters.query;
 
     var owned: data.OwnedHistoryQuery = .{
         .request_id = request_id,
         .query_len = @intCast(@min(query.len, data.OwnedHistoryQuery.max_query_bytes)),
-        .author = if (model.config.history_show_agent_commands) .all else .human,
+        .failed_only = filters.failed_only,
+        .author = filters.author,
         .match = if (model.config.history_match_fts) .fts else .fuzzy,
         .limit = core.max_history_results,
         .offset = model.history_palette.pending_offset,
@@ -274,6 +349,7 @@ pub fn applyHistoryResults(client: *Client, view: core.HistoryResultsView) !bool
             .snapshot_id = view.snapshot_id,
             .has_more = view.has_more,
             .now_ms = @intCast(std.Io.Timestamp.now(client.io, .real).toMilliseconds()),
+            .utc_offset_min = local_time.utcOffsetMinutes(),
         },
     );
     if (changed) {

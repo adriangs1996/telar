@@ -105,3 +105,131 @@ pub fn age(ms: i64, storage: []u8) []const u8 {
     else
         std.fmt.bufPrint(storage, "{d}d ago", .{@divTrunc(seconds, 86400)}) catch "?";
 }
+
+const seconds_per_day: i64 = 86400;
+const month_names = [_][]const u8{ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+const weekday_names = [_][]const u8{ "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+const short_weekday_names = [_][]const u8{ "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+
+/// The calendar day a timestamp falls on in the zone `offset_min` describes,
+/// counted from 1970-01-01. Two entries share a day group when they share it.
+/// Example: `const today = localDay(history.now_ms, history.utc_offset_min);`.
+pub fn localDay(ms: i64, offset_min: i16) i64 {
+    return @divFloor(@divFloor(ms, std.time.ms_per_s) + @as(i64, offset_min) * 60, seconds_per_day);
+}
+
+/// Wall-clock time of a timestamp in the local zone.
+/// Example: `const label = clock(entry.started_at_ms, history.utc_offset_min, &storage);`.
+pub fn clock(ms: i64, offset_min: i16, storage: []u8) []const u8 {
+    const seconds: u32 = @intCast(@mod(@divFloor(ms, std.time.ms_per_s) + @as(i64, offset_min) * 60, seconds_per_day));
+    return std.fmt.bufPrint(storage, "{d:0>2}:{d:0>2}", .{ seconds / 3600, (seconds % 3600) / 60 }) catch "?";
+}
+
+/// The heading of one day group: today and yesterday by name, the rest of
+/// the week by weekday, this year by month and day, older by month and year.
+/// Example: `const heading = dayLabel(day, today, &storage);`.
+pub fn dayLabel(day: i64, today: i64, storage: []u8) []const u8 {
+    const distance = today - day;
+    if (distance == 0) {
+        return "Today";
+    }
+    if (distance == 1) {
+        return "Yesterday";
+    }
+    if (distance > 1 and distance < 7) {
+        return weekday_names[weekday(day)];
+    }
+
+    const date = calendar(day) orelse return "Earlier";
+    if (calendar(today)) |now| {
+        if (now.year == date.year) {
+            return std.fmt.bufPrint(storage, "{s} {d}", .{ month_names[date.month - 1], date.day }) catch "?";
+        }
+    }
+
+    return std.fmt.bufPrint(storage, "{s} {d}", .{ month_names[date.month - 1], date.year }) catch "?";
+}
+
+/// The time column of a searched row, which has no day group above it:
+/// the clock today, the day this week, the date this year, the year before.
+/// Example: `const label = dateLabel(entry.started_at_ms, history.now_ms, history.utc_offset_min, &storage);`.
+pub fn dateLabel(ms: i64, now_ms: i64, offset_min: i16, storage: []u8) []const u8 {
+    const day = localDay(ms, offset_min);
+    const today = localDay(now_ms, offset_min);
+    const distance = today - day;
+    if (distance == 0) {
+        return clock(ms, offset_min, storage);
+    }
+    if (distance == 1) {
+        return "Yesterday";
+    }
+    if (distance > 1 and distance < 7) {
+        return short_weekday_names[weekday(day)];
+    }
+
+    const date = calendar(day) orelse return "Earlier";
+    if (calendar(today)) |now| {
+        if (now.year == date.year) {
+            return std.fmt.bufPrint(storage, "{s} {d}", .{ month_names[date.month - 1], date.day }) catch "?";
+        }
+    }
+
+    return std.fmt.bufPrint(storage, "{d}", .{date.year}) catch "?";
+}
+
+// 1970-01-01 was a Thursday; Sunday is 0.
+fn weekday(day: i64) usize {
+    return @intCast(@mod(day + 4, 7));
+}
+
+const CalendarDate = struct {
+    year: u16,
+    month: u8,
+    day: u8,
+};
+
+fn calendar(day: i64) ?CalendarDate {
+    if (day < 0 or day > 2932896) {
+        return null;
+    }
+
+    const epoch_day: std.time.epoch.EpochDay = .{ .day = @intCast(day) };
+    const year_day = epoch_day.calculateYearDay();
+    const month_day = year_day.calculateMonthDay();
+    return .{
+        .year = year_day.year,
+        .month = month_day.month.numeric(),
+        .day = month_day.day_index + 1,
+    };
+}
+
+test "local days and clocks follow the zone offset across midnight" {
+    // 2026-09-25T23:30:00Z
+    const ms: i64 = 1790379000000;
+    try std.testing.expectEqual(localDay(ms, 0) + 1, localDay(ms, 60));
+    try std.testing.expectEqual(localDay(ms, 0), localDay(ms, -300));
+    var storage: [16]u8 = undefined;
+    try std.testing.expectEqualStrings("23:30", clock(ms, 0, &storage));
+    try std.testing.expectEqualStrings("00:30", clock(ms, 60, &storage));
+    try std.testing.expectEqualStrings("18:30", clock(ms, -300, &storage));
+}
+
+test "day headings and searched dates name the distance from today" {
+    var storage: [32]u8 = undefined;
+    const today = localDay(1790379000000, 0); // Friday 2026-09-25
+    try std.testing.expectEqualStrings("Today", dayLabel(today, today, &storage));
+    try std.testing.expectEqualStrings("Yesterday", dayLabel(today - 1, today, &storage));
+    try std.testing.expectEqualStrings("Wednesday", dayLabel(today - 2, today, &storage));
+    try std.testing.expectEqualStrings("Saturday", dayLabel(today - 6, today, &storage));
+    try std.testing.expectEqualStrings("Sep 18", dayLabel(today - 7, today, &storage));
+    try std.testing.expectEqualStrings("Jan 1", dayLabel(today - 267, today, &storage));
+    try std.testing.expectEqualStrings("Dec 2025", dayLabel(today - 268, today, &storage));
+    try std.testing.expectEqualStrings("Earlier", dayLabel(-5, today, &storage));
+
+    const now_ms: i64 = 1790379000000;
+    try std.testing.expectEqualStrings("23:30", dateLabel(now_ms, now_ms, 0, &storage));
+    try std.testing.expectEqualStrings("Yesterday", dateLabel(now_ms - std.time.ms_per_day, now_ms, 0, &storage));
+    try std.testing.expectEqualStrings("Wed", dateLabel(now_ms - 2 * std.time.ms_per_day, now_ms, 0, &storage));
+    try std.testing.expectEqualStrings("Sep 18", dateLabel(now_ms - 7 * std.time.ms_per_day, now_ms, 0, &storage));
+    try std.testing.expectEqualStrings("2025", dateLabel(now_ms - 268 * std.time.ms_per_day, now_ms, 0, &storage));
+}

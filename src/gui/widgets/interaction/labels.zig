@@ -15,8 +15,25 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
         .history => |action_value| switch (action_value) {
             .select => "Select command",
             .submit => "Use selected command",
+            .submit_alternate => "Use selected command the other way",
             .cycle_scope => "Change history scope",
+            .select_scope => |scope| switch (scope) {
+                .global => "Search all history",
+                .workspace => "Search this workspace",
+                .cwd => "Search this directory",
+                .pane => "Search this pane",
+            },
+            .select_author => |author| switch (author) {
+                .human => "Show your commands",
+                .agent => "Show agent commands",
+                .all => "Show everyone's commands",
+            },
+            .toggle_failed => "Show only failed commands",
             .toggle_inspection => "Inspect command",
+            .page_older => "Older commands",
+            .copy => "Copy command",
+            .remove => "Delete command",
+            .visit_pane => "Go to the command's pane",
         },
         .intent => |intent| switch (intent) {
             .toggle_sidebar => "Toggle sidebar",

@@ -13,7 +13,7 @@ generation: u64 = 0,
 
 /// Reconciles search scope, selection and scroll after a history transition.
 /// Example: `state.updateHistory(.{ .selection = 0, .reset_scroll = true });`.
-pub fn updateHistory(self: *State, update: struct { scope: ?name_prompt.HistoryScope = null, selection: ?u16 = null, reset_scroll: bool = false, scroll_by: i16 = 0, scroll_limit: ?u32 = null }) void {
+pub fn updateHistory(self: *State, update: struct { scope: ?name_prompt.HistoryScope = null, author: ?core.HistoryAuthorFilter = null, selection: ?u16 = null, reset_scroll: bool = false, scroll_by: i16 = 0, scroll_limit: ?u32 = null }) void {
     const prompt = self.mutable() orelse return;
     if (prompt.mode != .history) {
         return;
@@ -23,6 +23,10 @@ pub fn updateHistory(self: *State, update: struct { scope: ?name_prompt.HistoryS
     const before = history.*;
     if (update.scope) |scope| {
         history.scope = scope;
+    }
+
+    if (update.author) |author| {
+        history.author = author;
     }
 
     if (update.selection) |selected| {
@@ -303,6 +307,12 @@ pub fn apply(self: *State, command: name_prompt.Command) PromptTransition {
             return .changed;
         },
         .back_tab => {
+            if (prompt.target() == .history) {
+                prompt.mode.history.author = nextAuthor(prompt.mode.history.author);
+                prompt.setSelection(0);
+                self.revision +%= 1;
+                return .changed;
+            }
             if (prompt.mode != .create_workspace) {
                 return .unchanged;
             }
@@ -311,6 +321,50 @@ pub fn apply(self: *State, command: name_prompt.Command) PromptTransition {
             form_state.focus = if (form_state.focus == .name) .directory else .name;
             self.revision +%= 1;
             return .changed;
+        },
+        .select_scope => |scope| {
+            if (prompt.target() != .history or prompt.mode.history.scope == scope) {
+                return .unchanged;
+            }
+
+            prompt.mode.history.scope = scope;
+            prompt.setSelection(0);
+            self.revision +%= 1;
+            return .changed;
+        },
+        .select_author => |author| {
+            if (prompt.target() != .history or prompt.mode.history.author == author) {
+                return .unchanged;
+            }
+
+            prompt.mode.history.author = author;
+            prompt.setSelection(0);
+            self.revision +%= 1;
+            return .changed;
+        },
+        .toggle_failed => {
+            if (prompt.target() != .history) {
+                return .unchanged;
+            }
+
+            prompt.mode.history.failed_only = !prompt.mode.history.failed_only;
+            prompt.setSelection(0);
+            self.revision +%= 1;
+            return .changed;
+        },
+        .copy_entry => {
+            if (prompt.target() != .history) {
+                return .unchanged;
+            }
+
+            return .{ .copied = prompt.selection() };
+        },
+        .visit_pane => {
+            if (prompt.target() != .history or prompt.pasting) {
+                return .unchanged;
+            }
+
+            return .{ .pane_requested = prompt.selection() };
         },
         .toggle_inspection => {
             if (prompt.target() != .history or prompt.pasting) {
@@ -409,6 +463,15 @@ fn directoryFocused(prompt: *const Prompt) bool {
     return prompt.mode == .create_workspace and prompt.mode.create_workspace.focus == .directory;
 }
 
+// Shift+Tab walks the author chips left to right: you, agents, both.
+fn nextAuthor(author: core.HistoryAuthorFilter) core.HistoryAuthorFilter {
+    return switch (author) {
+        .human => .agent,
+        .agent => .all,
+        .all => .human,
+    };
+}
+
 fn editField(self: *State, command: name_prompt.Command) PromptTransition {
     const prompt = self.mutable() orelse return .unchanged;
     if (directoryFocused(prompt)) {
@@ -454,7 +517,7 @@ fn applyEdit(field: anytype, pasting: bool, command: name_prompt.Command) void {
         .end => |extend| field.end(extend),
         .select_range => |range| _ = field.selectRange(range),
         .select_all => field.selectAll(),
-        .focus_field, .replace_range, .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .tab, .back_tab, .remove_entry, .toggle_inspection, .page_up, .page_down => unreachable,
+        .focus_field, .replace_range, .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .tab, .back_tab, .select_scope, .select_author, .toggle_failed, .remove_entry, .copy_entry, .visit_pane, .toggle_inspection, .page_up, .page_down => unreachable,
     }
 }
 
@@ -498,6 +561,11 @@ const PromptTransition = union(enum) {
     cancelled,
     /// The history palette asked to delete its selected entry.
     removed: u16,
+    /// The history palette asked to copy its selected command.
+    copied: u16,
+    /// The history palette asked to leave for the pane its selected
+    /// command ran in.
+    pane_requested: u16,
     /// The directory field asked for its selected completion; the
     /// controller owns the list and answers with `replaceDirectory`.
     completion_requested,
