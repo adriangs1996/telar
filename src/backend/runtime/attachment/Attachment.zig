@@ -76,6 +76,32 @@ pub fn acknowledgeFrame(self: *Attachment, frame_id: u64, now_ns: u64) ?u64 {
     return self.cells.acknowledge(frame_id, now_ns);
 }
 
+/// Whether any delivery lane could publish for this attachment. When it is
+/// false every `prepare*` returns null without a side effect, so delivery
+/// skips the attachment; a true answer only costs the lanes' own checks.
+///
+/// ```zig
+/// if (!attachment.hasDelivery()) continue;
+/// ```
+pub fn hasDelivery(self: *const Attachment) bool {
+    const pane = self.pane;
+    if (self.cell_deadline_ns != null or self.cells.snapshot_pending) {
+        return true;
+    }
+
+    if (!self.cells.hasOutstanding() and (pane.render_pending or self.cells.observed_revision != pane.cell_revision)) {
+        return true;
+    }
+
+    return self.observed_cwd_revision != pane.cwd.revision or
+        self.observed_title_revision != pane.title.revision or
+        self.observed_foreground_revision != pane.foreground_revision or
+        self.observed_progress_revision != pane.progress_revision or
+        self.observed_review_revision != pane.review_availability.revision or
+        (!self.exit_sent and pane.exit != null) or
+        self.hasGraphicsWork();
+}
+
 pub fn prepareCwd(self: *Attachment, buffer: []u8) !?Prepared {
     const pane = self.pane;
     if (self.observed_cwd_revision == pane.cwd.revision) {

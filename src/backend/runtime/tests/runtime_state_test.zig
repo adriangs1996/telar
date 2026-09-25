@@ -72,8 +72,10 @@ test "runtime-state foreground updates reach panes without cell attachments" {
 }
 
 const RuntimeStateFixture = struct {
-    /// The fixture client's row in `attachments`.
-    const client = 0;
+    /// The fixture client's row in `attachments`. The pane fixture already
+    /// attaches client 0 through its own table, and `Pane.observers` has one
+    /// bit per client, so this delivery must be another client.
+    const client = 1;
 
     delivery: Delivery,
     attachments: Attachments = .{},

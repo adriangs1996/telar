@@ -15,6 +15,7 @@ const LayoutSnapshotStorage = @import("../LayoutSnapshotStorage.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const Completion = @import("Completion.zig");
 const PreparedType = @import("../attachment/Prepared.zig");
+const Attachment = @import("../attachment/Attachment.zig");
 const ForegroundProjection = @import("ForegroundProjection.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const Attachments = @import("../attachment/Attachments.zig");
@@ -240,7 +241,8 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
     // Cells win over every periodic or metadata lane. With one message in
     // flight per client, anything sent ahead of a dirty pane costs the
     // keystroke echo a whole round trip.
-    if (try self.prepareAttachment(preparation, .cells)) |prepared| {
+    const pending = pendingAttachments(preparation);
+    if (try self.prepareAttachment(preparation, .cells, pending)) |prepared| {
         return prepared;
     }
 
@@ -284,7 +286,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
     }
 
     if (self.runtime_state_requested) {
-        if (try self.prepareAttachment(preparation, .review)) |prepared| {
+        if (try self.prepareAttachment(preparation, .review, pending)) |prepared| {
             return prepared;
         }
     }
@@ -322,11 +324,11 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         );
     }
 
-    if (try self.prepareAttachment(preparation, .cwd)) |prepared| {
+    if (try self.prepareAttachment(preparation, .cwd, pending)) |prepared| {
         return prepared;
     }
 
-    if (try self.prepareAttachment(preparation, .foreground)) |prepared| {
+    if (try self.prepareAttachment(preparation, .foreground, pending)) |prepared| {
         return prepared;
     }
 
@@ -336,19 +338,19 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         }
     }
 
-    if (try self.prepareAttachment(preparation, .title)) |prepared| {
+    if (try self.prepareAttachment(preparation, .title, pending)) |prepared| {
         return prepared;
     }
 
-    if (try self.prepareAttachment(preparation, .progress)) |prepared| {
+    if (try self.prepareAttachment(preparation, .progress, pending)) |prepared| {
         return prepared;
     }
 
-    if (try self.prepareAttachment(preparation, .exit)) |prepared| {
+    if (try self.prepareAttachment(preparation, .exit, pending)) |prepared| {
         return prepared;
     }
 
-    if (try self.prepareAttachment(preparation, .graphics)) |prepared| {
+    if (try self.prepareAttachment(preparation, .graphics, pending)) |prepared| {
         return prepared;
     }
 
@@ -499,7 +501,12 @@ fn prepareForeground(self: *Delivery, preparation: Preparation) !?Prepared {
             continue;
         }
 
-        if (preparation.attachments.find(preparation.client, pane.id) != null) {
+        const attached = pane.observers & Attachments.observer(preparation.client) != 0;
+        if (std.debug.runtime_safety) {
+            std.debug.assert(attached == (preparation.attachments.find(preparation.client, pane.id) != null));
+        }
+
+        if (attached) {
             continue;
         }
 
@@ -519,47 +526,40 @@ fn prepareForeground(self: *Delivery, preparation: Preparation) !?Prepared {
     return null;
 }
 
-fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane) !?Prepared {
+/// Marks the client's attachments for which some lane could publish, in one
+/// visit per attachment, so each lane skips the idle ones.
+fn pendingAttachments(preparation: Preparation) u64 {
+    comptime std.debug.assert(Attachments.capacity == @bitSizeOf(u64));
+
+    var pending: u64 = 0;
+    for (preparation.attachments.record[preparation.client], 0..) |slot, index| {
+        const attachment = slot orelse continue;
+        if (attachment.hasDelivery()) {
+            pending |= @as(u64, 1) << @intCast(index);
+        }
+    }
+
+    return pending;
+}
+
+fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane, pending: u64) !?Prepared {
     const attachments = preparation.attachments;
-    const buffer = self.send_buffer;
 
     var checked: usize = 0;
     while (checked < Attachments.capacity) : (checked += 1) {
         const index = (self.next_attachment + checked) % Attachments.capacity;
         const attachment = attachments.at(preparation.client, index) orelse continue;
-        const candidate: ?PreparedType = switch (lane) {
-            .cwd => try attachment.prepareCwd(buffer),
-            .foreground => try attachment.prepareForeground(buffer),
-            .title => try attachment.prepareTitle(buffer),
-            .progress => try attachment.prepareProgress(buffer),
-            .review => try attachment.prepareReview(buffer),
-            .cells => try attachment.prepareNextCells(.{ .io = preparation.io, .buffer = buffer, .metrics = preparation.metrics }),
-            .exit => try attachment.prepareExit(buffer),
-            .graphics => graphics: {
-                const frozen = attachment.hasFrozenGraphics();
-                if (attachment.pane.ingest_pending and !frozen) {
-                    break :graphics null;
-                }
-                if (!attachment.hasGraphicsWork()) {
-                    break :graphics null;
-                }
-                if (attachment.pane.media.worker != null and !frozen) {
-                    if (comptime core.enabled) {
-                        preparation.metrics.graphics_stage_deferred +|= 1;
-                    }
-                    break :graphics null;
-                }
-                break :graphics attachment.prepareNextGraphics(.{
-                    .buffer = buffer,
-                    .global_credit = attachments.availableGraphicsCredit(preparation.client),
-                    .live_storage_available = attachment.pane.media.worker == null,
-                }) catch {
-                    attachment.abandonGraphics();
-                    break :graphics null;
-                };
-            },
-        };
-        if (candidate) |attachment_prepared| {
+        if (pending & (@as(u64, 1) << @intCast(index)) == 0) {
+            // Safe builds prove the skip exact: an idle attachment's lane
+            // yields nothing and changes nothing.
+            if (std.debug.runtime_safety) {
+                std.debug.assert(try self.candidate(preparation, attachment, lane) == null);
+            }
+
+            continue;
+        }
+
+        if (try self.candidate(preparation, attachment, lane)) |attachment_prepared| {
             return self.stage(
                 attachment_prepared.bytes,
                 .{ .attachment = .{ .index = index, .prepared = attachment_prepared } },
@@ -567,6 +567,42 @@ fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane) !?Pr
         }
     }
     return null;
+}
+
+fn candidate(self: *Delivery, preparation: Preparation, attachment: *Attachment, lane: Lane) !?PreparedType {
+    const buffer = self.send_buffer;
+    return switch (lane) {
+        .cwd => try attachment.prepareCwd(buffer),
+        .foreground => try attachment.prepareForeground(buffer),
+        .title => try attachment.prepareTitle(buffer),
+        .progress => try attachment.prepareProgress(buffer),
+        .review => try attachment.prepareReview(buffer),
+        .cells => try attachment.prepareNextCells(.{ .io = preparation.io, .buffer = buffer, .metrics = preparation.metrics }),
+        .exit => try attachment.prepareExit(buffer),
+        .graphics => graphics: {
+            const frozen = attachment.hasFrozenGraphics();
+            if (attachment.pane.ingest_pending and !frozen) {
+                break :graphics null;
+            }
+            if (!attachment.hasGraphicsWork()) {
+                break :graphics null;
+            }
+            if (attachment.pane.media.worker != null and !frozen) {
+                if (comptime core.enabled) {
+                    preparation.metrics.graphics_stage_deferred +|= 1;
+                }
+                break :graphics null;
+            }
+            break :graphics attachment.prepareNextGraphics(.{
+                .buffer = buffer,
+                .global_credit = preparation.attachments.availableGraphicsCredit(preparation.client),
+                .live_storage_available = attachment.pane.media.worker == null,
+            }) catch {
+                attachment.abandonGraphics();
+                break :graphics null;
+            };
+        },
+    };
 }
 
 pub fn stage(self: *Delivery, payload: []const u8, effect: delivery_namespace.Effect) Prepared {
