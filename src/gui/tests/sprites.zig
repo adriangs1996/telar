@@ -33,7 +33,7 @@ test "the renderer builds the page with the atlas and versions it per change" {
     const renderer = &session.gui.renderer;
     const page = &renderer.sprites.?;
     try std.testing.expectEqual(SpritePage.cellFor(1), page.cell);
-    try std.testing.expectEqual(@as(u16, 3), page.count);
+    try std.testing.expectEqual(SpritePage.provider_mark_count, page.count);
     var frame = renderer.frame(1);
     try std.testing.expectEqual(SpritePage.side, frame.sprites_side);
     try std.testing.expect(frame.sprites != null);
@@ -56,7 +56,7 @@ test "the renderer builds the page with the atlas and versions it per change" {
     // A new scale rebuilds the page at its cell with the provider marks only.
     _ = try renderer.measure(.{ .width = 360, .height = 480, .scale = 2 });
     try std.testing.expectEqual(SpritePage.cellFor(2), renderer.sprites.?.cell);
-    try std.testing.expectEqual(@as(u16, 3), renderer.sprites.?.count);
+    try std.testing.expectEqual(SpritePage.provider_mark_count, renderer.sprites.?.count);
     try std.testing.expectEqual(@as(u32, 0), renderer.last_sprites_version);
 }
 
@@ -244,8 +244,8 @@ test "the registry places one landed image per workspace and forgets a rebuilt p
     try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(1) }) == null);
     favicons.refresh(gpa, &page);
     const placed = favicons.sprite(.{ .workspace = @enumFromInt(1) }).?;
-    try std.testing.expectEqual(@as(u16, 3), placed.index);
-    try std.testing.expectEqual(@as(u16, 4), page.count);
+    try std.testing.expectEqual(SpritePage.provider_mark_count, placed.index);
+    try std.testing.expectEqual(SpritePage.provider_mark_count + 1, page.count);
     try std.testing.expect(favicons.sprite(.{ .worktree = @enumFromInt(1) }) == null);
 
     favicons.land(gpa, .{ .workspace = @enumFromInt(2), .image = null });
@@ -257,7 +257,7 @@ test "the registry places one landed image per workspace and forgets a rebuilt p
     // A landing for a workspace the registry never saw is released unread.
     favicons.land(gpa, .{ .workspace = @enumFromInt(9), .image = try cellImage(16, 1) });
     favicons.refresh(gpa, &page);
-    try std.testing.expectEqual(@as(u16, 4), page.count);
+    try std.testing.expectEqual(SpritePage.provider_mark_count + 1, page.count);
 
     // A cell of the wrong size asks for the lookup again.
     _ = try workspaces.replace(.{ .revision = 2, .entries = &.{
@@ -390,8 +390,8 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
 
     try std.testing.expect(!gui.app.model.favicons.busy());
     const placed = gui.chrome.favicons.sprite(Session.location.workspace).?;
-    try std.testing.expectEqual(@as(u16, 3), placed.index);
-    try std.testing.expectEqual(@as(u16, 4), renderer.sprites.?.count);
+    try std.testing.expectEqual(SpritePage.provider_mark_count, placed.index);
+    try std.testing.expectEqual(SpritePage.provider_mark_count + 1, renderer.sprites.?.count);
     renderer.seal();
     const version = renderer.sprites_version;
     const again = try session.draw();

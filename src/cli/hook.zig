@@ -13,6 +13,7 @@ const PiHookInput = @import("PiHookInput.zig");
 const Report = @import("Report.zig");
 const ClaudeHookInput = @import("ClaudeHookInput.zig");
 const CodexHookInput = @import("CodexHookInput.zig");
+const CursorHookInput = @import("CursorHookInput.zig");
 const HookOptions = @import("arguments/HookOptions.zig");
 const control = @import("control.zig");
 const Target = @import("Target.zig");
@@ -20,6 +21,7 @@ const Reports = @import("Reports.zig");
 const Session = @import("Session.zig");
 const hook_event = @import("hook_event.zig");
 const CodexSubagents = @import("CodexSubagents.zig");
+const agentfiles = @import("agentfiles");
 
 pub const max_input_bytes = 64 * 1024;
 
@@ -347,6 +349,56 @@ fn codexRunningSubagents(io: std.Io, input: *const CodexHookInput) usize {
     return running.countExcept(input.agent_id orelse "");
 }
 
+/// Maps one Cursor Agent hook event to a report. Cursor fires no hook for
+/// a command approval or a plan review; those reach the runtime from the
+/// screen. Every turn end reports `ready`, including the `aborted` and
+/// `error` stops an interrupt fires. Tool events name their call in
+/// `buffer`.
+///
+/// ```zig
+/// const report = mapCursorHook(input, &buffer) orelse return;
+/// ```
+pub fn mapCursorHook(input: CursorHookInput, buffer: *hook_event.Buffer) ?Report {
+    const event = input.hook_event_name;
+    const session = if (core.validateSessionReference(input.conversation_id)) |_| input.conversation_id else |_| "";
+    const file = if (input.chat_meta.len <= core.max_agent_session_file_bytes) input.chat_meta else "";
+
+    if (std.mem.eql(u8, event, "sessionStart") or std.mem.eql(u8, event, "stop")) {
+        return .{ .state = .ready, .session = session, .session_file = file, .session_file_kind = .cursor_meta };
+    }
+    if (std.mem.eql(u8, event, "beforeSubmitPrompt")) {
+        return .{ .state = .working, .session = session, .session_file = file, .session_file_kind = .cursor_meta };
+    }
+    if (input.toolEvent() != null) {
+        const call = hook_event.toolCall(buffer, input.tool_name, input.tool_input) orelse "";
+        return .{ .state = .working, .event = call, .session = session, .session_file = file, .session_file_kind = .cursor_meta };
+    }
+    if (std.mem.eql(u8, event, "sessionEnd")) {
+        return .{ .state = .exited, .session_file = file, .session_file_kind = .cursor_meta };
+    }
+
+    return null;
+}
+
+/// Finds the chat metadata Cursor rewrites on `/rename`. Only the events
+/// that open a session or a turn look: a resumed chat fires no
+/// `sessionStart`, and a tool call never waits on the lookup.
+fn cursorChatMeta(init: std.process.Init, input: *const CursorHookInput, buffer: *[std.fs.max_path_bytes]u8) []const u8 {
+    if (!std.mem.eql(u8, input.hook_event_name, "sessionStart") and !std.mem.eql(u8, input.hook_event_name, "beforeSubmitPrompt")) {
+        return "";
+    }
+
+    const environ = init.minimal.environ;
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = agentfiles.cursor.configDirectory(
+        std.process.Environ.getPosix(environ, "CURSOR_CONFIG_DIR"),
+        std.process.Environ.getPosix(environ, "XDG_CONFIG_HOME"),
+        std.process.Environ.getPosix(environ, "HOME"),
+        &root_buffer,
+    ) orelse return "";
+    return agentfiles.cursor.locate(init.io, root, input.workspace(), input.conversation_id, buffer) orelse "";
+}
+
 /// Runs the hook for `options.agent`. Always exits 0.
 ///
 /// ```zig
@@ -431,6 +483,30 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
                 .lifecycle = mapPiHook(parsed.value),
                 .command = command,
                 .title = mapPiTitle(&title_buffer, parsed.value),
+            });
+        },
+        .cursor => {
+            var parsed = std.json.parseFromSlice(CursorHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
+            defer parsed.deinit();
+            var meta_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            parsed.value.chat_meta = cursorChatMeta(init, &parsed.value, &meta_buffer);
+            const tool: ToolHookInput = .{
+                .event = parsed.value.toolEvent() orelse parsed.value.hook_event_name,
+                .tool_name = parsed.value.tool_name,
+                .tool_call_id = parsed.value.tool_use_id,
+                .tool_input = parsed.value.tool_input,
+                .cwd = parsed.value.shellDirectory(),
+                .session = parsed.value.conversation_id,
+                .exit_code = parsed.value.shellExitCode(),
+            };
+            var event_buffer: hook_event.Buffer = undefined;
+            sendReports(init, target, .{
+                .lifecycle = mapCursorHook(parsed.value, &event_buffer),
+                .command = mapToolCommand(.cursor, tool),
+                .review = .{
+                    .provider = .cursor,
+                    .input = tool,
+                },
             });
         },
     }
@@ -816,4 +892,74 @@ test "Pi dialogs are questions" {
     try std.testing.expectEqual(core.AgentBlockedReason.question, mapPiHook(.{ .event = "ui_prompt_start" }).?.blocked_reason);
     try std.testing.expectEqual(core.AgentBlockedReason.question, mapPiHook(.{ .event = "state_snapshot", .blocked = true }).?.blocked_reason);
     try std.testing.expectEqual(core.AgentBlockedReason.none, mapPiHook(.{ .event = "agent_start" }).?.blocked_reason);
+}
+
+test "Cursor hook events map to reports and every turn end settles" {
+    var buffer: hook_event.Buffer = undefined;
+    const chat = "7f8ca51a-88f1-40a0-a73f-0f180d035134";
+    const meta = "/home/me/.cursor/chats/8ab1766528a4f5793554c6ceee08b55b/" ++ chat ++ "/meta.json";
+
+    const start = mapCursorHook(.{ .hook_event_name = "sessionStart", .conversation_id = chat, .chat_meta = meta }, &buffer).?;
+    try std.testing.expectEqual(core.AgentReportState.ready, start.state);
+    try std.testing.expectEqualStrings(chat, start.session);
+    try std.testing.expectEqualStrings(meta, start.session_file);
+    try std.testing.expectEqual(core.AgentSessionFileKind.cursor_meta, start.session_file_kind);
+
+    try std.testing.expectEqual(core.AgentReportState.working, mapCursorHook(.{ .hook_event_name = "beforeSubmitPrompt", .conversation_id = chat }, &buffer).?.state);
+    for ([_][]const u8{ "completed", "aborted", "error" }) |_| {
+        try std.testing.expectEqual(core.AgentReportState.ready, mapCursorHook(.{ .hook_event_name = "stop", .conversation_id = chat }, &buffer).?.state);
+    }
+    try std.testing.expectEqual(core.AgentReportState.exited, mapCursorHook(.{ .hook_event_name = "sessionEnd", .conversation_id = chat }, &buffer).?.state);
+    try std.testing.expect(mapCursorHook(.{ .hook_event_name = "afterAgentThought", .conversation_id = chat }, &buffer) == null);
+    try std.testing.expect(mapCursorHook(.{ .hook_event_name = "beforeShellExecution", .conversation_id = chat }, &buffer) == null);
+    try std.testing.expectEqualStrings("", mapCursorHook(.{ .hook_event_name = "stop", .conversation_id = "../etc" }, &buffer).?.session);
+}
+
+test "Cursor hook JSON maps a Shell call to a working report and a command row with its exit code" {
+    const pre_source =
+        \\{"conversation_id":"7f8ca51a-88f1-40a0-a73f-0f180d035134","generation_id":"x","model":"default","tool_name":"Shell",
+        \\"tool_input":{"command":"touch created.txt && echo made","cwd":"","timeout":30000},"tool_use_id":"0b10deac-f115-4905-ab27-ed0fd5d14461",
+        \\"cwd":"","session_id":"7f8ca51a-88f1-40a0-a73f-0f180d035134","hook_event_name":"preToolUse","cursor_version":"2026.09.26-dd393fe",
+        \\"workspace_roots":["/work/proj"],"user_email":"me@example.com","transcript_path":null}
+    ;
+    const pre = try std.json.parseFromSlice(CursorHookInput, std.testing.allocator, pre_source, .{ .ignore_unknown_fields = true });
+    defer pre.deinit();
+    var buffer: hook_event.Buffer = undefined;
+    const report = mapCursorHook(pre.value, &buffer).?;
+    try std.testing.expectEqual(core.AgentReportState.working, report.state);
+    try std.testing.expectEqualStrings("» Shell touch created.txt && echo made", report.event);
+
+    const started = mapToolCommand(.cursor, .{
+        .event = pre.value.toolEvent().?,
+        .tool_name = pre.value.tool_name,
+        .tool_call_id = pre.value.tool_use_id,
+        .tool_input = pre.value.tool_input,
+        .cwd = pre.value.shellDirectory(),
+        .session = pre.value.conversation_id,
+        .exit_code = pre.value.shellExitCode(),
+    }).?;
+    try std.testing.expectEqual(core.AgentCommandPhase.started, started.phase);
+    try std.testing.expectEqualStrings("cursor", started.provider);
+    try std.testing.expectEqualStrings("touch created.txt && echo made", started.command);
+    try std.testing.expectEqualStrings("/work/proj", started.cwd);
+    try std.testing.expect(started.exit_code == null);
+
+    const post_source =
+        \\{"conversation_id":"7f8ca51a-88f1-40a0-a73f-0f180d035134","tool_name":"Shell","tool_input":{"command":"touch created.txt && echo made"},
+        \\"tool_output":"{\"output\":\"made\\n\",\"exitCode\":0}","duration":7412.529,"tool_use_id":"0b10deac-f115-4905-ab27-ed0fd5d14461",
+        \\"cwd":"","hook_event_name":"postToolUse","workspace_roots":["/work/proj"]}
+    ;
+    const post = try std.json.parseFromSlice(CursorHookInput, std.testing.allocator, post_source, .{ .ignore_unknown_fields = true });
+    defer post.deinit();
+    const finished = mapToolCommand(.cursor, .{
+        .event = post.value.toolEvent().?,
+        .tool_name = post.value.tool_name,
+        .tool_call_id = post.value.tool_use_id,
+        .tool_input = post.value.tool_input,
+        .cwd = post.value.shellDirectory(),
+        .session = post.value.conversation_id,
+        .exit_code = post.value.shellExitCode(),
+    }).?;
+    try std.testing.expectEqual(core.AgentCommandPhase.finished, finished.phase);
+    try std.testing.expectEqual(@as(?i32, 0), finished.exit_code);
 }

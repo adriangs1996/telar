@@ -58,6 +58,10 @@ screen: ?Evidence = null,
 report: ?Evidence = null,
 /// State, reason and event line of `report`; consulted only while it decides.
 report_detail: ReportDetail = .{},
+/// The latest report of work. A blocked screen drawn after it shows a prompt
+/// no hook announced, even when a settled report followed it, as Cursor
+/// Agent's plan review follows its `stop`.
+work: ?Evidence = null,
 /// The line the projection shows; recomputed on every reprojection.
 event: EventLine = .{},
 /// Wall-clock time of the last projected status change; 0 until the first
@@ -139,6 +143,7 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
 
         self.screen = null;
         self.report = null;
+        self.work = null;
     }
 
     self.agent_process_id = observation.process_id;
@@ -188,6 +193,7 @@ pub fn applyReport(self: *Agent, observation: ReportObservation) bool {
 
         self.report = null;
         self.report_detail = .{};
+        self.work = null;
         return true;
     }
 
@@ -207,6 +213,10 @@ pub fn applyReport(self: *Agent, observation: ReportObservation) bool {
     }
 
     self.report = Evidence.fromReport(self.provider(), &observation);
+    if (observation.state == .working or observation.state == .waiting) {
+        self.work = self.report;
+    }
+
     self.authority = switch (self.authority) {
         .candidate, .stale, .obscured => .active,
         .active, .resumed => self.authority,
@@ -708,9 +718,16 @@ fn chooseEvidence(self: *const Agent, now_ms: i64) ?Evidence {
     else
         null;
 
-    // An official lifecycle report outranks everything the runtime infers.
+    // An official lifecycle report outranks everything the runtime infers,
+    // except a later approval prompt the agent has no hook for.
     if (self.report) |value| {
         if (!value.isExpired(now_ms)) {
+            if (screen) |shown| {
+                if (self.screenBlocksReport(shown, value)) {
+                    return shown;
+                }
+            }
+
             return value;
         }
     }
@@ -731,14 +748,29 @@ fn chooseEvidence(self: *const Agent, now_ms: i64) ?Evidence {
     return process;
 }
 
+// A blocked screen drawn after the latest reported work shows a prompt no
+// hook announced; newer work or a newer screen replaces it.
+fn screenBlocksReport(self: *const Agent, screen: Evidence, report: Evidence) bool {
+    if (screen.status != .blocked or !providers.of(self.provider()).screen_reports_blocked) {
+        return false;
+    }
+
+    const since = self.work orelse report;
+    return observedOrder(screen.observed_at_ns, screen.observed_at_ms, since) == .gt;
+}
+
 fn screenOrder(observation: ScreenObservation, evidence: Evidence) std.math.Order {
-    if (observation.observed_at_ns) |observed| {
+    return observedOrder(observation.observed_at_ns, observation.observed_at_ms, evidence);
+}
+
+fn observedOrder(observed_at_ns: ?i64, observed_at_ms: i64, evidence: Evidence) std.math.Order {
+    if (observed_at_ns) |observed| {
         if (evidence.observed_at_ns) |previous| {
             return std.math.order(observed, previous);
         }
     }
 
-    return std.math.order(observation.observed_at_ms, evidence.observed_at_ms);
+    return std.math.order(observed_at_ms, evidence.observed_at_ms);
 }
 
 /// A turn that finished while the previous projection was `working` stays

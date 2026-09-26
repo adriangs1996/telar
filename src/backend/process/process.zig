@@ -294,7 +294,9 @@ fn identifyCommand(table: *const core.Table, comm: []const u8, argv: []const u8)
     if (providerFromToken(table, argv0)) |provider| {
         return provider;
     }
-    if (!genericRuntime(argv0)) {
+    // A launcher may `exec -a` the runtime under the name the user typed, as
+    // Cursor Agent does, so the kernel's name of the image counts as well.
+    if (!genericRuntime(argv0) and !genericRuntime(comm)) {
         return .unknown;
     }
 
@@ -410,6 +412,14 @@ test "identifies direct agent executables" {
     try std.testing.expectEqual(core.AgentProvider.claude, identifyCommand(&core.builtin_table, "node", "/usr/bin/node\x00/opt/claude-code/claude-code\x00"));
     try std.testing.expectEqual(core.AgentProvider.codex, identifyCommand(&core.builtin_table, "codex", "codex\x00"));
     try std.testing.expectEqual(core.AgentProvider.codex, identifyCommand(&core.builtin_table, "node", "node\x00/usr/lib/node_modules/@openai/codex/bin/codex.js\x00"));
+}
+
+test "identifies Cursor Agent under the name its launcher gave the runtime" {
+    const entry = "/Users/me/.local/share/cursor-agent/versions/2026.09.26-dd393fe/index.js\x00";
+    try std.testing.expectEqual(core.AgentProvider.cursor, identifyCommand(&core.builtin_table, "node", "/Users/me/.local/bin/agent\x00--use-system-ca\x00" ++ entry ++ "--model\x00auto\x00"));
+    try std.testing.expectEqual(core.AgentProvider.cursor, identifyCommand(&core.builtin_table, "node", "/Users/me/.local/bin/cursor-agent\x00--use-system-ca\x00" ++ entry));
+    try std.testing.expectEqual(core.AgentProvider.cursor, identifyCommand(&core.builtin_table, "node", "agent\x00" ++ entry));
+    try std.testing.expectEqual(core.AgentProvider.unknown, identifyCommand(&core.builtin_table, "agent", "agent\x00" ++ entry));
 }
 
 test "does not infer an agent from arbitrary runtime arguments" {

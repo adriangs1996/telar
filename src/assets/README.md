@@ -14,15 +14,15 @@ contains the complete FreeType License and GPLv2 alternative.
 Text shaping links HarfBuzz 11.0.0 from the source archive pinned in
 `build.zig.zon`. Its complete Old MIT notice is in `HarfBuzz-COPYING.txt`.
 
-`TelarNerdIcons-Regular.ttf` is a 7,352-byte subset of
+`TelarNerdIcons-Regular.ttf` is a 7,448-byte subset of
 `SymbolsNerdFontMono-Regular.ttf` from Nerd Fonts v3.5.1. It contains only the
-27 icon glyphs used by the embedded `nerd-font` icon theme. The source release
+28 icon glyphs used by the embedded `nerd-font` icon theme. The source release
 archive SHA-256 is
 `01172f37db8543edb102e5cb5c64101c9f4686630804d49b419aa07b23a69996`;
 the source TTF SHA-256 is
 `fe471e538392f51910faab985fa8e192a39dd3426125edd15b71b3680df0e749`;
 and the subset SHA-256 is
-`ce4e73f3c996fbeb829a080cde56172888a6c30c8bee2eb2dafea8443e47d7ac`.
+`c075222cd7541275405885657553aa2cc24fd0995c17af0a8f896d869a996774`.
 `NerdFonts-LICENSE.txt` and `NerdFonts-README.md` record the license and
 upstream attribution shipped in the release archive.
 
@@ -38,12 +38,13 @@ and extracting `SymbolsNerdFontMono-Regular.ttf` without modification. The
 same bundled Nerd Fonts license and attribution apply.
 
 The subset includes U+E62B (`custom-vim`) and U+E702 (`dev-git`) for foreground
-application tabs. It is reproducible with fonttools 4.63.0:
+application tabs and U+F02D8 (`md-hexagon`) for Cursor Agent. It is
+reproducible with fonttools 4.63.0:
 
 ```sh
 SOURCE_DATE_EPOCH=1787335283 pyftsubset SymbolsNerdFontMono-Regular.ttf \
   --output-file=TelarNerdIcons-Regular.ttf \
-  --unicodes=U+E62B,U+E702,U+EA76,U+EACD,U+EB53,U+F4BC,U+EFC5,U+F240-F244,U+EC20,U+EA85,U+EB32,U+EE06-EE09,U+EA6C,U+EBB3,U+EBA4,U+EA87,U+EAB5-EAB6,U+EB4C,U+F03FF \
+  --unicodes=U+E62B,U+E702,U+EA76,U+EACD,U+EB53,U+F4BC,U+EFC5,U+F240-F244,U+EC20,U+EA85,U+EB32,U+EE06-EE09,U+EA6C,U+EBB3,U+EBA4,U+EA87,U+EAB5-EAB6,U+EB4C,U+F03FF,U+F02D8 \
   --layout-features='*' --name-IDs='*' --name-legacy \
   --name-languages='*' --notdef-glyph --recommended-glyphs
 ```
@@ -130,18 +131,18 @@ whatever it paints behind the bar.
 
 ## Sidebar provider symbols
 
-`provider-symbols-192x64.rgba` contains three 64 × 64 RGBA symbols in
-Claude, OpenAI, Pi order. Its SHA-256 is
-`e2cec9fa09ee6ae7f47dccf770f75f3e574f2e1e95a95d263278aa432378135d`.
-Both adapters embed this 49,152-byte atlas. The GUI box-filters the symbols
+`provider-symbols-256x64.rgba` contains four 64 × 64 RGBA symbols in
+Claude, OpenAI, Pi, Cursor order. Its SHA-256 is
+`d8d3a90cef06b21c5b1a4d45633fa16634b91e5f5c5f5050ce828dcedff7f526`.
+Both adapters embed this 65,536-byte atlas. The GUI box-filters the symbols
 into its existing sprite page, premultiplies them, and draws them at 60%
-opacity. OpenAI follows the theme's `text` color; Claude and Pi retain their
-source colors. Tint and opacity are quad attributes; changing selection or theme does not rebuild
+opacity. OpenAI and Cursor follow the theme's `text` color; Claude and Pi
+retain their source colors. Tint and opacity are quad attributes; changing selection or theme does not rebuild
 or upload the symbols. Workspace favicons retain their own colors.
 
 The TUI resamples the same 64 px slots with premultiplied-alpha bilinear
 filtering and centers each symbol inside the terminal cell aspect ratio.
-OpenAI follows the sidebar foreground. A foreground change rebuilds and
+OpenAI and Cursor follow the sidebar foreground. A foreground change rebuilds and
 retransmits the existing atlas without reallocating it; an unchanged frame
 does neither. Terminals without KGP retain the existing cell glyphs.
 
@@ -154,7 +155,22 @@ OpenAI uses white for tinting and Claude retains its orange fill. The complete
 upstream MIT notice is in `T3-Icons-LICENSE.txt`. `Pi-symbol.svg` matches `PiAgentIcon` in the same
 revision, including its black background and 160-unit corner radius.
 
-Regenerate with librsvg 2.62.3 and Pillow 12.2.0:
+`Cursor-symbol.svg` preserves the path and viewBox of the 2D cube from
+Cursor's official brand kit, `General Logos/Cube/SVG/CUBE_2D_DARK.svg` in
+`https://ptht05hbb1ssoooe.public.blob.vercel-storage.com/assets/brand/cursor-brand-assets.zip`,
+linked from <https://cursor.com/brand> and downloaded on 2026-09-26. The
+archive SHA-256 is
+`97488a7751914e60f9ff532bc33810cdeaebdddc017548abe6ca2bc29bbc3928` and the
+source SVG SHA-256 is
+`cd0e3e5d8991a4cdd4577f8896cd063105207665165c73e25a1ff918dd367eb7`. The
+brand kit publishes the cube in one flat color per theme, so Telar keeps the
+path and paints it white for tinting, as with OpenAI; the file's SHA-256 is
+`980e90eb26b2760b159b7984054e9751d971b687fee7ec6fdf09c2b49c540712`. Cursor
+is a trademark of Anysphere, Inc.; the brand page asks to call the product
+Cursor, not "Cursor AI" or "Cursor Code".
+
+Regenerate with librsvg 2.62.3 and Pillow 12.2.0 (librsvg 2.63.0 produces
+the same bytes):
 
 ```sh
 uv run --no-project --with pillow==12.2.0 python tools/build_provider_symbols.py

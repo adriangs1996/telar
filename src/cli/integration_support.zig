@@ -1,7 +1,8 @@
 //! `telar integration install|uninstall|status <agent>`: registers telar's
 //! lifecycle reporting with an agent so its official events reach the
-//! runtime. Claude Code and Codex get a command hook in their settings
-//! files; Pi gets a Telar extension in its global extension directory.
+//! runtime. Claude Code, Codex and Cursor Agent get a command hook in their
+//! settings files; Pi gets a Telar extension in its global extension
+//! directory.
 
 const std = @import("std");
 const IntegrationOptions = @import("arguments/IntegrationOptions.zig");
@@ -15,8 +16,14 @@ const max_extension_bytes = 64 * 1024;
 
 pub const claude_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Notification", "SessionEnd" };
 pub const codex_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "PermissionRequest", "PreToolUse", "PostToolUse", "Stop", "Interrupt", "SubagentStop", "SessionEnd" };
+/// Cursor Agent fires no hook for approvals or plan reviews; the screen
+/// reports those.
+pub const cursor_events = [_][]const u8{ "sessionStart", "beforeSubmitPrompt", "preToolUse", "postToolUse", "postToolUseFailure", "stop", "sessionEnd" };
 pub const claude_marker = " hook claude";
 pub const codex_marker = " hook codex";
+pub const cursor_marker = " hook cursor";
+/// The only `hooks.json` schema Cursor Agent documents.
+const cursor_hooks_version = 1;
 
 /// First line of the extension Telar writes for Pi; uninstall touches only
 /// files that start with it.
@@ -73,7 +80,7 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
     switch (options.action) {
         .status => {
             for (integration.events) |event| {
-                try writer.print("{s}: {s}\n", .{ event, if (hasHook(parsed.value, event, integration.marker)) "installed" else "absent" });
+                try writer.print("{s}: {s}\n", .{ event, if (hasHook(parsed.value, event, hook_set)) "installed" else "absent" });
             }
             return 0;
         },
@@ -115,6 +122,18 @@ fn integrationFor(agent: values.HookAgent) Integration {
             .marker = codex_marker,
             .events = &codex_events,
             .timeout_seconds = 3,
+        },
+        // Hooks live in `~/.cursor/hooks.json` whatever `CURSOR_CONFIG_DIR`
+        // says; Cursor reads its user hooks from the home directory.
+        .cursor => .{
+            .name = "cursor",
+            .settings_environment = null,
+            .settings_directory = ".cursor",
+            .settings_file = "hooks.json",
+            .marker = cursor_marker,
+            .events = &cursor_events,
+            .timeout_seconds = 5,
+            .layout = .flat,
         },
         // Pi has no hook settings; `run` dispatches it to `runPi` first.
         .pi => unreachable,
@@ -259,6 +278,7 @@ fn hookSetFor(integration: Integration, command: []const u8) HookSet {
         .marker = integration.marker,
         .command = command,
         .timeout_seconds = integration.timeout_seconds,
+        .layout = integration.layout,
     };
 }
 
@@ -275,14 +295,15 @@ fn defaultSettingsPath(environ: std.process.Environ, integration: Integration, b
     return std.fmt.bufPrint(buffer, "{s}/{s}/{s}", .{ home, integration.settings_directory, integration.settings_file });
 }
 
-/// Reports whether `event` already runs a command containing `marker`.
+/// Reports whether `event` already runs a command ending in the hook set's
+/// marker.
 ///
 /// ```zig
-/// if (hasHook(settings, "Stop", " hook claude")) {
+/// if (hasHook(settings, "Stop", .{ .events = &claude_events, .marker = claude_marker })) {
 ///     return;
 /// }
 /// ```
-pub fn hasHook(settings: std.json.Value, event: []const u8, marker: []const u8) bool {
+pub fn hasHook(settings: std.json.Value, event: []const u8, hook_set: HookSet) bool {
     const hooks = objectField(settings, "hooks") orelse return false;
     const entries = objectField(hooks, event) orelse return false;
     if (entries != .array) {
@@ -290,7 +311,7 @@ pub fn hasHook(settings: std.json.Value, event: []const u8, marker: []const u8) 
     }
 
     for (entries.array.items) |entry| {
-        if (entryHasCommand(entry, marker)) {
+        if (entryHasCommand(entry, hook_set)) {
             return true;
         }
     }
@@ -308,12 +329,17 @@ pub fn hasHook(settings: std.json.Value, event: []const u8, marker: []const u8) 
 /// ```
 pub fn installHooks(arena: std.mem.Allocator, settings: *std.json.Value, hook_set: HookSet) !bool {
     var changed = false;
+    if (hook_set.layout == .flat and settings.object.get("version") == null) {
+        try settings.object.put(arena, "version", .{ .integer = cursor_hooks_version });
+        changed = true;
+    }
+
     const hooks = try ensureObject(arena, &settings.object, "hooks");
     for (hook_set.events) |event| {
         const entries = try ensureArray(arena, &hooks.object, event);
         var present = false;
         for (entries.array.items) |*entry| {
-            const hook = findHook(entry, hook_set.marker) orelse continue;
+            const hook = findHook(entry, hook_set) orelse continue;
             present = true;
             if (!std.mem.eql(u8, hook.object.get("command").?.string, hook_set.command)) {
                 try hook.object.put(arena, "command", .{ .string = try arena.dupe(u8, hook_set.command) });
@@ -324,15 +350,7 @@ pub fn installHooks(arena: std.mem.Allocator, settings: *std.json.Value, hook_se
             continue;
         }
 
-        var hook: std.json.ObjectMap = .empty;
-        try hook.put(arena, "type", .{ .string = "command" });
-        try hook.put(arena, "command", .{ .string = try arena.dupe(u8, hook_set.command) });
-        try hook.put(arena, "timeout", .{ .integer = hook_set.timeout_seconds });
-        var list = std.json.Array.init(arena);
-        try list.append(.{ .object = hook });
-        var entry: std.json.ObjectMap = .empty;
-        try entry.put(arena, "hooks", .{ .array = list });
-        try entries.array.append(.{ .object = entry });
+        try entries.array.append(try newEntry(arena, hook_set));
         changed = true;
     }
     return changed;
@@ -360,7 +378,7 @@ pub fn uninstallHooks(settings: *std.json.Value, hook_set: HookSet) bool {
 
         var index: usize = 0;
         while (index < entries.array.items.len) {
-            if (entryHasCommand(entries.array.items[index], hook_set.marker)) {
+            if (entryHasCommand(entries.array.items[index], hook_set)) {
                 _ = entries.array.orderedRemove(index);
                 changed = true;
             } else {
@@ -374,16 +392,45 @@ pub fn uninstallHooks(settings: *std.json.Value, hook_set: HookSet) bool {
     return changed;
 }
 
-fn entryHasCommand(entry: std.json.Value, marker: []const u8) bool {
-    var owned = entry;
-    return findHook(&owned, marker) != null;
+// One event entry holding telar's command: a matcher group with a `hooks`
+// list for Claude Code and Codex, the command object itself for Cursor.
+fn newEntry(arena: std.mem.Allocator, hook_set: HookSet) !std.json.Value {
+    var hook: std.json.ObjectMap = .empty;
+    if (hook_set.layout == .nested) {
+        try hook.put(arena, "type", .{ .string = "command" });
+    }
+
+    try hook.put(arena, "command", .{ .string = try arena.dupe(u8, hook_set.command) });
+    try hook.put(arena, "timeout", .{ .integer = hook_set.timeout_seconds });
+    if (hook_set.layout == .flat) {
+        return .{ .object = hook };
+    }
+
+    var list = std.json.Array.init(arena);
+    try list.append(.{ .object = hook });
+    var entry: std.json.ObjectMap = .empty;
+    try entry.put(arena, "hooks", .{ .array = list });
+    return .{ .object = entry };
 }
 
-/// Returns the first hook object in `entry` whose command ends with `marker`.
-fn findHook(entry: *std.json.Value, marker: []const u8) ?*std.json.Value {
+fn entryHasCommand(entry: std.json.Value, hook_set: HookSet) bool {
+    var owned = entry;
+    return findHook(&owned, hook_set) != null;
+}
+
+/// Returns the first hook object in `entry` whose command ends with the
+/// hook set's marker.
+fn findHook(entry: *std.json.Value, hook_set: HookSet) ?*std.json.Value {
     if (entry.* != .object) {
         return null;
     }
+
+    const marker = hook_set.marker;
+    if (hook_set.layout == .flat) {
+        const command = objectField(entry.*, "command") orelse return null;
+        return if (command == .string and std.mem.endsWith(u8, command.string, marker)) entry else null;
+    }
+
     const hooks = entry.object.getPtr("hooks") orelse return null;
     if (hooks.* != .array) {
         return null;
@@ -432,7 +479,12 @@ fn ensureArray(arena: std.mem.Allocator, object: *std.json.ObjectMap, name: []co
     return object.getPtr(name).?;
 }
 
+// An agent that never ran has no settings directory yet.
 fn writeSettings(io: std.Io, path: []const u8, settings: std.json.Value) !void {
+    if (std.fs.path.dirname(path)) |directory| {
+        try std.Io.Dir.cwd().createDirPath(io, directory);
+    }
+
     var temp = try TempFile.begin(io, path);
     var buffer: [16 * 1024]u8 = undefined;
     var file_writer = temp.file.writerStreaming(io, &buffer);
@@ -459,7 +511,7 @@ test "Claude install adds telar hooks once and uninstall removes only them" {
     try std.testing.expect(try installHooks(arena, &parsed.value, hook_set));
     try std.testing.expect(!try installHooks(arena, &parsed.value, hook_set));
     for (claude_events) |event| {
-        try std.testing.expect(hasHook(parsed.value, event, claude_marker));
+        try std.testing.expect(hasHook(parsed.value, event, hook_set));
     }
     try std.testing.expectEqual(@as(usize, 2), parsed.value.object.get("hooks").?.object.get("Stop").?.array.items.len);
     const claude_timeout = parsed.value.object.get("hooks").?.object.get("SessionEnd").?.array.items[0].object.get("hooks").?.array.items[0].object.get("timeout").?.integer;
@@ -468,7 +520,7 @@ test "Claude install adds telar hooks once and uninstall removes only them" {
 
     try std.testing.expect(uninstallHooks(&parsed.value, hook_set));
     try std.testing.expect(!uninstallHooks(&parsed.value, hook_set));
-    try std.testing.expect(!hasHook(parsed.value, "SessionStart", claude_marker));
+    try std.testing.expect(!hasHook(parsed.value, "SessionStart", hook_set));
     const stop = parsed.value.object.get("hooks").?.object.get("Stop").?.array;
     try std.testing.expectEqual(@as(usize, 1), stop.items.len);
     try std.testing.expect(parsed.value.object.get("hooks").?.object.get("SessionStart") == null);
@@ -511,7 +563,7 @@ test "Codex install owns only its lifecycle events" {
     try std.testing.expect(try installHooks(parsed.arena.allocator(), &parsed.value, hook_set));
     try std.testing.expect(!try installHooks(parsed.arena.allocator(), &parsed.value, hook_set));
     for (codex_events) |event| {
-        try std.testing.expect(hasHook(parsed.value, event, codex_marker));
+        try std.testing.expect(hasHook(parsed.value, event, hook_set));
     }
     const codex_timeout = parsed.value.object.get("hooks").?.object.get("SessionEnd").?.array.items[0].object.get("hooks").?.array.items[0].object.get("timeout").?.integer;
     try std.testing.expectEqual(@as(i64, 3), codex_timeout);
@@ -520,6 +572,56 @@ test "Codex install owns only its lifecycle events" {
     try std.testing.expect(uninstallHooks(&parsed.value, hook_set));
     try std.testing.expect(parsed.value.object.get("hooks").?.object.get("Notification") != null);
     try std.testing.expect(parsed.value.object.get("hooks").?.object.get("PermissionRequest") == null);
+}
+
+test "Cursor install writes flat command hooks beside another tool's and keeps its version" {
+    const source =
+        \\{"version":1,"hooks":{"sessionStart":[{"command":"/Users/me/.config/herdr/cursor/herdr-agent-state.sh session","timeout":10}]}}
+    ;
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, source, .{});
+    defer parsed.deinit();
+    const arena = parsed.arena.allocator();
+    var buffer: [256]u8 = undefined;
+    const command = try renderHookCommand(&buffer, "/opt/telar", cursor_marker);
+    const hook_set = hookSetFor(integrationFor(.cursor), command);
+
+    try std.testing.expect(try installHooks(arena, &parsed.value, hook_set));
+    try std.testing.expect(!try installHooks(arena, &parsed.value, hook_set));
+    for (cursor_events) |event| {
+        try std.testing.expect(hasHook(parsed.value, event, hook_set));
+    }
+
+    const session_start = parsed.value.object.get("hooks").?.object.get("sessionStart").?.array;
+    try std.testing.expectEqual(@as(usize, 2), session_start.items.len);
+    const ours = session_start.items[1].object;
+    try std.testing.expectEqualStrings(command, ours.get("command").?.string);
+    try std.testing.expectEqual(@as(i64, 5), ours.get("timeout").?.integer);
+    try std.testing.expect(ours.get("type") == null);
+    try std.testing.expect(ours.get("hooks") == null);
+    try std.testing.expectEqual(@as(i64, 1), parsed.value.object.get("version").?.integer);
+
+    try std.testing.expect(uninstallHooks(&parsed.value, hook_set));
+    try std.testing.expect(!hasHook(parsed.value, "stop", hook_set));
+    try std.testing.expectEqual(@as(usize, 1), parsed.value.object.get("hooks").?.object.get("sessionStart").?.array.items.len);
+    try std.testing.expect(parsed.value.object.get("hooks").?.object.get("stop") == null);
+}
+
+test "Cursor install starts an absent hooks file at schema version 1 and rewrites a stale command" {
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, "{}", .{});
+    defer parsed.deinit();
+    const arena = parsed.arena.allocator();
+    const stale = hookSetFor(integrationFor(.cursor), "/old/telar hook cursor");
+    try std.testing.expect(try installHooks(arena, &parsed.value, stale));
+    try std.testing.expectEqual(@as(i64, 1), parsed.value.object.get("version").?.integer);
+
+    const current = hookSetFor(integrationFor(.cursor), "/opt/telar hook cursor");
+    try std.testing.expect(try installHooks(arena, &parsed.value, current));
+    const stop = parsed.value.object.get("hooks").?.object.get("stop").?.array;
+    try std.testing.expectEqual(@as(usize, 1), stop.items.len);
+    try std.testing.expectEqualStrings("/opt/telar hook cursor", stop.items[0].object.get("command").?.string);
+
+    // A Claude-shaped entry that happens to end in the marker is not Cursor's.
+    try std.testing.expect(!hasHook(parsed.value, "stop", hookSetFor(integrationFor(.claude), "/opt/telar hook cursor")));
 }
 
 test "Codex settings prefer CODEX_HOME while Claude uses HOME" {
@@ -534,6 +636,7 @@ test "Codex settings prefer CODEX_HOME while Claude uses HOME" {
 
     try std.testing.expectEqualStrings("/state/codex/hooks.json", try defaultSettingsPath(environ, integrationFor(.codex), &buffer));
     try std.testing.expectEqualStrings("/home/adrian/.claude/settings.json", try defaultSettingsPath(environ, integrationFor(.claude), &buffer));
+    try std.testing.expectEqualStrings("/home/adrian/.cursor/hooks.json", try defaultSettingsPath(environ, integrationFor(.cursor), &buffer));
     try std.testing.expectEqualStrings("/home/adrian/.pi/agent/extensions/telar.ts", try piExtensionPath(environ, &buffer));
 }
 

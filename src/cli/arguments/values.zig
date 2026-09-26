@@ -27,7 +27,7 @@ pub const max_wait_timeout_seconds = 3600;
 
 pub const default_wait_timeout_seconds = 30;
 
-pub const HookAgent = enum { claude, codex, pi };
+pub const HookAgent = enum { claude, codex, pi, cursor };
 
 pub fn parseHookAgent(text: []const u8) !HookAgent {
     if (std.mem.eql(u8, text, "claude")) {
@@ -38,6 +38,9 @@ pub fn parseHookAgent(text: []const u8) !HookAgent {
     }
     if (std.mem.eql(u8, text, "pi")) {
         return .pi;
+    }
+    if (std.mem.eql(u8, text, "cursor")) {
+        return .cursor;
     }
 
     return error.UnknownHookAgent;

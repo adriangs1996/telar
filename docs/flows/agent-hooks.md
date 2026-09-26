@@ -9,12 +9,13 @@ every other evidence so a silent hook hands control back.
 ## End-to-end path
 
 ```text
-telar integration install claude|codex
+telar integration install claude|codex|cursor
         |
-~/.claude/settings.json or ~/.codex/hooks.json
+~/.claude/settings.json, ~/.codex/hooks.json or ~/.cursor/hooks.json
         hooks.<owned event> += { type = command, command = "<pane guard>; exec '<telar>' hook <agent>", timeout = bounded }
+        (Cursor lists { command, timeout } directly under the event, beside version: 1)
 
-Claude Code or Codex fires a hook (sh -c)
+Claude Code, Codex or Cursor Agent fires a hook (sh -c)
         |
 [ -n "$TELAR_PANE_ID" ] && [ -n "$TELAR_PANE_GENERATION" ] || exit 0
         |   outside a telar pane the telar executable never runs
@@ -89,6 +90,44 @@ that row in place. A finish without an open row inserts a completed row.
 | `SubagentStop` of the session's last running child | `released`: settles an unexpired `waiting` report |
 | any other event with `agent_id` (subagent) | ignored |
 
+## Cursor Agent
+
+Cursor Agent's CLI runs the command hooks in `~/.cursor/hooks.json`. The
+mapping below was captured with Cursor Agent 2026.08.11 and 2026.09.26 under
+a pty, with a hook that recorded every payload.
+
+| Cursor event | Report |
+| --- | --- |
+| any event | `conversation_id` is the session reference (`cursor-agent --resume <id>` restores it) |
+| `sessionStart`, `beforeSubmitPrompt` | the chat's `meta.json` rides along so the runtime can watch its `title` for `/rename` |
+| `sessionStart` | `ready` + session reference; fires when the TUI opens a new chat, never on `--resume` |
+| `beforeSubmitPrompt` | `working`; the first hook of a resumed chat |
+| `preToolUse`, `postToolUse`, `postToolUseFailure` | `working`, event `» <tool> <argument>`; a `Shell` call is also recorded, its exit code read from `tool_output` |
+| `stop` | `ready`, whether `status` is `completed`, `aborted` or `error`; an Esc interrupt fires `aborted` then `error` |
+| `sessionEnd` | `exited` |
+
+No hook fires while a command waits for approval, and `beforeShellExecution`
+runs before the approval dialog and for commands the allowlist already
+permits, so it cannot say that the agent is blocked. The plan review ("Ready
+to build?") follows the turn's `stop`. Both are screen evidence: the manifest
+matches "Not in allowlist:", "Skip & tell the agent what to do instead" and
+"Yes, build locally", and `screen_reports_blocked` lets a blocked screen
+observed after the latest report decide the projection, with reason `other`.
+The composer's "ctrl+c to stop" is the working phrase that replaces the
+dialog once it is answered; a newer report does the same.
+
+Cursor names its chat directory after the MD5 of the directory the agent
+was launched from, `<config>/chats/<md5>/<conversation_id>/meta.json`, where
+`<config>` is `CURSOR_CONFIG_DIR`, else `$XDG_CONFIG_HOME/cursor`, else
+`~/.cursor`. Hooks carry the workspace root, not that directory, and the two
+differ when the agent starts in a subdirectory. `telar hook cursor` therefore
+tries the first workspace root, then visits at most 4096 launch directories
+for the chat, and only on the events that open a session or a turn.
+
+Cursor also imports Claude Code hooks from `~/.claude/settings.json` when its
+third-party import is enabled. On the account used for these captures it was
+not: Cursor's own hooks fired and Claude Code's did not.
+
 ## Pi
 
 Pi has no hook files; its lifecycle reaches extensions as events. `telar
@@ -145,8 +184,10 @@ touched.
 
 ## File change review
 
-Claude Code `Write` and `Edit`, and Codex `apply_patch`, also record before/after
-file evidence through `report_change_review_sample`. This works in ordinary
+Claude Code `Write` and `Edit`, Codex `apply_patch`, and Cursor Agent `Write`
+and `Delete` also record before/after file evidence through
+`report_change_review_sample`. Cursor reports every edit, a search-and-replace
+included, as a `Write` of the whole file. This works in ordinary
 terminal panes using their inherited pane ID, generation and provider session.
 It does not require launching the agent in Telar's agent mode.
 
@@ -179,7 +220,8 @@ unrelated changes. Shell commands and unrecognized tools are not automatically
 captured. Pi's current asynchronous extension delivery cannot guarantee a
 before snapshot, so it does not advertise this capture capability.
 
-Only explicitly submitted review feedback is sent to the agent. On the next
+Only explicitly submitted review feedback is sent to the agent, and only to
+Claude Code and Codex: Cursor's tool hooks document no context field for it. On the next
 `PreToolUse`, `PostToolUse` or `UserPromptSubmit`, the hook fetches feedback for
 its exact provider/session and emits official
 `hookSpecificOutput.additionalContext` JSON. It acknowledges the feedback ID
@@ -295,7 +337,8 @@ executable must use the matching schema; older peers are rejected at handshake.
 
 The command field is data, not harness-specific branching. Built-in manifests
 map Claude Code `Bash.command`, current Codex `Bash.command`, compatibility
-names `exec_command.cmd` and `shell.command`, and Pi `bash.command`. A custom
+names `exec_command.cmd` and `shell.command`, Pi `bash.command` and Cursor
+Agent `Shell.command`. A custom
 manifest can declare the same mapping with `command_tools`. Subagent tool calls
 are ignored. Native hook records use `origin = hook`; a later plugin record with
 the same session and tool call id cannot duplicate it.
@@ -304,17 +347,25 @@ Claude Code reports a successful `PostToolUse`, so Telar closes it with exit
 code zero. Failures use Claude Code's separate `PostToolUseFailure` event,
 which Telar does not install. Codex's `PostToolUse` payload does not carry a
 reliable process exit code, so its completed row keeps that field empty. Pi
-reports `isError`; its extension maps that boolean to zero or one.
+reports `isError`; its extension maps that boolean to zero or one. Cursor
+Agent nests `{"output":…,"exitCode":N}` in the string `tool_output` of a
+`Shell` `postToolUse`; a `postToolUseFailure` closes the row without a code.
+Cursor leaves a command's `cwd` empty when it runs in the workspace, so the
+row records the first workspace root.
 
 `telar integration` edits only the event arrays owned by the selected agent,
 adds an entry once per event, rewrites a telar entry whose command is stale
 (an older unguarded form or another executable path), removes only entries
-whose command ends in ` hook claude` or ` hook codex`, and rewrites the file
+whose command ends in ` hook claude`, ` hook codex` or ` hook cursor`, and
+rewrites the file
 atomically with
 two-space indentation. Other settings and hooks are untouched. Codex uses
 `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set and `~/.codex/hooks.json`
 otherwise. Codex asks the user to trust the new hook definitions; telar does
-not write Codex's trust state or bypass that check. Claude hooks use a
+not write Codex's trust state or bypass that check. Cursor always reads user hooks from `~/.cursor/hooks.json`, whatever
+`CURSOR_CONFIG_DIR` says; install adds `"version": 1` when the file lacks it,
+and Cursor's own JSONC comments make the file unreadable to install, which
+then leaves it untouched. Claude and Cursor hooks use a
 five-second timeout. Codex hooks use three seconds, the maximum Codex accepts
 for `SessionEnd` and `Interrupt`.
 
@@ -328,10 +379,10 @@ for `SessionEnd` and `Interrupt`.
   generated one, never clears a manual one, clears on an empty report and is
   durable.
 - `src/cli/hook.zig` proves the event mapping and subagent filtering for
-  Claude Code, Codex and Pi; installed payload shapes; manifest-based shell
+  Claude Code, Codex, Pi and Cursor Agent; installed payload shapes; manifest-based shell
   extraction; and the parsed arena lifetime that backs both requests.
 - `src/cli/integration_support.zig` proves idempotent install and selective removal
-  for Claude Code, and rendering, marker detection and atomic owner-only
+  for Claude Code and Cursor Agent's flat layout, and rendering, marker detection and atomic owner-only
   installation for the Pi extension.
 - `src/backend/history/persistence/history_sql.zig` proves that native start/finish
   updates one row and a later plugin observation with the same tool call id is

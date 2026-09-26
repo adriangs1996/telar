@@ -4,6 +4,7 @@ const textraster = @import("textraster");
 
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
+const data = @import("model");
 const SidebarProviderPlacement = @import("SidebarProviderPlacement.zig");
 const std = @import("std");
 const Size = textraster.Size;
@@ -20,6 +21,7 @@ pub const SidebarProvider = enum {
     claude,
     codex,
     pi,
+    cursor,
 
     /// ```zig
     /// const column = SidebarProvider.fromAgent(mark.provider) orelse continue;
@@ -29,7 +31,22 @@ pub const SidebarProvider = enum {
             .claude => .claude,
             .codex => .codex,
             .pi => .pi,
+            .cursor => .cursor,
             else => null,
+        };
+    }
+
+    /// The agent this column draws.
+    ///
+    /// ```zig
+    /// const agent = SidebarProvider.cursor.agent();
+    /// ```
+    pub fn agent(self: SidebarProvider) core.AgentProvider {
+        return switch (self) {
+            .claude => .claude,
+            .codex => .codex,
+            .pi => .pi,
+            .cursor => .cursor,
         };
     }
 };
@@ -95,6 +112,8 @@ pub fn renderProviderAtlas(input: ProviderAtlasInput) void {
             .origin_x = provider * KittySidebarRenderer.provider_source_size,
             .side = KittySidebarRenderer.provider_source_size,
         };
+        const column: SidebarProvider = @enumFromInt(provider);
+        const follows_theme = data.icons.providerMarkFollowsTheme(column.agent());
         var y: u32 = 0;
         while (y < icon_size) : (y += 1) {
             var x: u32 = 0;
@@ -103,7 +122,7 @@ pub fn renderProviderAtlas(input: ProviderAtlasInput) void {
                 const destination_y = offset_y + y;
                 const destination_index = (@as(usize, destination_y) * input.atlas.width + destination_x) * 4;
                 var rgba = bitmap.sample(source, .{ .x = x, .y = y }, icon_size);
-                if (provider == @intFromEnum(SidebarProvider.codex)) {
+                if (follows_theme) {
                     rgba[0..3].* = input.foreground;
                 }
 
@@ -117,7 +136,7 @@ fn providerAtlasSourceCount() u32 {
     return KittySidebarRenderer.provider_count;
 }
 
-test "sidebar theme changes recolor OpenAI without reallocating or changing other providers" {
+test "sidebar theme changes recolor OpenAI and Cursor without reallocating or changing other providers" {
     var renderer = KittySidebarRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     const providers = [_]SidebarProviderPlacement{.{ .area = .{ .w = 2, .h = 2 }, .provider = .codex }};
@@ -127,7 +146,7 @@ test "sidebar theme changes recolor OpenAI without reallocating or changing othe
     const original = try std.testing.allocator.dupe(u8, renderer.provider_atlas);
     defer std.testing.allocator.free(original);
     const allocation = renderer.provider_atlas.ptr;
-    var buffer: [128 * 1024]u8 = undefined;
+    var buffer: [256 * 1024]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
     _ = try renderer.write(&writer);
 
@@ -142,11 +161,13 @@ test "sidebar theme changes recolor OpenAI without reallocating or changing othe
             const offset = (y * renderer.provider_atlas_width + x) * 4;
             const before = original[offset..][0..4];
             const after = renderer.provider_atlas[offset..][0..4];
-            if (x / renderer.provider_slot_width == @intFromEnum(SidebarProvider.codex) and after[3] != 0) {
+            const column: SidebarProvider = @enumFromInt(x / renderer.provider_slot_width);
+            const follows_theme = data.icons.providerMarkFollowsTheme(column.agent());
+            if (follows_theme and after[3] != 0) {
                 try std.testing.expectEqualSlices(u8, &content.provider_foreground, after[0..3]);
                 try std.testing.expectEqual(before[3], after[3]);
                 visible += 1;
-            } else if (x / renderer.provider_slot_width != @intFromEnum(SidebarProvider.codex)) {
+            } else if (!follows_theme) {
                 try std.testing.expectEqualSlices(u8, before, after);
             }
         }
@@ -177,16 +198,21 @@ test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
             .area = .{ .x = 3, .y = 9, .w = 2, .h = 2 },
             .provider = .pi,
         },
+        .{
+            .area = .{ .x = 3, .y = 11, .w = 2, .h = 2 },
+            .provider = .cursor,
+        },
     };
     try renderer.prepare(.{ .area = area, .focused_card = null, .provider_marks = &providers }, .{ .width = 10, .height = 20 });
     try std.testing.expectEqual(@as(u32, 60), renderer.provider_slot_width);
     try std.testing.expectEqual(@as(u32, 120), renderer.provider_slot_height);
-    var initial_buffer: [128 * 1024]u8 = undefined;
+    var initial_buffer: [256 * 1024]u8 = undefined;
     var initial = std.Io.Writer.fixed(&initial_buffer);
     _ = try renderer.write(&initial);
     try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "a=t") != null);
     try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "x=60,y=0,w=60,h=120,c=2,r=2") != null);
     try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "x=120,y=0,w=60,h=120,c=2,r=2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "x=180,y=0,w=60,h=120,c=2,r=2") != null);
     try std.testing.expect(renderer.provider_emitted);
 
     try renderer.prepare(.{ .area = area, .focused_card = null, .provider_marks = &providers }, .{ .width = 10, .height = 20 });
@@ -202,7 +228,7 @@ test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
 
     try renderer.prepare(.{ .area = area, .focused_card = null, .provider_marks = &providers }, .{ .width = 9, .height = 18 });
     try std.testing.expect(renderer.provider_dirty);
-    var resized_buffer: [128 * 1024]u8 = undefined;
+    var resized_buffer: [256 * 1024]u8 = undefined;
     var resized = std.Io.Writer.fixed(&resized_buffer);
     _ = try renderer.write(&resized);
     try std.testing.expect(std.mem.indexOf(u8, resized.buffered(), "x=63,y=0,w=63,h=126,c=2,r=2") != null);
