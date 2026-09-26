@@ -112,6 +112,7 @@ fn workspace(self: WorkspaceIndicators, canvas: *Canvas, index: usize) !void {
         .bounds = icon,
         .ink = ink,
         .emphasized = selected or hovered,
+        .name = projection.workspaces.nameAt(index),
     };
     try mark.draw(canvas);
 

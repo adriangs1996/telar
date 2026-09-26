@@ -1,18 +1,21 @@
-//! A workspace's mark in navigation: its landed favicon, else the folder
-//! glyph in the caller's ink. The top-bar indicators and the rail draw the
-//! same mark, so a workspace looks alike wherever it is picked.
+//! A workspace's mark in navigation: its landed favicon, else the initial of
+//! its name, else the folder glyph, in the caller's ink. The top-bar
+//! indicators and the rail draw the same mark, so a workspace looks alike
+//! wherever it is picked and two workspaces without favicons still differ.
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
+const std = @import("std");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const label_size = @import("label_size.zig");
 const AgentCard = @import("AgentCard.zig");
 const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
+const Label = @import("Label.zig");
 const WorkspaceMark = @This();
 
 /// Opacity of a favicon whose workspace is neither selected nor hovered.
-pub const muted_alpha: f32 = 0.6;
+pub const muted_alpha: f32 = 0.7;
 
 context: *const Context,
 workspace: core.WorkspaceId,
@@ -20,6 +23,8 @@ bounds: Rect,
 ink: cellgrid.Color,
 emphasized: bool,
 size: label_size.Size = .small,
+/// The workspace's name; without a favicon its initial stands in.
+name: []const u8 = "",
 
 /// Example: `try (WorkspaceMark{ .context = context, .workspace = id, .bounds = icon, .ink = ink, .emphasized = selected }).draw(canvas);`
 pub fn draw(self: WorkspaceMark, canvas: *Canvas) !void {
@@ -32,10 +37,44 @@ pub fn draw(self: WorkspaceMark, canvas: *Canvas) !void {
         return;
     }
 
+    var storage: [4]u8 = undefined;
+    if (initial(&storage, self.name)) |letter| {
+        const label: Label = .{ .text = letter, .color = self.ink, .bold = true, .face = .sans, .size = self.size };
+        const width = @min(self.bounds.width, try canvas.measure(label));
+        _ = try canvas.textAt(.{ .x = self.bounds.x + (self.bounds.width - width) / 2, .y = self.bounds.y, .width = width, .height = self.bounds.height }, label);
+        return;
+    }
+
     try canvas.iconAt(self.bounds, .{
         .text = AgentCard.project_glyph,
         .color = self.ink,
         .face = .sans,
         .size = self.size,
     });
+}
+
+// The name's first code point, upper-cased when it is ASCII; null for an
+// empty or malformed name.
+fn initial(storage: *[4]u8, name: []const u8) ?[]const u8 {
+    if (name.len == 0) {
+        return null;
+    }
+
+    const length = std.unicode.utf8ByteSequenceLength(name[0]) catch return null;
+    if (length > name.len) {
+        return null;
+    }
+
+    _ = std.unicode.utf8Decode(name[0..length]) catch return null;
+    @memcpy(storage[0..length], name[0..length]);
+    storage[0] = std.ascii.toUpper(storage[0]);
+    return storage[0..length];
+}
+
+test "the initial is the first code point, upper-cased when ASCII" {
+    var storage: [4]u8 = undefined;
+    try std.testing.expectEqualStrings("R", initial(&storage, "replay-web").?);
+    try std.testing.expectEqualStrings("\u{00e9}", initial(&storage, "\u{00e9}clair").?);
+    try std.testing.expect(initial(&storage, "") == null);
+    try std.testing.expect(initial(&storage, &[_]u8{0xff}) == null);
 }

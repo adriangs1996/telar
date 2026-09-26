@@ -1,7 +1,9 @@
-//! The collapsed sidebar: one mark per workspace in runtime order. Every mark keeps its number, favicon and attention dot; the
-//! selected one carries a surface and an accent bar on the rail's edge. Names
-//! wait in `RailTooltip`. Overflow counters select the nearest hidden
-//! workspace and keep the attention of the ones they hide.
+//! The collapsed sidebar: one mark per workspace in runtime order, each a
+//! quiet rounded square holding its favicon or initial and its attention dot.
+//! Hover brightens the square; the selected one is filled and carries an
+//! accent pill on the rail's edge. Names wait in `RailTooltip`. Overflow
+//! counters select the nearest hidden workspace and keep the attention of the
+//! ones they hide.
 const cellgrid = @import("cellgrid");
 const std = @import("std");
 const gfx = @import("gfx");
@@ -9,7 +11,6 @@ const Rect = gfx.Rect;
 const attention = @import("attention.zig");
 const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
-const Label = @import("Label.zig");
 const PixelButton = @import("PixelButton.zig");
 const WorkspaceMark = @import("WorkspaceMark.zig");
 const WorkspaceWindow = @import("WorkspaceWindow.zig");
@@ -21,13 +22,13 @@ pub const button: f32 = 36;
 pub const button_gap: f32 = 6;
 const inset: f32 = 8;
 const radius: f32 = 10;
-const mark_side: f32 = 18;
+const idle_alpha: f32 = 0.05;
+const mark_side: f32 = 20;
 const accent_width: f32 = 3;
-const accent_height: f32 = 18;
+const accent_height: f32 = 20;
 const dot_side: f32 = 7;
 const dot_ring: f32 = 2;
 const dot_inset: f32 = 4;
-const number_inset: f32 = 3;
 const counter_height: f32 = 20;
 
 context: *const Context,
@@ -105,12 +106,19 @@ fn drawMark(self: WorkspaceRail, canvas: *Canvas, bounds: Rect, index: usize) !v
     const hovered = context.isHovered(.{ .intent = .{ .select_workspace = id } });
     if (selected or hovered) {
         try canvas.fillRoundedAt(bounds, .{ .radius = chrome.px(radius), .color = if (selected) palette.surface1 else palette.surface0 });
+    } else {
+        try canvas.fillRoundedAt(bounds, .{ .radius = chrome.px(radius), .color = palette.text, .alpha = idle_alpha });
     }
 
     if (selected) {
+        // A pill whose left half sits past the window edge, so only its
+        // rounded right end shows against the rail.
         const bar_height = @min(chrome.px(accent_height), bounds.height);
-        const bar: Rect = .{ .x = self.area.x, .y = bounds.y + (bounds.height - bar_height) / 2, .width = chrome.px(accent_width), .height = bar_height };
-        try canvas.fillRoundedAt(bar, .{ .radius = bar.width / 2, .color = palette.accent });
+        const width = chrome.px(accent_width);
+        const bar: Rect = .{ .x = self.area.x - width, .y = bounds.y + (bounds.height - bar_height) / 2, .width = 2 * width, .height = bar_height };
+        const first = canvas.quads.items().len;
+        try canvas.fillRoundedAt(bar, .{ .radius = width, .color = palette.accent });
+        canvas.quads.clipFrom(first, self.area);
     }
 
     const side = @min(chrome.px(mark_side), bounds.width);
@@ -121,19 +129,9 @@ fn drawMark(self: WorkspaceRail, canvas: *Canvas, bounds: Rect, index: usize) !v
         .ink = if (selected or hovered) palette.text else palette.subtext0,
         .emphasized = selected or hovered,
         .size = .body,
+        .name = projection.workspaces.nameAt(index),
     };
     try mark.draw(canvas);
-
-    var storage: [8]u8 = undefined;
-    const number: Label = .{
-        .text = std.fmt.bufPrint(&storage, "{d}", .{index + 1}) catch unreachable,
-        .color = palette.overlay0,
-        .face = .sans,
-        .size = .small,
-    };
-    const number_width = @min(bounds.width, try canvas.measure(number));
-    const line = chrome.rowHeight(.small);
-    _ = try canvas.textAt(.{ .x = bounds.x + bounds.width - chrome.px(number_inset) - number_width, .y = bounds.y + bounds.height - line, .width = number_width, .height = line }, number);
 
     if (attention.workspaceDot(projection, palette, id)) |color| {
         try drawDot(canvas, bounds, color);

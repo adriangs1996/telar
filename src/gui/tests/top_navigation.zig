@@ -141,7 +141,7 @@ test "the rail stacks five projects in one column and reuses landed favicons at 
     }
 }
 
-test "rail marks carry their number in the corner and attention does not shift their ink" {
+test "rail marks without a favicon show the workspace initial and attention does not shift their ink" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.showSidebar(false);
@@ -154,10 +154,10 @@ test "rail marks carry their number in the corner and attention does not shift t
     var projection = fixture.projection();
     projection.workspaces = &workspaces;
     try fixture.paint(projection);
-    const labels = [_][]const u8{ "1", "2", "3" };
-    for (labels, 0..) |text, index| {
+    const initials = [_][]const u8{ "A", "A", "X" };
+    for (initials, 0..) |text, index| {
         const bounds = fixture.bandTarget(.{ .select_workspace = workspaces.workspaceAt(index) }).?;
-        try expectNumberLabel(&fixture, bounds, .{ .text = text, .color = fixture.session.gui.app.model.theme.palette.overlay0, .face = .sans, .size = .small });
+        try expectInitial(&fixture, bounds, .{ .text = text, .bold = true, .face = .sans, .size = .body });
     }
 
     const active = fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }).?;
@@ -512,15 +512,16 @@ fn quadsIn(quads: []const Quad, area: Rect) !std.ArrayList(Quad) {
     return result;
 }
 
-// A rail mark's number sits in its bottom-right corner on one small line.
-fn expectNumberLabel(fixture: *Fixture, bounds: Rect, label: Label) !void {
+// A rail mark's initial is centred in the mark's 20 px box.
+fn expectInitial(fixture: *Fixture, bounds: Rect, label: Label) !void {
     const renderer = &fixture.session.gui.renderer;
     var reference = QuadList.init(std.testing.allocator);
     defer reference.deinit();
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &reference, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
     const width = try canvas.measure(label);
-    const line = renderer.chrome.rowHeight(.small);
-    const natural: Rect = .{ .x = bounds.x + bounds.width - renderer.chrome.px(3) - width, .y = bounds.y + bounds.height - line, .width = width, .height = line };
+    const side = renderer.chrome.px(20);
+    const box: Rect = .{ .x = bounds.x + (bounds.width - side) / 2, .y = bounds.y + (bounds.height - side) / 2, .width = side, .height = side };
+    const natural: Rect = .{ .x = box.x + (box.width - width) / 2, .y = box.y, .width = width, .height = box.height };
     const actual = try firstInk(renderer.quads.items(), natural);
     _ = try canvas.textAt(natural, label);
     const glyph = try firstInk(reference.items(), natural);
