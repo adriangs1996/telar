@@ -60,7 +60,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 111;
+const corpus_len = 113;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -1070,6 +1070,47 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     ));
     helper.add(.{ .name = "editor_opened", .direction = .server, .golden_hex = golden.editor_opened }, helper.commit(
         try schema.encodeEditorOpened(helper.space(), .{ .request_id = @enumFromInt(5), .outcome = .opened, .pane_id = @enumFromInt(8), .pane_generation = 9 }),
+    ));
+
+    helper.add(.{
+        .name = "find_paths",
+        .direction = .client,
+        .golden_hex = golden.find_paths,
+    }, helper.commit(
+        try schema.encodeFindPaths(
+            helper.space(),
+            .{
+                .request_id = @enumFromInt(5),
+                .root = "/w",
+                .query = "ab",
+                .kind = .files,
+                .limit = 20,
+                .refresh = true,
+            },
+        ),
+    ));
+    helper.add(.{
+        .name = "path_results",
+        .direction = .server,
+        .golden_hex = golden.path_results,
+    }, helper.commit(
+        try schema.encodePathResults(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .root = "/w",
+            .scanned = 2,
+            .complete = false,
+            .matches = &.{
+                .{
+                    .path = "a/b",
+                    .kind = .file,
+                    .positions = &.{ 0, 2 },
+                },
+                .{
+                    .path = "a/",
+                    .kind = .directory,
+                },
+            },
+        }),
     ));
 
     std.debug.assert(index == corpus_len);

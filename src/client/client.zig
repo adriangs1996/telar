@@ -195,6 +195,7 @@ test {
     _ = @import("input/actions.zig");
     _ = @import("input/copy_mode.zig");
     _ = @import("input/history_palette.zig");
+    _ = @import("input/path_picker.zig");
     _ = @import("input/key_routing.zig");
     _ = @import("input/lua_action.zig");
     _ = @import("input/name_prompt.zig");
@@ -249,6 +250,7 @@ pub const host_resize = @import("host/host_resize.zig");
 pub const actions = @import("input/actions.zig");
 pub const copy_mode = @import("input/copy_mode.zig");
 pub const history_palette = @import("input/history_palette.zig");
+pub const path_picker = @import("input/path_picker.zig");
 pub const HistoryFilters = @import("input/HistoryFilters.zig");
 pub const key_routing = @import("input/key_routing.zig");
 pub const name_prompt = @import("input/name_prompt.zig");

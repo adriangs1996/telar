@@ -156,6 +156,12 @@ The input mode where host input edits a name — a tab rename, a workspace
 rename, or a new workspace — until submitted or cancelled.
 _Avoid_: Rename dialog, modal input
 
+**Path picker**:
+The prompt that fuzzy-finds a path under the focused pane's working directory
+and pastes it at the pane's cursor. The runtime indexes and ranks; the client
+keeps the browsed root, the page and the selection.
+_Avoid_: File finder, path completion (the new-workspace directory list)
+
 **Telar action**:
 A semantic instruction handled by Telar rather than forwarded as input to a
 pane. It may affect client state or request a runtime-owned change.

@@ -51,6 +51,11 @@ test {
     _ = @import("history/history_tests.zig");
     _ = @import("history/metrics.zig");
     _ = @import("history/model.zig");
+    _ = @import("paths/PathIndex.zig");
+    _ = @import("paths/PathIndexes.zig");
+    _ = @import("paths/PathQuery.zig");
+    _ = @import("paths/path_index_build.zig");
+    _ = @import("paths/path_ranking.zig");
     _ = @import("history/observer_support.zig");
     _ = @import("history/persistence/history_sql.zig");
     _ = @import("history/prompt_scan.zig");

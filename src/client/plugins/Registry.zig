@@ -142,6 +142,7 @@ pub fn authorizeBatch(self: *const Registry, authorization: BatchAuthorization) 
             .command_tab,
             .goto_picker,
             .history_palette,
+            .path_picker,
             .suggest_command,
             => null,
             .notification => .notifications,

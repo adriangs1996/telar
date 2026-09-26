@@ -3,6 +3,7 @@ const pacing = @import("pacing");
 const core = @import("telar-core");
 const std = @import("std");
 const ReviewJobs = @import("../change_review/Jobs.zig");
+const PathIndexes = @import("../paths/PathIndexes.zig");
 const ReviewService = @import("../change_review/Service.zig");
 const EditorOpenState = @import("../editors/State.zig");
 const event = @import("event.zig");
@@ -93,6 +94,8 @@ review_owner_inputs: [4]u64 = @splat(0),
 /// Discovery skipped a pane because every job slot was busy; retry it.
 review_discovery_blocked: bool = false,
 editor_open: EditorOpenState = .{},
+/// The path picker index of each client that opened one.
+path_indexes: PathIndexes = .{},
 input_sequence: u64 = 0,
 cell_timer: pacing.DeadlineScheduler = .{},
 
@@ -142,6 +145,7 @@ pub fn deinit(model: *RuntimeModel) void {
     model.attachments.deinit(model.gpa);
     model.panes.deinit();
     model.review_jobs.deinitJoined();
+    model.path_indexes.deinitJoined();
     if (model.review_service) |service| {
         service.deinit();
         model.review_service = null;

@@ -46,6 +46,7 @@ test {
     _ = @import("client/tests/configuration.zig");
     _ = @import("client/tests/graphics_and_clipboard.zig");
     _ = @import("client/tests/history_browser.zig");
+    _ = @import("client/tests/path_picker.zig");
     _ = @import("client/tests/host_interaction.zig");
     _ = @import("client/tests/host_resources.zig");
     _ = @import("client/tests/input_operations.zig");

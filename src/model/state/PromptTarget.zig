@@ -17,4 +17,6 @@ pub const PromptTarget = union(enum) {
     /// One field whose first byte selects actions (`>`), the goto picker
     /// (`@`) or the suggestion engine (`?`); see `command_palette`.
     palette,
+    /// Path picker; the root and results live in the path-picker model state.
+    paths,
 };

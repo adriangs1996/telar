@@ -35,6 +35,11 @@ pub const max_workspace_list_entries = 64;
 pub const max_git_branch_bytes = 64;
 pub const max_search_needle_bytes = 128;
 pub const max_search_matches = 64;
+/// A path picker query: fuzzy alignment cost grows with its length.
+pub const max_path_query_bytes = 64;
+pub const max_path_results = 50;
+/// One path relative to the picker's root.
+pub const max_path_match_bytes = 1024;
 pub const max_pane_text_rows = 200;
 pub const max_pane_text_bytes = 64 * 1024;
 pub const max_pane_text_input_bytes = 16 * 1024;
@@ -170,6 +175,17 @@ pub const HistoryScope = enum(u8) {
     cwd = 1,
     workspace = 2,
     pane = 3,
+};
+
+pub const PathKind = enum(u8) {
+    file = 0,
+    directory = 1,
+};
+
+pub const PathKindFilter = enum(u8) {
+    any = 0,
+    files = 1,
+    directories = 2,
 };
 
 pub const HistoryStatus = enum(u8) {

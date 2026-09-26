@@ -58,6 +58,7 @@ test {
     _ = @import("tests/composition_budget.zig");
     _ = @import("tests/overlays.zig");
     _ = @import("tests/history_modal.zig");
+    _ = @import("tests/path_picker.zig");
     _ = @import("tests/history_rendering.zig");
     _ = @import("widgets/overlays/LoadingCue.zig");
     _ = @import("tests/notifications.zig");

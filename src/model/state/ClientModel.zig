@@ -29,6 +29,7 @@ const ClipboardCaptureState = @import("ClipboardCaptureState.zig");
 const PluginExecutionState = @import("PluginExecutionState.zig");
 const HostState = @import("HostState.zig");
 const HistoryPaletteState = @import("HistoryPaletteState.zig");
+const PathPickerState = @import("PathPickerState.zig");
 const SuggestionState = @import("SuggestionState.zig");
 const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
 const AgentSnapshot = @import("../agents/AgentSnapshot.zig");
@@ -118,6 +119,7 @@ name_prompt: model_data.NamePromptState = .{},
 history_palette: HistoryPaletteState = .{},
 suggestion: SuggestionState = .{},
 path_completion: model_data.PathCompletionState = .{},
+path_picker: PathPickerState = .{},
 workspace_revision: u64 = 0,
 configuration_generation: u64 = 0,
 window_title_template: [max_window_title_template_bytes]u8 = undefined,
@@ -291,6 +293,7 @@ pub fn version(model: *const ClientModel) Version {
         .history = model.history_palette.version(),
         .suggestion = model.suggestion.version(),
         .path_completion = model.path_completion.version(),
+        .path_picker = model.path_picker.version(),
         .copy = model.copy_revision,
         .viewport = model.viewport_revision,
     };

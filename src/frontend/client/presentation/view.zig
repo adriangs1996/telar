@@ -38,7 +38,7 @@ pub fn promptKind(prompt: ?*const data.Prompt) tab_rename_module.Kind {
     const current = prompt orelse return .rename_tab;
 
     return switch (current.target()) {
-        .rename_tab, .goto, .history, .suggest, .palette => .rename_tab,
+        .rename_tab, .goto, .history, .suggest, .palette, .paths => .rename_tab,
         .create_workspace => .create_workspace,
         .rename_workspace => .rename_workspace,
         .copy_search => |direction| switch (direction) {
@@ -51,7 +51,7 @@ pub fn promptKind(prompt: ?*const data.Prompt) tab_rename_module.Kind {
 pub fn pickerPrompt(prompt: ?*data.Prompt) ?*data.Prompt {
     const current = prompt orelse return null;
     return switch (current.target()) {
-        .goto, .history, .suggest, .palette => current,
+        .goto, .history, .suggest, .palette, .paths => current,
         else => null,
     };
 }
@@ -59,7 +59,7 @@ pub fn pickerPrompt(prompt: ?*data.Prompt) ?*data.Prompt {
 pub fn promptField(prompt: ?*data.Prompt) ?*tab_rename_module.Field {
     const current = prompt orelse return null;
     return switch (current.target()) {
-        .goto, .history, .suggest, .palette => null,
+        .goto, .history, .suggest, .palette, .paths => null,
         else => &current.field,
     };
 }

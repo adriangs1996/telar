@@ -1,5 +1,4 @@
 //! History palette: queries, pages, pastes and deletes command history rows.
-const keyinput = @import("keyinput");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -130,7 +129,11 @@ pub fn pasteHistorySelection(client: *Client, request: data.HistoryPasteRequest)
 
     const index = @min(request.selection, @as(u16, palette.len) - 1);
     const command = palette.commandAt(index) orelse return;
-    _ = try pasteHistoryCommand(client, command, request.run);
+    _ = try pane_input.pasteText(
+        client,
+        command,
+        request.run,
+    );
 }
 
 /// Sends one exact-entry deletion for the palette's selected row. The
@@ -382,34 +385,4 @@ pub fn completeHistoryPrune(model: *data.ClientModel, confirmation: core.History
 
     try queryHistory(model, model.name_prompt.currentConst().?.field.text());
     return true;
-}
-
-/// Delivers one history command, with execution outside bracketed paste framing.
-/// Example: `_ = try historyPaste(client, .{ .text = command, .run = false });`.
-fn pasteHistoryCommand(client: *Client, text: []const u8, run: bool) !?data.PaneInputDelivery {
-    const started = core.now(client.io);
-
-    const plan = data.pane_input.planInput(&client.model, .focused) orelse return null;
-    try pane_input.validateHistoryText(text, plan.input_modes.bracketed_paste);
-    var encoded: [core.max_history_command_bytes + 13]u8 = undefined;
-    const paste = try keyinput.encodePaste(
-        &encoded,
-        text,
-        plan.input_modes,
-    );
-    var len = paste.len;
-    if (run) {
-        encoded[len] = '\r';
-        len += 1;
-    }
-
-    return pane_input.recordPaneInput(client, started, try pane_input.deliverPaneInput(
-        client,
-        plan,
-        .{
-            .source = .paste,
-            .bytes = encoded[0..len],
-            .limit = encoded.len,
-        },
-    ));
 }

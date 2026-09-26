@@ -279,6 +279,37 @@ fn deliverPanePaste(client: *Client, delivery: PanePasteDelivery) !bool {
     return result != null;
 }
 
+/// Pastes text a picker chose into the focused pane, framed by bracketed
+/// paste when the child asked for it; `run` sends Enter after the frame.
+/// Example: `_ = try pane_input.pasteText(client, command, false);`.
+pub fn pasteText(client: *Client, text: []const u8, run: bool) !?data.PaneInputDelivery {
+    const started = core.now(client.io);
+
+    const plan = data.pane_input.planInput(&client.model, .focused) orelse return null;
+    try validateHistoryText(text, plan.input_modes.bracketed_paste);
+    var encoded: [core.max_history_command_bytes + 13]u8 = undefined;
+    const paste = try keyinput.encodePaste(
+        &encoded,
+        text,
+        plan.input_modes,
+    );
+    var len = paste.len;
+    if (run) {
+        encoded[len] = '\r';
+        len += 1;
+    }
+
+    return recordPaneInput(client, started, try deliverPaneInput(
+        client,
+        plan,
+        .{
+            .source = .paste,
+            .bytes = encoded[0..len],
+            .limit = encoded.len,
+        },
+    ));
+}
+
 /// Rejects terminal controls and unframed multiline text before history can send input.
 /// Example: `try validateHistoryText(command, modes.bracketed_paste);`.
 pub fn validateHistoryText(text: []const u8, bracketed_paste: bool) !void {

@@ -117,6 +117,9 @@ const specs = [_]Spec{
         .name = "urlscan",
     },
     .{
+        .name = "fuzzymatch",
+    },
+    .{
         .name = "syntaxhl",
     },
     .{

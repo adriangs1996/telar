@@ -34,6 +34,7 @@ pub fn capture(model: *data.ClientModel, context: Context) Projection {
         .history = &model.history_palette,
         .suggestion = &model.suggestion,
         .path_completion = &model.path_completion,
+        .path_picker = &model.path_picker,
         .proxy_tls_active = model.proxy_tls_active,
         .proxy_tls_scope = model.proxy_tls_scope,
         .proxy_system_trusted = model.proxy_system_trusted,

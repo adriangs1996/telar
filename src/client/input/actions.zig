@@ -7,6 +7,7 @@ const std = @import("std");
 const cli_control = @import("../connection/cli_control.zig");
 const copy_mode = @import("copy_mode.zig");
 const history_palette = @import("history_palette.zig");
+const path_picker = @import("path_picker.zig");
 const key_routing = @import("key_routing.zig");
 const lua_action = @import("lua_action.zig");
 const name_prompt = @import("name_prompt.zig");
@@ -177,6 +178,7 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
         .command_tab => |*command| try cli_control.createCommandTab(client, command),
         .goto_picker => _ = name_prompt.openNamePrompt(&client.model, .goto_picker),
         .history_palette => _ = try history_palette.beginHistoryPalette(&client.model),
+        .path_picker => _ = try path_picker.enter(&client.model),
         .suggest_command => _ = try suggest_command.beginSuggestion(&client.model),
         .notification => |*notification| _ = try notifications.requestNotificationDelivery(&client.model, notification),
         .lua_callback, .lua_expr, .plugin => unreachable,

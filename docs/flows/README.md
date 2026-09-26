@@ -96,6 +96,7 @@ line numbers are intentionally omitted because symbols survive refactors.
 | [Native host services](native-host-services.md) | A GUI copy, runtime clipboard message or link open | The host clipboard or opener receives the request from the window thread | Host service and GUI tests |
 | [Native input](native-input.md) | AppKit or Wayland delivers keys, text, paste or pointer events | The window thread routes them through the shared client | Input ABI, queue and routing tests |
 | [Pane pointer shape](pane-pointer-shape.md) | A child requests a pointer shape with OSC 22 | The host pointer changes while the cursor is over that pane | VT, protocol and presenter tests |
+| [Path picker](path-picker.md) | The user opens `prefix+f` over a pane | The runtime indexes the pane's directory off the loop, ranks each query, and Enter pastes the chosen path at the pane's cursor | Matcher, index, ranking, codec, model, flow and overlay tests |
 | [Terminal colors](terminal-colors.md) | The client learns its terminal's colors with OSC 10 and 11 | Panes use those colors as VT defaults | Negotiation, protocol and runtime tests |
 | [Terminal command history](terminal-command-history.md) | Shell input and output reach the history observer | Submitted commands and their completion enter history | Tracker and observer tests |
 | [Vulkan renderer](vulkan-renderer.md) | The GUI starts on Linux | Frames render through Vulkan 1.3, or startup fails explicitly | Native renderer tests |

@@ -12,6 +12,7 @@ const request_failure = @import("request_failure.zig");
 const resync_required = @import("resync_required.zig");
 const copy_mode = @import("../input/copy_mode.zig");
 const history_palette = @import("../input/history_palette.zig");
+const path_picker = @import("../input/path_picker.zig");
 const editor_file_links = @import("../links/editor_file_links.zig");
 const notifications = @import("../notifications/notifications.zig");
 const pane_attachment = @import("../panes/pane_attachment.zig");
@@ -93,7 +94,7 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
         },
         .pane_exited => |exited| _ = try pane_closure.applyPaneExit(client, exited),
         .request_failed => |failure| {
-            if (!client.model.history_palette.fail(failure)) {
+            if (!client.model.history_palette.fail(failure) and !client.model.path_picker.fail(failure)) {
                 _ = try request_failure.failRuntimeRequest(client, failure);
             }
         },
@@ -111,6 +112,7 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
         .history_pruned => |confirmation| _ = try history_palette.completeHistoryPrune(&client.model, confirmation),
         .history_output => |output| _ = client.model.history_palette.applyOutput(output),
         .command_suggestion => |suggested| _ = client.model.suggestion.apply(suggested),
+        .path_results => |results| try path_picker.receive(client, results),
         .client_command_result, .client_list, .pane_text, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
         .proxy_status => |status| _ = try proxy_status.applyProxyStatus(client, status),
         .agent_snapshot => |snapshot| _ = try agent_snapshot.applyAgentSnapshot(client, snapshot),

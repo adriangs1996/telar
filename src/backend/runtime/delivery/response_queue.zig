@@ -7,6 +7,7 @@ const PendingTabCreated = @import("PendingTabCreated.zig");
 const PendingTabRenamed = @import("PendingTabRenamed.zig");
 const PendingNotification = @import("PendingNotification.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
+const PathQuery = @import("../../paths/PathQuery.zig");
 const PaneKey = @import("../../pane/PaneKey.zig");
 const Matches = @import("Matches.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
@@ -44,6 +45,7 @@ pub const PendingResponse = union(enum) {
     pane_focus_command: core.PaneFocusCommand,
     pane_focus_result: core.PaneFocusResult,
     command_suggestion: PendingSuggestion,
+    path_results: *PathQuery,
 };
 
 test "management responses overtake observation work" {

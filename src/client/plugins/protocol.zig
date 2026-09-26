@@ -55,7 +55,7 @@ pub fn encode(buffer: []u8, batch: *const data.EffectBatch) ![]const u8 {
             try writer.writeByte(17);
             try writer.writeByte(value);
         },
-        .enter_copy_mode, .command_tab, .goto_picker, .history_palette, .suggest_command => return error.InvalidWorkerEffect,
+        .enter_copy_mode, .command_tab, .goto_picker, .history_palette, .path_picker, .suggest_command => return error.InvalidWorkerEffect,
         .notification => |*value| {
             try writer.writeByte(18);
             try writer.writeByte(@intFromEnum(value.level));

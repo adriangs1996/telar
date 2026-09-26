@@ -8,6 +8,7 @@ const agent_navigation = @import("../agents/agent_navigation.zig");
 const prompt_paths = @import("../completion/prompt_paths.zig");
 const actions = @import("actions.zig");
 const history_palette = @import("history_palette.zig");
+const path_picker = @import("path_picker.zig");
 const suggest_command = @import("suggest_command.zig");
 const tab_rename = @import("../workspace/tab_rename.zig");
 const tab_selection = @import("../workspace/tab_selection.zig");
@@ -87,9 +88,19 @@ pub fn chooseDirectory(client: *Client, index: u16, revision: u64) !void {
 pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
     const before = promptListSnapshot(&client.model.name_prompt);
     const directory_before = promptDirectoryVersion(&client.model.name_prompt);
+    const paths_request = client.model.path_picker.pending_request;
     const command = name_prompts.commandFor(input);
     const outcome = if (command) |value| try applyPromptCommand(client, value) else .unchanged;
     try refreshPromptHistory(&client.model, before);
+    try refreshPromptPaths(
+        &client.model,
+        before,
+        paths_request,
+    );
+    if (outcome == .cancelled and before.kind == .paths) {
+        path_picker.close(&client.model);
+    }
+
     try history_palette.navigateHistoryPage(&client.model);
     if (outcome == .completion_requested) {
         try prompt_paths.acceptPathCompletion(client);
@@ -172,6 +183,7 @@ pub fn openNamePrompt(model: *data.ClientModel, intent: name_prompt_opening.Inte
         .goto_picker => .goto_picker,
         .history_palette => .history_palette,
         .suggest_palette => .suggest_palette,
+        .path_picker => .path_picker,
         .palette => |prefix| .{
             .palette = prefix,
         },
@@ -204,6 +216,9 @@ pub fn promptListSnapshot(prompt_state: *const data.NamePromptState) data.Prompt
         },
         .history => .{
             .kind = .history,
+        },
+        .paths => .{
+            .kind = .paths,
         },
         .suggest => .{
             .kind = .suggest,
@@ -248,6 +263,11 @@ fn finishPromptList(client: *Client, before: data.PromptListSnapshot) !void {
             },
         ),
         .suggest => try suggest_command.pasteSuggestion(client),
+        .paths => try path_picker.insert(
+            client,
+            before.selection,
+            before.alternate,
+        ),
         .goto => {
             var results: data.Results = .{};
             data.goto_picker.collect(
@@ -298,6 +318,26 @@ fn refreshPromptHistory(model: *data.ClientModel, before: data.PromptListSnapsho
     try history_palette.queryHistory(model, text);
 }
 
+/// Asks for new matches only when the path query text changed; moving the
+/// root clears the field and requests on its own.
+fn refreshPromptPaths(model: *data.ClientModel, before: data.PromptListSnapshot, request_before: u64) !void {
+    const prompt = model.name_prompt.currentConst() orelse return;
+    if (prompt.target() != .paths or before.kind != .paths or model.path_picker.pending_request != request_before) {
+        return;
+    }
+
+    const text = prompt.field.text();
+    if (std.mem.eql(
+        u8,
+        before.textSlice(),
+        text,
+    )) {
+        return;
+    }
+
+    try path_picker.request(model, text);
+}
+
 /// Keeps the picker selection inside the deterministic result set the
 /// renderer and the submit path both derive from the current query.
 fn constrainPickerSelection(model: *data.ClientModel) void {
@@ -309,6 +349,7 @@ fn constrainPickerSelection(model: *data.ClientModel) void {
     const count: u16 = switch (prompt.target()) {
         .goto => pickerCount(model, prompt.field.text()),
         .history => model.history_palette.len,
+        .paths => model.path_picker.len,
         .suggest => 1,
         .create_workspace => @intCast(model.path_completion.entries().len),
         .palette => switch (prompt.paletteMode()) {
@@ -401,6 +442,15 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
             client.list_submission_alternate = submission.alternate;
             break :blk true;
         },
+        .paths => blk: {
+            const prompt = client.model.name_prompt.currentConst() orelse break :blk false;
+            if (!path_picker.canInsert(&client.model, prompt.selection())) {
+                break :blk false;
+            }
+
+            client.list_submission_alternate = submission.alternate;
+            break :blk true;
+        },
         .suggest => suggest_command.submitSuggestion(&client.model, submission.name),
         // The palette closes like the list its prefix selects; `>` closes
         // only when a catalogue entry matches, so Enter on no match is inert.
@@ -448,6 +498,14 @@ fn applyPromptCommand(client: *Client, command: data.PromptCommand) !PromptOutco
         .copied => .copied,
         .pane_requested => .pane_requested,
         .completion_requested => .completion_requested,
+        .descend_requested => |selection| blk: {
+            try path_picker.descend(&client.model, selection);
+            break :blk .changed;
+        },
+        .ascend_requested => blk: {
+            try path_picker.ascend(&client.model);
+            break :blk .changed;
+        },
         .submitted => |submission| if (!try submitPrompt(client, submission))
             .blocked
         else blk: {

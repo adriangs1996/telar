@@ -10,6 +10,9 @@ const bytecodec = @import("bytecodec");
 const OpenEditor = @import("OpenEditor.zig");
 const EditorOpened = @import("EditorOpened.zig");
 const editor = @import("editor.zig");
+const FindPaths = @import("FindPaths.zig");
+const PathResultsView = @import("PathResultsView.zig");
+const paths = @import("paths.zig");
 const OpenPaneView = @import("OpenPaneView.zig");
 const PaneInput = @import("PaneInput.zig");
 const PaneResize = @import("PaneResize.zig");
@@ -170,6 +173,7 @@ pub const ClientMessage = union(enum) {
     update_client_layout: ClientLayoutUpdateView,
     request_pane_focus: RequestPaneFocus,
     open_editor: OpenEditor,
+    find_paths: FindPaths,
     complete_pane_focus: CompletePaneFocus,
 };
 
@@ -229,6 +233,7 @@ pub const ServerMessage = union(enum) {
     pane_focus_command: PaneFocusCommand,
     pane_focus_result: PaneFocusResult,
     editor_opened: EditorOpened,
+    path_results: PathResultsView,
     pane_progress: PaneProgress,
 };
 
@@ -302,6 +307,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .read_history_output => .{ .read_history_output = try GenericDerived(ReadHistoryOutput).decode(&decoder) },
         .history_stats => .{ .history_stats = try history.decodeHistoryStatsQuery(&decoder) },
         .open_editor => .{ .open_editor = try editor.decodeOpenEditor(&decoder) },
+        .find_paths => .{ .find_paths = try paths.decodeFindPaths(&decoder) },
         .request_pane_focus => .{ .request_pane_focus = try focus.decodeRequestPaneFocus(&decoder) },
         .complete_pane_focus => .{ .complete_pane_focus = try focus.decodeCompletePaneFocus(&decoder) },
     };
@@ -367,6 +373,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .history_stats_result => .{ .history_stats_result = try history.decodeHistoryStats(&decoder) },
         .pane_focus_command => .{ .pane_focus_command = try focus.decodePaneFocusCommand(&decoder) },
         .editor_opened => .{ .editor_opened = try editor.decodeEditorOpened(&decoder) },
+        .path_results => .{ .path_results = try paths.decodePathResults(&decoder) },
         .pane_focus_result => .{ .pane_focus_result = try focus.decodePaneFocusResult(&decoder) },
         .pane_progress => .{ .pane_progress = try pane.decodePaneProgress(&decoder) },
     };

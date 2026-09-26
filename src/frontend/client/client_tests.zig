@@ -22,6 +22,7 @@ test {
     _ = @import("tests/configuration.zig");
     _ = @import("tests/graphics_and_clipboard.zig");
     _ = @import("tests/history_browser.zig");
+    _ = @import("tests/path_picker.zig");
     _ = @import("tests/host_interaction.zig");
     _ = @import("tests/input.zig");
     _ = @import("tests/mouse_selection.zig");

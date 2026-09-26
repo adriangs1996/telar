@@ -429,6 +429,7 @@ test {
     _ = @import("schema/graphics.zig");
     _ = @import("schema/handshake.zig");
     _ = @import("schema/messages/history.zig");
+    _ = @import("schema/messages/paths.zig");
     _ = @import("schema_contract_test.zig");
 }
 
@@ -477,3 +478,17 @@ pub const encodeEditorOpened = editor_codec.encodeEditorOpened;
 
 
 pub const OwnedEditorOpen = @import("schema/messages/OwnedEditorOpen.zig");
+
+pub const PathMatch = @import("schema/PathMatch.zig");
+pub const PathKind = types.PathKind;
+pub const PathKindFilter = types.PathKindFilter;
+pub const max_path_query_bytes = types.max_path_query_bytes;
+pub const max_path_results = types.max_path_results;
+pub const max_path_match_bytes = types.max_path_match_bytes;
+pub const FindPaths = @import("schema/messages/FindPaths.zig");
+pub const PathResults = @import("schema/messages/PathResults.zig");
+pub const PathResultsView = @import("schema/messages/PathResultsView.zig");
+pub const PathMatchIterator = @import("schema/messages/PathMatchIterator.zig");
+const paths_codec = @import("schema/messages/paths.zig");
+pub const encodeFindPaths = paths_codec.encodeFindPaths;
+pub const encodePathResults = paths_codec.encodePathResults;

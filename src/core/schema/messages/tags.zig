@@ -52,6 +52,7 @@ pub const ClientTag = enum(u8) {
     report_agent_title = 0x2b,
     configure_terminal_colors = 0x2c,
     open_editor = 0x3a,
+    find_paths = 0x3b,
     query_change_review = 0x37,
     change_review_command = 0x38,
     report_change_review_sample = 0x39,
@@ -106,4 +107,5 @@ pub const ServerTag = enum(u8) {
     command_suggestion = 0xa9,
     pane_progress = 0xaa,
     editor_opened = 0xb2,
+    path_results = 0xb3,
 };

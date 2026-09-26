@@ -25,6 +25,7 @@ const Context = @import("../../widgets/Context.zig");
 const composition_module = @import("../../widgets/composition.zig");
 const history_browser_module = @import("../../widgets/history_browser.zig");
 const goto_picker_module = @import("../../widgets/goto_picker.zig");
+const path_picker_module = @import("../../widgets/path_picker.zig");
 const toast_module = @import("../../widgets/toast.zig");
 const Cursor = @import("../../widgets/Cursor.zig");
 const SidebarProviderPlacement = @import("../../graphics/SidebarProviderPlacement.zig");
@@ -691,11 +692,19 @@ pub fn render(self: *State, screen: *Screen, input: RenderInput) !RenderStats {
     );
     const picker_prompt = view_ops.pickerPrompt(input.prompt);
     const application_area = context.buffer.area();
+    const path_placement = path_picker_module.modalArea(
+        application_area,
+        input.model,
+        input.tab,
+        layout,
+    );
     const current_modal_area = if (attachment_snapshot.modal != null)
         attachment_preview_module.modalArea(application_area)
     else if (picker_prompt) |prompt|
         if (prompt.target() == .history)
             history_browser_module.modalArea(application_area, .{ .count = input.history.len, .inspecting = prompt.inspecting() })
+        else if (prompt.target() == .paths)
+            path_placement.area
         else
             goto_picker_module.modalArea(application_area)
     else
@@ -745,7 +754,17 @@ pub fn render(self: *State, screen: *Screen, input: RenderInput) !RenderStats {
     });
     var picker_cursor: ?Cursor = null;
     if (picker_prompt) |prompt| {
-        if (drawn_modal_area.isEmpty()) {
+        if (drawn_modal_area.isEmpty() and prompt.target() == .paths) {
+            const picker_output = path_picker_module.render(&context, .{
+                .placement = path_placement,
+                .field = &prompt.field,
+                .selection = prompt.selection(),
+                .state = &input.model.path_picker,
+                .graphical_frame = graphical_modal,
+            });
+            drawn_modal_area = picker_output.area;
+            picker_cursor = picker_output.cursor;
+        } else if (drawn_modal_area.isEmpty()) {
             const picker_output = view_ops.renderGotoPicker(&context, application_area, .{
                 .prompt = prompt,
                 .agents = input.agents,

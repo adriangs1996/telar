@@ -111,6 +111,16 @@ pub fn pushClientCompletion(self: *Outbox, reply: core.ClientCommand) !void {
     self.items[index] = .{ .complete_client_command = @intCast(encoded.len) };
 }
 
+/// Encodes a path query into its slot's payload, since its root may be a
+/// whole working directory. Example: `try outbox.pushFindPaths(request);`
+pub fn pushFindPaths(self: *Outbox, request: core.FindPaths) !void {
+    try request.validateWire();
+    const index = try self.reserve();
+    const encoded = core.encodeFindPaths(self.payloadAt(index), request) catch unreachable;
+    self.item_launch_cwd[index] = null;
+    self.items[index] = .{ .find_paths = @intCast(encoded.len) };
+}
+
 pub fn push(self: *Outbox, message: outbox_support.Message) !void {
     switch (message) {
         .pane_resize => |resize| return self.pushResize(resize),
@@ -130,7 +140,7 @@ pub fn push(self: *Outbox, message: outbox_support.Message) !void {
                 }
             }
         },
-        .pane_input, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout, .query_change_review, .change_review_command, .complete_client_command => unreachable,
+        .pane_input, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout, .query_change_review, .change_review_command, .complete_client_command, .find_paths => unreachable,
         else => {},
     }
     try self.append(message);
@@ -435,7 +445,7 @@ fn encodeNext(self: *const Outbox, buffer: []u8) ![]const u8 {
         .delete_history => |value| core.encodeDeleteHistory(buffer, value),
         .read_history_output => |value| core.encodeReadHistoryOutput(buffer, value),
         .suggest_command => |*value| core.encodeSuggestCommand(buffer, value.view()),
-        .complete_client_command => |length| self.payloadAt(self.head)[0..length],
+        .complete_client_command, .find_paths => |length| self.payloadAt(self.head)[0..length],
         .open_editor => |value| encode: {
             var request = value;
             const bytes = self.payloadAt(self.head);

@@ -26,6 +26,8 @@ const Completion = @import("resources/Completion.zig");
 const AgentCompletion = @import("../agent/Completion.zig");
 const std = @import("std");
 const Job = @import("../change_review/Job.zig");
+const PathIndex = @import("../paths/PathIndex.zig");
+const PathQuery = @import("../paths/PathQuery.zig");
 
 pub const Event = union(enum) {
     accepted: anyerror!localsocket.SocketChannel,
@@ -56,6 +58,8 @@ pub const Event = union(enum) {
     git_status: Completion,
     editor_opened: *EditorJob,
     session_name: AgentCompletion,
+    path_index_built: *PathIndex,
+    paths_found: *PathQuery,
     stopped: anyerror!void,
 };
 
@@ -82,8 +86,9 @@ pub fn discard(completed: Event, io: std.Io) void {
             const effects = result catch return;
             effects.deinit();
         },
+        .paths_found => |query| query.destroy(),
         // These pointers name slots still retained by RuntimeModel.
-        .change_review_completed, .editor_opened => {},
+        .change_review_completed, .editor_opened, .path_index_built => {},
         // Other events contain values or borrows whose owners outlive the join.
         .handshaken,
         .client_message,
@@ -150,6 +155,8 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) core.Path {
         .git_status,
         .editor_opened,
         .session_name,
+        .path_index_built,
+        .paths_found,
         => .observation,
         .accepted,
         .handshaken,

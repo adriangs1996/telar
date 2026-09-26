@@ -155,6 +155,7 @@ for _, name in ipairs({
 	"detach",
 	"copy-mode",
 	"history-palette",
+	"path-picker",
 	"suggest-command",
 }) do
 	local stable_name = name

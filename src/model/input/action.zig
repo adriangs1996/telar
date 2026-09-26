@@ -38,6 +38,7 @@ pub const Action = union(enum) {
     detach,
     goto_picker,
     history_palette,
+    path_picker,
     suggest_command,
     enter_copy_mode,
     command_tab: CommandTab,
@@ -339,6 +340,13 @@ pub const Action = union(enum) {
             "history-palette",
         )) {
             return .history_palette;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "path-picker",
+        )) {
+            return .path_picker;
         }
         if (std.mem.eql(
             u8,
