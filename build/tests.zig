@@ -154,6 +154,8 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     const isolation_run = b.addRunArtifact(isolation_tests);
     isolation_run.has_side_effects = true;
     isolation_step.dependOn(&isolation_run.step);
+    const cache_trace_tests = b.addTest(.{ .name = "telar-cache-trace-tui", .root_module = app.modules.frontend, .filters = &.{"cache trace"} });
+    b.step("build-cache-trace", "Build the client hot-path windows traced by the touchrange Valgrind tool").dependOn(&b.addInstallArtifact(cache_trace_tests, .{}).step);
     const compression_tests = b.addTest(.{ .root_module = app.modules.frontend, .filters = &.{"performance probe"} });
     const compression_run = b.addRunArtifact(compression_tests);
     compression_run.has_side_effects = true;

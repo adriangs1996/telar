@@ -30,6 +30,7 @@ const TransmitContext = @import("TransmitContext.zig");
 const KgpIngestContext = @import("KgpIngestContext.zig");
 const SharedFrameContext = @import("SharedFrameContext.zig");
 const IdleDeliveryContext = @import("IdleDeliveryContext.zig");
+const ClientEventContext = @import("ClientEventContext.zig");
 const IdleDeliveryShape = @import("IdleDeliveryShape.zig");
 const Fixture = @import("Fixture.zig");
 const Config = @import("Config.zig");
@@ -140,6 +141,8 @@ const cases = [_]Case{
     .{ .name = "backend.blit.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
     .{ .name = "backend.delivery.flush_idle_2x8", .work_per_op = 1, .work_unit = "flushes" },
     .{ .name = "backend.delivery.flush_idle_1x32", .work_per_op = 1, .work_unit = "flushes" },
+    .{ .name = "frontend.client.frame_event", .work_per_op = 1, .work_unit = "frames" },
+    .{ .name = "frontend.client.key_event", .work_per_op = 1, .work_unit = "keys" },
 };
 
 /// A TUI and a GUI on one eight-pane tab, and one client on a crowded tab.
@@ -849,7 +852,41 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
             try result_writer.write(case, try measure(.{ .io = io, .config = config, .context = &context }, runIdleDelivery));
         }
     }
+    const client_frame_case = cases[case_index];
+    const client_key_case = cases[case_index + 1];
+    case_index += 2;
+    if (config.includes(client_frame_case.name) or config.includes(client_key_case.name)) {
+        var context: ClientEventContext = undefined;
+        try context.init(io, gpa);
+        defer context.deinit();
+        if (config.includes(client_frame_case.name)) {
+            try result_writer.write(client_frame_case, try measure(.{ .io = io, .config = config, .context = &context }, runClientFrame));
+        }
+
+        if (config.includes(client_key_case.name)) {
+            try result_writer.write(client_key_case, try measure(.{ .io = io, .config = config, .context = &context }, runClientKey));
+        }
+    }
+
     std.debug.assert(case_index == cases.len);
+}
+
+fn runClientFrame(context: *ClientEventContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |iteration| {
+        checksum +%= try context.frameEvent(iteration);
+    }
+
+    return checksum +% context.started_jobs;
+}
+
+fn runClientKey(context: *ClientEventContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        checksum +%= try context.keyEvent();
+    }
+
+    return checksum +% context.started_jobs;
 }
 
 pub fn main(init: std.process.Init) !void {
