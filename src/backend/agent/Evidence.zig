@@ -64,12 +64,12 @@ pub fn fromScreen(provider: core.AgentProvider, observation: *const ScreenObserv
 /// const evidence = Evidence.fromReport(.claude, &observation);
 /// ```
 pub fn fromReport(provider: core.AgentProvider, observation: *const ReportObservation) Evidence {
-    std.debug.assert(observation.state != .exited);
+    std.debug.assert(observation.state != .exited and observation.state != .continuing);
     const status: core.AgentStatus = switch (observation.state) {
         .working, .settling => .working,
         .blocked => .blocked,
         .ready => .ready,
-        .exited => unreachable,
+        .exited, .continuing => unreachable,
     };
 
     return .{
@@ -83,9 +83,30 @@ pub fn fromReport(provider: core.AgentProvider, observation: *const ReportObserv
             .working => types.report_working_expiry_ms,
             .settling => types.working_expiry_ms,
             .blocked, .ready => types.settled_expiry_ms,
-            .exited => unreachable,
+            .exited, .continuing => unreachable,
         },
     };
+}
+
+/// Extends a working lifecycle report as if the agent had reported the
+/// same work again at `now_ms`, once less than `report_renewal_margin_ms`
+/// is left. Returns whether the expiry moved. The observation times stay,
+/// so ordering against screen evidence still follows the report that
+/// started the work.
+///
+/// ```zig
+/// if (report.renewWork(observation.observed_at_ms)) {
+///     publishProjection();
+/// }
+/// ```
+pub fn renewWork(self: *Evidence, now_ms: i64) bool {
+    std.debug.assert(self.source == .lifecycle_report and self.status == .working);
+    if (self.expires_at_ms - now_ms > types.report_renewal_margin_ms) {
+        return false;
+    }
+
+    self.expires_at_ms = now_ms + types.report_working_expiry_ms;
+    return true;
 }
 
 /// Reports whether this evidence represents current model or tool work.

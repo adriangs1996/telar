@@ -105,7 +105,7 @@ ID and generation from the environment so initial reports need no prior agent
 discovery. Other targets resolve through the agent snapshot.
 
 `telar agent report-state TARGET STATE` exposes official lifecycle reports:
-working, blocked, ready, exited and settling. Optional flags preserve blocked
+working, blocked, ready, exited, settling and continuing. Optional flags preserve blocked
 reason, event text, session ID and session file kind/path. The shared wire
 validator rejects invalid state/reason combinations before any report is sent.
 

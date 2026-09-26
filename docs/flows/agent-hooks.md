@@ -64,12 +64,14 @@ that row in place. A finish without an open row inserts a completed row.
 | `PreToolUse` of `AskUserQuestion` | `blocked`, reason `question`, event: the first question |
 | `PreToolUse` of `ExitPlanMode` | `blocked`, reason `plan` |
 | `PreToolUse`, `PostToolUse` | `working`, event `» <tool> <first known argument>`; a mapped `Bash` call is also recorded |
-| `Stop` | `ready` (projected as `done` until seen), event: the first line of `last_assistant_message` |
+| `Stop` with a running subagent in `background_tasks` | `working`, event `waiting for <n> background agents` |
+| `Stop` otherwise | `ready` (projected as `done` until seen), event: the first line of `last_assistant_message` |
 | `Notification` `permission_prompt` | `blocked`, reason `permission`, event: the notification message |
 | `Notification` `elicitation_*`, `agent_needs_input` | `blocked`, reason `question`, event: the notification message |
 | `Notification` `idle_prompt` | `ready` |
 | `SessionEnd` | `exited`: the report is withdrawn, weaker evidence decides |
-| any event with `agent_id` (subagent) | ignored |
+| `PreToolUse`, `PostToolUse` with `agent_id` (subagent) | `continuing`: renews an unexpired `working` report |
+| any other event with `agent_id` (subagent) | ignored |
 
 | Codex event | Report |
 | --- | --- |
@@ -215,6 +217,21 @@ hook in between; a `settling` report with `working_expiry_ms`, other states
 with `settled_expiry_ms`; `applyProcess`
 clears it when a different process takes the pane. Sounds follow the same
 transition rule as screen evidence.
+
+Claude Code dispatches background agents and ends the turn while they run:
+its `Stop` fires with them still listed in `background_tasks` as `running`
+subagents. That field is absent from Claude Code's hook reference, so an
+absent list keeps the plain `Stop` mapping. Running shells are not counted,
+because a dev server outlives every turn. A finished background agent
+resumes the main thread with a `UserPromptSubmit` and a new `Stop`, which
+settles the agent once no subagent is left running.
+
+A background agent can outlast `report_working_expiry_ms` without a main
+thread hook. Its own tool calls report `continuing`, which renews an
+unexpired `working` report once less than `report_renewal_margin_ms` is
+left, so a burst of calls republishes the projection once. `continuing`
+never registers an agent, never replaces `blocked`, `ready` or `settling`,
+and never revives an expired report; the screen then decides as before.
 
 Codex runs matching `Stop` hooks before deciding whether a hook continues the
 turn. `settling` preserves this distinction from active tool work while still

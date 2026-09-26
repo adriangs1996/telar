@@ -59,6 +59,7 @@ test {
     _ = @import("tests/overlays.zig");
     _ = @import("tests/history_modal.zig");
     _ = @import("tests/history_rendering.zig");
+    _ = @import("widgets/overlays/LoadingCue.zig");
     _ = @import("tests/notifications.zig");
     _ = @import("tests/scene.zig");
     _ = @import("tests/visual_language.zig");

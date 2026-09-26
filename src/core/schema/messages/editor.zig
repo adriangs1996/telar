@@ -16,6 +16,8 @@ pub fn encodeOpenEditor(buffer: []u8, message: OpenEditor) ![]const u8 {
     try encoder.writeInt(u64, message.pane_generation);
     try encoder.writeSized16(message.editor);
     try encoder.writeSized16(message.path);
+    try encoder.writeInt(u32, message.line);
+    try encoder.writeInt(u32, message.column);
     return encoder.finish();
 }
 
@@ -26,6 +28,8 @@ pub fn decodeOpenEditor(decoder: *Decoder) !OpenEditor {
         .pane_generation = try decoder.readInt(u64),
         .editor = try decoder.readSized16(),
         .path = try decoder.readSized16(),
+        .line = try decoder.readInt(u32),
+        .column = try decoder.readInt(u32),
     };
     try message.validateWire();
     return message;

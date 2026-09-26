@@ -13,7 +13,34 @@ notification_type: []const u8 = "",
 message: []const u8 = "",
 /// Present on `Stop`: the final assistant message of the turn.
 last_assistant_message: []const u8 = "",
+/// Present on `Stop` and `SubagentStop`: work the session left running,
+/// such as background subagents and shells. Claude Code sends it without
+/// documenting it, so an absent list means nothing is known to run.
+background_tasks: []const BackgroundTask = &.{},
 tool_name: []const u8 = "",
 tool_use_id: []const u8 = "",
 tool_input: std.json.Value = .null,
 cwd: []const u8 = "",
+
+const BackgroundTask = struct {
+    type: []const u8 = "",
+    status: []const u8 = "",
+};
+
+/// Counts the subagents still running after the turn. Background shells
+/// are left out: a dev server outlives every turn and is not the agent
+/// working.
+///
+/// ```zig
+/// const running = input.runningSubagents();
+/// ```
+pub fn runningSubagents(self: *const ClaudeHookInput) usize {
+    var running: usize = 0;
+    for (self.background_tasks) |task| {
+        if (std.mem.eql(u8, task.type, "subagent") and std.mem.eql(u8, task.status, "running")) {
+            running += 1;
+        }
+    }
+
+    return running;
+}

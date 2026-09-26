@@ -22,6 +22,32 @@ pub fn init(text: []const u8) !Target {
     return target;
 }
 
+/// Copies one local path found in prose by `urlscan.pathAt`, with its
+/// `:line[:column]` suffix. It is not a URI, so only the file opener takes it.
+///
+/// ```zig
+/// const target = try Target.initPath("src/main.zig:12");
+/// ```
+pub fn initPath(text: []const u8) !Target {
+    if (text.len == 0 or text.len > urlscan.max_uri_bytes or !std.unicode.utf8ValidateSlice(text)) {
+        return error.InvalidLink;
+    }
+
+    for (text) |byte| {
+        if (std.ascii.isControl(byte)) {
+            return error.InvalidLink;
+        }
+    }
+
+    var target: Target = .{
+        .scheme = .path,
+        .len = @intCast(text.len),
+    };
+    @memcpy(target.storage[0..text.len], text);
+
+    return target;
+}
+
 pub fn uri(self: *const Target) []const u8 {
     return self.storage[0..self.len];
 }

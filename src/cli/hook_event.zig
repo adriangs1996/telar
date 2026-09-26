@@ -63,6 +63,16 @@ pub fn toolCall(buffer: *Buffer, tool_name: []const u8, tool_input: std.json.Val
     return line(buffer, scratch[0..len]);
 }
 
+/// Names the background agents a finished turn is still waiting for.
+///
+/// ```zig
+/// const event = backgroundAgents(&buffer, input.runningSubagents());
+/// ```
+pub fn backgroundAgents(buffer: *Buffer, count: usize) []const u8 {
+    const noun = if (count == 1) "agent" else "agents";
+    return std.fmt.bufPrint(buffer, "waiting for {d} background {s}", .{ count, noun }) catch buffer[0..0];
+}
+
 fn append(scratch: []u8, len: *usize, text: []const u8) void {
     const count = @min(text.len, scratch.len - len.*);
     @memcpy(scratch[len.*..][0..count], text[0..count]);

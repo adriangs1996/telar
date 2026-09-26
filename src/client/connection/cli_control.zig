@@ -258,7 +258,9 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
         },
         .client_open_link => {
             const target = try data.LinkTarget.init(reply.text());
-            if (!try link_opening.openLink(client, target)) {
+            const tab = client.model.tabs.activeSlot();
+            const focused = if (tab) |slot| data.tab_layout.focusedPaneConst(&client.model, slot) else null;
+            if (!try link_opening.openLink(client, target, if (focused) |pane| pane.id else null)) {
                 return error.LinkOpeningUnavailable;
             }
 

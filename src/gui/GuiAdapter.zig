@@ -1204,11 +1204,11 @@ fn openArmedLink(self: *GuiAdapter) !void {
     const pointer = &self.pointer;
     pointer.hover.dirty = true;
     pointer.hover.refresh(self);
-    const target = if (self.pointerGeometryMatches() and pointer.hover.openable()) pointer.link_gesture.finish(pointer.hover.link, self.app.model.version()) else null;
+    const opened = if (self.pointerGeometryMatches() and pointer.hover.openable()) pointer.link_gesture.finish(pointer.hover.link, self.app.model.version()) else null;
     pointer.link_gesture.cancel();
 
-    if (target) |selected| {
-        _ = try client.link_opening.openLink(&self.app, selected);
+    if (opened) |hit| {
+        _ = try client.link_opening.openLink(&self.app, hit.match.target, hit.pane_id);
     }
 }
 
@@ -2033,14 +2033,15 @@ const LinkGesture = struct {
         self.version = version;
     }
 
-    /// A release opens only the unchanged target. Cancellation never opens a URL.
-    /// Example: `const target = gesture.finish(current_hit, app.model.version());`
-    pub fn finish(self: *LinkGesture, current: ?Hit, version: data.Version) ?data.LinkTarget {
+    /// A release opens only the unchanged target, returned with the pane it
+    /// was printed in. Cancellation never opens a URL.
+    /// Example: `const hit = gesture.finish(current_hit, app.model.version());`
+    pub fn finish(self: *LinkGesture, current: ?Hit, version: data.Version) ?Hit {
         self.validate(current, version);
         const pressed = self.pressed orelse return null;
         self.pressed = null;
         const released = current orelse return null;
-        return if (pressed.eql(&released)) pressed.match.target else null;
+        return if (pressed.eql(&released)) pressed else null;
     }
 
     /// Navigation or an intervening target change cancels, even if later restored.

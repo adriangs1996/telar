@@ -37,6 +37,8 @@ const loading_step_ns: u64 = 24 * std.time.ns_per_ms;
 layout: Layout,
 projection: *const client.Projection,
 reveal: f32 = 1,
+/// A replacement page is late: rows dim and the loading line runs.
+loading: bool = false,
 
 /// All controls use the same animated pixel layout as the painted surface.
 /// Example: `try widget.draw(canvas);`
@@ -149,7 +151,7 @@ fn rows(self: HistoryModal, canvas: *Canvas) !void {
         }
     }
 
-    if (history.phase == .loading) {
+    if (self.loading) {
         canvas.quads.fadeFrom(first, 0.55);
     }
 
@@ -591,9 +593,8 @@ fn search(self: HistoryModal, canvas: *Canvas) !void {
     const palette = canvas.theme.palette;
     const px = canvas.chrome;
     const prompt = self.projection.prompt.?;
-    const history = self.projection.history;
     try canvas.fillAt(.{ .x = area.x, .y = area.y, .width = area.width, .height = 1 }, palette.surface1);
-    if (history.phase == .loading and history.has_page) {
+    if (self.loading) {
         try self.loadingLine(canvas, area);
     }
 

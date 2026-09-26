@@ -14,6 +14,10 @@ const timeout_seconds = 3;
 
 editor: []const u8,
 path: []const u8,
+/// The line to show once the file opens; zero leaves the editor's choice.
+line: u32 = 0,
+/// The column on `line`; zero means its start.
+column: u32 = 0,
 candidates: []Candidate,
 environment: std.process.Environ,
 io: std.Io = undefined,

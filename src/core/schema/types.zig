@@ -303,6 +303,10 @@ pub const AgentReportState = enum(u8) {
     /// A Stop hook ran, but the agent may still continue. A newer idle
     /// composer must confirm completion before the runtime announces it.
     settling = 4,
+    /// A helper the agent started, such as a Claude Code subagent, is still
+    /// at work. It extends an unexpired `working` report and never changes
+    /// what the agent reports.
+    continuing = 5,
 };
 
 pub const AgentAuthority = enum(u8) {

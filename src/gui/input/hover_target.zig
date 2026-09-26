@@ -66,6 +66,12 @@ pub fn resolve(gui: *GuiAdapter, mouse: keyinput.Mouse, mods: u32) Target {
                 return .{ .shape = .pointer };
             }
 
+            // A path in prose is a guess, so it is a link only while the
+            // platform modifier asks for one; plain clicks stay with the text.
+            if (found.target.scheme == .path and mods & link_modifier == 0) {
+                return base;
+            }
+
             return .{ .shape = .pointer, .link = .{
                 .pane_id = pane.id,
                 .generation = pane.attachment_generation,

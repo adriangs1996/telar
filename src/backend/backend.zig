@@ -97,6 +97,7 @@ test {
     _ = @import("runtime/tab_creation.zig");
     _ = @import("runtime/workspace_creation.zig");
     _ = @import("runtime/link_opening.zig");
+    _ = @import("editors/Job.zig");
     _ = @import("runtime/suggest_command.zig");
     _ = @import("runtime/session_checkpoint.zig");
     _ = @import("runtime/pane_closure.zig");

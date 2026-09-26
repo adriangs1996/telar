@@ -122,22 +122,28 @@ pub fn mapPiTitle(buffer: *[core.max_agent_session_title_bytes]u8, input: PiHook
     return core.truncateSessionTitle(buffer, name);
 }
 
-/// Maps one Claude Code hook event to a report. Subagent events and
-/// notifications that do not change what the user must do are ignored.
-/// `AskUserQuestion` and `ExitPlanMode` block before their tool runs, so
-/// their `PreToolUse` reports the question or the plan review instead of
-/// work. The event line borrows `buffer`.
+/// Maps one Claude Code hook event to a report. A subagent's tool calls
+/// only renew the work already reported, and notifications that do not
+/// change what the user must do are ignored. `AskUserQuestion` and
+/// `ExitPlanMode` block before their tool runs, so their `PreToolUse`
+/// reports the question or the plan review instead of work. A `Stop` that
+/// leaves subagents running keeps the agent working until the turn that
+/// collects the last of them. The event line borrows `buffer`.
 ///
 /// ```zig
 /// const report = mapClaudeHook(input, &buffer) orelse return;
 /// ```
 pub fn mapClaudeHook(input: ClaudeHookInput, buffer: *hook_event.Buffer) ?Report {
     const session_file = if (input.transcript_path.len <= core.max_agent_session_file_bytes) input.transcript_path else "";
+    const event = input.hook_event_name;
     if (input.agent_id != null and input.agent_id.?.len != 0) {
+        if (std.mem.eql(u8, event, "PreToolUse") or std.mem.eql(u8, event, "PostToolUse")) {
+            return .{ .state = .continuing };
+        }
+
         return null;
     }
 
-    const event = input.hook_event_name;
     const session = if (core.validateSessionReference(input.session_id)) |_| input.session_id else |_| "";
 
     if (std.mem.eql(u8, event, "SessionStart")) {
@@ -159,6 +165,11 @@ pub fn mapClaudeHook(input: ClaudeHookInput, buffer: *hook_event.Buffer) ?Report
         return .{ .state = .working, .event = call, .session = session, .session_file = session_file };
     }
     if (std.mem.eql(u8, event, "Stop")) {
+        const running = input.runningSubagents();
+        if (running != 0) {
+            return .{ .state = .working, .event = hook_event.backgroundAgents(buffer, running), .session = session, .session_file = session_file };
+        }
+
         return .{ .state = .ready, .event = hook_event.line(buffer, input.last_assistant_message), .session = session, .session_file = session_file };
     }
     if (std.mem.eql(u8, event, "SessionEnd")) {
@@ -505,7 +516,7 @@ test "Codex reports carry the resolved state database and find the newest schema
     try std.testing.expect(codexStateDatabase(io, "/nonexistent/telar", &missing_buffer) == null);
 }
 
-test "Claude hook events map to reports and subagents are ignored" {
+test "Claude hook events map to reports and subagent lifecycle events are ignored" {
     var buffer: hook_event.Buffer = undefined;
     const session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000";
     const start = mapClaudeHook(.{ .hook_event_name = "SessionStart", .session_id = session }, &buffer).?;
@@ -520,6 +531,75 @@ test "Claude hook events map to reports and subagents are ignored" {
     try std.testing.expectEqual(core.AgentReportState.working, mapClaudeHook(.{ .hook_event_name = "PreToolUse" }, &buffer).?.state);
     try std.testing.expect(mapClaudeHook(.{ .hook_event_name = "Stop", .agent_id = "sub-1" }, &buffer) == null);
     try std.testing.expectEqualStrings("", mapClaudeHook(.{ .hook_event_name = "Stop", .session_id = "bad session" }, &buffer).?.session);
+}
+
+test "a Claude Stop that leaves subagents running keeps the agent working" {
+    var buffer: hook_event.Buffer = undefined;
+    const waiting = mapClaudeHook(
+        .{
+            .hook_event_name = "Stop",
+            .last_assistant_message = "The agents are still working.",
+            .background_tasks = &.{
+                .{ .type = "subagent", .status = "running" },
+                .{ .type = "shell", .status = "running" },
+                .{ .type = "subagent", .status = "running" },
+            },
+        },
+        &buffer,
+    ).?;
+    try std.testing.expectEqual(core.AgentReportState.working, waiting.state);
+    try std.testing.expectEqualStrings("waiting for 2 background agents", waiting.event);
+
+    const one = mapClaudeHook(
+        .{
+            .hook_event_name = "Stop",
+            .background_tasks = &.{
+                .{ .type = "subagent", .status = "running" },
+                .{ .type = "subagent", .status = "completed" },
+            },
+        },
+        &buffer,
+    ).?;
+    try std.testing.expectEqualStrings("waiting for 1 background agent", one.event);
+
+    const shell_only = mapClaudeHook(
+        .{
+            .hook_event_name = "Stop",
+            .last_assistant_message = "Dev server is up.",
+            .background_tasks = &.{
+                .{ .type = "shell", .status = "running" },
+            },
+        },
+        &buffer,
+    ).?;
+    try std.testing.expectEqual(core.AgentReportState.ready, shell_only.state);
+    try std.testing.expectEqualStrings("Dev server is up.", shell_only.event);
+}
+
+test "Claude subagent tool calls renew work and nothing else" {
+    var buffer: hook_event.Buffer = undefined;
+    const renewal = mapClaudeHook(.{ .hook_event_name = "PreToolUse", .agent_id = "sub-1", .tool_name = "Bash", .session_id = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000" }, &buffer).?;
+    try std.testing.expectEqual(core.AgentReportState.continuing, renewal.state);
+    try std.testing.expectEqualStrings("", renewal.session);
+    try std.testing.expectEqualStrings("", renewal.event);
+    try std.testing.expectEqual(core.AgentReportState.continuing, mapClaudeHook(.{ .hook_event_name = "PostToolUse", .agent_id = "sub-1" }, &buffer).?.state);
+    try std.testing.expect(mapClaudeHook(.{ .hook_event_name = "Notification", .notification_type = "permission_prompt", .agent_id = "sub-1" }, &buffer) == null);
+    try std.testing.expect(mapClaudeHook(.{ .hook_event_name = "SubagentStop", .agent_id = "sub-1" }, &buffer) == null);
+}
+
+test "the background tasks of a real Claude Stop payload are read" {
+    const payload =
+        \\{"session_id":"0b4d1d8f-d094-4b86-8a23-7cbee8e2ca13","hook_event_name":"Stop","stop_hook_active":false,
+        \\"background_tasks":[{"id":"aef142ba64a0794f5","type":"subagent","status":"running","description":"Sleep test","agent_type":"general-purpose"},
+        \\{"id":"bgt6cv25t","type":"shell","status":"running","description":"Sleep","command":"sleep 25"}],"session_crons":[]}
+    ;
+    const parsed = try std.json.parseFromSlice(ClaudeHookInput, std.testing.allocator, payload, .{ .ignore_unknown_fields = true });
+    defer parsed.deinit();
+    try std.testing.expectEqual(@as(usize, 1), parsed.value.runningSubagents());
+
+    const bare = try std.json.parseFromSlice(ClaudeHookInput, std.testing.allocator, "{\"hook_event_name\":\"Stop\"}", .{ .ignore_unknown_fields = true });
+    defer bare.deinit();
+    try std.testing.expectEqual(@as(usize, 0), bare.value.runningSubagents());
 }
 
 test "Codex hook events map to reports and subagents are ignored" {

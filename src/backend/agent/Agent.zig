@@ -153,8 +153,9 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
 }
 
 /// Applies one official lifecycle report. `exited` withdraws the report so
-/// weaker evidence decides again; every other state becomes the ranking
-/// evidence until it expires.
+/// weaker evidence decides again; `continuing` only extends an unexpired
+/// working report, so a helper cannot hide a prompt or revive finished
+/// work; every other state becomes the ranking evidence until it expires.
 ///
 /// ```zig
 /// if (agent.applyReport(observation)) {
@@ -162,6 +163,15 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
 /// }
 /// ```
 pub fn applyReport(self: *Agent, observation: ReportObservation) bool {
+    if (observation.state == .continuing) {
+        const report = if (self.report) |*value| value else return false;
+        if (!report.isWorking() or self.report_settling or report.isExpired(observation.observed_at_ms)) {
+            return false;
+        }
+
+        return report.renewWork(observation.observed_at_ms);
+    }
+
     if (observation.state == .exited) {
         if (self.report == null) {
             return false;

@@ -38,6 +38,19 @@ static unsigned rule_count;
 static unsigned diagram_count;
 static uint32_t diagram_widths[TELAR_GUI_DIAGRAM_SLOTS], diagram_heights[TELAR_GUI_DIAGRAM_SLOTS];
 
+// One sample per submitted frame while a frame trace runs. Glyphs are atlas
+// quads; dim glyphs are the ones drawn at less than 60% opacity, and lines are
+// solid two-pixel bars wide enough to be a progress line.
+typedef struct {
+    double time_ms;
+    uint64_t token;
+    uint32_t quads, glyphs, dim, lines;
+} frame_sample;
+static frame_sample frame_trace[4096];
+static unsigned frame_trace_len;
+static BOOL frame_tracing;
+static NSTimeInterval frame_trace_started;
+
 static id find_control(NSArray *children, NSString *label) {
     for (id child in children) {
         if ([[child accessibilityLabel] isEqualToString:label]) return child;
@@ -196,8 +209,19 @@ static void render(void *context, telar_gui_viewport size, telar_gui_frame *fram
         diagram_heights[i] = frame->diagrams[i].height;
         if (frame->diagrams[i].pixels != NULL) diagram_count++;
     }
+    frame_sample sample = {
+        .time_ms = (NSProcessInfo.processInfo.systemUptime - frame_trace_started) * 1000,
+        .token = frame->token,
+        .quads = frame->quad_count,
+    };
     for (uint32_t i = 0; i < frame->quad_count; i++) {
         const telar_gui_quad *quad = &frame->quads[i];
+        if (quad->u0 != quad->u1) {
+            sample.glyphs++;
+            if (quad->a > .05f && quad->a < .6f) sample.dim++;
+        } else if (fabsf(quad->height - 2 * size.scale) < .01f && quad->width > 40 * size.scale) {
+            sample.lines++;
+        }
         if (quad->height == 1 && quad->u0 == quad->u1) {
             if (rule_count == sizeof rules / sizeof rules[0]) abort();
             rules[rule_count++] = *quad;
@@ -210,6 +234,20 @@ static void render(void *context, telar_gui_viewport size, telar_gui_frame *fram
             marker_valid = YES;
         }
     }
+    if (frame_tracing && frame_trace_len < sizeof frame_trace / sizeof frame_trace[0]) {
+        frame_trace[frame_trace_len++] = sample;
+    }
+}
+
+static void write_frame_trace(NSString *path) {
+    NSMutableArray *samples = [NSMutableArray arrayWithCapacity:frame_trace_len];
+    for (unsigned i = 0; i < frame_trace_len; i++) {
+        const frame_sample *sample = &frame_trace[i];
+        [samples addObject:@{@"time_ms": @(sample->time_ms), @"token": @(sample->token), @"quads": @(sample->quads),
+            @"glyphs": @(sample->glyphs), @"dim": @(sample->dim), @"lines": @(sample->lines)}];
+    }
+    NSData *data = [NSJSONSerialization dataWithJSONObject:@{@"frames": samples} options:NSJSONWritingPrettyPrinted error:nil];
+    if (![data writeToFile:path atomically:YES]) abort();
 }
 
 static id initialize(id self, SEL selector, NSRect frame, void *context, const telar_gui_callbacks *callbacks) {
@@ -383,6 +421,15 @@ __attribute__((constructor)) static void install(void) {
                 trace_scroll(view, action[@"trace_scroll"]);
             }
             if (action[@"scroll"]) scroll_control(view, action);
+            if ([action[@"trace_frames"] boolValue]) {
+                frame_trace_len = 0;
+                frame_trace_started = NSProcessInfo.processInfo.systemUptime;
+                frame_tracing = YES;
+            }
+            if (action[@"write_frames"]) {
+                frame_tracing = NO;
+                write_frame_trace(action[@"write_frames"]);
+            }
             if (action[@"click"]) {
                 NSArray *point = action[@"click"];
                 NSPoint local = NSMakePoint(view.bounds.size.width * [point[0] doubleValue],

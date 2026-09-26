@@ -55,7 +55,16 @@ pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) 
         layout.offsetY(offset * (1 - input.history_reveal));
         pending.modal = host;
         pending.native_modal = layout.bounds;
-        try widgets.append(.{ .modal = .{ .history = .{ .layout = layout, .projection = input.projection, .reveal = input.history_reveal } } });
+        try widgets.append(.{
+            .modal = .{
+                .history = .{
+                    .layout = layout,
+                    .projection = input.projection,
+                    .reveal = input.history_reveal,
+                    .loading = input.history_loading,
+                },
+            },
+        });
         return;
     }
 

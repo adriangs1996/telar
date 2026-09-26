@@ -221,7 +221,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `gitstatus` | a working tree's branch and whether it has changes |
 | `localsocket` | same-user Unix sockets and length-prefixed framing |
 | `bytecodec` | bounds-checked little-endian encoding into caller buffers and decoding from borrowed bytes |
-| `urlscan` | classifying a URI by scheme and finding the URI under an offset in a line |
+| `urlscan` | classifying a URI by scheme, finding the URI or the local file path under an offset in a line, and the line and column a link points at |
 | `keyinput` | keys, characters, modifiers and mouse events as values, chord parsing, binding order, bounded bindings and physical-key leases |
 | `textraster` | text shaped and rasterized into RGBA with FreeType and HarfBuzz in a caller's font, and rounded fills |
 | `syntaxhl` | syntax roles, languages by file path, Tree-sitter captures as roles, and a bounded highlighting cache keyed by content |
@@ -231,7 +231,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `mdinline` | inline Markdown spans over borrowed text and bounded link destination decoding |
 | `cellcodec` | runs of cells with a packed header, styles written on change and colors sized by kind |
 | `agentfiles` | titles from Claude Code's JSONL transcript and Codex's thread database |
-| `editorremote` | reusing a terminal editor: identify it, reach its server, open a literal path |
+| `editorremote` | reusing a terminal editor: identify it, reach its server, open a literal path at a line; the argv that launches a new one there |
 | `vtgrid` | a ghostty-vt terminal as cells: render state onto a `cellgrid` buffer, damaged rows into cost-aware spans, incremental scrollback search |
 | `cmdcapture` | commands, directories, exit status and output tails read from a pane's terminal |
 | `jsonl` | bounded JSON-lines streams, in-place truncation of output fields, total value accessors |

@@ -7,12 +7,14 @@ const GenericPresentedState = @import("../../render/GenericPresentedState.zig").
 const HistoryModal = @import("HistoryModal.zig");
 const Notifications = @import("Notifications.zig");
 const ModalMotion = @import("ModalMotion.zig");
+const LoadingCue = @import("LoadingCue.zig");
 const OverlayComposition = @import("OverlayComposition.zig");
 const Overlays = @This();
 
 maps: GenericPresentedState(HitState) = .{},
 notifications: Notifications = .{},
 history_motion: ModalMotion = .{},
+history_loading: LoadingCue = .{},
 gesture: ?u8 = null,
 /// The native keymap, for the palette's bound-key column.
 router: ?*const router_module.Type = null,
@@ -37,6 +39,10 @@ pub fn compose(self: *Overlays, input: OverlayComposition, widgets: anytype) !vo
     modal_input.scale = self.scale;
     const history_generation = if (input.projection.prompt) |prompt| if (prompt.target() == .history) prompt.generation else null else null;
     modal_input.history_reveal = self.history_motion.sample(history_generation, input.canvas.animation);
+
+    const history = input.projection.history;
+    const replacing = history_generation != null and history.phase == .loading and history.has_page;
+    modal_input.history_loading = self.history_loading.sample(replacing, input.canvas.animation);
     try modal_widget.compose(modal_input, pending, widgets);
 }
 

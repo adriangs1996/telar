@@ -908,6 +908,58 @@ test "a changed event line advances the revision like a label and clears with it
     try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 400 + types.report_working_expiry_ms + 1)[0].last_event);
 }
 
+test "a continuing helper renews reported work past its expiry once per margin" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    _ = agent_status.observeProcess(model, .{ .identity = identity, .provider = .claude, .process_id = 42, .observed_at_ms = 100 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 200 });
+    const revision = model.agent_revision;
+
+    try std.testing.expect(!agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = 300 }));
+    try std.testing.expectEqual(revision, model.agent_revision);
+
+    const renewed_at: i64 = 200 + types.report_working_expiry_ms - 1;
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = renewed_at }));
+    try std.testing.expect(!agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = renewed_at + 1 }));
+
+    _ = agent_status.expire(model, 200 + types.report_working_expiry_ms + 1);
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+    var snapshot = agent_status.snapshot(&model.agents, &entries, 0);
+    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
+    try std.testing.expectEqual(core.AgentSource.lifecycle_report, snapshot[0].source);
+
+    _ = agent_status.expire(model, renewed_at + types.report_working_expiry_ms);
+    snapshot = agent_status.snapshot(&model.agents, &entries, 0);
+    try std.testing.expectEqual(core.AgentSource.foreground_process, snapshot[0].source);
+}
+
+test "a continuing helper cannot hide a prompt, revive finished work or register an agent" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    try std.testing.expect(!agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = 100 }));
+    try std.testing.expect(agent_status.projectedStatus(model, identity.key) == null);
+
+    _ = agent_status.observeProcess(model, .{ .identity = identity, .provider = .claude, .process_id = 42, .observed_at_ms = 100 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .blocked, .blocked_reason = .permission, .observed_at_ms = 200 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = 300 });
+    try std.testing.expectEqual(core.AgentStatus.blocked, agent_status.projectedStatus(model, identity.key).?);
+
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 400 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .ready, .observed_at_ms = 500 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = 600 });
+    try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
+
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 700 });
+    const expired_at: i64 = 700 + types.report_working_expiry_ms;
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = expired_at });
+    _ = agent_status.expire(model, expired_at);
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+    const snapshot = agent_status.snapshot(&model.agents, &entries, 0);
+    try std.testing.expectEqual(core.AgentSource.foreground_process, snapshot[0].source);
+}
+
 const TestReadyPrompt = struct {
     provider: core.AgentProvider,
     observed_at_ms: i64,

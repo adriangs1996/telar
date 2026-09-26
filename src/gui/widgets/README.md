@@ -256,6 +256,13 @@ edits, query results and toggling details do not restart it. Painting and input
 registration use the same shifted rectangles. Closing or finishing the entrance
 leaves no animation deadline.
 
+While a replacement page is pending, the previous rows stay as they were.
+`Overlays` retains one `LoadingCue`: only a wait longer than 150 ms dims the
+rows and runs the loading line, so a reply that lands within a few frames
+never flashes the panel on each keystroke. A new query while one is pending
+continues the same wait, and a reply ends it. Rows and submit controls stay
+disabled for the whole wait, visible or not.
+
 During scene preparation, `Canvas.animation` exposes a `FrameClock` with one
 monotonic timestamp and one earliest requested deadline. A sprite can choose
 `clock.step(interval_ns) % count`; a transition can use `clock.sample(transition)`.
