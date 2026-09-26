@@ -268,7 +268,7 @@ pub fn startPluginAction(client: *Client, requested: data.PluginAction, callback
             std.debug.assert(rolled_back != null);
         }
 
-        try client.to_workers.push(.{ .plugin = .{
+        try client.to_background.push(.{ .plugin = .{
             .execution_id = execution.id,
             .request = request,
         } });

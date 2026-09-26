@@ -122,8 +122,8 @@ pub fn update(self: *Client, message: Message) !?u8 {
 }
 ```
 
-`Client` has no other behavior than `init`, `deinit`, `update`, `flush` and
-`failJob`. Client procedures live in flow files under `src/client`: one that
+`Client` has no other behavior than `init`, `deinit`, `update`, `flush`,
+`failJob` and `failBackgroundJob`. Client procedures live in flow files under `src/client`: one that
 touches only the model takes `model: *ClientModel`; one that also reaches the
 transport, Lua, the clock or the job queue takes `client: *Client`.
 
@@ -148,12 +148,16 @@ terminal or window, renderer, output buffers, pacing. Each embeds one
 - Procedures push runtime messages into `model.to_runtime`; `flush` writes
   them once per event.
 - Procedures start workers by pushing a `client.Job` into
-  `client.to_workers`. The adapter starts each job off the event loop and
-  the job reports through its completion message. A job the adapter cannot
-  start finishes through `Client.failJob` as that same completion carrying
-  the error, so one handler releases what starting it reserved. The queue
-  lives in `Client`, not the model, because jobs carry transport and Lua
-  handles. A job names the row it completes by id and generation; the
+  `client.to_workers`, or a `client.BackgroundJob` into
+  `client.to_background`. A `Job` is interactive work of a few words (a
+  runtime read or write, a timer); a `BackgroundJob` carries its own copy of
+  a request, kilobytes, so it queues apart and a runtime read never copies
+  it. The adapter drains both queues until they are empty, starts each job
+  off the event loop and the job reports through its completion message. A
+  job the adapter cannot start finishes through `Client.failJob` (or
+  `failBackgroundJob`) as that same completion carrying the error, so one
+  handler releases what starting it reserved. The queues live in `Client`,
+  not the model, because jobs carry transport and Lua handles. A job names the row it completes by id and generation; the
   pointers it carries (the transport, a timer's scheduler, the loaded
   configuration) belong to the client, whose adapter cancels every job before
   freeing it.

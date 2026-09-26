@@ -550,7 +550,8 @@ test "context folder clicks complete without submitting and reject stale listing
     const gui = session.gui;
     gui.job_hook = .{
         .context = session,
-        .start = ignorePathCompletion,
+        .start = Session.startJob,
+        .start_background = ignorePathCompletion,
     };
     gui.app.model.name_prompt.begin(.create_workspace);
     _ = gui.app.model.name_prompt.apply(.tab);
@@ -574,12 +575,12 @@ test "context folder clicks complete without submitting and reject stale listing
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
 
-fn ignorePathCompletion(context: *anyopaque, job: client.Job) !void {
+fn ignorePathCompletion(context: *anyopaque, job: client.BackgroundJob) !void {
     if (job == .path_completion) {
         return;
     }
 
-    try Session.startJob(context, job);
+    try Session.startBackgroundJob(context, job);
 }
 
 test "context controls reject retired generations and expose native press actions" {

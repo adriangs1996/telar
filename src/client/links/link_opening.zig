@@ -83,7 +83,7 @@ pub fn completeLinkOpening(client: *Client, result: anyerror!void) !void {
     }
 
     const next = client.model.link_opening.complete() orelse return;
-    client.to_workers.push(.{ .link = next }) catch |err| {
+    client.to_background.push(.{ .link = next }) catch |err| {
         client.model.link_opening.schedulingFailed();
         try reportLinkFailure(client, err);
     };
@@ -136,7 +136,7 @@ fn openLinkFile(client: *Client, path: data.FilePath) !void {
 fn openExternalLink(client: *Client, target: data.LinkTarget) !void {
     switch (client.model.link_opening.request(target)) {
         .queued => {},
-        .start => |selected| client.to_workers.push(.{ .link = selected }) catch |err| {
+        .start => |selected| client.to_background.push(.{ .link = selected }) catch |err| {
             client.model.link_opening.schedulingFailed();
 
             return err;

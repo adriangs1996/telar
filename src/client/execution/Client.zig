@@ -22,6 +22,7 @@ const HostChrome = @import("../presentation/HostChrome.zig");
 const AttachmentShelf = @import("../attachments/AttachmentShelf.zig");
 const PresentationLifecycle = @import("../presentation/LifecycleState.zig");
 const Job = @import("Job.zig").Job;
+const BackgroundJob = @import("BackgroundJob.zig").BackgroundJob;
 const job_runner = @import("job_runner.zig");
 const Message = @import("Message.zig").Message;
 const HostInputSource = @import("../input/HostInputSource.zig");
@@ -57,10 +58,16 @@ trust_store: ?*core.TrustStore,
 reload: ConfigReloadState,
 /// Transient: the alternate flag of the list submission being finished.
 list_submission_alternate: bool = false,
-/// Jobs procedures started during the current event. The adapter drains it
-/// after every event, runs each job off the event loop and delivers its
-/// completion message; a job it cannot start finishes through `failJob`.
+/// Interactive jobs procedures started during the current event. The
+/// adapter drains it after every event, runs each job off the event loop and
+/// delivers its completion message; a job it cannot start finishes through
+/// `failJob`.
 to_workers: core.GenericRing(Job, max_queued_jobs) = .{},
+/// Background jobs procedures started during the current event, drained
+/// like `to_workers`; one the adapter cannot start finishes through
+/// `failBackgroundJob`. Each slot holds a request copy of kilobytes, so the
+/// interactive queue stays a few cache lines.
+to_background: core.GenericRing(BackgroundJob, max_queued_jobs) = .{},
 /// Host ports, bound by the adapter before the first event.
 graphics: GraphicsRetention = undefined,
 chrome: HostChrome = undefined,
@@ -230,10 +237,20 @@ pub fn update(self: *Client, message: Message) !?u8 {
 /// with `err`, so its completion releases whatever starting it reserved.
 ///
 /// ```zig
-/// inbox.start(.client, .{ job_runner.run, .{ io, gpa, job } }) catch |err| try client.failJob(job, err);
+/// inbox.start(.client, .{ job_runner.run, .{ io, job } }) catch |err| try client.failJob(job, err);
 /// ```
 pub fn failJob(self: *Client, job: Job, err: anyerror) !void {
     const status = try self.update(job_runner.failed(job, err));
+    std.debug.assert(status == null);
+}
+
+/// Finishes a background job the adapter could not start, as `failJob`.
+///
+/// ```zig
+/// inbox.start(.client, .{ job_runner.runBackground, .{ io, gpa, job } }) catch |err| try client.failBackgroundJob(job, err);
+/// ```
+pub fn failBackgroundJob(self: *Client, job: BackgroundJob, err: anyerror) !void {
+    const status = try self.update(job_runner.failedBackground(job, err));
     std.debug.assert(status == null);
 }
 

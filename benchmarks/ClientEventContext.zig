@@ -187,6 +187,8 @@ fn drainJobs(self: *ClientEventContext) void {
     while (self.app.to_workers.pop()) |job| {
         self.startJob(job);
     }
+
+    std.debug.assert(self.app.to_background.count == 0);
 }
 
 /// Stands in for the adapter's inbox, which copies the job into its task.

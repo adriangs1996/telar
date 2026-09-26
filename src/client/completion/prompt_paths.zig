@@ -123,7 +123,7 @@ fn startPathCompletion(client: *Client) !void {
     }
 
     const id = completion_state.reserve();
-    client.to_workers.push(.{ .path_completion = .init(id, completion_state.inflightSlice()) }) catch |err| {
+    client.to_background.push(.{ .path_completion = .init(id, completion_state.inflightSlice()) }) catch |err| {
         completion_state.pending = .none;
         return err;
     };

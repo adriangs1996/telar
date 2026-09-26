@@ -172,6 +172,10 @@ fn startJobs(self: *Fixture) !void {
             else => return error.HeadlessJobUnsupported,
         }
     }
+
+    if (self.app.to_background.count != 0) {
+        return error.HeadlessJobUnsupported;
+    }
 }
 
 fn unsupportedGraphics(_: *anyopaque, _: model_data.PaneGraphicsCommand) !void {

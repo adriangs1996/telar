@@ -424,7 +424,7 @@ fn startNextCommand(client: *Client) !void {
 fn startCommand(client: *Client, start: CommandStart) !void {
     const state = &client.model.bar_updates;
     const execution = try state.reserveCommand(start.generation, start.target);
-    client.to_workers.push(.{ .bar_command = .{ .execution_id = execution.id, .command = start.command } }) catch |err| {
+    client.to_background.push(.{ .bar_command = .{ .execution_id = execution.id, .command = start.command } }) catch |err| {
         state.command_execution = null;
         return err;
     };
