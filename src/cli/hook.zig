@@ -14,6 +14,7 @@ const Report = @import("Report.zig");
 const ClaudeHookInput = @import("ClaudeHookInput.zig");
 const CodexHookInput = @import("CodexHookInput.zig");
 const CursorHookInput = @import("CursorHookInput.zig");
+const OpenCodeHookInput = @import("OpenCodeHookInput.zig");
 const HookOptions = @import("arguments/HookOptions.zig");
 const control = @import("control.zig");
 const Target = @import("Target.zig");
@@ -38,10 +39,12 @@ fn mapToolCommand(provider: core.AgentProvider, input: ToolHookInput) ?CommandRe
     }
 
     const phase: core.AgentCommandPhase = if (std.mem.eql(u8, input.event, "PreToolUse") or
-        std.mem.eql(u8, input.event, "tool_execution_start"))
+        std.mem.eql(u8, input.event, "tool_execution_start") or
+        std.mem.eql(u8, input.event, "tool.execute.before"))
         .started
     else if (std.mem.eql(u8, input.event, "PostToolUse") or
-        std.mem.eql(u8, input.event, "tool_execution_end"))
+        std.mem.eql(u8, input.event, "tool_execution_end") or
+        std.mem.eql(u8, input.event, "tool.execute.after"))
         .finished
     else
         return null;
@@ -123,6 +126,119 @@ pub fn mapPiTitle(buffer: *[core.max_agent_session_title_bytes]u8, input: PiHook
         return null;
 
     return core.truncateSessionTitle(buffer, name);
+}
+
+/// Maps one event of the OpenCode plugin to a report. The plugin keeps the
+/// pane state OpenCode implies: a busy root session works, an open
+/// permission or question blocks, and an idle one is ready, including after
+/// an interrupt. Prompts and tool calls name themselves in `buffer`; the
+/// last plugin instance to be disposed reports the exit.
+///
+/// ```zig
+/// const report = mapOpenCodeHook(input, &buffer) orelse return;
+/// ```
+pub fn mapOpenCodeHook(input: OpenCodeHookInput, buffer: *hook_event.Buffer) ?Report {
+    const event = input.event;
+    const session = if (core.validateSessionReference(input.session_id)) |_| input.session_id else |_| "";
+
+    if (std.mem.eql(u8, event, "permission.asked")) {
+        return .{
+            .state = .blocked,
+            .blocked_reason = .permission,
+            .event = hook_event.toolCall(buffer, input.tool_name, input.tool_input) orelse "",
+            .session = session,
+        };
+    }
+
+    if (std.mem.eql(u8, event, "question.asked")) {
+        return .{
+            .state = .blocked,
+            .blocked_reason = .question,
+            .event = hook_event.question(buffer, input.tool_input) orelse "",
+            .session = session,
+        };
+    }
+
+    if (std.mem.eql(u8, event, "tool.execute.before")) {
+        return .{
+            .state = .working,
+            .event = hook_event.toolCall(buffer, input.tool_name, input.tool_input) orelse "",
+            .session = session,
+        };
+    }
+
+    if (std.mem.eql(u8, event, "load") or
+        std.mem.eql(u8, event, "chat.message") or
+        std.mem.eql(u8, event, "session.status") or
+        std.mem.eql(u8, event, "permission.replied") or
+        std.mem.eql(u8, event, "question.replied") or
+        std.mem.eql(u8, event, "question.rejected") or
+        std.mem.eql(u8, event, "state_snapshot"))
+    {
+        if (input.blocked != .none) {
+            return .{
+                .state = .blocked,
+                .blocked_reason = input.blocked,
+                .session = session,
+            };
+        }
+
+        return .{
+            .state = if (input.busy) .working else .ready,
+            .session = session,
+        };
+    }
+
+    if (std.mem.eql(u8, event, "dispose")) {
+        return .{
+            .state = .exited,
+        };
+    }
+
+    return null;
+}
+
+/// Maps the root session's title to a title report. OpenCode names every
+/// session `New session - <ISO time>` until the user renames it or its
+/// title agent names it, so that default clears the title instead.
+///
+/// ```zig
+/// const title = mapOpenCodeTitle(&buffer, input) orelse return;
+/// ```
+pub fn mapOpenCodeTitle(buffer: *[core.max_agent_session_title_bytes]u8, input: OpenCodeHookInput) ?[]const u8 {
+    if (!std.mem.eql(u8, input.event, "session.updated")) {
+        return null;
+    }
+
+    const title = input.title orelse return null;
+    if (isOpenCodeDefaultTitle(title)) {
+        return "";
+    }
+
+    return core.truncateSessionTitle(buffer, title);
+}
+
+/// OpenCode's `isDefaultTitle`: a prefix and the creation time as
+/// `toISOString` writes it, where `0` stands for any digit.
+fn isOpenCodeDefaultTitle(title: []const u8) bool {
+    const time_shape = "0000-00-00T00:00:00.000Z";
+
+    for ([_][]const u8{ "New session - ", "Child session - " }) |prefix| {
+        if (title.len != prefix.len + time_shape.len or !std.mem.startsWith(u8, title, prefix)) {
+            continue;
+        }
+
+        for (title[prefix.len..], time_shape) |byte, shape| {
+            const matches = if (shape == '0') std.ascii.isDigit(byte) else byte == shape;
+            if (!matches) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    return false;
 }
 
 /// Maps one Claude Code hook event to a report. A subagent's tool calls
@@ -483,6 +599,26 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
                 .lifecycle = mapPiHook(parsed.value),
                 .command = command,
                 .title = mapPiTitle(&title_buffer, parsed.value),
+            });
+        },
+        .opencode => {
+            const parsed = std.json.parseFromSlice(OpenCodeHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
+            defer parsed.deinit();
+            const command = mapToolCommand(.opencode, .{
+                .event = parsed.value.event,
+                .tool_name = parsed.value.tool_name,
+                .tool_call_id = parsed.value.tool_call_id,
+                .tool_input = parsed.value.tool_input,
+                .cwd = parsed.value.cwd,
+                .session = parsed.value.session_id,
+                .exit_code = parsed.value.exit_code,
+            });
+            var title_buffer: [core.max_agent_session_title_bytes]u8 = undefined;
+            var event_buffer: hook_event.Buffer = undefined;
+            sendReports(init, target, .{
+                .lifecycle = mapOpenCodeHook(parsed.value, &event_buffer),
+                .command = command,
+                .title = mapOpenCodeTitle(&title_buffer, parsed.value),
             });
         },
         .cursor => {
@@ -962,4 +1098,133 @@ test "Cursor hook JSON maps a Shell call to a working report and a command row w
     }).?;
     try std.testing.expectEqual(core.AgentCommandPhase.finished, finished.phase);
     try std.testing.expectEqual(@as(?i32, 0), finished.exit_code);
+}
+
+test "OpenCode plugin events map to reports and an interrupt settles the turn" {
+    var buffer: hook_event.Buffer = undefined;
+    const session = "ses_f212d4cc3ffeR3t3CA08EwN5Ap";
+
+    const prompt = mapOpenCodeHook(.{ .event = "chat.message", .session_id = session, .busy = true }, &buffer).?;
+    try std.testing.expectEqual(core.AgentReportState.working, prompt.state);
+    try std.testing.expectEqualStrings(session, prompt.session);
+    try std.testing.expectEqual(core.AgentReportState.working, mapOpenCodeHook(.{ .event = "session.status", .busy = true }, &buffer).?.state);
+    try std.testing.expectEqual(core.AgentReportState.ready, mapOpenCodeHook(.{ .event = "session.status" }, &buffer).?.state);
+    try std.testing.expectEqual(core.AgentReportState.working, mapOpenCodeHook(.{ .event = "state_snapshot", .busy = true }, &buffer).?.state);
+    try std.testing.expectEqual(core.AgentReportState.working, mapOpenCodeHook(.{ .event = "permission.replied", .busy = true }, &buffer).?.state);
+    try std.testing.expectEqual(core.AgentReportState.exited, mapOpenCodeHook(.{ .event = "dispose", .session_id = session }, &buffer).?.state);
+    try std.testing.expectEqual(core.AgentReportState.ready, mapOpenCodeHook(.{ .event = "load" }, &buffer).?.state);
+
+    // A second prompt still open keeps the pane blocked after the first reply.
+    const still = mapOpenCodeHook(.{ .event = "question.replied", .busy = true, .blocked = .permission }, &buffer).?;
+    try std.testing.expectEqual(core.AgentReportState.blocked, still.state);
+    try std.testing.expectEqual(core.AgentBlockedReason.permission, still.blocked_reason);
+
+    try std.testing.expect(mapOpenCodeHook(.{ .event = "tool.execute.after", .busy = true }, &buffer) == null);
+    try std.testing.expect(mapOpenCodeHook(.{ .event = "session.updated", .title = "Fix proxy" }, &buffer) == null);
+    try std.testing.expect(mapOpenCodeHook(.{ .event = "session.error" }, &buffer) == null);
+    try std.testing.expectEqualStrings("", mapOpenCodeHook(.{ .event = "chat.message", .session_id = "../etc", .busy = true }, &buffer).?.session);
+}
+
+test "OpenCode permission and question prompts block with their request as the event line" {
+    // `permission.asked` and `question.asked` as OpenCode 1.18.32 published
+    // them, reshaped by the plugin into its payload.
+    const permission_source =
+        \\{"event":"permission.asked","session_id":"ses_f212d4cc3ffeR3t3CA08EwN5Ap","busy":true,"blocked":"permission",
+        \\"tool_name":"bash","tool_input":{"command":"ls -la"}}
+    ;
+    const permission = try std.json.parseFromSlice(OpenCodeHookInput, std.testing.allocator, permission_source, .{ .ignore_unknown_fields = true });
+    defer permission.deinit();
+    var buffer: hook_event.Buffer = undefined;
+    const asked = mapOpenCodeHook(permission.value, &buffer).?;
+    try std.testing.expectEqual(core.AgentReportState.blocked, asked.state);
+    try std.testing.expectEqual(core.AgentBlockedReason.permission, asked.blocked_reason);
+    try std.testing.expectEqualStrings("» bash ls -la", asked.event);
+
+    const question_source =
+        \\{"event":"question.asked","session_id":"ses_f212d4cc3ffeR3t3CA08EwN5Ap","busy":true,"blocked":"question",
+        \\"tool_input":{"questions":[{"question":"Which database?","header":"Database","options":[{"label":"SQLite","description":"Local"}]}]}}
+    ;
+    const question = try std.json.parseFromSlice(OpenCodeHookInput, std.testing.allocator, question_source, .{ .ignore_unknown_fields = true });
+    defer question.deinit();
+    const asking = mapOpenCodeHook(question.value, &buffer).?;
+    try std.testing.expectEqual(core.AgentBlockedReason.question, asking.blocked_reason);
+    try std.testing.expectEqualStrings("Which database?", asking.event);
+
+    try std.testing.expectError(error.InvalidEnumTag, std.json.parseFromSlice(OpenCodeHookInput, std.testing.allocator, "{\"event\":\"state_snapshot\",\"blocked\":\"approval\"}", .{ .ignore_unknown_fields = true }));
+}
+
+test "OpenCode session titles report renames and clear OpenCode's default name" {
+    var buffer: [core.max_agent_session_title_bytes]u8 = undefined;
+    try std.testing.expectEqualStrings("Fix proxy lifecycle", mapOpenCodeTitle(&buffer, .{ .event = "session.updated", .title = "Fix proxy lifecycle" }).?);
+    try std.testing.expectEqualStrings("", mapOpenCodeTitle(&buffer, .{ .event = "session.updated", .title = "New session - 2026-09-26T17:45:45.532Z" }).?);
+    try std.testing.expectEqualStrings("", mapOpenCodeTitle(&buffer, .{ .event = "session.updated", .title = "Child session - 2026-09-26T17:45:45.532Z" }).?);
+    try std.testing.expectEqualStrings("New session - today", mapOpenCodeTitle(&buffer, .{ .event = "session.updated", .title = "New session - today" }).?);
+    try std.testing.expectEqualStrings("New session - 2026-09-26T17:45:45.532", mapOpenCodeTitle(&buffer, .{ .event = "session.updated", .title = "New session - 2026-09-26T17:45:45.532" }).?);
+    try std.testing.expect(mapOpenCodeTitle(&buffer, .{ .event = "session.updated" }) == null);
+    try std.testing.expect(mapOpenCodeTitle(&buffer, .{ .event = "chat.message", .title = "Fix proxy" }) == null);
+
+    const cut = mapOpenCodeTitle(&buffer, .{ .event = "session.updated", .title = "é" ** 60 }).?;
+    try std.testing.expectEqual(@as(usize, 96), cut.len);
+    try std.testing.expect(std.unicode.utf8ValidateSlice(cut));
+}
+
+test "OpenCode bash calls open and close a command row with the exit status" {
+    // `tool.execute.before` and `tool.execute.after` as OpenCode 1.18.32 ran
+    // them for `echo hello-telar && false`, reshaped by the plugin.
+    const before_source =
+        \\{"event":"tool.execute.before","session_id":"ses_f212e24b9ffeeaehDu3OFjSrh8","tool_name":"bash",
+        \\"tool_call_id":"call-b28da335-0761-4e54-9172-d71eac55aad4","tool_input":{"command":"echo hello-telar && false"},"cwd":"/work/proj"}
+    ;
+    const before = try std.json.parseFromSlice(OpenCodeHookInput, std.testing.allocator, before_source, .{ .ignore_unknown_fields = true });
+    defer before.deinit();
+    var buffer: hook_event.Buffer = undefined;
+    const working = mapOpenCodeHook(before.value, &buffer).?;
+    try std.testing.expectEqual(core.AgentReportState.working, working.state);
+    try std.testing.expectEqualStrings("» bash echo hello-telar && false", working.event);
+
+    const started = mapToolCommand(.opencode, .{
+        .event = before.value.event,
+        .tool_name = before.value.tool_name,
+        .tool_call_id = before.value.tool_call_id,
+        .tool_input = before.value.tool_input,
+        .cwd = before.value.cwd,
+        .session = before.value.session_id,
+        .exit_code = before.value.exit_code,
+    }).?;
+    try std.testing.expectEqual(core.AgentCommandPhase.started, started.phase);
+    try std.testing.expectEqualStrings("opencode", started.provider);
+    try std.testing.expectEqualStrings("echo hello-telar && false", started.command);
+    try std.testing.expectEqualStrings("/work/proj", started.cwd);
+    try std.testing.expectEqualStrings("ses_f212e24b9ffeeaehDu3OFjSrh8", started.session);
+
+    const after_source =
+        \\{"event":"tool.execute.after","session_id":"ses_f212e24b9ffeeaehDu3OFjSrh8","tool_name":"bash",
+        \\"tool_call_id":"call-b28da335-0761-4e54-9172-d71eac55aad4","tool_input":{"command":"echo hello-telar && false"},"cwd":"/work/proj","exit_code":1}
+    ;
+    const after = try std.json.parseFromSlice(OpenCodeHookInput, std.testing.allocator, after_source, .{ .ignore_unknown_fields = true });
+    defer after.deinit();
+    const finished = mapToolCommand(.opencode, .{
+        .event = after.value.event,
+        .tool_name = after.value.tool_name,
+        .tool_call_id = after.value.tool_call_id,
+        .tool_input = after.value.tool_input,
+        .cwd = after.value.cwd,
+        .session = after.value.session_id,
+        .exit_code = after.value.exit_code,
+    }).?;
+    try std.testing.expectEqual(core.AgentCommandPhase.finished, finished.phase);
+    try std.testing.expectEqual(@as(?i32, 1), finished.exit_code);
+
+    const read = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, "{\"filePath\":\"/work/proj/README.md\"}", .{});
+    defer read.deinit();
+    try std.testing.expect(mapToolCommand(.opencode, .{
+        .event = "tool.execute.before",
+        .tool_name = "read",
+        .tool_call_id = "call-1",
+        .tool_input = read.value,
+        .cwd = "/work/proj",
+        .session = "ses_f212e24b9ffeeaehDu3OFjSrh8",
+        .exit_code = null,
+    }) == null);
+    try std.testing.expectEqualStrings("» read /work/proj/README.md", mapOpenCodeHook(.{ .event = "tool.execute.before", .tool_name = "read", .tool_input = read.value }, &buffer).?.event);
 }

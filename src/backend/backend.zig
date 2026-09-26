@@ -38,6 +38,8 @@ test {
     _ = @import("agent/providers/claude.zig");
     _ = @import("agent/providers/codex.zig");
     _ = @import("agent/providers/cursor.zig");
+    _ = @import("agent/providers/opencode.zig");
+    _ = @import("agent/providers/SessionFormat.zig");
     _ = @import("agent/providers/pi.zig");
     _ = @import("agent/providers/providers.zig");
     _ = @import("agent/repository_support.zig");

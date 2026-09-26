@@ -22,6 +22,7 @@ pub const SidebarProvider = enum {
     codex,
     pi,
     cursor,
+    opencode,
 
     /// ```zig
     /// const column = SidebarProvider.fromAgent(mark.provider) orelse continue;
@@ -32,6 +33,7 @@ pub const SidebarProvider = enum {
             .codex => .codex,
             .pi => .pi,
             .cursor => .cursor,
+            .opencode => .opencode,
             else => null,
         };
     }
@@ -47,6 +49,7 @@ pub const SidebarProvider = enum {
             .codex => .codex,
             .pi => .pi,
             .cursor => .cursor,
+            .opencode => .opencode,
         };
     }
 };
@@ -136,7 +139,7 @@ fn providerAtlasSourceCount() u32 {
     return KittySidebarRenderer.provider_count;
 }
 
-test "sidebar theme changes recolor OpenAI and Cursor without reallocating or changing other providers" {
+test "sidebar theme changes recolor OpenAI, Cursor and OpenCode without reallocating or changing other providers" {
     var renderer = KittySidebarRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     const providers = [_]SidebarProviderPlacement{.{ .area = .{ .w = 2, .h = 2 }, .provider = .codex }};
@@ -202,6 +205,10 @@ test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
             .area = .{ .x = 3, .y = 11, .w = 2, .h = 2 },
             .provider = .cursor,
         },
+        .{
+            .area = .{ .x = 3, .y = 13, .w = 2, .h = 2 },
+            .provider = .opencode,
+        },
     };
     try renderer.prepare(.{ .area = area, .focused_card = null, .provider_marks = &providers }, .{ .width = 10, .height = 20 });
     try std.testing.expectEqual(@as(u32, 60), renderer.provider_slot_width);
@@ -213,6 +220,7 @@ test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
     try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "x=60,y=0,w=60,h=120,c=2,r=2") != null);
     try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "x=120,y=0,w=60,h=120,c=2,r=2") != null);
     try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "x=180,y=0,w=60,h=120,c=2,r=2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "x=240,y=0,w=60,h=120,c=2,r=2") != null);
     try std.testing.expect(renderer.provider_emitted);
 
     try renderer.prepare(.{ .area = area, .focused_card = null, .provider_marks = &providers }, .{ .width = 10, .height = 20 });

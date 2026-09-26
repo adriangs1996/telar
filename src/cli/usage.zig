@@ -86,11 +86,11 @@ pub const text =
     \\       telar workspace get <id|--current> [--json] [--socket PATH]
     \\       telar workspace rename <id|--current> NAME [--json] [--socket PATH]
     \\       telar api schema [--json]
-    \\       telar integration install|uninstall|status claude|codex|pi|cursor [--settings PATH]
+    \\       telar integration install|uninstall|status claude|codex|pi|cursor|opencode [--settings PATH]
     \\       telar proxy trust install|uninstall|status [--ca-dir PATH] [--linux BACKEND]
-    \\       telar hook claude|codex|pi|cursor
+    \\       telar hook claude|codex|pi|cursor|opencode
     \\       telar review list|show|comment|delete|submit|reviewed [pane|--current] [options]
-    \\       telar review feedback|ack --provider claude|codex|pi|cursor --session ID [options]
+    \\       telar review feedback|ack --provider claude|codex|pi|cursor|opencode --session ID [options]
     \\       telar --skill
     \\
     \\Run an interactive shell inside telar's multiplexer UI.
@@ -121,7 +121,7 @@ pub const text =
     \\  pane focus       Move from Neovim into an adjacent Telar pane
     \\  workspace create Add a git worktree and open a workspace on it
     \\  api schema       Print the wire contract of this binary
-    \\  integration      Register telar's lifecycle reports with an agent (claude, codex and cursor hooks, pi extension)
+    \\  integration      Register telar's lifecycle reports with an agent (claude, codex and cursor hooks, pi extension, opencode plugin)
     \\  hook             Entry point that agent hooks run (reads JSON on stdin)
     \\  review           Inspect captured editions and submit line-range feedback
     \\  proxy trust      Install, remove, or inspect Telar's short-lived system CA

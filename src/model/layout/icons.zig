@@ -43,6 +43,7 @@ pub const Icon = enum {
     provider_codex,
     provider_pi,
     provider_cursor,
+    provider_opencode,
     app_terminal,
     app_editor,
     app_git,
@@ -73,6 +74,7 @@ pub const Icon = enum {
             .codex => .provider_codex,
             .pi => .provider_pi,
             .cursor => .provider_cursor,
+            .opencode => .provider_opencode,
             else => null,
         };
     }
@@ -122,6 +124,8 @@ pub const Icon = enum {
             .provider_codex => "\u{25c6}",
             .provider_pi => "\u{03c0}",
             .provider_cursor => "\u{2b22}",
+            // The mark OpenCode's own TUI draws beside the agent.
+            .provider_opencode => "\u{25a3}",
             .app_terminal => ">",
             .app_editor => "\u{270e}",
             .app_git => "\u{2387}",
@@ -157,6 +161,7 @@ pub const Icon = enum {
             .provider_codex => "\u{ea85}", // cod-terminal
             .provider_pi => "\u{f03ff}", // md-pi
             .provider_cursor => "\u{f02d8}", // md-hexagon
+            .provider_opencode => "\u{f0763}", // md-square-outline
             .app_terminal => "\u{ea85}", // cod-terminal
             .app_editor => "\u{e62b}", // custom-vim
             .app_git => "\u{e702}", // dev-git
@@ -195,6 +200,7 @@ pub const Icon = enum {
             .provider_codex => "X",
             .provider_pi => "P",
             .provider_cursor => "C",
+            .provider_opencode => "O",
             .app_terminal => ">",
             .app_editor => "E",
             .app_git => "G",
@@ -215,14 +221,15 @@ pub const Icon = enum {
 };
 
 /// Whether a built-in agent's mark is a white mask drawn in the theme's text
-/// color, as OpenAI's and Cursor's are, rather than in its own colors.
+/// color, as OpenAI's, Cursor's and OpenCode's are, rather than in its own
+/// colors.
 ///
 /// ```zig
 /// const tint = if (icons.providerMarkFollowsTheme(provider)) palette.text else .default;
 /// ```
 pub fn providerMarkFollowsTheme(provider: core.AgentProvider) bool {
     return switch (provider) {
-        .codex, .cursor => true,
+        .codex, .cursor, .opencode => true,
         else => false,
     };
 }
@@ -237,6 +244,8 @@ test "foreground application icons accept runtime display names and executable a
         .{ "pi", Icon.provider_pi },
         .{ "Cursor Agent", Icon.provider_cursor },
         .{ "cursor-agent", Icon.provider_cursor },
+        .{ "OpenCode", Icon.provider_opencode },
+        .{ "opencode", Icon.provider_opencode },
         .{ "nvim", Icon.app_editor },
         .{ "git", Icon.app_git },
         .{ "zsh", Icon.app_terminal },

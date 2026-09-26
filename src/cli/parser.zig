@@ -572,6 +572,11 @@ test "CLI parses hook and integration commands" {
     const cursor_install = [_][*:0]const u8{ "telar", "integration", "install", "cursor" };
     try std.testing.expectEqual(values_module.HookAgent.cursor, (try Cli.parse(&cursor_install, .empty)).integration.agent);
 
+    const opencode_hook = [_][*:0]const u8{ "telar", "hook", "opencode" };
+    try std.testing.expectEqual(values_module.HookAgent.opencode, (try Cli.parse(&opencode_hook, .empty)).hook.agent);
+    const opencode_install = [_][*:0]const u8{ "telar", "integration", "install", "opencode" };
+    try std.testing.expectEqual(values_module.HookAgent.opencode, (try Cli.parse(&opencode_install, .empty)).integration.agent);
+
     const unknown = [_][*:0]const u8{ "telar", "integration", "install", "gemini" };
     try std.testing.expectError(error.UnknownHookAgent, Cli.parse(&unknown, .empty));
 }
