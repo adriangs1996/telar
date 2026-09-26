@@ -239,12 +239,13 @@ cannot change which list receives a pointer event.
 
 A collapsed sidebar keeps a workspace rail (`widgets/WorkspaceRail.zig`):
 a band of `SidebarBand.logical_rail` (52) logical px with the same 8 px gap,
-running from under navigation to the status bar. One 36 px rounded square
-per project in runtime order holds the favicon or, without one, the bold
-initial of the project's name (`WorkspaceMark`), so projects without favicons
-still differ; the rail shows no numbers. Idle squares are a 5 % `text` tint,
-hover draws `surface0` and the selected project `surface1` with a 3 px accent
-pill whose rounded end shows at the rail's edge. Agent attention is a dot in
+running from under navigation to the status bar. One 36 px control per
+project in runtime order, 10 px apart below a 12 px inset, holds the favicon
+or, without one, a 20 px tile tinted with a hue the project's name picks from
+the palette's accents and holding its bold initial (`WorkspaceMark`), so
+projects without favicons still differ; the rail shows no numbers. Idle
+controls have no surface; hover draws `surface0` and the selected project
+`surface1` with a 3 px accent pill whose rounded end shows at the rail's edge. Agent attention is a dot in
 the top-right corner inside a ring of the rail's background. When the rail is too short for every project, the window
 centred on the selection keeps its marks and `+N` counters above and below
 select the nearest hidden project and keep the attention of the ones they

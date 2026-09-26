@@ -1,7 +1,7 @@
-//! The collapsed sidebar: one mark per workspace in runtime order, each a
-//! quiet rounded square holding its favicon or initial and its attention dot.
-//! Hover brightens the square; the selected one is filled and carries an
-//! accent pill on the rail's edge. Names wait in `RailTooltip`. Overflow
+//! The collapsed sidebar: one mark per workspace in runtime order, spaced so
+//! each breathes: its favicon or initial tile and its attention dot, with no
+//! surface until hover. The selected one is filled and carries an accent pill
+//! on the rail's edge. Names wait in `RailTooltip`. Overflow
 //! counters select the nearest hidden workspace and keep the attention of the
 //! ones they hide.
 const cellgrid = @import("cellgrid");
@@ -19,10 +19,9 @@ const WorkspaceRail = @This();
 /// Logical side of one workspace mark's control.
 pub const button: f32 = 36;
 /// Logical gap between two workspace controls.
-pub const button_gap: f32 = 6;
-const inset: f32 = 8;
+pub const button_gap: f32 = 10;
+const inset: f32 = 12;
 const radius: f32 = 10;
-const idle_alpha: f32 = 0.05;
 const mark_side: f32 = 20;
 const accent_width: f32 = 3;
 const accent_height: f32 = 20;
@@ -106,8 +105,6 @@ fn drawMark(self: WorkspaceRail, canvas: *Canvas, bounds: Rect, index: usize) !v
     const hovered = context.isHovered(.{ .intent = .{ .select_workspace = id } });
     if (selected or hovered) {
         try canvas.fillRoundedAt(bounds, .{ .radius = chrome.px(radius), .color = if (selected) palette.surface1 else palette.surface0 });
-    } else {
-        try canvas.fillRoundedAt(bounds, .{ .radius = chrome.px(radius), .color = palette.text, .alpha = idle_alpha });
     }
 
     if (selected) {

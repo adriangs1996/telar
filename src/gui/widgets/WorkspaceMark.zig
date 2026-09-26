@@ -1,9 +1,11 @@
-//! A workspace's mark in navigation: its landed favicon, else the initial of
-//! its name, else the folder glyph, in the caller's ink. The top-bar
-//! indicators and the rail draw the same mark, so a workspace looks alike
-//! wherever it is picked and two workspaces without favicons still differ.
+//! A workspace's mark in navigation: its landed favicon, else a tile tinted
+//! with a hue its name picks from the palette and holding its initial, else
+//! the folder glyph in the caller's ink. The top-bar indicators and the rail
+//! draw the same mark, so a workspace looks alike wherever it is picked and
+//! two workspaces without favicons still differ.
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
+const data = @import("model");
 const std = @import("std");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
@@ -16,6 +18,11 @@ const WorkspaceMark = @This();
 
 /// Opacity of a favicon whose workspace is neither selected nor hovered.
 pub const muted_alpha: f32 = 0.7;
+
+const tile_radius: f32 = 5;
+const tile_alpha: f32 = 0.22;
+const tile_emphasized_alpha: f32 = 0.3;
+const letter_muted_alpha: f32 = 0.8;
 
 context: *const Context,
 workspace: core.WorkspaceId,
@@ -39,7 +46,13 @@ pub fn draw(self: WorkspaceMark, canvas: *Canvas) !void {
 
     var storage: [4]u8 = undefined;
     if (initial(&storage, self.name)) |letter| {
-        const label: Label = .{ .text = letter, .color = self.ink, .bold = true, .face = .sans, .size = self.size };
+        const hue = tileHue(canvas.theme.palette, self.name);
+        try canvas.fillRoundedAt(self.bounds, .{
+            .radius = canvas.chrome.px(tile_radius),
+            .color = hue,
+            .alpha = if (self.emphasized) tile_emphasized_alpha else tile_alpha,
+        });
+        const label: Label = .{ .text = letter, .color = hue, .alpha = if (self.emphasized) 1 else letter_muted_alpha, .bold = true, .face = .sans, .size = self.size };
         const width = @min(self.bounds.width, try canvas.measure(label));
         _ = try canvas.textAt(.{ .x = self.bounds.x + (self.bounds.width - width) / 2, .y = self.bounds.y, .width = width, .height = self.bounds.height }, label);
         return;
@@ -51,6 +64,13 @@ pub fn draw(self: WorkspaceMark, canvas: *Canvas) !void {
         .face = .sans,
         .size = self.size,
     });
+}
+
+// A hue from the palette's accents chosen by the name alone, so a workspace
+// keeps its colour across sessions and themes keep their own tones.
+fn tileHue(palette: data.Palette, name: []const u8) cellgrid.Color {
+    const hues = [_]cellgrid.Color{ palette.red, palette.peach, palette.yellow, palette.green, palette.teal, palette.blue, palette.mauve };
+    return hues[std.hash.Fnv1a_32.hash(name) % hues.len];
 }
 
 // The name's first code point, upper-cased when it is ASCII; null for an
@@ -69,6 +89,11 @@ fn initial(storage: *[4]u8, name: []const u8) ?[]const u8 {
     @memcpy(storage[0..length], name[0..length]);
     storage[0] = std.ascii.toUpper(storage[0]);
     return storage[0..length];
+}
+
+test "a name always picks the same tile hue" {
+    const palette = data.theme_support.default_theme.palette;
+    try std.testing.expectEqual(tileHue(palette, "telar"), tileHue(palette, "telar"));
 }
 
 test "the initial is the first code point, upper-cased when ASCII" {
