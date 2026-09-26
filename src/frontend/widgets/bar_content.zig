@@ -210,8 +210,8 @@ fn metricWidth(view: data.NodeView) u16 {
     const value = cellgrid.text.measure(data.bar_metrics.value(&buffer, name, metrics));
     return switch (name) {
         .battery => iconCells(batteryIcon(data.bar_metrics.percent(name, metrics))) + 1 + value,
-        .memory => cellgrid.text.measure(data.bar_metrics.label(name)) + 1 + value,
-        .cpu => cellgrid.text.measure(data.bar_metrics.label(name)) + 1 + sparklineWidth(view.facts.cpu) + value,
+        .memory => iconCells(data.bar_metrics.icon(name).?) + 1 + value,
+        .cpu => iconCells(data.bar_metrics.icon(name).?) + 1 + sparklineWidth(view.facts.cpu) + value,
     };
 }
 
@@ -337,7 +337,7 @@ fn drawMetric(writer: *Writer, view: data.NodeView) void {
             writer.space();
         },
         .memory, .cpu => {
-            writer.text(data.bar_metrics.label(name), quiet(context));
+            writer.icon(data.bar_metrics.icon(name).?, quiet(context));
             writer.space();
             if (name == .cpu and view.facts.cpu.len != 0) {
                 writer.sparkline(view.facts.cpu, tone(context, data.bar_metrics.tone(name, metrics), .mark));

@@ -22,6 +22,8 @@ const track_height: f32 = 3;
 const sparkline_bar: f32 = 2;
 const sparkline_gap: f32 = 1;
 const sparkline_height: f32 = 12;
+/// An idle sample still shows as a short column above its track.
+const sparkline_floor: f32 = 2;
 const sparkline_bars = 9;
 const badge_padding: f32 = 6;
 const badge_height: f32 = 16;
@@ -357,14 +359,22 @@ fn drawSparkline(canvas: *Canvas, sparkline: Sparkline) !void {
     const bottom = sparkline.bounds.y + (sparkline.bounds.height + height) / 2;
     const color = bar_tone.mark(canvas, sparkline.tone);
     var x = sparkline.bounds.x;
+    const radius = chrome.px(sparkline_bar) / 4;
     for (shown) |sample| {
-        const bar = @max(chrome.px(1), @round(height * @as(f32, @floatFromInt(sample)) / full_percent));
+        // A faint full-height column keeps the chart legible when idle.
+        try canvas.fillRoundedAt(.{
+            .x = x,
+            .y = bottom - height,
+            .width = chrome.px(sparkline_bar),
+            .height = height,
+        }, .{ .radius = radius, .color = canvas.theme.palette.surface1 });
+        const bar = @max(chrome.px(sparkline_floor), @round(height * @as(f32, @floatFromInt(sample)) / full_percent));
         try canvas.fillRoundedAt(.{
             .x = x,
             .y = bottom - bar,
             .width = chrome.px(sparkline_bar),
             .height = bar,
-        }, .{ .radius = chrome.px(sparkline_bar) / 4, .color = color });
+        }, .{ .radius = radius, .color = color });
         x += chrome.px(sparkline_bar) + chrome.px(sparkline_gap);
     }
 }
@@ -413,8 +423,8 @@ fn metricWidth(canvas: *Canvas, view: data.NodeView) !f32 {
     total += chrome.px(part_gap);
     total += switch (name) {
         .battery => chrome.px(battery_width),
-        .memory => try canvas.measure(caption(data.bar_metrics.label(name))),
-        .cpu => try canvas.measure(caption(data.bar_metrics.label(name))) + chrome.px(part_gap) + sparklineWidth(canvas, view.facts.cpu.len),
+        .memory => canvas.iconSize(caption("")),
+        .cpu => canvas.iconSize(caption("")) + chrome.px(part_gap) + sparklineWidth(canvas, view.facts.cpu.len),
     };
 
     return total;
@@ -432,8 +442,11 @@ fn drawMetric(canvas: *Canvas, view: data.NodeView, bounds_value: Rect) !void {
             bounds = shift(bounds, chrome.px(battery_width) + chrome.px(part_gap));
         },
         .memory, .cpu => {
-            const painted = try canvas.textAt(bounds, captionColored(canvas, data.bar_metrics.label(name)));
-            bounds = shift(bounds, painted + chrome.px(part_gap));
+            var glyph = captionColored(canvas, data.bar_metrics.icon(name).?.nerdGlyph());
+            glyph.bold = false;
+            const side = canvas.iconSize(glyph);
+            try canvas.iconAt(.{ .x = bounds.x, .y = bounds.y, .width = side, .height = bounds.height }, glyph);
+            bounds = shift(bounds, side + chrome.px(part_gap));
             if (name == .cpu and view.facts.cpu.len != 0) {
                 const spark = sparklineWidth(canvas, view.facts.cpu.len);
                 try drawSparkline(canvas, .{ .samples = view.facts.cpu, .tone = tone, .bounds = .{ .x = bounds.x, .y = bounds.y, .width = spark, .height = bounds.height } });

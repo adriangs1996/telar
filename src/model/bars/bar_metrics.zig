@@ -4,6 +4,7 @@ const MetricName = @import("MetricName.zig").MetricName;
 const SystemMetrics = @import("../state/SystemMetrics.zig");
 const Tone = @import("Tone.zig").Tone;
 const std = @import("std");
+const ui_icons = @import("../layout/icons.zig");
 
 pub const max_value_bytes = 16;
 
@@ -20,12 +21,21 @@ pub fn available(name: MetricName, metrics: ?SystemMetrics) bool {
     return name != .battery or sample.battery_percent != null;
 }
 
-/// The short label drawn before the value; the battery draws a shape instead.
+/// The icon drawn before the value; the battery draws its own shape.
+pub fn icon(name: MetricName) ?ui_icons.Icon {
+    return switch (name) {
+        .cpu => .cpu,
+        .memory => .memory,
+        .battery => null,
+    };
+}
+
+/// The short caption a screen reader or a text-only row uses.
 pub fn label(name: MetricName) []const u8 {
     return switch (name) {
         .cpu => "CPU",
-        .memory => "MEM",
-        .battery => "",
+        .memory => "Memory",
+        .battery => "Battery",
     };
 }
 
