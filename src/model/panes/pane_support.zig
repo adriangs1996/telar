@@ -4,7 +4,8 @@ const std = @import("std");
 const Pane = @import("Pane.zig");
 const tests = @import("tests.zig");
 
-const max_cwd_name_bytes = 48;
+/// Bytes a displayed directory name keeps; longer names are cut at a code point.
+pub const max_cwd_name_bytes = 48;
 
 pub fn displayCwdName(path: []const u8) []const u8 {
     if (path.len == 0) {

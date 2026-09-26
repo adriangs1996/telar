@@ -10,6 +10,8 @@ const AgentAges = @import("AgentAges.zig");
 const SidebarRegions = @import("SidebarRegions.zig");
 const Favicons = @import("Favicons.zig");
 const ProgressMotions = @import("ProgressMotions.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const Context = @This();
 
 hits: *HitMap,
@@ -23,6 +25,12 @@ ages: ?*const AgentAges = null,
 /// Placed workspace favicons; `null` in fixtures without a registry.
 favicons: ?*const Favicons = null,
 progress: ?*ProgressMotions = null,
+/// Where the tab strip records its area for the pointer to test next frame.
+tab_strip: ?*Rect = null,
+/// Whether the delivered pointer rests on the tab strip.
+pointer_in_tabs: bool = false,
+/// The chrome's record of the tab the strip is laid out around.
+tab_anchor: ?*?core.TabId = null,
 
 /// Resolves the navigation highlight without retaining retired pane or tab data.
 /// Example: `const selected = context.workspaceId() == workspace;`

@@ -172,8 +172,14 @@ test "native tabs always retain the active tab when their row overflows" {
     try fixture.showSidebar(false);
     try fixture.resize(12, 4);
     try fixture.paint(fixture.projection());
-    try std.testing.expect(fixture.bandTarget(.{ .select_tab = second_id }) != null);
-    try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }) == null);
+    const active = fixture.bandTarget(.{ .select_tab = second_id }).?;
+    const top = fixture.chrome.presented().bands.top_bar;
+    try std.testing.expect(active.width > 0 and active.x >= top.x and active.x + active.width <= top.x + top.width);
+    // The first tab either compresses beside it or waits behind the counter,
+    // whose target selects it; it never pushes the active tab out.
+    if (fixture.bandTarget(.{ .select_tab = Session.location.tab_id })) |first| {
+        try std.testing.expect(first.x + first.width <= active.x or first.x >= active.x + active.width);
+    }
 }
 
 test "native fullscreen band keeps hidden panes and the leave control reachable below the content" {
@@ -201,8 +207,10 @@ test "native fullscreen band keeps hidden panes and the leave control reachable 
     try std.testing.expect(leave.y >= content.y + content.height);
     try std.testing.expect(hidden.x + hidden.width <= leave.x);
     for (fixture.session.gui.renderer.quads.items()) |quad| {
-        if (quad.a == 0 and quad.border > 0) {
+        const outside = quad.x + quad.width <= content.x or quad.x >= content.x + content.width or quad.y + quad.height <= content.y or quad.y >= content.y + content.height;
+        if (quad.a == 0 and quad.border > 0 and !outside) {
             // A frame ring paints only its stroke: the content must sit inside it.
+            // Rings elsewhere, like the selected tab's hairline, are not frames.
             try std.testing.expect(quad.x + quad.border <= content.x and quad.y + quad.border <= content.y);
             try std.testing.expect(quad.x + quad.width - quad.border >= content.x + content.width);
             try std.testing.expect(quad.y + quad.height - quad.border >= content.y + content.height);

@@ -33,7 +33,7 @@ test "projection composes split terminals link chrome notifications and modal be
     var canvas = begin(&fixture, &projection);
     var composition: Composition = .{ .chrome = &gui.chrome, .overlays = &gui.overlays, .canvas = &canvas, .link = &hit };
     const widgets = try composition.render(&projection);
-    const expected = [_]std.meta.Tag(FrameWidget.Widget){ .terminal_pane, .terminal_pane, .link, .top_bar, .status, .sidebar, .panes, .chrome_focus, .notification, .modal };
+    const expected = [_]std.meta.Tag(FrameWidget.Widget){ .terminal_pane, .terminal_pane, .link, .top_bar, .status, .sidebar, .panes, .rail_tooltip, .chrome_focus, .notification, .modal };
     try std.testing.expectEqual(expected.len, widgets.len);
     for (widgets.storage[0..widgets.len], expected) |widget, tag| {
         try std.testing.expectEqual(tag, std.meta.activeTag(widget));

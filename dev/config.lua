@@ -158,7 +158,7 @@ return telar.config({
 		window = {
 			background_opacity = 0.95,
 			background_blur = 20,
-			titlebar = true,
+			titlebar = false,
 			padding = { x = 2, y = 0 },
 		},
 		font = {

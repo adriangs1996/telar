@@ -2,7 +2,8 @@
 //! once per measurement like the chrome bands above and below it. It holds
 //! the band width, the gap between the band and the first cell column and
 //! the physical bounds an interactive resize may move between, so the grid,
-//! the painter and the pointer all read the same numbers.
+//! the painter and the pointer all read the same numbers. A collapsed
+//! sidebar keeps a narrow workspace rail rather than disappearing.
 const std = @import("std");
 const client = @import("telar-client");
 const gfx = @import("gfx");
@@ -17,14 +18,18 @@ pub const logical_gap: f32 = 8;
 pub const logical_handle: f32 = 6;
 /// Logical pixels one keyboard resize step moves the band.
 pub const logical_step: f32 = 16;
+/// Logical width of the workspace rail a collapsed sidebar keeps.
+pub const logical_rail: f32 = 52;
 /// Columns the workbench keeps whatever the band asks for.
 pub const min_workbench_columns: u32 = 20;
 
-/// Band width in device pixels; zero while hidden or when the window cannot
-/// hold the narrowest band beside the minimum workbench.
+/// Band width in device pixels; zero only when the window cannot hold even
+/// the rail beside the minimum workbench.
 width: u32 = 0,
 /// Device pixels between the band and the grid; zero while hidden.
 gap: u32 = 0,
+/// Whether the band is the collapsed workspace rail rather than the sidebar.
+rail: bool = false,
 /// Physical bounds of an interactive resize in this window.
 min: u32 = @intFromFloat(client.GuiSidebar.min_width),
 max: u32 = @intFromFloat(client.GuiSidebar.max_width),
@@ -32,7 +37,8 @@ scale: f32 = 1,
 
 /// Resolves the band for one window. The width is the request scaled and
 /// rounded, clamped to the configured bounds and to the room that leaves the
-/// workbench its minimum columns after the gap and the right padding.
+/// workbench its minimum columns after the gap and the right padding. A
+/// collapsed request, or a window too narrow for the sidebar, gets the rail.
 /// Example: `const band = SidebarBand.resolve(request, .{ .width = 1440, .cell_width = 9, .scale = 2 });`
 pub fn resolve(request: SidebarRequest, fit: SidebarFit) SidebarBand {
     const scale = if (std.math.isFinite(fit.scale) and fit.scale > 0) fit.scale else 1;
@@ -41,6 +47,13 @@ pub fn resolve(request: SidebarRequest, fit: SidebarFit) SidebarBand {
     const room = fit.width -| fit.padding_x -| gap -| min_workbench_columns * fit.cell_width;
     var band: SidebarBand = .{ .min = min, .max = @max(min, @min(physical(client.GuiSidebar.max_width, scale), room)), .scale = scale };
     if (!request.visible or room < min) {
+        const rail = physical(logical_rail, scale);
+        if (room >= rail) {
+            band.width = rail;
+            band.gap = gap;
+            band.rail = true;
+        }
+
         return band;
     }
 
@@ -55,9 +68,16 @@ pub fn reserved(self: SidebarBand) u32 {
     return self.width + self.gap;
 }
 
-/// Example: `if (band.visible()) try sidebar.draw(canvas);`
+/// Whether the band takes any pixels, as the sidebar or as the rail.
+/// Example: `const left = if (band.visible()) band.reserved() else padding;`
 pub fn visible(self: SidebarBand) bool {
     return self.width != 0;
+}
+
+/// Whether the full sidebar, not the rail, occupies the band.
+/// Example: `if (band.expanded()) try sidebar.draw(canvas);`
+pub fn expanded(self: SidebarBand) bool {
+    return self.width != 0 and !self.rail;
 }
 
 /// Clamps a requested physical width to this window's bounds.
@@ -100,18 +120,28 @@ test "the band scales the preference and clamps it to the bounds and the workben
     try std.testing.expectEqual(@as(u32, 16), resolve(.{ .visible = true }, .{ .width = 4000, .cell_width = 20, .scale = 2 }).gap);
     try std.testing.expectEqual(@as(u32, 220), resolve(.{ .visible = true, .logical_width = 100 }, wide).width);
     try std.testing.expectEqual(@as(u32, 480), resolve(.{ .visible = true, .logical_width = 900 }, wide).width);
-    try std.testing.expectEqual(@as(u32, 0), resolve(.{ .visible = false }, wide).width);
-    try std.testing.expectEqual(@as(u32, 0), resolve(.{ .visible = false }, wide).reserved());
+    try std.testing.expectEqual(@as(u32, 52), resolve(.{ .visible = false }, wide).width);
+    try std.testing.expectEqual(@as(u32, 60), resolve(.{ .visible = false }, wide).reserved());
+    try std.testing.expect(resolve(.{ .visible = false }, wide).rail);
+    try std.testing.expect(!resolve(.{ .visible = false }, wide).expanded());
+    try std.testing.expect(resolve(.{ .visible = true }, wide).expanded());
     // 600 px wide: 600 - 8 - 200 = 392 px remain for the band.
     const narrow = resolve(.{ .visible = true, .logical_width = 480 }, .{ .width = 600, .cell_width = 10 });
     try std.testing.expectEqual(@as(u32, 392), narrow.width);
     try std.testing.expectEqual(@as(u32, 392), narrow.max);
     // The right padding is grid inset too, so it comes off the room.
     try std.testing.expectEqual(@as(u32, 380), resolve(.{ .visible = true, .logical_width = 480 }, .{ .width = 600, .cell_width = 10, .padding_x = 12 }).width);
-    // Below 220 + 8 + 200 the band gives the window back to the workbench.
-    const hidden = resolve(.{ .visible = true }, .{ .width = 427, .cell_width = 10 });
+    // Below 220 + 8 + 200 the sidebar collapses to the rail.
+    const collapsed = resolve(.{ .visible = true }, .{ .width = 427, .cell_width = 10 });
+    try std.testing.expectEqual(@as(u32, 52), collapsed.width);
+    try std.testing.expect(collapsed.rail);
+    try std.testing.expectEqual(@as(u32, 220), collapsed.min);
+    // Below 52 + 8 + 200 even the rail gives the window back to the workbench.
+    const hidden = resolve(.{ .visible = false }, .{ .width = 259, .cell_width = 10 });
     try std.testing.expectEqual(@as(u32, 0), hidden.width);
-    try std.testing.expectEqual(@as(u32, 220), hidden.min);
+    try std.testing.expectEqual(@as(u32, 0), hidden.reserved());
+    try std.testing.expectEqual(@as(u32, 52), resolve(.{ .visible = false }, .{ .width = 260, .cell_width = 10 }).width);
+    try std.testing.expectEqual(@as(u32, 104), resolve(.{ .visible = false }, .{ .width = 4000, .cell_width = 20, .scale = 2 }).width);
     try std.testing.expectEqual(@as(u32, 220), resolve(.{ .visible = true }, .{ .width = 428, .cell_width = 10 }).width);
     try std.testing.expectEqual(@as(f32, 300), resolve(.{ .visible = true }, wide).clampLogical(300));
     try std.testing.expectEqual(@as(f32, 480), resolve(.{ .visible = true }, wide).clampLogical(500));

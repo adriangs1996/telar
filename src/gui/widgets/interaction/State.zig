@@ -67,7 +67,7 @@ pub fn begin(self: *State, modal: bool) void {
 pub fn chrome(self: *State, canvas: *Canvas, input: ChromeRegistration) !void {
     self.tab_drag_step = canvas.chrome.px(4);
     const value = input.chrome;
-    if (value.prepared().bands.sidebar.width > 0) {
+    if (value.prepared().bands.sidebar.width > 0 and !value.prepared().bands.rail) {
         _ = try self.dispatcher.add((Target{ .bounds = value.prepared().bands.sidebar, .action = .{ .custom = 1 }, .namespace = 1, .focusable = false, .role = 6 }).labelled("Agents"));
     }
 

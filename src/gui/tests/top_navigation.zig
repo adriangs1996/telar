@@ -1,3 +1,4 @@
+const cellgrid = @import("cellgrid");
 const data = @import("model");
 const QuadList = gfx.QuadList;
 const gfx = @import("gfx");
@@ -87,7 +88,7 @@ test "workspace handoff retains only delivered identities still present in the l
     try std.testing.expect(fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }) == null);
 }
 
-test "five compact projects fit without pill backgrounds and reuse landed favicons at both scales" {
+test "the rail stacks five projects in one column and reuses landed favicons at both scales" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.showSidebar(false);
@@ -114,29 +115,33 @@ test "five compact projects fit without pill backgrounds and reuse landed favico
         favicons.refresh(std.testing.allocator, &renderer.sprites.?);
         fixture.chrome.hovered = .{ .intent = .{ .select_workspace = @enumFromInt(9) } };
         try fixture.paint(fixture.projection());
+        const rail = fixture.band();
+        try std.testing.expect(fixture.chrome.presented().bands.rail);
         var last: f32 = 0;
+        var column: ?f32 = null;
         for (0..5) |index| {
             const id = model.workspace_list_snapshot.workspaceAt(index);
             const bounds = fixture.bandTarget(.{ .select_workspace = id }).?;
-            try std.testing.expect(bounds.x >= last);
-            try std.testing.expectEqual(renderer.chrome.px(40), bounds.width);
-            try std.testing.expectEqual(index == 0, hasApplicationMark(renderer.quads.items(), bounds));
-            _ = try firstInk(renderer.quads.items(), bounds);
-            for (renderer.quads.items()) |quad| {
-                if (solid(quad) and quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height) {
-                    try std.testing.expectEqual(@as(usize, 0), index);
-                    try std.testing.expectEqual(renderer.chrome.px(3), quad.width);
-                    try std.testing.expectEqual(quad.width, quad.height);
-                }
+            try std.testing.expect(bounds.y >= last);
+            try std.testing.expectEqual(renderer.chrome.px(36), bounds.width);
+            try std.testing.expectEqual(bounds.width, bounds.height);
+            try std.testing.expect(bounds.x >= rail.x and bounds.x + bounds.width <= rail.x + rail.width);
+            if (column) |x| {
+                try std.testing.expectEqual(x, bounds.x);
             }
 
+            column = bounds.x;
+            try std.testing.expectEqual(index == 0, hasApplicationMark(renderer.quads.items(), bounds));
+            _ = try firstInk(renderer.quads.items(), bounds);
+            // Only the selected project carries the accent bar on the rail's edge.
+            try std.testing.expectEqual(index == 0, accentBar(renderer.quads.items(), rail, bounds, renderer.chrome.px(3)));
             try std.testing.expectEqualDeep(client.Intent{ .select_workspace = id }, fixture.clickBand(bounds, 0).intent);
-            last = bounds.x + bounds.width;
+            last = bounds.y + bounds.height;
         }
     }
 }
 
-test "native project indicators use numbers instead of names and attention does not shift their ink" {
+test "rail marks without a favicon show the workspace initial and attention does not shift their ink" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.showSidebar(false);
@@ -149,10 +154,10 @@ test "native project indicators use numbers instead of names and attention does 
     var projection = fixture.projection();
     projection.workspaces = &workspaces;
     try fixture.paint(projection);
-    const labels = [_][]const u8{ "1", "2", "3" };
-    for (labels, 0..) |text, index| {
+    const initials = [_][]const u8{ "A", "A", "X" };
+    for (initials, 0..) |text, index| {
         const bounds = fixture.bandTarget(.{ .select_workspace = workspaces.workspaceAt(index) }).?;
-        try expectNumberLabel(&fixture, bounds, .{ .text = text, .bold = index == 0, .face = .sans, .size = .small });
+        try expectInitial(&fixture, bounds, .{ .text = text, .bold = true, .face = .sans, .size = .body });
     }
 
     const active = fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }).?;
@@ -163,13 +168,15 @@ test "native project indicators use numbers instead of names and attention does 
     try fixture.paint(projection);
     const with_dot = try firstInk(fixture.session.gui.renderer.quads.items(), active);
     try std.testing.expectApproxEqAbs(before_dot.x, with_dot.x, 0.01);
+    const palette = fixture.session.gui.app.model.theme.palette;
+    try std.testing.expect(colored(fixture.session.gui.renderer.quads.items(), active, palette.yellow));
 }
 
-test "native workspace overflow counters keep nearest hidden destinations without normal or hover backgrounds" {
+test "rail overflow counters select the nearest hidden project and keep its attention" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.showSidebar(false);
-    try fixture.measure(.{ .width = 488, .height = 700, .scale = 1 });
+    try fixture.measure(.{ .width = 900, .height = 260, .scale = 1 });
     var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = @enumFromInt(4), .name = "one", .path = "/one", .tab_count = 1 },
@@ -180,23 +187,49 @@ test "native workspace overflow counters keep nearest hidden destinations withou
         .{ .workspace = @enumFromInt(42), .name = "six", .path = "/six", .tab_count = 1 },
         .{ .workspace = @enumFromInt(99), .name = "seven", .path = "/seven", .tab_count = 1 },
     } });
+    var agents: data.AgentSnapshot = .{};
+    _ = try agents.replace(.{ .revision = 1, .agents = &.{.{ .key = .{ .pane_id = @enumFromInt(70), .pane_generation = 1 }, .location = .{ .workspace = .{ .workspace = @enumFromInt(99) }, .tab_id = @enumFromInt(70) }, .pane_index = 1, .provider = .codex, .status = .blocked }} });
     var projection = fixture.projection();
     projection.workspaces = &workspaces;
-    for ([_]core.WorkspaceId{ @enumFromInt(8), @enumFromInt(42) }) |id| {
-        for ([_]bool{ false, true }) |hovered| {
-            fixture.chrome.hovered = if (hovered) .{ .intent = .{ .select_workspace = id } } else null;
-            try fixture.paint(projection);
-            const bounds = fixture.bandTarget(.{ .select_workspace = id }).?;
-            _ = try firstInk(fixture.session.gui.renderer.quads.items(), bounds);
-            for (fixture.session.gui.renderer.quads.items()) |quad| {
-                if (quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height) {
-                    try std.testing.expect(!solid(quad));
-                }
+    projection.agents = &agents;
+    try fixture.paint(projection);
+    const renderer = &fixture.session.gui.renderer;
+    const counter = renderer.chrome.px(20);
+    var marks: usize = 0;
+    var counters: usize = 0;
+    const hits = fixture.chrome.presented().band_hits;
+    for (hits.items[0..hits.len]) |hit| {
+        if (hit.action != .intent or hit.action.intent != .select_workspace) {
+            continue;
+        }
+
+        if (hit.area.height == counter) {
+            counters += 1;
+            const id = hit.action.intent.select_workspace;
+            // A counter names a project that is not drawn as a mark.
+            var drawn = false;
+            for (hits.items[0..hits.len]) |other| {
+                drawn = drawn or (other.area.height != counter and other.action == .intent and std.meta.eql(other.action.intent, hit.action.intent));
             }
 
-            try std.testing.expectEqualDeep(client.Intent{ .select_workspace = id }, fixture.clickBand(bounds, 0).intent);
+            try std.testing.expect(!drawn);
+            try std.testing.expectEqualDeep(client.Intent{ .select_workspace = id }, fixture.clickBand(hit.area, 0).intent);
+        } else {
+            marks += 1;
         }
     }
+
+    try std.testing.expect(marks < workspaces.count and marks > 0);
+    try std.testing.expect(counters > 0);
+    try std.testing.expect(fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }) != null);
+    var last: ?Rect = null;
+    for (hits.items[0..hits.len]) |hit| {
+        if (hit.action == .intent and hit.action.intent == .select_workspace and hit.area.height == counter) {
+            last = hit.area;
+        }
+    }
+
+    try std.testing.expect(colored(renderer.quads.items(), last.?, fixture.session.gui.app.model.theme.palette.yellow));
 }
 
 test "native workspace visibility ignores the inherited collapse flag in wide and narrow windows" {
@@ -273,9 +306,12 @@ test "native navigation names unlisted workspaces and worktrees without selectin
         var unrelated_snapshot = try quadsIn(renderer.quads.items(), top);
         defer unrelated_snapshot.deinit(std.testing.allocator);
         try std.testing.expectEqualDeep(empty_snapshot.items, unrelated_snapshot.items);
+        const rail = fixture.band();
         const hits = fixture.chrome.presented().band_hits;
         for (hits.items[0..hits.len]) |hit| {
-            try std.testing.expect(hit.action != .intent or hit.action.intent != .select_workspace);
+            if (hit.action == .intent and hit.action.intent == .select_workspace) {
+                try std.testing.expect(!accentBar(renderer.quads.items(), rail, hit.area, renderer.chrome.px(3)));
+            }
         }
 
         try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }) != null);
@@ -344,7 +380,7 @@ test "native project indicators keep all seven projects in stable positions acro
     }
 }
 
-test "moving workspaces to the sidebar preserves every tab bound across sidebar visibility" {
+test "tabs pack from the left beside the workbench or the context name in both sidebar states" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
@@ -357,30 +393,33 @@ test "moving workspaces to the sidebar preserves every tab bound across sidebar 
 
     for ([_]u32{ 900, 1600 }) |width| {
         try fixture.measure(.{ .width = width, .height = 700, .scale = 1 });
-        try fixture.showSidebar(true);
-        try fixture.paint(fixture.projection());
-        const top = fixture.chrome.presented().bands.top_bar;
-        const workspace = fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }).?;
-        const first_tab = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
-        const second_tab = fixture.bandTarget(.{ .select_tab = @enumFromInt(2) }).?;
-        const plus = fixture.bandTarget(.create_tab).?;
-        try std.testing.expectEqual(@as(f32, 42), top.height);
-        try std.testing.expectEqual(@as(u32, 42), fixture.session.gui.renderer.origin[1]);
-        try std.testing.expect(workspace.x + workspace.width < first_tab.x);
-        try std.testing.expect(first_tab.x > top.width / 2);
-        try std.testing.expect(first_tab.x + first_tab.width <= second_tab.x);
-        try std.testing.expect(second_tab.x + second_tab.width <= plus.x);
-        try std.testing.expect(top.width - (plus.x + plus.width) <= 12 + 36);
-        try std.testing.expect(workspace.y >= top.height and first_tab.y < top.height);
-        try std.testing.expectEqual(top.height, second_tab.y + second_tab.height);
-
-        try fixture.showSidebar(false);
-        try fixture.paint(fixture.projection());
-        const fallback = fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }).?;
-        try std.testing.expect(fallback.y < top.height);
-        try std.testing.expectEqualDeep(first_tab, fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?);
-        try std.testing.expectEqualDeep(second_tab, fixture.bandTarget(.{ .select_tab = @enumFromInt(2) }).?);
-        try std.testing.expectEqualDeep(plus, fixture.bandTarget(.create_tab).?);
+        for ([_]bool{ true, false }) |expanded| {
+            try fixture.showSidebar(expanded);
+            try fixture.paint(fixture.projection());
+            const top = fixture.chrome.presented().bands.top_bar;
+            const band = fixture.band();
+            const workspace = fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }).?;
+            const first_tab = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
+            const second_tab = fixture.bandTarget(.{ .select_tab = @enumFromInt(2) }).?;
+            const plus = fixture.bandTarget(.create_tab).?;
+            try std.testing.expectEqual(@as(f32, 42), top.height);
+            try std.testing.expectEqual(@as(u32, 42), fixture.session.gui.renderer.origin[1]);
+            try std.testing.expect(first_tab.x < top.x + top.width / 2);
+            try std.testing.expect(first_tab.x + first_tab.width <= second_tab.x);
+            try std.testing.expect(second_tab.x + second_tab.width <= plus.x);
+            try std.testing.expect(plus.x - (second_tab.x + second_tab.width) <= 4);
+            try std.testing.expectApproxEqAbs(top.y + top.height / 2, first_tab.y + first_tab.height / 2, 1);
+            try std.testing.expectEqual(first_tab.y, second_tab.y);
+            if (expanded) {
+                // Tabs start where the workbench does, beside the sidebar.
+                try std.testing.expect(workspace.y >= top.height);
+                try std.testing.expect(first_tab.x >= band.x + band.width);
+            } else {
+                // Beside the rail, the context name comes first.
+                try std.testing.expect(workspace.x + workspace.width <= band.x + band.width);
+                try std.testing.expect(first_tab.x > top.x + fixture.session.gui.renderer.chrome.px(16));
+            }
+        }
     }
 }
 
@@ -435,7 +474,10 @@ test "native selected tab preserves its rounded surface and hosts an explicit ch
     const pane = fixture.session.gui.app.model.panes.find(Session.pane_id).?;
     _ = pane.setProgress(.{ .pane_id = Session.pane_id, .state = .set, .percent = 50 });
     try fixture.paint(fixture.projection());
-    const progress = progressRing(renderer.quads.items(), selected) orelse return error.MissingProgress;
+    // The trailing status slot widens the tab rather than covering its caption.
+    const widened = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
+    try std.testing.expect(widened.width > selected.width);
+    const progress = progressRing(renderer.quads.items(), widened) orelse return error.MissingProgress;
     try std.testing.expect(progress.width > 2);
     try std.testing.expectApproxEqAbs(selected.y + selected.height / 2, progress.y + progress.height / 2, 0.001);
     try std.testing.expectEqualDeep(client.Intent{ .select_tab = Session.location.tab_id }, fixture.clickBand(selected, 0).intent);
@@ -470,13 +512,17 @@ fn quadsIn(quads: []const Quad, area: Rect) !std.ArrayList(Quad) {
     return result;
 }
 
-fn expectNumberLabel(fixture: *Fixture, bounds: Rect, label: Label) !void {
+// A rail mark's initial is centred in the mark's 20 px box.
+fn expectInitial(fixture: *Fixture, bounds: Rect, label: Label) !void {
     const renderer = &fixture.session.gui.renderer;
-    const actual = try firstInk(renderer.quads.items(), bounds);
     var reference = QuadList.init(std.testing.allocator);
     defer reference.deinit();
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &reference, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
-    const natural: Rect = .{ .x = bounds.x + renderer.chrome.px(3), .y = bounds.y, .width = renderer.chrome.px(14), .height = bounds.height - renderer.chrome.px(5) };
+    const width = try canvas.measure(label);
+    const side = renderer.chrome.px(20);
+    const box: Rect = .{ .x = bounds.x + (bounds.width - side) / 2, .y = bounds.y + (bounds.height - side) / 2, .width = side, .height = side };
+    const natural: Rect = .{ .x = box.x + (box.width - width) / 2, .y = box.y, .width = width, .height = box.height };
+    const actual = try firstInk(renderer.quads.items(), natural);
     _ = try canvas.textAt(natural, label);
     const glyph = try firstInk(reference.items(), natural);
     try std.testing.expectApproxEqAbs(glyph.x, actual.x, 0.01);
@@ -492,6 +538,30 @@ fn firstInk(quads: []const Quad, bounds: Rect) !Quad {
     }
 
     return error.MissingLabelInk;
+}
+
+// A solid bar of `width` on the rail's left edge, level with `bounds`.
+fn accentBar(quads: []const Quad, rail: Rect, bounds: Rect, width: f32) bool {
+    for (quads) |quad| {
+        if (quad.x == rail.x and quad.width == width and quad.y >= bounds.y and quad.y + quad.height <= bounds.y + bounds.height) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+fn colored(quads: []const Quad, bounds: Rect, color: cellgrid.Color) bool {
+    const rgb = color.rgbChannels().?;
+    for (quads) |quad| {
+        const inside = quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height;
+        const matches = @abs(quad.r - @as(f32, @floatFromInt(rgb[0])) / 255) < 0.01 and @abs(quad.g - @as(f32, @floatFromInt(rgb[1])) / 255) < 0.01 and @abs(quad.b - @as(f32, @floatFromInt(rgb[2])) / 255) < 0.01;
+        if (inside and matches and quad.a > 0) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 fn solid(quad: Quad) bool {
@@ -511,11 +581,13 @@ test "native automatic tabs show the foreground application mark and preserve ma
     const bounds = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
     try std.testing.expect(hasApplicationMark(fixture.session.gui.renderer.quads.items(), bounds));
 
-    // Choosing the same text explicitly still disables automatic naming.
+    // Choosing the same text explicitly still disables automatic naming; the
+    // mark keeps following the application, as the chip of every tab does.
     _ = try data.tab_rename.rename(model, Session.location.tab_id, "codex");
     _ = pane.setForegroundName("nvim");
     try fixture.paint(fixture.projection());
     try std.testing.expectEqualStrings("codex", data.tab_label.text(model, tab));
+    try std.testing.expectEqual(data.icons.Icon.app_editor, data.tab_label.mark(model, tab));
     try std.testing.expect(!hasApplicationMark(fixture.session.gui.renderer.quads.items(), fixture.bandTarget(
         .{
             .select_tab = Session.location.tab_id,

@@ -185,9 +185,10 @@ retention still determines which closed sessions remain available to restore.
 bindings, custom prefixes, gesture ownership, prompts, selection, layer ordering,
 hot reload and ACK progress during GPU delivery. `zig build test-gui-window`
 uses the native window implementation and its GPU backend.
-`tests/top_navigation.zig` covers the centered workspace window, stable
-identities, right-aligned tabs with the sidebar shown and hidden, narrow
-windows and conditional child progress. `tests/status_bar.zig` covers widget
+`tests/top_navigation.zig` covers the workspace rail, stable identities,
+left-packed tabs with the sidebar expanded and collapsed, narrow windows and
+conditional child progress. `tests/tab_strip.zig` covers tab compression, the
+hidden-tab counter, frozen widths under the pointer and the rail tooltip. `tests/status_bar.zig` covers widget
 placement, compatibility with existing top slots and TLS priority.
 
 `tools/gui_multiplexer.py BINARY /tmp/NEW-DIRECTORY` drives AppKit against an

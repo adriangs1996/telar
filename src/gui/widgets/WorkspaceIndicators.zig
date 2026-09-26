@@ -1,15 +1,14 @@
 //! Compact numbered project marks in runtime order, with no tab-like surfaces.
 //! Overflow is used only when the available pixels cannot hold every project.
 const cellgrid = @import("cellgrid");
-const data = @import("model");
-const AgentCard = @import("AgentCard.zig");
+const WorkspaceMark = @import("WorkspaceMark.zig");
 const std = @import("std");
-const client = @import("telar-client");
 const core = @import("telar-core");
 const Context = @import("Context.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const attention = @import("attention.zig");
+const workspace_identity = @import("workspace_identity.zig");
 const Label = @import("Label.zig");
 const Layout = gfx.Layout;
 const Item = gfx.Item;
@@ -84,13 +83,8 @@ pub fn draw(self: WorkspaceIndicators, canvas: *Canvas) !void {
 }
 
 fn activeWorkspace(self: WorkspaceIndicators, canvas: *Canvas) !void {
-    const model = self.context.projection.model;
-    var storage: [64]u8 = undefined;
-    const name_value = model.workspaceName();
-    const text = if (name_value.len != 0) name_value else if (model.workspace) |location| switch (location) {
-        .workspace => |id| std.fmt.bufPrint(&storage, "workspace {d}", .{@intFromEnum(id)}) catch unreachable,
-        .worktree => |id| std.fmt.bufPrint(&storage, "worktree {d}", .{@intFromEnum(id)}) catch unreachable,
-    } else "workspace";
+    var storage: [workspace_identity.label_bytes]u8 = undefined;
+    const text = workspace_identity.contextLabel(self.context.projection.model, &storage);
     const label: Label = .{ .text = text, .color = canvas.theme.palette.text, .bold = true, .face = .sans, .size = .body };
     _ = try canvas.textAt(self.area, label);
 }
@@ -112,12 +106,15 @@ fn workspace(self: WorkspaceIndicators, canvas: *Canvas, index: usize) !void {
 
     const side = chrome.px(14);
     const icon: Rect = .{ .x = bounds.x + chrome.px(20), .y = bounds.y + (content_height - side) / 2, .width = side, .height = side };
-    const sprite = if (self.context.favicons) |favicons| favicons.sprite(.{ .workspace = id }) else null;
-    if (sprite) |value| {
-        try canvas.spriteTintedAt(icon, .{ .sprite = value, .alpha = if (selected or hovered) 1 else 0.6 });
-    } else {
-        try canvas.iconAt(icon, .{ .text = AgentCard.project_glyph, .color = ink, .face = .sans, .size = .small });
-    }
+    const mark: WorkspaceMark = .{
+        .context = self.context,
+        .workspace = id,
+        .bounds = icon,
+        .ink = ink,
+        .emphasized = selected or hovered,
+        .name = projection.workspaces.nameAt(index),
+    };
+    try mark.draw(canvas);
 
     if (selected) {
         const diameter = chrome.px(3);
@@ -153,7 +150,7 @@ fn overflowCounter(self: WorkspaceIndicators, canvas: *Canvas, range: [2]usize) 
     };
     try button.draw(canvas);
 
-    if (self.hiddenDot(canvas, range)) |color| {
+    if (attention.listRangeDot(self.context.projection, canvas.theme.palette, range)) |color| {
         try self.drawAttention(canvas, color);
     }
 }
@@ -164,30 +161,6 @@ fn drawAttention(self: WorkspaceIndicators, canvas: *Canvas, color: cellgrid.Col
     try canvas.fillRoundedAt(.{ .x = bounds.x + bounds.width - diameter, .y = bounds.y, .width = diameter, .height = diameter }, .{ .radius = diameter / 2, .color = color });
 }
 
-fn hiddenDot(self: WorkspaceIndicators, canvas: *const Canvas, range: [2]usize) ?cellgrid.Color {
-    const projection = self.context.projection;
-    var urgent: ?*const data.Agent = null;
-    for (projection.agents.slice()) |*agent| {
-        if (!attention.needsInput(agent.status)) {
-            continue;
-        }
-
-        const id = switch (agent.location.workspace) {
-            .workspace => |id| id,
-            .worktree => continue,
-        };
-        const index = projection.workspaces.indexOf(id) orelse continue;
-        if (index < range[0] or index >= range[1]) {
-            continue;
-        }
-
-        if (urgent == null or client.agent_attention.compare(agent, urgent.?) == .lt) {
-            urgent = agent;
-        }
-    }
-
-    return if (urgent) |agent| attention.statusColor(canvas.theme.palette, agent.status) else null;
-}
 
 const logical_gap: f32 = 4;
 const counter_width: f32 = 28;

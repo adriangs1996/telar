@@ -27,7 +27,8 @@ int telar_test_diagrams(void) {
     _Static_assert(sizeof(telar_gui_diagram_texture) == 24, "diagram ABI");
     _Static_assert(offsetof(telar_gui_diagram_texture, version) == 16, "diagram version ABI");
     _Static_assert(offsetof(telar_gui_frame, diagrams) == 56, "frame diagram ABI");
-    _Static_assert(sizeof(telar_gui_frame) == 272, "frame ABI");
+    _Static_assert(sizeof(telar_gui_frame) == 280, "frame ABI");
+    _Static_assert(offsetof(telar_gui_frame, navigation) == 272, "frame navigation ABI");
     uint8_t red[32], green[32];
     for (unsigned i = 0; i < 8; i++) {
         memcpy(red + i * 4, (uint8_t[]){128, 0, 0, 128}, 4);

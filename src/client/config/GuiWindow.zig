@@ -2,8 +2,9 @@
 const builtin = @import("builtin");
 const GuiPadding = @import("GuiPadding.zig");
 
-/// macOS fuses telar's top bar with the window edge, so the native titlebar
-/// starts hidden there. Wayland keeps the compositor decoration by default.
+/// macOS fuses telar's top bar with the window edge, the traffic lights
+/// sharing its row, so the native titlebar starts hidden there. Wayland keeps
+/// the compositor decoration by default.
 pub const default_titlebar = builtin.os.tag != .macos;
 
 background_opacity: f32 = 1,
