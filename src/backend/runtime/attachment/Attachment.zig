@@ -160,9 +160,15 @@ test "review discovery replays on attach and reconnect without losing changes du
     try std.testing.expect(try reconnect.prepareReview(&buffer) != null);
 }
 
+/// Prepares the pane's newest title. The VT actor writes the title while
+/// it ingests, so an ingesting pane publishes it once the actor returns.
+///
+/// ```zig
+/// const prepared = try attachment.prepareTitle(buffer);
+/// ```
 pub fn prepareTitle(self: *Attachment, buffer: []u8) !?Prepared {
     const pane = self.pane;
-    if (self.observed_title_revision == pane.title.revision) {
+    if (pane.ingest_pending or self.observed_title_revision == pane.title.revision) {
         return null;
     }
     return .{
@@ -189,13 +195,14 @@ pub fn prepareForeground(self: *Attachment, buffer: []u8) !?Prepared {
 }
 
 /// Prepares the newest coalesced progress state for this client attachment.
+/// Like the title, progress waits while the VT actor ingests.
 ///
 /// ```zig
 /// const prepared = try attachment.prepareProgress(buffer);
 /// ```
 pub fn prepareProgress(self: *Attachment, buffer: []u8) !?Prepared {
     const pane = self.pane;
-    if (self.observed_progress_revision == pane.progress_revision) {
+    if (pane.ingest_pending or self.observed_progress_revision == pane.progress_revision) {
         return null;
     }
 

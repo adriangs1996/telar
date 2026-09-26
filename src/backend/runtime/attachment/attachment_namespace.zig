@@ -566,6 +566,54 @@ test "attachments keep independent scrollback viewports" {
         pane.screen.h >= pane.terminal.screens.active.pages.scrollbar().total);
 }
 
+test "title and progress wait while the VT actor ingests the pane" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var service = try Service.init(gpa, .{ .database_path = ":memory:" });
+    defer {
+        service.stop(io);
+        service.deinit(io);
+    }
+
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
+    const args = [_][*:0]const u8{ "/bin/sleep", "600" };
+    const command = try Command.fromArgv(&args);
+    const pane = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = try core.pane(1), .generation = 1 },
+        .location = .{
+            .workspace = .{ .workspace = try core.workspace(1) },
+            .tab_id = try core.tab(1),
+        },
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/",
+        .size = .{ .cols = 8, .rows = 3 },
+        .graphics_limits = .{},
+    });
+    defer {
+        pane.session.shutdown();
+        pane.destroy();
+    }
+
+    var attachment = try Attachment.init(gpa, pane);
+    defer attachment.deinit();
+    _ = try pane.ingest(io, "\x1b]2;working\x1b\\\x1b]9;4;1;42\x1b\\");
+    var buffer: [256]u8 = undefined;
+
+    pane.ingest_pending = true;
+    try std.testing.expect(try attachment.prepareTitle(&buffer) == null);
+    try std.testing.expect(try attachment.prepareProgress(&buffer) == null);
+
+    pane.ingest_pending = false;
+    try std.testing.expect(try attachment.prepareTitle(&buffer) != null);
+    try std.testing.expect(try attachment.prepareProgress(&buffer) != null);
+}
+
 test "a scrolled attachment sees rows the pane's own render already consumed" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
