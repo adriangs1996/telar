@@ -20,7 +20,7 @@ pub fn encode(buffer: []u8, batch: *const data.EffectBatch) ![]const u8 {
             try writer.writeByte(2);
             try writer.writeByte(@intFromEnum(value));
         },
-        .navigate_pane, .scroll_pane => return error.InvalidWorkerEffect,
+        .navigate_pane, .scroll_pane, .open_panel, .close_panel, .refresh_panel => return error.InvalidWorkerEffect,
         .resize_pane => |value| {
             try writer.writeByte(12);
             try writer.writeByte(@intFromEnum(value));

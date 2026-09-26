@@ -7,6 +7,8 @@ const ViewInteractionCommand = @import("ViewInteractionCommand.zig");
 const ViewInteractionOutcome = @import("ViewInteractionOutcome.zig");
 const IntentOutcome = @import("IntentOutcome.zig");
 const agent_attachments = @import("../attachments/agent_attachments.zig");
+const bar_components = @import("bar_components.zig");
+const bar_updates = @import("../config/bar_updates.zig");
 const agent_navigation = @import("../agents/agent_navigation.zig");
 const name_prompt = @import("name_prompt.zig");
 const notifications = @import("../notifications/notifications.zig");
@@ -46,6 +48,11 @@ pub fn apply(client: *Client, tab: usize, interaction: ViewInteractionCommand) !
 
 fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome {
     var outcome: IntentOutcome = .{};
+    // Any other chrome interaction dismisses the bar panel, as a click
+    // outside a popover does.
+    if (client.model.bars.panel.isOpen() and !keepsPanel(intent)) {
+        try bar_updates.closePanel(client);
+    }
 
     switch (intent) {
         .none => {},
@@ -118,7 +125,18 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
         .notification_dismiss => |id| _ = try notifications.dismissNotificationNow(client, id),
         .attachment_dismiss => |id| outcome.layout_changed = try agent_attachments.dismissAttachment(client, id),
         .prompt_row => |index| try name_prompt.choosePromptRow(client, index),
+        .bar_component => |component| try bar_components.activate(client, component),
+        .panel_component => |index| try bar_components.activatePanel(client, index),
+        .toggle_bar_overflow => try bar_updates.toggleOverflow(client),
+        .close_panel => try bar_updates.closePanel(client),
     }
 
     return outcome;
+}
+
+fn keepsPanel(intent: view_interaction.Intent) bool {
+    return switch (intent) {
+        .none, .bar_component, .panel_component, .toggle_bar_overflow, .close_panel => true,
+        else => false,
+    };
 }

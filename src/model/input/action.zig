@@ -47,6 +47,12 @@ pub const Action = union(enum) {
     lua_expr: CallbackRef,
     plugin: PluginAction,
     scroll_pane: ScrollDirection,
+    /// Opens the configured panel with this index, or closes it when it is
+    /// already open. Configuration resolves the panel's name to the index.
+    open_panel: u8,
+    close_panel,
+    /// Runs the open panel's source now instead of at its next interval.
+    refresh_panel,
 
     /// Parses stable built-in action names used by configuration and tests.
     pub fn parse(name: []const u8) !Action {
@@ -354,6 +360,12 @@ pub const Action = union(enum) {
             "suggest-command",
         )) {
             return .suggest_command;
+        }
+        if (std.mem.eql(u8, name, "close-panel")) {
+            return .close_panel;
+        }
+        if (std.mem.eql(u8, name, "refresh-panel")) {
+            return .refresh_panel;
         }
 
         const prefix = "select-tab-";

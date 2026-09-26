@@ -1,7 +1,8 @@
 //! Reads the wall clock in the user's time zone for bar callbacks.
 const builtin = @import("builtin");
 const std = @import("std");
-const LocalTime = @import("LocalTime.zig");
+const data = @import("model");
+const LocalTime = data.LocalTime;
 
 const time = @cImport({
     @cInclude("time.h");
@@ -20,16 +21,7 @@ const SystemTime = extern struct {
 
 extern "kernel32" fn GetLocalTime(system_time: *SystemTime) callconv(.winapi) void;
 
-/// The Unix epoch, reported when the clock or the time zone is unreadable.
-const epoch: LocalTime = .{
-    .year = 1970,
-    .month = 1,
-    .day = 1,
-    .hour = 0,
-    .minute = 0,
-    .second = 0,
-    .weekday = 4,
-};
+const epoch = LocalTime.epoch;
 
 /// Example: `const local = local_time.now();`
 pub fn now() LocalTime {

@@ -13,6 +13,8 @@ palette: *const data.Palette,
 hovered: ?context_support.Action,
 icon_theme: data.icons.Theme = .unicode,
 icon_plan: ?*Plan = null,
+/// Where bar slots record the components they had no room for.
+bar_overflow: ?*data.BarOverflow = null,
 
 pub fn isHovered(self: *const Context, action: context_support.Action) bool {
     const hovered = self.hovered orelse return false;

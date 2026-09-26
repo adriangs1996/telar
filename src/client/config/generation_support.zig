@@ -655,9 +655,9 @@ test "client bars compile styled static dynamic and command sources" {
     defer generation.deinit();
 
     const left = &generation.snapshot.bars.bottom[0].static;
-    try std.testing.expectEqual(@as(u8, 2), left.segment_count);
+    try std.testing.expectEqual(@as(u8, 2), left.node_count);
     try std.testing.expectEqual(data.icons.Icon.cpu, left.slice()[0].icon.?);
-    try std.testing.expectEqualStrings(" CPU", left.text(left.slice()[0]));
+    try std.testing.expectEqualStrings(" CPU", left.text(left.slice()[0].text));
     try std.testing.expectEqualDeep(data.bar_values.Color{ .palette = .teal }, left.slice()[0].style.foreground.?);
     try std.testing.expectEqualDeep(data.bar_values.Color{ .value = .rgb(.{ 1, 2, 3 }) }, left.slice()[0].style.background.?);
     try std.testing.expect(left.slice()[0].style.bold);
@@ -697,22 +697,24 @@ test "client bars compile styled static dynamic and command sources" {
         },
     };
     const top = generation.snapshot.bars.top_right.dynamic;
-    const clock = try generation.invokeBar(.{ .reference = top.callback, .context = context }, &diagnostic);
+    var clock: data.Content = .{};
+    try generation.invokeBar(.{ .reference = top.callback, .context = context }, &clock, &diagnostic);
     try std.testing.expectEqual(@as(u64, std.time.ns_per_s), top.interval_ns);
-    try std.testing.expectEqual(@as(u8, 1), clock.segment_count);
+    try std.testing.expectEqual(@as(u8, 1), clock.node_count);
     try std.testing.expectEqual(data.icons.Icon.battery_full, clock.slice()[0].icon.?);
-    try std.testing.expectEqualStrings(" 2026-09-01 13:05:09 61%", clock.text(clock.slice()[0]));
+    try std.testing.expectEqualStrings(" 2026-09-01 13:05:09 61%", clock.text(clock.slice()[0].text));
     try std.testing.expect(!clock.slice()[0].style.faint);
 
     var command_context = context;
     command_context.command_output = "74%";
-    const quota = try generation.invokeBar(.{
+    var quota: data.Content = .{};
+    try generation.invokeBar(.{
         .reference = command.render.?,
         .context = command_context,
-    }, &diagnostic);
-    try std.testing.expectEqual(@as(u8, 2), quota.segment_count);
-    try std.testing.expectEqualStrings("74%", quota.text(quota.slice()[0]));
-    try std.testing.expectEqualStrings(" 3", quota.text(quota.slice()[1]));
+    }, &quota, &diagnostic);
+    try std.testing.expectEqual(@as(u8, 2), quota.node_count);
+    try std.testing.expectEqualStrings("74%", quota.text(quota.slice()[0].text));
+    try std.testing.expectEqualStrings(" 3", quota.text(quota.slice()[1].text));
     try std.testing.expect(quota.slice()[1].style.underline);
 }
 
@@ -733,6 +735,7 @@ test "bar callback context tables are immutable" {
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 9 });
     defer generation.deinit();
     const callback = generation.snapshot.bars.bottom[0].dynamic.callback;
+    var content: data.Content = .{};
 
     try std.testing.expectError(error.LuaBarCallbackFailed, generation.invokeBar(.{
         .reference = callback,
@@ -741,7 +744,7 @@ test "bar callback context tables are immutable" {
             .time = .{ .unix_seconds = 1, .year = 2026, .month = 9, .day = 1, .hour = 12, .minute = 0, .second = 0, .weekday = 2 },
             .metrics = null,
         },
-    }, &diagnostic));
+    }, &content, &diagnostic));
     try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), "immutable") != null);
 }
 
@@ -750,7 +753,9 @@ test "client bars default the sidebar footer to metrics and accept a bounded slo
     const defaults = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@config.lua", .number = 1 });
     defer defaults.deinit();
     try std.testing.expectEqualDeep([3]data.bar_values.Source{ .metrics, .empty, .empty }, defaults.snapshot.bars.sidebar_footer);
-    try std.testing.expectEqualDeep([3]data.bar_values.Slot{ .metrics, .empty, .empty }, defaults.snapshot.bars.presentation().sidebar_footer);
+    const presented = defaults.snapshot.bars.presentation().sidebar_footer;
+    try std.testing.expect(presented[0].content.eql(&data.bar_values.metrics_content));
+    try std.testing.expect(presented[1] == .empty and presented[2] == .empty);
 
     const source =
         \\local t = require('telar')
@@ -763,7 +768,7 @@ test "client bars default the sidebar footer to metrics and accept a bounded slo
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 3 });
     defer generation.deinit();
     const footer = &generation.snapshot.bars.sidebar_footer;
-    try std.testing.expectEqualStrings("left", footer[0].static.text(footer[0].static.slice()[0]));
+    try std.testing.expectEqualStrings("left", footer[0].static.text(footer[0].static.slice()[0].text));
     try std.testing.expect(footer[1] == .metrics);
     try std.testing.expectEqual(@as(u64, 500 * std.time.ns_per_ms), footer[2].dynamic.interval_ns);
     const layout = generation.snapshot.bars.presentation();

@@ -1,5 +1,8 @@
 //! Owns configured bar ticks, bounded Lua evaluation and command workers.
+//! The open panel's source and the clock components share the same timer,
+//! the same one-callback-per-event budget and the same single command.
 
+const PanelRequest = @import("PanelRequest.zig");
 const pacing = @import("pacing");
 const bar_update = @import("bar_update.zig");
 const local_time = @import("../resources/local_time.zig");
@@ -35,14 +38,22 @@ pub fn handleTick(client: *Client, result: anyerror!void) !void {
         try synchronizeBars(client);
         return;
     };
-    const due = client.model.bar_updates.takeDue(.{
+    const state = &client.model.bar_updates;
+    const due = state.takeDue(.{
         .generation = generation.number,
         .configuration = configuration,
         .now_ns = pacing.clock.monotonic(client.io),
+        .panel_source = openPanelSource(client, configuration),
     });
 
-    client.model.bar_updates.pending_callbacks |= due.dynamic_mask;
-    client.model.bar_updates.pending_commands |= due.command_mask;
+    state.pending_callbacks |= due.dynamic_mask;
+    state.pending_commands |= due.command_mask;
+    state.pending_panel_callback = state.pending_panel_callback or due.panel_callback;
+    state.pending_panel_command = state.pending_panel_command or due.panel_command;
+    if (due.clock) {
+        advanceClock(client);
+    }
+
     try invokeNextCallback(client, configuration);
     try startNextCommand(client);
     try rearm(client);
@@ -54,39 +65,190 @@ pub fn handleTick(client: *Client, result: anyerror!void) !void {
 /// try completeCommand(client, completion);
 /// ```
 pub fn completeCommand(client: *Client, completion: BarUpdatesCompletion) !void {
+    defer releaseOutput(completion.result);
     const execution = client.model.bar_updates.finishCommand(completion.execution_id) orelse return;
     const generation = client.lua_generation;
     const configuration = barConfiguration(client);
     if (generation != null and configuration != null and generation.?.number == execution.generation) {
-        const source = configuration.?.source(execution.position);
-        if (source.* == .command and source.command.generation == execution.generation) {
-            if (completion.result) |output| {
-                try applyCommandOutput(client, .{
-                    .execution = execution,
-                    .command = source.command,
-                    .output = output,
-                });
-            } else |err| {
-                _ = try publishFailure(&client.model, .{
-                    .generation = execution.generation,
-                    .position = execution.position,
-                    .reason = err,
-                    .kind = "command",
-                });
-            }
+        switch (execution.target) {
+            .bar => |position| try completeBarCommand(client, .{
+                .execution = execution,
+                .position = position,
+                .configuration = configuration.?,
+                .result = completion.result,
+            }),
+            .panel => |run| try completePanelCommand(client, .{
+                .execution = execution,
+                .run = run,
+                .configuration = configuration.?,
+                .result = completion.result,
+            }),
         }
     }
 
     try startNextCommand(client);
 }
 
+/// Opens or closes a configured panel for an `open_panel` action. A panel
+/// opened by a key binding appears above the bar component that opens it.
+///
+/// ```zig
+/// try bar_updates.togglePanel(client, .{ .index = 0, .anchor = null });
+/// ```
+pub fn togglePanel(client: *Client, request: PanelRequest) !void {
+    const configuration = barConfiguration(client) orelse return;
+    const definition = configuration.panel(request.index) orelse return;
+    data.bar_panels.toggle(&client.model, .{
+        .target = .{ .configured = request.index },
+        .anchor = request.anchor orelse data.bar_panels.anchorFor(&client.model.bars.layout, request.index),
+        .source = &definition.source,
+        .now_ns = pacing.clock.monotonic(client.io),
+    });
+
+    try rearm(client);
+}
+
+/// Opens or closes the list of components a narrow bar had no room for.
+/// Example: `try bar_updates.toggleOverflow(client);`
+pub fn toggleOverflow(client: *Client) !void {
+    data.bar_panels.toggle(&client.model, .{
+        .target = .overflow,
+        .now_ns = pacing.clock.monotonic(client.io),
+    });
+
+    try rearm(client);
+}
+
+/// Example: `try bar_updates.closePanel(client);`
+pub fn closePanel(client: *Client) !void {
+    data.bar_panels.close(&client.model);
+    try rearm(client);
+}
+
+/// Example: `try bar_updates.refreshPanel(client);`
+pub fn refreshPanel(client: *Client) !void {
+    data.bar_panels.refresh(&client.model, pacing.clock.monotonic(client.io));
+    try rearm(client);
+}
+
+fn completeBarCommand(client: *Client, finished: FinishedBarCommand) !void {
+    const source = finished.configuration.source(finished.position);
+    if (source.* != .command or source.command.generation != finished.execution.generation) {
+        return;
+    }
+
+    if (finished.result) |output| {
+        try applyCommandOutput(client, .{
+            .generation = finished.execution.generation,
+            .position = finished.position,
+            .command = source.command,
+            .output = output.slice(),
+        });
+    } else |err| {
+        _ = try publishFailure(&client.model, .{
+            .generation = finished.execution.generation,
+            .position = finished.position,
+            .reason = err,
+            .kind = "command",
+        });
+    }
+}
+
+fn completePanelCommand(client: *Client, finished: FinishedPanelCommand) !void {
+    const definition = finished.configuration.panel(finished.run.index) orelse return;
+    if (definition.source != .command or definition.source.command.generation != finished.execution.generation) {
+        return;
+    }
+
+    const output = finished.result catch |err| {
+        var diagnostic: data.Diagnostic = .{};
+        diagnostic.set("panel '{s}' command failed: {s}", .{ definition.heading.name(), @errorName(err) });
+        return failPanel(client, .{
+            .generation = finished.execution.generation,
+            .run = finished.run,
+            .reason = err,
+            .diagnostic = diagnostic,
+        });
+    };
+
+    try renderPanel(client, .{
+        .generation = finished.execution.generation,
+        .run = finished.run,
+        .render = definition.source.command.render,
+        .output = output.slice(),
+    });
+}
+
+fn renderPanel(client: *Client, request: PanelRender) !void {
+    var content: data.PanelContent = .{};
+    var diagnostic: data.Diagnostic = .{};
+    const reference = request.render orelse {
+        if (request.output) |text| {
+            _ = content.append(.{
+                .kind = .text,
+                .text = text,
+            }) catch |err| return failPanel(client, .{
+                .generation = request.generation,
+                .run = request.run,
+                .reason = err,
+                .diagnostic = diagnostic,
+            });
+        }
+
+        return receivePanel(client, request, content);
+    };
+    const generation = client.lua_generation orelse return;
+    generation.invokeBar(.{
+        .reference = reference,
+        .context = callbackContext(client, request.output),
+        .surface = .panel,
+    }, &content, &diagnostic) catch |err| {
+        if (diagnostic.len == 0) {
+            diagnostic.set("panel callback failed: {s}", .{@errorName(err)});
+        }
+
+        return failPanel(client, .{
+            .generation = request.generation,
+            .run = request.run,
+            .reason = err,
+            .diagnostic = diagnostic,
+        });
+    };
+
+    try receivePanel(client, request, content);
+}
+
+fn receivePanel(client: *Client, request: PanelRender, content: data.PanelContent) !void {
+    _ = data.bar_panels.receive(&client.model, .{
+        .generation = request.generation,
+        .run = request.run,
+        .content = content,
+        .time = local_time.now(),
+    });
+}
+
+fn failPanel(client: *Client, failure: PanelFailure) !void {
+    if (data.bar_panels.fail(&client.model, failure.generation, failure.run) == .stale) {
+        return;
+    }
+
+    _ = try client_diagnostic.replace(&client.model, .{
+        .diagnostic = failure.diagnostic,
+        .invalid_fallback = client_diagnostic.formatted(
+            "panel source failed: {s}",
+            .{@errorName(failure.reason)},
+        ),
+    });
+}
+
 fn invokeCallback(client: *Client, request: CallbackRequest) !bar_update.Outcome {
     const generation = client.lua_generation orelse return .stale;
     var diagnostic: data.Diagnostic = .{};
-    const content = generation.invokeBar(.{
+    var content: data.Content = .{};
+    generation.invokeBar(.{
         .reference = request.reference,
         .context = callbackContext(client, request.output),
-    }, &diagnostic) catch |err| {
+    }, &content, &diagnostic) catch |err| {
         if (diagnostic.len == 0) {
             diagnostic.set("bar callback failed: {s}", .{@errorName(err)});
         }
@@ -108,20 +270,20 @@ fn invokeCallback(client: *Client, request: CallbackRequest) !bar_update.Outcome
 fn applyCommandOutput(client: *Client, completed: CommandOutput) !void {
     if (completed.command.render) |reference| {
         _ = try invokeCallback(client, .{
-            .position = completed.execution.position,
+            .position = completed.position,
             .reference = reference,
-            .output = completed.output.slice(),
+            .output = completed.output,
         });
         return;
     }
 
     var content: data.Content = .{};
     if (completed.output.len != 0) {
-        try content.append(.{ .text = completed.output.slice() });
+        try content.appendSegment(.{ .text = completed.output });
     }
     _ = try publishEvaluation(&client.model, .{
-        .generation = completed.execution.generation,
-        .position = completed.execution.position,
+        .generation = completed.generation,
+        .position = completed.position,
         .result = .{ .content = content },
     });
 }
@@ -176,13 +338,15 @@ fn callbackContext(client: *const Client, output: ?[]const u8) BarCallbackContex
     };
 }
 
+/// Runs one pending render per event: bar positions first, then the panel.
 fn invokeNextCallback(client: *Client, configuration: *const data.BarConfiguration) !void {
+    const state = &client.model.bar_updates;
     for (std.enums.values(data.bar_values.Position)) |position| {
-        if (client.model.bar_updates.pending_callbacks & position.bit() == 0) {
+        if (state.pending_callbacks & position.bit() == 0) {
             continue;
         }
 
-        client.model.bar_updates.pending_callbacks &= ~position.bit();
+        state.pending_callbacks &= ~position.bit();
         const source = configuration.source(position);
         if (source.* != .dynamic) {
             continue;
@@ -194,33 +358,76 @@ fn invokeNextCallback(client: *Client, configuration: *const data.BarConfigurati
         });
         return;
     }
+
+    if (!state.pending_panel_callback) {
+        return;
+    }
+
+    state.pending_panel_callback = false;
+    const run = state.panel_run orelse return;
+    const definition = configuration.panel(run.index) orelse return;
+    if (definition.source != .dynamic) {
+        return;
+    }
+
+    try renderPanel(client, .{
+        .generation = definition.source.dynamic.callback.generation,
+        .run = run,
+        .render = definition.source.dynamic.callback,
+    });
 }
 
 fn startNextCommand(client: *Client) !void {
-    if (client.model.bar_updates.command_execution != null) {
+    const state = &client.model.bar_updates;
+    if (state.command_execution != null) {
         return;
     }
     const generation = client.lua_generation orelse return;
     const configuration = barConfiguration(client) orelse return;
 
     for (std.enums.values(data.bar_values.Position)) |position| {
-        if (client.model.bar_updates.pending_commands & position.bit() == 0) {
+        if (state.pending_commands & position.bit() == 0) {
             continue;
         }
 
-        client.model.bar_updates.pending_commands &= ~position.bit();
+        state.pending_commands &= ~position.bit();
         const source = configuration.source(position);
         if (source.* != .command) {
             continue;
         }
 
-        const execution = try client.model.bar_updates.reserveCommand(generation.number, position);
-        client.to_workers.push(.{ .bar_command = .{ .execution_id = execution.id, .command = source.command } }) catch |err| {
-            client.model.bar_updates.command_execution = null;
-            return err;
-        };
+        return startCommand(client, .{
+            .generation = generation.number,
+            .target = .{ .bar = position },
+            .command = source.command,
+        });
+    }
+
+    if (!state.pending_panel_command) {
         return;
     }
+
+    state.pending_panel_command = false;
+    const run = state.panel_run orelse return;
+    const definition = configuration.panel(run.index) orelse return;
+    if (definition.source != .command) {
+        return;
+    }
+
+    try startCommand(client, .{
+        .generation = generation.number,
+        .target = .{ .panel = run },
+        .command = definition.source.command,
+    });
+}
+
+fn startCommand(client: *Client, start: CommandStart) !void {
+    const state = &client.model.bar_updates;
+    const execution = try state.reserveCommand(start.generation, start.target);
+    client.to_workers.push(.{ .bar_command = .{ .execution_id = execution.id, .command = start.command } }) catch |err| {
+        state.command_execution = null;
+        return err;
+    };
 }
 
 fn commitContent(model: *data.ClientModel, command: BarUpdateCommand, content: data.Content) !bar_update.Outcome {
@@ -255,6 +462,35 @@ fn commitFailure(model: *data.ClientModel, command: BarUpdateCommand, failure: B
     return .{ .failed = failure.reason };
 }
 
+/// Shows the current local time in clock components and arms the next
+/// minute (or second) only while the layout has a clock.
+fn advanceClock(client: *Client) void {
+    const now = local_time.now();
+    const state = &client.model.bar_updates;
+    const period = data.bar_clock.period(&client.model.bars.layout) orelse {
+        state.scheduleClock(no_deadline);
+        return;
+    };
+
+    if (!std.meta.eql(client.model.bars.now, now)) {
+        client.model.bars.now = now;
+        client.model.bars_revision +%= 1;
+    }
+
+    state.scheduleClock(pacing.clock.monotonic(client.io) + data.bar_clock.untilNext(period, now));
+}
+
+fn openPanelSource(client: *const Client, configuration: *const data.BarConfiguration) ?*const data.bar_values.Source {
+    const run = client.model.bar_updates.panel_run orelse return null;
+    const definition = configuration.panel(run.index) orelse return null;
+    return &definition.source;
+}
+
+fn releaseOutput(result: anyerror!Output) void {
+    var output = result catch return;
+    output.deinit();
+}
+
 /// Keeps one timer for the earliest bar deadline or an immediate pending
 /// callback. A timer the queue rejects releases its reservation so the next
 /// attempt can retry.
@@ -273,7 +509,8 @@ pub fn rearm(client: *Client) !void {
 /// The timer the bar deadlines need, or null while the pending one still
 /// fits or nothing is due.
 fn timerJob(io: std.Io, state: *data.BarUpdatesState) ?Job {
-    const deadline_ns = if (state.pending_callbacks != 0) pacing.clock.monotonic(io) else state.nextDeadline();
+    const immediate = state.pending_callbacks != 0 or state.pending_panel_callback;
+    const deadline_ns = if (immediate) pacing.clock.monotonic(io) else state.nextDeadline();
 
     return switch (state.scheduler.update(io, deadline_ns)) {
         .idle, .retained => null,
@@ -326,9 +563,44 @@ const CallbackRequest = struct {
 };
 
 const CommandOutput = struct {
-    execution: data.CommandExecution,
+    generation: u64,
+    position: data.bar_values.Position,
     command: data.BarCommand,
-    output: Output,
+    output: []const u8,
+};
+
+const CommandStart = struct {
+    generation: u64,
+    target: data.CommandTarget,
+    command: data.BarCommand,
+};
+
+const FinishedBarCommand = struct {
+    execution: data.CommandExecution,
+    position: data.bar_values.Position,
+    configuration: *const data.BarConfiguration,
+    result: anyerror!Output,
+};
+
+const FinishedPanelCommand = struct {
+    execution: data.CommandExecution,
+    run: data.PanelRun,
+    configuration: *const data.BarConfiguration,
+    result: anyerror!Output,
+};
+
+const PanelRender = struct {
+    generation: u64,
+    run: data.PanelRun,
+    render: ?data.CallbackRef,
+    output: ?[]const u8 = null,
+};
+
+const PanelFailure = struct {
+    generation: u64,
+    run: data.PanelRun,
+    reason: anyerror,
+    diagnostic: data.Diagnostic,
 };
 
 /// Borrows bar sources only when Lua and the model agree on their generation.
@@ -353,6 +625,16 @@ pub fn synchronizeBars(client: *Client) !void {
             .now_ns = pacing.clock.monotonic(client.io),
         },
     );
+    // A reload that kept the layout keeps its open panel; its source starts
+    // again under the new generation.
+    const panel = &client.model.bars.panel;
+    if (panel.configured()) |index| {
+        client.model.bar_updates.startPanel(.{
+            .index = index,
+            .opening = panel.opening,
+        }, pacing.clock.monotonic(client.io));
+    }
+    advanceClock(client);
 
     try rearm(client);
 }

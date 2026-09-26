@@ -626,7 +626,7 @@ test "system metrics commit before presenter-owned projection" {
     try std.testing.expectEqual(@as(u16, 0), expanded_bottom.x);
     try std.testing.expectEqual(terminal.presenter.screen.front.w, expanded_bottom.w);
     try std.testing.expect(std.mem.indexOf(u8, expanded_text, " 50%") != null);
-    try std.testing.expect(std.mem.indexOf(u8, expanded_text, " 1.0G") != null);
+    try std.testing.expect(std.mem.indexOf(u8, expanded_text, "1.0 GB") != null);
     try std.testing.expect(std.mem.indexOf(u8, expanded_text, "80%") != null);
 }
 

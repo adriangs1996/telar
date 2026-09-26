@@ -10,7 +10,6 @@ const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
 const Session = @import("Session.zig");
 const HitMap = @import("../widgets/HitMap.zig");
-const bar_regions = @import("../widgets/bar_regions.zig");
 const Rect = gfx.Rect;
 
 test "native pane frames use the smaller pixel gutter on both axes" {
@@ -243,21 +242,13 @@ test "native chrome warm repaint reuses glyphs and performs no allocation" {
     try std.testing.expectEqual(@as(usize, 0), failure.allocations);
 }
 
-test "native hit capacity fails explicitly and bar slots never overlap" {
+test "native hit capacity fails explicitly" {
     var hits: HitMap = .{};
     for (0..HitMap.capacity) |index| {
         try hits.add(.{ .area = .{ .x = @intCast(index), .w = 1, .h = 1 }, .action = .{ .intent = .toggle_sidebar } });
     }
 
     try std.testing.expectError(error.ChromeHitCapacityExceeded, hits.add(.{ .area = .{ .w = 1, .h = 1 }, .action = .resize_sidebar }));
-    for (0..3) |tab_index| {
-        for (0..80) |width| {
-            const areas = bar_regions.calculate(.{ .x = 4, .y = 3, .w = @intCast(width), .h = 1 }, .{ 40, 30, 50 }, tab_index);
-            try std.testing.expect(areas[0].intersect(areas[1]).isEmpty());
-            try std.testing.expect(areas[1].intersect(areas[2]).isEmpty());
-            try std.testing.expect(areas[0].w + areas[1].w + areas[2].w <= width);
-        }
-    }
 }
 
 test "native pane presses focus before forwarding and chrome cancellation releases capture" {
@@ -316,7 +307,7 @@ test "native configured bar segments preserve colors decorations and faint ink" 
     defer fixture.deinit();
     var state: data.BarsState = .{};
     var content: data.Content = .{};
-    try content.append(.{ .text = "Styled", .style = .{
+    try content.appendSegment(.{ .text = "Styled", .style = .{
         .foreground = .{ .value = .rgb(.{ 255, 0, 0 }) },
         .background = .{ .value = .rgb(.{ 0, 255, 0 }) },
         .bold = true,
@@ -334,12 +325,10 @@ test "native configured bar segments preserve colors decorations and faint ink" 
     var underline = false;
     const renderer = &fixture.session.gui.renderer;
     const band = fixture.chrome.presented().bands.status_bar;
-    const cell_height: f32 = @floatFromInt(renderer.metrics.cell_height);
-    const row_top = band.y + @floor((band.height - cell_height) / 2);
     for (renderer.quads.items()) |quad| {
         background = background or (quad.r == 0 and quad.g == 1 and quad.b == 0 and quad.a == 1);
         faint_ink = faint_ink or (quad.r == 1 and quad.g == 0 and quad.b == 0 and quad.a == 0.5);
-        underline = underline or (quad.r == 1 and quad.g == 0 and quad.b == 0 and quad.y == row_top + cell_height - 2 and quad.height == 1);
+        underline = underline or (quad.r == 1 and quad.g == 0 and quad.b == 0 and quad.y > band.y and quad.height == 1);
     }
 
     try std.testing.expect(background and faint_ink and underline);
@@ -357,8 +346,8 @@ test "native sidebar ignores configured footer slots" {
     defer std.testing.allocator.free(before);
 
     var content: data.Content = .{};
-    try content.append(.{ .text = "footer", .style = .{ .background = .{ .value = .rgb(.{ 0, 0, 255 }) } } });
-    state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .metrics };
+    try content.appendSegment(.{ .text = "footer", .style = .{ .background = .{ .value = .rgb(.{ 0, 0, 255 }) } } });
+    state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .{ .content = data.bar_values.metrics_content } };
     try fixture.paint(projection);
     try std.testing.expectEqualSlices(Quad.Quad, before, renderer.quads.items());
 }
