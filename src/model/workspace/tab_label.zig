@@ -52,6 +52,13 @@ pub fn text(model: *const ClientModel, slot: usize) []const u8 {
     return applicationName(model, slot);
 }
 
+/// Artwork for the focused application of any tab, renamed or not, so every
+/// tab in the GUI strip carries a mark.
+/// Example: `const mark = tab_label.mark(model, slot);`
+pub fn mark(model: *const ClientModel, slot: usize) icons.Icon {
+    return icons.Icon.forApplication(applicationName(model, slot));
+}
+
 /// Artwork for a tab that follows its foreground application.
 /// Example: `if (tab_label.icon(model, slot)) |icon| draw(icon);`
 pub fn icon(model: *const ClientModel, slot: usize) ?icons.Icon {

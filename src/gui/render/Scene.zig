@@ -38,7 +38,7 @@ pub fn prepare(self: *Scene, projection: client.Projection) !data.PresentationCo
     const renderer = self.terminal;
     renderer.begin();
     self.chrome.animation.begin(self.chrome.now_ns);
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = self.theme, .background_opacity = renderer.config.window.background_opacity, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .sprites = if (renderer.sprites) |*page| page else null, .terminal_renderer = renderer };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = self.theme, .background_opacity = renderer.config.window.background_opacity, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .controls = renderer.controls, .sprites = if (renderer.sprites) |*page| page else null, .terminal_renderer = renderer };
     canvas.animation = &self.chrome.animation;
     canvas.widgets = self.widgets;
     canvas.diagrams = self.diagrams;

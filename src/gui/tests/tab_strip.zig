@@ -64,6 +64,27 @@ fn shadowed(quads: []const Quad, bounds: Rect) bool {
     return false;
 }
 
+fn outlined(quads: []const Quad, bounds: Rect) bool {
+    for (quads) |quad| {
+        if (quad.border > 0 and inside(quad, bounds)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// A translucent rounded square of `side` inside a tab: its mark's chip.
+fn chipped(quads: []const Quad, bounds: Rect, side: f32) bool {
+    for (quads) |quad| {
+        if (inside(quad, bounds) and quad.radius > 0 and quad.a > 0 and quad.a < 1 and quad.width == side and quad.height == side) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 fn colored(quads: []const Quad, bounds: Rect, color: cellgrid.Color) bool {
     const rgb = color.rgbChannels().?;
     for (quads) |quad| {
@@ -89,7 +110,7 @@ fn settle(fixture: *Fixture) !void {
     try fixture.paint(fixture.projection());
 }
 
-test "only the selected tab is filled and lifted by a translucent shadow" {
+test "only the selected tab is filled, without an outline or a shadow, and every tab has a chip" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try addTabs(&fixture, 3);
@@ -99,9 +120,13 @@ test "only the selected tab is filled and lifted by a translucent shadow" {
     const selected = fixture.bandTarget(.{ .select_tab = tabId(0) }).?;
     const other = fixture.bandTarget(.{ .select_tab = tabId(1) }).?;
     try std.testing.expect(filled(quads, selected));
-    try std.testing.expect(shadowed(quads, selected));
+    try std.testing.expect(!shadowed(quads, selected));
+    try std.testing.expect(!outlined(quads, selected));
     try std.testing.expect(!filled(quads, other));
     try std.testing.expect(!shadowed(quads, other));
+    for ([_]Rect{ selected, other }) |bounds| {
+        try std.testing.expect(chipped(quads, bounds, fixture.session.gui.renderer.chrome.px(20)));
+    }
 
     // Hover gives a quiet fill and no shadow.
     fixture.chrome.hovered = .{ .intent = .{ .select_tab = tabId(1) } };
@@ -300,4 +325,67 @@ test "a frozen strip still reveals a selection made from the keyboard" {
     const revealed = fixture.bandTarget(.{ .select_tab = tabId(count - 1) }).?;
     try std.testing.expect(revealed.width > fixture.session.gui.renderer.chrome.px(36));
     try std.testing.expect(fixture.chrome.pointer_in_tabs);
+}
+
+test "tab numbers show in the chips only while the prefix waits and never change widths" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try addTabs(&fixture, 3);
+    try fixture.showSidebar(false);
+    try settle(&fixture);
+    var plain: [3]?Rect = undefined;
+    tabBounds(&fixture, 3, &plain);
+    const chip = fixture.session.gui.renderer.chrome.px(20);
+    const before = glyphsIn(fixture.session.gui.renderer.quads.items(), plain[1].?, chip);
+
+    var projection = fixture.projection();
+    projection.status_mode = .{ .prefix = .{} };
+    fixture.chrome.now_ns += std.time.ns_per_s;
+    try fixture.paint(projection);
+    var numbered: [3]?Rect = undefined;
+    tabBounds(&fixture, 3, &numbered);
+    for (plain, numbered) |old, new| {
+        try std.testing.expectEqualDeep(old, new);
+    }
+
+    const during = glyphsIn(fixture.session.gui.renderer.quads.items(), numbered[1].?, chip);
+    try std.testing.expect(during.bold_text and !before.bold_text);
+}
+
+const ChipInk = struct {
+    bold_text: bool,
+};
+
+// Whether the chip at the tab's left holds glyph ink drawn in the text color,
+// as the number is; a mark uses the dimmed icon ink or a sprite.
+fn glyphsIn(quads: []const Quad, bounds: Rect, side: f32) ChipInk {
+    const chip: Rect = .{ .x = bounds.x, .y = bounds.y, .width = side + 10, .height = bounds.height };
+    var result: ChipInk = .{ .bold_text = false };
+    for (quads) |quad| {
+        if (inside(quad, chip) and quad.radius == 0 and quad.texture == 0 and quad.a > 0.99 and quad.r > 0.8 and quad.u0 != gfx.Quad.solid_uv[0]) {
+            result.bold_text = true;
+        }
+    }
+
+    return result;
+}
+
+test "navigation leaves the window controls their room before the toggle" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.showSidebar(false);
+    const renderer = &fixture.session.gui.renderer;
+    try fixture.measure(.{ .width = 1200, .height = 600, .scale = 1 });
+    try fixture.paint(fixture.projection());
+    const without = fixture.bandTarget(.toggle_sidebar).?;
+    try fixture.measure(.{ .width = 1200, .height = 600, .scale = 1, .controls = 78 });
+    try std.testing.expectEqual(@as(u32, 78), renderer.controls);
+    try fixture.paint(fixture.projection());
+    const with = fixture.bandTarget(.toggle_sidebar).?;
+    try std.testing.expect(with.x >= 78);
+    try std.testing.expect(with.x > without.x);
+    const top = fixture.chrome.presented().bands.top_bar;
+    try std.testing.expectApproxEqAbs(top.y + top.height / 2, with.y + with.height / 2, 1);
+    try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?.x > with.x + with.width);
+    try std.testing.expectEqual(renderer.chrome.top_bar, renderer.frame(1).navigation);
 }

@@ -169,7 +169,7 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
     try std.testing.expectEqual(@as(f32, 480), gui.sidebar.logical);
 }
 
-test "collapsing the sidebar returns all but the rail to the grid and moves the toggle into the rail" {
+test "collapsing the sidebar returns all but the rail to the grid and keeps the toggle in navigation" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.paint(fixture.projection());
@@ -188,11 +188,9 @@ test "collapsing the sidebar returns all but the rail to the grid and moves the 
     const navigation = fixture.chrome.presented().bands.top_bar;
     try std.testing.expect(renderer.sidebar.rail);
     try std.testing.expectEqual(@as(f32, 52), rail.width);
-    try std.testing.expectEqual(@as(f32, 0), rail.y);
-    try std.testing.expectEqual(rail.width, navigation.x);
-    try std.testing.expectEqual(top.width - rail.width, navigation.width);
-    const moved = fixture.bandTarget(.toggle_sidebar).?;
-    try std.testing.expect(moved.x >= rail.x and moved.x + moved.width <= rail.x + rail.width);
+    try std.testing.expectEqual(navigation.height, rail.y);
+    try std.testing.expectEqualDeep(top, navigation);
+    try std.testing.expectEqualDeep(toggle, fixture.bandTarget(.toggle_sidebar).?);
     const tab = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
     try std.testing.expect(tab.x >= navigation.x and tab.y < navigation.height);
     try std.testing.expect(fixture.resizeHandle() == null);

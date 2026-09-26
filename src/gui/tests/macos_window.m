@@ -195,11 +195,18 @@ static void draw(id view, SEL selector, id drawable) {
             ((TelarWindowBackground *)window.contentView).appliedBlurRadius != radius ||
             (!fullscreen_in_progress && (window.titleVisibility != (titlebar ? NSWindowTitleVisible : NSWindowTitleHidden) ||
             !!(window.styleMask & NSWindowStyleMaskFullSizeContentView) == titlebar ||
-            [window standardWindowButton:NSWindowCloseButton].isHidden == titlebar)) ||
+            [window standardWindowButton:NSWindowCloseButton].isHidden)) ||
             !NSEqualRects(outer_frame, window.frame) ||
             (was_key && (!window.isKeyWindow || window.firstResponder != responder)) ||
             window.alphaValue != 1.0) failed++;
         if (!titlebar && !fullscreen_in_progress) {
+            // The traffic lights stay visible over the transparent titlebar,
+            // centered on Telar's navigation row and reported as its inset.
+            NSButton *close = [window standardWindowButton:NSWindowCloseButton];
+            NSRect light = [close convertRect:close.bounds toView:nil];
+            CGFloat row = 84 / window.backingScaleFactor;
+            CGFloat center = window.frame.size.height - NSMidY(light);
+            if (fabs(center - row / 2) > 1 || fabs(light.origin.x - 14) > 1 || ((TelarWindow *)window).controlsInset < 60) failed++;
             NSView *terminal = view;
             NSPoint top = NSMakePoint(NSMidX(terminal.bounds), terminal.bounds.size.height - 8);
             NSView *frame_view = window.contentView.superview;
@@ -247,7 +254,7 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
     CAMetalLayer *layer = (CAMetalLayer *)terminal_view(NSApp.windows.firstObject.contentView).layer;
     if (layer && (viewport.width != (uint32_t)layer.drawableSize.width ||
                   viewport.height != (uint32_t)layer.drawableSize.height)) failed++;
-    *frame = (telar_gui_frame){.token = ++paints, .quads = quads, .quad_count = appearance_phase == 2 ? 4 : 6, .atlas = pixels, .atlas_side = 2, .atlas_version = 1, .sprites = sprite_pixels, .sprites_side = 2, .sprites_version = 1, .background = {.2f,.3f,.4f,appearance_phase == 2 ? 1 : .5f}, .background_blur = appearance_phase == 0 ? 40 : appearance_phase == 1 || appearance_phase == 4 ? 80 : 0, .titlebar = appearance_phase != 1 && appearance_phase != 4};
+    *frame = (telar_gui_frame){.token = ++paints, .quads = quads, .quad_count = appearance_phase == 2 ? 4 : 6, .atlas = pixels, .atlas_side = 2, .atlas_version = 1, .sprites = sprite_pixels, .sprites_side = 2, .sprites_version = 1, .background = {.2f,.3f,.4f,appearance_phase == 2 ? 1 : .5f}, .background_blur = appearance_phase == 0 ? 40 : appearance_phase == 1 || appearance_phase == 4 ? 80 : 0, .titlebar = appearance_phase != 1 && appearance_phase != 4, .navigation = 84};
     if (appearance_phase != 2) {
         frame->diagrams[0] = (telar_gui_diagram_texture){sprite_pixels, 4, 1, 1};
         frame->diagrams[7] = (telar_gui_diagram_texture){sprite_pixels, 1, 4, appearance_phase + 1};

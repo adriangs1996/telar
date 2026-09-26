@@ -38,19 +38,19 @@ test "chrome bands leave complete cells below them and share the pointer origin"
         defer quads.deinit();
         const canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = data.theme_support.default_theme, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar };
         const bands = Bands.resolve(&canvas);
-        // The collapsed sidebar is the rail: it runs from the window's top and
-        // navigation starts beside it.
+        // The collapsed sidebar is the rail below navigation, which spans the
+        // window so the window's own controls can share its row.
         const rail: f32 = @floatFromInt(renderer.sidebar.width);
         try std.testing.expect(renderer.sidebar.rail and bands.rail);
         try std.testing.expectEqual(@round(52 * scale), rail);
         try std.testing.expectEqual(@as(f32, @floatFromInt(renderer.origin[1])), bands.top_bar.y + bands.top_bar.height);
-        try std.testing.expectEqual(rail, bands.top_bar.x);
+        try std.testing.expectEqual(@as(f32, 0), bands.top_bar.x);
         try std.testing.expectEqual(rail, bands.sidebar.width);
-        try std.testing.expectEqual(@as(f32, 0), bands.sidebar.y);
+        try std.testing.expectEqual(bands.top_bar.height, bands.sidebar.y);
         try std.testing.expectEqual(bands.status_bar.y, bands.sidebar.y + bands.sidebar.height);
         const grid_bottom = canvas.rect(.{ .x = 0, .y = size.rows - 1, .w = 1, .h = 1 });
         try std.testing.expect(grid_bottom.y + grid_bottom.height <= bands.status_bar.y);
-        try std.testing.expect(!bands.contains(bands.top_bar.x, @floatFromInt(renderer.origin[1])));
+        try std.testing.expect(!bands.contains(@floatFromInt(renderer.origin[0]), @floatFromInt(renderer.origin[1])));
         try std.testing.expect(bands.contains(bands.top_bar.x, bands.top_bar.y));
     }
 

@@ -239,49 +239,59 @@ cannot change which list receives a pointer event.
 
 A collapsed sidebar keeps a workspace rail (`widgets/WorkspaceRail.zig`):
 a band of `SidebarBand.logical_rail` (52) logical px with the same 8 px gap,
-running from the top of the window to the status bar, while navigation starts
-beside it. The sidebar toggle sits at its top. Below it, one 36 px mark per
-project in runtime order shows the favicon, or the folder glyph, with its
-one-based position in the bottom-right corner. The selected project has a
-`surface1` surface and a 3 px accent bar on the rail's edge; hover draws a
-`surface0` surface. Agent attention is a dot in the top-right corner inside a
-ring of the rail's background. When the rail is too short for every project,
-the window centred on the selection keeps its marks and `+N` counters above
-and below select the nearest hidden project and keep the attention of the
-ones they hide. Hovering a mark shows `RailTooltip` beside the rail, above the
-panes: the project's name and what it runs, `N waiting`, else `N agents`,
-else `N tabs`. The tooltip paints only; the mark owns the target.
+running from under navigation to the status bar. One 36 px mark per project
+in runtime order shows the favicon, or the folder glyph, with its one-based
+position in the bottom-right corner. The selected project has a `surface1`
+surface and a 3 px accent bar on the rail's edge; hover draws a `surface0`
+surface. Agent attention is a dot in the top-right corner inside a ring of the
+rail's background. When the rail is too short for every project, the window
+centred on the selection keeps its marks and `+N` counters above and below
+select the nearest hidden project and keep the attention of the ones they
+hide. Hovering a mark shows `RailTooltip` beside the rail, above the panes:
+the project's name and what it runs, `N waiting`, else `N agents`, else
+`N tabs`. The tooltip paints only; the mark owns the target.
 
-Beside the rail the top bar names the current context, the listed project's
+Navigation spans the window and shares its row with the window's own
+controls. On macOS, with `gui.window.titlebar = false`, the traffic lights
+stay visible over a transparent titlebar: `TelarWindow` centres them on the
+navigation row the frame reports (`telar_gui_frame.navigation`) at a 14 pt
+lead and 20 pt pitch, and reports the points they cover through
+`telar_gui_viewport.controls`, zero in fullscreen, with the native titlebar
+and on Linux. After that room comes the sidebar toggle, a glyph with a quiet
+hover surface. Above the rail the context name follows, the listed project's
 name or the unlisted workspace or worktree label, then a separator, then the
-tabs. With the sidebar expanded the top bar keeps the toggle and the tabs
-start where the workbench starts. Only a window too narrow for the rail, or
-an expanded sidebar too short for project rows, falls back to the compact
-top-bar indicators (`WorkspaceIndicators`). All navigation still uses the
-shared client intents; the GUI keeps only bounded disposable scroll and
-pointer state. Configured metrics and other widgets belong in the bottom
-status bar.
+tabs; with the sidebar expanded the tabs start where the workbench starts.
+Only a window too narrow for the rail, or an expanded sidebar too short for
+project rows, falls back to the compact top-bar indicators
+(`WorkspaceIndicators`). All navigation still uses the shared client intents;
+the GUI keeps only bounded disposable scroll and pointer state. Configured
+metrics and other widgets belong in the bottom status bar.
 
 The tab strip (`widgets/TabStrip.zig`) packs tabs from the left, each a
-28 px pill: its dimmed number, the application mark, the caption and a
-trailing status. The caption is `tab_label.caption`: a manual label, else the
-focused pane's agent session title once it is no longer a placeholder, else
-the focused directory beside the foreground application (`replay-web ·
-fish`). The status is the selected pane's progress report, else the tab's
-most urgent agent: a spinner stepping every 120 ms while it works, a dot in
-the attention colour when it waits, fails or is done. Only the selected tab
-has a fill, a hairline and a shadow; hover gives the others a quiet fill.
+30 px pill with a 10 px radius: a 20 px translucent chip holding the
+application mark (`tab_label.mark`, the focused application's even for a
+renamed tab), the caption and a trailing status. While the prefix waits for a
+digit the chips show the tabs' numbers instead, so widths never change. The
+caption is `tab_label.caption`: a manual label, else the focused pane's agent
+session title once it is no longer a placeholder, else the focused directory
+beside the foreground application (`replay-web · fish`). The status is the
+selected pane's progress report, else the tab's most urgent agent: a spinner
+stepping every 120 ms while it works, a dot in the attention colour when it
+waits, fails or is done. Only the selected tab is filled, with no outline or
+shadow; hover gives the others a quieter fill and brightens their mark.
 The selected tab keeps its whole caption up to 300 px or 55 % of the strip.
 The others share the rest at the richest fit that holds all of them: whole
-captions up to 220 px, captions truncated to a common cap no shorter than
-56 px of text, number and mark, then the mark alone. Truncated captions fade
-over their last 20 px instead of ending in an ellipsis. Past the marks, the
-tabs farthest from the selection hide behind a `+N` counter that selects the
-nearest hidden tab and keeps their attention dot, and `+` follows the last
-visible control. While the pointer rests on the strip, widths stay laid out
-around the tab they were built for, so a click changes the selection without
-moving tabs under the pointer; leaving the strip relayouts it, and a
-selection the frozen layout would hide rebuilds it at once.
+captions up to 220 px, then captions truncated to a common cap no shorter
+than 56 px of text. When not every caption fits, the tabs nearest the
+selection keep one and the farther ones shrink to their chip, so no usable
+room is left over. Truncated captions fade over their last 20 px instead of
+ending in an ellipsis. Past the chips, the tabs farthest from the selection
+hide behind a `+N` counter that selects the nearest hidden tab and keeps
+their attention dot, and `+` follows the last visible control. While the
+pointer rests on the strip, widths stay laid out around the tab they were
+built for, so a click changes the selection without moving tabs under the
+pointer; leaving the strip relayouts it, and a selection the frozen layout
+would hide rebuilds it at once.
 
 During the empty tab-model phase of a workspace handoff, the top bar retains
 the last delivered project identity while it remains in the workspace list.

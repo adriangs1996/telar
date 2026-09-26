@@ -1,8 +1,9 @@
-//! Navigation above the workbench. Beside the workspace rail it names the
-//! current context and packs the tabs from the left after a separator. With
-//! the sidebar expanded it holds the sidebar toggle and starts the tabs where
-//! the workbench starts. When the window cannot hold even the rail, compact
-//! workspace indicators follow the toggle as the last fallback.
+//! Navigation across the window, sharing its row with the window's own
+//! controls: room for the traffic lights, the sidebar toggle, then the tabs.
+//! Above the workspace rail it names the current context before the tabs;
+//! with the sidebar expanded the tabs start where the workbench starts. When
+//! the window cannot hold even the rail, compact workspace indicators follow
+//! the toggle as the last fallback.
 const data = @import("model");
 const SidebarRegions = @import("SidebarRegions.zig");
 const Bands = @import("Bands.zig");
@@ -20,7 +21,7 @@ const workspace_identity = @import("workspace_identity.zig");
 const TopBar = @This();
 
 const padding: f32 = 8;
-const toggle_width: f32 = 30;
+const toggle_side: f32 = 28;
 const control_height: f32 = 26;
 const control_gap: f32 = 8;
 const change_review_width: f32 = 36;
@@ -67,21 +68,21 @@ pub fn draw(self: TopBar, canvas: *Canvas) !void {
     const right = content.x + content.width;
     const height = @min(content.height, chrome.px(control_height));
     const middle = content.y + (content.height - height) / 2;
-    var left = content.x;
-    if (!band.rail) {
-        const width = @min(content.width, chrome.px(toggle_width));
-        const toggle: PixelButton = .{
-            .context = self.context,
-            .area = .{ .x = left, .y = middle, .width = width, .height = height },
-            .intent = .toggle_sidebar,
-            .text = "\u{2261}",
-            .active = band.expanded(),
-            .radius = chrome.px(6),
-            .inset = chrome.px(9),
-        };
-        try toggle.draw(canvas);
-        left += width + chrome.px(control_gap);
-    }
+    var left = @max(content.x, self.area.x + @as(f32, @floatFromInt(canvas.controls)));
+    const side = @min(@max(0, right - left), @min(content.height, chrome.px(toggle_side)));
+    const toggle: PixelButton = .{
+        .context = self.context,
+        .area = .{ .x = left, .y = content.y + (content.height - side) / 2, .width = side, .height = side },
+        .intent = .toggle_sidebar,
+        .text = "\u{2261}",
+        .active = band.expanded(),
+        .alignment = .center,
+        .background = false,
+        .hover_fill = true,
+        .radius = chrome.px(8),
+    };
+    try toggle.draw(canvas);
+    left += side + chrome.px(control_gap);
 
     if (try self.showsIndicators(canvas)) {
         const width = @max(0, @min(chrome.px(WorkspaceIndicators.preferredWidth(self.context)), @floor((right - left) / 2)));

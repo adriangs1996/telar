@@ -580,11 +580,13 @@ test "native automatic tabs show the foreground application mark and preserve ma
     const bounds = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
     try std.testing.expect(hasApplicationMark(fixture.session.gui.renderer.quads.items(), bounds));
 
-    // Choosing the same text explicitly still disables automatic naming.
+    // Choosing the same text explicitly still disables automatic naming; the
+    // mark keeps following the application, as the chip of every tab does.
     _ = try data.tab_rename.rename(model, Session.location.tab_id, "codex");
     _ = pane.setForegroundName("nvim");
     try fixture.paint(fixture.projection());
     try std.testing.expectEqualStrings("codex", data.tab_label.text(model, tab));
+    try std.testing.expectEqual(data.icons.Icon.app_editor, data.tab_label.mark(model, tab));
     try std.testing.expect(!hasApplicationMark(fixture.session.gui.renderer.quads.items(), fixture.bandTarget(
         .{
             .select_tab = Session.location.tab_id,

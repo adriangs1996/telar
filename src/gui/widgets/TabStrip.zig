@@ -1,10 +1,12 @@
-//! The tab group in navigation, packed from the left. The selected tab keeps
-//! its whole caption, carries the strip's only fill and casts a shadow. The
-//! others give up width in steps: whole caption, faded caption, number and
-//! mark, mark alone. Past that the tabs farthest from the selection hide
-//! behind a counter that keeps their attention. While the pointer rests on
-//! the strip, widths stay laid out around the tab they were built for, so a
-//! click changes the selection without moving tabs under the pointer.
+//! The tab group in navigation, packed from the left. Each tab is a quiet
+//! pill: its application mark in a translucent chip, its caption and a
+//! trailing status. Only the selected tab is filled; numbers appear in the
+//! chips only while the prefix waits for a digit. The selected tab keeps its
+//! whole caption while the others give up width in steps: whole caption,
+//! faded caption, chip alone. Past that the tabs farthest from the selection
+//! hide behind a counter that keeps their attention. While the pointer rests
+//! on the strip, widths stay laid out around the tab they were built for, so
+//! a click changes the selection without moving tabs under the pointer.
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const action_module = @import("action.zig");
@@ -25,11 +27,16 @@ const Label = @import("Label.zig");
 const PixelButton = @import("PixelButton.zig");
 const TabStrip = @This();
 
-const pill_height: f32 = 28;
-const pill_radius: f32 = 8;
-const lead: f32 = 8;
-const trail: f32 = 10;
-const spacing: f32 = 7;
+const pill_height: f32 = 30;
+const pill_radius: f32 = 10;
+const lead: f32 = 5;
+const trail: f32 = 12;
+const spacing: f32 = 8;
+const chip_side: f32 = 20;
+const chip_radius: f32 = 6;
+const chip_alpha: f32 = 0.06;
+const chip_selected_alpha: f32 = 0.1;
+const mark_side: f32 = 14;
 const strip_gap: f32 = 2;
 const inactive_max: f32 = 220;
 const selected_max: f32 = 300;
@@ -37,17 +44,12 @@ const selected_share: f32 = 0.55;
 const caption_min: f32 = 56;
 const fade_width: f32 = 20;
 const counter_width: f32 = 36;
-const plus_side: f32 = 28;
+const plus_side: f32 = 30;
 const dot_side: f32 = 6;
 const spinner_side: f32 = 12;
 const spinner_fraction: f32 = 0.3;
 const spinner_steps = 8;
 const spinner_step_ns = 120 * std.time.ns_per_ms;
-const shadow_layers = 3;
-const shadow_spread: f32 = 2;
-const shadow_drop: f32 = 2;
-const shadow_alpha: f32 = 0.08;
-const edge_alpha: f32 = 0.07;
 const cap_steps = 24;
 const max_tabs = core.max_tabs_per_workspace;
 
@@ -226,36 +228,18 @@ fn drawTab(self: TabStrip, canvas: *Canvas, entry: Painted) !void {
     const action: action_module.Action = .{ .intent = .{ .select_tab = location.tab_id } };
     const hovered = context.isHovered(action);
     const first = canvas.quads.items().len;
-    if (selected) {
-        try drawLift(canvas, bounds);
-    } else if (hovered) {
-        try canvas.fillRoundedAt(bounds, .{ .radius = chrome.px(pill_radius), .color = palette.surface0 });
+    if (selected or hovered) {
+        try canvas.fillRoundedAt(bounds, .{ .radius = chrome.px(pill_radius), .color = if (selected) palette.surface1 else palette.surface0 });
     }
 
     const size = entry.size;
     const status = self.statusOf(index, palette);
-    const status_width = size.status;
-    const status_right = bounds.x + bounds.width - chrome.px(if (entry.fit == .mark) lead else trail);
-    var x = bounds.x + chrome.px(lead);
-    if (entry.fit == .mark) {
-        x = bounds.x + @max(chrome.px(lead), (bounds.width - size.markOnly(.of(chrome)) + 2 * chrome.px(lead)) / 2);
-    }
+    const status_right = bounds.x + bounds.width - chrome.px(if (entry.fit == .compact) lead else trail);
+    const chip_width = @max(0, @min(size.chip, bounds.width - 2 * chrome.px(lead)));
+    const chip: Rect = .{ .x = bounds.x + chrome.px(lead), .y = bounds.y + (bounds.height - chip_width) / 2, .width = chip_width, .height = chip_width };
+    try self.drawChip(canvas, chip, .{ .index = index, .lit = selected or hovered });
 
-    var number_storage: [8]u8 = undefined;
-    const number: Label = numberLabel(&number_storage, index, palette);
-    const icon = data.tab_label.icon(model, index);
-    if (entry.fit != .mark or icon == null) {
-        _ = try canvas.textAt(.{ .x = x, .y = bounds.y, .width = @max(0, @min(size.number, status_right - x)), .height = bounds.height }, number);
-        x += size.number + chrome.px(spacing);
-    }
-
-    if (icon) |mark| {
-        const side = @max(0, @min(size.mark, @min(bounds.height, status_right - x)));
-        try application_mark.draw(canvas, mark, .{ .x = x, .y = bounds.y + (bounds.height - side) / 2, .width = side, .height = side }, false);
-        x += size.mark + chrome.px(spacing);
-    }
-
-    if (entry.fit == .full or entry.fit == .truncated) {
+    if (entry.fit != .compact) {
         var storage: [caption_capacity]u8 = undefined;
         const label: Label = .{
             .text = self.caption(&storage, index),
@@ -263,7 +247,8 @@ fn drawTab(self: TabStrip, canvas: *Canvas, entry: Painted) !void {
             .face = .sans,
             .size = .body,
         };
-        const right = status_right - (if (status_width > 0) status_width + chrome.px(spacing) else 0);
+        const x = chip.x + chip.width + chrome.px(spacing);
+        const right = status_right - (if (size.status > 0) size.status + chrome.px(spacing) else 0);
         const room = @max(0, right - x);
         const caption_first = canvas.quads.items().len;
         _ = try canvas.textAt(.{ .x = x, .y = bounds.y, .width = room, .height = bounds.height }, label);
@@ -272,42 +257,43 @@ fn drawTab(self: TabStrip, canvas: *Canvas, entry: Painted) !void {
         }
     }
 
-    if (status_width > 0) {
-        const slot: Rect = .{ .x = status_right - status_width, .y = bounds.y, .width = status_width, .height = bounds.height };
+    if (size.status > 0) {
+        const slot: Rect = .{ .x = status_right - size.status, .y = bounds.y, .width = size.status, .height = bounds.height };
         try self.drawStatus(canvas, slot, status);
     }
 
-    // The shadow may spread sideways past the pill, even past the strip's
-    // first tab, but never above or below the navigation band.
-    const lift = liftBounds(chrome, bounds);
-    canvas.quads.clipFrom(first, intersection(lift, .{ .x = lift.x, .y = self.area.y, .width = lift.width, .height = self.area.height }));
+    canvas.quads.clipFrom(first, bounds);
     try context.bands.add(.{ .area = bounds, .action = action });
 }
 
-// The selected tab rises: a soft shadow under a filled pill with a hairline.
-fn drawLift(canvas: *Canvas, bounds: Rect) !void {
-    const chrome = canvas.chrome;
-    const radius = chrome.px(pill_radius);
-    for (0..shadow_layers) |layer| {
-        const spread = chrome.px(shadow_spread) * @as(f32, @floatFromInt(shadow_layers - layer));
-        try canvas.quads.pushRounded(.{ .x = bounds.x - spread, .y = bounds.y - spread + chrome.px(shadow_drop), .width = bounds.width + 2 * spread, .height = bounds.height + 2 * spread }, .{ .fill = .{ .r = 0, .g = 0, .b = 0, .a = shadow_alpha }, .radius = radius + spread });
+// The chip holds the application's mark, or the tab's number while the
+// prefix waits for a digit, so the numbers never change a tab's width.
+fn drawChip(self: TabStrip, canvas: *Canvas, chip: Rect, tab: ChipTab) !void {
+    if (chip.width <= 0) {
+        return;
     }
 
-    try canvas.fillRoundedAt(bounds, .{ .radius = radius, .color = canvas.theme.palette.surface1 });
-    try canvas.ringAt(bounds, .{ .color = canvas.theme.palette.text, .width = chrome.px(1), .radius = radius, .alpha = edge_alpha });
-}
+    const palette = canvas.theme.palette;
+    const chrome = canvas.chrome;
+    const selected = tab.index == self.context.projection.model.tabs.active;
+    try canvas.fillRoundedAt(chip, .{ .radius = chrome.px(chip_radius), .color = palette.text, .alpha = if (selected) chip_selected_alpha else chip_alpha });
+    if (std.meta.activeTag(self.context.projection.status_mode) == .prefix) {
+        var storage: [8]u8 = undefined;
+        const number: Label = .{
+            .text = std.fmt.bufPrint(&storage, "{d}", .{tab.index + 1}) catch unreachable,
+            .color = palette.text,
+            .bold = true,
+            .face = .sans,
+            .size = .small,
+        };
+        const width = @min(chip.width, try canvas.measure(number));
+        _ = try canvas.textAt(.{ .x = chip.x + (chip.width - width) / 2, .y = chip.y, .width = width, .height = chip.height }, number);
+        return;
+    }
 
-fn liftBounds(chrome: ChromeMetrics, bounds: Rect) Rect {
-    const reach = chrome.px(shadow_spread) * shadow_layers;
-    return .{ .x = bounds.x - reach, .y = bounds.y - reach, .width = bounds.width + 2 * reach, .height = bounds.height + 2 * reach + chrome.px(shadow_drop) };
-}
-
-fn intersection(first: Rect, second: Rect) Rect {
-    const left = @max(first.x, second.x);
-    const top = @max(first.y, second.y);
-    const right = @min(first.x + first.width, second.x + second.width);
-    const bottom = @min(first.y + first.height, second.y + second.height);
-    return .{ .x = left, .y = top, .width = @max(0, right - left), .height = @max(0, bottom - top) };
+    const side = @min(chip.width, chrome.px(mark_side));
+    const mark = data.tab_label.mark(self.context.projection.model, tab.index);
+    try application_mark.draw(canvas, mark, .{ .x = chip.x + (chip.width - side) / 2, .y = chip.y + (chip.height - side) / 2, .width = side, .height = side }, !tab.lit);
 }
 
 fn drawStatus(self: TabStrip, canvas: *Canvas, slot: Rect, status: Status) !void {
@@ -380,25 +366,11 @@ fn caption(self: TabStrip, storage: *[caption_capacity]u8, index: usize) []const
     return std.fmt.bufPrint(storage, "{s}{s}", .{ text, suffix }) catch unreachable;
 }
 
-fn numberLabel(storage: *[8]u8, index: usize, palette: data.Palette) Label {
-    return .{
-        .text = std.fmt.bufPrint(storage, "{d}", .{index + 1}) catch unreachable,
-        .color = palette.overlay0,
-        .face = .sans,
-        .size = .small,
-    };
-}
-
 fn measure(self: TabStrip, canvas: *Canvas, index: usize) !Measure {
-    const model = self.context.projection.model;
     var storage: [caption_capacity]u8 = undefined;
-    var number_storage: [8]u8 = undefined;
-    const caption_width = try canvas.measure(.{ .text = self.caption(&storage, index), .face = .sans, .size = .body });
-    const number_width = try canvas.measure(numberLabel(&number_storage, index, canvas.theme.palette));
     return .{
-        .caption = caption_width,
-        .number = number_width,
-        .mark = if (data.tab_label.icon(model, index) != null) canvas.iconSize(.{ .text = "", .size = .body }) else 0,
+        .caption = try canvas.measure(.{ .text = self.caption(&storage, index), .face = .sans, .size = .body }),
+        .chip = canvas.chrome.px(chip_side),
         .status = try statusWidth(canvas, self.statusOf(index, canvas.theme.palette)),
     };
 }
@@ -487,14 +459,20 @@ fn previewOrder(order: []usize, model: *const data.ClientModel, move: client.Tab
 }
 
 /// How much of a tab is left after compression, from its whole caption down
-/// to its mark alone.
-const Fit = enum { full, truncated, compact, mark };
+/// to its chip alone.
+const Fit = enum { full, truncated, compact };
 
 const Status = union(enum) {
     none,
     dot: cellgrid.Color,
     spinner,
     progress: *const data.Pane,
+};
+
+/// Which tab a chip belongs to and whether its mark is at full strength.
+const ChipTab = struct {
+    index: usize,
+    lit: bool,
 };
 
 const Painted = struct {
@@ -538,33 +516,30 @@ const Metrics = struct {
 /// The measured parts of one tab, in device pixels.
 const Measure = struct {
     caption: f32,
-    number: f32,
-    mark: f32,
+    chip: f32,
     status: f32,
 
     fn trailing(self: Measure, metrics: Metrics) f32 {
         return if (self.status > 0) metrics.spacing + self.status else 0;
     }
 
-    fn marked(self: Measure, metrics: Metrics) f32 {
-        return if (self.mark > 0) self.mark + metrics.spacing else 0;
-    }
-
     fn whole(self: Measure, metrics: Metrics) f32 {
-        return metrics.lead + self.number + metrics.spacing + self.marked(metrics) + self.caption + self.trailing(metrics) + metrics.trail;
+        return metrics.lead + self.chip + metrics.spacing + self.caption + self.trailing(metrics) + metrics.trail;
     }
 
     fn truncated(self: Measure, metrics: Metrics) f32 {
-        return @min(self.whole(metrics), metrics.lead + self.number + metrics.spacing + self.marked(metrics) + metrics.caption_min + self.trailing(metrics) + metrics.trail);
+        return @min(self.whole(metrics), metrics.lead + self.chip + metrics.spacing + metrics.caption_min + self.trailing(metrics) + metrics.trail);
     }
 
     fn compact(self: Measure, metrics: Metrics) f32 {
-        return metrics.lead + self.number + (if (self.mark > 0) metrics.spacing + self.mark else 0) + self.trailing(metrics) + metrics.trail;
+        return 2 * metrics.lead + self.chip + self.trailing(metrics);
     }
+};
 
-    fn markOnly(self: Measure, metrics: Metrics) f32 {
-        return 2 * metrics.lead + (if (self.mark > 0) self.mark else self.number) + self.trailing(metrics);
-    }
+/// The tabs that keep a caption and the room they share.
+const Share = struct {
+    captioned: *const [max_tabs]bool,
+    budget: f32,
 };
 
 const Room = struct {
@@ -592,7 +567,7 @@ const Plan = struct {
 
 // Lays the tabs out around `focus`. The focus takes its whole caption up to
 // a share of the room; the rest share what is left at the richest fit that
-// holds all of them, and only below the mark alone do the farthest tabs hide.
+// holds all of them, and only below the chip alone do the farthest tabs hide.
 fn plan(sizes: []const Measure, focus: usize, room: Room) Plan {
     const metrics = room.metrics;
     const count = sizes.len;
@@ -604,7 +579,6 @@ fn plan(sizes: []const Measure, focus: usize, room: Room) Plan {
     const budget = room.room - focus_width - metrics.gap * @as(f32, @floatFromInt(count - 1));
     var natural: f32 = 0;
     var shortest: f32 = 0;
-    var compact: f32 = 0;
     for (sizes, 0..) |size, index| {
         if (index == focus) {
             continue;
@@ -612,7 +586,6 @@ fn plan(sizes: []const Measure, focus: usize, room: Room) Plan {
 
         natural += @min(size.whole(metrics), metrics.inactive_max);
         shortest += @min(size.truncated(metrics), metrics.inactive_max);
-        compact += size.compact(metrics);
     }
 
     if (natural <= budget) {
@@ -626,29 +599,51 @@ fn plan(sizes: []const Measure, focus: usize, room: Room) Plan {
         return result;
     }
 
-    if (shortest <= budget) {
-        const cap = largestCap(sizes, focus, budget, metrics);
+    // Every other tab starts as its chip; the nearest to the focus take back
+    // a caption while the budget allows, so no room is left unused.
+    var captioned: [max_tabs]bool = @splat(shortest <= budget);
+    captioned[focus] = false;
+    if (shortest > budget) {
+        var used: f32 = 0;
         for (sizes, 0..) |size, index| {
             if (index != focus) {
-                const floor = @min(size.truncated(metrics), metrics.inactive_max);
-                const width = @floor(@max(floor, @min(@min(size.whole(metrics), metrics.inactive_max), cap)));
-                result.widths[index] = width;
-                result.fits[index] = if (width >= size.whole(metrics)) .full else .truncated;
+                used += size.compact(metrics);
             }
         }
 
-        return result;
-    }
-
-    const fit: Fit = if (compact <= budget) .compact else .mark;
-    for (sizes, 0..) |size, index| {
-        if (index != focus) {
-            result.widths[index] = if (fit == .compact) size.compact(metrics) else size.markOnly(metrics);
-            result.fits[index] = fit;
+        var distance: usize = 1;
+        while (distance < count) : (distance += 1) {
+            for ([_]?usize{ if (focus >= distance) focus - distance else null, if (focus + distance < count) focus + distance else null }) |candidate| {
+                const index = candidate orelse continue;
+                const extra = @min(sizes[index].truncated(metrics), metrics.inactive_max) - sizes[index].compact(metrics);
+                if (used + extra <= budget) {
+                    captioned[index] = true;
+                    used += extra;
+                }
+            }
         }
     }
 
-    if (fit == .compact) {
+    var fixed: f32 = 0;
+    for (sizes, 0..) |size, index| {
+        if (index != focus and !captioned[index]) {
+            result.widths[index] = size.compact(metrics);
+            result.fits[index] = .compact;
+            fixed += size.compact(metrics);
+        }
+    }
+
+    const cap = largestCap(sizes, .{ .captioned = &captioned, .budget = budget - fixed }, metrics);
+    for (sizes, 0..) |size, index| {
+        if (captioned[index]) {
+            const floor = @min(size.truncated(metrics), metrics.inactive_max);
+            const width = @floor(@max(floor, @min(@min(size.whole(metrics), metrics.inactive_max), cap)));
+            result.widths[index] = width;
+            result.fits[index] = if (width >= size.whole(metrics)) .full else .truncated;
+        }
+    }
+
+    if (shortest <= budget) {
         return result;
     }
 
@@ -663,21 +658,21 @@ fn plan(sizes: []const Measure, focus: usize, room: Room) Plan {
     return result;
 }
 
-// The largest per-tab cap at which the capped widths still fit the budget,
-// found by bisection so the answer never depends on tab order.
-fn largestCap(sizes: []const Measure, focus: usize, budget: f32, metrics: Metrics) f32 {
+// The largest per-tab cap at which the captioned tabs' capped widths still
+// fit their budget, found by bisection so it never depends on tab order.
+fn largestCap(sizes: []const Measure, share: Share, metrics: Metrics) f32 {
     var low: f32 = 0;
     var high = metrics.inactive_max;
     for (0..cap_steps) |_| {
         const cap = (low + high) / 2;
         var used: f32 = 0;
         for (sizes, 0..) |size, index| {
-            if (index != focus) {
+            if (share.captioned[index]) {
                 used += @max(@min(size.truncated(metrics), metrics.inactive_max), @min(@min(size.whole(metrics), metrics.inactive_max), cap));
             }
         }
 
-        if (used <= budget) {
+        if (used <= share.budget) {
             low = cap;
         } else {
             high = cap;
@@ -702,9 +697,9 @@ fn footprint(layout: Plan, metrics: Metrics) f32 {
 }
 
 const test_metrics: Metrics = .{
-    .lead = 8,
-    .trail = 10,
-    .spacing = 7,
+    .lead = 5,
+    .trail = 12,
+    .spacing = 8,
     .gap = 2,
     .inactive_max = 220,
     .selected_max = 300,
@@ -715,8 +710,7 @@ const test_metrics: Metrics = .{
 fn testSizes(comptime count: usize, caption_width: f32) [count]Measure {
     return @splat(.{
         .caption = caption_width,
-        .number = 7,
-        .mark = 14,
+        .chip = 20,
         .status = 0,
     });
 }
@@ -732,7 +726,7 @@ test "tabs that fit keep their whole captions and the selection its full width" 
     try std.testing.expectEqual(@as(usize, 0), layout.hidden());
 }
 
-test "narrower rooms truncate, then compact, then keep only marks around the selection" {
+test "narrower rooms truncate the captions, then keep only the chips around the selection" {
     const sizes = testSizes(8, 120);
     const whole = sizes[0].whole(test_metrics);
     const truncated = plan(&sizes, 2, .{ .room = 1100, .metrics = test_metrics });
@@ -742,23 +736,19 @@ test "narrower rooms truncate, then compact, then keep only marks around the sel
     try std.testing.expect(truncated.widths[0] < whole and truncated.widths[0] >= sizes[0].truncated(test_metrics));
     try std.testing.expect(footprint(truncated, test_metrics) <= 1100);
 
-    const compact = plan(&sizes, 2, .{ .room = 700, .metrics = test_metrics });
+    const compact = plan(&sizes, 2, .{ .room = 420, .metrics = test_metrics });
     try std.testing.expectEqual(Fit.compact, compact.fits[0]);
     try std.testing.expectEqual(sizes[0].compact(test_metrics), compact.widths[0]);
-    try std.testing.expect(footprint(compact, test_metrics) <= 700);
-
-    const marks = plan(&sizes, 2, .{ .room = 420, .metrics = test_metrics });
-    try std.testing.expectEqual(Fit.mark, marks.fits[0]);
-    try std.testing.expectEqual(@as(usize, 0), marks.hidden());
-    try std.testing.expect(footprint(marks, test_metrics) <= 420);
+    try std.testing.expectEqual(@as(usize, 0), compact.hidden());
+    try std.testing.expect(footprint(compact, test_metrics) <= 420);
 }
 
-test "past the marks the tabs farthest from the selection hide behind the counter" {
+test "past the chips the tabs farthest from the selection hide behind the counter" {
     const sizes = testSizes(8, 120);
-    const layout = plan(&sizes, 2, .{ .room = 300, .metrics = test_metrics });
+    const layout = plan(&sizes, 2, .{ .room = 250, .metrics = test_metrics });
     try std.testing.expect(layout.hidden() > 0);
     try std.testing.expect(layout.first <= 2 and 2 < layout.end);
-    try std.testing.expect(footprint(layout, test_metrics) <= 300);
+    try std.testing.expect(footprint(layout, test_metrics) <= 250);
     try std.testing.expect(layout.end - 1 - 2 <= 2 - layout.first + 1);
 }
 
@@ -767,4 +757,16 @@ test "the selection never takes more than its share of a narrow strip" {
     const layout = plan(&sizes, 0, .{ .room = 400, .metrics = test_metrics });
     try std.testing.expectEqual(Fit.truncated, layout.fits[0]);
     try std.testing.expectEqual(@as(f32, 400 * selected_share), layout.widths[0]);
+}
+
+test "a strip too narrow for every caption keeps captions next to the selection and chips further away" {
+    const sizes = testSizes(8, 120);
+    const layout = plan(&sizes, 3, .{ .room = 700, .metrics = test_metrics });
+    try std.testing.expectEqual(Fit.full, layout.fits[3]);
+    try std.testing.expect(layout.fits[2] != .compact and layout.fits[4] != .compact);
+    try std.testing.expectEqual(Fit.compact, layout.fits[7]);
+    try std.testing.expectEqual(@as(usize, 0), layout.hidden());
+    try std.testing.expect(footprint(layout, test_metrics) <= 700);
+    // No room a truncated caption could use is left over.
+    try std.testing.expect(700 - footprint(layout, test_metrics) < sizes[7].truncated(test_metrics) - sizes[7].compact(test_metrics));
 }

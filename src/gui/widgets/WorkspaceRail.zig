@@ -1,5 +1,4 @@
-//! The collapsed sidebar: the sidebar toggle above one mark per workspace in
-//! runtime order. Every mark keeps its number, favicon and attention dot; the
+//! The collapsed sidebar: one mark per workspace in runtime order. Every mark keeps its number, favicon and attention dot; the
 //! selected one carries a surface and an accent bar on the rail's edge. Names
 //! wait in `RailTooltip`. Overflow counters select the nearest hidden
 //! workspace and keep the attention of the ones they hide.
@@ -21,8 +20,6 @@ pub const button: f32 = 36;
 /// Logical gap between two workspace controls.
 pub const button_gap: f32 = 6;
 const inset: f32 = 8;
-const toggle_height: f32 = 28;
-const toggle_gap: f32 = 12;
 const radius: f32 = 10;
 const mark_side: f32 = 18;
 const accent_width: f32 = 3;
@@ -36,7 +33,7 @@ const counter_height: f32 = 20;
 context: *const Context,
 area: Rect,
 
-/// Paints the rail and registers its toggle and one target per visible mark.
+/// Paints the rail and registers one target per visible mark.
 /// Example: `try (WorkspaceRail{ .context = context, .area = bands.sidebar }).draw(canvas);`
 pub fn draw(self: WorkspaceRail, canvas: *Canvas) !void {
     const area = self.area;
@@ -50,19 +47,7 @@ pub fn draw(self: WorkspaceRail, canvas: *Canvas) !void {
 
     const side = @min(chrome.px(button), area.width - 1);
     const left = area.x + @floor((area.width - 1 - side) / 2);
-    const toggle: PixelButton = .{
-        .context = self.context,
-        .area = .{ .x = left, .y = area.y + chrome.px(inset), .width = side, .height = @min(chrome.px(toggle_height), area.height) },
-        .intent = .toggle_sidebar,
-        .text = "\u{2261}",
-        .alignment = .center,
-        .background = false,
-        .hover_fill = true,
-        .radius = chrome.px(8),
-    };
-    try toggle.draw(canvas);
-
-    const top = toggle.area.y + toggle.area.height + chrome.px(toggle_gap);
+    const top = area.y + chrome.px(inset);
     const list: Rect = .{ .x = left, .y = top, .width = side, .height = @max(0, area.y + area.height - chrome.px(inset) - top) };
     try self.drawList(canvas, list);
 }

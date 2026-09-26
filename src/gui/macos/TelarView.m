@@ -115,6 +115,15 @@
   [self requestDraw];
 }
 
+// Device pixels the window's traffic lights cover in the navigation row.
+- (uint32_t)controlsPixels:(CGFloat)scale {
+  if (![self.window isKindOfClass:TelarWindow.class]) {
+    return 0;
+  }
+
+  return (uint32_t)ceil([(TelarWindow *)self.window controlsInset] * scale);
+}
+
 - (void)resizeDrawable {
   CAMetalLayer *layer = (CAMetalLayer *)self.layer;
   CGFloat scale = self.window != nil ? self.window.backingScaleFactor : 1.0;
@@ -125,7 +134,7 @@
       layer.drawableSize.height >= 1 && callbacks.ready != NULL) {
     telar_gui_viewport viewport = {(uint32_t)layer.drawableSize.width,
                                    (uint32_t)layer.drawableSize.height,
-                                   (float)scale};
+                                   (float)scale, [self controlsPixels:scale]};
     callbacks.ready(context, viewport);
   }
 }
@@ -232,7 +241,8 @@
   }
 
   telar_gui_viewport viewport = {(uint32_t)size.width, (uint32_t)size.height,
-                                 (float)layer.contentsScale};
+                                 (float)layer.contentsScale,
+                                 [self controlsPixels:layer.contentsScale]};
   telar_gui_frame frame;
   memset(&frame, 0, sizeof frame);
 
@@ -245,11 +255,16 @@
     preparing = NO;
     return;
   }
-  ((TelarWindow *)self.window).titlebarVisible = frame.titlebar != 0;
+  TelarWindow *window = (TelarWindow *)self.window;
+  window.titlebarVisible = frame.titlebar != 0;
+  window.controlsHeight = frame.navigation / layer.contentsScale;
+  [window placeControls];
   [self.backgroundView applyFrame:&frame];
-  if (!CGSizeEqualToSize(size, layer.drawableSize)) {
-    // Decorations changed the viewport after preparation. Retire this token
-    // without publishing its hit geometry, then repaint using the new size.
+  // Decorations changed the viewport after preparation, or the traffic
+  // lights appeared or left: retire this token like a resize.
+  if (!CGSizeEqualToSize(size, layer.drawableSize) || [self controlsPixels:layer.contentsScale] != viewport.controls) {
+    // Retire without publishing its hit geometry, then repaint using the
+    // new size.
     callbacks.complete(context, frame.token, 0);
     dirty = YES;
     preparing = NO;
