@@ -138,7 +138,7 @@ pub fn drain(self: *Fixture) !void {
         switch (message) {
             .server => |received| {
                 defer self.receive_pending = false;
-                _ = try runtime_messages.handleServerMessage(&self.app, received.message);
+                _ = try runtime_messages.receiveServerMessage(&self.app, &received.message);
             },
             .key => |value| try self.applyKey(value),
             .completed => |value| try self.deliver(value.token, value.outcome),
