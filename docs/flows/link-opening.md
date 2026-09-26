@@ -1,25 +1,35 @@
 # Link opening
 
 Telar shares bounded URI recognition and opening between its terminal and native
-adapters. Native URL hover follows [Ghostty’s modifier convention](https://ghostty.org/docs/config/reference#link-url):
-Command on macOS, Control on Linux. Hold Shift as well when the child owns mouse
-reporting. A left press acquires the gesture; release opens the unchanged target.
-Dragging, leaving the window, losing focus, changing geometry or switching context
-cancels it. Modifier changes re-evaluate a stationary pointer.
+adapters. In the GUI, hovering a link needs no modifier: the pointer becomes a
+hand, the visible spans get an accent underline and a card beside the row names
+the destination. A plain left press stays with the pane, so a drag still selects
+text; releasing without motion on the same presented link opens it. The platform
+modifier ([Ghostty’s convention](https://ghostty.org/docs/config/reference#link-url):
+Command on macOS, Control on Linux) claims the whole gesture instead, so nothing
+reaches the pane. When the child owns mouse reporting the plain button is the
+child’s; hold Shift, with or without the modifier, to open. A right press copies
+the URI to the clipboard and shows the copy toast. Alt keeps the text plain for
+selection. Leaving the window, losing focus, changing geometry or switching
+context cancels a pending open.
 
-The GUI recognizes visible URLs across VT-confirmed soft wraps, and OSC 8 links
-whose label differs from their URI. Explicit links take precedence over textual
-recognition. Hover underlines the matching spans and shows the actual destination
-in a clipped pane-local preview. Its delivered rectangle consumes pointer gestures
-until another frame removes it; covered terminal text cannot receive a click.
-Single-row panes keep the underline without a preview that would cover the link. Distinct OSC 8 identities with the same URI remain
+The GUI recognizes visible URLs across VT-confirmed soft wraps, inline Markdown
+links (`[label](destination)`, the form coding agents print) whose whole
+bracketed span acts as one link, and OSC 8 links whose label differs from their
+URI. Explicit links take precedence over textual recognition. The card
+(`LinkTooltip`) sits above the hovered row, or below it when the pane has no
+room above, stays inside the pane content and wraps the URI to at most twelve
+rows. Its delivered cells consume pointer gestures until another frame removes
+it; covered terminal text cannot receive a click. A pane too short for a card
+keeps the underline alone. Distinct OSC 8 identities with the same URI remain
 distinct groups. A hard newline never joins text into a URL.
 
 Supported explicit schemes are `http`, `https`, `file`, `mailto`, `ftp`, `ssh`,
 `git`, `tel`, `magnet`, `ipfs`, `ipns`, `gemini`, `gopher` and `news`. Relative paths
 and user-defined link matchers are outside this implementation. An unsupported,
 invalid, overlong or omitted explicit destination cannot authorize its label as
-a substitute URL.
+a substitute URL. A Markdown label is at most 512 bytes; a longer, unterminated
+or angle-bracketed form stays plain text, and its bare URI is still recognized.
 
 ```text
 VT RenderState -> TextMetadataCapture -> pane_frame -> owned client Pane
@@ -28,7 +38,7 @@ native event -> GuiAdapter.acceptInput -> InputQueue
 GuiAdapter.drainInput -> dispatchPointer -> hover_target.resolve
                                       |                    |
                                 LinkGesture           LinkRegions
-                                      |              underline + preview
+                                      |              underline + card
                           HostChrome.link_pointer_fn
                                       |
              link_opening.openLink -> file tab or links/host.zig worker
@@ -43,10 +53,12 @@ its received metadata, independent of the socket buffer. See
 
 `model.cells.resolve` (`src/model/links/cells.zig`) gives OSC 8 priority and otherwise traverses the
 visible logical line. It copies a bounded text window to stack storage, with
-independent byte and cell-visit limits, then returns an owned URI and cell range.
-No row cache, regex engine, URL opener or allocation runs for movement within the
-same cell and unchanged model/control state. URI length is limited to 4,096 bytes;
-overlong targets are rejected rather than truncated.
+independent byte and cell-visit limits, then returns an owned URI and cell range:
+a Markdown link’s whole span with its destination (`urlscan.markdownLinkAt`),
+else the bare URI under the position (`urlscan.extractAt`). No row cache, regex
+engine, URL opener or allocation runs for movement within the same cell and
+unchanged model/control state. URI length is limited to 4,096 bytes; overlong
+targets are rejected rather than truncated.
 
 The native adapter owns hover, prepared/shown target identities, and the pressed
 link. A URI newly received from the runtime is not openable until that same target
@@ -54,8 +66,10 @@ was presented. GPU completion publishes only the identity captured by that fligh
 it does not ACK cells. URI or context changes during a press cancel it permanently,
 even if the original state subsequently returns. A captured link consumes its
 whole gesture, including stationary modifier motion, without leaking child input.
+A plain press arms the same gesture beside the pane’s own selection; any drag
+cancels it and the selection goes on.
 
-Underline and preview use the existing retained glyph atlas and frame quads.
+Underline and card use the existing retained glyph atlas and frame quads.
 They do not invalidate terminal cell meshes. Native pointer shape changes alone
 require no GPU frame, timer or polling. Browser launch uses the existing bounded
 worker and never blocks input or presentation.
@@ -63,8 +77,8 @@ worker and never blocks input or presentation.
 ## Shared opening policy and the TUI
 
 The optional `HostChrome.link_pointer_fn` is an adapter hit test. GUI implements its
-modifier/release policy there (`src/gui/ports/chrome.zig`). An absent callback retains TUI behavior: ordinary
-left press opens a row-local textual link, Shift declines opening for selection,
+press policy there (`src/gui/ports/chrome.zig`). An absent callback retains TUI behavior: ordinary
+left press opens a row-local textual or Markdown link, Shift declines opening for selection,
 and copy mode uses `o`. The common client contains no GUI gesture policy.
 
 `link_opening.openLink` sends supported non-file schemes through
@@ -83,7 +97,7 @@ are rejected. No command or URI is evaluated through a shell.
 
 ## Validation
 
-- `src/core/link.zig`: scheme allowlist, punctuation, Unicode, and length limits.
+- `lib/urlscan`: scheme allowlist, punctuation, Unicode, Markdown link bounds and length limits.
 - `src/model/links/cells.zig`: row, OSC 8 and soft-wrap resolution.
 - `src/backend/pane/TextMetadataCapture.zig`: VT identity, wide cells, wrap and quotas.
 - `src/gui/tests/links.zig`, `link_regressions.zig`, `link_metadata.zig`: release

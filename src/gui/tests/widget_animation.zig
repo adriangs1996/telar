@@ -74,7 +74,7 @@ test "hiding the only animated widget removes its frame deadline" {
         .session_id = @splat(0),
         .provider = .codex,
         .status = .working,
-        .source = .proxy_tls,
+        .source = .lifecycle_report,
         .authority = .active,
         .confidence = 100,
         .sequence = 1,

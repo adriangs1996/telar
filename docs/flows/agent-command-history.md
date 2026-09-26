@@ -1,15 +1,14 @@
 # Agent command history
 
-Agent commands enter history through native harness hooks or a trusted proxy
-tap plugin. Both sources use the runtime-owned history service; neither writes
-SQLite or emits history protocol messages directly.
+Agent commands enter history through native harness hooks, which use the
+runtime-owned history service; the hook never writes SQLite or emits history
+protocol messages directly. The `plugin` origin remains on stored rows written
+before proxy taps stopped recording commands.
 
 ```text
-native hook report                 proxy tap effect
-        |                                  |
-        `-------------+--------------------'
-                      |
-                      v
+native hook report
+        |
+        v
         history.Service.recordAgentCommand
                       |
           filter secrets and policies
@@ -39,5 +38,4 @@ interactive shell privacy convention.
 
 Queries return `origin` and `provider` over schema generation 33. The CLI keeps
 the existing `[agent]` author marker and renders a non-empty provider before the
-command, allowing users to distinguish native and plugin observations without
-exposing the tool-call identifier.
+command without exposing the tool-call identifier.

@@ -1,5 +1,5 @@
 //! Captured exchanges as telar owns them: the capture library's types over
-//! the pane, API dialect and protocol of the tunnel that relayed them.
+//! the protocol of the tunnel that relayed them.
 const exchangecapture = @import("exchangecapture");
 const Owner = @import("Owner.zig");
 const GenericJoiner = exchangecapture.GenericJoiner;

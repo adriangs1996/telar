@@ -1,8 +1,11 @@
 ---
-status: accepted
+status: superseded
 ---
 
 # Keep proxy credentials behind the proxy root
+
+Superseded by [0018](0018-decouple-the-proxy-from-agents.md): the proxy no
+longer issues per-pane credentials or publishes observations.
 
 The runtime needs to launch pane children through the observation proxy, but a
 credential is proxy-owned authorization rather than pane state. Exposing it to

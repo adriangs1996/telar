@@ -1,18 +1,16 @@
 //! One runtime-owned agent aggregate.
 //!
-//! Every process, proxy, screen, title, authority, and projection mutation for
+//! Every process, screen, title, authority, and projection mutation for
 //! one pane generation crosses this type.
 
 const core = @import("telar-core");
 const Job = @import("Job.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const Evidence = @import("Evidence.zig");
-const ProxyState = @import("ProxyState.zig");
 const Title = @import("Title.zig");
 const SessionReference = @import("SessionReference.zig");
 const Identity = @import("Identity.zig");
 const ProcessObservation = @import("ProcessObservation.zig");
-const ProxyObservation = @import("ProxyObservation.zig");
 const providers = @import("providers/providers.zig");
 const ReportObservation = @import("ReportObservation.zig");
 const ScreenObservation = @import("ScreenObservation.zig");
@@ -22,7 +20,6 @@ const Result = @import("Result.zig");
 const DescriptionFinished = @import("DescriptionFinished.zig");
 const SessionTitle = @import("SessionTitle.zig");
 const types = @import("types.zig");
-const ProxyExchange = @import("ProxyExchange.zig");
 const EventLine = @import("EventLine.zig");
 
 const Agent = @This();
@@ -56,7 +53,6 @@ agent_process_id: ?u32 = null,
 session_id: [16]u8,
 authority: core.AgentAuthority = .candidate,
 process: ?Evidence = null,
-proxy: ProxyState = .{},
 screen: ?Evidence = null,
 /// Official lifecycle report; outranks every other evidence while valid.
 report: ?Evidence = null,
@@ -144,7 +140,6 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
 
         self.screen = null;
         self.report = null;
-        self.proxy.clear();
     }
 
     self.agent_process_id = observation.process_id;
@@ -152,60 +147,6 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
     self.authority = if (replaced_process) .active else switch (self.authority) {
         .candidate, .stale, .exited => .active,
         .active, .obscured, .resumed => self.authority,
-    };
-
-    return true;
-}
-
-/// Applies one tracked proxy lifecycle transition and updates agent authority.
-///
-/// ```zig
-/// if (agent.applyProxy(observation)) {
-///     publishProjection();
-/// }
-/// ```
-pub fn applyProxy(self: *Agent, observation: ProxyObservation) bool {
-    if (observation.dialect == .unknown) {
-        return false;
-    }
-
-    // The proxy names the API dialect it saw on the wire, which implies an
-    // agent identity only while no process has claimed the pane. A
-    // process-backed agent may talk to any host, so its exchanges count
-    // regardless of dialect; only proxy- or screen-derived identity rejects a
-    // foreign one.
-    const established_provider = self.provider();
-
-    if (self.process == null and established_provider != .unknown and observation.impliedProvider() != established_provider) {
-        return false;
-    }
-
-    switch (self.proxy.apply(observation)) {
-        .ignored => return false,
-        .activity_refreshed => return true,
-        .evidence_replaced => {},
-    }
-
-    if (providers.of(established_provider).ready_prompt_settles_report and observation.phase == .request_started) {
-        if (self.screen) |screen| {
-            if (screen.status == .ready and screen.observed_at_ms <= observation.observed_at_ms) {
-                self.screen = null;
-            }
-        }
-    }
-
-    if (self.authority == .obscured and
-        (observation.phase == .request_started or observation.phase == .response_activity))
-    {
-        self.screen = null;
-        self.authority = .resumed;
-        return true;
-    }
-
-    self.authority = switch (self.authority) {
-        .candidate, .stale => .active,
-        .active, .obscured, .resumed => self.authority,
-        .exited => return false,
     };
 
     return true;
@@ -256,7 +197,7 @@ pub fn applyReport(self: *Agent, observation: ReportObservation) bool {
 }
 
 /// Validates and applies one terminal-screen observation against stronger
-/// process and proxy identity evidence.
+/// process identity evidence.
 ///
 /// ```zig
 /// if (agent.applyScreen(observation)) {
@@ -334,8 +275,6 @@ pub fn applyScreen(self: *Agent, observation: ScreenObservation) bool {
 /// }
 /// ```
 pub fn expire(self: *Agent, now_ms: i64) bool {
-    _ = self.proxy.clearExpired(now_ms);
-
     if (self.screen) |evidence| {
         if (evidence.isExpired(now_ms)) {
             self.screen = null;
@@ -348,7 +287,7 @@ pub fn expire(self: *Agent, now_ms: i64) bool {
         }
     }
 
-    if (self.process != null or self.proxy.currentEvidence() != null or self.screen != null or self.report != null) {
+    if (self.process != null or self.screen != null or self.report != null) {
         return false;
     }
 
@@ -698,9 +637,8 @@ fn applyReadyTitle(self: *Agent, value: []const u8, source: core.AgentTitleSourc
     self.title.phase = .finished;
 }
 
-// The hook names the reason when it has one. Without it, a response that
-// closed on a tool request while nothing is in flight is a permission
-// prompt; the remaining blocked states carry no evidence about their cause.
+// The hook names the reason when it has one. Without it, a blocked state
+// carries no evidence about its cause.
 fn blockedReason(self: *const Agent, evidence: Evidence) core.AgentBlockedReason {
     if (self.projected.status != .blocked) {
         return .none;
@@ -708,10 +646,6 @@ fn blockedReason(self: *const Agent, evidence: Evidence) core.AgentBlockedReason
 
     if (evidence.source == .lifecycle_report and self.report_detail.blocked_reason != .none) {
         return self.report_detail.blocked_reason;
-    }
-
-    if (self.proxy.awaitingToolResult()) {
-        return .permission;
     }
 
     return .other;
@@ -734,12 +668,6 @@ fn provider(self: *const Agent) core.AgentProvider {
         return evidence.provider;
     }
 
-    if (self.proxy.currentEvidence()) |evidence| {
-        if (evidence.provider != .unknown) {
-            return evidence.provider;
-        }
-    }
-
     if (self.screen) |evidence| {
         return evidence.provider;
     }
@@ -753,10 +681,6 @@ fn chooseEvidence(self: *const Agent, now_ms: i64) ?Evidence {
         if (!value.isExpired(now_ms)) value else null
     else
         null;
-    const proxy = if (self.proxy.currentEvidence()) |value|
-        if (!value.isExpired(now_ms)) value else null
-    else
-        null;
 
     // An official lifecycle report outranks everything the runtime infers.
     if (self.report) |value| {
@@ -765,58 +689,7 @@ fn chooseEvidence(self: *const Agent, now_ms: i64) ?Evidence {
         }
     }
 
-    // Visible permission and work states outrank network activity. A proxy
-    // working state still outranks an older ready prompt.
-    if (screen) |value| {
-        if (value.status == .blocked) {
-            return value;
-        }
-    }
-
-    if (screen) |value| {
-        if (value.status == .working) {
-            return value;
-        }
-    }
-
-    if (proxy) |proxy_work| {
-        if (proxy_work.status == .working) {
-            // A newer confirmed prompt repairs a dropped proxy completion.
-            if (screen) |screen_ready| {
-                if (screen_ready.status == .ready and screen_ready.observed_at_ms > proxy_work.observed_at_ms) {
-                    return screen_ready;
-                }
-            }
-
-            return proxy_work;
-        }
-    }
-
-    if (screen) |value| {
-        if (value.status == .ready) {
-            return value;
-        }
-    }
-
-    if (proxy) |value| {
-        if (value.status == .ready and process != null and providers.of(process.?.provider).completion_requires_agent_signal) {
-            // A model response can be followed by local tools or another
-            // model request. The agent must confirm its own turn completion.
-            var working = value;
-            working.status = .working;
-            working.expires_at_ms = value.observed_at_ms + types.working_expiry_ms;
-            if (working.isExpired(now_ms)) {
-                var unknown = process.?;
-                unknown.status = .unknown;
-                return unknown;
-            }
-
-            return working;
-        }
-
-        return value;
-    }
-
+    // What the screen shows outranks bare process presence.
     if (screen) |value| {
         return value;
     }
@@ -865,10 +738,6 @@ fn projectionProvider(self: *const Agent, evidence: Evidence) core.AgentProvider
 
     if (evidence.provider != .unknown) {
         return evidence.provider;
-    }
-
-    if (self.proxy.currentEvidence()) |proxy| {
-        return proxy.provider;
     }
 
     if (self.screen) |screen| {
@@ -925,249 +794,6 @@ fn sameProjection(left_value: core.AgentSnapshotEntry, right_value: core.AgentSn
     return std.meta.eql(left, right);
 }
 
-fn testIdentity() !Identity {
-    return .{
-        .key = .{ .id = try core.pane(7), .generation = 3 },
-        .process_id = 42,
-        .session_id = .{0xa5} ** 16,
-    };
-}
-
-test "agent rejects an untracked proxy response" {
-    var agent = init(try testIdentity());
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
-
-    try std.testing.expect(!agent.applyProxy(.{
-        .identity = try testIdentity(),
-        .dialect = .anthropic_messages,
-        .phase = .response_activity,
-        .exchange = exchange,
-        .observed_at_ms = 100,
-    }));
-    try std.testing.expect(agent.proxy.currentEvidence() == null);
-    try std.testing.expectEqual(core.AgentAuthority.candidate, agent.authority);
-}
-
-test "agent applies a tracked proxy lifecycle" {
-    const identity = try testIdentity();
-    var agent = init(identity);
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
-
-    try std.testing.expect(agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = exchange,
-        .observed_at_ms = 100,
-    }));
-    try std.testing.expectEqual(core.AgentAuthority.active, agent.authority);
-
-    try std.testing.expect(agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .response_finished,
-        .exchange = exchange,
-        .observed_at_ms = 200,
-    }));
-
-    const evidence = agent.proxy.currentEvidence().?;
-    try std.testing.expectEqual(core.AgentProvider.claude, evidence.provider);
-    try std.testing.expectEqual(core.AgentStatus.working, evidence.status);
-    try std.testing.expectEqual(core.AgentSource.proxy_tls, evidence.source);
-    try std.testing.expectEqual(@as(i64, 200), evidence.observed_at_ms);
-}
-
-test "agent applies semantic completion without changing its authority" {
-    const identity = try testIdentity();
-    var agent = init(identity);
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
-
-    try std.testing.expect(agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = exchange,
-        .observed_at_ms = 100,
-    }));
-    try std.testing.expect(agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .provider_turn_completed,
-        .exchange = exchange,
-        .observed_at_ms = 200,
-    }));
-
-    const evidence = agent.proxy.currentEvidence().?;
-    try std.testing.expectEqual(core.AgentStatus.ready, evidence.status);
-    try std.testing.expectEqual(core.AgentAuthority.active, agent.authority);
-}
-
-test "agent rejects completion from a contradictory provider" {
-    const identity = try testIdentity();
-    var agent = init(identity);
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
-
-    _ = agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = exchange,
-        .observed_at_ms = 100,
-    });
-    try std.testing.expect(!agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .openai_responses,
-        .phase = .provider_turn_completed,
-        .exchange = exchange,
-        .observed_at_ms = 200,
-    }));
-    var evidence = agent.proxy.currentEvidence().?;
-    try std.testing.expectEqual(core.AgentProvider.claude, evidence.provider);
-    try std.testing.expectEqual(core.AgentStatus.working, evidence.status);
-    try std.testing.expectEqual(@as(i64, 100), evidence.observed_at_ms);
-
-    try std.testing.expect(agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .provider_turn_completed,
-        .exchange = exchange,
-        .observed_at_ms = 300,
-    }));
-    evidence = agent.proxy.currentEvidence().?;
-    try std.testing.expectEqual(core.AgentProvider.claude, evidence.provider);
-    try std.testing.expectEqual(core.AgentStatus.ready, evidence.status);
-    try std.testing.expectEqual(@as(i64, 300), evidence.observed_at_ms);
-}
-
-test "a process-backed agent accepts exchanges with any provider family" {
-    const identity = try testIdentity();
-    var agent = init(identity);
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
-
-    try std.testing.expect(agent.applyProcess(.{
-        .identity = identity,
-        .provider = .pi,
-        .process_id = 42,
-        .observed_at_ms = 50,
-    }));
-
-    // Pi talks to Anthropic here; the wire family must not reject the exchange.
-    try std.testing.expect(agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = exchange,
-        .observed_at_ms = 100,
-    }));
-    try std.testing.expect(agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .provider_turn_completed,
-        .exchange = exchange,
-        .observed_at_ms = 200,
-    }));
-
-    const evidence = agent.proxy.currentEvidence().?;
-    try std.testing.expectEqual(core.AgentStatus.ready, evidence.status);
-    try std.testing.expectEqual(core.AgentProvider.pi, agent.provider());
-}
-
-test "semantic completion does not clear stronger blocked screen evidence" {
-    const identity = try testIdentity();
-    var agent = init(identity);
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
-
-    _ = agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = exchange,
-        .observed_at_ms = 100,
-    });
-    agent.authority = .obscured;
-    agent.screen = .{
-        .provider = .claude,
-        .status = .blocked,
-        .source = .screen,
-        .confidence = 98,
-        .observed_at_ms = 150,
-        .expires_at_ms = 150 + types.settled_expiry_ms,
-    };
-
-    try std.testing.expect(agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .provider_turn_completed,
-        .exchange = exchange,
-        .observed_at_ms = 200,
-    }));
-    try std.testing.expectEqual(core.AgentAuthority.obscured, agent.authority);
-    try std.testing.expect(agent.screen != null);
-    try std.testing.expectEqual(core.AgentStatus.blocked, agent.chooseEvidence(200).?.status);
-}
-
-test "agent coalesces frequent proxy activity" {
-    const identity = try testIdentity();
-    var agent = init(identity);
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
-
-    try std.testing.expect(agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = exchange,
-        .observed_at_ms = 100,
-    }));
-    try std.testing.expect(!agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .response_activity,
-        .exchange = exchange,
-        .observed_at_ms = 100 + types.activity_refresh_ms - 1,
-    }));
-    try std.testing.expectEqual(@as(i64, 100), agent.proxy.currentEvidence().?.observed_at_ms);
-
-    const refreshed_at = 100 + types.activity_refresh_ms;
-    try std.testing.expect(agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .response_activity,
-        .exchange = exchange,
-        .observed_at_ms = refreshed_at,
-    }));
-    try std.testing.expectEqual(refreshed_at, agent.proxy.currentEvidence().?.observed_at_ms);
-    try std.testing.expectEqual(refreshed_at + types.working_expiry_ms, agent.proxy.currentEvidence().?.expires_at_ms);
-}
-
-test "new proxy work resumes an obscured agent" {
-    const identity = try testIdentity();
-    var agent = init(identity);
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
-
-    agent.authority = .obscured;
-    agent.screen = .{
-        .provider = .claude,
-        .status = .blocked,
-        .source = .screen,
-        .confidence = 88,
-        .observed_at_ms = 50,
-        .expires_at_ms = types.settled_expiry_ms,
-    };
-
-    try std.testing.expect(agent.applyProxy(.{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = exchange,
-        .observed_at_ms = 100,
-    }));
-    try std.testing.expectEqual(core.AgentAuthority.resumed, agent.authority);
-    try std.testing.expect(agent.screen == null);
-}
-
-/// What a lifecycle report says beyond its state: why the agent is blocked
-/// and one line naming the moment. It is shown only while that report is
-/// the evidence the projection follows.
 const ReportDetail = struct {
     blocked_reason: core.AgentBlockedReason = .none,
     event: EventLine = .{},

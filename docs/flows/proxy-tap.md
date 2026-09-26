@@ -29,9 +29,7 @@ proxy_tap.receive
         |
         +-- exact generation, plugin ID and digest check
         +-- declared and granted capability check
-        +-- notification publication
-        +-- low/medium agent evidence
-        `-- command persistence (history effect owner)
+        `-- notification publication
 ```
 
 The runtime starts only enabled packages whose exact digest grant includes
@@ -53,10 +51,6 @@ Shutdown first stops proxy production, then closes worker queues and kills each
 child and its descendants. Captured buffers and protocol frames are scrubbed by
 their single owner before release.
 
-The shipped `examples/plugins/agent-commands` package is the end-to-end
-classifier fixture. Host tests load its real Lua entrypoint, deliver Anthropic
-and OpenAI streaming exchanges split across argument deltas, verify
-`Bash.command` and `exec_command.cmd`, verify the non-stream
-`shell.command` path, and reject truncated or undecoded bodies. This keeps
-provider event interpretation outside the runtime while proving the typed
-effect boundary.
+A tap returns notifications only. Host tests round-trip the effect frame,
+reject the retired command and evidence tags, and prove the capability checks
+for every effect.

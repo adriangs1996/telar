@@ -2,9 +2,9 @@
 
 An agent's own hooks are the most reliable evidence about its state and tool
 calls. The engineering invariants already rank "full official lifecycle
-reports" first. telar does not depend on hooks: the proxy and the screen keep
-working when none are installed, and a lifecycle report expires like every
-other evidence so a silent hook hands control back.
+reports" first. telar does not depend on hooks: the process and the screen
+keep working when none are installed, and a lifecycle report expires like
+every other evidence so a silent hook hands control back.
 
 ## End-to-end path
 
@@ -209,8 +209,10 @@ The runtime keeps the report as `Agent.report`, the first evidence
 `chooseEvidence` consults while it is valid. Its reason and event line are
 shown on the agent card only while that report decides the projection; the
 event is one control-free line of at most 96 bytes, cut by `telar hook`
-before it is sent. A `working` or `settling` report expires with
-`working_expiry_ms`, other states with `settled_expiry_ms`; `applyProcess`
+before it is sent. A `working` report expires with
+`report_working_expiry_ms`, ten minutes, because a long model turn fires no
+hook in between; a `settling` report with `working_expiry_ms`, other states
+with `settled_expiry_ms`; `applyProcess`
 clears it when a different process takes the pane. Sounds follow the same
 transition rule as screen evidence.
 

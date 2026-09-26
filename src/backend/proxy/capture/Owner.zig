@@ -1,13 +1,4 @@
-//! Who a captured exchange belongs to and how it travelled.
-const core = @import("telar-core");
-const types = @import("../../agent/types.zig");
-const middleware = @import("../middleware.zig");
+//! How a captured exchange travelled.
+const Protocol = @import("../Protocol.zig").Protocol;
 
-pane: Pane,
-dialect: types.ApiDialect,
-protocol: middleware.Protocol,
-
-const Pane = struct {
-    id: core.PaneId,
-    generation: u64,
-};
+protocol: Protocol,

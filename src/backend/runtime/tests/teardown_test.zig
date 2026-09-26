@@ -48,8 +48,6 @@ fn pluginResult(gpa: std.mem.Allocator) !*PluginResult {
         .digest = @splat(0),
         .generation = 1,
         .event_id = 1,
-        .pane = @enumFromInt(1),
-        .pane_generation = 1,
         .storage = try gpa.dupe(u8, "owned effect"),
         .batch = .{},
     };
@@ -82,11 +80,7 @@ test "loop cancellation releases every transferred result already queued by comp
     capture.* = .{
         .gpa = gpa,
         .reservation = quota.reserve(16).?,
-        .meta = .{
-            .pane = .{ .id = @enumFromInt(1), .generation = 1 },
-            .dialect = .unknown,
-            .protocol = .http11,
-        },
+        .meta = .{ .protocol = .http11 },
         .key = .{ .connection_id = 1, .stream_id = 0 },
         .side = .request,
         .head = .init(gpa, 16),

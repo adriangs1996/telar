@@ -9,8 +9,9 @@ OSC 52 host clipboard writer. A bare click does not copy.
 A child with mouse tracking retains ordinary presses. Shift-left press forces
 Telar selection, including over textual links, if the host terminal delivers
 the modifier. Some terminals intercept Shift-drag for their own selection;
-Telar cannot handle events the host does not send. Plain link clicks retain
-the existing opening behavior.
+Telar cannot handle events the host does not send. In the GUI a plain press on
+a link still begins this selection; only a release without a drag opens the
+link. The TUI opens on the press. See [Link opening](link-opening.md).
 
 ## Entry and ownership
 

@@ -39,7 +39,6 @@ fn producerSlots(tag: Tag) usize {
         .history_response,
         .telemetry_tick,
         .telemetry_written,
-        .proxy_event,
         .proxy_capture,
         .plugin_effects,
         .agent_tick,

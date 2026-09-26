@@ -17,7 +17,7 @@ or an error. The launch never depends on client state. The pane table owns every
 `running` panes.
 
 The runtime schedules `waitPane` before `readPane`. If a later launch step
-fails, it marks the pane `aborting`, revokes its proxy credential, shuts down
+fails, it marks the pane `aborting`, shuts down
 the PTY, and retains the allocation until the child is reaped and no actor can
 access it. A consumed `PaneKey` is never reused.
 

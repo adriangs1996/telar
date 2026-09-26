@@ -21,6 +21,8 @@ const Sample = @import("input/PointerSample.zig");
 const Event = @import("input/PointerEvent.zig");
 const PointerHover = @import("input/PointerHover.zig");
 const Hit = @import("input/LinkHit.zig");
+const LinkTooltip = @import("widgets/LinkTooltip.zig");
+const cellgrid = @import("cellgrid");
 const PointerSample = @import("input/PointerSample.zig");
 const PointerCapture = @import("input/PointerCapture.zig");
 const TerminalClipboard = @import("host/TerminalClipboard.zig");
@@ -1138,14 +1140,7 @@ fn dispatchPointer(self: *GuiAdapter, value: PointerSample) !void {
 
                 if (event.kind == .release) {
                     pointer.owners[button] = .shared;
-                    pointer.hover.dirty = true;
-                    pointer.hover.refresh(self);
-                    const target = if (self.pointerGeometryMatches() and pointer.hover.openable()) pointer.link_gesture.finish(pointer.hover.link, app.model.version()) else null;
-                    pointer.link_gesture.cancel();
-
-                    if (target) |selected| {
-                        _ = try client.link_opening.openLink(app, selected);
-                    }
+                    try self.openArmedLink();
                 }
 
                 return;
@@ -1159,6 +1154,12 @@ fn dispatchPointer(self: *GuiAdapter, value: PointerSample) !void {
             },
             .shared => {},
         }
+    }
+
+    // A plain press leaves its link gesture with the pane: a drag becomes a
+    // selection and only a release without motion opens the link.
+    if (event.kind == .drag) {
+        pointer.link_gesture.cancel();
     }
 
     const outcome = try client.pointer_routing.apply(app, mouse);
@@ -1186,6 +1187,28 @@ fn dispatchPointer(self: *GuiAdapter, value: PointerSample) !void {
                 };
             },
         };
+
+        if (event.button == .left and (pointer.owners[button] == .child or pointer.owners[button] == .discarded)) {
+            pointer.link_gesture.cancel();
+        }
+    }
+
+    if (event.kind == .release and event.button == .left) {
+        try self.openArmedLink();
+    }
+}
+
+/// Opens the link a press armed when the release lands on the same presented
+/// target; a cancelled or changed gesture opens nothing.
+fn openArmedLink(self: *GuiAdapter) !void {
+    const pointer = &self.pointer;
+    pointer.hover.dirty = true;
+    pointer.hover.refresh(self);
+    const target = if (self.pointerGeometryMatches() and pointer.hover.openable()) pointer.link_gesture.finish(pointer.hover.link, self.app.model.version()) else null;
+    pointer.link_gesture.cancel();
+
+    if (target) |selected| {
+        _ = try client.link_opening.openLink(&self.app, selected);
     }
 }
 
@@ -1703,9 +1726,16 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
             .geometry = client.Geometry.capture(projected),
         },
     );
-    self.pointer.hover.prepare();
+    self.pointer.hover.prepare(self.tooltipCover(renderer));
 
     return @intFromEnum(token);
+}
+
+/// The host cells the hovered link's tooltip will cover in the prepared frame.
+fn tooltipCover(self: *const GuiAdapter, renderer: *const Renderer) ?cellgrid.Rect {
+    const hit = if (self.pointer.hover.link) |*value| value else return null;
+    const area = LinkTooltip.place(hit, renderer.metrics, renderer.origin, renderer.chrome) orelse return null;
+    return LinkTooltip.cover(area, renderer.metrics, renderer.origin);
 }
 
 /// Defers image adoption until the current GPU consumer releases its frame.

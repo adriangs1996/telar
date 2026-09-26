@@ -32,8 +32,8 @@ with a 64 KiB cap. Full-text search covers user-authored previews only.
   Messages API with request deduplication, but Codex sends incremental
   turns over a WebSocket with `store=false`, compaction erases earlier
   history from the traffic, subagents share the pane credential, and side
-  calls (title generation, suggestions) pollute the stream. The proxy stays
-  what it is: lifecycle and command evidence.
+  calls (title generation, suggestions) pollute the stream. The proxy has
+  since stopped observing agents altogether ([0018](0018-decouple-the-proxy-from-agents.md)).
 - Screen scraping: alternate-screen agents leave nothing in scrollback, and
   the screen has no structure. It stays a lifecycle fallback.
 - Copying transcript text into telar's database: measured session

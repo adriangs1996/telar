@@ -45,7 +45,7 @@ Cut: what must move or be parameterized before the library compiles alone.
 | `pty` (done) | `src/backend/pty` | std |
 | `console` (done) | `src/frontend/platform` (tty, raw mode, resize watcher, fast writer, escape sequences) | std |
 | `pi_rpc` (done) | `src/backend/engine` (Pi's JSONL RPC mode) | std; the `Purpose` enum became a parameter |
-| `eventstream` (done) | `src/backend/proxy/{sse,Decoder,SseEvent}.zig` | std |
+| `eventstream` (removed) | `src/backend/proxy/{sse,Decoder,SseEvent}.zig` | std; deleted with the provider observers |
 | `h2frames` (done) | `src/backend/proxy/h2/{framing,Reader,streams,Tracker,HeaderField,HeaderBlock,PeerSettings,Settings}.zig` | std |
 | `localca` (done) | `src/backend/proxy/{ca,Authority,AuthorityFiles,Pair,Resources,Roots,tls,Session,InterceptOptions}.zig` | std, tls |
 | `mailbox` (done) | `src/client/execution/{GenericInbox,DrainBudget,Wakeup,ProducerTicket,InboxSnapshot}.zig` | std |
@@ -181,7 +181,7 @@ of them: every package imports the libraries it uses by name.
    candidate uses from core showed `history-store` and `checkpoint` persist
    telar's own model, so they stay; `kitty-media` and `pane-render` build
    protocol values, and their cuts are listed above.
-4. Proxy. Done: `eventstream`, `h2frames`, `localca`. The relay and the
+4. Proxy. Done: `h2frames`, `localca`; `eventstream` was removed with agent observation. The relay and the
    capture buffer carry telar policy, so the proxy first moves to the
    procedural model:
    - A. Ports with one production implementation become direct calls:

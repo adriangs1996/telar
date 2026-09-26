@@ -116,8 +116,7 @@ quarantined as `.corrupt` on its own.
 An agent reports its own session identifier with `telar agent report-session`
 (`report_agent_session` on the wire). The tracker stores it on the exact pane
 generation as a typed, bounded token; the checkpoint records it next to the
-pane's observed process provider. Screen and proxy guesses cannot authorize
-resume. Every changed reference marks the checkpoint dirty, including a new
+pane's observed process provider. Screen guesses cannot authorize resume. Every changed reference marks the checkpoint dirty, including a new
 session reported by an already-running agent. Process detection that makes
 an earlier reference resumable, and process exit that retires it, also mark
 the checkpoint dirty.

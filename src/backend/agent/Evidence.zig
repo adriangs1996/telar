@@ -1,7 +1,6 @@
 const core = @import("telar-core");
 const ProcessObservation = @import("ProcessObservation.zig");
 const std = @import("std");
-const ProxyObservation = @import("ProxyObservation.zig");
 const types = @import("types.zig");
 const ScreenObservation = @import("ScreenObservation.zig");
 const ReportObservation = @import("ReportObservation.zig");
@@ -28,33 +27,6 @@ pub fn fromProcess(observation: *const ProcessObservation) Evidence {
         .confidence = 100,
         .observed_at_ms = observation.observed_at_ms,
         .expires_at_ms = std.math.maxInt(i64),
-    };
-}
-
-/// Converts one accepted proxy observation and the aggregate status after
-/// that transition into expiring evidence.
-///
-/// ```zig
-/// const evidence = Evidence.fromProxy(&observation, .working);
-/// ```
-pub fn fromProxy(observation: *const ProxyObservation, status: core.AgentStatus) Evidence {
-    std.debug.assert(status == .working or status == .ready or status == .failed);
-
-    return .{
-        .provider = observation.impliedProvider(),
-        .status = status,
-        .source = .proxy_tls,
-        .confidence = switch (observation.phase) {
-            .request_started, .response_finished => 95,
-            .response_activity => 90,
-            .provider_turn_completed => 99,
-            .request_failed => 98,
-        },
-        .observed_at_ms = observation.observed_at_ms,
-        .expires_at_ms = observation.observed_at_ms + if (status == .working)
-            types.working_expiry_ms
-        else
-            types.settled_expiry_ms,
     };
 }
 
@@ -85,7 +57,8 @@ pub fn fromScreen(provider: core.AgentProvider, observation: *const ScreenObserv
 
 /// Converts one official lifecycle report into the highest-ranked
 /// evidence. Reports expire so a silent hook hands control back to the
-/// proxy and screen.
+/// screen: active work keeps the long report expiry, a settling report
+/// the short one, and settled states the settled one.
 ///
 /// ```zig
 /// const evidence = Evidence.fromReport(.claude, &observation);
@@ -106,10 +79,12 @@ pub fn fromReport(provider: core.AgentProvider, observation: *const ReportObserv
         .confidence = 100,
         .observed_at_ms = observation.observed_at_ms,
         .observed_at_ns = observation.observed_at_ns,
-        .expires_at_ms = observation.observed_at_ms + if (status == .working)
-            types.working_expiry_ms
-        else
-            types.settled_expiry_ms,
+        .expires_at_ms = observation.observed_at_ms + switch (observation.state) {
+            .working => types.report_working_expiry_ms,
+            .settling => types.working_expiry_ms,
+            .blocked, .ready => types.settled_expiry_ms,
+            .exited => unreachable,
+        },
     };
 }
 

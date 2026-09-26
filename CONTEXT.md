@@ -125,11 +125,11 @@ The lifecycle of a pane whose launch has not settled. A pane is `starting`,
 A history record for a child process that was spawned but whose pane launch did
 not complete. It is distinct from a normal pane session.
 
-**Proxy credential**:
-A pane-generation-scoped capability that authorizes one child to use Telar's
-observation proxy. It expires when pane launch aborts or that pane generation
-retires.
-_Avoid_: Proxy token, proxy authentication
+**Proxy secret**:
+The one capability that authorizes a child of the runtime to use Telar's
+proxy. It lives in the proxy directory, survives runtime restarts and rotates
+only when its file is deleted.
+_Avoid_: Proxy credential, proxy token, proxy authentication
 
 **Host input**:
 User input received from a client's host before Telar classifies its intent.
@@ -194,29 +194,14 @@ _Avoid_: Selected agent, active agent
 
 **Agent**:
 The runtime-owned identity and lifecycle of one coding-agent session associated
-with an exact pane generation. Process, proxy, and screen observations describe
-the same agent; none of those observations is an agent by itself.
+with an exact pane generation. Process, screen and lifecycle observations
+describe the same agent; none of those observations is an agent by itself.
 _Avoid_: Agent record, detector result
 
-**Model exchange**:
-One inference request and its provider response. Several model exchanges may
-belong to the same agent session and may overlap in time.
-_Avoid_: Agent turn, HTTP connection
-
-**Transport completion**:
-The end of an HTTP response stream. It says that no more response bytes remain,
-but does not say why the model stopped or whether the agent is ready.
-_Avoid_: Provider turn completion, agent completion
-
-**Provider turn completion**:
-An explicit provider-protocol outcome saying that one model exchange ended
-without requesting tool execution or continuation. It is evidence that the
-agent can become ready once no other model exchange remains.
-_Avoid_: Transport completion, agent ready
-
 **Agent tracker**:
-The runtime authority that reconciles process, proxy, and screen observations
-with the corresponding agents and publishes their client-facing state.
+The runtime authority that reconciles process, screen and lifecycle
+observations with the corresponding agents and publishes their client-facing
+state.
 _Avoid_: Agent registry, Agent observer, Agent repository
 
 **Open agent**:

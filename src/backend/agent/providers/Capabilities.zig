@@ -8,5 +8,5 @@ resume_prefix: ?[]const u8 = null,
 /// Active work cannot be settled by a prompt, and process or model
 /// completion alone does not establish readiness.
 ready_prompt_settles_report: bool = false,
-/// Process presence and model response completion do not prove an idle agent.
+/// Process presence alone does not prove an idle agent.
 completion_requires_agent_signal: bool = false,

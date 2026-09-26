@@ -102,11 +102,12 @@ pub fn openable(self: *const Hover) bool {
     return current.eql(&shown);
 }
 
-/// Seals the overlay bounds with the frame, independently of later pointer motion.
-/// Example: `hover.prepare();`
-pub fn prepare(self: *Hover) void {
+/// Seals the tooltip's covered cells with the frame, independently of later
+/// pointer motion.
+/// Example: `hover.prepare(LinkTooltip.cover(area, metrics, origin));`
+pub fn prepare(self: *Hover, cover: ?cellgrid.Rect) void {
     self.prepared_link = self.link;
-    self.prepared_preview = if (self.link) |*hit| hit.previewArea() else null;
+    self.prepared_preview = if (self.link != null) cover else null;
 }
 
 /// Visible previews cover terminal cells until a replacement is delivered.

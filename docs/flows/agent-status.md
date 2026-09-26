@@ -8,8 +8,7 @@ implements this flow over `RuntimeModel`.
 
 ```text
 pane_observation (foreground process)  -> agent_status.observeProcess
-proxy_observation (model request)       -> agent_status.observeProxy
-pane_observation / proxy_tap (screen)   -> agent_status.observeScreen
+pane_observation (screen)               -> agent_status.observeScreen
 agent_hooks (lifecycle report)          -> agent_status.observeReport
   -> ensure: the pane generation's row in model.agents, created from
      identity evidence and seeded from model.restored_agents
@@ -33,11 +32,10 @@ agent_snapshot.project -> agent_status.snapshot(&model.agents, ...)
 
 ## Rules
 
-- Screen text refines a status but never creates an agent; process, proxy
-  or lifecycle evidence does.
-- Proxy activity, completion and failure need a matching started exchange;
-  an unmatched observation cannot create or settle an agent.
-- A lifecycle report outranks screen and proxy evidence until it expires.
+- Screen text refines a status but never creates an agent; process or
+  lifecycle evidence does.
+- A lifecycle report outranks screen evidence until it expires: ten minutes
+  for `working`, two for `settling`, thirty for settled states.
 - A pending resume is dropped when the observed process belongs to another
   provider or the agent reports a different session.
 

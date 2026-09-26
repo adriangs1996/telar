@@ -18,11 +18,6 @@ pub const max_history_path_bytes = 1024;
 pub const max_editor_bytes = 4096;
 pub const max_proxy_path_bytes = 1024;
 
-pub const default_proxy_intercept_hosts = [_][]const u8{
-    "api.anthropic.com",
-    "api.openai.com",
-    "chatgpt.com",
-};
 pub const max_agent_description_command_args = 32;
 pub const max_agent_description_command_bytes = 4096;
 pub const max_bar_callbacks = 64;
@@ -35,13 +30,10 @@ pub const max_agent_description_timeout_ms: u32 = 60_000;
 
 pub const ConfiguredBinding = GenericBinding(data.Action, max_binding_keys);
 
+/// The proxy intercepts nothing until `intercept_hosts` names a host: every
+/// CONNECT stays an authenticated TCP tunnel.
 pub fn defaultProxyInterceptHosts() ProxyInterceptHosts {
-    var hosts: ProxyInterceptHosts = .{};
-    for (default_proxy_intercept_hosts) |host| {
-        hosts.append(host) catch unreachable;
-    }
-
-    return hosts;
+    return .{};
 }
 
 test "proxy intercept hosts are compact, canonical, sorted, and unique" {
@@ -58,15 +50,10 @@ test "proxy intercept hosts are compact, canonical, sorted, and unique" {
     try std.testing.expectEqualStrings("updates.example.com", sorted[1]);
 }
 
-test "default proxy intercept hosts cover Claude Code and Codex APIs" {
+test "the proxy intercepts no host by default" {
     const hosts = defaultProxyInterceptHosts();
     var storage: [core.max_intercept_hosts][]const u8 = undefined;
-    const configured = hosts.slices(&storage);
-
-    try std.testing.expectEqual(default_proxy_intercept_hosts.len, configured.len);
-    for (default_proxy_intercept_hosts, configured) |expected, actual| {
-        try std.testing.expectEqualStrings(expected, actual);
-    }
+    try std.testing.expectEqual(@as(usize, 0), hosts.slices(&storage).len);
 }
 
 pub const max_window_title_bytes = 128;

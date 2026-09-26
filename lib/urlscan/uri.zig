@@ -231,7 +231,9 @@ fn containsSeparator(uri: []const u8) bool {
     return false;
 }
 
-fn isSeparator(byte: u8) bool {
+/// A byte that ends a URI token: controls, whitespace and quoting punctuation.
+/// Example: `if (uri.isSeparator(line[end])) break;`
+pub fn isSeparator(byte: u8) bool {
     if (std.ascii.isControl(byte) or std.ascii.isWhitespace(byte)) {
         return true;
     }

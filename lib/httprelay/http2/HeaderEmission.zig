@@ -1,7 +1,0 @@
-const relay = @import("relay.zig");
-const Headers = @import("../Headers.zig");
-const HeaderEmission = @This();
-
-direction: relay.Direction,
-stream_id: u32,
-headers: *const Headers,

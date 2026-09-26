@@ -1907,7 +1907,7 @@ test "malformed application messages are rejected" {
         .cwd_label = "~/sandbox/telar",
         .provider = .codex,
         .status = .working,
-        .source = .proxy_tls,
+        .source = .lifecycle_report,
         .authority = .active,
         .confidence = 95,
         .sequence = 6,

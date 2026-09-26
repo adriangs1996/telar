@@ -235,10 +235,9 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `vtgrid` | a ghostty-vt terminal as cells: render state onto a `cellgrid` buffer, damaged rows into cost-aware spans, incremental scrollback search |
 | `cmdcapture` | commands, directories, exit status and output tails read from a pane's terminal |
 | `jsonl` | bounded JSON-lines streams, in-place truncation of output fields, total value accessors |
-| `eventstream` | incremental, bounded Server-Sent Events decoding |
 | `h2frames` | HTTP/2 frames, SETTINGS, header blocks and stream states, without a connection |
 | `localca` | a local certificate authority, per-host leaves, system roots and intercepted TLS sessions |
-| `httprelay` | HTTP/1.1 and HTTP/2 relays that forward bytes unchanged, rewrite heads by data and report what they forwarded |
+| `httprelay` | HTTP/1.1 and HTTP/2 relays that forward bytes unchanged and report what they forwarded |
 | `dropqueue` | a bounded many-publisher queue that drops instead of waiting and counts depth, high water and loss |
 | `exchangecapture` | bounded capture of relayed exchanges: heads and de-framed bodies within a shared quota, halves paired by key, bodies decoded |
 

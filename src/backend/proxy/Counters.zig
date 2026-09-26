@@ -1,4 +1,3 @@
-const dropqueue = @import("dropqueue");
 const std = @import("std");
 const metrics = @import("metrics.zig");
 const SlotSnapshot = @import("SlotSnapshot.zig");
@@ -16,11 +15,6 @@ tls_context_failures: std.atomic.Value(u64) = .init(0),
 tls_upstream_handshake_failures: std.atomic.Value(u64) = .init(0),
 tls_downstream_handshake_failures: std.atomic.Value(u64) = .init(0),
 tls_mint_failures: std.atomic.Value(u64) = .init(0),
-claude_inference_requests: std.atomic.Value(u64) = .init(0),
-claude_sse_payload_fragments: std.atomic.Value(u64) = .init(0),
-claude_turn_completions: std.atomic.Value(u64) = .init(0),
-claude_successful_responses: std.atomic.Value(u64) = .init(0),
-claude_failure_observations: std.atomic.Value(u64) = .init(0),
 
 /// Records one named proxy outcome without exposing the underlying
 /// atomics to protocol adapters.
@@ -40,17 +34,12 @@ pub fn record(self: *Counters, counter: metrics.Counter) void {
         .tls_upstream_handshake_failure => &self.tls_upstream_handshake_failures,
         .tls_downstream_handshake_failure => &self.tls_downstream_handshake_failures,
         .tls_mint_failure => &self.tls_mint_failures,
-        .claude_inference_request => &self.claude_inference_requests,
-        .claude_sse_payload_fragment => &self.claude_sse_payload_fragments,
-        .claude_turn_completion => &self.claude_turn_completions,
-        .claude_successful_response => &self.claude_successful_responses,
-        .claude_failure_observation => &self.claude_failure_observations,
     };
 
     _ = selected.fetchAdd(1, .monotonic);
 }
 
-/// Combines owned counters with current queue and admission state.
+/// Combines owned counters with current admission and capture state.
 ///
 /// ```zig
 /// const snapshot = counters.snapshot(live_state);
@@ -58,9 +47,6 @@ pub fn record(self: *Counters, counter: metrics.Counter) void {
 pub fn snapshot(self: *const Counters, live: LiveState) Snapshot {
     return .{
         .active_connections = live.connections.active,
-        .queued_events = live.observations.queued,
-        .event_queue_high_water = live.observations.high_water,
-        .dropped_events = live.observations.dropped,
         .rejected_connections = self.rejected_connections.load(.monotonic),
         .invalid_authorization_rejections = self.invalid_authorization_rejections.load(.monotonic),
         .unknown_credential_rejections = self.unknown_credential_rejections.load(.monotonic),
@@ -72,11 +58,6 @@ pub fn snapshot(self: *const Counters, live: LiveState) Snapshot {
         .tls_upstream_handshake_failures = self.tls_upstream_handshake_failures.load(.monotonic),
         .tls_downstream_handshake_failures = self.tls_downstream_handshake_failures.load(.monotonic),
         .tls_mint_failures = self.tls_mint_failures.load(.monotonic),
-        .claude_inference_requests = self.claude_inference_requests.load(.monotonic),
-        .claude_sse_payload_fragments = self.claude_sse_payload_fragments.load(.monotonic),
-        .claude_turn_completions = self.claude_turn_completions.load(.monotonic),
-        .claude_successful_responses = self.claude_successful_responses.load(.monotonic),
-        .claude_failure_observations = self.claude_failure_observations.load(.monotonic),
         .capture_started = live.captures.started,
         .capture_truncated = live.captures.truncated,
         .capture_skipped_quota = live.captures.skipped_quota,
@@ -89,6 +70,5 @@ pub fn snapshot(self: *const Counters, live: LiveState) Snapshot {
 
 const LiveState = struct {
     connections: SlotSnapshot,
-    observations: dropqueue.QueueMetrics,
     captures: CaptureMetrics = .{},
 };

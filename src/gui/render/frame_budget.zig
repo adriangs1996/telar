@@ -9,7 +9,8 @@ const core = @import("telar-core");
 pub fn quads(cells: usize) usize {
     const modal = @min(cells, 140 * 30);
     const notifications = @min(cells, 2 * 48 * 4);
-    const link_preview = @min(cells, 100);
+    // The link tooltip: twelve wrapped rows of at most 128 cells plus its card.
+    const link_preview = @min(cells, 12 * 128 + 8);
     const link_spans = cells;
     const chrome_bands = (core.max_workspace_list_entries + core.max_tabs_per_workspace) * (2 + 32) + 512;
     // Header glyphs and attention plus one capsule with a 64-segment arc.

@@ -22,19 +22,3 @@ pub fn eql(self: *const Hit, other: *const Hit) bool {
         std.meta.eql(self.area, other.area) and std.meta.eql(self.match.start, other.match.start) and
         std.meta.eql(self.match.end, other.match.end) and self.match.target.eql(&other.match.target);
 }
-
-/// Uses the same clipped overlay bounds for painting and delivered hit testing.
-/// Example: `const area = hit.previewArea();`
-pub fn previewArea(self: *const Hit) ?cellgrid.Rect {
-    if (self.content.h < 2) {
-        return null;
-    }
-
-    var area = self.content.row(self.content.h -| 1);
-    area.w = @min(area.w, 100);
-    if (area.y == self.area.y) {
-        area.y -= 1;
-    }
-
-    return area;
-}

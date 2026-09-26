@@ -1,16 +1,13 @@
 const httprelay = @import("httprelay");
 const core = @import("telar-core");
 const Resources = @import("Resources.zig");
-const Registry = @import("../Registry.zig");
-const Channel = @import("../Channel.zig");
-const claude_transport = @import("../provider/claude_transport.zig");
+const identity = @import("../identity.zig");
 const Producer = @import("../capture/Producer.zig");
 const std = @import("std");
 const http1 = httprelay.http1;
 const tunnel_namespace = @import("tunnel_namespace.zig");
 const connect_authentication = @import("../connect_authentication.zig");
 const Exchange = @import("Exchange.zig");
-const dialect_module = @import("../provider/dialect.zig");
 const Establisher = @import("Establisher.zig");
 const H2Connection = @import("H2Connection.zig");
 const Http1Connection = @import("Http1Connection.zig");
@@ -49,7 +46,7 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
     var head: [http1.max_head_bytes]u8 = undefined;
     defer std.crypto.secureZero(u8, &head);
     const head_len = tunnel_namespace.readConnectHead(io, self.child, &head) orelse return;
-    const authenticated = switch (connect_authentication.authenticate(self.dependencies.tls.io, self.dependencies.credentials, head[0..head_len])) {
+    const target = switch (connect_authentication.authenticate(dependencies.secret, head[0..head_len])) {
         .authenticated => |value| value,
         .rejected => |rejection| {
             if (rejection.metric) |metric| {
@@ -61,13 +58,9 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
         },
     };
 
-    const target = authenticated.target;
     var exchange: Exchange = .{
         .io = io,
-        .observations = dependencies.observations,
         .telemetry = dependencies.tls.telemetry,
-        .owner = authenticated.owner,
-        .dialect = dialect_module.identify(target.host.bytes),
         .connection_id = dependencies.connection_ids.fetchAdd(1, .monotonic),
         .protocol = .http11,
         .host = target.host,
@@ -75,17 +68,13 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
 
     const upstream = tunnel_namespace.connectUpstream(target.host, io, target.port) catch {
         dependencies.tls.telemetry.record(.upstream_connect_failure);
-        exchange.publish(.request_failed, 0);
         tunnel_namespace.reply(io, self.child, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
         return;
     };
     defer upstream.close(io);
     tunnel_namespace.reply(io, self.child, "HTTP/1.1 200 Connection Established\r\n\r\n");
 
-    var tls_establisher: Establisher = .{
-        .resources = dependencies.tls,
-        .exchange = &exchange,
-    };
+    var tls_establisher: Establisher = .{ .resources = dependencies.tls };
     const route = tls_establisher.establish(.{
         .host = target.host.bytes,
         .child = self.child,
@@ -110,8 +99,6 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
     if (negotiated_h2) {
         var connection = H2Connection.init(.{
             .io = io,
-            .gpa = dependencies.tls.gpa,
-            .request_rewrites = claude_transport.requestRewrites(exchange.dialect),
             .session = session,
             .exchange = &exchange,
             .captures = dependencies.captures,
@@ -123,7 +110,6 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
 
     var connection = Http1Connection.init(.{
         .io = io,
-        .request_rewrites = claude_transport.requestRewrites(exchange.dialect),
         .session = session,
         .exchange = &exchange,
         .captures = dependencies.captures,
@@ -138,8 +124,7 @@ const TunnelOptions = struct {
 
 const Dependencies = struct {
     tls: Resources,
-    credentials: *Registry,
-    observations: *Channel,
+    secret: *const identity.Secret,
     connection_ids: *std.atomic.Value(u64),
     captures: *Producer,
 };

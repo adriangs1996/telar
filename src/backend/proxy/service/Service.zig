@@ -3,29 +3,25 @@ const core = @import("telar-core");
 const std = @import("std");
 const Listener = @import("Listener.zig");
 const Interception = @import("Interception.zig");
-const Registry = @import("../Registry.zig");
-const Channel = @import("../Channel.zig");
 const Producer = @import("../capture/Producer.zig");
 const Slots = @import("../Slots.zig");
 const service_support = @import("service_support.zig");
 const Counters = @import("../Counters.zig");
 const Paths = @import("Paths.zig");
 const ClientConfiguration = @import("ClientConfiguration.zig");
-const MiddlewareEvent = @import("../MiddlewareEvent.zig");
 const Half = owned.Half;
 const Snapshot = @import("../Snapshot.zig");
-const Credential = @import("../Credential.zig");
 const identity = @import("../identity.zig");
-const Pane = @import("Pane.zig");
+const secret_store = @import("secret.zig");
+const port_memory = @import("port_memory.zig");
 const Service = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,
 listener: Listener,
 interception: Interception,
-credentials: Registry = .{},
-/// Lifecycle observations on their way to the runtime.
-observations: Channel = undefined,
+/// The one secret every child of this runtime authenticates with.
+secret: identity.Secret,
 captures: Producer = undefined,
 connection_slots: Slots = .init(service_support.max_connections),
 telemetry: Counters = .{},
@@ -34,8 +30,9 @@ next_connection_id: std.atomic.Value(u64) = .init(1),
 worker: ?service_support.Worker = null,
 
 /// Builds the loopback listener and every bounded dependency without
-/// starting concurrent traffic. Ownership transfers to the returned
-/// service on success.
+/// starting concurrent traffic: the secret is read or created, and the
+/// listener prefers the port remembered from the last start. Ownership
+/// transfers to the returned service on success.
 ///
 /// ```zig
 /// const service = try Service.create(io, gpa, paths);
@@ -45,8 +42,12 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
     var interception = try Interception.init(io, gpa, paths);
     errdefer interception.deinit();
 
-    var listener = try Listener.bind(io);
+    var secret = try secret_store.ensure(io, paths.secret);
+    defer std.crypto.secureZero(u8, &secret);
+
+    var listener = try Listener.bind(io, port_memory.recall(io, paths.port));
     errdefer listener.deinit(io);
+    port_memory.remember(io, paths.port, listener.port());
 
     const service = try gpa.create(Service);
     errdefer gpa.destroy(service);
@@ -55,19 +56,15 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
         .gpa = gpa,
         .listener = listener,
         .interception = interception,
-        .observations = undefined,
+        .secret = secret,
     };
-    service.observations.init(&service.credentials);
-    try service.captures.init(gpa, .{
-        .config = paths.capture,
-        .credentials = &service.credentials,
-    });
+    try service.captures.init(gpa, paths.capture);
 
     return service;
 }
 
 /// Releases the stopped service and scrubs its in-memory authority and
-/// credentials. A started service must be stopped first.
+/// secret. A started service must be stopped first.
 ///
 /// ```zig
 /// service.destroy();
@@ -93,8 +90,8 @@ pub fn start(self: *Service) !void {
 }
 
 /// Stops traffic, then delivery: joins the accept loop, which cancels every
-/// tunnel, and only then closes the observation and capture queues, so no
-/// producer outlives them.
+/// tunnel, and only then closes the capture queue, so no producer outlives
+/// it.
 ///
 /// ```zig
 /// service.stop();
@@ -105,12 +102,11 @@ pub fn stop(self: *Service) void {
         self.worker = null;
     }
 
-    self.observations.close(self.io);
     self.captures.close(self.io);
 }
 
 /// Returns the stable connection and trust configuration inherited by
-/// children registered with this service.
+/// children of this runtime.
 ///
 /// ```zig
 /// const client = service.clientConfiguration();
@@ -132,17 +128,7 @@ fn run(self: *Service) anyerror!void {
     return service_support.acceptConnections(self);
 }
 
-/// Waits for the next live observation. Events for credentials revoked
-/// while queued are discarded before this method returns.
-///
-/// ```zig
-/// const event = try service.receive(io);
-/// ```
-pub fn receive(self: *Service, io: std.Io) anyerror!MiddlewareEvent {
-    return self.observations.receive(io);
-}
-
-/// Waits for one captured half whose pane credential remains live.
+/// Waits for one captured half.
 ///
 /// ```zig
 /// const half = try service.receiveCapture(io);
@@ -160,8 +146,8 @@ pub fn decodeCapture(self: *Service, half: *Half) void {
     self.captures.decodeBody(half);
 }
 
-/// Returns one lock-free snapshot without exposing queue, admission, or
-/// counter storage to the caller.
+/// Returns one lock-free snapshot without exposing admission or counter
+/// storage to the caller.
 ///
 /// ```zig
 /// const snapshot = service.metrics();
@@ -169,60 +155,16 @@ pub fn decodeCapture(self: *Service, half: *Half) void {
 pub fn metrics(self: *const Service) Snapshot {
     return self.telemetry.snapshot(.{
         .connections = self.connection_slots.snapshot(),
-        .observations = self.observations.metrics(),
         .captures = self.captures.metrics(),
     });
 }
 
-/// Formats the loopback proxy URL for a credential into caller-owned
-/// storage.
+/// Formats the loopback proxy URL carrying the secret into caller-owned
+/// storage, which the caller scrubs after use.
 ///
 /// ```zig
-/// const url = try service.credentialUrl(&buffer, &credential);
+/// const url = try service.proxyUrl(&buffer);
 /// ```
-pub fn credentialUrl(self: *const Service, buffer: []u8, credential: *const Credential) ![]const u8 {
-    return identity.formatUrl(buffer, self.listener.port(), credential);
-}
-
-/// Creates and registers a fresh capability for one pane generation. The
-/// caller owns the returned secret and must scrub it after use.
-///
-/// ```zig
-/// var credential = try service.registerPane(.{ .id = pane_id, .generation = 2 });
-/// defer std.crypto.secureZero(u8, &credential.token);
-/// ```
-pub fn registerPane(self: *Service, pane: Pane) !Credential {
-    var credential: Credential = .{
-        .pane_id = pane.id,
-        .pane_generation = pane.generation,
-        .token = identity.randomToken(self.io),
-    };
-    errdefer std.crypto.secureZero(u8, &credential.token);
-
-    try self.registerCredential(&credential);
-
-    return credential;
-}
-
-fn registerCredential(self: *Service, credential: *const Credential) !void {
-    return self.credentials.register(self.io, credential);
-}
-
-/// Revokes one exact credential, including rollback of an incomplete pane
-/// registration.
-///
-/// ```zig
-/// service.unregisterCredential(&credential);
-/// ```
-pub fn unregisterCredential(self: *Service, credential: *const Credential) void {
-    self.credentials.remove(self.io, credential);
-}
-
-/// Revokes every credential issued for one exact pane generation.
-///
-/// ```zig
-/// service.unregisterPane(.{ .id = pane_id, .generation = 2 });
-/// ```
-pub fn unregisterPane(self: *Service, pane: Pane) void {
-    self.credentials.removePane(self.io, .{ .id = pane.id, .generation = pane.generation });
+pub fn proxyUrl(self: *const Service, buffer: []u8) ![]const u8 {
+    return identity.formatUrl(buffer, self.listener.port(), &self.secret);
 }

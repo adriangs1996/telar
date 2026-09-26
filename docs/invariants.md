@@ -158,10 +158,12 @@ analytics.
 - TLS interception is opt-in, scoped and visible while active. Installing
   system trust is an explicit reversible CLI action with a separate 30-day CA
   whose fingerprint is recorded.
-- A proxy credential never leaves the proxy. The runtime registers and revokes
-  by pane key. Its token lives only in the registry and in the CONNECT head
-  being authenticated; tunnels and queues carry the credential's non-secret
-  `CredentialId`, so no connection or queue slot retains a secret.
+- The proxy secret never leaves the proxy. It lives in the owner-only proxy
+  directory, in the service that compares it in constant time and in the
+  CONNECT head being authenticated; tunnels and capture queues carry no
+  secret. The runtime only asks the proxy for a child environment.
+- The proxy observes traffic, never agents: it keeps no provider dialect, no
+  lifecycle observation and no agent evidence.
 
 ## Lua and plugins
 
@@ -189,8 +191,8 @@ analytics.
 - Socket directories are owner-only and reject wrong-owner, symlinked,
   hard-linked or non-regular endpoints. Peer UID checks do not isolate
   processes of the same user.
-- Child panes inherit no runtime socket, token, plugin authority or proxy
-  credential by default.
+- Child panes inherit no runtime socket, token or plugin authority by
+  default; the proxy secret is inherited only when the proxy is enabled.
 - Persisted state never restores argv, hooks, closures, plugin enablement or
   executable authority without revalidation.
 - Remote attach negotiates compatibility before any mutation; installing a

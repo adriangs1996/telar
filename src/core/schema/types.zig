@@ -288,7 +288,6 @@ pub const AgentSound = enum(u8) {
 };
 
 pub const AgentSource = enum(u8) {
-    proxy_tls = 0,
     screen = 1,
     foreground_process = 2,
     /// An official lifecycle report from hooks or a runtime-owned provider.

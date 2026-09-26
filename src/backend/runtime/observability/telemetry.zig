@@ -279,11 +279,8 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
     });
     try output.print(
         "\"agent_process_inspections\":{d},\"agent_process_misses\":{d}," ++
-            "\"proxy_active\":{d},\"proxy_observations\":{d}," ++
+            "\"proxy_active\":{d}," ++
             "\"proxy_active_connections\":{d}," ++
-            "\"proxy_event_queue_depth\":{d}," ++
-            "\"proxy_event_queue_high_water\":{d}," ++
-            "\"proxy_dropped_events\":{d}," ++
             "\"proxy_rejected_connections\":{d}," ++
             "\"proxy_invalid_authorization_rejections\":{d}," ++
             "\"proxy_unknown_credential_rejections\":{d}," ++
@@ -295,11 +292,6 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
             "\"proxy_tls_upstream_handshake_failures\":{d}," ++
             "\"proxy_tls_downstream_handshake_failures\":{d}," ++
             "\"proxy_tls_mint_failures\":{d}," ++
-            "\"proxy_claude_inference_requests\":{d}," ++
-            "\"proxy_claude_sse_payload_fragments\":{d}," ++
-            "\"proxy_claude_turn_completions\":{d}," ++
-            "\"proxy_claude_successful_responses\":{d}," ++
-            "\"proxy_claude_failure_observations\":{d}," ++
             "\"proxy_capture_started\":{d}," ++
             "\"proxy_capture_truncated\":{d}," ++
             "\"proxy_capture_skipped_quota\":{d}," ++
@@ -311,11 +303,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
             metrics.agent_process_inspections,
             metrics.agent_process_misses,
             @intFromBool(proxy.active),
-            metrics.proxy_observations,
             proxy.active_connections,
-            proxy.event_queue_depth,
-            proxy.event_queue_high_water,
-            proxy.dropped_events,
             proxy.rejected_connections,
             proxy.invalid_authorization_rejections,
             proxy.unknown_credential_rejections,
@@ -327,11 +315,6 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
             proxy.tls_upstream_handshake_failures,
             proxy.tls_downstream_handshake_failures,
             proxy.tls_mint_failures,
-            proxy.claude_inference_requests,
-            proxy.claude_sse_payload_fragments,
-            proxy.claude_turn_completions,
-            proxy.claude_successful_responses,
-            proxy.claude_failure_observations,
             proxy.capture_started,
             proxy.capture_truncated,
             proxy.capture_skipped_quota,
@@ -489,9 +472,6 @@ test "runtime telemetry reports retained memory domains" {
             .proxy = .{
                 .active = true,
                 .active_connections = 17,
-                .event_queue_depth = 19,
-                .event_queue_high_water = 23,
-                .dropped_events = 29,
                 .rejected_connections = 31,
                 .invalid_authorization_rejections = 37,
                 .unknown_credential_rejections = 41,
@@ -503,11 +483,6 @@ test "runtime telemetry reports retained memory domains" {
                 .tls_upstream_handshake_failures = 67,
                 .tls_downstream_handshake_failures = 71,
                 .tls_mint_failures = 73,
-                .claude_inference_requests = 79,
-                .claude_sse_payload_fragments = 83,
-                .claude_turn_completions = 89,
-                .claude_successful_responses = 97,
-                .claude_failure_observations = 101,
                 .capture_started = 103,
                 .capture_truncated = 107,
                 .capture_skipped_quota = 109,
@@ -551,9 +526,6 @@ test "runtime telemetry reports retained memory domains" {
             "\"response_queue_dropped\":7",
             "\"proxy_active\":1",
             "\"proxy_active_connections\":17",
-            "\"proxy_event_queue_depth\":19",
-            "\"proxy_event_queue_high_water\":23",
-            "\"proxy_dropped_events\":29",
             "\"proxy_rejected_connections\":31",
             "\"proxy_invalid_authorization_rejections\":37",
             "\"proxy_unknown_credential_rejections\":41",
@@ -565,11 +537,6 @@ test "runtime telemetry reports retained memory domains" {
             "\"proxy_tls_upstream_handshake_failures\":67",
             "\"proxy_tls_downstream_handshake_failures\":71",
             "\"proxy_tls_mint_failures\":73",
-            "\"proxy_claude_inference_requests\":79",
-            "\"proxy_claude_sse_payload_fragments\":83",
-            "\"proxy_claude_turn_completions\":89",
-            "\"proxy_claude_successful_responses\":97",
-            "\"proxy_claude_failure_observations\":101",
             "\"proxy_capture_started\":103",
             "\"proxy_capture_truncated\":107",
             "\"proxy_capture_skipped_quota\":109",
@@ -599,9 +566,6 @@ const TelemetrySample = struct {
     const ProxySample = struct {
         active: bool = false,
         active_connections: u32 = 0,
-        event_queue_depth: u64 = 0,
-        event_queue_high_water: u64 = 0,
-        dropped_events: u64 = 0,
         rejected_connections: u64 = 0,
         invalid_authorization_rejections: u64 = 0,
         unknown_credential_rejections: u64 = 0,
@@ -613,11 +577,6 @@ const TelemetrySample = struct {
         tls_upstream_handshake_failures: u64 = 0,
         tls_downstream_handshake_failures: u64 = 0,
         tls_mint_failures: u64 = 0,
-        claude_inference_requests: u64 = 0,
-        claude_sse_payload_fragments: u64 = 0,
-        claude_turn_completions: u64 = 0,
-        claude_successful_responses: u64 = 0,
-        claude_failure_observations: u64 = 0,
         capture_started: u64 = 0,
         capture_truncated: u64 = 0,
         capture_skipped_quota: u64 = 0,

@@ -1,51 +1,23 @@
 //! Contract and integration tests for the proxy service.
 
-const core = @import("telar-core");
 const std = @import("std");
-const Credential = @import("../Credential.zig");
-const Pane = @import("Pane.zig");
 const Service = @import("Service.zig");
-const MiddlewareEvent = @import("../MiddlewareEvent.zig");
-const observation_queue = @import("../observation_queue.zig");
-const middleware = @import("../middleware.zig");
+const Paths = @import("Paths.zig");
+const identity = @import("../identity.zig");
 
 const basic_raw_capacity = 128;
 const basic_encoded_capacity = std.base64.standard.Encoder.calcSize(basic_raw_capacity);
 
-fn encodeBasic(credential: *const Credential, raw_buffer: *[basic_raw_capacity]u8, encoded_buffer: *[basic_encoded_capacity]u8) ![]const u8 {
-    const raw = try std.fmt.bufPrint(raw_buffer, "telar:{d}.{d}.{x}", .{
-        core.raw(credential.pane_id),
-        credential.pane_generation,
-        credential.token,
-    });
+fn encodeBasic(secret: *const identity.Secret, raw_buffer: *[basic_raw_capacity]u8, encoded_buffer: *[basic_encoded_capacity]u8) ![]const u8 {
+    const raw = try std.fmt.bufPrint(raw_buffer, "telar:{x}", .{secret.*});
     const encoded_len = std.base64.standard.Encoder.calcSize(raw.len);
 
     return std.base64.standard.Encoder.encode(encoded_buffer[0..encoded_len], raw);
 }
 
-test "pane registration creates one live capability for the requested generation" {
-    const io = std.testing.io;
-    var fixture: TestServiceFixture = .{};
-    try fixture.init(io, std.testing.allocator);
-    defer fixture.deinit();
-    const service = fixture.service.?;
-    const pane: Pane = .{ .id = try core.pane(7), .generation = 3 };
-
-    var credential = try service.registerPane(pane);
-    defer std.crypto.secureZero(u8, &credential.token);
-
-    try std.testing.expectEqual(pane.id, credential.pane_id);
-    try std.testing.expectEqual(pane.generation, credential.pane_generation);
-    try std.testing.expect(service.credentials.identify(io, &credential) != null);
-
-    service.unregisterCredential(&credential);
-
-    try std.testing.expect(service.credentials.identify(io, &credential) == null);
-}
-
 test "running service leaves exchange capture inert when disabled" {
     var fixture: TestServiceFixture = .{};
-    try fixture.init(std.testing.io, std.testing.allocator);
+    try fixture.init(std.testing.io, std.testing.allocator, &.{});
     defer fixture.deinit();
     const service = fixture.service.?;
     try service.start();
@@ -56,6 +28,25 @@ test "running service leaves exchange capture inert when disabled" {
     try std.testing.expectEqual(@as(u64, 0), snapshot.capture_started);
     try std.testing.expectEqual(@as(u64, 0), snapshot.capture_skipped_quota);
     try std.testing.expectEqual(@as(u64, 0), snapshot.queued_captures);
+}
+
+test "the proxy secret and port persist across service restarts" {
+    const io = std.testing.io;
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, std.testing.allocator, &.{});
+    defer fixture.deinit();
+    const first_secret = fixture.service.?.secret;
+    const first_port = fixture.service.?.clientConfiguration().port;
+    var url_buffer: [256]u8 = undefined;
+    const url = try fixture.service.?.proxyUrl(&url_buffer);
+    try std.testing.expect(std.mem.startsWith(u8, url, "http://telar:"));
+    try std.testing.expect(std.mem.indexOf(u8, url, "@127.0.0.1:") != null);
+
+    fixture.service.?.destroy();
+    fixture.service = try Service.create(io, std.testing.allocator, fixture.paths(&.{}));
+
+    try std.testing.expect(identity.sameSecret(&first_secret, &fixture.service.?.secret));
+    try std.testing.expectEqual(first_port, fixture.service.?.clientConfiguration().port);
 }
 
 fn echoOpaquePayload(io: std.Io, listener: *std.Io.net.Server, expected: []const u8) !void {
@@ -95,53 +86,18 @@ fn listenTestOrigin(io: std.Io) !TestOrigin {
     return error.TestOriginPortUnavailable;
 }
 
-test "non-whitelisted CONNECT relays bytes with a saturated observation queue" {
+test "non-whitelisted CONNECT relays bytes untouched" {
     const io = std.testing.io;
-    const gpa = std.testing.allocator;
     const payload = "not-a-tls-client-hello";
     var origin = try listenTestOrigin(io);
     defer origin.listener.deinit(io);
     var origin_worker = try io.concurrent(echoOpaquePayload, .{ io, &origin.listener, payload });
     defer origin_worker.cancel(io) catch {};
 
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
-    var key_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var cert_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var bundle_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const service = try Service.create(io, gpa, .{
-        .key = try std.fmt.bufPrint(&key_buffer, "{s}/ca-key.pem", .{directory}),
-        .certificate = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory}),
-        .bundle = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
-        .intercept_hosts = &.{"api.openai.com"},
-    });
-    defer service.destroy();
-    var credential = try service.registerPane(.{ .id = try core.pane(7), .generation = 12 });
-    defer std.crypto.secureZero(u8, &credential.token);
-    const observation: MiddlewareEvent = .{
-        .owner = service.credentials.identify(io, &credential).?,
-        .dialect = .openai_responses,
-        .phase = .response_activity,
-        .protocol = .http11,
-        .connection_id = 1,
-        .observed_at_ms = 1,
-    };
-    for (0..observation_queue.capacity) |_| service.observations.publish(io, observation);
-    service.observations.publish(io, observation);
-    const observation_metrics = service.observations.metrics();
-
-    try std.testing.expectEqual(
-        @as(u64, observation_queue.capacity),
-        observation_metrics.queued,
-    );
-    try std.testing.expectEqual(
-        @as(u64, observation_queue.capacity),
-        observation_metrics.high_water,
-    );
-    try std.testing.expectEqual(@as(u64, 1), observation_metrics.dropped);
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, std.testing.allocator, &.{"api.openai.com"});
+    defer fixture.deinit();
+    const service = fixture.service.?;
     try service.start();
     defer service.stop();
 
@@ -154,7 +110,7 @@ test "non-whitelisted CONNECT relays bytes with a saturated observation queue" {
     defer std.crypto.secureZero(u8, &raw_buffer);
     var encoded_buffer: [basic_encoded_capacity]u8 = undefined;
     defer std.crypto.secureZero(u8, &encoded_buffer);
-    const basic = try encodeBasic(&credential, &raw_buffer, &encoded_buffer);
+    const basic = try encodeBasic(&service.secret, &raw_buffer, &encoded_buffer);
     var request_buffer: [512]u8 = undefined;
     const request = try std.fmt.bufPrint(
         &request_buffer,
@@ -185,32 +141,17 @@ test "non-whitelisted CONNECT relays bytes with a saturated observation queue" {
     );
 }
 
-test "intercepted CONNECT publishes and counts an upstream TLS failure" {
+test "intercepted CONNECT counts an upstream TLS failure" {
     const io = std.testing.io;
-    const gpa = std.testing.allocator;
     var origin = try listenTestOrigin(io);
     defer origin.listener.deinit(io);
     var origin_worker = try io.concurrent(rejectTlsHandshake, .{ io, &origin.listener });
     defer origin_worker.cancel(io) catch {};
 
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
-    var key_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var cert_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var bundle_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const service = try Service.create(io, gpa, .{
-        .key = try std.fmt.bufPrint(&key_buffer, "{s}/ca-key.pem", .{directory}),
-        .certificate = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory}),
-        .bundle = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
-        .intercept_hosts = &.{"localhost"},
-    });
-    defer service.destroy();
-
-    var credential = try service.registerPane(.{ .id = try core.pane(9), .generation = 4 });
-    defer std.crypto.secureZero(u8, &credential.token);
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, std.testing.allocator, &.{"localhost"});
+    defer fixture.deinit();
+    const service = fixture.service.?;
     try service.start();
     defer service.stop();
 
@@ -223,7 +164,7 @@ test "intercepted CONNECT publishes and counts an upstream TLS failure" {
     defer std.crypto.secureZero(u8, &raw_buffer);
     var encoded_buffer: [basic_encoded_capacity]u8 = undefined;
     defer std.crypto.secureZero(u8, &encoded_buffer);
-    const basic = try encodeBasic(&credential, &raw_buffer, &encoded_buffer);
+    const basic = try encodeBasic(&service.secret, &raw_buffer, &encoded_buffer);
     var request_buffer: [512]u8 = undefined;
     const request = try std.fmt.bufPrint(
         &request_buffer,
@@ -246,15 +187,7 @@ test "intercepted CONNECT publishes and counts an upstream TLS failure" {
     try writer.interface.flush();
     try origin_worker.await(io);
 
-    const event = try service.receive(io);
-    try std.testing.expectEqual(middleware.Phase.request_failed, event.phase);
-    try std.testing.expectEqual(middleware.Protocol.http11, event.protocol);
-    try std.testing.expectEqual(@as(u32, 0), event.stream_id);
-    try std.testing.expectEqualDeep(service.credentials.identify(io, &credential).?, event.owner);
-    try std.testing.expectEqual(
-        @as(u64, 1),
-        service.metrics().tls_upstream_handshake_failures,
-    );
+    try waitForCounter(service, "tls_upstream_handshake_failures", 1);
     try std.testing.expectEqual(@as(u64, 0), service.metrics().tls_context_failures);
     try std.testing.expectEqual(
         @as(u64, 0),
@@ -263,69 +196,25 @@ test "intercepted CONNECT publishes and counts an upstream TLS failure" {
     try std.testing.expectEqual(@as(u64, 0), service.metrics().tls_mint_failures);
 }
 
-test "receive discards observations queued before pane revocation" {
-    const io = std.testing.io;
-    const gpa = std.testing.allocator;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
-    var key_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var cert_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var bundle_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const service = try Service.create(io, gpa, .{
-        .key = try std.fmt.bufPrint(&key_buffer, "{s}/ca-key.pem", .{directory}),
-        .certificate = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory}),
-        .bundle = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
-    });
-    defer service.destroy();
+/// The tunnel records its TLS outcome after the origin closed; poll briefly.
+fn waitForCounter(service: *const Service, comptime field: []const u8, expected: u64) !void {
+    for (0..1000) |_| {
+        if (@field(service.metrics(), field) == expected) {
+            return;
+        }
 
-    var current = try service.registerPane(.{ .id = try core.pane(7), .generation = 2 });
-    defer std.crypto.secureZero(u8, &current.token);
-    service.observations.publish(io, .{
-        .owner = service.credentials.identify(io, &current).?,
-        .dialect = .openai_responses,
-        .phase = .request_started,
-        .protocol = .http11,
-        .connection_id = 1,
-        .observed_at_ms = 1,
-    });
-    service.unregisterPane(.{ .id = current.pane_id, .generation = current.pane_generation });
-    var next = try service.registerPane(.{ .id = current.pane_id, .generation = 3 });
-    defer std.crypto.secureZero(u8, &next.token);
-    const next_owner = service.credentials.identify(io, &next).?;
-    service.observations.publish(io, .{
-        .owner = next_owner,
-        .dialect = .openai_responses,
-        .phase = .request_started,
-        .protocol = .http11,
-        .connection_id = 2,
-        .observed_at_ms = 2,
-    });
+        try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+    }
 
-    const received = try service.receive(io);
-    try std.testing.expectEqualDeep(next_owner, received.owner);
-    try std.testing.expectEqual(@as(u64, 0), service.observations.metrics().queued);
+    return error.ProxyCounterNotObserved;
 }
 
 test "loopback service maps CONNECT authentication and target rejections" {
     const io = std.testing.io;
-    const gpa = std.testing.allocator;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
-    var key_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var cert_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var bundle_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const service = try Service.create(io, gpa, .{
-        .key = try std.fmt.bufPrint(&key_buffer, "{s}/ca-key.pem", .{directory}),
-        .certificate = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory}),
-        .bundle = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
-    });
-    defer service.destroy();
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, std.testing.allocator, &.{});
+    defer fixture.deinit();
+    const service = fixture.service.?;
     try service.start();
     defer service.stop();
 
@@ -363,14 +252,15 @@ test "loopback service maps CONNECT authentication and target rejections" {
     defer unknown_client.close(io);
     var unknown_write_buffer: [512]u8 = undefined;
     var unknown_writer = unknown_client.writer(io, &unknown_write_buffer);
-    const raw = "telar:7.12.00112233445566778899aabbccddeeff";
-    var encoded: [std.base64.standard.Encoder.calcSize(raw.len)]u8 = undefined;
-    const basic = std.base64.standard.Encoder.encode(&encoded, raw);
+    const wrong_secret: identity.Secret = .{0} ** identity.secret_bytes;
+    var wrong_raw_buffer: [basic_raw_capacity]u8 = undefined;
+    var wrong_encoded_buffer: [basic_encoded_capacity]u8 = undefined;
+    const wrong_basic = try encodeBasic(&wrong_secret, &wrong_raw_buffer, &wrong_encoded_buffer);
     var request_buffer: [256]u8 = undefined;
     const request = try std.fmt.bufPrint(
         &request_buffer,
         "CONNECT api.openai.com:443 HTTP/1.1\r\nProxy-Authorization: Basic {s}\r\n\r\n",
-        .{basic},
+        .{wrong_basic},
     );
     try unknown_writer.interface.writeAll(request);
     try unknown_writer.interface.flush();
@@ -392,13 +282,11 @@ test "loopback service maps CONNECT authentication and target rejections" {
         service.metrics().rejected_connections,
     );
 
-    var credential = try service.registerPane(.{ .id = try core.pane(7), .generation = 12 });
-    defer std.crypto.secureZero(u8, &credential.token);
     var registered_raw_buffer: [basic_raw_capacity]u8 = undefined;
     defer std.crypto.secureZero(u8, &registered_raw_buffer);
     var registered_encoded_buffer: [basic_encoded_capacity]u8 = undefined;
     defer std.crypto.secureZero(u8, &registered_encoded_buffer);
-    const registered_basic = try encodeBasic(&credential, &registered_raw_buffer, &registered_encoded_buffer);
+    const registered_basic = try encodeBasic(&service.secret, &registered_raw_buffer, &registered_encoded_buffer);
     const invalid_target_client = try address.connect(io, .{ .mode = .stream });
     defer invalid_target_client.close(io);
     var invalid_target_write_buffer: [512]u8 = undefined;
@@ -433,24 +321,44 @@ const TestServiceFixture = struct {
     key: [std.fs.max_path_bytes]u8 = undefined,
     certificate: [std.fs.max_path_bytes]u8 = undefined,
     bundle: [std.fs.max_path_bytes]u8 = undefined,
+    secret: [std.fs.max_path_bytes]u8 = undefined,
+    port: [std.fs.max_path_bytes]u8 = undefined,
+    directory_len: usize = 0,
     service: ?*Service = null,
 
-    pub fn init(self: *TestServiceFixture, io: std.Io, gpa: std.mem.Allocator) !void {
+    pub fn init(self: *TestServiceFixture, io: std.Io, gpa: std.mem.Allocator, intercept_hosts: []const []const u8) !void {
         self.temp = std.testing.tmpDir(.{});
         errdefer self.temp.cleanup();
 
         var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const directory_len = try self.temp.dir.realPath(io, &directory_buffer);
-        const directory = directory_buffer[0..directory_len];
-        self.service = try Service.create(io, gpa, .{
-            .key = try std.fmt.bufPrint(&self.key, "{s}/ca-key.pem", .{directory}),
-            .certificate = try std.fmt.bufPrint(&self.certificate, "{s}/ca-cert.pem", .{directory}),
-            .bundle = try std.fmt.bufPrint(&self.bundle, "{s}/ca-bundle.pem", .{directory}),
-        });
+        const directory = directory_buffer[0..try self.temp.dir.realPath(io, &directory_buffer)];
+        self.directory_len = (try std.fmt.bufPrint(&self.key, "{s}/ca-key.pem", .{directory})).len;
+        _ = try std.fmt.bufPrint(&self.certificate, "{s}/ca-cert.pem", .{directory});
+        _ = try std.fmt.bufPrint(&self.bundle, "{s}/ca-bundle.pem", .{directory});
+        _ = try std.fmt.bufPrint(&self.secret, "{s}/proxy-secret", .{directory});
+        _ = try std.fmt.bufPrint(&self.port, "{s}/proxy-port", .{directory});
+        self.service = try Service.create(io, gpa, self.paths(intercept_hosts));
+    }
+
+    /// The paths under the fixture's directory; every name shares the
+    /// directory prefix and its own suffix.
+    pub fn paths(self: *const TestServiceFixture, intercept_hosts: []const []const u8) Paths {
+        const directory_len = self.directory_len - "/ca-key.pem".len;
+        return .{
+            .key = self.key[0 .. directory_len + "/ca-key.pem".len],
+            .certificate = self.certificate[0 .. directory_len + "/ca-cert.pem".len],
+            .bundle = self.bundle[0 .. directory_len + "/ca-bundle.pem".len],
+            .secret = self.secret[0 .. directory_len + "/proxy-secret".len],
+            .port = self.port[0 .. directory_len + "/proxy-port".len],
+            .intercept_hosts = intercept_hosts,
+        };
     }
 
     pub fn deinit(self: *TestServiceFixture) void {
-        self.service.?.destroy();
+        if (self.service) |service| {
+            service.destroy();
+        }
+
         self.temp.cleanup();
     }
 };

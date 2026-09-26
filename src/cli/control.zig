@@ -172,7 +172,7 @@ test "snapshot resolution prefers exact pane ids and rejects ambiguous titles" {
         .session_title = "Investigate proxy",
         .provider = .claude,
         .status = .done,
-        .source = .proxy_tls,
+        .source = .lifecycle_report,
         .authority = .active,
         .confidence = 90,
         .sequence = 1,

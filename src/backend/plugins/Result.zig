@@ -9,8 +9,6 @@ plugin_id: u64,
 digest: core.Digest,
 generation: u64,
 event_id: u64,
-pane: core.PaneId,
-pane_generation: u64,
 storage: []u8,
 batch: Batch,
 

@@ -8,7 +8,6 @@ code and stay with the built-ins.
 | --- | --- | --- |
 | Data | `core.agent_manifest.Table` (`config.runtime.agents`) | Which process and phrases are this agent; how it is named, titled and drawn; how its prompt marks pasted images |
 | Runtime capabilities | `backend/agent/providers/` (one file per built-in) | How a session is resumed; which lifecycle quirks the aggregate tolerates |
-| API dialect | `backend/proxy/provider/dialect.zig` | Which wire protocol an exchange speaks (`anthropic_messages`, `openai_responses`) |
 
 The sidebar, the `telar agent` command, notifications and the image shelf read
 the data axis from the snapshot entry the runtime publishes. None of them
@@ -110,18 +109,6 @@ Lifecycle hooks are the CLI's own per-agent table: `telar integration`
 installs them from `cli/integration.zig` and `telar hook` parses them in
 `cli/hook.zig`. Pi uses an extension instead of hook settings.
 
-## API dialect
-
-The proxy never names an agent. `provider/dialect.zig` identifies the dialect
-of a CONNECT host and `request_support.inferenceRoutes` names the inference
-routes per dialect; the relay only reports whether a request matched them.
-Observations carry the dialect to the runtime, where
-`ProxyObservation.impliedProvider` maps it to the native built-in agent
-(`anthropic_messages` to Claude Code, `openai_responses` to Codex). That
-implied identity is used only while no process has claimed the pane; once a
-process is known, its exchanges count whatever the host says, so Pi talking to
-Anthropic stays Pi and a Codex pointed at a compatible gateway stays Codex.
-
 ## Ownership and budgets
 
 The table is copied once into runtime resources and only borrowed afterwards:
@@ -138,8 +125,6 @@ table.
 - `src/core/agent_manifest.zig` proves the built-in heuristics, custom index
   assignment, extension by name, list bounds and presentation defaults.
 - `src/backend/agent/providers/providers.zig` proves capability resolution.
-- `src/backend/proxy/provider/dialect.zig` proves host identification and the
-  implied agent per dialect.
 - `src/backend/history/agent_detection.zig` and `src/backend/process/process.zig`
   prove screen and process detection against the built-in table.
 - `src/client/config/generation_support.zig` proves manifest parsing and its

@@ -53,11 +53,7 @@ return telar.config({
         max_total_bytes = 64 * 1024 * 1024,
         join_timeout_ms = 30000,
       },
-      intercept_hosts = {
-        "api.anthropic.com",
-        "api.openai.com",
-        "chatgpt.com",
-      },
+      intercept_hosts = { "api.example.com" },
     },
     agent_descriptions = {
       command = {
@@ -470,10 +466,6 @@ agent-specific program rather than data:
   a plain shell.
 - **Lifecycle hooks.** `telar integration <agent>` and `telar hook <agent>`
   know the hook formats of the three built-ins (`src/cli/`).
-- **Network observation.** The proxy recognizes API dialects
-  (`anthropic_messages`, `openai_responses`), not agents. Any agent that talks
-  to one of those APIs through the proxy gets network-side lifecycle for free;
-  an agent talking to another API relies on process detection and phrases.
 
 Diagnostics name the entry and the field, for example
 `config.runtime.agents[2].icon must be exactly one cell wide`.
@@ -862,15 +854,16 @@ relative `ca_dir` is also resolved beside `config.lua`; Telar creates it
 owner-only and stores its private CA and derived trust bundle there with
 owner-only file permissions. `intercept_hosts` accepts at most 256 exact DNS
 hostnames, leading wildcard rules such as `*.example.com`, or the global `*`
-rule within a 64,768-byte budget. It defaults to `api.anthropic.com`,
-`api.openai.com`, and `chatgpt.com`; an explicitly configured array replaces
-the defaults, including with an empty array. Telar canonicalizes case, sorts
+rule within a 64,768-byte budget. It is empty by default, so an enabled proxy
+intercepts nothing until you name hosts. Telar canonicalizes case, sorts
 the set, and removes duplicates when the runtime starts. A leading wildcard
 matches proper subdomains but not the bare suffix; `*` matches every hostname.
 Partial labels such as `*example.com` and embedded wildcards are rejected.
-Every connection still requires a live pane credential. A connection outside
-the configured scope passes through the authenticated CONNECT listener, but
-its TCP payload is forwarded opaquely and is not observed.
+Every connection still requires the proxy secret, which Telar writes to
+`proxy-secret` in `ca_dir` on the first start and puts in each pane's
+`HTTPS_PROXY`; delete the file to rotate it. A connection outside the
+configured scope passes through the authenticated CONNECT listener, but its
+TCP payload is forwarded opaquely and is not captured.
 
 System trust is not a configuration side effect. Run `telar proxy trust
 install|uninstall|status` explicitly. If `ca_dir` is custom, pass the same
@@ -887,13 +880,9 @@ are bounded independently, and a full queue or exhausted quota drops capture
 data without delaying or changing proxied traffic. Response decompression is
 performed on the runtime observation path and is capped by `max_part_bytes`.
 Until a trusted tap plugin is configured, completed captures are consumed only
-for metrics and are not persisted. The shipped
-[`examples/plugins/agent-commands`](../examples/plugins/agent-commands)
-package is an opt-in classifier: install it, grant its exact digest
-`proxy.tap`, `history.write`, and `notifications`, then add the immutable path
-printed by `telar plugin install` to `config.plugins`. Runtime tap workers are
-created only at server startup, so restart the runtime after changing that
-package or its grants.
+for metrics and are not persisted. Runtime tap workers are created only at
+server startup, so restart the runtime after changing a tap package or its
+grants.
 
 Explicit server CLI graphics limits still override the Lua values.
 Runtime-owned settings take effect when the long-lived runtime starts; restart

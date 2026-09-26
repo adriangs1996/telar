@@ -52,7 +52,6 @@ pub fn resolve(gui: *GuiAdapter, mouse: keyinput.Mouse, mods: u32) Target {
                 return base;
             }
 
-            const reporting = pane.mouse.tracking != .none;
             const row = pane.scroll.offset + (mouse.y - view.content.y);
             const found = data.cells.resolve(pane, .{ .x = mouse.x - view.content.x, .y = row }) orelse return base;
             const start_x = if (row == found.start.y) found.start.x else 0;
@@ -61,7 +60,9 @@ pub fn resolve(gui: *GuiAdapter, mouse: keyinput.Mouse, mods: u32) Target {
                 return base;
             }
 
-            if (mods & link_modifier == 0 or mods & 2 != 0 or (reporting and mods & 1 == 0)) {
+            // Alt keeps the text plain for selection. Every other hover shows
+            // the link; the press policy in `ports/chrome.zig` decides who opens it.
+            if (mods & 2 != 0) {
                 return .{ .shape = .pointer };
             }
 

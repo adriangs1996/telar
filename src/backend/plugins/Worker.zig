@@ -83,8 +83,6 @@ fn run(self: *Worker, io: std.Io) anyerror!void {
         }, .{
             .event_id = frame.event_id,
             .bytes = frame.bytes(),
-            .pane = frame.pane,
-            .pane_generation = frame.pane_generation,
         }) catch |err| {
             if (err != error.WorkerEventFailed) {
                 self.closeSession();

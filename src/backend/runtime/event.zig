@@ -15,7 +15,6 @@ const ObservationCompletion = @import("events/ObservationCompletion.zig");
 const MediaCompletion = @import("events/MediaCompletion.zig");
 const ExitCompletion = @import("events/ExitCompletion.zig");
 const Wake = @import("events/Wake.zig");
-const Observation = @import("../proxy/Observation.zig");
 const Half = owned.Half;
 const Result = @import("../plugins/Result.zig");
 const AgentResult = @import("../agent/Result.zig");
@@ -45,7 +44,6 @@ pub const Event = union(enum) {
     pane_search: Wake,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
-    proxy_event: anyerror!Observation,
     proxy_capture: anyerror!*Half,
     plugin_effects: anyerror!*Result,
     agent_tick: anyerror!void,
@@ -101,7 +99,6 @@ pub fn discard(completed: Event, io: std.Io) void {
         .pane_search,
         .telemetry_tick,
         .telemetry_written,
-        .proxy_event,
         .agent_tick,
         .agent_description,
         .engine_response,
@@ -139,7 +136,6 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) core.Path {
         .pane_search,
         .pane_observed,
         .history_response,
-        .proxy_event,
         .proxy_capture,
         .plugin_effects,
         .agent_tick,
@@ -186,7 +182,6 @@ test "observation events use the observation budget" {
     const tags = [_]std.meta.Tag(Event){
         .pane_observed,
         .history_response,
-        .proxy_event,
         .proxy_capture,
         .plugin_effects,
         .agent_tick,

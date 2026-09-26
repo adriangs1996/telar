@@ -133,7 +133,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     const schema_test_prerequisites = testBarrier(b, "run schema test prerequisites");
     const backend_proxy_test_step = b.step(
         "test-backend-proxy",
-        "Run the runtime observation proxy tests",
+        "Run the runtime proxy tests",
     );
     const editor_tests = b.addTest(.{ .root_module = app.modules.backend, .filters = &.{"editor"} });
     const editor_wire_tests = b.addTest(.{ .root_module = app.modules.core, .filters = &.{ "editor", "corpus", "every truncated prefix" } });

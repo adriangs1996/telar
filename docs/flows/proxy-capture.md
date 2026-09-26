@@ -13,15 +13,14 @@ while `runtime.proxy.capture.enabled` is true.
    `tunnel/RelayContext.zig` does the same
    per stream using separate 128-slot direction tables. Relay writes complete
    before body fragments are observed.
-2. `capture.Producer.publish` checks the pane credential and attempts a
-   zero-deadline pointer transfer into the 256-entry capture queue. Failure
-   erases and frees the half; it never waits for capacity.
+2. `capture.Producer.publish` attempts a zero-deadline pointer transfer into
+   the 256-entry capture queue. Failure erases and frees the half; it never
+   waits for capacity.
 3. `Sources.receiveProxyCapture` completes the runtime `Event.proxy_capture`.
    The dispatcher delegates to `proxy_capture.receive`, which rearms receive
    first.
-4. The procedure rejects stale pane generations through `model.panes.resolve`,
-   then asks `ProxyRuntime.decodeCapture` to decode a content-coded body on the
-   observation path.
+4. The procedure asks `ProxyRuntime.decodeCapture` to decode a content-coded
+   body on the observation path.
 5. `ProxyRuntime.acceptCapture` pushes the half into `capture.Joiner`, which
    owns it until its peer arrives. Matching `(connection_id, stream_id)`
    halves form one exchange. `ProxyRuntime.expireCaptures`, run on each accept
@@ -38,14 +37,13 @@ Part, exchange, and global byte quotas are fixed by validated runtime config.
 Allocation failure and quota exhaustion stop capture for the affected data but
 do not stop forwarding. Decompression supports at most two reverse-ordered
 codings and caps its output. Unknown or invalid encodings retain raw captured
-bytes. Queue envelopes name the pane credential by its non-secret `CredentialId`,
-checked against the registry at publication and delivery; the token never
-enters the queue, and retained halves carry only pane ID and generation.
+bytes. A half carries the protocol it travelled over and nothing that
+identifies a pane or a secret.
 
 ## Validation
 
 Proxy tests cover split HTTP/1.1 chunked and content-length bodies, unchanged
-wire output, interleaved HTTP/2 streams, capture under an unknown dialect,
-mid-body truncation, queue saturation, credential revocation, gzip, Brotli and
+wire output, interleaved HTTP/2 streams,
+mid-body truncation, queue saturation, gzip, Brotli and
 zstd output caps, join completion, and timeout release. The disabled producer
 test proves the default path reserves no capture memory.

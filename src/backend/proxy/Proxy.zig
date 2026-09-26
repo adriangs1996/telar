@@ -4,13 +4,11 @@ const proxy_namespace = @import("proxy_namespace.zig");
 const Config = @import("Config.zig");
 const Service = @import("service/Service.zig");
 const Half = owned.Half;
-const PaneKey = @import("../pane/PaneKey.zig");
 const PaneEnvironmentOptions = @import("PaneEnvironmentOptions.zig");
 const PaneEnvironment = @import("PaneEnvironment.zig");
 const pty = @import("pty");
 const Override = pty.Override;
 const ChildEnvironment = pty.ChildEnvironment;
-const Observation = @import("Observation.zig");
 const Snapshot = @import("Snapshot.zig");
 const Proxy = @This();
 
@@ -31,6 +29,8 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
         .key = config.key_path,
         .certificate = config.certificate_path,
         .bundle = config.bundle_path,
+        .secret = config.secret_path,
+        .port = config.port_path,
         .system_authority = config.system_authority,
         .intercept_hosts = config.intercept_hosts,
         .capture = config.capture,
@@ -46,8 +46,8 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
     return proxy;
 }
 
-/// Cancels proxy traffic, closes observation delivery, and releases the
-/// capability. The caller must first cancel its outstanding `receive`
+/// Cancels proxy traffic, closes capture delivery, and releases the
+/// capability. The caller must first cancel its outstanding `receiveCapture`
 /// operations.
 ///
 /// ```zig
@@ -60,7 +60,7 @@ pub fn destroy(self: *Proxy) void {
     gpa.destroy(self);
 }
 
-/// Waits for one live, heap-owned captured exchange half.
+/// Waits for one heap-owned captured exchange half.
 ///
 /// ```zig
 /// const half = try proxy.receiveCapture(io);
@@ -78,24 +78,20 @@ pub fn decodeCapture(self: *Proxy, half: *Half) void {
     self.service.decodeCapture(half);
 }
 
-/// Registers one pane generation and returns its owned child environment.
-/// `pane_overrides` carries the pane's identity variables; the proxy adds
-/// its own credentials and trust configuration after them.
+/// Returns the owned child environment of a new pane. `pane_overrides`
+/// carries the pane's identity variables; the proxy adds the shared proxy
+/// URL and trust configuration after them.
 ///
 /// ```zig
-/// var pane_environment = try proxy.registerPane(key, .{ .inherited = inherited, .overrides = pane_overrides });
+/// var pane_environment = try proxy.environment(.{ .inherited = inherited, .overrides = pane_overrides });
 /// defer pane_environment.deinit();
 /// ```
-pub fn registerPane(self: *Proxy, key: PaneKey, options: PaneEnvironmentOptions) !PaneEnvironment {
+pub fn environment(self: *Proxy, options: PaneEnvironmentOptions) !PaneEnvironment {
     std.debug.assert(options.overrides.len <= proxy_namespace.max_pane_overrides);
     const service = self.service;
-    var credential = try service.registerPane(.{ .id = key.id, .generation = key.generation });
-    defer std.crypto.secureZero(u8, &credential.token);
-    errdefer service.unregisterCredential(&credential);
-
     var url_buffer: [256]u8 = undefined;
     defer std.crypto.secureZero(u8, &url_buffer);
-    const proxy_url = try service.credentialUrl(&url_buffer, &credential);
+    const proxy_url = try service.proxyUrl(&url_buffer);
     const client = service.clientConfiguration();
     const proxy_overrides = proxy_namespace.environmentOverrides(
         proxy_url,
@@ -109,38 +105,6 @@ pub fn registerPane(self: *Proxy, key: PaneKey, options: PaneEnvironmentOptions)
         .telar_term_program = "telar",
         .overrides = overrides[0 .. options.overrides.len + proxy_overrides.len],
     }) };
-}
-
-/// Revokes new tunnels and observations for one exact pane generation.
-///
-/// ```zig
-/// proxy.revokePane(key);
-/// ```
-pub fn revokePane(self: *Proxy, key: PaneKey) void {
-    self.service.unregisterPane(.{ .id = key.id, .generation = key.generation });
-}
-
-/// Revocation rejects new tunnels and filters both queued and subsequent
-/// observations. A tunnel already authenticated keeps forwarding bytes.
-///
-/// ```zig
-/// const observation = try proxy.receive(io);
-/// ```
-pub fn receive(self: *Proxy, io: std.Io) anyerror!Observation {
-    const event = try self.service.receive(io);
-    return .{
-        .pane = .{
-            .id = event.owner.pane_id,
-            .generation = event.owner.pane_generation,
-        },
-        .dialect = event.dialect,
-        .phase = event.phase,
-        .protocol = event.protocol,
-        .connection_id = event.connection_id,
-        .stream_id = event.stream_id,
-        .status_code = event.status_code,
-        .observed_at_ms = event.observed_at_ms,
-    };
 }
 
 /// Returns a lock-free snapshot of proxy counters.

@@ -70,16 +70,6 @@ pub fn receiveEngine(self: *Sources, engine_service: *EngineService) !void {
     try self.select.concurrent(.engine_response, EngineService.receiveResponse, .{ engine_service, self.io });
 }
 
-/// Arms the next proxy observation. A disabled proxy arms nothing.
-///
-/// ```zig
-/// try sources.receiveProxyObservation(&resources.proxy);
-/// ```
-pub fn receiveProxyObservation(self: *Sources, proxy_runtime: *ProxyRuntime) !void {
-    const proxy = proxy_runtime.capability() orelse return;
-    try self.select.concurrent(.proxy_event, Proxy.receive, .{ proxy, self.io });
-}
-
 /// Arms the next captured exchange half. A disabled proxy arms nothing.
 ///
 /// ```zig
@@ -141,7 +131,6 @@ test "a disabled stop signal and a disabled proxy arm nothing" {
     defer proxy.deinit();
 
     try sources.waitForStop(null);
-    try sources.receiveProxyObservation(&proxy);
     try sources.receiveProxyCapture(&proxy);
 }
 
@@ -157,7 +146,6 @@ test "an armed stop signal and an active proxy propagate scheduling failures" {
     defer proxy.deinit();
 
     try std.testing.expectError(error.ConcurrencyUnavailable, sources.waitForStop(&queue));
-    try std.testing.expectError(error.ConcurrencyUnavailable, sources.receiveProxyObservation(&proxy));
     try std.testing.expectError(error.ConcurrencyUnavailable, sources.receiveProxyCapture(&proxy));
     try std.testing.expect(proxy.active());
 }

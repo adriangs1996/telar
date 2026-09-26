@@ -23,6 +23,8 @@ test "interception owns trust paths and exposes bounded tunnel resources" {
         .key = key_path,
         .certificate = certificate_path,
         .bundle = bundle_path,
+        .secret = "",
+        .port = "",
         .intercept_hosts = &.{"localhost"},
     });
     defer interception.deinit();

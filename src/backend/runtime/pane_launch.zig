@@ -1,7 +1,7 @@
 //! Pane launch transaction (ADR 0001).
 //!
-//! Allocation, proxy registration, process creation, table insertion and
-//! actor scheduling either establish a fully observable pane or run the
+//! Allocation, environment preparation, process creation, table insertion
+//! and actor scheduling either establish a fully observable pane or run the
 //! matching rollback path.
 
 const session_checkpoint = @import("session_checkpoint.zig");
@@ -84,19 +84,12 @@ fn launchTerminal(model: *RuntimeModel, request: LaunchRequest) !*Pane {
     defer if (proxy_environment) |*owned| owned.deinit();
     var owned_environment: ?ChildEnvironment = null;
     defer if (owned_environment) |*owned| owned.deinit();
-    var proxy_registered = false;
-    errdefer if (proxy_registered) if (proxy) |active|
-        active.revokePane(pane_key);
 
     const child_environment = if (proxy) |active| block: {
-        proxy_environment = try active.registerPane(
-            pane_key,
-            .{
-                .inherited = model.inherited_environment,
-                .overrides = identity_overrides,
-            },
-        );
-        proxy_registered = true;
+        proxy_environment = try active.environment(.{
+            .inherited = model.inherited_environment,
+            .overrides = identity_overrides,
+        });
         break :block proxy_environment.?.environment();
     } else block: {
         owned_environment = try ChildEnvironment.initWithOverrides(
@@ -173,7 +166,6 @@ fn launchTerminal(model: *RuntimeModel, request: LaunchRequest) !*Pane {
     };
 
     fresh.commitLaunch(shell);
-    proxy_registered = false;
     return fresh;
 }
 

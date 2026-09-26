@@ -28,10 +28,12 @@ test "captured native link consumes stationary modifier motion before release" {
     event.mods = 1;
     try fixture.send(event);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
+    // Dropping the modifier leaves the same link under the pointer, so the
+    // claimed press still opens on release without leaking to the child.
     event.code = 2;
     try fixture.send(event);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
-    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
+    try std.testing.expectEqual(@as(usize, 1), fixture.session.link_open_count);
 }
 
 test "native link click cannot open a replacement URL before its frame is presented" {
@@ -201,17 +203,21 @@ fn receiveLink(fixture: *Fixture, frame_id: u64, text: []const u8) !void {
     @memset(&wire, 0xff);
 }
 
-test "native displayed link previews consume hidden URL clicks until replacement delivery" {
+test "native displayed link tooltips consume hidden URL clicks until replacement delivery" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
     const pane = gui.app.model.panes.find(Session.pane_id).?;
-    _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = pane.buffer.h - 1 }, .text = "https://b.c", .style = .{} });
-    pane.markSpan(0, @intCast(pane.buffer.cells.len));
-    try fixture.present();
     try fixture.send(fixture.event(6));
     try fixture.present();
     const preview = gui.pointer.hover.shown_preview.?;
+    // A second URL sits on a pane row the card covers.
+    const view = data.tab_layout.view(&gui.app.model, gui.app.model.tabs.active, Session.pane_id, data.workbench.region(&gui.app.model).area).?;
+    try std.testing.expect(preview.y > view.content.y and preview.y < view.content.y + view.content.h);
+    _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = preview.y - view.content.y }, .text = "https://b.c", .style = .{} });
+    pane.markSpan(0, @intCast(pane.buffer.cells.len));
+    try fixture.present();
+    try std.testing.expectEqualDeep(@as(?cellgrid.Rect, preview), gui.pointer.hover.shown_preview);
     const size = gui.app.model.host.host_size;
     var pointer = fixture.event(6);
     pointer.x = @as(f64, @floatFromInt(preview.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[0])) + 1;
@@ -285,8 +291,10 @@ test "native preview coverage survives pointer leave failed presentation and lat
     try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
     try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
     try std.testing.expect(gui.overlays.gesture == null);
+    // The pointer now rests on the link without a modifier: its card shows again.
     try fixture.present();
-    try std.testing.expect(gui.pointer.hover.shown_preview == null);
+    try std.testing.expectEqualStrings("https://a.b", gui.pointer.hover.link.?.match.target.uri());
+    try std.testing.expect(gui.pointer.hover.shown_preview != null);
 }
 
 test "native hover computes absolute rows without adding the host offset to history" {
@@ -315,9 +323,12 @@ test "native hover computes absolute rows without adding the host offset to hist
     try std.testing.expectEqual(pane.scroll.offset, gui.pointer.hover.link.?.match.start.y);
 }
 
-test "native one-row panes keep links visible without a self-covering preview" {
+test "native link tooltips sit beside their row and skip a pane too short to hold one" {
     const Hit = @import("../input/LinkHit.zig");
-    const hit: Hit = .{
+    const LinkTooltip = @import("../widgets/LinkTooltip.zig");
+    const TerminalMetrics = @import("../TerminalMetrics.zig");
+    const metrics: TerminalMetrics = .{ .cell_width = 8, .cell_height = 16, .baseline = 12, .pixel_height = 14 };
+    var hit: Hit = .{
         .pane_id = Session.pane_id,
         .generation = 1,
         .location = Session.location,
@@ -335,12 +346,23 @@ test "native one-row panes keep links visible without a self-covering preview" {
             },
         },
     };
-    try std.testing.expect(hit.previewArea() == null);
+    try std.testing.expect(LinkTooltip.place(&hit, metrics, .{ 0, 0 }, .{}) == null);
     var hover: PointerHover = .{ .link = hit };
-    hover.prepare();
+    hover.prepare(null);
     hover.present(true);
     try std.testing.expect(hover.shown_preview == null);
     try std.testing.expect(hover.openable());
+
+    hit.content.h = 8;
+    const area = LinkTooltip.place(&hit, metrics, .{ 0, 0 }, .{}).?;
+    const anchor = metrics.rect(.{ 0, 0 }, hit.area);
+    try std.testing.expect(area.y >= anchor.y + anchor.height or area.y + area.height <= anchor.y);
+    const bounds = metrics.rect(.{ 0, 0 }, hit.content);
+    try std.testing.expect(area.x >= bounds.x and area.x + area.width <= bounds.x + bounds.width);
+    try std.testing.expect(area.y >= bounds.y and area.y + area.height <= bounds.y + bounds.height);
+    const covered = LinkTooltip.cover(area, metrics, .{ 0, 0 });
+    try std.testing.expect(!covered.contains(hit.area.x, hit.area.y));
+    try std.testing.expect(covered.w > 0 and covered.h > 0);
 }
 
 test "native right click copies a link without modifiers or child mouse reports" {

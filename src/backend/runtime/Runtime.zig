@@ -20,7 +20,6 @@ const pane_observation = @import("pane_observation.zig");
 const pane_output = @import("pane_output.zig");
 const pane_search = @import("pane_search.zig");
 const proxy_capture = @import("proxy_capture.zig");
-const proxy_observation = @import("proxy_observation.zig");
 const proxy_tap = @import("proxy_tap.zig");
 const runtime_telemetry = @import("runtime_telemetry.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
@@ -82,7 +81,6 @@ fn scheduleInitialEvents(self: *Runtime) !void {
     if (resources.engineService()) |engine_service| {
         try sources.receiveEngine(engine_service);
     }
-    try sources.receiveProxyObservation(&resources.proxy);
     try sources.receiveProxyCapture(&resources.proxy);
     try sources.receivePluginEffects(resources.pluginService());
     try sources.waitForAgentMaintenance();
@@ -172,7 +170,6 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
         .agent_description => |result| agent_description.finish(model, result),
         .agent_tick => |result| try agent_maintenance.tick(model, result),
         .session_name => |completion| agent_rename.finish(model, completion),
-        .proxy_event => |result| try proxy_observation.receive(model, result),
         .proxy_capture => |result| try proxy_capture.receive(model, result),
         .plugin_effects => |result| try proxy_tap.receive(model, result),
         .engine_response => |result| try suggest_command.finish(model, result),

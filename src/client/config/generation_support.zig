@@ -828,18 +828,13 @@ test "client bars reject invalid positions timing and tab ownership" {
     }
 }
 
-test "runtime proxy defaults to the Claude Code and Codex API hosts" {
+test "runtime proxy intercepts no host by default" {
     var diagnostic: data.Diagnostic = .{};
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
 
     var storage: [core.max_intercept_hosts][]const u8 = undefined;
-    const hosts = generation.snapshot.runtime.proxyInterceptHosts(&storage);
-
-    try std.testing.expectEqual(@as(usize, 3), hosts.len);
-    try std.testing.expectEqualStrings("api.anthropic.com", hosts[0]);
-    try std.testing.expectEqualStrings("api.openai.com", hosts[1]);
-    try std.testing.expectEqualStrings("chatgpt.com", hosts[2]);
+    try std.testing.expectEqual(@as(usize, 0), generation.snapshot.runtime.proxyInterceptHosts(&storage).len);
 }
 
 test "an explicit empty intercept host list disables interception" {
