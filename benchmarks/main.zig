@@ -143,6 +143,7 @@ const cases = [_]Case{
     .{ .name = "backend.delivery.flush_idle_1x32", .work_per_op = 1, .work_unit = "flushes" },
     .{ .name = "frontend.client.frame_event", .work_per_op = 1, .work_unit = "frames" },
     .{ .name = "frontend.client.key_event", .work_per_op = 1, .work_unit = "keys" },
+    .{ .name = "frontend.client.request_group_query", .work_per_op = 1, .work_unit = "queries" },
 };
 
 /// A TUI and a GUI on one eight-pane tab, and one client on a crowded tab.
@@ -854,8 +855,9 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
     }
     const client_frame_case = cases[case_index];
     const client_key_case = cases[case_index + 1];
-    case_index += 2;
-    if (config.includes(client_frame_case.name) or config.includes(client_key_case.name)) {
+    const client_request_case = cases[case_index + 2];
+    case_index += 3;
+    if (config.includes(client_frame_case.name) or config.includes(client_key_case.name) or config.includes(client_request_case.name)) {
         var context: ClientEventContext = undefined;
         try context.init(io, gpa);
         defer context.deinit();
@@ -865,6 +867,13 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
 
         if (config.includes(client_key_case.name)) {
             try result_writer.write(client_key_case, try measure(.{ .io = io, .config = config, .context = &context }, runClientKey));
+        }
+
+        if (config.includes(client_request_case.name)) {
+            try context.holdTabSnapshot();
+            defer context.releaseTabSnapshot();
+
+            try result_writer.write(client_request_case, try measure(.{ .io = io, .config = config, .context = &context }, runClientRequestGroup));
         }
     }
 
@@ -878,6 +887,16 @@ fn runClientFrame(context: *ClientEventContext, iterations: usize) !u64 {
     }
 
     return checksum +% context.started_jobs;
+}
+
+fn runClientRequestGroup(context: *ClientEventContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        checksum +%= @intFromBool(context.requestGroupQuery());
+        std.mem.doNotOptimizeAway(context.app);
+    }
+
+    return checksum;
 }
 
 fn runClientKey(context: *ClientEventContext, iterations: usize) !u64 {

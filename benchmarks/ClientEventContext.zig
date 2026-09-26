@@ -14,6 +14,7 @@ const Capacity = enum(usize) {
 };
 
 const pane_id: core.PaneId = @enumFromInt(1);
+const held_request: core.RequestId = @enumFromInt(1 << 32);
 const location: core.TabLocation = .{
     .workspace = .{
         .workspace = @enumFromInt(1),
@@ -129,6 +130,28 @@ pub fn keyEvent(self: *ClientEventContext) !u64 {
     );
     try self.finishEvent();
     return @intFromEnum(outcome.owner);
+}
+
+/// Leaves one tab snapshot request pending, as a client has while it waits
+/// for the runtime's answer.
+/// Example: `try context.holdTabSnapshot(); defer context.releaseTabSnapshot();`
+pub fn holdTabSnapshot(self: *ClientEventContext) !void {
+    try self.app.model.request_lifecycle.tracker.add(
+        held_request,
+        .{
+            .tab_snapshot = location,
+        },
+    );
+}
+
+pub fn releaseTabSnapshot(self: *ClientEventContext) void {
+    _ = self.app.model.request_lifecycle.tracker.take(held_request);
+}
+
+/// The pending-request query the native adapter makes before every frame.
+/// Example: `const busy = context.requestGroupQuery();`
+pub fn requestGroupQuery(self: *ClientEventContext) bool {
+    return self.app.model.request_lifecycle.tracker.has(.tab_operation);
 }
 
 fn channel(handle: std.c.fd_t) localsocket.SocketChannel {
