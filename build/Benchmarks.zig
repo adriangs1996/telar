@@ -37,7 +37,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
             .name = "tls",
             .module = app.modules.tls,
         },
-    }, &.{ .{ .library = "nghttp2", .path = app.modules.nghttp2_prefix }, .{ .library = "brotlidec", .path = app.modules.brotli_prefix } });
+    }, app.modules.natives);
     const bench_lua_api = lua_build.add(b, .{ .target = app.modules.target, .optimize = bench_optimize, .name = "lua-bench" });
     const bench_lua = b.createModule(.{
         .root_source_file = b.path("src/lua/lua.zig"),

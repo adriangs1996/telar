@@ -1,0 +1,42 @@
+class Telar < Formula
+  desc "Terminal multiplexer and runtime aware of coding agents"
+  homepage "https://github.com/adriangs1996/telar"
+  version "@VERSION@"
+  license "MIT"
+
+  on_macos do
+    depends_on macos: :tahoe
+
+    on_arm do
+      url "https://github.com/adriangs1996/telar/releases/download/v#{version}/telar-macos-aarch64.tar.gz"
+      sha256 "@SHA256_MACOS_AARCH64@"
+    end
+    on_intel do
+      url "https://github.com/adriangs1996/telar/releases/download/v#{version}/telar-macos-x86_64.tar.gz"
+      sha256 "@SHA256_MACOS_X86_64@"
+    end
+  end
+
+  # Linux gets the headless build: Homebrew on Linux mostly runs on servers
+  # and WSL, where the Wayland and Vulkan libraries are absent.
+  on_linux do
+    on_arm do
+      url "https://github.com/adriangs1996/telar/releases/download/v#{version}/telar-linux-aarch64-headless.tar.gz"
+      sha256 "@SHA256_LINUX_AARCH64_HEADLESS@"
+    end
+    on_intel do
+      url "https://github.com/adriangs1996/telar/releases/download/v#{version}/telar-linux-x86_64-headless.tar.gz"
+      sha256 "@SHA256_LINUX_X86_64_HEADLESS@"
+    end
+  end
+
+  def install
+    bin.install "bin/telar"
+    bin.install "bin/telar-diagram-renderer" if File.exist?("bin/telar-diagram-renderer")
+    (share/"telar").install "share/telar/licenses"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/telar --version")
+  end
+end

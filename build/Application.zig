@@ -4,6 +4,10 @@ const Modules = @import("Modules.zig");
 const Libraries = @import("Libraries.zig");
 const lua_build = @import("lua.zig");
 const freetype_build = @import("freetype.zig");
+const native_libraries = @import("native_libraries.zig");
+const macos_sdk = @import("macos_sdk.zig");
+/// Its `version` is the one a release publishes; tags must match it.
+const manifest = @import("../build.zig.zon");
 const assets_build = @import("assets.zig");
 const model_build = @import("model.zig");
 const client_build = @import("client.zig");
@@ -56,28 +60,8 @@ pub fn init(b: *std.Build) ?@This() {
         .target = target,
         .optimize = optimize,
     }).module("tls");
-    const nghttp2_prefix = b.option(
-        []const u8,
-        "nghttp2",
-        "Prefix of a libnghttp2 installation",
-    ) orelse if (target.result.os.tag == .macos)
-        if (target.result.cpu.arch == .aarch64)
-            "/opt/homebrew/opt/libnghttp2"
-        else
-            "/usr/local/opt/libnghttp2"
-    else
-        "/usr";
-    const brotli_prefix = b.option(
-        []const u8,
-        "brotli",
-        "Prefix of a libbrotli installation",
-    ) orelse if (target.result.os.tag == .macos)
-        if (target.result.cpu.arch == .aarch64)
-            "/opt/homebrew/opt/brotli"
-        else
-            "/usr/local/opt/brotli"
-    else
-        "/usr";
+    // Third-party C, like the emulator, stays optimized in Debug builds.
+    const natives = native_libraries.create(b, target, vt_optimize);
 
     // The width tables come from the emulator that renders the panes; the
     // drawing layer only names the `unicode` library, never its provider.
@@ -99,7 +83,7 @@ pub fn init(b: *std.Build) ?@This() {
             .name = "tls",
             .module = tls,
         },
-    }, &.{ .{ .library = "nghttp2", .path = nghttp2_prefix }, .{ .library = "brotlidec", .path = brotli_prefix } });
+    }, natives);
     for (libraries.modules) |library| {
         coverage.instrumentModule(library.?);
     }
@@ -168,6 +152,7 @@ pub fn init(b: *std.Build) ?@This() {
             .file = b.path("src/frontend/attachments/darwin.m"),
             .flags = c_flags.forCoverage(b, &.{"-fobjc-arc"}, coverage.enabled),
         });
+        macos_sdk.addPaths(b, frontend);
         frontend.linkFramework("AppKit", .{});
         frontend.linkFramework("ImageIO", .{});
         frontend.linkFramework("CoreGraphics", .{});
@@ -182,6 +167,7 @@ pub fn init(b: *std.Build) ?@This() {
             .target = target,
             .optimize = optimize,
             .link_libc = true,
+            .strip = b.option(bool, "strip", "Leave debug information out of the telar executable"),
         }),
     });
     exe.root_module.addImport("telar-backend", backend);
@@ -196,7 +182,13 @@ pub fn init(b: *std.Build) ?@This() {
         "diagnostics",
         "Collect development telemetry in optimized builds",
     ) orelse false;
+    // A headless build leaves out `telar gui`, and with it every desktop
+    // library, so the same runtime installs on a server without them.
+    const native_client = (b.option(bool, "gui", "Build the native client behind `telar gui` (default: true on macOS and Linux)") orelse true) and
+        (target.result.os.tag == .macos or target.result.os.tag == .linux);
     const exe_options = b.addOptions();
+    exe_options.addOption([]const u8, "version", manifest.version);
+    exe_options.addOption(bool, "native_client", native_client);
     exe_options.addOption(bool, "diagnostics", diagnostics_enabled);
     exe_options.addOption(bool, "echo_trace", b.option(bool, "echo-trace", "Record bounded echo phase timestamps until shutdown") orelse false);
     exe_options.addOption(bool, "echo_trace_cpu", b.option(bool, "echo-trace-cpu", "Include thread CPU clocks in diagnostic echo traces") orelse false);
@@ -236,8 +228,8 @@ pub fn init(b: *std.Build) ?@This() {
         .gui = null,
         .ghostty_vt = ghostty_vt,
         .wuffs = wuffs,
-        .nghttp2_prefix = nghttp2_prefix,
-        .brotli_prefix = brotli_prefix,
+        .natives = natives,
+        .native_client = native_client,
         .target = target,
         .optimize = optimize,
         .build_options = exe_options,

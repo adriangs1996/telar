@@ -19,6 +19,8 @@ root through `b.path`, even from these support files.
 | Windows and Linux portability checks | [cross.zig](cross.zig) |
 | Frontend execution experiments | [experiments.zig](experiments.zig) |
 | FreeType/HarfBuzz sources and flags | [freetype.zig](freetype.zig) |
+| Pinned brotli, nghttp2 and SQLite, or system copies by `-D<name>=<prefix>` | [native_libraries.zig](native_libraries.zig), [NativeLibrary.zig](NativeLibrary.zig) |
+| SDK search paths for a pinned macOS deployment target | [macos_sdk.zig](macos_sdk.zig) |
 | Vendored Lua library and API module | [lua.zig](lua.zig) |
 | Shared value module, depending only on core | [model.zig](model.zig) |
 | Shared-client module imports | [client.zig](client.zig) |

@@ -322,9 +322,8 @@ certificate.
 
 ## Build dependency
 
-The runtime links the system `libnghttp2` for HPACK decoding and encoding and
-`libbrotlidec` for captured Brotli bodies. The
-default prefix is `/opt/homebrew/opt/libnghttp2` on Apple Silicon,
-`/usr/local/opt/libnghttp2` on Intel macOS, and `/usr` elsewhere. Override it
-with `zig build -Dnghttp2=/path/to/prefix`. The Brotli defaults use the same
-platform prefixes; override them with `zig build -Dbrotli=/path/to/prefix`.
+The runtime links `libnghttp2` for HPACK decoding and encoding and
+`libbrotlidec` for captured Brotli bodies. Both are compiled from the sources
+pinned in `build.zig.zon` and linked statically, so no installation is needed.
+`zig build -Dnghttp2=/path/to/prefix` and `-Dbrotli=/path/to/prefix` link a
+system installation instead; see [packaging](packaging.md#native-libraries).

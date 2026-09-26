@@ -1,0 +1,281 @@
+name: Release
+
+# Pushing a tag vX.Y.Z whose version matches build.zig.zon builds every
+# platform, publishes the GitHub release with SHA256SUMS and provenance
+# attestations, and updates the Homebrew tap. docs/packaging.md lists the
+# secrets; without them the release still publishes, unsigned.
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  RUST_TOOLCHAIN: 1.93.1
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Tag matches build.zig.zon
+        id: version
+        run: |
+          manifest=$(sed -n 's/^ *\.version = "\(.*\)",$/\1/p' build.zig.zon)
+          tag=${GITHUB_REF_NAME#v}
+          if [ "$manifest" != "$tag" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match build.zig.zon version $manifest"
+            exit 1
+          fi
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
+
+  linux:
+    needs: version
+    name: linux (${{ matrix.runner }})
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: sudo packaging/release/install-linux-deps.sh
+
+      - name: Install Zig
+        run: |
+          packaging/release/install-zig.sh "$RUNNER_TEMP/zig"
+          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+
+      # Builds the desktop and headless archives and fails if either links
+      # a library it must not, or the headless one needs glibc above 2.28.
+      - name: Build and check linkage
+        run: packaging/release/linux.sh dist
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ matrix.runner }}
+          path: dist/*
+          if-no-files-found: error
+
+  macos:
+    needs: version
+    name: macos (${{ matrix.runner }})
+    strategy:
+      matrix:
+        include:
+          - runner: macos-26
+            arch: aarch64
+          - runner: macos-26-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    env:
+      MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+      NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+      NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Zig
+        run: |
+          packaging/release/install-zig.sh "$RUNNER_TEMP/zig"
+          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+
+      - name: Build and check linkage
+        run: packaging/release/macos.sh build "$RUNNER_TEMP/stage"
+
+      - name: Import the Developer ID certificate
+        if: env.MACOS_CERTIFICATE_P12 != ''
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password=$(openssl rand -base64 32)
+          printf '%s' "$MACOS_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain"
+          security list-keychain -d user -s "$keychain"
+          rm -f "$RUNNER_TEMP/certificate.p12"
+
+      - name: Sign
+        if: env.MACOS_CERTIFICATE_P12 != ''
+        run: packaging/release/sign-macos.sh "$RUNNER_TEMP/stage"
+
+      - name: Package
+        run: packaging/release/macos.sh package "$RUNNER_TEMP/stage" dist
+
+      - name: Notarize
+        id: notarize
+        if: env.MACOS_CERTIFICATE_P12 != '' && env.NOTARY_KEY_P8 != ''
+        run: |
+          printf '%s' "$NOTARY_KEY_P8" > "$RUNNER_TEMP/notary.p8"
+          NOTARY_KEY_PATH="$RUNNER_TEMP/notary.p8" packaging/release/notarize-macos.sh \
+            "dist/Telar-macos-${{ matrix.arch }}.dmg" "dist/telar-macos-${{ matrix.arch }}.tar.gz"
+
+      # Not a release asset: tells the publish job what the notes must say.
+      - name: Record signing status
+        run: |
+          signed=no
+          notarized=no
+          if [ -n "$MACOS_CERTIFICATE_P12" ]; then signed=yes; fi
+          if [ "${{ steps.notarize.outcome }}" = success ]; then notarized=yes; fi
+          printf 'macos-%s signed=%s notarized=%s\n' "${{ matrix.arch }}" "$signed" "$notarized" > "$RUNNER_TEMP/status-macos-${{ matrix.arch }}.txt"
+
+      - name: Remove signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/certificate.p12"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-macos-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: status-macos-${{ matrix.arch }}
+          path: ${{ runner.temp }}/status-macos-${{ matrix.arch }}.txt
+
+  publish:
+    needs: [version, linux, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    outputs:
+      notarized: ${{ steps.notes.outputs.notarized }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: status-*
+          path: status
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cp install.sh dist/install.sh
+          cd dist
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: dist/SHA256SUMS
+
+      - name: Release notes
+        id: notes
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          notarized=yes
+          {
+            echo "## Install"
+            echo
+            echo '```sh'
+            echo "curl -fsSL https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/install.sh | sh -s -- --version $VERSION"
+            echo '```'
+            echo
+            echo "Linux servers: add \`--headless\`. Verify an asset's provenance with \`gh attestation verify FILE --repo $GITHUB_REPOSITORY\`."
+            echo
+            echo "## macOS signing"
+            echo
+            for file in status/status-macos-*.txt; do
+              read -r platform signed notarized_state < "$file"
+              echo "- $platform: ${signed#signed=} signed, ${notarized_state#notarized=} notarized"
+              if [ "$notarized_state" != notarized=yes ]; then notarized=no; fi
+            done
+            if [ "$notarized" = no ]; then
+              echo
+              echo "**The disk images of this release are not notarized.** Gatekeeper blocks Telar.app when it comes from a browser or Homebrew; the command line archives run when downloaded with curl or install.sh."
+            fi
+          } > notes.md
+          echo "notarized=$notarized" >> "$GITHUB_OUTPUT"
+          cat notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "telar $VERSION" \
+            --generate-notes \
+            --notes "$(cat notes.md)"
+
+  homebrew:
+    needs: [version, publish]
+    runs-on: ubuntu-24.04
+    env:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.HOMEBREW_TAP_TOKEN != ''
+        with:
+          persist-credentials: false
+
+      - name: Update adriangs1996/homebrew-tap
+        if: env.HOMEBREW_TAP_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          NOTARIZED: ${{ needs.publish.outputs.notarized }}
+        run: |
+          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir "$RUNNER_TEMP"
+          git clone --depth 1 "https://x-access-token:$HOMEBREW_TAP_TOKEN@github.com/adriangs1996/homebrew-tap.git" "$RUNNER_TEMP/tap"
+          cask=
+          if [ "$NOTARIZED" = yes ]; then cask=--cask; fi
+          packaging/homebrew/render.sh "$VERSION" "$RUNNER_TEMP/SHA256SUMS" "$RUNNER_TEMP/tap" $cask
+          cd "$RUNNER_TEMP/tap"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The tap already has telar $VERSION"
+            exit 0
+          fi
+          git commit -m "telar $VERSION"
+          git push origin HEAD

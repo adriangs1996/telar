@@ -29,7 +29,7 @@ const client_module = @import("cli/client.zig");
 const login_shell_module = @import("cli/login_shell.zig");
 const cli_install_module = @import("cli/cli_install.zig");
 
-const version = "0.0.0";
+const version = build_options.version;
 
 // Zig tests use the compiler runner as root, not this bootstrap. Check the
 // declarations here; executable probes exercise their root-level effects.

@@ -34,6 +34,18 @@
             .url = "https://deps.files.ghostty.org/harfbuzz-11.0.0.tar.xz",
             .hash = "N-V-__8AAG02ugUcWec-Ndp-i7JTsJ0dgF8nnJRUInkGLG7G",
         },
+        .brotli = .{
+            .url = "https://github.com/google/brotli/archive/refs/tags/v1.2.0.tar.gz",
+            .hash = "N-V-__8AAJudKgCQCuIiH6MJjAiIJHfg_tT_Ew-0vZwVkCo_",
+        },
+        .nghttp2 = .{
+            .url = "https://github.com/nghttp2/nghttp2/releases/download/v1.70.0/nghttp2-1.70.0.tar.xz",
+            .hash = "N-V-__8AACay2gDbHrByjNGWvyH8G9Gp30uRgZqobYOF1nhb",
+        },
+        .sqlite = .{
+            .url = "https://sqlite.org/2026/sqlite-amalgamation-3530400.zip",
+            .hash = "N-V-__8AAGVtrgCcOcmjrOJnagmnRyMrcKaOo09KbU-vu8w8",
+        },
         .tls = .{
             .url = "git+https://github.com/adriangs1996/tls.zig#8092ca3fa136a48a11f08a245f6fddfeb23d4a1c",
             .hash = "tls-0.1.0-ER2e0ovGBgBhrHCA_DsEI8RQpbSIRXkX3F3cTH8tzBwY",

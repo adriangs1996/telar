@@ -4,7 +4,7 @@ const Application = @import("Application.zig");
 /// Build the isolated Mermaid helper: `const helper = diagram_renderer.add(b, app)`.
 pub fn add(b: *std.Build, app: Application) ?std.Build.LazyPath {
     const target = app.modules.target.result;
-    if (target.os.tag != .macos and target.os.tag != .linux) {
+    if (!app.modules.native_client) {
         return null;
     }
 
