@@ -542,7 +542,13 @@ pub fn handleMouse(self: *State, mouse: keyinput.Mouse) client.ViewInteractionCo
         .active_workspace => {},
         .select_workspace => |workspace| result.intent = .{ .select_workspace = workspace },
         .toggle_workspace_list => result.intent = .toggle_workspace_list,
-        .sidebar_focus_agent => |key| result.intent = .{ .focus_agent = key },
+        .sidebar_focus_agent => |key| {
+            switch (mouse.button & 0b11) {
+                0 => result.intent = .{ .focus_agent = key },
+                2 => result.intent = .{ .peek_agent = key },
+                else => {},
+            }
+        },
         .sidebar_scroll_to => |row| {
             self.sidebar.scroll = row;
             self.recordInteraction();

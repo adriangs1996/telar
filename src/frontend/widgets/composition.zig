@@ -44,6 +44,7 @@ pub fn render(context: *Context, input: CompositionInput) CompositionOutput {
     const sidebar_output = sidebar.render(context, .{
         .area = input.regions.sidebar,
         .snapshot = input.sidebar_snapshot,
+        .workspaces = &input.model.workspace_list_snapshot,
         .state = input.sidebar_state,
         .model = input.model,
         .tab = input.tab,

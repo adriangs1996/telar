@@ -1,4 +1,5 @@
 const core = @import("telar-core");
+const AgentKey = @import("../agents/AgentKey.zig");
 const copy_mode_module = @import("../input/copy_mode.zig");
 const History = @import("History.zig");
 const name_prompt = @import("name_prompt.zig");
@@ -18,6 +19,7 @@ mode: union(enum) {
     history: History,
     suggest,
     palette: struct { selection: u16 = 0 },
+    peek: AgentKey,
 },
 field: name_prompt.Field,
 /// Working directory of the new-context form; unused by other targets.
@@ -35,6 +37,7 @@ pub fn target(self: *const Prompt) name_prompt.Target {
         .history => .history,
         .suggest => .suggest,
         .palette => .palette,
+        .peek => |key| .{ .peek = key },
     };
 }
 

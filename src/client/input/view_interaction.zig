@@ -9,6 +9,8 @@ pub const Intent = union(enum) {
     resize_sidebar: u16,
     toggle_workspace_list,
     focus_agent: model_data.AgentKey,
+    /// A secondary press on an agent card: peek at it without leaving the tab.
+    peek_agent: model_data.AgentKey,
     select_tab: core.TabId,
     move_tab: TabMoveIntent,
     focus_pane: core.PaneId,
@@ -28,7 +30,7 @@ pub const Intent = union(enum) {
 
 pub fn capturesPaneInput(intent: Intent) bool {
     return switch (intent) {
-        .select_tab, .focus_agent => true,
+        .select_tab, .focus_agent, .peek_agent => true,
         else => false,
     };
 }

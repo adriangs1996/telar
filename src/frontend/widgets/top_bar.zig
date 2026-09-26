@@ -81,7 +81,7 @@ pub fn render(context: *Context, input: TopBarInput) void {
     const active_id = activeWorkspaceId(input.location);
     const list_x = @min(safe_start, row_end);
 
-    if (input.workspaces.count == 0) {
+    if (input.workspaces.project_count == 0) {
         renderFallback(context, input, .{ .x = list_x, .y = area.y, .w = row_end -| list_x, .h = 1 });
     } else {
         renderList(context, input, .{
@@ -148,12 +148,16 @@ fn renderRight(context: *Context, area: cellgrid.Rect, input: TopBarInput) void 
 fn renderList(context: *Context, input: TopBarInput, list: ListInput) void {
     const snapshot = input.workspaces;
     const row_end = list.area.x + list.area.w;
-    const active_index = if (list.active_id) |id| snapshot.indexOf(id) else null;
+    const active_index = if (list.active_id) |id| snapshot.indexOf(snapshot.projectOf(id)) else null;
+    const active_worktree = if (list.active_id) |id| snapshot.worktreeOfWorkspace(id) else null;
+    // The model names the shown workspace; inside a worktree that name is the
+    // worktree's, so the project keeps its own.
+    const active_name = if (active_worktree == null) input.workspace_name else "";
     const collapsed = input.collapsed or
         !listFits(.{
             .snapshot = snapshot,
             .active_index = active_index,
-            .active_name = input.workspace_name,
+            .active_name = active_name,
         }, list.area.w);
     var x = list.area.x;
 
@@ -163,13 +167,14 @@ fn renderList(context: *Context, input: TopBarInput, list: ListInput) void {
             .snapshot = snapshot,
             .index = shown,
             .active_index = active_index,
-            .active_name = input.workspace_name,
+            .active_name = active_name,
             .area = .{ .x = x, .y = list.area.y, .w = row_end -| x, .h = 1 },
+            .worktree = active_worktree,
         });
-        if (snapshot.count > 1) {
+        if (snapshot.project_count > 1) {
             var counter_buffer: [8]u8 = undefined;
             const counter = std.fmt.bufPrint(&counter_buffer, " +{d} ", .{
-                snapshot.count - 1,
+                snapshot.project_count - 1,
             }) catch " + ";
             const width = @min(cellgrid.text.measure(counter), row_end -| x);
             const rect: cellgrid.Rect = .{ .x = x, .y = list.area.y, .w = width, .h = 1 };
@@ -185,7 +190,7 @@ fn renderList(context: *Context, input: TopBarInput, list: ListInput) void {
         return;
     }
 
-    for (0..snapshot.count) |index| {
+    for (0..snapshot.project_count) |index| {
         if (x >= row_end) {
             break;
         }
@@ -193,8 +198,9 @@ fn renderList(context: *Context, input: TopBarInput, list: ListInput) void {
             .snapshot = snapshot,
             .index = index,
             .active_index = active_index,
-            .active_name = input.workspace_name,
+            .active_name = active_name,
             .area = .{ .x = x, .y = list.area.y, .w = row_end -| x, .h = 1 },
+            .worktree = active_worktree,
         });
     }
 }
@@ -237,8 +243,35 @@ fn drawWorkspace(context: *Context, draw: WorkspaceDraw) u16 {
         .{ .fg = context.palette.overlay0, .bg = context.palette.panel_bg };
 
     _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = draw.area.x, .y = draw.area.y }, .text = label, .max_width = width, .style = style });
+    if (is_active) {
+        if (draw.worktree) |row| {
+            return drawWorktreeCrumb(context, row, .{ .x = draw.area.x + width, .y = draw.area.y, .w = draw.area.w -| width, .h = 1 });
+        }
+    }
 
     return draw.area.x + width;
+}
+
+/// `› ⎇ branch ` after the active project while a worktree's tab is shown,
+/// in the accent color so it never passes for the main checkout. A click
+/// returns to the project.
+fn drawWorktreeCrumb(context: *Context, row: *const data.WorktreeRow, area: cellgrid.Rect) u16 {
+    var buffer: [core.max_git_branch_bytes + 16]u8 = undefined;
+    const crumb = std.fmt.bufPrint(&buffer, "\u{203a} \u{2387} {s} ", .{row.handle()}) catch return area.x;
+    const width = @min(cellgrid.text.measure(crumb), area.w);
+    if (width == 0) {
+        return area.x;
+    }
+
+    const rect: cellgrid.Rect = .{ .x = area.x, .y = area.y, .w = width, .h = 1 };
+    const action: widget.Action = .{ .select_workspace = row.source };
+    context.hits.add(rect, action);
+    _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = area.x, .y = area.y }, .text = crumb, .max_width = width, .style = .{
+        .fg = context.palette.accent,
+        .bg = if (context.isHovered(action)) context.palette.surface0 else context.palette.panel_bg,
+        .flags = .{ .bold = true },
+    } });
+    return area.x + width;
 }
 
 fn renderFallback(context: *Context, input: TopBarInput, area: cellgrid.Rect) void {
@@ -271,7 +304,7 @@ fn listFits(names: WorkspaceNames, available: u16) bool {
 
 fn listWidth(snapshot: *const data.WorkspaceListSnapshot, active_index: ?usize, active_name: []const u8) u16 {
     var total: u16 = 0;
-    for (0..snapshot.count) |index| {
+    for (0..snapshot.project_count) |index| {
         total +|= cellgrid.text.measure(workspaceNameAt(.{
             .snapshot = snapshot,
             .active_index = active_index,
@@ -635,4 +668,6 @@ const WorkspaceDraw = struct {
     active_index: ?usize,
     active_name: []const u8,
     area: cellgrid.Rect,
+    /// The worktree whose tab is shown, crumbed after the active project.
+    worktree: ?*const data.WorktreeRow = null,
 };

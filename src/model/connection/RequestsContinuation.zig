@@ -24,6 +24,8 @@ pub const RequestsContinuation = union(enum) {
     change_review_query: ChangeReviewOperation,
     change_review_command: ChangeReviewOperation,
     editor_open: EditorOpenOperation,
+    /// A peek's read of its agent's pane.
+    peek_screen: core.PaneId,
     ignored,
 
     pub fn group(self: RequestsContinuation) Group {
@@ -39,6 +41,7 @@ pub const RequestsContinuation = union(enum) {
             .change_review_query => .change_review_query,
             .change_review_command => .change_review_command,
             .editor_open => .editor_open,
+            .peek_screen => .peek_screen,
             .ignored => .ignored,
         };
     }
@@ -51,7 +54,7 @@ pub const RequestsContinuation = union(enum) {
             .split => |split| split.location.tab_id,
             .close_pane, .attach_pane => |operation| operation.location.tab_id,
             .rename_tab, .close_tab, .move_tab => |location| location.tab_id,
-            .initial_open, .create_workspace, .rename_workspace, .workspace_snapshot, .create_tab, .notification, .ignored => null,
+            .initial_open, .create_workspace, .rename_workspace, .workspace_snapshot, .create_tab, .notification, .peek_screen, .ignored => null,
         };
     }
 
@@ -61,7 +64,7 @@ pub const RequestsContinuation = union(enum) {
             .editor_open => |operation| operation.pane_id,
             .split => |split| split.target_pane,
             .close_pane, .attach_pane => |operation| operation.pane_id,
-            .initial_open, .create_workspace, .rename_workspace, .workspace_snapshot, .tab_snapshot, .create_tab, .rename_tab, .close_tab, .move_tab, .notification, .ignored => null,
+            .initial_open, .create_workspace, .rename_workspace, .workspace_snapshot, .tab_snapshot, .create_tab, .rename_tab, .close_tab, .move_tab, .notification, .peek_screen, .ignored => null,
         };
     }
 };

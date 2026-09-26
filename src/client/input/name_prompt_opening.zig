@@ -16,6 +16,8 @@ pub const Intent = union(enum) {
     suggest_palette,
     /// The command palette with its prefix already typed.
     palette: model_data.CommandPalettePrefix,
+    /// A peek at one agent, opened from its task card.
+    peek: model_data.AgentKey,
 };
 
 pub fn renameTab(tab_id: core.TabId, label: []const u8) model_data.PromptBegin {

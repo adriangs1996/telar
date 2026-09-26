@@ -3,6 +3,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const pane_graphics = @import("../panes/pane_graphics.zig");
+const agent_peek = @import("../agents/agent_peek.zig");
 const agent_snapshot = @import("../agents/agent_snapshot.zig");
 const agent_sound = @import("../agents/agent_sound.zig");
 const proxy_status = @import("../agents/proxy_status.zig");
@@ -113,9 +114,13 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
         .history_pruned => |confirmation| _ = try history_palette.completeHistoryPrune(&client.model, confirmation),
         .history_output => |output| _ = client.model.history_palette.applyOutput(output),
         .command_suggestion => |suggested| _ = client.model.suggestion.apply(suggested),
-        .client_command_result, .client_list, .pane_text, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
+        .pane_text => |text| try agent_peek.receiveScreen(&client.model, text),
+        .client_command_result, .client_list, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
         .proxy_status => |status| _ = try proxy_status.applyProxyStatus(client, status),
-        .agent_snapshot => |snapshot| _ = try agent_snapshot.applyAgentSnapshot(client, snapshot),
+        .agent_snapshot => |snapshot| {
+            _ = try agent_snapshot.applyAgentSnapshot(client, snapshot);
+            try agent_peek.requestScreen(&client.model);
+        },
         .system_metrics => |metrics| _ = try data.system_metrics.reconcile(&client.model, 
             .{
                 .runtime_revision = metrics.revision,

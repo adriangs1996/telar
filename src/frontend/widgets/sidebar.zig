@@ -13,6 +13,7 @@ const widget = @import("context_support.zig");
 const std = @import("std");
 const icons_module = @import("../ui/icons.zig");
 const State = @import("State.zig");
+const client = @import("telar-client");
 
 const agent_card_rows = 3;
 const agent_row_spacing = 1;
@@ -75,39 +76,244 @@ fn drawAgents(context: *Context, input: SidebarInput, semantic: *Semantic) void 
     const background = cellBackground(context, input.transparent);
     context.buffer.fill(area, .{ .glyph = " ", .style = .{ .bg = background } });
 
-    const total: u16 = if (input.snapshot.count == 0)
-        0
-    else
-        @intCast(@as(usize, input.snapshot.count) * agent_row_stride - agent_row_spacing);
-    input.state.total_rows = total;
-    input.state.scroll = @min(input.state.scroll, total -| area.h);
+    refreshFleet(input);
+    const state = input.state;
+    const total = state.total_rows;
+    state.scroll = @min(state.scroll, total -| area.h);
     if (input.snapshot.count == 0) {
         drawEmpty(context, area, background);
         return;
     }
 
     var line: u16 = 0;
+    var entry_position: usize = 0;
     while (line < area.h) : (line += 1) {
-        const row_index = input.state.scroll + line;
+        const row_index = state.scroll + line;
         if (row_index >= total) {
             break;
         }
-        const agent_index: usize = row_index / agent_row_stride;
-        const card_line: u2 = @intCast(row_index % agent_row_stride);
-        if (card_line >= agent_card_rows) {
+
+        while (entry_position + 1 < state.fleet_len and state.fleet_start[entry_position + 1] <= row_index) {
+            entry_position += 1;
+        }
+
+        const entry = state.fleet[entry_position];
+        const start = state.fleet_start[entry_position];
+        if (row_index < start) {
             continue;
         }
 
-        drawAgentLine(context, .{
+        const offset = row_index - start;
+        if (offset >= cardRows(entry.card)) {
+            continue;
+        }
+
+        const agent = &input.snapshot.slice()[entry.index];
+        const task = if (entry.card == .agent) null else if (input.workspaces) |workspaces| client.fleet_order.taskRow(workspaces, agent) else null;
+        const line_input: AgentLineInput = .{
             .sidebar = input,
             .semantic = semantic,
             .y = area.y + line,
-            .agent = &input.snapshot.slice()[agent_index],
-            .line = card_line,
+            .agent = agent,
+            .line = @intCast(offset),
             .background = background,
-        });
+        };
+        if (task) |row| {
+            drawTaskLine(context, line_input, .{ .task = row, .card = entry.card });
+        } else {
+            drawAgentLine(context, line_input);
+        }
     }
     drawScrollbar(context, .{ .state = input.state, .list = area, .total = total, .background = background });
+}
+
+/// Orders the fleet and lays out its lines when the agents, the workspace
+/// list or the focused pane changed since the last frame.
+fn refreshFleet(input: SidebarInput) void {
+    const state = input.state;
+    const workspaces = input.workspaces orelse &empty_workspaces;
+    const focused = if (input.focused_agent) |key| key.pane_id else null;
+    const same = state.fleet_valid and state.fleet_agents == input.snapshot.revision and
+        state.fleet_workspaces == workspaces.revision and state.fleet_focus == focused and
+        state.fleet_len == input.snapshot.count;
+    if (same) {
+        return;
+    }
+
+    const fleet = client.fleet_order.order(.{
+        .agents = input.snapshot.slice(),
+        .workspaces = workspaces,
+        .focused = focused,
+    }, &state.fleet);
+    var line: u16 = 0;
+    for (fleet, 0..) |entry, position| {
+        if (entry.first_in_project and position != 0) {
+            line += project_gap_rows;
+        }
+
+        state.fleet_start[position] = line;
+        line += cardRows(entry.card) + cardSpacing(entry.card);
+    }
+
+    const last_spacing: u16 = if (fleet.len == 0) 0 else cardSpacing(fleet[fleet.len - 1].card);
+    state.fleet_len = fleet.len;
+    state.total_rows = line -| last_spacing;
+    state.fleet_agents = input.snapshot.revision;
+    state.fleet_workspaces = workspaces.revision;
+    state.fleet_focus = focused;
+    state.fleet_valid = true;
+}
+
+const empty_workspaces: data.WorkspaceListSnapshot = .{};
+const project_gap_rows = 1;
+const task_indent = 2;
+const max_plan_cells = 8;
+
+fn cardRows(card: client.FleetCard) u16 {
+    return switch (card) {
+        .agent, .task_full => agent_card_rows,
+        .task_compact => 1,
+    };
+}
+
+fn cardSpacing(card: client.FleetCard) u16 {
+    return switch (card) {
+        .agent, .task_full => agent_row_spacing,
+        .task_compact => 0,
+    };
+}
+
+const TaskLine = struct {
+    task: *const data.WorktreeRow,
+    card: client.FleetCard,
+};
+
+/// One line of a task card: indented under its project with a guide, in
+/// full three lines (branch and diff beside the status, the task title, what
+/// happens now) or compact in one.
+fn drawTaskLine(context: *Context, line_input: AgentLineInput, task_line: TaskLine) void {
+    const input = line_input.sidebar;
+    const semantic = line_input.semantic;
+    const agent = line_input.agent;
+    const task = task_line.task;
+    const y = line_input.y;
+    const action: widget.Action = .{ .sidebar_focus_agent = agent.key };
+    const focused = if (input.focused_agent) |key| std.meta.eql(key, agent.key) else false;
+    const row_bg = if (focused)
+        context.palette.surface0
+    else if (context.isHovered(action))
+        context.palette.surface1
+    else
+        line_input.background;
+    const row: cellgrid.Rect = .{ .x = semantic.list_area.x, .y = y, .w = semantic.list_area.w -| 1, .h = 1 };
+    _ = context.buffer.writeText(row, .{ .point = .{ .x = row.x + 1, .y = y }, .text = "│", .style = .{ .fg = context.palette.surface1, .bg = line_input.background } });
+    const card_row: cellgrid.Rect = .{ .x = row.x + task_indent, .y = y, .w = row.w -| task_indent, .h = 1 };
+    context.buffer.fill(card_row, .{ .glyph = " ", .style = .{ .bg = row_bg } });
+    const body: cellgrid.Rect = .{ .x = card_row.x + 1, .y = y, .w = card_row.w -| 2, .h = 1 };
+    const part: TaskPart = .{
+        .area = body,
+        .agent = agent,
+        .task = task,
+        .background = row_bg,
+        .animation_frame = input.animation_frame,
+    };
+    if (task_line.card == .task_compact) {
+        drawTaskCompact(context, part);
+    } else {
+        switch (line_input.line) {
+            0 => drawTaskFacts(context, part),
+            1 => _ = context.buffer.writeTruncated(body, .{ .point = .{ .x = body.x, .y = y }, .text = task.displayName(), .max_width = body.w, .style = .{ .fg = context.palette.text, .bg = row_bg, .flags = .{ .bold = true } } }),
+            else => drawTaskActivity(context, part),
+        }
+    }
+
+    context.hits.add(card_row, action);
+}
+
+const TaskPart = struct {
+    area: cellgrid.Rect,
+    agent: *const data.Agent,
+    task: *const data.WorktreeRow,
+    background: cellgrid.Color,
+    animation_frame: u8,
+};
+
+fn drawTaskCompact(context: *Context, part: TaskPart) void {
+    const area = part.area;
+    const status = part.agent.status;
+    var x = area.x;
+    x += context.drawIcon(.{ .area = area, .point = .{ .x = x, .y = area.y }, .icon = statusIcon(status, part.animation_frame), .style = .{ .fg = statusColor(context, status), .bg = part.background } });
+    x += 1;
+    var handle_buffer: [core.max_git_branch_bytes + 8]u8 = undefined;
+    const handle = std.fmt.bufPrint(&handle_buffer, "\u{2387} {s}", .{part.task.handle()}) catch part.task.handle();
+    const handle_width = @min(cellgrid.text.measure(handle), area.w / 2);
+    const title_width = (area.x + area.w) -| x -| handle_width -| 1;
+    _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = x, .y = area.y }, .text = part.task.displayName(), .max_width = title_width, .style = .{ .fg = if (status == .ready) context.palette.overlay1 else context.palette.text, .bg = part.background } });
+    _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x + area.w -| handle_width, .y = area.y }, .text = handle, .max_width = handle_width, .style = .{ .fg = context.palette.overlay0, .bg = part.background } });
+}
+
+/// `⎇ branch  +12 −3 · 2  ↑1  ✓ zig`: where the task lives, how much it
+/// changed and how its last command ended, beside the status.
+fn drawTaskFacts(context: *Context, part: TaskPart) void {
+    const area = part.area;
+    const task = part.task;
+    var buffer: [256]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buffer);
+    writer.print("\u{2387} {s}", .{task.handle()}) catch {};
+    if (task.diff_files != 0) {
+        writer.print("  +{d} \u{2212}{d} \u{00b7} {d}", .{ task.diff_added, task.diff_removed, task.diff_files }) catch {};
+    }
+
+    if (task.commits_ahead != 0) {
+        writer.print("  \u{2191}{d}", .{task.commits_ahead}) catch {};
+    }
+
+    if (task.command_state == .exited) {
+        writer.print("  {s} {s}", .{ if (task.command_exit == 0) "\u{2713}" else "\u{2715}", task.commandLabel() }) catch {};
+    }
+
+    const status_width = statusWidth(part.agent.status);
+    _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x, .y = area.y }, .text = writer.buffered(), .max_width = area.w -| status_width -| 1, .style = .{ .fg = context.palette.overlay1, .bg = part.background } });
+    drawStatus(context, .{ .area = area, .status = part.agent.status, .animation_frame = part.animation_frame, .background = part.background });
+}
+
+/// What the agent does now: the question or approval it waits for, its plan
+/// step with a bar, its final answer, or its last tool call.
+fn drawTaskActivity(context: *Context, part: TaskPart) void {
+    const area = part.area;
+    const agent = part.agent;
+    var x = area.x;
+    const text: []const u8, const color = switch (agent.status) {
+        .blocked => .{ agent.lastEvent(), context.palette.yellow },
+        .failed => .{ agent.lastEvent(), context.palette.red },
+        .done, .ready => .{ if (agent.finalLine().len != 0) agent.finalLine() else agent.lastEvent(), context.palette.subtext0 },
+        .working, .unknown => activity: {
+            if (agent.plan_total != 0) {
+                x += drawPlanBar(context, part);
+                break :activity .{ agent.planStep(), context.palette.subtext0 };
+            }
+
+            break :activity .{ agent.lastEvent(), context.palette.overlay0 };
+        },
+    };
+    _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = x, .y = area.y }, .text = text, .max_width = (area.x + area.w) -| x, .style = .{ .fg = color, .bg = part.background } });
+}
+
+/// `▰▰▱▱ 2/4 `: one cell per task, at most `max_plan_cells`.
+fn drawPlanBar(context: *Context, part: TaskPart) u16 {
+    const agent = part.agent;
+    const cells: u16 = @min(agent.plan_total, max_plan_cells);
+    const filled: u16 = @intCast((@as(u32, agent.plan_done) * cells + agent.plan_total - 1) / agent.plan_total);
+    var x = part.area.x;
+    for (0..cells) |index| {
+        const done = index < filled;
+        x += context.buffer.writeText(part.area, .{ .point = .{ .x = x, .y = part.area.y }, .text = if (done) "\u{25b0}" else "\u{25b1}", .style = .{ .fg = if (done) context.palette.teal else context.palette.surface1, .bg = part.background } });
+    }
+
+    var count_buffer: [16]u8 = undefined;
+    const count = std.fmt.bufPrint(&count_buffer, " {d}/{d} ", .{ agent.plan_done, agent.plan_total }) catch "";
+    x += context.buffer.writeText(part.area, .{ .point = .{ .x = x, .y = part.area.y }, .text = count, .style = .{ .fg = context.palette.overlay1, .bg = part.background } });
+    return x - part.area.x;
 }
 
 fn drawAgentLine(context: *Context, line_input: AgentLineInput) void {
@@ -175,6 +381,7 @@ fn drawAgentLine(context: *Context, line_input: AgentLineInput) void {
             .agent = agent,
             .pane_index = projectedPaneIndex(input, agent),
             .background = row_bg,
+            .coordinator = if (input.workspaces) |workspaces| workspaces.delegates(agent.key.pane_id) else false,
         });
     } else {
         drawAgentMeta(context, .{ .area = body, .agent = agent, .background = row_bg });
@@ -239,7 +446,9 @@ fn drawAgentLocation(context: *Context, input: AgentLocationInput) void {
         ) catch ""
     else
         std.fmt.bufPrint(&location_buffer, "pane {d}", .{input.pane_index}) catch "";
-    _ = context.buffer.writeTruncated(input.area, .{ .point = .{ .x = input.area.x + 3, .y = input.area.y }, .text = location, .max_width = input.area.w -| 3, .style = .{
+    var marked_buffer: [288]u8 = undefined;
+    const shown = if (input.coordinator) std.fmt.bufPrint(&marked_buffer, "{s} \u{00b7} coordinator", .{location}) catch location else location;
+    _ = context.buffer.writeTruncated(input.area, .{ .point = .{ .x = input.area.x + 3, .y = input.area.y }, .text = shown, .max_width = input.area.w -| 3, .style = .{
         .fg = context.palette.overlay0,
         .bg = input.background,
     } });
@@ -699,7 +908,7 @@ test "partial card scroll preserves visible rows, spacing, and hit targets" {
             .cwd_label = "~/sandbox/telar",
             .provider = .codex,
             .display_name = "Codex",
-            .status = .ready,
+            .status = .working,
         },
         .{
             .key = .{ .pane_id = @enumFromInt(42), .pane_generation = 1 },
@@ -710,7 +919,7 @@ test "partial card scroll preserves visible rows, spacing, and hit targets" {
             .pane_index = 3,
             .provider = .claude,
             .display_name = "Claude Code",
-            .status = .working,
+            .status = .ready,
         },
     };
     var snapshot: data.AgentSnapshot = .{};
@@ -846,6 +1055,9 @@ const AgentLineInput = struct {
 const SidebarInput = struct {
     area: cellgrid.Rect,
     snapshot: *const data.AgentSnapshot,
+    /// Worktrees and projects the fleet is grouped by; null draws the
+    /// agents without groups.
+    workspaces: ?*const data.WorkspaceListSnapshot = null,
     state: *State,
     /// The client model and its active tab, for pane numbering.
     model: ?*const data.ClientModel = null,
@@ -860,6 +1072,8 @@ const AgentLocationInput = struct {
     area: cellgrid.Rect,
     agent: *const data.Agent,
     pane_index: u16,
+    /// The agent delegated worktree tasks.
+    coordinator: bool = false,
     background: cellgrid.Color,
 };
 

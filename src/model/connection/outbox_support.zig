@@ -60,6 +60,9 @@ pub const Message = union(enum) {
     suggest_command: data.OwnedSuggestion,
     complete_client_command: u16,
     complete_pane_focus: core.CompletePaneFocus,
+    /// A control request the client encoded itself into the item's payload:
+    /// peek reads, prompts, interrupts and worktree launches.
+    encoded: u16,
 };
 
 pub fn messageLaunchCwd(message: Message) ?[]const u8 {

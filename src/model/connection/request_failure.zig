@@ -34,6 +34,7 @@ fn failureTitle(continuation: client_requests.Continuation) []const u8 {
         .notification => "Could not show notification",
         .initial_open, .workspace_snapshot, .tab_snapshot => "Runtime request failed",
         .ignored => "Request ignored",
+        .peek_screen => "Could not read the agent's pane",
     };
 }
 
@@ -56,6 +57,9 @@ fn notificationTarget(continuation: client_requests.Continuation) notifications.
         },
         .rename_workspace, .workspace_snapshot => |location| workspaceNotificationTarget(location),
         .create_tab => |creation| workspaceNotificationTarget(creation.workspace),
+        .peek_screen => |pane_id| .{
+            .focus_pane = pane_id,
+        },
         .initial_open, .create_workspace, .notification, .ignored => .none,
     };
 }

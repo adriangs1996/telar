@@ -6,7 +6,7 @@ const Resolved = @import("Resolved.zig");
 const GenericKeymap = keyinput.GenericKeymap;
 const std = @import("std");
 
-pub const count = 41;
+pub const count = 42;
 pub const Binding = keyinput.GenericBinding(data.Action, data.config_values.max_binding_keys);
 
 pub fn load(prefix: keyinput.Key) ![count]Binding {
@@ -35,6 +35,8 @@ pub fn load(prefix: keyinput.Key) ![count]Binding {
         try prefixed(prefix, "alt+right", .{ .resize_sidebar = .right }),
 
         try prefixed(prefix, "w", .toggle_workspace_list),
+        // Back from a worktree's tabs to its project.
+        try prefixed(prefix, "b", .leave_worktree),
 
         try prefixed(prefix, "N", .new_workspace),
 

@@ -68,6 +68,7 @@ const RecoverPaneSplit = @import("RecoverPaneSplit.zig");
 const RenameTab = @import("RenameTab.zig");
 const NewTab = @import("NewTab.zig");
 const RemoveTab = @import("RemoveTab.zig");
+const PeekScreen = @import("PeekScreen.zig");
 const ClientModel = @This();
 
 pub const max_window_title_template_bytes = 128;
@@ -115,6 +116,8 @@ host: HostState,
 to_host: model_data.HostEffects = .{},
 to_runtime: model_data.Outbox = .{},
 name_prompt: model_data.NamePromptState = .{},
+/// The pane text an open peek shows.
+peek_screen: PeekScreen = .{},
 history_palette: HistoryPaletteState = .{},
 suggestion: SuggestionState = .{},
 path_completion: model_data.PathCompletionState = .{},

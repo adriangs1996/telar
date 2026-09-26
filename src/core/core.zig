@@ -187,6 +187,7 @@ pub const Scroll = @import("schema/Scroll.zig");
 pub const SearchMatch = @import("schema/SearchMatch.zig");
 pub const SearchPane = @import("schema/messages/SearchPane.zig");
 pub const SendPaneText = @import("schema/messages/SendPaneText.zig");
+pub const PaneText = @import("schema/messages/PaneText.zig");
 pub const ServerMessage = messages.ServerMessage;
 pub const ServerResponse = handshake.ServerResponse;
 pub const ServerTag = tags.ServerTag;

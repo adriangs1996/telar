@@ -144,7 +144,7 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
             if (activated(event)) {
                 var value = intent;
                 if (event == .pointer and event.pointer.button != .left) {
-                    value = if (event.pointer.button == .right and intent == .select_tab) .{ .rename_tab = intent.select_tab } else .none;
+                    value = if (event.pointer.button == .right) secondaryIntent(intent) else .none;
                 }
 
                 try dispatchIntent(gui, value);
@@ -474,6 +474,16 @@ fn activated(event: event_module.Event) bool {
         .pointer => |value| value.kind == .press,
         .key => |value| value.phase == .press and (value.code == .enter or (value.code == .char and value.code.char.len == 1 and value.code.char.bytes[0] == ' ')),
         else => false,
+    };
+}
+
+/// What a right press on an intent target does: rename a tab, peek at an
+/// agent, nothing elsewhere.
+fn secondaryIntent(intent: client.Intent) client.Intent {
+    return switch (intent) {
+        .select_tab => |tab_id| .{ .rename_tab = tab_id },
+        .focus_agent => |key| .{ .peek_agent = key },
+        else => .none,
     };
 }
 

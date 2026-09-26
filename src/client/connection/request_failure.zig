@@ -38,6 +38,10 @@ pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !Request
     errdefer reportRuntimeFailure(failure.message);
     switch (continuation) {
         .ignored => return .ignored,
+        .peek_screen => {
+            client.model.peek_screen.reading = false;
+            return .ignored;
+        },
         .workspace_snapshot, .tab_snapshot => return error.RuntimeRequestFailed,
         .initial_open => |open| {
             const outcome = try workspace_handoff.recoverWorkspaceSwitch(&client.model, open.fallback_workspace, failure.code);

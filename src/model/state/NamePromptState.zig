@@ -112,6 +112,10 @@ pub fn begin(self: *State, command: name_prompt.Begin) void {
             .mode = .{ .palette = .{} },
             .field = .init(&[_]u8{prefix.byte()}),
         },
+        .peek => |key| .{
+            .mode = .{ .peek = key },
+            .field = .init(""),
+        },
     };
     self.value.?.generation = self.generation;
     self.revision +%= 1;

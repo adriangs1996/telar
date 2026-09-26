@@ -17,7 +17,7 @@ bounds: Rect,
 pub fn draw(self: WorkspaceList, canvas: *Canvas) !void {
     const snapshot = self.context.projection.workspaces;
     const pitch = WorkspaceRow.height(canvas);
-    const total = @as(f32, @floatFromInt(snapshot.count)) * pitch;
+    const total = @as(f32, @floatFromInt(snapshot.project_count)) * pitch;
     const scroll = &self.state.projects;
     scroll.setBounds(pitch, total - self.bounds.height);
     self.state.revealWorkspace(self.context.projection, self.bounds.height);
@@ -26,7 +26,7 @@ pub fn draw(self: WorkspaceList, canvas: *Canvas) !void {
         return;
     }
 
-    if (snapshot.count == 0) {
+    if (snapshot.project_count == 0) {
         const name = self.context.projection.model.workspaceName();
         _ = try canvas.textAt(self.bounds, .{ .text = if (name.len > 0) name else "No workspaces", .color = canvas.theme.palette.subtext0, .face = .sans, .size = .body });
         return;
@@ -34,7 +34,7 @@ pub fn draw(self: WorkspaceList, canvas: *Canvas) !void {
 
     const clip: SidebarList = .{ .bounds = self.bounds };
     const gutter = canvas.chrome.px(6);
-    for (0..snapshot.count) |index| {
+    for (0..snapshot.project_count) |index| {
         const top = self.bounds.y + @as(f32, @floatFromInt(index)) * pitch - @as(f32, @floatFromInt(scroll.scroll));
         if (top + pitch <= self.bounds.y) {
             continue;

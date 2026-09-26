@@ -45,7 +45,7 @@ pub fn begin(self: *Chrome, canvas: *Canvas, projection: *const client.Projectio
     const pending = self.maps.begin();
     try registerPanes(&pending.hits, projection.*);
     pending.bands = Bands.resolve(canvas);
-    pending.sidebar_regions = try SidebarRegions.resolve(canvas, pending.bands.sidebar, projection.workspaces.count);
+    pending.sidebar_regions = try SidebarRegions.resolve(canvas, pending.bands.sidebar, projection.workspaces.project_count);
     self.ages.observe(projection.agents, self.now_ns);
     self.progress.begin();
     const context: Context = .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = self.hovered, .presented_workspace = self.presented().workspace, .ages = &self.ages, .favicons = &self.favicons, .progress = &self.progress, .sidebar_regions = &pending.sidebar_regions };

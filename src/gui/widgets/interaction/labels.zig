@@ -55,6 +55,7 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
 
                 break :blk "Workspace";
             },
+            .peek_agent => "Peek at agent",
             .focus_agent => |key| blk: {
                 for (projection.agents.slice()) |*agent| {
                     if (std.meta.eql(agent.key, key)) {

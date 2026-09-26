@@ -135,6 +135,7 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
                 .position = position,
             },
         ),
+        .leave_worktree => try leaveWorktree(client),
         .close_pane => _ = try pane_closure.requestPaneClose(&client.model),
         .new_tab => _ = try tab_creation.requestTabCreation(
             client,
@@ -206,4 +207,16 @@ pub fn navigationKey(direction: data.InputDirection) keyinput.Key {
         .up => ctrl_k,
         .down => ctrl_j,
     };
+}
+
+/// Selects the project a worktree hangs from while its tabs are shown; does
+/// nothing elsewhere.
+fn leaveWorktree(client: *Client) !void {
+    const current = client.model.workspace orelse return;
+    const workspace = switch (current) {
+        .workspace => |id| id,
+        .worktree => return,
+    };
+    const row = client.model.workspace_list_snapshot.worktreeOfWorkspace(workspace) orelse return;
+    _ = try workspace_handoff.selectWorkspace(client, .{ .workspace = row.source });
 }
