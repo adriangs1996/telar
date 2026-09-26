@@ -140,10 +140,12 @@ fn buildBuiltin() Table {
     // Cursor Agent's launcher runs `exec -a "$0" <version>/node <version>/index.js`,
     // so the process is `node`, argv[0] is whatever the user typed (`agent`
     // or `cursor-agent`) and the versioned entry point is the reliable
-    // identity. It has no hook for its approval prompts, so their screen
-    // phrases carry that state; they are specific to Cursor's dialogs
-    // because blocked phrases are matched in every pane. No brand word:
-    // "cursor" names a terminal cursor in any pane.
+    // identity. It has no hook for its approval, plan and workspace trust
+    // dialogs, so their screen phrases carry that state; they are specific
+    // to Cursor's dialogs because blocked phrases are matched in every pane.
+    // Working and ready come from `history.cursor_screen`, which reads the
+    // live composer. No brand word: "cursor" names a terminal cursor in any
+    // pane.
     const cursor = table.add("cursor") catch unreachable;
     cursor.setDisplayName("Cursor Agent") catch unreachable;
     cursor.process_names.append("cursor-agent") catch unreachable;
@@ -153,8 +155,8 @@ fn buildBuiltin() Table {
         "not in allowlist:",
         "skip & tell the agent what to do instead",
         "yes, build locally",
+        "do you trust the contents of this directory?",
     }) |phrase| cursor.blocked.append(phrase) catch unreachable;
-    cursor.working.append("ctrl+c to stop") catch unreachable;
 
     return table;
 }
@@ -273,7 +275,8 @@ test "built-in Cursor Agent is identified by its launcher, entry point and dialo
     try std.testing.expectEqual(Status.blocked, approval.status);
     try std.testing.expectEqual(types.AgentProvider.unknown, approval.provider);
     try std.testing.expectEqual(Status.blocked, table.detect(" Ready to build?\n  → 1. Yes, build locally (b)").?.status);
-    try std.testing.expectEqual(Status.working, table.detect("  → Add a follow-up        ctrl+c to stop").?.status);
+    try std.testing.expectEqual(Status.blocked, table.detect("  Do you trust the contents of this directory?").?.status);
+    try std.testing.expect(table.detect("  → Add a follow-up        ctrl+c to stop") == null);
     try std.testing.expect(table.detect("  → Add a follow-up") == null);
     try std.testing.expect(table.detect("move the cursor left") == null);
 }

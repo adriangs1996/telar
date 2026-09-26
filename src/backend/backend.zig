@@ -49,6 +49,8 @@ test {
     _ = @import("history/agent_detection.zig");
     _ = @import("history/channel_support.zig");
     _ = @import("history/codex_screen.zig");
+    _ = @import("history/cursor_screen.zig");
+    _ = @import("history/ScreenRow.zig");
     _ = @import("history/history_tests.zig");
     _ = @import("history/metrics.zig");
     _ = @import("history/model.zig");
