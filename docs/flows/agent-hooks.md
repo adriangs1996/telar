@@ -109,12 +109,27 @@ a pty, with a hook that recorded every payload.
 No hook fires while a command waits for approval, and `beforeShellExecution`
 runs before the approval dialog and for commands the allowlist already
 permits, so it cannot say that the agent is blocked. The plan review ("Ready
-to build?") follows the turn's `stop`. Both are screen evidence: the manifest
-matches "Not in allowlist:", "Skip & tell the agent what to do instead" and
-"Yes, build locally", and `screen_reports_blocked` lets a blocked screen
-observed after the latest report decide the projection, with reason `other`.
-The composer's "ctrl+c to stop" is the working phrase that replaces the
-dialog once it is answered; a newer report does the same.
+to build?") follows the turn's `stop`, and the workspace trust dialog comes
+before any hook. All three are screen evidence: the manifest matches "Not in
+allowlist:", "Skip & tell the agent what to do instead", "Yes, build
+locally" and "Do you trust the contents of this directory?", and
+`screen_reports_blocked` lets a blocked screen observed after the latest
+reported work decide the projection, with reason `other`.
+
+Working and ready on screen come from `history.cursor_screen`, which reads
+the live composer, the bottom row that starts with `→`. Traced frame by
+frame on Cursor Agent 2026.09.26, a turn draws a braille spinner row
+("⠀⠞ Working", "⠘⠣ Running  245 tokens") above the composer from its first
+frame, and "ctrl+c to stop" joins the composer about 300 ms later; an idle
+composer has neither. A spinner within six rows above the composer, or the
+hint on it, reads `working`; the composer alone reads `ready`, confirmed.
+A frame without the composer, such as one Cursor is still painting,
+publishes nothing. Dialogs draw their options with the same arrow, so their
+blocked phrases decide first. Without hooks this screen is the only
+lifecycle evidence, and a finished turn settles as soon as the idle
+composer is drawn; with hooks, the reports outrank it as for any agent. A
+queue loss holds a ready composer back until a spinner is seen again, as
+for Codex.
 
 Cursor names its chat directory after the MD5 of the directory the agent
 was launched from, `<config>/chats/<md5>/<conversation_id>/meta.json`, where

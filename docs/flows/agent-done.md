@@ -77,6 +77,9 @@ silent.
   input-only batches.
 - `src/backend/history/codex_screen.zig` covers drafts, cursor ownership,
   remapped interrupt keys, and disabled animations without consulting colors.
+- `src/backend/history/cursor_screen.zig` covers Cursor Agent's spinner before
+  and after its stop hint, idle composers, drafts and partial frames;
+  `observer_support.zig` replays a Cursor turn through a blocked dialog.
 - `src/backend/runtime/tests/observation_events_test.zig` combines PTY
   frames with continuing Stop hooks and proves exactly one final sound. It
   also rejects a delayed ready result older than the current report.
