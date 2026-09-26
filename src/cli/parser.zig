@@ -18,6 +18,7 @@ const PluginOptions = @import("arguments/PluginOptions.zig");
 const AgentOptions = @import("arguments/AgentOptions.zig");
 const PaneOptions = @import("arguments/PaneOptions.zig");
 const WorkspaceOptions = @import("arguments/WorkspaceOptions.zig");
+const WorktreeOptions = @import("arguments/WorktreeOptions.zig");
 const ApiOptions = @import("arguments/ApiOptions.zig");
 const HookOptions = @import("arguments/HookOptions.zig");
 const ReviewOptions = @import("arguments/ReviewOptions.zig");
@@ -58,6 +59,7 @@ pub const Cli = union(enum) {
     api: ApiOptions,
     hook: HookOptions,
     review: ReviewOptions,
+    worktree: WorktreeOptions,
     integration: IntegrationOptions,
     proxy: ProxyOptions,
     skill,
@@ -121,6 +123,9 @@ pub const Cli = union(enum) {
         }
         if (std.mem.eql(u8, first, "workspace")) {
             return .{ .workspace = try WorkspaceOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "worktree")) {
+            return .{ .worktree = try WorktreeOptions.parse(args[2..]) };
         }
         if (std.mem.eql(u8, first, "api")) {
             return .{ .api = try ApiOptions.parse(args[2..]) };
@@ -458,7 +463,7 @@ test "CLI parses agent commands with their targets and options" {
     const wait_cli = try Cli.parse(&wait, .empty);
     try std.testing.expectEqual(agent_module.AgentAction.wait, wait_cli.agent.action);
     try std.testing.expectEqual(@as(u64, 7), wait_cli.agent.target.?.pane);
-    try std.testing.expectEqual(core.AgentStatus.blocked, wait_cli.agent.until);
+    try std.testing.expectEqual(values_module.WaitCondition{ .status = .blocked }, wait_cli.agent.until);
     try std.testing.expectEqual(@as(u32, 90), wait_cli.agent.timeout_seconds);
 
     const prompt = [_][*:0]const u8{ "telar", "agent", "prompt", "--current", "run the tests", "--wait" };

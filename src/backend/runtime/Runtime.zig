@@ -26,6 +26,7 @@ const session_checkpoint = @import("session_checkpoint.zig");
 const suggest_command = @import("suggest_command.zig");
 const system_metrics = @import("system_metrics.zig");
 const workspace_git = @import("workspace_git.zig");
+const worktree_git = @import("worktree_git.zig");
 /// Owns and composes the resources, event loop and model for one
 /// long-lived backend lifetime.
 const Runtime = @This();
@@ -177,6 +178,7 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
         .editor_opened => |job| link_opening.finish(model, job),
         .history_response => |result| try command_history.receive(model, result),
         .git_status => |completion| workspace_git.finish(model, completion),
+        .worktree_git => |completion| worktree_git.finish(model, completion),
         .checkpoint_written => |result| session_checkpoint.finish(model, result),
         .metrics_tick => |result| try system_metrics.tick(model, result),
         .metrics_sampled => |sample| system_metrics.finish(model, sample),

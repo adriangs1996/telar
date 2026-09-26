@@ -23,6 +23,7 @@ const Response = EngineRuntime.Service.Response;
 const hostmetrics = @import("hostmetrics");
 const SystemMetricsSample = hostmetrics.SystemMetricsSample;
 const Completion = @import("resources/Completion.zig");
+const WorktreeProbeCompletion = @import("resources/WorktreeProbeCompletion.zig");
 const AgentCompletion = @import("../agent/Completion.zig");
 const std = @import("std");
 const Job = @import("../change_review/Job.zig");
@@ -54,6 +55,7 @@ pub const Event = union(enum) {
     metrics_sampled: SystemMetricsSample,
     checkpoint_written: anyerror!void,
     git_status: Completion,
+    worktree_git: WorktreeProbeCompletion,
     editor_opened: *EditorJob,
     session_name: AgentCompletion,
     stopped: anyerror!void,
@@ -106,6 +108,7 @@ pub fn discard(completed: Event, io: std.Io) void {
         .metrics_sampled,
         .checkpoint_written,
         .git_status,
+        .worktree_git,
         .session_name,
         .stopped,
         => {},
@@ -148,6 +151,7 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) core.Path {
         .telemetry_written,
         .checkpoint_written,
         .git_status,
+        .worktree_git,
         .editor_opened,
         .session_name,
         => .observation,

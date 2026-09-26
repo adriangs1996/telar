@@ -19,6 +19,7 @@ const plugin_module = @import("cli/plugin.zig");
 const agent_module = @import("cli/agent.zig");
 const pane_module = @import("cli/pane.zig");
 const workspace_module = @import("cli/workspace.zig");
+const worktree_module = @import("cli/worktree.zig");
 const api_module = @import("cli/api.zig");
 const hook_module = @import("cli/hook.zig");
 const review_module = @import("cli/review.zig");
@@ -119,6 +120,7 @@ pub fn main(init: std.process.Init) !void {
         .agent => |options| std.process.exit(try agent_module.run(init, options)),
         .pane => |options| std.process.exit(try pane_module.run(init, options)),
         .workspace => |options| std.process.exit(try workspace_module.run(init, options)),
+        .worktree => |options| std.process.exit(try worktree_module.run(init, options)),
         .api => |options| try api_module.run(init, options),
         .hook => |options| try hook_module.run(init, options),
         .review => |options| std.process.exit(try review_module.run(init, options)),

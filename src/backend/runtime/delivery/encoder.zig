@@ -38,6 +38,7 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
             .message = failure.message,
         }),
         .pane_opened => |opened| try core.encodePaneOpened(buffer, opened),
+        .worktree_registered => |registered| try core.encodeWorktreeRegistered(buffer, registered),
         .tab_snapshot => |snapshot| try core.encodeTabSnapshot(buffer, .{
             .request_id = snapshot.request_id,
             .location = snapshot.location,

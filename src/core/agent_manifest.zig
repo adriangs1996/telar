@@ -23,6 +23,23 @@ pub const generic_placeholder = "New agent session";
 
 pub const Status = enum { working, blocked, ready };
 
+/// The key that stops an agent's current turn without ending its session.
+pub const InterruptKey = enum {
+    none,
+    escape,
+    ctrl_c,
+
+    /// The bytes a terminal sends for the key; empty for `none`.
+    /// Example: `try forward(pane, key.bytes());`.
+    pub fn bytes(self: InterruptKey) []const u8 {
+        return switch (self) {
+            .none => "",
+            .escape => "\x1b",
+            .ctrl_c => "\x03",
+        };
+    }
+};
+
 pub const ListError = error{ TooManyEntries, EntryTooLong, EmptyEntry };
 
 pub const PhraseList = GenericBoundedList(max_phrases, max_phrase_bytes);
@@ -102,6 +119,7 @@ fn buildBuiltin() Table {
     claude.brand.append("claude") catch unreachable;
     claude.identity.append("claude code") catch unreachable;
     claude.command_tools.append("Bash", "command") catch unreachable;
+    claude.interrupt = .escape;
     for (shared_blocked) |phrase| claude.blocked.append(phrase) catch unreachable;
     for (shared_working) |phrase| claude.working.append(phrase) catch unreachable;
 
@@ -115,6 +133,7 @@ fn buildBuiltin() Table {
     codex.command_tools.append("Bash", "command") catch unreachable;
     codex.command_tools.append("exec_command", "cmd") catch unreachable;
     codex.command_tools.append("shell", "command") catch unreachable;
+    codex.interrupt = .escape;
 
     // Pi launches as `node .../pi-coding-agent/dist/bundle/cli.js`, so its
     // entry-point path is the reliable identity; the package moved from the

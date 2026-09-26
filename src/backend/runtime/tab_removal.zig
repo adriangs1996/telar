@@ -8,6 +8,7 @@ const Session = @import("client/Session.zig");
 const TabRemoved = @import("../workspace/TabRemoved.zig");
 const client_request = @import("client_request.zig");
 const resync_required = @import("resync_required.zig");
+const worktree_lifecycle = @import("worktree_lifecycle.zig");
 
 /// Removes the tab, asks its panes to close and resyncs other observers.
 ///
@@ -22,6 +23,10 @@ pub fn remove(model: *RuntimeModel, session: *Session, request: core.CloseTab) !
     model.panes.closeAt(removed.location);
     model.review_owner_revision +%= 1;
     session_checkpoint.noteChange(model);
+    if (removed.workspace_removed) {
+        worktree_lifecycle.releaseWorkspace(model, removed.location.workspace);
+    }
+
     resync_required.notify(model, .{
         .origin = session.key,
         .workspace = removed.location.workspace,

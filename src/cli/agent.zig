@@ -11,10 +11,13 @@ const PaneRef = @import("PaneRef.zig");
 const ControlAgent = @import("ControlAgent.zig");
 const Text = @import("Text.zig");
 const AgentReports = @import("AgentReports.zig");
+const WorktreeCatalog = @import("WorktreeCatalog.zig");
 const core = @import("telar-core");
 
 const poll_interval_ms = 250;
 const prompt_start_grace_ms = 5_000;
+/// How long `prompt --interrupt` waits for the interrupted turn to stop.
+const interrupt_settle_ms = 15_000;
 
 pub const exit_ok: u8 = 0;
 pub const exit_failure: u8 = 1;
@@ -29,19 +32,29 @@ pub const exit_timeout: u8 = 3;
 /// ```
 pub fn run(init: std.process.Init, options: AgentOptions) !u8 {
     var session = switch (options.action) {
-        .list, .get, .wait, .prompt, .read, .report_session => try Session.open(init, options.socket),
+        .list, .get, .wait, .prompt, .read, .interrupt, .report_session => try Session.open(init, options.socket),
         else => try Session.attach(init, options.socket),
     };
     defer session.close();
+    var catalog: WorktreeCatalog = .init(init.gpa);
+    defer catalog.deinit();
+    if (options.target) |target| {
+        if (target == .worktree) {
+            var catalog_session = try Session.open(init, options.socket);
+            defer catalog_session.close();
+            try catalog_session.fetchCatalog(&catalog);
+        }
+    }
+
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
     defer writer.flush() catch {};
 
-    return execute(&session, options, .{ .writer = writer, .environ = init.minimal.environ }) catch |err| {
+    return execute(&session, options, .{ .writer = writer, .environ = init.minimal.environ, .catalog = &catalog }) catch |err| {
         std.debug.print("telar agent: {s}\n", .{control.describe(err)});
         return switch (err) {
-            error.AgentNotFound, error.PaneNotFound, error.PaneExited => exit_not_found,
+            error.AgentNotFound, error.PaneNotFound, error.PaneExited, error.WorktreeNotFound, error.WorktreeHasNoAgent => exit_not_found,
             else => exit_failure,
         };
     };
@@ -54,7 +67,7 @@ fn execute(session: *Session, options: AgentOptions, output: ExecutionContext) !
         return exit_ok;
     }
 
-    var snapshot: Snapshot = .{};
+    var snapshot: Snapshot = .{ .catalog = output.catalog };
     try session.fetchAgents(&snapshot);
 
     switch (options.action) {
@@ -87,6 +100,12 @@ fn execute(session: *Session, options: AgentOptions, output: ExecutionContext) !
         },
         .wait => return waitFor(session, options, output),
         .prompt => return prompt(session, options, output),
+        .interrupt => {
+            const agent = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
+            try session.interruptAgent(.{ .pane_id = agent.pane_id, .pane_generation = agent.pane_generation });
+            try writeOne(output.writer, agent, options.json);
+            return exit_ok;
+        },
         .report_session => {
             const agent = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
             try session.reportSession(.{
@@ -109,12 +128,12 @@ fn execute(session: *Session, options: AgentOptions, output: ExecutionContext) !
 
 fn waitFor(session: *Session, options: AgentOptions, output: ExecutionContext) !u8 {
     const deadline = session.nowMs() + @as(i64, options.timeout_seconds) * std.time.ms_per_s;
-    var snapshot: Snapshot = .{};
+    var snapshot: Snapshot = .{ .catalog = output.catalog };
 
     while (true) {
         try session.fetchAgents(&snapshot);
         const agent = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
-        if (agent.status == options.until) {
+        if (options.until.matches(agent.status)) {
             try writeOne(output.writer, agent, options.json);
             return exit_ok;
         }
@@ -132,14 +151,23 @@ fn waitFor(session: *Session, options: AgentOptions, output: ExecutionContext) !
 }
 
 fn prompt(session: *Session, options: AgentOptions, output: ExecutionContext) !u8 {
-    var snapshot: Snapshot = .{};
+    var snapshot: Snapshot = .{ .catalog = output.catalog };
     try session.fetchAgents(&snapshot);
     const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
     const pane: PaneRef = .{
         .pane_id = target.pane_id,
         .pane_generation = target.pane_generation,
     };
-    try session.sendText(pane, .{ .mode = .prompt, .text = std.mem.span(options.text.?) });
+    if (options.interrupt_first and target.status == .working) {
+        try interruptAndSettle(session, pane, &snapshot);
+    }
+
+    const sender = control.currentPaneId(output.environ) catch null;
+    try session.sendText(pane, .{
+        .mode = .prompt,
+        .text = std.mem.span(options.text.?),
+        .sender = if (sender == pane.pane_id) null else sender,
+    });
 
     if (!options.wait_after_prompt) {
         return exit_ok;
@@ -174,6 +202,23 @@ fn prompt(session: *Session, options: AgentOptions, output: ExecutionContext) !u
 
         session.sleepMs(poll_interval_ms);
     }
+}
+
+/// Interrupts a working agent and waits until its turn stopped, so the
+/// prompt that follows starts a new turn instead of queueing behind the old.
+fn interruptAndSettle(session: *Session, pane: PaneRef, snapshot: *Snapshot) !void {
+    try session.interruptAgent(pane);
+    const deadline = session.nowMs() + interrupt_settle_ms;
+    while (session.nowMs() < deadline) {
+        session.sleepMs(poll_interval_ms);
+        try session.fetchAgents(snapshot);
+        const agent = try snapshot.resolve(.{ .pane = pane.pane_id }, .empty) orelse return error.AgentNotFound;
+        if (agent.status != .working) {
+            return;
+        }
+    }
+
+    return error.InterruptNotSettled;
 }
 
 fn writeList(writer: *std.Io.Writer, snapshot: *const Snapshot, json: bool) !void {

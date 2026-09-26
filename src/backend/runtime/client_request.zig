@@ -33,6 +33,8 @@ const terminal_colors = @import("terminal_colors.zig");
 const workspace_creation = @import("workspace_creation.zig");
 const workspace_reconciliation = @import("workspace_reconciliation.zig");
 const workspace_rename = @import("workspace_rename.zig");
+const worktree_lifecycle = @import("worktree_lifecycle.zig");
+const agent_control = @import("agent_control.zig");
 
 /// Calls the procedure that owns `message`. An error drops the sender.
 ///
@@ -98,6 +100,11 @@ pub fn receive(model: *RuntimeModel, session: *Session, message: core.ClientMess
         .query_clients => |request| client_control.list(model, session, request),
         .request_pane_focus => |request| client_control.requestFocus(model, session, request),
         .complete_pane_focus => |request| client_control.finishFocus(model, session, request),
+        .register_worktree => |request| worktree_lifecycle.register(model, session, request),
+        .launch_worktree => |request| worktree_lifecycle.launch(model, session, request),
+        .forget_worktree => |request| worktree_lifecycle.forget(model, session, request),
+        .interrupt_agent => |request| agent_control.interrupt(model, session, request),
+        .report_agent_progress => |request| agent_hooks.receiveProgress(model, session, request),
     };
 }
 

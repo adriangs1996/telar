@@ -197,6 +197,12 @@ pub fn encodeSendPaneText(buffer: []u8, message: SendPaneText) ![]const u8 {
     try encoder.writeInt(u64, message.pane_generation);
     try encoder.writeByte(@intFromEnum(message.mode));
     try encoder.writeSized16(message.text);
+    try encoder.writeByte(@intFromBool(message.sender != null));
+    if (message.sender) |sender| {
+        try codec.validatePaneId(sender);
+        try encoder.writeInt(u64, id.raw(sender));
+    }
+
     return encoder.finish();
 }
 
@@ -208,12 +214,14 @@ pub fn decodeSendPaneText(decoder: *Decoder) !SendPaneText {
         return error.InvalidPaneTextMode;
     const text = try decoder.readSized16();
     try codec.validateBytes(text, types.max_pane_text_input_bytes, false);
+    const sender: ?id.PaneId = if (try decoder.readBool()) try id.pane(try decoder.readInt(u64)) else null;
     return .{
         .request_id = request_id,
         .pane_id = pane_id,
         .pane_generation = pane_generation,
         .mode = mode,
         .text = text,
+        .sender = sender,
     };
 }
 

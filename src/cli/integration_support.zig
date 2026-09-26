@@ -15,6 +15,11 @@ const max_extension_bytes = 64 * 1024;
 
 pub const claude_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Notification", "SessionEnd" };
 pub const codex_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "PermissionRequest", "PreToolUse", "PostToolUse", "Stop", "Interrupt", "SessionEnd" };
+/// Claude Code asks these hooks to create and remove its worktrees, so they
+/// run in every session and answer with a path, never through the pane guard.
+pub const claude_worktree_events = [_][]const u8{ "WorktreeCreate", "WorktreeRemove" };
+/// Worktree hooks run `git worktree add`, which may take a while.
+pub const worktree_timeout_seconds = 60;
 pub const claude_marker = " hook claude";
 pub const codex_marker = " hook codex";
 
@@ -50,6 +55,14 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
     var command_buffer: [std.fs.max_path_bytes + pane_guard.len + 32]u8 = undefined;
     const command = try renderHookCommand(&command_buffer, executable, integration.marker);
     const hook_set = hookSetFor(integration, command);
+    var worktree_command_buffer: [std.fs.max_path_bytes + 32]u8 = undefined;
+    const worktree_command = try renderUnguardedCommand(&worktree_command_buffer, executable, integration.marker);
+    const worktree_hooks: HookSet = .{
+        .events = integration.worktree_events,
+        .marker = integration.marker,
+        .command = worktree_command,
+        .timeout_seconds = worktree_timeout_seconds,
+    };
     var output_buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
@@ -75,10 +88,15 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
             for (integration.events) |event| {
                 try writer.print("{s}: {s}\n", .{ event, if (hasHook(parsed.value, event, integration.marker)) "installed" else "absent" });
             }
+            for (integration.worktree_events) |event| {
+                try writer.print("{s}: {s}\n", .{ event, if (hasHook(parsed.value, event, integration.marker)) "installed" else "absent" });
+            }
             return 0;
         },
         .install => {
-            const changed = try installHooks(parsed.arena.allocator(), &parsed.value, hook_set);
+            const lifecycle_changed = try installHooks(parsed.arena.allocator(), &parsed.value, hook_set);
+            const worktree_changed = try installHooks(parsed.arena.allocator(), &parsed.value, worktree_hooks);
+            const changed = lifecycle_changed or worktree_changed;
             if (changed) {
                 try writeSettings(init.io, path, parsed.value);
             }
@@ -86,7 +104,9 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
             return 0;
         },
         .uninstall => {
-            const changed = uninstallHooks(&parsed.value, hook_set);
+            const lifecycle_changed = uninstallHooks(&parsed.value, hook_set);
+            const worktree_changed = uninstallHooks(&parsed.value, worktree_hooks);
+            const changed = lifecycle_changed or worktree_changed;
             if (changed) {
                 try writeSettings(init.io, path, parsed.value);
             }
@@ -105,6 +125,7 @@ fn integrationFor(agent: values.HookAgent) Integration {
             .settings_file = "settings.json",
             .marker = claude_marker,
             .events = &claude_events,
+            .worktree_events = &claude_worktree_events,
             .timeout_seconds = 5,
         },
         .codex => .{
@@ -251,6 +272,21 @@ pub fn renderHookCommand(buffer: []u8, executable: []const u8, marker: []const u
     }
 
     return std.fmt.bufPrint(buffer, pane_guard ++ "'{s}'{s}", .{ executable, marker });
+}
+
+/// Renders a hook command without the pane guard, for hooks an agent needs
+/// answered in every session.
+///
+/// ```zig
+/// const command = try renderUnguardedCommand(&buffer, "/opt/telar", claude_marker);
+/// // exec '/opt/telar' hook claude
+/// ```
+pub fn renderUnguardedCommand(buffer: []u8, executable: []const u8, marker: []const u8) ![]const u8 {
+    if (std.mem.indexOfScalar(u8, executable, '\'') != null) {
+        return error.UnsupportedExecutablePath;
+    }
+
+    return std.fmt.bufPrint(buffer, "exec '{s}'{s}", .{ executable, marker });
 }
 
 fn hookSetFor(integration: Integration, command: []const u8) HookSet {

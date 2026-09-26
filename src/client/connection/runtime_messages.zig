@@ -47,6 +47,8 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
             }
         },
         .pane_opened => |opened| _ = try pane_attachment.completePaneOpen(client, opened),
+        // Worktree registration is a CLI request; a UI never asks for it.
+        .worktree_registered => return error.UnexpectedControlReply,
         .tab_snapshot => |snapshot| _ = try tab_snapshot.applyTabSnapshot(client, snapshot),
         .workspace_snapshot => |snapshot| try workspace_list_snapshot.applyWorkspaceSnapshot(client, snapshot),
         .tab_created => |created| _ = try tab_creation.completeTabCreation(client, created),

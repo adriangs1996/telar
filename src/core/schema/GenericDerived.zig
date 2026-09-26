@@ -45,6 +45,10 @@ pub fn Type(comptime T: type) type {
                     try codec.validatePaneId(value);
                     try encoder.writeInt(u64, id.raw(value));
                 },
+                id.WorktreeId => {
+                    _ = try id.worktree(id.raw(value));
+                    try encoder.writeInt(u64, id.raw(value));
+                },
                 ?id.WorkspaceId => {
                     try encoder.writeByte(@intFromBool(value != null));
                     if (value) |workspace_id| {
@@ -84,6 +88,7 @@ pub fn Type(comptime T: type) type {
                 else
                     try id.request(try decoder.readInt(u64)),
                 id.PaneId => try id.pane(try decoder.readInt(u64)),
+                id.WorktreeId => try id.worktree(try decoder.readInt(u64)),
                 ?id.WorkspaceId => if (try decoder.readBool())
                     try id.workspace(try decoder.readInt(u64))
                 else

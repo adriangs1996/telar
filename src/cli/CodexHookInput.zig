@@ -10,6 +10,8 @@ tool_name: []const u8 = "",
 tool_use_id: []const u8 = "",
 tool_input: std.json.Value = .null,
 cwd: []const u8 = "",
+/// Present on `Stop`: the final assistant message of the turn.
+last_assistant_message: ?[]const u8 = null,
 /// Not part of Codex's payload: the state database `run` resolves from
 /// `CODEX_HOME`, where `/rename` lands as `threads.name`.
 state_database: []const u8 = "",

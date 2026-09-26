@@ -17,6 +17,7 @@ const pane_attachment = @import("pane_attachment.zig");
 const pane_observation = @import("pane_observation.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
 const tab_removal = @import("tab_removal.zig");
+const worktree_lifecycle = @import("worktree_lifecycle.zig");
 
 /// Requests PTY shutdown exactly once and marks review owners for
 /// rediscovery. Pane retirement stays with the later exit event.
@@ -59,6 +60,7 @@ pub fn finishExit(model: *RuntimeModel, completion: ExitCompletion) !void {
     };
 
     _ = agent_status.remove(model, transition.pane.key());
+    worktree_lifecycle.finishCommand(model, transition.pane.id, transition.exit.code());
 
     if (transition.launch_aborting) {
         return;
@@ -100,6 +102,9 @@ pub fn collect(model: *RuntimeModel) void {
         if (!store.hasAt(location) and model.workspaces.contains(location)) {
             const removed = model.workspaces.removeTab(model.gpa, location).?;
             tab_removal.announce(model, removed);
+            if (removed.workspace_removed) {
+                worktree_lifecycle.releaseWorkspace(model, removed.location.workspace);
+            }
         }
 
         leaveEmptyWorkspace(model, location.workspace);

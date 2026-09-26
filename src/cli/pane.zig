@@ -134,7 +134,7 @@ fn resolvePane(session: *Session, target: values.Target, environ: std.process.En
     const pane_id: u64 = switch (target) {
         .current => try control.currentPaneId(environ),
         .pane => |pane| pane,
-        .name => return error.InvalidPaneId,
+        .name, .worktree => return error.InvalidPaneId,
     };
 
     var snapshot: Snapshot = .{};
@@ -157,7 +157,7 @@ fn inspect(session: *Session, options: PaneOptions, context: ExecutionContext) !
         const wanted = switch (options.target) {
             .current => try control.currentPaneId(context.environ),
             .pane => |id| id,
-            .name => return error.InvalidPaneId,
+            .name, .worktree => return error.InvalidPaneId,
         };
         for (catalog.entries[0..catalog.count]) |*entry| {
             if (core.raw(entry.pane.pane_id) != wanted) {

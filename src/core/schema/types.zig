@@ -33,6 +33,18 @@ pub const max_foreground_name_bytes = 48;
 pub const max_pane_title_bytes = 256;
 pub const max_workspace_list_entries = 64;
 pub const max_git_branch_bytes = 64;
+/// Worktrees the runtime tracks at once, one per possible workspace.
+pub const max_worktree_entries = max_workspace_list_entries;
+/// Bound for a task title, the name the user and a coordinator use.
+pub const max_worktree_title_bytes = 96;
+/// Bound for the initial prompt kept to match a task by its content.
+pub const max_worktree_brief_bytes = 512;
+/// Bound for the program name of the last command run in a worktree.
+pub const max_worktree_command_label_bytes = 48;
+/// Bound for an agent's final answer as its stop hook reports it.
+pub const max_agent_final_message_bytes = 2048;
+/// Bound for one plan step or task subject an agent reports.
+pub const max_agent_plan_step_bytes = 96;
 pub const max_search_needle_bytes = 128;
 pub const max_search_matches = 64;
 pub const max_pane_text_rows = 200;
@@ -127,6 +139,58 @@ pub const FailureCode = enum(u16) {
     tab_not_found = 8,
     agent_blocked = 9,
     pane_exited = 10,
+    worktree_not_found = 11,
+    /// Text aimed at the pane a person is typing in; refused so automation
+    /// never interleaves with their input.
+    pane_focused = 12,
+    /// The sender exceeded its prompt budget for this target.
+    prompt_rate_limited = 13,
+    /// An interrupt reached an agent that is not working.
+    agent_not_working = 14,
+    /// The agent's manifest declares no interrupt keys.
+    interrupt_unsupported = 15,
+};
+
+/// Who asked the runtime to track a worktree: `telar` for worktrees made
+/// through `telar worktree` or an agent hook routed to it, `external` for
+/// linked worktrees found through an agent's reported working directory.
+pub const WorktreeOrigin = enum(u8) {
+    telar = 0,
+    external = 1,
+};
+
+/// What remains to do with a worktree, from its last Git probe.
+pub const WorktreeState = enum(u8) {
+    active = 0,
+    /// Nothing differs from its base: no commits ahead, no local changes.
+    integrated = 1,
+    /// The checkout directory no longer exists.
+    gone = 2,
+};
+
+/// Lifecycle of the last command launched in a worktree.
+pub const CommandState = enum(u8) {
+    none = 0,
+    running = 1,
+    exited = 2,
+};
+
+/// How an agent's progress report changes its plan.
+pub const AgentPlanOp = enum(u8) {
+    none = 0,
+    /// Appends one task; its position is its identity.
+    add = 1,
+    /// Changes the status of the task at `plan_index` (zero-based).
+    mark = 2,
+    /// Replaces the whole plan with counts and the current step.
+    set = 3,
+};
+
+pub const AgentPlanStatus = enum(u8) {
+    pending = 0,
+    in_progress = 1,
+    completed = 2,
+    deleted = 3,
 };
 
 /// Outcome of asking the runtime's engine for a command suggestion. Failures

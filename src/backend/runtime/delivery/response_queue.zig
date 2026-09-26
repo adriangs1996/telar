@@ -23,6 +23,7 @@ pub const PendingResponse = union(enum) {
     client_list: core.ClientList,
     editor_opened: core.EditorOpened,
     pane_opened: core.PaneOpened,
+    worktree_registered: core.WorktreeRegistered,
     request_failed: PendingFailure,
     tab_snapshot: PendingTabSnapshot,
     workspace_snapshot: PendingWorkspaceSnapshot,

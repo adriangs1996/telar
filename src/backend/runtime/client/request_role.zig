@@ -32,6 +32,11 @@ pub fn classify(tag: Tag) RequestClass {
         .report_agent_command,
         .report_agent_title,
         .request_pane_focus,
+        .register_worktree,
+        .launch_worktree,
+        .forget_worktree,
+        .interrupt_agent,
+        .report_agent_progress,
         => .control,
         else => .ui,
     };
