@@ -14,7 +14,7 @@ const max_settings_bytes = 4 * 1024 * 1024;
 const max_extension_bytes = 64 * 1024;
 
 pub const claude_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Notification", "SessionEnd" };
-pub const codex_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "PermissionRequest", "PreToolUse", "PostToolUse", "Stop", "Interrupt", "SessionEnd" };
+pub const codex_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "PermissionRequest", "PreToolUse", "PostToolUse", "Stop", "Interrupt", "SubagentStop", "SessionEnd" };
 pub const claude_marker = " hook claude";
 pub const codex_marker = " hook codex";
 

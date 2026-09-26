@@ -960,6 +960,52 @@ test "a continuing helper cannot hide a prompt, revive finished work or register
     try std.testing.expectEqual(core.AgentSource.foreground_process, snapshot[0].source);
 }
 
+test "a turn waiting on helpers stays working through the idle prompt" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    _ = agent_status.observeProcess(model, .{ .identity = identity, .provider = .claude, .process_id = 42, .observed_at_ms = 100 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 200 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .waiting, .event = "waiting for 1 background agent", .observed_at_ms = 300 });
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, identity.key).?);
+
+    const revision = model.agent_revision;
+    try std.testing.expect(!agent_status.observeReport(model, .{ .identity = identity, .state = .idle, .observed_at_ms = 60_300 }));
+    try std.testing.expectEqual(revision, model.agent_revision);
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, identity.key).?);
+
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+    try std.testing.expectEqualStrings("waiting for 1 background agent", agent_status.snapshot(&model.agents, &entries, 60_300)[0].last_event);
+
+    // The helper's own tool calls keep the wait alive past its first expiry.
+    const renewed_at: i64 = 300 + types.report_working_expiry_ms - 1;
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = renewed_at }));
+    try std.testing.expect(!agent_status.observeReport(model, .{ .identity = identity, .state = .idle, .observed_at_ms = renewed_at + 1 }));
+
+    // The helper's result starts a new turn, and its Stop settles the agent.
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = renewed_at + 2 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .ready, .observed_at_ms = renewed_at + 3 });
+    try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
+}
+
+test "the idle prompt settles work no wait holds and an expired wait" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    _ = agent_status.observeProcess(model, .{ .identity = identity, .provider = .claude, .process_id = 42, .observed_at_ms = 100 });
+
+    // Without a wait, the idle prompt settles like ready.
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 200 });
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .idle, .observed_at_ms = 60_200 }));
+    try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
+
+    // A wait no helper renewed stops vetoing the idle prompt once it expires.
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .waiting, .observed_at_ms = 70_000 });
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, identity.key).?);
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .idle, .observed_at_ms = 70_000 + types.report_working_expiry_ms }));
+    try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
+}
+
 const TestReadyPrompt = struct {
     provider: core.AgentProvider,
     observed_at_ms: i64,

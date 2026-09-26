@@ -64,11 +64,11 @@ that row in place. A finish without an open row inserts a completed row.
 | `PreToolUse` of `AskUserQuestion` | `blocked`, reason `question`, event: the first question |
 | `PreToolUse` of `ExitPlanMode` | `blocked`, reason `plan` |
 | `PreToolUse`, `PostToolUse` | `working`, event `» <tool> <first known argument>`; a mapped `Bash` call is also recorded |
-| `Stop` with a running subagent in `background_tasks` | `working`, event `waiting for <n> background agents` |
+| `Stop` with a running subagent in `background_tasks` | `waiting`, event `waiting for <n> background agents` |
 | `Stop` otherwise | `ready` (projected as `done` until seen), event: the first line of `last_assistant_message` |
 | `Notification` `permission_prompt` | `blocked`, reason `permission`, event: the notification message |
 | `Notification` `elicitation_*`, `agent_needs_input` | `blocked`, reason `question`, event: the notification message |
-| `Notification` `idle_prompt` | `ready` |
+| `Notification` `idle_prompt` | `idle`: settles like `ready` unless an unexpired `waiting` report holds |
 | `SessionEnd` | `exited`: the report is withdrawn, weaker evidence decides |
 | `PreToolUse`, `PostToolUse` with `agent_id` (subagent) | `continuing`: renews an unexpired `working` report |
 | any other event with `agent_id` (subagent) | ignored |
@@ -82,9 +82,12 @@ that row in place. A finish without an open row inserts a completed row.
 | `PermissionRequest` | `blocked`, reason `permission`, event `» <tool> <argument>` |
 | `PreToolUse`, `PostToolUse` | `working`, event `» <tool> <argument>`; a mapped shell call is also recorded |
 | `Stop` | `settling`, projected as `working` until a newer idle composer confirms completion |
+| `Stop`, `Interrupt` with subagents running in the rollout | `waiting`, event `waiting for <n> background agents` |
 | `Interrupt` | `ready` |
 | `SessionEnd` | `exited`: the report is withdrawn, weaker evidence decides |
-| any event with `agent_id` (subagent) | ignored |
+| `PreToolUse`, `PostToolUse` with `agent_id` (subagent) | `continuing`: renews an unexpired `working` or `waiting` report |
+| `SubagentStop` of the session's last running child | `released`: settles an unexpired `waiting` report |
+| any other event with `agent_id` (subagent) | ignored |
 
 ## Pi
 
@@ -213,8 +216,8 @@ shown on the agent card only while that report decides the projection; the
 event is one control-free line of at most 96 bytes, cut by `telar hook`
 before it is sent. A `working` report expires with
 `report_working_expiry_ms`, ten minutes, because a long model turn fires no
-hook in between; a `settling` report with `working_expiry_ms`, other states
-with `settled_expiry_ms`; `applyProcess`
+hook in between, and so does a `waiting` report; a `settling` report with
+`working_expiry_ms`, other states with `settled_expiry_ms`; `applyProcess`
 clears it when a different process takes the pane. Sounds follow the same
 transition rule as screen evidence.
 
@@ -222,16 +225,41 @@ Claude Code dispatches background agents and ends the turn while they run:
 its `Stop` fires with them still listed in `background_tasks` as `running`
 subagents. That field is absent from Claude Code's hook reference, so an
 absent list keeps the plain `Stop` mapping. Running shells are not counted,
-because a dev server outlives every turn. A finished background agent
-resumes the main thread with a `UserPromptSubmit` and a new `Stop`, which
-settles the agent once no subagent is left running.
+because a dev server outlives every turn. Such a `Stop` reports `waiting`,
+projected as `working`. A finished background agent resumes the main thread
+with a `UserPromptSubmit` and a new `Stop`, which settles the agent once no
+subagent is left running.
+
+Sixty seconds after any `Stop`, Claude Code sends the `idle_prompt`
+notification, running subagents or not, and without `background_tasks`.
+It maps to `idle`, which the runtime drops while an unexpired `waiting`
+report holds and otherwise applies as `ready`. An Esc interrupt fires
+neither `Stop` nor `idle_prompt` (observed with Claude Code 2.1.283), and
+Claude's screen cannot settle a report, so an interrupted turn stays
+`working` until its report expires.
 
 A background agent can outlast `report_working_expiry_ms` without a main
 thread hook. Its own tool calls report `continuing`, which renews an
-unexpired `working` report once less than `report_renewal_margin_ms` is
-left, so a burst of calls republishes the projection once. `continuing`
+unexpired `working` or `waiting` report once less than
+`report_renewal_margin_ms` is left, so a burst of calls republishes the
+projection once. `continuing`
 never registers an agent, never replaces `blocked`, `ready` or `settling`,
 and never revives an expired report; the screen then decides as before.
+
+Codex fires the main thread's `Stop` while children that `spawn_agent`
+started still run, sometimes before their `SubagentStart`, and lists them in
+no payload. The session's rollout (`transcript_path`) does: one
+`SubAgentActivity` item with `kind` `started` when a child is spawned, before
+the `Stop`, and one with `kind` `completed` when it finishes, both keyed by
+the child's thread id, which its hooks carry as `agent_id`. On `Stop`,
+`Interrupt` and `SubagentStop`, `telar hook codex` streams that rollout
+through a fixed window (`CodexSubagents.read`), a regular file the user owns,
+and counts the children started without a completion. The finishing child is
+left out, because its completion is written after its `SubagentStop` runs.
+Codex resumes no turn for a finished child, so the last child's
+`SubagentStop` reports `released`, which ends only a wait still in force and
+leaves a newer turn alone. A nested child's `SubagentStop` names its parent's
+rollout, not the session's, and is ignored.
 
 Codex runs matching `Stop` hooks before deciding whether a hook continues the
 turn. `settling` preserves this distinction from active tool work while still
@@ -262,7 +290,7 @@ expiry without fresh proof falls back to unknown rather than notifying done.
 Claude retains its lifecycle mappings and screen detection policy. Pi uses
 its ordered, renewed lifecycle reports as described above.
 
-The current schema includes the `settling` report. Client, runtime, and hook
+The current schema includes the `settling`, `continuing`, `waiting` and `idle` reports. Client, runtime, and hook
 executable must use the matching schema; older peers are rejected at handshake.
 
 The command field is data, not harness-specific branching. Built-in manifests

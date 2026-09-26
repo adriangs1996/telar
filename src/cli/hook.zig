@@ -19,6 +19,7 @@ const Target = @import("Target.zig");
 const Reports = @import("Reports.zig");
 const Session = @import("Session.zig");
 const hook_event = @import("hook_event.zig");
+const CodexSubagents = @import("CodexSubagents.zig");
 
 pub const max_input_bytes = 64 * 1024;
 
@@ -127,8 +128,9 @@ pub fn mapPiTitle(buffer: *[core.max_agent_session_title_bytes]u8, input: PiHook
 /// change what the user must do are ignored. `AskUserQuestion` and
 /// `ExitPlanMode` block before their tool runs, so their `PreToolUse`
 /// reports the question or the plan review instead of work. A `Stop` that
-/// leaves subagents running keeps the agent working until the turn that
-/// collects the last of them. The event line borrows `buffer`.
+/// leaves subagents running reports `waiting` until the turn that collects
+/// the last of them, and the idle prompt reports `idle`, which cannot
+/// settle that wait. The event line borrows `buffer`.
 ///
 /// ```zig
 /// const report = mapClaudeHook(input, &buffer) orelse return;
@@ -167,7 +169,7 @@ pub fn mapClaudeHook(input: ClaudeHookInput, buffer: *hook_event.Buffer) ?Report
     if (std.mem.eql(u8, event, "Stop")) {
         const running = input.runningSubagents();
         if (running != 0) {
-            return .{ .state = .working, .event = hook_event.backgroundAgents(buffer, running), .session = session, .session_file = session_file };
+            return .{ .state = .waiting, .event = hook_event.backgroundAgents(buffer, running), .session = session, .session_file = session_file };
         }
 
         return .{ .state = .ready, .event = hook_event.line(buffer, input.last_assistant_message), .session = session, .session_file = session_file };
@@ -185,7 +187,7 @@ pub fn mapClaudeHook(input: ClaudeHookInput, buffer: *hook_event.Buffer) ?Report
             }
         }
         if (std.mem.eql(u8, input.notification_type, "idle_prompt")) {
-            return .{ .state = .ready, .session = session, .session_file = session_file };
+            return .{ .state = .idle, .session = session, .session_file = session_file };
         }
 
         return null;
@@ -258,22 +260,39 @@ fn stateVersion(name: []const u8) ?u32 {
     return std.fmt.parseUnsigned(u32, name[prefix.len .. name.len - suffix.len], 10) catch null;
 }
 
-/// Maps one Codex hook event to a report. Subagent events are ignored. A
-/// compacted session remains working; `Stop` starts settlement, which still
-/// needs a newer idle composer before it can announce completion. Tool
-/// events and permission requests name their tool call in `buffer`.
+/// Maps one Codex hook event to a report. A compacted session remains
+/// working; `Stop` starts settlement, which still needs a newer idle
+/// composer before it can announce completion. A `Stop` or `Interrupt` that
+/// leaves subagents running reports `waiting` instead, a subagent's tool
+/// calls renew that wait, and the `SubagentStop` of the last child the
+/// session started reports `released`. Codex resumes no turn for a finished
+/// child, so nothing else ends the wait. Tool events and permission
+/// requests name their tool call in `buffer`.
 ///
 /// ```zig
 /// const report = mapCodexHook(input, &buffer) orelse return;
 /// ```
 pub fn mapCodexHook(input: CodexHookInput, buffer: *hook_event.Buffer) ?Report {
+    const event = input.hook_event_name;
     if (input.agent_id != null and input.agent_id.?.len != 0) {
+        if (std.mem.eql(u8, event, "PreToolUse") or std.mem.eql(u8, event, "PostToolUse")) {
+            return .{ .state = .continuing };
+        }
+
+        // A nested child's stop names its parent's rollout, which does not
+        // list the children the session is waiting for.
+        if (std.mem.eql(u8, event, "SubagentStop") and input.running_subagents == 0 and isSessionRollout(input.transcript_path, input.session_id)) {
+            return .{ .state = .released };
+        }
+
         return null;
     }
 
-    const event = input.hook_event_name;
     const session = if (core.validateSessionReference(input.session_id)) |_| input.session_id else |_| "";
     const file = if (input.state_database.len <= core.max_agent_session_file_bytes) input.state_database else "";
+    if ((std.mem.eql(u8, event, "Stop") or std.mem.eql(u8, event, "Interrupt")) and input.running_subagents != 0) {
+        return .{ .state = .waiting, .event = hook_event.backgroundAgents(buffer, input.running_subagents), .session = session, .session_file = file, .session_file_kind = .codex_state };
+    }
 
     if (std.mem.eql(u8, event, "SessionStart")) {
         const state: core.AgentReportState = if (std.mem.eql(u8, input.source, "compact")) .working else .ready;
@@ -302,6 +321,30 @@ pub fn mapCodexHook(input: CodexHookInput, buffer: *hook_event.Buffer) ?Report {
     }
 
     return null;
+}
+
+/// Whether `path` is the rollout Codex writes for `session`, named
+/// `rollout-<time>-<session>.jsonl`.
+fn isSessionRollout(path: []const u8, session: []const u8) bool {
+    const suffix = ".jsonl";
+    if (session.len == 0 or path.len < session.len + suffix.len + 1 or !std.mem.endsWith(u8, path, suffix)) {
+        return false;
+    }
+
+    const name_end = path.len - suffix.len;
+    return std.mem.eql(u8, path[name_end - session.len .. name_end], session) and path[name_end - session.len - 1] == '-';
+}
+
+// Only the events that end a turn or a child read the rollout; a tool call
+// never waits on it.
+fn codexRunningSubagents(io: std.Io, input: *const CodexHookInput) usize {
+    const event = input.hook_event_name;
+    if (!std.mem.eql(u8, event, "Stop") and !std.mem.eql(u8, event, "Interrupt") and !std.mem.eql(u8, event, "SubagentStop")) {
+        return 0;
+    }
+
+    const running = CodexSubagents.read(io, input.transcript_path);
+    return running.countExcept(input.agent_id orelse "");
 }
 
 /// Runs the hook for `options.agent`. Always exits 0.
@@ -355,6 +398,8 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
             if (codexHome(environ, &home_buffer)) |home| {
                 parsed.value.state_database = codexStateDatabase(init.io, home, &database_buffer) orelse "";
             }
+
+            parsed.value.running_subagents = codexRunningSubagents(init.io, &parsed.value);
             const tool: ToolHookInput = .{
                 .event = parsed.value.hook_event_name,
                 .agent_id = parsed.value.agent_id,
@@ -526,14 +571,14 @@ test "Claude hook events map to reports and subagent lifecycle events are ignore
     try std.testing.expectEqual(core.AgentReportState.ready, mapClaudeHook(.{ .hook_event_name = "Stop" }, &buffer).?.state);
     try std.testing.expectEqual(core.AgentReportState.exited, mapClaudeHook(.{ .hook_event_name = "SessionEnd" }, &buffer).?.state);
     try std.testing.expectEqual(core.AgentReportState.blocked, mapClaudeHook(.{ .hook_event_name = "Notification", .notification_type = "permission_prompt" }, &buffer).?.state);
-    try std.testing.expectEqual(core.AgentReportState.ready, mapClaudeHook(.{ .hook_event_name = "Notification", .notification_type = "idle_prompt" }, &buffer).?.state);
+    try std.testing.expectEqual(core.AgentReportState.idle, mapClaudeHook(.{ .hook_event_name = "Notification", .notification_type = "idle_prompt" }, &buffer).?.state);
     try std.testing.expect(mapClaudeHook(.{ .hook_event_name = "Notification", .notification_type = "auth_success" }, &buffer) == null);
     try std.testing.expectEqual(core.AgentReportState.working, mapClaudeHook(.{ .hook_event_name = "PreToolUse" }, &buffer).?.state);
     try std.testing.expect(mapClaudeHook(.{ .hook_event_name = "Stop", .agent_id = "sub-1" }, &buffer) == null);
     try std.testing.expectEqualStrings("", mapClaudeHook(.{ .hook_event_name = "Stop", .session_id = "bad session" }, &buffer).?.session);
 }
 
-test "a Claude Stop that leaves subagents running keeps the agent working" {
+test "a Claude Stop that leaves subagents running reports a wait" {
     var buffer: hook_event.Buffer = undefined;
     const waiting = mapClaudeHook(
         .{
@@ -547,7 +592,7 @@ test "a Claude Stop that leaves subagents running keeps the agent working" {
         },
         &buffer,
     ).?;
-    try std.testing.expectEqual(core.AgentReportState.working, waiting.state);
+    try std.testing.expectEqual(core.AgentReportState.waiting, waiting.state);
     try std.testing.expectEqualStrings("waiting for 2 background agents", waiting.event);
 
     const one = mapClaudeHook(
@@ -602,7 +647,7 @@ test "the background tasks of a real Claude Stop payload are read" {
     try std.testing.expectEqual(@as(usize, 0), bare.value.runningSubagents());
 }
 
-test "Codex hook events map to reports and subagents are ignored" {
+test "Codex hook events map to reports" {
     var buffer: hook_event.Buffer = undefined;
     const session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000";
     const start = mapCodexHook(.{ .hook_event_name = "SessionStart", .session_id = session }, &buffer).?;
@@ -616,8 +661,28 @@ test "Codex hook events map to reports and subagents are ignored" {
     try std.testing.expectEqual(core.AgentReportState.ready, mapCodexHook(.{ .hook_event_name = "Interrupt" }, &buffer).?.state);
     try std.testing.expectEqual(core.AgentReportState.exited, mapCodexHook(.{ .hook_event_name = "SessionEnd" }, &buffer).?.state);
     try std.testing.expectEqual(core.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "PreToolUse" }, &buffer).?.state);
-    try std.testing.expect(mapCodexHook(.{ .hook_event_name = "PostToolUse", .agent_id = "sub-1" }, &buffer) == null);
     try std.testing.expectEqualStrings("", mapCodexHook(.{ .hook_event_name = "Stop", .session_id = "bad session" }, &buffer).?.session);
+}
+
+test "Codex subagents keep a finished turn waiting until the last one stops" {
+    var buffer: hook_event.Buffer = undefined;
+    const session = "01a0dcd0-a558-74a1-a3ad-0198c1715d1f";
+    const rollout = "/home/me/.codex/sessions/2026/09/26/rollout-2026-09-26T10-24-16-01a0dcd0-a558-74a1-a3ad-0198c1715d1f.jsonl";
+    const waiting = mapCodexHook(.{ .hook_event_name = "Stop", .session_id = session, .transcript_path = rollout, .running_subagents = 2 }, &buffer).?;
+    try std.testing.expectEqual(core.AgentReportState.waiting, waiting.state);
+    try std.testing.expectEqualStrings("waiting for 2 background agents", waiting.event);
+    try std.testing.expectEqual(core.AgentReportState.waiting, mapCodexHook(.{ .hook_event_name = "Interrupt", .running_subagents = 1 }, &buffer).?.state);
+
+    const child = "01a0dcd1-0be8-73f0-b8d7-9b50638143ca";
+    try std.testing.expectEqual(core.AgentReportState.continuing, mapCodexHook(.{ .hook_event_name = "PostToolUse", .agent_id = child }, &buffer).?.state);
+    try std.testing.expect(mapCodexHook(.{ .hook_event_name = "SubagentStart", .agent_id = child }, &buffer) == null);
+    try std.testing.expect(mapCodexHook(.{ .hook_event_name = "PermissionRequest", .agent_id = child }, &buffer) == null);
+    try std.testing.expect(mapCodexHook(.{ .hook_event_name = "SubagentStop", .agent_id = child, .session_id = session, .transcript_path = rollout, .running_subagents = 1 }, &buffer) == null);
+    try std.testing.expectEqual(core.AgentReportState.released, mapCodexHook(.{ .hook_event_name = "SubagentStop", .agent_id = child, .session_id = session, .transcript_path = rollout }, &buffer).?.state);
+
+    // A nested child's stop reads its parent's rollout, not the session's.
+    const nested = "/home/me/.codex/sessions/2026/09/26/rollout-2026-09-26T10-24-42-01a0dcd1-0be8-73f0-b8d7-9b50638143ca.jsonl";
+    try std.testing.expect(mapCodexHook(.{ .hook_event_name = "SubagentStop", .agent_id = "grandchild", .session_id = session, .transcript_path = nested }, &buffer) == null);
 }
 
 test "installed harness payloads map shell tools through manifests" {

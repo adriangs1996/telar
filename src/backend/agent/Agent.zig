@@ -56,8 +56,7 @@ process: ?Evidence = null,
 screen: ?Evidence = null,
 /// Official lifecycle report; outranks every other evidence while valid.
 report: ?Evidence = null,
-report_settling: bool = false,
-/// Reason and event line of `report`; consulted only while it decides.
+/// State, reason and event line of `report`; consulted only while it decides.
 report_detail: ReportDetail = .{},
 /// The line the projection shows; recomputed on every reprojection.
 event: EventLine = .{},
@@ -155,7 +154,9 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
 /// Applies one official lifecycle report. `exited` withdraws the report so
 /// weaker evidence decides again; `continuing` only extends an unexpired
 /// working report, so a helper cannot hide a prompt or revive finished
-/// work; every other state becomes the ranking evidence until it expires.
+/// work; `idle` is dropped while an unexpired `waiting` report says helpers
+/// still work, and `released` applies only to such a report; every other
+/// state becomes the ranking evidence until it expires.
 ///
 /// ```zig
 /// if (agent.applyReport(observation)) {
@@ -165,11 +166,19 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
 pub fn applyReport(self: *Agent, observation: ReportObservation) bool {
     if (observation.state == .continuing) {
         const report = if (self.report) |*value| value else return false;
-        if (!report.isWorking() or self.report_settling or report.isExpired(observation.observed_at_ms)) {
+        if (!report.isWorking() or self.report_detail.state == .settling or report.isExpired(observation.observed_at_ms)) {
             return false;
         }
 
         return report.renewWork(observation.observed_at_ms);
+    }
+
+    if (observation.state == .idle and self.awaitsHelpers(observation.observed_at_ms)) {
+        return false;
+    }
+
+    if (observation.state == .released and !self.awaitsHelpers(observation.observed_at_ms)) {
+        return false;
     }
 
     if (observation.state == .exited) {
@@ -182,12 +191,12 @@ pub fn applyReport(self: *Agent, observation: ReportObservation) bool {
         return true;
     }
 
-    self.report_settling = observation.state == .settling;
     self.report_detail = .{
+        .state = observation.state,
         .blocked_reason = observation.blocked_reason,
         .event = EventLine.init(observation.event),
     };
-    if (providers.of(self.provider()).ready_prompt_settles_report and observation.state == .working) {
+    if (providers.of(self.provider()).ready_prompt_settles_report and (observation.state == .working or observation.state == .waiting)) {
         // A prompt from before this tool or turn cannot become completion
         // evidence later, when the report expires.
         if (self.screen) |screen| {
@@ -254,7 +263,7 @@ pub fn applyScreen(self: *Agent, observation: ScreenObservation) bool {
             }
 
             if (signal.status == .ready) {
-                if (!signal.ready_confirmed or (report.status == .working and !self.report_settling and !report.isExpired(observation.observed_at_ms))) {
+                if (!signal.ready_confirmed or (report.status == .working and self.report_detail.state != .settling and !report.isExpired(observation.observed_at_ms))) {
                     return false;
                 }
 
@@ -673,6 +682,13 @@ fn refreshEvent(self: *Agent, evidence: Evidence) bool {
     return true;
 }
 
+// A turn that ended with helpers still at work keeps the agent working
+// until the report expires or the agent reports again.
+fn awaitsHelpers(self: *const Agent, now_ms: i64) bool {
+    const report = self.report orelse return false;
+    return self.report_detail.state == .waiting and !report.isExpired(now_ms);
+}
+
 fn provider(self: *const Agent) core.AgentProvider {
     if (self.process) |evidence| {
         return evidence.provider;
@@ -805,6 +821,7 @@ fn sameProjection(left_value: core.AgentSnapshotEntry, right_value: core.AgentSn
 }
 
 const ReportDetail = struct {
+    state: core.AgentReportState = .ready,
     blocked_reason: core.AgentBlockedReason = .none,
     event: EventLine = .{},
 };

@@ -60,7 +60,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 108;
+const corpus_len = 111;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -453,6 +453,30 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
             .state = .continuing,
+        }),
+    ));
+    helper.add(.{ .name = "report_agent_waiting", .direction = .client, .golden_hex = golden.report_agent_waiting }, helper.commit(
+        try agent_module.encodeReportAgent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .state = .waiting,
+        }),
+    ));
+    helper.add(.{ .name = "report_agent_idle", .direction = .client, .golden_hex = golden.report_agent_idle }, helper.commit(
+        try agent_module.encodeReportAgent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .state = .idle,
+        }),
+    ));
+    helper.add(.{ .name = "report_agent_released", .direction = .client, .golden_hex = golden.report_agent_released }, helper.commit(
+        try agent_module.encodeReportAgent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .state = .released,
         }),
     ));
     helper.add(.{ .name = "report_agent_command", .direction = .client, .golden_hex = golden.report_agent_command }, helper.commit(

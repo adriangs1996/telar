@@ -307,6 +307,17 @@ pub const AgentReportState = enum(u8) {
     /// at work. It extends an unexpired `working` report and never changes
     /// what the agent reports.
     continuing = 5,
+    /// The turn ended while helpers the agent started, such as Claude Code
+    /// background subagents, are still at work. It projects as `working`,
+    /// `continuing` renews it, and `idle` cannot settle it.
+    waiting = 6,
+    /// The agent's prompt has sat idle. It settles the agent like `ready`,
+    /// except while an unexpired `waiting` report says helpers still work.
+    idle = 7,
+    /// The last helper a `waiting` report was waiting for has finished, and
+    /// the agent resumes no turn for it, as with Codex subagents. It settles
+    /// an unexpired `waiting` report like `ready` and changes nothing else.
+    released = 8,
 };
 
 pub const AgentAuthority = enum(u8) {

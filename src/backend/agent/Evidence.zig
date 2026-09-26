@@ -57,8 +57,9 @@ pub fn fromScreen(provider: core.AgentProvider, observation: *const ScreenObserv
 
 /// Converts one official lifecycle report into the highest-ranked
 /// evidence. Reports expire so a silent hook hands control back to the
-/// screen: active work keeps the long report expiry, a settling report
-/// the short one, and settled states the settled one.
+/// screen: active work and helpers still at work keep the long report
+/// expiry, a settling report the short one, and settled states the
+/// settled one.
 ///
 /// ```zig
 /// const evidence = Evidence.fromReport(.claude, &observation);
@@ -66,9 +67,9 @@ pub fn fromScreen(provider: core.AgentProvider, observation: *const ScreenObserv
 pub fn fromReport(provider: core.AgentProvider, observation: *const ReportObservation) Evidence {
     std.debug.assert(observation.state != .exited and observation.state != .continuing);
     const status: core.AgentStatus = switch (observation.state) {
-        .working, .settling => .working,
+        .working, .settling, .waiting => .working,
         .blocked => .blocked,
-        .ready => .ready,
+        .ready, .idle, .released => .ready,
         .exited, .continuing => unreachable,
     };
 
@@ -80,9 +81,9 @@ pub fn fromReport(provider: core.AgentProvider, observation: *const ReportObserv
         .observed_at_ms = observation.observed_at_ms,
         .observed_at_ns = observation.observed_at_ns,
         .expires_at_ms = observation.observed_at_ms + switch (observation.state) {
-            .working => types.report_working_expiry_ms,
+            .working, .waiting => types.report_working_expiry_ms,
             .settling => types.working_expiry_ms,
-            .blocked, .ready => types.settled_expiry_ms,
+            .blocked, .ready, .idle, .released => types.settled_expiry_ms,
             .exited, .continuing => unreachable,
         },
     };

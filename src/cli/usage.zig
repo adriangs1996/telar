@@ -70,7 +70,7 @@ pub const text =
     \\       telar agent acknowledge <pane|title|--current> [--json] [--socket PATH]
     \\       telar agent report-title <pane|title|--current> TITLE [--json] [--socket PATH]
     \\       telar agent report-command <pane|title|--current> started|finished COMMAND --provider NAME [--tool-call ID] [--cwd PATH] [--session ID] [--exit-code N] [--json] [--socket PATH]
-    \\       telar agent report-state <pane|title|--current> working|blocked|ready|exited|settling|continuing [--blocked-reason REASON] [--event TEXT] [--session ID] [--session-file PATH] [--session-file-kind KIND] [--json] [--socket PATH]
+    \\       telar agent report-state <pane|title|--current> working|blocked|ready|exited|settling|continuing|waiting|idle|released [--blocked-reason REASON] [--event TEXT] [--session ID] [--session-file PATH] [--session-file-kind KIND] [--json] [--socket PATH]
     \\       telar pane read|send-keys <pane|--current> [options]
     \\         telar pane list [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\         telar pane get <id|--current> [--workspace ID [--tab ID]] [--json] [--socket PATH]
