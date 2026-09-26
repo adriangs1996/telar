@@ -343,7 +343,6 @@ const Probe = struct {
         const state = try self.gpa.create(State);
         defer self.gpa.destroy(state);
         state.* = .{};
-        defer state.deinit();
         canvas.widgets = state;
         var before: core.ProfileCounters = .{};
         var started: i96 = 0;
