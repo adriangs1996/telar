@@ -4,6 +4,7 @@ const core = @import("telar-core");
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const client_module = @import("telar-client");
+const host_inputs = @import("../input/host_inputs.zig");
 
 fn press(client: *client_module.Client, code: keyinput.Key.Code) !void {
     _ = try client_module.name_prompt.inputPrompt(
@@ -131,6 +132,44 @@ test "the picker browses the pane's directory, drills in and out, and pastes the
             break;
         }
     }
+}
+
+test "terminal Tab and Shift+Tab bytes browse into a directory and back" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    _ = try client_module.runtime_messages.handleServerMessage(
+        client,
+        .{
+            .pane_cwd = .{
+                .pane_id = TestHarness.bootstrap_pane,
+                .cwd = "/work/app",
+            },
+        },
+    );
+
+    _ = try client_module.actions.executeAction(client, .path_picker, .binding);
+    try harness.settle();
+    var buffer: [8192]u8 = undefined;
+    const opened = (try harness.nextClientMessage(&buffer)).find_paths;
+    try answer(client, opened, &.{.{
+        .path = "src/",
+        .kind = .directory,
+    }});
+
+    _ = try host_inputs.feed(harness.terminal, .{
+        .bytes = "\t",
+        .now_ns = 0,
+    });
+    try std.testing.expectEqualStrings("/work/app/src", client.model.path_picker.rootSlice());
+
+    _ = try host_inputs.feed(harness.terminal, .{
+        .bytes = "\x1b[Z",
+        .now_ns = 0,
+    });
+    try std.testing.expectEqualStrings("/work/app", client.model.path_picker.rootSlice());
 }
 
 test "a stale reply cannot replace the page and a failure shows in the picker" {

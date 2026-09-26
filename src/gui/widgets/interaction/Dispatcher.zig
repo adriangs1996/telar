@@ -236,7 +236,9 @@ fn key(self: *Dispatcher, event: Key, navigate: bool) Route {
     }
     if (navigate and event.phase == .press and self.window_focused) {
         const target = self.focusedTarget();
-        if ((event.code == .tab or event.code == .back_tab) and (target != null or self.maps.presented().modal_layer != 0) ) {
+        // Tab moves focus only when another control can take it; a lone
+        // field keeps the key, so its prompt can give Tab its own meaning.
+        if ((event.code == .tab or event.code == .back_tab) and (target != null or self.maps.presented().modal_layer != 0) and self.canTraverse()) {
             result = .{ .consumed = true, .focus_changed = self.traverse(event.code == .back_tab or event.mods.shift) };
         } else if (event.code == .escape and target != null and self.maps.presented().modal_layer == 0) {
             result = .{ .consumed = true, .focus_changed = self.focus(null) };
@@ -300,6 +302,22 @@ fn pointer(self: *Dispatcher, event: Pointer) Route {
     }
 
     return .{ .consumed = target != null or registry.modal_layer != 0, .target = if (target != null and target.?.enabled) target else null, .focus_changed = changed };
+}
+
+/// Whether a focusable control other than the focused one is reachable.
+fn canTraverse(self: *const Dispatcher) bool {
+    const registry = self.maps.presented();
+    for (registry.targets[0..registry.len]) |target| {
+        if (!target.enabled or !target.focusable or target.layer < registry.modal_layer) {
+            continue;
+        }
+
+        if (self.focused == null or !target.id.eql(self.focused.?)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 fn traverse(self: *Dispatcher, backwards: bool) bool {

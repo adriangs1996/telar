@@ -103,6 +103,33 @@ test "retired generations and modal scope consume captured releases without reta
     try std.testing.expect(dispatcher.maps.presented().find(first) == null);
 }
 
+test "GUI path picker Tab and Shift+Tab browse directories instead of moving widget focus" {
+    const session = try initSession();
+    defer session.deinit();
+    const model = &session.gui.app.model;
+    model.name_prompt.begin(.path_picker);
+    model.path_picker.begin(Session.pane_id, "/work/app");
+    model.path_picker.expect(3);
+
+    var buffer: [512]u8 = undefined;
+    const encoded = try core.encodePathResults(&buffer, .{
+        .request_id = @enumFromInt(3),
+        .root = "/work/app",
+        .matches = &.{.{
+            .path = "src/",
+            .kind = .directory,
+        }},
+    });
+    try std.testing.expect(try model.path_picker.receive((try core.decodeServer(encoded)).path_results));
+    try publish(session);
+
+    try send(session, .{ .key = .{ .code = .tab } });
+    try std.testing.expectEqualStrings("/work/app/src", model.path_picker.rootSlice());
+    try publish(session);
+    try send(session, .{ .key = .{ .code = .back_tab } });
+    try std.testing.expectEqualStrings("/work/app", model.path_picker.rootSlice());
+}
+
 fn publish(session: *Session) !void {
     const token = try session.draw();
     try input_support.presented(
