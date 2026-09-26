@@ -1,8 +1,10 @@
 # Worktrees and agent coordination
 
-Status: proposed. Nothing in this plan is implemented. It builds on the
-existing `telar workspace create --worktree`, the unused
-`WorkspaceLocation.worktree` and the agent control commands in
+Status: implemented (W1–W8), with the deviations listed in
+[Implementation](#implementation). The flows are
+[worktree lifecycle](../flows/worktree-lifecycle.md),
+[worktree git probe](../flows/worktree-git.md),
+[task cards](../flows/task-cards.md), [agent peek](../flows/agent-peek.md) and
 [agent control](../flows/agent-control.md).
 
 Implementation must follow the [invariants](../invariants.md) and the
@@ -75,7 +77,7 @@ deleting the branch are separate decisions.
 
 ## Terms
 
-To add to `CONTEXT.md`:
+Now in `CONTEXT.md`:
 
 - **Worktree**: a git linked worktree that telar tracks as a location. It
   belongs to one project (by common directory) and hangs from one source
@@ -437,19 +439,62 @@ W1 location + create/exec/list/open ──> W2 agent work tree ──> W3 task c
 - **W8. Claude Code adoption.** `WorktreeCreate`, `WorktreeRemove` and
   `PermissionRequest` hooks through `telar integration`.
 
-## To verify
+## Implementation
 
-- Whether clients send their layout on every focus change (focus rule).
-- Whether Claude Code calls `chdir` on `EnterWorktree`, or only its hook `cwd`
-  changes. If only the hook changes, process evidence alone cannot see it.
-- The `WorktreeCreate` input field names; Claude Code issue #65646 reports a
-  mismatch between docs and runtime.
-- How Claude Code, Codex and pi handle a prompt that arrives while they are
-  working: queued, interleaved or dropped.
-- Whether Claude Code asks for permission to edit a sibling worktree that it
-  entered through `WorktreeCreate`, beyond the entry prompt.
-- Which supported agents load skills; the rest need the `AGENTS.md` text.
-- The name and `tool_input` shape of Claude Code's task tool in the installed
-  version (`TodoWrite`, or `TaskCreate`/`TaskUpdate`), and Codex's
-  `update_plan`, for plan progress.
-- The interrupt key of each built-in provider.
+What was built differs from the plan above in these points.
+
+- **A worktree's tabs live in a child workspace**, an ordinary
+  `WorkspaceLocation.workspace` bound to the `Worktrees` row, instead of a
+  live `WorkspaceLocation.worktree`. Every tab, pane, layout, navigation and
+  checkpoint path works unchanged, and no consumer of `.worktree` needed a
+  new branch. The workspace list shows projects only; child workspaces reach
+  the UI as worktree entries.
+- **`exec --wait`** was added so a coordinator runs tests, linters and
+  searches in a worktree and gets their output and exit code. Finished
+  panes keep their last 16 KiB and exit code in the runtime's `ExitedPanes`
+  ring, and `pane_text` carries `exit_code`.
+- **Untracked worktrees** of the same repository appear in `worktree list`
+  and are adopted on their first `exec` or `open`.
+- **Restart**: panes launched by `create`/`exec` follow the existing pane
+  record policy. An agent with a session reference resumes; a pane without
+  one relaunches its recorded arguments, so a worker whose provider reported
+  no session runs its original prompt again.
+- **Sender**: the sender line is sent, but not recorded in history, and the
+  receiving card shows no `← sender` mark. The prompt budget is fixed at 8
+  per 60 s per pair, not configurable. The CLI sends a sender only when it
+  talks to the runtime whose pane it runs in.
+- **Card density**: a task card expands when it needs attention or is the
+  focused agent, not on hover.
+- **Peek**: a right click on a card opens it; its field sends a message, and
+  `/stop`, `/diff` or an empty field interrupt, open a diff tab or open the
+  agent's tab. The GUI shows the last 16 rows of the pane; the TUI shows the
+  field only. It shows no per-file changes.
+- **`leave-worktree`** returns to the source workspace, bound to `prefix+b`.
+- **`PermissionRequest`** is not installed. The `claude --worktree` run
+  worked in the returned path; whether an `EnterWorktree` mid-session asks
+  for permission was not checked.
+- **`telar integration install claude`** installs the worktree hooks and the
+  coordinator skill at `<settings dir>/skills/telar-coordinator/SKILL.md`;
+  `telar --skill coordinator` prints it for other agents.
+
+## Findings
+
+- **Focus rule**: clients report their layout with its focused pane on each
+  focus change, and the runtime's `ClientLayouts` follows it. Verified with a
+  TUI in a PTY: a prompt to its focused pane fails with `pane_focused`, to
+  any other pane it succeeds.
+- **`WorktreeCreate`** receives `name` and `cwd` and expects the absolute path
+  on stdout; `WorktreeRemove` receives `worktree_path`. Verified with
+  `claude --worktree`.
+- **Claude Code's task tools** are `TaskCreate {subject, description,
+  activeForm}` and `TaskUpdate {taskId, status}`, numbered from one in
+  creation order. `TodoWrite` is still mapped.
+- **Codex** reports `Stop` with `last_assistant_message`. The Codex build
+  tested runs tools through `exec` and offered no `update_plan`, so its task
+  cards show no plan bar.
+- **Interrupt keys**: `escape` for Claude Code and Codex. Claude Code runs no
+  `Stop` hook for an interrupted turn, so the runtime reports `ready` itself.
+- **Not verified**: whether Claude Code calls `chdir` on `EnterWorktree`
+  (hook `cwd` resolves the worktree either way), how each agent handles a
+  prompt that arrives mid-turn, and which agents besides Claude Code load
+  skills.

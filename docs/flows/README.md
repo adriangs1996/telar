@@ -11,7 +11,7 @@ line numbers are intentionally omitted because symbols survive refactors.
 | [Native appearance](native-appearance.md) | GUI config loads, the child changes its cursor, or a cursor deadline fires | Native fonts, terminal colors and cursor styles render through shared retained geometry | Config, protocol, VT, font, retained rendering and native deadline tests |
 | [Agent snapshot](agent-snapshot.md) | Runtime agent evidence changes | The client commits one bounded replica, emits actionable transitions and the presenter projects the latest revision | Storage, model, effect-order, protocol and presenter tests |
 | [Mermaid diagrams](mermaid-diagrams.md) | A GUI widget asks the diagram store for a Mermaid source | `lib/mermaid` renders it in the isolated helper and the GUI caches the texture for the frame | Library render, protocol and deadline tests; GUI store and service tests |
-| [Agent control](agent-control.md) | An agent or script runs `telar agent` or `telar pane` | The runtime answers one bounded query, read or send over the control socket without any attachment | Schema, runtime-operation, launcher and parser tests |
+| [Agent control](agent-control.md) | An agent or script runs `telar agent` or `telar pane` | The runtime answers one bounded query, read, send or interrupt over the control socket, never into a pane a person has focused | Schema, runtime-operation, launcher and parser tests |
 | [Agent status](agent-status.md) | Process, screen or lifecycle evidence reaches the runtime | One status per pane generation, advancing the agents revision the snapshot reads | Agent status scenario and aggregate tests |
 | [Agent hooks](agent-hooks.md) | An agent's lifecycle hook fires inside its pane | The runtime ranks the official report above inferred evidence, stores the session reference and notifies clients | Agent status, runtime-operation, mapping and settings-edit tests |
 | [Agent rename](agent-rename.md) | The user names a session inside Pi, Claude Code or Codex | The sidebar row takes the agent's own name, above a generated title and persisted like a manual one | Aggregate, tracker, watch, scan, probe, mapping and wire tests |
@@ -98,6 +98,10 @@ line numbers are intentionally omitted because symbols survive refactors.
 | [Pane pointer shape](pane-pointer-shape.md) | A child requests a pointer shape with OSC 22 | The host pointer changes while the cursor is over that pane | VT, protocol and presenter tests |
 | [Terminal colors](terminal-colors.md) | The client learns its terminal's colors with OSC 10 and 11 | Panes use those colors as VT defaults | Negotiation, protocol and runtime tests |
 | [Terminal command history](terminal-command-history.md) | Shell input and output reach the history observer | Submitted commands and their completion enter history | Tracker and observer tests |
+| [Worktree lifecycle](worktree-lifecycle.md) | `telar worktree`, or Claude Code's `WorktreeCreate` hook | A tracked worktree with its own tabs, commands whose output and exit code outlive them, and safe removal | Table, record, checkpoint, CLI, porcelain and schema tests |
+| [Worktree git probe](worktree-git.md) | The maintenance tick finds a worktree due | Its diffstat, commits ahead and `integrated`/`gone` state reach every client without touching the interactive path | `gitstatus` and table tests |
+| [Task cards](task-cards.md) | Agent snapshot or workspace list changes | The sidebar groups agents by project and shows each worktree agent as a task card | Fleet order, mapping and sidebar tests |
+| [Agent peek](agent-peek.md) | Right click on an agent card | A modal shows the agent's state and last rows and sends a message, interrupt, diff or open | Command and pane-row tests |
 | [Vulkan renderer](vulkan-renderer.md) | The GUI starts on Linux | Frames render through Vulkan 1.3, or startup fails explicitly | Native renderer tests |
 
 Add a flow when a behavior crosses an asynchronous boundary, a process
