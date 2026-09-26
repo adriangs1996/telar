@@ -14,9 +14,13 @@ const EventResources = @import("../EventResources.zig");
 const host_inputs = @import("../input/host_inputs.zig");
 const host_effects = @import("../host/host_effects.zig");
 const support = @import("support.zig");
-const touch_trace = @import("touch_trace.zig");
+const touchtrace = @import("touchtrace");
 
-const Range = touch_trace.Range;
+const Range = enum(usize) {
+    client = 0,
+    adapter = 1,
+    pane = 2,
+};
 const Sha256 = std.crypto.hash.sha2.Sha256;
 const Trace = enum(usize) {
     warm_iterations = 6,
@@ -44,11 +48,11 @@ test "cache trace: frame, key and draw events through the terminal event loop" {
     const cols: u16 = @intCast(@max(pane.buffer.w, 1));
     const rows: u16 = @intCast(@max(pane.buffer.h, 1));
 
-    touch_trace.dumpLayout(client_module.Client, "Client");
-    touch_trace.dumpLayout(TerminalAdapter, "TerminalAdapter");
-    touch_trace.register(Range.client, client);
-    touch_trace.register(Range.adapter, terminal);
-    touch_trace.register(Range.pane, pane);
+    touchtrace.dumpLayout(client_module.Client, "Client");
+    touchtrace.dumpLayout(TerminalAdapter, "TerminalAdapter");
+    touchtrace.register(@intFromEnum(Range.client), client);
+    touchtrace.register(@intFromEnum(Range.adapter), terminal);
+    touchtrace.register(@intFromEnum(Range.pane), pane);
 
     try client_module.runtime_io.startRuntimeRead(client);
     try host_effects.deliver(terminal);
@@ -93,10 +97,10 @@ test "cache trace: frame, key and draw events through the terminal event loop" {
             },
         );
 
-        touch_trace.start(traced);
+        touchtrace.start(traced);
         try harness.peer.send(std.testing.io, bytes);
         const event = try terminal.inbox.receive();
-        touch_trace.stop(traced, "frame/read_worker");
+        touchtrace.stop(traced, "frame/read_worker");
         try handleWindow(
             terminal,
             event,
@@ -112,10 +116,10 @@ test "cache trace: frame, key and draw events through the terminal event loop" {
             &wire,
         );
 
-        touch_trace.start(traced);
+        touchtrace.start(traced);
         try harness.input_write.writeStreamingAll(std.testing.io, "x");
         const input = try terminal.inbox.receive();
-        touch_trace.stop(traced, "key/read_worker");
+        touchtrace.stop(traced, "key/read_worker");
         try handleWindow(
             terminal,
             input,
@@ -135,7 +139,7 @@ test "cache trace: frame, key and draw events through the terminal event loop" {
     try std.testing.expectEqual(frame_id, pane.applied_frame_id);
     var digest: [Sha256.digest_length]u8 = undefined;
     wire.hasher.final(&digest);
-    touch_trace.reportOutput(
+    touchtrace.reportOutput(
         &digest,
         wire.messages,
         harness.sink.fullCount(),
@@ -190,9 +194,9 @@ fn handleWindow(terminal: *TerminalAdapter, event: TerminalAdapter.ClientEvent, 
         .{ phase, eventName(event) },
     );
 
-    touch_trace.start(traced);
+    touchtrace.start(traced);
     const outcome = try events.handle(terminal, event, resources);
-    touch_trace.stop(traced, label);
+    touchtrace.stop(traced, label);
     try std.testing.expect(outcome == .keep_running);
 }
 

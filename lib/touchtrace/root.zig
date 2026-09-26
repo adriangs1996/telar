@@ -1,14 +1,10 @@
 //! Client requests for the touchrange Valgrind tool
-//! (docs/performance/client-model-cache/touchrange). Natively the request
-//! sequence is a no-op that returns the default, so nothing is printed.
+//! (docs/performance/client-model-cache/touchrange): register byte ranges,
+//! then record which of their bytes a window of code reads or writes.
+//! Natively the request sequence is a no-op that returns the default, so
+//! nothing is recorded or printed.
 const builtin = @import("builtin");
 const std = @import("std");
-
-pub const Range = enum(usize) {
-    client = 0,
-    adapter = 1,
-    pane = 2,
-};
 
 const Request = enum(usize) {
     running_on_valgrind = 0x1001,
@@ -26,12 +22,12 @@ const Arguments = struct {
 const tool_base = (@as(usize, 'T') << 24) | (@as(usize, 'R') << 16);
 const layout_depth = 3;
 
-/// Registers the bytes of `value` as one traced range.
-/// Example: `touch_trace.register(.client, client);`
-pub fn register(range: Range, value: anytype) void {
+/// Registers the bytes of `value` as the traced range `id`.
+/// Example: `touchtrace.register(0, client);`
+pub fn register(id: usize, value: anytype) void {
     const Pointee = @typeInfo(@TypeOf(value)).pointer.child;
     const arguments: Arguments = .{
-        .first = @intFromEnum(range),
+        .first = id,
         .second = @intFromPtr(value),
         .third = @sizeOf(Pointee),
     };
@@ -47,7 +43,7 @@ pub fn register(range: Range, value: anytype) void {
 }
 
 /// Starts recording when `traced` is set.
-/// Example: `touch_trace.start(iteration == last);`
+/// Example: `touchtrace.start(iteration == last);`
 pub fn start(traced: bool) void {
     if (traced) {
         _ = request(.start, .{});
@@ -55,7 +51,7 @@ pub fn start(traced: bool) void {
 }
 
 /// Stops recording and prints the touched runs under `label`.
-/// Example: `touch_trace.stop(traced, "frame/server");`
+/// Example: `touchtrace.stop(traced, "frame/server");`
 pub fn stop(traced: bool, label: [:0]const u8) void {
     if (traced) {
         _ = request(.stop, .{
@@ -66,7 +62,7 @@ pub fn stop(traced: bool, label: [:0]const u8) void {
 
 /// Prints the digest of what the traced session sent, so two builds can be
 /// compared byte for byte.
-/// Example: `touch_trace.reportOutput(&digest, messages, terminal_bytes);`
+/// Example: `touchtrace.reportOutput(&digest, messages, terminal_bytes);`
 pub fn reportOutput(digest: []const u8, messages: u64, terminal_bytes: u64) void {
     if (!running()) {
         return;
@@ -80,7 +76,7 @@ pub fn reportOutput(digest: []const u8, messages: u64, terminal_bytes: u64) void
 
 /// Prints every field's offset and size down to `layout_depth` levels, so
 /// the analysis can name the field behind each touched byte.
-/// Example: `touch_trace.dumpLayout(Client, "Client");`
+/// Example: `touchtrace.dumpLayout(Client, "Client");`
 pub fn dumpLayout(comptime T: type, comptime name: []const u8) void {
     if (!running()) {
         return;
@@ -146,4 +142,13 @@ fn request(code: Request, arguments: Arguments) usize {
             : .{ .cc = true, .memory = true }),
         else => 0,
     };
+}
+
+test "requests are no-ops outside Valgrind" {
+    var value: u64 = 0;
+    try std.testing.expect(!running());
+    register(0, &value);
+    start(true);
+    stop(true, "window");
+    dumpLayout(struct { a: u8 }, "value");
 }

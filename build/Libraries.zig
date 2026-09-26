@@ -179,6 +179,9 @@ const specs = [_]Spec{
         .libc = true,
         .posix = true,
     },
+    .{
+        .name = "touchtrace",
+    },
 };
 
 /// Null for a library whose external dependency this graph does not provide.

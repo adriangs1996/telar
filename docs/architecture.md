@@ -244,6 +244,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `httprelay` | HTTP/1.1 and HTTP/2 relays that forward bytes unchanged and report what they forwarded |
 | `dropqueue` | a bounded many-publisher queue that drops instead of waiting and counts depth, high water and loss |
 | `exchangecapture` | bounded capture of relayed exchanges: heads and de-framed bodies within a shared quota, halves paired by key, bodies decoded |
+| `touchtrace` | client requests that mark byte ranges and code windows for the touchrange Valgrind tool; no-ops natively |
 
 A rule that decides what telar means stays in a flow even when it is pure;
 [`plans/libraries.md`](plans/libraries.md) lists what is still to move.

@@ -12,7 +12,7 @@ import json
 import re
 from collections import defaultdict
 
-RANGES = {0: "Client", 1: "TerminalAdapter", 2: "Pane"}
+RANGES = {0: "Client", 1: "Adapter", 2: "Pane"}
 PAGE_NORMAL = 16384
 
 
@@ -45,6 +45,11 @@ def load(stem):
             elif kind == "run":
                 rid, off, n, rw = rest.split()
                 windows[current][int(rid)].append((int(off), int(n), rw))
+    # Range 1 is the adapter the probe embeds the client in; name it after
+    # the second layout the probe printed.
+    roots = [root for root in layout if root != "Client"]
+    if roots:
+        RANGES[1] = roots[0]
     return layout, bases, windows, digest
 
 
