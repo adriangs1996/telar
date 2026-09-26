@@ -1,11 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
-    <path d="M14 12 V28 M14 36 V52"></path>
-    <path d="M23 12 V52"></path>
-    <path d="M32 12 V28 M32 36 V52"></path>
-    <path d="M41 12 V52"></path>
-    <path d="M50 12 V28 M50 36 V52"></path>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <g fill="none" stroke="#e5e5e5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M256 0 V148" stroke-width="14"></path>
+    <g stroke-width="26">
+      <path d="M176 190 L124 150 L80 186"></path>
+      <path d="M164 234 L100 226 L60 262"></path>
+      <path d="M164 276 L100 296 L72 340"></path>
+      <path d="M182 318 L140 358 L130 404"></path>
+      <path d="M336 190 L388 150 L432 186"></path>
+      <path d="M348 234 L412 226 L452 262"></path>
+      <path d="M348 276 L412 296 L440 340"></path>
+      <path d="M330 318 L372 358 L382 404"></path>
+    </g>
+    <rect x="160" y="152" width="192" height="180" rx="58" stroke-width="22"></rect>
+    <path d="M210 208 L250 238 L210 268 M268 284 H310" stroke-width="28"></path>
   </g>
-  <path d="M6 32 H19 M27 32 H37 M45 32 H50" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
-  <path d="M49 32 L55 27.5 L61 32 L55 36.5 Z" fill="currentColor"></path>
 </svg>

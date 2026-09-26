@@ -272,7 +272,7 @@ test "embedded subset rasterizes every configured Nerd Font icon" {
     }
 }
 
-test "the telar mark slot keeps its weft and stays transparent outside its square" {
+test "the telar mark slot keeps its live blue and stays transparent outside its square" {
     var renderer = IconsRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 20, .cell_height = 40 });
@@ -283,16 +283,16 @@ test "the telar mark slot keeps its weft and stays transparent outside its squar
         .background = .{ 0, 0, 0 },
     }});
 
-    var peach = false;
+    var live_blue = false;
     var index: usize = 0;
     while (index < renderer.atlas.len) : (index += 4) {
         const pixel = renderer.atlas[index..][0..4];
-        if (pixel[3] > 200 and pixel[0] > 200 and pixel[0] > pixel[2] + 40) {
-            peach = true;
+        if (pixel[3] > 200 and pixel[2] > 200 and pixel[2] > @as(u16, pixel[0]) + 40) {
+            live_blue = true;
             break;
         }
     }
-    try std.testing.expect(peach);
+    try std.testing.expect(live_blue);
     // The rows above the square icon are fully transparent.
     try std.testing.expectEqualSlices(u8, &.{ 0, 0, 0, 0 }, renderer.atlas[0..4]);
     // The container's middle is opaque.

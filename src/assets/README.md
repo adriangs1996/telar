@@ -109,25 +109,40 @@ Official sources and usage terms:
 - <https://pi.dev/favicon.svg>
 - <https://github.com/earendil-works/pi/blob/main/LICENSE>
 
-`telar-mark.svg` is Telar's own mark, the small variant of the icon designed
-for sizes at or below 32 px: three warp threads and one weft carrying the
-shuttle, on the rounded container. Its SHA-256 is
-`2bd0d0ad77297ac92076edf19f487313e6a32c56bb525d6593a36ab85c7e921c`.
+Telar's own brand is a weaver: a spider whose body is a terminal with a
+`>_` face and whose feet end in cursors, hanging from the thread it spins.
+Telar pulls the threads of many sessions, panes and machines, as the spider
+does with its web. The colors are Pierre Dark's: the `#0a0a0a`..`#1d1d1d`
+neutrals, `#bdbdbd`..`#e5e5e5` for the spider and `#009fff` for what is
+live. The three sources are drawn for different sizes:
 
-`telar-mark-64.png` is its 64 x 64 RGBA rasterization with SHA-256
-`514ff1658c1f3ee191827624bdf39865e367a3afb090341343b62f69cde1785c`,
-reproducible with librsvg 2.62.3:
+- `telar-icon.svg` (SHA-256
+  `4299a72132ff33504735c3d94d4b41f534bb8f793b192bec1da23f4b487f960d`), the
+  weaver in her web with three caught terminals, the live one in blue, for
+  128 px and up.
+- `telar-mark.svg` (SHA-256
+  `b58f8b63681a9cd3832db7340f511495c8aa531e5bce5848438ae2902d243dc8`), the
+  weaver alone with heavier legs and outline, for 64 px and down.
+- `telar-mark-mono.svg` (SHA-256
+  `3037f817667d85158f3bae784ccfde081a9c0256bfe1a7149f9afc6103edbc73`), the
+  weaver in one color without a container.
+
+`telar-mark-64.png` is the mark's 64 x 64 RGBA rasterization, SHA-256
+`355173b38b9f442bb593b0ebf41ba201d5220bf497ddcd4032cb28f112d84209`, and
+`telar-mark-64.rgba` its raw straight-alpha RGBA, SHA-256
+`82605b49a3d7c37188a923e2e3daa79483f085b912ba73e3b903c08fe19e8c52`. The top
+bar box-filters it into the icon atlas at cell size, sixteen
+premultiplied-alpha bilinear taps per pixel, and keeps its alpha so the host
+composes it over whatever it paints behind the bar.
+
+`tools/build_brand_icons.py` renders both, the macOS `.icns` (16 to 64 px
+from the mark, 128 to 1024 px from the icon), the Linux PNG and the site's
+brand files from these sources. The hashes above come from librsvg 2.63.0
+and Pillow 12.2.0:
 
 ```sh
-rsvg-convert -w 64 -h 64 -f png -o telar-mark-64.png telar-mark.svg
+uv run --no-project --with pillow==12.2.0 python tools/build_brand_icons.py
 ```
-
-`telar-mark-64.rgba` is the raw straight-alpha RGBA of that PNG, SHA-256
-`c1cd678c75399de6171cd9975927ced073a9043a9131f92fb3f27c7f2935d2dd`.
-`tools/build_telar_mark.py` rebuilds it with Pillow 12.2.0. The top bar
-box-filters it into the icon atlas at cell size, sixteen premultiplied-alpha
-bilinear taps per pixel, and keeps its alpha so the host composes it over
-whatever it paints behind the bar.
 
 ## Sidebar provider symbols
 
