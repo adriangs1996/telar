@@ -31,6 +31,10 @@ tab_strip: ?*Rect = null,
 pointer_in_tabs: bool = false,
 /// The chrome's record of the tab the strip is laid out around.
 tab_anchor: ?*?core.TabId = null,
+/// Where the bar panel records its bounds for the pointer.
+bar_panel: ?*Rect = null,
+/// Where the bar row records the components it had no room for.
+bar_overflow: ?*data.BarOverflow = null,
 
 /// Resolves the navigation highlight without retaining retired pane or tab data.
 /// Example: `const selected = context.workspaceId() == workspace;`

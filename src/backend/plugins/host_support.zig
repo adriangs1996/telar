@@ -13,7 +13,6 @@ const Batch = @import("Batch.zig");
 
 const max_frame_bytes = 128 * 1024 * 1024;
 pub const max_entry_bytes = 1024 * 1024;
-const max_json_bytes = 1024 * 1024;
 
 /// Runs one long-lived worker until its framed stdin closes.
 ///
@@ -247,51 +246,6 @@ pub fn redactSecrets(state_optional: ?*lua_api.c.lua_State) callconv(.c) c_int {
     const output = if (core.looksLikeSecret(input)) "[REDACTED]" else input;
     _ = lua_api.c.lua_pushlstring(state, output.ptr, output.len);
     return 1;
-}
-
-pub fn decodeJson(state_optional: ?*lua_api.c.lua_State) callconv(.c) c_int {
-    const state = state_optional.?;
-    const input = luaString(state, 1) orelse return raise(state, "json.decode expects a string");
-    if (input.len > max_json_bytes) {
-        return raise(state, "JSON input is too large");
-    }
-    const parsed = std.json.parseFromSlice(std.json.Value, std.heap.c_allocator, input, .{ .max_value_len = max_json_bytes }) catch return raise(state, "invalid JSON");
-    defer parsed.deinit();
-    pushJson(state, parsed.value, 0) catch return raise(state, "JSON exceeds depth limit");
-    return 1;
-}
-
-fn pushJson(state: *lua_api.c.lua_State, value: std.json.Value, depth: u8) !void {
-    if (depth == 64) {
-        return error.JsonDepth;
-    }
-    switch (value) {
-        .null => lua_api.c.lua_pushnil(state),
-        .bool => |boolean| lua_api.c.lua_pushboolean(state, @intFromBool(boolean)),
-        .integer => |integer| lua_api.c.lua_pushinteger(state, integer),
-        .float => |float| lua_api.c.lua_pushnumber(state, float),
-        .number_string => |number| {
-            const parsed = std.fmt.parseFloat(f64, number) catch return error.InvalidJson;
-            lua_api.c.lua_pushnumber(state, parsed);
-        },
-        .string => |string| _ = lua_api.c.lua_pushlstring(state, string.ptr, string.len),
-        .array => |array| {
-            lua_api.c.lua_createtable(state, @intCast(array.items.len), 0);
-            for (array.items, 1..) |item, index| {
-                try pushJson(state, item, depth + 1);
-                lua_api.c.lua_seti(state, -2, @intCast(index));
-            }
-        },
-        .object => |object| {
-            lua_api.c.lua_createtable(state, 0, @intCast(object.count()));
-            var iterator = object.iterator();
-            while (iterator.next()) |entry| {
-                _ = lua_api.c.lua_pushlstring(state, entry.key_ptr.ptr, entry.key_ptr.len);
-                try pushJson(state, entry.value_ptr.*, depth + 1);
-                lua_api.c.lua_settable(state, -3);
-            }
-        },
-    }
 }
 
 fn freezeTable(state: *lua_api.c.lua_State) void {

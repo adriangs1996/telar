@@ -28,6 +28,7 @@ const tab_selection = @import("../workspace/tab_selection.zig");
 const workspace_creation = @import("../workspace/workspace_creation.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 const Client = @import("../execution/Client.zig");
+const bar_updates = @import("../config/bar_updates.zig");
 
 const ctrl_h = keyinput.chord.parseKey("ctrl+h") catch unreachable;
 
@@ -128,6 +129,9 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
             },
         ),
         .toggle_workspace_list => _ = data.workspace_list.toggle(&client.model),
+        .open_panel => |index| try bar_updates.togglePanel(client, .{ .index = index }),
+        .close_panel => try bar_updates.closePanel(client),
+        .refresh_panel => try bar_updates.refreshPanel(client),
         .new_workspace => _ = workspace_creation.beginWorkspacePrompt(client),
         .rename_workspace => _ = name_prompt.openNamePrompt(&client.model, .rename_workspace),
         .select_workspace => |position| _ = try workspace_handoff.selectWorkspace(

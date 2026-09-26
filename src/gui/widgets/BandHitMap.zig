@@ -11,9 +11,13 @@ const action = @import("action.zig");
 const core = @import("telar-core");
 const BandHit = @import("BandHit.zig");
 const Bands = @import("Bands.zig");
+const data = @import("model");
 const BandHitMap = @This();
 
-pub const capacity = 1 + core.max_workspace_list_entries + 2 + core.max_tabs_per_workspace + 2 + core.max_agent_snapshot_entries + 1 + 4 + core.max_panes_per_tab + 1;
+pub const capacity = 1 + core.max_workspace_list_entries + 2 + core.max_tabs_per_workspace + 2 + core.max_agent_snapshot_entries + 1 + 4 + core.max_panes_per_tab + 1 + bar_targets;
+/// Bar components with a target, the overflow chip, the panel's close
+/// control and its buttons (or the overflow list's rows).
+const bar_targets = data.BarOverflow.capacity + 1 + 1 + data.bar_values.max_panel_nodes;
 items: [capacity]BandHit = undefined,
 len: usize = 0,
 

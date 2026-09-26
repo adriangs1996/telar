@@ -55,7 +55,7 @@ pub fn begin(self: *Chrome, canvas: *Canvas, projection: *const client.Projectio
     pending.tab_strip = .{ .x = 0, .y = 0, .width = 0, .height = 0 };
     self.ages.observe(projection.agents, self.now_ns);
     self.progress.begin();
-    const context: Context = .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = self.hovered, .presented_workspace = self.presented().workspace, .ages = &self.ages, .favicons = &self.favicons, .progress = &self.progress, .sidebar_regions = &pending.sidebar_regions, .tab_strip = &pending.tab_strip, .pointer_in_tabs = self.pointer_in_tabs, .tab_anchor = &self.tab_anchor };
+    const context: Context = .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = self.hovered, .presented_workspace = self.presented().workspace, .ages = &self.ages, .favicons = &self.favicons, .progress = &self.progress, .sidebar_regions = &pending.sidebar_regions, .tab_strip = &pending.tab_strip, .pointer_in_tabs = self.pointer_in_tabs, .tab_anchor = &self.tab_anchor, .bar_panel = &pending.bar_panel, .bar_overflow = &pending.bar_overflow };
     pending.workspace = context.workspaceId();
     return context;
 }
@@ -75,6 +75,7 @@ pub fn compose(self: *Chrome, context: *Context, widgets: anytype) !void {
 
     try widgets.append(.{ .panes = .{ .context = context, .rings = &self.rings } });
     try widgets.append(.{ .rail_tooltip = .{ .context = context, .area = bands.sidebar } });
+    try widgets.append(.{ .bar_overlay = .{ .context = context, .area = bands.status_bar } });
 }
 
 /// Seals hit records only after every composed widget has drawn successfully.
@@ -160,7 +161,9 @@ pub fn bandPointer(self: *Chrome, event: PointerEvent) ?BandCommand {
     const visible = self.presented();
     self.trackTabs(Bands.within(visible.tab_strip, event.x, event.y));
     const action = visible.band_hits.at(.{ event.x, event.y });
-    const inside = action != null or visible.bands.contains(event.x, event.y);
+    const panel_open = visible.bar_panel.width > 0;
+    const in_panel = panel_open and Bands.within(visible.bar_panel, event.x, event.y);
+    const inside = action != null or in_panel or visible.bands.contains(event.x, event.y);
     if (self.band_gesture) |button| {
         if (event.kind == .release or event.kind == .drag) {
             const resize = self.sidebar_resize_active;
@@ -177,6 +180,12 @@ pub fn bandPointer(self: *Chrome, event: PointerEvent) ?BandCommand {
     }
 
     if (!inside) {
+        // A press on the panes while a bar panel is open only dismisses it.
+        if (panel_open and event.kind == .press) {
+            self.hover(null);
+            return .{ .interaction = .{ .intent = .close_panel, .consumed = true } };
+        }
+
         return null;
     }
 

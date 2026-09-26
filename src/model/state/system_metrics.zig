@@ -29,6 +29,7 @@ pub fn reconcile(model: *ClientModel, metrics: SystemMetrics) !?SystemMetricsCom
     }
 
     model.system_metrics = metrics;
+    model.cpu_history.push(metrics.cpu_percent);
     model.system_metrics_revision +%= 1;
 
     return .{

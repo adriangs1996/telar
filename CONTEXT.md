@@ -55,6 +55,17 @@ sidebar, bars, modals, pickers and Telar views. Its look belongs to the
 adapter; the state it shows belongs to the client model.
 _Avoid_: UI, widgets, decorations
 
+**Bar component**:
+One item a configuration places in a bar, a tooltip or a bar panel, from a
+closed vocabulary Telar draws itself: a label, a meter, a group and the like.
+The configuration says what it shows; the adapter decides how it looks.
+_Avoid_: Widget, segment, module
+
+**Bar panel**:
+The panel a bar component opens above the bottom bar, filled from its own
+configured source while it is open. Disposable client state.
+_Avoid_: Popup, modal, dropdown
+
 **Telar view**:
 Content Telar composes from client and runtime projections instead of from a
 PTY, such as a history browser or a change review. The layout may

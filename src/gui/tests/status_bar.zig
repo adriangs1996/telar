@@ -80,8 +80,13 @@ test "native footer reserves TLS ahead of widgets and mode hints in narrow windo
                 try std.testing.expect(tls.x > right_edge - 8 * @as(f32, @floatFromInt(renderer.metrics.cell_width)));
                 try std.testing.expect(tls.x + tls.width <= right_edge);
                 if (mode == 0) {
-                    const widgets = paintedBounds(&fixture, widget_color).?;
-                    try std.testing.expect(widgets.x + widgets.width <= tls.x);
+                    // A component too wide for the row moves to the overflow
+                    // chip whole instead of being cut; what stays ends before TLS.
+                    if (paintedBounds(&fixture, widget_color)) |widgets| {
+                        try std.testing.expect(widgets.x + widgets.width <= tls.x);
+                    } else {
+                        try std.testing.expect(fixture.bandTarget(.toggle_bar_overflow) != null);
+                    }
                 } else {
                     try std.testing.expect(paintedBounds(&fixture, widget_color) == null);
                 }
@@ -118,7 +123,7 @@ test "native footer clips tall terminal line spacing without hiding configured w
 
 fn colored(text: []const u8, color: cellgrid.Color) !data.bar_values.Slot {
     var content: data.Content = .{};
-    try content.append(.{ .text = text, .style = .{ .background = .{ .value = color } } });
+    try content.appendSegment(.{ .text = text, .style = .{ .background = .{ .value = color } } });
     return .{ .content = content };
 }
 

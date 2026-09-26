@@ -25,6 +25,7 @@ test {
     _ = @import("tests/top_navigation.zig");
     _ = @import("tests/tab_strip.zig");
     _ = @import("tests/status_bar.zig");
+    _ = @import("tests/bar_components.zig");
     _ = @import("tests/widget_interaction.zig");
     _ = @import("diagrams/tests.zig");
     _ = @import("diagrams/theme.zig");

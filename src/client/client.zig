@@ -37,7 +37,7 @@ pub const GraphicsCredit = @import("graphics/Credit.zig");
 pub const GraphicsRetention = @import("graphics/GraphicsRetention.zig");
 pub const HostChrome = @import("presentation/HostChrome.zig");
 pub const HostInputSource = @import("input/HostInputSource.zig");
-pub const LocalTime = @import("resources/LocalTime.zig");
+pub const LocalTime = data.LocalTime;
 pub const Options = @import("Options.zig");
 pub const Package = @import("plugins/Package.zig");
 pub const AttachmentSnapshot = @import("attachments/AttachmentSnapshot.zig");
@@ -134,6 +134,7 @@ test {
     _ = @import("agents/attention.zig");
     _ = @import("agents/agent_snapshot_delivery.zig");
     _ = @import("config/bar_update.zig");
+    _ = @import("config/component_values.zig");
     _ = @import("config/client_diagnostic.zig");
     _ = @import("input/action_routing.zig");
     _ = @import("input/attachment_prompt.zig");

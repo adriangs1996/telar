@@ -1,85 +1,12 @@
-//! System metrics at the left edge of the bottom bar.
-//!
-//! The runtime samples cpu, memory, and battery off the interactive path and
-//! ClientModel caches the latest values. Rendering only formats what is
-//! already in memory, in fixed buffers, so the frame stays allocation free.
+//! The bottom row in prefix and copy mode: the mode label and key hints.
 const keyinput = @import("keyinput");
 
 const cellgrid = @import("cellgrid");
 const client = @import("telar-client");
 const data = @import("model");
 const Context = @import("Context.zig");
-const Metrics = @import("Metrics.zig");
 const std = @import("std");
-const icons_module = @import("../ui/icons.zig");
 const widget = @import("context_support.zig");
-
-pub fn render(context: *Context, area: cellgrid.Rect, metrics: ?Metrics) void {
-    if (area.isEmpty()) {
-        return;
-    }
-    const values = metrics orelse return;
-    var x = area.x + 1;
-    const background = context.palette.panel_bg;
-
-    const cpu_style: cellgrid.Style = .{
-        .fg = cpuColor(context, values.cpu_percent),
-        .bg = background,
-    };
-    x += context.drawIcon(.{ .area = area, .point = .{ .x = x, .y = area.y }, .icon = .cpu, .style = cpu_style });
-    var cpu_buffer: [10]u8 = undefined;
-    const cpu = std.fmt.bufPrint(&cpu_buffer, " {d}%", .{values.cpu_percent}) catch return;
-    x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = cpu, .style = cpu_style });
-    x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = "  ", .style = .{ .bg = background } });
-
-    const memory_style: cellgrid.Style = .{
-        .fg = context.palette.mauve,
-        .bg = background,
-    };
-    x += context.drawIcon(.{ .area = area, .point = .{ .x = x, .y = area.y }, .icon = .memory, .style = memory_style });
-    var memory_buffer: [14]u8 = undefined;
-    const memory = std.fmt.bufPrint(&memory_buffer, " {d}.{d}G", .{
-        values.memory_used_decigib / 10,
-        values.memory_used_decigib % 10,
-    }) catch return;
-    x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = memory, .style = memory_style });
-
-    // Machines without a battery show nothing rather than a fake 0%.
-    if (values.battery_percent) |battery| {
-        x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = "  ", .style = .{ .bg = background } });
-        const battery_style: cellgrid.Style = .{
-            .fg = if (battery < 20) context.palette.red else context.palette.green,
-            .bg = background,
-        };
-        x += context.drawIcon(.{ .area = area, .point = .{ .x = x, .y = area.y }, .icon = icons_module.battery(battery), .style = battery_style });
-        var battery_buffer: [10]u8 = undefined;
-        const text = std.fmt.bufPrint(&battery_buffer, "{d}%", .{battery}) catch return;
-        _ = context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = text, .style = battery_style });
-    }
-}
-
-pub fn desiredWidth(metrics: ?Metrics) u16 {
-    const values = metrics orelse return 0;
-    var cpu_buffer: [10]u8 = undefined;
-    const cpu = std.fmt.bufPrint(&cpu_buffer, " {d}%", .{values.cpu_percent}) catch return 0;
-    var memory_buffer: [14]u8 = undefined;
-    const memory = std.fmt.bufPrint(&memory_buffer, " {d}.{d}G", .{
-        values.memory_used_decigib / 10,
-        values.memory_used_decigib % 10,
-    }) catch return 0;
-    var width: u16 = 1 + iconWidth(.cpu) + cellgrid.text.measure(cpu) + 2 + iconWidth(.memory) + cellgrid.text.measure(memory);
-    if (values.battery_percent) |battery| {
-        var battery_buffer: [10]u8 = undefined;
-        const text = std.fmt.bufPrint(&battery_buffer, "{d}%", .{battery}) catch return width;
-        width +|= 2 + iconWidth(icons_module.battery(battery)) + cellgrid.text.measure(text);
-    }
-
-    return width;
-}
-
-fn iconWidth(icon: data.icons.Icon) u16 {
-    return @max(@as(u16, 1), cellgrid.text.measure(icon.unicodeGlyph()));
-}
 
 pub fn renderMode(context: *Context, area: cellgrid.Rect, mode: client.Mode) void {
     if (area.isEmpty() or mode == .normal) {
@@ -199,16 +126,6 @@ fn append(buffer: *[32]u8, len: *usize, text: []const u8) void {
     const take = @min(text.len, buffer.len - len.*);
     @memcpy(buffer[len.*..][0..take], text[0..take]);
     len.* += take;
-}
-
-fn cpuColor(context: *const Context, cpu_percent: u8) cellgrid.Color {
-    if (cpu_percent > 90) {
-        return context.palette.red;
-    }
-    if (cpu_percent > 70) {
-        return context.palette.yellow;
-    }
-    return context.palette.teal;
 }
 
 test "mode bars render prefix and copy hints" {

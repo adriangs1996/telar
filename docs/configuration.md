@@ -479,34 +479,44 @@ workspace navigation. Its bars start at the workbench edge while the sidebar
 is visible and expand to the full width when it is hidden.
 
 The native app keeps workspace navigation and tabs together in its top bar.
-Its configurable widgets occupy the full-width bottom bar: `bottom.left`,
+Its configurable components occupy the full-width bottom bar: `bottom.left`,
 `bottom.center` and `bottom.right` retain their order and alignment, while
 `telar.bar.tabs()` leaves its slot empty because the tabs are already above.
-Existing `top.right` content follows those slots, immediately before the
-reserved TLS badge. This keeps existing configurations visible without a reload
-migration. When both groups have content, `top.right` takes at most half the
-available widget width. The remaining slots share the rest and clip on overflow.
-The TLS badge has priority over every widget and remains visible while
-interception is active or Telar's system trust is installed.
+Existing `top.right` content follows the right slot, immediately before the
+reserved TLS badge, so existing configurations stay visible. The TLS badge has
+priority over every component and remains visible while interception is active
+or Telar's system trust is installed.
+
+A bar is built from components that Telar draws itself: the configuration says
+what to show and Telar decides how it looks, so a bar follows the theme, the
+chrome's type sizes and spacing in the native app and a cell rendering in the
+TUI. [`docs/examples/bar`](examples/bar/config.lua) recreates a clock, host
+metrics and agent quotas with detail panels from any data source.
 
 ```lua
+local telar = require("telar")
+local ui = telar.ui
+
 bars = {
   bottom = {
-    left = telar.bar.metrics(),
-    center = telar.bar.tabs(),
-    right = telar.bar.dynamic({
-      every_ms = 1000,
-      render = function(ctx)
-        return {
-          { icon = "battery-full", text = string.format(" %d%%  ", ctx.metrics.battery_percent or 0), fg = "green" },
-          { text = string.format("%02d:%02d:%02d ", ctx.time.hour, ctx.time.minute, ctx.time.second), fg = "text", bold = true },
-        }
-      end,
+    left = telar.bar.static({
+      ui.clock("%H:%M"),
+      ui.metrics({ "battery", "cpu", "memory" }),
     }),
-  },
-  top = {
-    right = telar.bar.static({
-      { icon = "provider-codex", text = " telar ", fg = "accent", bold = true },
+    center = telar.bar.tabs(),
+    right = telar.bar.command({
+      command = { "my-quota", "--json" },
+      every_ms = 60000,
+      render = function(ctx)
+        local quota = telar.json.decode(ctx.output)
+        return ui.group({
+          mark = "claude",
+          on_click = telar.action.open_panel("claude"),
+          tooltip = { ui.meter_row({ label = "This week", value = quota.week / 100 }) },
+          ui.meter({ label = "5h", value = quota.session / 100 }),
+          ui.meter({ label = "7d", value = quota.week / 100, tone = quota.week >= 80 and "danger" or "neutral" }),
+        })
+      end,
     }),
   },
 }
@@ -519,8 +529,8 @@ still has to contain the tabs.
 
 `sidebar_footer` remains accepted for compatibility, with at most three sources
 and no `telar.bar.tabs()`. Neither the GUI nor the TUI displays these slots.
-Place metrics and other visible widgets in `bottom` instead.
-Prefix and copy mode replace the native bottom widgets with the mode chip and
+Place metrics and other visible components in `bottom` instead.
+Prefix and copy mode replace the native bottom components with the mode chip and
 key hints, preserving TLS and top navigation. The TUI also replaces its bottom
 row during prefix mode, copy mode and a rename prompt.
 
@@ -529,7 +539,7 @@ Each position accepts one source:
 - `telar.bar.tabs()` renders the built-in tabs and is valid only once in the
   bottom bar.
 - `telar.bar.metrics()` renders the latest runtime CPU, used-memory and
-  optional battery values.
+  optional battery values, the same as `telar.bar.static(telar.ui.metrics())`.
 - `telar.bar.static(content)` parses fixed content when the configuration is
   loaded.
 - `telar.bar.dynamic({ every_ms, render })` calls `render` on a client-owned
@@ -538,8 +548,60 @@ Each position accepts one source:
   array outside the client loop. `render` is optional; without it, trimmed
   stdout becomes plain content.
 
-Content may be `nil`, a string, one segment table, or an array of at most 16
-segments. A segment accepts these fields:
+### Components
+
+Content may be `nil`, a string, one component, a legacy segment table, or a
+list of any of them; nested lists are flattened. Every `telar.ui` constructor
+takes a table of fields; the ones marked below also take their main field
+alone, as in `ui.clock("%H:%M")`.
+
+| Component | Fields |
+| --- | --- |
+| `ui.label` | `text` (shorthand), `tone`, and the segment style fields below |
+| `ui.icon` | `name` (shorthand), a built-in icon, or `glyph`, one grapheme of at most 16 bytes; `tone` |
+| `ui.mark` | `name` (shorthand): `claude`, `codex`, `pi` or `telar`, drawn from Telar's own artwork |
+| `ui.meter` | `value` 0..1, `label`, `text` (shown instead of the percentage), `marker` 0..1, `tone` |
+| `ui.sparkline` | `values`, at most 32 non-negative numbers; `max` (their largest by default); `tone` |
+| `ui.badge` | `text` (shorthand), `tone` |
+| `ui.clock` | `format` (shorthand, default `%H:%M`), `tone` |
+| `ui.metric` | `name` (shorthand): `cpu`, `memory` or `battery` |
+| `ui.metrics(names)` | a group of metrics, `{ "cpu", "memory", "battery" }` by default |
+| `ui.group` | children in its list part, `mark` or `icon`, `tooltip`, `on_click`, `url` |
+
+Every component also accepts `priority`, 0 to 100. Components default to 50
+and a group's children inherit the group's priority.
+
+`tone` is one of `neutral`, `muted`, `accent`, `success`, `warning` and
+`danger`, and each adapter maps it to the theme's palette. Neutral components
+use plain text and quiet shapes; colour is kept for attention.
+
+`ui.clock` formats Telar's local time with `%H %M %S %I %p %d %e %m %y %Y %a
+%A %b %B %%`; other bytes are copied. It needs no `every_ms`: the client
+repaints on the next minute, or second when the format shows seconds, and only
+while a clock is configured. `ui.metric` reads the runtime's latest sample; the
+CPU metric draws the recent samples as a sparkline and turns `warning` at 90%
+and `danger` at 98%, the battery at 20% and 10%. A host without a battery
+omits it.
+
+A group draws its mark or icon and its children with even spacing, and Telar
+draws a hairline between a group and its neighbours. `tooltip` is a string or a
+list of components, which may also use the panel blocks `heading`, `text`,
+`meter_row`, `kv` and `divider`. The native app shows it above the group while
+the pointer rests on it. `on_click` is a `telar.action` value run when the
+group is clicked; `url`, an `http` or `https` address, is opened in the
+browser instead. Only groups take a tooltip or a click, so wrap a single
+component in `ui.group` to give it one.
+
+When the bottom bar is narrower than its components, Telar reduces the
+component with the lowest priority one step at a time, the later one on ties:
+a meter first drops its track, any other component disappears, and a group
+disappears once none of its children is visible. A `warning` tone adds 20 to a
+component's priority while the bar is fitted and `danger` adds 40, so a
+component asking for attention is the last to go. Top-level components that
+did not fit are counted in a `+N` chip; clicking it lists them in a panel.
+
+Legacy segment tables remain accepted as labels, and icons without text as
+icons:
 
 ```lua
 {
@@ -564,14 +626,77 @@ indexed terminal color from 0 through 255. Palette roles are `accent`,
 The icon names are `sidebar-collapse`, `sidebar-expand`, `workspace-menu`,
 `proxy-active`, `cpu`, `memory`, `battery-empty`, `battery-quarter`,
 `battery-half`, `battery-three-quarters`, `battery-full`, `provider-unknown`,
-`provider-claude`, `provider-codex`, `agent-unknown`, `agent-working-0` through
-`agent-working-3`, `agent-blocked`, `agent-ready`, `agent-failed`, and `close`.
-They follow the configured Unicode or graphical icon theme.
+`provider-claude`, `provider-codex`, `provider-pi`, `app-terminal`,
+`app-editor`, `app-git`, `agent-unknown`, `agent-working-0` through
+`agent-working-3`, `agent-blocked`, `agent-ready`, `agent-done`,
+`agent-failed`, `close`, `pane-fullscreen` and `telar-mark`. They follow the
+configured Unicode or graphical icon theme.
+
+A slot holds at most 32 components, 1024 bytes of text, 64 sparkline samples
+and 4 actions. Text is UTF-8 without control characters.
+
+### Panels
+
+`client.panels` names the panels a bar can open. A panel appears above the
+component that opened it, closes on Escape, on a click outside it or on a
+second click on its component, and renders its content only while it is open.
+
+```lua
+panels = {
+  claude = telar.panel({
+    title = "Claude usage",
+    mark = "claude",
+    width = 460,
+    command = { "my-quota", "--json" },
+    every_ms = 30000,
+    render = function(ctx)
+      local quota = telar.json.decode(ctx.output)
+      return {
+        ui.heading("On track"),
+        ui.meter_row({ label = "Current session", detail = "Resets at 13:20", value = quota.session / 100, marker = 0.7 }),
+        ui.actions({
+          ui.button({ text = "Open in browser", url = "https://example.com/usage" }),
+          ui.button({ text = "Refresh", action = telar.action.refresh_panel() }),
+        }),
+      }
+    end,
+  }),
+}
+```
+
+`telar.panel` accepts `title`, `mark` or `icon`, `width` in logical pixels
+(240 to 720, default 420), and either `command`, `timeout_ms` and `render`,
+like `telar.bar.command`, or `render` alone, like `telar.bar.dynamic`. Without
+`every_ms` a panel renders once each time it opens and on
+`telar.action.refresh_panel()`. Panel names are 1 to 32 letters, digits, `-`
+or `_`; a configuration holds at most 8 panels.
+
+A panel's content is any list of components plus these blocks:
+
+| Block | Fields |
+| --- | --- |
+| `ui.heading` | `text` (shorthand), wrapped to three lines |
+| `ui.text` | `text` (shorthand), `tone`, wrapped to three lines |
+| `ui.meter_row` | `label`, `detail`, `value` 0..1, `marker` 0..1, `tone` |
+| `ui.kv` | `key`, `value`, `tone` |
+| `ui.callout` | `icon`, `text`, `detail`, one `button` |
+| `ui.actions` | buttons in its list part, right aligned |
+| `ui.button` | `text`, `action` or `url`, `primary` |
+| `ui.divider` | none |
+
+A panel holds at most 64 components, 4096 bytes of text and 8 actions. Its
+header shows the title, the time of the last successful render and a close
+control. A failed render keeps the last content and says so.
+
+`telar.action.open_panel("name")` opens or closes a panel from a key binding
+too; it appears above the bar component that opens the same panel.
+`telar.action.close_panel()` and `telar.action.refresh_panel()` complete the
+set. These actions are for configuration; plugin effects cannot return them.
 
 ### Dynamic context
 
-A dynamic or command render callback receives one immutable table. Tab indices
-are one-based in Lua.
+A dynamic, command or panel render callback receives one immutable table. Tab
+indices are one-based in Lua.
 
 ```lua
 {
@@ -596,6 +721,10 @@ are one-based in Lua.
 }
 ```
 
+`telar.json.decode(text)` turns a JSON document of at most 1 MiB into Lua
+tables, with `null` as `nil`, and raises a Lua error for invalid JSON. It is
+pure: it reads no file and opens no connection.
+
 `every_ms` defaults to 1000 and must be between 100 and 3,600,000. Each source
 owns one deadline. If a client is delayed, expired ticks collapse into one
 evaluation instead of replaying every missed value. Lua evaluation keeps the
@@ -606,26 +735,13 @@ bounded client diagnostic.
 Commands contain 1 to 32 arguments and at most 4096 argument bytes. Telar
 executes the argv directly, without a shell, and inherits the client's process
 environment and working directory. `timeout_ms` defaults to 2000 and must be
-between 100 and 10000. Stdout is limited to one valid UTF-8 display line of at
-most 512 bytes; stderr is bounded to 4096 bytes. All bar commands share one
-worker, and another elapsed tick records only one pending rerun. Reloading the
-configuration discards a completion from the previous generation.
-
-For example, a subscription quota helper can be polled without giving Lua
-filesystem, process or network authority:
-
-```lua
-top = {
-  right = telar.bar.command({
-    command = { "telar-quota" },
-    every_ms = 60000,
-    timeout_ms = 2000,
-    render = function(ctx)
-      return { icon = "provider-codex", text = " " .. ctx.output .. " ", fg = "accent" }
-    end,
-  }),
-}
-```
+between 100 and 10000. Output passed to a `render` callback may hold several
+lines, up to 64 KiB of UTF-8 without control characters other than tab and
+newline, so a helper can print JSON. Without `render`, stdout must be one
+display line of at most 512 bytes. Stderr is bounded to 4096 bytes. Bar and
+panel commands share one worker, and another elapsed tick records only one
+pending rerun. Reloading the configuration discards a completion from the
+previous generation.
 
 The helper owns any credentials and network access it needs. Telar receives
 only its bounded stdout. See [Configurable bars](flows/configurable-bars.md)

@@ -16,3 +16,5 @@ proxy_tls_scope: core.ProxyScope = .exact,
 proxy_system_trusted: bool = false,
 right: *const data.bar_values.Slot = &top_bar.empty_right,
 system_metrics: ?Metrics = null,
+/// Host facts the configured components read.
+facts: *const data.BarFacts = &top_bar.empty_facts,

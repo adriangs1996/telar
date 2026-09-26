@@ -20,6 +20,8 @@ const Spec = struct {
     /// Built only for POSIX targets.
     posix: bool = false,
     system_libraries: []const []const u8 = &.{},
+    /// Frameworks linked when the target is macOS.
+    macos_frameworks: []const []const u8 = &.{},
     /// Links its system libraries only for the host; other targets can still
     /// analyze packages that import it, and portability checks skip it.
     host_only: bool = false,
@@ -153,6 +155,7 @@ const specs = [_]Spec{
     .{
         .name = "hostmetrics",
         .libc = true,
+        .macos_frameworks = &.{ "IOKit", "CoreFoundation" },
     },
     .{
         .name = "vtgrid",
@@ -228,6 +231,11 @@ fn build(b: *std.Build, spec: Spec, target: std.Build.ResolvedTarget, optimize: 
     if (!spec.host_only or target.query.isNative()) {
         for (spec.system_libraries) |name| {
             module.linkSystemLibrary(name, .{});
+        }
+    }
+    if (target.result.os.tag == .macos) {
+        for (spec.macos_frameworks) |name| {
+            module.linkFramework(name, .{});
         }
     }
 

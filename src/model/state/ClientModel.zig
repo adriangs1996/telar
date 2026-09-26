@@ -35,6 +35,7 @@ const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
 const AgentSnapshot = @import("../agents/AgentSnapshot.zig");
 const SystemMetrics = @import("SystemMetrics.zig");
 const State = @import("../bars/State.zig");
+const CpuHistory = @import("CpuHistory.zig");
 const ReportedPaneFocus = @import("ReportedPaneFocus.zig");
 const std = @import("std");
 const InitialClientState = @import("InitialClientState.zig");
@@ -142,6 +143,8 @@ proxy_system_trusted: bool = false,
 proxy_status_revision: u64 = 0,
 system_metrics: ?SystemMetrics = null,
 system_metrics_revision: u64 = 0,
+/// Recent CPU samples for the built-in sparkline; advances with the metrics.
+cpu_history: CpuHistory = .{},
 bars: State = .{},
 bars_revision: u64 = 0,
 notification_center: model_data.Center = .{},
