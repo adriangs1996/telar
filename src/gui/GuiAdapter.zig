@@ -1643,7 +1643,7 @@ pub fn resize(self: *GuiAdapter, size: core.TerminalSize, theme: shared_model.Te
 /// Retires captured damage after GPU delivery, preserving newer received state.
 fn complete(self: *GuiAdapter, token: u64, delivered: bool) !void {
     core.profiling.add(.gui_complete, 1);
-    const active = self.app.presentation.active orelse return;
+    const active = if (self.app.presentation.active) |*flight| flight else return;
 
     if (token == 0 or token != @intFromEnum(active.token)) {
         return;

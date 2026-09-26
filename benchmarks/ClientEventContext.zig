@@ -154,6 +154,34 @@ pub fn requestGroupQuery(self: *ClientEventContext) bool {
     return self.app.model.request_lifecycle.tracker.has(.tab_operation);
 }
 
+/// One presentation of the active tab, as an adapter prepares it and the
+/// host confirms it: projection, geometry and pane commit captured, the
+/// flight begun and completed, and the delivered frames retired.
+/// Example: `const retired = try context.presentFrame();`
+pub fn presentFrame(self: *ClientEventContext) !u64 {
+    const model = &self.app.model;
+    const projection = client.capture(
+        model,
+        .{
+            .geometry = data.workbench.region(model),
+        },
+    );
+    const observation: client.Observation = .{
+        .model = projection.version,
+        .presentation_ingress = projection.presentation_ingress,
+        .geometry_revision = projection.geometry.revision,
+    };
+    _ = self.app.presentation.observe(observation);
+    const token = try self.app.presentation.begin(.{
+        .observation = observation,
+        .commit = data.presentation_delivery.capture(model, projection.tab orelse return error.NoActiveTab),
+        .geometry = client.Geometry.capture(projection),
+    });
+    const delivery = self.app.presentation.complete(token, .delivered) orelse return error.PresentationLost;
+    const retired = model.commitPresentation(delivery.commit);
+    return retired.len;
+}
+
 fn channel(handle: std.c.fd_t) localsocket.SocketChannel {
     return .init(.{
         .socket = .{

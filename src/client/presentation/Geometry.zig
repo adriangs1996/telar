@@ -37,6 +37,20 @@ pub fn capture(projection: Projection) Geometry {
 /// Checks a new gesture against delivered geometry. Captured gestures keep
 /// their original owner and must not be reassigned on a failed match.
 /// Example: `if (!delivered.matches(current)) return;`.
+/// Copies `source` without the unused tail of `panes`, kilobytes that a
+/// whole-struct copy would move for one pane.
+/// Example: `flight.geometry.copyFrom(&submission.geometry);`
+pub fn copyFrom(self: *Geometry, source: *const Geometry) void {
+    comptime std.debug.assert(std.meta.fields(Geometry).len == 6);
+
+    self.region = source.region;
+    self.location = source.location;
+    self.layout_revision = source.layout_revision;
+    self.host_size = source.host_size;
+    self.len = source.len;
+    @memcpy(self.panes[0..source.len], source.panes[0..source.len]);
+}
+
 pub fn matches(self: *const Geometry, current: *const Geometry) bool {
     if (!self.region.matches(current.region) or
         !std.meta.eql(self.location, current.location) or

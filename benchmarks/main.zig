@@ -144,6 +144,7 @@ const cases = [_]Case{
     .{ .name = "frontend.client.frame_event", .work_per_op = 1, .work_unit = "frames" },
     .{ .name = "frontend.client.key_event", .work_per_op = 1, .work_unit = "keys" },
     .{ .name = "frontend.client.request_group_query", .work_per_op = 1, .work_unit = "queries" },
+    .{ .name = "frontend.client.present_frame", .work_per_op = 1, .work_unit = "frames" },
 };
 
 /// A TUI and a GUI on one eight-pane tab, and one client on a crowded tab.
@@ -856,8 +857,9 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
     const client_frame_case = cases[case_index];
     const client_key_case = cases[case_index + 1];
     const client_request_case = cases[case_index + 2];
-    case_index += 3;
-    if (config.includes(client_frame_case.name) or config.includes(client_key_case.name) or config.includes(client_request_case.name)) {
+    const client_present_case = cases[case_index + 3];
+    case_index += 4;
+    if (config.includes(client_frame_case.name) or config.includes(client_key_case.name) or config.includes(client_request_case.name) or config.includes(client_present_case.name)) {
         var context: ClientEventContext = undefined;
         try context.init(io, gpa);
         defer context.deinit();
@@ -874,6 +876,10 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
             defer context.releaseTabSnapshot();
 
             try result_writer.write(client_request_case, try measure(.{ .io = io, .config = config, .context = &context }, runClientRequestGroup));
+        }
+
+        if (config.includes(client_present_case.name)) {
+            try result_writer.write(client_present_case, try measure(.{ .io = io, .config = config, .context = &context }, runClientPresent));
         }
     }
 
@@ -894,6 +900,15 @@ fn runClientRequestGroup(context: *ClientEventContext, iterations: usize) !u64 {
     for (0..iterations) |_| {
         checksum +%= @intFromBool(context.requestGroupQuery());
         std.mem.doNotOptimizeAway(context.app);
+    }
+
+    return checksum;
+}
+
+fn runClientPresent(context: *ClientEventContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        checksum +%= try context.presentFrame();
     }
 
     return checksum;
