@@ -9,6 +9,7 @@ static const CGFloat controls_trail = 10;
 
 @implementation TelarWindow {
   BOOL configured, visible, applied_visible, changing_fullscreen;
+  BOOL watching_controls, placing_controls;
 }
 
 - (BOOL)titlebarVisible {
@@ -88,12 +89,45 @@ static const CGFloat controls_trail = 10;
   return controls_lead + 2 * controls_pitch + (zoom != nil ? zoom.frame.size.width : 14) + controls_trail;
 }
 
+// AppKit lays the titlebar out again whenever the title changes, which a
+// running command does on every prompt, and on resize. It moves the lights
+// back to their default place during that layout; correcting them in the same
+// pass, before anything is displayed, keeps them from flickering.
+- (void)setTitle:(NSString *)title {
+  [super setTitle:title];
+  [self placeControls];
+}
+
+- (void)watchControls:(NSView *)container {
+  if (watching_controls) {
+    return;
+  }
+
+  watching_controls = YES;
+  NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+  NSMutableArray<NSView *> *views = [NSMutableArray arrayWithObject:container];
+  for (NSNumber *kind in @[@(NSWindowCloseButton), @(NSWindowMiniaturizeButton), @(NSWindowZoomButton)]) {
+    NSButton *button = [self standardWindowButton:kind.unsignedIntegerValue];
+    if (button != nil) {
+      [views addObject:button];
+    }
+  }
+  for (NSView *view in views) {
+    view.postsFrameChangedNotifications = YES;
+    [center addObserver:self selector:@selector(controlsMoved:) name:NSViewFrameDidChangeNotification object:view];
+  }
+}
+
+- (void)controlsMoved:(NSNotification *)notification {
+  [self placeControls];
+}
+
 // Over a transparent titlebar the lights move into Telar's navigation row:
 // the titlebar container takes the row's height and each light is centered in
-// it at a fixed pitch. AppKit may lay the container out again on resize, so
-// every paint calls this and it writes only what differs.
+// it at a fixed pitch. Paints, title changes and AppKit's own relayouts call
+// this; it writes only what differs, so its own frame changes end the loop.
 - (void)placeControls {
-  if (![self controlsOverContent] || self.controlsHeight <= 0) {
+  if (placing_controls || ![self controlsOverContent] || self.controlsHeight <= 0) {
     return;
   }
 
@@ -102,6 +136,9 @@ static const CGFloat controls_trail = 10;
   if (close == nil || container == nil) {
     return;
   }
+
+  placing_controls = YES;
+  [self watchControls:container];
 
   NSRect bar = container.frame;
   const CGFloat height = self.controlsHeight;
@@ -123,6 +160,7 @@ static const CGFloat controls_trail = 10;
       [button setFrameOrigin:origin];
     }
   }
+  placing_controls = NO;
 }
 
 // The hidden title has no reserved layout/drag strip. FullSizeContentView

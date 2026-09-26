@@ -207,6 +207,12 @@ static void draw(id view, SEL selector, id drawable) {
             CGFloat row = 84 / window.backingScaleFactor;
             CGFloat center = window.frame.size.height - NSMidY(light);
             if (fabs(center - row / 2) > 1 || fabs(light.origin.x - 14) > 1 || ((TelarWindow *)window).controlsInset < 60) failed++;
+            // A new title makes AppKit lay the titlebar out again; the lights
+            // must still be in place when that layout ends, before any paint.
+            window.title = [NSString stringWithFormat:@"title %d", paints];
+            [window.contentView.superview layoutSubtreeIfNeeded];
+            NSRect moved = [close convertRect:close.bounds toView:nil];
+            if (fabs((window.frame.size.height - NSMidY(moved)) - row / 2) > 1 || fabs(moved.origin.x - 14) > 1) failed++;
             NSView *terminal = view;
             NSPoint top = NSMakePoint(NSMidX(terminal.bounds), terminal.bounds.size.height - 8);
             NSView *frame_view = window.contentView.superview;
