@@ -1,5 +1,6 @@
 //! Fixed pointer targets for the pixel bands: the sidebar toggle, every
-//! project row or fallback workspace control, every tab, the new-tab control,
+//! project row, rail mark or fallback workspace control with their overflow
+//! counters, every tab and the hidden-tab counter, the new-tab control,
 //! one target per visible agent card, one per pane frame extension or hidden
 //! fullscreen pane, the leave-fullscreen control, and the sidebar resize
 //! handle. Cell targets stay in `HitMap`; this table is looked up first
@@ -12,7 +13,7 @@ const BandHit = @import("BandHit.zig");
 const Bands = @import("Bands.zig");
 const BandHitMap = @This();
 
-pub const capacity = 1 + core.max_workspace_list_entries + 1 + core.max_tabs_per_workspace + 1 + core.max_agent_snapshot_entries + 1 + 4 + core.max_panes_per_tab + 1;
+pub const capacity = 1 + core.max_workspace_list_entries + 2 + core.max_tabs_per_workspace + 2 + core.max_agent_snapshot_entries + 1 + 4 + core.max_panes_per_tab + 1;
 items: [capacity]BandHit = undefined,
 len: usize = 0,
 

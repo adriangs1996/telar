@@ -29,8 +29,10 @@ test "the band takes the configured width off the grid columns at scale 1 and 2 
     for ([_]f32{ 1, 2 }) |scale| {
         renderer.sidebar_request = .{ .visible = false };
         const without = try renderer.measure(.{ .width = 1400, .height = 800, .scale = scale });
-        try std.testing.expectEqual(@as(u32, 0), renderer.sidebar.width);
-        try std.testing.expectEqual(@as(u32, 0), renderer.origin[0]);
+        const rail: u32 = @intFromFloat(@round(52 * scale));
+        try std.testing.expect(renderer.sidebar.rail);
+        try std.testing.expectEqual(rail, renderer.sidebar.width);
+        try std.testing.expectEqual(rail + @as(u32, @intFromFloat(@round(8 * scale))), renderer.origin[0]);
         renderer.sidebar_request = .{ .visible = true };
         const with = try renderer.measure(.{ .width = 1400, .height = 800, .scale = scale });
         const expected_width: u32 = @intFromFloat(@round(284 * scale));
@@ -49,7 +51,7 @@ test "the band takes the configured width off the grid columns at scale 1 and 2 
     }
 }
 
-test "the band clamps to its bounds and to twenty workbench columns and hides below them" {
+test "the band clamps to its bounds and to twenty workbench columns and collapses to the rail below them" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
     renderer.sidebar_request = .{ .visible = true, .logical_width = 100 };
@@ -64,9 +66,14 @@ test "the band clamps to its bounds and to twenty workbench columns and hides be
     try std.testing.expectEqual(@as(u32, 300), renderer.sidebar.width);
     try std.testing.expectEqual(@as(u16, 20), size.cols);
     const narrow = try renderer.measure(.{ .width = 220 + 8 + workbench - 1, .height = 800, .scale = 1 });
+    try std.testing.expect(renderer.sidebar.rail);
+    try std.testing.expectEqual(@as(u32, 52), renderer.sidebar.width);
+    try std.testing.expectEqual(@as(u32, 60), renderer.origin[0]);
+    try std.testing.expect(narrow.cols >= 20);
+    const cramped = try renderer.measure(.{ .width = 52 + 8 + workbench - 1, .height = 800, .scale = 1 });
     try std.testing.expectEqual(@as(u32, 0), renderer.sidebar.width);
     try std.testing.expectEqual(@as(u32, 0), renderer.origin[0]);
-    try std.testing.expect(narrow.cols >= 20);
+    try std.testing.expect(cramped.cols >= 20);
 }
 
 test "a pointer on a card focuses its agent and a pointer in the gap hits nothing" {
@@ -162,7 +169,7 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
     try std.testing.expectEqual(@as(f32, 480), gui.sidebar.logical);
 }
 
-test "hiding the sidebar returns its pixels to the grid without moving top navigation" {
+test "collapsing the sidebar returns all but the rail to the grid and moves the toggle into the rail" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.paint(fixture.projection());
@@ -171,20 +178,26 @@ test "hiding the sidebar returns its pixels to the grid without moving top navig
     const shown = gui.app.model.host.host_size;
     try std.testing.expect(fixture.band().width > 0);
     const top = fixture.chrome.presented().bands.top_bar;
-    const tab = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
     const toggle = fixture.bandTarget(.toggle_sidebar).?;
+    try std.testing.expectEqual(@as(f32, 0), top.x);
+    try std.testing.expect(toggle.y < top.height);
     try fixture.showSidebar(false);
     try fixture.paint(fixture.projection());
-    const hidden = gui.app.model.host.host_size;
-    try std.testing.expectEqual(@as(u32, 0), renderer.sidebar.width);
-    try std.testing.expectEqual(@as(f32, 0), fixture.band().width);
-    try std.testing.expectEqualDeep(top, fixture.chrome.presented().bands.top_bar);
-    try std.testing.expectEqualDeep(tab, fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?);
-    try std.testing.expectEqualDeep(toggle, fixture.bandTarget(.toggle_sidebar).?);
+    const collapsed = gui.app.model.host.host_size;
+    const rail = fixture.band();
+    const navigation = fixture.chrome.presented().bands.top_bar;
+    try std.testing.expect(renderer.sidebar.rail);
+    try std.testing.expectEqual(@as(f32, 52), rail.width);
+    try std.testing.expectEqual(@as(f32, 0), rail.y);
+    try std.testing.expectEqual(rail.width, navigation.x);
+    try std.testing.expectEqual(top.width - rail.width, navigation.width);
+    const moved = fixture.bandTarget(.toggle_sidebar).?;
+    try std.testing.expect(moved.x >= rail.x and moved.x + moved.width <= rail.x + rail.width);
+    const tab = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
+    try std.testing.expect(tab.x >= navigation.x and tab.y < navigation.height);
     try std.testing.expect(fixture.resizeHandle() == null);
-    try std.testing.expectEqual(shown.rows, hidden.rows);
-    try std.testing.expectEqual(shown.cols + 292 / renderer.metrics.cell_width, hidden.cols);
-    try std.testing.expect(fixture.bandTarget(.toggle_sidebar) != null);
+    try std.testing.expectEqual(shown.rows, collapsed.rows);
+    try std.testing.expectEqual(shown.cols + (292 - 60) / renderer.metrics.cell_width, collapsed.cols);
 }
 
 test "a configuration reload applies a new sidebar width without changing the PTY rows" {

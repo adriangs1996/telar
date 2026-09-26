@@ -54,9 +54,11 @@ fn sidebarColumn(fixture: *Fixture) Rect {
     return fixture.band();
 }
 
-fn ring(quads: []const Quad) ?Quad {
+// Only the sidebar column counts: the selected tab's hairline is a ring too.
+fn ring(quads: []const Quad, column: Rect) ?Quad {
     for (quads) |item| {
-        if (item.radius == CardGeometry.radius and item.border == 1) {
+        const inside = item.x >= column.x and item.x < column.x + column.width and item.y >= column.y;
+        if (inside and item.radius == CardGeometry.radius and item.border == 1) {
             return item;
         }
     }
@@ -154,7 +156,7 @@ test "the selected card is the focused pane's agent and carries the fill and rin
     // Provider marks are secondary; custom providers use an unboxed glyph.
     try std.testing.expectEqual(@as(usize, 0), roundedCount(quads, 4, sidebarColumn(&fixture)));
     try std.testing.expectEqual(@as(usize, 5), sprites.spriteCount(quads));
-    const selected = ring(quads).?;
+    const selected = ring(quads, sidebarColumn(&fixture)).?;
     const renderer = &fixture.session.gui.renderer;
     const geometry = CardGeometry.derive(renderer.chrome, renderer.metrics);
     const list_top = fixture.chrome.presented().sidebar_regions.agents.y;
@@ -258,7 +260,13 @@ test "the working pulse samples the status alpha from presentation time" {
     projection.agents = &agents;
     fixture.chrome.now_ns = 0;
     try fixture.paint(projection);
+    const column = sidebarColumn(&fixture);
     for (fixture.session.gui.renderer.quads.items()) |item| {
+        // The tab strip's shadow and spinner are translucent on their own.
+        if (item.x < column.x or item.x >= column.x + column.width or item.y < column.y) {
+            continue;
+        }
+
         try std.testing.expect(item.a == 1 or item.a == 0 or item.a == AgentCard.provider_alpha);
     }
 

@@ -47,8 +47,11 @@ sidebar. Tests use the same compose, draw and seal steps as the scene.
 resolves both viewports once per preparation, and the delivered hit map owns
 scroll targeting. `SidebarState` retains separate `PixelScroll` values;
 `WorkspaceList` clips project rows and reveals the active runtime identity.
-`TopBar` preserves `TabStrip` geometry and shows workspace controls only when
-the project list cannot be shown. Unlisted contexts keep their label there.
+A collapsed sidebar draws `WorkspaceRail` in its band and `RailTooltip` above
+the panes. `TopBar` names the current context beside the rail, or keeps the
+toggle beside the expanded sidebar, and falls back to `WorkspaceIndicators`
+only when neither can show the projects. `TabStrip` packs tabs from the left
+and compresses them around the selection.
 Tabs are not a separate frame section. `StatusBar` owns configured bottom
 widgets and mode hints, with space reserved for TLS in every mode.
 

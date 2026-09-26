@@ -95,6 +95,15 @@ pub fn pathAt(self: *const Snapshot, index: usize) []const u8 {
     return self.path_pool[entry.path_offset..][0..entry.path_len];
 }
 
+/// Returns how many tabs the runtime reported for the workspace at an index.
+///
+/// ```zig
+/// const tabs = snapshot.tabCountAt(0);
+/// ```
+pub fn tabCountAt(self: *const Snapshot, index: usize) u16 {
+    return self.entries[index].tab_count;
+}
+
 /// Returns the workspace identity at a known valid index.
 ///
 /// ```zig

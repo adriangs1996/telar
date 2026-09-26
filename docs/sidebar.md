@@ -203,7 +203,8 @@ way the top bar, tab strip and status bar come off the height. Its width is
 the display and rounded, and an 8 logical px gap separates the edge line
 from the first cell column. The band is clamped so the workbench keeps at
 least 20 columns after the gap and the right window padding; a window that
-cannot hold the narrowest band beside that workbench hides it. The width is
+cannot hold the narrowest band beside that workbench collapses it to the
+workspace rail, and one that cannot hold even the rail hides the band. The width is
 a disposable host preference (`SidebarPreference`) seeded from the Lua
 value: `resize_sidebar` moves it by 16 logical px, dragging the edge sets
 the exact width under the pointer, both clamp to the same bounds, and a
@@ -236,19 +237,51 @@ repaints retain manual scrolling. Headers and the resize gutter do not scroll.
 The viewports belong to the delivered hit map, so pending or failed frames
 cannot change which list receives a pointer event.
 
-When the sidebar is hidden or too short for a project line, the top bar shows
-compact project indicators: their one-based position and the existing favicon,
-or a folder glyph when no favicon is available. Names and pill backgrounds are
-absent. The active project uses the accent color and a small dot underneath;
-agent attention gets a separate dot at the top right. Each indicator occupies
-40 logical px with a 4 px gap. All projects that fit within the navigation
-region remain visible in runtime order, without a three-project limit. Only
-physical overflow uses counters that select the nearest hidden project and
-retain its group's attention signal. An unlisted workspace
-or worktree retains its current-context label there. Tab layout and behavior
-are unchanged in either case. All navigation still uses the shared client
-intents; the GUI keeps only bounded disposable scroll state. Configured
-metrics and other widgets belong in the bottom status bar.
+A collapsed sidebar keeps a workspace rail (`widgets/WorkspaceRail.zig`):
+a band of `SidebarBand.logical_rail` (52) logical px with the same 8 px gap,
+running from the top of the window to the status bar, while navigation starts
+beside it. The sidebar toggle sits at its top. Below it, one 36 px mark per
+project in runtime order shows the favicon, or the folder glyph, with its
+one-based position in the bottom-right corner. The selected project has a
+`surface1` surface and a 3 px accent bar on the rail's edge; hover draws a
+`surface0` surface. Agent attention is a dot in the top-right corner inside a
+ring of the rail's background. When the rail is too short for every project,
+the window centred on the selection keeps its marks and `+N` counters above
+and below select the nearest hidden project and keep the attention of the
+ones they hide. Hovering a mark shows `RailTooltip` beside the rail, above the
+panes: the project's name and what it runs, `N waiting`, else `N agents`,
+else `N tabs`. The tooltip paints only; the mark owns the target.
+
+Beside the rail the top bar names the current context, the listed project's
+name or the unlisted workspace or worktree label, then a separator, then the
+tabs. With the sidebar expanded the top bar keeps the toggle and the tabs
+start where the workbench starts. Only a window too narrow for the rail, or
+an expanded sidebar too short for project rows, falls back to the compact
+top-bar indicators (`WorkspaceIndicators`). All navigation still uses the
+shared client intents; the GUI keeps only bounded disposable scroll and
+pointer state. Configured metrics and other widgets belong in the bottom
+status bar.
+
+The tab strip (`widgets/TabStrip.zig`) packs tabs from the left, each a
+28 px pill: its dimmed number, the application mark, the caption and a
+trailing status. The caption is `tab_label.caption`: a manual label, else the
+focused pane's agent session title once it is no longer a placeholder, else
+the focused directory beside the foreground application (`replay-web ·
+fish`). The status is the selected pane's progress report, else the tab's
+most urgent agent: a spinner stepping every 120 ms while it works, a dot in
+the attention colour when it waits, fails or is done. Only the selected tab
+has a fill, a hairline and a shadow; hover gives the others a quiet fill.
+The selected tab keeps its whole caption up to 300 px or 55 % of the strip.
+The others share the rest at the richest fit that holds all of them: whole
+captions up to 220 px, captions truncated to a common cap no shorter than
+56 px of text, number and mark, then the mark alone. Truncated captions fade
+over their last 20 px instead of ending in an ellipsis. Past the marks, the
+tabs farthest from the selection hide behind a `+N` counter that selects the
+nearest hidden tab and keeps their attention dot, and `+` follows the last
+visible control. While the pointer rests on the strip, widths stay laid out
+around the tab they were built for, so a click changes the selection without
+moving tabs under the pointer; leaving the strip relayouts it, and a
+selection the frozen layout would hide rebuilds it at once.
 
 During the empty tab-model phase of a workspace handoff, the top bar retains
 the last delivered project identity while it remains in the workspace list.
@@ -260,8 +293,11 @@ it. This retains no pane data and does not change navigation authority.
 independent scrolling, selected-row visibility, deferred delivery and display
 scaling. The existing sidebar warm-repaint test includes project names and
 paths, and the favicon tests verify that rows and cards reuse the same sprite.
-`src/gui/tests/top_navigation.zig` covers compact indicators, shared favicons
-at both display scales, stable positions, overflow navigation and tab bounds.
+`src/gui/tests/top_navigation.zig` covers the rail's marks, numbers,
+favicons at both display scales, stable positions, overflow counters and tab
+placement in both sidebar states. `src/gui/tests/tab_strip.zig` covers the
+selected tab's lift, compression and the hidden-tab counter, frozen widths,
+faded captions, the rail tooltip and session-title captions.
 
 ## Detector wiring
 
