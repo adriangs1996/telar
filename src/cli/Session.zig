@@ -252,18 +252,15 @@ pub const TextInput = @import("TextInput.zig");
 /// const text = try session.readPane(pane, .{ .rows = 40, .source = .recent });
 /// ```
 pub fn readPane(self: *Session, pane: PaneRef, options: ReadOptions) !Text {
-    var send_buffer: [64]u8 = undefined;
-    try self.connection.send(self.io, try core.encodeReadPane(&send_buffer, .{
-        .request_id = self.requestId(),
+    const response = try self.exchange(core.encodeReadPane, core.ReadPane{
+        .request_id = .none,
         .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .rows = options.rows,
         .source = options.source,
-    }));
-
-    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    });
     return switch (response) {
-        .pane_text => |text| .{ .pane_id = pane.pane_id, .truncated = text.truncated, .text = text.text },
+        .pane_text => |text| .{ .pane_id = pane.pane_id, .truncated = text.truncated, .text = text.text, .exit_code = text.exit_code },
         .request_failed => |failure| control.failureError(failure),
         else => error.UnexpectedRuntimeResponse,
     };

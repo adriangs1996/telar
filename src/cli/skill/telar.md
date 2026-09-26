@@ -9,20 +9,29 @@ child receives `TELAR_SOCKET_PATH`, `TELAR_PANE_ID`, `TELAR_WORKSPACE_ID` and
 
 ```
 telar agent list [--json]
-telar agent get <pane|title|--current> [--json]
-telar agent wait <pane|title|--current> [--until done|ready|blocked|working|failed] [--timeout 30s]
-telar agent prompt <pane|title|--current> "text" [--wait] [--timeout 30s]
-telar agent read <pane|title|--current> [--lines 40] [--source recent|screen] [--json]
+telar agent get <target> [--json]
+telar agent wait <target> [--until done|finished|ready|blocked|working|failed] [--timeout 30s]
+telar agent prompt <target> "text" [--interrupt] [--wait] [--timeout 30s] [--json]
+telar agent interrupt <target> [--json]
+telar agent read <target> [--lines 40] [--source recent|screen] [--json]
 telar agent report-session <pane|--current> <session-id>
 telar pane read <pane|--current> [--lines 40] [--source recent|screen] [--json]
 telar pane send-keys <pane|--current> "text" [--enter]
 telar api schema [--json]
-telar --skill
-telar integration install|uninstall|status claude|pi
+telar worktree create <branch> --title "title" [--from <ref>] [--workspace <id|dir>] [--json] [-- <command...>]
+telar worktree exec <branch> [--label name] [--json] -- <command...>
+telar worktree list [--workspace <id|dir>] [--json]
+telar worktree open <branch> [--client ID]
+telar worktree diff <branch> [--stat] [--uncommitted]
+telar worktree remove <branch> [--force] [--delete-branch]
+telar --skill [coordinator]
+telar integration install|uninstall|status claude|codex|pi
 ```
 
-A pane is named by its numeric id, its agent's session title (case-insensitive,
-must be unique) or `--current`.
+A `<target>` is a pane's numeric id, its agent's session title
+(case-insensitive, must be unique), `--current`, or `worktree:<branch|title>`
+for the agent working in a tracked worktree. To coordinate agents in
+worktrees, read `telar --skill coordinator`.
 
 ## Agent states
 
@@ -30,6 +39,7 @@ must be unique) or `--current`.
 - `blocked`: it is showing an approval, question or permission prompt. A
   prompt sent now is refused; answer with `pane send-keys` first.
 - `done`: it finished a turn and no user has looked at the pane yet.
+  `--until finished` accepts `done` or `ready`.
 - `ready`: it is idle and its last result has been seen.
 - `failed`: its last model request failed.
 

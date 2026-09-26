@@ -71,7 +71,8 @@ pub fn sendText(model: *RuntimeModel, session: *Session, request: core.SendPaneT
             }
 
             var sender_buffer: [agent_control.max_sender_line_bytes]u8 = undefined;
-            const sender_line = if (request.sender) |sender| line: {
+            const known_sender = if (request.sender) |sender| if (model.panes.resolveControlConst(.{ .id = sender, .generation = 0 }) != null) sender else null else null;
+            const sender_line = if (known_sender) |sender| line: {
                 const now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
                 if (!model.prompt_budget.spend(sender, pane.id, now_ms)) {
                     return client_request.fail(session, request.request_id, .prompt_rate_limited, "prompt budget for this pane is spent; wait for its answer");

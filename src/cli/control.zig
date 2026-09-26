@@ -30,6 +30,30 @@ pub fn currentPaneGeneration(environ: std.process.Environ) !u64 {
     return generation;
 }
 
+/// The pane this process runs in, when the command talks to the runtime that
+/// owns that pane: `TELAR_PANE_ID` names a pane of the runtime at
+/// `TELAR_SOCKET_PATH`, not of one reached through `--socket` or
+/// `TELAR_SOCKET`.
+///
+/// ```zig
+/// const sender = control.senderPane(environ, options.socket);
+/// ```
+pub fn senderPane(environ: std.process.Environ, socket: ?[*:0]const u8) ?u64 {
+    const pane_id = currentPaneId(environ) catch return null;
+    const own = std.process.Environ.getPosix(environ, "TELAR_SOCKET_PATH") orelse return null;
+    if (socket) |explicit| {
+        return if (std.mem.eql(u8, std.mem.span(explicit), own)) pane_id else null;
+    }
+
+    if (std.process.Environ.getPosix(environ, "TELAR_SOCKET")) |configured| {
+        if (configured.len != 0 and !std.mem.eql(u8, configured, own)) {
+            return null;
+        }
+    }
+
+    return pane_id;
+}
+
 pub const ControlError = error{
     PaneNotFound,
     PaneExited,

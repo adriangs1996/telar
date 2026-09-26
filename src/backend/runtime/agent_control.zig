@@ -12,6 +12,10 @@ const PaneKey = @import("../pane/PaneKey.zig");
 const agent_status = @import("agent_status.zig");
 const client_request = @import("client_request.zig");
 const pane_input = @import("pane_input.zig");
+const agent_identity = @import("agent_identity.zig");
+
+/// The event line an interrupted agent shows until its next hook.
+pub const interrupted_event = "Interrupted by telar";
 
 /// Bound for the line that names a sending pane on its prompt.
 pub const max_sender_line_bytes = 192;
@@ -46,6 +50,16 @@ pub fn interrupt(model: *RuntimeModel, session: *Session, request: core.Interrup
     }
 
     try pane_input.forwardControl(model, pane, interrupt_key.bytes());
+    // Claude Code runs no stop hook for an interrupted turn, so the working
+    // report would outlive the turn. The runtime pressed the key itself; the
+    // agent's next hook corrects this if the turn somehow went on.
+    _ = agent_status.observeReport(model, .{
+        .identity = agent_identity.fromPane(pane),
+        .state = .ready,
+        .event = interrupted_event,
+        .observed_at_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
+        .observed_at_ns = @intCast(std.Io.Timestamp.now(model.io, .awake).toNanoseconds()),
+    });
     try client_request.complete(session, request.request_id);
 }
 

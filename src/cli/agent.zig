@@ -162,7 +162,7 @@ fn prompt(session: *Session, options: AgentOptions, output: ExecutionContext) !u
         try interruptAndSettle(session, pane, &snapshot);
     }
 
-    const sender = control.currentPaneId(output.environ) catch null;
+    const sender = control.senderPane(output.environ, options.socket);
     try session.sendText(pane, .{
         .mode = .prompt,
         .text = std.mem.span(options.text.?),
@@ -254,7 +254,14 @@ fn writeOne(writer: *std.Io.Writer, agent: *const ControlAgent, json: bool) !voi
 
 fn writeText(writer: *std.Io.Writer, text: Text, json: bool) !void {
     if (json) {
-        try writer.print("{{\"pane_id\":{d},\"truncated\":{},\"text\":", .{ text.pane_id, text.truncated });
+        try writer.print("{{\"pane_id\":{d},\"truncated\":{},\"exit_code\":", .{ text.pane_id, text.truncated });
+        if (text.exit_code) |code| {
+            try writer.print("{d}", .{code});
+        } else {
+            try writer.writeAll("null");
+        }
+
+        try writer.writeAll(",\"text\":");
         try control.writeJsonString(writer, text.text);
         try writer.writeAll("}\n");
         return;

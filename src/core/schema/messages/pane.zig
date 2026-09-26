@@ -311,6 +311,11 @@ pub fn encodePaneText(buffer: []u8, message: PaneText) ![]const u8 {
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeByte(@intFromBool(message.truncated));
     try encoder.writeSized32(message.text);
+    try encoder.writeByte(@intFromBool(message.exit_code != null));
+    if (message.exit_code) |code| {
+        try encoder.writeInt(i32, code);
+    }
+
     return encoder.finish();
 }
 
@@ -322,11 +327,13 @@ pub fn decodePaneText(decoder: *Decoder) !PaneText {
     if (text.len > types.max_pane_text_bytes) {
         return error.InvalidByteString;
     }
+    const exit_code: ?i32 = if (try decoder.readBool()) try decoder.readInt(i32) else null;
     return .{
         .request_id = request_id,
         .pane_id = pane_id,
         .truncated = truncated,
         .text = text,
+        .exit_code = exit_code,
     };
 }
 

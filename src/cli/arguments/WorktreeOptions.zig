@@ -1,11 +1,13 @@
 const std = @import("std");
 const core = @import("telar-core");
 const Cursor = @import("Cursor.zig");
+const values = @import("values.zig");
 const workspace_grammar = @import("workspace.zig");
 const WorktreeOptions = @This();
 
 /// Most arguments a command after `--` may carry.
 pub const max_command_arguments = 32;
+pub const default_wait_seconds = 600;
 
 pub const Action = enum { create, exec, list, open, diff, remove };
 
@@ -25,6 +27,9 @@ uncommitted: bool = false,
 stat: bool = false,
 force: bool = false,
 delete_branch: bool = false,
+/// `exec --wait`: block until the command exits and print its final output.
+wait: bool = false,
+timeout_seconds: u32 = default_wait_seconds,
 command: [max_command_arguments][*:0]const u8 = undefined,
 command_len: usize = 0,
 
@@ -87,6 +92,10 @@ pub fn parse(args: []const [*:0]const u8) !WorktreeOptions {
             options.force = true;
         } else if (std.mem.eql(u8, arg, "--delete-branch") and action == .remove) {
             options.delete_branch = true;
+        } else if (std.mem.eql(u8, arg, "--wait") and action == .exec) {
+            options.wait = true;
+        } else if (std.mem.eql(u8, arg, "--timeout") and action == .exec) {
+            options.timeout_seconds = try values.parseTimeoutSeconds(std.mem.span(try cursor.require(error.MissingTimeout)));
         } else if (std.mem.eql(u8, arg, "--json")) {
             options.json = true;
         } else if (std.mem.eql(u8, arg, "--socket")) {

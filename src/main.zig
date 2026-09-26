@@ -126,7 +126,7 @@ pub fn main(init: std.process.Init) !void {
         .review => |options| std.process.exit(try review_module.run(init, options)),
         .integration => |options| std.process.exit(try integration_support.run(init, options)),
         .proxy => |options| std.process.exit(try proxy_module.run(init, options)),
-        .skill => try skill_module.run(init),
+        .skill => |which| try skill_module.run(init, which),
         .run => |options| {
             const status = try client_module.run(init, options);
             dumpEchoTrace(init);

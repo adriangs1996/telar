@@ -13,10 +13,12 @@ const WorktreeCatalog = @import("WorktreeCatalog.zig");
 const agent = @import("agent.zig");
 const control = @import("control.zig");
 const worktree_git = @import("worktree_git.zig");
+const ListedWorktree = @import("ListedWorktree.zig");
 const CatalogWorktree = @import("CatalogWorktree.zig");
 
 /// Size of a pane launched before any UI sized it; a UI resizes it on view.
 const launch_size: core.TerminalSize = .{ .cols = 160, .rows = 48 };
+const wait_poll_ms = 250;
 
 /// Runs one worktree command and returns the process exit code.
 ///
@@ -42,17 +44,26 @@ pub fn run(init: std.process.Init, options: WorktreeOptions) !u8 {
 fn execute(init: std.process.Init, options: WorktreeOptions, writer: *std.Io.Writer) !u8 {
     var catalog: WorktreeCatalog = .init(init.gpa);
     defer catalog.deinit();
+    var arena: std.heap.ArenaAllocator = .init(init.gpa);
+    defer arena.deinit();
     var session = try Session.open(init, options.socket);
     defer session.close();
     try session.fetchCatalog(&catalog);
 
+    const command: Command = .{
+        .session = &session,
+        .catalog = &catalog,
+        .options = options,
+        .writer = writer,
+        .arena = arena.allocator(),
+    };
     return switch (options.action) {
-        .create => create(init, .{ .session = &session, .catalog = &catalog, .options = options, .writer = writer }),
-        .exec => exec(init, .{ .session = &session, .catalog = &catalog, .options = options, .writer = writer }),
-        .list => list(init, .{ .session = &session, .catalog = &catalog, .options = options, .writer = writer }),
-        .open => open(init, .{ .session = &session, .catalog = &catalog, .options = options, .writer = writer }),
-        .diff => diff(init, .{ .session = &session, .catalog = &catalog, .options = options, .writer = writer }),
-        .remove => remove(init, .{ .session = &session, .catalog = &catalog, .options = options, .writer = writer }),
+        .create => create(init, command),
+        .exec => exec(init, command),
+        .list => list(init, command),
+        .open => open(init, command),
+        .diff => diff(init, command),
+        .remove => remove(init, command),
     };
 }
 
@@ -62,6 +73,8 @@ const Command = struct {
     catalog: *const WorktreeCatalog,
     options: WorktreeOptions,
     writer: *std.Io.Writer,
+    /// Owns strings that outlive one helper, freed when the command ends.
+    arena: std.mem.Allocator,
 };
 
 fn create(init: std.process.Init, command: Command) !u8 {
@@ -123,8 +136,7 @@ fn create(init: std.process.Init, command: Command) !u8 {
 }
 
 fn exec(init: std.process.Init, command: Command) !u8 {
-    _ = init;
-    const worktree = try command.catalog.find(std.mem.span(command.options.branch.?)) orelse return error.WorktreeNotFound;
+    const worktree = try findOrAdopt(init, command);
     var argv_storage: [WorktreeOptions.max_command_arguments][]const u8 = undefined;
     const opened = try launch(command.session, .{
         .worktree = worktree.id,
@@ -132,6 +144,10 @@ fn exec(init: std.process.Init, command: Command) !u8 {
         .label = if (command.options.label) |label| std.mem.span(label) else "",
         .argv = command.options.argv(&argv_storage),
     });
+
+    if (command.options.wait) {
+        return waitForExit(command, opened);
+    }
 
     try writeLaunch(command.writer, .{
         .worktree = worktree.id,
@@ -141,6 +157,34 @@ fn exec(init: std.process.Init, command: Command) !u8 {
         .opened = opened,
     }, command.options.json);
     return agent.exit_ok;
+}
+
+/// Polls the launched pane until its command exits, then prints its final
+/// output and returns its exit status as this process's.
+fn waitForExit(command: Command, opened: core.PaneOpened) !u8 {
+    const pane: Session.PaneRef = .{ .pane_id = core.raw(opened.pane_id), .pane_generation = opened.pane_generation };
+    const deadline = command.session.nowMs() + @as(i64, command.options.timeout_seconds) * std.time.ms_per_s;
+    while (true) {
+        const text = try command.session.readPane(pane, .{ .rows = core.max_pane_text_rows, .source = .recent });
+        if (text.exit_code) |code| {
+            const output = std.mem.trimEnd(u8, text.text, " \n");
+            if (command.options.json) {
+                try std.json.Stringify.value(.{ .pane_id = pane.pane_id, .exit_code = code, .output = output }, .{}, command.writer);
+                try command.writer.writeByte('\n');
+            } else {
+                try command.writer.print("{s}\n", .{output});
+            }
+
+            return std.math.cast(u8, code) orelse agent.exit_failure;
+        }
+
+        if (command.session.nowMs() >= deadline) {
+            std.debug.print("telar worktree: the command is still running after {d}s; pane {d}\n", .{ command.options.timeout_seconds, pane.pane_id });
+            return agent.exit_timeout;
+        }
+
+        command.session.sleepMs(wait_poll_ms);
+    }
 }
 
 fn list(init: std.process.Init, command: Command) !u8 {
@@ -180,11 +224,132 @@ fn list(init: std.process.Init, command: Command) !u8 {
         first = false;
     }
 
+    var untracked_storage = UntrackedWorktrees.init(init.gpa);
+    defer untracked_storage.deinit();
+    const untracked = untrackedWorktrees(init, command, &untracked_storage) catch &.{};
+    for (untracked) |listed| {
+        if (command.options.json) {
+            if (!first) {
+                try writer.writeByte(',');
+            }
+
+            try writer.writeAll("{\"worktree_id\":null,\"branch\":");
+            try control.writeJsonString(writer, listed.branch);
+            try writer.writeAll(",\"path\":");
+            try control.writeJsonString(writer, listed.path);
+            try writer.writeAll(",\"origin\":\"untracked\",\"agents\":[]}");
+        } else {
+            try writer.print("{s}\t-\tuntracked\t-\t-\t-\t{s}\n", .{ listed.branch, listed.path });
+        }
+
+        first = false;
+    }
+
     if (command.options.json) {
         try writer.writeAll("]\n");
     }
 
     return agent.exit_ok;
+}
+
+const UntrackedWorktrees = struct {
+    gpa: std.mem.Allocator,
+    bytes: []u8 = &.{},
+    items: [max_untracked]ListedWorktree = undefined,
+    count: usize = 0,
+
+    const max_untracked = 64;
+
+    fn init(gpa: std.mem.Allocator) UntrackedWorktrees {
+        return .{ .gpa = gpa };
+    }
+
+    fn deinit(self: *UntrackedWorktrees) void {
+        self.gpa.free(self.bytes);
+    }
+};
+
+/// The linked worktrees Git knows in the current directory's repository
+/// that telar does not track: made by hand, or left from a lost runtime.
+fn untrackedWorktrees(init: std.process.Init, command: Command, storage: *UntrackedWorktrees) ![]const ListedWorktree {
+    var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const cwd = try realPath(init, ".", &cwd_buffer);
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = try worktree_git.mainRoot(init, cwd, &root_buffer);
+    storage.bytes = try worktree_git.listPorcelain(init, root);
+    var listed = worktree_git.listed(storage.bytes);
+    while (listed.next()) |entry| {
+        if (storage.count == UntrackedWorktrees.max_untracked) {
+            break;
+        }
+
+        const tracked = for (command.catalog.worktrees.items) |*worktree| {
+            if (std.mem.eql(u8, worktree.path, entry.path)) {
+                break true;
+            }
+        } else false;
+        if (!tracked) {
+            storage.items[storage.count] = entry;
+            storage.count += 1;
+        }
+    }
+
+    return storage.items[0..storage.count];
+}
+
+/// The tracked worktree a reference names; else a Git worktree of the
+/// current repository with that branch, registered on the spot so it joins
+/// the fleet.
+fn findOrAdopt(init: std.process.Init, command: Command) !CatalogWorktree {
+    const reference = std.mem.span(command.options.branch.?);
+    if (try command.catalog.find(reference)) |worktree| {
+        return worktree.*;
+    }
+
+    var storage = UntrackedWorktrees.init(init.gpa);
+    defer storage.deinit();
+    const untracked = untrackedWorktrees(init, command, &storage) catch return error.WorktreeNotFound;
+    for (untracked) |listed| {
+        if (!std.mem.eql(u8, listed.branch, reference)) {
+            continue;
+        }
+
+        var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const root = try worktree_git.mainRoot(init, listed.path, &root_buffer);
+        var base_buffer: [256]u8 = undefined;
+        const base = worktree_git.currentBranch(init, root, &base_buffer) catch "";
+        const source = try sourceWorkspace(init, command, root);
+        const registered = try command.session.registerWorktree(.{
+            .request_id = .none,
+            .source = try core.workspace(source),
+            .created_by = currentPane(init.minimal.environ),
+            .path = listed.path,
+            .branch = listed.branch[0..@min(listed.branch.len, core.max_git_branch_bytes)],
+            .base = base[0..@min(base.len, core.max_git_branch_bytes)],
+        });
+        return .{
+            .id = registered.worktree,
+            .source = source,
+            .workspace = null,
+            .created_by = null,
+            .origin = .telar,
+            .state = .active,
+            .path = try command.arena.dupe(u8, listed.path),
+            .branch = try command.arena.dupe(u8, listed.branch),
+            .base = try command.arena.dupe(u8, base),
+            .title = "",
+            .brief = "",
+            .diff_added = 0,
+            .diff_removed = 0,
+            .diff_files = 0,
+            .commits_ahead = 0,
+            .command_label = "",
+            .command_state = .none,
+            .command_exit = 0,
+        };
+    }
+
+    return error.WorktreeNotFound;
 }
 
 fn open(init: std.process.Init, command: Command) !u8 {
@@ -222,7 +387,7 @@ fn open(init: std.process.Init, command: Command) !u8 {
 }
 
 fn diff(init: std.process.Init, command: Command) !u8 {
-    const worktree = try command.catalog.find(std.mem.span(command.options.branch.?)) orelse return error.WorktreeNotFound;
+    const worktree = try findOrAdopt(init, command);
     try command.writer.flush();
     try worktree_git.diff(init, .{
         .directory = worktree.path,

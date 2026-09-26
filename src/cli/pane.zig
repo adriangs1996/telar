@@ -87,7 +87,14 @@ fn execute(session: *Session, options: PaneOptions, context: ExecutionContext) !
         .read => {
             const text = try session.readPane(pane, .{ .rows = options.lines, .source = options.source });
             if (options.json) {
-                try context.writer.print("{{\"pane_id\":{d},\"truncated\":{},\"text\":", .{ text.pane_id, text.truncated });
+                try context.writer.print("{{\"pane_id\":{d},\"truncated\":{},\"exit_code\":", .{ text.pane_id, text.truncated });
+                if (text.exit_code) |code| {
+                    try context.writer.print("{d}", .{code});
+                } else {
+                    try context.writer.writeAll("null");
+                }
+
+                try context.writer.writeAll(",\"text\":");
                 try control.writeJsonString(context.writer, text.text);
                 try context.writer.writeAll("}\n");
             } else {
@@ -97,6 +104,10 @@ fn execute(session: *Session, options: PaneOptions, context: ExecutionContext) !
                 }
                 if (text.truncated) {
                     std.debug.print("telar pane: older rows were omitted\n", .{});
+                }
+
+                if (text.exit_code) |code| {
+                    std.debug.print("telar pane: the command exited with {d}\n", .{code});
                 }
             }
         },

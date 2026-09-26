@@ -8,6 +8,8 @@ const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const Pane = @import("../pane/Pane.zig");
+const PaneStore = @import("../pane/PaneStore.zig");
+const ExitedPanes = @import("../pane/ExitedPanes.zig");
 const ExitCompletion = @import("events/ExitCompletion.zig");
 const pty = @import("pty");
 const exit_module = pty.exit;
@@ -93,6 +95,7 @@ pub fn collect(model: *RuntimeModel) void {
         }
 
         const location = pane.location;
+        keepExitText(store, pane);
         _ = store.removeExitedAt(index);
         _ = agent_status.remove(model, pane.key());
 
@@ -129,6 +132,15 @@ fn leaveEmptyWorkspace(model: *RuntimeModel, workspace: core.WorkspaceLocation) 
             geometry_lease.release(model, session.key, workspace);
         }
     }
+}
+
+/// Keeps a collected pane's final rows and exit status, so its output stays
+/// readable after the pane is gone.
+fn keepExitText(store: *PaneStore, pane: *const Pane) void {
+    const exit = pane.exit orelse return;
+    var storage: [ExitedPanes.max_text_bytes]u8 = undefined;
+    const dump = pane.dumpText(.{ .rows = ExitedPanes.kept_rows, .source = .recent }, &storage);
+    store.exited.record(pane.key(), exit.code(), storage[0..dump.len]);
 }
 
 fn exitOrSynthetic(result: anyerror!exit_module.Exit) exit_module.Exit {

@@ -9,6 +9,7 @@ const values = @import("arguments/values.zig");
 const Integration = @import("Integration.zig");
 const TempFile = @import("TempFile.zig");
 const HookSet = @import("HookSet.zig");
+const skill = @import("skill.zig");
 
 const max_settings_bytes = 4 * 1024 * 1024;
 const max_extension_bytes = 64 * 1024;
@@ -20,6 +21,17 @@ pub const codex_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "Per
 pub const claude_worktree_events = [_][]const u8{ "WorktreeCreate", "WorktreeRemove" };
 /// Worktree hooks run `git worktree add`, which may take a while.
 pub const worktree_timeout_seconds = 60;
+/// The coordinator skill, installed next to an agent's settings so the agent
+/// finds it among its own skills.
+pub const coordinator_skill_directory = "skills/telar-coordinator";
+pub const coordinator_skill_header =
+    \\---
+    \\name: telar-coordinator
+    \\description: Delegate tasks to agents in their own Git worktrees and steer them through telar. Use when the user asks to implement, fix or build something in a separate worktree, or asks about, stops, redirects or reviews agents working in worktrees.
+    \\---
+    \\
+    \\
+;
 pub const claude_marker = " hook claude";
 pub const codex_marker = " hook codex";
 
@@ -101,6 +113,9 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
                 try writeSettings(init.io, path, parsed.value);
             }
             try writer.print("telar integration: {s} hooks {s} in {s}\n", .{ integration.name, if (changed) "installed" else "already present", path });
+            var skill_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            const skill_path = try installSkill(init.io, path, &skill_buffer);
+            try writer.print("telar integration: coordinator skill written to {s}\n", .{skill_path});
             return 0;
         },
         .uninstall => {
@@ -111,6 +126,7 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
                 try writeSettings(init.io, path, parsed.value);
             }
             try writer.print("telar integration: {s} hooks {s} in {s}\n", .{ integration.name, if (changed) "removed" else "not present", path });
+            removeSkill(init.io, path);
             return 0;
         },
     }
@@ -466,6 +482,36 @@ fn ensureArray(arena: std.mem.Allocator, object: *std.json.ObjectMap, name: []co
 
     try object.put(arena, name, .{ .array = std.json.Array.init(arena) });
     return object.getPtr(name).?;
+}
+
+/// Writes the coordinator skill into `skills/telar-coordinator/SKILL.md`
+/// beside the agent's settings file and returns its path.
+fn installSkill(io: std.Io, settings_path: []const u8, buffer: *[std.fs.max_path_bytes]u8) ![]const u8 {
+    const directory = std.fs.path.dirname(settings_path) orelse return error.InvalidSettingsPath;
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const skill_directory = try std.fmt.bufPrint(&directory_buffer, "{s}/{s}", .{ directory, coordinator_skill_directory });
+    try std.Io.Dir.cwd().createDirPath(io, skill_directory);
+    const path = try std.fmt.bufPrint(buffer, "{s}/SKILL.md", .{skill_directory});
+    var temp = try TempFile.begin(io, path);
+    var file_buffer: [4096]u8 = undefined;
+    var file_writer = temp.file.writerStreaming(io, &file_buffer);
+    file_writer.interface.writeAll(coordinator_skill_header ++ skill.coordinator_text) catch |err| {
+        temp.discard();
+        return err;
+    };
+    file_writer.interface.flush() catch |err| {
+        temp.discard();
+        return err;
+    };
+    try temp.commit();
+    return path;
+}
+
+fn removeSkill(io: std.Io, settings_path: []const u8) void {
+    const directory = std.fs.path.dirname(settings_path) orelse return;
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = std.fmt.bufPrint(&buffer, "{s}/{s}/SKILL.md", .{ directory, coordinator_skill_directory }) catch return;
+    std.Io.Dir.deleteFileAbsolute(io, path) catch {};
 }
 
 fn writeSettings(io: std.Io, path: []const u8, settings: std.json.Value) !void {

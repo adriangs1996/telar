@@ -19,6 +19,7 @@ const AgentOptions = @import("arguments/AgentOptions.zig");
 const PaneOptions = @import("arguments/PaneOptions.zig");
 const WorkspaceOptions = @import("arguments/WorkspaceOptions.zig");
 const WorktreeOptions = @import("arguments/WorktreeOptions.zig");
+const skill_module = @import("skill.zig");
 const ApiOptions = @import("arguments/ApiOptions.zig");
 const HookOptions = @import("arguments/HookOptions.zig");
 const ReviewOptions = @import("arguments/ReviewOptions.zig");
@@ -62,7 +63,7 @@ pub const Cli = union(enum) {
     worktree: WorktreeOptions,
     integration: IntegrationOptions,
     proxy: ProxyOptions,
-    skill,
+    skill: skill_module.Skill,
     run: RunOptions,
     gui: GuiOptions,
     cli: CliOptions,
@@ -113,7 +114,12 @@ pub const Cli = union(enum) {
             return .version;
         }
         if (std.mem.eql(u8, first, "--skill")) {
-            return .skill;
+            if (args.len > 2) {
+                const which = std.meta.stringToEnum(skill_module.Skill, std.mem.span(args[2])) orelse return error.UnknownSkill;
+                return .{ .skill = which };
+            }
+
+            return .{ .skill = .telar };
         }
         if (std.mem.eql(u8, first, "agent")) {
             return .{ .agent = try AgentOptions.parse(args[2..]) };
