@@ -28,6 +28,20 @@ pub const Intent = union(enum) {
     prompt_row: u16,
 };
 
+/// What a secondary (right) press on a target does: rename a tab, peek at an
+/// agent, nothing elsewhere.
+///
+/// ```zig
+/// const intent = view_interaction.secondary(.{ .focus_agent = key });
+/// ```
+pub fn secondary(intent: Intent) Intent {
+    return switch (intent) {
+        .select_tab => |tab_id| .{ .rename_tab = tab_id },
+        .focus_agent => |key| .{ .peek_agent = key },
+        else => .none,
+    };
+}
+
 pub fn capturesPaneInput(intent: Intent) bool {
     return switch (intent) {
         .select_tab, .focus_agent, .peek_agent => true,

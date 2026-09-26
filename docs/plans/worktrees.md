@@ -469,7 +469,7 @@ What was built differs from the plan above in these points.
   `/stop`, `/diff` or an empty field interrupt, open a diff tab or open the
   agent's tab. The GUI shows the last 16 rows of the pane; the TUI shows the
   field only. It shows no per-file changes.
-- **`leave-worktree`** returns to the source workspace, bound to `prefix+b`.
+- **`leave-worktree`** returns to the source workspace, bound to `prefix+u` ("up" to the project; `b` is a common sidebar binding).
 - **`PermissionRequest`** is not installed. The `claude --worktree` run
   worked in the returned path; whether an `EnterWorktree` mid-session asks
   for permission was not checked.
@@ -494,6 +494,21 @@ What was built differs from the plan above in these points.
   cards show no plan bar.
 - **Interrupt keys**: `escape` for Claude Code and Codex. Claude Code runs no
   `Stop` hook for an interrupted turn, so the runtime reports `ready` itself.
+- **Two earlier defects surfaced under a fleet** and are fixed. The runtime
+  published a pane's title and progress while the VT actor was ingesting
+  it, so a debug runtime aborted in `Delivery.assertIdle` when an attached
+  agent's spinner title changed mid-delivery; those lanes now wait like the
+  cell lane. The TUI presented a model changed earlier in the same inbox
+  turn before observing it, so a debug client aborted in
+  `Presenter.presentDue` at startup; `presentNow` now leaves that frame to
+  the turn's closing observation.
+- **End to end**: a Claude Code coordinator in a TUI delegated to a Claude
+  Code and a Codex worker through `worktree exec`, approved a worker's
+  permission with `pane send-keys`, waited with `agent wait --until
+  finished` and reported final answers and diffstats; the sidebar showed
+  the task cards, densities and states throughout. The TUI was driven in
+  tmux; the GUI with `tools/gui_fleet.py`, checked through accessibility
+  records and effects because screen capture was not permitted.
 - **Not verified**: whether Claude Code calls `chdir` on `EnterWorktree`
   (hook `cwd` resolves the worktree either way), how each agent handles a
   prompt that arrives mid-turn, and which agents besides Claude Code load

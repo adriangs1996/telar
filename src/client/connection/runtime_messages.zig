@@ -43,7 +43,7 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
         },
         .request_completed => |reply| {
             const continuation = client.model.request_lifecycle.tracker.take(reply.request_id) orelse return error.UnexpectedControlReply;
-            if (continuation != .ignored) {
+            if (continuation != .ignored and continuation != .peek_action) {
                 return error.UnexpectedControlReply;
             }
         },

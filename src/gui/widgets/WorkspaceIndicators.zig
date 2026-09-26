@@ -90,7 +90,9 @@ pub fn draw(self: WorkspaceIndicators, canvas: *Canvas) !void {
 
 /// The location of a workspace that is not a numbered project. A worktree's
 /// workspace reads `project › ⎇ branch`, the branch in the accent color, so a
-/// worktree tab is never mistaken for the main checkout.
+/// worktree tab is never mistaken for the main checkout. The crumb is not a
+/// control: the project's row in the sidebar and `leave-worktree` return,
+/// and a second target with the row's action would share its identity.
 fn activeWorkspace(self: WorkspaceIndicators, canvas: *Canvas) !void {
     const projection = self.context.projection;
     if (self.context.workspaceId()) |id| {
@@ -126,7 +128,6 @@ fn worktreeBreadcrumb(self: WorkspaceIndicators, canvas: *Canvas, row: *const da
     const branch_text = std.fmt.bufPrint(&branch_storage, "\u{2387} {s}", .{row.handle()}) catch row.handle();
     const branch: Label = .{ .text = branch_text, .color = palette.accent, .bold = true, .face = .sans, .size = .body };
     _ = try canvas.textAt(.{ .x = self.area.x + prefix_width, .y = self.area.y, .width = @max(0, self.area.width - prefix_width), .height = self.area.height }, branch);
-    try self.context.bands.add(.{ .area = self.area, .action = .{ .intent = .{ .select_workspace = row.source } } });
 }
 
 fn workspace(self: WorkspaceIndicators, canvas: *Canvas, index: usize) !void {

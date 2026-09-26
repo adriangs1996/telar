@@ -85,6 +85,7 @@ pub const HeadlessAdapter = @import("presentation/HeadlessAdapter.zig");
 pub const Hints = @import("input/Hints.zig");
 pub const ImageIdentity = @import("graphics/ImageIdentity.zig");
 pub const Intent = view_interaction.Intent;
+pub const secondaryIntent = view_interaction.secondary;
 pub const IntentOutcome = @import("input/IntentOutcome.zig");
 pub const MarkerScreen = @import("attachments/MarkerScreen.zig");
 pub const Mode = hints_support.Mode;

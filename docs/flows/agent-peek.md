@@ -7,7 +7,7 @@ pane, with a field whose text goes to the agent.
 ## End-to-end path
 
 ```text
-right press on a card (GUI routing.secondaryIntent, TUI State.handleMouse)
+right press on a card (view_interaction.secondary from GUI bands and widget routing; TUI State.handleMouse)
         |
 Intent.peek_agent -> agent_peek.open
         |  name_prompt: PromptTarget.peek

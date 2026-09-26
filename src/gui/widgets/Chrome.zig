@@ -226,16 +226,11 @@ fn edgeWidth(x: f64) u32 {
 }
 
 fn buttonIntent(intent: client.Intent, button: u8) client.Intent {
-    if (intent == .select_tab) {
-        const tab_id = intent.select_tab;
-        return switch (button) {
-            0 => .{ .select_tab = tab_id },
-            2 => .{ .rename_tab = tab_id },
-            else => .none,
-        };
-    }
-
-    return if (button != 0) .none else intent;
+    return switch (button) {
+        0 => intent,
+        2 => client.secondaryIntent(intent),
+        else => .none,
+    };
 }
 
 fn hover(self: *Chrome, action: ?action_module.Action) void {

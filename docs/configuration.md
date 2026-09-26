@@ -672,6 +672,10 @@ rightmost column selects an exact width. Telar always reserves at least 42
 columns for the sidebar and 20 for the workbench; a narrower host temporarily
 hides or clamps the sidebar without discarding its preferred width.
 
+`telar.action.leave_worktree()` returns from a worktree's tab to the project
+workspace the worktree hangs from; outside a worktree it does nothing. The
+default binding is `prefix`, then `u`.
+
 `telar.action.scroll_pane({ direction = ... })` accepts `"up"` or `"down"` and
 applies one wheel step to the focused pane without entering copy mode. The
 default bindings are `prefix`, then `-` to scroll up, and `prefix`, then `=`

@@ -290,7 +290,8 @@ pub fn version(model: *const ClientModel) Version {
         .pane_progress = model.pane_progress_revision,
         .pane_graphics = model.pane_graphics_revision,
         .chrome = model.chrome_revision,
-        .prompt = model.name_prompt.version(),
+        // A peek draws inside its prompt, so its pane text is prompt state.
+        .prompt = model.name_prompt.version() +% model.peek_screen.revision,
         .history = model.history_palette.version(),
         .suggestion = model.suggestion.version(),
         .path_completion = model.path_completion.version(),

@@ -88,6 +88,7 @@ pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !Request
         .change_review_query,
         .change_review_command,
         .editor_open,
+        .peek_action,
         => {},
     }
 

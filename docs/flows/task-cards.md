@@ -43,7 +43,7 @@ array of `max_agent_snapshot_entries`; drawing allocates nothing.
 The workspace list shows projects only; a project's worktrees appear as a
 summary `⎇ N · ◌ n ✓ n` (worktrees, tasks working, tasks finished). Inside a worktree the top
 bar reads `project › ⎇ handle` in a distinct accent, and `leave-worktree`
-(`prefix+b`) returns to the source workspace.
+(`prefix+u`) returns to the source workspace.
 
 ## Proof
 

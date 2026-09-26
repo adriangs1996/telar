@@ -90,6 +90,7 @@ test "the sidebar orders six agents by attention and maps one hit per card" {
     try std.testing.expectEqual(entries.len, position);
     try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.agents.maximum_scroll);
     try std.testing.expectEqualDeep(client.Intent{ .focus_agent = entries[5].key }, fixture.clickBand(fixture.bandTarget(.{ .focus_agent = entries[5].key }).?, 0).intent);
+    try std.testing.expectEqualDeep(client.Intent{ .peek_agent = entries[5].key }, fixture.clickBand(fixture.bandTarget(.{ .focus_agent = entries[5].key }).?, 2).intent);
 }
 
 test "replacement sidebar widgets retain scrolling and clip their own card controls" {

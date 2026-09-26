@@ -19,6 +19,7 @@ pub const TextInput = @import("input/TextInput.zig");
 
 test {
     _ = @import("tests/change_review.zig");
+    _ = @import("tests/agent_peek.zig");
     _ = @import("tests/change_review_navigation.zig");
     _ = @import("tests/frame_pacer.zig");
     _ = @import("tests/input_pacing.zig");

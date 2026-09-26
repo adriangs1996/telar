@@ -27,6 +27,20 @@ pub fn selects(target: Target) bool {
     return target == .goto or target == .history or target == .suggest or target == .palette;
 }
 
+/// Targets that act on Enter with an empty field: list prompts pick their
+/// row, and a peek opens its agent's tab.
+pub fn acceptsEmpty(target: Target) bool {
+    return selects(target) or target == .peek;
+}
+
+test "a peek submits an empty field so Enter opens its agent" {
+    var state: NamePromptState = .{};
+    state.begin(.{ .peek = .{ .pane_id = @enumFromInt(7), .pane_generation = 1 } });
+    const outcome = state.apply(.submit);
+    try std.testing.expect(outcome == .submitted);
+    try std.testing.expectEqualStrings("", outcome.submitted.name);
+}
+
 test "selection clamping and combined history updates publish exactly one revision" {
     var state: NamePromptState = .{};
     state.begin(.goto_picker);

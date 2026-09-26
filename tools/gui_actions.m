@@ -47,7 +47,7 @@ static id find_control(NSArray *children, NSString *label) {
     return nil;
 }
 
-static void click_control(NSView *view, NSString *label) {
+static void press_control(NSView *view, NSString *label, BOOL secondary) {
     id control = find_control([view accessibilityChildren], label);
     if (control == nil) {
         fprintf(stderr, "Missing native control: %s\n", label.UTF8String);
@@ -55,13 +55,30 @@ static void click_control(NSView *view, NSString *label) {
     }
     NSRect frame = [control accessibilityFrame];
     NSPoint location = [view.window convertPointFromScreen:NSMakePoint(NSMidX(frame), NSMidY(frame))];
-    for (NSNumber *type in @[@(NSEventTypeLeftMouseDown), @(NSEventTypeLeftMouseUp)]) {
+    NSEventType down = secondary ? NSEventTypeRightMouseDown : NSEventTypeLeftMouseDown;
+    NSEventType up = secondary ? NSEventTypeRightMouseUp : NSEventTypeLeftMouseUp;
+    for (NSNumber *type in @[@(down), @(up)]) {
         NSEvent *event = [NSEvent mouseEventWithType:type.unsignedIntegerValue location:location
             modifierFlags:0 timestamp:0 windowNumber:view.window.windowNumber context:nil
             eventNumber:0 clickCount:1 pressure:1];
+        if (secondary) {
+            // AppKit leaves buttonNumber at zero on synthesized events; a
+            // CGEvent carries the right button the view reads.
+            CGEventRef source = [event CGEvent];
+            CGEventRef copy = CGEventCreateCopy(source);
+            CGEventSetIntegerValueField(copy, kCGMouseEventButtonNumber, kCGMouseButtonRight);
+            event = [NSEvent eventWithCGEvent:copy];
+            CFRelease(copy);
+        }
         if (type.unsignedIntegerValue == NSEventTypeLeftMouseDown) [view mouseDown:event];
-        else [view mouseUp:event];
+        else if (type.unsignedIntegerValue == NSEventTypeLeftMouseUp) [view mouseUp:event];
+        else if (type.unsignedIntegerValue == NSEventTypeRightMouseDown) [view rightMouseDown:event];
+        else [view rightMouseUp:event];
     }
+}
+
+static void click_control(NSView *view, NSString *label) {
+    press_control(view, label, NO);
 }
 
 static void scroll_control(NSView *view, NSDictionary *action) {
@@ -369,6 +386,7 @@ __attribute__((constructor)) static void install(void) {
             if (action[@"key"]) send_key(view, action);
             if (action[@"text"]) [(id<NSTextInputClient>)view insertText:action[@"text"] replacementRange:NSMakeRange(NSNotFound, 0)];
             if (action[@"click_label"]) click_control(view, action[@"click_label"]);
+            if (action[@"right_click_label"]) press_control(view, action[@"right_click_label"], YES);
             if (action[@"signal"] && ![[NSData data] writeToFile:action[@"signal"] atomically:YES]) abort();
             if (action[@"expect_clipboard"] && ![[NSPasteboard.generalPasteboard stringForType:NSPasteboardTypeString] isEqualToString:action[@"expect_clipboard"]]) abort();
             if (action[@"expect_value"]) {

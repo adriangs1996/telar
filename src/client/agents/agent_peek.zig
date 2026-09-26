@@ -9,6 +9,7 @@ const core = @import("telar-core");
 const data = @import("model");
 const Client = @import("../execution/Client.zig");
 const agent_navigation = @import("agent_navigation.zig");
+const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 const name_prompt = @import("../input/name_prompt.zig");
 const fleet_order = @import("fleet_order.zig");
 
@@ -113,13 +114,13 @@ pub fn submit(client: *Client, key: data.AgentKey, text: []const u8) !bool {
     const model = &client.model;
     switch (Command.of(text)) {
         .open => _ = try agent_navigation.navigateAgent(client, key),
-        .stop => try sendEncoded(model, .ignored, core.encodeInterruptAgent, core.InterruptAgent{
+        .stop => try sendEncoded(model, .{ .peek_action = key.pane_id }, core.encodeInterruptAgent, core.InterruptAgent{
             .request_id = .none,
             .pane_id = key.pane_id,
             .pane_generation = key.pane_generation,
         }),
         .diff => try openDiff(model, key),
-        .message => try sendEncoded(model, .ignored, core.encodeSendPaneText, core.SendPaneText{
+        .message => try sendEncoded(model, .{ .peek_action = key.pane_id }, core.encodeSendPaneText, core.SendPaneText{
             .request_id = .none,
             .pane_id = key.pane_id,
             .pane_generation = key.pane_generation,
@@ -132,6 +133,26 @@ pub fn submit(client: *Client, key: data.AgentKey, text: []const u8) !bool {
     return true;
 }
 
+/// Takes the user to the diff tab a peek opened, in the worktree's own
+/// workspace. A handoff waits for no other request; with one in flight the
+/// tab stays where the task card reaches it.
+///
+/// ```zig
+/// try agent_peek.showOpened(client, opened);
+/// ```
+pub fn showOpened(client: *Client, opened: core.PaneOpened) !void {
+    const workspace = switch (opened.location.workspace) {
+        .workspace => |id| id,
+        .worktree => return,
+    };
+
+    if (!client.model.request_lifecycle.tracker.isEmpty()) {
+        return;
+    }
+
+    _ = try workspace_handoff.requestWorkspacePane(client, opened.pane_id, workspace);
+}
+
 /// Opens a tab in the task's worktree showing its diff against its base,
 /// then leaves a shell there.
 fn openDiff(model: *data.ClientModel, key: data.AgentKey) !void {
@@ -139,7 +160,7 @@ fn openDiff(model: *data.ClientModel, key: data.AgentKey) !void {
     const row = fleet_order.taskRow(&model.workspace_list_snapshot, agent) orelse return;
     const base = if (row.baseSlice().len != 0) row.baseSlice() else "HEAD";
     const arguments = [_][]const u8{ "sh", "-c", diff_script, "sh", base };
-    try sendEncoded(model, .ignored, core.encodeLaunchWorktree, core.LaunchWorktree{
+    try sendEncoded(model, .{ .peek_action = key.pane_id }, core.encodeLaunchWorktree, core.LaunchWorktree{
         .request_id = .none,
         .worktree = row.worktree,
         .label = "diff",

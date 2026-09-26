@@ -36,7 +36,7 @@ pub fn load(prefix: keyinput.Key) ![count]Binding {
 
         try prefixed(prefix, "w", .toggle_workspace_list),
         // Back from a worktree's tabs to its project.
-        try prefixed(prefix, "b", .leave_worktree),
+        try prefixed(prefix, "u", .leave_worktree),
 
         try prefixed(prefix, "N", .new_workspace),
 
