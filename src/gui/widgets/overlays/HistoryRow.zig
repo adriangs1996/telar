@@ -5,6 +5,7 @@ const cellgrid = @import("cellgrid");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
+const data = @import("model");
 const Canvas = @import("../Canvas.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
@@ -201,7 +202,7 @@ fn mark(self: Row, canvas: *Canvas, box: Rect) !void {
     const palette = canvas.theme.palette;
     const provider = providerOf(entry.providerSlice());
     if (canvas.providerMark(provider)) |sprite| {
-        const tint: cellgrid.Color = if (provider == .codex)
+        const tint: cellgrid.Color = if (data.icons.providerMarkFollowsTheme(provider))
             (if (palette.text.kind == .default) .rgb(canvas.theme.terminal.foreground) else palette.text)
         else
             .default;
@@ -235,17 +236,7 @@ fn mark(self: Row, canvas: *Canvas, box: Rect) !void {
 /// The built-in provider a history entry's manifest name denotes.
 /// Example: `if (canvas.providerMark(HistoryRow.providerOf(entry.providerSlice()))) |mark| ...`
 pub fn providerOf(name: []const u8) core.AgentProvider {
-    if (std.mem.eql(u8, name, "claude")) {
-        return .claude;
-    }
-    if (std.mem.eql(u8, name, "codex")) {
-        return .codex;
-    }
-    if (std.mem.eql(u8, name, "pi")) {
-        return .pi;
-    }
-
-    return .unknown;
+    return core.builtinProvider(name) orelse .unknown;
 }
 
 fn commandText(self: Row, canvas: *Canvas, value: struct { bounds: Rect, text: []const u8 }) !void {
@@ -325,6 +316,7 @@ test "manifest names select the built-in provider mark or none" {
     try std.testing.expectEqual(core.AgentProvider.claude, providerOf("claude"));
     try std.testing.expectEqual(core.AgentProvider.codex, providerOf("codex"));
     try std.testing.expectEqual(core.AgentProvider.pi, providerOf("pi"));
+    try std.testing.expectEqual(core.AgentProvider.cursor, providerOf("cursor"));
     try std.testing.expectEqual(core.AgentProvider.unknown, providerOf("aider"));
     try std.testing.expectEqual(core.AgentProvider.unknown, providerOf(""));
 }

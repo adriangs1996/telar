@@ -805,6 +805,76 @@ test "lifecycle reports outrank screen evidence until they expire" {
     try std.testing.expectEqual(core.AgentSource.screen, snapshot[0].source);
 }
 
+test "a Cursor approval on screen outranks the earlier hook report until newer evidence replaces it" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    try std.testing.expect(agent_status.observeProcess(model, .{ .identity = identity, .provider = .cursor, .process_id = 42, .observed_at_ms = 100 }));
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .working, .event = "» Shell touch created.txt", .observed_at_ms = 200 }));
+
+    // The approval dialog fires no hook: its screen decides.
+    try std.testing.expect(agent_status.observeScreen(model, .{
+        .identity = identity,
+        .signal = .{ .provider = .unknown, .status = .blocked, .confidence = 88 },
+        .observed_at_ms = 300,
+    }));
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+    var snapshot = agent_status.snapshot(&model.agents, &entries, 300);
+    try std.testing.expectEqual(core.AgentStatus.blocked, snapshot[0].status);
+    try std.testing.expectEqual(core.AgentSource.screen, snapshot[0].source);
+    try std.testing.expectEqual(core.AgentBlockedReason.other, snapshot[0].blocked_reason);
+
+    // Approved: the working composer replaces the dialog and the report decides again.
+    try std.testing.expect(agent_status.observeScreen(model, .{
+        .identity = identity,
+        .signal = .{ .provider = .unknown, .status = .working, .confidence = 78 },
+        .observed_at_ms = 400,
+    }));
+    snapshot = agent_status.snapshot(&model.agents, &entries, 400);
+    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
+    try std.testing.expectEqual(core.AgentSource.lifecycle_report, snapshot[0].source);
+
+    // The plan review is drawn before the turn's stop hook reports ready;
+    // it stays blocked until the next prompt submission reports work.
+    _ = agent_status.observeScreen(model, .{
+        .identity = identity,
+        .signal = .{ .provider = .unknown, .status = .blocked, .confidence = 88 },
+        .observed_at_ms = 500,
+    });
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .ready, .observed_at_ms = 600 }));
+    try std.testing.expectEqual(core.AgentStatus.blocked, agent_status.projectedStatus(model, identity.key).?);
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 700 }));
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, identity.key).?);
+
+    // A dialog left behind by answered work cannot hold a later turn end.
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .ready, .observed_at_ms = 800 }));
+    try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
+}
+
+test "a blocked screen older than the report, or of an agent with a permission hook, does not outrank it" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const cursor = try testIdentityAt(8, 1);
+    try std.testing.expect(agent_status.observeProcess(model, .{ .identity = cursor, .provider = .cursor, .process_id = 8, .observed_at_ms = 100 }));
+    _ = agent_status.observeScreen(model, .{
+        .identity = cursor,
+        .signal = .{ .provider = .unknown, .status = .blocked, .confidence = 88 },
+        .observed_at_ms = 200,
+    });
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = cursor, .state = .working, .observed_at_ms = 300 }));
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, cursor.key).?);
+
+    const claude = try testIdentityAt(9, 1);
+    try std.testing.expect(agent_status.observeProcess(model, .{ .identity = claude, .provider = .claude, .process_id = 9, .observed_at_ms = 100 }));
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = claude, .state = .working, .observed_at_ms = 200 }));
+    _ = agent_status.observeScreen(model, .{
+        .identity = claude,
+        .signal = .{ .provider = .claude, .status = .blocked, .confidence = 88, .identity_confirmed = true },
+        .observed_at_ms = 300,
+    });
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, claude.key).?);
+}
+
 test "Pi report renewal keeps a long tool working and loss cannot announce completion" {
     const model = try testModel();
     defer std.testing.allocator.destroy(model);

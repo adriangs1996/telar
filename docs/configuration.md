@@ -383,7 +383,7 @@ for the code path, resource lifetime and verification.
 `runtime.agents` is an array of agent manifests. A manifest is everything
 Telar knows about one coding agent without code: how to recognize it, how to
 show it, and which client capability it supports. Telar ships manifests for
-`claude`, `codex` and `pi`. Naming one of them extends or overrides the
+`claude`, `codex`, `pi` and `cursor`. Naming one of them extends or overrides the
 shipped manifest; any other name creates a new agent that the sidebar, the
 `telar agent` command, notifications and the image shelf treat exactly like a
 built-in one. At most 16 agents can be configured.
@@ -461,11 +461,11 @@ agents = {
 Three things stay in code and are not configurable, because each needs an
 agent-specific program rather than data:
 
-- **Session resume.** Only `claude`, `codex` and `pi` are resumed from a
+- **Session resume.** Only `claude`, `codex`, `pi` and `cursor` are resumed from a
   checkpoint (`src/backend/agent/providers/`). A configured agent restores as
   a plain shell.
 - **Lifecycle hooks.** `telar integration <agent>` and `telar hook <agent>`
-  know the hook formats of the three built-ins (`src/cli/`).
+  know the hook formats of the four built-ins (`src/cli/`).
 
 Diagnostics name the entry and the field, for example
 `config.runtime.agents[2].icon must be exactly one cell wide`.

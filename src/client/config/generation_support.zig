@@ -1256,7 +1256,7 @@ test "runtime agents extend built-ins and add custom manifests" {
     defer generation.deinit();
     const table = &generation.snapshot.runtime.agent_manifests;
 
-    try std.testing.expectEqual(@as(u8, 4), table.count);
+    try std.testing.expectEqual(core.builtin_table.count + 1, table.count);
     const gemini = table.find(@enumFromInt(core.first_custom_agent_provider)).?;
     try std.testing.expectEqualStrings("gemini", gemini.nameSlice());
     try std.testing.expectEqual(gemini.provider, table.providerFromExecutable("gemini").?);

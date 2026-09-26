@@ -10,3 +10,7 @@ resume_prefix: ?[]const u8 = null,
 ready_prompt_settles_report: bool = false,
 /// Process presence alone does not prove an idle agent.
 completion_requires_agent_signal: bool = false,
+/// The agent has no hook for its approval prompts, so a blocked screen
+/// observed after its latest report decides the projection until a newer
+/// report or screen replaces it.
+screen_reports_blocked: bool = false,

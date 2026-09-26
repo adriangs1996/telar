@@ -1,7 +1,7 @@
 # Agent rename
 
 A user names a session inside the agent (`/name` in Pi, `/rename` in Claude
-Code and Codex) and the sidebar row takes that name. The title has source
+Code, Codex and Cursor Agent) and the sidebar row takes that name. The title has source
 `agent`: it outranks a generated title, is checkpointed like a manual one, and
 clearing the name inside the agent returns the row to its placeholder unless a
 manual title was set afterwards. Every route ends in the same aggregate call,
@@ -113,6 +113,36 @@ file in WAL mode, so the probe never blocks Codex and a busy or missing
 database simply reports nothing. The schema number in the file name and the
 `threads.name` column are Codex internals; a future Codex can move them and
 the probe then degrades to reporting nothing.
+
+## Cursor Agent
+
+`/rename` fires no hook. Measured on Cursor Agent 2026.08.11, it rewrites the
+`title` of the chat's `meta.json` at once and sets the terminal title to the
+same name; the names Cursor generates for a new chat ("Shell Command")
+arrive the same way, so they become agent titles too.
+
+```text
+/rename <text> inside Cursor Agent
+        |
+Cursor rewrites title in <config>/chats/<md5 of launch dir>/<chat>/meta.json
+        |
+sessionStart or beforeSubmitPrompt: telar hook cursor locates meta.json
+(workspace root first, then at most 4096 launch directories) and sends it
+as session_file, kind cursor_meta
+        -> agent_hooks.receive -> agent_status.observeReport -> Watches.put
+        |
+agent_maintenance.tick -> agent_rename.start -> session_readers.probe   [observation path]
+        |
+probe reads at most 16 KiB of JSON from a meta.json inside the chat's own
+directory and reports title; an absent title reports an empty one
+        |
+event session_name -> agent_rename.finish -> Watch.remember drops an unchanged name
+        -> Agent.reportTitle; checkpoint dirty
+```
+
+A file mid-write fails to parse and reports nothing until the next probe.
+`meta.json` and its location are Cursor internals, like Codex's database; a
+future Cursor can move them and the probe then degrades to reporting nothing.
 
 ## Ownership and bounds
 

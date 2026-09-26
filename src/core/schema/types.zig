@@ -240,11 +240,12 @@ pub const AgentProvider = enum(u8) {
     claude = 1,
     codex = 2,
     pi = 3,
+    cursor = 4,
     _,
 };
 
 pub const max_agent_manifests = 16;
-pub const first_custom_agent_provider: u8 = 4;
+pub const first_custom_agent_provider: u8 = 5;
 pub const max_agent_provider_index: u8 = first_custom_agent_provider + max_agent_manifests - 1;
 pub const max_agent_provider_name_bytes = 32;
 /// Bound for a manifest display name such as "Claude Code".
@@ -365,6 +366,9 @@ pub const AgentSessionFileKind = enum(u8) {
     claude_transcript = 0,
     /// Codex's state database; `/rename` updates `threads.name`.
     codex_state = 1,
+    /// Cursor Agent's chat metadata; `/rename` and its generated names
+    /// rewrite `title`.
+    cursor_meta = 2,
 };
 
 pub const AgentTitleState = enum(u8) {

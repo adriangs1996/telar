@@ -60,6 +60,10 @@ identity change. All native inspection stays in the observation worker.
 
 `process/process.zig` tests direct Claude Code, Codex and Pi roots, bounded
 acquisition and an interpreter becoming an agent in the same process group.
+A runtime a launcher renamed with `exec -a` still counts as an interpreter
+when the kernel names its image `node`, `bun` or `deno`: Cursor Agent runs as
+`node` with argv[0] set to `agent` or `cursor-agent`, and its versioned entry
+point (`/cursor-agent/versions/`) identifies it.
 `runtime/tests/observation_events_test.zig` verifies that root-agent
 evidence retains its typed resume session and allows screen status updates.
 
@@ -91,8 +95,8 @@ before manifests existed, plus each built-in's display name and attachment
 scheme.
 
 Provider identity on the wire is `schema.AgentProvider`, non-exhaustive.
-`claude`, `codex` and `pi` keep their values; configured agents take indexes
-from `schema.first_custom_agent_provider` in configuration order. The snapshot
+`claude`, `codex`, `pi` and `cursor` keep their values; configured agents
+take indexes from `schema.first_custom_agent_provider` in configuration order. The snapshot
 entry carries `provider_name`, `display_name`, `icon` and `attachments`, so a
 client never needs the table.
 
@@ -101,8 +105,11 @@ client never needs the table.
 `src/backend/agent/providers/providers.zig` resolves `Capabilities` for a provider:
 `resume_prefix` (the shell words `session_checkpoint.resumeCommand` types in
 front of a UUID) and `ready_prompt_settles_report` (Codex reports `working`
-from its `Stop` hook, so only its newer input prompt ends that report). Each
-built-in has one file; every other provider resolves to `default`, which
+from its `Stop` hook, so only its newer input prompt ends that report),
+`completion_requires_agent_signal` and `screen_reports_blocked` (Cursor Agent
+fires no hook for its command approvals or plan reviews, so a blocked screen
+observed after its latest report decides the projection until newer evidence
+replaces it). Each built-in has one file; every other provider resolves to `default`, which
 claims nothing. Only this table can ever produce a resume command.
 
 Lifecycle hooks are the CLI's own per-agent table: `telar integration`

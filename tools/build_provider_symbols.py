@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Rasterize the T3 Code provider SVGs into the sidebar atlas.
+"""Rasterize the provider SVGs into the sidebar atlas.
 
-Claude and Pi retain their colors. OpenAI is white so the renderer can tint it
-with the theme's foreground color.
+Claude and Pi retain their colors. OpenAI and Cursor are white so the renderer
+can tint them with the theme's foreground color.
 
 Requires rsvg-convert and Pillow. Run from any directory; output is reproducible
 with librsvg 2.62.3 and Pillow 12.2.0.
@@ -15,7 +15,7 @@ from PIL import Image
 
 
 ASSETS = Path(__file__).resolve().parents[1] / "src" / "assets"
-SOURCES = ("Claude-symbol.svg", "OpenAI-symbol.svg", "Pi-symbol.svg")
+SOURCES = ("Claude-symbol.svg", "OpenAI-symbol.svg", "Pi-symbol.svg", "Cursor-symbol.svg")
 SIDE = 64
 
 
@@ -30,7 +30,7 @@ def main():
             symbol = source.convert("RGBA")
             atlas.alpha_composite(symbol, (index * SIDE + (SIDE - symbol.width) // 2,
                                            (SIDE - symbol.height) // 2))
-    (ASSETS / "provider-symbols-192x64.rgba").write_bytes(atlas.tobytes())
+    (ASSETS / f"provider-symbols-{SIDE * len(SOURCES)}x{SIDE}.rgba").write_bytes(atlas.tobytes())
 
 
 if __name__ == "__main__":

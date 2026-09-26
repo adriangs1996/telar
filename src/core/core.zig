@@ -218,6 +218,7 @@ pub const WorkspaceListView = @import("schema/messages/WorkspaceListView.zig");
 pub const WorkspaceLocation = types.WorkspaceLocation;
 pub const WorkspaceSnapshotView = @import("schema/messages/WorkspaceSnapshotView.zig");
 pub const builtin_table = agent_manifest.builtin_table;
+pub const builtinProvider = agent_manifest.builtinProvider;
 pub const client_layout_ratio_scale = types.client_layout_ratio_scale;
 pub const clipScaled = graphics.clipScaled;
 pub const decodeClient = messages.decodeClient;
