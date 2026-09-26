@@ -14,15 +14,14 @@ const PaletteHits = @import("PaletteHits.zig");
 const key_label = @import("key_label.zig");
 const PathPicker = @This();
 
-pub const max_rows = 10;
-pub const width_cells = 72;
+pub const max_rows = data.path_picker_placement.max_rows;
 pub const radius_px = 8;
 /// Nerd Font folder and file glyphs; the embedded symbols face covers both.
 const folder_icon = "\u{f07b}";
 const file_icon = "\u{f15b}";
 /// Key, word pairs; the host style picks glyphs or words.
-const mac_hints = [_][]const u8{ "↵", "insert", "⇥", "open", "⇧⇥", "up", "⌥↵", "absolute", "esc", "close" };
-const pc_hints = [_][]const u8{ "enter", "insert", "tab", "open", "shift+tab", "up", "alt+enter", "absolute", "esc", "close" };
+const mac_hints = [_][]const u8{ "↵", "insert", "⇥", "open", "⇧⇥", "parent", "⌥↵", "absolute", "esc", "close" };
+const pc_hints = [_][]const u8{ "enter", "insert", "tab", "open", "shift+tab", "parent", "alt+enter", "absolute", "esc", "close" };
 const hints = if (key_label.host_style == .mac) mac_hints else pc_hints;
 
 projection: *const client.Projection,
@@ -38,13 +37,7 @@ pub fn draw(self: PathPicker, canvas: *Canvas) !void {
     const state = self.projection.path_picker;
     const colors = canvas.theme.palette;
     const scale = if (self.scale > 0) self.scale else 1;
-    const visible: u16 = @max(@min(state.len, max_rows), 1);
-    const placement = data.path_picker_placement.place(
-        self.host(),
-        self.cursor(),
-        width_cells,
-        visible + 4,
-    );
+    const placement = data.path_picker_placement.forPage(self.host(), self.cursor(), state.len);
     const frame = placement.area;
     self.modal.* = frame;
     try canvas.fillRounded(

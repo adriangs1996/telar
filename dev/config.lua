@@ -266,6 +266,8 @@ return telar.config({
 			-- telar.bind_global({ "ctrl+k" }, action.focus_pane({ direction = "up" })),
 			-- telar.bind_global({ "ctrl+l" }, action.focus_pane({ direction = "right" })),
 
+			telar.bind_global({ "ctrl+p" }, telar.action.path_picker()),
+
 			telar.bind_global({ "ctrl+h" }, telar.action.navigate_pane({ direction = "left" })),
 			telar.bind_global({ "ctrl+j" }, telar.action.navigate_pane({ direction = "down" })),
 			telar.bind_global({ "ctrl+k" }, telar.action.navigate_pane({ direction = "up" })),

@@ -727,8 +727,9 @@ open without the prefix.
 `telar.action.path_picker()` opens a fuzzy finder over the files and
 directories under the focused pane's directory, anchored at its cursor. Enter
 pastes the chosen path relative to the pane's directory, Alt+Enter pastes it
-absolute, Tab browses the selected directory and Shift+Tab its parent. Its
-default binding is `prefix`, then `f`.
+absolute, Tab browses the selected directory and Shift+Tab its parent. Up and
+Down, or Ctrl+K and Ctrl+J, move the selection; Ctrl+K and Ctrl+J move it in
+every list prompt. Its default binding is `prefix`, then `f`.
 
 Copy mode accepts `h`, `j`, `k`, `l` and the arrow keys, `w`, `b`, `e`, `{`,
 `}`, `0`, `^`, `$`, `g`, `G`, Page Up, Page Down, Ctrl-B, Ctrl-F, Ctrl-U, and Ctrl-D.

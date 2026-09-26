@@ -16,6 +16,22 @@ fn press(client: *client_module.Client, code: keyinput.Key.Code) !void {
     );
 }
 
+fn pressCtrl(client: *client_module.Client, letter: []const u8) !void {
+    _ = try client_module.name_prompt.inputPrompt(
+        client,
+        .{
+            .key = .{
+                .code = .{
+                    .char = keyinput.Char.init(letter),
+                },
+                .mods = .{
+                    .ctrl = true,
+                },
+            },
+        },
+    );
+}
+
 fn answer(client: *client_module.Client, request: core.FindPaths, matches: []const core.PathMatch) !void {
     var buffer: [4096]u8 = undefined;
     const encoded = try core.encodePathResults(&buffer, .{
@@ -66,6 +82,11 @@ test "the picker browses the pane's directory, drills in and out, and pastes the
         },
     });
     try std.testing.expectEqual(@as(u8, 2), client.model.path_picker.len);
+
+    try pressCtrl(client, "j");
+    try std.testing.expectEqual(@as(u16, 1), client.model.name_prompt.currentConst().?.selection());
+    try pressCtrl(client, "k");
+    try std.testing.expectEqual(@as(u16, 0), client.model.name_prompt.currentConst().?.selection());
 
     try press(client, .tab);
     try harness.settle();

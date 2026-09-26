@@ -9,9 +9,8 @@ const Context = @import("Context.zig");
 const GotoPickerOutput = @import("GotoPickerOutput.zig");
 const PathPickerInput = @import("PathPickerInput.zig");
 
-pub const max_rows = 10;
-pub const width_cells = 72;
-const hints = "enter insert  tab open  shift+tab up  alt+enter absolute  esc close";
+const max_rows = data.path_picker_placement.max_rows;
+const hints = "enter insert  tab open  shift+tab parent  alt+enter absolute  esc close";
 
 /// The cells the picker covers for the current page.
 ///
@@ -19,17 +18,15 @@ const hints = "enter insert  tab open  shift+tab up  alt+enter absolute  esc clo
 /// const placement = path_picker.modalArea(application, model, tab, layout);
 /// ```
 pub fn modalArea(application: cellgrid.Rect, model: *const data.ClientModel, tab: usize, layout: *const data.LayoutSnapshot) data.PathPickerPlacement {
-    const visible: u16 = @max(@min(model.path_picker.len, max_rows), 1);
     const cursor = data.path_picker_placement.cursorCell(
         model,
         tab,
         layout,
     );
-    return data.path_picker_placement.place(
+    return data.path_picker_placement.forPage(
         application,
         cursor,
-        width_cells,
-        visible + 4,
+        model.path_picker.len,
     );
 }
 

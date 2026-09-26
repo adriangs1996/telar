@@ -9,8 +9,45 @@ const LayoutSnapshot = @import("../workspace/LayoutSnapshot.zig");
 const PathPickerPlacement = @import("PathPickerPlacement.zig");
 const tab_layout = @import("../workspace/tab_layout.zig");
 
+/// Matches the picker shows at once.
+pub const max_rows = 10;
+/// Columns the picker wants before the host clips it.
+pub const max_width = 72;
+/// The border, the field row and the hint row around the matches.
+const chrome_rows = 4;
 /// Columns left of the cursor, so the field's text starts near it.
 const cursor_inset = 2;
+
+/// Places the picker for a page of `len` matches.
+///
+/// ```zig
+/// const placement = path_picker_placement.forPage(host, cursor, state.len);
+/// ```
+pub fn forPage(host: cellgrid.Rect, cursor: ?cellgrid.Point, len: u16) PathPickerPlacement {
+    const rows: u16 = @max(@min(len, max_rows), 1);
+    return place(host, cursor, max_width, rows + chrome_rows);
+}
+
+/// Where the picker sits on the host grid now, from the model's cached
+/// layout of the active tab; null before that tab was laid out. Input reads
+/// it to move the selection the way the rows run on screen.
+///
+/// ```zig
+/// const flipped = if (path_picker_placement.current(model)) |placement| placement.flipped else false;
+/// ```
+pub fn current(model: *const ClientModel) ?PathPickerPlacement {
+    const tab = model.tabs.activeSlot() orelse return null;
+    if (model.layout_snapshot_tab != model.tabs.location[tab].tab_id) {
+        return null;
+    }
+
+    const size = model.host.host_size;
+    const host: cellgrid.Rect = .{
+        .w = size.cols,
+        .h = size.rows,
+    };
+    return forPage(host, cursorCell(model, tab, &model.layout_snapshot), model.path_picker.len);
+}
 
 /// The focused pane's cursor in host cells, or null when it is not on
 /// screen. Example: `const cursor = path_picker_placement.cursorCell(model, tab, layout);`

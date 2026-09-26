@@ -71,7 +71,10 @@ it opened (the anchor), the root, and a page of at most 50 matches within
 for the current root. A ring of the last 32 ids recognises late failures of
 older requests; the newest one's failure shows in the footer.
 
-Keys: Up and Down move the selection; Tab browses the selected directory and
+Keys: Up and Down, or Ctrl+K and Ctrl+J, move the selection the way the rows
+run on screen: a picker opened above the cursor lists its best match at the
+bottom, so there Up moves to worse matches (`path_picker.orient` reads the
+placement from the model's cached layout). Tab browses the selected directory and
 Shift+Tab the root's parent, both clearing the query; Enter pastes; Alt+Enter
 and Shift+Enter paste the absolute path; Escape closes. A pointer press on a
 row chooses it.

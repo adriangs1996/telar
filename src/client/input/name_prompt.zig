@@ -89,7 +89,7 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
     const before = promptListSnapshot(&client.model.name_prompt);
     const directory_before = promptDirectoryVersion(&client.model.name_prompt);
     const paths_request = client.model.path_picker.pending_request;
-    const command = name_prompts.commandFor(input);
+    const command = path_picker.orient(&client.model, name_prompts.commandFor(&input));
     const outcome = if (command) |value| try applyPromptCommand(client, value) else .unchanged;
     try refreshPromptHistory(&client.model, before);
     try refreshPromptPaths(

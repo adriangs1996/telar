@@ -142,6 +142,36 @@ pub fn canInsert(model: *data.ClientModel, selection: u16) bool {
     return true;
 }
 
+/// Makes Up and Down follow the screen. A picker opened above the cursor
+/// lists its best match at the bottom, next to the field, so there the
+/// selection moves to worse matches going up.
+///
+/// ```zig
+/// const command = path_picker.orient(&client.model, name_prompts.commandFor(&input));
+/// ```
+pub fn orient(model: *const data.ClientModel, command: ?data.PromptCommand) ?data.PromptCommand {
+    const value = command orelse return null;
+    const prompt = model.name_prompt.currentConst() orelse return value;
+    if (prompt.target() != .paths) {
+        return value;
+    }
+
+    const placement = data.path_picker_placement.current(model) orelse return value;
+    return onScreen(value, placement.flipped);
+}
+
+fn onScreen(command: data.PromptCommand, flipped: bool) data.PromptCommand {
+    if (!flipped) {
+        return command;
+    }
+
+    return switch (command) {
+        .move_up => .move_down,
+        .move_down => .move_up,
+        else => command,
+    };
+}
+
 /// Pastes the selected path after the prompt closed: relative to the
 /// pane's directory when it lies inside it, absolute otherwise or when
 /// `absolute` asks for it.
@@ -373,6 +403,13 @@ test "a root above the pane's directory inserts absolute paths" {
         },
         &buffer,
     ).?);
+}
+
+test "a picker opened above the cursor moves the selection the way its rows run" {
+    try std.testing.expectEqual(data.PromptCommand.move_down, onScreen(.move_down, false));
+    try std.testing.expectEqual(data.PromptCommand.move_up, onScreen(.move_down, true));
+    try std.testing.expectEqual(data.PromptCommand.move_down, onScreen(.move_up, true));
+    try std.testing.expectEqual(data.PromptCommand.tab, onScreen(.tab, true));
 }
 
 test "long queries are cut on a character boundary" {
