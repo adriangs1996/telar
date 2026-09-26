@@ -316,9 +316,20 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
 }
 
 pub fn decodeServer(payload: []const u8) !ServerMessage {
+    var message: ServerMessage = undefined;
+    try decodeServerInto(&message, payload);
+    return message;
+}
+
+/// Decodes into `message` and writes only the variant the payload carries.
+/// The union is kilobytes while a pane frame is 168 bytes, so a receiver
+/// that keeps the message in place never copies the rest. On error the
+/// destination holds no valid message.
+/// Example: `try core.decodeServerInto(&transport.received.message, bytes);`
+pub fn decodeServerInto(message: *ServerMessage, payload: []const u8) !void {
     var decoder = Decoder.init(payload);
     const tag = try decodeTag(tags.ServerTag, try decoder.readByte());
-    const message: ServerMessage = switch (tag) {
+    message.* = switch (tag) {
         .change_review_changed => .{ .change_review_changed = try change_review.decode(ChangeReviewChanged, &decoder) },
         .change_review_snapshot => .{ .change_review_snapshot = try change_review.decode(ChangeReviewSnapshotView, &decoder) },
         .pane_opened => .{ .pane_opened = try GenericDerived(PaneOpened).decode(&decoder) },
@@ -378,7 +389,6 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .pane_progress => .{ .pane_progress = try pane.decodePaneProgress(&decoder) },
     };
     try decoder.ensureEnd();
-    return message;
 }
 
 fn decodeTag(comptime Tag: type, value: u8) error{UnknownMessage}!Tag {

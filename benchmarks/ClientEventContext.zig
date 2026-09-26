@@ -163,7 +163,7 @@ fn receiveFrame(self: *ClientEventContext, cells: []const cellgrid.Cell, start: 
             }},
         },
     );
-    self.message = try data.RuntimeMessage.decode(self.io, bytes);
+    try self.message.decodeInto(self.io, bytes);
     if (try self.app.update(.{ .server = &self.message })) |_| {
         return error.ClientExited;
     }
