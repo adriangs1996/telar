@@ -31,7 +31,7 @@ _Avoid_: AppState, Client runtime, UI state
 **Client application**:
 The use cases and operational policy of one disposable client, independent of
 how its host supplies input or presents its model.
-_Avoid_: TUI logic, Second client, Shared client instance
+_Avoid_: Window logic, Second client, Shared client instance
 
 **Prepared presentation**:
 One client projection consumed by its presentation adapter but not yet confirmed
@@ -45,8 +45,8 @@ _Avoid_: Frame receipt, Composition, Client delivery
 
 **Presentation adapter**:
 The implementation that shows one client's projection on a host and turns host
-events into host input. The TUI, the native GUI and the headless test adapter
-are presentation adapters; each owns its chrome, hit testing and metrics.
+events into host input. The native GUI, the headless client and the headless
+test adapter are presentation adapters; each owns its chrome, hit testing and metrics.
 _Avoid_: Renderer, frontend, view layer
 
 **Client chrome**:

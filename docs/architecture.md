@@ -74,7 +74,8 @@ files named after [`docs/flows`](flows/README.md).
 - A transition that must change several columns together happens inside one
   procedure, never split across callers.
 - Invariants that span tables are checked by `model_invariants.check(model)`,
-  which the TUI test harness runs after every settled step and the model's
+  which the client integration harness (`src/client_tests`) runs after every
+  settled step and the model's
   flow tests run after every scenario.
 
 ```zig
@@ -135,9 +136,9 @@ schedules presentation.
 
 ## The host boundary is data
 
-The TUI (`TerminalAdapter`), the native GUI (`GuiAdapter`) and the headless
-test adapter are presentation adapters. Each owns its host resources:
-terminal or window, renderer, output buffers, pacing. Each embeds one
+The native GUI (`GuiAdapter`), the headless client (`HeadlessClient`) and the
+headless test adapter are presentation adapters. Each owns its host
+resources: window, renderer, output buffers, pacing. Each embeds one
 `Client` and drains it after every event.
 
 - The adapter writes host facts into `model.host` before calling `update`.
@@ -187,11 +188,12 @@ is one index probe, not a walk through nested structs.
 | `telar-backend` | the runtime: children, PTYs, emulation, agents, history, proxy |
 | `model` | client state and its procedures, with no I/O, Lua or host access |
 | `telar-client` | `Client` and the client flows: runtime socket, Lua VM, job queue, inbox |
-| `telar-frontend` | the TUI adapter: host terminal, decoder, compositor, diff, pacing |
 | `telar-gui` | the native adapter: glyph atlas and quads drawn by Metal or Vulkan |
+| `telar-headless` | the headless client for tests and tools: stdin input, exit trace and dump |
 
 Backend and client packages never import each other; both import core. The
-TUI and GUI never import each other; what both embed lives in `assets`.
+GUI and the headless client never import each other; what adapters embed
+lives in `assets`.
 
 ### Libraries
 

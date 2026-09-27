@@ -31,8 +31,8 @@ agent is currently doing, and the history.
 
 A user closes their laptop lid, the client goes away, and the agents keep
 working. That is the whole reason the runtime is separate, and it is the test
-for whether a piece of state belongs here. Ask what happens to it when the TUI
-is killed. If the answer is "the session is ruined", it belongs to the runtime.
+for whether a piece of state belongs here. Ask what happens to it when the
+window is closed. If the answer is "the session is ruined", it belongs to the runtime.
 
 ### The client
 
@@ -62,8 +62,9 @@ change.
 ### Code packages
 
 Both processes import `telar-core`. Backend and client packages never import
-each other, the TUI and the GUI never import each other, and what both adapters
-embed lives in the `assets` module. The package table is in
+each other, the window (`telar-gui`) and the headless client (`telar-headless`)
+never import each other, and what adapters embed lives in the `assets`
+module. The package table is in
 [`docs/architecture.md`](docs/architecture.md#packages). Each client connection
 owns its own model; sharing code never shares another connection's focus or
 navigation.
@@ -74,17 +75,19 @@ The path a byte takes, because most decisions are really about where on it a
 piece of code sits:
 
 ```
-child ──pty──> vt.Terminal ──> vt.RenderState ──> blit ──> ui.Buffer
-                                                              │
-                                                     term.Screen diff
-                                                              │
-keystroke <── term.parse <── platform.Tty <──────────── real terminal
+child ──pty──> vt.Terminal ──> vt.RenderState ──> CellSync ──> pane_frame
+                                                                    │
+                                                         client model (frame ack)
+                                                                    │
+                                                        window renderer (Metal/Vulkan)
+                                                                    │
+keystroke <── key_routing <── keymap router <── native window (AppKit/Wayland)
 ```
 
 Two things fall out of that picture. The emulator decides what a screen _is_, so
-telar never parses escape sequences from a child. And the diff is the last step
-before bytes leave, so anything that wants to change what the user sees changes
-the buffer, never the output stream.
+telar never parses escape sequences from a child. And the client model is the
+last shared step before pixels, so anything that wants to change what the user
+sees changes the model or the frame, never the renderer's output.
 
 ### Three paths, three budgets
 
@@ -129,7 +132,7 @@ Watch out for memory problems. Take inspiration from Rust for keeping track of m
 - me is who you are talking to.
 - user means the person using telar.
 - agent means the coding agent a user runs inside a telar's pane. It could include you.
-- client means a TUI or GUI connected to telar's runtime.
+- client means the window (GUI) or the headless client connected to telar's runtime.
 
 ## Commit style
 

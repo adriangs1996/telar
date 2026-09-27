@@ -57,10 +57,23 @@ ssh dev@box 'command -v telar; telar --version'
 ./zig-out/bin/telar --no-config --remote dev@box
 ```
 
-The client discovers the remote home and shell and forwards the runtime's Unix
-socket over SSH. Ctrl-b followed by `d` detaches without stopping the remote
-processes; the same command reconnects. No Telar TCP listener is exposed.
-See [remote attach](docs/flows/remote-attach.md) for requirements and ownership.
+The window discovers the remote home and shell and forwards the runtime's Unix
+socket over SSH, and reconnects by itself when the link drops. Closing the
+window leaves the remote processes running; the same command reattaches. No
+Telar TCP listener is exposed. See [remote attach](docs/flows/remote-attach.md)
+for requirements and ownership.
+
+Machines you use often can be saved and kept in every window:
+
+```sh
+telar machine add box dev@box --check
+telar --machine box pane list          # run a telar command on box
+telar gui --machine box                # a window that shows box first
+```
+
+See [machine profiles](docs/flows/machine-profiles.md),
+[machine dispatch](docs/flows/machine-dispatch.md) and
+[machine presentation](docs/flows/machine-presentation.md).
 
 ## Configuration and plugins
 
@@ -100,7 +113,7 @@ zig build run -- --theme terminal
 
 Themes color Telar's bars, sidebar, selections, and pane borders. The GUI also
 uses the preset's terminal foreground, background, ANSI palette and cursor
-colors. The TUI retains its host terminal's palette. Customize either part with
+colors. Customize either part with
 `theme.colors` and `theme.terminal`; [Lua configuration](docs/configuration.md#theme)
 documents overrides, profiles and hot reload.
 
@@ -215,18 +228,16 @@ zig build bench
 ```
 
 The benchmark target uses `ReleaseFast` when the main build mode is `Debug`.
-It measures damage collection, frame encoding and decoding, client application
-plus terminal output, native keybinding routing, bounded Lua callbacks, cursor-only output, direct KGP
-encoding, the no-damage KGP path, and a 1920×1080 RGBA upload through APC,
-base64, zlib, and Ghostty. Cell workloads use a fixed 154×37 screen: a one-cell
+It measures damage collection, frame encoding and decoding, keybinding routing,
+bounded Lua callbacks, client events, KGP ingest and shared frames, text
+rasterization and blitting. Cell workloads use a fixed 154×37 screen: a one-cell
 patch, a representative fragmented patch with 56 spans of 24 cells, and a full
-screen. Client chrome workloads render the real tab model with 1, 8, and 64
-tabs. Fixture construction is outside the timed section. Use `--filter`,
+screen. Fixture construction is outside the timed section. Use `--filter`,
 `--samples`, or `--sample-ms` after `--` to narrow or lengthen a run:
 
 ```sh
-zig build bench -- --filter frontend --samples 20 --sample-ms 100
-zig build bench -- --filter frontend.client_ui.chrome --samples 20 --sample-ms 100
+zig build bench -- --filter frontend.client --samples 20 --sample-ms 100
+zig build bench -- --filter client.keybind --samples 20 --sample-ms 100
 zig build bench -- --list
 ```
 
