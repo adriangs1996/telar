@@ -3,4 +3,7 @@
 test {
     _ = @import("fixtures.zig");
     _ = @import("pane_splits.zig");
+    _ = @import("host_resources.zig");
+    _ = @import("graphics_and_clipboard.zig");
+    _ = @import("configuration.zig");
 }
