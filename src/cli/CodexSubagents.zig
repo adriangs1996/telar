@@ -5,8 +5,11 @@
 //! is the `agent_id` its own hooks carry.
 
 const std = @import("std");
+const runtime_connection = @import("runtime_connection.zig");
 
 const native = std.c;
+// `std.c.fstat` is void on Linux; the C declaration exists everywhere.
+const stat_header = runtime_connection.native;
 const CodexSubagents = @This();
 
 /// Children tracked at once; more are counted as this many.
@@ -139,8 +142,8 @@ pub fn read(io: std.Io, path: []const u8) CodexSubagents {
     defer file.close(io);
 
     // A FIFO or another user's file is never a rollout this agent wrote.
-    var stat: native.Stat = undefined;
-    if (native.fstat(fd, &stat) != 0 or (stat.mode & native.S.IFMT) != native.S.IFREG or stat.uid != native.getuid()) {
+    var stat: stat_header.struct_stat = undefined;
+    if (stat_header.fstat(fd, &stat) != 0 or !isRegular(stat.st_mode) or stat.st_uid != native.getuid()) {
         return running;
     }
 
@@ -171,6 +174,10 @@ fn value(item: []const u8, key: []const u8) ?[]const u8 {
 const started_a = "{\"type\":\"event_msg\",\"payload\":{\"type\":\"item_completed\",\"item\":{\"type\":\"SubAgentActivity\",\"id\":\"call_a\",\"kind\":\"started\",\"agent_thread_id\":\"thread-a\",\"agent_path\":\"/root/a\"}}}\n";
 const started_b = "{\"type\":\"event_msg\",\"payload\":{\"type\":\"item_completed\",\"item\":{\"type\":\"SubAgentActivity\",\"id\":\"call_b\",\"kind\":\"started\",\"agent_thread_id\":\"thread-b\",\"agent_path\":\"/root/b\"}}}\n";
 const completed_a = "{\"type\":\"event_msg\",\"payload\":{\"type\":\"item_completed\",\"item\":{\"type\":\"SubAgentActivity\",\"id\":\"subagent-completed-x\",\"kind\":\"completed\",\"agent_thread_id\":\"thread-a\",\"agent_path\":\"/root/a\"}}}\n";
+
+fn isRegular(mode: stat_header.mode_t) bool {
+    return (@as(u32, mode) & @as(u32, stat_header.S_IFMT)) == @as(u32, stat_header.S_IFREG);
+}
 
 test "started children without a completion are running" {
     var running: CodexSubagents = .{};
