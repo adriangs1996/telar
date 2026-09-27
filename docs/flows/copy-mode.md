@@ -20,7 +20,7 @@ request containing only coordinates.
 ## Input and commit
 
 ```text
-host key, mouse wheel or native action
+window key, mouse wheel or native action
         |
 key_routing / copy_mode_pointer / actions.executeAction
         |
@@ -105,7 +105,7 @@ runtime-selected bytes -> schema.pane_clipboard
                               |
                  model.to_host.writeClipboard
                               |
-     host_effects.deliver -> term.writeClipboard (OSC 52) -> writer flush
+     GuiAdapter.deliverRequests -> requestClipboardWrite -> native clipboard
 ```
 
 `runtime_messages.handleServerMessage(.pane_clipboard)` validates pane identity
@@ -113,14 +113,18 @@ and copies the bytes into `model.to_host`; a later write in the same event
 replaces an earlier one. The event changes no other `ClientModel` state; the
 runtime already selected the requested text. The schema decoder rejects an
 invalid pane identity, and the client keeps the same check for direct callers.
-After the event the TUI drains the request in `host/host_effects.deliver`,
-which encodes OSC 52 and flushes it; the GUI drains it in
-`GuiAdapter.deliverHostEffects`.
+After the event the window drains the request in
+`GuiAdapter.deliverHostEffects`; `requestClipboardWrite` hands the bytes to
+the native host services, which the window thread completes (see
+[Native host services](native-host-services.md)). The headless client records
+the request in its trace and performs nothing.
 A pane may exit after the copy request without cancelling the user's completed
 copy.
 
-Clipboard output bypasses the cell diff and does not advance a model version or
-schedule presentation. The schema and terminal writer share the 64 KiB bound.
+Clipboard output does not advance a model version or schedule presentation.
+The schema bounds the payload at 64 KiB. The window's host services also reject
+text over their own request bound or invalid UTF-8, and log that the update was
+not admitted.
 
 ## Runtime frames and pane retirement
 
@@ -151,21 +155,14 @@ runtime response.
 
 ## Presentation
 
-Neither the input adapter nor the operation requests a draw or
-writes presentation state. After the turn's client events, `events.update`
-observes the model version once. `Presenter` compares the `copy` revision with
-its last presented version and folds the latest immutable `Projection.copy`
-(`CopyProjection`) into the paced frame.
-
-When copy movement also changes the viewport, `Presenter` observes the
-independent viewport revision. Its compositor detects the changed scroll
-projection; the copy use case does not mutate rendering caches.
-
-The presenter-owned compositor retains only the projection it last painted.
-It clears the old pane when the target changes or copy mode exits. Entering and
-leaving invalidate the status bar; cursor and selection movement patch exact
-visible ranges without mutating multiplexer pane damage. Copy projection is
-presentation state, never semantic authority inside the model's `Pane`.
+Neither the input adapter nor the operation requests a draw or writes
+presentation state. After the inbox turn, `GuiAdapter.update` observes the
+model version once through `Client.presentation.observe`. A changed `copy` or
+viewport revision asks for a frame. `GuiAdapter.prepare` captures the latest
+immutable `Projection.copy` (`CopyProjection`), and the terminal renderer
+reads it per pane through `copy_selection.forPane`. The copy use case does not
+mutate rendering caches. Copy projection is presentation state, never
+semantic authority inside the model's `Pane`.
 
 ## Validation
 
@@ -179,11 +176,9 @@ presentation state, never semantic authority inside the model's `Pane`.
   `model.to_runtime`, and graphics visibility and runtime viewport
   synchronization for both normal input and copy mode
   (`deliverPaneViewport`).
-- `lib/console/host_output.zig` proves exact OSC 52 encoding,
-  multi-chunk payloads and the terminal-side size bound.
-- `src/frontend/client/tests/` proves key and pointer routing,
-  outside-wheel consumption, missing-target exit, source-independent
-  copy-mode preflight, backpressure, clipboard delivery and presenter-only
-  projection through the real client boundary.
-- `src/frontend/workspace/multiplexer.zig` proves that copy deltas belong to
-  `Compositor` and patch exact visible ranges without pane-model mutation.
+- `src/client_tests/host_interaction.zig`, `input.zig` and
+  `graphics_and_clipboard.zig` prove key and pointer routing, outside-wheel
+  consumption, missing-target exit, source-independent copy-mode preflight,
+  backpressure and clipboard delivery through the real client boundary.
+- `src/gui/tests/scene.zig` and `italic.zig` draw a copy projection in the
+  window's renderer.

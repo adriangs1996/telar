@@ -41,8 +41,8 @@ bounds, colliding glyph indices, mixed runs and 120 warm repaints. The full
 symbols font's source, version, SHA-256 and license are recorded in
 [`src/assets/README.md`](../../src/assets/README.md).
 
-This is a GUI presentation change. It changes neither the runtime's cells and
-PTY behavior nor the TUI's small embedded icon subset.
+This is a GUI presentation change. It does not change the runtime's cells or
+PTY behavior.
 
 For a native visual check on macOS, build the GUI and run the Neovim probe with
 a new temporary directory:

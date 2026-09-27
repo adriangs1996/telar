@@ -48,8 +48,8 @@ the confirmation instead of the hints, and the next `Enter` sends
 `create_workspace` with `create_cwd = true`. The runtime creates the path
 (`launch_cwd.createLaunchDirectory`) before proposing the workspace and
 refuses relative paths or an existing non-directory. Any edit clears the
-confirmation. The TUI paints the form inline on the bottom row (fields, then
-the completion names); the GUI paints a modal with the list.
+confirmation. The window paints the form as a modal with the list
+(`WorkspaceForm`).
 
 ## Opening and input
 
@@ -62,21 +62,20 @@ NamePromptState.begin
         |
 ClientModel.name_prompt.version() (Version.prompt)
 
-host key input                     streamed paste phase
-        |                                  |
-key_routing.routeKeyInput   paste_routing.start / content / finish
-        |                                  |
-key routing selects the prompt      paste_routing -> prompt owner
-        |                                  |
-key or replayed bytes -> term.parse       paste_start / paste_text / paste_end
-        |                                  |
-        +----------------+-----------------+
-                         |
-             name_prompt.inputPrompt(Input)
-                         |
-                  semantic Command
+window key, text or paste event
         |
-name_prompt.inputPrompt -> NamePromptState.apply
+GuiAdapter.drainInput -> GuiAdapter.widgetInput
+        |                                     |
+  not consumed                      prompt text field owns it
+        |                                     |
+GuiAdapter.routeKey / paste_routing    widget routing editor
+        |                                     |
+key_routing.routeKeyInput or             semantic Command
+paste_routing selects the prompt              |
+        |                                     |
+        +------------------+------------------+
+                           |
+       name_prompt.inputPrompt(Input) -> NamePromptState.apply
 ```
 
 `name_prompt.openNamePrompt` owns opening eligibility and canonical initialization.
@@ -91,15 +90,17 @@ and mutate the prompt through the model.
 paste, `paste_routing` snapshots those modes plus the attachment modal and
 `paste_routing` selects one owner. A paste that starts in the prompt
 records `Prompt.pasting`; its later chunks and closing boundary stay with that
-editor. For normal host keys, `key_routing.routeKeyInput` selects prompt authority
+editor. For keys the prompt's widget did not consume, `key_routing.routeKeyInput`
+selects prompt authority
 before copy mode or pane input. `key_routing.captures` bypasses configured bindings
 while the prompt is active. Mouse input and configured actions are suppressed
 in that interval. `pointer_routing.apply` receives no pointer authority, while
 `actions.executeAction` returns before selecting a native, Lua or plugin effect.
 See [Key routing](key-routing.md).
 
-The terminal adapter translates bytes into semantic editor commands. The state
-component handles grapheme-aware editing and records a revision only for a
+The window's prompt field translates key, text and paste events into semantic
+editor commands; the headless client sends its keys through key routing. The
+state component handles grapheme-aware editing and records a revision only for a
 visible change. Bracketed-paste start and end change routing without requesting
 a frame. A newline inside a paste becomes a space; Enter outside a paste
 submits only a non-empty value.
@@ -135,33 +136,32 @@ reconciliation use cases.
 ## Presentation
 
 Neither input routing nor the prompt use case requests a draw. After each
-turn of client events, `events.update` observes `ClientModel.version()` for `Presenter`.
-`Presenter` compares the observed `prompt` revision with its last presented
-version and folds the latest state into the paced frame.
+turn of client events, `GuiAdapter.update` observes `ClientModel.version()`
+through `Client.presentation.observe`. A changed `prompt` revision asks for a
+frame, which folds the latest state.
 
-The TUI view (`presentation/State.zig`) receives a borrowed prompt in `RenderInput`. It renders the field and
-cursor but stores no prompt target, text or paste state and makes no lifecycle
-decision. Multiple edits before a frame replace obsolete visual work with the
-latest model state.
+The window's overlays (`NamePrompt`, `WorkspaceForm`) read the prompt from the
+captured `client.Projection`. They render the field and cursor but store no
+prompt target, text or paste state and make no lifecycle decision. Multiple
+edits before a frame replace obsolete visual work with the latest model state.
 
 ## Validation
 
 - `src/model/state/name_prompt.zig` proves bounded editing, revisions,
   cancellation and exact-target completion.
 - `src/client/input/name_prompt.zig` owns effect ordering (`inputPrompt`,
-  `submitPrompt`); `src/frontend/client/tests/renaming_and_telemetry.zig` and
-  `workspace_lifecycle.zig` prove prompt retention after blocked or failed
-  submissions.
+  `submitPrompt`); `src/client_tests/renaming_and_telemetry.zig`,
+  `input_operations.zig` and `workspace_lifecycle.zig` prove prompt retention
+  after blocked or failed submissions.
 - `src/client/input/name_prompt_opening.zig` holds input authority,
   workspace-creation gating, target resolution and canonical text.
 - `src/client/input/name_prompts.zig` maps semantic host events to commands.
-- `src/frontend/client/tests/` covers terminal parsing, bracketed
-  paste handling and the zero-length incomplete-sequence regression.
 - `src/client/input/paste_routing.zig` wires exclusive prompt or pane
-  ownership and ignores unowned phases; `src/frontend/client/tests/input.zig`
-  proves it through streamed paste.
-- `src/frontend/client/tests/` proves request ownership, `model.to_runtime`
-  failure recovery and presenter-only frame scheduling through the real client
-  adapters.
-- `src/frontend/client/presentation/view.zig` and `src/frontend/client/presentation/Presenter.zig` prove
-  that presentation receives model state without becoming its owner.
+  ownership and ignores unowned phases; `src/client_tests/input.zig` proves it
+  through streamed paste.
+- `src/client_tests/renaming_and_telemetry.zig` proves request ownership,
+  `model.to_runtime` failure recovery and presentation-only frame scheduling
+  through the real client.
+- `src/gui/tests/overlays.zig`, `navigation.zig` and `widget_interaction.zig`
+  prove the window's prompt rendering, pasted text that never reaches the
+  child, and preedit ownership.

@@ -5,12 +5,12 @@ and PTYs. Start at `actions.executeAction`, mouse input, or agent navigation;
 each source reaches the same concrete operation.
 
 ```text
-host input -> actions.executeAction, view_interactions.apply or agent navigation
+window input -> actions.executeAction, view_interactions.apply or agent navigation
   -> pane_focus.applyPaneFocus
      -> pane_focus.focusPane
      -> pane_focus.deliverPaneFocus
         -> pane_focus.synchronizeActivePane
-           -> synchronizePaneAttachments: shelf reservation and geometry
+           -> synchronizePaneAttachments: agent acknowledgement, bound shelf
            -> pane_focus.synchronizeReportedFocus
         -> fullscreen: model.to_host.invalidate_placements,
            resizeAttachedPanes, attachVisiblePanes
@@ -25,8 +25,10 @@ leaf order without wrapping; up/down does nothing. The split tree is retained.
 
 `pane_focus.deliverPaneFocus` validates the exact location, identity and
 pane revision because compound input transactions also call it with a captured
-focus commit. It synchronizes the attachment shelf before focus reports; a
-changed shelf reservation re-offers geometry. A fullscreen focus change
+focus commit. It synchronizes attachments before focus reports: a pending
+`acknowledge_agent` is queued, and a bound attachment shelf whose reservation
+changed would re-offer geometry. Neither the window nor the headless client
+binds a shelf. A fullscreen focus change
 invalidates placements and offers the visible pane size, then requests missing
 attachments. A newly visible detached pane cannot receive input until its
 correlated `pane_opened` confirmation arrives. Pending requests are deduplicated.
@@ -55,6 +57,6 @@ Operations do not draw: the adapter observes the changed model revision.
 
 Source: `src/client/panes/pane_focus.zig`,
 `pane_focus.deliverPaneFocus` and `pane_focus.synchronizeReportedFocus`.
-Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
-`src/frontend/client/tests/mouse_selection.zig`, and
+Tests: `src/client_tests/pane_lifecycle.zig`,
+`src/client_tests/mouse_selection.zig`, and
 `src/model/state/tests/panes.zig`.

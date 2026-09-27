@@ -1,15 +1,16 @@
 # Link opening
 
-Telar shares bounded URI recognition and opening between its terminal and native
-adapters. In the GUI, hovering a link needs no modifier: the pointer becomes a
-hand, the visible spans get an accent underline and a card beside the row names
-the destination. A plain left press stays with the pane, so a drag still selects
-text; releasing without motion on the same presented link opens it. The platform
-modifier ([Ghostty’s convention](https://ghostty.org/docs/config/reference#link-url):
-Command on macOS, Control on Linux) claims the whole gesture instead, so nothing
-reaches the pane. When the child owns mouse reporting the plain button is the
-child’s; hold Shift, with or without the modifier, to open. A right press copies
-the URI to the clipboard and shows the copy toast. Alt keeps the text plain for
+Telar shares bounded URI recognition and opening between the shared client and
+the native adapter. In the GUI, hovering a link needs no modifier: the pointer
+becomes a hand, the visible spans get an accent underline and a card beside the
+row names the destination. A plain left press stays with the pane, so a drag
+still selects text; releasing without motion on the same presented link opens
+it. The platform modifier ([Ghostty’s
+convention](https://ghostty.org/docs/config/reference#link-url): Command on
+macOS, Control on Linux) claims the whole gesture instead, so nothing reaches
+the pane. When the child owns mouse reporting the plain button is the child’s;
+hold Shift, with or without the modifier, to open. A right press copies the URI
+to the clipboard and shows the copy toast. Alt keeps the text plain for
 selection. Leaving the window, losing focus, changing geometry or switching
 context cancels a pending open.
 
@@ -52,8 +53,8 @@ TUI draws around a path (box drawing, bullets, ellipses) are not part of it.
 
 A path is a guess, so the GUI treats it as a link only while the platform
 modifier is held: without Cmd (Ctrl on Linux) it is plain text for selection and
-shows no underline. The TUI keeps its row-local click policy. Nothing checks the
-file on hover; the runtime does when the link is opened.
+shows no underline. Nothing checks the file on hover; the runtime does when the
+link is opened.
 
 `file://` links carry a line too: a fragment of `12`, `L12`, `L12:3`, `L12C3` or
 a range such as `L12-L20` (kitty's and GitHub's forms) becomes the line and
@@ -102,21 +103,22 @@ They do not invalidate terminal cell meshes. Native pointer shape changes alone
 require no GPU frame, timer or polling. Browser launch uses the existing bounded
 worker and never blocks input or presentation.
 
-## Shared opening policy and the TUI
+## Shared opening policy
 
-The optional `HostChrome.link_pointer_fn` is an adapter hit test. GUI implements its
-press policy there (`src/gui/ports/chrome.zig`). An absent callback retains TUI behavior: ordinary
-left press opens a row-local textual or Markdown link, Shift declines opening for selection,
-and copy mode uses `o`. The common client contains no GUI gesture policy.
+The optional `HostChrome.link_pointer_fn` is an adapter hit test. GUI implements
+its press policy there (`src/gui/ports/chrome.zig`). An adapter without the
+callback, such as the client integration tests' `ClientHarness`, keeps the
+shared default in `link_opening.inputLinkPointer`: an ordinary left press opens
+a row-local textual or Markdown link, and Shift declines opening for selection.
+Copy mode uses `o`. The common client contains no GUI gesture policy.
 
 `link_opening.openLink` sends supported non-file schemes through
-`model.link_opening` (`Opening`): at most one worker and one replaceable
-pending target per client. It starts the worker with
-`client.workers.start(.{ .link = target })`; `src/client/links/host.zig` uses
-`/usr/bin/open` on macOS, `xdg-open` on Linux, or
-`rundll32.exe url.dll,FileProtocolHandler` on Windows. It passes the URI as one
-argument, captures bounded output, and expires after five seconds. Failure emits
-an in-app warning.
+`model.link_opening` (`Opening`): at most one worker and one replaceable pending
+target per client. It queues the worker with `client.to_background.push(.{ .link
+= target })`; `src/client/links/host.zig` uses `/usr/bin/open` on macOS,
+`xdg-open` on Linux, or `rundll32.exe url.dll,FileProtocolHandler` on Windows.
+It passes the URI as one argument, captures bounded output, and expires after
+five seconds. Failure emits an in-app warning.
 
 `file://` links and paths open through
 [editor file links](editor-file-links.md) from the pane they were printed in:

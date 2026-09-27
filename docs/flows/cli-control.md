@@ -349,7 +349,8 @@ Validated with Zig 0.16.0:
   3,131 passed, one skipped; all 65 build steps succeeded.
 - `python3 tools/test_cli_control.py`: 72 socket contract and failure tests.
 - `python3 tools/test_cli_live.py`: two integration tests against isolated real
-  runtimes, including a PTY-hosted TUI and the isolated plugin worker.
+  runtimes, including one attached through the headless client and the
+  isolated plugin worker.
 - Formatting and `codestyle` passed for all 125 changed Zig files; the client
   module/capability boundary checker passed.
 
