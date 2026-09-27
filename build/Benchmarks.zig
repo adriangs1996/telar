@@ -123,15 +123,6 @@ pub fn init(b: *std.Build, app: Application) @This() {
     }
     b.step("bench", "Run the interactive path benchmarks").dependOn(&run_benchmarks.step);
 
-    const verify_terminal_browser = b.addSystemCommand(&.{"python3"});
-    verify_terminal_browser.addFileArg(b.path("tools/verify_terminal_browser.py"));
-    if (b.args) |args| {
-        verify_terminal_browser.addArgs(args);
-    }
-    b.step(
-        "verify-terminal-browser",
-        "Build and exercise pinned terminal-browser inside Telar on Ghostty",
-    ).dependOn(&verify_terminal_browser.step);
 
     return .{ .benchmarks = benchmarks, .echo_probe = echo_probe };
 }
