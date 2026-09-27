@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix='telar-client-smoke-',dir='/tmp') as tem
   time.sleep(.2)
   run('runtime','status')
   client=HeadlessClient(['--config',cfg,'--','/bin/sh'],env=env,cwd=root,size=(140,40),log=root/'client.log')
-  time.sleep(.5)
+  client.wait_ready()
   deadline=time.monotonic()+12
   while True:
    clients=run('client','list',quiet=True)

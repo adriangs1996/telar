@@ -5,7 +5,7 @@ const InputLabel = @import("InputLabel.zig");
 const InputSize = @import("InputSize.zig");
 
 pub const InputLine = union(enum) {
-    /// A key or chord, pressed and released.
+    /// A key or chord, pressed.
     key: keyinput.Key,
     /// Characters typed one after another.
     text: InputText,

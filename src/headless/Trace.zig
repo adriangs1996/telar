@@ -58,8 +58,12 @@ pub fn writeJson(self: *const Trace, writer: *std.Io.Writer) !void {
         }
 
         try writer.print("{{\"kind\":\"{s}\",\"t_ns\":{d}", .{ @tagName(entry.kind), entry.t_ns });
+        if (entry.pane != 0) {
+            try writer.print(",\"pane\":{d}", .{entry.pane});
+        }
+
         if (entry.kind == .frame) {
-            try writer.print(",\"pane\":{d},\"frame\":{d}", .{ entry.pane, entry.frame });
+            try writer.print(",\"frame\":{d}", .{entry.frame});
         }
 
         if (entry.label_len != 0) {

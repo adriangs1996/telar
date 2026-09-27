@@ -1131,7 +1131,7 @@ __attribute__((constructor)) static void install(void){
     setbuf(probe_log,NULL);
     limit=atoi(getenv("TELAR_DISPLAY_SAMPLES"));if(limit<1 || limit>512)abort();
     const char *mode = getenv("TELAR_DISPLAY_MODE"), *layout = getenv("TELAR_DISPLAY_LAYOUT");
-    display_mode = mode ? @(mode) : ([NSProcessInfo.processInfo.arguments containsObject:@"gui"] ? @"gui" : @"tui");
+    display_mode = mode ? @(mode) : ([NSProcessInfo.processInfo.arguments containsObject:@"gui"] ? @"gui" : @"ghostty");
     display_layout = layout ? @(layout) : @"single";
     const char *diagnostics = getenv("TGB_DRAW_DIAGNOSTICS");
     draw_diagnostics = diagnostics && !strcmp(diagnostics, "1");
@@ -1141,7 +1141,7 @@ __attribute__((constructor)) static void install(void){
     window_manager = manager ? @(manager) : nil;
     const char *pane_count = getenv("TELAR_DISPLAY_PANES");
     panes = [display_layout isEqualToString:@"single"] ? 1 : (pane_count ? (unsigned)atoi(pane_count) : 4);
-    BOOL valid = [@[@"gui", @"tui", @"ghostty"] containsObject:display_mode] &&
+    BOOL valid = [@[@"gui", @"ghostty"] containsObject:display_mode] &&
         [@[@"single", @"splits", @"tabs"] containsObject:display_layout] && panes >= 1 && panes <= 8;
     valid = valid && (!diagnostics || !strcmp(diagnostics, "0") || draw_diagnostics);
     const char *viewport = getenv("TELAR_DISPLAY_VIEWPORT");

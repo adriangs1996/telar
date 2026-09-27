@@ -44,6 +44,8 @@ options: HeadlessOptions,
 stdin_buffer: [2 * input_protocol.max_line_bytes]u8 = undefined,
 stdin: std.Io.File.Reader = undefined,
 reading: bool = false,
+/// Whether `ready` went to stdout, once input was first admitted.
+announced: bool = false,
 
 /// Adopts the client's options and binds every port before any event.
 ///
@@ -199,21 +201,33 @@ fn dispatch(self: *HeadlessClient, event: Event) !?u8 {
 }
 
 fn take(self: *HeadlessClient, line: InputLine) !?u8 {
+    // The echo trace's chain starts where a host key arrives; only lines a
+    // window would have received as keys count.
+    if (line == .key or line == .text) {
+        core.mark(self.io, .host_read);
+        core.mark(self.io, .client_input);
+    }
+
     const now_ns = pacing.clock.monotonic(self.io);
+    const pane = self.focusedPane();
     switch (line) {
         .key => |key| {
-            self.trace.record(.{ .kind = .input, .t_ns = now_ns }, "key");
-            try self.press(key, now_ns);
+            self.trace.record(.{ .kind = .input, .t_ns = now_ns, .pane = pane }, "key");
+            if (try self.press(key, now_ns) == .stop) {
+                return 0;
+            }
         },
         .text => |*text| {
-            self.trace.record(.{ .kind = .input, .t_ns = now_ns }, "text");
+            self.trace.record(.{ .kind = .input, .t_ns = now_ns, .pane = pane }, "text");
             var characters = (try std.unicode.Utf8View.init(text.slice())).iterator();
             while (characters.nextCodepointSlice()) |character| {
-                try self.press(.{ .code = .{ .char = keyinput.Char.init(character) } }, now_ns);
+                if (try self.press(.{ .code = .{ .char = keyinput.Char.init(character) } }, now_ns) == .stop) {
+                    return 0;
+                }
             }
         },
         .resize => |size| {
-            self.trace.record(.{ .kind = .input, .t_ns = now_ns }, "resize");
+            self.trace.record(.{ .kind = .input, .t_ns = now_ns, .pane = pane }, "resize");
             var capabilities = self.app.model.host.host_capabilities;
             capabilities.window_width_px = @as(u32, size.cols) * cell_width_px;
             capabilities.window_height_px = @as(u32, size.rows) * cell_height_px;
@@ -229,25 +243,32 @@ fn take(self: *HeadlessClient, line: InputLine) !?u8 {
     return null;
 }
 
-// A press and its release, through the keymap as a window's keys go.
-fn press(self: *HeadlessClient, key: keyinput.Key, now_ns: u64) !void {
-    var released = key;
-    released.phase = .release;
-    for ([_]keyinput.Key{ key, released }) |event| {
-        const decision = self.router.routeEvent(.{
-            .key = event,
-            .raw = "",
-            .now_ns = now_ns,
-        }, .{
-            .captures_keys = data.key_routing.captures(client.key_routing.keyRoutingAuthority(&self.app)),
-            .repeat_policy = null,
-        });
-
-        try self.decide(decision);
-    }
+// The pane input goes to, recorded so a trace reader can find its echo
+// among other panes' frames; 0 without one.
+fn focusedPane(self: *const HeadlessClient) u64 {
+    const model = &self.app.model;
+    const slot = model.tabs.activeSlot() orelse return 0;
+    const pane = data.tab_layout.focusedPaneConst(model, slot) orelse return 0;
+    return @intFromEnum(pane.id);
 }
 
-fn decide(self: *HeadlessClient, decision: client.key_router.Type.Decision) !void {
+// A press through the keymap, as a terminal delivers keys: without a
+// release, which would end prefix mode before its second key. A binding
+// such as detach may end the client.
+fn press(self: *HeadlessClient, key: keyinput.Key, now_ns: u64) !keyinput.Control {
+    const decision = self.router.routeEvent(.{
+        .key = key,
+        .raw = "",
+        .now_ns = now_ns,
+    }, .{
+        .captures_keys = data.key_routing.captures(client.key_routing.keyRoutingAuthority(&self.app)),
+        .repeat_policy = null,
+    });
+
+    return self.decide(decision);
+}
+
+fn decide(self: *HeadlessClient, decision: client.key_router.Type.Decision) !keyinput.Control {
     switch (decision) {
         .forward => |value| _ = try client.key_routing.routeKeyInput(&self.app, .{ .key = value.key }),
         .replay => |value| {
@@ -264,9 +285,13 @@ fn decide(self: *HeadlessClient, decision: client.key_router.Type.Decision) !voi
             if (control == .continue_routing) {
                 self.router.actionCompleted(request, client.repeatPolicy(request.value, client.actions.repeatPane(&self.app)));
             }
+
+            return control;
         },
         .pending, .discard => {},
     }
+
+    return .continue_routing;
 }
 
 // Presents the active tab's pending frames the moment they are ready and
@@ -287,6 +312,7 @@ fn present(self: *HeadlessClient) !void {
         return;
     }
 
+    core.mark(self.io, .compose_start);
     const projected = client.capture(model, .{
         .geometry = region,
         .presentation_ingress = ingress,
@@ -297,9 +323,18 @@ fn present(self: *HeadlessClient) !void {
         .geometry = client.Geometry.capture(projected),
     });
 
+    // There is no host to write to; the frame counts as flushed once it is
+    // presented.
+    core.mark(self.io, .host_flush_start);
     const delivery = app.presentation.complete(token, .delivered) orelse return;
+    core.mark(self.io, .host_flush_done);
     const now_ns = pacing.clock.monotonic(self.io);
     for (delivery.commit.slice()) |pane| {
+        // A pane with no pending frame was only drawn again.
+        if (pane.frame_id == 0) {
+            continue;
+        }
+
         self.trace.record(.{
             .kind = .frame,
             .t_ns = now_ns,
@@ -375,6 +410,12 @@ fn readWhenAdmitted(self: *HeadlessClient) !void {
     self.reading = true;
     errdefer self.reading = false;
     try self.inbox.start(.input, .{ readLine, .{&self.stdin} });
+
+    // Tools wait for this line before they send what they measure.
+    if (!self.announced) {
+        self.announced = true;
+        try std.Io.File.stdout().writeStreamingAll(self.io, "ready\n");
+    }
 }
 
 fn readLine(reader: *std.Io.File.Reader) anyerror!InputLine {

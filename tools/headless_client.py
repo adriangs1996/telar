@@ -12,6 +12,7 @@ while the client runs.
 """
 
 import json
+import select
 import subprocess
 from pathlib import Path
 
@@ -26,7 +27,7 @@ def build(root=ROOT):
 
 class HeadlessClient:
     def __init__(self, args, env, cwd, size=(140, 40), trace=None, dump=None, log=None, binary=BINARY):
-        command = [str(binary), "--size", f"{size[0]}x{size[1]}"]
+        command = [str(Path(binary).resolve()), "--size", f"{size[0]}x{size[1]}"]
         if trace is not None:
             command += ["--trace", str(trace)]
         if dump is not None:
@@ -38,12 +39,20 @@ class HeadlessClient:
         self.process = subprocess.Popen(
             command,
             stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
             stderr=self.log,
             env=env,
             cwd=cwd,
             start_new_session=True,
         )
+
+    def wait_ready(self, timeout=30):
+        """Waits until the client admits input: connected, its first tab
+        open and startup over."""
+        ready, _, _ = select.select([self.process.stdout], [], [], timeout)
+        line = self.process.stdout.readline() if ready else b""
+        if line != b"ready\n":
+            raise RuntimeError(f"headless client not ready: {line!r}, exit {self.process.poll()}")
 
     def send(self, *lines):
         for line in lines:
@@ -97,3 +106,44 @@ class HeadlessClient:
 
     def dump(self):
         return json.loads(Path(self.dump_path).read_text())
+
+
+def echo_latencies(trace, label="text", since=None):
+    """Microseconds from each input line named `label` to the first frame
+    of the pane it went to, and how many inputs saw no such frame before the
+    next input. With `since`, only inputs after the mark of that name count."""
+    entries = trace["entries"]
+    latencies = []
+    timeouts = 0
+    counting = since is None
+    for index, entry in enumerate(entries):
+        if entry["kind"] == "mark" and entry.get("label") == since:
+            counting = True
+        if not counting or entry["kind"] != "input" or entry.get("label") != label:
+            continue
+        pane = entry.get("pane")
+        for later in entries[index + 1:]:
+            if later["kind"] == "input":
+                timeouts += 1
+                break
+            if later["kind"] == "frame" and (pane is None or later.get("pane") == pane):
+                latencies.append((later["t_ns"] - entry["t_ns"]) / 1e3)
+                break
+        else:
+            timeouts += 1
+    return latencies, timeouts
+
+
+def last_frame_after(trace, input_index, pane=None):
+    """Nanoseconds from the input at `input_index` (counting input entries)
+    to the last frame of its pane before the next input, or None."""
+    inputs = [i for i, entry in enumerate(trace["entries"]) if entry["kind"] == "input"]
+    start = inputs[input_index]
+    end = inputs[input_index + 1] if input_index + 1 < len(inputs) else len(trace["entries"])
+    entry = trace["entries"][start]
+    pane = entry.get("pane") if pane is None else pane
+    frames = [later for later in trace["entries"][start + 1:end]
+              if later["kind"] == "frame" and (pane is None or later.get("pane") == pane)]
+    if not frames:
+        return None
+    return frames[-1]["t_ns"] - entry["t_ns"]
