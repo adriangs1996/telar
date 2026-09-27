@@ -1,10 +1,13 @@
 # Kitty graphics support
 
 Telar terminates Kitty Graphics Protocol commands at each pane PTY. Child APCs
-never pass through to the exterior terminal. The runtime interprets them into
-virtual images and placements; the client assigns exterior IDs, clips them to
-the visible pane, and emits fresh KGP commands inside the same synchronized
-DEC 2026 update as the cell diff.
+never pass through to the host. The runtime interprets them into virtual
+images and placements and sends them to each client as separate graphics
+messages. The window keeps a bounded replica of them
+([pane graphics](flows/pane-graphics.md)); it has no GPU image consumer yet, so
+it does not draw them, and a pane that holds images carries the cell fallback
+flag. The terminal client re-emitted them as KGP to its host terminal; that
+path left with it.
 
 ## Ownership
 
@@ -13,39 +16,18 @@ generations, placements, quotas, incomplete uploads, and replies written back
 to the PTY. This state survives client disconnection. A reconnecting client
 requests an incremental graphics snapshot.
 
-`ClientModel` owns exterior capability state and resolved pixel geometry. The
-client's graphics resources own exterior IDs, physical placements, layout
-clipping, pending exterior deletes, and the hybrid sidebar framebuffers. Pane
-exterior IDs use the low range below `0x40000000`.
-Telar UI images use the high range beginning at `0x80000001`; child z-indices
-are clamped to `[-1000, 1000]`, while sidebar layers use `-10` through `-8`.
+The client's graphics resources own the retained replica: image identities,
+placements, per-pane and global quotas, and the byte credit returned to the
+runtime. The window reports images as unsupported and exact pointer pixels as
+supported; its cell pixel size comes from its font metrics.
 
 `telar-core` contains only bounded wire values, formats, rectangles, clipping,
 and schema messages. It contains no parser, allocator, PTY, or terminal writer.
 
 `lib/kitty_protocol` is a dependency-free library that encodes Kitty image
 transmissions, placements, and deletions into a caller-owned writer. It owns no
-resources or pacing policy. The frontend adapter converts Telar image metadata
-and applies client-specific byte budgets and z-index limits before calling it.
-
-## Capability detection
-
-On client startup Telar sends direct-data KGP probes for raw image support and
-zlib support using image IDs 31 and 32. It also sends the window-pixel query
-(`CSI 14 t`), the cell-pixel query (`CSI 16 t`), the mode 1016 query and primary
-device attributes. APC and CSI replies are consumed by the client input parser
-and never reach the focused pane. Each support state is `unknown`, `supported`
-or `unsupported`; `unknown` expires after 250 ms without blocking input. Pixel
-queries are repeated after resize.
-
-The [host capability flow](flows/host-capabilities.md) records response
-translation, model ownership, expiry and resource fallback. The
-[host resize flow](flows/host-resize.md) records geometry effects, placement
-invalidation and query-rearm order.
-
-`automatic` renders cells while support is unknown, selects `kitty-hybrid` on
-success, and stays on cells on rejection or timeout. Explicit `kitty-hybrid`
-and `kitty-full` return `KittyGraphicsUnsupported` when the probe fails.
+resources or pacing policy. The runtime media path and `core.Image` use its
+format values.
 
 ## Implemented child subset
 
@@ -71,9 +53,9 @@ and `kitty-full` return `KittyGraphicsUnsupported` when the probe fails.
 - PTY replies through a bounded, serialized response queue.
 - Cell and pixel dimensions in Ghostty VT and PTY `winsize`, including
   `xpixel` and `ypixel`.
-- SGR cell and SGR-pixel mouse modes. When the exterior reports mode 1016,
-  Telar preserves its exact pixel coordinates relative to the pane. Otherwise
-  it falls back to the measured center of the reported cell.
+- SGR cell and SGR-pixel mouse modes. When the client reports exact pointer
+  pixels, as the window does, Telar preserves them relative to the pane.
+  Otherwise it falls back to the measured center of the reported cell.
 
 Regular file media (`t=f`) is accepted for complete frames and for the
 `a=q` capability query, on the pane's validation rather than the emulator's:
@@ -93,9 +75,9 @@ Graphics do not ride in `pane_frame`. Metadata, pixel chunks, placements,
 deletes, and snapshot boundaries are separate ordered messages. IPC pixel
 chunks are capped at 1 MiB. The runtime freezes at most one generation per
 attachment while it crosses the socket, folds newer generations, and keeps the
-previous exterior placement visible until the replacement image and placement
-are complete. A complete terminal-browser frame (`a=T`, `t=s`, `C=1`, `q=2`,
-no crop or offset keys) crosses the runtime with one copy: the media actor
+previous placement until the replacement image and placement are complete. A
+complete terminal-browser frame (`a=T`, `t=s`, `C=1`, `q=2`, no crop or offset
+keys) crosses the runtime with one copy: the media actor
 maps the child's object, copies it into a fresh runtime-owned object, unlinks
 the child's name, and keeps its own object mapped read-only as the image's
 pixels. The emulator stores a one-byte placeholder for that image; it never
@@ -131,8 +113,7 @@ client-transfer generations. It enforces both the pane and runtime totals; the
 per-screen cap is an additional bound, not a partition that can hide copied
 transfers. Every `width * height * bytes_per_pixel` calculation is checked.
 Incomplete loads are cancelled on chunk, payload, or quota violations. Closing
-a pane frees VT images, transfer snapshots, client pixels, placements, and
-exterior IDs.
+a pane frees VT images, transfer snapshots, client pixels and placements.
 
 PTY output is copied into two fixed 64 KiB batches and parsed by at most one
 media actor per pane. PTY reads resume after the independent text ingest, so
@@ -148,79 +129,26 @@ A client that shares the runtime's machine declares it with an explicit
 clients the runtime freezes each generation into a runtime-owned POSIX
 shared-memory object and sends only its validated name (`graphics_shared_image`)
 instead of pixel chunks; the pixels never cross the socket. The client maps the
-object read-only, without copying, and that one mapping serves both the compact
-`t=s` hand-off to a local Ghostty host and the inline fallback. Names are
-unguessable, unique for the life of the process, at most 31 bytes (Darwin's
-PSHMNAMLEN), and objects are created `0600` with `O_EXCL`.
-
-The host that consumes a `t=s` name unlinks the object; the client unlinks
-whatever it discards, and unlinking twice is harmless because names are never
-reused. A host that has not consumed a name after about three seconds of drawn
-frames loses it: the client unlinks the object, retransmits the pixels inline
-from its mapping, and after two such expiries stops offering names for the rest
-of the session. This keeps one dropped `t=s` command, silent under `q=2`, from
-pinning pane memory credit forever. A client crash can strand at most the
-in-flight objects its credit allowed; macOS offers no way to enumerate and
-sweep them, so that bounded leak is accepted and cleared on reboot.
-
-The shared transmission is the one pane escape that asks the host for a reply
-(`q=0`). Ghostty's `OK` for the exterior image id marks the object consumed,
-so a replaced generation retires on the next pass without probing the name;
-an error reply reclaims the name at once and retransmits the pixels inline.
-Hosts that answer nothing fall back to the probe: only when the name is gone,
-or the deadline reclaims it, does the client retire the image. Either way the
-client returns the exact byte credit to the runtime on retirement.
-Hosts without Kitty graphics shared-memory support and remote sessions retain
-the bounded direct-data fallback, which base64-encodes at most 256 KiB per
-media pass. Shared names, placements and deletes ride inside the cell frame's
-synchronized update, after the cells and before the cursor, so a local frame
-costs no media tick. Cell composition and its terminal flush complete first;
-a pending cell frame defers the separately paced bulk media pass to its own
-completion, and terminal writes remain serialized so KGP chunks cannot
-interleave with cell escape sequences.
+object read-only, without copying, and unlinks any name it does not adopt.
+Names are unguessable, unique for the life of the process, at most 31 bytes
+(Darwin's PSHMNAMLEN), and objects are created `0600` with `O_EXCL`. The window
+and the headless client bootstrap with shared graphics off, so today every
+client receives bounded pixel chunks. A shared client that crashes can strand
+at most the in-flight objects its credit allowed; macOS offers no way to
+enumerate and sweep them, so that bounded leak is accepted and cleared on
+reboot. The client returns the exact byte credit to the runtime when it
+retires an image.
 
 Debug telemetry exposes `input_write_*` and `ingest_*` timings. The benchmark
 `backend.kitty.ingest_zlib_rgba_1920x1080` covers the actual APC → base64 →
 zlib → Ghostty path; the transport integration suite holds the ingest actor at
 a deterministic gate and proves input reaches the child before it is released.
 
-## Sidebar renderers
+## Sidebar and icons
 
-The cell widget draws the complete semantic sidebar into `ui.Buffer`.
-`KittySidebarRenderer` owns two reusable RGBA assets: one rounded selection
-card and the provider-mark atlas. The card raster is capped at 64 KiB, while
-the checked-in atlas's 256 px source slots are downsampled with
-premultiplied-alpha bilinear filtering into slots that preserve the terminal
-cell aspect ratio. Text, cursor, selection marker, hover, and hit targets
-remain cells. Hover does not enter the KGP preparation contract and therefore
-cannot dirty graphical pixels or placements. Both renderers consume the same
-semantic frame, so hit testing does not depend on KGP.
-
-The cell widget renders the immutable bounded snapshot supplied by the
-presenter. Agent storage, local pane-index projection and adapter ownership are
-recorded in [`sidebar.md`](sidebar.md).
-
-`kitty-full` is an experimental alias of the hybrid backend. It intentionally
-does not rasterize text yet.
-
-The optional `nerd-font` icon theme is separate from the sidebar renderer.
-Widgets keep a one-cell fallback and publish a bounded icon plan. During the
-media pass, the client rasterizes the required glyph/color tuples from the
-embedded Nerd Fonts subset into one opaque atlas whose slots preserve the host
-cell aspect ratio. Glyph size is constrained by the shorter side, so circular
-icons remain circular in tall terminal cells. Working-status frames share one
-atlas, so animation changes placements without retransmitting pixels. Missing
-KGP support or non-RGB colors use the Unicode theme directly. Allocation or
-rasterization failure triggers the same fallback on the next cell frame.
-
-The top bar's telar mark is artwork, not a glyph. `telar-mark-64.rgba` is
-box-filtered into the same icon atlas under every icon theme, in a slot two
-cells wide so its square can reach the row's height, and the slot keeps the
-artwork's alpha instead of an opaque cell background. The mark therefore
-appears wherever KGP is available, including over a `default` panel background
-the host paints itself, and falls back to a one-cell `▣` elsewhere. Atlas rows
-are as wide as the widest slot; a one-cell glyph leaves the rest of its row
-transparent and never places it.
+The terminal client's Kitty sidebar renderers, its provider-mark and Nerd Font
+icon atlases and its top-bar mark raster left with it. The window draws the
+sidebar, icons and marks itself; see [`sidebar.md`](sidebar.md).
 
 ## Verification
 
@@ -231,73 +159,26 @@ errors, replacement and deletion. `zig build test-transport` also sends PNG
 through a real child PTY and checks the decoded pixels before and after a
 runtime graphics snapshot.
 
-The automated suite covers exact query and command encoding, APC parsing at
-every input split, RGB/RGBA chunking, zlib success and invalid sizes, unsupported
-media replies, overflow and quota checks, exterior ID isolation, clipping at
-all four pane edges, image and placement deletes, resize reconstruction,
-generation replacement, renderer selection and fallback, idle zero-work,
-semantic hit testing, history isolation, exact mode-1016 coordinates, mouse
-encoding, tab hide/show deletion, and runtime reconnect snapshots. Runtime
-integration tests use real PTYs in raw mode, verify that the child receives
-`Gi=31;OK`, exercise KGP and history in the same pane, and prove input remains
-live while the ingest actor is occupied.
+The runtime suite covers exact query encoding, APC parsing at every input
+split, RGB/RGBA chunking, zlib success and invalid sizes, unsupported media
+replies, overflow and quota checks, image and placement deletes, resize
+reconstruction, generation replacement, history isolation and runtime
+reconnect snapshots. Runtime integration tests use real PTYs in raw mode,
+verify that the child receives `Gi=31;OK`, exercise KGP and history in the
+same pane, and prove input remains live while the ingest actor is occupied.
+Client resource-store tests cover quotas, stale revisions and credits.
 
-The reproducible exterior check builds the pinned terminal-browser revision
-`cce10b6131d15bf46a3e4b8dc827e0544ff7fc65` without changes and runs it inside
-Telar. It rejects media resets or dropped PTY bytes, so a silent fallback to an
-overloaded inline transport cannot pass:
-
-```sh
-zig build verify-terminal-browser
-# Reuse an already-built checkout:
-zig build verify-terminal-browser -- \
-  --terminal-browser-repo /path/to/terminal-browser --skip-build
-```
-
-`--measure SECONDS` keeps the animated fixture running that long, builds
-Telar as `-Doptimize=ReleaseFast -Ddiagnostics=true` so the counters exist
-without Debug overhead, and adds a `frames` block: frames per second forwarded
-by the media actor, published by the runtime and presented by the client, with
-the ingest, freeze, deferral and retire-latency figures behind them.
-
-It writes its machine-readable result to
-`zig-out/terminal-browser-verification.json`. On 2026-08-23 it passed against:
-
-- Ghostty 1.3.1 on macOS: exterior KGP and mode 1016 were accepted, the fixture
-  page loaded, terminal-browser produced an image and placement, Telar emitted
-  pane and hybrid-sidebar graphics, and response drops were zero.
-- Silent and responding simulated exteriors in the parser/client tests: timeout
-  commits the cell fallback; APC, pixel-size and mode-1016 replies update the
-  client model before presenter observation.
-
-The real run also uses Ghostty's scripting API to send keyboard and pixel-mouse
-input to the exact verification terminal; the page preload records the
-resulting Chromium key and pointer events. Its isolated SQLite database contains
-zero command rows from KGP or injected input. A human pass is still required
-for subjective interaction quality, pixel-perfect clipping, font metrics, DPI
-scaling, and sidebar artwork.
-
-On 2026-08-24 the full-size animated fixture ran for 75 seconds after crossing
-the old 64-generation failure point. Runtime and client telemetry recorded zero
-media resets, media failures, dropped media bytes, client resyncs, stale client
-messages, and outbox saturation. Two screenshots three seconds apart changed
-inside the browser image, confirming that the visible frame had not frozen.
+The terminal-browser verifier (`zig build verify-terminal-browser`) and the
+graphics throughput gate measured the terminal client inside Ghostty and were
+retired with it; [`performance-gates.md`](performance-gates.md) records what
+replaces them.
 
 ## Remaining limitations
 
 - No temporary-file or Unicode-placeholder transport. File transport
   covers complete frames and queries only; chunked or cropped file commands
   are refused.
-- Pixel mouse precision is limited to cell centers when the exterior terminal
-  does not report pixel mouse coordinates.
+- The window retains images but does not draw them.
+- Every current client receives decoded pixels in 1 MiB chunks through the
+  socket; no client declares shared graphics.
 - Only the local socket transport has been exercised with graphical load.
-- `kitty-full` does not rasterize text.
-- The reproducible terminal-browser check covers one real graphical pane. ID
-  isolation across panes, tab visibility, delete, resize, and layout rebuilds
-  are deterministic Store/writer tests rather than an automated GUI pass.
-- Remote clients still receive decoded pixels in 1 MiB chunks through the
-  socket. A local client receives a complete terminal-browser frame with one
-  copy on the runtime side; images the emulator decoded itself cost one more
-  copy when frozen.
-- The graphics throughput gate (`docs/performance-gates.md`) has been run on
-  one M3 with Ghostty 1.3.1; other hosts and displays are unverified.

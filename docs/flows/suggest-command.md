@@ -48,7 +48,7 @@ ResponseQueue command_suggestion { request_id, status, text }  (client gone: dro
         |
 runtime_messages.handleServerMessage -> model.suggestion.apply(request id, status, text)
         |
-Version.suggestion -> presenter invalidate -> list modal frame
+Version.suggestion -> window observation -> palette frame
 ```
 
 Only the awaited request id lands; a reply after the palette closed changes
@@ -87,7 +87,7 @@ suggestion at 1024; the engine's own prompt and reply caps bound the rest.
   edit invalidation and failure phases.
 - `src/model/state/name_prompt.zig` proves the palette's submit
   and selection commands.
-- `src/frontend/client/tests/graphics_and_clipboard.zig` proves a stray
+- `src/client_tests/graphics_and_clipboard.zig` proves a stray
   suggestion is ignored without ending the client.
 - `src/core/schema_contract_test.zig` pins both messages and bumps the
   handshake fingerprint.

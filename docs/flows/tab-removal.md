@@ -64,7 +64,7 @@ outbox capacity, and never schedules presentation directly.
 
 Source: `src/client/workspace/tab_removal.zig`, `src/model/state/ClientModel.zig` and
 `src/model/workspace/tab_removal.zig`.
-Tests: `src/frontend/client/tests/tab_lifecycle.zig` and `synchronization.zig`
+Tests: `src/client_tests/tab_lifecycle.zig` and `synchronization.zig`
 cover preflight, partial failures, correlation, late replies, exact cleanup,
 predecessor following and exit. Model and runtime transport tests cover
 canonical validation and both requested/natural lifecycle triggers.

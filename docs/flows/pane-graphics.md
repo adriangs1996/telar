@@ -1,10 +1,10 @@
 # Pane graphics
 
 Pane graphics carry image resources and placements from the runtime's terminal
-emulator to the host terminal. The runtime owns the canonical image identity,
-generation, pixels and placement facts. The disposable client owns mapped
-resources, host identifiers, clipping, visibility, transmission and the cell
-fallback used when Kitty graphics are unavailable.
+emulator to the window. The runtime owns the canonical image identity,
+generation, pixels and placement facts. The disposable client owns its
+retained replica of resources and placements, their quotas and the semantic
+cell fallback flag.
 
 ## PNG ingestion
 
@@ -42,10 +42,17 @@ committed host capability (images support changed)
 
 `pane_graphics.applyPaneGraphics` translates physical ingress results into semantic fallback
 or runtime recovery directly. The resource store owns allocations, shared
-mappings, quotas, image identities and transmission damage. Accepted ingress
-advances its physical revision; stale deltas and rejected operations do not.
-The presenter observes this revision independently of the model, including when
-supported graphics cause no fallback change.
+mappings, quotas and image identities. Accepted ingress advances its physical
+revision; stale deltas and rejected operations do not. The window observes this
+revision independently of the model, including when a change causes no
+fallback change.
+
+The window binds `graphics_delivery.Store` (`src/gui/graphics_delivery.zig`)
+as its retained store; `GuiAdapter.applyGraphics` applies each command to it.
+The store has no GPU image consumer yet, and the window reports images as
+unsupported to the shared client, so a pane that holds graphics carries the
+fallback flag. The window bootstraps with shared graphics off. The headless
+client accepts graphics commands and drops them.
 
 Only `pane_graphics.setFallback` commits cell fallback. A changed value
 advances the pane-graphics revision; unknown panes and repeats do nothing.
@@ -61,30 +68,11 @@ A failed shared mapping first disables shared transfer and then requests the
 snapshot, so the runtime can resend bounded pixel chunks. Failure of the later
 enqueue preserves the already requested downgrade.
 
-## Host replies
-
-The shared transmission asks the host for a reply. `host_inputs.terminalResponse`
-hands every Kitty reply first to `host_capabilities.observe`, which consumes
-the probe identities, then to `kitty_delivery.noteHostReply` on the TUI's
-`graphics_store` for exterior pane image ids: `OK` marks the object consumed,
-an error reclaims the name and retransmits inline, and either bumps the
-graphics ingress so the next paced frame retires or resends. Unknown ids
-change nothing.
-
 ## Budget and bounds
 
 Resource ingestion belongs to the media path. Images, chunks and placements
-are bounded by the graphics schema and `kitty.Store` quotas. The presenter
-composes and writes cells first. Pane graphics control escapes (shared names,
-placements, deletes) are a few hundred bytes per image, so the cell frame
-carries them inside its own synchronized update, after the cells and before
-the cursor; a graphics-only ingress therefore reaches the host at the pacer
-cadence with no extra tick. Pixel streams and UI rasters belong to the
-separate bulk media tick, which emits at most the configured KGP byte budget
-and yields while interactive cell work is pending; a tick that yields runs at
-that frame's completion rather than a pacer interval later. An open chunked
-transfer owns the graphics stream, so the cell frame carries no control
-escapes until the bulk pass closes it. Repeated frames replace obsolete
+are bounded by the graphics schema and the resource store's per-pane and
+global quotas (`GenericResourceStore`). Repeated frames replace obsolete
 generations in the store rather than forming an unbounded replay queue.
 
 Fallback synchronization allocates nothing and visits at most 64 tabs with 64
@@ -100,7 +88,7 @@ dedicated media queue is a separate scheduling change.
 
 Source: `src/client/panes/pane_graphics.zig` and the `graphics:
 GraphicsRetention` store each adapter binds on `Client`.
-`src/frontend/client/tests/graphics_and_clipboard.zig` checks recovery IPC,
+`src/client_tests/graphics_and_clipboard.zig` checks recovery IPC,
 physical-only presentation observation and downgrade-before-resync ordering.
 Resource-store and model tests cover quotas, stale revisions, fallback ownership
 and no-op semantics. Runtime PNG tests and `src/transport_integration_test.zig`

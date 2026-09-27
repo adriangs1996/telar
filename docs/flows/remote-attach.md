@@ -1,21 +1,33 @@
 # Remote attach
 
-`telar gui --remote <ssh-destination>` (and the terminal client's
-`telar --remote`) runs the local client against the runtime on another
-machine. The remote transport is the local transport: the same framing,
-schema handshake, bounds and backpressure travel through one OpenSSH
-Unix-socket forward, so the runtime cannot tell a forwarded client from a
-local one.
+`telar gui --remote <ssh-destination>` (and `telar --remote`, which opens the
+same window) runs a client against the runtime on another machine. The
+remote transport is the local transport: the same framing, schema handshake,
+bounds and backpressure travel through one OpenSSH Unix-socket forward, so the
+runtime cannot tell a forwarded client from a local one.
 
-The window opens first and connects on a worker, and a lost connection does
-not close it: [runtime link](runtime-link.md) covers connecting,
-reconnecting and what the window shows meanwhile. The terminal client still
-connects before it starts and ends when the connection is lost.
+The window keeps its own client for this machine and opens the remote one
+beside it, in its own machine slot, and shows it first
+([machine presentation](machine-presentation.md)). The window opens first and
+connects on a worker, and a lost connection does not close it:
+[runtime link](runtime-link.md) covers connecting, reconnecting and what the
+window shows meanwhile. `telar-headless --remote` attaches its one client to
+the remote runtime the same way ([headless client](headless-client.md)).
 
 ## End-to-end path
 
 ```text
-telar --remote dev@box
+telar gui --remote dev@box
+        |
+client.runNative -> gui.run            the window opens; its own client is local
+        |
+window_machines.open                   a saved row by destination or label, or
+        |                              a temporary row never written back;
+        |                              openClient, then select
+        |
+runtime_link.start -> machine_connection.connect (connection job)
+        |
+remote.establish
         |
 ssh -T <managed options> dev@box 'printf ... "$HOME" "${SHELL:-/bin/sh}"; exec telar server endpoint'
         |     BatchMode, keepalives, no agent forwarding, the destination's
@@ -28,10 +40,10 @@ ssh -T <forward options> -L <local>/remote-<hash>-<slot>.sock:<remote>.sock dev@
         |
 local managed 0700 directory holds the forwarded socket
         |
-normal client connect (bounded retries) + schema handshake
+remote.connectForwarded (bounded retries) + schema handshake
         |
-frontend client runs unchanged; shared-memory graphics are disabled, so the
-runtime delivers image chunks instead of /dev/shm names
+the machine's client runs unchanged; shared-memory graphics are disabled, so
+the runtime delivers image chunks instead of /dev/shm names
 ```
 
 ## Ownership
@@ -54,7 +66,7 @@ Initial launches use the remote home and login shell, not the client's current
 directory or `$SHELL`. An explicit command still selects the remote program to
 run. Reattaching to an existing pane preserves that pane's process and cwd.
 
-The client never starts a runtime locally in remote mode, and
+A remote machine's client never starts a runtime locally, and
 `--config`/`--profile` affect only the local client: the remote runtime reads
 its own configuration.
 
@@ -66,16 +78,16 @@ its own configuration.
 - `src/cli/client.zig` tests remote launch defaults and explicit commands.
 - `telar server endpoint` is covered by the parser tests and prints through
   the same connector the client uses.
-- `python3 tools/remote_smoke.py --destination dev@box` checks remote home,
+- `python3 tools/remote_smoke.py --destination dev@box` drives
+  `telar-headless --remote` and checks remote home,
   OS, UID, shell PID and an exported variable across detach/reconnect. It needs
   a fresh remote workspace, refuses to type into unknown panes and leaves its
   own shell running. Results go to `.zig-out/remote-smoke/result.json`.
 - A manual macOS-to-Arch-ARM test through OpenSSH retained the same Linux shell
   PID and an exported variable after detach and reconnect.
 - The same probe passed from macOS UID 501 to Debian 13 UID 1000 in Docker.
-  The Linux client also attached and detached through an SSH PTY. Recreating
-  that container retained the history database and checkpoint in a named volume,
-  but the old shell process was replaced.
+  Recreating that container retained the history database and checkpoint in a
+  named volume, but the old shell process was replaced.
 
 ## SSH requirements
 
@@ -85,7 +97,7 @@ the host key before connecting:
 
 ```sh
 ssh dev@box 'command -v telar; telar --version'
-./zig-out/bin/telar --no-config --remote dev@box
+./zig-out/bin/telar gui --no-config --remote dev@box
 ```
 
 The SSH server must support Unix-socket forwarding and connect to the runtime

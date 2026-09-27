@@ -27,10 +27,10 @@ propagates unclassified failures.
 Only a newer runtime revision commits. Each such commit advances
 `model.workspace_list_revision` once; repeated/older runtime versions are no-ops.
 Model queries resolve stable identity and zero-based position for actions and
-clicks. The view retains hit regions, not navigation authority or a second list.
+clicks. The window retains hit regions, not navigation authority or a second list.
 
-No server-message operation requests a draw. The adapter observes the model
-revision and composes the latest immutable snapshot at the paced deadline.
+No server-message operation requests a draw. The window observes the model
+revision and draws the latest immutable snapshot in its next frame.
 Several updates can fold into one presentation. A later valid runtime revision
 can recover from rejected input; reconnect obtains a fresh canonical snapshot.
 
@@ -39,5 +39,5 @@ Source: `src/model/state/ClientModel.zig`,
 `src/model/workspace/workspace_list_snapshot.zig` and
 `src/model/workspace/workspace_list.zig`.
 Tests: `src/model/state/tests/workspaces.zig`, workspace-list storage tests and
-`src/frontend/client/tests/notifications_and_agents.zig` cover revision
+`src/client_tests/notifications_and_agents.zig` cover revision
 ownership, bounded rejection, navigation and presentation.

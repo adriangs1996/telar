@@ -4,14 +4,14 @@ The runtime publishes bounded, self-contained agent snapshots assembled from
 lifecycle hooks, the foreground process, terminal-screen hints, and canonical
 workspace state.
 Detection replaces the client snapshot; it does not own layout, focus,
-scrolling, hit targets, or physical KGP placements.
+scrolling, hit targets or drawing.
 
 ## Ownership
 
 The runtime owns agent truth and publishes stable `(pane_id, generation)` task
-identity. `ClientModel` keeps one disposable `agents.Snapshot` replica.
-`widgets.sidebar.State` keeps only visible interaction state such as scroll
-position. The runtime retains the selected tab, pane focus, split trees,
+identity. `ClientModel` keeps one disposable `agents.Snapshot` replica. The
+window's `SidebarState` keeps only visible interaction state: scroll
+positions and the attention order of the current snapshot. The runtime retains the selected tab, pane focus, split trees,
 sidebar geometry and workspace-list collapse for reconnecting clients; hover
 and sidebar scroll still die with the client. None of this alters a runtime
 task or agent.
@@ -43,12 +43,12 @@ ready-unseen (`done`), idle (`ready`), `unknown`. Inside a group the smallest
 `status_age_s` comes first; equal ages fall back to pane id and generation so
 the order is stable across revisions. It is pure and allocation-free.
 
-`agent_snapshots.apply` is the protocol adapter. It maps borrowed wire entries
-to `AgentInput` values and invokes `ApplyAgentSnapshotHandler`.
-`agent_snapshot.reconcile` owns the transaction, while
-`agents.Snapshot.replace` performs atomic bounded storage. The resulting commit
-is validated and delivered by `DeliverAgentSnapshotHandler`, which owns
-attachment, alert and animation ordering. Replacement:
+`agent_snapshot.applyAgentSnapshot` is the protocol adapter. It maps borrowed
+wire entries to `AgentInput` values. The model's `agent_snapshot.reconcile`
+owns the transaction, while `agents.Snapshot.replace` performs atomic bounded
+storage. After the commit, `applyAgentSnapshot` synchronizes pane attachments,
+publishes actionable alerts and synchronizes the sidebar animation, in that
+order. Replacement:
 
 - rejects revisions older than or equal to the current revision;
 - rejects duplicate `(id, generation)` task keys;
@@ -115,14 +115,12 @@ models.
 
 The runtime pane position remains immutable in `agents.Snapshot`. When the
 active client layout has a different local display order, the sidebar derives
-that pane index while rendering. Neither `View.render` nor a widget rewrites
-the runtime replica.
+that pane index while rendering. No widget rewrites the runtime replica.
 
 ## Rendering boundary
 
-Cells own every string, the editable search field, terminal cursor, hover,
-focus marker, tabs, section headers, status, footer, and hit target. The
-cell renderer is complete by itself.
+The window draws the sidebar in device pixels. The terminal client's cell
+sidebar and its Kitty graphics layer left with it.
 
 Each agent card stays three rows high:
 
@@ -137,10 +135,9 @@ non-repository workspaces and worktree-only locations without a workspace-list
 entry leave the row empty. A working agent with no event also leaves it empty.
 A workspace-list revision can update the branch without an agent revision.
 The card shows no location row (`workspace › tab › pane N`) and no cwd;
-the project rows above the agents show workspace paths instead. The TUI cell
-renderer retains its own layout.
+the project rows above the agents show workspace paths instead.
 
-The GUI draws cards in device pixels inside the sidebar band
+The window draws cards in device pixels inside the sidebar band
 (`src/gui/widgets/Sidebar.zig`, `AgentCard.zig`). Text uses the `small`, `title`,
 `small` line boxes. The title is body-sized without the pane header's height cap. Insets are 10 horizontal and 8 vertical logical pixels,
 with 4 logical pixels before the title and 2 before the detail. Card spacing
@@ -158,8 +155,9 @@ cards drop the duration, then the state word before clipping the icon;
 project, title and detail fit independently with an ellipsis. The provider
 symbol disappears only when its own box cannot fit.
 
-Only the working glyph pulses through six alpha steps between 1.0 and 0.35
-across 17 animation frames. The state word and duration remain steady.
+Only the working glyph pulses through six alpha steps between 1.0 and 0.65
+across 17 animation frames, one frame every 120 ms of the window's frame
+clock ([sidebar animation](flows/sidebar-animation.md)). The state word and duration remain steady.
 The focused pane's card has `surface0` fill and an inner 1px `surface1` ring.
 Built-in providers use the embedded symbol atlas at 60% opacity. OpenAI
 is a white mask tinted with `text`; Claude and Pi retain their source colors. Custom providers keep an unboxed glyph.
@@ -168,35 +166,14 @@ One clipped `focus_agent` hit target covers each visible card. The wheel
 over the agent viewport scrolls one card pitch; the band's last pixel column is its edge and a 6 px
 strip centered on it remains the resize handle.
 
-KGP owns two reusable assets: one three-row focused-agent card and the same
-T3 Code provider atlas as the GUI. The card is an antialiased rounded rectangle below the
-cell layer. Cells keep the same solid fill except at its four corner cells,
-where the KGP alpha edge remains visible. Themes whose focus color is not RGB
-retain the square cell-only fallback.
-
-Changing hover never changes KGP input. Moving the focused agent or a provider
-mark changes placements only. Pixel transmission happens after a theme or
-cell-size change, or when an asset first becomes necessary. The focused-card
-raster is capped at 64 KiB. Media failure leaves the cell actions intact.
-
 ## Geometry
 
-Visibility is shared: `sidebar_visible` lives in the client model, the
-runtime retains it for reconnecting clients and `toggle_sidebar` flips it
-in both clients. Width is not.
+Visibility lives in the client model as `sidebar_visible`, and the runtime
+retains it for reconnecting clients. The runtime also retains a column-width
+preference in the client layout replica; the terminal client drew a cell
+sidebar at that width, and the window does not read it.
 
-In the TUI the sidebar is a column of cells. It is visible only when the
-client can reserve 42 columns for it and 20 for the workbench. Its default
-preferred width is 42 columns. Keybindings move that preference by two
-columns, and dragging the rightmost sidebar column selects an exact width.
-Host geometry clamps only the visible width: shrinking the terminal does
-not overwrite the preference, so expanding it restores the chosen size.
-The runtime retains this column preference in the client layout replica;
-it is TUI-only. While visible, the sidebar owns the complete left column.
-The top bar, bottom bar and workbench use the remaining width. Hiding it
-expands all three regions to the full client width.
-
-In the GUI the sidebar is a band of device pixels (`widgets/SidebarBand.zig`)
+The window's sidebar is a band of device pixels (`widgets/SidebarBand.zig`)
 that the renderer takes off the window width before it counts columns, the
 way the top bar, tab strip and status bar come off the height. Its width is
 `gui.sidebar.width` logical pixels (default 284, bounds 220..480) scaled by
@@ -313,20 +290,21 @@ faded captions, the rail tooltip and session-title captions.
 
 ## Detector wiring
 
-The frontend message handler:
+`runtime_messages.handleServerMessage` hands an agent snapshot to
+`agent_snapshot.applyAgentSnapshot`, which:
 
-1. validates the runtime message and its revision;
-2. maps runtime agent records to bounded `AgentInput` values;
-3. invokes `ApplyAgentSnapshotHandler`;
-4. commits the replica and `Version.agents` in `ClientModel`;
-5. synchronizes attachment resources and emits bounded actionable alerts;
-6. lets `Presenter` observe the version and pass the immutable snapshot to
-   `View.render` on the next paced frame.
+1. maps runtime agent records to bounded `AgentInput` values;
+2. commits the replica and `Version.agents` in `ClientModel` through
+   `agent_snapshot.reconcile`, which rejects stale revisions;
+3. synchronizes attachment resources;
+4. emits bounded actionable alerts;
+5. synchronizes the sidebar animation.
 
-The snapshot path never requests a draw for the replica itself. `Presenter`
-compares the model version with the last version it painted, resets transient
-sidebar scroll, invalidates chrome and renders the latest snapshot. Several
-runtime revisions inside one frame interval therefore fold into one projection.
+The snapshot path never requests a draw for the replica itself. The window
+observes the model version after the event, and its next frame projects the
+latest snapshot; `SidebarState.observe` sorts it again only when the snapshot
+identity changes. Several runtime revisions inside one frame interval
+therefore fold into one projection.
 
 Only status changes for identities present in the previous revision can emit
 an alert. Transitions to `blocked`, `done` and `failed` are actionable, and

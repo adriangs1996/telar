@@ -39,7 +39,7 @@ and is scheduled only by the host adapter.
 
 Source: `src/client/workspace/tab_selection.zig`, `src/model/state/ClientModel.zig`
 and `src/model/workspace/tab_selection.zig`.
-Tests: `src/frontend/client/tests/tab_lifecycle.zig`, `pane_lifecycle.zig`,
+Tests: `src/client_tests/tab_lifecycle.zig`, `pane_lifecycle.zig`,
 `src/model/state/tests/tabs.zig` and `src/model/workspace/tab_flow_tests.zig`
 cover target resolution, no-ops, wire order, exact ownership and canonical
 repair.

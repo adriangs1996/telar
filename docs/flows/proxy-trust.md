@@ -28,7 +28,7 @@ telar proxy trust install|uninstall|status
                  |
  runtime ProxyStatus.system_trusted
                  |
- client model -> presenter -> top-bar shield
+ client model -> projection -> status-bar TLS badge
 ```
 
 ## Authority and failure rules
@@ -72,7 +72,7 @@ therefore survives an inactive proxy and a client reconnect.
 - `src/cli/server.zig` proves separate private and system authority paths.
 - `src/core/schema_contract_test.zig` fixes the wire representation.
 - `src/client/agents/proxy_status.zig` applies the committed status
-  before publishing notifications; model observation and frontend notification
+  before publishing notifications; model observation and client notification
   integration tests cover exact transitions and no-op repeats.
-- `src/frontend/widgets/top_bar.zig` proves the trust-only badge stays visible
-  with the proxy off.
+- `src/gui/tests/status_bar.zig` paints the trust-only badge with the proxy
+  off.
