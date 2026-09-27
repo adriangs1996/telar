@@ -193,7 +193,10 @@ of the host, not a build.
    `begin`, `complete`, `commitPresentation` and `retire`. Removing them
    means changing those signatures in the model, the client, both adapters
    and the headless fixture.
-3. **`Message` size.** `plugin_result` makes `client.Message` 4,432 bytes,
+3. **`Message` size.** Resolved on `perf/client-message-size`: the plugin
+   result now stays in `Client.plugin_result` and `Message` is 584 bytes;
+   `frontend.client.inbox_event` went from 265 to 44 ns (7/7). The finding
+   as measured here: `plugin_result` makes `client.Message` 4,432 bytes,
    so every adapter inbox slot (`ClientEvent`, 4,448 bytes) and every
    publish and receive moves 4 KiB for events that carry a pointer. Only one
    plugin action is in flight at a time (`PluginExecutionState`), so its

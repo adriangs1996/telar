@@ -332,15 +332,19 @@ test "plugin completion applies one authorized batch through model observation" 
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    const exit = try client_module.plugin_actions.completePluginAction(client, .{
-        .execution_id = execution.id,
-        .result = data.WorkerResult{
-            .package_index = 0,
-            .plugin_id = installed.action.plugin,
-            .digest = installed.digest,
-            .batch = batch,
+    client.plugin_result = .{
+        .package_index = 0,
+        .plugin_id = installed.action.plugin,
+        .digest = installed.digest,
+        .batch = batch,
+    };
+    const exit = try client_module.plugin_actions.completePluginAction(
+        client,
+        .{
+            .execution_id = execution.id,
+            .result = {},
         },
-    });
+    );
 
     try std.testing.expect(!exit);
     try std.testing.expect(client.model.plugins.pluginExecution() == null);
@@ -376,15 +380,19 @@ test "plugin completion from an old configuration is consumed without effects" {
     const version_after_reload = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    const exit = try client_module.plugin_actions.completePluginAction(client, .{
-        .execution_id = execution.id,
-        .result = data.WorkerResult{
-            .package_index = 0,
-            .plugin_id = installed.action.plugin,
-            .digest = installed.digest,
-            .batch = batch,
+    client.plugin_result = .{
+        .package_index = 0,
+        .plugin_id = installed.action.plugin,
+        .digest = installed.digest,
+        .batch = batch,
+    };
+    const exit = try client_module.plugin_actions.completePluginAction(
+        client,
+        .{
+            .execution_id = execution.id,
+            .result = {},
         },
-    });
+    );
 
     try std.testing.expect(!exit);
     try std.testing.expect(client.model.plugins.pluginExecution() == null);
@@ -409,15 +417,19 @@ test "plugin authorization denial consumes the run before publishing failure" {
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    const exit = try client_module.plugin_actions.completePluginAction(client, .{
-        .execution_id = execution.id,
-        .result = data.WorkerResult{
-            .package_index = 0,
-            .plugin_id = installed.action.plugin,
-            .digest = installed.digest,
-            .batch = batch,
+    client.plugin_result = .{
+        .package_index = 0,
+        .plugin_id = installed.action.plugin,
+        .digest = installed.digest,
+        .batch = batch,
+    };
+    const exit = try client_module.plugin_actions.completePluginAction(
+        client,
+        .{
+            .execution_id = execution.id,
+            .result = {},
         },
-    });
+    );
 
     try std.testing.expect(!exit);
     try std.testing.expect(client.model.plugins.pluginExecution() == null);
