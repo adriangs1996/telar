@@ -7,4 +7,6 @@ test {
     _ = @import("renaming_and_telemetry.zig");
     _ = @import("history_browser.zig");
     _ = @import("path_picker.zig");
+    _ = @import("synchronization.zig");
+    _ = @import("transport.zig");
 }
