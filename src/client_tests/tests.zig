@@ -17,4 +17,7 @@ test {
     _ = @import("mouse_selection.zig");
     _ = @import("presentation.zig");
     _ = @import("cache_trace.zig");
+    _ = @import("host_resources.zig");
+    _ = @import("graphics_and_clipboard.zig");
+    _ = @import("configuration.zig");
 }
