@@ -1247,7 +1247,7 @@ test "resync forgets the final workspace before exiting" {
     try std.testing.expect(!presentationPending(&harness));
 }
 
-test "TUI tab drag emits one anchored move on release and never forwards the gesture" {
+test "a tab drag emits one anchored move on release and never forwards the gesture" {
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();
@@ -1295,7 +1295,7 @@ test "TUI tab drag emits one anchored move on release and never forwards the ges
     try std.testing.expect(!drag.captured);
 }
 
-test "TUI tab drag cancellation consumes releases outside the tab strip" {
+test "a tab drag cancellation consumes releases outside the tab strip" {
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();

@@ -99,7 +99,7 @@ test "presentation flushes an explicit empty model before bootstrap" {
     try std.testing.expectEqual(@as(usize, 0), harness.adapter.frame.cell_count);
 }
 
-test "TUI frame ACKs advance while a sealed host write retains its presentation token" {
+test "frame ACKs advance while a presentation token is still held" {
     for ([_]bool{ false, true }) |fail| {
         var harness: ClientHarness = undefined;
         try harness.init();
