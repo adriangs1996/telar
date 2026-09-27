@@ -66,6 +66,12 @@ Implementation must follow the [invariants](../invariants.md) and the
     drives the shared client over a real socket without a window
     (`ClientHarness`); tests about the TUI itself (its parser, screen, host
     probes, telemetry writer) retired.
+  - The window lacked three things the TUI provided, and they are gone with
+    it: inline Kitty images in panes (the window keeps the images the
+    runtime sends but has no GPU consumer for them and reports
+    `images = .unsupported`, so panes show the cell fallback), OSC 9
+    notifications to the host terminal (`delivery = "terminal"` is now
+    dropped), and the clipboard image previews below.
   - Clipboard image previews below an agent's pane (`AttachmentShelf`,
     [clipboard image](../flows/clipboard-image.md)) existed only in the TUI and
     are gone: the window never bound a shelf. The agent still receives the

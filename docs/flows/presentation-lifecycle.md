@@ -89,7 +89,8 @@ Window-title formatting and change suppression use the shared
 native storage. Clipboard writes, terminal notifications, clipboard capture and
 machine requests go through `model.to_host`, which the window drains after
 every event in `GuiAdapter.deliverHostEffects`. Links, sound and system
-notifications run as client jobs through `client.workers.start`. Common
+notifications run as client jobs the adapter starts from
+`Client.to_workers` and `Client.to_background`. Common
 procedures do not receive a GPU device.
 
 ## Failure and teardown

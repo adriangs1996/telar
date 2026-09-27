@@ -40,10 +40,10 @@ transfer reservations. It knows neither `Client` nor the client
 `runtime_io.sendRuntime` and its typed variants copy messages into
 `model.to_runtime` and call the private `startRuntimeSend`. Callers supply only the message.
 Pane input uses the existing `core.PaneInput` value, including bounded batches
-when it exceeds one slot. `startRuntimeRead` and `startRuntimeSend` reserve
-transport storage and start a worker with `client.workers.start`
-(`.runtime_read` or `.runtime_send`), releasing the reservation if the adapter
-refuses the job. `job_runner.run` performs the read or write on the worker and
+when it exceeds one slot. `runtime_io.startRuntimeRead` and `Client.flush`
+reserve transport storage and queue a `.runtime_read` or `.runtime_send` job
+on `Client.to_workers`, which the adapter starts; a job the adapter refuses
+fails through `Client.failJob`, releasing the reservation. `job_runner.run` performs the read or write on the worker and
 returns `Message.server` or `Message.sent`.
 
 ## Bootstrap
@@ -74,7 +74,7 @@ Outbox copies and folds bounded data
        |
 Client.startRuntimeSend()
        |
-Outbox.beginSend -> schema encoder -> workers.start(.runtime_send) -> SocketChannel.send
+Outbox.beginSend -> schema encoder -> to_workers(.runtime_send) -> SocketChannel.send
        |
 Message.sent -> Client.update
        |

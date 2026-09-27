@@ -19,7 +19,7 @@ BarLayout -> ClientModel.bars
           |                 |
           |   bar_updates.synchronizeBars -> model.bar_updates
           |                 |
-          |   bar_updates.rearm -> workers.start(bar timer or bar_command)
+          |   bar_updates.rearm -> to_workers (bar timer) or to_background (bar_command)
           |                 |
           |   bar_updates.handleTick / completeCommand
           |                 |

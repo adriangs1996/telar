@@ -20,7 +20,7 @@ Registry.resolve + Registry.workerRequest
         |
 plugin_action.beginExecution { id, configuration_generation }
         |
-client.workers.start(.plugin) -> job_runner -> isolated one-shot worker
+client.to_background (.plugin job) -> job_runner -> isolated one-shot worker
         |
 client Message .plugin_result { execution_id, result }
         |
@@ -52,7 +52,7 @@ IDs and owns this order:
 2. resolve the action and build its worker request;
 3. reserve a monotonically increasing execution identity in `ClientModel`;
 4. capture the current configuration generation in that reservation;
-5. start the `.plugin` job through `client.workers.start` with the same
+5. queue the `.plugin` job on `Client.to_background` with the same
    identity.
 
 Resolution happens before the reservation, so an unavailable registry or an

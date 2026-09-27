@@ -25,7 +25,7 @@ directory edit -> name_prompt.inputPrompt
         |
 prompt_paths.refreshPathCompletion (expand, compare with the wanted query)
         |
-client.workers.start(.path_completion) (observation path)
+client.to_background (.path_completion job, observation path)
         |
 completion/path_completion.run: one listing, <= 64 directories, <= 4096 B per path
         |

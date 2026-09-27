@@ -20,7 +20,7 @@ agent_sound.applyAgentSound
         |
 model.agent_snapshot.find (exact key)
         |
-SoundPlayback.request -> workers.start(.{ .sound = kind })
+SoundPlayback.request -> client.to_background (.sound job)
         |
 client.Message.sound_played <- job_runner: sound_playback.play
         |
@@ -44,8 +44,8 @@ revision and asks for no frame.
 
 `SoundPlayback` (`model.sound_playback`) owns the effective `SoundPolicy`, one
 active worker token and one optional queued `AgentSound`. `Client`
-knows none of its queue transitions. It starts the worker with
-`workers.start`; the adapter runs it through its inbox and returns the
+knows none of its queue transitions. It queues a `.sound` job on
+`Client.to_background`; the adapter runs it through its inbox and returns the
 completion as `client.Message.sound_played`, which `Client.update`
 hands to `agent_sound.completeAgentSound`.
 
