@@ -110,7 +110,7 @@ ink; selection and cursor text colors follow the glyph's owning cell. Quads
 already inside the pane bypass texture-coordinate adjustment.
 
 Metal and Vulkan consume the same quads and alpha atlas. No KGP messages, images,
-new textures or GPU-specific drawing code are involved. Runtime and TUI code are
+new textures or GPU-specific drawing code are involved. Runtime code is
 unchanged by this GUI implementation.
 
 `zig build test-gui` covers all 256 patterns, individual dot positions, blank

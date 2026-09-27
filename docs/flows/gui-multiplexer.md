@@ -2,8 +2,9 @@
 
 The GUI renders the shared client's semantic projection. Workspace and tab
 requests, pane splits, focus, resize, fullscreen, copy mode, history and prompt
-editing use the same concrete operations as the TUI. Native code owns window input and GPU
-delivery; it does not reproduce those state transitions.
+editing use the shared client's concrete operations, the same ones the headless
+client drives. Native code owns window input and GPU delivery; it does not
+reproduce those state transitions.
 
 ## Composition
 
@@ -45,8 +46,8 @@ row is a complete terminal row and every column a complete terminal column.
 A window too short for one row gives the height bands back: navigation
 first, then the status bar. The shared `workbench.region(model)` gives the
 whole grid to the workbench because the GUI leaves `model.host.grid_chrome`
-false; the column preference the runtime retains in the shared layout is
-TUI-only and the GUI no longer reads it.
+false. The GUI does not read the sidebar column width the runtime retains in
+the shared layout; its width is the pixel preference in `SidebarPreference`.
 `widgets/Bands.zig` places the pixel bands from the same origin, the sidebar
 band running from under navigation to the status bar, so a band never
 overlaps a cell. Both horizontal bars span the full window independently
@@ -91,7 +92,7 @@ Attention colours and aggregation come from `widgets/attention.zig` over the
 shared `telar-client.agent_attention` comparator.
 
 The native adapters consume the existing quad frame through Metal on macOS and
-Vulkan on Wayland. No TUI compositor or Kitty delivery code is imported by the GUI.
+Vulkan on Wayland.
 
 ## Input and invalidation
 
@@ -105,7 +106,7 @@ router. Some useful default suffixes are:
 | Arrow, Shift-arrow | Focus pane, resize pane |
 | `z` | Toggle pane fullscreen |
 | `s`, Alt-left/right | Toggle sidebar, resize sidebar |
-| `w` | Toggle the TUI workspace-list preference; native visibility follows available width |
+| `w` | Toggle the workspace-list preference; native visibility follows available width |
 | `N`, `W` | Create or rename workspace |
 | `c`, `T` | Create or rename tab |
 | `n`, `p`, `1`–`9` | Select tab |

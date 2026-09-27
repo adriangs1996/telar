@@ -82,13 +82,14 @@ identity and generation. Partial text edits also carry the expected text revisio
 Zig rejects a stale range instead of reconstructing a whole value from an old
 native snapshot. No platform callback mutates the model directly.
 
-`input/router.zig` instantiates the shared key router without an escape decoder.
-It resolves the same configured prefix, built-in actions and Lua/plugin bindings
-as the TUI. `GuiAdapter.routeKey` supplies current capture/repeat policy and
+`client.key_router` (`src/client/input/key_router.zig`) instantiates the shared
+key router without an escape decoder; the window and the headless client both
+build it. It resolves the configured prefix, built-in actions and Lua/plugin
+bindings. `GuiAdapter.routeKey` supplies current capture/repeat policy and
 receives a typed decision. Its `applyInputDecision` switch forwards keys through
 `key_routing.routeKeyInput` and actions through `actions.executeAction`;
-the GUI's own `executeAction` keeps only the native palette, sidebar and
-transcript cases. Prompt editing, copy mode, pane focus, workspace and tab
+the GUI's own `executeAction` keeps only the native palette and sidebar
+cases. Prompt editing, copy mode, pane focus, workspace and tab
 requests, splits, pane fullscreen and detach call the same concrete operations
 and runtime messages. Prefix status is projected from this effective
 router, and a replaceable `.binding` timer expires ordinary partial chords.

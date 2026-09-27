@@ -1,81 +1,28 @@
 # Client telemetry
 
-Debug clients project their latest disposable state into one bounded JSON line
-per diagnostics interval. This flow observes the client; it never commits
-semantic model state, requests a draw or enters the interactive path.
+The periodic client telemetry line left with the terminal client. That client
+armed a diagnostics tick, captured a bounded snapshot and wrote one JSON line
+per interval to its sink. Neither the window nor the headless client schedules
+that tick, so no client flow writes telemetry lines today.
 
-## End-to-end path
+## What remains
 
-```text
-Client.init
-    |
-TelemetryState.init -> core.Sink
-    |
-telemetry.start
-    |
-ClientEvent.telemetry_tick <- core.waitForTick
-    |
-telemetry.handleTick
-    +-- rearm next tick
-    +-- capture immutable Snapshot
-    +-- format into TelemetryState.buffer
-    +-- reserve one write token
-    |
-ClientEvent.telemetry_written <- Sink.write
-    |
-telemetry.handleWritten
-    |
-release token or finish deferred sink shutdown
-```
+`Client` still owns one `TelemetryState` (`client.telemetry`, in
+`src/client/resources/TelemetryState.zig`). It holds the metrics epoch, the
+`Metrics` counters, the fail-closed `core.Sink`, a fixed 8192-byte line buffer
+and a single write flag. In builds with diagnostics enabled and a runtime
+endpoint, `TelemetryState.init` creates the sink file
+`<endpoint>.client-<pid>.log` with mode `0600`. Release builds create nothing.
+`Client.deinit` closes the sink through `TelemetryState.deinit`.
 
-`Client` owns one `TelemetryState` (`client.telemetry`). That object
-owns the metrics epoch, the diagnostics sink, the fixed 8192-byte line buffer
-and the single in-flight write token. `client_startup` starts the flow; the
-TUI's `events` dispatches its two events. Neither constructs file names, formats JSON or manages write
-lifetime.
+Shared components still count their work in `client.telemetry.metrics`: for
+example `runtime_io` calls `TelemetryState.recordMessage` for every decoded
+runtime message, `pointer_routing.apply` counts pointer events, and
+`GuiAdapter.drainInput` adds physical-key lease overflows. The counters never
+commit semantic model state, request a draw or enter the interactive path.
 
-## Snapshot boundary
-
-`telemetry.capture` reads the active workspace, presenter pacing, retained
-graphics bytes, host capabilities, Lua meter, outbox counters and heap
-snapshot into a typed `Snapshot`. `format` accepts that snapshot together with
-immutable metrics and pacer references through one `FormatRequest`.
-
-The capture returns no value before the first active tab exists. Formatting is
-bounded by the state-owned buffer and cannot allocate a replay queue. A format
-error drops only that interval; the already-rearmed clock keeps later
-observations alive.
-
-Metrics record successful work at the component that performs it, but their
-storage belongs to `TelemetryState`. The presenter borrows that metrics
-address after the heap-stable `Client` has been initialized. Moving the client
-or replacing the metrics object while it is live is therefore forbidden.
-
-## Pacing, coalescence and failure
-
-Every completed tick rearms the next one before capturing state. If a write is
-already pending, the tick is folded into that future observation instead of
-queuing obsolete JSON. At most one worker can borrow the buffer and sink.
-
-The sink is fail-closed. A failed tick, failed rearm, failed write scheduling
-or failed write disables later observations without affecting the client
-loop. If the clock fails while a write still borrows the sink, `TelemetryState` marks
-the sink disabled but defers closing its file until that worker completes.
-This prevents teardown of a resource still in use.
-
-Client teardown first cancels every inbox task, then closes the sink. Release
-builds and clients whose sink cannot be created schedule no telemetry work.
-Neither condition changes semantic state or visible presentation.
-
-## Validation
-
-- `src/frontend/client/telemetry/telemetry.zig` proves the bounded projection, one-write
-  token, coalescence, deferred shutdown and write-failure recovery.
-- `src/frontend/client/tests/` proves a real substituted client
-  schedules and completes a snapshot write without changing model or
-  presenter versions, and that tick failure disables the sink.
-- `src/frontend/client/events.zig` keeps telemetry events on the
-  observation path and delegates both lifecycle boundaries to the telemetry
-  adapter.
-- `src/core/diagnostics.zig` and `src/core/Sink.zig` own the development-only
-  sink, interval and heap attribution primitives shared with the runtime.
+The window measures itself through `core.profiling` counters instead, and the
+headless client writes its own trace (see [Headless client](headless-client.md)).
+`src/core/diagnostics.zig` and `src/core/Sink.zig` still own the
+development-only sink, interval and heap attribution primitives shared with
+the runtime.

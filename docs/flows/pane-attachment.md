@@ -58,7 +58,7 @@ immediate retry: an identical snapshot could otherwise repeat the same failure
 indefinitely. A later resync, selection or reconnect can retry.
 
 The flow uses fixed request/outbox capacity and at most one pending attachment
-per pane. Tests in `src/frontend/client/tests/pane_lifecycle.zig`,
+per pane. Tests in `src/client_tests/pane_lifecycle.zig`,
 `synchronization.zig` and `notifications_and_agents.zig` cover real correlation,
 late responses, ordering, recovery and failed recovery delivery. Model tests
 in `src/model/state/tests/panes.zig` and `tabs.zig` cover exact plans and

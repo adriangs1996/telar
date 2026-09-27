@@ -39,7 +39,8 @@ the model. Input readiness, focus and GPU completion use that same inbox.
 The window thread adopts a prepared generation after native consumers finish.
 See [native appearance](native-appearance.md#hot-reload) for the swap and cleanup,
 and [client event dispatch](client-event-dispatch.md) for admission, drain
-budgets, wakeups and shutdown shared with the TUI and headless driver.
+budgets, wakeups and shutdown shared with the headless client and the test
+drivers.
 
 ## Three verification cuts
 
@@ -197,8 +198,7 @@ Use new result directories. The test-only injected library sends alternating
 `x` and erase to `cat`, and waits for the expected glyph count's GPU token
 before sending another key. It retains individual samples, viewport dimensions,
 summary statistics and optional phase traces. It requires a graphical login
-session. Completion is not physical display scanout, and a TUI host-write timing
-is not the same measurement endpoint.
+session. Completion is not physical display scanout.
 
 The [Metal 4 renderer flow](metal4-renderer.md) describes display-link scheduling,
 argument tables, residency, completion ownership and shutdown.

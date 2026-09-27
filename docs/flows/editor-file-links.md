@@ -3,7 +3,7 @@
 `editor_file_links.openFile(client, pane_id, path)` opens a local file linked
 from a pane, at the line the link names. `link_opening.openLink` calls it for
 every `file://` link and every path found in prose (see
-[link opening](link-opening.md#file-paths-in-prose)); the GUI, the TUI, copy
+[link opening](link-opening.md#file-paths-in-prose)); the GUI, copy
 mode and `telar client open-link` pass the pane the link came from.
 
 The client anchors the path first, without touching the filesystem: an absolute

@@ -1,105 +1,112 @@
 # Client startup
 
-This flow starts after `run` has opened the host terminal and constructed one
-heap-stable `TerminalAdapter` embedding `Client`. It negotiates host colors before subscribing to the runtime
-state that triggers the first pane opening. See [terminal colors](terminal-colors.md)
-for probe ownership and early-input bounds.
+This flow starts after the window has constructed one heap-stable
+`GuiAdapter` embedding `Client` and the native surface reports usable
+geometry. The window's colors come from its own renderer theme, so no host
+probe gates the bootstrap. The headless client follows the same order from
+fixed host facts (see [Headless client](headless-client.md)).
 
 ## Boundary
 
-`run` owns the TTY, resize watcher, output writer, process heap and client
-lifetime. `client_startup.start` owns startup order. It receives the watcher;
-launch values remain owned by the heap-stable client until the runtime answers
-with its retained layout.
+`GuiAdapter.run` owns the native window, the renderer and the client lifetime.
+`GuiAdapter.windowReady` starts the client once: repeated notifications do not
+repeat the bootstrap. Launch values remain owned by the heap-stable client
+until the runtime answers with its retained layout.
 
 ```text
-run -> TerminalAdapter.init
+GuiAdapter.run -> native window
         |
-client_startup.start
+GuiAdapter.windowReady(viewport)
         |
-validate workbench geometry
+GuiAdapter.resizeViewport: measure the grid, commit host size
         |
-start host probes and TTY input, arm asynchronous event sources
+GuiAdapter.start
         |
-run -> inbox.wait -> events.update / dispatch
+host_resize.applyHostUpdate (theme colors, capabilities)
         |
-OSC 10/11 results or 250 ms deadline
+startup.phase = .opening, Client.bootstrap
         |
-client_startup.advance
+runtime_link.start -> connect worker -> runtime_link.finishConnect
         |
-configure_graphics -> configure_terminal_colors
-        |
-request_runtime_state(client_identity)
+Outbox.pushBootstrap: configure_graphics -> configure_terminal_colors
+                      -> request_runtime_state(client_identity)
         |
 client_layout_snapshot
         |
-restore chrome, navigation and split layouts
+client_layout.restoreClientLayout: chrome, navigation and split layouts
         |
-register initial_open continuation
+client_layout.openInitialPane -> register initial_open
         |
 open_pane(restored pane or default launch)
         |
-pane activation -> replay retained input
+pane activation -> client_startup.finish -> drain retained input
 ```
 
-`src/frontend/client/session/client_startup.zig` is the TUI startup adapter. It owns
-the negotiation gate and bootstrap order. The common
-`client_layout.restoreClientLayout` restores runtime layout and requests
-the initial pane without knowing about terminal probes. `run` waits on the
-inbox and calls `events.update`; each resource owner keeps its own token and
-rearming policy.
+`GuiAdapter.start` sets the startup phase and stores `Client.bootstrap`. On a
+new connection `runtime_link.start` queues the connect job; its completion
+pushes the bootstrap and starts runtime I/O. A window that already holds a
+connection pushes the bootstrap directly. The common
+`client_layout.restoreClientLayout` restores runtime layout and requests the
+initial pane. The window-thread consumer `GuiAdapter.update` dispatches each
+inbox message; each resource owner keeps its own token and rearming policy.
 
 ## Validation and handshake
 
-Startup derives the initial pane size from the current workbench. An empty
-workbench returns `TerminalTooSmall` before request correlation or transport
-state changes.
+Startup derives the initial pane size from the current workbench.
+`GuiAdapter.windowReady` returns without starting when the viewport measures
+to an invalid grid. `client_layout.openInitialPane` returns
+`TerminalTooSmall` for an empty workbench before request correlation or
+transport state changes.
 
-After color negotiation settles, `client_startup.advance` calls
-`model.to_runtime.pushBootstrap`, which checks space for three FIFO messages
-before changing the bounded outbox:
+`model.to_runtime.pushBootstrap` checks space for three FIFO messages before
+changing the bounded outbox:
 
 1. `configure_graphics` with this client's shared-memory support;
-2. `configure_terminal_colors` with the known foreground and background;
-3. `request_runtime_state` with the stable identity of the host terminal.
+2. `configure_terminal_colors` with the renderer theme's foreground and
+   background;
+3. `request_runtime_state` with the client's stable identity.
 
-The ordinary runtime send worker delivers them in order. Runtime and TTY reads are
-already armed; early user input is retained until the first pane is active.
-The runtime delivers `client_layout_snapshot` before its other level-triggered projections. The
-client restores sidebar visibility and width, workspace-list collapse, active
-tab, pane focus, fullscreen state and validated split trees. It then derives
-geometry from the restored sidebar, registers `initial_open`, and requests the
-retained pane. With no safe pane layout, it uses the normal default launch while
-still restoring retained chrome preferences. A reply therefore cannot race an
-unregistered continuation, and the first pane size matches the restored view.
+The ordinary runtime send worker delivers them in order. Early user input is
+retained until the first pane is active: `StartupState.holdsInput` is true
+while the phase is `probing` or `opening`, so `GuiAdapter.drainInput` leaves
+the queue untouched and the headless client reads no stdin line. The runtime
+delivers `client_layout_snapshot` before its other level-triggered
+projections. The client restores sidebar visibility and width,
+workspace-list collapse, active tab, pane focus, fullscreen state and
+validated split trees. It then derives geometry from the restored sidebar,
+registers `initial_open`, and requests the retained pane. With no safe pane
+layout, it uses the normal default launch while still restoring retained
+chrome preferences. A reply therefore cannot race an unregistered
+continuation, and the first pane size matches the restored view.
+
+A machine the window does not show defers its first pane: the layout is kept
+in `Client.deferred_layout` and the open waits until the window shows it. See
+[Machine presentation](machine-presentation.md).
 
 ## Event sources and lifetime
 
-Before waiting for replies, startup arms the host resize watcher, one runtime
-read, one TTY read, the host-capability deadline, telemetry, configured bar
-deadlines and configuration reload. Adapters with disabled configuration
+Before waiting for replies, startup arms one runtime connection, configured
+bar deadlines and configuration reload. Adapters with disabled configuration
 schedule no worker. Each active adapter owns its bounded pending token.
 
-Any startup error aborts the disposable client. `TerminalAdapter.deinit` closes
-and joins inbox producers before freeing client buffers; its defer runs before
-`run` destroys the watcher. Telar does not retry an uncertain partial handshake inside the same
-client; the runtime remains the authority and a later client reconnects from
-snapshots.
+Any startup error aborts the disposable client. The adapter closes and joins
+inbox producers before freeing client buffers. Telar does not retry an
+uncertain partial handshake inside the same client; the runtime remains the
+authority and a later client reconnects from snapshots.
 
 ## Validation
 
-- `client startup validates geometry before request registration` proves that
-  an invalid workbench changes neither correlation nor transport state.
-- `client startup waits for runtime layout before its initial open` crosses a
-  real socketpair and proves identity delivery, deferred correlation, geometry,
-  launch arguments and the receive token.
-- `restored client layout controls the initial attach geometry` proves that
-  retained chrome and navigation precede the attach request.
+- `native startup sends the ordered bootstrap without graphics credits or a
+  server reply` in `src/gui/tests/terminal.zig` proves the window's bootstrap
+  order.
+- `client startup waits for runtime layout before its initial open` in
+  `src/client_tests/transport.zig` crosses a real socketpair and proves
+  identity delivery, deferred correlation, geometry, launch arguments and the
+  receive token.
+- `restored client layout controls the initial attach geometry` in the same
+  file proves that retained chrome and navigation precede the attach request.
 - `runtime bootstrap queues colors before subscribing to the initial layout`
-  proves ordered bounded delivery independently of startup orchestration.
-- `startup timeout publishes unknown colors once and consumes late replies`
-  proves fallback and expiry.
-- `startup replays early typing exactly once after pane activation` proves that
-  negotiation does not discard keystrokes.
-- Resize, capability, telemetry and reload lifecycle tests prove their own
-  scheduling-token cleanup and failure rules.
+  in `src/model/connection/Outbox.zig` proves ordered bounded delivery
+  independently of startup orchestration.
+- `each GUI drains only its own queue and respects its own startup gate` in
+  `src/gui/tests/host_input.zig` proves that input waits for startup.

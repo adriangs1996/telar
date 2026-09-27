@@ -7,11 +7,11 @@ or asks the runtime for another workspace.
 ## Flow
 
 ```text
-sidebar hit region
+native pointer press over a sidebar agent card
        |
-pointer_routing.apply -> HostChrome.pointer
+GuiAdapter.dispatchPointer -> GuiAdapter.dispatchBandPointer
        |
-TUI presentation State.handleMouse -> focus_agent AgentKey
+Chrome.bandPointer -> focus_agent AgentKey
        |
 view_interactions.apply
        |
@@ -38,7 +38,8 @@ handoff flow's workspace retry.
 The operation does not draw. Local selection and focus commit their own
 `ClientModel.Version` dimensions through existing operations. A remote handoff
 commits the normal empty workspace transition after its protocol messages enter
-the outbox. `Presenter` observes either result at the event boundary.
+the outbox. After the inbox turn, `GuiAdapter.update` hands either result to
+the shared presentation lifecycle through `Client.presentation.observe`.
 
 ## Fullscreen across workspaces
 
@@ -60,10 +61,10 @@ selection. See [Client layout persistence](client-layout-persistence.md).
   remote plans without exposing the agent replica.
 - `src/client/agents/agent_navigation.zig` applies selection before
   focus and calls the concrete tab, focus and handoff operations.
-- `src/frontend/client/tests/notifications_and_agents.zig` and
-  `src/frontend/client/tests/synchronization.zig` exercise stale/pending
+- `src/client_tests/notifications_and_agents.zig` and
+  `src/client_tests/synchronization.zig` exercise stale/pending
   suppression and navigation order on the real client.
-- `src/frontend/client/tests/synchronization.zig` proves local fullscreen focus,
+- `src/client_tests/synchronization.zig` proves local fullscreen focus,
   direct pane handoff and a workspace round trip into a previously inactive
   fullscreen tab through the substituted runtime socket. The requested pane
   differs from saved focus, and canonical pane order differs from split order.

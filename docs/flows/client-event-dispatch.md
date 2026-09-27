@@ -1,7 +1,8 @@
 # Client event dispatch
 
 Input, IPC, deadlines and worker completions enter a client-owned inbox. The
-TUI, GUI and headless test driver use `mailbox.GenericInbox` (`lib/mailbox`). Their
+GUI, the headless client and the test drivers use `mailbox.GenericInbox`
+(`lib/mailbox`). Their
 consumers classify messages and delegate to existing operations. Only that
 consumer may mutate the client model or prepare a presentation.
 
@@ -30,12 +31,11 @@ Messages own values or carry an explicit borrow from a producer resource:
 | --- | --- |
 | Runtime RX | `RuntimeTransportState` owns both its 4 MiB `receive_buffer` and one validated `RuntimeMessage`. Inbox entries borrow the decoded value; handlers finish before the next read is armed. |
 | Runtime TX | The `model.to_runtime` outbox plus the 4 MiB send buffer. One writer; completion releases the send claim. |
-| TUI input | One reserved 4 KiB `HostInput.chunk`. Decode and routing finish before rearming its reader. |
 | Native input | `InputQueue` copies keys/paste before returning to AppKit/Wayland. One coalesced readiness message dispatches bounded chunks. |
-| TUI host output | Sealed bytes owned by `Output`; no model pointer reaches its writer. |
+| Headless stdin | One owned `InputLine` per `.input` event, parsed from a fixed `stdin_buffer`. The next line is read only after startup admits input and the outbox has room. |
 | GUI presentation | A token and outcome. GPU consumers have finished before posting the completion. |
 | Config, plugins and media | Existing generation/job owners retain results through dispatch or orphan cleanup. |
-| Headless RX | One explicit 64 KiB wire buffer and one decoded value owned by the fixture; a second pending receive or oversized frame is rejected. |
+| Fixture RX | One explicit 64 KiB wire buffer and one decoded value owned by `presentation/Fixture`; a second pending receive or oversized frame is rejected. |
 
 The inbox does not make a borrowed slice independent of its owner. Rearming,
 generation validation, release and orphan cleanup remain in their capabilities.
@@ -65,18 +65,12 @@ workers; their completions carry results rather than heavy work to execute.
 
 ## Host consumers
 
-`frontend/client/run` sleeps on `inbox.wait`, then calls `events.update`.
-`events` classifies each message into its diagnostic path and delegates to the
-existing adapter. Startup may advance after each message. A successful batch
-observes layout and presentation once; unchanged versions schedule no frame.
-Draw deadlines and host-write completions retain the presenter's existing
-pacing and sealed-output contract. `events.handle` supplies the same dispatch
-and observation for tests that deliberately execute one transition.
-
-Shared client work starts with `client.workers.start(job)`. Both adapters run
-it as `inbox.start(.client, .{ job_runner.run, ... })`; the GUI hands only the
-config watch to `ConfigurationReload`. The finished `client.Message` arrives as
-the `.client` event and goes to `Client.update`.
+Shared client work is queued in `Client.to_workers` and `to_background`. Each
+adapter's `startJobs` pops those jobs and runs them as
+`inbox.start(.client, .{ job_runner.run, ... })`; the GUI does so through
+`gui/workers.zig`, and hands only the config watch to `ConfigurationReload`.
+The finished `client.Message` arrives as the `.client` event and goes to
+`Client.update`.
 
 `gui/NativeLoop` uses the same inbox and a nonblocking wake pipe. Socket actors
 use its task group. `ConfigurationReload` reserves a slot for its font/watch
@@ -98,29 +92,36 @@ returns token zero. Both backends defer GPU submission until a later wake or
 viewport change. Linux requests a surface frame callback only after admitting
 a nonzero token, avoiding a callback wait with no surface commit.
 
-`presentation/Fixture` is the headless driver. It uses the same inbox, decoder,
-production operations, outbox and presentation lifecycle. Tests can delay messages
-and presentation independently. It remains a controllable test adapter rather
-than a second CLI with unimplemented host services.
+`HeadlessClient.run` in `src/headless/` sleeps on `inbox.wait`, then calls
+`HeadlessClient.update`. One turn dispatches the admitted events, synchronizes
+client layout once, presents and acknowledges the ready frames, then arms the
+next stdin read when input is admitted. See [Headless
+client](headless-client.md).
+
+`presentation/Fixture` and `src/client_tests/ClientHarness.zig` are test
+drivers. They use the same inbox, decoder, production operations, outbox and
+presentation lifecycle. Tests can delay messages and presentation
+independently.
 
 ## Saturation, shutdown and recovery
 
-A full outbox keeps its existing per-operation policies: pause TTY reads, retain
-native input, hold graphics credits, or reject a request explicitly. Writers
-consume prepared bytes independently of the reader and the model owner.
+A full outbox keeps its existing per-operation policies: retain native input,
+delay the next headless stdin read, hold graphics credits, or reject a request
+explicitly. Writers consume prepared bytes independently of the reader and the
+model owner.
 A failed worker admission releases the corresponding transport reservation.
 
 Shutdown revokes inbox admission before canceling and joining producers. The
-GUI joins its font worker before releasing staged renderers; both hosts join
-socket/output workers before freeing their buffers, client generations and wake
+GUI joins its font worker before releasing staged renderers; both adapters
+join socket workers before freeing their buffers, client generations and wake
 endpoints. Late results cannot mutate a replacement owner. Socket failures or
 uncertain partial writes end that client. Runtime panes survive and reconnect
 rebuilds state through the existing snapshot protocol.
 
 `InboxSnapshot` exposes depth, reserved slots, storage bytes, high-water count,
 admitted/consumed messages, coalescing, rejections, stale publications, wakes
-and budget yields. TUI diagnostics include these as `inbox_*` fields. Native
-and headless drivers expose the same snapshot for integration probes. Storage
+and budget yields through the inbox's `snapshot`. Window, transport and
+diagram tests read it to check depth, reservations and consumption. Storage
 bytes describe the inbox itself; the separate payload owners above remain
 charged to their own budgets. Wakes count signal attempts, not kernel wakeups;
 the native endpoint can coalesce several signals into one host callback.
@@ -132,8 +133,6 @@ the native endpoint can coalesce several signals into one host callback.
   publication, wake delivery and shutdown with a saturated queue.
 - `connection/runtime_transport.zig`: a non-reading socket blocks TX while RX
   and local input continue, then cancellation joins both actors.
-- `frontend/client/tests/host_interaction.zig`: finite TUI batches publish one
-  presentation observation; terminal outcomes skip observation.
 - `presentation/headless_tests.zig`: delayed owned wire bytes, ordered patches
   and dependent input, snapshot recovery, stale presentation tokens, retained
   frame lifetimes and allocation-free steady state.

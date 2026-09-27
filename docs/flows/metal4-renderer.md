@@ -2,8 +2,8 @@
 
 The GUI requires macOS 26 and a GPU reporting `MTLGPUFamilyMetal4` support.
 The application bundle declares the OS minimum; the CLI GUI entrypoint checks
-it before creating the view. Unsupported systems fail explicitly. The TUI and
-runtime do not use this rendering API.
+it before creating the view. Unsupported systems fail explicitly. The runtime
+does not use this rendering API.
 
 The native adapter is split by ownership:
 

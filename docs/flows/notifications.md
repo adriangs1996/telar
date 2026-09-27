@@ -1,9 +1,9 @@
 # Notifications
 
 Notifications are bounded, disposable client state. `ClientModel` owns their
-content, identity and lifecycle. The TUI view (`presentation/State.zig`) and
-both toast renderers borrow the immutable center and never decide whether a
-notification exists, expires or starts exiting.
+content, identity and lifecycle. The window's toast widgets borrow the
+immutable center and never decide whether a notification exists, expires or
+starts exiting.
 
 ## Publication path
 
@@ -26,9 +26,9 @@ notifications.publishNotification <-------------------+
                                |
                 notifications.deliverHostNotification
                                |
-                  presentation_lifecycle.observe
+               Client.presentation.observe after the turn
                                |
-         Presenter -> State.render(projection.notifications)
+      GuiAdapter.prepare -> widgets/overlays/Notifications.prepare
 ```
 
 `runtime_messages.handleServerMessage` delegates a runtime event to
@@ -43,8 +43,10 @@ Diagnostic-producing procedures commit their banner before constructing
 the input. Publication commits its owned model state before it touches the
 timer. `deliverHostNotification` then follows the configured
 `notification_delivery`: `telar` shows only the in-app center, `terminal`
-pushes `.terminal_notification` into `model.to_host`, and `system` starts a
-best-effort `.system_notification` job through `client.workers.start`.
+pushes `.terminal_notification` into `model.to_host`, and `system` queues a
+best-effort `.system_notification` job on `client.to_background`. Neither the
+window nor the headless client has an outer terminal, so both drop
+`.terminal_notification`; with `terminal` only the in-app center shows.
 
 `notifications.Center` copies title and message bytes into fixed buffers. It
 keeps at most four items, refreshes an equivalent active item and replaces the
@@ -111,8 +113,8 @@ items wake at `model.host.animation_frame_ns`, while stable items sleep until
 expiry. The deadline lives in `model.notification_scheduler`, a
 `pacing.DeadlineScheduler` like the bar and sidebar animation timers. The
 scheduler owns one atomic deadline, one wake event and one pending flag. When
-it reports `.schedule`, the client starts one `.timer` job through
-`client.workers.start`; `job_runner` waits in `deadline_timer.wait`. Replacing
+it reports `.schedule`, the client queues one `.timer` job on
+`client.to_workers`; `job_runner` waits in `deadline_timer.wait`. Replacing
 or removing a deadline sets the wake event rather than adding another job. Its
 fixed two-way select discards whichever wait loses the race.
 
@@ -122,17 +124,11 @@ which releases the scheduler before checking the result. It then advances the
 center from elapsed monotonic time, bumps `notifications_revision` only when
 state changed and rearms the next deadline.
 
-`events.update` calls `presentation_lifecycle.observe` after the event.
-`Presenter` compares `projection.version.notifications` with the last version
-it painted, invalidates the view and passes `projection.notifications`, a
-borrow of `model.notification_center`, into the next paced frame. Several
-lifecycle ticks inside one frame budget therefore fold into one projection of
-the latest state.
-
-Cell toasts and the Kitty Graphics renderer consume the same immutable center.
-The view stores only physical presentation state such as hit regions, overlay
-cleanup and prepared raster data. Graphics preparation runs on the independent
-media path and cannot mutate notification semantics.
+`GuiAdapter.update` calls `Client.presentation.observe` after the turn. A
+changed `notifications` version asks for a frame, and `GuiAdapter.prepare`
+passes `projection.notifications`, a borrow of `model.notification_center`,
+into that paced frame. Several lifecycle ticks inside one frame budget
+therefore fold into one projection of the latest state.
 
 The native GUI samples a copy of each visible item at `FrameClock.now_ns`.
 `widgets/overlays/Notifications` owns four bounded stack-position slots keyed by item
@@ -152,13 +148,13 @@ controls while later preparation samples current time.
 ## Interaction path
 
 ```text
-toast hit region
+toast card or close control
       |
-pointer_routing.apply -> HostChrome.pointer -> State.handleMouse
+GuiAdapter.widgetInput -> widget routing (NotificationCard target)
       |
 .notification_activate(id) or .notification_dismiss(id)
       |
-view_interactions.apply
+view_interactions.apply (routing.dispatchIntent)
       |
 notifications.activateNotificationNow or notifications.dismissNotificationNow
       |
@@ -167,14 +163,14 @@ ClientModel commit + notifications.scheduleNotificationTimer
 notifications.navigateNotification -> optional tab, workspace or pane navigation
 ```
 
-The view returns only the notification ID and consumes the click. Activation
-starts the exit transition and rearms its timer before `navigateNotification`
-follows the semantic target through tab selection, workspace handoff or pane
-focus.
-Dismissal starts the same transition without navigation. Missing IDs and IDs
-already exiting are stale no-ops, so a repeated hit cannot repeat its action or
-click through into a pane. Timer failure prevents navigation; navigation
-failure retains both the committed exit and the rearmed timer.
+The card's target carries only the notification ID and consumes the click.
+Activation starts the exit transition and rearms its timer before
+`navigateNotification` follows the semantic target through tab selection,
+workspace handoff or pane focus. Dismissal starts the same transition without
+navigation. Missing IDs and IDs already exiting are stale no-ops, so a repeated
+hit cannot repeat its action or click through into a pane. Timer failure
+prevents navigation; navigation failure retains both the committed exit and the
+rearmed timer.
 
 ## Bounds and recovery
 
@@ -212,9 +208,7 @@ new notifications after reconciliation.
 - `lib/pacing/deadline_timer.zig` proves deadline replacement,
   removal, parking and pending-token release after successful and failed
   completions.
-- `src/frontend/client/presentation/view.zig` proves immutable rendering, ID-only intents
-  and cell restoration after an exit.
-- `src/frontend/client/tests/notifications_and_agents.zig` proves outbound
+- `src/client_tests/notifications_and_agents.zig` proves outbound
   delivery and rollback, wire and local producers, commit-before-navigation
-  ordering, a real lifecycle tick, presenter-owned projection, retained
+  ordering, a real lifecycle tick, presentation observation, retained
   commits after host failures and bounded agent alerts.

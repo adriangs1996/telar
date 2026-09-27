@@ -29,4 +29,4 @@ without a second notification. The model owns no drawing or timer scheduling.
 
 Validation lives in the model's configuration tests,
 `src/client/config/client_diagnostic.zig`, and the real
-configuration/Lua/plugin flows in `src/frontend/client/tests/configuration.zig`.
+configuration/Lua/plugin flows in `src/client_tests/configuration.zig`.
