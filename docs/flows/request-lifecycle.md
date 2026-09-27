@@ -62,10 +62,11 @@ delivery fails.
 `model.request_lifecycle.ensureCanStart(2)` proves both identities and one tracker slot exist
 before provisional attachment effects begin.
 
-After host negotiation settles, the adapter (`client_startup.advance` in the
-TUI, `GuiAdapter` in the GUI) calls `model.to_runtime.pushBootstrap`, which
-queues graphics and color configuration and the `request_runtime_state`
-subscription through the ordinary send path. Reads are already
+The adapter stores its bootstrap on `Client` before it starts the link. Each
+session's `runtime_link.adopt` calls `model.to_runtime.pushBootstrap` (the
+window calls it directly when it was handed a connection), which queues
+graphics and color configuration and the `request_runtime_state` subscription
+through the ordinary send path. Reads are already
 armed. The later `client_layout_snapshot` enters `client_layout.restoreClientLayout`, which
 restores geometry and registers the fixed `initial_open` continuation before
 enqueueing its corresponding open request. Registration and send admission use
@@ -123,12 +124,12 @@ snapshots.
 ## Validation
 
 - `src/model/connection/RequestLifecycle.zig` owns identity bounds and preflight;
-  frontend tab/handoff integration tests exercise refusal before provisional
+  client tab/handoff integration tests exercise refusal before provisional
   effects and reserve capacity for recovery.
 - `src/model/connection/requests.zig` proves single consumption, group and pane
   lookup, exact close completion and stale-retirement exceptions.
 - `request delivery rolls correlation back when transport is full` in
-  `src/frontend/client/tests/` crosses the public request and transport
+  `src/client_tests/transport.zig` crosses the public request and transport
   boundaries and proves transactional rollback.
 - `owned request deliveries roll back only their own correlation when the outbox is full`
   in `src/client/connection/runtime_io.zig` checks the five variable-payload send paths

@@ -9,70 +9,60 @@ application independently of presentation.
 
 The common `telar-client.presentation` capability owns the borrowed projection,
 observations, pane-coordinate geometry and single-flight completion identity.
-Each client has one lifecycle, `Client.presentation`
-(`LifecycleState`). The TUI `Presenter` borrows it as `presentation_state`, and
-the GUI reads it through its `app`. The `Presenter` owns `Screen`, compositor,
-pacing, draw/media deadlines and physical caches. Common procedures do not
+Each client has one lifecycle, `Client.presentation` (`LifecycleState`). The
+window reads it through its `app`. `GuiAdapter` owns the renderer, the frame
+pacer, the cursor clock and widget presentation state. Common procedures do not
 request draws.
 
 ```text
-committed client event
+committed client event (GuiAdapter.update turn)
         |
-presentation_lifecycle.observe -> view_chrome.refresh
+model version + ingress and geometry revisions (GuiAdapter.observation)
         |
-model version + resource/input/geometry revisions
+app.presentation.observe -> needsPreparation -> needs_draw
         |
-Presenter.observe -> presentation_state.observe -> TUI pacing
+native render callback -> GuiAdapter.draw -> prepare
         |
-projection_support.capture + TUI resources -> Presenter.presentDue
+projection + Scene.prepare -> app.presentation.begin -> owned token
         |
-compose and encode -> presentation_state.begin -> owned token
+GPU submission -> native complete callback -> .presented message
         |
-sealed output bytes -> host write completion
-        |
-presentation_state.complete(token, delivered)
+GuiAdapter.complete -> widgets present -> app.presentation.complete(token)
         |
 presentation_delivery.apply -> ClientModel.commitPresentation
         |
 filter attachment generations + exact damage commit
-        |
-graphics credits -> adapter schedules optional media work
 ```
 
-The headless adapter uses the same projection, lifecycle and concrete delivery
-procedure on `Client`.
-It copies cells into bounded storage instead of encoding a terminal diff. Its
-caller controls when preparation and delivery fail or finish.
+The headless client uses the same projection, lifecycle and delivery
+procedure on `Client`. `HeadlessClient.present` captures the active tab's
+commit, begins and completes it as delivered at once, then applies the
+delivery; there is no host to write to. The test `HeadlessAdapter` copies cells
+into bounded storage, and its caller controls when preparation and delivery
+fail or finish.
 
 ## Observation and preparation
 
-`Observation` contains `ClientModel.Version`, graphics and attachment ingress,
-visible input/view interaction revisions and the workbench-grid revision. The
-lifecycle keeps observed, prepared and delivered values separately. Observing
-unchanged prepared work adds no frame, including while its write is pending.
-A newer observation replaces the desired version; there is no frame queue.
+`Observation` contains `ClientModel.Version`, visible input-routing and view
+interaction revisions and the workbench-grid revision. The lifecycle keeps
+observed, prepared and delivered values separately. Observing unchanged
+prepared work adds no frame, including while its GPU work is pending. A newer
+observation replaces the desired version; there is no frame queue.
 
-TUI scheduling retains burst credit, input grace and the existing paced draw
-deadline. An event may prepare immediately or coalesce onto that deadline.
-`presentation_projection` supplies host context to the shared
+The native loop asks `GuiAdapter.frameDelayNs` before drawing. `FramePacer`
+keeps the window's frame cadence and gives admitted pane input a bounded grace,
+so a frame carrying that pane's echo need not wait for the next interval. The
+cursor clock and widget animations report their own wakeups through
+`wakeupAfter`.
+
+`GuiAdapter.prepare` captures the projection through the shared
 `projection_support.capture` builder. The projection carries `layout`, the
-cached snapshot of the active tab.
-Rendering borrows model data synchronously and receives TUI resources separately.
-No worker borrows the model or the projection.
+cached snapshot of the active tab. Rendering borrows model data synchronously.
+No worker borrows the model or the projection. The scene returns its bounded
+`PresentationCommit`, including fullscreen-hidden panes. Preparation advances
+prepared revisions, not delivered revisions or pane acknowledgement state.
 
-The compositor keeps last-painted cells, its layout snapshot and copy projection.
-It reads the shared workspace and returns its bounded `PresentationCommit`,
-including fullscreen-hidden panes. An empty active model composes an explicit
-empty screen. Preparation advances prepared revisions, not delivered revisions
-or pane acknowledgement state.
-
-## Output and completion
-
-`host/Output` keeps one sealed byte slice in flight. Sideband bytes may
-accumulate in its other bounded buffer. When output is occupied, the lifecycle
-records deferred draw/media work without composing another diff or discarding
-the partly written one. The actor returns after the complete write and flush.
-A zero-byte diff may complete inline because the host already has those cells.
+## Completion
 
 The common lifecycle consumes the matching token once. A duplicate or replaced
 token cannot complete a newer flight. A valid completion for an older model
@@ -81,33 +71,26 @@ version still identifies only that version's captured pane frames.
 `ClientModel.commitPresentation` rejects retired attachment generations, even
 when a reconstructed pane reuses the same wire frame number. Exact pending-frame
 matching prevents an old delivery from clearing newer damage.
-`presentation_delivery.apply` validates the bounded commit, commits model damage
-and flushes released graphics credit. The TUI adapter then schedules optional
-media work. This procedure sends no cell ACK. `pane_frame.receive` queues the
-ACK for owned cells before resource delivery, so new patches can update the
-model while the sealed output is still in flight. The next preparation captures the latest state.
+`presentation_delivery.apply` validates the bounded commit and commits model
+damage; the next flush returns the resource credit those frames held. This
+procedure sends no cell ACK. `pane_frame.receive` queues the ACK for owned
+cells before resource delivery, so new patches can update the model while a
+frame is still on the GPU. The next preparation captures the latest state.
 
 `Geometry` owns region, tab, layout, host size and pane-shape identities. A new
-TUI pointer gesture cannot use changed pane geometry during an in-flight
+pointer gesture cannot use changed pane geometry during an in-flight
 presentation. Captured gestures retain their existing owner. Widget hit maps
 remain adapter-owned; the contract does not prescribe native widget layout.
 
-## Media and host services
-
-Media retains its existing independent deadline, quotas and byte budget. Cell
-output takes priority. Image and attachment consumers acquire explicit leases
-when bytes outlive a synchronous call. Obsolete allocations stay charged until
-the last consumer releases them; completing cells alone cannot return that
-storage's credit.
+## Host services
 
 Window-title formatting and change suppression use the shared
-`WindowTitleState`. The TUI supplies hostname lookup and OSC encoding; the GUI
-passes a `Sink` that copies the title into native storage. Clipboard writes,
-terminal notifications and media capture go through `model.to_host`, which the
-adapter drains after every event (`host_effects.deliver` in the TUI,
-`GuiAdapter.deliverHostEffects` in the GUI). Links, sound and system
+`WindowTitleState`; the window passes a `Sink` that copies the title into
+native storage. Clipboard writes, terminal notifications, clipboard capture and
+machine requests go through `model.to_host`, which the window drains after
+every event in `GuiAdapter.deliverHostEffects`. Links, sound and system
 notifications run as client jobs through `client.workers.start`. Common
-procedures do not receive a terminal writer or a GPU device.
+procedures do not receive a GPU device.
 
 ## Failure and teardown
 
@@ -116,15 +99,11 @@ keeps model damage pending and permits a fresh preparation. Cancellation means
 that consumers have stopped borrowing, not that their storage may be reused
 while they are still running.
 
-The TUI never cancels a partial diff to replace it. Write failure ends that
-client. The driver cancels and joins actors before freeing output, graphics and
-model storage; a new connection rebuilds runtime snapshots. Runtime PTYs and
-history remain valid after client death.
-
-After successful delivery, a credit or media-scheduling error does not
-undo earlier effects. The existing event loop closes that client and snapshot
-reconciliation recovers it. Completion does not claim physical input-to-photon
-or monitor presentation timing.
+A new connection rebuilds runtime snapshots. Runtime PTYs and history remain
+valid after client death. After successful delivery, a credit error does not
+undo earlier effects. The event loop closes that client and snapshot
+reconciliation recovers it. Completion reports GPU delivery, not monitor
+presentation timing.
 
 ## Proof
 
@@ -132,14 +111,12 @@ or monitor presentation timing.
   cancellation, exact-token completion and captured-frame delivery.
 - `src/client/presentation/headless_tests.zig` exercises shared entrypoints,
   concrete procedures, coalescing, resource lifetime and outbox without a
-  terminal.
+  window.
 - `src/client/connection/presentation_delivery.zig` contains the direct
   completion procedure and `src/model/panes/presentation_delivery.zig` the
   exact retirement; headless and adapter tests exercise its damage/credit
   ordering through actual client state.
-- `src/frontend/client/tests/presentation.zig` tests TUI pacing, observations,
-  media priority and the successful/failed host-write boundary.
-- `src/frontend/client/host/host_output.zig` tests immutable sealed bytes,
-  nonblocking prefixes, exact-once writes and token release.
-- `src/frontend/workspace/multiplexer.zig` keeps full/incremental composition,
-  hidden-pane and stale-damage tests against the common pane model.
+- `src/client_tests/presentation.zig` tests observation folding and pointer
+  shape delivery through presentation.
+- `src/gui/tests/navigation.zig` rejects queued pointer presses after the
+  geometry changes, including before a GPU flight starts.

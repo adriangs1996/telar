@@ -60,7 +60,7 @@ later snapshot repairs disposable resources. No operation schedules a draw.
 
 Source: `src/client/workspace/workspace_list_snapshot.zig`, `src/model/state/ClientModel.zig`
 and `src/model/workspace/workspace_reconciliation.zig`.
-Tests: `src/frontend/client/tests/synchronization.zig`,
+Tests: `src/client_tests/synchronization.zig`,
 `renaming_and_telemetry.zig`, `src/model/state/tests/workspaces.zig`,
 `tabs.zig` and `src/model/workspace/tab_flow_tests.zig` cover correlation, atomic validation, retained layouts, foreground
 metadata, cleanup, coalescence and canonical no-ops.

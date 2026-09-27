@@ -48,18 +48,18 @@ returns `Message.server` or `Message.sent`.
 
 ## Bootstrap
 
-After host negotiation, `model.to_runtime.pushBootstrap` admits these frames
+When a session starts, `model.to_runtime.pushBootstrap` admits these frames
 atomically to the ordinary outbox, in order:
 
 1. `configure_graphics`, so the runtime knows whether it may offer shared
    memory resources;
-2. `configure_terminal_colors`, so terminal queries use the host defaults;
+2. `configure_terminal_colors`, so terminal queries use the client's default
+   colors (the window's theme);
 3. `request_runtime_state`, so reconnectable replicas can be rebuilt.
 
-Bootstrap only queues messages. The GUI calls `runtime_io.startRuntimeIo`
-to activate the receive loop before starting the queued send. The TUI
-(`client_startup.advance`) finishes its color probes before queuing the same
-bootstrap. The send actor writes independently of reception. The initial
+Bootstrap only queues messages. `runtime_link` then calls
+`runtime_io.startRuntimeIo` to activate the receive loop before starting the
+queued send. The send actor writes independently of reception. The initial
 runtime layout determines the subsequent `open_pane` transaction.
 
 ## Outbound path
@@ -88,10 +88,11 @@ can mutate the head or reuse that buffer until `.sent` releases the claim.
 Queue insertion may fold pane input, resize and frame acknowledgements only
 where their ordering rules permit it.
 
-A full outbox stops new host TTY reads. A successful send removes one message,
-pumps its successor and sets `model.to_host.resume_input`; the adapter drains
-it after the event (`host_effects.deliver` calls `host_inputs.scheduleRead` in
-the TUI), which reads again only if capacity still exists. Request correlation rolls back when an enqueue fails; transport does
+A full outbox stops the adapter from taking more input. A successful send
+removes one message, pumps its successor and sets `model.to_host.resume_input`;
+the adapter drains it after the event. `GuiAdapter.resumeInput` drains the
+window's queued input again only if capacity still exists; the headless client
+reads its next stdin line under the same capacity check. Request correlation rolls back when an enqueue fails; transport does
 not invent or consume continuations.
 
 Graphics memory credit follows the same queue. The graphics store retains a
@@ -137,13 +138,14 @@ wire data early.
 ## Destruction and failures
 
 The host closes its inbox and joins producers before `RuntimeTransportState.deinit` frees either frame
-buffer. A socket the adapter handed in (the TUI) stays the caller's to close;
+buffer. A socket the adapter handed in (tests do) stays the caller's to close;
 a socket a connection job produced is the client's, and `Client.deinit`
 closes it.
 
 If inbox admission or task creation refuses a read or write actor, transport releases the token it
 reserved. A completed socket error also releases its token. A client that
-connects by itself (the GUI, `options.machine` set) then loses the link
+connects by itself (the window or the headless client, `options.machine`
+set) then loses the link
 instead of failing: see [runtime link](runtime-link.md). A client handed its
 socket propagates the error as before. Telar never retries an uncertain
 partial socket write inside the same session; a reconnect starts a new
@@ -163,9 +165,9 @@ original message.
 - `src/model/connection/outbox_support.zig` proves one send claim, completion on success
   and failure, copied payload ownership, folding rules and saturation bounds.
 - `runtime reads own one token and do not rearm after shutdown` in
-  `src/frontend/client/tests/transport.zig` crosses the real framed socket and
+  `src/client_tests/transport.zig` crosses the real framed socket and
   proves rearming, terminal shutdown and error cleanup.
 - `host input reads pause at outbox capacity and resume with one token` proves
-  that a real send completion recovers TTY capacity without duplicate reads.
+  that a real send completion sets `resume_input` and restores one slot.
 - `graphics credits remain owned until the outbox accepts them` proves credit
   retention across saturation and transfer after one slot opens.

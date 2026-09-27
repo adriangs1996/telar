@@ -20,7 +20,7 @@ path_picker.enter (client)
        query               -> PathQuery.run          (observation worker)
   -> path_results { root, scanned, complete, truncated, matches }
   -> runtime_messages -> path_picker.receive -> PathPickerState (Version.path_picker)
-  -> PathPicker (GUI) / widgets/path_picker (TUI)
+  -> PathPicker (window overlay)
 Enter -> path_picker.insert -> pane_input.pasteText -> pane input
 ```
 
@@ -88,7 +88,7 @@ palette, after the prompt closes.
 ## Presentation
 
 `path_picker_placement.place` puts the picker under the cursor, or above it
-when the rows below do not fit, and both adapters use it. The field is
+when the rows below do not fit; the window's `PathPicker` overlay uses it. The field is
 always the row next to the cursor and the key hints the far row; flipped,
 the best match sits just above the field. `PathLabel` lays out each row:
 the directory muted, the file name plain, matched characters in the accent,
@@ -106,7 +106,7 @@ name stays whole.
   `path_picker_placement.zig`: stale replies, late failures, row layout and
   placement.
 - `src/client/input/path_picker.zig`: relative, absolute and quoted pastes.
-- `src/frontend/client/tests/path_picker.zig`: open, browse in and out,
+- `src/client_tests/path_picker.zig`: open, browse in and out,
   type, paste, stale reply and failure through the real client outbox.
 - `src/gui/tests/path_picker.zig`: bounds on every host size, row hits and
   scrolling.

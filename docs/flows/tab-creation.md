@@ -52,9 +52,9 @@ model revisions; this operation does not draw.
 
 Source: `src/client/workspace/tab_creation.zig`, `src/model/state/ClientModel.zig`
 and `src/model/workspace/tab_creation.zig`.
-Tests: `src/frontend/client/tests/tab_lifecycle.zig`,
+Tests: `src/client_tests/tab_lifecycle.zig`,
 `src/model/state/tests/tabs.zig`, `src/model/workspace/tab_flow_tests.zig`,
 `src/model/connection/outbox_support.zig`,
-and runtime/transport tab-lifecycle tests. The frontend suite includes invalid
+and runtime/transport tab-lifecycle tests. `tab_lifecycle.zig` includes invalid
 labels, full-outbox correlation rollback and a confirmed creation whose later
 attachment retirement fails.

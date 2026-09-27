@@ -50,7 +50,7 @@ failure of that repair never replaces the original request error.
 Only a locally accepted open permits `workspace_handoff.depart`. Departure captures
 the bookmark and bounded retired pane identities and retains reconciled layouts
 for active and inactive tabs. It advances workspace/tab/active-tab/pane revisions
-once, then releases local resources silently. The presenter can render that
+once, then releases local resources silently. The window can render that
 empty model once; waiting for the reply does not create a redraw loop.
 
 Arrival consumes exact correlation. Saved bookmark geometry is accepted only
@@ -77,7 +77,7 @@ survive client failure and reconnect.
 Source: `src/client/workspace/workspace_handoff.zig`, `src/model/state/ClientModel.zig`,
 `src/model/workspace/workspace_handoff.zig` and
 `src/model/workspace/NavigationHistory.zig`.
-Tests: `src/frontend/client/tests/synchronization.zig`,
+Tests: `src/client_tests/synchronization.zig`,
 `workspace_lifecycle.zig`, `notifications_and_agents.zig`, and
 `src/model/state/tests/workspaces.zig` cover preflight, partial failure,
 bookmarks/layout round trips, empty-state presentation, arrival and bounded retry.

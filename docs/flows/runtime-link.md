@@ -77,8 +77,8 @@ machine disabled or moved (machine-presentation.md)
   identity, so the runtime restores the layout it kept for this window.
 - **`--fresh` applies once.** The first session sets the previous one aside;
   a reconnect adopts the runtime that session started.
-- **A client handed its socket cannot reconnect.** The TUI keeps its
-  synchronous connection and ends when it is lost.
+- **A client handed its socket cannot reconnect.** Tests hand one in; it
+  ends when that socket is lost.
 - **An explicit stop ends the window.** `telar server stop` tells clients the
   runtime is stopping, and they exit as before; only a lost socket
   reconnects.
