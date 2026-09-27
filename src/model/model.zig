@@ -72,9 +72,6 @@ pub const GridRegions = @import("layout/GridRegions.zig");
 pub const workbench = @import("workspace/workbench.zig");
 pub const pane_frame = @import("panes/pane_frame.zig");
 pub const model_invariants = @import("state/model_invariants.zig");
-const sidebar_rendering = @import("config/sidebar_rendering.zig");
-pub const SidebarRendering = sidebar_rendering.SidebarRendering;
-pub const ResolvedSidebarRendering = sidebar_rendering.ResolvedSidebarRendering;
 pub const tab_close = @import("workspace/close_tab.zig");
 pub const theme_support = @import("appearance/theme_support.zig");
 pub const workspace_list = @import("workspace/workspace_list.zig");
@@ -367,7 +364,6 @@ test {
     _ = @import("bars/color_name.zig");
     _ = @import("connection/runtime_session.zig");
     _ = @import("state/model_invariants.zig");
-    _ = @import("config/sidebar_rendering.zig");
     _ = @import("layout/GridRegions.zig");
     _ = @import("workspace/workbench.zig");
     _ = @import("notifications/NotificationPayload.zig");

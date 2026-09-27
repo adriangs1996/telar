@@ -13,7 +13,6 @@ registry: *Registry,
 trust_store: *core.TrustStore,
 /// Bindings the adapter compiles into its own router when it adopts.
 input: RouterConfig,
-sidebar_rendering: data.SidebarRendering,
 
 /// Releases an adoption that no client accepted.
 ///

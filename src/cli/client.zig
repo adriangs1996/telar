@@ -119,15 +119,6 @@ fn displayAvailable(environ: std.process.Environ) bool {
     };
 }
 
-pub fn supportsHostSharedMemory(environ: std.process.Environ) bool {
-    if (environ.getPosix("SSH_CONNECTION") != null) {
-        return false;
-    }
-
-    const terminal_program = environ.getPosix("TERM_PROGRAM") orelse return false;
-    return std.ascii.eqlIgnoreCase(terminal_program, "ghostty");
-}
-
 pub fn configuredEditor(environ: std.process.Environ) []const u8 {
     return environ.getPosix("EDITOR") orelse "";
 }
@@ -153,31 +144,6 @@ test "remote launch preserves explicit commands while keeping the remote home" {
     try std.testing.expectEqual(@as(usize, 2), prepared.argument_count);
     try std.testing.expectEqualStrings("/bin/bash", prepared.argument_storage[0]);
     try std.testing.expectEqualStrings("-l", prepared.argument_storage[1]);
-}
-
-test "local Ghostty clients may use host shared memory" {
-    var environment = try TestEnvironment.init(&.{.{ .name = "TERM_PROGRAM", .value = "Ghostty" }});
-    defer environment.deinit();
-
-    try std.testing.expect(supportsHostSharedMemory(.{ .block = environment.block }));
-}
-
-test "SSH clients never use host shared memory" {
-    var environment = try TestEnvironment.init(&.{
-        .{ .name = "TERM_PROGRAM", .value = "ghostty" },
-        .{ .name = "SSH_CONNECTION", .value = "host 22 host 22" },
-    });
-    defer environment.deinit();
-
-    try std.testing.expect(!supportsHostSharedMemory(.{ .block = environment.block }));
-}
-
-test "other terminals do not use Ghostty shared memory" {
-    var environment = try TestEnvironment.init(&.{.{ .name = "TERM_PROGRAM", .value = "iTerm.app" }});
-    defer environment.deinit();
-
-    try std.testing.expect(!supportsHostSharedMemory(.{ .block = environment.block }));
-    try std.testing.expect(!supportsHostSharedMemory(.empty));
 }
 
 test "the client snapshots EDITOR without inventing a fallback" {

@@ -130,18 +130,10 @@ pub fn frontendOptions(self: *const Launch) client_module.Options {
         else
             options.theme,
         .icon_theme = if (snapshot) |value| value.icon_theme else .unicode,
-        .sidebar_rendering = if (options.sidebar_renderer_set)
-            options.sidebar_rendering
-        else if (snapshot) |value|
-            value.sidebar_rendering
-        else
-            options.sidebar_rendering,
         .sidebar_visible = if (snapshot) |value| value.sidebar_visible else true,
         .pane_gaps = if (snapshot) |value| value.pane_gaps else true,
         .sound = if (snapshot) |value| value.sound else .{},
         .bars = if (snapshot) |value| value.bars.presentation() else .{},
-        .host_shared_memory = self.options.remote == null and
-            client.supportsHostSharedMemory(self.process.minimal.environ),
         .input_escape_timeout_ns = if (snapshot) |value|
             value.input_escape_timeout_ns
         else
@@ -154,7 +146,6 @@ pub fn frontendOptions(self: *const Launch) client_module.Options {
         .config_path = self.config_path,
         .config_mtime_ns = self.config_mtime_ns,
         .theme_locked = options.theme_set,
-        .sidebar_renderer_locked = options.sidebar_renderer_set,
         .plugin_registry = self.plugin_registry,
         .trust_store = self.trust_store,
         .trust_path = self.trust_path,

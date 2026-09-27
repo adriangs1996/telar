@@ -3,7 +3,7 @@
 const std = @import("std");
 
 pub const text =
-    \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--sidebar-renderer MODE] [--fresh] [command [args...]]
+    \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--remote DESTINATION | --machine LABEL] [--fresh] [command [args...]]
     \\       telar gui [--login-shell] [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--remote DESTINATION | --machine LABEL] [command [args...]]
     \\       telar cli install|uninstall|status [--dir DIR]
     \\       telar --machine LABEL COMMAND [args...]
@@ -193,7 +193,6 @@ pub const text =
     \\                    aside (session.ckpt.previous) instead of restoring
     \\                    it; refused while a runtime is already running
     \\  --theme NAME      UI theme: shade, vesper, catppuccin, tokyo-night, terminal
-    \\  --sidebar-renderer MODE  automatic, cells, kitty-hybrid, kitty-full
     \\Server options:
     \\  --graphics-pane-mib N    Decoded KGP memory per pane (default 64)
     \\  --graphics-global-mib N  Decoded KGP memory for the runtime (default 256)

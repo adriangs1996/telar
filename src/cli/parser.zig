@@ -241,15 +241,6 @@ test "CLI rejects unknown and duplicate themes" {
     try std.testing.expectError(error.DuplicateThemeOption, Cli.parse(&duplicate, .empty));
 }
 
-test "CLI selects and validates the sidebar renderer" {
-    const args = [_][*:0]const u8{ "telar", "--sidebar-renderer=kitty-hybrid", "/bin/sh" };
-    const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(data.SidebarRendering.kitty_hybrid, cli.run.sidebar_rendering);
-
-    const invalid = [_][*:0]const u8{ "telar", "--sidebar-renderer", "sixel" };
-    try std.testing.expectError(error.UnknownSidebarRenderer, Cli.parse(&invalid, .empty));
-}
-
 test "CLI rejects an empty command after the delimiter" {
     const args = [_][*:0]const u8{ "telar", "--" };
     try std.testing.expectError(error.MissingCommand, Cli.parse(&args, .empty));

@@ -89,6 +89,9 @@ return telar.config({
 })
 ```
 
+`client.sidebar.renderer`, which chose how the retired terminal client drew
+its sidebar, is still accepted so older files load, and has no effect.
+
 `runtime.agent_descriptions` is an explicit privacy opt-in. When the first user
 request starts model work, Telar sends that request through standard input to
 the configured command and accepts one short line as the session title. The

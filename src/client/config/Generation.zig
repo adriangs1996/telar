@@ -1123,17 +1123,12 @@ fn parseSidebar(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !
     lua_value.pop(state, 1);
 
     _ = lua_api.c.lua_getfield(state, absolute, "renderer");
-    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
-        const value = lua_value.string(state, -1) orelse {
-            lua_value.pop(state, 1);
-            diagnostic.set("config.client.sidebar.renderer must be a string", .{});
-            return error.InvalidConfig;
-        };
-        self.snapshot.sidebar_rendering = data.SidebarRendering.parse(value) catch {
-            diagnostic.set("unknown sidebar renderer '{s}'", .{value});
-            lua_value.pop(state, 1);
-            return error.InvalidConfig;
-        };
+    // The terminal client's renderer choice has no effect in the window; the
+    // key stays valid so configurations that set it still load.
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL and lua_value.string(state, -1) == null) {
+        lua_value.pop(state, 1);
+        diagnostic.set("config.client.sidebar.renderer must be a string", .{});
+        return error.InvalidConfig;
     }
     lua_value.pop(state, 1);
 }

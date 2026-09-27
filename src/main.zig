@@ -26,6 +26,7 @@ const integration_support = @import("cli/integration_support.zig");
 const proxy_module = @import("cli/proxy.zig");
 const skill_module = @import("cli/skill.zig");
 const client_module = @import("cli/client.zig");
+const RunOptions = @import("cli/arguments/RunOptions.zig");
 const login_shell_module = @import("cli/login_shell.zig");
 const cli_install_module = @import("cli/cli_install.zig");
 const machine_profiles_module = @import("cli/machine_profiles.zig");
@@ -164,10 +165,26 @@ fn dispatch(init: std.process.Init, args: []const [*:0]const u8) anyerror!void {
     }
 }
 
+fn openWindowOn(init: std.process.Init, label: [:0]const u8, run: RunOptions) anyerror!void {
+    if (run.remote != null or run.machine != null) {
+        try std.Io.File.stderr().writeStreamingAll(init.io, "telar --machine: a window shows one machine first; drop --remote and the second --machine\n");
+        std.process.exit(machine_dispatch_failure);
+    }
+
+    var options = run;
+    options.machine = label.ptr;
+    const status = try client_module.runNative(init, options);
+    dumpEchoTrace(init);
+    std.process.exit(status);
+}
+
 fn dispatchToMachine(init: std.process.Init, options: MachineDispatchOptions) anyerror!void {
     switch (try parser.Cli.parse(options.argv, init.minimal.environ)) {
-        .run, .gui, .machine_dispatch, .dispatch_argv => {
-            try std.Io.File.stderr().writeStreamingAll(init.io, "telar --machine: runs one telar command there; it cannot open a window or name another machine\n");
+        // Window options, or none: a window that shows the machine first.
+        .run => |run| return openWindowOn(init, options.label, run),
+        .gui => |gui| return openWindowOn(init, options.label, gui.run),
+        .machine_dispatch, .dispatch_argv => {
+            try std.Io.File.stderr().writeStreamingAll(init.io, "telar --machine: runs one telar command there; it cannot name another machine\n");
             std.process.exit(machine_dispatch_failure);
         },
         else => {},

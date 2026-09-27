@@ -194,11 +194,7 @@ pub fn init(self: *Client, params: ClientInit) !void {
         .host_size = host_size,
         .host_capabilities = capabilities,
         .sidebar_width = data.sidebar.default_width,
-        .config = config: {
-            var config: data.Config = if (snapshot) |value| config_adoption.configFrom(value) else .{};
-            config.sidebar_rendering = params.options.sidebar_rendering;
-            break :config config;
-        },
+        .config = if (snapshot) |value| config_adoption.configFrom(value) else .{},
         .theme = params.options.theme,
         .icon_theme = params.options.icon_theme,
         .window_title = if (snapshot) |value| value.windowTitle() else "",

@@ -1,12 +1,13 @@
 //! `telar --machine LABEL COMMAND…`: run one telar command on a saved
-//! machine. The flag is only ever read from argv, never from the
-//! environment, so a pane never passes its machine to a child.
+//! machine; without a command, or with window options, open a window that
+//! shows that machine. The flag is only ever read from argv, never from
+//! the environment, so a pane never passes its machine to a child.
 const std = @import("std");
 const MachineDispatchOptions = @This();
 
 const flag = "--machine";
 
-label: []const u8,
+label: [:0]const u8,
 /// The command as its own argv: element 0 stands in for the program name.
 argv: []const [*:0]const u8,
 
@@ -31,19 +32,15 @@ pub fn parse(args: []const [*:0]const u8) !?MachineDispatchOptions {
     }
 
     if (std.mem.startsWith(u8, first, flag ++ "=")) {
-        return try finish(first[flag.len + 1 ..], args[1..]);
+        return try finish(std.mem.span(args[1] + flag.len + 1), args[1..]);
     }
 
     return null;
 }
 
-fn finish(label: []const u8, argv: []const [*:0]const u8) !MachineDispatchOptions {
+fn finish(label: [:0]const u8, argv: []const [*:0]const u8) !MachineDispatchOptions {
     if (label.len == 0) {
         return error.MissingMachineLabel;
-    }
-
-    if (argv.len < 2) {
-        return error.MissingMachineCommand;
     }
 
     return .{
@@ -67,5 +64,6 @@ test "the machine flag needs a label and a command" {
     try std.testing.expectEqual(@as(?MachineDispatchOptions, null), try MachineDispatchOptions.parse(&.{ "telar", "pane", "list" }));
     try std.testing.expectError(error.MissingMachineLabel, MachineDispatchOptions.parse(&.{ "telar", "--machine" }));
     try std.testing.expectError(error.MissingMachineLabel, MachineDispatchOptions.parse(&.{ "telar", "--machine=", "pane" }));
-    try std.testing.expectError(error.MissingMachineCommand, MachineDispatchOptions.parse(&.{ "telar", "--machine", "box" }));
+    const window = (try MachineDispatchOptions.parse(&.{ "telar", "--machine", "box" })).?;
+    try std.testing.expectEqual(@as(usize, 1), window.argv.len);
 }

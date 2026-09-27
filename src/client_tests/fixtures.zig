@@ -199,7 +199,6 @@ pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !client_modu
             .escape_timeout_ns = generation.snapshot.input_escape_timeout_ns,
             .sequence_timeout_ns = generation.snapshot.input_sequence_timeout_ns,
         },
-        .sidebar_rendering = generation.snapshot.sidebar_rendering,
     };
 }
 

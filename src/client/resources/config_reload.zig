@@ -88,14 +88,6 @@ pub fn resolve(state: *ConfigReloadState, args: ResolveArgs) Outcome {
         .loaded => |loaded| {
             const rejection: RejectContext = .{ .state = state, .gpa = args.gpa, .loaded = loaded };
             const snapshot = &loaded.generation.snapshot;
-            const requested_sidebar = if (args.checks.sidebar_renderer_locked)
-                args.checks.current_sidebar
-            else
-                snapshot.sidebar_rendering;
-            _ = requested_sidebar.resolve(args.checks.kitty_support) catch |err| return rejection.reject(
-                "reloaded sidebar renderer is unavailable: {s}",
-                .{@errorName(err)},
-            );
             default_bindings.validate(snapshot.prefix, snapshot.bindingSlice()) catch |err| return rejection.reject(
                 "reloaded keymap is invalid: {s}",
                 .{@errorName(err)},
@@ -113,7 +105,6 @@ pub fn resolve(state: *ConfigReloadState, args: ResolveArgs) Outcome {
                     .escape_timeout_ns = snapshot.input_escape_timeout_ns,
                     .sequence_timeout_ns = snapshot.input_sequence_timeout_ns,
                 },
-                .sidebar_rendering = requested_sidebar,
             } };
         },
     }

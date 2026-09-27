@@ -47,11 +47,6 @@ pub fn completeConfigReload(client: *Client, result: anyerror!config_reload.Conf
         .{
             .gpa = client.gpa,
             .reload = reload,
-            .checks = .{
-                .kitty_support = client.model.host.host_capabilities.images,
-                .sidebar_renderer_locked = client.options.sidebar_renderer_locked,
-                .current_sidebar = client.model.config.sidebar_rendering,
-            },
         },
     )) {
         .unchanged => .unchanged,
@@ -126,7 +121,6 @@ fn adoptConfiguration(client: *Client, adoption: Adoption) !data.ConfigurationCo
     client.plugin_registry = adoption.registry;
     client.trust_store = adoption.trust_store;
     client.model.to_host.rebind_input = true;
-    client.model.config.sidebar_rendering = adoption.sidebar_rendering;
     client.model.sound_playback.configure(snapshot.sound);
     consumed = true;
 
@@ -232,7 +226,6 @@ pub fn followConfiguration(client: *Client, owner: *const Client) !void {
     client.plugin_registry = owner.plugin_registry;
     client.trust_store = owner.trust_store;
     client.model.to_host.rebind_input = true;
-    client.model.config.sidebar_rendering = owner.model.config.sidebar_rendering;
     client.model.sound_playback.configure(generation.snapshot.sound);
 }
 

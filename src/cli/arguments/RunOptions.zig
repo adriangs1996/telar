@@ -8,8 +8,6 @@ command: pty.Command,
 command_set: bool = false,
 theme: data.ColorTheme = data.theme_support.default_theme,
 theme_set: bool = false,
-sidebar_rendering: data.SidebarRendering = .automatic,
-sidebar_renderer_set: bool = false,
 config: ?[*:0]const u8 = null,
 no_config: bool = false,
 profile: ?[*:0]const u8 = null,
@@ -24,7 +22,6 @@ fresh: bool = false,
 pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOptions {
     var options: RunOptions = .{ .command = undefined };
     var theme_set = false;
-    var sidebar_renderer_set = false;
     var delimiter_seen = false;
     var command_start: usize = 0;
     while (command_start < args.len) {
@@ -58,35 +55,6 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
                 return error.UnknownTheme;
             theme_set = true;
             options.theme_set = true;
-            command_start += 1;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--sidebar-renderer")) {
-            if (sidebar_renderer_set) {
-                return error.DuplicateSidebarRendererOption;
-            }
-            if (command_start + 1 >= args.len) {
-                return error.MissingSidebarRenderer;
-            }
-
-            options.sidebar_rendering = try data.SidebarRendering.parse(
-                std.mem.span(args[command_start + 1]),
-            );
-            sidebar_renderer_set = true;
-            options.sidebar_renderer_set = true;
-            command_start += 2;
-            continue;
-        }
-        if (std.mem.startsWith(u8, arg, "--sidebar-renderer=")) {
-            if (sidebar_renderer_set) {
-                return error.DuplicateSidebarRendererOption;
-            }
-
-            options.sidebar_rendering = try data.SidebarRendering.parse(
-                arg["--sidebar-renderer=".len..],
-            );
-            sidebar_renderer_set = true;
-            options.sidebar_renderer_set = true;
             command_start += 1;
             continue;
         }

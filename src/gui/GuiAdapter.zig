@@ -186,7 +186,6 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     try client.Client.init(gui.app, params);
 
     // Native chrome uses the shared semantic projection, never TUI Kitty output.
-    gui.app.options.sidebar_renderer_locked = true;
     gui.driver.configuration.inbox = &gui.driver.inbox;
     gui.input_queue = .{};
     gui.router = router;

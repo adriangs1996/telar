@@ -115,6 +115,5 @@ fn adoption(self: *Fixture) !client.ConfigAdoption {
         .registry = registry,
         .trust_store = trust,
         .input = .{ .prefix = snapshot.prefix, .bindings = snapshot.bindingSlice(), .escape_timeout_ns = snapshot.input_escape_timeout_ns, .sequence_timeout_ns = snapshot.input_sequence_timeout_ns },
-        .sidebar_rendering = .cells,
     };
 }

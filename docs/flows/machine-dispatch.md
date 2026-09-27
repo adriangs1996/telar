@@ -51,10 +51,10 @@ minutes reuse that connection.
   child process.
 - A failure on the machine is a failure. Nothing falls back to the local
   machine; `ssh`'s own failures exit 255.
-- `--machine` refuses `telar` without a subcommand and `telar gui`: a
-  window on another machine is not a CLI command. `telar gui --machine
-  LABEL`, with the flag after `gui`, opens a window that shows that saved
-  machine first ([Machine presentation](machine-presentation.md)).
+- Without a subcommand, or with window options or `gui`, `telar --machine
+  LABEL` opens a window on this machine that shows LABEL first, as `telar gui
+  --machine LABEL` does ([Machine presentation](machine-presentation.md)). It
+  refuses `--remote` or a second machine beside it.
 - A disabled profile still receives dispatch; `enabled` only decides whether
   windows connect.
 

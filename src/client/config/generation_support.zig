@@ -249,7 +249,6 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expect(!generation.snapshot.sound.ready);
     try std.testing.expect(generation.snapshot.sound.needs_input);
     try std.testing.expectEqual(data.icons.Theme.nerd_font, generation.snapshot.icon_theme);
-    try std.testing.expectEqual(data.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     try std.testing.expectEqual(@as(u64, 40 * std.time.ns_per_ms), generation.snapshot.input_escape_timeout_ns);
     try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
     try std.testing.expectEqualDeep(
@@ -1120,7 +1119,6 @@ test "profile overlays base config before CLI locks are applied" {
     });
     defer generation.deinit();
     try std.testing.expect(!generation.snapshot.sidebar_visible);
-    try std.testing.expectEqual(data.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     try std.testing.expectEqual(@as(usize, 16 * 1024 * 1024), generation.snapshot.runtime.graphics_pane_bytes);
     try std.testing.expectEqual(@as(usize, 64 * 1024 * 1024), generation.snapshot.runtime.graphics_global_bytes);
     const binding = generation.snapshot.bindings[0];
@@ -1202,7 +1200,6 @@ test "local modules are contained and participate in reload fingerprints" {
     }, .{ .path = config_path, .number = 1 });
     defer generation.deinit();
     try std.testing.expectEqual(@as(u8, 1), generation.modules.dependency_count);
-    try std.testing.expectEqual(data.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     const before = generation.watchFingerprint(io, config_path);
     {
         var module = try temp.dir.createFile(io, "settings.lua", .{ .truncate = true });

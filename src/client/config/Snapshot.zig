@@ -7,7 +7,6 @@ const Snapshot = @This();
 theme: data.ColorTheme = data.theme_support.default_theme,
 gui: GuiConfig = .{},
 icon_theme: data.icons.Theme = .unicode,
-sidebar_rendering: data.SidebarRendering = .automatic,
 sidebar_visible: bool = true,
 pane_gaps: bool = true,
 editor_bytes: [data.config_values.max_editor_bytes]u8 = undefined,
