@@ -184,6 +184,7 @@ const specs = [_]Spec{
     },
     .{
         .name = "privatefile",
+        .libc = true,
         .posix = true,
     },
 };

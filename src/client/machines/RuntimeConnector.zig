@@ -1,23 +1,24 @@
 const localsocket = @import("localsocket");
-const client = @import("telar-client");
+const privatefile = @import("privatefile");
+const handshake = @import("../transport/handshake.zig");
 const std = @import("std");
 const runtime_connection = @import("runtime_connection.zig");
 const RuntimeConfigSelection = @import("RuntimeConfigSelection.zig");
 const RuntimeConnector = @This();
 
-process: std.process.Init,
+io: std.Io,
 endpoint: localsocket.Local,
 
 /// Resolves the local runtime endpoint from an explicit socket or the
 /// process environment. It does not access the filesystem or connect yet.
 ///
 /// ```zig
-/// const connector = try RuntimeConnector.init(process_init, null);
+/// const connector = try RuntimeConnector.init(io, environ, null);
 /// ```
-pub fn init(process: std.process.Init, override: ?[*:0]const u8) !RuntimeConnector {
+pub fn init(io: std.Io, environ: std.process.Environ, override: ?[*:0]const u8) !RuntimeConnector {
     return .{
-        .process = process,
-        .endpoint = try runtime_connection.resolveEndpoint(process.minimal.environ, override),
+        .io = io,
+        .endpoint = try runtime_connection.resolveEndpoint(environ, override),
     };
 }
 
@@ -38,28 +39,10 @@ pub fn endpointPath(self: *const RuntimeConnector) []const u8 {
 /// ```
 pub fn prepareServerDirectory(self: *const RuntimeConnector) !void {
     const directory = self.endpoint.managedDirectory() orelse return;
-    const permissions = std.Io.File.Permissions.fromMode(0o700);
-    std.Io.Dir.createDirAbsolute(self.process.io, directory, permissions) catch |err| switch (err) {
-        error.PathAlreadyExists => {},
+    privatefile.prepareDirectory(self.io, directory) catch |err| switch (err) {
+        error.InsecureDirectory => return error.InvalidRuntimeDirectory,
         else => |other| return other,
     };
-
-    const stat = try std.Io.Dir.cwd().statFile(self.process.io, directory, .{ .follow_symlinks = false });
-    if (stat.kind != .directory) {
-        return error.InvalidRuntimeDirectory;
-    }
-
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{directory}) catch
-        return error.NameTooLong;
-    var native_stat: runtime_connection.native.struct_stat = undefined;
-    if (runtime_connection.native.fstatat(std.c.AT.FDCWD, directory_z, &native_stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
-        return error.InvalidRuntimeDirectory;
-    }
-
-    try runtime_connection.checkRuntimeDirectoryOwner(native_stat.st_uid, std.c.getuid());
-
-    try std.Io.Dir.cwd().setFilePermissions(self.process.io, directory, permissions, .{ .follow_symlinks = false });
 }
 
 /// Connects to an already running runtime and completes schema negotiation.
@@ -67,10 +50,10 @@ pub fn prepareServerDirectory(self: *const RuntimeConnector) !void {
 ///
 /// ```zig
 /// var connection = try connector.connect();
-/// defer connection.deinit(process_init.io);
+/// defer connection.deinit(io);
 /// ```
 pub fn connect(self: *const RuntimeConnector) !localsocket.SocketChannel {
-    const connection = try localsocket.connect(self.process.io, self.endpoint.path());
+    const connection = try localsocket.connect(self.io, self.endpoint.path());
     return self.finishHandshake(connection);
 }
 
@@ -79,10 +62,10 @@ pub fn connect(self: *const RuntimeConnector) !localsocket.SocketChannel {
 ///
 /// ```zig
 /// var connection = try connector.connectOrStart(.{});
-/// defer connection.deinit(process_init.io);
+/// defer connection.deinit(io);
 /// ```
 pub fn connectOrStart(self: *const RuntimeConnector, config: RuntimeConfigSelection) !localsocket.SocketChannel {
-    const first = localsocket.connect(self.process.io, self.endpoint.path()) catch |err| switch (err) {
+    const first = localsocket.connect(self.io, self.endpoint.path()) catch |err| switch (err) {
         error.PermissionDenied,
         error.NotDir,
         error.SymLinkLoop,
@@ -94,7 +77,7 @@ pub fn connectOrStart(self: *const RuntimeConnector, config: RuntimeConfigSelect
     if (first) |connection| {
         if (config.fresh) {
             var running = connection;
-            running.deinit(self.process.io);
+            running.deinit(self.io);
             std.debug.print("telar: a runtime is already running; stop it first (telar server stop) or drop --fresh\n", .{});
             return error.RuntimeAlreadyRunning;
         }
@@ -105,10 +88,10 @@ pub fn connectOrStart(self: *const RuntimeConnector, config: RuntimeConfigSelect
     try self.prepareServerDirectory();
     try self.startRuntime(config);
     for (0..runtime_connection.runtime_start_attempts) |_| {
-        if (localsocket.connect(self.process.io, self.endpoint.path())) |connection| {
+        if (localsocket.connect(self.io, self.endpoint.path())) |connection| {
             return self.finishHandshake(connection);
         } else |_| {
-            self.process.io.sleep(.fromMilliseconds(runtime_connection.runtime_start_interval_ms), .awake) catch {};
+            self.io.sleep(.fromMilliseconds(runtime_connection.runtime_start_interval_ms), .awake) catch {};
         }
     }
 
@@ -117,7 +100,7 @@ pub fn connectOrStart(self: *const RuntimeConnector, config: RuntimeConfigSelect
 
 fn startRuntime(self: *const RuntimeConnector, config: RuntimeConfigSelection) !void {
     var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const executable = executable_buffer[0..try std.process.executablePath(self.process.io, &executable_buffer)];
+    const executable = executable_buffer[0..try std.process.executablePath(self.io, &executable_buffer)];
     var argv: [10][]const u8 = undefined;
     var argc: usize = 0;
     for ([_][]const u8{ executable, "server", "--background", "--socket", self.endpoint.path() }) |arg| {
@@ -142,13 +125,13 @@ fn startRuntime(self: *const RuntimeConnector, config: RuntimeConfigSelection) !
         argc += 2;
     }
 
-    var launcher = try std.process.spawn(self.process.io, .{
+    var launcher = try std.process.spawn(self.io, .{
         .argv = argv[0..argc],
         .stdin = .ignore,
         .stdout = .ignore,
         .stderr = .inherit,
     });
-    const result = try launcher.wait(self.process.io);
+    const result = try launcher.wait(self.io);
     switch (result) {
         .exited => |status| if (status != 0) {
             return error.RuntimeStartFailed;
@@ -159,9 +142,9 @@ fn startRuntime(self: *const RuntimeConnector, config: RuntimeConfigSelection) !
 
 fn finishHandshake(self: *const RuntimeConnector, connection: localsocket.SocketChannel) !localsocket.SocketChannel {
     var result = connection;
-    errdefer result.deinit(self.process.io);
+    errdefer result.deinit(self.io);
 
-    const response = try client.perform(self.process.io, &result);
+    const response = try handshake.perform(self.io, &result);
     switch (response) {
         .accepted => return result,
         .rejected => |rejected| {

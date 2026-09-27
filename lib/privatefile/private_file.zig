@@ -1,4 +1,7 @@
 const std = @import("std");
+const native = @cImport({
+    @cInclude("sys/stat.h");
+});
 
 /// Permission bits a private file and its directory carry.
 pub const Mode = enum(u32) {
@@ -85,6 +88,46 @@ pub fn replace(io: std.Io, path: []const u8, content: []const u8) !void {
     committed = true;
 }
 
+/// Makes `path` an owner-only directory: created when missing, refused
+/// unless it is a real directory the current user owns, then reset to
+/// owner-only permissions. A directory someone else owns is where another
+/// user could plant a socket or a file, so it is never adopted.
+///
+/// ```zig
+/// try private_file.prepareDirectory(io, "/run/user/1000/telar");
+/// ```
+pub fn prepareDirectory(io: std.Io, path: []const u8) !void {
+    const permissions: std.Io.File.Permissions = .fromMode(@intFromEnum(Mode.directory));
+    std.Io.Dir.createDirAbsolute(io, path, permissions) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => |other| return other,
+    };
+
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{path}) catch return error.NameTooLong;
+    var stat: native.struct_stat = undefined;
+    if (native.fstatat(std.c.AT.FDCWD, path_z, &stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
+        return error.InsecureDirectory;
+    }
+
+    if (!isDirectory(stat.st_mode)) {
+        return error.InsecureDirectory;
+    }
+
+    try requireOwner(stat.st_uid, std.c.getuid());
+    try std.Io.Dir.cwd().setFilePermissions(io, path, permissions, .{ .follow_symlinks = false });
+}
+
+fn isDirectory(mode: native.mode_t) bool {
+    return (@as(u32, mode) & @as(u32, native.S_IFMT)) == @as(u32, native.S_IFDIR);
+}
+
+fn requireOwner(owner: std.c.uid_t, current_user: std.c.uid_t) error{WrongOwner}!void {
+    if (owner != current_user) {
+        return error.WrongOwner;
+    }
+}
+
 /// Summarizes what a poller needs to notice a change: the path, and the
 /// kind, size and modification time of what is there, or its absence. It
 /// does not read the file.
@@ -166,4 +209,27 @@ test "shared files, symlinks and oversized files are refused" {
     try std.testing.expectError(error.InsecureFile, read(std.testing.io, std.testing.allocator, link, .limited(64)));
 
     try std.testing.expectError(error.StreamTooLong, read(std.testing.io, std.testing.allocator, target, .limited(1)));
+}
+
+test "a prepared directory is owner-only and a file in its place is refused" {
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try temporaryPath(&temp, "runtime", &path_buffer);
+    try prepareDirectory(std.testing.io, path);
+    try prepareDirectory(std.testing.io, path);
+
+    const stat = try std.Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false });
+    try std.testing.expectEqual(@intFromEnum(Mode.directory), stat.permissions.toMode() & 0o777);
+
+    var file_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const file = try temporaryPath(&temp, "not-a-directory", &file_buffer);
+    try replace(std.testing.io, file, "{}");
+    try std.testing.expectError(error.InsecureDirectory, prepareDirectory(std.testing.io, file));
+}
+
+test "a directory must belong to the current user" {
+    try requireOwner(1000, 1000);
+    try std.testing.expectError(error.WrongOwner, requireOwner(0, 1000));
 }

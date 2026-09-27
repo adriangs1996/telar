@@ -5,11 +5,12 @@
 //! is the `agent_id` its own hooks carry.
 
 const std = @import("std");
-const runtime_connection = @import("runtime_connection.zig");
 
 const native = std.c;
 // `std.c.fstat` is void on Linux; the C declaration exists everywhere.
-const stat_header = runtime_connection.native;
+const stat_header = @cImport({
+    @cInclude("sys/stat.h");
+});
 const CodexSubagents = @This();
 
 /// Children tracked at once; more are counted as this many.

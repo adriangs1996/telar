@@ -2,13 +2,14 @@
 //! the saved machines in `machines.json`. Every change replaces the file
 //! atomically; open windows follow it through their configuration watch.
 //! Removing or disabling a machine never touches its runtime.
+const client = @import("telar-client");
 const core = @import("telar-core");
 const privatefile = @import("privatefile");
 const std = @import("std");
 const MachineOptions = @import("arguments/MachineOptions.zig");
 const config_directory = @import("config_directory.zig");
 const control = @import("control.zig");
-const remote = @import("remote.zig");
+const remote = client.remote;
 
 /// Where the profiles live inside the settings directory.
 pub const file_name = "machines.json";
@@ -145,7 +146,7 @@ fn check(init: std.process.Init, profile: *const core.MachineProfile, json: bool
     var output = std.Io.File.stdout().writerStreaming(init.io, &buffer);
     const writer = &output.interface;
 
-    const found = remote.discover(init, profile.destination()) catch |err| {
+    const found = remote.discover(init.io, init.gpa, init.minimal.environ, profile.destination()) catch |err| {
         if (json) {
             try writer.writeAll("{\"label\":");
             try control.writeJsonString(writer, profile.label());
@@ -159,7 +160,7 @@ fn check(init: std.process.Init, profile: *const core.MachineProfile, json: bool
     };
 
     const defaults = found.launchDefaults();
-    const remote_schema: ?core.SchemaId = remote.schema(init, profile.destination()) catch null;
+    const remote_schema: ?core.SchemaId = remote.schema(init.io, init.gpa, init.minimal.environ, profile.destination()) catch null;
     const compatible = if (remote_schema) |id| std.mem.eql(u8, &id, &core.schema_id) else false;
     const schema_text: []const u8 = if (remote_schema) |*id| id else "unknown";
 

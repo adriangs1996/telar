@@ -3,10 +3,6 @@
 const localsocket = @import("localsocket");
 const std = @import("std");
 
-pub const native = @cImport({
-    @cInclude("sys/stat.h");
-});
-
 pub const runtime_start_attempts = 200;
 pub const runtime_start_interval_ms = 10;
 
@@ -44,12 +40,6 @@ pub fn resolveEndpoint(environ: std.process.Environ, override: ?[*:0]const u8) !
     }
 
     return localsocket.Local.managed("/tmp", directory_name);
-}
-
-pub fn checkRuntimeDirectoryOwner(owner: std.c.uid_t, current_user: std.c.uid_t) error{WrongOwner}!void {
-    if (owner != current_user) {
-        return error.WrongOwner;
-    }
 }
 
 test "an explicit runtime endpoint overrides the environment" {
@@ -98,9 +88,4 @@ test "runtime endpoint falls back to a user-specific temporary directory" {
     const expected = try std.fmt.bufPrint(&expected_buffer, "/tmp/telar-{d}/runtime.sock", .{std.c.getuid()});
 
     try std.testing.expectEqualStrings(expected, endpoint.path());
-}
-
-test "the runtime directory must belong to the current user" {
-    try checkRuntimeDirectoryOwner(1000, 1000);
-    try std.testing.expectError(error.WrongOwner, checkRuntimeDirectoryOwner(0, 1000));
 }

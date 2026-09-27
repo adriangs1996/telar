@@ -27,15 +27,15 @@ const endpoint_timeout: std.Io.Timeout = .{
 /// one `ssh -N -L` forward and waits until its private socket is connectable.
 ///
 /// ```zig
-/// var forward = try establish(process_init, "dev@build-box");
-/// defer forward.stop(process_init.io);
+/// var forward = try remote.establish(io, gpa, environ, "dev@build-box");
+/// defer forward.stop(io);
 /// ```
-pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
+pub fn establish(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ, destination: []const u8) !Forward {
     try core.ssh_destination.validate(destination);
-    const discovery = try discover(init, destination);
+    const discovery = try discover(io, gpa, environ, destination);
 
     // The forwarded socket lives in telar's managed, owner-only directory.
-    const connector = try RuntimeConnector.init(init, null);
+    const connector = try RuntimeConnector.init(io, environ, null);
     try connector.prepareServerDirectory();
     const local_directory = std.fs.path.dirname(connector.endpointPath()) orelse return error.InvalidRuntimeDirectory;
 
@@ -45,11 +45,11 @@ pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
         core.ssh_destination.hash(destination),
     });
     forward.local_path_len = local_path.len;
-    std.Io.Dir.deleteFileAbsolute(init.io, local_path) catch {};
+    std.Io.Dir.deleteFileAbsolute(io, local_path) catch {};
 
     var forward_spec_buffer: [2 * std.fs.max_path_bytes + 1]u8 = undefined;
     const forward_spec = try std.fmt.bufPrint(&forward_spec_buffer, "{s}:{s}", .{ local_path, forward.discovery.endpoint() });
-    forward.child = try std.process.spawn(init.io, .{
+    forward.child = try std.process.spawn(io, .{
         .argv = &.{
             "ssh",
             "-N",
@@ -68,9 +68,9 @@ pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
         .stdout = .ignore,
         .stderr = .inherit,
     });
-    errdefer forward.child.kill(init.io);
+    errdefer forward.child.kill(io);
 
-    try waitForSocket(init.io, forward.localPath());
+    try waitForSocket(io, forward.localPath());
     return forward;
 }
 
@@ -78,9 +78,9 @@ pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
 /// normal schema handshake. It never starts a runtime locally.
 ///
 /// ```zig
-/// var connection = try connectForwarded(init, &connector);
+/// var connection = try remote.connectForwarded(io, &connector);
 /// ```
-pub fn connectForwarded(init: std.process.Init, connector: *const RuntimeConnector) !localsocket.SocketChannel {
+pub fn connectForwarded(io: std.Io, connector: *const RuntimeConnector) !localsocket.SocketChannel {
     var attempt: usize = 0;
     while (attempt < connect_attempts) : (attempt += 1) {
         if (connector.connect()) |connection| {
@@ -88,7 +88,7 @@ pub fn connectForwarded(init: std.process.Init, connector: *const RuntimeConnect
         } else |err| {
             switch (err) {
                 error.IncompatibleSchema => return err,
-                else => init.io.sleep(.fromMilliseconds(connect_interval_ms), .awake) catch {},
+                else => io.sleep(.fromMilliseconds(connect_interval_ms), .awake) catch {},
             }
         }
     }
@@ -101,20 +101,20 @@ pub fn connectForwarded(init: std.process.Init, connector: *const RuntimeConnect
 /// never installs anything.
 ///
 /// ```zig
-/// const found = try remote.discover(process_init, "dev@box");
+/// const found = try remote.discover(io, gpa, environ, "dev@box");
 /// ```
-pub fn discover(init: std.process.Init, destination: []const u8) !Discovery {
+pub fn discover(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ, destination: []const u8) !Discovery {
     const command = "/bin/sh -c 'printf \"%s\\n\" \"$HOME\" \"${SHELL:-/bin/sh}\"; exec telar server endpoint'";
-    const options = try SshOptions.prepare(init, destination);
+    const options = try SshOptions.prepare(io, environ, destination);
     const managed = options.arguments();
-    const result = std.process.run(init.gpa, init.io, .{
+    const result = std.process.run(gpa, io, .{
         .argv = &(.{ "ssh", "-T" } ++ managed ++ .{ "--", destination, command }),
         .stdout_limit = .limited(Discovery.max_output_bytes),
         .stderr_limit = .limited(16 * 1024),
         .timeout = endpoint_timeout,
     }) catch return error.RemoteEndpointUnavailable;
-    defer init.gpa.free(result.stdout);
-    defer init.gpa.free(result.stderr);
+    defer gpa.free(result.stdout);
+    defer gpa.free(result.stderr);
 
     if (result.term != .exited or result.term.exited != 0) {
         std.debug.print("telar: `ssh {s} telar server endpoint` failed:\n{s}", .{ destination, result.stderr });
@@ -129,26 +129,26 @@ pub fn discover(init: std.process.Init, destination: []const u8) !Discovery {
 /// unreachable one before any window tries to attach.
 ///
 /// ```zig
-/// const schema = try remote.schema(process_init, "dev@box");
+/// const schema = try remote.schema(io, gpa, environ, "dev@box");
 /// ```
-pub fn schema(init: std.process.Init, destination: []const u8) !core.SchemaId {
-    const options = try SshOptions.prepare(init, destination);
+pub fn schema(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ, destination: []const u8) !core.SchemaId {
+    const options = try SshOptions.prepare(io, environ, destination);
     const managed = options.arguments();
-    const result = std.process.run(init.gpa, init.io, .{
+    const result = std.process.run(gpa, io, .{
         .argv = &(.{ "ssh", "-T" } ++ managed ++ .{ "--", destination, "telar api schema --json" }),
         .stdout_limit = .limited(schema_output_limit),
         .stderr_limit = .limited(16 * 1024),
         .timeout = endpoint_timeout,
     }) catch return error.RemoteSchemaUnavailable;
-    defer init.gpa.free(result.stdout);
-    defer init.gpa.free(result.stderr);
+    defer gpa.free(result.stdout);
+    defer gpa.free(result.stderr);
 
     if (result.term != .exited or result.term.exited != 0) {
         return error.RemoteSchemaUnavailable;
     }
 
     const Reported = struct { schema_version: []const u8, fingerprint: []const u8 };
-    const parsed = std.json.parseFromSlice(Reported, init.gpa, result.stdout, .{
+    const parsed = std.json.parseFromSlice(Reported, gpa, result.stdout, .{
         .ignore_unknown_fields = true,
     }) catch return error.RemoteSchemaUnavailable;
     defer parsed.deinit();

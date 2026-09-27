@@ -1,12 +1,13 @@
 //! `telar --machine LABEL COMMAND…`: run one telar command on a saved
 //! machine over its managed SSH connection, or here when the label is this
 //! machine's. A failure there is a failure: nothing falls back to here.
+const client = @import("telar-client");
 const core = @import("telar-core");
 const std = @import("std");
 const config_directory = @import("config_directory.zig");
 const dispatch_argv = @import("dispatch_argv.zig");
 const machine_profiles = @import("machine_profiles.zig");
-const SshOptions = @import("SshOptions.zig");
+const SshOptions = client.SshOptions;
 
 /// Where a label points.
 pub const Target = union(enum) {
@@ -54,7 +55,7 @@ pub fn forward(init: std.process.Init, profile: *const core.MachineProfile, argv
     defer init.gpa.free(command);
 
     const remote_command = try encodeCommand(argv[1..], command);
-    const options = try SshOptions.prepare(init, profile.destination());
+    const options = try SshOptions.prepare(init.io, init.minimal.environ, profile.destination());
     const managed = options.arguments();
 
     var child = try std.process.spawn(init.io, .{

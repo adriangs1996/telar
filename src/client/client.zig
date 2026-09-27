@@ -226,6 +226,10 @@ test {
     _ = @import("workspace/workspace_handoff.zig");
     _ = @import("workspace/workspace_list_snapshot.zig");
     _ = @import("workspace/workspace_rename.zig");
+    _ = @import("machines/remote.zig");
+    _ = @import("machines/runtime_connection.zig");
+    _ = @import("machines/RuntimeConnector.zig");
+    _ = @import("machines/SshOptions.zig");
 }
 
 pub const GuiConfig = @import("config/GuiConfig.zig");
@@ -246,6 +250,14 @@ pub const clipboard_capture = @import("attachments/clipboard_capture.zig");
 pub const change_review = @import("change_review/change_review.zig");
 pub const config_adoption = @import("config/config_adoption.zig");
 pub const runtime_io = @import("connection/runtime_io.zig");
+pub const runtime_connection = @import("machines/runtime_connection.zig");
+pub const remote = @import("machines/remote.zig");
+pub const Discovery = @import("machines/Discovery.zig");
+pub const Forward = @import("machines/Forward.zig");
+pub const LaunchDefaults = @import("machines/LaunchDefaults.zig");
+pub const RuntimeConfigSelection = @import("machines/RuntimeConfigSelection.zig");
+pub const RuntimeConnector = @import("machines/RuntimeConnector.zig");
+pub const SshOptions = @import("machines/SshOptions.zig");
 pub const runtime_messages = @import("connection/runtime_messages.zig");
 pub const host_capabilities = @import("host/host_capabilities.zig");
 pub const host_resize = @import("host/host_resize.zig");

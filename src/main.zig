@@ -197,13 +197,10 @@ test {
     _ = @import("cli/dispatch_argv.zig");
     _ = @import("cli/machine_profiles.zig");
     _ = @import("cli/machine_dispatch.zig");
-    _ = @import("cli/SshOptions.zig");
     _ = @import("cli/runtime.zig");
     _ = @import("cli/DiagnosticLog.zig");
     _ = @import("cli/arguments/DiagnosticsOptions.zig");
     _ = @import("cli/arguments/RuntimeOptions.zig");
-    _ = @import("cli/RuntimeConfigSelection.zig");
-    _ = @import("cli/RuntimeConnector.zig");
     _ = @import("cli/agent.zig");
     _ = @import("cli/api.zig");
     _ = @import("cli/arguments/AgentOptions.zig");
@@ -244,8 +241,6 @@ test {
     _ = @import("cli/parser.zig");
     _ = @import("cli/plugin.zig");
     _ = @import("cli/proxy.zig");
-    _ = @import("cli/remote.zig");
-    _ = @import("cli/runtime_connection.zig");
     _ = @import("cli/server.zig");
     _ = @import("cli/skill.zig");
     _ = @import("cli/usage.zig");

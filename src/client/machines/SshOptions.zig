@@ -28,12 +28,12 @@ control_len: usize = 0,
 /// directory, creating the directory owner-only when it is missing.
 ///
 /// ```zig
-/// var options = try SshOptions.prepare(process_init, "dev@box");
+/// var options = try SshOptions.prepare(io, environ, "dev@box");
 /// ```
-pub fn prepare(init: std.process.Init, destination: []const u8) !SshOptions {
+pub fn prepare(io: std.Io, environ: std.process.Environ, destination: []const u8) !SshOptions {
     try core.ssh_destination.validate(destination);
 
-    const connector = try RuntimeConnector.init(init, null);
+    const connector = try RuntimeConnector.init(io, environ, null);
     try connector.prepareServerDirectory();
     const directory = std.fs.path.dirname(connector.endpointPath()) orelse return error.InvalidRuntimeDirectory;
 

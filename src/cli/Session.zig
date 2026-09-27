@@ -1,6 +1,7 @@
+const client = @import("telar-client");
 const localsocket = @import("localsocket");
 const std = @import("std");
-const RuntimeConnector = @import("RuntimeConnector.zig");
+const RuntimeConnector = client.RuntimeConnector;
 const Snapshot = @import("Snapshot.zig");
 const control = @import("control.zig");
 const ControlAgent = @import("ControlAgent.zig");
@@ -25,7 +26,7 @@ review_failure: ?[]const u8 = null,
 /// defer session.close();
 /// ```
 pub fn open(init: std.process.Init, socket: ?[*:0]const u8) !Session {
-    const connector = try RuntimeConnector.init(init, socket);
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, socket);
     return adopt(init, try connector.connectOrStart(.{}));
 }
 
@@ -39,7 +40,7 @@ pub fn open(init: std.process.Init, socket: ?[*:0]const u8) !Session {
 /// defer session.close();
 /// ```
 pub fn attach(init: std.process.Init, socket: ?[*:0]const u8) !Session {
-    const connector = try RuntimeConnector.init(init, socket);
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, socket);
     return adopt(init, try connector.connect());
 }
 

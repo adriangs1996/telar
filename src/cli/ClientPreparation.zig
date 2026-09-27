@@ -1,6 +1,7 @@
+const client = @import("telar-client");
 const std = @import("std");
 const RunOptions = @import("arguments/RunOptions.zig");
-const LaunchDefaults = @import("LaunchDefaults.zig");
+const LaunchDefaults = client.LaunchDefaults;
 const Preparation = @This();
 
 process: std.process.Init,

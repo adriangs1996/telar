@@ -7,9 +7,9 @@ const frontend = @import("telar-frontend");
 const std = @import("std");
 const builtin = @import("builtin");
 const RunOptions = @import("arguments/RunOptions.zig");
-const Forward = @import("Forward.zig");
-const remote = @import("remote.zig");
-const RuntimeConnector = @import("RuntimeConnector.zig");
+const Forward = client.Forward;
+const remote = client.remote;
+const RuntimeConnector = client.RuntimeConnector;
 const ClientLaunch = @import("ClientLaunch.zig");
 const TestEnvironment = @import("TestEnvironment.zig");
 
@@ -46,12 +46,12 @@ fn launch(init: std.process.Init, options: RunOptions, adapter: Adapter) !u8 {
     var forward: ?Forward = null;
     defer if (forward) |*owned| owned.stop(init.io);
     if (options.remote) |destination| {
-        forward = try remote.establish(init, std.mem.span(destination));
+        forward = try remote.establish(init.io, init.gpa, init.minimal.environ, std.mem.span(destination));
     }
 
-    const connector = try RuntimeConnector.init(init, if (forward) |*owned| owned.localPathZ() else null);
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, if (forward) |*owned| owned.localPathZ() else null);
     var connection = if (forward != null)
-        try remote.connectForwarded(init, &connector)
+        try remote.connectForwarded(init.io, &connector)
     else
         try connector.connectOrStart(.{
             .path = options.config,
