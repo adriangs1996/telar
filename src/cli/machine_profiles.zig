@@ -9,6 +9,7 @@ const MachineOptions = @import("arguments/MachineOptions.zig");
 const control = @import("control.zig");
 const remote = client.remote;
 const profile_file = client.profile_file;
+const machine_profiles = client.machine_profiles;
 
 /// Exit status of a command that failed.
 const failure: u8 = 1;
@@ -30,14 +31,8 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
             return check(init, &profiles.rows[row], options.json);
         },
         .add => {
-            var label_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
-            const label = std.mem.span(options.label.?);
-            if (std.mem.eql(u8, label, profile_file.localLabel(&profiles, &label_buffer))) {
-                return report(init, error.DuplicateMachineLabel);
-            }
-
-            const profile = core.MachineProfile.init(try core.MachineId.generate(init.io), .{
-                .label = label,
+            const profile = machine_profiles.newProfile(init.io, &profiles, .{
+                .label = std.mem.span(options.label.?),
                 .destination = std.mem.span(options.value.?),
                 .color = if (options.color) |color| std.mem.span(color) else null,
                 .enabled = !options.disabled,
@@ -52,10 +47,17 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
 
             profiles.add(profile) catch |err| return report(init, err);
         },
-        .remove => profiles.remove(std.mem.span(options.label.?)) catch |err| return report(init, err),
-        .rename => profiles.rename(std.mem.span(options.label.?), std.mem.span(options.value.?)) catch |err| return report(init, err),
-        .enable => profiles.enable(std.mem.span(options.label.?), true) catch |err| return report(init, err),
-        .disable => profiles.enable(std.mem.span(options.label.?), false) catch |err| return report(init, err),
+        .remove, .rename, .enable, .disable => machine_profiles.change(init.io, &profiles, .{
+            .kind = switch (options.action) {
+                .remove => .remove,
+                .rename => .rename,
+                .enable => .enable,
+                .disable => .disable,
+                else => unreachable,
+            },
+            .label = std.mem.span(options.label.?),
+            .value = if (options.value) |value| std.mem.span(value) else "",
+        }) catch |err| return report(init, err),
     }
 
     try profile_file.save(init.io, path, &profiles);
@@ -157,17 +159,7 @@ fn check(init: std.process.Init, profile: *const core.MachineProfile, json: bool
 }
 
 fn report(init: std.process.Init, err: anyerror) u8 {
-    const detail = switch (err) {
-        error.InsecureFile => "machines.json must be a regular file only its owner can read and write (chmod 600)",
-        error.UnknownMachine => "no saved machine has that label; see `telar machine list`",
-        error.DuplicateMachineLabel => "that label is already taken, by a saved machine or by this machine",
-        error.TooManyMachines => "machines.json already holds the most machines it can",
-        error.InvalidMachineLabel => "labels are 1 to 32 letters, digits, '.', '_' or '-', starting with a letter or a digit",
-        error.InvalidMachineColor => "colors are #RRGGBB or a theme role such as red or accent",
-        error.InvalidRemoteDestination => "destinations are an ssh host alias or user@host, without spaces or a leading '-'",
-        error.InvalidMachineProfiles, error.IncompatibleMachineProfiles => "machines.json is not a file this telar can read",
-        else => @errorName(err),
-    };
+    const detail = machine_profiles.describe(err);
 
     var buffer: [512]u8 = undefined;
     const message = std.fmt.bufPrint(&buffer, "telar machine: {s}\n", .{detail}) catch return failure;

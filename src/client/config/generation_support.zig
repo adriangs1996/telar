@@ -793,6 +793,19 @@ test "client bars accept the machines component" {
     try std.testing.expect(presented[0].content.eql(&data.bar_values.machines_content));
 }
 
+test "machine actions bind from Lua" {
+    var diagnostic: data.Diagnostic = .{};
+    const source = "local t = require('telar') return { api_version = 2, client = { keybindings = { t.bind({ 'm' }, t.action.machine_picker()), t.bind({ ']' }, t.action.next_machine()), t.bind({ '[' }, t.action.previous_machine()) } } }";
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
+    defer generation.deinit();
+
+    const bindings = generation.snapshot.bindingSlice();
+    try std.testing.expectEqual(@as(usize, 3), bindings.len);
+    try std.testing.expectEqualDeep(data.Action.machine_picker, bindings[0].action);
+    try std.testing.expectEqualDeep(data.Action{ .select_machine_offset = 1 }, bindings[1].action);
+    try std.testing.expectEqualDeep(data.Action{ .select_machine_offset = -1 }, bindings[2].action);
+}
+
 test "client bars reject invalid positions timing and tab ownership" {
     const cases = [_]struct { source: []const u8, message: []const u8 }{
         .{

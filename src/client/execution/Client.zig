@@ -18,6 +18,7 @@ const ConnectReport = @import("../connection/ConnectReport.zig");
 const Forward = @import("../machines/Forward.zig");
 const RuntimeConnection = @import("../machines/RuntimeConnection.zig");
 const runtime_link = @import("../connection/runtime_link.zig");
+const machine_profiles = @import("../machines/machine_profiles.zig");
 const Machines = @import("../machines/Machines.zig");
 const TelemetryState = @import("../resources/TelemetryState.zig");
 const Generation = @import("../config/Generation.zig");
@@ -110,6 +111,10 @@ connect_outdated: bool = false,
 /// A connection that landed while the previous socket was still in use
 /// waits in `connect_result` until that socket closes.
 connect_parked: bool = false,
+/// The text of the machine change being written; one change at a time.
+machine_edit_label: [core.MachineProfile.max_label_bytes]u8 = undefined,
+machine_edit_value: [core.ssh_destination.max_bytes]u8 = undefined,
+machine_edit_pending: bool = false,
 /// The destination the running connection job reads. It is written only
 /// when no job runs, so a machine renamed meanwhile never changes it.
 connect_destination: [core.ssh_destination.max_bytes]u8 = undefined,
@@ -306,6 +311,7 @@ pub fn update(self: *Client, message: Message) !?u8 {
         .config_reload => |result| _ = try config_adoption.completeConfigReload(self, result),
         .runtime_connected => |result| try runtime_link.finishConnect(self, result),
         .runtime_retry_tick => |result| try runtime_link.retry(self, result),
+        .machine_edited => |result| try machine_profiles.finish(self, result),
     }
 
     return null;

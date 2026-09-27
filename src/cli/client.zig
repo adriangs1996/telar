@@ -61,7 +61,13 @@ pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
     } };
     var profiles: core.MachineProfiles = .{};
     const opened = if (options.machine) |label|
-        try savedDestination(init, std.mem.span(label), &profiles)
+        savedDestination(init, std.mem.span(label), &profiles) catch |err| {
+            std.debug.print("telar gui: {s}\n", .{switch (err) {
+                error.UnknownMachine => "no saved machine or local label has that name; see telar machine list",
+                else => @errorName(err),
+            }});
+            return 1;
+        }
     else if (options.remote) |destination|
         std.mem.span(destination)
     else
@@ -93,7 +99,6 @@ fn savedDestination(init: std.process.Init, label: []const u8, profiles: *core.M
         return null;
     }
 
-    std.debug.print("telar gui: no saved machine is labelled '{s}'; see telar machine list\n", .{label});
     return error.UnknownMachine;
 }
 

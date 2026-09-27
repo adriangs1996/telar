@@ -230,6 +230,25 @@ pub fn retry(client: *Client, result: anyerror!void) !void {
     try queueConnect(client, client.options.machine.?);
 }
 
+/// Connects a lost machine now instead of when its backoff ends, as the
+/// person asked. The pending retry finds the link connecting and does
+/// nothing.
+///
+/// ```zig
+/// try runtime_link.retryNow(client);
+/// ```
+pub fn retryNow(client: *Client) !void {
+    const link = &client.model.runtime_link;
+    if (link.phase != .lost or client.channel_owned or client.connect_pending) {
+        return;
+    }
+
+    link.phase = .connecting;
+    link.attempt = 0;
+    client.model.link_revision +%= 1;
+    try queueConnect(client, client.options.machine.?);
+}
+
 fn queueConnect(client: *Client, target: MachineTarget) !void {
     std.debug.assert(!client.connect_pending);
     var job_target = target;
@@ -356,6 +375,6 @@ test "a lost runtime is reached again and its session starts fresh" {
     try client_tests.reconnectAfterLoss(start);
 }
 
-test "a failed attempt shows its report and waits to retry" {
-    try client_tests.failedAttemptWaits(start);
+test "a failed attempt shows its report and waits to retry, unless retried now" {
+    try client_tests.failedAttemptWaits(start, retryNow);
 }

@@ -47,6 +47,8 @@ pub fn commandFor(input: *const Input) ?data.PromptCommand {
                 .toggle_inspection
             else if (key.mods.ctrl and !key.mods.alt and char.slice().len == 1 and char.slice()[0] == 'c')
                 .copy_entry
+            else if (key.mods.ctrl and !key.mods.alt and char.slice().len == 1 and char.slice()[0] == 'r')
+                .rename_entry
             // Vim-style list movement; a terminal sends Ctrl+J as LF, which
             // the host decoder keeps apart from Enter.
             else if (key.mods.ctrl and !key.mods.alt and char.slice().len == 1 and char.slice()[0] == 'j')

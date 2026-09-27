@@ -17,6 +17,12 @@ pub const Intent = union(enum) {
     path_picker,
     /// The command palette with its prefix already typed.
     palette: model_data.CommandPalettePrefix,
+    /// Renames the machine in a window slot.
+    rename_machine: struct {
+        slot: u8,
+        label: []const u8,
+    },
+    add_machine,
 };
 
 pub fn renameTab(tab_id: core.TabId, label: []const u8) model_data.PromptBegin {

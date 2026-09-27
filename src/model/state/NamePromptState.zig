@@ -116,6 +116,14 @@ pub fn begin(self: *State, command: name_prompt.Begin) void {
             .mode = .{ .palette = .{} },
             .field = .init(&[_]u8{prefix.byte()}),
         },
+        .rename_machine => |rename| .{
+            .mode = .{ .machine = .{ .rename = rename.slot } },
+            .field = .init(rename.label),
+        },
+        .add_machine => .{
+            .mode = .{ .machine = .add_label },
+            .field = .init(""),
+        },
     };
     self.value.?.generation = self.generation;
     self.revision +%= 1;
@@ -221,6 +229,10 @@ pub fn apply(self: *State, command: name_prompt.Command) PromptTransition {
             if (prompt.pasting) {
                 return self.editField(.{ .insert = " " });
             }
+            if (prompt.mode == .machine and prompt.mode.machine == .add_label) {
+                return self.askDestination(prompt);
+            }
+
             if (prompt.form()) |form_state| {
                 if (prompt.field.text().len == 0 and prompt.directory.text().len == 0) {
                     return .unchanged;
@@ -408,12 +420,19 @@ pub fn apply(self: *State, command: name_prompt.Command) PromptTransition {
             return .changed;
         },
         .remove_entry => {
-            if (prompt.target() != .history) {
+            if (prompt.target() != .history and prompt.paletteMode() != .machines) {
                 return .unchanged;
             }
 
             self.revision +%= 1;
             return .{ .removed = prompt.selection() };
+        },
+        .rename_entry => {
+            if (prompt.paletteMode() != .machines or prompt.pasting) {
+                return .unchanged;
+            }
+
+            return .{ .rename_requested = prompt.selection() };
         },
         .insert,
         .backspace,
@@ -493,6 +512,20 @@ pub fn clearPathQuery(self: *State) void {
     self.revision +%= 1;
 }
 
+// The first step of adding a machine keeps the label and asks for the
+// destination in the same prompt.
+fn askDestination(self: *State, prompt: *Prompt) PromptTransition {
+    const text = prompt.field.text();
+    if (text.len == 0) {
+        return .unchanged;
+    }
+
+    prompt.mode = .{ .machine = .{ .add_destination = .init(text) } };
+    prompt.field = .init("");
+    self.revision +%= 1;
+    return .changed;
+}
+
 fn directoryFocused(prompt: *const Prompt) bool {
     return prompt.mode == .create_workspace and prompt.mode.create_workspace.focus == .directory;
 }
@@ -551,7 +584,7 @@ fn applyEdit(field: anytype, pasting: bool, command: name_prompt.Command) void {
         .end => |extend| field.end(extend),
         .select_range => |range| _ = field.selectRange(range),
         .select_all => field.selectAll(),
-        .focus_field, .replace_range, .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .tab, .back_tab, .select_scope, .select_author, .toggle_failed, .remove_entry, .copy_entry, .visit_pane, .toggle_inspection, .page_up, .page_down => unreachable,
+        .focus_field, .replace_range, .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .tab, .back_tab, .select_scope, .select_author, .toggle_failed, .remove_entry, .rename_entry, .copy_entry, .visit_pane, .toggle_inspection, .page_up, .page_down => unreachable,
     }
 }
 
@@ -593,8 +626,11 @@ const PromptTransition = union(enum) {
     routing_changed,
     changed,
     cancelled,
-    /// The history palette asked to delete its selected entry.
+    /// The history palette or the machine list asked to delete its
+    /// selected entry.
     removed: u16,
+    /// The machine list asked to rename its selected machine.
+    rename_requested: u16,
     /// The history palette asked to copy its selected command.
     copied: u16,
     /// The history palette asked to leave for the pane its selected

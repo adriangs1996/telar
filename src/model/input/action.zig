@@ -57,6 +57,8 @@ pub const Action = union(enum) {
     select_machine_offset: i8,
     /// Opens the command palette on the window's machines.
     machine_picker,
+    /// Asks for a new machine's label and destination and saves it.
+    add_machine,
 
     /// Parses stable built-in action names used by configuration and tests.
     pub fn parse(name: []const u8) !Action {
@@ -74,6 +76,10 @@ pub const Action = union(enum) {
 
         if (std.mem.eql(u8, name, "machine-picker")) {
             return .machine_picker;
+        }
+
+        if (std.mem.eql(u8, name, "add-machine")) {
+            return .add_machine;
         }
 
         if (std.mem.eql(

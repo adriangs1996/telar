@@ -91,6 +91,11 @@ pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) 
         .suggest => .{ .suggestion = .{ .area = area, .projection = input.projection } },
         .rename_tab => .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = "Rename tab" } },
         .rename_workspace => .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = "Rename workspace" } },
+        .machine => |machine| .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = switch (machine) {
+            .rename => "Rename machine",
+            .add_label => "New machine label",
+            .add_destination => "Its SSH destination: user@host or an alias",
+        } } },
         .copy_search => |direction| .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = if (direction == .forward) "Search forward" else "Search backward" } },
         .palette, .create_workspace, .history, .paths => unreachable,
     };

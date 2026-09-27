@@ -711,9 +711,10 @@ pub fn reconnectAfterLoss(comptime start: fn (*Client) anyerror!void) !void {
     while (app.to_workers.pop()) |_| {}
 }
 
-/// A failed attempt keeps the client, shows the report and waits to retry.
-/// Example: `try client_tests.failedAttemptWaits(runtime_link.start);`
-pub fn failedAttemptWaits(comptime start: fn (*Client) anyerror!void) !void {
+/// A failed attempt keeps the client, shows the report and waits to retry;
+/// retrying now connects before the wait ends.
+/// Example: `try client_tests.failedAttemptWaits(runtime_link.start, runtime_link.retryNow);`
+pub fn failedAttemptWaits(comptime start: fn (*Client) anyerror!void, comptime retry_now: fn (*Client) anyerror!void) !void {
     const gpa = std.testing.allocator;
     const app = try gpa.create(Client);
     defer gpa.destroy(app);
@@ -749,6 +750,10 @@ pub fn failedAttemptWaits(comptime start: fn (*Client) anyerror!void) !void {
     try std.testing.expectEqualStrings(report, app.model.runtime_link.failure().?);
     const retry = app.to_workers.pop().?;
     try std.testing.expect(retry == .timer and retry.timer.kind == .runtime_retry);
+
+    try retry_now(app);
+    try std.testing.expect(app.model.runtime_link.phase == .connecting);
+    try std.testing.expect(app.to_background.pop().? == .runtime_connect);
 }
 
 /// A hidden machine defers its first pane, opens it when shown, and leaves

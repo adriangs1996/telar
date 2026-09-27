@@ -44,6 +44,7 @@ pub const entries = [_]CommandEntry{
     .{ .action = .machine_picker, .label = "Switch machine" },
     .{ .action = .{ .select_machine_offset = 1 }, .label = "Next machine" },
     .{ .action = .{ .select_machine_offset = -1 }, .label = "Previous machine" },
+    .{ .action = .add_machine, .label = "Add machine" },
 };
 
 /// The mode the field text selects. Example: `switch (prefixOf(text)) { ... }`.

@@ -186,6 +186,9 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
         .suggest_command => _ = try suggest_command.beginSuggestion(&client.model),
         .select_machine_offset => |offset| try client.model.to_host.push(.{ .machine = .{ .offset = offset } }),
         .machine_picker => _ = name_prompt.openNamePrompt(&client.model, .{ .palette = .machines }),
+        .add_machine => if (client.machines != null) {
+            _ = name_prompt.openNamePrompt(&client.model, .add_machine);
+        },
         .notification => |*notification| _ = try notifications.requestNotificationDelivery(&client.model, notification),
         .lua_callback, .lua_expr, .plugin => unreachable,
     }

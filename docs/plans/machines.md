@@ -1,6 +1,7 @@
 # Machines
 
-Status: proposed. Nothing in this plan is implemented. It builds on
+Status: phases 0, 1 and 2 are implemented on `feat/machines`; see
+[Implementation status](#implementation-status). It builds on
 [remote attach](../flows/remote-attach.md), the
 [worktrees and agent coordination plan](worktrees.md) and the agent control
 commands in [agent control](../flows/agent-control.md).
@@ -13,6 +14,36 @@ lists what the TUI still does for remote work and the order that keeps it.
 Implementation must follow the [invariants](../invariants.md) and the
 [architecture](../architecture.md). New terms go to
 [CONTEXT.md](../../CONTEXT.md) before they appear in code.
+
+## Implementation status
+
+- **Phase 0** (one remote in the GUI that survives): done. Flow:
+  [Runtime link](../flows/runtime-link.md). The capability handshake stays
+  exact-schema: rolling upgrades are not promised (`handshake.zig`), so a
+  mismatch is refused with its text in the window and `telar machine
+  check` reports both schemas.
+- **Phase 1** (profiles and `--machine`): done. Flows:
+  [Machine profiles](../flows/machine-profiles.md),
+  [Machine dispatch](../flows/machine-dispatch.md).
+- **Phase 2** (the GUI with several machines): done. Flow:
+  [Machine presentation](../flows/machine-presentation.md). It differs from
+  the design below in three places:
+  - `machines.json` has its own watch, a worker that compares a stat
+    fingerprint once per second and wakes the window only on a change,
+    instead of a fingerprint inside `config_reload.wait`. The configuration
+    watch belongs to the window's own client and reloads Lua, fonts and
+    plugins; the machines file needs none of that.
+  - "Add machine" is one prompt in two steps, label then destination, not a
+    two-field form. The new-context form's second field is a directory
+    field with path completion, which a destination does not want. The
+    prompt's field holds 128 bytes, so a longer destination has to be
+    added with `telar machine add`.
+  - Picker rows act through keys (Shift+Enter, Ctrl+R, Ctrl+D) and Enter on
+    an unreachable machine is "Reconnect now".
+- **Phase 3** (worktrees on another machine): not started. It needs the
+  [worktrees plan](worktrees.md) merged first.
+- **Phase 4** (coordinator across machines): not started.
+- **Retiring the TUI**: not started.
 
 ## Problem
 
@@ -245,7 +276,8 @@ From the GUI:
   remaining backoff in that window and writes nothing.
 - Disabling or removing the active machine makes the local machine active
   and says why in a notice.
-- The GUI follows `machines.json` through the existing configuration watch
+- (Implemented differently; see [Implementation status](#implementation-status).)
+  The GUI follows `machines.json` through the existing configuration watch
   job. `config_reload.wait` (`src/client/resources/config_reload.zig`)
   sleeps one second, then compares fingerprints of the Lua configuration,
   the plugin registry and `trust.json`. It gains a separate fingerprint for

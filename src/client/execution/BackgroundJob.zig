@@ -12,6 +12,7 @@ const PluginActionsJob = @import("../plugins/PluginActionsJob.zig");
 const PathCompletionJob = @import("../completion/PathCompletionJob.zig");
 const WaitArgs = @import("../resources/WaitArgs.zig");
 const RuntimeConnectJob = @import("../connection/RuntimeConnectJob.zig");
+const MachineEditJob = @import("../machines/MachineEditJob.zig");
 
 pub const BackgroundJob = union(enum) {
     bar_command: BarUpdatesJob,
@@ -24,4 +25,6 @@ pub const BackgroundJob = union(enum) {
     config_watch: WaitArgs,
     /// Connects to the client's machine, starting or reaching its runtime.
     runtime_connect: RuntimeConnectJob,
+    /// Writes one change the picker made to `machines.json`.
+    machine_edit: MachineEditJob,
 };

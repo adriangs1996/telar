@@ -1,5 +1,6 @@
 const core = @import("telar-core");
 const copy_mode = @import("../input/copy_mode.zig");
+const MachinePrompt = @import("MachinePrompt.zig").MachinePrompt;
 
 pub const PromptTarget = union(enum) {
     rename_tab: core.TabId,
@@ -19,4 +20,6 @@ pub const PromptTarget = union(enum) {
     palette,
     /// Path picker; the root and results live in the path-picker model state.
     paths,
+    /// Renames or adds one of the window's machines.
+    machine: MachinePrompt,
 };

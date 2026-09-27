@@ -174,7 +174,7 @@ fn saveProfiles(session: *Session, temp: *std.testing.TmpDir, profiles: *const c
     const gui = session.gui;
     var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const directory_len = try temp.dir.realPath(std.testing.io, &directory_buffer);
-    const path = try std.fmt.bufPrint(&gui.profiles_path, "{s}/{s}", .{ directory_buffer[0..directory_len], client.profile_file.file_name });
+    const path = try std.fmt.bufPrint(&gui.profiles_path, "{s}/telar/{s}", .{ directory_buffer[0..directory_len], client.profile_file.file_name });
     gui.profiles_path_len = path.len;
 
     try client.profile_file.save(std.testing.io, path, profiles);
@@ -240,4 +240,85 @@ test "machines.json changes connect, stop, move and remove the window's machines
     try std.testing.expect(gui.app == window_machines.window(gui));
     try std.testing.expectEqual(@as(?u8, null), gui.machines.find(@enumFromInt(7)));
     try std.testing.expectEqual(data.RuntimeLink.Phase.stopped, box.model.runtime_link.phase);
+}
+
+// Runs the machine changes the client queued, as the window's workers would.
+fn writeChanges(app: *client.Client) !void {
+    while (app.to_background.pop()) |job| {
+        if (job == .machine_edit) {
+            _ = try app.update(client.job_runner.runBackground(std.testing.io, std.testing.allocator, job));
+        }
+    }
+}
+
+fn press(app: *client.Client, key: client.name_prompts.Input) !void {
+    _ = try client.name_prompt.inputPrompt(app, key);
+}
+
+fn pick(app: *client.Client, row: u16) void {
+    _ = client.name_prompt.beginCommandPalette(&app.model, .machines);
+    app.model.name_prompt.select(row);
+}
+
+test "the machine list adds, disables, renames and removes machines through machines.json" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+    const app = gui.app;
+    _ = try gui.machines.add(.{ .label = "laptop" }, Machines.local_slot);
+    gui.machines.live[Machines.local_slot] = true;
+
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(std.testing.io, &directory_buffer);
+    var environment = std.process.Environ.Map.init(std.testing.allocator);
+    defer environment.deinit();
+    try environment.put("XDG_CONFIG_HOME", directory_buffer[0..directory_len]);
+    try environment.put("HOME", directory_buffer[0..directory_len]);
+    var block = try environment.createPosixBlock(std.testing.allocator, .{});
+    defer block.deinit(std.testing.allocator);
+    app.options.environ = .{ .block = block };
+
+    var profiles: core.MachineProfiles = .{};
+    try saveProfiles(session, &temp, &profiles);
+
+    // The "Add machine" row follows this machine.
+    pick(app, 1);
+    try press(app, .{ .key = .{ .code = .enter } });
+    try press(app, .{ .command = .{ .insert = "box" } });
+    try press(app, .{ .key = .{ .code = .enter } });
+    try press(app, .{ .command = .{ .insert = "dev@box" } });
+    try press(app, .{ .key = .{ .code = .enter } });
+    try writeChanges(app);
+    try window_machines.reconcile(gui);
+    const slot = gui.machines.findLabel("box").?;
+    try std.testing.expect(gui.machines.shown(slot) and gui.machines.live[slot]);
+    try std.testing.expectEqualStrings("dev@box", gui.machines.destination(slot));
+
+    // Shift+Enter disables it.
+    pick(app, 1);
+    try press(app, .{ .key = .{ .code = .enter, .mods = .{ .shift = true } } });
+    try writeChanges(app);
+    try window_machines.reconcile(gui);
+    try std.testing.expect(!gui.machines.shown(slot));
+    try std.testing.expectEqual(data.RuntimeLink.Phase.stopped, gui.clients[slot].model.runtime_link.phase);
+
+    // Ctrl+R renames it.
+    pick(app, 1);
+    try press(app, .{ .command = .rename_entry });
+    try press(app, .{ .command = .select_all });
+    try press(app, .{ .command = .{ .insert = "gpu" } });
+    try press(app, .{ .key = .{ .code = .enter } });
+    try writeChanges(app);
+    try window_machines.reconcile(gui);
+    try std.testing.expectEqualStrings("gpu", gui.machines.label(slot));
+
+    // Ctrl+D removes it.
+    pick(app, 1);
+    try press(app, .{ .command = .remove_entry });
+    try writeChanges(app);
+    try window_machines.reconcile(gui);
+    try std.testing.expectEqual(@as(?u8, null), gui.machines.findLabel("gpu"));
 }

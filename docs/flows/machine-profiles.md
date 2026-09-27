@@ -2,8 +2,9 @@
 
 `telar machine …` saves the machines an account can reach in
 `$XDG_CONFIG_HOME/telar/machines.json` (or `~/.config/telar/machines.json`).
-The CLI edits the file; windows follow it through their configuration watch.
-Nothing here touches a runtime.
+The CLI and the window's machine list edit the file; windows follow it
+within a second ([Machine presentation](machine-presentation.md)). Nothing
+here touches a runtime.
 
 ## End-to-end path
 
@@ -13,10 +14,12 @@ telar machine add box dev@box --color red --check
 MachineOptions.parse                      src/cli/arguments/MachineOptions.zig
         |
 machine_profiles.run                      src/cli/machine_profiles.zig
-        |   machine_profiles.load: privatefile.read, owner-only regular file, 16 KiB,
+        |   profile_file.load: privatefile.read, owner-only regular file, 16 KiB,
         |   MachineProfiles.parse: version 1, no unknown fields
         |
-MachineId.generate + MachineProfile.init  validation of label, destination, color
+machine_profiles.newProfile              src/client/machines/machine_profiles.zig:
+        |   refuses this machine's label, MachineId.generate + MachineProfile.init
+        |   validate label, destination, color
         |   --check: remote.discover over the managed SSH connection first
         |
 MachineProfiles.add                       unique id and label, 16 profiles at most
@@ -26,7 +29,10 @@ MachineProfiles.writeJson -> privatefile.replace
 ```
 
 `remove`, `rename`, `enable` and `disable` follow the same load, change and
-replace path. `list` and `check` only read.
+replace path through `machine_profiles.change`, which the window's list
+also uses from a background job (`machine_profiles.start`, `write`,
+`finish`). A rename, like an add, refuses this machine's label. `list` and
+`check` only read.
 
 ## The file
 

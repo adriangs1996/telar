@@ -26,6 +26,8 @@ pub const radius_px = 10;
 /// frame shapes nothing. The active prefix token is painted in the accent.
 /// Icons and key words use glyphs the embedded faces cover.
 pub const legend = [_][]const u8{ ">", "actions", "@", "agents & panes", "?", "suggest", ":", "machines", "↑↓", "select", "enter", "run", "esc", "close" };
+/// The machine list's keys instead of the prefixes.
+pub const machine_legend = [_][]const u8{ "enter", "show", "⇧enter", "enable/disable", "^R", "rename", "^D", "remove", "esc", "close" };
 
 projection: *const client.Projection,
 hits: *PaletteHits,
@@ -81,7 +83,7 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
         .machines => blk: {
             const machines = self.projection.machines orelse break :blk 0;
             client.machine_picker.collect(machines, prompt.paletteQuery(), &machine_results);
-            break :blk machine_results.len;
+            break :blk machine_results.rows();
         },
     };
     const visible: u16 = @max(@min(total, max_rows), 1);
@@ -125,7 +127,7 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
         var child = switch (prompt.paletteMode()) {
             .goto => self.pickerRow(goto_results.slice()[index].item, &label_storage),
             .actions => self.actionRow(action_results.slice()[index].index, &key_storage),
-            .machines => self.machineRow(machine_results.slice()[index], &label_storage),
+            .machines => if (machine_results.slotAt(index)) |slot| self.machineRow(slot, &label_storage) else addMachineRow(),
             .suggest => unreachable,
         };
         child.area = row;
@@ -140,7 +142,8 @@ fn drawLegend(canvas: *Canvas, row: cellgrid.Rect, mode: data.command_palette.Pr
     const colors = canvas.theme.palette;
     const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
     var remaining = row;
-    for (legend, 0..) |token, index| {
+    const tokens: []const []const u8 = if (mode == .machines) &machine_legend else &legend;
+    for (tokens, 0..) |token, index| {
         const is_key = index % 2 == 0;
         const active = token.len == 1 and data.command_palette.Prefix.parse(token[0]) == mode;
         const label: Label = .{ .text = token, .color = if (active) colors.accent else colors.subtext0, .bold = active, .face = if (is_key) .mono else .sans, .size = .body };
@@ -197,16 +200,22 @@ fn actionRow(self: CommandPalette, index: u8, storage: *[key_label.max_bytes]u8)
     return .{ .icon = "»", .primary = entry.label, .hint = hint };
 }
 
+fn addMachineRow() PaletteRow {
+    return .{ .icon = "+", .primary = "Add machine…", .secondary = "a label and its SSH destination" };
+}
+
 // Label, then destination and state; the one on screen says so, and one
 // that asks for the person carries a dot.
 fn machineRow(self: CommandPalette, slot: u8, storage: *[data.goto_picker.max_label_bytes]u8) PaletteRow {
     const machines = self.projection.machines.?;
-    const state: []const u8 = if (slot == machines.active)
+    const state: []const u8 = if (!machines.enabled[slot])
+        "disabled · enter enables"
+    else if (slot == machines.active)
         "shown"
     else switch (machines.phase[slot]) {
         .connected => if (machines.cpu_percent[slot]) |cpu| std.fmt.bufPrint(storage, "{d}% cpu", .{cpu}) catch "connected" else "connected",
         .connecting => "connecting",
-        .lost => "unreachable",
+        .lost => "unreachable · enter retries",
         .stopped => "disabled",
     };
     const destination = machines.destination(slot);

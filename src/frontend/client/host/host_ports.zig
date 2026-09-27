@@ -252,7 +252,7 @@ fn routePromptBytes(context: *anyopaque, bytes: []const u8) !void {
         };
         switch (try client_module.name_prompt.inputPrompt(client, input)) {
             .cancelled, .blocked, .finished, .removed, .pane_requested => return,
-            .unchanged, .routing_changed, .changed, .completion_requested, .copied => {},
+            .unchanged, .routing_changed, .changed, .completion_requested, .copied, .rename_requested => {},
         }
     }
 }

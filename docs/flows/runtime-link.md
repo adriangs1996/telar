@@ -1,8 +1,8 @@
 # Runtime link
 
 A window reaches its machine's runtime by itself and keeps running when it
-loses it. The link is connecting, connected or lost; the chrome shows it
-and pane input waits for it. Reconnecting starts a new session as a fresh
+loses it. The link is connecting, connected, lost or stopped; the chrome
+shows it and pane input waits for it. Reconnecting starts a new session as a fresh
 client would, so nothing from the lost session is replayed.
 
 ## End-to-end path
@@ -32,6 +32,12 @@ runtime read or write fails
 .runtime_retry_tick
   runtime_link.retry                    link.phase = connecting, attempt + 1
     to_background: runtime_connect      (again)
+
+machine disabled or moved (machine-presentation.md)
+  runtime_link.stop                     link.phase = stopped: no retry
+  runtime_link.start                    after a move; an attempt still running
+                                        is marked outdated, its result closed
+                                        and a new attempt queued when it lands
 ```
 
 ## Rules
@@ -52,6 +58,18 @@ runtime read or write fails
 - **The socket closes when idle.** `lose` shuts the socket down, which makes a
   read or write still waiting on it return, and closes it only once neither
   is in flight, so a descriptor number is never reused under a job.
+- **One attempt at a time.** `connect_pending` marks a running attempt. A
+  start while it runs marks it outdated instead of queueing a second one;
+  its connection is closed when it lands and the next attempt reads the
+  current target. The attempt reads its destination from a copy the client
+  wrote before queueing it, never from the machines table.
+- **A new socket waits for the old one.** A connection that lands while the
+  previous socket still has a read or write in flight is parked in
+  `connect_result` and adopted when that socket closes, so the pending job
+  never sees its socket replaced. `stop` and the client's teardown close a
+  parked connection.
+- **Stopped is not lost.** `stop` closes the socket once idle and stops the
+  forward like a loss, but schedules nothing; only `start` connects again.
 - **Pane resources go through the canonical release.** Before forgetting a
   session, each pane passes through `pane_closure.releasePaneResources`, so
   graphics, copy mode, paste and reported focus stop naming it.
@@ -71,6 +89,8 @@ runtime read or write fails
   socketpairs: connect, bootstrap, a failed read and write, idle close, the
   retry timer, a second session that forgets the first, and a failed attempt
   that shows its report and waits.
+- `src/gui/tests/machines.zig` tests that a moved machine drops the result
+  of the attempt that was running and reaches the new destination next.
 - `src/model/connection/runtime_session.zig` tests what a forgotten session
   drops and keeps, and that revisions advance.
 - `src/model/connection/RuntimeLink.zig` tests bounded, one-line failures.

@@ -98,6 +98,11 @@ pub fn profilesChanged(gui: *GuiAdapter, fingerprint: u64) !void {
     gui.profiles_seen = fingerprint;
     reconcile(gui) catch |err| {
         std.log.scoped(.machines).warn("machines.json not applied: {s}", .{@errorName(err)});
+        try client.notifications.publishNotificationNow(gui.app, .{
+            .level = .failure,
+            .title = "machines.json not applied",
+            .message = client.machine_profiles.describe(err),
+        });
     };
 
     try watchProfiles(gui);
@@ -114,7 +119,7 @@ pub fn profilesChanged(gui: *GuiAdapter, fingerprint: u64) !void {
 /// ```
 pub fn reconcile(gui: *GuiAdapter) !void {
     const machines = &gui.machines;
-    var profiles = readProfiles(gui) catch return;
+    var profiles = try readProfiles(gui);
 
     var hostname_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
     const local_label = client.profile_file.localLabel(&profiles, &hostname_buffer);
@@ -129,7 +134,7 @@ pub fn reconcile(gui: *GuiAdapter) !void {
             continue;
         }
 
-        try retire(gui, slot);
+        try retire(gui, slot, .removed);
         machines.remove(slot);
     }
 
@@ -156,7 +161,7 @@ pub fn reconcile(gui: *GuiAdapter) !void {
         machines.update(slot, row);
         if (!profile.enabled) {
             if (was_enabled) {
-                try retire(gui, slot);
+                try retire(gui, slot, .disabled);
             }
 
             continue;
@@ -213,7 +218,14 @@ pub fn select(gui: *GuiAdapter, slot: u8) !void {
 pub fn choose(gui: *GuiAdapter, request: data.MachineRequest) !void {
     const machines = &gui.machines;
     switch (request) {
-        .slot => |slot| try select(gui, slot),
+        .slot => |slot| {
+            // Choosing an unreachable machine also tries it again now.
+            if (machines.live[slot]) {
+                try client.runtime_link.retryNow(&gui.clients[slot]);
+            }
+
+            try select(gui, slot);
+        },
         .offset => |offset| {
             var slot = machines.active;
             for (0..Machines.capacity) |_| {
@@ -415,11 +427,25 @@ fn admit(gui: *GuiAdapter, slot: u8) !void {
     try client.runtime_link.start(app);
 }
 
-// Stops a machine the file disabled or removed, showing this machine first
-// when the window shows that one.
-fn retire(gui: *GuiAdapter, slot: u8) !void {
-    if (slot == gui.machines.active) {
+const Retirement = enum { disabled, removed };
+
+// Stops a machine the file disabled or removed. When the window shows that
+// one, it shows this machine instead and says why.
+fn retire(gui: *GuiAdapter, slot: u8, reason: Retirement) !void {
+    const machines = &gui.machines;
+    if (slot == machines.active) {
         try select(gui, Machines.local_slot);
+
+        var buffer: [2 * Machines.max_label_bytes + 64]u8 = undefined;
+        const message = std.fmt.bufPrint(&buffer, "{s} was {s}; the window shows {s}", .{
+            machines.label(slot),
+            @tagName(reason),
+            machines.label(Machines.local_slot),
+        }) catch "the window shows this machine";
+        try client.notifications.publishNotificationNow(window(gui), .{
+            .title = "Machine left the window",
+            .message = message,
+        });
     }
 
     if (gui.pending_machine == slot) {

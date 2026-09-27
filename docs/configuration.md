@@ -540,6 +540,10 @@ Each position accepts one source:
   bottom bar.
 - `telar.bar.metrics()` renders the latest runtime CPU, used-memory and
   optional battery values, the same as `telar.bar.static(telar.ui.metrics())`.
+- `telar.bar.machines()` renders a chip per machine the window holds, with
+  its link state, attention and latest CPU sample, and nothing while the
+  window holds only this machine. The native app draws it; the TUI does not.
+  `telar.bar.metrics()` reports the machine the window shows.
 - `telar.bar.static(content)` parses fixed content when the configuration is
   loaded.
 - `telar.bar.dynamic({ every_ms, render })` calls `render` on a client-owned
@@ -839,6 +843,16 @@ bottom.
 `telar.action.history_palette()` opens command-history search. Its default
 binding is `prefix`, then `/`. Bind it with `telar.bind_global` when it should
 open without the prefix.
+
+`telar.action.next_machine()` and `telar.action.previous_machine()` switch
+the whole window to the next or previous enabled machine, wrapping around.
+`telar.action.machine_picker()` opens the command palette on the window's
+machines, which typing `:` in the palette also does; there Enter shows a
+machine, Shift+Enter enables or disables it, Ctrl+R renames it and Ctrl+D
+removes it. `telar.action.add_machine()` asks for a new machine's label and
+SSH destination. Each change is written to `machines.json`. They have no
+default binding, and plugins cannot run them. See
+[Machine presentation](flows/machine-presentation.md).
 
 `telar.action.path_picker()` opens a fuzzy finder over the files and
 directories under the focused pane's directory, anchored at its cursor. Enter

@@ -246,6 +246,10 @@ for _, name in ipairs({
 	"suggest-command",
 	"close-panel",
 	"refresh-panel",
+	"next-machine",
+	"previous-machine",
+	"machine-picker",
+	"add-machine",
 }) do
 	local stable_name = name
 	telar.action[name:gsub("-", "_")] = function()

@@ -231,6 +231,7 @@ test {
     _ = @import("machines/machine_presentation.zig");
     _ = @import("machines/Machines.zig");
     _ = @import("machines/profile_file.zig");
+    _ = @import("machines/machine_profiles.zig");
     _ = @import("machines/machine_picker.zig");
     _ = @import("machines/runtime_connection.zig");
     _ = @import("machines/RuntimeConnector.zig");
@@ -261,6 +262,8 @@ pub const RemoteMachine = @import("machines/RemoteMachine.zig");
 pub const machine_presentation = @import("machines/machine_presentation.zig");
 pub const Machines = @import("machines/Machines.zig");
 pub const profile_file = @import("machines/profile_file.zig");
+pub const machine_profiles = @import("machines/machine_profiles.zig");
+pub const MachineEdit = @import("machines/MachineEdit.zig");
 pub const machine_picker = @import("machines/machine_picker.zig");
 pub const MachineResults = @import("machines/MachineResults.zig");
 pub const config_directory = @import("config/config_directory.zig");

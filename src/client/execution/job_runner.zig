@@ -15,6 +15,7 @@ const sound_playback = @import("../agents/sound_playback.zig");
 const system_notification = @import("../notifications/system_notification.zig");
 const config_reload = @import("../resources/config_reload.zig");
 const runtime_link = @import("../connection/runtime_link.zig");
+const machine_profiles = @import("../machines/machine_profiles.zig");
 
 /// Runs `job` to completion. The adapter starts it as an inbox producer:
 /// `try inbox.start(.client, .{ job_runner.run, .{ io, job } });`
@@ -52,6 +53,7 @@ pub fn runBackground(io: std.Io, gpa: std.mem.Allocator, job: BackgroundJob) Mes
         .system_notification => |payload| .{ .notified = system_notification.post(io, payload) },
         .config_watch => |args| .{ .config_reload = config_reload.wait(args) },
         .runtime_connect => |connect| .{ .runtime_connected = runtime_link.runConnect(io, gpa, connect) },
+        .machine_edit => |edit| .{ .machine_edited = machine_profiles.write(io, gpa, edit) },
     };
 }
 
@@ -99,6 +101,7 @@ pub fn failedBackground(job: BackgroundJob, err: anyerror) Message {
         .system_notification => .{ .notified = err },
         .config_watch => .{ .config_reload = err },
         .runtime_connect => .{ .runtime_connected = err },
+        .machine_edit => .{ .machine_edited = err },
     };
 }
 

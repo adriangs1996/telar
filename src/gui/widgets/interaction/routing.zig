@@ -432,7 +432,7 @@ fn editor(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
 
 fn shortcut(gui: *GuiAdapter, target: Target, key: Key) !bool {
     // ⌘⌫ deletes the selected history command, as it removes a Finder item.
-    if (key.code == .backspace and key.mods.super and historyPrompt(gui)) {
+    if (key.code == .backspace and key.mods.super and (historyPrompt(gui) or machineList(gui))) {
         if (key.phase == .press) {
             try command(gui, .remove_entry);
         }
@@ -462,6 +462,11 @@ fn shortcut(gui: *GuiAdapter, target: Target, key: Key) !bool {
     }
 
     return true;
+}
+
+fn machineList(gui: *const GuiAdapter) bool {
+    const prompt = gui.app.model.name_prompt.currentConst() orelse return false;
+    return prompt.paletteMode() == .machines;
 }
 
 fn historyPrompt(gui: *const GuiAdapter) bool {

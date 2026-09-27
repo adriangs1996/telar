@@ -19,4 +19,9 @@ pub const PromptBegin = union(enum) {
     path_picker,
     /// Opens the palette with the prefix already typed.
     palette: command_palette.Prefix,
+    rename_machine: struct {
+        slot: u8,
+        label: []const u8,
+    },
+    add_machine,
 };
