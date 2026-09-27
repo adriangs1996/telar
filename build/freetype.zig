@@ -12,7 +12,7 @@ pub fn add(b: *std.Build, config: FreeTypeConfig) *std.Build.Module {
     const upstream = b.dependency("freetype", .{});
     const harfbuzz = b.dependency("harfbuzz", .{});
     const module = b.createModule(.{
-        .root_source_file = b.path("src/frontend/graphics/freetype.zig"),
+        .root_source_file = b.path("lib/freetype/root.zig"),
         .target = target,
         .optimize = config.optimize,
         .link_libc = true,

@@ -1,4 +1,5 @@
-//! Narrow C surface used by the client-side text rasterizer.
+//! Narrow C surface of the FreeType and HarfBuzz sources `build/freetype.zig`
+//! compiles, used by the text rasterizer and the native client's fonts.
 
 pub const c = @cImport({
     @cInclude("ft2build.h");
