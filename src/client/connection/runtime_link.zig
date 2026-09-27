@@ -76,11 +76,7 @@ pub fn finishConnect(client: *Client, result: anyerror!void) !void {
     client.connect_outdated = false;
     if (client.model.runtime_link.phase == .stopped or outdated) {
         if (result) |_| {
-            var connection = client.connect_result;
-            connection.channel.deinit(client.io);
-            if (connection.forward) |*forward| {
-                forward.stop(client.io);
-            }
+            client.connect_result.close(client.io);
         } else |_| {}
 
         if (outdated and client.model.runtime_link.phase == .connecting) {
@@ -98,6 +94,13 @@ pub fn finishConnect(client: *Client, result: anyerror!void) !void {
 
         return scheduleRetry(client);
     };
+
+    // The previous socket still has a read or write waiting on it; the new
+    // one is adopted once that socket closes.
+    if (client.channel_owned) {
+        client.connect_parked = true;
+        return;
+    }
 
     try adopt(client);
 }
@@ -117,8 +120,7 @@ pub fn lose(client: *Client, err: anyerror) !void {
 
     const link = &client.model.runtime_link;
     if (link.phase != .connected) {
-        closeWhenIdle(client);
-        return;
+        return closeWhenIdle(client);
     }
 
     const now_ns = pacing.clock.monotonic(client.io);
@@ -142,7 +144,7 @@ pub fn lose(client: *Client, err: anyerror) !void {
         client.forward = null;
     }
 
-    closeWhenIdle(client);
+    try closeWhenIdle(client);
     try scheduleRetry(client);
 }
 
@@ -151,9 +153,9 @@ pub fn lose(client: *Client, err: anyerror) !void {
 /// again. The runtime and its panes are untouched.
 ///
 /// ```zig
-/// runtime_link.stop(client);
+/// try runtime_link.stop(client);
 /// ```
-pub fn stop(client: *Client) void {
+pub fn stop(client: *Client) !void {
     const link = &client.model.runtime_link;
     link.phase = .stopped;
     link.clearFailure();
@@ -168,16 +170,22 @@ pub fn stop(client: *Client) void {
         client.forward = null;
     }
 
-    closeWhenIdle(client);
+    if (client.connect_parked) {
+        client.connect_parked = false;
+        client.connect_result.close(client.io);
+    }
+
+    try closeWhenIdle(client);
 }
 
 /// Closes a lost socket once no read or write uses it. Closing earlier could
-/// let the descriptor number be reused under a job still waiting on it.
+/// let the descriptor number be reused under a job still waiting on it. A
+/// connection parked behind that socket is adopted then.
 ///
 /// ```zig
-/// runtime_link.closeWhenIdle(client);
+/// try runtime_link.closeWhenIdle(client);
 /// ```
-pub fn closeWhenIdle(client: *Client) void {
+pub fn closeWhenIdle(client: *Client) !void {
     if (client.model.runtime_link.phase == .connected) {
         return;
     }
@@ -190,6 +198,11 @@ pub fn closeWhenIdle(client: *Client) void {
     if (client.channel_owned) {
         client.channel.deinit(client.io);
         client.channel_owned = false;
+    }
+
+    if (client.connect_parked) {
+        client.connect_parked = false;
+        try adopt(client);
     }
 }
 
@@ -218,11 +231,26 @@ pub fn retry(client: *Client, result: anyerror!void) !void {
 }
 
 fn queueConnect(client: *Client, target: MachineTarget) !void {
+    std.debug.assert(!client.connect_pending);
+    var job_target = target;
+    switch (job_target) {
+        .local => {},
+        .remote => |*machine| {
+            if (machine.destination.len > client.connect_destination.len) {
+                return error.DestinationTooLong;
+            }
+
+            const copy = client.connect_destination[0..machine.destination.len];
+            @memcpy(copy, machine.destination);
+            machine.destination = copy;
+        },
+    }
+
     client.connect_report.len = 0;
     client.connect_pending = true;
     errdefer client.connect_pending = false;
     try client.to_background.push(.{ .runtime_connect = .{
-        .target = target,
+        .target = job_target,
         .environ = client.options.environ,
         .connection = &client.connect_result,
         .report = &client.connect_report,

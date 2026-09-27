@@ -31,6 +31,8 @@ pub fn apply(self: *Sampler, raw: Raw) void {
     const next: Values = .{
         .cpu_percent = cpu,
         .memory_used_decigib = system_metrics.decigib(raw.memory_used_bytes),
+        .memory_total_decigib = system_metrics.decigib(raw.memory_total_bytes),
+        .cpu_count = raw.cpu_count,
         .battery_percent = raw.battery_percent,
     };
     if (self.latest) |current| {

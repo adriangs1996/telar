@@ -585,6 +585,8 @@ test "system metrics commit before presenter-owned projection" {
         .memory_used_decigib = 10,
         .has_battery = true,
         .battery_percent = 80,
+        .cpu_count = 4,
+        .memory_total_decigib = 160,
     });
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(metrics));
 
@@ -593,6 +595,8 @@ test "system metrics commit before presenter-owned projection" {
         .cpu_percent = 50,
         .memory_used_decigib = 10,
         .battery_percent = 80,
+        .cpu_count = 4,
+        .memory_total_decigib = 160,
     }, client.model.system_metrics.?);
     try std.testing.expectEqual(version_before.system_metrics + 1, client.model.version().system_metrics);
     try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);

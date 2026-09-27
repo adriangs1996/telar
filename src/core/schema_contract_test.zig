@@ -894,6 +894,8 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .memory_used_decigib = 92,
             .has_battery = true,
             .battery_percent = 84,
+            .cpu_count = 12,
+            .memory_total_decigib = 360,
         }),
     ));
     const workspace_list_entries = [_]WorkspaceListEntry{

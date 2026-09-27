@@ -3,6 +3,7 @@
 const localsocket = @import("localsocket");
 const gui = @import("telar-gui");
 const client = @import("telar-client");
+const core = @import("telar-core");
 const frontend = @import("telar-frontend");
 const std = @import("std");
 const builtin = @import("builtin");
@@ -58,15 +59,42 @@ pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
         .profile = options.profile,
         .fresh = options.fresh,
     } };
-    if (options.remote) |destination| {
+    var profiles: core.MachineProfiles = .{};
+    const opened = if (options.machine) |label|
+        try savedDestination(init, std.mem.span(label), &profiles)
+    else if (options.remote) |destination|
+        std.mem.span(destination)
+    else
+        null;
+    if (opened) |destination| {
         frontend_options.open_machine = .{
-            .destination = std.mem.span(destination),
+            .destination = destination,
             .arguments = prepared.command(),
         };
         frontend_options.arguments = &.{defaultShell(init.minimal.environ)};
     }
     prepared.transferResources();
     return gui.run(init, null, frontend_options);
+}
+
+// The destination of the saved machine `label` names, or null when it is
+// this machine's label. `profiles` holds the text the result points into.
+fn savedDestination(init: std.process.Init, label: []const u8, profiles: *core.MachineProfiles) !?[]const u8 {
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try client.profile_file.path(init.minimal.environ, &path_buffer);
+    profiles.* = try client.profile_file.load(init.io, init.gpa, path);
+
+    if (profiles.find(label)) |index| {
+        return profiles.rows[index].destination();
+    }
+
+    var hostname_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
+    if (std.mem.eql(u8, client.profile_file.localLabel(profiles, &hostname_buffer), label)) {
+        return null;
+    }
+
+    std.debug.print("telar gui: no saved machine is labelled '{s}'; see telar machine list\n", .{label});
+    return error.UnknownMachine;
 }
 
 /// One presentation adapter's entrypoint: it adopts the resources `Options`
@@ -79,6 +107,11 @@ fn defaultShell(environ: std.process.Environ) []const u8 {
 pub const Adapter = *const fn (std.process.Init, ?*localsocket.SocketChannel, client.Options) anyerror!u8;
 
 fn launch(init: std.process.Init, options: RunOptions, adapter: Adapter) !u8 {
+    if (options.machine != null) {
+        std.debug.print("telar: --machine chooses the machine a window shows; use telar gui --machine\n", .{});
+        return error.MachineNeedsWindow;
+    }
+
     var forward: ?Forward = null;
     defer if (forward) |*owned| owned.stop(init.io);
     if (options.remote) |destination| {

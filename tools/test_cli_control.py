@@ -150,13 +150,14 @@ class ControlTests(unittest.TestCase):
         def exchange(connection):
             receive_frame(connection)
             send_frame(connection, bytes([0x95, 0, 0, 0]))
-            send_frame(connection, bytes([0x97]) + struct.pack("<QB HBB", 7, 42, 123, 0, 0))
+            send_frame(connection, bytes([0x97]) + struct.pack("<QB HBB HH", 7, 42, 123, 0, 0, 8, 160))
 
         result = self.run_control(["runtime", "metrics", "--json"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {
             "revision": 7, "cpu_percent": 42,
-            "memory_used_decigib": 123, "battery_percent": None,
+            "memory_used_decigib": 123, "memory_total_decigib": 160,
+            "cpu_count": 8, "battery_percent": None,
         })
 
     def test_workspace_list_exposes_git_metadata_and_escapes_names(self):

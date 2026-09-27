@@ -107,6 +107,12 @@ connect_pending: bool = false,
 /// The target changed while a job ran; its result is closed and a new
 /// attempt starts.
 connect_outdated: bool = false,
+/// A connection that landed while the previous socket was still in use
+/// waits in `connect_result` until that socket closes.
+connect_parked: bool = false,
+/// The destination the running connection job reads. It is written only
+/// when no job runs, so a machine renamed meanwhile never changes it.
+connect_destination: [core.ssh_destination.max_bytes]u8 = undefined,
 /// The wait before connecting again to a lost runtime.
 runtime_retry: pacing.DeadlineScheduler = .{},
 connected_at_ns: u64 = 0,
@@ -264,6 +270,10 @@ pub fn deinit(self: *Client) void {
 
     if (self.forward) |*forward| {
         forward.stop(self.io);
+    }
+
+    if (self.connect_parked) {
+        self.connect_result.close(self.io);
     }
 }
 

@@ -3,11 +3,13 @@
 //! the configuration, the bars and the configuration watch. Every enabled
 //! saved machine, and the one `--remote` names, gets a client of its own in
 //! another slot that shares that configuration. The window presents one
-//! machine; the others keep metadata only and never touch the host.
+//! machine; the others keep metadata only and never touch the host. A
+//! change to `machines.json` reaches the window within a second.
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
+const pacing = @import("pacing");
 const GuiAdapter = @import("GuiAdapter.zig");
 const host_ports = @import("host_ports.zig");
 const workers = @import("workers.zig");
@@ -33,7 +35,13 @@ pub fn window(gui: *GuiAdapter) *client.Client {
 pub fn open(gui: *GuiAdapter) !void {
     const machines = &gui.machines;
     const own = window(gui);
-    var profiles = loadProfiles(gui);
+    const path = client.profile_file.path(own.options.environ, &gui.profiles_path) catch "";
+    gui.profiles_path_len = path.len;
+    gui.profiles_seen = client.profile_file.fingerprint(own.io, path);
+
+    // A missing, unreadable or invalid file leaves the window with this
+    // machine only; `telar machine list` reports what is wrong with it.
+    var profiles = readProfiles(gui) catch core.MachineProfiles{};
 
     var hostname_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
     const local_label = client.profile_file.localLabel(&profiles, &hostname_buffer);
@@ -75,6 +83,95 @@ pub fn open(gui: *GuiAdapter) !void {
 
     if (requested) |slot| {
         try select(gui, slot);
+    }
+
+    try watchProfiles(gui);
+}
+
+/// Takes a changed `machines.json`: brings the window in line with it and
+/// watches it again. A file the window cannot apply keeps what it holds.
+///
+/// ```zig
+/// try window_machines.profilesChanged(gui, fingerprint);
+/// ```
+pub fn profilesChanged(gui: *GuiAdapter, fingerprint: u64) !void {
+    gui.profiles_seen = fingerprint;
+    reconcile(gui) catch |err| {
+        std.log.scoped(.machines).warn("machines.json not applied: {s}", .{@errorName(err)});
+    };
+
+    try watchProfiles(gui);
+}
+
+/// Brings the window in line with `machines.json`: new enabled machines
+/// connect, disabled ones stop, removed ones leave, and a machine whose
+/// destination changed connects again. The window shows this machine first
+/// when the one it shows is disabled or removed. An unreadable or invalid
+/// file keeps the machines the window holds.
+///
+/// ```zig
+/// try window_machines.reconcile(gui);
+/// ```
+pub fn reconcile(gui: *GuiAdapter) !void {
+    const machines = &gui.machines;
+    var profiles = readProfiles(gui) catch return;
+
+    var hostname_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
+    const local_label = client.profile_file.localLabel(&profiles, &hostname_buffer);
+    if (!std.mem.eql(u8, machines.label(Machines.local_slot), local_label)) {
+        machines.update(Machines.local_slot, .{ .label = local_label });
+    }
+
+    for (0..Machines.capacity) |index| {
+        const slot: u8 = @intCast(index);
+        const id = machines.id[slot];
+        if (!machines.used[slot] or id == .invalid or profileFor(&profiles, id) != null) {
+            continue;
+        }
+
+        try retire(gui, slot);
+        machines.remove(slot);
+    }
+
+    for (profiles.slice()) |*profile| {
+        const row: client.MachineRow = .{
+            .id = profile.id,
+            .label = profile.label(),
+            .destination = profile.destination(),
+            .color = profile.color(),
+            .enabled = profile.enabled,
+        };
+
+        const slot = machines.find(profile.id) orelse temporaryFor(machines, profile.destination()) orelse {
+            const added = try machines.add(row, null);
+            if (profile.enabled) {
+                try admit(gui, added);
+            }
+
+            continue;
+        };
+
+        const was_enabled = machines.enabled[slot];
+        const moved = !std.mem.eql(u8, machines.destination(slot), profile.destination());
+        machines.update(slot, row);
+        if (!profile.enabled) {
+            if (was_enabled) {
+                try retire(gui, slot);
+            }
+
+            continue;
+        }
+
+        if (!was_enabled or moved) {
+            try admit(gui, slot);
+        }
+    }
+
+    const now_ns = pacing.clock.monotonic(window(gui).io);
+    for (machines.live, 0..) |live, index| {
+        if (live) {
+            _ = machines.summarize(@intCast(index), &gui.clients[index].model, now_ns);
+        }
     }
 }
 
@@ -140,7 +237,7 @@ pub fn choose(gui: *GuiAdapter, request: data.MachineRequest) !void {
 pub fn handle(gui: *GuiAdapter, slot: u8, message: client.Message) !?u8 {
     const app = &gui.clients[slot];
     const status = try app.update(message);
-    _ = gui.machines.summarize(slot, &app.model);
+    _ = gui.machines.summarize(slot, &app.model, pacing.clock.monotonic(app.io));
     try client.machine_presentation.settle(app);
 
     if (slot != gui.machines.active) {
@@ -290,6 +387,86 @@ fn openClient(gui: *GuiAdapter, slot: u8, arguments: []const []const u8) !void {
     try client.runtime_link.start(app);
 }
 
+// Connects a machine the file enabled or added. A slot whose client is
+// already live, from a machine stopped or removed before, connects that
+// client to the row's destination.
+fn admit(gui: *GuiAdapter, slot: u8) !void {
+    if (!gui.machines.live[slot]) {
+        return openClient(gui, slot, &.{});
+    }
+
+    const app = &gui.clients[slot];
+    if (app.model.runtime_link.phase != .stopped) {
+        try client.runtime_link.stop(app);
+    }
+
+    const destination = gui.machines.destination(slot);
+    const identity = machineIdentity(window(gui).client_identity, destination);
+    app.options.machine = .{ .remote = .{
+        .destination = destination,
+        .arguments = &.{},
+        .window_slot = gui.window_slot,
+    } };
+    app.client_identity = identity;
+    if (app.bootstrap) |*bootstrap| {
+        bootstrap.client_identity = identity;
+    }
+
+    try client.runtime_link.start(app);
+}
+
+// Stops a machine the file disabled or removed, showing this machine first
+// when the window shows that one.
+fn retire(gui: *GuiAdapter, slot: u8) !void {
+    if (slot == gui.machines.active) {
+        try select(gui, Machines.local_slot);
+    }
+
+    if (gui.pending_machine == slot) {
+        gui.pending_machine = null;
+    }
+
+    if (gui.machines.live[slot]) {
+        try client.runtime_link.stop(&gui.clients[slot]);
+    }
+}
+
+fn watchProfiles(gui: *GuiAdapter) !void {
+    if (gui.profiles_path_len == 0) {
+        return;
+    }
+
+    const own = window(gui);
+    try gui.driver.inbox.start(.profiles_changed, .{ client.profile_file.waitForChange, .{
+        own.io,
+        gui.profiles_path[0..gui.profiles_path_len],
+        gui.profiles_seen,
+    } });
+}
+
+fn profileFor(profiles: *const core.MachineProfiles, id: core.MachineId) ?*const core.MachineProfile {
+    for (profiles.slice()) |*profile| {
+        if (profile.id == id) {
+            return profile;
+        }
+    }
+
+    return null;
+}
+
+// The temporary `--remote` row a new profile for the same destination
+// takes over, so one destination never gets two clients.
+fn temporaryFor(machines: *const Machines, destination: []const u8) ?u8 {
+    for (machines.used, machines.id, 0..) |used, id, index| {
+        const slot: u8 = @intCast(index);
+        if (used and id == .invalid and slot != Machines.local_slot and std.mem.eql(u8, machines.destination(slot), destination)) {
+            return slot;
+        }
+    }
+
+    return null;
+}
+
 fn machineFor(machines: *const Machines, name: []const u8) ?u8 {
     for (machines.used, 0..) |used, index| {
         const slot: u8 = @intCast(index);
@@ -305,13 +482,13 @@ fn machineFor(machines: *const Machines, name: []const u8) ?u8 {
     return null;
 }
 
-// A missing, unreadable or invalid file leaves the window with this
-// machine only; `telar machine list` reports what is wrong with it.
-fn loadProfiles(gui: *GuiAdapter) core.MachineProfiles {
+fn readProfiles(gui: *GuiAdapter) !core.MachineProfiles {
+    if (gui.profiles_path_len == 0) {
+        return error.NoProfilesPath;
+    }
+
     const own = window(gui);
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = client.profile_file.path(own.options.environ, &path_buffer) catch return .{};
-    return client.profile_file.load(own.io, own.gpa, path) catch .{};
+    return client.profile_file.load(own.io, own.gpa, gui.profiles_path[0..gui.profiles_path_len]);
 }
 
 fn dropHostEffects(app: *client.Client) void {

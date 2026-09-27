@@ -4,7 +4,7 @@ const std = @import("std");
 
 pub const text =
     \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--sidebar-renderer MODE] [--fresh] [command [args...]]
-    \\       telar gui [--login-shell] [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--remote DESTINATION] [command [args...]]
+    \\       telar gui [--login-shell] [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--remote DESTINATION | --machine LABEL] [command [args...]]
     \\       telar cli install|uninstall|status [--dir DIR]
     \\       telar --machine LABEL COMMAND [args...]
     \\       telar machine add LABEL DESTINATION [--color COLOR] [--disabled] [--check] [--json]
@@ -182,6 +182,8 @@ pub const text =
     \\Remote:
     \\  --remote DEST    Attach to the runtime on an SSH host (forwards its
     \\                   socket; needs telar on the remote PATH)
+    \\  --machine LABEL  (gui) Show a saved machine first; the window still
+    \\                   holds every enabled one
     \\
     \\Options:
     \\  --config PATH     Load a specific Lua configuration

@@ -53,6 +53,11 @@ pub fn decigib(bytes: u64) u16 {
     return @intCast(@min(tenths, std.math.maxInt(u16)));
 }
 
+fn cpuCount() u16 {
+    const count = std.Thread.getCpuCount() catch return 0;
+    return @intCast(@min(count, std.math.maxInt(u16)));
+}
+
 pub fn readRaw() ?Raw {
     return switch (builtin.os.tag) {
         .macos => readDarwin(),
@@ -92,6 +97,8 @@ fn readDarwin() ?Raw {
         .busy_ticks = user + system + nice,
         .total_ticks = user + system + nice + idle,
         .memory_used_bytes = used_pages * page_size,
+        .memory_total_bytes = std.process.totalSystemMemory() catch 0,
+        .cpu_count = cpuCount(),
         .battery_percent = readDarwinBattery(),
     };
 }
@@ -164,6 +171,8 @@ fn readLinux() ?Raw {
         .busy_ticks = total - idle,
         .total_ticks = total,
         .memory_used_bytes = used_kb * 1024,
+        .memory_total_bytes = total_kb * 1024,
+        .cpu_count = cpuCount(),
         .battery_percent = readLinuxBattery(),
     };
 }
@@ -252,6 +261,8 @@ test "the revision moves only when a visible value changes" {
         .busy_ticks = 100,
         .total_ticks = 1000,
         .memory_used_bytes = 8 * 1024 * 1024 * 1024,
+        .memory_total_bytes = 16 * 1024 * 1024 * 1024,
+        .cpu_count = 8,
         .battery_percent = 80,
     });
     const first = sampler.revision;
@@ -262,6 +273,8 @@ test "the revision moves only when a visible value changes" {
         .busy_ticks = 100,
         .total_ticks = 1000,
         .memory_used_bytes = 8 * 1024 * 1024 * 1024,
+        .memory_total_bytes = 16 * 1024 * 1024 * 1024,
+        .cpu_count = 8,
         .battery_percent = 80,
     });
     try std.testing.expectEqual(first, sampler.revision);
@@ -270,6 +283,8 @@ test "the revision moves only when a visible value changes" {
         .busy_ticks = 600,
         .total_ticks = 2000,
         .memory_used_bytes = 8 * 1024 * 1024 * 1024,
+        .memory_total_bytes = 16 * 1024 * 1024 * 1024,
+        .cpu_count = 8,
         .battery_percent = 80,
     });
     try std.testing.expect(sampler.revision != first);

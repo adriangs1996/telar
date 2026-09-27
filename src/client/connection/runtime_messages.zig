@@ -130,6 +130,8 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
                 .cpu_percent = metrics.cpu_percent,
                 .memory_used_decigib = metrics.memory_used_decigib,
                 .battery_percent = if (metrics.has_battery) metrics.battery_percent else null,
+                .cpu_count = metrics.cpu_count,
+                .memory_total_decigib = metrics.memory_total_decigib,
             },
         ),
         .workspace_list => |list| _ = try data.workspace_list_snapshot.apply(&client.model, list),

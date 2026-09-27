@@ -2,12 +2,14 @@ const localsocket = @import("localsocket");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
+const data = @import("model");
 const Session = @import("Session.zig");
 const Fixture = @import("ChromeFixture.zig");
 const host_ports = @import("../host_ports.zig");
 const window_machines = @import("../window_machines.zig");
 
 const Machines = client.Machines;
+const runtime_link = client.runtime_link;
 
 const Peer = struct {
     channel: localsocket.SocketChannel,
@@ -164,4 +166,78 @@ test "the expanded sidebar switches between machines and folds the rest" {
     projection.machines = &gui.machines;
     try fixture.paint(projection);
     try std.testing.expect(fixture.bandTarget(.{ .select_machine = @intCast(gui.machines.count() - 1) }) == null);
+}
+
+// Points the window at a `machines.json` in `temp` and writes `profiles`
+// there, the way `telar machine` replaces it.
+fn saveProfiles(session: *Session, temp: *std.testing.TmpDir, profiles: *const core.MachineProfiles) !void {
+    const gui = session.gui;
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(std.testing.io, &directory_buffer);
+    const path = try std.fmt.bufPrint(&gui.profiles_path, "{s}/{s}", .{ directory_buffer[0..directory_len], client.profile_file.file_name });
+    gui.profiles_path_len = path.len;
+
+    try client.profile_file.save(std.testing.io, path, profiles);
+}
+
+fn boxProfile(destination: []const u8, enabled: bool) !core.MachineProfiles {
+    var profiles: core.MachineProfiles = .{};
+    var profile = try core.MachineProfile.init(@enumFromInt(7), .{
+        .label = "box",
+        .destination = destination,
+    });
+    profile.enabled = enabled;
+    try profiles.add(profile);
+    return profiles;
+}
+
+test "machines.json changes connect, stop, move and remove the window's machines" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+    _ = try gui.machines.add(.{ .label = "laptop" }, Machines.local_slot);
+    gui.machines.live[Machines.local_slot] = true;
+
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var profiles = try boxProfile("dev@box", true);
+    try saveProfiles(session, &temp, &profiles);
+    try window_machines.reconcile(gui);
+    const slot = gui.machines.find(@enumFromInt(7)).?;
+    const box = &gui.clients[slot];
+    try std.testing.expect(gui.machines.live[slot] and gui.machines.shown(slot));
+    try std.testing.expect(box.connect_pending);
+    try std.testing.expectEqual(data.RuntimeLink.Phase.connecting, gui.machines.phase[slot]);
+
+    profiles = try boxProfile("dev@box", false);
+    try saveProfiles(session, &temp, &profiles);
+    try window_machines.reconcile(gui);
+    try std.testing.expect(!gui.machines.shown(slot));
+    try std.testing.expectEqual(data.RuntimeLink.Phase.stopped, gui.machines.phase[slot]);
+
+    // The attempt to dev@box is still running when the machine moves; its
+    // result is dropped and the next attempt reaches the new destination.
+    profiles = try boxProfile("dev@gpu", true);
+    try saveProfiles(session, &temp, &profiles);
+    try window_machines.reconcile(gui);
+    try std.testing.expect(box.connect_outdated);
+    try runtime_link.finishConnect(box, error.ConnectionRefused);
+    var queued: ?client.BackgroundJob = null;
+    while (box.to_background.pop()) |job| {
+        queued = job;
+    }
+
+    try std.testing.expectEqualStrings("dev@gpu", queued.?.runtime_connect.target.remote.destination);
+    try std.testing.expectEqual(data.RuntimeLink.Phase.connecting, box.model.runtime_link.phase);
+
+    gui.machines.active = slot;
+    gui.app = box;
+    profiles = .{};
+    try saveProfiles(session, &temp, &profiles);
+    try window_machines.reconcile(gui);
+    try std.testing.expect(gui.app == window_machines.window(gui));
+    try std.testing.expectEqual(@as(?u8, null), gui.machines.find(@enumFromInt(7)));
+    try std.testing.expectEqual(data.RuntimeLink.Phase.stopped, box.model.runtime_link.phase);
 }

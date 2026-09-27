@@ -93,5 +93,5 @@ pub fn completeRuntimeSend(client: *Client, result: anyerror!void) !void {
     };
 
     client.model.to_host.resume_input = true;
-    runtime_link.closeWhenIdle(client);
+    try runtime_link.closeWhenIdle(client);
 }

@@ -97,6 +97,11 @@ machines: client.Machines = .{},
 pending_machine: ?u8 = null,
 /// The window's lease slot, which keeps its forwarded sockets apart.
 window_slot: u8 = 0,
+/// Where `machines.json` lives, empty when it cannot be resolved, and the
+/// fingerprint the window last applied.
+profiles_path: [std.fs.max_path_bytes]u8 = undefined,
+profiles_path_len: usize = 0,
+profiles_seen: u64 = 0,
 driver: NativeLoop,
 renderer: Renderer,
 failure: ?anyerror = null,
@@ -158,6 +163,8 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.machines = .{};
     gui.pending_machine = null;
     gui.window_slot = 0;
+    gui.profiles_path_len = 0;
+    gui.profiles_seen = 0;
 
     const review = try params.gpa.create(ReviewPanel);
     errdefer params.gpa.destroy(review);
@@ -618,6 +625,7 @@ fn dispatch(self: *GuiAdapter, event: gui_event.Message) !?u8 {
                 return status;
             }
         },
+        .profiles_changed => |fingerprint| try window_machines.profilesChanged(self, fingerprint),
         .input_ready => try self.inputReady(),
         .focus => |focused| try self.focus(focused),
         .presented => |result| try self.complete(result.token, result.delivered),
@@ -649,6 +657,7 @@ fn pathFor(event: gui_event.Message) core.Path {
         .client => |message| message.path(),
         .machine => |event_value| event_value.message.path(),
         .configuration_ready,
+        .profiles_changed,
         .favicon,
         .diagram_ready,
         .syntax_ready,

@@ -81,6 +81,8 @@ test "runtime reads own one token and do not rearm after shutdown" {
         .memory_used_decigib = 10,
         .has_battery = false,
         .battery_percent = 0,
+        .cpu_count = 4,
+        .memory_total_decigib = 160,
     });
     try harness.peer.send(io, metrics);
     switch (try support.receiveClient(terminal)) {

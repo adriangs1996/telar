@@ -7,6 +7,10 @@ const config_directory = @import("../config/config_directory.zig");
 
 /// The file's name inside the settings directory.
 pub const file_name = "machines.json";
+/// How long a window waits between looks at the file.
+const poll_interval_s = 1;
+/// Seeds the file's fingerprint; any fixed value works.
+const fingerprint_seed = 0;
 
 /// Resolves the file's path into `buffer`.
 ///
@@ -41,6 +45,32 @@ pub fn save(io: std.Io, file_path: []const u8, profiles: *const core.MachineProf
     try profiles.writeJson(&writer);
 
     try privatefile.replace(io, file_path, writer.buffered());
+}
+
+/// A cheap stamp of the file's metadata that changes when it is replaced,
+/// written or removed.
+///
+/// ```zig
+/// const seen = profile_file.fingerprint(io, path);
+/// ```
+pub fn fingerprint(io: std.Io, file_path: []const u8) u64 {
+    return privatefile.fingerprint(io, file_path, fingerprint_seed);
+}
+
+/// Looks at the file once per interval until its fingerprint differs from
+/// `known`, and returns the new one. A canceled wait returns `known`.
+///
+/// ```zig
+/// const changed = profile_file.waitForChange(io, path, seen);
+/// ```
+pub fn waitForChange(io: std.Io, file_path: []const u8, known: u64) u64 {
+    while (true) {
+        io.sleep(.fromSeconds(poll_interval_s), .awake) catch return known;
+        const current = fingerprint(io, file_path);
+        if (current != known) {
+            return current;
+        }
+    }
 }
 
 /// The label this machine answers to: the file's, or the host name.

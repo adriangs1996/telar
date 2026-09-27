@@ -35,6 +35,15 @@ live: [capacity]bool = @splat(false),
 phase: [capacity]data.RuntimeLink.Phase = @splat(.connecting),
 attention: [capacity]bool = @splat(false),
 cpu_percent: [capacity]?u8 = @splat(null),
+/// What placement needs from the last sample: the CPU count, memory in
+/// tenths of a GiB, and when the sample arrived by the client's monotonic
+/// clock, so a stale one can be skipped. Zero means none yet.
+cpu_count: [capacity]u16 = @splat(0),
+memory_used_decigib: [capacity]u16 = @splat(0),
+memory_total_decigib: [capacity]u16 = @splat(0),
+sampled_ns: [capacity]u64 = @splat(0),
+/// The client's metrics revision the row last copied.
+metrics_revision: [capacity]u64 = @splat(0),
 /// The slot the window presents.
 active: u8 = local_slot,
 /// Advances when any column a surface draws changes.
@@ -53,6 +62,11 @@ pub fn add(self: *Machines, row: MachineRow, wanted: ?u8) !u8 {
     self.phase[slot] = .connecting;
     self.attention[slot] = false;
     self.cpu_percent[slot] = null;
+    self.cpu_count[slot] = 0;
+    self.memory_used_decigib[slot] = 0;
+    self.memory_total_decigib[slot] = 0;
+    self.sampled_ns[slot] = 0;
+    self.metrics_revision[slot] = 0;
     self.revision +%= 1;
     return slot;
 }
@@ -68,8 +82,8 @@ pub fn update(self: *Machines, slot: u8, row: MachineRow) void {
     self.revision +%= 1;
 }
 
-/// Frees a row. A slot whose client is still live stays reserved until
-/// the window closes, since jobs may still point into that client.
+/// Frees a row. A live client keeps its slot; the next row added there
+/// reuses that client with the new destination.
 pub fn remove(self: *Machines, slot: u8) void {
     std.debug.assert(self.used[slot] and slot != local_slot);
     self.used[slot] = false;
@@ -131,13 +145,24 @@ pub fn shown(self: *const Machines, slot: u8) bool {
     return self.used[slot] and self.enabled[slot];
 }
 
-/// Refreshes a row's summary from its client's model. Returns whether a
-/// column a surface draws changed.
+/// Refreshes a row's summary from its client's model, stamping a new
+/// metrics sample with `now_ns`. Returns whether a column a surface draws
+/// changed.
 ///
 /// ```zig
-/// _ = machines.summarize(slot, &client.model);
+/// _ = machines.summarize(slot, &client.model, pacing.clock.monotonic(io));
 /// ```
-pub fn summarize(self: *Machines, slot: u8, model: *const data.ClientModel) bool {
+pub fn summarize(self: *Machines, slot: u8, model: *const data.ClientModel, now_ns: u64) bool {
+    if (model.system_metrics) |metrics| {
+        if (model.system_metrics_revision != self.metrics_revision[slot]) {
+            self.metrics_revision[slot] = model.system_metrics_revision;
+            self.cpu_count[slot] = metrics.cpu_count;
+            self.memory_used_decigib[slot] = metrics.memory_used_decigib;
+            self.memory_total_decigib[slot] = metrics.memory_total_decigib;
+            self.sampled_ns[slot] = now_ns;
+        }
+    }
+
     const phase = model.runtime_link.phase;
     const attention_now = needsAttention(model);
     const cpu: ?u8 = if (model.system_metrics) |metrics| metrics.cpu_percent else null;
@@ -173,9 +198,11 @@ fn needsAttention(model: *const data.ClientModel) bool {
     return false;
 }
 
+// The shown slot stays out of reach until the window shows another one,
+// even once its row is removed.
 fn freeSlot(self: *const Machines) ?u8 {
-    for (self.used, self.live, 0..) |used, live, slot| {
-        if (!used and !live and slot != local_slot) {
+    for (self.used, 0..) |used, slot| {
+        if (!used and slot != local_slot and slot != self.active) {
             return @intCast(slot);
         }
     }
@@ -222,9 +249,31 @@ test "a summary changes the revision only when a drawn column changes" {
     defer model.deinit();
 
     model.runtime_link.phase = .connected;
-    try std.testing.expect(machines.summarize(slot, &model));
+    try std.testing.expect(machines.summarize(slot, &model, 10));
     const revision = machines.revision;
-    try std.testing.expect(!machines.summarize(slot, &model));
+    try std.testing.expect(!machines.summarize(slot, &model, 20));
     try std.testing.expectEqual(revision, machines.revision);
     try std.testing.expect(!machines.attentionElsewhere());
+}
+
+test "a new metrics sample records placement data with its arrival time" {
+    var machines: Machines = .{};
+    const slot = try machines.add(.{ .label = "box" }, null);
+    var model = data.ClientModel.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    _ = try data.system_metrics.reconcile(&model, .{
+        .runtime_revision = 1,
+        .cpu_percent = 30,
+        .memory_used_decigib = 40,
+        .battery_percent = null,
+        .cpu_count = 16,
+        .memory_total_decigib = 640,
+    });
+    _ = machines.summarize(slot, &model, 5);
+    _ = machines.summarize(slot, &model, 9);
+
+    try std.testing.expectEqual(@as(u16, 16), machines.cpu_count[slot]);
+    try std.testing.expectEqual(@as(u16, 640), machines.memory_total_decigib[slot]);
+    try std.testing.expectEqual(@as(u64, 5), machines.sampled_ns[slot]);
 }

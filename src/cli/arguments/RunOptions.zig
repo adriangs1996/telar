@@ -15,6 +15,8 @@ no_config: bool = false,
 profile: ?[*:0]const u8 = null,
 /// SSH destination whose runtime this client attaches to.
 remote: ?[*:0]const u8 = null,
+/// Label of a saved machine the window shows first.
+machine: ?[*:0]const u8 = null,
 /// Start a runtime that sets the previous session aside instead of
 /// restoring it. Refused when a runtime is already running.
 fresh: bool = false,
@@ -112,6 +114,30 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
             command_start += 1;
             continue;
         }
+        if (std.mem.eql(u8, arg, "--machine")) {
+            if (options.machine != null) {
+                return error.DuplicateMachineOption;
+            }
+            if (command_start + 1 >= args.len) {
+                return error.MissingMachineLabel;
+            }
+
+            options.machine = args[command_start + 1];
+            command_start += 2;
+            continue;
+        }
+        if (std.mem.startsWith(u8, arg, "--machine=")) {
+            if (options.machine != null) {
+                return error.DuplicateMachineOption;
+            }
+            if (arg["--machine=".len..].len == 0) {
+                return error.MissingMachineLabel;
+            }
+
+            options.machine = args[command_start] + "--machine=".len;
+            command_start += 1;
+            continue;
+        }
         if (std.mem.eql(u8, arg, "--config")) {
             if (options.config != null or options.no_config) {
                 return error.DuplicateConfigOption;
@@ -196,6 +222,9 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
     }
     if (options.fresh and options.remote != null) {
         return error.FreshWithRemote;
+    }
+    if (options.machine != null and options.remote != null) {
+        return error.MachineWithRemote;
     }
 
     return options;

@@ -269,6 +269,22 @@ test "CLI parses config profiles and rejects profile without config" {
     try std.testing.expectEqualStrings("remote", std.mem.span(parsed_check.config_check.profile.?));
 }
 
+test "gui --machine names a saved machine and excludes --remote" {
+    const machine = [_][*:0]const u8{ "telar", "gui", "--machine", "box", "htop" };
+    const parsed = try Cli.parse(&machine, .empty);
+    try std.testing.expectEqualStrings("box", std.mem.span(parsed.gui.run.machine.?));
+    try std.testing.expect(parsed.gui.run.command_set);
+
+    const inline_form = [_][*:0]const u8{ "telar", "gui", "--machine=box" };
+    try std.testing.expectEqualStrings("box", std.mem.span((try Cli.parse(&inline_form, .empty)).gui.run.machine.?));
+
+    const both = [_][*:0]const u8{ "telar", "gui", "--machine", "box", "--remote", "dev@box" };
+    try std.testing.expectError(error.MachineWithRemote, Cli.parse(&both, .empty));
+
+    const missing = [_][*:0]const u8{ "telar", "gui", "--machine" };
+    try std.testing.expectError(error.MissingMachineLabel, Cli.parse(&missing, .empty));
+}
+
 test "CLI parses --fresh for the client and the server and rejects it elsewhere" {
     const client = [_][*:0]const u8{ "telar", "--fresh", "--no-config" };
     const parsed_client = try Cli.parse(&client, .empty);
