@@ -782,6 +782,17 @@ test "client bars default the sidebar footer to metrics and accept a bounded slo
     try std.testing.expectEqualDeep([3]data.bar_values.Source{ .empty, .empty, .empty }, hidden.snapshot.bars.sidebar_footer);
 }
 
+test "client bars accept the machines component" {
+    var diagnostic: data.Diagnostic = .{};
+    const source = "local t = require('telar') return { api_version = 2, client = { bars = { bottom = { left = t.bar.machines(), right = t.bar.tabs() } } } }";
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
+    defer generation.deinit();
+
+    try std.testing.expect(generation.snapshot.bars.bottom[0] == .machines);
+    const presented = generation.snapshot.bars.presentation().bottom;
+    try std.testing.expect(presented[0].content.eql(&data.bar_values.machines_content));
+}
+
 test "client bars reject invalid positions timing and tab ownership" {
     const cases = [_]struct { source: []const u8, message: []const u8 }{
         .{

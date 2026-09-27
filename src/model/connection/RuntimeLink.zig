@@ -6,7 +6,8 @@
 const std = @import("std");
 const RuntimeLink = @This();
 
-pub const Phase = enum { connecting, connected, lost };
+/// `stopped`: the window does not keep this machine connected.
+pub const Phase = enum { connecting, connected, lost, stopped };
 
 /// The longest failure text kept, in bytes.
 pub const max_failure_bytes = 256;

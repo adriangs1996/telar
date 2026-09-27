@@ -3,6 +3,7 @@
 //! groups and a hover target for every component with an action, a url or a
 //! tooltip. Components that did not fit are counted in a `+N` chip.
 const data = @import("model");
+const client = @import("telar-client");
 const gfx = @import("gfx");
 const std = @import("std");
 const Rect = gfx.Rect;
@@ -35,7 +36,8 @@ pub fn draw(self: BarRow, canvas: *Canvas) !void {
     }
 
     var cpu_buffer: [data.CpuHistory.capacity]u8 = undefined;
-    const facts = barFacts(self.context, &cpu_buffer);
+    var machine_buffer: [client.Machines.capacity]data.MachineFact = undefined;
+    const facts = barFacts(self.context, &cpu_buffer, &machine_buffer);
     var input: data.FitInput = .{ .available = self.area.width };
     try measure(canvas, .{ .layout = &self.context.projection.bar_state.layout, .facts = &facts, .input = &input });
     const fitted = data.bar_fitting.fit(&input);
@@ -96,14 +98,41 @@ fn recordOverflow(self: BarRow, input: *const data.FitInput, fitted: *const data
 }
 
 /// The host facts built-in components read, from the projection.
-/// Example: `const facts = BarRow.barFacts(context, &buffer);`
-pub fn barFacts(context: *const Context, cpu_buffer: *[data.CpuHistory.capacity]u8) data.BarFacts {
+/// Example: `const facts = BarRow.barFacts(context, &buffer, &machines);`
+pub fn barFacts(context: *const Context, cpu_buffer: *[data.CpuHistory.capacity]u8, machine_buffer: *[client.Machines.capacity]data.MachineFact) data.BarFacts {
     const projection = context.projection;
     return .{
         .metrics = projection.system_metrics,
         .cpu = projection.model.cpu_history.ordered(cpu_buffer),
         .now = projection.bar_state.now,
+        .machines = machineFacts(projection.machines, machine_buffer),
     };
+}
+
+fn machineFacts(table: ?*const client.Machines, buffer: *[client.Machines.capacity]data.MachineFact) []const data.MachineFact {
+    const machines = table orelse return &.{};
+    if (machines.count() <= 1) {
+        return &.{};
+    }
+
+    var len: usize = 0;
+    for (0..client.Machines.capacity) |index| {
+        const slot: u8 = @intCast(index);
+        if (!machines.shown(slot)) {
+            continue;
+        }
+
+        buffer[len] = .{
+            .label = machines.label(slot),
+            .active = slot == machines.active,
+            .phase = machines.phase[slot],
+            .attention = machines.attention[slot],
+            .cpu_percent = machines.cpu_percent[slot],
+        };
+        len += 1;
+    }
+
+    return buffer[0..len];
 }
 
 /// Measures every component of the configured slots for the fitter.

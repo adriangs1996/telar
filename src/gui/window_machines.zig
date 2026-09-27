@@ -7,6 +7,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
+const data = @import("model");
 const GuiAdapter = @import("GuiAdapter.zig");
 const host_ports = @import("host_ports.zig");
 const workers = @import("workers.zig");
@@ -85,7 +86,7 @@ pub fn open(gui: *GuiAdapter) !void {
 /// ```
 pub fn select(gui: *GuiAdapter, slot: u8) !void {
     const machines = &gui.machines;
-    if (slot == machines.active or !machines.used[slot] or !machines.live[slot]) {
+    if (slot == machines.active or !machines.shown(slot) or !machines.live[slot]) {
         return;
     }
 
@@ -104,6 +105,28 @@ pub fn select(gui: *GuiAdapter, slot: u8) !void {
     gui.app.presentation.preparation_invalid = true;
     try client.machine_presentation.show(gui.app);
     gui.app.model.to_host.resume_input = true;
+}
+
+/// Resolves what the person asked for: the machine the picker chose, or
+/// the next or previous one in slot order, wrapping around.
+///
+/// ```zig
+/// try window_machines.choose(gui, .{ .offset = 1 });
+/// ```
+pub fn choose(gui: *GuiAdapter, request: data.MachineRequest) !void {
+    const machines = &gui.machines;
+    switch (request) {
+        .slot => |slot| try select(gui, slot),
+        .offset => |offset| {
+            var slot = machines.active;
+            for (0..Machines.capacity) |_| {
+                slot = @intCast(@mod(@as(i16, slot) + offset, Machines.capacity));
+                if (machines.shown(slot) and machines.live[slot]) {
+                    return select(gui, slot);
+                }
+            }
+        },
+    }
 }
 
 /// Delivers one event to the client in `slot`, refreshes its row, finishes
@@ -251,6 +274,7 @@ fn openClient(gui: *GuiAdapter, slot: u8, arguments: []const []const u8) !void {
     app.chrome = host_ports.chrome(gui);
     app.host_input_source = host_ports.hostInput(gui);
     app.presented = false;
+    app.machines = &gui.machines;
     try client.config_adoption.followConfiguration(app, own);
     _ = try client.host_resize.applyHostUpdate(app, .{
         .size = host.host_size,

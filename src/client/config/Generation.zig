@@ -906,6 +906,10 @@ fn parseBarSource(self: *Generation, index: c_int, diagnostic: *data.Diagnostic)
         try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"bar_kind"}, .path = "bar metrics" }, diagnostic);
         return .metrics;
     }
+    if (std.mem.eql(u8, kind, "machines")) {
+        try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"bar_kind"}, .path = "bar machines" }, diagnostic);
+        return .machines;
+    }
     if (std.mem.eql(u8, kind, "static")) {
         try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "bar_kind", "value" }, .path = "bar static block" }, diagnostic);
         _ = lua_api.c.lua_getfield(state, absolute, "value");

@@ -23,6 +23,10 @@ function telar.bar.metrics()
 	return { bar_kind = "metrics" }
 end
 
+function telar.bar.machines()
+	return { bar_kind = "machines" }
+end
+
 function telar.bar.static(value)
 	return { bar_kind = "static", value = value }
 end

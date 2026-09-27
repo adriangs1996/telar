@@ -2,6 +2,7 @@ pub const CommandPalettePrefix = enum(u8) {
     actions = '>',
     goto = '@',
     suggest = '?',
+    machines = ':',
 
     /// The byte the prefix occupies in the prompt field.
     /// Example: `field.init(&.{prefix.byte()})`.
@@ -15,6 +16,7 @@ pub const CommandPalettePrefix = enum(u8) {
             '>' => .actions,
             '@' => .goto,
             '?' => .suggest,
+            ':' => .machines,
             else => null,
         };
     }

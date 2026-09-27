@@ -184,6 +184,8 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
         .history_palette => _ = try history_palette.beginHistoryPalette(&client.model),
         .path_picker => _ = try path_picker.enter(&client.model),
         .suggest_command => _ = try suggest_command.beginSuggestion(&client.model),
+        .select_machine_offset => |offset| try client.model.to_host.push(.{ .machine = .{ .offset = offset } }),
+        .machine_picker => _ = name_prompt.openNamePrompt(&client.model, .{ .palette = .machines }),
         .notification => |*notification| _ = try notifications.requestNotificationDelivery(&client.model, notification),
         .lua_callback, .lua_expr, .plugin => unreachable,
     }

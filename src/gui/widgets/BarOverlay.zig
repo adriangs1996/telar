@@ -44,7 +44,8 @@ pub fn draw(self: BarOverlay, canvas: *Canvas) !void {
     }
 
     var cpu_buffer: [data.CpuHistory.capacity]u8 = undefined;
-    const facts = BarRow.barFacts(self.context, &cpu_buffer);
+    var machine_buffer: [client.Machines.capacity]data.MachineFact = undefined;
+    const facts = BarRow.barFacts(self.context, &cpu_buffer, &machine_buffer);
     const panel = &self.context.projection.bar_state.panel;
     switch (panel.target) {
         .none => try self.drawTooltip(canvas, &facts),

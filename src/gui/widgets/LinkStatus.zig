@@ -90,6 +90,7 @@ fn headlineText(link: *const data.RuntimeLink, buffer: []u8) []const u8 {
         else
             std.fmt.bufPrint(buffer, "Reconnecting to {s} (attempt {d})…", .{ target, link.attempt + 1 }) catch "Reconnecting…",
         .lost => std.fmt.bufPrint(buffer, "{s} is unreachable; trying again shortly", .{target}) catch "The runtime is unreachable",
+        .stopped => std.fmt.bufPrint(buffer, "{s} is disabled", .{target}) catch "The machine is disabled",
     };
 }
 

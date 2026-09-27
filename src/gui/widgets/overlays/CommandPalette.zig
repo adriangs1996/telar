@@ -25,7 +25,7 @@ pub const radius_px = 10;
 /// Footer tokens; each stays under the shaping cache's entry size so a warm
 /// frame shapes nothing. The active prefix token is painted in the accent.
 /// Icons and key words use glyphs the embedded faces cover.
-pub const legend = [_][]const u8{ ">", "actions", "@", "agents & panes", "?", "suggest", "↑↓", "select", "enter", "run", "esc", "close" };
+pub const legend = [_][]const u8{ ">", "actions", "@", "agents & panes", "?", "suggest", ":", "machines", "↑↓", "select", "enter", "run", "esc", "close" };
 
 projection: *const client.Projection,
 hits: *PaletteHits,
@@ -67,6 +67,7 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
     const scale = if (self.scale > 0) self.scale else 1;
     var goto_results: data.Results = .{};
     var action_results: data.CommandResults = .{};
+    var machine_results: client.MachineResults = .{};
     const total: u16 = switch (prompt.paletteMode()) {
         .goto => blk: {
             data.goto_picker.collect(self.sources(), prompt.paletteQuery(), &goto_results);
@@ -77,6 +78,11 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
             break :blk action_results.len;
         },
         .suggest => 1,
+        .machines => blk: {
+            const machines = self.projection.machines orelse break :blk 0;
+            client.machine_picker.collect(machines, prompt.paletteQuery(), &machine_results);
+            break :blk machine_results.len;
+        },
     };
     const visible: u16 = @max(@min(total, max_rows), 1);
     const frame = self.area(canvas, visible);
@@ -119,6 +125,7 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
         var child = switch (prompt.paletteMode()) {
             .goto => self.pickerRow(goto_results.slice()[index].item, &label_storage),
             .actions => self.actionRow(action_results.slice()[index].index, &key_storage),
+            .machines => self.machineRow(machine_results.slice()[index], &label_storage),
             .suggest => unreachable,
         };
         child.area = row;
@@ -188,4 +195,25 @@ fn actionRow(self: CommandPalette, index: u8, storage: *[key_label.max_bytes]u8)
         break :blk key_label.chord(storage, router.prefix, key, key_label.host_style);
     } else "";
     return .{ .icon = "»", .primary = entry.label, .hint = hint };
+}
+
+// Label, then destination and state; the one on screen says so, and one
+// that asks for the person carries a dot.
+fn machineRow(self: CommandPalette, slot: u8, storage: *[data.goto_picker.max_label_bytes]u8) PaletteRow {
+    const machines = self.projection.machines.?;
+    const state: []const u8 = if (slot == machines.active)
+        "shown"
+    else switch (machines.phase[slot]) {
+        .connected => if (machines.cpu_percent[slot]) |cpu| std.fmt.bufPrint(storage, "{d}% cpu", .{cpu}) catch "connected" else "connected",
+        .connecting => "connecting",
+        .lost => "unreachable",
+        .stopped => "disabled",
+    };
+    const destination = machines.destination(slot);
+    return .{
+        .icon = if (machines.attention[slot]) "●" else "○",
+        .primary = machines.label(slot),
+        .secondary = if (destination.len == 0) "this machine" else destination,
+        .hint = state,
+    };
 }

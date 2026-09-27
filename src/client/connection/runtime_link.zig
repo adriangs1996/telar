@@ -35,7 +35,15 @@ pub fn start(client: *Client) !void {
     const link = &client.model.runtime_link;
     link.name(targetName(target));
     link.phase = .connecting;
+    link.clearFailure();
     client.model.link_revision +%= 1;
+
+    // A job already running reached the old target; its result is closed
+    // when it lands, and the new attempt starts then.
+    if (client.connect_pending) {
+        client.connect_outdated = true;
+        return;
+    }
 
     try queueConnect(client, target);
 }
@@ -60,6 +68,28 @@ pub fn runConnect(io: std.Io, gpa: std.mem.Allocator, job: RuntimeConnectJob) an
 /// try runtime_link.finishConnect(client, result);
 /// ```
 pub fn finishConnect(client: *Client, result: anyerror!void) !void {
+    client.connect_pending = false;
+
+    // A machine the window stopped, or whose target changed meanwhile,
+    // keeps no connection that arrives late.
+    const outdated = client.connect_outdated;
+    client.connect_outdated = false;
+    if (client.model.runtime_link.phase == .stopped or outdated) {
+        if (result) |_| {
+            var connection = client.connect_result;
+            connection.channel.deinit(client.io);
+            if (connection.forward) |*forward| {
+                forward.stop(client.io);
+            }
+        } else |_| {}
+
+        if (outdated and client.model.runtime_link.phase == .connecting) {
+            try queueConnect(client, client.options.machine.?);
+        }
+
+        return;
+    }
+
     result catch |err| {
         const report = client.connect_report.text();
         client.model.runtime_link.fail(if (report.len != 0) report else @errorName(err));
@@ -116,6 +146,31 @@ pub fn lose(client: *Client, err: anyerror) !void {
     try scheduleRetry(client);
 }
 
+/// Stops keeping the machine connected: the socket shuts down and closes
+/// once idle, the forward stops, and no retry follows. `start` connects it
+/// again. The runtime and its panes are untouched.
+///
+/// ```zig
+/// runtime_link.stop(client);
+/// ```
+pub fn stop(client: *Client) void {
+    const link = &client.model.runtime_link;
+    link.phase = .stopped;
+    link.clearFailure();
+    client.model.link_revision +%= 1;
+    client.model.to_runtime.discardQueued();
+    if (client.channel_owned) {
+        client.channel.shutdown(client.io);
+    }
+
+    if (client.forward) |*forward| {
+        forward.stop(client.io);
+        client.forward = null;
+    }
+
+    closeWhenIdle(client);
+}
+
 /// Closes a lost socket once no read or write uses it. Closing earlier could
 /// let the descriptor number be reused under a job still waiting on it.
 ///
@@ -164,6 +219,8 @@ pub fn retry(client: *Client, result: anyerror!void) !void {
 
 fn queueConnect(client: *Client, target: MachineTarget) !void {
     client.connect_report.len = 0;
+    client.connect_pending = true;
+    errdefer client.connect_pending = false;
     try client.to_background.push(.{ .runtime_connect = .{
         .target = target,
         .environ = client.options.environ,

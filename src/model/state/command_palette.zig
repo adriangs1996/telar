@@ -1,7 +1,7 @@
 //! The command palette: one prompt field whose first byte selects what the
 //! rest of the text searches. `>` filters the built-in action catalogue,
-//! `@` reuses the goto picker over workspaces, tabs and agents, and `?` asks
-//! the command-suggestion engine. Text without a recognised prefix behaves
+//! `@` reuses the goto picker over workspaces, tabs and agents, `?` asks
+//! the command-suggestion engine, and `:` lists the window's machines. Text without a recognised prefix behaves
 //! like `@`, so deleting the prefix never leaves the palette without a mode.
 
 const core = @import("telar-core");
@@ -41,6 +41,9 @@ pub const entries = [_]CommandEntry{
         .action = .path_picker,
         .label = "Insert a path",
     },
+    .{ .action = .machine_picker, .label = "Switch machine" },
+    .{ .action = .{ .select_machine_offset = 1 }, .label = "Next machine" },
+    .{ .action = .{ .select_machine_offset = -1 }, .label = "Previous machine" },
 };
 
 /// The mode the field text selects. Example: `switch (prefixOf(text)) { ... }`.

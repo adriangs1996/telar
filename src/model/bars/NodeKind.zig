@@ -9,6 +9,8 @@ pub const NodeKind = enum(u8) {
     badge,
     clock,
     metric,
+    /// The window's machines: `telar.bar.machines()`.
+    machines,
     group,
     heading,
     text,
@@ -23,7 +25,7 @@ pub const NodeKind = enum(u8) {
     /// Example: `if (!kind.isInline()) return error.BlockComponentInBar;`
     pub fn isInline(self: NodeKind) bool {
         return switch (self) {
-            .label, .icon, .mark, .meter, .sparkline, .badge, .clock, .metric, .group => true,
+            .label, .icon, .mark, .meter, .sparkline, .badge, .clock, .metric, .machines, .group => true,
             else => false,
         };
     }

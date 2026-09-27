@@ -68,10 +68,12 @@ pub fn update(self: *Machines, slot: u8, row: MachineRow) void {
     self.revision +%= 1;
 }
 
-/// Frees a row. Its client must already be gone.
+/// Frees a row. A slot whose client is still live stays reserved until
+/// the window closes, since jobs may still point into that client.
 pub fn remove(self: *Machines, slot: u8) void {
-    std.debug.assert(self.used[slot] and !self.live[slot] and slot != local_slot);
+    std.debug.assert(self.used[slot] and slot != local_slot);
     self.used[slot] = false;
+    self.enabled[slot] = false;
     self.id[slot] = .invalid;
     self.revision +%= 1;
 }
@@ -114,14 +116,19 @@ pub fn findLabel(self: *const Machines, text: []const u8) ?u8 {
     return null;
 }
 
-/// Rows in use, in slot order.
+/// Rows the window shows: in use and enabled.
 pub fn count(self: *const Machines) usize {
     var total: usize = 0;
-    for (self.used) |used| {
-        total += @intFromBool(used);
+    for (self.used, self.enabled) |used, enabled| {
+        total += @intFromBool(used and enabled);
     }
 
     return total;
+}
+
+/// Whether a row is one the window shows.
+pub fn shown(self: *const Machines, slot: u8) bool {
+    return self.used[slot] and self.enabled[slot];
 }
 
 /// Refreshes a row's summary from its client's model. Returns whether a
@@ -167,8 +174,8 @@ fn needsAttention(model: *const data.ClientModel) bool {
 }
 
 fn freeSlot(self: *const Machines) ?u8 {
-    for (self.used, 0..) |used, slot| {
-        if (!used and slot != local_slot) {
+    for (self.used, self.live, 0..) |used, live, slot| {
+        if (!used and !live and slot != local_slot) {
             return @intCast(slot);
         }
     }

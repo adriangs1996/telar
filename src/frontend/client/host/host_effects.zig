@@ -60,6 +60,8 @@ fn deliverRequests(terminal: *TerminalAdapter) !void {
                 try console.writeHostNotification(terminal.writer, payload.titleSlice(), payload.messageSlice());
                 try terminal.writer.flush();
             },
+            // The terminal client holds one machine.
+            .machine => {},
             .capture => |request| startCapture(terminal, request) catch |err| {
                 try client_module.clipboard_capture.completeClipboardCapture(client, .{
                     .execution_id = @enumFromInt(request.sequence),

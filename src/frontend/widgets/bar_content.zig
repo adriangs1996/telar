@@ -182,7 +182,8 @@ pub fn leafWidth(view: data.NodeView, level: data.FitLevel) u16 {
         .clock => cellgrid.text.measure(data.bar_clock.format(&buffer, view.text, view.facts.now)),
         .metric => metricWidth(view),
         .kv => cellgrid.text.measure(view.text) + 1 + cellgrid.text.measure(view.detail),
-        .group, .meter_row, .callout, .actions, .button, .divider => 0,
+        // The terminal client holds one machine.
+        .machines, .group, .meter_row, .callout, .actions, .button, .divider => 0,
     };
 }
 
@@ -316,7 +317,7 @@ pub fn drawLeaf(context: *Context, view: data.NodeView, at: LeafCursor) u16 {
             writer.space();
             writer.text(view.detail, tone(context, node.tone, .ink));
         },
-        .group, .meter_row, .callout, .actions, .button, .divider => {},
+        .machines, .group, .meter_row, .callout, .actions, .button, .divider => {},
     }
 
     return writer.x - at.x;

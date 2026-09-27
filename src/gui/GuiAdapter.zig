@@ -219,6 +219,7 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.review.widget.host_port = &gui.host;
     gui.review.widget.widgets = &gui.widgets;
 
+    gui.app.machines = &gui.machines;
     gui.app.graphics = host_ports.graphicsRetention(gui);
     gui.app.chrome = host_ports.chrome(gui);
     gui.app.host_input_source = host_ports.hostInput(gui);
@@ -1517,6 +1518,7 @@ fn deliverRequests(self: *GuiAdapter) !void {
                 .execution_id = @enumFromInt(request.sequence),
                 .result = error.NativeServiceUnavailable,
             }),
+            .machine => |request| try window_machines.choose(self, request),
         }
     }
 }
@@ -1908,6 +1910,7 @@ pub fn projection(self: *GuiAdapter) client.Projection {
     );
     // Bars belong to the window, whichever machine it shows.
     projected.bar_state = &window_machines.window(self).model.bars;
+    projected.machines = &self.machines;
     return projected;
 }
 

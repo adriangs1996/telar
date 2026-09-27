@@ -70,6 +70,8 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
         .toggle_workspace_list => {
             _ = data.workspace_list.toggle(&client.model);
         },
+        .machine_picker => _ = name_prompt.openNamePrompt(&client.model, .{ .palette = .machines }),
+        .select_machine => |slot| try client.model.to_host.push(.{ .machine = .{ .slot = slot } }),
         .focus_agent => |key| _ = try agent_navigation.navigateAgent(client, key),
         .select_tab => |tab_id| {
             _ = try tab_selection.selectTab(

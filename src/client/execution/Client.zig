@@ -18,6 +18,7 @@ const ConnectReport = @import("../connection/ConnectReport.zig");
 const Forward = @import("../machines/Forward.zig");
 const RuntimeConnection = @import("../machines/RuntimeConnection.zig");
 const runtime_link = @import("../connection/runtime_link.zig");
+const Machines = @import("../machines/Machines.zig");
 const TelemetryState = @import("../resources/TelemetryState.zig");
 const Generation = @import("../config/Generation.zig");
 const Snapshot = @import("../config/Snapshot.zig");
@@ -101,6 +102,11 @@ forward: ?Forward = null,
 /// Written by the connection worker before its completion.
 connect_result: RuntimeConnection = undefined,
 connect_report: ConnectReport = .{},
+/// A connection job is running; its result lands in `connect_result`.
+connect_pending: bool = false,
+/// The target changed while a job ran; its result is closed and a new
+/// attempt starts.
+connect_outdated: bool = false,
 /// The wait before connecting again to a lost runtime.
 runtime_retry: pacing.DeadlineScheduler = .{},
 connected_at_ns: u64 = 0,
@@ -120,6 +126,9 @@ deferred_layout: ?data.SavedLayout = null,
 left_workspace: ?core.WorkspaceId = null,
 /// Leaving waits for requests in flight to finish.
 leave_pending: bool = false,
+/// The machines of the window this client belongs to, for the palette's
+/// machine mode; null in a host that holds one machine.
+machines: ?*const Machines = null,
 
 /// Builds the shared state in its final address. The model is megabytes, so
 /// nothing here passes it by value. Ports remain unbound.

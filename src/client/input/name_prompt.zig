@@ -8,6 +8,9 @@ const agent_navigation = @import("../agents/agent_navigation.zig");
 const prompt_paths = @import("../completion/prompt_paths.zig");
 const actions = @import("actions.zig");
 const history_palette = @import("history_palette.zig");
+const machine_picker = @import("../machines/machine_picker.zig");
+const MachineResults = @import("../machines/MachineResults.zig");
+const Machines = @import("../machines/Machines.zig");
 const path_picker = @import("path_picker.zig");
 const suggest_command = @import("suggest_command.zig");
 const tab_rename = @import("../workspace/tab_rename.zig");
@@ -42,7 +45,7 @@ pub fn beginCommandPalette(model: *data.ClientModel, prefix: data.CommandPalette
 /// Example: `try name_prompt.choosePromptRow(app, index);`
 pub fn choosePromptRow(client: *Client, index: u16) !void {
     client.model.name_prompt.select(index);
-    constrainPickerSelection(&client.model);
+    constrainPickerSelection(&client.model, client.machines);
     _ = try inputPrompt(
         client,
         .{
@@ -109,7 +112,7 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
     } else if (directory_before != null and !std.meta.eql(directory_before, promptDirectoryVersion(&client.model.name_prompt))) {
         try prompt_paths.refreshPathCompletion(client);
     }
-    constrainPickerSelection(&client.model);
+    constrainPickerSelection(&client.model, client.machines);
     try history_palette.refreshHistoryInspection(client);
     suggest_command.discardEditedSuggestion(&client.model, before);
     if (outcome == .finished) {
@@ -233,6 +236,9 @@ pub fn promptListSnapshot(prompt_state: *const data.NamePromptState) data.Prompt
             .actions => .{
                 .kind = .actions,
             },
+            .machines => .{
+                .kind = .machines,
+            },
         },
         else => return .{},
     };
@@ -292,6 +298,17 @@ fn finishPromptList(client: *Client, before: data.PromptListSnapshot) !void {
             const index = @min(before.selection, @as(u16, results.len) - 1);
             _ = try actions.executeAction(client, data.command_palette.entries[results.slice()[index].index].action, .effect);
         },
+        .machines => {
+            const machines = client.machines orelse return;
+            var results: MachineResults = .{};
+            machine_picker.collect(machines, before.textSlice(), &results);
+            if (results.len == 0) {
+                return;
+            }
+
+            const index = @min(before.selection, @as(u16, results.len) - 1);
+            try client.model.to_host.push(.{ .machine = .{ .slot = results.slice()[index] } });
+        },
     }
 }
 
@@ -340,7 +357,7 @@ fn refreshPromptPaths(model: *data.ClientModel, before: data.PromptListSnapshot,
 
 /// Keeps the picker selection inside the deterministic result set the
 /// renderer and the submit path both derive from the current query.
-fn constrainPickerSelection(model: *data.ClientModel) void {
+fn constrainPickerSelection(model: *data.ClientModel, machines_for_selection: ?*const Machines) void {
     const prompt = model.name_prompt.currentConst() orelse return;
     if (prompt.selection() == 0) {
         return;
@@ -358,6 +375,12 @@ fn constrainPickerSelection(model: *data.ClientModel) void {
             .actions => blk: {
                 var results: data.CommandResults = .{};
                 data.command_palette.collect(prompt.paletteQuery(), &results);
+                break :blk results.len;
+            },
+            .machines => blk: {
+                const machines = machines_for_selection orelse break :blk 0;
+                var results: MachineResults = .{};
+                machine_picker.collect(machines, prompt.paletteQuery(), &results);
                 break :blk results.len;
             },
         },
@@ -467,6 +490,7 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
                     data.command_palette.collect(prompt.paletteQuery(), &results);
                     break :blk results.len != 0;
                 },
+                .machines => break :blk client.machines != null,
             }
         },
         .copy_search => blk: {
