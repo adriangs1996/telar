@@ -38,7 +38,7 @@ def main():
             run(['zig', 'build', 'bench', '--', '--samples', '20', '--sample-ms', '40', '--json'],
                 source, args.output / (stem + '-bench'))
             run(['zig', 'build', 'headless', '-Doptimize=ReleaseFast'], source, args.output / (stem + '-headless'))
-            for step in ('test-isolation', 'test-compression-isolation'):
+            for step in ('test-isolation',):
                 run(['zig', 'build', step, '-Doptimize=ReleaseFast'], source, args.output / (stem + '-' + step))
     run([sys.executable, 'tools/perf_e2e.py', '--baseline', str(args.baseline),
          '--candidate', str(args.candidate), '--output', str(args.output / 'e2e'),

@@ -19,6 +19,7 @@ pub fn add(b: *std.Build, module: *std.Build.Module, disable_coverage: bool) voi
             "src/gui/macos/TelarPointerCursor.m",
             "src/gui/macos/font.m",
             "src/gui/macos/glyph_rasterizer.m",
+            "src/gui/macos/clipboard_capture.m",
         },
         .flags = c_flags.forCoverage(b, &.{ "-fobjc-arc", "-std=c23" }, disable_coverage),
     });

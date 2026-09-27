@@ -57,6 +57,7 @@ const animate = @import("animate");
 const FrameClock = animate.FrameClock;
 const native_callbacks = @import("native/window_callbacks.zig");
 const window_machines = @import("window_machines.zig");
+const clipboard_image = @import("clipboard_image.zig");
 const TestSession = @import("tests/Session.zig");
 const input_test_support = @import("tests/input_support.zig");
 const GuiAdapter = @This();
@@ -184,6 +185,7 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.window_title = .{};
     gui.hostname_len = 0;
     try client.Client.init(gui.app, params);
+    gui.app.model.host.clipboard_capture = clipboard_image.supported();
 
     // Native chrome uses the shared semantic projection, never TUI Kitty output.
     gui.app.options.sidebar_renderer_locked = true;
@@ -634,6 +636,7 @@ fn dispatch(self: *GuiAdapter, event: gui_event.Message) !?u8 {
         .diagram_ready => self.landDiagram(),
         .syntax_ready => self.landSyntax(),
         .change_review_ready => self.landChangeReview(),
+        .clipboard_image => |completion| try clipboard_image.finish(self, completion),
     }
 
     return if (self.stopped) @as(u8, 0) else null;
@@ -1519,9 +1522,9 @@ fn deliverRequests(self: *GuiAdapter) !void {
                 else => return err,
             },
             .terminal_notification => {},
-            .capture => |request| try client.clipboard_capture.completeClipboardCapture(self.app, .{
+            .capture => |request| clipboard_image.start(self, request) catch |err| try client.clipboard_capture.completeClipboardCapture(self.app, .{
                 .execution_id = @enumFromInt(request.sequence),
-                .result = error.NativeServiceUnavailable,
+                .result = err,
             }),
             .machine => |request| try window_machines.choose(self, request),
         }

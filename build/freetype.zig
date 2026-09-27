@@ -4,7 +4,7 @@ const c_flags = @import("c_flags.zig");
 
 /// Builds the same static FreeType and HarfBuzz sources Ghostty uses for font
 /// faces and shaping. Telar leaves system zlib disabled, so FreeType's bundled
-/// gzip decoder remains self-contained and the frontend gains no runtime
+/// gzip decoder remains self-contained and the client gains no runtime
 /// library dependency.
 pub fn add(b: *std.Build, config: FreeTypeConfig) *std.Build.Module {
     const target = config.target;

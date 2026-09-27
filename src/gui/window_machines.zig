@@ -13,6 +13,7 @@ const pacing = @import("pacing");
 const GuiAdapter = @import("GuiAdapter.zig");
 const host_ports = @import("host_ports.zig");
 const workers = @import("workers.zig");
+const clipboard_image = @import("clipboard_image.zig");
 
 const Machines = client.Machines;
 
@@ -379,6 +380,7 @@ fn openClient(gui: *GuiAdapter, slot: u8, arguments: []const []const u8) !void {
     machines.live[slot] = true;
 
     app.owns_configuration = false;
+    app.model.host.clipboard_capture = clipboard_image.supported();
     app.graphics = host_ports.graphicsRetention(gui);
     app.chrome = host_ports.chrome(gui);
     app.host_input_source = host_ports.hostInput(gui);

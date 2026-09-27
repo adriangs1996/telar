@@ -82,6 +82,7 @@ pub const CompletionOutcome = plugin_action.CompletionOutcome;
 pub const CopyProjection = @import("workspace/CopyProjection.zig");
 pub const GenericCatalog = @import("attachments/GenericCatalog.zig").Type;
 pub const GenericResourceStore = @import("graphics/GenericResourceStore.zig").Type;
+pub const retained_graphics = @import("graphics/retained.zig");
 pub const Geometry = @import("presentation/Geometry.zig");
 pub const HeadlessAdapter = @import("presentation/HeadlessAdapter.zig");
 pub const Hints = @import("input/Hints.zig");

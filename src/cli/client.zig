@@ -1,30 +1,16 @@
 //! Composition of the interactive Telar client process.
 
-const localsocket = @import("localsocket");
 const gui = @import("telar-gui");
 const client = @import("telar-client");
 const core = @import("telar-core");
-const frontend = @import("telar-frontend");
 const std = @import("std");
 const builtin = @import("builtin");
 const RunOptions = @import("arguments/RunOptions.zig");
-const Forward = client.Forward;
-const remote = client.remote;
 const RuntimeConnector = client.RuntimeConnector;
 const ClientLaunch = @import("ClientLaunch.zig");
 const TestEnvironment = @import("TestEnvironment.zig");
 
-/// Connects to the selected runtime, prepares the local client configuration
-/// and transfers its owned resources into the frontend client lifecycle.
-///
-/// ```zig
-/// const exit_code = try client.run(process_init, options);
-/// ```
-pub fn run(init: std.process.Init, options: RunOptions) !u8 {
-    return launch(init, options, frontend.ClientRun);
-}
-
-/// The same configuration as `run`, presented by the native window. The
+/// Opens the native window, which `telar` and `telar gui` both do. The
 /// window opens first and connects to its machine by itself, so nothing
 /// here waits on SSH or a runtime start.
 ///
@@ -33,8 +19,13 @@ pub fn run(init: std.process.Init, options: RunOptions) !u8 {
 /// ```
 pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
     if (builtin.os.tag != .macos and builtin.os.tag != .linux) {
-        std.debug.print("telar gui: the native client is only built on macOS and Linux\n", .{});
+        std.debug.print("telar: the window is only built on macOS and Linux\n", .{});
         return error.UnsupportedPlatform;
+    }
+
+    if (!displayAvailable(init.minimal.environ)) {
+        std.debug.print("{s}", .{no_display_message});
+        return no_display_status;
     }
 
     // The window's identity lease lives in the local runtime directory,
@@ -102,51 +93,30 @@ fn savedDestination(init: std.process.Init, label: []const u8, profiles: *core.M
     return error.UnknownMachine;
 }
 
-/// One presentation adapter's entrypoint: it adopts the resources `Options`
-/// carries and runs until the user leaves.
 fn defaultShell(environ: std.process.Environ) []const u8 {
     const shell = environ.getPosix("SHELL") orelse return "/bin/sh";
     return if (shell.len == 0) "/bin/sh" else shell;
 }
 
-pub const Adapter = *const fn (std.process.Init, ?*localsocket.SocketChannel, client.Options) anyerror!u8;
+/// Exit status when no window can open here.
+const no_display_status: u8 = 1;
 
-fn launch(init: std.process.Init, options: RunOptions, adapter: Adapter) !u8 {
-    if (options.machine != null) {
-        std.debug.print("telar: --machine chooses the machine a window shows; use telar gui --machine\n", .{});
-        return error.MachineNeedsWindow;
-    }
+const no_display_message =
+    \\telar: no display to open a window here (an SSH login, or Linux without WAYLAND_DISPLAY).
+    \\From a terminal, reach the panes and agents through the CLI:
+    \\  telar pane read|watch|send-keys, telar agent prompt, telar --machine LABEL COMMAND
+    \\
+;
 
-    var forward: ?Forward = null;
-    defer if (forward) |*owned| owned.stop(init.io);
-    if (options.remote) |destination| {
-        forward = try remote.establish(init.io, init.gpa, init.minimal.environ, .{ .destination = std.mem.span(destination) }, null);
-    }
-
-    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, if (forward) |*owned| owned.localPathZ() else null);
-    var connection = if (forward != null)
-        try remote.connectForwarded(init.io, &connector)
-    else
-        try connector.connectOrStart(.{
-            .path = options.config,
-            .disabled = options.no_config,
-            .profile = options.profile,
-            .fresh = options.fresh,
-        });
-    defer connection.deinit(init.io);
-
-    var prepared: ClientLaunch = undefined;
-    try prepared.prepare(.{
-        .process = init,
-        .options = &options,
-        .endpoint = connector.endpointPath(),
-        .remote_defaults = if (forward) |*owned| owned.discovery.launchDefaults() else null,
-    });
-    defer prepared.deinit();
-
-    const frontend_options = prepared.frontendOptions();
-    prepared.transferResources();
-    return adapter(init, &connection, frontend_options);
+// A window needs a display: Wayland on Linux (X11 is not supported), and
+// on macOS a login session rather than an SSH one, whose window server
+// AppKit would fail to reach.
+fn displayAvailable(environ: std.process.Environ) bool {
+    return switch (builtin.os.tag) {
+        .linux => if (environ.getPosix("WAYLAND_DISPLAY")) |display| display.len != 0 else false,
+        .macos => environ.getPosix("SSH_CONNECTION") == null and environ.getPosix("SSH_TTY") == null,
+        else => false,
+    };
 }
 
 pub fn supportsHostSharedMemory(environ: std.process.Environ) bool {

@@ -1,4 +1,5 @@
 const client = @import("telar-client");
+const data = @import("model");
 const mailbox = @import("mailbox");
 const PresentationResult = @import("PresentationResult.zig");
 const MachineMessage = @import("MachineMessage.zig");
@@ -18,6 +19,8 @@ pub const Message = union(enum) {
     diagram_ready,
     syntax_ready,
     change_review_ready,
+    /// A clipboard image capture finished reading the pasteboard.
+    clipboard_image: data.Completion,
 };
 
 pub const Inbox = mailbox.GenericInbox(Message);

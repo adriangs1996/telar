@@ -139,7 +139,7 @@ fn dispatch(init: std.process.Init, args: []const [*:0]const u8) anyerror!void {
         .proxy => |options| std.process.exit(try proxy_module.run(init, options)),
         .skill => try skill_module.run(init),
         .run => |options| {
-            const status = try client_module.run(init, options);
+            const status = try client_module.runNative(init, options);
             dumpEchoTrace(init);
             std.process.exit(status);
         },
