@@ -3,4 +3,6 @@
 test {
     _ = @import("fixtures.zig");
     _ = @import("pane_splits.zig");
+    _ = @import("synchronization.zig");
+    _ = @import("transport.zig");
 }
