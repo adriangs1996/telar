@@ -43,7 +43,39 @@ Implementation must follow the [invariants](../invariants.md) and the
 - **Phase 3** (worktrees on another machine): not started. It needs the
   [worktrees plan](worktrees.md) merged first.
 - **Phase 4** (coordinator across machines): not started.
-- **Retiring the TUI**: not started.
+- **Retiring the TUI**: done. `telar` opens the window and refuses without a
+  display; `src/frontend` is gone. What changed on the way:
+  - The headless client exists (`zig build headless`,
+    [flow](../flows/headless-client.md)). It sends keys as presses only, writes
+    `ready` once it admits input, and records the focused pane with each input
+    so echo tools can find their frame among flooding panes.
+  - Tools moved to it: `client_smoke.py` (was `tui_smoke.py`),
+    `test_cli_live.py`, `test_review_runtime.py`, `remote_smoke.py`,
+    `latency_bench.sh`, `echo_latency.py`, `flood.py`, `load_bench.sh`,
+    `load_latency.py`, `echo_path.py`, `perf_e2e.py`, `perf_suite.py`,
+    `terminal_runtime_bench.py`. `gui_tui_latency.py` keeps its name and loses
+    its TUI mode.
+  - Retired with no window-side replacement yet: `graphics_roundtrip.py`, the
+    `slow-host` and `graphics` perf cases, `verify_terminal_browser.py` and the
+    graphics throughput gate built on it (see
+    [performance gates](../performance-gates.md)), the TUI benchmarks
+    (pipeline, cursor flush, cell chrome, compositor, Kitty host output) and
+    `test-compression-isolation`. `frontend.keybind.route` became
+    `client.keybind.route` over semantic keys.
+  - The TUI's client integration tests moved to `src/client_tests`, which
+    drives the shared client over a real socket without a window
+    (`ClientHarness`); tests about the TUI itself (its parser, screen, host
+    probes, telemetry writer) retired.
+  - Clipboard image previews below an agent's pane (`AttachmentShelf`,
+    [clipboard image](../flows/clipboard-image.md)) existed only in the TUI and
+    are gone: the window never bound a shelf. The agent still receives the
+    paste and reads the image itself; only the preview is missing.
+  - Not found in the inventory but also a TUI consumer:
+    `verify_terminal_browser.py`.
+  - `client.sidebar.renderer` is still accepted, with no effect, because the
+    shipped example configuration set it; `--sidebar-renderer` is gone.
+  - `telar agent watch`, named in decision 19, does not exist on this branch;
+    the no-display message names the commands that do.
 
 ## Problem
 
