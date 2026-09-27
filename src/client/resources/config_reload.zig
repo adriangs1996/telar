@@ -16,8 +16,14 @@ const RejectContext = @import("RejectContext.zig");
 const Generation = @import("../config/Generation.zig");
 const Orphans = @import("Orphans.zig");
 const Registry = @import("../plugins/Registry.zig");
+const privatefile = @import("privatefile");
 const std = @import("std");
 const BackgroundJob = @import("../execution/BackgroundJob.zig").BackgroundJob;
+
+/// Seeds the trust store's watch fingerprint apart from the other watched files.
+const trust_fingerprint_seed = 0x74656c61722d7472;
+/// The largest trust store the watch loads, in bytes.
+const trust_store_limit = 64 * 1024;
 
 pub const ConfigReload = union(enum) {
     unchanged: i128,
@@ -181,33 +187,22 @@ pub fn wait(args: WaitArgs) anyerror!ConfigReload {
 }
 
 pub fn trustWatchFingerprint(io: std.Io, path: []const u8) u64 {
-    var hasher = std.hash.Wyhash.init(0x74656c61722d7472);
-    hasher.update(path);
-    const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch {
-        hasher.update("\x00missing");
-        return hasher.final();
-    };
-    hasher.update(std.mem.asBytes(&stat.kind));
-    hasher.update(std.mem.asBytes(&stat.size));
-    hasher.update(std.mem.asBytes(&stat.mtime.nanoseconds));
-    return hasher.final();
+    return privatefile.fingerprint(io, path, trust_fingerprint_seed);
 }
 
 fn loadReloadTrustStore(gpa: std.mem.Allocator, io: std.Io, path: []const u8) !*core.TrustStore {
     const store = try gpa.create(core.TrustStore);
     errdefer gpa.destroy(store);
-    const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
-        error.FileNotFound => {
-            store.* = .{};
-            return store;
-        },
-        else => return err,
+
+    const source = privatefile.read(io, gpa, path, .limited(trust_store_limit)) catch |err| switch (err) {
+        error.InsecureFile => return error.InsecureTrustStore,
+        else => |other| return other,
+    } orelse {
+        store.* = .{};
+        return store;
     };
-    if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0) {
-        return error.InsecureTrustStore;
-    }
-    const source = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(64 * 1024));
     defer gpa.free(source);
+
     store.* = try core.TrustStore.parse(gpa, source);
     return store;
 }
