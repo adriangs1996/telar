@@ -31,6 +31,7 @@ const KgpIngestContext = @import("KgpIngestContext.zig");
 const SharedFrameContext = @import("SharedFrameContext.zig");
 const IdleDeliveryContext = @import("IdleDeliveryContext.zig");
 const ClientEventContext = @import("ClientEventContext.zig");
+const InboxContext = @import("InboxContext.zig");
 const IdleDeliveryShape = @import("IdleDeliveryShape.zig");
 const Fixture = @import("Fixture.zig");
 const Config = @import("Config.zig");
@@ -145,6 +146,7 @@ const cases = [_]Case{
     .{ .name = "frontend.client.key_event", .work_per_op = 1, .work_unit = "keys" },
     .{ .name = "frontend.client.request_group_query", .work_per_op = 1, .work_unit = "queries" },
     .{ .name = "frontend.client.present_frame", .work_per_op = 1, .work_unit = "frames" },
+    .{ .name = "frontend.client.inbox_event", .work_per_op = 1, .work_unit = "events" },
 };
 
 /// A TUI and a GUI on one eight-pane tab, and one client on a crowded tab.
@@ -883,7 +885,24 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
         }
     }
 
+    const inbox_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(inbox_case.name)) {
+        var context = InboxContext.init(io);
+        defer context.deinit();
+        try result_writer.write(inbox_case, try measure(.{ .io = io, .config = config, .context = &context }, runInboxEvent));
+    }
+
     std.debug.assert(case_index == cases.len);
+}
+
+fn runInboxEvent(context: *InboxContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        checksum +%= try context.roundTrip();
+    }
+
+    return checksum;
 }
 
 fn runClientFrame(context: *ClientEventContext, iterations: usize) !u64 {

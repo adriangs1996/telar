@@ -5,6 +5,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const Job = @import("Job.zig").Job;
 const BackgroundJob = @import("BackgroundJob.zig").BackgroundJob;
+const PluginActionsJob = @import("../plugins/PluginActionsJob.zig");
 const Message = @import("Message.zig").Message;
 const command = @import("../bars/command.zig");
 const plugins = @import("../plugins/plugins.zig");
@@ -38,7 +39,7 @@ pub fn runBackground(io: std.Io, gpa: std.mem.Allocator, job: BackgroundJob) Mes
         } },
         .plugin => |plugin| .{ .plugin_result = .{
             .execution_id = plugin.execution_id,
-            .result = plugins.executeWorker(io, gpa, plugin.request),
+            .result = runPlugin(io, gpa, plugin),
         } },
         .path_completion => |completion| .{ .path_completion = .{
             .execution_id = completion.execution_id,
@@ -94,6 +95,10 @@ pub fn failedBackground(job: BackgroundJob, err: anyerror) Message {
         .system_notification => .{ .notified = err },
         .config_watch => .{ .config_reload = err },
     };
+}
+
+fn runPlugin(io: std.Io, gpa: std.mem.Allocator, plugin: PluginActionsJob) anyerror!void {
+    plugin.result.* = try plugins.executeWorker(io, gpa, plugin.request);
 }
 
 fn sendRuntime(io: std.Io, send: Job.RuntimeSend) anyerror!void {

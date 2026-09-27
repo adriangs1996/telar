@@ -68,6 +68,10 @@ to_workers: core.GenericRing(Job, max_queued_jobs) = .{},
 /// `failBackgroundJob`. Each slot holds a request copy of kilobytes, so the
 /// interactive queue stays a few cache lines.
 to_background: core.GenericRing(BackgroundJob, max_queued_jobs) = .{},
+/// The running plugin action's result. Its worker writes it before posting
+/// the completion that tells `plugin_actions.completePluginAction` to read
+/// it; it stays out of `Message`, which every event copies.
+plugin_result: data.WorkerResult = undefined,
 /// Host ports, bound by the adapter before the first event.
 graphics: GraphicsRetention = undefined,
 chrome: HostChrome = undefined,
