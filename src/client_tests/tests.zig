@@ -20,4 +20,6 @@ test {
     _ = @import("host_resources.zig");
     _ = @import("graphics_and_clipboard.zig");
     _ = @import("configuration.zig");
+    _ = @import("tab_lifecycle.zig");
+    _ = @import("workspace_lifecycle.zig");
 }
