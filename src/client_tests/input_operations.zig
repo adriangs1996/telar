@@ -1,0 +1,231 @@
+//! Exercises direct operations with real client state and the runtime outbox.
+const keyinput = @import("keyinput");
+const data = @import("model");
+
+const std = @import("std");
+const api = @import("telar-client");
+const core = @import("telar-core");
+const ClientHarness = @import("ClientHarness.zig");
+const fixtures = @import("fixtures.zig");
+
+fn fillOutbox(client: *api.Client) !void {
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = ClientHarness.bootstrap_pane } });
+    }
+}
+
+test "key press rolls back its physical lease when runtime delivery fails" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    try fillOutbox(client);
+    var key = try keyinput.chord.parseKey("x");
+    key.physical = .{ .value = 41 };
+
+    try std.testing.expectError(error.ClientOutboxFull, api.key_routing.routeKeyInput(
+        client,
+        .{
+            .key = key,
+        },
+    ));
+    try std.testing.expectEqual(@as(usize, 0), client.model.input_leases.count());
+    try std.testing.expect(client.model.input_leases.owner(key.physical.?) == null);
+}
+
+test "physical key repeat and release keep their pane after focus and prompt changes" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const tab = client.model.tabs.active;
+    const other: core.PaneId = @enumFromInt(11);
+    try data.pane_split.split(&client.model, tab, .{ .existing_pane = ClientHarness.bootstrap_pane, .new_pane = other, .location = ClientHarness.bootstrap_location, .axis = .horizontal, .area = client.geometry().area });
+    try std.testing.expect(client.model.tabs.layout[tab].focusPane(ClientHarness.bootstrap_pane));
+    var key = try keyinput.chord.parseKey("x");
+    key.physical = .{ .value = 41 };
+    try std.testing.expect((try api.key_routing.routeKeyInput(
+        client,
+        .{
+            .key = key,
+        },
+    )).delivered);
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const press = try harness.nextClientMessage(&buffer);
+    try std.testing.expectEqual(ClientHarness.bootstrap_pane, press.pane_input.pane_id);
+
+    try std.testing.expect(client.model.tabs.layout[tab].focusPane(other));
+    client.model.name_prompt.begin(.goto_picker);
+    key.phase = .repeat;
+    try std.testing.expect((try api.key_routing.routeKeyInput(
+        client,
+        .{
+            .key = key,
+        },
+    )).delivered);
+    try harness.settle();
+    const repeated = try harness.nextClientMessage(&buffer);
+    try std.testing.expectEqual(ClientHarness.bootstrap_pane, repeated.pane_input.pane_id);
+    try std.testing.expectEqualStrings("x", repeated.pane_input.bytes);
+    try std.testing.expectEqualStrings("", client.model.name_prompt.currentConst().?.field.text());
+
+    key.phase = .release;
+    const released = try api.key_routing.routeKeyInput(
+        client,
+        .{
+            .key = key,
+        },
+    );
+    try std.testing.expectEqual(.pane, released.owner);
+    try std.testing.expectEqual(@as(usize, 0), client.model.input_leases.count());
+    const duplicate = try api.key_routing.routeKeyInput(
+        client,
+        .{
+            .key = key,
+        },
+    );
+    try std.testing.expectEqual(.ignored, duplicate.owner);
+}
+
+test "physical lease saturation rejects input before mutation or transport" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    var identity: u32 = 1;
+    while (client.model.input_leases.acquire(.{ .value = identity }, .ignored)) {
+        identity += 1;
+    }
+    const version = client.model.version();
+    const overflows = client.telemetry.metrics.key_lease_overflows;
+    var key = try keyinput.chord.parseKey("x");
+    key.physical = .{ .value = identity + 1 };
+
+    const outcome = try api.key_routing.routeKeyInput(
+        client,
+        .{
+            .key = key,
+        },
+    );
+
+    try std.testing.expectEqual(.ignored, outcome.owner);
+    try std.testing.expect(outcome.lease_overflow);
+    try std.testing.expectEqual(overflows + 1, client.telemetry.metrics.key_lease_overflows);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
+    try std.testing.expect(!client.model.to_runtime.inFlight());
+}
+
+test "failed opening paste marker rolls back the captured session" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.model.panes.find(ClientHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
+    try fillOutbox(client);
+
+    try std.testing.expectError(error.ClientOutboxFull, api.pane_input.startPanePaste(client));
+    try std.testing.expect(!data.pane_input.pasteActive(&client.model));
+}
+
+test "failed closing paste marker releases the session without repeating it" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.model.panes.find(ClientHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
+    try std.testing.expectEqual(.applied, try api.pane_input.startPanePaste(client));
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const opening = try harness.nextClientMessage(&buffer);
+    try std.testing.expectEqualStrings("\x1b[200~", opening.pane_input.bytes);
+    try fillOutbox(client);
+
+    try std.testing.expectError(error.ClientOutboxFull, api.pane_input.finishPanePaste(client));
+    try std.testing.expect(!data.pane_input.pasteActive(&client.model));
+    try std.testing.expectEqual(.ignored, try api.pane_input.finishPanePaste(client));
+}
+
+test "retired paste target cannot redirect its remaining content" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    try std.testing.expectEqual(.applied, try api.pane_input.startPanePaste(client));
+    client.model.panes.find(ClientHarness.bootstrap_pane).?.attached = false;
+
+    try std.testing.expectEqual(.unavailable, try api.pane_input.appendPanePaste(client, "private text"));
+    _ = try api.pane_input.finishPanePaste(client);
+    try std.testing.expect(!data.pane_input.pasteActive(&client.model));
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
+    try std.testing.expect(!client.model.to_runtime.inFlight());
+}
+
+test "obsolete clipboard completion frees its image without consuming a newer capture" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const target = try fixtures.installTestingAttachmentTarget(client, 1);
+    const old = (try client.model.clipboard.reserve(target)).?;
+    _ = client.model.clipboard.finish(old.id);
+    const current = (try client.model.clipboard.reserve(target)).?;
+    const image = try fixtures.testingClipboardCapture(client, old, "private image");
+    const notifications = client.model.version().notifications;
+
+    try api.clipboard_capture.completeClipboardCapture(
+        client,
+        .{
+            .execution_id = old.id,
+            .result = image,
+        },
+    );
+
+    try std.testing.expectEqual(current.id, client.model.clipboard.capture.?.id);
+    try std.testing.expect(client.model.clipboard.orphan == null);
+    // No shelf is bound: adopting the image would have raised an
+    // adoption-failure notification.
+    try std.testing.expectEqual(notifications, client.model.version().notifications);
+}
+
+test "blocked name submission keeps the exact prompt open until cancellation" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    try std.testing.expect(api.name_prompt.openNamePrompt(&client.model, .rename_active_tab));
+    _ = try api.name_prompt.inputPrompt(
+        client,
+        .{
+            .command = .{
+                .insert = "renamed",
+            },
+        },
+    );
+    try fillOutbox(client);
+
+    try std.testing.expectError(error.ClientOutboxFull, api.name_prompt.inputPrompt(
+        client,
+        .{
+            .command = .submit,
+        },
+    ));
+    try std.testing.expect(client.model.name_prompt.active());
+    try std.testing.expectEqualStrings("shellrenamed", client.model.name_prompt.currentConst().?.field.text());
+    try std.testing.expectEqual(.cancelled, try api.name_prompt.inputPrompt(
+        client,
+        .{
+            .command = .cancel,
+        },
+    ));
+    try std.testing.expect(!client.model.name_prompt.active());
+}
