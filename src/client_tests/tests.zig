@@ -3,4 +3,6 @@
 test {
     _ = @import("fixtures.zig");
     _ = @import("pane_splits.zig");
+    _ = @import("tab_lifecycle.zig");
+    _ = @import("workspace_lifecycle.zig");
 }
