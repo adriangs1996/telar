@@ -507,7 +507,9 @@ test "an inactive pane exit retires only inactive state" {
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
-    try std.testing.expect(observePresentation(&harness));
+    // The terminal client drew once more to delete the host's copy of the
+    // image; a client that keeps its images itself has nothing to redraw.
+    try std.testing.expect(!observePresentation(&harness));
 }
 
 // Observes the model as a window does after an event, as `ClientHarness.present`

@@ -317,6 +317,7 @@ test "mouse focus precedes forwarding its triggering press" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    focusOnPress(client);
     const first = ClientHarness.bootstrap_pane;
     const second: core.PaneId = @enumFromInt(20);
     const area = client.geometry().area;
@@ -1376,4 +1377,29 @@ fn expectKeyInput(harness: *ClientHarness, pane_id: core.PaneId) !void {
     try std.testing.expect(message == .pane_input);
     try std.testing.expectEqual(pane_id, message.pane_input.pane_id);
     try std.testing.expectEqualStrings("x", message.pane_input.bytes);
+}
+
+// A window's chrome answers a press inside a pane with that pane's focus,
+// as the native window's does; the harness chrome answers nothing.
+fn focusOnPress(client: *client_module.Client) void {
+    client.chrome.context = client;
+    client.chrome.pointer_fn = focusPaneAt;
+}
+
+fn focusPaneAt(context: *anyopaque, event: keyinput.Mouse) client_module.ViewInteractionCommand {
+    const client: *client_module.Client = @ptrCast(@alignCast(context));
+    if (event.kind != .press) {
+        return .{};
+    }
+
+    const model = &client.model;
+    const tab = model.tabs.activeSlot() orelse return .{};
+    const layout = data.tab_layout.snapshot(model, tab, client.geometry().area);
+    for (layout.views()) |view| {
+        if (view.content.contains(event.x, event.y)) {
+            return .{ .intent = .{ .focus_pane = view.pane_id } };
+        }
+    }
+
+    return .{};
 }
