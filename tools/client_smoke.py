@@ -1,7 +1,10 @@
-import os,json,time,subprocess,tempfile,pty,threading,select,fcntl,termios,struct,signal,shutil
+"""CLI and plugin smoke against a real runtime with the headless client attached."""
+import os,json,time,subprocess,tempfile,shutil
 from pathlib import Path
+from headless_client import HeadlessClient, build
 validation=Path(__file__).resolve().parent
 binary=validation.parent/'zig-out/bin/telar'
+build()
 with tempfile.TemporaryDirectory(prefix='telar-client-smoke-',dir='/tmp') as temp:
  root=Path(temp);endpoint=root/'runtime.sock';cfg=root/'config.lua'
  shutil.copytree(binary.parents[2]/'examples/plugins/sample',root/'plugin')
@@ -9,7 +12,7 @@ with tempfile.TemporaryDirectory(prefix='telar-client-smoke-',dir='/tmp') as tem
  env=dict(os.environ,XDG_DATA_HOME=str(root/'data'),XDG_CONFIG_HOME=str(root/'config'),SHELL='/bin/sh',TERM='xterm-256color',TELAR_SOCKET=str(endpoint))
  server_output=(root/'server.log').open('w+')
  server=subprocess.Popen([str(binary),'server','--no-config','--socket',str(endpoint)],stdout=server_output,stderr=server_output,env=env,cwd=root)
- client_pid=None;master=None;stop=threading.Event();captured=bytearray()
+ client=None
  def run(*args, quiet=False):
   result=subprocess.run([str(binary),*map(str,args),'--socket',str(endpoint),'--json'],cwd=root,env=env,capture_output=True,text=True,timeout=12)
   if quiet and result.returncode!=0:
@@ -17,31 +20,19 @@ with tempfile.TemporaryDirectory(prefix='telar-client-smoke-',dir='/tmp') as tem
   assert result.returncode==0,(args,result.returncode,result.stderr,result.stdout)
   if not quiet:print('PASS '+' '.join(map(str,args)),flush=True)
   return json.loads(result.stdout)
- def drain():
-  while not stop.is_set():
-   try:
-    if select.select([master],[],[],.1)[0]:
-     data=os.read(master,65536)
-     if not data:break
-     if len(captured)<200000:captured.extend(data)
-   except OSError:break
  try:
   deadline=time.monotonic()+8
   while not endpoint.exists() and server.poll() is None and time.monotonic()<deadline:time.sleep(.05)
   assert endpoint.exists(),'server startup'
   time.sleep(.2)
   run('runtime','status')
-  client_pid,master=pty.fork()
-  if client_pid==0:
-   os.chdir(root);os.execve(str(binary),[str(binary),'--config',str(cfg),'--sidebar-renderer','cells','--','/bin/sh'],env)
-  fcntl.ioctl(master,termios.TIOCSWINSZ,struct.pack('HHHH',40,140,0,0))
-  thread=threading.Thread(target=drain,daemon=True);thread.start()
+  client=HeadlessClient(['--config',cfg,'--','/bin/sh'],env=env,cwd=root,size=(140,40),log=root/'client.log')
   time.sleep(.5)
   deadline=time.monotonic()+12
   while True:
    clients=run('client','list',quiet=True)
    if clients:break
-   if time.monotonic()>deadline:raise AssertionError('UI did not register: '+repr(bytes(captured[-4000:])))
+   if time.monotonic()>deadline:raise AssertionError('client did not register: '+(root/'client.log').read_text()[-4000:])
    time.sleep(.1)
   cid=clients[0]['id']
   def ui(*args):return run(*args,'--client',cid)
@@ -75,17 +66,11 @@ with tempfile.TemporaryDirectory(prefix='telar-client-smoke-',dir='/tmp') as tem
    ui('pane','close',split[-1]['pane_id']);time.sleep(.3)
    assert len(run('pane','list'))==1
   run('client','detach',cid)
+  assert client.quit()==0
   print('Real client command smoke passed',flush=True)
  finally:
-  if client_pid:
-   try:os.kill(client_pid,signal.SIGTERM)
-   except ProcessLookupError:pass
-   try:os.waitpid(client_pid,0)
-   except ChildProcessError:pass
-  stop.set()
-  if master is not None:os.close(master)
-  (validation/'tui-terminal.log').write_bytes(captured)
+  if client is not None:client.terminate()
   if server.poll() is None:
    try:subprocess.run([str(binary),'server','stop','--socket',str(endpoint)],env=env,capture_output=True,timeout=5);server.wait(timeout=5)
    except Exception:server.terminate();server.wait(timeout=5)
-  server_output.seek(0);(validation/'tui-server.log').write_text(server_output.read());server_output.close()
+  server_output.seek(0);(validation/'client-smoke-server.log').write_text(server_output.read());server_output.close()

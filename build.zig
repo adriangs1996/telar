@@ -9,6 +9,7 @@ const tests = @import("build/tests.zig");
 const cross = @import("build/cross.zig");
 const diagram_renderer = @import("build/diagram_renderer.zig");
 const syntax_highlighter = @import("build/syntax_highlighter.zig");
+const headless = @import("build/headless.zig");
 
 pub fn build(b: *std.Build) void {
     var app = Application.init(b) orelse return;
@@ -19,6 +20,7 @@ pub fn build(b: *std.Build) void {
     packaging.add(b, app, diagram_helper);
     app.modules.gui = gui.add(b, app, diagram_helper);
     run_widget.addBuild(b, app);
+    app.modules.headless = headless.add(b, app);
     const parallel_tests = tests.add(b, app, bench);
     parallel_tests.dependOn(cross.add(b));
 }

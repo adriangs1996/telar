@@ -7,3 +7,6 @@ profile: ?[*:0]const u8 = null,
 /// a fresh start that silently attaches to the old session is worse than
 /// none.
 fresh: bool = false,
+/// The telar binary that starts the runtime; null is this executable. The
+/// headless client names the `telar` beside it.
+executable: ?[]const u8 = null,

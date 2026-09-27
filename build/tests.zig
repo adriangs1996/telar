@@ -46,6 +46,10 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     b.step("check-client-boundaries", "Check shared-client module boundaries").dependOn(&client_boundaries.step);
     b.step("test-client", "Run renderer-independent client tests").dependOn(&run_client_tests.step);
     test_step.dependOn(&run_client_tests.step);
+    const headless_tests = b.addTest(.{ .root_module = app.modules.headless.? });
+    const run_headless_tests = b.addRunArtifact(headless_tests);
+    b.step("test-headless", "Run the headless client's tests").dependOn(&run_headless_tests.step);
+    test_step.dependOn(&run_headless_tests.step);
     // ZLS uses "check" on save. Test artifacts are analyzed without codegen;
     // source validators run separately and never execute application tests.
     const check_step = b.step("check", "Analyze test suites and validate source organization");

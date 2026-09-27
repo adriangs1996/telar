@@ -1,5 +1,4 @@
 const keyinput = @import("keyinput");
-const router_module = @import("../../input/router.zig");
 const modal_widget = @import("modal_widget.zig");
 const client = @import("telar-client");
 const HitState = @import("HitState.zig");
@@ -17,7 +16,7 @@ history_motion: ModalMotion = .{},
 history_loading: LoadingCue = .{},
 gesture: ?u8 = null,
 /// The native keymap, for the palette's bound-key column.
-router: ?*const router_module.Type = null,
+router: ?*const client.key_router.Type = null,
 /// Host scale, so the palette's logical width becomes cells.
 scale: f32 = 1,
 

@@ -103,7 +103,7 @@ pub fn connectOrStart(self: *const RuntimeConnector, config: RuntimeConfigSelect
 
 fn startRuntime(self: *const RuntimeConnector, config: RuntimeConfigSelection) !void {
     var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const executable = executable_buffer[0..try std.process.executablePath(self.io, &executable_buffer)];
+    const executable = config.executable orelse executable_buffer[0..try std.process.executablePath(self.io, &executable_buffer)];
     var argv: [10][]const u8 = undefined;
     var argc: usize = 0;
     for ([_][]const u8{ executable, "server", "--background", "--socket", self.endpoint.path() }) |arg| {

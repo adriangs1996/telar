@@ -35,7 +35,6 @@ const SyntaxService = @import("syntax/Service.zig");
 const ReviewPanel = @import("change_review/Panel.zig");
 const review_dispatch = @import("change_review/dispatch.zig");
 
-const input_routing = @import("input/router.zig");
 const widget_routing = @import("widgets/interaction/routing.zig");
 const KeyInput = @import("input/KeyInput.zig");
 const ClipboardResult = @import("input/ClipboardResult.zig");
@@ -114,7 +113,7 @@ window_title: client.WindowTitleState = .{},
 hostname: [std.posix.HOST_NAME_MAX]u8 = undefined,
 hostname_len: usize = 0,
 input_queue: InputQueue = .{},
-router: input_routing.Type,
+router: client.key_router.Type,
 binding_timeout: pacing.DeadlineScheduler = .{},
 /// Replaces the time of noted pane input; pacing tests pin it so scheduler
 /// delays cannot expire their grace.
@@ -145,7 +144,7 @@ review: *ReviewPanel,
 /// Adopts options on success and binds all ports before receiving messages.
 /// Example: `const gui = try GuiAdapter.init(params);`
 pub fn init(params: client.ClientInit) !*GuiAdapter {
-    const router = try input_routing.build(
+    const router = try client.key_router.build(
         .{
             .prefix = params.options.prefix,
             .bindings = params.options.bindings,
@@ -669,10 +668,7 @@ fn pathFor(event: gui_event.Message) core.Path {
 
 /// Finishes startup and resumes input once a runtime message lands.
 fn resumeAfterRuntime(self: *GuiAdapter) !void {
-    if (self.app.model.startup.phase == .opening and self.app.model.activeTabLocation() != null) {
-        self.app.model.startup.phase = .active;
-    }
-
+    client.client_startup.finish(&self.app.model);
     try self.resumeInput();
     self.refreshPointer();
 }
@@ -690,7 +686,7 @@ fn inputReady(self: *GuiAdapter) !void {
 /// Replaces bindings without transferring held keys to their new meanings.
 /// Example: `gui.adoptBindings(config);`
 pub fn adoptBindings(self: *GuiAdapter, config: client.RouterConfig) void {
-    var replacement = input_routing.build(config) catch unreachable;
+    var replacement = client.key_router.build(config) catch unreachable;
 
     replacement.inheritPhysicalLeases(&self.router);
     self.router = replacement;
@@ -889,7 +885,7 @@ fn drainInput(self: *GuiAdapter) !void {
 
 /// Resolve and execute one semantic key before accepting the next event.
 /// Example: `_ = try gui.routeKey(event);`
-pub fn routeKey(self: *GuiAdapter, event: input_routing.Type.KeyInput) !keyinput.Control {
+pub fn routeKey(self: *GuiAdapter, event: client.key_router.Type.KeyInput) !keyinput.Control {
     errdefer self.router.eventFailed(event.key);
 
     const decision = self.router.routeEvent(
@@ -906,7 +902,7 @@ pub fn routeKey(self: *GuiAdapter, event: input_routing.Type.KeyInput) !keyinput
     return control;
 }
 
-fn applyInputDecision(self: *GuiAdapter, decision: input_routing.Type.Decision) !keyinput.Control {
+fn applyInputDecision(self: *GuiAdapter, decision: client.key_router.Type.Decision) !keyinput.Control {
     switch (decision) {
         .forward => |value| {
             _ = try client.key_routing.routeKeyInput(

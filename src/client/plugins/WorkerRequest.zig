@@ -10,6 +10,8 @@ package: Package,
 action_bytes: [core.max_action_bytes]u8 = undefined,
 action_len: u8,
 context: data.CallbackContext,
+/// The telar binary that runs the worker; null is this executable.
+executable: ?[]const u8 = null,
 
 pub fn action(self: *const WorkerRequest) []const u8 {
     return self.action_bytes[0..self.action_len];

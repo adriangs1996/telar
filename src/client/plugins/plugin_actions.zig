@@ -254,7 +254,7 @@ pub fn startPluginAction(client: *Client, requested: data.PluginAction, callback
             },
         ),
     };
-    const request = registry.workerRequest(invocation, callback_context) catch |err| switch (err) {
+    var request = registry.workerRequest(invocation, callback_context) catch |err| switch (err) {
         error.PluginNotConfigured, error.UnknownPluginAction => return reportPluginStart(
             client,
             .{
@@ -262,6 +262,7 @@ pub fn startPluginAction(client: *Client, requested: data.PluginAction, callback
             },
         ),
     };
+    request.executable = client.options.telar_executable;
     const execution = (try data.plugin_action.beginExecution(&client.model)) orelse
         return reportPluginStart(client, .busy);
     {

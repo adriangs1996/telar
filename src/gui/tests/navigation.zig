@@ -7,7 +7,6 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Session = @import("Session.zig");
 const GuiAdapter = @import("../GuiAdapter.zig");
-const routing = @import("../input/router.zig");
 
 test "update processes a horizontal split shortcut and its correlated runtime reply" {
     const session = try Session.init();
@@ -70,7 +69,7 @@ test "update processes a horizontal split shortcut and its correlated runtime re
 test "native semantic router resolves every TUI default action" {
     const defaults = try client.default_bindings.load(data.keybind.default_prefix);
     for (defaults) |binding| {
-        var router = try routing.build(
+        var router = try client.key_router.build(
             .{
                 .prefix = data.keybind.default_prefix,
                 .bindings = &.{},

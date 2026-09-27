@@ -3,7 +3,6 @@
 //! canonical results for every mode and never scores anything itself.
 const cellgrid = @import("cellgrid");
 const TextField = @import("../TextField.zig");
-const router_module = @import("../../input/router.zig");
 const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
@@ -34,7 +33,7 @@ hits: *PaletteHits,
 modal: *?cellgrid.Rect,
 /// The native keymap that prints bound chords next to actions; absent in
 /// fixtures without a window.
-router: ?*const router_module.Type,
+router: ?*const client.key_router.Type,
 scale: f32,
 
 /// Cells the palette occupies for `rows` visible results, centered

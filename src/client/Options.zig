@@ -21,6 +21,8 @@ machine: ?MachineTarget = null,
 open_machine: ?RemoteMachine = null,
 /// Process environment used to expand `~` and `$VAR` in typed directories.
 environ: std.process.Environ = .empty,
+/// The telar binary that runs plugin workers; null is this executable.
+telar_executable: ?[]const u8 = null,
 prefix: keyinput.Key = data.keybind.default_prefix,
 bindings: []const data.config_values.ConfiguredBinding = &.{},
 theme: data.ColorTheme = data.theme_support.default_theme,
