@@ -4,15 +4,20 @@
 //! connects to the forwarded socket, and shared-memory graphics are disabled
 //! because the runtime lives on another machine.
 
+const core = @import("telar-core");
 const localsocket = @import("localsocket");
 const std = @import("std");
 const Forward = @import("Forward.zig");
 const RuntimeConnector = @import("RuntimeConnector.zig");
 const Discovery = @import("Discovery.zig");
 const remote_discovery = @import("remote_discovery.zig");
+const SshOptions = @import("SshOptions.zig");
 
 pub const connect_attempts = 100;
 pub const connect_interval_ms = 100;
+
+/// The largest `telar api schema --json` output read back, in bytes.
+const schema_output_limit = 256 * 1024;
 
 const endpoint_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(30) },
@@ -26,8 +31,8 @@ const endpoint_timeout: std.Io.Timeout = .{
 /// defer forward.stop(process_init.io);
 /// ```
 pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
-    try validateDestination(destination);
-    const discovery = try remoteEndpoint(init, destination);
+    try core.ssh_destination.validate(destination);
+    const discovery = try discover(init, destination);
 
     // The forwarded socket lives in telar's managed, owner-only directory.
     const connector = try RuntimeConnector.init(init, null);
@@ -37,7 +42,7 @@ pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
     var forward: Forward = .{ .child = undefined, .discovery = discovery };
     const local_path = try std.fmt.bufPrint(forward.local_path[0..std.fs.max_path_bytes], "{s}/remote-{x}.sock", .{
         local_directory,
-        destinationHash(destination),
+        core.ssh_destination.hash(destination),
     });
     forward.local_path_len = local_path.len;
     std.Io.Dir.deleteFileAbsolute(init.io, local_path) catch {};
@@ -91,34 +96,73 @@ pub fn connectForwarded(init: std.process.Init, connector: *const RuntimeConnect
     return error.RemoteRuntimeUnavailable;
 }
 
-fn remoteEndpoint(init: std.process.Init, destination: []const u8) !Discovery {
+/// Asks the machine for its home, login shell and runtime socket over the
+/// managed SSH connection, starting its runtime when none is running. It
+/// never installs anything.
+///
+/// ```zig
+/// const found = try remote.discover(process_init, "dev@box");
+/// ```
+pub fn discover(init: std.process.Init, destination: []const u8) !Discovery {
     const command = "/bin/sh -c 'printf \"%s\\n\" \"$HOME\" \"${SHELL:-/bin/sh}\"; exec telar server endpoint'";
+    const options = try SshOptions.prepare(init, destination);
+    const managed = options.arguments();
     const result = std.process.run(init.gpa, init.io, .{
-        .argv = &.{ "ssh", "-T", "-o", "BatchMode=yes", "--", destination, command },
+        .argv = &(.{ "ssh", "-T" } ++ managed ++ .{ "--", destination, command }),
         .stdout_limit = .limited(Discovery.max_output_bytes),
         .stderr_limit = .limited(16 * 1024),
         .timeout = endpoint_timeout,
     }) catch return error.RemoteEndpointUnavailable;
     defer init.gpa.free(result.stdout);
     defer init.gpa.free(result.stderr);
+
     if (result.term != .exited or result.term.exited != 0) {
-        std.debug.print("telar --remote: `ssh {s} telar server endpoint` failed:\n{s}", .{ destination, result.stderr });
+        std.debug.print("telar: `ssh {s} telar server endpoint` failed:\n{s}", .{ destination, result.stderr });
         return error.RemoteEndpointUnavailable;
     }
 
     return Discovery.parse(result.stdout);
 }
 
-fn validateDestination(destination: []const u8) !void {
-    if (destination.len == 0 or destination[0] == '-') {
-        return error.InvalidRemoteDestination;
+/// Asks the machine which wire schema its `telar` speaks, over the managed
+/// SSH connection, so a check can tell an outdated machine from an
+/// unreachable one before any window tries to attach.
+///
+/// ```zig
+/// const schema = try remote.schema(process_init, "dev@box");
+/// ```
+pub fn schema(init: std.process.Init, destination: []const u8) !core.SchemaId {
+    const options = try SshOptions.prepare(init, destination);
+    const managed = options.arguments();
+    const result = std.process.run(init.gpa, init.io, .{
+        .argv = &(.{ "ssh", "-T" } ++ managed ++ .{ "--", destination, "telar api schema --json" }),
+        .stdout_limit = .limited(schema_output_limit),
+        .stderr_limit = .limited(16 * 1024),
+        .timeout = endpoint_timeout,
+    }) catch return error.RemoteSchemaUnavailable;
+    defer init.gpa.free(result.stdout);
+    defer init.gpa.free(result.stderr);
+
+    if (result.term != .exited or result.term.exited != 0) {
+        return error.RemoteSchemaUnavailable;
     }
 
-    for (destination) |byte| {
-        if (byte <= 0x20 or byte == 0x7f) {
-            return error.InvalidRemoteDestination;
-        }
+    const Reported = struct { schema_version: []const u8, fingerprint: []const u8 };
+    const parsed = std.json.parseFromSlice(Reported, init.gpa, result.stdout, .{
+        .ignore_unknown_fields = true,
+    }) catch return error.RemoteSchemaUnavailable;
+    defer parsed.deinit();
+
+    var id: core.SchemaId = undefined;
+    const version = parsed.value.schema_version;
+    const fingerprint = parsed.value.fingerprint;
+    if (version.len + fingerprint.len != id.len) {
+        return error.RemoteSchemaUnavailable;
     }
+
+    @memcpy(id[0..version.len], version);
+    @memcpy(id[version.len..], fingerprint);
+    return id;
 }
 
 fn waitForSocket(io: std.Io, path: []const u8) !void {
@@ -134,30 +178,6 @@ fn waitForSocket(io: std.Io, path: []const u8) !void {
     return error.RemoteForwardUnavailable;
 }
 
-/// Stable per-destination suffix so two remotes never share a forward file.
-///
-/// ```zig
-/// const suffix = destinationHash("dev@build-box");
-/// ```
-pub fn destinationHash(destination: []const u8) u64 {
-    var digest: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash(destination, &digest, .{});
-    return std.mem.readInt(u64, digest[0..8], .little);
-}
-
-test "SSH destinations cannot inject options or control bytes" {
-    try validateDestination("dev@box");
-    try validateDestination("telar-linux-native");
-    for ([_][]const u8{ "", "-oProxyCommand=bad", "host\ncommand", "host alias" }) |destination| {
-        try std.testing.expectError(error.InvalidRemoteDestination, validateDestination(destination));
-    }
-}
-
 test {
     _ = remote_discovery;
-}
-
-test "destination hashes are stable and distinct" {
-    try std.testing.expectEqual(destinationHash("a@b"), destinationHash("a@b"));
-    try std.testing.expect(destinationHash("a@b") != destinationHash("a@c"));
 }

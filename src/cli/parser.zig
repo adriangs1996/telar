@@ -26,6 +26,8 @@ const ProxyOptions = @import("arguments/ProxyOptions.zig");
 const RunOptions = @import("arguments/RunOptions.zig");
 const GuiOptions = @import("arguments/GuiOptions.zig");
 const CliOptions = @import("arguments/CliOptions.zig");
+const MachineOptions = @import("arguments/MachineOptions.zig");
+const MachineDispatchOptions = @import("arguments/MachineDispatchOptions.zig");
 const std = @import("std");
 const server_module = @import("arguments/server.zig");
 const plugin_module = @import("arguments/plugin.zig");
@@ -64,6 +66,11 @@ pub const Cli = union(enum) {
     run: RunOptions,
     gui: GuiOptions,
     cli: CliOptions,
+    machine: MachineOptions,
+    /// `telar --machine LABEL COMMAND…`.
+    machine_dispatch: MachineDispatchOptions,
+    /// The encoded words `--machine` sends to the other machine.
+    dispatch_argv: []const [*:0]const u8,
 
     /// Parses one complete argv into a validated command without performing
     /// filesystem, transport or process work.
@@ -78,6 +85,10 @@ pub const Cli = union(enum) {
         }
         if (args.len == 1) {
             return .{ .run = try RunOptions.parse(&.{}, environ) };
+        }
+
+        if (try MachineDispatchOptions.parse(args)) |options| {
+            return .{ .machine_dispatch = options };
         }
 
         if (try RoutedOptions.parse(args[1..])) |options| {
@@ -169,6 +180,12 @@ pub const Cli = union(enum) {
         }
         if (std.mem.eql(u8, first, "cli")) {
             return .{ .cli = try CliOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "machine")) {
+            return .{ .machine = try MachineOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "dispatch-argv")) {
+            return .{ .dispatch_argv = args[2..] };
         }
         return .{ .run = try RunOptions.parse(args[1..], environ) };
     }

@@ -210,7 +210,8 @@ telar machine check LABEL
 - Writes replace the file atomically, never in place.
 - `add --check` and `check` run the discovery step over SSH (the same
   `telar server endpoint` call as remote attach) and report the remote
-  version, home and socket, or the SSH error. They never install anything.
+  home, login shell and runtime socket, or the SSH error. They never install
+  anything.
 - `remove` does not touch the machine's runtime; its panes keep running.
 
 `enabled` is the whole connection policy. An enabled machine has a
@@ -269,11 +270,14 @@ No call forwards the ssh-agent.
 telar --machine LABEL <any telar command>
 ```
 
-The CLI runs `ssh DESTINATION -- telar <argv>` through the control master.
-OpenSSH joins the remote argv into one string for the remote shell, so the
-CLI quotes every element for POSIX `sh`; argv never reaches a shell
-unquoted. The exit status and stdout come back unchanged, so `--json` works
-across machines without new code.
+The CLI runs `ssh DESTINATION -- telar dispatch-argv <words>` through the
+control master. OpenSSH joins the remote argv into one string for the remote
+login shell, and sh, zsh and fish quote differently, so no quoting is right
+for all of them. Each argument instead travels as `a` plus its unpadded
+base64url form: letters, digits, `-` and `_`, which no shell reads as syntax.
+`telar dispatch-argv` decodes them on the other side. The exit status and
+stdout come back unchanged, so `--json` works across machines without new
+code. See [machine dispatch](../flows/machine-dispatch.md).
 
 - `--machine` is never read from the environment and never inherited from
   the pane the command runs in.
@@ -728,7 +732,7 @@ proceed before or after it.
 - No credentials in profiles. `BatchMode=yes` everywhere. No agent
   forwarding.
 - `--machine` never falls back and is never inherited.
-- Argv crosses SSH quoted element by element.
+- Argv crosses SSH as base64url words that no shell parses.
 - The worktree plan's focus rule applies across machines: telar refuses text
   to a pane that any attached client has focused, on whichever machine.
 - Peer UID checks stay as they are; remote attach already refuses an SSH
@@ -787,7 +791,7 @@ tests exist and `zig build test` plus the perf gate pass.
    after this phase.
 1. **Profiles and `--machine`**: `machines.json`, `telar machine
    add|remove|rename|enable|disable|list|check` (no `connect`), the CLI
-   proxy, quoting.
+   proxy, the encoded argv.
 2. **The GUI with several machines**: `Machines`, the client array,
    identity per window and machine, metadata-only attach, client
    configuration and plugin registry at the adapter level, `cpu_count` and

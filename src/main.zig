@@ -28,6 +28,12 @@ const skill_module = @import("cli/skill.zig");
 const client_module = @import("cli/client.zig");
 const login_shell_module = @import("cli/login_shell.zig");
 const cli_install_module = @import("cli/cli_install.zig");
+const machine_profiles_module = @import("cli/machine_profiles.zig");
+const machine_dispatch_module = @import("cli/machine_dispatch.zig");
+const MachineDispatchOptions = @import("cli/arguments/MachineDispatchOptions.zig");
+
+/// Exit status of a `--machine` command that never reached its machine.
+const machine_dispatch_failure: u8 = 1;
 
 const version = "0.0.0";
 
@@ -100,6 +106,13 @@ pub fn main(init: std.process.Init) !void {
     var arg_storage: [pty.command_support.max_args][*:0]const u8 = undefined;
     const args = try collectArgs(init, &arg_storage);
 
+    try dispatch(init, args);
+}
+
+// Runs one parsed command. `--machine` and `dispatch-argv` come back here
+// with the command they carry, so a command runs the same way wherever it
+// arrives from.
+fn dispatch(init: std.process.Init, args: []const [*:0]const u8) anyerror!void {
     switch (try parser.Cli.parse(args, init.minimal.environ)) {
         .help => try std.Io.File.stdout().writeStreamingAll(init.io, usage_module.text),
         .version => try std.Io.File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
@@ -140,11 +153,51 @@ pub fn main(init: std.process.Init) !void {
             std.process.exit(status);
         },
         .cli => |options| try cli_install_module.run(init, options),
+        .machine => |options| std.process.exit(try machine_profiles_module.run(init, options)),
+        .machine_dispatch => |options| try dispatchToMachine(init, options),
+        .dispatch_argv => |words| {
+            const argv = try machine_dispatch_module.decode(init.gpa, words);
+            defer machine_dispatch_module.freeDecoded(init.gpa, argv);
+
+            try dispatch(init, argv);
+        },
+    }
+}
+
+fn dispatchToMachine(init: std.process.Init, options: MachineDispatchOptions) anyerror!void {
+    switch (try parser.Cli.parse(options.argv, init.minimal.environ)) {
+        .run, .gui, .machine_dispatch, .dispatch_argv => {
+            try std.Io.File.stderr().writeStreamingAll(init.io, "telar --machine: runs one telar command there; it cannot open a window or name another machine\n");
+            std.process.exit(machine_dispatch_failure);
+        },
+        else => {},
+    }
+
+    const target = machine_dispatch_module.resolve(init, options.label) catch |err| {
+        var buffer: [256]u8 = undefined;
+        const message = std.fmt.bufPrint(&buffer, "telar --machine: {s}: {s}\n", .{
+            options.label,
+            if (err == error.UnknownMachine) "no saved machine or local label has that name; see `telar machine list`" else @errorName(err),
+        }) catch "telar --machine: the machine cannot be resolved\n";
+        try std.Io.File.stderr().writeStreamingAll(init.io, message);
+        std.process.exit(machine_dispatch_failure);
+    };
+
+    switch (target) {
+        .local => try dispatch(init, options.argv),
+        .remote => |profile| std.process.exit(try machine_dispatch_module.forward(init, &profile, options.argv)),
     }
 }
 
 test {
     _ = @import("cli/arguments/TabOptions.zig");
+    _ = @import("cli/arguments/MachineOptions.zig");
+    _ = @import("cli/arguments/MachineDispatchOptions.zig");
+    _ = @import("cli/config_directory.zig");
+    _ = @import("cli/dispatch_argv.zig");
+    _ = @import("cli/machine_profiles.zig");
+    _ = @import("cli/machine_dispatch.zig");
+    _ = @import("cli/SshOptions.zig");
     _ = @import("cli/runtime.zig");
     _ = @import("cli/DiagnosticLog.zig");
     _ = @import("cli/arguments/DiagnosticsOptions.zig");

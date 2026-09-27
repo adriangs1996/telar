@@ -260,6 +260,46 @@ changes a provider option on a running agent. Its effect is confirmed only by
 the transcript.
 _Avoid_: Slash command, remote setting
 
+## Machines
+
+**Machine**:
+One computer whose runtime a client or the CLI can reach, through the local
+socket or an SSH connection. A machine runs one runtime per account; runtimes
+never know about each other.
+_Avoid_: Host, server, remote, node
+
+**Local machine**:
+The machine the client or CLI process runs on. It needs no profile; it answers
+to the label `machines.json` gives it, or its host name.
+_Avoid_: Localhost, home machine
+
+**Machine profile**:
+The saved record of how to reach a machine: a stable id, a label, an SSH
+destination, an optional color and whether windows connect to it. It never
+holds credentials.
+_Avoid_: Remote config, connection, host entry
+
+**Machine label**:
+The name a command line and the chrome use for a machine. It can change; the
+profile's id never does.
+_Avoid_: Alias, hostname
+
+**Active machine**:
+The machine whose runtime a window presents and sends input to. A window has
+exactly one.
+_Avoid_: Current host, selected server
+
+**Dispatch**:
+Starting work on another machine: one CLI command, a worktree or an agent. The
+machine that dispatches sends what the work needs, such as commits, and a
+failure there never falls back to the local machine.
+_Avoid_: Remote exec, offload
+
+**Repository identity**:
+The normalized URL of a repository's `origin` remote. It finds the clone of
+one project on another machine; it never decides where work runs.
+_Avoid_: Repo id, project key
+
 ## Change review
 
 **Directed session**:
