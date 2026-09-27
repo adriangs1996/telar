@@ -64,6 +64,7 @@ const GuiAdapter = @This();
 const JobHook = struct {
     context: *anyopaque,
     start: *const fn (*anyopaque, client.Job) anyerror!void,
+    start_background: *const fn (*anyopaque, client.BackgroundJob) anyerror!void,
 };
 
 const InputLimit = enum(u8) {
@@ -1476,12 +1477,22 @@ fn deliverRequests(self: *GuiAdapter) !void {
 /// which may queue its successor.
 fn startJobs(self: *GuiAdapter) !void {
     try self.app.flush();
-    while (self.app.to_workers.pop()) |job| {
-        const started = if (self.job_hook) |hook| hook.start(hook.context, job) else workers.start(self, job);
-        started catch |err| {
-            try self.app.failJob(job, err);
-            try self.app.flush();
-        };
+    while (true) {
+        if (self.app.to_workers.pop()) |job| {
+            const started = if (self.job_hook) |hook| hook.start(hook.context, job) else workers.start(self, job);
+            started catch |err| {
+                try self.app.failJob(job, err);
+                try self.app.flush();
+            };
+        } else if (self.app.to_background.pop()) |job| {
+            const started = if (self.job_hook) |hook| hook.start_background(hook.context, job) else workers.startBackground(self, job);
+            started catch |err| {
+                try self.app.failBackgroundJob(job, err);
+                try self.app.flush();
+            };
+        } else {
+            return;
+        }
     }
 }
 
@@ -1632,7 +1643,7 @@ pub fn resize(self: *GuiAdapter, size: core.TerminalSize, theme: shared_model.Te
 /// Retires captured damage after GPU delivery, preserving newer received state.
 fn complete(self: *GuiAdapter, token: u64, delivered: bool) !void {
     core.profiling.add(.gui_complete, 1);
-    const active = self.app.presentation.active orelse return;
+    const active = if (self.app.presentation.active) |*flight| flight else return;
 
     if (token == 0 or token != @intFromEnum(active.token)) {
         return;

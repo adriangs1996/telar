@@ -43,7 +43,7 @@ pub fn completeRead(self: *State, result: anyerror!*const data.RuntimeMessage) !
 pub fn read(self: *State, io: std.Io) !*const data.RuntimeMessage {
     const bytes = try self.connection.receive(io, self.receive_buffer);
     core.mark(io, .client_read);
-    self.received = try data.RuntimeMessage.decode(io, bytes);
+    try self.received.decodeInto(io, bytes);
     return &self.received;
 }
 

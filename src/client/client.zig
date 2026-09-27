@@ -100,6 +100,7 @@ pub const Route = @import("input/Route.zig");
 pub const RuntimeTransportState = @import("connection/RuntimeTransportState.zig");
 pub const Message = @import("execution/Message.zig").Message;
 pub const Job = @import("execution/Job.zig").Job;
+pub const BackgroundJob = @import("execution/BackgroundJob.zig").BackgroundJob;
 pub const job_runner = @import("execution/job_runner.zig");
 pub const agent_attention = @import("agents/attention.zig");
 pub const StartOutcome = plugin_action.StartOutcome;

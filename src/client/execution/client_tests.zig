@@ -155,6 +155,7 @@ fn transportClient(send_buffer: []u8) !*Client {
     errdefer std.testing.allocator.destroy(app);
     app.io = std.testing.io;
     app.to_workers = .{};
+    app.to_background = .{};
     app.graphics = no_graphics;
     app.model.to_runtime = try .init(std.testing.allocator);
     app.runtime_transport = .{

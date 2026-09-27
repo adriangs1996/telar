@@ -224,6 +224,7 @@ pub const clipScaled = graphics.clipScaled;
 pub const decodeClient = messages.decodeClient;
 pub const decodeClientHello = handshake.decodeClientHello;
 pub const decodeServer = messages.decodeServer;
+pub const decodeServerInto = messages.decodeServerInto;
 pub const decodeServerResponse = handshake.decodeServerResponse;
 pub const default_notification_duration_ms = types.default_notification_duration_ms;
 pub const elapsed = diagnostics.elapsed;

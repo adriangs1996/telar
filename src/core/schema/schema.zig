@@ -145,6 +145,7 @@ pub const ClientMessage = messages.ClientMessage;
 pub const ServerMessage = messages.ServerMessage;
 pub const decodeClient = messages.decodeClient;
 pub const decodeServer = messages.decodeServer;
+pub const decodeServerInto = messages.decodeServerInto;
 
 pub const LaunchView = @import("messages/LaunchView.zig");
 pub const ArgumentIterator = @import("messages/ArgumentIterator.zig");

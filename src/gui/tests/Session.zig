@@ -52,6 +52,7 @@ pub fn init() !*Session {
     session.gui.job_hook = .{
         .context = session,
         .start = startJob,
+        .start_background = startBackgroundJob,
     };
     return session;
 }
@@ -105,8 +106,8 @@ pub fn deinit(self: *Session) void {
     std.testing.allocator.destroy(self);
 }
 
-/// Captures runtime sends and link opens; every other job runs on the real inbox.
-/// Example: `session.gui.job_hook = .{ .context = session, .start = Session.startJob };`
+/// Captures runtime sends; every other interactive job runs on the real inbox.
+/// Example: `session.gui.job_hook = .{ .context = session, .start = Session.startJob, .start_background = Session.startBackgroundJob };`
 pub fn startJob(context: *anyopaque, job: client.Job) !void {
     const session: *Session = @ptrCast(@alignCast(context));
 
@@ -116,11 +117,22 @@ pub fn startJob(context: *anyopaque, job: client.Job) !void {
             std.debug.assert(session.pending == null);
             session.pending = send.bytes;
         },
+        else => try workers.start(session.gui, job),
+    }
+}
+
+/// Records opened links and starts every other background job as the
+/// window loop would.
+/// Example: `session.gui.job_hook = .{ .context = session, .start = Session.startJob, .start_background = Session.startBackgroundJob };`
+pub fn startBackgroundJob(context: *anyopaque, job: client.BackgroundJob) !void {
+    const session: *Session = @ptrCast(@alignCast(context));
+
+    switch (job) {
         .link => |target| {
             session.opened_link = target;
             session.link_open_count += 1;
         },
-        else => try workers.start(session.gui, job),
+        else => try workers.startBackground(session.gui, job),
     }
 }
 
@@ -138,8 +150,14 @@ pub fn startJobs(self: *Session) !void {
     const app = &self.gui.app;
 
     try app.flush();
-    while (app.to_workers.pop()) |job| {
-        try startJob(self, job);
+    while (true) {
+        if (app.to_workers.pop()) |job| {
+            try startJob(self, job);
+        } else if (app.to_background.pop()) |job| {
+            try startBackgroundJob(self, job);
+        } else {
+            return;
+        }
     }
 }
 

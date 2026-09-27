@@ -57,9 +57,16 @@ pub fn begin(self: *State, submission: Submission) !lifecycle.Token {
     self.active = .{
         .token = token,
         .observation = submission.observation,
-        .geometry = submission.geometry,
-        .delivery = .{ .commit = submission.commit, .media_pending = submission.media_pending },
+        .geometry = undefined,
+        .delivery = .{
+            .commit = undefined,
+            .media_pending = submission.media_pending,
+        },
     };
+
+    const flight = &self.active.?;
+    flight.geometry.copyFrom(&submission.geometry);
+    flight.delivery.commit.copyFrom(&submission.commit);
     return token;
 }
 
@@ -67,20 +74,30 @@ pub fn begin(self: *State, submission: Submission) !lifecycle.Token {
 /// An older successful delivery leaves subsequently received damage pending.
 /// Example: `const delivery = state.complete(token, .delivered) orelse return;`.
 pub fn complete(self: *State, token: lifecycle.Token, outcome: lifecycle.Outcome) ?PresentationDelivery {
-    const flight = self.active orelse return null;
+    const flight = if (self.active) |*value| value else return null;
     if (flight.token != token) {
         return null;
     }
 
-    self.active = null;
     if (outcome != .delivered) {
+        self.active = null;
         self.preparation_invalid = true;
         return null;
     }
 
     self.delivered = flight.observation;
-    self.delivered_geometry = flight.geometry;
-    return flight.delivery;
+    if (self.delivered_geometry == null) {
+        self.delivered_geometry = @as(Geometry, undefined);
+    }
+
+    self.delivered_geometry.?.copyFrom(&flight.geometry);
+    var delivery: PresentationDelivery = .{
+        .commit = undefined,
+        .media_pending = flight.delivery.media_pending,
+    };
+    delivery.commit.copyFrom(&flight.delivery.commit);
+    self.active = null;
+    return delivery;
 }
 
 const Flight = struct {

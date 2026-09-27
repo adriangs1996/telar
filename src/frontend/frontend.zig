@@ -43,6 +43,7 @@ test {
     _ = @import("client/host/host_output.zig");
     _ = @import("client/session/startup_input.zig");
     _ = @import("client/telemetry/telemetry.zig");
+    _ = @import("client/tests/cache_trace.zig");
     _ = @import("client/tests/configuration.zig");
     _ = @import("client/tests/graphics_and_clipboard.zig");
     _ = @import("client/tests/history_browser.zig");

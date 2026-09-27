@@ -14,6 +14,17 @@ pub fn slice(self: *const PresentationCommit) []const PaneCommit {
     return self.panes[0..self.len];
 }
 
+/// Copies `source` without the unused tail of `panes`, kilobytes that a
+/// whole-struct copy would move for one pane.
+/// Example: `flight.delivery.commit.copyFrom(&submission.commit);`
+pub fn copyFrom(self: *PresentationCommit, source: *const PresentationCommit) void {
+    comptime std.debug.assert(std.meta.fields(PresentationCommit).len == 3);
+
+    self.location = source.location;
+    self.len = source.len;
+    @memcpy(self.panes[0..source.len], source.slice());
+}
+
 /// Captures the pending frame without retaining model pointers.
 /// Example: commit.append(pane);
 pub fn append(self: *PresentationCommit, pane: *const Pane) void {
