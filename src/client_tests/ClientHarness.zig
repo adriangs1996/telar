@@ -158,6 +158,28 @@ pub fn present(self: *ClientHarness) !void {
     try self.startJobs();
 }
 
+/// Observes the model as a window does after an event and reports whether
+/// a presentation is due, without preparing one.
+/// Example: `try std.testing.expect(harness.observe());`
+pub fn observe(self: *ClientHarness) bool {
+    const model = &self.client.model;
+    const projection = client_module.capture(model, .{ .geometry = data.workbench.region(model) });
+    _ = self.client.presentation.observe(.{
+        .model = projection.version,
+        .presentation_ingress = projection.presentation_ingress,
+        .geometry_revision = projection.geometry.revision,
+    });
+
+    return self.client.presentation.needsPreparation();
+}
+
+/// The copy selection a presentation of the current model carries.
+/// Example: `const copy = harness.presentedCopy().?;`
+pub fn presentedCopy(self: *ClientHarness) ?client_module.CopyProjection {
+    const model = &self.client.model;
+    return client_module.capture(model, .{ .geometry = data.workbench.region(model) }).copy;
+}
+
 /// Presents until the prepared state matches the model, running the timer
 /// and write completions that arrive meanwhile.
 /// Example: `try harness.settleModelPresentation();`

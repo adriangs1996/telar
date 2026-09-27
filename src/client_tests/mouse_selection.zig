@@ -28,7 +28,7 @@ test "mouse drag copies pane coordinates and keeps highlighting until typing" {
     _ = try client_module.pointer_routing.apply(client, .{ .x = content.x + 4, .y = content.y, .kind = .drag });
     try std.testing.expectEqual(version.copy + 2, client.model.version().copy);
     try harness.settleModelPresentation();
-    try std.testing.expect(presentedCopy(&harness).?.view.selected(2, 10));
+    try std.testing.expect(harness.presentedCopy().?.view.selected(2, 10));
 
     _ = try client_module.pointer_routing.apply(client, .{ .x = content.x + 4, .y = content.y, .kind = .release });
     try std.testing.expect(!data.copy_mode.pointerSelection(&client.model).?.dragging);
@@ -176,9 +176,3 @@ fn noScrollLimit(_: *anyopaque) ?u32 {
     return null;
 }
 
-/// The copy selection a presentation of the current model carries.
-fn presentedCopy(harness: *ClientHarness) ?client_module.CopyProjection {
-    const model = &harness.client.model;
-
-    return client_module.capture(model, .{ .geometry = data.workbench.region(model) }).copy;
-}

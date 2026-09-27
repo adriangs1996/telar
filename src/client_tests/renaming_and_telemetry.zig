@@ -4,6 +4,7 @@ const keyinput = @import("keyinput");
 const data = @import("model");
 const client_module = @import("telar-client");
 const core = @import("telar-core");
+const keys = @import("keys.zig");
 const ClientHarness = @import("ClientHarness.zig");
 const std = @import("std");
 const fixtures = @import("fixtures.zig");
@@ -31,8 +32,8 @@ test "workspace rename separates prompt submission canonical commit and presenta
 
     const version_before_request = client.model.version();
     const observed_before_request = client.presentation.observed;
-    try typeText(client, "mainx");
-    try pressKey(client, .enter);
+    try keys.routeText(client, "mainx");
+    try keys.routeKey(client, .plain(.enter));
 
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.name_prompt.active());
@@ -106,8 +107,8 @@ test "pending workspace operation keeps the rename prompt without sending" {
     const version_before_request = client.model.version();
 
     try std.testing.expect(client_module.name_prompt.openNamePrompt(&client.model, .rename_workspace));
-    try typeText(client, "x");
-    try pressKey(client, .enter);
+    try keys.routeText(client, "x");
+    try keys.routeKey(client, .plain(.enter));
 
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(client.model.name_prompt.active());
@@ -116,7 +117,7 @@ test "pending workspace operation keeps the rename prompt without sending" {
     try fixtures.expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
-    try pressKey(client, .escape);
+    try keys.routeKey(client, .plain(.escape));
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.name_prompt.active());
 }
@@ -268,8 +269,8 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     ));
     try std.testing.expect(data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)));
 
-    try typeText(client, "x");
-    try pressKey(client, .enter);
+    try keys.routeText(client, "x");
+    try keys.routeKey(client, .plain(.enter));
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualStrings("shell", data.tab_label.text(&client.model, client.model.tabs.active));
@@ -339,8 +340,8 @@ test "tab rename response must match the requested identity" {
             .rename_tab = ClientHarness.bootstrap_location.tab_id,
         },
     ));
-    try typeText(client, "x");
-    try pressKey(client, .enter);
+    try keys.routeText(client, "x");
+    try keys.routeKey(client, .plain(.enter));
     const version_before_response = client.model.version();
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
@@ -379,8 +380,8 @@ test "a failed tab rename preserves the label and notifies" {
             .rename_tab = ClientHarness.bootstrap_location.tab_id,
         },
     ));
-    try typeText(client, "x");
-    try pressKey(client, .enter);
+    try keys.routeText(client, "x");
+    try keys.routeKey(client, .plain(.enter));
     const version_before_failure = client.model.version();
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
@@ -417,8 +418,8 @@ test "pending tab operation keeps the rename prompt without sending" {
             .rename_tab = ClientHarness.bootstrap_location.tab_id,
         },
     ));
-    try typeText(client, "x");
-    try pressKey(client, .enter);
+    try keys.routeText(client, "x");
+    try keys.routeKey(client, .plain(.enter));
 
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(client.model.name_prompt.active());
@@ -427,7 +428,7 @@ test "pending tab operation keeps the rename prompt without sending" {
     try fixtures.expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
-    try pressKey(client, .escape);
+    try keys.routeKey(client, .plain(.escape));
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.name_prompt.active());
 }
@@ -451,8 +452,8 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
         },
     ));
 
-    try typeText(client, "x");
-    try std.testing.expectError(error.ClientOutboxFull, pressKey(client, .enter));
+    try keys.routeText(client, "x");
+    try std.testing.expectError(error.ClientOutboxFull, keys.routeKey(client, .plain(.enter)));
 
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(client.model.name_prompt.active());
@@ -474,27 +475,10 @@ test "escaping the prompt editor closes model state without changing mode" {
     _ = try client_module.actions.executeAction(client, .new_workspace, .binding);
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
-    try pressKey(client, .escape);
+    try keys.routeKey(client, .plain(.escape));
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(!client.model.name_prompt.active());
 }
 
 // Routes each character as one semantic key through key routing, as an
 // adapter delivers typed text to the active prompt.
-fn typeText(client: *client_module.Client, text: []const u8) !void {
-    var characters = (try std.unicode.Utf8View.init(text)).iterator();
-    while (characters.nextCodepointSlice()) |character| {
-        try pressKey(client, .{ .char = keyinput.Char.init(character) });
-    }
-}
-
-fn pressKey(client: *client_module.Client, code: keyinput.Key.Code) !void {
-    _ = try client_module.key_routing.routeKeyInput(
-        client,
-        .{
-            .key = .{
-                .code = code,
-            },
-        },
-    );
-}

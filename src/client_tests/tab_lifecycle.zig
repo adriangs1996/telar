@@ -7,7 +7,6 @@ const ClientHarness = @import("ClientHarness.zig");
 const std = @import("std");
 const fixtures = @import("fixtures.zig");
 
-/// Panes a test can mark as holding retained images.
 const max_image_panes = 4;
 
 test "an unexpected tab creation is rejected without effects" {
@@ -112,10 +111,8 @@ test "tab creation consumes a mismatched workspace before rejection" {
 
 test "tab lifecycle: created, renamed, moved, closed" {
     var harness: ClientHarness = undefined;
-    var images: PaneImages = undefined;
     try harness.init();
     defer harness.deinit();
-    images.install(harness.client);
     try harness.bootstrap();
     try harness.allowTabSelection();
     const client = harness.client;
@@ -1020,10 +1017,8 @@ test "late correlated close after lifecycle removal is ignored" {
 
 test "inactive tab lifecycle closure changes only the tab collection" {
     var harness: ClientHarness = undefined;
-    var images: PaneImages = undefined;
     try harness.init();
     defer harness.deinit();
-    images.install(harness.client);
     try harness.bootstrap();
     const client = harness.client;
     client.model.request_lifecycle.tracker = .{};
@@ -1064,10 +1059,8 @@ test "inactive tab lifecycle closure changes only the tab collection" {
 
 test "invalid last tab closure has no semantic or cleanup effects" {
     var harness: ClientHarness = undefined;
-    var images: PaneImages = undefined;
     try harness.init();
     defer harness.deinit();
-    images.install(harness.client);
     try harness.bootstrap();
     const client = harness.client;
     client.model.request_lifecycle.tracker = .{};
@@ -1114,10 +1107,8 @@ test "invalid last tab closure has no semantic or cleanup effects" {
 
 test "closing the last workspace exits the client" {
     var harness: ClientHarness = undefined;
-    var images: PaneImages = undefined;
     try harness.init();
     defer harness.deinit();
-    images.install(harness.client);
     try harness.bootstrap();
     const client = harness.client;
     client.model.request_lifecycle.tracker = .{};
@@ -1480,90 +1471,3 @@ fn releaseTab(client: *client_module.Client, drag: *client_module.TabDrag) !bool
     return outcome.consume_pane_input;
 }
 
-/// The harness's graphics stand-in keeps no images, so a test that checks
-/// the client clearing a pane's images wraps it: an image marks its pane,
-/// clearing the pane unmarks it, and every call still reaches the stand-in.
-const PaneImages = struct {
-    inner: client_module.GraphicsRetention,
-    panes: [max_image_panes]core.PaneId = undefined,
-    count: usize = 0,
-
-    fn install(self: *PaneImages, client: *client_module.Client) void {
-        self.* = .{
-            .inner = client.graphics,
-        };
-        client.graphics = .{
-            .context = self,
-            .apply_fn = apply,
-            .clear_pane_fn = clearPane,
-            .set_pane_visible_fn = setPaneVisible,
-            .pane_visible_fn = paneVisible,
-            .has_pane_graphics_fn = hasPaneGraphics,
-            .ingress_version_fn = ingressVersion,
-            .peek_credit_fn = peekCredit,
-            .consume_credit_fn = consumeCredit,
-        };
-    }
-
-    fn from(context: *anyopaque) *PaneImages {
-        return @ptrCast(@alignCast(context));
-    }
-
-    fn find(self: *const PaneImages, pane_id: core.PaneId) ?usize {
-        for (self.panes[0..self.count], 0..) |pane, index| {
-            if (pane == pane_id) {
-                return index;
-            }
-        }
-
-        return null;
-    }
-
-    fn apply(context: *anyopaque, command: data.PaneGraphicsCommand) !void {
-        const self = from(context);
-        if (command == .image and self.find(command.paneId()) == null) {
-            if (self.count == max_image_panes) {
-                return error.TooManyImagePanes;
-            }
-
-            self.panes[self.count] = command.paneId();
-            self.count += 1;
-        }
-
-        try self.inner.apply(command);
-    }
-
-    fn clearPane(context: *anyopaque, pane_id: core.PaneId) void {
-        const self = from(context);
-        if (self.find(pane_id)) |index| {
-            self.panes[index] = self.panes[self.count - 1];
-            self.count -= 1;
-        }
-
-        self.inner.clearPane(pane_id);
-    }
-
-    fn setPaneVisible(context: *anyopaque, pane_id: core.PaneId, value: bool) !void {
-        try from(context).inner.setPaneVisible(pane_id, value);
-    }
-
-    fn paneVisible(context: *anyopaque, pane_id: core.PaneId) bool {
-        return from(context).inner.paneVisible(pane_id);
-    }
-
-    fn hasPaneGraphics(context: *anyopaque, pane_id: core.PaneId) bool {
-        return from(context).find(pane_id) != null;
-    }
-
-    fn ingressVersion(context: *anyopaque) u64 {
-        return from(context).inner.ingressVersion();
-    }
-
-    fn peekCredit(context: *anyopaque) ?client_module.GraphicsCredit {
-        return from(context).inner.peekCredit();
-    }
-
-    fn consumeCredit(context: *anyopaque, credit: client_module.GraphicsCredit) void {
-        from(context).inner.consumeCredit(credit);
-    }
-};

@@ -55,7 +55,7 @@ test "pane focus commits before reports resize and presentation" {
     const expected_size = data.tab_layout.contentSize(&client.model, model, ClientHarness.bootstrap_pane, area).?;
 
     // The harness presents while it settles, so the observation comes first.
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
     try std.testing.expectEqualDeep(client.model.version(), client.presentation.observed.model);
 
     try harness.settle();
@@ -85,7 +85,7 @@ test "pane focus commits before reports resize and presentation" {
         .effect,
     );
 
-    try std.testing.expect(!observePresentation(&harness));
+    try std.testing.expect(!harness.observe());
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
@@ -439,7 +439,7 @@ test "pane resize publishes committed geometry before presentation" {
     try std.testing.expectEqualDeep(observed_before, client.presentation.observed);
 
     // The harness presents while it settles, so the observation comes first.
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
     try std.testing.expectEqualDeep(client.model.version(), client.presentation.observed.model);
 
     try harness.settle();
@@ -465,7 +465,7 @@ test "pane resize publishes committed geometry before presentation" {
         .effect,
     );
 
-    try std.testing.expect(!observePresentation(&harness));
+    try std.testing.expect(!harness.observe());
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
@@ -538,7 +538,7 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
     try std.testing.expectEqual(core.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, fullscreen_size);
     try std.testing.expectEqual(version_before_enter.panes + 1, client.model.version().panes);
     try std.testing.expectEqualDeep(observed_before_enter, client.presentation.observed);
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
 
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
@@ -559,7 +559,7 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
     try std.testing.expectEqual(second_tiled, data.tab_layout.contentSize(&client.model, model, second, area).?);
     try std.testing.expectEqual(version_before_exit.panes + 1, client.model.version().panes);
     try std.testing.expectEqualDeep(observed_before_exit, client.presentation.observed);
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
 
     try harness.settle();
     const first_resize = try harness.nextClientMessage(&message_buffer);
@@ -598,7 +598,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
     try std.testing.expectEqual(version_before_hide.active_tab, client.model.version().active_tab);
     try std.testing.expectEqual(version_before_hide.panes, client.model.version().panes);
     try std.testing.expectEqualDeep(observed_before_hide, client.presentation.observed);
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
 
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
@@ -622,7 +622,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
     try std.testing.expectEqualDeep(shown_area, client.geometry().area);
     try std.testing.expectEqual(version_before_show.chrome + 1, client.model.version().chrome);
     try std.testing.expectEqualDeep(observed_before_show, client.presentation.observed);
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
 
     try harness.settle();
     const contracted = try harness.nextClientMessage(&message_buffer);
@@ -707,7 +707,7 @@ test "workspace list toggle is projected only by the presenter" {
     try std.testing.expectEqualDeep(observed_before_collapse, client.presentation.observed);
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
     try harness.settleModelPresentation();
     try std.testing.expectEqualDeep(client.model.version(), client.presentation.prepared.model);
 
@@ -720,7 +720,7 @@ test "workspace list toggle is projected only by the presenter" {
     try std.testing.expectEqualDeep(observed_before_expand, client.presentation.observed);
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
     try harness.settleModelPresentation();
     try std.testing.expectEqualDeep(client.model.version(), client.presentation.prepared.model);
 }
@@ -756,7 +756,7 @@ test "an active split commits once and presentation observes the model" {
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
     try std.testing.expectEqualDeep(observed_before, client.presentation.observed);
 
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
 }
 
 test "an inactive split is retained detached without a visible revision" {
@@ -1281,20 +1281,6 @@ test "a late failed pane attachment does not notify or draw" {
     try std.testing.expectEqualDeep(observed_before_failure, client.presentation.observed);
     try std.testing.expect(!client.model.notification_scheduler.pending);
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
-}
-
-// Observes the model as a window does after an event, as `ClientHarness.present`
-// does before it prepares, and reports whether a presentation is due.
-fn observePresentation(harness: *ClientHarness) bool {
-    const client = harness.client;
-    const projection = client_module.capture(&client.model, .{ .geometry = data.workbench.region(&client.model) });
-    _ = client.presentation.observe(.{
-        .model = projection.version,
-        .presentation_ingress = projection.presentation_ingress,
-        .geometry_revision = projection.geometry.revision,
-    });
-
-    return client.presentation.needsPreparation();
 }
 
 // Frames the workbench with the host's grid chrome, as a terminal does, so

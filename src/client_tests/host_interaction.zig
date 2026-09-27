@@ -5,6 +5,7 @@ const keyinput = @import("keyinput");
 const core = @import("telar-core");
 const data = @import("model");
 const client_module = @import("telar-client");
+const keys = @import("keys.zig");
 const ClientHarness = @import("ClientHarness.zig");
 const fixtures = @import("fixtures.zig");
 const std = @import("std");
@@ -15,13 +16,6 @@ const Measurement = struct {
     rows: u16,
     width_px: u32,
     height_px: u32,
-};
-
-/// A window's image store reduced to which pane last received a graphics
-/// command, so the client sees that pane holding graphics.
-const PaneImages = struct {
-    pane_id: ?core.PaneId = null,
-    commands: u64 = 0,
 };
 
 test "host resize commits before resources and presents by model version" {
@@ -297,8 +291,6 @@ test "a Kitty capability response commits before fallback projection and present
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    var images: PaneImages = .{};
-    client.graphics = paneImagesPort(&images);
 
     var payload: [256]u8 = undefined;
     const encoded = try core.encodeGraphicsImage(&payload, .{
@@ -382,7 +374,7 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     try std.testing.expectEqual(@as(u32, 7), pane.scroll.offset);
     try std.testing.expect(!client.graphics.paneVisible(pane.id));
 
-    try pressKey(client, "x");
+    try keys.routeChord(client, "x");
 
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expect(client.graphics.paneVisible(pane.id));
@@ -474,7 +466,7 @@ test "a full outbox preserves the committed pane viewport and rejects input" {
 
     const version = client.model.version();
 
-    try std.testing.expectError(error.ClientOutboxFull, pressKey(client, "x"));
+    try std.testing.expectError(error.ClientOutboxFull, keys.routeChord(client, "x"));
 
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expect(client.graphics.paneVisible(pane.id));
@@ -507,9 +499,9 @@ test "copy mode round trip: enter, select, copy, leave" {
     try harness.settleModelPresentation();
     try std.testing.expectEqualDeep(
         data.copy_mode.currentProjection(&client.model).?.view,
-        presentedCopy(&harness).?.view,
+        harness.presentedCopy().?.view,
     );
-    const painted_cursor_y = presentedCopy(&harness).?.view.cursor.y;
+    const painted_cursor_y = harness.presentedCopy().?.view.cursor.y;
 
     const pane_view = data.tab_layout.view(
         &client.model,
@@ -535,20 +527,20 @@ test "copy mode round trip: enter, select, copy, leave" {
     try std.testing.expectEqual(painted_cursor_y - 3, data.copy_mode.currentProjection(&client.model).?.view.cursor.y);
 
     // While in copy mode, keys route to the selection, not the pane.
-    try pressKey(client, "v");
-    try pressKey(client, "l");
+    try keys.routeChord(client, "v");
+    try keys.routeChord(client, "l");
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(@as(u16, 1), presentedCopy(&harness).?.view.cursor.x);
-    try std.testing.expect(presentedCopy(&harness).?.view.anchor != null);
+    try std.testing.expectEqual(@as(u16, 1), harness.presentedCopy().?.view.cursor.x);
+    try std.testing.expect(harness.presentedCopy().?.view.anchor != null);
 
     const version_before_copy = client.model.version();
-    try pressKey(client, "enter");
+    try keys.routeChord(client, "enter");
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try fixtures.expectNonCopyOrViewportVersionEqual(version_before_copy, client.model.version());
     try std.testing.expectEqual(version_before_copy.copy + 1, client.model.version().copy);
     try std.testing.expectEqual(version_before_copy.viewport + 1, client.model.version().viewport);
     try harness.settleModelPresentation();
-    try std.testing.expect(presentedCopy(&harness) == null);
+    try std.testing.expect(harness.presentedCopy() == null);
     try std.testing.expectEqualDeep(client.model.version(), client.presentation.delivered.model);
     try harness.settle();
 
@@ -581,7 +573,7 @@ test "copy-mode o opens a file URI in an editor tab without leaving the mode" {
 
     _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
     const version = client.model.version();
-    try pressKey(client, "o");
+    try keys.routeChord(client, "o");
 
     try std.testing.expect(data.copy_mode.isActive(&client.model));
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -711,10 +703,10 @@ test "a full outbox keeps copy mode and its selection active" {
     }
 
     _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
-    try pressKey(client, "v");
+    try keys.routeChord(client, "v");
     const version = client.model.version();
 
-    try std.testing.expectError(error.ClientOutboxFull, pressKey(client, "enter"));
+    try std.testing.expectError(error.ClientOutboxFull, keys.routeChord(client, "enter"));
 
     try std.testing.expect(data.copy_mode.isActive(&client.model));
     try std.testing.expect(data.copy_mode.currentProjection(&client.model).?.view.anchor != null);
@@ -742,78 +734,9 @@ fn resizeHost(client: *client_module.Client, measurement: Measurement) !?data.Ho
     });
 }
 
-/// Delivers one chord straight to the shared key routing, as a host does for
-/// a key its keymap already resolved.
-/// Example: `try pressKey(client, "enter");`
-fn pressKey(client: *client_module.Client, chord: []const u8) !void {
-    _ = try client_module.key_routing.routeKeyInput(
-        client,
-        .{
-            .key = try keyinput.chord.parseKey(chord),
-        },
-    );
-}
-
-fn paneImagesPort(images: *PaneImages) client_module.GraphicsRetention {
-    return .{
-        .context = images,
-        .apply_fn = applyPaneImage,
-        .clear_pane_fn = clearPaneImages,
-        .set_pane_visible_fn = setPaneImagesVisible,
-        .pane_visible_fn = paneImagesVisible,
-        .has_pane_graphics_fn = hasPaneImages,
-        .ingress_version_fn = paneImagesIngress,
-        .peek_credit_fn = noCredit,
-        .consume_credit_fn = consumeNoCredit,
-    };
-}
-
-fn imagesFrom(context: *anyopaque) *PaneImages {
-    return @ptrCast(@alignCast(context));
-}
-
-fn applyPaneImage(context: *anyopaque, command: data.PaneGraphicsCommand) !void {
-    const images = imagesFrom(context);
-    images.pane_id = command.paneId();
-    images.commands += 1;
-}
-
-fn clearPaneImages(context: *anyopaque, pane_id: core.PaneId) void {
-    const images = imagesFrom(context);
-    if (images.pane_id == pane_id) {
-        images.pane_id = null;
-    }
-}
-
-fn setPaneImagesVisible(_: *anyopaque, _: core.PaneId, _: bool) !void {}
-
-fn paneImagesVisible(_: *anyopaque, _: core.PaneId) bool {
-    return true;
-}
-
-fn hasPaneImages(context: *anyopaque, pane_id: core.PaneId) bool {
-    return imagesFrom(context).pane_id == pane_id;
-}
-
-fn paneImagesIngress(context: *anyopaque) u64 {
-    return imagesFrom(context).commands;
-}
-
-fn noCredit(_: *anyopaque) ?client_module.GraphicsCredit {
-    return null;
-}
-
-fn consumeNoCredit(_: *anyopaque, _: client_module.GraphicsCredit) void {}
-
 /// Presents the model and checks the presentation carried its version.
 fn expectPresented(harness: *ClientHarness) !void {
     try harness.present();
     try std.testing.expectEqualDeep(harness.client.model.version(), harness.client.presentation.delivered.model);
 }
 
-/// The copy selection a presentation of the current model carries.
-fn presentedCopy(harness: *ClientHarness) ?client_module.CopyProjection {
-    const model = &harness.client.model;
-
-    return client_module.capture(model, .{ .geometry = data.workbench.region(model) }).copy;
-}

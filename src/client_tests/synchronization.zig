@@ -6,6 +6,7 @@ const keyinput = @import("keyinput");
 const core = @import("telar-core");
 const client_module = @import("telar-client");
 const data = @import("model");
+const keys = @import("keys.zig");
 const ClientHarness = @import("ClientHarness.zig");
 const RetainedGraphics = @import("RetainedGraphics.zig");
 const std = @import("std");
@@ -164,8 +165,8 @@ test "new workspace inherits cwd from the focused runtime pane" {
     harness.client.model.request_lifecycle.tracker = .{};
 
     _ = try client_module.actions.executeAction(harness.client, .new_workspace, .effect);
-    try typeText(&harness, "agents");
-    try pressKey(&harness, .plain(.enter));
+    try keys.typeText(harness.client, "agents");
+    try keys.pressKey(harness.client, .plain(.enter));
     try harness.settle();
 
     var buffer: [512]u8 = undefined;
@@ -824,11 +825,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
     try data.pane_split.split(&client.model, model, .{ .existing_pane = ClientHarness.bootstrap_pane, .new_pane = retired, .location = ClientHarness.bootstrap_location, .axis = .horizontal, .area = client.geometry().area });
     try client_module.pane_focus.synchronizeActivePane(client);
     try std.testing.expect(data.copy_mode.enter(&client.model));
-    var images: PaneImages = .{
-        .retained = &harness.graphics,
-    };
-    client.graphics = images.port();
-    try images.add(retired);
+    try harness.graphics.holdImage(retired);
     try client.model.request_lifecycle.tracker.add(@enumFromInt(91), .{ .close_pane = .{
         .pane_id = retired,
         .location = ClientHarness.bootstrap_location,
@@ -1192,11 +1189,7 @@ test "workspace reconciliation retires removed state and restores the new active
     const client = harness.client;
     const second = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
     try client.model.request_lifecycle.tracker.add(@enumFromInt(90), .{ .rename_tab = ClientHarness.bootstrap_location });
-    var images: PaneImages = .{
-        .retained = &harness.graphics,
-    };
-    client.graphics = images.port();
-    try images.add(ClientHarness.bootstrap_pane);
+    try harness.graphics.holdImage(ClientHarness.bootstrap_pane);
     try std.testing.expect(client.graphics.hasPaneGraphics(ClientHarness.bootstrap_pane));
     const frames_before = preparedFrames(&harness);
 
@@ -1414,113 +1407,4 @@ fn preparedFrames(harness: *const ClientHarness) u64 {
 }
 
 // Presses one key through the keymap, as a window delivers it.
-fn pressKey(harness: *ClientHarness, key: keyinput.Key) !void {
-    const app = harness.client;
-    var router = try client_module.key_router.build(app.routerConfig());
-    const decision = router.routeEvent(
-        .{
-            .key = key,
-            .raw = "",
-            .now_ns = 0,
-        },
-        .{
-            .captures_keys = data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(app)),
-            .repeat_policy = null,
-        },
-    );
-
-    switch (decision) {
-        .forward => |value| _ = try client_module.key_routing.routeKeyInput(app, .{ .key = value.key }),
-        .action => |request| _ = try client_module.actions.executeAction(app, request.value, .binding),
-        .replay, .pending, .discard => return error.UnexpectedKeyDecision,
-    }
-}
-
 // Types each character of `text` as its own key press.
-fn typeText(harness: *ClientHarness, text: []const u8) !void {
-    for (0..text.len) |index| {
-        try pressKey(harness, .plain(.{ .char = keyinput.Char.init(text[index..][0..1]) }));
-    }
-}
-
-/// The harness's graphics stand-in keeps no images. This one remembers which
-/// panes hold one until the client clears them, and leaves visibility to the
-/// harness's stand-in.
-const PaneImages = struct {
-    const capacity = 4;
-
-    retained: *RetainedGraphics,
-    panes: [capacity]core.PaneId = undefined,
-    count: usize = 0,
-
-    fn add(self: *PaneImages, pane_id: core.PaneId) !void {
-        if (self.count == capacity) {
-            return error.TooManyPaneImages;
-        }
-
-        self.panes[self.count] = pane_id;
-        self.count += 1;
-    }
-
-    fn port(self: *PaneImages) client_module.GraphicsRetention {
-        return .{
-            .context = self,
-            .apply_fn = apply,
-            .clear_pane_fn = clearPane,
-            .set_pane_visible_fn = setVisible,
-            .pane_visible_fn = visible,
-            .has_pane_graphics_fn = hasGraphics,
-            .ingress_version_fn = ingress,
-            .peek_credit_fn = peekCredit,
-            .consume_credit_fn = consumeCredit,
-        };
-    }
-
-    fn from(context: *anyopaque) *PaneImages {
-        return @ptrCast(@alignCast(context));
-    }
-
-    fn apply(context: *anyopaque, command: data.PaneGraphicsCommand) !void {
-        try from(context).retained.port().apply(command);
-    }
-
-    fn clearPane(context: *anyopaque, pane_id: core.PaneId) void {
-        const self = from(context);
-        for (self.panes[0..self.count], 0..) |pane, index| {
-            if (pane == pane_id) {
-                self.panes[index] = self.panes[self.count - 1];
-                self.count -= 1;
-                return;
-            }
-        }
-    }
-
-    fn setVisible(context: *anyopaque, pane_id: core.PaneId, value: bool) !void {
-        try from(context).retained.setPaneVisible(pane_id, value);
-    }
-
-    fn visible(context: *anyopaque, pane_id: core.PaneId) bool {
-        return from(context).retained.port().paneVisible(pane_id);
-    }
-
-    fn hasGraphics(context: *anyopaque, pane_id: core.PaneId) bool {
-        const self = from(context);
-        for (self.panes[0..self.count]) |pane| {
-            if (pane == pane_id) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    fn ingress(context: *anyopaque) u64 {
-        return from(context).retained.port().ingressVersion();
-    }
-
-    fn peekCredit(_: *anyopaque) ?client_module.GraphicsCredit {
-        return null;
-    }
-
-    fn consumeCredit(_: *anyopaque, _: client_module.GraphicsCredit) void {}
-};

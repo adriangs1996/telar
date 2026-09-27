@@ -8,9 +8,6 @@ const std = @import("std");
 const ClientHarness = @import("ClientHarness.zig");
 const fixtures = @import("fixtures.zig");
 
-/// Panes a test gives graphics at once.
-const probe_capacity = 4;
-
 test "a patch against an unknown base requests a fresh snapshot" {
     var harness: ClientHarness = undefined;
     try harness.init();
@@ -34,7 +31,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(patch));
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqualDeep(observed, client.presentation.observed);
-    try std.testing.expect(!observePresentation(&harness));
+    try std.testing.expect(!harness.observe());
     if (comptime core.enabled) {
         try std.testing.expectEqual(frames, client.telemetry.metrics.frames);
     }
@@ -79,7 +76,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
     try std.testing.expectEqual(ClientHarness.bootstrap_pane, ack.frame_ack.pane_id);
     try std.testing.expectEqual(@as(u64, 5), ack.frame_ack.frame_id);
     try std.testing.expectEqual(@as(u64, 5), pane.pending_frame_id);
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
     try harness.settleModelPresentation();
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try harness.settle();
@@ -122,7 +119,7 @@ test "a frame made stale by detach has no state resources or presentation effect
     }
 
     try std.testing.expectEqualDeep(observed, client.presentation.observed);
-    try std.testing.expect(!observePresentation(&harness));
+    try std.testing.expect(!harness.observe());
 }
 
 test "a frame already sent before workspace departure is harmless during handoff" {
@@ -259,7 +256,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
     try std.testing.expectEqualDeep(observed, client.presentation.observed);
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
     try harness.settleModelPresentation();
     try std.testing.expectEqualDeep(client.model.version(), client.presentation.prepared.model);
 
@@ -275,7 +272,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
         client.model.panes.find(ClientHarness.bootstrap_pane).?.cwdSlice(),
     );
     try std.testing.expectEqualDeep(presented_version, client.model.version());
-    try std.testing.expect(!observePresentation(&harness));
+    try std.testing.expect(!harness.observe());
 
     const stale = try core.encodePaneCwd(&payload, .{
         .pane_id = @enumFromInt(99),
@@ -312,7 +309,7 @@ test "pane foreground and focus update automatic tab labels through presentation
     try std.testing.expectEqualDeep(observed, client.presentation.observed);
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
     try harness.settleModelPresentation();
     try std.testing.expectEqualDeep(client.model.version(), client.presentation.prepared.model);
     try expectBootstrapTab(&harness, "Claude Code", .provider_claude);
@@ -321,7 +318,7 @@ test "pane foreground and focus update automatic tab labels through presentation
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(foreground));
 
     try std.testing.expectEqualDeep(presented_version, client.model.version());
-    try std.testing.expect(!observePresentation(&harness));
+    try std.testing.expect(!harness.observe());
 
     const second_pane: core.PaneId = @enumFromInt(11);
     _ = try data.pane_split.commitSplit(&client.model, .{
@@ -352,8 +349,6 @@ test "close pane request waits for the authoritative exit before committing" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    var probe: GraphicsProbe = undefined;
-    probe.install(client);
     client.model.request_lifecycle.tracker = .{};
     const closing_pane: core.PaneId = @enumFromInt(11);
     const split = try data.pane_split.commitSplit(&client.model, .{
@@ -406,7 +401,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expect(!client.graphics.hasPaneGraphics(closing_pane));
     try std.testing.expect(!client.model.notification_scheduler.pending);
 
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
     try harness.settleModelPresentation();
     try std.testing.expectEqualDeep(client.model.version(), client.presentation.prepared.model);
     const committed_version = client.model.version();
@@ -419,7 +414,7 @@ test "close pane request waits for the authoritative exit before committing" {
     );
 
     try std.testing.expectEqualDeep(committed_version, client.model.version());
-    try std.testing.expect(!observePresentation(&harness));
+    try std.testing.expect(!harness.observe());
 }
 
 test "an unrequested pane exit removes the pane silently" {
@@ -428,8 +423,6 @@ test "an unrequested pane exit removes the pane silently" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    var probe: GraphicsProbe = undefined;
-    probe.install(client);
     try std.testing.expect(data.copy_mode.enter(&client.model));
     try applyTestingImage(client, ClientHarness.bootstrap_pane);
     const version_before_exit = client.model.version();
@@ -451,7 +444,7 @@ test "an unrequested pane exit removes the pane silently" {
     try std.testing.expectEqualDeep(observed_before_exit, client.presentation.observed);
 
     // The harness presents while it settles, so the observation comes first.
-    try std.testing.expect(observePresentation(&harness));
+    try std.testing.expect(harness.observe());
     try harness.settle();
 
     try std.testing.expect(client.model.panes.find(ClientHarness.bootstrap_pane) == null);
@@ -471,8 +464,6 @@ test "an inactive pane exit retires only inactive state" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    var probe: GraphicsProbe = undefined;
-    probe.install(client);
     client.model.request_lifecycle.tracker = .{};
     const inactive_pane: core.PaneId = @enumFromInt(20);
     const inactive = try harness.addInactiveTab(@enumFromInt(2), inactive_pane);
@@ -509,21 +500,7 @@ test "an inactive pane exit retires only inactive state" {
 
     // The terminal client drew once more to delete the host's copy of the
     // image; a client that keeps its images itself has nothing to redraw.
-    try std.testing.expect(!observePresentation(&harness));
-}
-
-// Observes the model as a window does after an event, as `ClientHarness.present`
-// does before it prepares, and reports whether a presentation is due.
-fn observePresentation(harness: *ClientHarness) bool {
-    const client = harness.client;
-    const projection = client_module.capture(&client.model, .{ .geometry = data.workbench.region(&client.model) });
-    _ = client.presentation.observe(.{
-        .model = projection.version,
-        .presentation_ingress = projection.presentation_ingress,
-        .geometry_revision = projection.geometry.revision,
-    });
-
-    return client.presentation.needsPreparation();
+    try std.testing.expect(!harness.observe());
 }
 
 // Receives the next runtime read and hands it to the client, as the event
@@ -565,88 +542,3 @@ fn applyTestingImage(client: *client_module.Client, pane_id: core.PaneId) !void 
     });
 }
 
-/// Wraps the harness's graphics store to remember which panes hold images,
-/// so a test sees the client clear a retired pane's graphics. Everything
-/// else goes to the wrapped store.
-const GraphicsProbe = struct {
-    inner: client_module.GraphicsRetention,
-    panes: [probe_capacity]core.PaneId = undefined,
-    count: usize = 0,
-
-    fn install(self: *GraphicsProbe, client: *client_module.Client) void {
-        self.* = .{ .inner = client.graphics };
-        client.graphics = .{
-            .context = self,
-            .apply_fn = apply,
-            .clear_pane_fn = clearPane,
-            .set_pane_visible_fn = setVisible,
-            .pane_visible_fn = visible,
-            .has_pane_graphics_fn = hasGraphics,
-            .ingress_version_fn = ingress,
-            .peek_credit_fn = peekCredit,
-            .consume_credit_fn = consumeCredit,
-        };
-    }
-
-    fn from(context: *anyopaque) *GraphicsProbe {
-        return @ptrCast(@alignCast(context));
-    }
-
-    fn apply(context: *anyopaque, command: data.PaneGraphicsCommand) !void {
-        const self = from(context);
-        try self.inner.apply(command);
-        if (hasGraphics(context, command.paneId())) {
-            return;
-        }
-
-        if (self.count == self.panes.len) {
-            return error.TooManyProbedPanes;
-        }
-
-        self.panes[self.count] = command.paneId();
-        self.count += 1;
-    }
-
-    fn clearPane(context: *anyopaque, pane_id: core.PaneId) void {
-        const self = from(context);
-        self.inner.clearPane(pane_id);
-        for (self.panes[0..self.count], 0..) |pane, index| {
-            if (pane == pane_id) {
-                self.panes[index] = self.panes[self.count - 1];
-                self.count -= 1;
-                return;
-            }
-        }
-    }
-
-    fn setVisible(context: *anyopaque, pane_id: core.PaneId, value: bool) !void {
-        try from(context).inner.setPaneVisible(pane_id, value);
-    }
-
-    fn visible(context: *anyopaque, pane_id: core.PaneId) bool {
-        return from(context).inner.paneVisible(pane_id);
-    }
-
-    fn hasGraphics(context: *anyopaque, pane_id: core.PaneId) bool {
-        const self = from(context);
-        for (self.panes[0..self.count]) |pane| {
-            if (pane == pane_id) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    fn ingress(context: *anyopaque) u64 {
-        return from(context).inner.ingressVersion();
-    }
-
-    fn peekCredit(context: *anyopaque) ?client_module.GraphicsCredit {
-        return from(context).inner.peekCredit();
-    }
-
-    fn consumeCredit(context: *anyopaque, credit: client_module.GraphicsCredit) void {
-        from(context).inner.consumeCredit(credit);
-    }
-};

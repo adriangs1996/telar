@@ -5,6 +5,7 @@ const keyinput = @import("keyinput");
 const data = @import("model");
 const client_module = @import("telar-client");
 const core = @import("telar-core");
+const keys = @import("keys.zig");
 const ClientHarness = @import("ClientHarness.zig");
 const std = @import("std");
 const fixtures = @import("fixtures.zig");
@@ -16,7 +17,7 @@ test "host input arriving while no tab exists is dropped, not a crash" {
     try harness.init();
     defer harness.deinit();
 
-    try pressKey(&harness, .plain(.{ .char = keyinput.Char.init("x") }));
+    try keys.pressKey(harness.client, .plain(.{ .char = keyinput.Char.init("x") }));
     try std.testing.expectEqual(@as(usize, 0), harness.client.model.to_runtime.len);
 }
 
@@ -373,28 +374,6 @@ test "client layout observation sends one canonical workspace update" {
 }
 
 // Presses one key through the keymap, as a window delivers it.
-fn pressKey(harness: *ClientHarness, key: keyinput.Key) !void {
-    const app = harness.client;
-    var router = try client_module.key_router.build(app.routerConfig());
-    const decision = router.routeEvent(
-        .{
-            .key = key,
-            .raw = "",
-            .now_ns = 0,
-        },
-        .{
-            .captures_keys = data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(app)),
-            .repeat_policy = null,
-        },
-    );
-
-    switch (decision) {
-        .forward => |value| _ = try client_module.key_routing.routeKeyInput(app, .{ .key = value.key }),
-        .action => |request| _ = try client_module.actions.executeAction(app, request.value, .binding),
-        .replay, .pending, .discard => return error.UnexpectedKeyDecision,
-    }
-}
-
 /// A graphics store holding one credit the host released, standing in for
 /// the harness's store, which never releases any.
 const PendingCredit = struct {

@@ -1,37 +1,18 @@
 //! Client integration tests for input: semantic keys through the keymap,
-//! pastes, pointer events and attachment previews.
+//! pastes, pointer events and attachment shelf.catalog.
 const keyinput = @import("keyinput");
 
 const cellgrid = @import("cellgrid");
 const client_module = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
+const keys = @import("keys.zig");
 const ClientHarness = @import("ClientHarness.zig");
+const PreviewShelf = @import("PreviewShelf.zig");
 const fixtures = @import("fixtures.zig");
 const std = @import("std");
 
 const KeyRouter = client_module.key_router.Type;
-const PreviewCatalog = client_module.GenericCatalog(PreviewDelivery);
-
-/// Attachment previews need no host resources in these tests: the catalog
-/// keeps the PNG bytes and nothing is drawn.
-const PreviewDelivery = struct {
-    pub const State = struct {};
-    pub const SlotState = struct {};
-
-    pub fn createSlot(_: *PreviewCatalog) !SlotState {
-        return .{};
-    }
-
-    pub fn targetChanged(_: *PreviewCatalog) void {}
-
-    pub fn retireSlot(_: *PreviewCatalog, _: usize) void {}
-
-    pub fn canRelease(_: *const PreviewCatalog.Slot) bool {
-        return true;
-    }
-};
-
 const PiFrame = struct {
     target: data.AttachmentTarget,
     prompt: []const u8,
@@ -105,9 +86,9 @@ test "closing a preview deletes its matching atomic image marker" {
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();
-    var previews = PreviewCatalog.init(std.testing.allocator);
-    defer previews.deinit();
-    harness.client.attachments = previewShelf(&previews);
+    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator), .reserves_rows = false };
+    defer shelf.catalog.deinit();
+    harness.client.attachments = shelf.port();
     try harness.bootstrap();
     const client = harness.client;
     const target = try fixtures.installTestingAttachmentTarget(client, 1);
@@ -130,7 +111,7 @@ test "closing a preview deletes its matching atomic image marker" {
         .x = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = prompt, .style = .{} }),
         .y = 0,
     };
-    const first = previews.snapshot().items[0].id;
+    const first = shelf.catalog.snapshot().items[0].id;
     const model = client.model.tabs.active;
 
     _ = try client_module.view_interactions.apply(client, model, .{
@@ -138,7 +119,7 @@ test "closing a preview deletes its matching atomic image marker" {
         .consumed = true,
     });
 
-    const remaining = previews.snapshot();
+    const remaining = shelf.catalog.snapshot();
     try std.testing.expectEqual(@as(u8, 1), remaining.len);
     try std.testing.expectEqual(@as(u64, 2), @intFromEnum(remaining.items[0].id));
     try harness.settle();
@@ -155,9 +136,9 @@ test "child marker deletion and prompt submission retire paired previews" {
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();
-    var previews = PreviewCatalog.init(std.testing.allocator);
-    defer previews.deinit();
-    harness.client.attachments = previewShelf(&previews);
+    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator), .reserves_rows = false };
+    defer shelf.catalog.deinit();
+    harness.client.attachments = shelf.port();
     try harness.bootstrap();
     const client = harness.client;
     const target = try fixtures.installTestingAttachmentTarget(client, 1);
@@ -177,11 +158,11 @@ test "child marker deletion and prompt submission retire paired previews" {
         .y = 0,
     };
 
-    try pressKey(client, "backspace");
+    try keys.routeChord(client, "backspace");
 
-    try std.testing.expectEqual(@as(u8, 0), previews.snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), shelf.catalog.snapshot().len);
     const pending = (try client.model.clipboard.reserve(target)).?;
-    try pressKey(client, "enter");
+    try keys.routeChord(client, "enter");
     try std.testing.expect(client.model.clipboard.capture == null);
     const completed = try fixtures.testingClipboardCapture(client, pending, "private png");
 
@@ -193,7 +174,7 @@ test "child marker deletion and prompt submission retire paired previews" {
         },
     );
 
-    try std.testing.expectEqual(@as(u8, 0), previews.snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), shelf.catalog.snapshot().len);
     try std.testing.expect(client.model.clipboard.orphan == null);
 }
 
@@ -201,9 +182,9 @@ test "Claude marker disappearance in a committed frame retires its paired previe
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();
-    var previews = PreviewCatalog.init(std.testing.allocator);
-    defer previews.deinit();
-    harness.client.attachments = previewShelf(&previews);
+    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator), .reserves_rows = false };
+    defer shelf.catalog.deinit();
+    harness.client.attachments = shelf.port();
     try harness.bootstrap();
     const client = harness.client;
     const target = try fixtures.installTestingAttachmentProvider(client, 1, .claude);
@@ -231,9 +212,9 @@ test "Claude marker disappearance in a committed frame retires its paired previe
     });
 
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(marker_frame));
-    try std.testing.expectEqual(@as(u8, 1), previews.snapshot().len);
-    try pressKey(client, "backspace");
-    try std.testing.expectEqual(@as(u8, 1), previews.snapshot().len);
+    try std.testing.expectEqual(@as(u8, 1), shelf.catalog.snapshot().len);
+    try keys.routeChord(client, "backspace");
+    try std.testing.expectEqual(@as(u8, 1), shelf.catalog.snapshot().len);
 
     pane_buffer.clear(.{});
     const empty_cursor = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = "> ", .style = .{} });
@@ -249,16 +230,16 @@ test "Claude marker disappearance in a committed frame retires its paired previe
     });
 
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(empty_frame));
-    try std.testing.expectEqual(@as(u8, 0), previews.snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), shelf.catalog.snapshot().len);
 }
 
 test "closing a Pi preview deletes its whole pasted path from the editor" {
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();
-    var previews = PreviewCatalog.init(std.testing.allocator);
-    defer previews.deinit();
-    harness.client.attachments = previewShelf(&previews);
+    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator), .reserves_rows = false };
+    defer shelf.catalog.deinit();
+    harness.client.attachments = shelf.port();
     try harness.bootstrap();
     const client = harness.client;
     const target = try fixtures.installTestingAttachmentProvider(client, 1, .pi);
@@ -266,7 +247,7 @@ test "closing a Pi preview deletes its whole pasted path from the editor" {
     try commitPiFrame(client, .{ .target = target, .prompt = "> " ++ pi_test_path, .id = 1 });
     var ack_wire: [512]u8 = undefined;
     try std.testing.expectEqual(@as(u64, 1), (try harness.nextClientMessage(&ack_wire)).frame_ack.frame_id);
-    const id = previews.snapshot().items[0].id;
+    const id = shelf.catalog.snapshot().items[0].id;
     const model = client.model.tabs.active;
 
     _ = try client_module.view_interactions.apply(client, model, .{
@@ -274,7 +255,7 @@ test "closing a Pi preview deletes its whole pasted path from the editor" {
         .consumed = true,
     });
 
-    try std.testing.expectEqual(@as(u8, 0), previews.snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), shelf.catalog.snapshot().len);
     try harness.settle();
     var buffer: [512]u8 = undefined;
     const message = try harness.nextClientMessage(&buffer);
@@ -286,25 +267,25 @@ test "a Pi path removed by a word deletion retires its preview on the next frame
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();
-    var previews = PreviewCatalog.init(std.testing.allocator);
-    defer previews.deinit();
-    harness.client.attachments = previewShelf(&previews);
+    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator), .reserves_rows = false };
+    defer shelf.catalog.deinit();
+    harness.client.attachments = shelf.port();
     try harness.bootstrap();
     const client = harness.client;
     const target = try fixtures.installTestingAttachmentProvider(client, 1, .pi);
     try adoptPiPreview(client, target);
     try commitPiFrame(client, .{ .target = target, .prompt = "> " ++ pi_test_path, .id = 1 });
-    try std.testing.expectEqual(@as(u8, 1), previews.snapshot().len);
+    try std.testing.expectEqual(@as(u8, 1), shelf.catalog.snapshot().len);
 
-    try pressKey(client, "ctrl+w");
-    try std.testing.expectEqual(@as(u8, 1), previews.snapshot().len);
+    try keys.routeChord(client, "ctrl+w");
+    try std.testing.expectEqual(@as(u8, 1), shelf.catalog.snapshot().len);
     try commitPiFrame(client, .{
         .target = target,
         .prompt = "> /var/folders/8x/abc/T/pi-clipboard-3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b.",
         .id = 2,
     });
 
-    try std.testing.expectEqual(@as(u8, 0), previews.snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), shelf.catalog.snapshot().len);
 }
 
 test "host keys use the keyboard modes received in a pane frame" {
@@ -502,7 +483,7 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     try std.testing.expect(!data.pane_input.pasteActive(&client.model));
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
-    try pressKey(client, "escape");
+    try keys.routeChord(client, "escape");
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expect(data.copy_mode.enter(&client.model));
 
@@ -714,7 +695,7 @@ test "focused scroll bindings target focus rather than hover and normal input re
     try std.testing.expectEqual(focused, scrolled.set_pane_viewport.pane_id);
     try std.testing.expectEqual(@as(u32, 7), scrolled.set_pane_viewport.offset);
 
-    try pressKey(client, "x");
+    try keys.routeChord(client, "x");
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expect(client.graphics.paneVisible(focused));
     try harness.settle();
@@ -991,7 +972,7 @@ test "focused scroll retires copy mode before moving the restored viewport" {
     const pane = client.model.panes.find(ClientHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
     _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
-    try pressKey(client, "g");
+    try keys.routeChord(client, "g");
     try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -1136,27 +1117,15 @@ fn commitPiFrame(client: *client_module.Client, input: PiFrame) !void {
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(frame));
 }
 
-/// Delivers one chord straight to the shared key routing, as a host does for
-/// a key its keymap already resolved.
-/// Example: `try pressKey(client, "enter");`
-fn pressKey(client: *client_module.Client, chord: []const u8) !void {
-    _ = try client_module.key_routing.routeKeyInput(
-        client,
-        .{
-            .key = try keyinput.chord.parseKey(chord),
-        },
-    );
-}
-
 /// The prefix and one plain suffix through the keymap, as presses only.
 /// Example: `try routePrefixed(client, &router, "-");`
 fn routePrefixed(client: *client_module.Client, router: *KeyRouter, suffix: []const u8) !void {
-    const keys = [_]keyinput.Key{
+    const sequence = [_]keyinput.Key{
         prefix_key,
         .plain(.{ .char = .init(suffix) }),
     };
 
-    try std.testing.expectEqual(keyinput.Control.continue_routing, try routeKeys(client, router, &keys, 0));
+    try std.testing.expectEqual(keyinput.Control.continue_routing, try routeKeys(client, router, &sequence, 0));
 }
 
 /// One key a host reports with Kitty event types: its codepoint doubles as
@@ -1176,8 +1145,8 @@ fn kittyKey(text: []const u8, mods: keyinput.Key.Mods, phase: keyinput.Key.Phase
 /// Routes keys in order until a binding stops the client, as a host routes
 /// one batch of input.
 /// Example: `const control = try routeKeys(client, &router, &keys, now_ns);`
-fn routeKeys(client: *client_module.Client, router: *KeyRouter, keys: []const keyinput.Key, now_ns: u64) !keyinput.Control {
-    for (keys) |key| {
+fn routeKeys(client: *client_module.Client, router: *KeyRouter, sequence: []const keyinput.Key, now_ns: u64) !keyinput.Control {
+    for (sequence) |key| {
         if (try routeKey(client, router, key, now_ns) == .stop) {
             return .stop;
         }
@@ -1226,103 +1195,3 @@ fn routeKey(client: *client_module.Client, router: *KeyRouter, key: keyinput.Key
     return .continue_routing;
 }
 
-/// Binds `catalog` as the client's attachment shelf. Previews reserve no
-/// space below their pane: no window draws them here.
-fn previewShelf(catalog: *PreviewCatalog) client_module.AttachmentShelf {
-    return .{
-        .context = catalog,
-        .adopt_fn = adoptPreview,
-        .reconcile_markers_fn = reconcilePreviewMarkers,
-        .sync_target_fn = syncPreviewTarget,
-        .remove_fn = removePreview,
-        .remove_prompt_fn = removePromptPreviews,
-        .modal_active_fn = previewModalActive,
-        .close_modal_fn = closePreviewModal,
-        .reservation_fn = noReservation,
-        .visible_target_fn = visiblePreviewTarget,
-        .plan_marker_removal_fn = planPreviewMarkerRemoval,
-        .id_at_marker_deletion_fn = previewAtMarkerDeletion,
-        .pending_marker_at_deletion_fn = pendingPreviewMarker,
-        .expect_marker_deletion_fn = expectPreviewMarkerDeletion,
-    };
-}
-
-fn catalogFrom(context: *anyopaque) *PreviewCatalog {
-    return @ptrCast(@alignCast(context));
-}
-
-fn adoptPreview(context: *anyopaque, capture: *data.Capture) !bool {
-    const catalog = catalogFrom(context);
-    const had_items = catalog.hasVisibleItems();
-    try catalog.adopt(capture);
-
-    return had_items != catalog.hasVisibleItems();
-}
-
-fn reconcilePreviewMarkers(context: *anyopaque, target: data.AttachmentTarget, screen: client_module.MarkerScreen) ?bool {
-    const catalog = catalogFrom(context);
-    const had_items = catalog.hasVisibleItems();
-    if (catalog.reconcileMarkers(target, screen) == 0) {
-        return null;
-    }
-
-    return had_items != catalog.hasVisibleItems();
-}
-
-fn syncPreviewTarget(context: *anyopaque, target: ?data.AttachmentTarget) bool {
-    const change = catalogFrom(context).setTarget(target);
-
-    return change.changed and change.layout_changed;
-}
-
-fn removePreview(context: *anyopaque, id: data.AttachmentId) ?bool {
-    const catalog = catalogFrom(context);
-    const had_items = catalog.hasVisibleItems();
-    if (!catalog.remove(id)) {
-        return null;
-    }
-
-    return had_items != catalog.hasVisibleItems();
-}
-
-fn removePromptPreviews(context: *anyopaque, target: data.AttachmentTarget) ?bool {
-    const catalog = catalogFrom(context);
-    const had_items = catalog.hasVisibleItems();
-    if (catalog.removeVisible(target) == 0) {
-        return null;
-    }
-
-    return had_items != catalog.hasVisibleItems();
-}
-
-fn previewModalActive(context: *anyopaque) bool {
-    return catalogFrom(context).hasModal();
-}
-
-fn closePreviewModal(context: *anyopaque) bool {
-    return catalogFrom(context).closeModal();
-}
-
-fn noReservation(_: *anyopaque) ?data.PaneBottomReservation {
-    return null;
-}
-
-fn visiblePreviewTarget(context: *anyopaque) ?data.AttachmentTarget {
-    return catalogFrom(context).visibleTarget();
-}
-
-fn planPreviewMarkerRemoval(context: *anyopaque, id: data.AttachmentId, screen: client_module.MarkerScreen) ?data.MarkerRemoval {
-    return catalogFrom(context).planMarkerRemoval(id, screen);
-}
-
-fn previewAtMarkerDeletion(context: *anyopaque, screen: client_module.MarkerScreen, deletion: data.AttachmentMarkerDeletion) ?data.AttachmentId {
-    return catalogFrom(context).idAtMarkerDeletion(screen, deletion);
-}
-
-fn pendingPreviewMarker(context: *anyopaque, screen: client_module.MarkerScreen, probe: client_module.DeletionProbe) bool {
-    return catalogFrom(context).pendingMarkerAtDeletion(screen, probe);
-}
-
-fn expectPreviewMarkerDeletion(context: *anyopaque, target: data.AttachmentTarget) void {
-    catalogFrom(context).expectMarkerDeletion(target);
-}
