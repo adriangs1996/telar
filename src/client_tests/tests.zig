@@ -2,6 +2,7 @@
 //! pair, driven through `ClientHarness` without a window.
 test {
     _ = @import("fixtures.zig");
+    _ = @import("pane_lifecycle.zig");
     _ = @import("pane_splits.zig");
     _ = @import("notifications_and_agents.zig");
     _ = @import("renaming_and_telemetry.zig");
@@ -9,4 +10,5 @@ test {
     _ = @import("path_picker.zig");
     _ = @import("synchronization.zig");
     _ = @import("transport.zig");
+    _ = @import("pane_updates.zig");
 }
