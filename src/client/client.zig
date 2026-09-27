@@ -227,6 +227,7 @@ test {
     _ = @import("workspace/workspace_list_snapshot.zig");
     _ = @import("workspace/workspace_rename.zig");
     _ = @import("machines/remote.zig");
+    _ = @import("connection/runtime_link.zig");
     _ = @import("machines/runtime_connection.zig");
     _ = @import("machines/RuntimeConnector.zig");
     _ = @import("machines/SshOptions.zig");
@@ -250,6 +251,9 @@ pub const clipboard_capture = @import("attachments/clipboard_capture.zig");
 pub const change_review = @import("change_review/change_review.zig");
 pub const config_adoption = @import("config/config_adoption.zig");
 pub const runtime_io = @import("connection/runtime_io.zig");
+pub const runtime_link = @import("connection/runtime_link.zig");
+pub const MachineTarget = @import("machines/MachineTarget.zig").MachineTarget;
+pub const RemoteMachine = @import("machines/RemoteMachine.zig");
 pub const runtime_connection = @import("machines/runtime_connection.zig");
 pub const remote = @import("machines/remote.zig");
 pub const Discovery = @import("machines/Discovery.zig");

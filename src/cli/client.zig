@@ -23,8 +23,9 @@ pub fn run(init: std.process.Init, options: RunOptions) !u8 {
     return launch(init, options, frontend.ClientRun);
 }
 
-/// The same runtime connection and configuration as `run`, presented by the
-/// native window instead of the host terminal.
+/// The same configuration as `run`, presented by the native window. The
+/// window opens first and connects to its machine by itself, so nothing
+/// here waits on SSH or a runtime start.
 ///
 /// ```zig
 /// const exit_code = try client.runNative(process_init, options);
@@ -35,18 +36,42 @@ pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
         return error.UnsupportedPlatform;
     }
 
-    return launch(init, options, gui.run);
+    // The window's identity lease lives in the local runtime directory,
+    // which exists even before any runtime runs.
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, null);
+    try connector.prepareServerDirectory();
+
+    var prepared: ClientLaunch = undefined;
+    try prepared.prepare(.{
+        .process = init,
+        .options = &options,
+        .endpoint = connector.endpointPath(),
+        .remote_later = options.remote != null,
+    });
+    defer prepared.deinit();
+
+    var frontend_options = prepared.frontendOptions();
+    frontend_options.machine = if (options.remote) |destination| .{ .remote = .{
+        .destination = std.mem.span(destination),
+    } } else .{ .local = .{
+        .path = options.config,
+        .disabled = options.no_config,
+        .profile = options.profile,
+        .fresh = options.fresh,
+    } };
+    prepared.transferResources();
+    return gui.run(init, null, frontend_options);
 }
 
 /// One presentation adapter's entrypoint: it adopts the resources `Options`
 /// carries and runs until the user leaves.
-pub const Adapter = *const fn (std.process.Init, *localsocket.SocketChannel, client.Options) anyerror!u8;
+pub const Adapter = *const fn (std.process.Init, ?*localsocket.SocketChannel, client.Options) anyerror!u8;
 
 fn launch(init: std.process.Init, options: RunOptions, adapter: Adapter) !u8 {
     var forward: ?Forward = null;
     defer if (forward) |*owned| owned.stop(init.io);
     if (options.remote) |destination| {
-        forward = try remote.establish(init.io, init.gpa, init.minimal.environ, std.mem.span(destination));
+        forward = try remote.establish(init.io, init.gpa, init.minimal.environ, .{ .destination = std.mem.span(destination) }, null);
     }
 
     const connector = try RuntimeConnector.init(init.io, init.minimal.environ, if (forward) |*owned| owned.localPathZ() else null);

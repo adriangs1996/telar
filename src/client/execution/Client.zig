@@ -3,6 +3,8 @@
 //! presentation adapter supplies its host. Adapters embed it, build it in
 //! place and bind the ports before the first event.
 const sidebar_animation = @import("../notifications/sidebar_animation.zig");
+const localsocket = @import("localsocket");
+const pacing = @import("pacing");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -12,6 +14,10 @@ const client_tests = @import("client_tests.zig");
 const Options = @import("../Options.zig");
 const ClientInit = @import("../ClientInit.zig");
 const RuntimeTransportState = @import("../connection/RuntimeTransportState.zig");
+const ConnectReport = @import("../connection/ConnectReport.zig");
+const Forward = @import("../machines/Forward.zig");
+const RuntimeConnection = @import("../machines/RuntimeConnection.zig");
+const runtime_link = @import("../connection/runtime_link.zig");
 const TelemetryState = @import("../resources/TelemetryState.zig");
 const Generation = @import("../config/Generation.zig");
 const Snapshot = @import("../config/Snapshot.zig");
@@ -81,6 +87,25 @@ attachments: ?AttachmentShelf = null,
 /// by every adapter.
 presentation: PresentationLifecycle = .{},
 host_input_source: HostInputSource = undefined,
+/// What every session sends first; the adapter stores it before the link
+/// starts.
+bootstrap: ?data.RuntimeBootstrap = null,
+/// The socket a connection job produced; `runtime_transport` borrows it.
+channel: localsocket.SocketChannel = undefined,
+channel_owned: bool = false,
+/// The SSH forward carrying `channel` to a remote machine.
+forward: ?Forward = null,
+/// Written by the connection worker before its completion.
+connect_result: RuntimeConnection = undefined,
+connect_report: ConnectReport = .{},
+/// The wait before connecting again to a lost runtime.
+runtime_retry: pacing.DeadlineScheduler = .{},
+connected_at_ns: u64 = 0,
+/// A remote machine's home and login shell for the first pane, copied
+/// from its discovery because the forward that holds them can stop.
+launch_cwd: [std.fs.max_path_bytes]u8 = undefined,
+launch_shell: [std.fs.max_path_bytes]u8 = undefined,
+launch_arguments: [1][]const u8 = undefined,
 
 /// Builds the shared state in its final address. The model is megabytes, so
 /// nothing here passes it by value. Ports remain unbound.
@@ -145,6 +170,11 @@ pub fn init(self: *Client, params: ClientInit) !void {
         .window_title = if (snapshot) |value| value.windowTitle() else "",
     });
     errdefer self.model.deinit();
+    if (params.connection != null) {
+        self.model.runtime_link.phase = .connected;
+        self.model.runtime_link.sessions = 1;
+    }
+
     self.model.sound_playback = .init(params.options.sound);
     try self.model.history_palette.prepare(gpa);
     try self.model.to_runtime.reservePayloads(gpa);
@@ -203,6 +233,13 @@ pub fn deinit(self: *Client) void {
 
     self.model.deinit();
     self.runtime_transport.deinit(gpa);
+    if (self.channel_owned) {
+        self.channel.deinit(self.io);
+    }
+
+    if (self.forward) |*forward| {
+        forward.stop(self.io);
+    }
 }
 
 /// Handles one client event an adapter delivered and returns an exit
@@ -217,7 +254,7 @@ pub fn update(self: *Client, message: Message) !?u8 {
 
     switch (message) {
         .server => |result| return runtime_io.receiveRuntime(self, result),
-        .sent => |result| try runtime_io.completeRuntimeSend(&self.model, result),
+        .sent => |result| try runtime_io.completeRuntimeSend(self, result),
         .sidebar_animation_tick => |result| _ = try sidebar_animation.completeSidebarAnimationTick(self, result),
         .notification_tick => |result| _ = try notifications.completeNotificationTick(self, result),
         .bar_tick => |result| try bar_updates.handleTick(self, result),
@@ -232,6 +269,8 @@ pub fn update(self: *Client, message: Message) !?u8 {
         .sound_played => |result| try agent_sound.completeAgentSound(self, result),
         .notified => |result| result catch {},
         .config_reload => |result| _ = try config_adoption.completeConfigReload(self, result),
+        .runtime_connected => |result| try runtime_link.finishConnect(self, result),
+        .runtime_retry_tick => |result| try runtime_link.retry(self, result),
     }
 
     return null;
@@ -268,8 +307,15 @@ pub fn failBackgroundJob(self: *Client, job: BackgroundJob, err: anyerror) !void
 /// try client.flush();
 /// ```
 pub fn flush(self: *Client) !void {
-    self.queueGraphicsCredits();
     const transport = &self.runtime_transport;
+    if (transport.connection == null) {
+        // Nothing reaches a runtime this client is not connected to; a new
+        // session starts from its bootstrap.
+        self.model.to_runtime.discardQueued();
+        return;
+    }
+
+    self.queueGraphicsCredits();
     const payload = try self.model.to_runtime.beginSend(transport.send_buffer) orelse return;
 
     self.to_workers.push(.{ .runtime_send = .{ .state = transport, .bytes = payload } }) catch |err| {

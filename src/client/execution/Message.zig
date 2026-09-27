@@ -19,13 +19,18 @@ pub const Message = union(enum) {
     sound_played: anyerror!void,
     notified: anyerror!void,
     config_reload: anyerror!config_reload.ConfigReload,
+    /// A connection attempt finished; the connection or its report waits in
+    /// the client.
+    runtime_connected: anyerror!void,
+    /// The wait before connecting again to a lost runtime ended.
+    runtime_retry_tick: anyerror!void,
 
     /// The budget the event runs under.
     /// Example: `const path = core.enter(message.path());`
     pub fn path(self: Message) core.Path {
         return switch (self) {
-            .server, .sent, .sidebar_animation_tick => .interactive,
-            .notification_tick, .bar_tick, .bar_command, .plugin_result, .path_completion, .link_opened, .sound_played, .notified, .config_reload => .observation,
+            .server, .sent, .sidebar_animation_tick, .runtime_connected => .interactive,
+            .notification_tick, .bar_tick, .bar_command, .plugin_result, .path_completion, .link_opened, .sound_played, .notified, .config_reload, .runtime_retry_tick => .observation,
         };
     }
 };

@@ -12,6 +12,7 @@ const RuntimeConnector = @import("RuntimeConnector.zig");
 const Discovery = @import("Discovery.zig");
 const remote_discovery = @import("remote_discovery.zig");
 const SshOptions = @import("SshOptions.zig");
+const RemoteMachine = @import("RemoteMachine.zig");
 
 pub const connect_attempts = 100;
 pub const connect_interval_ms = 100;
@@ -24,15 +25,18 @@ const endpoint_timeout: std.Io.Timeout = .{
 };
 
 /// Discovers the remote home, shell and runtime socket over SSH, then starts
-/// one `ssh -N -L` forward and waits until its private socket is connectable.
+/// one `ssh -L` forward and waits until its private socket exists. The
+/// socket's name carries the destination and the window slot, so two
+/// windows on one machine never share or remove each other's socket. SSH's
+/// error output goes to `report` when given.
 ///
 /// ```zig
-/// var forward = try remote.establish(io, gpa, environ, "dev@build-box");
+/// var forward = try remote.establish(io, gpa, environ, .{ .destination = "dev@build-box" }, null);
 /// defer forward.stop(io);
 /// ```
-pub fn establish(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ, destination: []const u8) !Forward {
-    try core.ssh_destination.validate(destination);
-    const discovery = try discover(io, gpa, environ, destination);
+pub fn establish(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ, machine: RemoteMachine, report: ?*std.Io.Writer) !Forward {
+    try core.ssh_destination.validate(machine.destination);
+    const discovery = try discover(io, gpa, environ, machine.destination, report);
 
     // The forwarded socket lives in telar's managed, owner-only directory.
     const connector = try RuntimeConnector.init(io, environ, null);
@@ -40,31 +44,22 @@ pub fn establish(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Enviro
     const local_directory = std.fs.path.dirname(connector.endpointPath()) orelse return error.InvalidRuntimeDirectory;
 
     var forward: Forward = .{ .child = undefined, .discovery = discovery };
-    const local_path = try std.fmt.bufPrint(forward.local_path[0..std.fs.max_path_bytes], "{s}/remote-{x}.sock", .{
+    const local_path = try std.fmt.bufPrint(forward.local_path[0..std.fs.max_path_bytes], "{s}/remote-{x}-{d}.sock", .{
         local_directory,
-        core.ssh_destination.hash(destination),
+        core.ssh_destination.hash(machine.destination),
+        machine.window_slot,
     });
     forward.local_path_len = local_path.len;
     std.Io.Dir.deleteFileAbsolute(io, local_path) catch {};
 
     var forward_spec_buffer: [2 * std.fs.max_path_bytes + 1]u8 = undefined;
     const forward_spec = try std.fmt.bufPrint(&forward_spec_buffer, "{s}:{s}", .{ local_path, forward.discovery.endpoint() });
+    // The remote side reads a pipe only this process holds. If this process
+    // dies without stopping the forward, the pipe closes, `cat` ends, and
+    // ssh exits with it instead of outliving the window.
     forward.child = try std.process.spawn(io, .{
-        .argv = &.{
-            "ssh",
-            "-N",
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "ExitOnForwardFailure=yes",
-            "-o",
-            "StreamLocalBindUnlink=yes",
-            "-L",
-            forward_spec,
-            "--",
-            destination,
-        },
-        .stdin = .ignore,
+        .argv = &(.{ "ssh", "-T" } ++ SshOptions.forward_arguments ++ .{ "-L", forward_spec, "--", machine.destination, "cat >/dev/null" }),
+        .stdin = .pipe,
         .stdout = .ignore,
         .stderr = .inherit,
     });
@@ -98,12 +93,13 @@ pub fn connectForwarded(io: std.Io, connector: *const RuntimeConnector) !localso
 
 /// Asks the machine for its home, login shell and runtime socket over the
 /// managed SSH connection, starting its runtime when none is running. It
-/// never installs anything.
+/// never installs anything. SSH's error output goes to `report` when given,
+/// and to standard error otherwise.
 ///
 /// ```zig
-/// const found = try remote.discover(io, gpa, environ, "dev@box");
+/// const found = try remote.discover(io, gpa, environ, "dev@box", null);
 /// ```
-pub fn discover(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ, destination: []const u8) !Discovery {
+pub fn discover(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ, destination: []const u8, report: ?*std.Io.Writer) !Discovery {
     const command = "/bin/sh -c 'printf \"%s\\n\" \"$HOME\" \"${SHELL:-/bin/sh}\"; exec telar server endpoint'";
     const options = try SshOptions.prepare(io, environ, destination);
     const managed = options.arguments();
@@ -117,7 +113,12 @@ pub fn discover(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ
     defer gpa.free(result.stderr);
 
     if (result.term != .exited or result.term.exited != 0) {
-        std.debug.print("telar: `ssh {s} telar server endpoint` failed:\n{s}", .{ destination, result.stderr });
+        if (report) |writer| {
+            writer.writeAll(result.stderr) catch {};
+        } else {
+            std.debug.print("telar: `ssh {s} telar server endpoint` failed:\n{s}", .{ destination, result.stderr });
+        }
+
         return error.RemoteEndpointUnavailable;
     }
 

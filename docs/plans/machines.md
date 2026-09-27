@@ -189,7 +189,7 @@ running Lua, so it is plain data.
 - Unknown fields, duplicate ids or labels, and more than the table's
   capacity are rejected, the way `plugin.json` is validated.
 - `destination` passes the same validation as `--remote` today
-  (`src/cli/remote.zig`, `validateDestination`).
+  (`src/core/ssh_destination.zig`, `validate`).
 - The id is opaque and stable; the label can change.
 - The local machine has no entry. Its label is the host name unless
   `local_label` is set in the file.

@@ -1,22 +1,30 @@
 # Remote attach
 
-`telar --remote <ssh-destination>` runs the local client against the runtime
-on another machine. The remote transport is the local transport: the same
-framing, schema handshake, bounds and backpressure travel through one
-OpenSSH Unix-socket forward, so the runtime cannot tell a forwarded client
-from a local one.
+`telar gui --remote <ssh-destination>` (and the terminal client's
+`telar --remote`) runs the local client against the runtime on another
+machine. The remote transport is the local transport: the same framing,
+schema handshake, bounds and backpressure travel through one OpenSSH
+Unix-socket forward, so the runtime cannot tell a forwarded client from a
+local one.
+
+The window opens first and connects on a worker, and a lost connection does
+not close it: [runtime link](runtime-link.md) covers connecting,
+reconnecting and what the window shows meanwhile. The terminal client still
+connects before it starts and ends when the connection is lost.
 
 ## End-to-end path
 
 ```text
 telar --remote dev@box
         |
-ssh -T dev@box 'printf ... "$HOME" "${SHELL:-/bin/sh}"; exec telar server endpoint'
-        |     BatchMode, 30 s timeout; discovers remote home, shell and socket
-        |     starts the remote runtime if needed
+ssh -T <managed options> dev@box 'printf ... "$HOME" "${SHELL:-/bin/sh}"; exec telar server endpoint'
+        |     BatchMode, keepalives, no agent forwarding, the destination's
+        |     control master; 30 s timeout; discovers remote home, shell and
+        |     socket; starts the remote runtime if needed
         |
-ssh -N -L <local>/remote-<hash>.sock:<remote>.sock dev@box
-        |     StreamLocalBindUnlink, ExitOnForwardFailure; child kept until exit
+ssh -T <forward options> -L <local>/remote-<hash>-<slot>.sock:<remote>.sock dev@box 'cat >/dev/null'
+        |     StreamLocalBindUnlink, ExitOnForwardFailure, ControlPath=none;
+        |     stdin is a pipe only this process holds
         |
 local managed 0700 directory holds the forwarded socket
         |
@@ -29,9 +37,15 @@ runtime delivers image chunks instead of /dev/shm names
 ## Ownership
 
 The forward is a child process owned by the client; exiting the client kills
-it and removes the forwarded socket file. The forwarded path is derived from
-a hash of the destination, so two remotes never collide and reconnecting
-reuses the same name. Discovery requires `telar` on the remote PATH for
+it and removes the forwarded socket file. If the client dies without that,
+the pipe on the forward's stdin closes, the remote `cat` ends and ssh exits,
+so a crashed window leaves no forward behind. The forward never joins the
+control master: a forward the master owned would outlive the `ssh` that
+asked for it. The forwarded path carries a hash of the destination and the
+window slot, so two remotes never collide, two windows on one machine never
+share or remove each other's socket, and a window reconnecting reuses its
+name. A window's client identity mixes its slot with the destination, so the
+runtime keeps one layout per window and machine. Discovery requires `telar` on the remote PATH for
 non-interactive SSH. Discovery accepts exactly three bounded absolute paths
 and rejects control bytes, extra output and socket paths containing `:`. SSH
 destinations cannot start with an option or contain whitespace/control bytes.
@@ -46,8 +60,9 @@ its own configuration.
 
 ## Validation
 
-- `src/cli/remote.zig` tests destination validation and hashing.
-- `src/cli/remote_discovery.zig` tests bounded discovery and malformed paths.
+- `src/core/ssh_destination.zig` tests destination validation and hashing.
+- `src/client/machines/remote_discovery.zig` tests bounded discovery and malformed paths.
+- `src/gui/run.zig` tests that one window slot gets a distinct identity on each machine.
 - `src/cli/client.zig` tests remote launch defaults and explicit commands.
 - `telar server endpoint` is covered by the parser tests and prints through
   the same connector the client uses.

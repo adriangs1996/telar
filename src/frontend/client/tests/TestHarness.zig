@@ -130,7 +130,7 @@ pub fn settleModelPresentation(self: *TestHarness) !void {
             .media_tick => |result| try presentation_lifecycle.handleMediaTick(self.terminal, result),
             .client => |message| switch (message) {
                 .sent => |result| {
-                    try client_module.runtime_io.completeRuntimeSend(&self.client.model, result);
+                    try client_module.runtime_io.completeRuntimeSend(self.client, result);
                     try host_effects.deliver(self.terminal);
                 },
                 .sidebar_animation_tick, .notification_tick, .bar_tick, .bar_command, .path_completion => {

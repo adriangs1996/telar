@@ -1,4 +1,5 @@
 const localsocket = @import("localsocket");
+const core = @import("telar-core");
 const privatefile = @import("privatefile");
 const handshake = @import("../transport/handshake.zig");
 const std = @import("std");
@@ -8,6 +9,8 @@ const RuntimeConnector = @This();
 
 io: std.Io,
 endpoint: localsocket.Local,
+/// Where a refused handshake explains itself; standard error when null.
+report: ?*std.Io.Writer = null,
 
 /// Resolves the local runtime endpoint from an explicit socket or the
 /// process environment. It does not access the filesystem or connect yet.
@@ -148,7 +151,12 @@ fn finishHandshake(self: *const RuntimeConnector, connection: localsocket.Socket
     switch (response) {
         .accepted => return result,
         .rejected => |rejected| {
-            std.debug.print("telar protocol mismatch: runtime expects schema {s}\n", .{&rejected.expected_schema});
+            if (self.report) |writer| {
+                writer.print("the runtime speaks wire schema {s}; this telar speaks {s}. Update telar on one side", .{ &rejected.expected_schema, &core.schema_id }) catch {};
+            } else {
+                std.debug.print("telar protocol mismatch: runtime expects schema {s}\n", .{&rejected.expected_schema});
+            }
+
             return error.IncompatibleSchema;
         },
     }

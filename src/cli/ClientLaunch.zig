@@ -36,7 +36,11 @@ pub fn prepare(self: *Launch, preparation: ClientPreparation) !void {
     };
     errdefer self.deinit();
 
-    try self.prepareChild(preparation.remote_defaults);
+    if (preparation.remote_later) {
+        self.prepareRemoteCommand();
+    } else {
+        try self.prepareChild(preparation.remote_defaults);
+    }
     self.generation = try config.loadGeneration(preparation.process, .{
         .path = preparation.options.config,
         .disabled = preparation.options.no_config,
@@ -56,6 +60,19 @@ pub fn prepare(self: *Launch, preparation: ClientPreparation) !void {
 
     if (self.generation) |generation| {
         try self.preparePlugins(generation);
+    }
+}
+
+/// Keeps only an explicit command for a remote machine whose home and login
+/// shell the client learns when it connects.
+fn prepareRemoteCommand(self: *Launch) void {
+    self.cwd_len = 0;
+    if (!self.options.command_set) {
+        return;
+    }
+
+    while (self.options.command.argv[self.argument_count]) |argument| : (self.argument_count += 1) {
+        self.argument_storage[self.argument_count] = std.mem.span(argument);
     }
 }
 

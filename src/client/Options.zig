@@ -5,11 +5,16 @@ const Generation = @import("config/Generation.zig");
 const Registry = @import("plugins/Registry.zig");
 const std = @import("std");
 const GuiConfig = @import("config/GuiConfig.zig");
+const MachineTarget = @import("machines/MachineTarget.zig").MachineTarget;
 const Options = @This();
 
 arguments: []const []const u8,
 cwd: []const u8,
 endpoint: []const u8,
+/// The machine the client connects to by itself. Null when the adapter
+/// hands it a socket that is already connected; such a client cannot
+/// reconnect.
+machine: ?MachineTarget = null,
 /// Process environment used to expand `~` and `$VAR` in typed directories.
 environ: std.process.Environ = .empty,
 prefix: keyinput.Key = data.keybind.default_prefix,

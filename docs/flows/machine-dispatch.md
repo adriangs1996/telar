@@ -39,7 +39,7 @@ attach does.
 
 ## SSH
 
-`src/cli/SshOptions.zig` builds the options every managed call passes:
+`src/client/machines/SshOptions.zig` builds the options every managed call passes:
 `BatchMode=yes`, keepalives, `ForwardAgent=no`, and a control master per
 destination in telar's owner-only runtime directory with `ControlPersist=600`.
 The first call authenticates; later discovery, dispatch and checks within ten

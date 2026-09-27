@@ -58,6 +58,7 @@ pub const tab_selection = @import("workspace/tab_selection.zig");
 pub const tab_snapshot_reconciliation = @import("workspace/tab_snapshot_reconciliation.zig");
 pub const workspace_reconciliation = @import("workspace/workspace_reconciliation.zig");
 pub const workspace_handoff = @import("workspace/workspace_handoff.zig");
+pub const runtime_session = @import("connection/runtime_session.zig");
 pub const pane_split = @import("workspace/pane_split.zig");
 pub const presentation_delivery = @import("panes/presentation_delivery.zig");
 pub const name_prompt = @import("state/name_prompt.zig");
@@ -212,6 +213,8 @@ pub const NotificationTarget = @import("notifications/NotificationTarget.zig").N
 pub const OpenedPane = @import("panes/OpenedPane.zig");
 pub const Opening = @import("links/Opening.zig");
 pub const Outbox = @import("connection/Outbox.zig");
+pub const RuntimeLink = @import("connection/RuntimeLink.zig");
+pub const RuntimeBootstrap = @import("connection/RuntimeBootstrap.zig");
 pub const OutboxSnapshot = @import("connection/OutboxSnapshot.zig");
 pub const Overrides = @import("appearance/Overrides.zig");
 pub const OwnedHistoryQuery = @import("connection/OwnedHistoryQuery.zig");
@@ -354,6 +357,8 @@ pub const WorkspaceTabInput = @import("workspace/WorkspaceTabInput.zig");
 
 test {
     _ = @import("config/SoundPolicy.zig");
+    _ = @import("connection/RuntimeLink.zig");
+    _ = @import("connection/runtime_session.zig");
     _ = @import("state/model_invariants.zig");
     _ = @import("config/sidebar_rendering.zig");
     _ = @import("layout/GridRegions.zig");

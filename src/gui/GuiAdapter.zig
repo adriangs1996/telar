@@ -466,16 +466,19 @@ fn start(self: *GuiAdapter, colors: core.TerminalColors) !void {
     );
 
     self.app.model.startup.phase = .opening;
+    self.app.bootstrap = .{
+        .graphics_shared = false,
+        .client_identity = self.app.client_identity,
+        .terminal_colors = colors,
+    };
 
-    try self.app.model.to_runtime.pushBootstrap(
-        .{
-            .graphics_shared = false,
-            .client_identity = self.app.client_identity,
-            .terminal_colors = colors,
-        },
-    );
+    if (self.app.runtime_transport.connection == null) {
+        try client.runtime_link.start(&self.app);
+    } else {
+        try self.app.model.to_runtime.pushBootstrap(self.app.bootstrap.?);
+        try client.runtime_io.startRuntimeIo(&self.app);
+    }
 
-    try client.runtime_io.startRuntimeIo(&self.app);
     try client.config_adoption.scheduleConfigReload(&self.app);
     try client.bar_updates.synchronizeBars(&self.app);
     self.started = true;

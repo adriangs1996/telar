@@ -14,6 +14,7 @@ const host = @import("../links/host.zig");
 const sound_playback = @import("../agents/sound_playback.zig");
 const system_notification = @import("../notifications/system_notification.zig");
 const config_reload = @import("../resources/config_reload.zig");
+const runtime_link = @import("../connection/runtime_link.zig");
 
 /// Runs `job` to completion. The adapter starts it as an inbox producer:
 /// `try inbox.start(.client, .{ job_runner.run, .{ io, job } });`
@@ -25,6 +26,7 @@ pub fn run(io: std.Io, job: Job) Message {
             .bar => .{ .bar_tick = pacing.deadline_timer.wait(io, timer.scheduler) },
             .notification => .{ .notification_tick = pacing.deadline_timer.wait(io, timer.scheduler) },
             .sidebar_animation => .{ .sidebar_animation_tick = pacing.deadline_timer.wait(io, timer.scheduler) },
+            .runtime_retry => .{ .runtime_retry_tick = pacing.deadline_timer.wait(io, timer.scheduler) },
         },
     };
 }
@@ -49,6 +51,7 @@ pub fn runBackground(io: std.Io, gpa: std.mem.Allocator, job: BackgroundJob) Mes
         .sound => |kind| .{ .sound_played = sound_playback.play(io, kind) },
         .system_notification => |payload| .{ .notified = system_notification.post(io, payload) },
         .config_watch => |args| .{ .config_reload = config_reload.wait(args) },
+        .runtime_connect => |connect| .{ .runtime_connected = runtime_link.runConnect(io, gpa, connect) },
     };
 }
 
@@ -67,6 +70,7 @@ pub fn failed(job: Job, err: anyerror) Message {
             .bar => .{ .bar_tick = err },
             .notification => .{ .notification_tick = err },
             .sidebar_animation => .{ .sidebar_animation_tick = err },
+            .runtime_retry => .{ .runtime_retry_tick = err },
         },
     };
 }
@@ -94,6 +98,7 @@ pub fn failedBackground(job: BackgroundJob, err: anyerror) Message {
         .sound => .{ .sound_played = err },
         .system_notification => .{ .notified = err },
         .config_watch => .{ .config_reload = err },
+        .runtime_connect => .{ .runtime_connected = err },
     };
 }
 

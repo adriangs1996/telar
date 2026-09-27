@@ -233,6 +233,6 @@ pub fn expectAck(self: *Fixture, frame_id: u64) !void {
 pub fn sendOne(self: *Fixture) !void {
     try std.testing.expect(self.pending != null);
     self.pending = null;
-    try runtime_io.completeRuntimeSend(&self.app.model, {});
+    try runtime_io.completeRuntimeSend(&self.app, {});
     try self.startJobs();
 }

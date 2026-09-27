@@ -13,7 +13,7 @@ const host_resizes = @import("host/host_resizes.zig");
 const client_startup = @import("session/client_startup.zig");
 const client_events = @import("events.zig");
 
-pub fn run(init: std.process.Init, connection: *localsocket.SocketChannel, options: client_module.Options) !u8 {
+pub fn run(init: std.process.Init, connection: ?*localsocket.SocketChannel, options: client_module.Options) !u8 {
     const io = init.io;
     var heap = core.Heap.init(init.gpa);
     const gpa = heap.allocator();
@@ -68,7 +68,7 @@ pub fn run(init: std.process.Init, connection: *localsocket.SocketChannel, optio
     const terminal = try TerminalAdapter.init(.{
         .gpa = gpa,
         .io = io,
-        .connection = connection,
+        .connection = connection orelse return error.NotConnected,
         .input_file = input_file,
         .writer = writer,
         .async_output = true,

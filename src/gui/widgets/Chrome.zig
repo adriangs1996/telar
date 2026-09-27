@@ -74,6 +74,9 @@ pub fn compose(self: *Chrome, context: *Context, widgets: anytype) !void {
     }
 
     try widgets.append(.{ .panes = .{ .context = context, .rings = &self.rings } });
+    if (context.projection.model.runtime_link.phase != .connected) {
+        try widgets.append(.{ .link_status = .{ .context = context } });
+    }
     try widgets.append(.{ .rail_tooltip = .{ .context = context, .area = bands.sidebar } });
     try widgets.append(.{ .bar_overlay = .{ .context = context, .area = bands.status_bar } });
 }

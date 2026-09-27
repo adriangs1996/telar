@@ -55,7 +55,7 @@ its owner, or is a symlink, is refused and left untouched.
 
 `telar machine check LABEL` and `add --check` run remote attach's discovery:
 `ssh … telar server endpoint` through the managed options in
-`src/cli/SshOptions.zig`. It reports the remote home, login shell and runtime
+`src/client/machines/SshOptions.zig`. It reports the remote home, login shell and runtime
 socket, or the SSH error. Discovery starts the remote runtime when none is
 running, as attaching would; it never installs anything.
 

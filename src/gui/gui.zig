@@ -18,6 +18,7 @@ pub const PointerEvent = @import("input/PointerEvent.zig");
 pub const TextInput = @import("input/TextInput.zig");
 
 test {
+    _ = @import("widgets/LinkStatus.zig");
     _ = @import("tests/cache_trace.zig");
     _ = @import("tests/change_review.zig");
     _ = @import("tests/change_review_navigation.zig");

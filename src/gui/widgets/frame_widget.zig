@@ -15,8 +15,9 @@ const BarOverlay = @import("BarOverlay.zig");
 const PaneDecorations = @import("PaneDecorations.zig");
 const ChromeFocus = @import("ChromeFocus.zig");
 const NotificationCard = @import("overlays/NotificationCard.zig");
+const LinkStatus = @import("LinkStatus.zig");
 
-pub const capacity = core.max_panes_per_tab + 1 + 6 + 1 + Notifications.max_visible + 1;
+pub const capacity = core.max_panes_per_tab + 1 + 7 + 1 + Notifications.max_visible + 1;
 pub const List = GenericWidgetList(Widget, capacity);
 
 pub const Widget = union(enum) {
@@ -29,6 +30,7 @@ pub const Widget = union(enum) {
     rail_tooltip: RailTooltip,
     bar_overlay: BarOverlay,
     panes: PaneDecorations,
+    link_status: LinkStatus,
     chrome_focus: ChromeFocus,
     notification: NotificationCard,
     modal: modal_widget.Widget,

@@ -1,0 +1,91 @@
+# Runtime link
+
+A window reaches its machine's runtime by itself and keeps running when it
+loses it. The link is connecting, connected or lost; the chrome shows it
+and pane input waits for it. Reconnecting starts a new session as a fresh
+client would, so nothing from the lost session is replayed.
+
+## End-to-end path
+
+```text
+GuiAdapter.start                        window on screen, host facts written
+  client.bootstrap = { graphics, identity, colors }
+  runtime_link.start                    link.phase = connecting
+    to_background: runtime_connect
+      runtime_link.runConnect           worker
+        machine_connection.connect
+          local:  RuntimeConnector.connectOrStart (starts the runtime)
+          remote: remote.establish (discovery, ssh -L), connectForwarded
+        writes client.connect_result, or client.connect_report
+  .runtime_connected
+    runtime_link.finishConnect
+      ok:   adopt: forget the previous session if any, bind the socket,
+            launch defaults from discovery, push bootstrap, start IO
+      fail: link.phase = lost, failure from the report, schedule retry
+
+runtime read or write fails
+  runtime_io.receiveRuntime / completeRuntimeSend
+    runtime_link.lose                   link.phase = lost
+      discard queued messages, shut the socket down, stop the forward,
+      close the socket once no read or write uses it, schedule retry
+
+.runtime_retry_tick
+  runtime_link.retry                    link.phase = connecting, attempt + 1
+    to_background: runtime_connect      (again)
+```
+
+## Rules
+
+- **The window never waits.** Connecting runs on a worker; the window draws
+  from the first frame. `LinkStatus` dims the workbench and says
+  `Connecting to …`, `Reconnecting to … (attempt n)` or `… is unreachable`,
+  with SSH's error output or the runtime's refusal underneath.
+- **Backoff.** The first retry waits half a second, then the wait doubles up
+  to thirty seconds. A link that stayed up for a minute earns fast retries
+  again. Retries never prompt: every SSH call runs in batch mode.
+- **Nothing is replayed.** Queued messages are dropped when the link is lost,
+  pane input is dropped while it is not connected, and the next session
+  starts from the bootstrap. `runtime_session.forget` drops every replica and
+  pending request of the lost session and keeps what the client owns:
+  configuration, theme, host facts, bars, notifications and timers.
+  Revisions advance rather than restart.
+- **The socket closes when idle.** `lose` shuts the socket down, which makes a
+  read or write still waiting on it return, and closes it only once neither
+  is in flight, so a descriptor number is never reused under a job.
+- **Pane resources go through the canonical release.** Before forgetting a
+  session, each pane passes through `pane_closure.releasePaneResources`, so
+  graphics, copy mode, paste and reported focus stop naming it.
+- **Same identity, same layout.** Every session presents the same client
+  identity, so the runtime restores the layout it kept for this window.
+- **`--fresh` applies once.** The first session sets the previous one aside;
+  a reconnect adopts the runtime that session started.
+- **A client handed its socket cannot reconnect.** The TUI keeps its
+  synchronous connection and ends when it is lost.
+- **An explicit stop ends the window.** `telar server stop` tells clients the
+  runtime is stopping, and they exit as before; only a lost socket
+  reconnects.
+
+## Validation
+
+- `src/client/connection/runtime_link.zig` tests a full cycle over real
+  socketpairs: connect, bootstrap, a failed read and write, idle close, the
+  retry timer, a second session that forgets the first, and a failed attempt
+  that shows its report and waits.
+- `src/model/connection/runtime_session.zig` tests what a forgotten session
+  drops and keeps, and that revisions advance.
+- `src/model/connection/RuntimeLink.zig` tests bounded, one-line failures.
+- `src/model/connection/outbox_support.zig` tests discarding everything but
+  the message being written.
+- `src/gui/widgets/LinkStatus.zig` tests the headlines; the widget
+  composition tests include it as an optional layer.
+- Against the Linux SSH box (`tools/local-docker`), with a GUI window on
+  `--remote telar-docker`:
+  - killing the local `ssh` forward: the window stays, opens a new forward
+    and reattaches with the same identity within two seconds;
+  - SIGKILL of the remote runtime: the retry's discovery starts it again and
+    the window reattaches within two seconds;
+  - stopping the container for 12 seconds: the window stays and reattaches
+    three seconds after the machine returns;
+  - SIGKILL of the window: its forward exits within a second.
+- Not verified here: the drawn `LinkStatus` overlay, because this session
+  cannot capture the window (macOS screen recording permission).

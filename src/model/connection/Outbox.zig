@@ -9,6 +9,7 @@ const OwnedWorkspaceRename = @import("OwnedWorkspaceRename.zig");
 const OwnedCreateWorkspace = @import("OwnedCreateWorkspace.zig");
 const OwnedCreateTab = @import("OwnedCreateTab.zig");
 const OwnedNotification = @import("OwnedNotification.zig");
+const RuntimeBootstrap = @import("RuntimeBootstrap.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Outbox = @This();
@@ -366,6 +367,25 @@ pub fn finishSend(self: *Outbox, result: anyerror!void) !void {
     self.popSent();
 }
 
+/// Drops every queued message that is not being written, with the payloads
+/// it owns. A lost runtime never receives them: its successor starts a new
+/// session, and replaying mutations into it could repeat them.
+///
+/// ```zig
+/// model.to_runtime.discardQueued();
+/// ```
+pub fn discardQueued(self: *Outbox) void {
+    const kept: u8 = @intFromBool(self.send_pending);
+    var offset: usize = kept;
+    while (offset < self.len) : (offset += 1) {
+        const index = (@as(usize, self.head) + offset) % outbox_support.capacity;
+        self.releaseLaunchCwd(index);
+        self.releaseClientLayout(index);
+    }
+
+    self.len = kept;
+}
+
 /// True while a claimed send has neither completed nor failed.
 pub fn inFlight(self: *const Outbox) bool {
     return self.send_pending;
@@ -643,10 +663,3 @@ test "runtime bootstrap queues colors before subscribing to the initial layout" 
     try std.testing.expect(runtime_state == .request_runtime_state);
     try std.testing.expectEqual(@as(core.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
 }
-
-/// What a client tells the runtime right after host negotiation.
-const RuntimeBootstrap = struct {
-    graphics_shared: bool,
-    client_identity: core.ClientIdentity,
-    terminal_colors: core.TerminalColors = .{},
-};

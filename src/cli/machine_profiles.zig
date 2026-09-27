@@ -146,7 +146,7 @@ fn check(init: std.process.Init, profile: *const core.MachineProfile, json: bool
     var output = std.Io.File.stdout().writerStreaming(init.io, &buffer);
     const writer = &output.interface;
 
-    const found = remote.discover(init.io, init.gpa, init.minimal.environ, profile.destination()) catch |err| {
+    const found = remote.discover(init.io, init.gpa, init.minimal.environ, profile.destination(), null) catch |err| {
         if (json) {
             try writer.writeAll("{\"label\":");
             try control.writeJsonString(writer, profile.label());

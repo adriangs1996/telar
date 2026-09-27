@@ -137,14 +137,18 @@ wire data early.
 ## Destruction and failures
 
 The host closes its inbox and joins producers before `RuntimeTransportState.deinit` frees either frame
-buffer. The caller still owns and closes the `SocketChannel` after the owning host loop
-returns.
+buffer. A socket the adapter handed in (the TUI) stays the caller's to close;
+a socket a connection job produced is the client's, and `Client.deinit`
+closes it.
 
 If inbox admission or task creation refuses a read or write actor, transport releases the token it
-reserved. A completed socket error also releases its token, retains bounded
-queue ownership for cleanup and propagates the error. Telar does not retry an
-uncertain partial socket write inside the same client session. Dispatch errors
-propagate without transport classifying their original message.
+reserved. A completed socket error also releases its token. A client that
+connects by itself (the GUI, `options.machine` set) then loses the link
+instead of failing: see [runtime link](runtime-link.md). A client handed its
+socket propagates the error as before. Telar never retries an uncertain
+partial socket write inside the same session; a reconnect starts a new
+session. Dispatch errors propagate without transport classifying their
+original message.
 
 ## Validation
 

@@ -50,7 +50,7 @@ test "host input reads pause at outbox capacity and resume with one token" {
     try std.testing.expect(!terminal.host_input.read_pending);
 
     switch (try support.receiveClient(terminal)) {
-        .sent => |result| try client_module.runtime_io.completeRuntimeSend(&client.model, result),
+        .sent => |result| try client_module.runtime_io.completeRuntimeSend(client, result),
         else => return error.UnexpectedEvent,
     }
     try harness.deliverHostEffects();
@@ -143,7 +143,7 @@ test "graphics credits remain owned until the outbox accepts them" {
     try std.testing.expect(client.model.to_runtime.inFlight());
 
     switch (try support.receiveClient(terminal)) {
-        .sent => |result| try client_module.runtime_io.completeRuntimeSend(&client.model, result),
+        .sent => |result| try client_module.runtime_io.completeRuntimeSend(client, result),
         else => return error.UnexpectedEvent,
     }
     try harness.deliverHostEffects();
@@ -164,7 +164,7 @@ test "runtime write errors release the outbound token" {
 
     try std.testing.expectError(
         error.RuntimeWriteFailed,
-        client_module.runtime_io.completeRuntimeSend(&client.model, error.RuntimeWriteFailed),
+        client_module.runtime_io.completeRuntimeSend(client, error.RuntimeWriteFailed),
     );
     try std.testing.expect(!client.model.to_runtime.inFlight());
     try std.testing.expectEqual(@as(u8, 1), client.model.to_runtime.len);
