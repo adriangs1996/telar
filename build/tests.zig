@@ -44,7 +44,8 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     client_boundaries.step.dependOn(&model_boundaries.step);
     run_client_tests.step.dependOn(&client_boundaries.step);
     b.step("check-client-boundaries", "Check shared-client module boundaries").dependOn(&client_boundaries.step);
-    b.step("test-client", "Run renderer-independent client tests").dependOn(&run_client_tests.step);
+    const client_integration_step = b.step("test-client", "Run renderer-independent client tests");
+    client_integration_step.dependOn(&run_client_tests.step);
     test_step.dependOn(&run_client_tests.step);
     const headless_tests = b.addTest(.{ .root_module = app.modules.headless.? });
     const run_headless_tests = b.addRunArtifact(headless_tests);
@@ -201,6 +202,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         // Capability roots can import sibling capabilities, so the package
         // root collects their tests without narrowing Zig's module path.
         .{ .path = "src/frontend/frontend.zig", .libc = true, .frontend = true },
+        .{ .path = "src/client_tests/tests.zig", .libc = true, .client_integration = true },
         .{ .path = "src/backend/proxy_test.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/history/history_tests.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/backend.zig", .vt = true, .libc = true },
@@ -260,6 +262,10 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         }
         if (suite.frontend) {
             frontend_test_step.dependOn(&run_tests.step);
+        }
+        if (suite.client_integration) {
+            b.step("test-client-integration", "Run the shared client over a real socket without a window").dependOn(&run_tests.step);
+            client_integration_step.dependOn(&run_tests.step);
         }
     }
 
