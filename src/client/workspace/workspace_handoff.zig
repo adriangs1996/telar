@@ -125,7 +125,40 @@ pub fn requestWorkspaceSwitch(client: *Client, target: WorkspaceSwitchTarget, au
     }
 
     try client.model.request_lifecycle.ensureCanStart(2);
-    var required: usize = 1;
+    try detachWorkspace(client, 1);
+    sendWorkspaceOpen(&client.model, command) catch |err| {
+        restoreDepartingWorkspace(client) catch {};
+        return err;
+    };
+
+    const departure = data.workspace_handoff.depart(&client.model);
+    releaseWorkspace(client, &departure);
+    return departure;
+}
+
+/// Detaches every tab of the current workspace and retires it without
+/// opening another, remembering where it was. A window leaves a machine it
+/// stops presenting this way: the runtime stops streaming its panes, and
+/// the remembered pane reopens when the window returns.
+///
+/// ```zig
+/// const departure = try workspace_handoff.leaveWorkspace(client);
+/// ```
+pub fn leaveWorkspace(client: *Client) !data.WorkspaceDeparture {
+    if (!client.model.request_lifecycle.tracker.isEmpty()) {
+        return error.WorkspaceSwitchWhileRequestPending;
+    }
+
+    try detachWorkspace(client, 0);
+    const departure = data.workspace_handoff.depart(&client.model);
+    releaseWorkspace(client, &departure);
+    return departure;
+}
+
+// Checks capacity for every detach plus `extra` messages, then detaches
+// each tab in order. A failure restores the visible tab.
+fn detachWorkspace(client: *Client, extra: usize) !void {
+    var required: usize = extra;
     for (client.model.tabs.location[0..client.model.tabs.count]) |location| {
         required += try tab_removal.tabDetachmentCapacity(&client.model, location);
     }
@@ -140,15 +173,6 @@ pub fn requestWorkspaceSwitch(client: *Client, target: WorkspaceSwitchTarget, au
             return err;
         };
     }
-
-    sendWorkspaceOpen(&client.model, command) catch |err| {
-        restoreDepartingWorkspace(client) catch {};
-        return err;
-    };
-
-    const departure = data.workspace_handoff.depart(&client.model);
-    releaseWorkspace(client, &departure);
-    return departure;
 }
 
 /// Repairs the visible tab after a partial departure; callers preserve the original error.

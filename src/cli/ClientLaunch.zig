@@ -36,11 +36,7 @@ pub fn prepare(self: *Launch, preparation: ClientPreparation) !void {
     };
     errdefer self.deinit();
 
-    if (preparation.remote_later) {
-        self.prepareRemoteCommand();
-    } else {
-        try self.prepareChild(preparation.remote_defaults);
-    }
+    try self.prepareChild(preparation.remote_defaults);
     self.generation = try config.loadGeneration(preparation.process, .{
         .path = preparation.options.config,
         .disabled = preparation.options.no_config,
@@ -60,19 +56,6 @@ pub fn prepare(self: *Launch, preparation: ClientPreparation) !void {
 
     if (self.generation) |generation| {
         try self.preparePlugins(generation);
-    }
-}
-
-/// Keeps only an explicit command for a remote machine whose home and login
-/// shell the client learns when it connects.
-fn prepareRemoteCommand(self: *Launch) void {
-    self.cwd_len = 0;
-    if (!self.options.command_set) {
-        return;
-    }
-
-    while (self.options.command.argv[self.argument_count]) |argument| : (self.argument_count += 1) {
-        self.argument_storage[self.argument_count] = std.mem.span(argument);
     }
 }
 
@@ -119,6 +102,15 @@ fn preparePlugins(self: *Launch, generation: *client_module.Generation) !void {
     self.config_mtime_ns ^= @as(i128, self.plugin_registry.?.watchFingerprint(self.process.gpa, self.process.io));
     self.config_mtime_ns ^= @as(i128, client_module.config_reload.trustWatchFingerprint(self.process.io, resolved_trust_path));
     self.trust_path = resolved_trust_path;
+}
+
+/// The command the user named, if any, for a machine that launches it.
+pub fn command(self: *const Launch) []const []const u8 {
+    if (!self.options.command_set) {
+        return &.{};
+    }
+
+    return self.argument_storage[0..self.argument_count];
 }
 
 pub fn frontendOptions(self: *const Launch) client_module.Options {

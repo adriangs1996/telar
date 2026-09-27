@@ -211,7 +211,7 @@ pub fn endPaste(gui: *GuiAdapter) !void {
     defer gui.widgets.paste_consumed = false;
     const owner = gui.widgets.paste_owner orelse return;
     const target = gui.widgets.dispatcher.maps.presented().find(owner) orelse return;
-    if (field(gui, target) != null and FieldView.revision(&gui.app) == gui.widgets.paste_revision) {
+    if (field(gui, target) != null and FieldView.revision(gui.app) == gui.widgets.paste_revision) {
         if (gui.widgets.paste_buffer.text()) |bytes| {
             try focus(gui, target);
             try command(gui, .{ .replace_range = .{ .range = gui.widgets.paste_selection, .text = bytes } });
@@ -231,7 +231,7 @@ fn explicitTarget(event: event_module.Event) ?Id {
 }
 
 fn field(gui: *const GuiAdapter, target: Target) ?FieldView {
-    return FieldView.captureClient(&gui.app, target);
+    return FieldView.captureClient(gui.app, target);
 }
 
 fn editingRevision(gui: *const GuiAdapter) u64 {
@@ -302,7 +302,7 @@ fn focus(gui: *GuiAdapter, target: Target) !void {
 
         _ = gui.widgets.dispatcher.focus(target.id);
         const tab = gui.app.model.tabs.activeSlot() orelse return;
-        _ = try client.view_interactions.apply(&gui.app, tab, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
+        _ = try client.view_interactions.apply(gui.app, tab, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
         return;
     }
 
@@ -314,7 +314,7 @@ fn focus(gui: *GuiAdapter, target: Target) !void {
 fn command(gui: *GuiAdapter, value: data.name_prompt.Command) !void {
     const revision = editingRevision(gui);
     _ = try client.name_prompt.inputPrompt(
-        &gui.app,
+        gui.app,
         .{
             .command = value,
         },
@@ -363,7 +363,7 @@ fn editor(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
 
             const revision = editingRevision(gui);
             _ = try client.name_prompt.inputPrompt(
-                &gui.app,
+                gui.app,
                 .{
                     .key = key.terminalKey(),
                 },
@@ -518,7 +518,7 @@ fn activateControl(gui: *GuiAdapter, target: Target) !void {
     switch (target.action) {
         .change_review => |pane_id| try gui.openChangeReview(pane_id),
         .prompt => |action| try command(gui, if (action == .submit) .submit else .cancel),
-        .complete_path => |choice| try client.name_prompt.chooseDirectory(&gui.app, choice.index, choice.revision),
+        .complete_path => |choice| try client.name_prompt.chooseDirectory(gui.app, choice.index, choice.revision),
         .history => |action| {
             const prompt = gui.app.model.name_prompt.currentConst() orelse return;
             if (prompt.target() != .history) {
@@ -526,7 +526,7 @@ fn activateControl(gui: *GuiAdapter, target: Target) !void {
             }
 
             switch (action) {
-                .select => |choice| try client.history_palette.selectHistoryRow(&gui.app, choice.index, choice.revision),
+                .select => |choice| try client.history_palette.selectHistoryRow(gui.app, choice.index, choice.revision),
                 .submit, .submit_alternate => |choice| {
                     const history = &gui.app.model.history_palette;
                     if (history.phase == .ready and history.version() == choice.revision and prompt.selection() == choice.index) {
@@ -551,7 +551,7 @@ fn activateControl(gui: *GuiAdapter, target: Target) !void {
 
 fn dispatchIntent(gui: *GuiAdapter, intent: client.Intent) !void {
     const tab = gui.app.model.tabs.activeSlot() orelse return;
-    _ = try client.view_interactions.apply(&gui.app, tab, .{ .intent = intent, .consumed = true });
+    _ = try client.view_interactions.apply(gui.app, tab, .{ .intent = intent, .consumed = true });
     _ = gui.widgets.dispatcher.focus(null);
 }
 
@@ -650,7 +650,7 @@ fn scrollHistory(gui: *GuiAdapter, event: event_module.Event) !bool {
     }
 
     if (prompt.inspecting()) {
-        try client.history_palette.scrollHistoryInspection(&gui.app, lines);
+        try client.history_palette.scrollHistoryInspection(gui.app, lines);
     } else {
         for (0..@abs(lines)) |_| {
             if (history.phase != .ready) {
@@ -670,7 +670,7 @@ fn accessibility(gui: *GuiAdapter, value: AccessibilityAction) !void {
         return;
     }
 
-    if (value.revision != 0 and value.revision != FieldView.revision(&gui.app)) {
+    if (value.revision != 0 and value.revision != FieldView.revision(gui.app)) {
         return;
     }
 
@@ -695,7 +695,7 @@ fn accessibility(gui: *GuiAdapter, value: AccessibilityAction) !void {
         .replace_range => {
             const current = field(gui, target) orelse return;
             const range: [2]u32 = .{ value.replacement_start, value.replacement_end };
-            if (value.revision != FieldView.revision(&gui.app) or range[0] > range[1] or !current.validRange(range)) {
+            if (value.revision != FieldView.revision(gui.app) or range[0] > range[1] or !current.validRange(range)) {
                 return;
             }
 
@@ -733,7 +733,7 @@ fn beginCut(gui: *GuiAdapter, target: Target, range: [2]u32) !void {
         }
 
         const request_id = gui.requestClipboardWriteOwned(.{ .target_id = target.id.target_id, .generation = target.id.generation }, current.text[range[0]..range[1]]) catch return;
-        slot.* = .{ .request_id = request_id, .owner = target.id, .range = range, .revision = FieldView.revision(&gui.app) };
+        slot.* = .{ .request_id = request_id, .owner = target.id, .range = range, .revision = FieldView.revision(gui.app) };
         return;
     }
 }
@@ -750,7 +750,7 @@ pub fn beginClipboardRead(gui: *GuiAdapter, owner: Id) !void {
 
         const request_owner: Owner = .{ .target_id = owner.target_id, .generation = owner.generation };
         const request_id = try gui.host.read(request_owner);
-        slot.* = .{ .request_id = request_id, .owner = owner, .range = current.selection(), .revision = FieldView.revision(&gui.app) };
+        slot.* = .{ .request_id = request_id, .owner = owner, .range = current.selection(), .revision = FieldView.revision(gui.app) };
         gui.widgets.dispatcher.revision +%= 1;
         native.telar_gui_wake(gui.driver.fds[1]);
         return;
@@ -775,14 +775,14 @@ fn finishPaste(gui: *GuiAdapter, result: ClipboardResult) !void {
 
         const focused = gui.widgets.dispatcher.focused orelse return;
         const target = gui.widgets.dispatcher.maps.presented().find(owner) orelse return;
-        if (!focused.eql(owner) or !eligible(gui, target) or pending.revision != FieldView.revision(&gui.app)) {
+        if (!focused.eql(owner) or !eligible(gui, target) or pending.revision != FieldView.revision(gui.app)) {
             return;
         }
 
         if (result.status != .success) {
             if (result.status == .too_large or result.status == .cancelled) {
                 try client.notifications.publishNotificationNow(
-                    &gui.app,
+                    gui.app,
                     .{
                         .level = .warning,
                         .title = "Clipboard could not be pasted",
@@ -824,7 +824,7 @@ fn finishCut(gui: *GuiAdapter, result: ClipboardResult) !void {
         }
 
         const target = gui.widgets.dispatcher.maps.presented().find(id) orelse return;
-        if (result.status != .success or cut.revision != FieldView.revision(&gui.app)) {
+        if (result.status != .success or cut.revision != FieldView.revision(gui.app)) {
             return;
         }
         if (field(gui, target) == null or !eligible(gui, target)) {

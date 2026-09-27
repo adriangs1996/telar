@@ -61,6 +61,9 @@ model: data.ClientModel,
 lua_generation: ?*Generation,
 plugin_registry: ?*Registry,
 trust_store: ?*core.TrustStore,
+/// Whether this client frees the configuration above. A window's other
+/// machines share its client's configuration and follow its reloads.
+owns_configuration: bool = true,
 reload: ConfigReloadState,
 /// Transient: the alternate flag of the list submission being finished.
 list_submission_alternate: bool = false,
@@ -106,6 +109,17 @@ connected_at_ns: u64 = 0,
 launch_cwd: [std.fs.max_path_bytes]u8 = undefined,
 launch_shell: [std.fs.max_path_bytes]u8 = undefined,
 launch_arguments: [1][]const u8 = undefined,
+/// Whether the window shows this client's machine. A hidden client keeps
+/// metadata only: it defers its first pane and leaves its workspace.
+presented: bool = true,
+/// The first pane a hidden client did not open yet, and the layout the
+/// runtime restored for it.
+open_deferred: bool = false,
+deferred_layout: ?data.SavedLayout = null,
+/// The workspace a hidden client left, reopened when it is shown again.
+left_workspace: ?core.WorkspaceId = null,
+/// Leaving waits for requests in flight to finish.
+leave_pending: bool = false,
 
 /// Builds the shared state in its final address. The model is megabytes, so
 /// nothing here passes it by value. Ports remain unbound.
@@ -219,16 +233,18 @@ pub fn deinit(self: *Client) void {
     const gpa = self.gpa;
     self.telemetry.deinit(self.io);
     self.reload.deinit(gpa);
-    if (self.lua_generation) |generation| {
-        generation.deinit();
-    }
+    if (self.owns_configuration) {
+        if (self.lua_generation) |generation| {
+            generation.deinit();
+        }
 
-    if (self.plugin_registry) |registry| {
-        gpa.destroy(registry);
-    }
+        if (self.plugin_registry) |registry| {
+            gpa.destroy(registry);
+        }
 
-    if (self.trust_store) |store| {
-        gpa.destroy(store);
+        if (self.trust_store) |store| {
+            gpa.destroy(store);
+        }
     }
 
     self.model.deinit();

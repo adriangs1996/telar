@@ -119,7 +119,7 @@ test "GUI admission stamps geometry and invalidates only its own gestures before
 test "shared routing queries distinguish key capture from eligible repetition" {
     const session = try Session.init();
     defer session.deinit();
-    const app = &session.gui.app;
+    const app = session.gui.app;
     try std.testing.expect(!data.key_routing.captures(client.key_routing.keyRoutingAuthority(app)));
     try std.testing.expect(client.actions.repeatPane(app) == null);
     try session.bootstrap();

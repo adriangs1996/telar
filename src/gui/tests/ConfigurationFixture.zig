@@ -34,7 +34,7 @@ pub fn init(source: []const u8, profile: ?[]const u8) !Fixture {
     const candidate = try fixture.adoption();
     session.gui.app.reload.next_generation = candidate.generation.number;
     _ = try client.config_adoption.completeConfigReload(
-        &session.gui.app,
+        session.gui.app,
         .{
             .loaded = .{
                 .generation = candidate.generation,
@@ -56,7 +56,7 @@ pub fn init(source: []const u8, profile: ?[]const u8) !Fixture {
         @as(i128, session.gui.app.plugin_registry.?.watchFingerprint(gpa, io)) ^
         @as(i128, client.config_reload.trustWatchFingerprint(io, trust_path));
     session.gui.driver.configuration.observe(renderer.config, viewport);
-    try client.config_adoption.scheduleConfigReload(&session.gui.app);
+    try client.config_adoption.scheduleConfigReload(session.gui.app);
     try session.startJobs();
     return fixture;
 }
@@ -80,7 +80,7 @@ pub fn write(self: *Fixture, name: []const u8, source: []const u8) !void {
 pub fn wait(self: *Fixture) !void {
     const reload = &self.session.gui.driver.configuration;
     try self.session.startJobs();
-    try reload.poll(&self.session.gui.app);
+    try reload.poll(self.session.gui.app);
     for (0..1000) |_| {
         if (reload.ready.load(.acquire)) {
             _ = try self.session.gui.update();

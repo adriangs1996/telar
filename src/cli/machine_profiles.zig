@@ -4,15 +4,11 @@
 //! Removing or disabling a machine never touches its runtime.
 const client = @import("telar-client");
 const core = @import("telar-core");
-const privatefile = @import("privatefile");
 const std = @import("std");
 const MachineOptions = @import("arguments/MachineOptions.zig");
-const config_directory = @import("config_directory.zig");
 const control = @import("control.zig");
 const remote = client.remote;
-
-/// Where the profiles live inside the settings directory.
-pub const file_name = "machines.json";
+const profile_file = client.profile_file;
 
 /// Exit status of a command that failed.
 const failure: u8 = 1;
@@ -24,8 +20,8 @@ const failure: u8 = 1;
 /// ```
 pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try config_directory.path(init.minimal.environ, file_name, &path_buffer);
-    var profiles = load(init, path) catch |err| return report(init, err);
+    const path = try profile_file.path(init.minimal.environ, &path_buffer);
+    var profiles = profile_file.load(init.io, init.gpa, path) catch |err| return report(init, err);
 
     switch (options.action) {
         .list => return list(init, &profiles, options.json),
@@ -36,7 +32,7 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
         .add => {
             var label_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
             const label = std.mem.span(options.label.?);
-            if (std.mem.eql(u8, label, localLabel(&profiles, &label_buffer))) {
+            if (std.mem.eql(u8, label, profile_file.localLabel(&profiles, &label_buffer))) {
                 return report(init, error.DuplicateMachineLabel);
             }
 
@@ -62,42 +58,8 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
         .disable => profiles.enable(std.mem.span(options.label.?), false) catch |err| return report(init, err),
     }
 
-    try save(init.io, path, &profiles);
+    try profile_file.save(init.io, path, &profiles);
     return 0;
-}
-
-/// Reads the saved profiles; a missing file is an empty list.
-///
-/// ```zig
-/// const profiles = try machine_profiles.load(process_init, path);
-/// ```
-pub fn load(init: std.process.Init, path: []const u8) !core.MachineProfiles {
-    const source = try privatefile.read(init.io, init.gpa, path, .limited(core.MachineProfiles.max_file_bytes)) orelse return .{};
-    defer init.gpa.free(source);
-
-    return core.MachineProfiles.parse(init.gpa, source);
-}
-
-/// The label the local machine answers to: the file's, or the host name.
-///
-/// ```zig
-/// var buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
-/// const local = machine_profiles.localLabel(&profiles, &buffer);
-/// ```
-pub fn localLabel(profiles: *const core.MachineProfiles, buffer: *[std.posix.HOST_NAME_MAX]u8) []const u8 {
-    if (profiles.localLabel()) |label| {
-        return label;
-    }
-
-    return std.posix.gethostname(buffer) catch "localhost";
-}
-
-fn save(io: std.Io, path: []const u8, profiles: *const core.MachineProfiles) !void {
-    var buffer: [core.MachineProfiles.max_file_bytes]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    try profiles.writeJson(&writer);
-
-    try privatefile.replace(io, path, writer.buffered());
 }
 
 fn list(init: std.process.Init, profiles: *const core.MachineProfiles, json: bool) !u8 {
@@ -105,7 +67,7 @@ fn list(init: std.process.Init, profiles: *const core.MachineProfiles, json: boo
     var output = std.Io.File.stdout().writerStreaming(init.io, &buffer);
     const writer = &output.interface;
     var local_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
-    const local = localLabel(profiles, &local_buffer);
+    const local = profile_file.localLabel(profiles, &local_buffer);
 
     if (json) {
         try writer.writeAll("{\"local\":");
@@ -211,27 +173,4 @@ fn report(init: std.process.Init, err: anyerror) u8 {
     const message = std.fmt.bufPrint(&buffer, "telar machine: {s}\n", .{detail}) catch return failure;
     std.Io.File.stderr().writeStreamingAll(init.io, message) catch {};
     return failure;
-}
-
-test "the profiles file is saved privately and loads back" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(std.testing.io, &directory_buffer);
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}/telar/{s}", .{ directory_buffer[0..directory_len], file_name });
-
-    var profiles: core.MachineProfiles = .{};
-    try profiles.add(try core.MachineProfile.init(@enumFromInt(1), .{
-        .label = "box",
-        .destination = "dev@box",
-    }));
-    try save(std.testing.io, path, &profiles);
-
-    const source = (try privatefile.read(std.testing.io, std.testing.allocator, path, .limited(core.MachineProfiles.max_file_bytes))).?;
-    defer std.testing.allocator.free(source);
-
-    const loaded = try core.MachineProfiles.parse(std.testing.allocator, source);
-    try std.testing.expectEqualStrings("dev@box", loaded.rows[0].destination());
 }

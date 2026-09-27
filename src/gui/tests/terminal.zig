@@ -13,7 +13,7 @@ const client = @import("telar-client");
 test "native startup sends the ordered bootstrap without graphics credits or a server reply" {
     const session = try Session.init();
     defer session.deinit();
-    const app = &session.gui.app;
+    const app = session.gui.app;
     const colors: core.TerminalColors = .{
         .foreground = .{
             210,
@@ -448,7 +448,7 @@ test "native driver joins a blocked socket read before freeing the shared client
     const session = try Session.init();
     defer session.deinit();
     session.gui.job_hook = null;
-    try client.runtime_io.startRuntimeRead(&session.gui.app);
+    try client.runtime_io.startRuntimeRead(session.gui.app);
     _ = try session.gui.update();
     try std.testing.expect(session.gui.app.runtime_transport.receive_pending);
 }

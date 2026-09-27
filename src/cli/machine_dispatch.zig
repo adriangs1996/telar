@@ -4,9 +4,7 @@
 const client = @import("telar-client");
 const core = @import("telar-core");
 const std = @import("std");
-const config_directory = @import("config_directory.zig");
 const dispatch_argv = @import("dispatch_argv.zig");
-const machine_profiles = @import("machine_profiles.zig");
 const SshOptions = client.SshOptions;
 
 /// Where a label points.
@@ -28,15 +26,15 @@ const max_command_bytes = 64 * 1024;
 /// ```
 pub fn resolve(init: std.process.Init, label: []const u8) !Target {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try config_directory.path(init.minimal.environ, machine_profiles.file_name, &path_buffer);
-    const profiles = try machine_profiles.load(init, path);
+    const path = try client.profile_file.path(init.minimal.environ, &path_buffer);
+    const profiles = try client.profile_file.load(init.io, init.gpa, path);
 
     if (profiles.find(label)) |row| {
         return .{ .remote = profiles.rows[row] };
     }
 
     var local_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
-    if (std.mem.eql(u8, label, machine_profiles.localLabel(&profiles, &local_buffer))) {
+    if (std.mem.eql(u8, label, client.profile_file.localLabel(&profiles, &local_buffer))) {
         return .local;
     }
 

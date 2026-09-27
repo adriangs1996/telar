@@ -7,7 +7,6 @@ const std = @import("std");
 const PluginOptions = @import("arguments/PluginOptions.zig");
 const PluginWorkerOptions = @import("arguments/PluginWorkerOptions.zig");
 const TestEnvironment = @import("TestEnvironment.zig");
-const config_directory = @import("config_directory.zig");
 
 /// The largest trust store read or written, in bytes.
 const trust_store_limit = 64 * 1024;
@@ -48,7 +47,7 @@ pub fn runWorker(init: std.process.Init, options: PluginWorkerOptions) !void {
 /// const path = try plugin.trustPath(environ, &path_buffer);
 /// ```
 pub fn trustPath(environ: std.process.Environ, buffer: []u8) ![]const u8 {
-    return config_directory.path(environ, "trust.json", buffer);
+    return client.config_directory.path(environ, "trust.json", buffer);
 }
 
 /// Loads a bounded trust store after verifying that its path is a private,

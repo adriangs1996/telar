@@ -11,6 +11,7 @@ const Credit = @import("../graphics/Credit.zig");
 const actions = @import("../input/actions.zig");
 const change_review = @import("../change_review/change_review.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
+const runtime_messages = @import("../connection/runtime_messages.zig");
 const workspace_rename = @import("../workspace/workspace_rename.zig");
 
 /// Layout export decodes to the same active pane and split tree.
@@ -748,4 +749,72 @@ pub fn failedAttemptWaits(comptime start: fn (*Client) anyerror!void) !void {
     try std.testing.expectEqualStrings(report, app.model.runtime_link.failure().?);
     const retry = app.to_workers.pop().?;
     try std.testing.expect(retry == .timer and retry.timer.kind == .runtime_retry);
+}
+
+/// A hidden machine defers its first pane, opens it when shown, and leaves
+/// its workspace when hidden again, reopening it on the next show.
+/// Example: `try client_tests.hiddenMachineDefersAndLeaves(machine_presentation.show, machine_presentation.hide);`
+pub fn hiddenMachineDefersAndLeaves(comptime show: fn (*Client) anyerror!void, comptime hide: fn (*Client) anyerror!void) !void {
+    const gpa = std.testing.allocator;
+    var pair = try socketPair();
+    defer pair.channel.deinit(std.testing.io);
+    defer pair.peer.deinit(std.testing.io);
+
+    const app = try gpa.create(Client);
+    defer gpa.destroy(app);
+
+    try app.init(.{
+        .gpa = gpa,
+        .io = std.testing.io,
+        .connection = &pair.channel,
+        .host_size = .{
+            .cols = 40,
+            .rows = 10,
+            .cell_width_px = 0,
+            .cell_height_px = 0,
+        },
+        .options = .{
+            .arguments = &.{"/bin/sh"},
+            .cwd = "/",
+            .endpoint = "",
+        },
+    });
+    defer app.deinit();
+    app.graphics = no_graphics;
+    app.presented = false;
+
+    var buffer: [256]u8 = undefined;
+    const snapshot = try core.encodeClientLayoutSnapshot(&buffer, .{ .restored = false });
+    _ = try runtime_messages.handleServerMessage(app, try core.decodeServer(snapshot));
+    try std.testing.expect(app.open_deferred);
+    try std.testing.expectEqual(@as(u8, 0), app.model.to_runtime.len);
+
+    try show(app);
+    try std.testing.expect(!app.open_deferred);
+    try std.testing.expect(app.model.to_runtime.peek().?.* == .open_pane);
+    app.model.to_runtime.discardQueued();
+    app.model.request_lifecycle = .{};
+
+    try data.workspace_handoff.bootstrap(
+        &app.model,
+        .{
+            .pane_id = @enumFromInt(3),
+            .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(2) },
+            .size = .{
+                .cols = 40,
+                .rows = 10,
+            },
+        },
+    );
+
+    try hide(app);
+    try std.testing.expect(app.model.workspace == null);
+    try std.testing.expectEqual(@as(?core.WorkspaceId, @enumFromInt(1)), app.left_workspace);
+    try std.testing.expect(app.model.to_runtime.peek().?.* == .detach_pane);
+    app.model.to_runtime.discardQueued();
+
+    try show(app);
+    try std.testing.expect(app.left_workspace == null);
+    try std.testing.expect(app.model.to_runtime.peek().?.* == .open_pane);
+    app.model.to_runtime.discardQueued();
 }

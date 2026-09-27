@@ -194,6 +194,12 @@ fn adopt(client: *Client) !void {
         forgetSession(client);
     }
 
+    // A new session opens its first pane again when shown.
+    client.open_deferred = false;
+    client.deferred_layout = null;
+    client.left_workspace = null;
+    client.leave_pending = false;
+
     client.channel = connection.channel;
     client.channel_owned = true;
     client.forward = connection.forward;
@@ -232,8 +238,8 @@ fn forgetSession(client: *Client) void {
     data.runtime_session.forget(&client.model);
 }
 
-// A remote machine launches the first pane in its own home, with its login
-// shell unless the user named a command.
+// A remote machine launches the first pane in its own home, with the
+// command the user named for it or its login shell.
 fn adoptLaunchDefaults(client: *Client) void {
     const forward = client.forward orelse return;
     const defaults = forward.discovery.launchDefaults();
@@ -241,7 +247,12 @@ fn adoptLaunchDefaults(client: *Client) void {
     @memcpy(client.launch_cwd[0..home.len], home);
     client.options.cwd = client.launch_cwd[0..home.len];
 
-    if (client.options.arguments.len == 0) {
+    const named = switch (client.options.machine.?) {
+        .remote => |machine| machine.arguments,
+        .local => &.{},
+    };
+    client.options.arguments = named;
+    if (named.len == 0) {
         const shell = defaults.shell[0..@min(defaults.shell.len, client.launch_shell.len)];
         @memcpy(client.launch_shell[0..shell.len], shell);
         client.launch_arguments[0] = client.launch_shell[0..shell.len];

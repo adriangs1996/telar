@@ -46,25 +46,36 @@ pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
         .process = init,
         .options = &options,
         .endpoint = connector.endpointPath(),
-        .remote_later = options.remote != null,
     });
     defer prepared.deinit();
 
+    // The window's own client is this machine's; a `--remote` machine
+    // opens beside it, runs the named command, and is shown first.
     var frontend_options = prepared.frontendOptions();
-    frontend_options.machine = if (options.remote) |destination| .{ .remote = .{
-        .destination = std.mem.span(destination),
-    } } else .{ .local = .{
+    frontend_options.machine = .{ .local = .{
         .path = options.config,
         .disabled = options.no_config,
         .profile = options.profile,
         .fresh = options.fresh,
     } };
+    if (options.remote) |destination| {
+        frontend_options.open_machine = .{
+            .destination = std.mem.span(destination),
+            .arguments = prepared.command(),
+        };
+        frontend_options.arguments = &.{defaultShell(init.minimal.environ)};
+    }
     prepared.transferResources();
     return gui.run(init, null, frontend_options);
 }
 
 /// One presentation adapter's entrypoint: it adopts the resources `Options`
 /// carries and runs until the user leaves.
+fn defaultShell(environ: std.process.Environ) []const u8 {
+    const shell = environ.getPosix("SHELL") orelse return "/bin/sh";
+    return if (shell.len == 0) "/bin/sh" else shell;
+}
+
 pub const Adapter = *const fn (std.process.Init, ?*localsocket.SocketChannel, client.Options) anyerror!u8;
 
 fn launch(init: std.process.Init, options: RunOptions, adapter: Adapter) !u8 {

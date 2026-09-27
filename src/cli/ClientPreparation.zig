@@ -8,5 +8,3 @@ process: std.process.Init,
 options: *const RunOptions,
 endpoint: []const u8,
 remote_defaults: ?LaunchDefaults = null,
-/// The machine is remote and its home and shell arrive with the connection.
-remote_later: bool = false,

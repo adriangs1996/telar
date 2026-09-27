@@ -16,7 +16,7 @@ pub fn text(gui: *GuiAdapter, output: *native.TextContext) bool {
     }
 
     const target = gui.widgets.dispatcher.focusedTarget() orelse return false;
-    const current = FieldView.captureClient(&gui.app, target) orelse return false;
+    const current = FieldView.captureClient(gui.app, target) orelse return false;
     const geometry = gui.widgets.editors.presented().find(target.id) orelse return false;
     const preedit = if (gui.widgets.preedit.owner) |owner| if (owner.eql(target.id)) &gui.widgets.preedit else null else null;
     var display = EditorDisplay.capture(current, preedit);
@@ -24,7 +24,7 @@ pub fn text(gui: *GuiAdapter, output: *native.TextContext) bool {
     output.* = .{
         .target_id = target.id.target_id,
         .generation = target.id.generation,
-        .revision = FieldView.revision(&gui.app) +% gui.widgets.dispatcher.revision,
+        .revision = FieldView.revision(gui.app) +% gui.widgets.dispatcher.revision,
         .enabled = 1,
         .composition_active = @intFromBool(preedit != null),
         .text = current.text.ptr,
@@ -67,10 +67,10 @@ pub fn accessibility(gui: *GuiAdapter, output: *native.AccessibilityTree) bool {
             .label_len = target.label_len,
         };
         if (target.action == .text_field) {
-            const current = FieldView.captureClient(&gui.app, target.*) orelse continue;
+            const current = FieldView.captureClient(gui.app, target.*) orelse continue;
             node.flags |= 8;
             node.actions |= 4 | 8 | 64 | 128 | 256 | 512;
-            node.text_revision = FieldView.revision(&gui.app);
+            node.text_revision = FieldView.revision(gui.app);
             node.value = current.text.ptr;
             node.value_len = current.text.len;
             node.selection_start = current.anchor;

@@ -215,6 +215,7 @@ pub const Opening = @import("links/Opening.zig");
 pub const Outbox = @import("connection/Outbox.zig");
 pub const RuntimeLink = @import("connection/RuntimeLink.zig");
 pub const RuntimeBootstrap = @import("connection/RuntimeBootstrap.zig");
+pub const ConfigurationInput = @import("state/ConfigurationInput.zig");
 pub const OutboxSnapshot = @import("connection/OutboxSnapshot.zig");
 pub const Overrides = @import("appearance/Overrides.zig");
 pub const OwnedHistoryQuery = @import("connection/OwnedHistoryQuery.zig");

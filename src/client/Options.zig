@@ -6,6 +6,7 @@ const Registry = @import("plugins/Registry.zig");
 const std = @import("std");
 const GuiConfig = @import("config/GuiConfig.zig");
 const MachineTarget = @import("machines/MachineTarget.zig").MachineTarget;
+const RemoteMachine = @import("machines/RemoteMachine.zig");
 const Options = @This();
 
 arguments: []const []const u8,
@@ -15,6 +16,9 @@ endpoint: []const u8,
 /// hands it a socket that is already connected; such a client cannot
 /// reconnect.
 machine: ?MachineTarget = null,
+/// A remote machine a window opens beside its own and shows first, as
+/// `telar gui --remote` asks.
+open_machine: ?RemoteMachine = null,
 /// Process environment used to expand `~` and `$VAR` in typed directories.
 environ: std.process.Environ = .empty,
 prefix: keyinput.Key = data.keybind.default_prefix,

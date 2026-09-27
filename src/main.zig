@@ -193,7 +193,6 @@ test {
     _ = @import("cli/arguments/TabOptions.zig");
     _ = @import("cli/arguments/MachineOptions.zig");
     _ = @import("cli/arguments/MachineDispatchOptions.zig");
-    _ = @import("cli/config_directory.zig");
     _ = @import("cli/dispatch_argv.zig");
     _ = @import("cli/machine_profiles.zig");
     _ = @import("cli/machine_dispatch.zig");
