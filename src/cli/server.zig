@@ -7,6 +7,7 @@ const std = @import("std");
 const ServerOptions = @import("arguments/ServerOptions.zig");
 const RuntimeConnector = client.RuntimeConnector;
 const ServerLaunch = @import("ServerLaunch.zig");
+const runtime_bridge = @import("runtime_bridge.zig");
 const ProxyAuthorityNames = @import("ProxyAuthorityNames.zig");
 const HistoryPath = @import("HistoryPath.zig");
 const TestEnvironment = @import("TestEnvironment.zig");
@@ -29,6 +30,9 @@ pub fn run(init: std.process.Init, options: ServerOptions) !void {
     if (options.action == .endpoint) {
         return printEndpoint(init, &connector);
     }
+    if (options.action == .bridge) {
+        return runtime_bridge.relay(init.io, &connector);
+    }
 
     var launch: ServerLaunch = undefined;
     try launch.prepare(.{
@@ -49,14 +53,15 @@ pub fn run(init: std.process.Init, options: ServerOptions) !void {
     try runtime.run();
 }
 
-/// Ensures the runtime is running and prints its socket path on one line.
-/// `telar --remote` runs this over SSH to discover the remote endpoint.
+/// Ensures the runtime is running and prints its socket path, then the wire
+/// schema this `telar` speaks, one per line. A client runs this over SSH to
+/// discover a remote machine (`Discovery.parse`).
 fn printEndpoint(init: std.process.Init, connector: *const RuntimeConnector) !void {
     var connection = try connector.connectOrStart(.{});
     connection.deinit(init.io);
 
-    var buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
-    const line = try std.fmt.bufPrint(&buffer, "{s}\n", .{connector.endpointPath()});
+    var buffer: [std.fs.max_path_bytes + 1 + core.schema_id.len + 1]u8 = undefined;
+    const line = try std.fmt.bufPrint(&buffer, "{s}\n{s}\n", .{ connector.endpointPath(), &core.schema_id });
     try std.Io.File.stdout().writeStreamingAll(init.io, line);
 }
 

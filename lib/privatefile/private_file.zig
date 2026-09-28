@@ -52,10 +52,8 @@ pub fn read(io: std.Io, gpa: std.mem.Allocator, path: []const u8, limit: std.Io.
 /// try private_file.replace(io, path, json);
 /// ```
 pub fn replace(io: std.Io, path: []const u8, content: []const u8) !void {
-    const directory = std.fs.path.dirname(path) orelse return error.InvalidPrivatePath;
+    try prepareParent(io, path);
     const cwd = std.Io.Dir.cwd();
-    _ = try cwd.createDirPathStatus(io, directory, .fromMode(@intFromEnum(Mode.directory)));
-    try cwd.setFilePermissions(io, directory, .fromMode(@intFromEnum(Mode.directory)), .{ .follow_symlinks = false });
 
     var nonce: [16]u8 = undefined;
     try io.randomSecure(&nonce);
@@ -84,6 +82,49 @@ pub fn replace(io: std.Io, path: []const u8, content: []const u8) !void {
 
     try cwd.rename(temporary, cwd, path, io);
     committed = true;
+}
+
+/// Takes an exclusive lock over `path` for one read, change and replace,
+/// so two processes or threads never both read the old file and each
+/// replace it without the other's change. The lock is flock(2) on
+/// `<path>.lock`, an owner-only file beside it that stays when released,
+/// because removing a locked file would let a second caller lock a new one.
+/// A caller waits while another holds it, and closing the returned file
+/// releases it, as does the process ending.
+///
+/// ```zig
+/// const held = try private_file.lock(io, path);
+/// defer held.close(io);
+/// const bytes = try private_file.read(io, gpa, path, limit);
+/// try private_file.replace(io, path, changed);
+/// ```
+pub fn lock(io: std.Io, path: []const u8) !std.Io.File {
+    try prepareParent(io, path);
+
+    var lock_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const lock_path = try std.fmt.bufPrint(&lock_buffer, "{s}.lock", .{path});
+    const file = try std.Io.Dir.cwd().createFile(io, lock_path, .{
+        .truncate = false,
+        .lock = .exclusive,
+        .permissions = .fromMode(@intFromEnum(Mode.file)),
+    });
+    errdefer file.close(io);
+
+    const stat = try file.stat(io);
+    if (stat.kind != .file or stat.permissions.toMode() & @intFromEnum(Mode.shared) != 0) {
+        return error.InsecureFile;
+    }
+
+    return file;
+}
+
+// Creates the parent of `path` owner-only when missing, and resets its
+// permissions when it exists.
+fn prepareParent(io: std.Io, path: []const u8) !void {
+    const directory = std.fs.path.dirname(path) orelse return error.InvalidPrivatePath;
+    const cwd = std.Io.Dir.cwd();
+    _ = try cwd.createDirPathStatus(io, directory, .fromMode(@intFromEnum(Mode.directory)));
+    try cwd.setFilePermissions(io, directory, .fromMode(@intFromEnum(Mode.directory)), .{ .follow_symlinks = false });
 }
 
 /// Makes `path` an owner-only directory: created when missing, refused
@@ -217,6 +258,27 @@ test "a prepared directory is owner-only and a file in its place is refused" {
     const file = try temporaryPath(&temp, "not-a-directory", &file_buffer);
     try replace(std.testing.io, file, "{}");
     try std.testing.expectError(error.InsecureDirectory, prepareDirectory(std.testing.io, file));
+}
+
+test "a lock is owner-only, excludes a second holder and outlives its release" {
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try temporaryPath(&temp, "config/machines.json", &path_buffer);
+
+    const held = try lock(std.testing.io, path);
+    var lock_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const lock_path = try std.fmt.bufPrint(&lock_buffer, "{s}.lock", .{path});
+    const second = try std.Io.Dir.cwd().openFile(std.testing.io, lock_path, .{ .mode = .read_write });
+    defer second.close(std.testing.io);
+    try std.testing.expect(!try second.tryLock(std.testing.io, .exclusive));
+
+    const stat = try std.Io.Dir.cwd().statFile(std.testing.io, lock_path, .{ .follow_symlinks = false });
+    try std.testing.expectEqual(@intFromEnum(Mode.file), stat.permissions.toMode() & 0o777);
+
+    held.close(std.testing.io);
+    try std.testing.expect(try second.tryLock(std.testing.io, .exclusive));
 }
 
 test "a directory must belong to the current user" {

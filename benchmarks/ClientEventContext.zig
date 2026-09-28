@@ -1,6 +1,7 @@
 //! One shared client driven through its event path without threads: a pane
 //! frame or a key through `Client.update`, then `flush`, the job queue the
-//! adapter drains, and the write completion.
+//! adapter drains, and the write completion. As one machine of a window, it
+//! also refreshes its row in the window's machine table after each event.
 const localsocket = @import("localsocket");
 const cellgrid = @import("cellgrid");
 const data = @import("model");
@@ -35,6 +36,8 @@ payload: []u8,
 message: data.RuntimeMessage = undefined,
 frame_id: u64 = 0,
 started_jobs: u64 = 0,
+machines: client.Machines = .{},
+machine_slot: u8 = client.Machines.local_slot,
 
 /// Builds the client in place, attaches one pane and applies its first
 /// snapshot, so every measured frame is an incremental one.
@@ -130,6 +133,48 @@ pub fn keyEvent(self: *ClientEventContext) !u64 {
     );
     try self.finishEvent();
     return @intFromEnum(outcome.owner);
+}
+
+/// Gives the client a row in a window's machine table and a full agent
+/// snapshot, every agent working, as a machine with busy agents has.
+/// Example: `try context.loadMachine();`
+pub fn loadMachine(self: *ClientEventContext) !void {
+    _ = try self.machines.add(.{ .label = "laptop" }, client.Machines.local_slot);
+    self.machine_slot = try self.machines.add(.{ .label = "box", .destination = "dev@box" }, null);
+
+    var agents: [core.max_agent_snapshot_entries]data.AgentInput = undefined;
+    for (&agents, 0..) |*agent, index| {
+        agent.* = .{
+            .key = .{
+                .pane_id = @enumFromInt(index + 1),
+                .pane_generation = 1,
+            },
+            .location = location,
+            .pane_index = @intCast(index),
+            .provider = .claude,
+            .status = .working,
+        };
+    }
+
+    _ = try data.agent_snapshot.reconcile(&self.app.model, .{
+        .revision = 1,
+        .agents = &agents,
+    });
+    self.summarizeMachine();
+}
+
+/// One incremental frame as a window delivers it to one of its machines:
+/// the frame through the client, then the refresh of the machine's row.
+/// Example: `const applied = try context.machineFrameEvent(iteration);`
+pub fn machineFrameEvent(self: *ClientEventContext, iteration: usize) !u64 {
+    const applied = try self.frameEvent(iteration);
+    self.summarizeMachine();
+    return applied +% self.machines.revision;
+}
+
+// What `window_machines.handle` does after each of a machine's events.
+noinline fn summarizeMachine(self: *ClientEventContext) void {
+    _ = self.machines.summarize(self.machine_slot, &self.app.model, self.io);
 }
 
 /// Leaves one tab snapshot request pending, as a client has while it waits

@@ -32,6 +32,7 @@ HeadlessClient.run
     present                           capture, begin, complete as delivered,
                                       presentation_delivery.apply (frame acks)
     deliverEffects                    host requests recorded, jobs started
+    link failed (runtime-link.md)     exit 1: nobody here can retry it
   writeReports                        --trace and --dump, after the loop
 ```
 
@@ -60,7 +61,7 @@ they send what they measure.
   line (`label` key/text/resize and the focused `pane`), a mark, or a host
   request. Times are the client's monotonic clock in nanoseconds. Recording
   never allocates or formats; the JSON is written once at exit.
-- `--dump PATH`: the link state, the tabs, the active tab's panes with their
+- `--dump PATH`: the link state and its failure text, the tabs, the active tab's panes with their
   visible rows as text, the workspace list and the notifications, from the
   client model when it exits.
 

@@ -38,6 +38,5 @@ pub fn run(init: std.process.Init, connection: ?*localsocket.SocketChannel, opti
 
     adopted = true;
     defer app.deinit();
-    app.window_slot = identity.slot;
     return app.run("Telar");
 }

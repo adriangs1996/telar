@@ -576,7 +576,8 @@ fn machineGlyph(canvas: *const Canvas, fact: data.MachineFact) Label {
     else switch (fact.phase) {
         .connected => .{ "●", palette.green },
         .connecting => .{ "◌", palette.overlay1 },
-        .lost => .{ "✕", palette.red },
+        .lost => .{ "✕", palette.peach },
+        .failed => .{ "✕", palette.red },
         .stopped => .{ "○", palette.overlay0 },
     };
     return .{ .text = glyph, .color = color, .face = .sans, .size = .small };

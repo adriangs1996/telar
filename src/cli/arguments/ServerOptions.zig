@@ -37,6 +37,13 @@ pub fn parse(args: []const [*:0]const u8) !ServerOptions {
 
             options.action = .endpoint;
             action_explicit = true;
+        } else if (std.mem.eql(u8, arg, "bridge")) {
+            if (action_explicit) {
+                return error.DuplicateServerAction;
+            }
+
+            options.action = .bridge;
+            action_explicit = true;
         } else if (std.mem.eql(u8, arg, "--background")) {
             if (options.mode != .foreground) {
                 return error.ConflictingServerModes;
@@ -108,4 +115,13 @@ pub fn parse(args: []const [*:0]const u8) !ServerOptions {
 
     try options.graphics.validate();
     return options;
+}
+
+test "server bridge is one action and takes no other" {
+    const options = try ServerOptions.parse(&.{"bridge"});
+    try std.testing.expectEqual(server.ServerAction.bridge, options.action);
+
+    try std.testing.expectError(error.DuplicateServerAction, ServerOptions.parse(&.{ "bridge", "endpoint" }));
+    try std.testing.expectError(error.DuplicateServerAction, ServerOptions.parse(&.{ "stop", "bridge" }));
+    try std.testing.expectError(error.FreshRequiresRun, ServerOptions.parse(&.{ "bridge", "--fresh" }));
 }

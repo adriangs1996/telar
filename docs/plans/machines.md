@@ -1,6 +1,7 @@
 # Machines
 
-Status: phases 0, 1 and 2 are implemented on `feat/machines`; see
+Status: phases 0 to 4 and the retirement of the TUI are implemented and
+merged into `main` (`7950e160`); see
 [Implementation status](#implementation-status). It builds on
 [remote attach](../flows/remote-attach.md), the
 [worktrees and agent coordination plan](worktrees.md) and the agent control
@@ -40,6 +41,24 @@ Implementation must follow the [invariants](../invariants.md) and the
     added with `telar machine add`.
   - Picker rows act through keys (Shift+Enter, Ctrl+R, Ctrl+D) and Enter on
     an unreachable machine is "Reconnect now".
+  - Client configuration does not move to the adapter. The window's own
+    client, this machine's, loads Lua, runs the configuration watch and
+    draws the bars; every other machine's client follows its generation
+    (`config_adoption.followConfiguration`, `owns_configuration = false`,
+    `window_machines.openClient`) and takes each reload after it.
+  - The identity hashes the window identity with the destination, not
+    with a machine id (`window_machines.machineIdentity`). A temporary
+    `--remote` row has no id; a saved machine whose destination changes
+    presents a new identity (`window_machines.admit`).
+  - A row's link is `connecting`, `connected`, `lost`, `failed` or
+    `stopped` (`RuntimeLink.Phase`). A machine that cannot be reached
+    stays `lost` and retries with a capped backoff; one that fails for a
+    reason retrying cannot fix, such as a refused host key, stays `failed`
+    until "Reconnect now" ([Runtime link](../flows/runtime-link.md)).
+  - A client reaches a remote runtime through `ssh … telar server bridge`
+    over the managed ControlMaster, not an `ssh -L` forward, so every
+    window shares one SSH connection and one authentication per machine
+    ([Remote attach](../flows/remote-attach.md)).
 - **Phase 3** (worktrees on another machine): done. Flow:
   [Worktree dispatch](../flows/worktree-dispatch.md). It differs from the
   design below in four places:
@@ -844,9 +863,10 @@ at network speed.
   The remote runtime then sends shared-memory names the client cannot map,
   and the client appears to fall back after the first image. Moot if the TUI
   is retired.
-- Two GUI windows on the same remote share one forwarded socket path, and
-  either one's exit unlinks it (see
-  [The GUI as a remote client](#the-gui-as-a-remote-client)).
+- Fixed: two GUI windows on the same remote shared one forwarded socket
+  path, and either one's exit unlinked it. No forwarded socket exists now:
+  each client's SSH session carries its connection on standard input and
+  output (`remote.connect`).
 - `--socket` pointing at a forwarded socket whose forward is gone may start a
   local runtime at that path, because `Session.open` uses `connectOrStart`.
 - `herdr-adoption.md` P12 still lists `endpoint.Remote`, `attach-stdio` and

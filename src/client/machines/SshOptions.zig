@@ -1,8 +1,8 @@
 //! The one way telar runs `ssh`. Batch mode, so nothing in the background
 //! ever asks for a password or a host key; keepalives, so a dead link is
 //! noticed; no agent forwarding; and one control master per destination in
-//! telar's owner-only runtime directory, so discovery, forwards, dispatch
-//! and git share one authenticated connection.
+//! telar's owner-only runtime directory, so discovery, every window's
+//! bridge session, dispatch and git share one authenticated connection.
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeConnector = @import("RuntimeConnector.zig");
@@ -16,20 +16,6 @@ pub const control_persist_s = 600;
 
 /// Arguments every managed call passes before its own.
 pub const option_count = 14;
-
-/// Options for a socket forward. A forward never joins the control master:
-/// a forward a master owns outlives the `ssh` that asked for it, so
-/// stopping that process would leave the socket behind. It fails at once
-/// when the forward cannot be set up and replaces a stale socket file.
-pub const forward_arguments = [_][]const u8{
-    "-o", "BatchMode=yes",
-    "-o", std.fmt.comptimePrint("ServerAliveInterval={d}", .{keepalive_interval_s}),
-    "-o", std.fmt.comptimePrint("ServerAliveCountMax={d}", .{keepalive_misses}),
-    "-o", "ForwardAgent=no",
-    "-o", "ControlPath=none",
-    "-o", "ExitOnForwardFailure=yes",
-    "-o", "StreamLocalBindUnlink=yes",
-};
 
 /// Hex digits of the destination hash in a control socket name. OpenSSH adds
 /// a random suffix while it binds, and Unix socket paths are short.
