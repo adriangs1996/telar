@@ -15,6 +15,7 @@ const ConfigEntry = @import("ConfigEntry.zig");
 const ConfigRoot = @import("ConfigRoot.zig");
 const config_filter = @import("config_filter.zig");
 const config_receive = @import("config_receive.zig");
+const config_secrets = @import("config_secrets.zig");
 const integration_support = @import("integration_support.zig");
 const remote_shell = @import("remote_shell.zig");
 
@@ -37,6 +38,15 @@ const StagedFile = struct {
     json: ?std.json.Value = null,
 };
 
+/// A directory the sync reads under: an agent's configuration directory or
+/// the shared skills, with where it really is here once symlinks resolve.
+const SyncRoot = struct {
+    /// Relative to the home on both sides, as `rootFor` names it.
+    remote: []const u8,
+    /// The real path of this machine's copy.
+    real: []const u8,
+};
+
 /// Every file one sync sends, and what it left out and why.
 const Staging = struct {
     arena: std.mem.Allocator,
@@ -49,6 +59,8 @@ const Staging = struct {
     left: std.ArrayList([]const u8) = .empty,
     /// Where each wanted agent keeps its configuration here.
     local_roots: std.EnumArray(Agent, ?[]const u8) = .initFill(null),
+    /// Every root read, real paths resolved.
+    roots: std.ArrayList(SyncRoot) = .empty,
 
     fn leave(self: *Staging, comptime format: []const u8, arguments: anytype) !void {
         try self.left.append(self.arena, try std.fmt.allocPrint(self.arena, format, arguments));
@@ -64,8 +76,36 @@ const Staging = struct {
         return false;
     }
 
-    // Reads one allowlisted file, refusing credentials by its name and by
-    // where a symlink leads, and anything past the bounds.
+    // Records a root's real path; false when it does not exist here.
+    fn addRoot(self: *Staging, remote: []const u8, local: []const u8) !bool {
+        var real_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const real_len = std.Io.Dir.realPathFileAbsolute(self.io, local, &real_buffer) catch return false;
+        try self.roots.append(self.arena, .{
+            .remote = remote,
+            .real = try self.arena.dupe(u8, real_buffer[0..real_len]),
+        });
+        return true;
+    }
+
+    /// Whether `real`, where `remote_path` really is here, lies inside the
+    /// real directory of the root `remote_path` is synced under. A root
+    /// that is a symlink (`~/.claude` into a dotfiles checkout) is followed
+    /// once, when it is recorded; nothing below it may leave it.
+    fn inside(self: *const Staging, remote_path: []const u8, real: []const u8) bool {
+        for (self.roots.items) |*root| {
+            if (!below(remote_path, root.remote)) {
+                continue;
+            }
+
+            return std.mem.eql(u8, real, root.real) or below(real, root.real);
+        }
+
+        return false;
+    }
+
+    // Reads one allowlisted file, refusing a credential by its name, a path
+    // whose real location is outside its root, a hard link and anything
+    // past the bounds.
     fn addFile(self: *Staging, local_path: []const u8, remote_path: []const u8, format: Format, hooks_agent: ?Agent) !void {
         if (self.staged(remote_path)) {
             return;
@@ -78,9 +118,30 @@ const Staging = struct {
             return self.leave("{s}: never sent", .{remote_path});
         }
 
-        const stat = std.Io.Dir.cwd().statFile(self.io, real, .{}) catch return;
+        if (!self.inside(remote_path, real)) {
+            return self.leave("{s}: leads outside its agent's directory, not sent", .{remote_path});
+        }
+
+        // A FIFO would block the open, so the kind is checked first; the
+        // bytes then come from the file whose metadata is checked.
+        const kind = std.Io.Dir.cwd().statFile(self.io, real, .{ .follow_symlinks = false }) catch return;
+        if (kind.kind != .file) {
+            return;
+        }
+
+        const file = std.Io.Dir.cwd().openFile(self.io, real, .{
+            .follow_symlinks = false,
+            .allow_directory = false,
+        }) catch return;
+        defer file.close(self.io);
+
+        const stat = file.stat(self.io) catch return;
         if (stat.kind != .file) {
             return;
+        }
+
+        if (stat.nlink > 1) {
+            return self.leave("{s}: has another hard link, which could be any file; not sent", .{remote_path});
         }
 
         if (stat.size > config_receive.max_file_bytes) {
@@ -91,7 +152,12 @@ const Staging = struct {
             return self.leave("{s}: the sync is full, not sent", .{remote_path});
         }
 
-        const bytes = try std.Io.Dir.cwd().readFileAlloc(self.io, real, self.arena, .limited(config_receive.max_file_bytes + 1));
+        var reader = file.reader(self.io, &.{});
+        const bytes = reader.interface.allocRemaining(self.arena, .limited(config_receive.max_file_bytes + 1)) catch |err| switch (err) {
+            error.StreamTooLong => return self.leave("{s}: larger than {d} KiB, not sent", .{ remote_path, config_receive.max_file_bytes / 1024 }),
+            error.OutOfMemory => return error.OutOfMemory,
+            error.ReadFailed => return,
+        };
         self.total_bytes += bytes.len;
         try self.files.append(self.arena, .{
             .remote_path = try self.arena.dupe(u8, remote_path),
@@ -102,12 +168,18 @@ const Staging = struct {
         });
     }
 
-    // Walks an allowlisted directory: hidden entries stay, symlinks are
-    // followed only where they lead to something allowed, and depth is
-    // bounded, so a cycle ends.
+    // Walks an allowlisted directory: hidden entries stay, a directory whose
+    // real path leaves its root is skipped, and depth is bounded, so a
+    // cycle ends.
     fn addTree(self: *Staging, local_dir: []const u8, remote_dir: []const u8, depth: u8) !void {
         if (depth > max_depth or config_allowlist.telarOwned(remote_dir)) {
             return;
+        }
+
+        var real_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const real_len = std.Io.Dir.realPathFileAbsolute(self.io, local_dir, &real_buffer) catch return;
+        if (!self.inside(remote_dir, real_buffer[0..real_len])) {
+            return self.leave("{s}/: leads outside its agent's directory, not sent", .{remote_dir});
         }
 
         var dir = std.Io.Dir.cwd().openDir(self.io, local_dir, .{ .iterate = true }) catch return;
@@ -133,7 +205,29 @@ const Staging = struct {
             }
         }
     }
+
+    // Keeps `bytes` of the file at `index`, or holds the file back when it
+    // looks like it holds a secret; false when it was held back.
+    fn keepUnlessSecret(self: *Staging, index: usize, bytes: []const u8) !bool {
+        const file = &self.files.items[index];
+        if (config_secrets.find(bytes)) |finding| {
+            try self.leave("{s}: held back, line {d} holds what looks like {s}; review it and sync again", .{
+                file.remote_path,
+                finding.line,
+                finding.kind.describe(),
+            });
+            return false;
+        }
+
+        file.bytes = bytes;
+        return true;
+    }
 };
+
+// Whether `path` lies below the directory `parent`.
+fn below(path: []const u8, parent: []const u8) bool {
+    return path.len > parent.len and std.mem.startsWith(u8, path, parent) and path[parent.len] == '/';
+}
 
 fn targetKind(io: std.Io, path: []const u8) std.Io.File.Kind {
     const stat = std.Io.Dir.cwd().statFile(io, path, .{}) catch return .unknown;
@@ -165,6 +259,7 @@ pub fn run(init: std.process.Init, report: *SetupReport, destination: []const u8
     try transform(&staging, platform.target.slice());
     const existing = try queryPaths(init, destination, &staging);
     try pruneHooks(&staging, existing);
+    try serialize(&staging);
 
     const stream = try writeStream(&staging);
     var command_buffer: [512]u8 = undefined;
@@ -203,6 +298,10 @@ fn collect(staging: *Staging, environ: std.process.Environ, wanted: std.EnumSet(
         const root = config_allowlist.rootFor(agent);
         const local_root = try localRoot(staging, environ, root);
         staging.local_roots.set(agent, local_root);
+        if (!try staging.addRoot(root.directory, local_root)) {
+            continue;
+        }
+
         for (config_allowlist.entriesFor(agent)) |entry| {
             const local_path = try std.fmt.allocPrint(staging.arena, "{s}/{s}", .{ local_root, entry.path });
             const remote_path = try std.fmt.allocPrint(staging.arena, "{s}/{s}", .{ root.directory, entry.path });
@@ -215,7 +314,9 @@ fn collect(staging: *Staging, environ: std.process.Environ, wanted: std.EnumSet(
 
     if (wanted.contains(.codex) or wanted.contains(.opencode) or wanted.contains(.cursor)) {
         const local_path = try std.fmt.allocPrint(staging.arena, "{s}/{s}", .{ staging.local_home, config_allowlist.shared_skills });
-        try staging.addTree(local_path, config_allowlist.shared_skills, 0);
+        if (try staging.addRoot(config_allowlist.shared_skills, local_path)) {
+            try staging.addTree(local_path, config_allowlist.shared_skills, 0);
+        }
     }
 }
 
@@ -231,45 +332,89 @@ fn localRoot(staging: *Staging, environ: std.process.Environ, root: ConfigRoot) 
     return std.fmt.allocPrint(staging.arena, "{s}/{s}", .{ staging.local_home, root.directory });
 }
 
-// Filters and rewrites every staged file. JSON stays parsed until hooks
-// are pruned; files its commands name inside an agent's directory join
-// the sync.
+// Filters and rewrites every staged file, and holds back a text file that
+// looks like it holds a secret. JSON stays parsed until hooks are pruned;
+// files its commands name inside an agent's directory join the sync.
 fn transform(staging: *Staging, telar_path: []const u8) !void {
     var index: usize = 0;
-    while (index < staging.files.items.len) : (index += 1) {
-        const file = &staging.files.items[index];
-        var dropped: std.ArrayList([]const u8) = .empty;
-        switch (file.format) {
-            .text => file.bytes = try config_filter.rewriteHome(staging.arena, file.bytes, staging.local_home, staging.remote_home),
-            .toml => {
-                const filtered = try config_filter.filterToml(staging.arena, file.bytes, staging.arena, &dropped);
-                file.bytes = try config_filter.rewriteHome(staging.arena, filtered, staging.local_home, staging.remote_home);
-            },
-            .json => {
-                const plain = try config_filter.stripJsonc(staging.arena, file.bytes);
-                var value = std.json.parseFromSliceLeaky(std.json.Value, staging.arena, plain, .{}) catch {
-                    try staging.leave("{s}: not valid JSON here, not sent", .{file.remote_path});
-                    _ = staging.files.orderedRemove(index);
-                    index -%= 1;
-                    continue;
-                };
-
-                try config_filter.dropSecrets(staging.arena, &value, &dropped);
-                try bringCommandFiles(staging, value);
-                try rewriteStrings(staging, &value);
-                // Staging more files may have moved the list.
-                const moved = &staging.files.items[index];
-                if (moved.hooks_agent) |agent| {
-                    _ = try integration_support.placeHooks(staging.arena, &value, agent, telar_path);
-                }
-
-                moved.json = value;
-            },
+    while (index < staging.files.items.len) {
+        if (try transformOne(staging, index, telar_path)) {
+            index += 1;
+        } else {
+            _ = staging.files.orderedRemove(index);
         }
+    }
+}
 
-        if (dropped.items.len != 0) {
-            const joined = try std.mem.join(staging.arena, ", ", dropped.items);
-            try staging.leave("{s}: left out {s}", .{ staging.files.items[index].remote_path, joined });
+// Transforms the file at `index`; false when it stays here.
+fn transformOne(staging: *Staging, index: usize, telar_path: []const u8) !bool {
+    const file = staging.files.items[index];
+    var dropped: std.ArrayList([]const u8) = .empty;
+    switch (file.format) {
+        .text => {
+            const bytes = try config_filter.rewriteHome(staging.arena, file.bytes, staging.local_home, staging.remote_home);
+            if (!try staging.keepUnlessSecret(index, bytes)) {
+                return false;
+            }
+        },
+        .toml => {
+            const filtered = try config_filter.filterToml(staging.arena, file.bytes, staging.arena, &dropped);
+            const bytes = try config_filter.rewriteHome(staging.arena, filtered, staging.local_home, staging.remote_home);
+            if (!try staging.keepUnlessSecret(index, bytes)) {
+                return false;
+            }
+        },
+        .json => {
+            const plain = config_filter.stripJsonc(staging.arena, file.bytes) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                error.UnterminatedComment => {
+                    try staging.leave("{s}: not valid JSON here, not sent", .{file.remote_path});
+                    return false;
+                },
+            };
+
+            var value = std.json.parseFromSliceLeaky(std.json.Value, staging.arena, plain, .{}) catch {
+                try staging.leave("{s}: not valid JSON here, not sent", .{file.remote_path});
+                return false;
+            };
+
+            try config_filter.dropSecrets(staging.arena, &value, &dropped);
+            try bringCommandFiles(staging, value);
+            try rewriteStrings(staging, &value);
+            if (file.hooks_agent) |agent| {
+                _ = try integration_support.placeHooks(staging.arena, &value, agent, telar_path);
+            }
+
+            // Staging more files may have moved the list.
+            staging.files.items[index].json = value;
+        },
+    }
+
+    if (dropped.items.len != 0) {
+        const joined = try std.mem.join(staging.arena, ", ", dropped.items);
+        try staging.leave("{s}: left out {s}", .{ file.remote_path, joined });
+    }
+
+    return true;
+}
+
+// Writes each JSON file out as `integration install` writes settings, once
+// its hooks are pruned, and holds back one that still looks like it holds a
+// secret: a hook's command with a token in it.
+fn serialize(staging: *Staging) !void {
+    var index: usize = 0;
+    while (index < staging.files.items.len) {
+        const json = staging.files.items[index].json orelse {
+            index += 1;
+            continue;
+        };
+
+        const bytes = try std.fmt.allocPrint(staging.arena, "{f}\n", .{std.json.fmt(json, .{ .whitespace = .indent_2 })});
+        if (try staging.keepUnlessSecret(index, bytes)) {
+            staging.files.items[index].json = null;
+            index += 1;
+        } else {
+            _ = staging.files.orderedRemove(index);
         }
     }
 }
@@ -519,16 +664,12 @@ fn keepCommands(staging: *Staging, existing: *const std.StringHashMapUnmanaged(v
     }
 }
 
-// The stream `receive-config` reads, with JSON written out as
-// `integration install` writes settings.
+// The stream `receive-config` reads, once `serialize` wrote out the JSON.
 fn writeStream(staging: *Staging) ![]const u8 {
     var stream: std.Io.Writer.Allocating = .init(staging.arena);
     try stream.writer.writeAll(config_receive.stream_header ++ "\n");
     for (staging.files.items) |*file| {
-        const bytes = if (file.json) |json|
-            try std.fmt.allocPrint(staging.arena, "{f}\n", .{std.json.fmt(json, .{ .whitespace = .indent_2 })})
-        else
-            file.bytes;
+        const bytes = file.bytes;
         try stream.writer.print("file {s} {d} {s}\n", .{
             if (file.mode == .executable) "755" else "644",
             bytes.len,
@@ -602,6 +743,7 @@ test "no credential file of any agent leaves this machine" {
     try collect(&staging, .{ .block = block }, .initFull());
     try transform(&staging, "/home/dev/.local/share/telar/versions/0.3.0/telar");
     try pruneHooks(&staging, .empty);
+    try serialize(&staging);
     const stream = try writeStream(&staging);
 
     try std.testing.expect(std.mem.indexOf(u8, stream, "SECRET-TOKEN-VALUE") == null);
@@ -652,6 +794,7 @@ test "hooks keep their commands only where their programs are" {
     try collect(&staging, .{ .block = block }, wanted);
     try transform(&staging, "/home/dev/.local/share/telar/versions/0.3.0/telar");
     try pruneHooks(&staging, .empty);
+    try serialize(&staging);
     const stream = try writeStream(&staging);
 
     try std.testing.expect(std.mem.indexOf(u8, stream, "\"command\": \"/home/dev/.claude/hooks/notify.sh\"") != null);
@@ -660,4 +803,169 @@ test "hooks keep their commands only where their programs are" {
     try std.testing.expect(std.mem.indexOf(u8, stream, "statusLine") == null);
     try std.testing.expect(std.mem.indexOf(u8, stream, "'/home/dev/.local/share/telar/versions/0.3.0/telar' hook claude") != null);
     try std.testing.expect(std.mem.indexOf(u8, stream, home) == null);
+}
+
+// Stages, transforms, prunes and writes the stream for every agent, as `run`
+// does without a machine to ask.
+fn stageForTest(arena: std.mem.Allocator, home: []const u8, environment: *std.process.Environ.Map) !struct { staging: Staging, stream: []const u8 } {
+    var staging: Staging = .{
+        .arena = arena,
+        .io = std.testing.io,
+        .local_home = home,
+        .remote_home = "/home/dev",
+    };
+
+    const block = try environment.createPosixBlock(arena, .{});
+    try collect(&staging, .{ .block = block }, .initFull());
+    try transform(&staging, "/home/dev/.local/share/telar/versions/0.3.0/telar");
+    try pruneHooks(&staging, .empty);
+    try serialize(&staging);
+    return .{
+        .staging = staging,
+        .stream = try writeStream(&staging),
+    };
+}
+
+test "no planted secret reaches the stream, however it is linked or written" {
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    const io = std.testing.io;
+    var home_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const home = home_buffer[0..try temp.dir.realPath(io, &home_buffer)];
+
+    // Credentials outside every agent's directory.
+    for ([_][]const u8{ ".config/gh", ".cargo", "elsewhere" }) |directory| {
+        try temp.dir.createDirPath(io, directory);
+    }
+
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude.json", .data = "{\"oauthAccount\":\"PLANTED-1\"}" });
+    try temp.dir.writeFile(io, .{ .sub_path = ".config/gh/hosts.yml", .data = "PLANTED-2" });
+    try temp.dir.writeFile(io, .{ .sub_path = ".cargo/credentials.toml", .data = "PLANTED-3" });
+    try temp.dir.writeFile(io, .{ .sub_path = ".vault-token", .data = "PLANTED-4" });
+    try temp.dir.writeFile(io, .{ .sub_path = ".pgpass", .data = "PLANTED-5" });
+    try temp.dir.writeFile(io, .{ .sub_path = "elsewhere/notes.md", .data = "PLANTED-6" });
+
+    // Links from inside the allowlisted directories to all of them.
+    try temp.dir.createDirPath(io, ".claude/skills/deploy");
+    try temp.dir.createDirPath(io, ".claude/agents");
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/skills/deploy/SKILL.md", .data = "# Deploy" });
+    try temp.dir.symLink(io, "../../.claude.json", ".claude/skills/notes.json", .{});
+    try temp.dir.symLink(io, "../../../.config/gh/hosts.yml", ".claude/skills/deploy/gh.yml", .{});
+    try temp.dir.symLink(io, "../../../.cargo/credentials.toml", ".claude/skills/deploy/cargo.md", .{});
+    try temp.dir.symLink(io, "../../.vault-token", ".claude/skills/vault.md", .{});
+    try temp.dir.symLink(io, "../../.pgpass", ".claude/skills/pg.md", .{});
+    try temp.dir.symLink(io, "../../elsewhere/notes.md", ".claude/skills/plain.md", .{});
+    try temp.dir.symLink(io, home, ".claude/skills/home", .{});
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/skills/deploy/secrets.env", .data = "PLANTED-7" });
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/skills/deploy/token.txt", .data = "PLANTED-8" });
+    try temp.dir.hardLink(".claude.json", temp.dir, ".claude/skills/linked.json", io, .{});
+
+    // Secrets written inline in hooks, scripts and a subagent's frontmatter.
+    try temp.dir.createDirPath(io, ".claude/hooks");
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/hooks/notify.sh", .data = "#!/bin/sh\nTOKEN=PLANTED-9 ./post\n" });
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/agents/github.md", .data = "---\nname: github\nmcpServers:\n  github:\n    env:\n      GITHUB_PERSONAL_ACCESS_TOKEN: PLANTED-10\n---\nReview PRs.\n" });
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/agents/reviewer.md", .data = "---\nname: reviewer\n---\nReview code.\n" });
+    const settings = try std.fmt.allocPrint(std.testing.allocator,
+        \\{{"model":"opus","hooks":{{"Stop":[{{"hooks":[{{"type":"command","command":"curl -s https://hooks.slack.com/services/T0/B0/PLANTED-11"}}]}}]}},
+        \\ "statusLine":{{"type":"command","command":"{s}/.claude/hooks/notify.sh"}}}}
+    , .{home});
+    defer std.testing.allocator.free(settings);
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/settings.json", .data = settings });
+
+    // Codex's TOML in the auditor's shapes.
+    try temp.dir.createDirPath(io, ".codex");
+    try temp.dir.writeFile(io, .{ .sub_path = ".codex/config.toml", .data =
+        \\model = "m"
+        \\experimental_bearer_token = """
+        \\PLANTED-12
+        \\"""
+        \\[model_providers.x]
+        \\http_headers.Authorization = "Bearer PLANTED-13"
+        \\[model_providers.x.http_headers]
+        \\Authorization = "Bearer PLANTED-14"
+        \\[otel.exporter."otlp-http".headers]
+        \\"x-api-key" = "PLANTED-15"
+        \\
+    });
+
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    var environment: std.process.Environ.Map = .init(std.testing.allocator);
+    defer environment.deinit();
+    try environment.put("HOME", home);
+
+    const staged = try stageForTest(arena_state.allocator(), home, &environment);
+    try std.testing.expect(std.mem.indexOf(u8, staged.stream, "PLANTED") == null);
+    try std.testing.expect(std.mem.indexOf(u8, staged.stream, ".claude/skills/deploy/SKILL.md") != null);
+    try std.testing.expect(std.mem.indexOf(u8, staged.stream, ".claude/agents/reviewer.md") != null);
+    try std.testing.expect(std.mem.indexOf(u8, staged.stream, ".codex/config.toml") != null);
+    try std.testing.expect(std.mem.indexOf(u8, staged.stream, "model = \"m\"") != null);
+
+    // What stayed is listed for the person, without the secret.
+    const left = try std.mem.join(arena_state.allocator(), "\n", staged.staging.left.items);
+    try std.testing.expect(std.mem.indexOf(u8, left, "PLANTED") == null);
+    for ([_][]const u8{
+        ".claude/skills/plain.md: leads outside",
+        ".claude/skills/home/: leads outside",
+        ".claude/skills/linked.json: has another hard link",
+        ".claude/agents/github.md: held back, line 6",
+        ".claude/hooks/notify.sh: held back, line 2",
+        ".claude/settings.json: held back",
+    }) |expected| {
+        if (std.mem.indexOf(u8, left, expected) == null) {
+            std.debug.print("missing from the report: {s}\n{s}\n", .{ expected, left });
+            return error.TestExpectedLeftOut;
+        }
+    }
+}
+
+test "a root linked into a dotfiles checkout syncs what is inside it and nothing else" {
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    const io = std.testing.io;
+    var home_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const home = home_buffer[0..try temp.dir.realPath(io, &home_buffer)];
+    try temp.dir.createDirPath(io, "dotfiles/claude/skills/grill");
+    try temp.dir.writeFile(io, .{ .sub_path = "dotfiles/claude/CLAUDE.md", .data = "# Rules" });
+    try temp.dir.writeFile(io, .{ .sub_path = "dotfiles/claude/skills/grill/SKILL.md", .data = "# Grill" });
+    try temp.dir.writeFile(io, .{ .sub_path = "dotfiles/private.md", .data = "PLANTED" });
+    try temp.dir.symLink(io, "../../private.md", "dotfiles/claude/skills/private.md", .{});
+    try temp.dir.symLink(io, "dotfiles/claude", ".claude", .{});
+
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    var environment: std.process.Environ.Map = .init(std.testing.allocator);
+    defer environment.deinit();
+    try environment.put("HOME", home);
+
+    const staged = try stageForTest(arena_state.allocator(), home, &environment);
+    try std.testing.expect(std.mem.indexOf(u8, staged.stream, "PLANTED") == null);
+    try std.testing.expect(std.mem.indexOf(u8, staged.stream, "file 644 7 .claude/CLAUDE.md") != null);
+    try std.testing.expect(std.mem.indexOf(u8, staged.stream, ".claude/skills/grill/SKILL.md") != null);
+}
+
+test "a file that is not valid JSON first in the list is left out without overflow" {
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    const io = std.testing.io;
+    var home_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const home = home_buffer[0..try temp.dir.realPath(io, &home_buffer)];
+    try temp.dir.createDirPath(io, ".claude");
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/settings.json", .data = "{not json" });
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/keybindings.json", .data = "also not json" });
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/CLAUDE.md", .data = "# Rules" });
+
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    var environment: std.process.Environ.Map = .init(std.testing.allocator);
+    defer environment.deinit();
+    try environment.put("HOME", home);
+
+    const staged = try stageForTest(arena_state.allocator(), home, &environment);
+    try std.testing.expectEqual(@as(usize, 1), staged.staging.files.items.len);
+    try std.testing.expectEqualStrings(".claude/CLAUDE.md", staged.staging.files.items[0].remote_path);
+    try std.testing.expectEqual(@as(usize, 2), staged.staging.left.items.len);
 }

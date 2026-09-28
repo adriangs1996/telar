@@ -2,9 +2,11 @@
 //! (docs/plans/machine-setup.md, decision 2): keys that carry secrets or
 //! MCP servers are dropped, at any depth, and this home's paths become the
 //! machine's. JSONC is read by removing its comments and trailing commas,
-//! so the machine gets plain JSON. Codex's TOML is filtered by whole tables
-//! and keys, since no TOML parser exists here. Each dropped key is named so
-//! setup can report it.
+//! so the machine gets plain JSON. Codex's TOML is filtered line by line,
+//! since no TOML parser exists here: a table whose path holds a dropped name
+//! goes whole, a key whose dotted path holds one goes with every line of its
+//! value, and multi-line strings and arrays are followed so their lines are
+//! never read as keys. Each dropped key is named so setup can report it.
 const std = @import("std");
 
 /// Key names dropped wherever they appear: environment blocks, headers,
@@ -33,33 +35,65 @@ const dropped_names = [_][]const u8{
     "id_token",
 };
 
-/// Fragments that mark a key as a secret whatever else it says.
-const secret_fragments = [_][]const u8{ "secret", "password", "apikey", "api_key", "credential", "bearer", "private_key", "privatekey" };
+/// Fragments that mark a key as a secret whatever its value.
+const secret_fragments = [_][]const u8{
+    "secret",
+    "password",
+    "passphrase",
+    "apikey",
+    "api_key",
+    "api-key",
+    "credential",
+    "bearer",
+    "private_key",
+    "privatekey",
+    "authorization",
+    "cookie",
+};
+
+/// Fragments that mark a key as a secret unless its value is a number or a
+/// boolean: `githubToken` and `x-auth` go, `max_tokens = 4096` and
+/// `requires_openai_auth = true` stay.
+const secret_text_fragments = [_][]const u8{ "token", "auth" };
 
 /// TOML tables dropped whole: MCP servers, per-project trust (this
 /// machine's paths) and the environment Codex passes to commands.
 const dropped_tables = [_][]const u8{ "mcp_servers", "projects", "shell_environment_policy" };
 
+/// What a key holds, as far as deciding whether it is a secret goes.
+const ValueKind = enum {
+    /// A number or a boolean: no credential fits in one.
+    scalar,
+    /// A string.
+    text,
+    /// A table, an object or an array.
+    container,
+};
+
 /// Whether a key carries a secret or an MCP server and is never sent.
 ///
 /// ```zig
-/// if (config_filter.secretKey("apiKey")) ...
+/// if (config_filter.secretKey("apiKey", .text)) ...
 /// ```
-pub fn secretKey(name: []const u8) bool {
+pub fn secretKey(name: []const u8, value: ValueKind) bool {
     for (dropped_names) |dropped| {
         if (std.mem.eql(u8, name, dropped)) {
             return true;
         }
     }
 
-    var lower_buffer: [128]u8 = undefined;
-    if (name.len > lower_buffer.len) {
+    for (secret_fragments) |fragment| {
+        if (std.ascii.indexOfIgnoreCase(name, fragment) != null) {
+            return true;
+        }
+    }
+
+    if (value == .scalar) {
         return false;
     }
 
-    const lower = std.ascii.lowerString(&lower_buffer, name);
-    for (secret_fragments) |fragment| {
-        if (std.mem.indexOf(u8, lower, fragment) != null) {
+    for (secret_text_fragments) |fragment| {
+        if (std.ascii.indexOfIgnoreCase(name, fragment) != null) {
             return true;
         }
     }
@@ -170,7 +204,7 @@ pub fn dropSecrets(arena: std.mem.Allocator, value: *std.json.Value, dropped: *s
             var index: usize = 0;
             while (index < object.count()) {
                 const key = object.keys()[index];
-                if (secretKey(key)) {
+                if (secretKey(key, jsonKind(object.values()[index]))) {
                     try noteOnce(arena, dropped, key);
                     object.orderedRemoveAt(index);
                     continue;
@@ -189,6 +223,14 @@ pub fn dropSecrets(arena: std.mem.Allocator, value: *std.json.Value, dropped: *s
     }
 }
 
+fn jsonKind(value: std.json.Value) ValueKind {
+    return switch (value) {
+        .bool, .integer, .float, .number_string, .null => .scalar,
+        .string => .text,
+        .object, .array => .container,
+    };
+}
+
 fn noteOnce(arena: std.mem.Allocator, dropped: *std.ArrayList([]const u8), name: []const u8) !void {
     for (dropped.items) |known| {
         if (std.mem.eql(u8, known, name)) {
@@ -199,9 +241,11 @@ fn noteOnce(arena: std.mem.Allocator, dropped: *std.ArrayList([]const u8), name:
     try dropped.append(arena, name);
 }
 
-/// Codex's `config.toml` without its secret tables and keys. A dropped key
-/// whose value spans lines takes those lines with it. The result belongs
-/// to `gpa`.
+/// Codex's `config.toml` without its secret tables and keys: a table whose
+/// path holds a dropped or secret name (`[mcp_servers.x]`,
+/// `[model_providers.x.http_headers]`) goes whole, and so does a key whose
+/// dotted path holds one (`http_headers.Authorization = …`), with every
+/// line its value spans. The result belongs to `gpa`.
 ///
 /// ```zig
 /// const toml = try config_filter.filterToml(gpa, bytes, arena, &dropped);
@@ -211,33 +255,40 @@ pub fn filterToml(gpa: std.mem.Allocator, bytes: []const u8, arena: std.mem.Allo
     errdefer output.deinit();
 
     var skipping_table = false;
-    var open_brackets: i32 = 0;
+    var value: TomlValue = .{};
+    var dropping_value = false;
     var lines = std.mem.splitScalar(u8, bytes, '\n');
     var first = true;
     while (lines.next()) |line| {
-        const trimmed = std.mem.trim(u8, line, " \t\r");
-        if (open_brackets > 0) {
-            open_brackets += bracketBalance(trimmed);
-            continue;
+        var keep = !skipping_table;
+        if (value.open()) {
+            value.scan(line);
+            keep = keep and !dropping_value;
+        } else {
+            const trimmed = std.mem.trim(u8, line, " \t\r");
+            if (trimmed.len != 0 and trimmed[0] == '[') {
+                const offending = tomlPathSecret(tomlHeader(trimmed), .container);
+                skipping_table = offending != null;
+                keep = !skipping_table;
+                if (offending) |name| {
+                    try noteOnce(arena, dropped, try arena.dupe(u8, name));
+                }
+            } else if (tomlEquals(trimmed)) |equals| {
+                const rest = std.mem.trim(u8, trimmed[equals + 1 ..], " \t");
+                const offending = tomlPathSecret(trimmed[0..equals], tomlKind(rest));
+                dropping_value = offending != null;
+                value.scan(rest);
+                if (offending) |name| {
+                    keep = false;
+                    if (!skipping_table) {
+                        try noteOnce(arena, dropped, try arena.dupe(u8, name));
+                    }
+                }
+            }
         }
 
-        if (trimmed.len != 0 and trimmed[0] == '[') {
-            const name = std.mem.trim(u8, std.mem.trim(u8, trimmed, "[] \t"), "\"");
-            skipping_table = droppedTable(name);
-            if (skipping_table) {
-                try noteOnce(arena, dropped, tableRoot(name));
-                continue;
-            }
-        } else if (skipping_table) {
+        if (!keep) {
             continue;
-        } else if (std.mem.indexOfScalar(u8, trimmed, '=')) |equals| {
-            const key = std.mem.trim(u8, trimmed[0..equals], " \t\"");
-            const dotted = if (std.mem.lastIndexOfScalar(u8, key, '.')) |dot| key[dot + 1 ..] else key;
-            if (secretKey(dotted) or droppedTable(key)) {
-                try noteOnce(arena, dropped, try arena.dupe(u8, dotted));
-                open_brackets = bracketBalance(trimmed[equals + 1 ..]);
-                continue;
-            }
         }
 
         if (!first) {
@@ -251,46 +302,167 @@ pub fn filterToml(gpa: std.mem.Allocator, bytes: []const u8, arena: std.mem.Allo
     return output.toOwnedSlice();
 }
 
-fn droppedTable(name: []const u8) bool {
-    const root = tableRoot(name);
-    for (dropped_tables) |table| {
-        if (std.mem.eql(u8, root, table)) {
-            return true;
+/// Where a TOML value stands at the end of a line: inside a multi-line
+/// string, or inside brackets or braces not yet closed.
+const TomlValue = struct {
+    string: ?Delimiter = null,
+    depth: i32 = 0,
+
+    const Delimiter = enum { basic, literal };
+
+    fn open(self: *const TomlValue) bool {
+        return self.string != null or self.depth > 0;
+    }
+
+    // Follows one line of a value: strings, brackets and a trailing comment.
+    fn scan(self: *TomlValue, text: []const u8) void {
+        var index: usize = 0;
+        while (index < text.len) {
+            if (self.string) |delimiter| {
+                switch (delimiter) {
+                    .basic => {
+                        if (text[index] == '\\') {
+                            index += 2;
+                            continue;
+                        }
+
+                        if (std.mem.startsWith(u8, text[index..], "\"\"\"")) {
+                            self.string = null;
+                            index += 3;
+                            continue;
+                        }
+                    },
+                    .literal => if (std.mem.startsWith(u8, text[index..], "'''")) {
+                        self.string = null;
+                        index += 3;
+                        continue;
+                    },
+                }
+
+                index += 1;
+                continue;
+            }
+
+            if (std.mem.startsWith(u8, text[index..], "\"\"\"")) {
+                self.string = .basic;
+                index += 3;
+                continue;
+            }
+
+            if (std.mem.startsWith(u8, text[index..], "'''")) {
+                self.string = .literal;
+                index += 3;
+                continue;
+            }
+
+            switch (text[index]) {
+                '#' => return,
+                '"', '\'' => index = skipQuoted(text, index),
+                '[', '{' => self.depth += 1,
+                ']', '}' => self.depth -= 1,
+                else => {},
+            }
+
+            index += 1;
+        }
+    }
+};
+
+// The index of the quote closing the one-line string that opens at `start`.
+fn skipQuoted(text: []const u8, start: usize) usize {
+    const quote = text[start];
+    var index = start + 1;
+    while (index < text.len and text[index] != quote) {
+        index += if (quote == '"' and text[index] == '\\') 2 else 1;
+    }
+
+    return @min(index, text.len);
+}
+
+// The path inside a `[table]` or `[[array]]` header, without its comment.
+fn tomlHeader(trimmed: []const u8) []const u8 {
+    var inner = std.mem.trimStart(u8, trimmed, "[");
+    var index: usize = 0;
+    while (index < inner.len and inner[index] != ']') {
+        index = if (inner[index] == '"' or inner[index] == '\'') skipQuoted(inner, index) + 1 else index + 1;
+    }
+
+    inner = inner[0..@min(index, inner.len)];
+    return inner;
+}
+
+// Where a key's `=` is, outside quoted parts of the key.
+fn tomlEquals(trimmed: []const u8) ?usize {
+    if (trimmed.len == 0 or trimmed[0] == '#') {
+        return null;
+    }
+
+    var index: usize = 0;
+    while (index < trimmed.len) {
+        switch (trimmed[index]) {
+            '=' => return index,
+            '"', '\'' => index = skipQuoted(trimmed, index) + 1,
+            else => index += 1,
         }
     }
 
-    return false;
+    return null;
 }
 
-fn tableRoot(name: []const u8) []const u8 {
-    const end = std.mem.indexOfScalar(u8, name, '.') orelse name.len;
-    return std.mem.trim(u8, name[0..end], "\" ");
+fn tomlKind(value: []const u8) ValueKind {
+    if (value.len == 0) {
+        return .text;
+    }
+
+    return switch (value[0]) {
+        '"', '\'' => .text,
+        '[', '{' => .container,
+        else => .scalar,
+    };
 }
 
-// Opening minus closing brackets and braces outside strings.
-fn bracketBalance(text: []const u8) i32 {
-    var balance: i32 = 0;
-    var quote: ?u8 = null;
-    for (text) |byte| {
-        if (quote) |open| {
-            if (byte == open) {
-                quote = null;
+// The first component of a dotted TOML path that is a dropped table or a
+// secret key; the last component holds a value of `last`, the others
+// tables.
+fn tomlPathSecret(path: []const u8, last: ValueKind) ?[]const u8 {
+    var components: [max_toml_components][]const u8 = undefined;
+    var count: usize = 0;
+    var index: usize = 0;
+    var start: usize = 0;
+    while (index <= path.len) {
+        if (index == path.len or path[index] == '.') {
+            if (count == components.len) {
+                // Deeper than any real configuration: refuse it whole.
+                return path;
             }
 
+            components[count] = std.mem.trim(u8, std.mem.trim(u8, path[start..index], " \t"), "\"'");
+            count += 1;
+            start = index + 1;
+            index += 1;
             continue;
         }
 
-        switch (byte) {
-            '"', '\'' => quote = byte,
-            '[', '{' => balance += 1,
-            ']', '}' => balance -= 1,
-            '#' => break,
-            else => {},
+        index = if (path[index] == '"' or path[index] == '\'') skipQuoted(path, index) + 1 else index + 1;
+    }
+
+    for (dropped_tables) |table| {
+        if (std.mem.eql(u8, components[0], table)) {
+            return components[0];
         }
     }
 
-    return balance;
+    for (components[0..count], 0..) |component, position| {
+        if (secretKey(component, if (position + 1 == count) last else .container)) {
+            return component;
+        }
+    }
+
+    return null;
 }
+
+/// Components of a dotted TOML path read, at most.
+const max_toml_components = 16;
 
 test "secret keys are dropped at any depth and named once" {
     const source =
@@ -369,4 +541,87 @@ test "codex's config loses MCP servers, projects and secret keys" {
         toml,
     );
     try std.testing.expectEqual(@as(usize, 4), dropped.items.len);
+}
+
+test "the auditor's TOML shapes lose every secret" {
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var dropped: std.ArrayList([]const u8) = .empty;
+
+    const toml = try filterToml(arena,
+        \\model = "gpt-5"
+        \\model_max_output_tokens = 4096
+        \\experimental_bearer_token = """
+        \\SECRET-1
+        \\[not_a_table]
+        \\"""
+        \\
+        \\[model_providers.x]
+        \\name = "x"
+        \\requires_openai_auth = true
+        \\http_headers.Authorization = "Bearer SECRET-2"
+        \\
+        \\[model_providers.x.http_headers]
+        \\Authorization = "Bearer SECRET-3"
+        \\
+        \\[otel.exporter."otlp-http".headers]
+        \\"x-api-key" = "SECRET-4"
+        \\
+        \\[otel.exporter."otlp-http"]
+        \\endpoint = "https://otel"
+        \\"x-api-key" = "SECRET-5"
+        \\
+        \\[mcp_servers.github.env]
+        \\GITHUB_PERSONAL_ACCESS_TOKEN = "SECRET-6"
+        \\
+        \\[tools]
+        \\githubToken = 'SECRET-7'
+        \\notes = '''
+        \\token = "kept, inside a string"
+        \\'''
+        \\list = [
+        \\  "a", # ]
+        \\  "b",
+        \\]
+    , arena, &dropped);
+
+    try std.testing.expect(std.mem.indexOf(u8, toml, "SECRET") == null);
+    try std.testing.expectEqualStrings(
+        \\model = "gpt-5"
+        \\model_max_output_tokens = 4096
+        \\
+        \\[model_providers.x]
+        \\name = "x"
+        \\requires_openai_auth = true
+        \\
+        \\[otel.exporter."otlp-http"]
+        \\endpoint = "https://otel"
+        \\
+        \\[tools]
+        \\notes = '''
+        \\token = "kept, inside a string"
+        \\'''
+        \\list = [
+        \\  "a", # ]
+        \\  "b",
+        \\]
+    , toml);
+}
+
+test "JSON loses headers, tokens and keys however they are spelled" {
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    var value = try std.json.parseFromSliceLeaky(std.json.Value, arena,
+        \\{"provider":{"x":{"options":{"headers":{"Authorization":"SECRET-1"},"x-api-key":"SECRET-2","api-key":"SECRET-3"}}},
+        \\ "githubToken":"SECRET-4","GITHUB_PERSONAL_ACCESS_TOKEN":"SECRET-5","maxTokens":8,"autoUpdates":false,"authorName":"SECRET-6"}
+    , .{});
+    var dropped: std.ArrayList([]const u8) = .empty;
+    try dropSecrets(arena, &value, &dropped);
+
+    const written = try std.json.Stringify.valueAlloc(arena, value, .{});
+    try std.testing.expect(std.mem.indexOf(u8, written, "SECRET") == null);
+    try std.testing.expectEqualStrings("{\"provider\":{\"x\":{\"options\":{}}},\"maxTokens\":8,\"autoUpdates\":false}", written);
 }

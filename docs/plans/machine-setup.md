@@ -173,10 +173,41 @@ on both sides. Anything outside it is never read for sync.
 Never synced, whatever the allowlist says: credential and token files, the
 Keychain, session and history stores, caches, logs, databases, and any file
 whose name or resolved target is in the credential denylist (the files of
-[Agent facts](#agent-facts) marked secret, plus `~/.ssh`, `~/.gnupg`,
-`~/.aws`, `~/.netrc`, `~/.npmrc`, `*.pem`, `*.key`, `.env*`). A symlink is
-followed only when its target is a regular file or directory outside the
-denylist; a cycle or a target past the bounds is skipped and reported.
+[Agent facts](#agent-facts) marked secret, plus `~/.claude.json`, `~/.ssh`,
+`~/.gnupg`, `~/.aws`, `~/.netrc`, `~/.npmrc`, `~/.pgpass`, `~/.vault-token`,
+the GitHub CLI's `hosts.yml`, `*.pem`, `*.key`, `.env*`, `*.env`, and any
+name holding `credential`, `secret`, `token`, `password` or `passwd`).
+
+Symlinks never lead out of an agent's directory. The sync reads under one
+root per agent (`~/.claude`, `~/.codex`, …, and `~/.agents/skills`), and
+resolves each root's real path once, so a root that is itself a symlink
+into a dotfiles checkout (`~/.claude -> ~/dotfiles/claude`) is followed.
+Every file and directory below it must resolve inside that real
+directory: a symlink below the root that leads anywhere else
+(`skills/notes.json -> ~/.claude.json`, `skills/x -> ~`, or a file linked
+into the dotfiles checkout from outside the root's directory there) is
+skipped and reported. A file with more than one hard link is skipped too,
+since its other name could be any file. Depth is bounded, so a cycle ends.
+
+Secrets written inline are held back. After filtering, every file's bytes
+are scanned (`config_secrets`) for the shapes secrets are written in: an
+assignment or header whose name says secret (`TOKEN=…`, `x-api-key: …`,
+`GITHUB_PERSONAL_ACCESS_TOKEN: …` in a subagent's frontmatter), `Bearer`
+tokens, a password inside a URL, webhook URLs whose path is their key
+(Slack, Discord, Teams, Zapier, Telegram, Google Chat), the prefixes of
+well-known tokens (`ghp_`, `github_pat_`, `sk-`, `xoxb-`, `AKIA`, …) and
+private key blocks. A file with a finding stays here, whole, and the report
+names it with the line and the shape, never the value, so the person can
+move the secret into a variable (`TOKEN=$(…)`, `$TOKEN`), which the scan
+leaves alone, and sync again. A settings file whose hook holds a secret is
+held back whole, not rewritten. The scan is a heuristic: a secret with none
+of these shapes, a bare random string under an innocent name, is not
+recognized. The allowlist, the denylist and the key filter are the rules;
+the scan is the net under them.
+
+The machine's copy follows this one. The machine is changed only through
+telar, so a synced file that differs there is overwritten, and an edit made
+there by hand is lost at the next setup.
 
 Bounds: 1 MiB per file, 16 MiB and 4,096 files per machine.
 
@@ -308,9 +339,18 @@ Settled with Adrian on 2026-09-28.
    configuration never travels (Claude keeps it in `~/.claude.json`, which
    is never sent; Codex `[mcp_servers.*]`, OpenCode `mcp`, Cursor
    `mcp.json`). `env`, `apiKeyHelper` and the other credential helpers are
-   dropped. Each omitted key is reported by name. Codex's `config.toml` is
-   filtered by whole tables (`[mcp_servers.*]`, `[projects.*]`), since no
-   TOML parser exists here.
+   dropped. Each omitted key is reported by name. A key is dropped when its
+   name holds `secret`, `password`, `passphrase`, `api_key`, `apikey`,
+   `api-key`, `credential`, `bearer`, `private_key`, `authorization` or
+   `cookie`, or `token` or `auth` unless its value is a number or a boolean
+   (`max_tokens = 4096` and `requires_openai_auth = true` stay). Codex's
+   `config.toml` is filtered line by line, since no TOML parser exists
+   here: a table whose dotted path holds a dropped name goes whole
+   (`[mcp_servers.*]`, `[projects.*]`, `[model_providers.x.http_headers]`,
+   `[otel.exporter."otlp-http".headers]`), a key whose dotted path holds one
+   goes with every line of its value (`http_headers.Authorization = …`, a
+   `"""` string), and multi-line strings and arrays are followed so none of
+   their lines is read as a key or a table.
 3. **Notifications gain a link.** An optional `link` (https only, at most
    2 KiB) on `show_notification` and the notification event, opened through
    the existing link policy when the card is clicked, and `telar

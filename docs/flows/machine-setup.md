@@ -79,14 +79,22 @@ SetupReport: one numbered line per step as it ends, or one JSON object
   (Node for Pi, Alpine packages for Claude Code, glibc for Cursor) is
   reported, and the next setup installs the agent once it is there.
 - **The sync is an allowlist** (`config_allowlist`): named files and
-  directories per agent, hidden entries skipped, symlinks followed only to
-  what is allowed, a denylist of credential names, extensions and
-  directories applied to every path and every symlink target. Secret keys,
-  MCP servers and credential helpers are dropped (`config_filter`), hooks
-  keep only commands whose programs exist there, this home's paths become
-  the machine's, and telar's own hooks are written for the machine's telar.
-  The machine writes only under the agents' directories, never through a
-  symlink, and only what differs.
+  directories per agent, hidden entries skipped, a denylist of credential
+  names, name fragments, extensions and directories applied to every path
+  and every symlink target. Each agent's root is resolved once (it may be a
+  symlink into a dotfiles checkout); every file and directory below it must
+  resolve inside it, and a hard-linked file is refused, so no link reaches
+  a file elsewhere. Secret keys, MCP servers and credential helpers are
+  dropped (`config_filter`, TOML by dotted path, multi-line values
+  included), hooks keep only commands whose programs exist there, this
+  home's paths become the machine's, and telar's own hooks are written for
+  the machine's telar. Then every file is scanned for inline secrets
+  (`config_secrets`); a file with one stays here and the report names its
+  line and shape, never the value. The scan is a heuristic and misses a
+  secret with no recognizable shape. The machine writes only under the
+  agents' directories, never through a symlink, and only what differs,
+  overwriting an edit made there by hand: the machine's copy follows this
+  one.
 - **Logins are the agents' own.** Setup reads a login's link and one-time
   code from its pane and shows them, but stores neither; what the person
   pastes is typed into the login pane and nowhere else. A provider with no

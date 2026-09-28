@@ -265,6 +265,7 @@ test {
     _ = @import("cli/ConfigEntry.zig");
     _ = @import("cli/ConfigRoot.zig");
     _ = @import("cli/config_filter.zig");
+    _ = @import("cli/config_secrets.zig");
     _ = @import("cli/config_receive.zig");
     _ = @import("cli/config_sync.zig");
     _ = @import("cli/ScriptOutput.zig");

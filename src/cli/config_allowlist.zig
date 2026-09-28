@@ -98,19 +98,28 @@ const telar_owned = [_][]const u8{
     "plugins/telar.ts",
 };
 
-/// File names that hold credentials, wherever they appear.
+/// File names that hold credentials, wherever they appear. `.claude.json`
+/// holds Claude Code's OAuth session and MCP servers; `hosts.yml` is the
+/// GitHub CLI's tokens.
 const credential_names = [_][]const u8{
+    ".claude.json",
     ".credentials.json",
     "auth.json",
     "mcp-auth.json",
-    "credentials.json",
     "credentials",
     ".netrc",
     ".npmrc",
     ".pypirc",
+    ".pgpass",
+    ".vault-token",
     ".git-credentials",
+    "hosts.yml",
     "models.json",
 };
+
+/// Fragments of a file name, in any case, that mark it as a credential:
+/// `credentials.toml`, `secrets.env`, `token.txt`, `passwords.md`.
+const credential_fragments = [_][]const u8{ "credential", "secret", "token", "password", "passwd" };
 
 /// Extensions of key and certificate files.
 const credential_extensions = [_][]const u8{ ".pem", ".key", ".p12", ".pfx", ".keychain", ".keychain-db" };
@@ -128,8 +137,9 @@ const credential_directories = [_][]const u8{
 };
 
 /// Whether a path, here or where a symlink leads, may never leave this
-/// machine: a credential file by name, a key by extension, anything under a
-/// credential directory, an `.env` file or an SSH key.
+/// machine: a credential file by name or by a word in its name, a key by
+/// extension, anything under a credential directory, an `.env` file or an
+/// SSH key.
 ///
 /// ```zig
 /// if (config_allowlist.denied("/home/dev/.codex/auth.json")) continue;
@@ -157,7 +167,13 @@ pub fn denied(path: []const u8) bool {
         }
     }
 
-    return std.mem.eql(u8, name, ".env") or std.mem.startsWith(u8, name, ".env.") or
+    for (credential_fragments) |fragment| {
+        if (std.ascii.indexOfIgnoreCase(name, fragment) != null) {
+            return true;
+        }
+    }
+
+    return std.mem.eql(u8, name, ".env") or std.mem.startsWith(u8, name, ".env.") or std.ascii.endsWithIgnoreCase(name, ".env") or
         std.mem.startsWith(u8, name, "id_rsa") or std.mem.startsWith(u8, name, "id_ed25519") or
         std.mem.startsWith(u8, name, "id_ecdsa") or std.mem.startsWith(u8, name, "id_dsa");
 }
@@ -230,6 +246,14 @@ test "every known credential file is denied" {
         "/Users/a/.claude/skills/deploy/.env.production",
         "/Users/a/.claude/skills/deploy/server.pem",
         "/Users/a/.config/gcloud/application_default_credentials.json",
+        "/Users/a/.claude.json",
+        "/Users/a/.config/gh/hosts.yml",
+        "/Users/a/.cargo/credentials.toml",
+        "/Users/a/.vault-token",
+        "/Users/a/.pgpass",
+        "/Users/a/.claude/skills/deploy/secrets.env",
+        "/Users/a/.claude/skills/deploy/token.txt",
+        "/Users/a/.claude/skills/deploy/GitHub-Token.md",
     };
 
     for (credentials) |path| {
