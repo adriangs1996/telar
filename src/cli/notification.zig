@@ -8,7 +8,7 @@ const NotificationOptions = @import("arguments/NotificationOptions.zig");
 const RuntimeConnector = client.RuntimeConnector;
 
 const request_id: core.RequestId = @enumFromInt(1);
-const request_buffer_size = 1 + 8 + 1 + 4 + 1 + 8 + 2 + core.max_notification_title_bytes + 2 + core.max_notification_message_bytes;
+const request_buffer_size = 1 + 8 + 1 + 4 + 1 + 8 + 2 + core.max_notification_title_bytes + 2 + core.max_notification_message_bytes + 2 + core.max_notification_link_bytes;
 
 /// Sends one bounded notification request to the running local runtime and
 /// fails when no UI client accepted it.
@@ -58,6 +58,7 @@ fn request(options: NotificationOptions) core.ShowNotification {
             .target = options.target,
             .title = std.mem.span(options.title),
             .message = if (options.body) |body| std.mem.span(body) else "",
+            .link = if (options.link) |link| std.mem.span(link) else "",
         },
     };
 }

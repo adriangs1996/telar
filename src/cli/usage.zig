@@ -196,6 +196,7 @@ pub const text =
     \\  --pane ID        Make it focus a pane when clicked
     \\  --tab ID         Make it select a tab when clicked
     \\  --workspace ID   Make it select a workspace when clicked
+    \\  --link URL       Make it open an https URL in the browser when clicked
     \\  --socket PATH    Notify clients of a specific local runtime
     \\
     \\Remote:

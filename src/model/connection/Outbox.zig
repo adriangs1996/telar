@@ -297,6 +297,12 @@ pub fn pushNotification(self: *Outbox, request: core.ShowNotification) !void {
     {
         return error.NotificationTooLarge;
     }
+
+    // Only `telar notification show` sends a link, straight from the CLI;
+    // the queue keeps its slots small by not holding one.
+    if (request.notification.link.len != 0) {
+        return error.NotificationLinkNotQueued;
+    }
     var owned: OwnedNotification = .{
         .request_id = request.request_id,
         .level = request.notification.level,

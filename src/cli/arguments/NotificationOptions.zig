@@ -5,6 +5,8 @@ const NotificationOptions = @This();
 
 title: [*:0]const u8,
 body: ?[*:0]const u8 = null,
+/// An https URL a click on the notification opens.
+link: ?[*:0]const u8 = null,
 level: core.NotificationLevel = .info,
 duration_ms: u32 = core.default_notification_duration_ms,
 target: core.NotificationTarget = .none,
@@ -34,6 +36,12 @@ pub fn parse(args: []const [*:0]const u8) !NotificationOptions {
             const value = try cursor.require(error.MissingNotificationBody);
 
             options.body = value;
+        } else if (std.mem.eql(u8, arg, "--link")) {
+            if (options.link != null) {
+                return error.DuplicateNotificationLink;
+            }
+
+            options.link = try cursor.require(error.MissingNotificationLink);
         } else if (std.mem.eql(u8, arg, "--level")) {
             if (level_set) {
                 return error.DuplicateNotificationLevel;

@@ -51,7 +51,13 @@ telar notification show "Build complete" \
 The title is required. `--body` is optional; `--level` accepts `info`,
 `success`, `warning`, or `failure`; `--duration` accepts 500 through 60000
 milliseconds. `--pane ID`, `--tab ID`, and `--workspace ID` are mutually
-exclusive click targets. `--socket PATH` selects an explicit runtime; otherwise
+exclusive click targets. `--link URL` makes a click open an https URL of at
+most 1024 bytes in the browser, through the same policy as a link clicked in
+a pane; `telar machine setup` uses it to bring an agent's login page from
+another machine to this window. The body holds 192 bytes, too few for an
+OAuth URL, so the link travels in its own field. Only the CLI sends one: a
+client's own notification requests never carry a link, which keeps the
+client's outbox slots small. `--socket PATH` selects an explicit runtime; otherwise
 the normal `TELAR_SOCKET` and managed-runtime resolution applies.
 
 The command exits successfully only when at least one UI client accepted the

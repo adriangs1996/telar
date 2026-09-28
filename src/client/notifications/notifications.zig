@@ -2,6 +2,7 @@
 //! delivers them to the host.
 const pacing = @import("pacing");
 const data = @import("model");
+const link_opening = @import("../links/link_opening.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const pane_focus = @import("../panes/pane_focus.zig");
@@ -112,6 +113,7 @@ pub fn applyRuntimeNotification(client: *Client, notification: core.Notification
             },
             .title = notification.title,
             .message = notification.message,
+            .link = notification.link,
             .target = switch (notification.target) {
                 .none => .none,
                 .pane => |pane_id| .{
@@ -154,10 +156,27 @@ fn advanceNotifications(client: *Client, now_ns: u64) !?data.NotificationChange 
 /// Activates one current notification identity and follows its target at most
 /// once.
 fn activateNotification(client: *Client, id: data.NotificationId, now_ns: u64) !?data.NotificationActivation {
+    // The link is copied before activation starts the card's exit.
+    const link = linkOf(client, id);
     const activation = data.notifications.activate(&client.model, id, now_ns) orelse return null;
     try scheduleNotificationTimer(client);
     try navigateNotification(client, activation.target);
+    if (link) |target| {
+        _ = try link_opening.openLink(client, target, null);
+    }
+
     return activation;
+}
+
+// The link a notification carries, through the same classification every
+// opened link passes; null when it has none.
+fn linkOf(client: *Client, id: data.NotificationId) ?data.LinkTarget {
+    const item = client.model.notification_center.find(id) orelse return null;
+    if (item.link_len == 0) {
+        return null;
+    }
+
+    return data.LinkTarget.init(item.link()) catch null;
 }
 
 /// Dismisses one current notification identity without navigation.

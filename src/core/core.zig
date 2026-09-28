@@ -408,6 +408,7 @@ pub const max_manifest_bytes = plugin.max_manifest_bytes;
 pub const max_message_size = handshake.max_message_size;
 pub const max_notification_duration_ms = types.max_notification_duration_ms;
 pub const max_notification_message_bytes = types.max_notification_message_bytes;
+pub const max_notification_link_bytes = types.max_notification_link_bytes;
 pub const max_notification_title_bytes = types.max_notification_title_bytes;
 pub const max_pane_text_bytes = types.max_pane_text_bytes;
 pub const max_pane_text_input_bytes = types.max_pane_text_input_bytes;

@@ -72,6 +72,7 @@ pub const max_foreground_name_bytes = types.max_foreground_name_bytes;
 pub const max_workspace_list_entries = types.max_workspace_list_entries;
 pub const max_notification_title_bytes = types.max_notification_title_bytes;
 pub const max_notification_message_bytes = types.max_notification_message_bytes;
+pub const max_notification_link_bytes = types.max_notification_link_bytes;
 pub const max_history_provider_bytes = types.max_history_provider_bytes;
 pub const max_history_tool_call_id_bytes = types.max_history_tool_call_id_bytes;
 pub const max_client_layout_clients = types.max_client_layout_clients;

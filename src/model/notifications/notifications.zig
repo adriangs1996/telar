@@ -46,6 +46,11 @@ pub fn sameNotification(left: *const Item, right: *const Item) bool {
             u8,
             left.message(),
             right.message(),
+        ) and
+        std.mem.eql(
+            u8,
+            left.link(),
+            right.link(),
         );
 }
 
