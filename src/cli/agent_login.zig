@@ -525,7 +525,8 @@ fn waitForLogin(init: std.process.Init, login: Login) !AgentLogin {
     return .failed;
 }
 
-// Runs the agent's own status command there.
+// Runs the agent's own status command there; an ssh failure is an error,
+// never "not logged in", which would open a login it cannot show.
 fn loggedIn(init: std.process.Init, destination: []const u8, agent: Agent, path: []const u8, provider: ?[]const u8) !bool {
     var script_buffer: [2048]u8 = undefined;
     var script: std.Io.Writer = .fixed(&script_buffer);
@@ -536,6 +537,10 @@ fn loggedIn(init: std.process.Init, destination: []const u8, agent: Agent, path:
 
     var result = try remote_shell.runScript(init, destination, script.buffered(), status_timeout_s);
     defer result.deinit(init.gpa);
+    if (result.sshFailed()) {
+        return error.SshFailed;
+    }
+
     return result.succeeded();
 }
 

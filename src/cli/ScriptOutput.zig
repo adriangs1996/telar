@@ -12,9 +12,21 @@ pub fn deinit(self: *const ScriptOutput, gpa: std.mem.Allocator) void {
     gpa.free(self.stderr);
 }
 
+/// OpenSSH's own failures exit 255 (ssh(1), EXIT STATUS).
+const SshExit = enum(u8) {
+    failed = 255,
+    _,
+};
+
 /// Whether the command exited with status 0.
 pub fn succeeded(self: *const ScriptOutput) bool {
     return self.term == .exited and self.term.exited == 0;
+}
+
+/// Whether `ssh` itself failed or was killed, so the command's own status
+/// says nothing: a status check must not read it as "not logged in".
+pub fn sshFailed(self: *const ScriptOutput) bool {
+    return self.term != .exited or self.term.exited == @intFromEnum(SshExit.failed);
 }
 
 /// The last line the command printed on standard error: what an installer
@@ -39,4 +51,11 @@ test "the error line is the last one printed" {
 
     try std.testing.expectEqualStrings("fatal: refused", output.errorLine());
     try std.testing.expect(!output.succeeded());
+}
+
+test "ssh's own failure is told from the command's" {
+    const refused: ScriptOutput = .{ .term = .{ .exited = 255 }, .stdout = &.{}, .stderr = &.{} };
+    const answered: ScriptOutput = .{ .term = .{ .exited = 1 }, .stdout = &.{}, .stderr = &.{} };
+    try std.testing.expect(refused.sshFailed());
+    try std.testing.expect(!answered.sshFailed());
 }

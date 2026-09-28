@@ -536,6 +536,12 @@ fn queryPaths(init: std.process.Init, destination: []const u8, staging: *Staging
     try script.writer.writeAll("TELAR_PATHS\n");
     var result = try remote_shell.runScript(init, destination, script.written(), query_timeout_s);
     defer result.deinit(init.gpa);
+    // An unanswered question is no answer: every hook would look missing
+    // and be dropped from what the machine gets.
+    if (!result.succeeded()) {
+        return error.MachinePathsUnreadable;
+    }
+
     var lines = std.mem.splitScalar(u8, result.stdout, '\n');
     while (lines.next()) |line| {
         if (line.len != 0) {

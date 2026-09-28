@@ -395,7 +395,7 @@ fn confirmInteractively(init: std.process.Init, report: *SetupReport, target: *c
 
 fn reportUnreachable(report: *SetupReport, target: *const SetupTarget, probe: *const ScriptOutput, confirmed: bool) !void {
     const failed = remote.sshFailure(probe.term, probe.stderr);
-    if (probe.term == .exited and probe.term.exited != @intFromEnum(SshExit.failed) and failed != error.RemoteRuntimeIncompatible) {
+    if (!probe.sshFailed() and failed != error.RemoteRuntimeIncompatible) {
         try report.end(.ssh, .ok, "batch-mode SSH to {s} works", .{target.destination()});
         try report.end(.platform, .failed, "the probe failed there: {s}", .{probe.errorLine()});
         return;
@@ -413,12 +413,6 @@ fn reportUnreachable(report: *SetupReport, target: *const SetupTarget, probe: *c
         else => try report.end(.ssh, .failed, "{s}", .{probe.errorLine()}),
     }
 }
-
-/// OpenSSH's own failures exit 255 (ssh(1), EXIT STATUS).
-const SshExit = enum(u8) {
-    failed = 255,
-    _,
-};
 
 // Step 3: this build at its own path, downloaded there from the release
 // with the hash this machine read, or uploaded with `--binary`.
