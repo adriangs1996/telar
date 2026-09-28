@@ -33,8 +33,12 @@ pub fn map(io: std.Io, input: ProgressHookInput, storage: *ProgressStorage) ?cor
     if (input.cwd.len != 0 and input.cwd.len <= core.max_cwd_bytes and std.fs.path.isAbsolute(input.cwd)) {
         report.cwd = input.cwd;
         if (gitstatus.linked_worktree.find(io, input.cwd, &storage.root, &storage.head)) |linked| {
-            report.work_tree_path = linked.root;
-            report.work_tree_branch = boundedLine(linked.branch, core.max_git_branch_bytes);
+            // A branch the runtime cannot hold whole names no worktree: a
+            // cut one would never match `telar worktree` or `worktree:`.
+            if (core.validateWorktreeText(.{ .path = linked.root, .branch = linked.branch })) |_| {
+                report.work_tree_path = linked.root;
+                report.work_tree_branch = linked.branch;
+            } else |_| {}
         }
     }
 
@@ -188,10 +192,6 @@ fn sanitizeMessage(text: []const u8, buffer: *[core.max_agent_final_message_byte
     }
 
     return validPrefix(std.mem.trim(u8, buffer[0..len], " \n\t"));
-}
-
-fn boundedLine(text: []const u8, maximum: usize) []const u8 {
-    return validPrefix(text[0..@min(text.len, maximum)]);
 }
 
 fn validPrefix(text: []const u8) []const u8 {

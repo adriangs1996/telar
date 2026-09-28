@@ -155,13 +155,14 @@ fn resolveWorkTree(model: *RuntimeModel, pane: *const Pane, report: core.ReportA
     }
 
     const source = workspaceOf(pane) orelse return .invalid;
+    // Registration refuses a name it cannot hold whole rather than cutting it.
     const branch = if (report.work_tree_branch.len != 0) report.work_tree_branch else std.fs.path.basename(report.work_tree_path);
     const registered = model.worktrees.register(model.gpa, .{
         .source = model.worktrees.sourceFor(source),
         .created_by = pane.key().id,
         .origin = .external,
         .path = report.work_tree_path,
-        .branch = branch[0..@min(branch.len, core.max_git_branch_bytes)],
+        .branch = branch,
     }) catch |err| return switch (err) {
         error.OutOfMemory => err,
         else => .invalid,

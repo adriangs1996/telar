@@ -10,6 +10,7 @@ const Session = @import("client/Session.zig");
 const Pane = @import("../pane/Pane.zig");
 const Worktrees = @import("../workspace/Worktrees.zig");
 const client_request = @import("client_request.zig");
+const delivery_namespace = @import("delivery/delivery_namespace.zig");
 const pane_launch = @import("pane_launch.zig");
 const resync_required = @import("resync_required.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
@@ -231,18 +232,11 @@ fn startCommand(model: *RuntimeModel, slot: usize, pane: *Pane, request: core.La
 
 /// The program's base name, cut to the label bound on a UTF-8 boundary.
 fn commandLabel(program: []const u8) []const u8 {
-    const name = std.fs.path.basename(program);
-    var len = @min(name.len, core.max_worktree_command_label_bytes);
-    while (len > 0 and len < name.len and (name[len] & 0xc0) == 0x80) {
-        len -= 1;
-    }
-
-    return name[0..len];
+    return delivery_namespace.truncateUtf8(std.fs.path.basename(program), core.max_worktree_command_label_bytes);
 }
 
 fn workspaceName(worktrees: *const Worktrees, slot: usize) []const u8 {
-    const name = worktrees.displayName(slot);
-    return name[0..@min(name.len, core.max_tab_label_bytes)];
+    return delivery_namespace.truncateUtf8(worktrees.displayName(slot), core.max_tab_label_bytes);
 }
 
 fn closeWorkspace(model: *RuntimeModel, workspace_id: core.WorkspaceId) void {
@@ -255,6 +249,26 @@ fn closeWorkspace(model: *RuntimeModel, workspace_id: core.WorkspaceId) void {
 
     model.review_owner_revision +%= 1;
     session_checkpoint.noteChange(model);
+}
+
+test "a long branch names its workspace on a character boundary" {
+    const gpa = std.testing.allocator;
+    const table = try gpa.create(Worktrees);
+    defer gpa.destroy(table);
+    table.* = .{};
+    defer table.deinit(gpa);
+
+    // 127 ASCII bytes, then a two-byte character straddling the tab bound.
+    const branch = "a" ** (core.max_tab_label_bytes - 1) ++ "é" ++ "b" ** 8;
+    const registered = try table.register(gpa, .{
+        .source = @enumFromInt(1),
+        .path = "/w/long",
+        .branch = branch,
+    });
+
+    const name = workspaceName(table, registered.slot);
+    try std.testing.expect(std.unicode.utf8ValidateSlice(name));
+    try std.testing.expectEqual(@as(usize, core.max_tab_label_bytes - 1), name.len);
 }
 
 test "command labels keep the program name within the wire bound" {

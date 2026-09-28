@@ -32,7 +32,9 @@ pub const max_agent_session_file_bytes = 1024;
 pub const max_foreground_name_bytes = 48;
 pub const max_pane_title_bytes = 256;
 pub const max_workspace_list_entries = 64;
-pub const max_git_branch_bytes = 64;
+/// Bound for a Git branch name, the longest `telar worktree create` accepts,
+/// so every branch telar creates is stored and matched whole.
+pub const max_git_branch_bytes = 200;
 /// Worktrees the runtime tracks at once, one per possible workspace.
 pub const max_worktree_entries = max_workspace_list_entries;
 /// Bound for a task title, the name the user and a coordinator use.

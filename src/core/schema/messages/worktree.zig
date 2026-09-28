@@ -17,6 +17,7 @@ const LaunchWorktreeView = @import("LaunchWorktreeView.zig");
 const ForgetWorktree = @import("ForgetWorktree.zig");
 const WorktreeListEntry = @import("WorktreeListEntry.zig");
 const MachineProfile = @import("../../MachineProfile.zig");
+const WorktreeText = @import("WorktreeText.zig");
 
 /// Encodes a registration after validating every bounded field.
 ///
@@ -190,16 +191,13 @@ fn validateListEntry(entry: WorktreeListEntry) !void {
     try codec.validateDisplayText(entry.command_label, types.max_worktree_command_label_bytes, true);
 }
 
-const WorktreeText = struct {
-    path: []const u8,
-    branch: []const u8,
-    base: []const u8,
-    title: []const u8,
-    brief: []const u8,
-    dispatched_from: []const u8,
-};
-
-fn validateWorktreeText(text: WorktreeText) !void {
+/// Checks that a worktree's texts fit their bounds and are printable UTF-8,
+/// the rule every copy of a worktree follows before it is stored or sent.
+///
+/// ```zig
+/// try core.validateWorktreeText(.{ .path = "/src/fix", .branch = "fix", .base = "main" });
+/// ```
+pub fn validateWorktreeText(text: WorktreeText) !void {
     try codec.validateBytes(text.path, types.max_cwd_bytes, false);
     if (!std.fs.path.isAbsolutePosix(text.path)) {
         return error.InvalidWorktreePath;

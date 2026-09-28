@@ -223,6 +223,18 @@ test "branches that look like options or escape a ref are refused" {
     try std.testing.expect(removal.force and removal.delete_branch);
 }
 
+test "every branch create accepts fits the protocol, so the runtime stores it whole" {
+    const longest = "b" ** workspace_grammar.max_worktree_branch_bytes;
+    const options = try WorktreeOptions.parse(&.{ "create", longest });
+    try core.validateWorktreeText(.{
+        .path = "/src/telar-worktrees/b",
+        .branch = std.mem.span(options.branch.?),
+        .base = std.mem.span(options.branch.?),
+    });
+
+    try std.testing.expectError(error.InvalidWorktreeBranch, WorktreeOptions.parse(&.{ "create", longest ++ "b" }));
+}
+
 test "a worktree on another machine names it; fetch needs one and resolve a repository" {
     const remote = try WorktreeOptions.parse(&.{ "create", "fix", "--machine", "box", "--from", "HEAD", "--title", "Fix", "--", "claude", "go" });
     try std.testing.expectEqualStrings("box", std.mem.span(remote.machine.?));

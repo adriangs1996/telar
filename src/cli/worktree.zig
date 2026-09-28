@@ -17,6 +17,7 @@ const ListedWorktree = @import("ListedWorktree.zig");
 const CatalogWorktree = @import("CatalogWorktree.zig");
 const machine_dispatch = @import("machine_dispatch.zig");
 const worktree_dispatch = @import("worktree_dispatch.zig");
+const workspace_grammar = @import("arguments/workspace.zig");
 
 /// Size of a pane launched before any UI sized it; a UI resizes it on view.
 const launch_size: core.TerminalSize = .{ .cols = 160, .rows = 48 };
@@ -112,6 +113,9 @@ fn create(init: std.process.Init, command: Command) !u8 {
 
     var base_buffer: [256]u8 = undefined;
     const base = if (options.from) |from| std.mem.span(from) else try worktree_git.currentBranch(init, root, &base_buffer);
+    // The runtime records the base whole; refuse one it cannot hold before
+    // Git creates anything.
+    workspace_grammar.validateWorktreeBranch(base) catch return error.UnusableBase;
     const source = try sourceWorkspace(init, command, root);
     try worktree_git.add(init, .{
         .root = root,
@@ -128,9 +132,9 @@ fn create(init: std.process.Init, command: Command) !u8 {
         .source = try core.workspace(source),
         .created_by = currentPane(init.minimal.environ),
         .path = checkout,
-        .branch = branch[0..@min(branch.len, core.max_git_branch_bytes)],
-        .base = base[0..@min(base.len, core.max_git_branch_bytes)],
-        .title = if (options.title) |title| std.mem.span(title) else "",
+        .branch = branch,
+        .base = base,
+        .title =if (options.title) |title| std.mem.span(title) else "",
         .brief = briefOf(argv, &brief_buffer),
         .dispatched_from = if (options.dispatched_from) |label| std.mem.span(label) else "",
     });
@@ -335,15 +339,17 @@ fn findOrAdopt(init: std.process.Init, command: Command) !CatalogWorktree {
         var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const root = try worktree_git.mainRoot(init, listed.path, &root_buffer);
         var base_buffer: [256]u8 = undefined;
-        const base = worktree_git.currentBranch(init, root, &base_buffer) catch "";
+        const current = worktree_git.currentBranch(init, root, &base_buffer) catch "";
+        // Without a base the runtime's probe finds the main checkout's branch.
+        const base = if (workspace_grammar.validateWorktreeBranch(current)) |_| current else |_| "";
         const source = try sourceWorkspace(init, command, root);
         const registered = try command.session.registerWorktree(.{
             .request_id = .none,
             .source = try core.workspace(source),
             .created_by = currentPane(init.minimal.environ),
             .path = listed.path,
-            .branch = listed.branch[0..@min(listed.branch.len, core.max_git_branch_bytes)],
-            .base = base[0..@min(base.len, core.max_git_branch_bytes)],
+            .branch = listed.branch,
+            .base = base,
         });
         return .{
             .id = registered.worktree,
@@ -814,6 +820,7 @@ fn describe(err: anyerror) []const u8 {
         error.ClientCommandFailed => "the UI client could not open the worktree",
         error.PathTooLong => "the worktree path exceeds the supported length",
         error.InvalidWorktreeBranch => "the branch name is not usable for a worktree",
+        error.UnusableBase => "the base branch name is too long or not usable; pass --from REF",
         error.GitDiffFailed => "git diff failed",
         error.UnknownMachine => "no saved machine or local label has that name; see `telar machine list`",
         error.FetchNeedsAnotherMachine => "fetch brings a branch from another machine; this label names this one",

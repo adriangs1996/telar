@@ -362,14 +362,19 @@ fn validate(request: WorktreeRegistration) !void {
         return error.InvalidWorktreePath;
     }
 
-    const within = request.branch.len != 0 and request.branch.len <= core.max_git_branch_bytes and
-        request.base.len <= core.max_git_branch_bytes and
-        request.title.len <= core.max_worktree_title_bytes and
-        request.brief.len <= core.max_worktree_brief_bytes and
-        request.dispatched_from.len <= core.MachineProfile.max_label_bytes;
-    if (!within) {
+    if (request.branch.len == 0) {
         return error.InvalidWorktreeText;
     }
+
+    // A row every client can decode: the workspace list carries all of them.
+    try core.validateWorktreeText(.{
+        .path = request.path,
+        .branch = request.branch,
+        .base = request.base,
+        .title = request.title,
+        .brief = request.brief,
+        .dispatched_from = request.dispatched_from,
+    });
 }
 
 fn copyText(storage: []u8, value: []const u8) usize {
@@ -475,6 +480,19 @@ test "commands and workspace links follow their panes" {
     try std.testing.expectEqual(@as(usize, 1), table.listEntries(&entries).len);
     try std.testing.expect(table.remove(gpa, registered.id));
     try std.testing.expectEqual(@as(usize, 0), table.listEntries(&entries).len);
+}
+
+test "registration refuses text no client could decode" {
+    const gpa = std.testing.allocator;
+    const table = try testingTable();
+    defer destroyTestingTable(table);
+    const source: core.WorkspaceId = @enumFromInt(1);
+
+    // A branch cut inside a character, as a truncated checkpoint or report
+    // would carry it, would make every workspace list fail to encode.
+    try std.testing.expectError(error.InvalidUtf8, table.register(gpa, .{ .source = source, .path = "/w/fix", .branch = "fix-\xc3" }));
+    try std.testing.expectError(error.InvalidAgentDisplayText, table.register(gpa, .{ .source = source, .path = "/w/fix", .branch = "fix", .title = "a\x1b[2J" }));
+    try std.testing.expectEqual(@as(usize, 0), table.count);
 }
 
 test "registration rejects relative paths, empty branches and exhausted capacity" {

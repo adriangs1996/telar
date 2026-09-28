@@ -76,10 +76,11 @@ pub fn validateTitle(title: []const u8, source: u8) !void {
     }
 }
 
-/// A worktree record carries bounded, printable text and an absolute path.
+/// A worktree record carries an absolute path and text every client can
+/// decode, by the same rule the wire and the runtime's table apply.
 pub fn validateWorktree(record: WorktreeRecord) !void {
     try validatePath(record.path);
-    if (record.id == 0 or record.source_workspace_id == 0 or !std.fs.path.isAbsolutePosix(record.path)) {
+    if (record.id == 0 or record.source_workspace_id == 0 or record.branch.len == 0) {
         return error.InvalidCheckpoint;
     }
 
@@ -87,14 +88,14 @@ pub fn validateWorktree(record: WorktreeRecord) !void {
         return error.InvalidCheckpoint;
     }
 
-    const within = record.branch.len != 0 and record.branch.len <= core.max_git_branch_bytes and
-        record.base.len <= core.max_git_branch_bytes and
-        record.title.len <= core.max_worktree_title_bytes and
-        record.brief.len <= core.max_worktree_brief_bytes and
-        record.dispatched_from.len <= core.MachineProfile.max_label_bytes;
-    if (!within) {
-        return error.InvalidCheckpoint;
-    }
+    core.validateWorktreeText(.{
+        .path = record.path,
+        .branch = record.branch,
+        .base = record.base,
+        .title = record.title,
+        .brief = record.brief,
+        .dispatched_from = record.dispatched_from,
+    }) catch return error.InvalidCheckpoint;
 }
 
 pub fn validatePath(path: []const u8) !void {
@@ -374,4 +375,24 @@ test "worktree records keep the dispatching machine from version 7 on" {
     try std.testing.expectEqualStrings("fix", restored.branch);
     try std.testing.expectEqualStrings("", restored.dispatched_from);
     try std.testing.expect(try reader.next() == null);
+}
+
+test "a worktree record with text no client could decode is refused" {
+    const valid: WorktreeRecord = .{
+        .id = 4,
+        .source_workspace_id = 1,
+        .path = "/work/telar-worktrees/fix",
+        .branch = "fix",
+        .base = "main",
+        .title = "Fix tabs",
+    };
+    try validateWorktree(valid);
+
+    var cut = valid;
+    cut.branch = "fix-\xc3";
+    try std.testing.expectError(error.InvalidCheckpoint, validateWorktree(cut));
+
+    var escaped = valid;
+    escaped.title = "Fix\x1b[2J";
+    try std.testing.expectError(error.InvalidCheckpoint, validateWorktree(escaped));
 }
