@@ -4,6 +4,8 @@ const std = @import("std");
 const ImageIdentity = @import("ImageIdentity.zig");
 const PlacementIdentity = @import("PlacementIdentity.zig");
 const store_ops = @import("store.zig");
+const privatefile = @import("privatefile");
+const Inode = privatefile.Inode;
 
 /// Creates one resource catalog with an explicit image-delivery lifetime policy.
 /// Example: `var assets = ResourceStore(Delivery).init(gpa);`.
@@ -241,12 +243,8 @@ pub fn Type(comptime Delivery: type) type {
                 return error.SharedMemoryUnavailable;
             }
             defer _ = std.c.close(fd);
-            var stat: store_ops.native.struct_stat = undefined;
-            if (store_ops.native.fstat(fd, &stat) != 0) {
-                return error.SharedMemoryUnavailable;
-            }
-
-            if (stat.st_size < 0 or @as(u64, @intCast(stat.st_size)) < byte_len) {
+            const inode = Inode.fromDescriptor(fd) catch return error.SharedMemoryUnavailable;
+            if (inode.size < byte_len) {
                 return error.SharedMemoryUnavailable;
             }
             const map = std.posix.mmap(

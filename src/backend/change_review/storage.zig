@@ -4,6 +4,8 @@ const core = @import("telar-core");
 const Group = @import("Group.zig");
 const Edition = @import("Edition.zig");
 const Comment = @import("Comment.zig");
+const privatefile = @import("privatefile");
+const Inode = privatefile.Inode;
 const c = @cImport({
     @cInclude("sys/stat.h");
     @cInclude("unistd.h");
@@ -33,12 +35,9 @@ pub fn private(path: []const u8, directory: bool) !void {
     }
     @memcpy(buffer[0..path.len], path);
     buffer[path.len] = 0;
-    var stat: c.struct_stat = undefined;
-    if (c.lstat(buffer[0..path.len :0], &stat) != 0) {
-        return error.InvalidReviewStorage;
-    }
-    const expected: u32 = if (directory) 0o040000 else 0o100000;
-    if (stat.st_mode & 0o170000 != expected or stat.st_mode & 0o077 != 0 or stat.st_uid != c.geteuid() or (!directory and stat.st_nlink != 1)) {
+    const inode = Inode.fromPath(buffer[0..path.len :0], .no_follow) catch return error.InvalidReviewStorage;
+    const expected: Inode.Kind = if (directory) .directory else .regular;
+    if (inode.kind() != expected or inode.mode & 0o077 != 0 or inode.owner != c.geteuid() or (!directory and inode.links != 1)) {
         return error.InvalidReviewStorage;
     }
 }
@@ -222,12 +221,12 @@ fn ownedSize(io: std.Io, path: []const u8) !usize {
 }
 
 fn privateSize(fd: std.posix.fd_t) !usize {
-    var stat: c.struct_stat = undefined;
-    if (c.fstat(fd, &stat) != 0 or stat.st_mode & 0o170000 != 0o100000 or stat.st_mode & 0o077 != 0 or stat.st_uid != c.geteuid() or stat.st_nlink != 1 or stat.st_size < 0 or stat.st_size > max_file_bytes) {
+    const inode = Inode.fromDescriptor(fd) catch return error.InvalidReviewStorage;
+    if (inode.kind() != .regular or inode.mode & 0o077 != 0 or inode.owner != c.geteuid() or inode.links != 1 or inode.size > max_file_bytes) {
         return error.InvalidReviewStorage;
     }
 
-    return @intCast(stat.st_size);
+    return @intCast(inode.size);
 }
 
 fn filename(input: StorageInput, key: [64]u8, buffer: []u8) ![]const u8 {

@@ -16,9 +16,8 @@ const AuthorityCommand = @import("AuthorityCommand.zig");
 const AuthorityRemoval = @import("AuthorityRemoval.zig");
 const JsonRecord = @import("JsonRecord.zig");
 
-const native = @cImport({
-    @cInclude("sys/stat.h");
-});
+const privatefile = @import("privatefile");
+const Inode = privatefile.Inode;
 
 const rotation_window_seconds: u64 = 24 * 60 * 60;
 pub const record_name = "trust-install.json";
@@ -496,12 +495,8 @@ fn validateDirectoryOwner(io: std.Io, directory: []const u8) !void {
 
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{directory}) catch return error.NameTooLong;
-    var native_stat: native.struct_stat = undefined;
-    if (native.fstatat(std.c.AT.FDCWD, path_z, &native_stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
-        return error.InvalidProxyDirectory;
-    }
-
-    if (native_stat.st_uid != std.c.getuid()) {
+    const inode = Inode.fromPath(path_z, .no_follow) catch return error.InvalidProxyDirectory;
+    if (inode.owner != std.c.getuid()) {
         return error.WrongOwner;
     }
 }

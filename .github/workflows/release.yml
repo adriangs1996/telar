@@ -64,8 +64,9 @@ jobs:
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
           rustup default "$RUST_TOOLCHAIN"
 
-      # Builds the desktop and headless archives and fails if either links
-      # a library it must not, or the headless one needs glibc above 2.28.
+      # Builds the desktop and headless archives and fails if the desktop
+      # one links a library it must not or needs glibc above 2.38, or the
+      # headless one is not static.
       - name: Build and check linkage
         run: packaging/release/linux.sh dist
 
@@ -86,13 +87,6 @@ jobs:
           - runner: macos-26-intel
             arch: x86_64
     runs-on: ${{ matrix.runner }}
-    env:
-      MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
-      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-      MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
-      NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
-      NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
-      NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -111,8 +105,96 @@ jobs:
       - name: Build and check linkage
         run: packaging/release/macos.sh build "$RUNNER_TEMP/stage"
 
+      # upload-artifact drops file modes, so the stage travels as a tarball.
+      - name: Archive the stage
+        run: tar -czf "$RUNNER_TEMP/stage-macos-${{ matrix.arch }}.tar.gz" -C "$RUNNER_TEMP" stage
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: stage-macos-${{ matrix.arch }}
+          path: ${{ runner.temp }}/stage-macos-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  # Signing gets a runner of its own. The build runs Cargo build scripts and
+  # other third-party code, which could write to GITHUB_ENV, GITHUB_PATH or
+  # the checkout and so reach every later step of the same job. Here the
+  # secrets live only in the steps that use them, and nothing is built.
+  macos-sign:
+    needs: macos
+    name: macos sign (${{ matrix.runner }})
+    strategy:
+      matrix:
+        include:
+          - runner: macos-26
+            arch: aarch64
+          - runner: macos-26-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: stage-macos-${{ matrix.arch }}
+          path: ${{ runner.temp }}
+
+      # Into an empty directory of its own, so the tarball cannot replace
+      # anything else in RUNNER_TEMP, such as the keychain made below.
+      - name: Unpack the stage
+        run: |
+          mkdir "$RUNNER_TEMP/unpacked"
+          tar -xzf "$RUNNER_TEMP/stage-macos-${{ matrix.arch }}.tar.gz" -C "$RUNNER_TEMP/unpacked"
+
+      # Each group of secrets is all set or all empty; half a group would
+      # otherwise publish an ad hoc signature or skip notarization silently.
+      - name: Check the signing secrets
+        id: secrets
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          set_count() {
+            count=0
+            for value in "$@"; do
+              if [ -n "$value" ]; then
+                count=$((count + 1))
+              fi
+            done
+          }
+
+          set_count "$MACOS_CERTIFICATE_P12" "$MACOS_CERTIFICATE_PASSWORD" "$MACOS_SIGNING_IDENTITY"
+          signing=$count
+          set_count "$NOTARY_KEY_P8" "$NOTARY_KEY_ID" "$NOTARY_ISSUER_ID"
+          notary=$count
+          if [ "$signing" -ne 0 ] && [ "$signing" -ne 3 ]; then
+            echo "::error::set MACOS_CERTIFICATE_P12, MACOS_CERTIFICATE_PASSWORD and MACOS_SIGNING_IDENTITY together, or none of them"
+            exit 1
+          fi
+
+          if [ "$notary" -ne 0 ] && [ "$notary" -ne 3 ]; then
+            echo "::error::set NOTARY_KEY_P8, NOTARY_KEY_ID and NOTARY_ISSUER_ID together, or none of them"
+            exit 1
+          fi
+
+          if [ "$notary" -eq 3 ] && [ "$signing" -eq 0 ]; then
+            echo "::error::notarization needs the Developer ID secrets"
+            exit 1
+          fi
+
+          echo "sign=$([ "$signing" -eq 3 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "notarize=$([ "$notary" -eq 3 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
       - name: Import the Developer ID certificate
-        if: env.MACOS_CERTIFICATE_P12 != ''
+        if: steps.secrets.outputs.sign == 'true'
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         run: |
           keychain="$RUNNER_TEMP/signing.keychain-db"
           password=$(openssl rand -base64 32)
@@ -127,26 +209,40 @@ jobs:
 
       # Ad hoc without the secrets, so the bundle's signature is complete.
       - name: Sign
-        run: packaging/release/sign-macos.sh "$RUNNER_TEMP/stage"
+        env:
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: packaging/release/sign-macos.sh "$RUNNER_TEMP/unpacked/stage"
 
       - name: Package
-        run: packaging/release/macos.sh package "$RUNNER_TEMP/stage" dist
+        run: packaging/release/macos.sh package "$RUNNER_TEMP/unpacked/stage" dist
 
       - name: Notarize
         id: notarize
-        if: env.MACOS_CERTIFICATE_P12 != '' && env.NOTARY_KEY_P8 != ''
+        if: steps.secrets.outputs.notarize == 'true'
+        env:
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: |
           printf '%s' "$NOTARY_KEY_P8" > "$RUNNER_TEMP/notary.p8"
           NOTARY_KEY_PATH="$RUNNER_TEMP/notary.p8" packaging/release/notarize-macos.sh \
             "dist/Telar-macos-${{ matrix.arch }}.dmg" "dist/telar-macos-${{ matrix.arch }}.tar.gz"
 
       # Not a release asset: tells the publish job what the notes must say.
+      # "signed" reads the bundle's signature, not which secrets exist.
       - name: Record signing status
         run: |
           signed=no
           notarized=no
-          if [ -n "$MACOS_CERTIFICATE_P12" ]; then signed=yes; fi
-          if [ "${{ steps.notarize.outcome }}" = success ]; then notarized=yes; fi
+          if packaging/release/signed-by-developer-id.sh "$RUNNER_TEMP/unpacked/stage/prefix/Telar.app"; then
+            signed=yes
+          fi
+
+          if [ "${{ steps.notarize.outcome }}" = success ]; then
+            notarized=yes
+          fi
+
           printf 'macos-%s signed=%s notarized=%s\n' "${{ matrix.arch }}" "$signed" "$notarized" > "$RUNNER_TEMP/status-macos-${{ matrix.arch }}.txt"
 
       - name: Remove signing material
@@ -167,7 +263,7 @@ jobs:
           path: ${{ runner.temp }}/status-macos-${{ matrix.arch }}.txt
 
   publish:
-    needs: [version, linux, macos]
+    needs: [version, linux, macos-sign]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -249,21 +345,23 @@ jobs:
   homebrew:
     needs: [version, publish]
     runs-on: ubuntu-24.04
-    env:
-      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: env.HOMEBREW_TAP_TOKEN != ''
         with:
           persist-credentials: false
 
       - name: Update adriangs1996/homebrew-tap
-        if: env.HOMEBREW_TAP_TOKEN != ''
         env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.version.outputs.version }}
           NOTARIZED: ${{ needs.publish.outputs.notarized }}
         run: |
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "No HOMEBREW_TAP_TOKEN; the tap keeps its version"
+            exit 0
+          fi
+
           gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir "$RUNNER_TEMP"
           git clone --depth 1 "https://x-access-token:$HOMEBREW_TAP_TOKEN@github.com/adriangs1996/homebrew-tap.git" "$RUNNER_TEMP/tap"
           cask=

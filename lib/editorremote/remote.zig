@@ -3,8 +3,9 @@ const std = @import("std");
 const Search = @import("Search.zig");
 const editor = @import("editor.zig");
 const expressions = @import("expressions.zig");
+const privatefile = @import("privatefile");
+const Inode = privatefile.Inode;
 const c = @cImport({
-    @cInclude("sys/stat.h");
     @cInclude("unistd.h");
 });
 
@@ -88,16 +89,16 @@ fn ownedPath(path: []const u8, kind: PathKind) bool {
     var storage: [std.fs.max_path_bytes]u8 = undefined;
     @memcpy(storage[0..path.len], path);
     storage[path.len] = 0;
-    var stat: c.struct_stat = undefined;
-    if (c.lstat(@ptrCast(&storage), &stat) != 0 or stat.st_uid != c.getuid()) {
+    const inode = Inode.fromPath(storage[0..path.len :0], .no_follow) catch return false;
+    if (inode.owner != c.getuid()) {
         return false;
     }
 
-    const expected: c.mode_t = switch (kind) {
-        .directory => c.S_IFDIR,
-        .socket => c.S_IFSOCK,
+    const expected: Inode.Kind = switch (kind) {
+        .directory => .directory,
+        .socket => .socket,
     };
-    return stat.st_mode & c.S_IFMT == expected and stat.st_mode & 0o022 == 0;
+    return inode.kind() == expected and inode.mode & 0o022 == 0;
 }
 
 fn vim(search: *Search) !void {
