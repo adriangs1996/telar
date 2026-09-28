@@ -139,6 +139,10 @@ analytics.
   signal and inspects processes only after a relevant change.
 - Detection and Git status run in observation workers, never in a request,
   render or input handler.
+- Git the runtime runs on its own goes through `gitstatus.untrusted_git`: a
+  repository's config never makes observation run a program (fsmonitor,
+  hooks, filter or diff drivers, lazy fetch). Files beside a checkout are
+  read only when they are regular files, opened without blocking.
 - Persist typed session references, never resume commands. Restore validates
   an official allowlist and rebuilds a fixed argv; reject malformed,
   option-looking, duplicated, stale or wrong-owner references.

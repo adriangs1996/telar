@@ -3,6 +3,7 @@
 //! worktree and a directory in a main checkout. Cheap enough for a hook.
 const std = @import("std");
 const Linked = @import("Linked.zig");
+const gitfile = @import("gitfile.zig");
 const probe = @import("probe.zig");
 
 const max_depth = 64;
@@ -48,21 +49,16 @@ pub fn find(io: std.Io, path: []const u8, root_buffer: []u8, head_buffer: []u8) 
 
 /// Reads the HEAD of the git dir a `.git` file points at, when that git dir
 /// belongs to a linked worktree (it has a `commondir` file).
-fn linkedBranch(io: std.Io, gitfile_path: []const u8, head_buffer: []u8) ?[]const u8 {
-    var gitfile_buffer: [std.fs.max_path_bytes + 16]u8 = undefined;
-    const gitfile = readSmall(io, gitfile_path, &gitfile_buffer) orelse return null;
-    const trimmed = std.mem.trim(u8, gitfile, " \r\n");
-    if (!std.mem.startsWith(u8, trimmed, "gitdir:")) {
-        return null;
-    }
-
-    const git_dir = std.mem.trim(u8, trimmed["gitdir:".len..], " ");
+fn linkedBranch(io: std.Io, dot_git_path: []const u8, head_buffer: []u8) ?[]const u8 {
+    var git_dir_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const git_dir = gitfile.gitDir(io, dot_git_path, &git_dir_buffer) orelse return null;
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const common_path = std.fmt.bufPrint(&path_buffer, "{s}/commondir", .{git_dir}) catch return null;
-    _ = std.Io.Dir.cwd().statFile(io, common_path, .{}) catch return null;
+    var common_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    _ = gitfile.readRegular(io, common_path, &common_buffer) orelse return null;
 
     const head_path = std.fmt.bufPrint(&path_buffer, "{s}/HEAD", .{git_dir}) catch return null;
-    const head = readSmall(io, head_path, head_buffer) orelse return null;
+    const head = gitfile.readRegular(io, head_path, head_buffer) orelse return null;
     const branch = probe.parseHead(head);
     return if (branch.len == 0) null else branch;
 }
@@ -78,23 +74,18 @@ fn linkedBranch(io: std.Io, gitfile_path: []const u8, head_buffer: []u8) ?[]cons
 /// ```
 pub fn mainBranch(io: std.Io, root: []const u8, head_buffer: []u8) ?[]const u8 {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const gitfile_path = std.fmt.bufPrint(&path_buffer, "{s}/.git", .{std.mem.trimEnd(u8, root, "/")}) catch return null;
-    var gitfile_buffer: [std.fs.max_path_bytes + 16]u8 = undefined;
-    const gitfile = std.mem.trim(u8, readSmall(io, gitfile_path, &gitfile_buffer) orelse return null, " \r\n");
-    if (!std.mem.startsWith(u8, gitfile, "gitdir:")) {
-        return null;
-    }
+    const dot_git_path = std.fmt.bufPrint(&path_buffer, "{s}/.git", .{std.mem.trimEnd(u8, root, "/")}) catch return null;
+    var git_dir_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const git_dir = gitfile.gitDir(io, dot_git_path, &git_dir_buffer) orelse return null;
 
-    const git_dir = std.mem.trim(u8, gitfile["gitdir:".len..], " ");
     const common_path = std.fmt.bufPrint(&path_buffer, "{s}/commondir", .{git_dir}) catch return null;
     var common_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const common = std.mem.trim(u8, readSmall(io, common_path, &common_buffer) orelse return null, " \r\n");
-    const head_path = if (std.fs.path.isAbsolute(common))
-        std.fmt.bufPrint(&path_buffer, "{s}/HEAD", .{common}) catch return null
-    else
-        std.fmt.bufPrint(&path_buffer, "{s}/{s}/HEAD", .{ git_dir, common }) catch return null;
+    const named_common = std.mem.trim(u8, gitfile.readRegular(io, common_path, &common_buffer) orelse return null, " \t\r\n");
+    var common_dir_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const common = gitfile.resolve(git_dir, named_common, &common_dir_buffer) orelse return null;
 
-    const head = std.mem.trim(u8, readSmall(io, head_path, head_buffer) orelse return null, " \r\n");
+    const head_path = std.fmt.bufPrint(&path_buffer, "{s}/HEAD", .{common}) catch return null;
+    const head = std.mem.trim(u8, gitfile.readRegular(io, head_path, head_buffer) orelse return null, " \r\n");
     const prefix = "ref: refs/heads/";
     if (!std.mem.startsWith(u8, head, prefix) or head.len == prefix.len) {
         return null;
@@ -103,12 +94,64 @@ pub fn mainBranch(io: std.Io, root: []const u8, head_buffer: []u8) ?[]const u8 {
     return head[prefix.len..];
 }
 
-fn readSmall(io: std.Io, path: []const u8, buffer: []u8) ?[]const u8 {
-    const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch return null;
-    defer file.close(io);
-    var reader = file.readerStreaming(io, &.{});
-    const len = reader.interface.readSliceShort(buffer) catch return null;
-    return buffer[0..len];
+test "a relative gitdir resolves against the worktree, not the reader's directory" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    // `git worktree add` with worktree.useRelativePaths writes these.
+    try temp.dir.createDirPath(io, "main/.git/worktrees/fix");
+    try temp.dir.createDirPath(io, "fix/src");
+    try temp.dir.writeFile(io, .{ .sub_path = "main/.git/HEAD", .data = "ref: refs/heads/trunk\n" });
+    try temp.dir.writeFile(io, .{ .sub_path = "main/.git/worktrees/fix/HEAD", .data = "ref: refs/heads/fix\n" });
+    try temp.dir.writeFile(io, .{ .sub_path = "main/.git/worktrees/fix/commondir", .data = "../..\n" });
+    try temp.dir.writeFile(io, .{ .sub_path = "fix/.git", .data = "gitdir: ../main/.git/worktrees/fix\n" });
+
+    var base_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const base = base_buffer[0..try temp.dir.realPath(io, &base_buffer)];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const nested = try std.fmt.bufPrint(&path_buffer, "{s}/fix/src", .{base});
+    var root: [std.fs.max_path_bytes]u8 = undefined;
+    var head: [256]u8 = undefined;
+    const linked = find(io, nested, &root, &head).?;
+    try std.testing.expectEqualStrings("fix", linked.branch);
+
+    var main_head: [256]u8 = undefined;
+    try std.testing.expectEqualStrings("trunk", mainBranch(io, linked.root, &main_head).?);
+}
+
+test "a FIFO where Git keeps a file is refused instead of blocking the reader" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var base_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const base = base_buffer[0..try temp.dir.realPath(io, &base_buffer)];
+
+    try temp.dir.createDirPath(io, "main/.git/worktrees/fix");
+    try temp.dir.createDirPath(io, "fix");
+    try temp.dir.createDirPath(io, "pipe");
+    try temp.dir.writeFile(io, .{ .sub_path = "main/.git/worktrees/fix/commondir", .data = "../..\n" });
+    var gitfile_buffer: [std.fs.max_path_bytes + 32]u8 = undefined;
+    const dot_git = try std.fmt.bufPrint(&gitfile_buffer, "gitdir: {s}/main/.git/worktrees/fix\n", .{base});
+    try temp.dir.writeFile(io, .{ .sub_path = "fix/.git", .data = dot_git });
+
+    var fifo_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const fifos = [_][]const u8{ "pipe/.git", "main/.git/worktrees/fix/HEAD", "main/.git/HEAD" };
+    for (fifos) |fifo| {
+        const path = try std.fmt.bufPrint(&fifo_buffer, "{s}/{s}", .{ base, fifo });
+        if (!gitfile.makeTestingFifo(path)) {
+            return error.SkipZigTest;
+        }
+    }
+
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var root: [std.fs.max_path_bytes]u8 = undefined;
+    var head: [256]u8 = undefined;
+    try std.testing.expect(find(io, try std.fmt.bufPrint(&path_buffer, "{s}/pipe", .{base}), &root, &head) == null);
+
+    const fix = try std.fmt.bufPrint(&path_buffer, "{s}/fix", .{base});
+    try std.testing.expect(find(io, fix, &root, &head) == null);
+    try std.testing.expect(mainBranch(io, fix, &head) == null);
 }
 
 test "a linked worktree is found from a nested directory and a main checkout is not" {
@@ -124,8 +167,8 @@ test "a linked worktree is found from a nested directory and a main checkout is 
     var base_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const base = base_buffer[0..try temp.dir.realPath(io, &base_buffer)];
     var gitfile_buffer: [std.fs.max_path_bytes + 32]u8 = undefined;
-    const gitfile = try std.fmt.bufPrint(&gitfile_buffer, "gitdir: {s}/main/.git/worktrees/fix\n", .{base});
-    try temp.dir.writeFile(io, .{ .sub_path = "fix/.git", .data = gitfile });
+    const dot_git = try std.fmt.bufPrint(&gitfile_buffer, "gitdir: {s}/main/.git/worktrees/fix\n", .{base});
+    try temp.dir.writeFile(io, .{ .sub_path = "fix/.git", .data = dot_git });
 
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     var root: [std.fs.max_path_bytes]u8 = undefined;

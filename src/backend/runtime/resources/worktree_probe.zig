@@ -30,7 +30,7 @@ pub fn probe(job: WorktreeProbeJob) WorktreeProbeCompletion {
 
     completion.present = true;
     var head_buffer: [4096]u8 = undefined;
-    if (gitstatus.probe.run(job.io, path, &head_buffer)) |status| {
+    if (gitstatus.probe.run(job.io, job.environ, path, &head_buffer)) |status| {
         // A branch the row cannot hold whole keeps the recorded one.
         if (fitsRow(path, status.branch)) {
             completion.branch_len = @intCast(status.branch.len);
@@ -54,7 +54,7 @@ pub fn probe(job: WorktreeProbeJob) WorktreeProbeCompletion {
         }
     }
 
-    if (gitstatus.base_distance.run(job.io, path, base)) |measured| {
+    if (gitstatus.base_distance.run(job.io, .{ .environ = job.environ, .path = path }, base)) |measured| {
         completion.measured = true;
         completion.stat = measured;
     }
@@ -99,7 +99,7 @@ test "a worktree registered without a base is measured against its main checkout
         .base_len = 0,
     };
     @memcpy(request.path[0..linked.len], linked);
-    const completion = probe(.{ .io = io, .request = request });
+    const completion = probe(.{ .io = io, .environ = std.testing.environ, .request = request });
 
     try std.testing.expect(completion.measured);
     try std.testing.expectEqualStrings("trunk", completion.foundBaseSlice());

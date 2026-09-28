@@ -21,6 +21,7 @@ pub fn start(model: *RuntimeModel) void {
 
     model.select.concurrent(.git_status, git_probe.probe, .{Job{
         .io = model.io,
+        .environ = model.inherited_environment,
         .request = request,
     }}) catch cancel(&model.workspaces, request.workspace);
 }

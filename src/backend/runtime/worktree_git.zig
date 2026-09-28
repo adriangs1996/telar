@@ -25,6 +25,7 @@ pub fn start(model: *RuntimeModel) void {
 
     model.select.concurrent(.worktree_git, worktree_probe.probe, .{WorktreeProbeJob{
         .io = model.io,
+        .environ = model.inherited_environment,
         .request = request,
     }}) catch cancel(&model.worktrees, request.worktree);
 }

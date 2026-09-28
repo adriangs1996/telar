@@ -49,9 +49,32 @@ branch its repository's main checkout stands on, which is what `telar
 worktree create` would have recorded, and the row keeps that base. A
 detached main checkout gives no base, and the row stays unmeasured.
 
+## A repository nobody vouched for
+
+The probe runs Git in any checkout a shell entered, including one extracted
+from a tarball, which passes `safe.directory` because the user owns it. Its
+config can name programs that read-only commands run, so every Git child of
+the workspace and worktree probes goes through `gitstatus.untrusted_git`:
+
+| Program the repository names | Turned off by |
+| --- | --- |
+| `core.fsmonitor` | `-c core.fsmonitor=false` |
+| hooks (`post-index-change` when `status` refreshes the index) | `-c core.hooksPath=/dev/null`, `GIT_OPTIONAL_LOCKS=0` |
+| filter drivers (`clean`, `process`) from `.gitattributes` or `.git/info/attributes` | `-c filter.<name>.clean=` (and `smudge`, `process`) for every driver the repository's own config defines, listed by `git config --show-scope`; more than 8, or a name `-c` cannot carry, and nothing runs |
+| `diff.external`, a diff driver's `textconv` | `--no-ext-diff --no-textconv` |
+| a partial clone's lazy fetch (`uploadpack`, `core.sshCommand`) | `GIT_NO_LAZY_FETCH=1` (Git 2.45 and later) |
+| submodules | `--ignore-submodules=all` |
+
+Filter drivers the user defines globally or system-wide, such as Git LFS,
+stay on. A repository that defines its own LFS driver locally is compared
+by raw content and may read as changed.
+
 ## Proof
 
-`gitstatus` linked-worktree and base-distance tests; `worktree_probe.zig`
+`gitstatus/untrusted_test.zig` measures a planted repository whose config
+names a program for each row above and fails if any of them ran (it does
+with the options removed); `gitstatus` linked-worktree and base-distance
+tests; `worktree_probe.zig`
 measures a hand-made worktree in a real repository against its main
 checkout's branch; `worktree_git.zig` keeps a found base once and turns rows
 `integrated` and `gone`; the Worktrees table tests.

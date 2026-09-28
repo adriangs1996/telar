@@ -44,6 +44,15 @@ agents.work_tree = that worktree (task card)
 
 ## Rules
 
+- The files are read, never trusted: `.git`, a HEAD or `commondir` that is
+  not a regular file (a FIFO would block the worker forever) is refused
+  through the open descriptor, which is opened non-blocking, and a relative
+  `gitdir:` (Git's `worktree.useRelativePaths`) resolves against the
+  directory holding the `.git` file (`gitstatus/gitfile.zig`).
+- Found worktrees take at most `capacity - reserved_for_telar` rows
+  (48 of 64), so `telar worktree create` always finds a row for the
+  checkout Git just added.
+
 - The pane's own workspace is the source, through `Worktrees.sourceFor`, so
   a worktree found inside another worktree's tabs hangs from that one's
   project. The runtime does not know which workspace holds the same

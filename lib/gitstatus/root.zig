@@ -13,5 +13,8 @@ test {
     _ = @import("Status.zig");
     _ = @import("probe.zig");
     _ = @import("linked_worktree.zig");
+    _ = @import("gitfile.zig");
+    _ = @import("untrusted_git.zig");
+    _ = @import("untrusted_test.zig");
     _ = @import("base_distance.zig");
 }
