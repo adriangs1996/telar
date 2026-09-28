@@ -38,6 +38,7 @@ pub fn addSuiteTest(self: Modules, b: *std.Build, suite: Suite) *std.Build.Step.
 
     if (std.mem.eql(u8, suite.path, "src/main.zig")) {
         tests.root_module.addOptions("build_options", self.build_options);
+        addInstaller(b, tests.root_module);
     }
 
     tests.root_module.addImport("telar-core", self.core);
@@ -59,4 +60,14 @@ pub fn addSuiteTest(self: Modules, b: *std.Build, suite: Suite) *std.Build.Step.
     }
 
     return tests;
+}
+
+/// Embeds `install.sh` as `@embedFile("install.sh")` in a module that runs
+/// `telar machine setup`, which sends it to the machine it sets up.
+///
+/// ```zig
+/// Modules.addInstaller(b, exe.root_module);
+/// ```
+pub fn addInstaller(b: *std.Build, module: *std.Build.Module) void {
+    module.addAnonymousImport("install.sh", .{ .root_source_file = b.path("install.sh") });
 }

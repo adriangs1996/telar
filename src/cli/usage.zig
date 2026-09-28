@@ -7,7 +7,8 @@ pub const text =
     \\       telar gui [--login-shell] [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--remote DESTINATION | --machine LABEL] [command [args...]]
     \\       telar cli install|uninstall|status [--dir DIR]
     \\       telar --machine LABEL COMMAND [args...]
-    \\       telar machine add LABEL DESTINATION [--color COLOR] [--disabled] [--check] [--json]
+    \\       telar machine add LABEL DESTINATION [--color COLOR] [--disabled] [--check] [--setup [--binary PATH] [--skip agents,config,login]] [--json]
+    \\       telar machine setup LABEL|DESTINATION [--label LABEL] [--binary PATH] [--skip agents,config,login] [--json]
     \\       telar machine remove|enable|disable LABEL
     \\       telar machine rename LABEL NEW_LABEL
     \\       telar machine list [--json]
@@ -116,7 +117,7 @@ pub const text =
     \\  gui              Open the native client window; --login-shell adopts the login shell's environment
     \\  cli              Link this executable as `telar` into DIR (default /usr/local/bin)
     \\  --machine        Run one telar command on a saved machine over SSH; never falls back to this one
-    \\  machine          Save, rename, enable, disable, remove, list and check machines in machines.json
+    \\  machine          Save, rename, enable, disable, remove, list, check and set up machines in machines.json
     \\  server           Run the local runtime in the foreground
     \\  server stop      Stop the local runtime
     \\  history list     Show recent command history

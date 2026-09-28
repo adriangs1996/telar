@@ -65,7 +65,7 @@ telar machine setup box
         |                Linux x86_64|aarch64 -> telar-linux-ARCH-headless.tar.gz
         |                macOS arm64|x86_64   -> telar-macos-ARCH.tar.gz
         |                anything else        -> error, nothing installed
- 3. telar              ~/.local/share/telar/VERSION/telar present and prints
+ 3. telar              ~/.local/share/telar/versions/VERSION/telar present and prints
         |                this version: unchanged. Otherwise install (below).
  4. Runtime            discovery through the absolute path: same schema, or
         |                none running: ok. Another build running: ask on the
@@ -115,7 +115,7 @@ A released build (`build.zig.zon` version other than `0.0.0`):
    with `curl --proto '=https,file'`, and reads the hash of the archive the
    machine needs.
 2. The machine runs `install.sh --version V --headless --sha256 H --bin-dir
-   ~/.local/share/telar/V`: it downloads the archive itself, refuses it
+   ~/.local/share/telar/versions/V`: it downloads the archive itself, refuses it
    unless both hashes match, runs the staged binary from the target
    directory and renames it into place, as today.
 
@@ -125,7 +125,7 @@ A development build has nothing to download: setup refuses without
 same SSH connection into a private file there, and runs `install.sh
 --binary FILE --sha256 H`. The binary must print this client's `--version`
 and discovery must report this client's schema; its directory is
-`~/.local/share/telar/VERSION-SHA12`, where `SHA12` is the first twelve hex
+`~/.local/share/telar/versions/VERSION-SHA12`, where `SHA12` is the first twelve hex
 digits of its hash, so two development builds never share a path.
 
 Versions live side by side. A runtime started by the old executable keeps
@@ -140,7 +140,7 @@ a symlink; interactive shells there then find `telar` as before.
 
 ```json
 {"id":"m-3f9c2a00b001","label":"box","destination":"dev@box","enabled":true,
- "telar_path":"/home/dev/.local/share/telar/0.3.0/telar"}
+ "telar_path":"/home/dev/.local/share/telar/versions/0.3.0/telar"}
 ```
 
 - `telar_path` is absolute, at most 255 bytes, and holds only ASCII letters,

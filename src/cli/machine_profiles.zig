@@ -1,5 +1,5 @@
 //! `telar machine …`: add, rename, enable, disable, remove, list and check
-//! the saved machines in `machines.json`. Every change holds the file's lock,
+//! the saved machines in `machines.json`, and set one up. Every change holds the file's lock,
 //! then replaces it atomically; open windows follow it through their watch.
 //! Removing or disabling a machine never touches its runtime.
 const client = @import("telar-client");
@@ -7,6 +7,7 @@ const core = @import("telar-core");
 const std = @import("std");
 const MachineOptions = @import("arguments/MachineOptions.zig");
 const control = @import("control.zig");
+const machine_setup = @import("machine_setup.zig");
 const remote = client.remote;
 const profile_file = client.profile_file;
 const machine_profiles = client.machine_profiles;
@@ -27,6 +28,7 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
     const profiles = profile_file.load(init.io, init.gpa, path) catch |err| return report(init, err);
 
     switch (options.action) {
+        .setup => return machine_setup.run(init, options),
         .list => return list(init, &profiles, options.json),
         .check => {
             const row = profiles.find(std.mem.span(options.label.?)) orelse return report(init, error.UnknownMachine);
@@ -59,13 +61,17 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
             .rename => .rename,
             .enable => .enable,
             .disable => .disable,
-            .list, .check => unreachable,
+            .list, .check, .setup => unreachable,
         },
         .label = std.mem.span(options.label.?),
         .value = if (options.value) |value| std.mem.span(value) else "",
         .color = if (options.color) |color| std.mem.span(color) else null,
         .enabled = !options.disabled,
     }) catch |err| return report(init, err);
+
+    if (options.action == .add and options.setup) {
+        return machine_setup.run(init, options);
+    }
 
     return 0;
 }

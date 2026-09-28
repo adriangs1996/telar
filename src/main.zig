@@ -257,6 +257,11 @@ test {
     _ = @import("cli/dispatch_argv.zig");
     _ = @import("cli/machine_profiles.zig");
     _ = @import("cli/machine_dispatch.zig");
+    _ = @import("cli/machine_setup.zig");
+    _ = @import("cli/MachinePlatform.zig");
+    _ = @import("cli/SetupReport.zig");
+    _ = @import("cli/remote_shell.zig");
+    _ = @import("cli/telar_release.zig");
     _ = @import("cli/arguments/WorktreeOptions.zig");
     _ = @import("cli/repository_identity.zig");
     _ = @import("cli/worktree_dispatch.zig");

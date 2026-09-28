@@ -53,11 +53,24 @@ pub fn change(io: std.Io, profiles: *core.MachineProfiles, edit: MachineEdit) !v
 /// try machine_profiles.store(io, gpa, path, .{ .kind = .remove, .label = "box" });
 /// ```
 pub fn store(io: std.Io, gpa: std.mem.Allocator, path: []const u8, edit: MachineEdit) !void {
+    return storeAll(io, gpa, path, &.{edit});
+}
+
+/// Makes several changes as one: all of them reach the file, or none does
+/// when one is refused.
+///
+/// ```zig
+/// try machine_profiles.storeAll(io, gpa, path, &.{ add, place, enable });
+/// ```
+pub fn storeAll(io: std.Io, gpa: std.mem.Allocator, path: []const u8, edits: []const MachineEdit) !void {
     const held = try privatefile.lock(io, path);
     defer held.close(io);
 
     var profiles = try profile_file.load(io, gpa, path);
-    try change(io, &profiles, edit);
+    for (edits) |edit| {
+        try change(io, &profiles, edit);
+    }
+
     try profile_file.save(io, path, &profiles);
 }
 
