@@ -96,6 +96,14 @@ pub fn connect(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ,
         return error.RemoteTelarIncompatible;
     }
 
+    const options = try SshOptions.prepare(io, environ, machine.destination);
+    const managed = options.arguments();
+    return openSession(io, &(.{ "ssh", "-T" } ++ managed ++ .{ "--", machine.destination, bridge_command }), discovery, report);
+}
+
+// Runs `argv` with one end of a socket pair as its standard input and
+// output and completes the handshake over the other end.
+fn openSession(io: std.Io, argv: []const []const u8, discovery: Discovery, report: *std.Io.Writer) !RuntimeConnection {
     const ends = try localsocket.pair();
     var local = ends[0];
     // `negotiate` owns this end once called and closes it when it fails.
@@ -103,22 +111,23 @@ pub fn connect(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ,
     errdefer if (local_owned) {
         local.deinit(io);
     };
-    // The child holds its own descriptors for this end; only this process's
-    // copy closes. `SocketChannel.deinit` would shut the socket down, which
-    // ends the child's standard input and output with it.
+    // This process closes its copy of the child's end as soon as the child
+    // holds its own: while any copy stays open here, the local end never
+    // reads the end of the stream when the child dies, and the handshake
+    // waits forever. Only the descriptor closes; `SocketChannel.deinit`
+    // would shut the socket down, ending the child's input and output too.
     const bridge = ends[1];
-    defer bridge.stream.close(io);
-
-    const options = try SshOptions.prepare(io, environ, machine.destination);
-    const managed = options.arguments();
     const bridge_file: std.Io.File = .{ .handle = bridge.stream.socket.handle, .flags = .{ .nonblocking = false } };
+    const spawned = std.process.spawn(io, .{
+        .argv = argv,
+        .stdin = .{ .file = bridge_file },
+        .stdout = .{ .file = bridge_file },
+        .stderr = .pipe,
+    });
+    bridge.stream.close(io);
+
     var forward: Forward = .{
-        .child = try std.process.spawn(io, .{
-            .argv = &(.{ "ssh", "-T" } ++ managed ++ .{ "--", machine.destination, bridge_command }),
-            .stdin = .{ .file = bridge_file },
-            .stdout = .{ .file = bridge_file },
-            .stderr = .pipe,
-        }),
+        .child = try spawned,
         .discovery = discovery,
     };
     errdefer forward.stop(io);
@@ -282,6 +291,20 @@ test "ssh failures that retrying cannot fix are told apart from passing ones" {
     for (cases) |case| {
         try std.testing.expectEqual(case[2], sshFailure(case[0], case[1]));
     }
+}
+
+test "a bridge that dies before the handshake fails the attempt with its error output" {
+    const discovery = try Discovery.parse("/home/dev\n/bin/sh\n/run/telar.sock\n" ++ core.schema_id ++ "\n");
+    var buffer: [256]u8 = undefined;
+    var report: std.Io.Writer = .fixed(&buffer);
+
+    if (openSession(std.testing.io, &.{ "/bin/sh", "-c", "echo bridge ended >&2" }, discovery, &report)) |connection| {
+        var opened = connection;
+        opened.close(std.testing.io);
+        return error.TestUnexpectedResult;
+    } else |_| {}
+
+    try std.testing.expectEqualStrings("bridge ended\n", report.buffered());
 }
 
 test "a refused host key keeps which key and the verdict, not the banner" {
