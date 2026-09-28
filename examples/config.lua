@@ -72,7 +72,7 @@ return telar.config({
     icons = "nerd-font",
     sidebar = { visible = true },
     sound = { enabled = true, ready = true, needs_input = true },
-    input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },
+    input = { sequence_timeout_ms = 1000 },
     bars = {
       bottom = {
         left = telar.bar.metrics(),
