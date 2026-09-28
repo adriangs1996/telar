@@ -569,11 +569,12 @@ fn sourceWorkspace(init: std.process.Init, command: Command, root: []const u8) !
 
     var creator = try Session.open(init, command.options.socket);
     defer creator.close();
-    return creator.createWorkspace(.{
+    const opened = try creator.createWorkspace(.{
         .name = std.fs.path.basename(root),
         .cwd = root,
         .arguments = &.{shellArgument(init.minimal.environ)},
     });
+    return core.raw(opened.location.workspace.workspace);
 }
 
 /// The workspace whose worktrees `list` shows: all without `--workspace`.

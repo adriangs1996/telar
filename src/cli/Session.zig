@@ -416,25 +416,26 @@ pub fn reportAgentTitle(self: *Session, pane: PaneRef, title: []const u8) !void 
 
 pub const WorkspaceCreation = @import("WorkspaceCreation.zig");
 
-/// Creates a named workspace rooted at an explicit path and returns the
-/// runtime workspace id. The size only shapes the root pane until a UI
-/// client attaches and resizes it.
+/// Creates a named workspace rooted at an explicit path and returns its
+/// first pane. The size only shapes that pane until a UI client attaches
+/// and resizes it.
 ///
 /// ```zig
-/// const id = try session.createWorkspace(.{ .name = "fix", .cwd = "/src/fix", .arguments = &.{"/bin/sh"} });
+/// const opened = try session.createWorkspace(.{ .name = "fix", .cwd = "/src/fix", .arguments = &.{"/bin/sh"} });
+/// const workspace_id = core.raw(opened.location.workspace.workspace);
 /// ```
-pub fn createWorkspace(self: *Session, request: WorkspaceCreation) !u64 {
+pub fn createWorkspace(self: *Session, request: WorkspaceCreation) !core.PaneOpened {
     var send_buffer: [8192]u8 = undefined;
     try self.connection.send(self.io, try core.encodeCreateWorkspace(&send_buffer, .{
         .request_id = self.requestId(),
-        .size = .{ .cols = 80, .rows = 24 },
+        .size = .{ .cols = request.columns, .rows = 24 },
         .name = request.name,
         .launch = .{ .cwd = request.cwd, .arguments = request.arguments },
     }));
 
     const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
     switch (response) {
-        .pane_opened => |opened| return core.raw(opened.location.workspace.workspace),
+        .pane_opened => |opened| return opened,
         .request_failed => |failure| return control.failureError(failure),
         else => return error.UnexpectedRuntimeResponse,
     }

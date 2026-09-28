@@ -59,6 +59,11 @@ an existing directory before connecting, then uses `create_workspace` with a
 shell launch. The default name is the directory basename. It never runs Git
 unless `--worktree` is supplied. Existing worktree creation keeps its original
 behavior. The socket test uses a temporary directory without a Git repository.
+`-- COMMAND...` launches that argv in the first pane instead of the login
+shell, and `--columns N` (20 to 1024) sets that pane's width until a window
+attaches and sizes it; `telar machine setup` opens an agent's login this way,
+wide enough that `pane read` returns its URL on one line. `--json` also
+reports the first pane's id.
 
 `telar workspace rename ID NAME [--json]` sends `rename_workspace` and waits
 for the matching request ID in `workspace_snapshot`. It reports the canonical

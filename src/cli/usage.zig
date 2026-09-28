@@ -92,7 +92,7 @@ pub const text =
     \\       telar worktree remove BRANCH|TITLE [--force] [--delete-branch]
     \\       telar agent interrupt <pane|title|worktree:BRANCH|TITLE> [--json] [--socket PATH]
     \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
-    \\       telar workspace create --directory DIR [--name NAME] [--json] [--socket PATH]
+    \\       telar workspace create --directory DIR [--name NAME] [--columns N] [--json] [--socket PATH] [-- COMMAND...]
     \\       telar workspace list [--json] [--socket PATH]
     \\       telar tab close <id|--current> [--workspace ID] [--json] [--socket PATH]
     \\       telar tab move <id|--current> previous|next [--relative-to ID] [--workspace ID] [--json] [--socket PATH]

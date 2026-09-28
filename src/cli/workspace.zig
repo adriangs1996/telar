@@ -10,6 +10,9 @@ const worktree = @import("worktree.zig");
 const workspace_output = @import("workspace_output.zig");
 const core = @import("telar-core");
 
+/// The most words `create -- COMMAND` passes.
+const max_command_words = 64;
+
 /// Runs one workspace command and returns the process exit code.
 ///
 /// ```zig
@@ -55,16 +58,28 @@ fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Wr
         return error.MissingWorkspaceName;
     }
 
+    var command_buffer: [max_command_words][]const u8 = undefined;
+    if (options.command.len > command_buffer.len) {
+        return error.WorkspaceCommandTooLong;
+    }
+
+    for (options.command, 0..) |word, index| {
+        command_buffer[index] = std.mem.span(word);
+    }
+
+    const shell = [_][]const u8{shellArgument(init.minimal.environ)};
     var session = try Session.open(init, options.socket);
     defer session.close();
-    const workspace_id = try session.createWorkspace(.{
+    const opened = try session.createWorkspace(.{
         .name = name,
         .cwd = directory,
-        .arguments = &.{shellArgument(init.minimal.environ)},
+        .arguments = if (options.command.len != 0) command_buffer[0..options.command.len] else &shell,
+        .columns = options.columns orelse 80,
     });
+    const workspace_id = core.raw(opened.location.workspace.workspace);
 
     if (options.json) {
-        try writer.print("{{\"workspace_id\":{d},\"directory\":", .{workspace_id});
+        try writer.print("{{\"workspace_id\":{d},\"pane_id\":{d},\"directory\":", .{ workspace_id, core.raw(opened.pane_id) });
         try control.writeJsonString(writer, directory);
         try writer.writeAll("}\n");
     } else {
