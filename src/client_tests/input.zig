@@ -586,11 +586,11 @@ test "mouse reports preserve exact host pixels relative to pane content" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    _ = try data.host_capabilities.observe(&client.model, .{ .cell_pixels = .{
-        .width = 10,
-        .height = 20,
-    } });
-    _ = try data.host_capabilities.observe(&client.model, .{ .pointer_pixels = .supported });
+    var capabilities = client.model.host.host_capabilities;
+    capabilities.cell_width_px = 10;
+    capabilities.cell_height_px = 20;
+    capabilities.pointer_pixels = .supported;
+    try fixtures.reconcileCapabilities(&client.model, capabilities);
     const pane = client.model.panes.find(ClientHarness.bootstrap_pane).?;
     pane.mouse = .{ .tracking = .normal, .sgr = true, .pixels = true };
     const pane_view = data.tab_layout.view(
@@ -820,8 +820,11 @@ test "focused scroll bindings emit unmodified SGR wheel reports in cells or pixe
         try harness.bootstrap();
         const client = harness.client;
         var router = try client_module.key_router.build(client.routerConfig());
-        _ = try data.host_capabilities.observe(&client.model, .{ .cell_pixels = .{ .width = 10, .height = 20 } });
-        _ = try data.host_capabilities.observe(&client.model, .{ .pointer_pixels = .supported });
+        var capabilities = client.model.host.host_capabilities;
+        capabilities.cell_width_px = 10;
+        capabilities.cell_height_px = 20;
+        capabilities.pointer_pixels = .supported;
+        try fixtures.reconcileCapabilities(&client.model, capabilities);
         const pane = client.model.panes.find(ClientHarness.bootstrap_pane).?;
         pane.mouse = .{ .tracking = .normal, .sgr = true, .pixels = pixels };
         pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };

@@ -170,8 +170,6 @@ pub const HostAppearance = @import("state/HostAppearance.zig").HostAppearance;
 pub const HostCapabilities = @import("state/HostCapabilities.zig");
 pub const HostEffects = @import("state/HostEffects.zig");
 pub const HostCapabilitiesChange = @import("state/HostCapabilitiesChange.zig");
-pub const HostCapabilityObservation = @import("state/HostCapabilityObservation.zig").HostCapabilityObservation;
-pub const HostCapabilitySupport = @import("state/HostCapabilitySupport.zig").HostCapabilitySupport;
 pub const HostCommit = @import("state/HostCommit.zig");
 pub const HostResizeCommit = @import("state/HostResizeCommit.zig");
 pub const HostUpdate = @import("state/HostUpdate.zig");
@@ -506,7 +504,6 @@ test {
     _ = @import("state/PaneFrameCommit.zig");
     _ = @import("state/PaneRetirement.zig");
     _ = @import("state/PathCompletionLanding.zig");
-    _ = @import("state/PixelSize.zig");
     _ = @import("state/StalePaneExit.zig");
     _ = @import("state/StaleTabRemoval.zig");
     _ = @import("state/TabRemoval.zig");

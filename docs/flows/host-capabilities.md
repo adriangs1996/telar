@@ -85,9 +85,8 @@ frame.
 
 ## Validation
 
-- `src/model/state/tests/configuration_and_host.zig` proves independent
-  observations, pixel precedence, atomic geometry and validation before
-  mutation.
+- `src/model/state/tests/configuration_and_host.zig` proves atomic geometry
+  and validation before mutation.
 - `src/client_tests/host_resources.zig` proves commit-before-delivery, no-op
   suppression and that presentation follows committed grid and cell-size
   changes.

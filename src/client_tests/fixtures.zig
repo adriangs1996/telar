@@ -7,6 +7,25 @@ const data = @import("model");
 const std = @import("std");
 const ClientHarness = @import("ClientHarness.zig");
 
+/// Reconciles `capabilities` on the current grid, as a host update does.
+/// Example: `try fixtures.reconcileCapabilities(&client.model, capabilities);`
+pub fn reconcileCapabilities(model: *data.ClientModel, capabilities: data.HostCapabilities) !void {
+    const size = model.host.host_size;
+    const cell = capabilities.cellSize(size.cols, size.rows);
+    _ = try data.host_capabilities.reconcile(
+        model,
+        .{
+            .capabilities = capabilities,
+            .size = .{
+                .cols = size.cols,
+                .rows = size.rows,
+                .cell_width_px = cell.width,
+                .cell_height_px = cell.height,
+            },
+        },
+    );
+}
+
 pub fn reportedPaneId(client: *const client_module.Client) ?core.PaneId {
     const reported = client.model.reported_pane_focus orelse return null;
 
