@@ -6,9 +6,10 @@
 #   sh install.sh --version 0.3.0 --bin-dir /usr/local/bin --sudo
 #
 # It downloads the archive for this system, or the disk image with --app,
-# checks it against the release's SHA256SUMS and installs it. The only
-# downloaded code it runs is the installed `telar`, after the checksum
-# matched: `--version` to report it, and `cli install` to link the app's
+# checks it against the release's SHA256SUMS, runs the downloaded `telar
+# --version` to prove it starts here, and only then replaces what is
+# installed. The only downloaded code it runs is that `telar`, after the
+# checksum matched, and with --app its `cli install`, which links the app's
 # executable into the bin directory.
 set -eu
 
@@ -18,6 +19,7 @@ version=
 bin_dir=${TELAR_BIN_DIR:-$HOME/.local/bin}
 app_dir=$HOME/Applications
 variant=auto
+fallback=
 install_app=false
 use_sudo=false
 
@@ -35,7 +37,8 @@ Usage: install.sh [options]
                     desktop library. For servers.
   --gui             Linux: include the native client (Wayland and Vulkan).
                     Without either flag, the native client is chosen when
-                    its libraries are installed.
+                    Wayland and Vulkan are installed, and the headless build
+                    replaces it when it does not start.
   --sudo            Write with sudo, for directories such as /usr/local/bin
                     or /Applications.
   -h, --help        Show this help.
@@ -45,6 +48,25 @@ EOF
 fail() {
     printf 'install.sh: %s\n' "$1" >&2
     exit 1
+}
+
+# True when the linker cache knows Wayland and Vulkan. Debian keeps ldconfig
+# in /sbin, outside a regular user's PATH.
+has_desktop_libraries() {
+    ldconfig=$(command -v ldconfig 2>/dev/null || true)
+    for candidate in /sbin/ldconfig /usr/sbin/ldconfig; do
+        if [ -z "$ldconfig" ] && [ -x "$candidate" ]; then
+            ldconfig=$candidate
+        fi
+    done
+
+    [ -n "$ldconfig" ] || return 1
+    libraries=$("$ldconfig" -p 2>/dev/null || true)
+    case $libraries in
+        *libwayland-client.so.0*libvulkan.so.1* | *libvulkan.so.1*libwayland-client.so.0*) return 0 ;;
+    esac
+
+    return 1
 }
 
 while [ $# -gt 0 ]; do
@@ -112,27 +134,14 @@ case $(uname -s) in
         [ "$install_app" = false ] || fail "--app is for macOS; on Linux, --gui installs the native client"
         if [ "$variant" = auto ]; then
             variant=headless
-            if command -v ldconfig >/dev/null 2>&1; then
-                libraries=$(ldconfig -p 2>/dev/null || true)
-                case $libraries in
-                    *libwayland-client.so.0*libvulkan.so.1* | *libvulkan.so.1*libwayland-client.so.0*) variant=gui ;;
-                esac
+            if has_desktop_libraries; then
+                variant=gui
+                fallback=headless
             fi
         fi
         ;;
     *) fail "no release for $(uname -s)" ;;
 esac
-
-if [ "$install_app" = true ]; then
-    file=Telar-$os-$arch.dmg
-else
-    asset=telar-$os-$arch
-    if [ "$variant" = headless ]; then
-        asset=$asset-headless
-    fi
-
-    file=$asset.tar.gz
-fi
 
 if [ -n "$version" ]; then
     base=$releases/download/v$version
@@ -140,14 +149,13 @@ else
     base=$releases/latest/download
 fi
 
+command -v curl >/dev/null 2>&1 || fail "curl is required"
+
+# Only https, or file for a local mirror. --proto also binds redirects, so
+# an https URL never lands on http. wget has no such option: its
+# --https-only applies to recursive downloads alone.
 download() {
-    if command -v curl >/dev/null 2>&1; then
-        curl --proto '=https,file' --tlsv1.2 -fsSL -o "$2" "$1" || fail "could not download $1"
-    elif command -v wget >/dev/null 2>&1; then
-        wget --https-only -q -O "$2" "$1" || fail "could not download $1"
-    else
-        fail "curl or wget is required"
-    fi
+    curl --proto '=https,file' --tlsv1.2 -fsSL -o "$2" "$1" || fail "could not download $1"
 }
 
 sha256() {
@@ -178,6 +186,44 @@ prepare() {
     fi
 }
 
+# Downloads FILE from the release and checks it against SHA256SUMS.
+fetch() {
+    printf 'Downloading %s from %s\n' "$1" "$base"
+    download "$base/$1" "$work/$1"
+    expected=$(awk -v name="$1" '$2 == name || $2 == "*" name { print $1 }' "$work/SHA256SUMS")
+    [ -n "$expected" ] || fail "SHA256SUMS lists no $1"
+    actual=$(sha256 "$work/$1")
+    [ "$actual" = "$expected" ] || fail "checksum mismatch for $1: expected $expected, got $actual"
+}
+
+# Prints the version of a downloaded telar, or fails when it does not start,
+# as when the dynamic loader misses a library. LD_BIND_NOW makes glibc
+# resolve every symbol before main instead of at its first call.
+starts() {
+    LD_BIND_NOW=1 "$1" --version 2>"$work/start.log"
+}
+
+# Stops without touching the install because FILE's telar does not start.
+refuse() {
+    sed 's/^/  /' "$work/start.log" >&2
+    fail "the telar in $1 does not start on this system; nothing was installed"
+}
+
+# Downloads and unpacks the archive of VARIANT; sets file and source_dir.
+unpack() {
+    asset=telar-$os-$arch
+    if [ "$1" = headless ]; then
+        asset=$asset-headless
+    fi
+
+    file=$asset.tar.gz
+    fetch "$file"
+    mkdir "$work/$1"
+    tar -xzf "$work/$file" -C "$work/$1"
+    source_dir=$work/$1/$asset/bin
+    [ -x "$source_dir/telar" ] || fail "$file has no bin/telar"
+}
+
 prepare "$bin_dir"
 if [ "$install_app" = true ]; then
     prepare "$app_dir"
@@ -196,22 +242,23 @@ cleanup() {
 
     rm -rf "$work"
 }
-trap cleanup EXIT INT TERM
 
-printf 'Downloading %s from %s\n' "$file" "$base"
-download "$base/$file" "$work/$file"
+# A signal trap that returned would resume the script after cleanup.
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 download "$base/SHA256SUMS" "$work/SHA256SUMS"
 
-expected=$(awk -v name="$file" '$2 == name || $2 == "*" name { print $1 }' "$work/SHA256SUMS")
-[ -n "$expected" ] || fail "SHA256SUMS lists no $file"
-actual=$(sha256 "$work/$file")
-[ "$actual" = "$expected" ] || fail "checksum mismatch for $file: expected $expected, got $actual"
-
 if [ "$install_app" = true ]; then
+    file=Telar-$os-$arch.dmg
+    fetch "$file"
     mount=$work/volume
     mkdir "$mount"
     hdiutil attach -quiet -nobrowse -readonly -noautoopen -mountpoint "$mount" "$work/$file" || fail "could not open $file"
     [ -d "$mount/Telar.app" ] || fail "$file has no Telar.app"
+    installed=$(starts "$mount/Telar.app/Contents/Resources/bin/telar") || refuse "$file"
 
     # Copy beside the target and swap, so a failed copy keeps the old app.
     run rm -rf "$app_dir/.Telar.app.new"
@@ -221,25 +268,35 @@ if [ "$install_app" = true ]; then
     hdiutil detach -quiet "$mount"
     mount=
 
-    telar=$app_dir/Telar.app/Contents/Resources/bin/telar
-    run "$telar" cli install --dir "$bin_dir" >/dev/null
-    printf 'Installed %s as %s/Telar.app, linked from %s/telar\n' "$("$telar" --version)" "$app_dir" "$bin_dir"
+    run "$app_dir/Telar.app/Contents/Resources/bin/telar" cli install --dir "$bin_dir" >/dev/null
+    printf 'Installed %s as %s/Telar.app, linked from %s/telar\n' "$installed" "$app_dir" "$bin_dir"
 else
-    mkdir "$work/unpacked"
-    tar -xzf "$work/$file" -C "$work/unpacked"
-    source_dir=$work/unpacked/$asset/bin
-    [ -x "$source_dir/telar" ] || fail "$file has no bin/telar"
+    unpack "$variant"
+    if ! installed=$(starts "$source_dir/telar"); then
+        [ -n "$fallback" ] || refuse "$file"
+        printf 'install.sh: the native client does not start on this system:\n' >&2
+        sed 's/^/  /' "$work/start.log" >&2
+        printf 'install.sh: installing the headless build instead; --gui insists on the native client\n' >&2
+        unpack "$fallback"
+        installed=$(starts "$source_dir/telar") || refuse "$file"
+    fi
 
-    # Copy beside the target and rename, so a running telar keeps its file.
+    # Copy every tool beside its target before renaming any: a failed copy
+    # changes nothing, and a running telar keeps its file.
+    tools=
     for tool in telar telar-diagram-renderer; do
         if [ -f "$source_dir/$tool" ]; then
             run cp "$source_dir/$tool" "$bin_dir/.$tool.new"
             run chmod 755 "$bin_dir/.$tool.new"
-            run mv -f "$bin_dir/.$tool.new" "$bin_dir/$tool"
+            tools="$tools $tool"
         fi
     done
 
-    printf 'Installed %s into %s\n' "$("$bin_dir/telar" --version)" "$bin_dir"
+    for tool in $tools; do
+        run mv -f "$bin_dir/.$tool.new" "$bin_dir/$tool"
+    done
+
+    printf 'Installed %s into %s\n' "$installed" "$bin_dir"
 fi
 
 case :$PATH: in

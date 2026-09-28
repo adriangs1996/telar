@@ -70,3 +70,6 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
           shellcheck install.sh packaging/release/*.sh packaging/homebrew/*.sh packaging/macos/*.sh
+
+      - name: Installer
+        run: packaging/release/test-install.sh

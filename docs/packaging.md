@@ -154,7 +154,8 @@ To publish a version:
 
 Every pull request and push to `main` runs [`ci.yml`](../.github/workflows/ci.yml):
 `zig build`, `zig build check` and `zig build test` on macOS arm64 and Linux
-x86_64, the headless linkage check, and shellcheck on the release scripts.
+x86_64, the headless linkage check, shellcheck on the release scripts and
+the installer tests.
 
 ### Assets
 
@@ -288,13 +289,33 @@ executable inside the app. It refuses to replace a regular `telar` file left
 by a command line install.
 
 It picks the asset for the system and architecture, downloads it with
-`SHA256SUMS`, aborts unless the checksum matches, and copies `telar` and
-`telar-diagram-renderer` into `~/.local/bin` or `--bin-dir`. It runs `sudo`
-only with `--sudo`. On Linux it installs the desktop build when `ldconfig`
-knows `libwayland-client.so.0` and `libvulkan.so.1`, and the headless one
-otherwise; `--gui` and `--headless` override the choice. Remote mode needs
+`SHA256SUMS`, aborts unless the checksum matches, and runs the downloaded
+`telar --version` with `LD_BIND_NOW=1`, so a build that the dynamic loader
+cannot load, for a missing library or symbol, never replaces a working
+install. Only then does it copy `telar` and `telar-diagram-renderer` beside
+their targets in `~/.local/bin` or `--bin-dir` and rename them into place.
+It runs `sudo` only with `--sudo`.
+
+On Linux it tries the desktop build when `ldconfig -p` lists
+`libwayland-client.so.0` and `libvulkan.so.1`, looking in `/sbin` and
+`/usr/sbin` too, since a regular Debian user's PATH has neither. The
+desktop build also needs xkbcommon, Fontconfig, ATK, GLib and a recent
+glibc (see [What each build pins](#what-each-build-pins)); when it does not
+start, the installer prints the loader's error and installs the headless
+build instead. `--gui` insists on the desktop build and aborts, keeping the
+install, when it does not start; `--headless` skips it. Remote mode needs
 the same version on both machines, so pin `--version` on the server.
 `TELAR_RELEASES_URL` points it at a mirror or a local `file://` copy.
+
+It needs `curl`. `--proto '=https,file'` refuses plain http, redirects to
+http included. `wget` has no equivalent: its `--https-only` applies only to
+recursive downloads, and GNU Wget 1.21.3 fetched an http URL with it.
+Ctrl-C, SIGTERM and SIGHUP stop it after removing its temporary directory.
+
+`packaging/release/test-install.sh` runs the installer against fake
+releases through `file://`, with `uname`, `sw_vers` and `ldconfig`
+stubbed: fallback, refusal, checksum, http and signal cases, plus `--app`
+where `hdiutil` exists.
 
 The checksums come from the same release as the archive. They catch a
 corrupt download, not a tampered release; the attestation covers that.
