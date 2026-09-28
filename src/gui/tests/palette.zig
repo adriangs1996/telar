@@ -1,5 +1,6 @@
 //! Slice 6 of the GUI visual language: the native command palette.
 const cellgrid = @import("cellgrid");
+const core = @import("telar-core");
 const Viewport = @import("../native/Viewport.zig");
 const data = @import("model");
 const input_support = @import("input_support.zig");
@@ -114,6 +115,40 @@ test "native palette rows are hits that choose their result and scroll with the 
     try std.testing.expect(empty.at(.{ .x = row.x, .y = row.y, .kind = .move }) == null);
     empty.add(.{});
     try std.testing.expectEqual(@as(u8, 0), empty.count);
+}
+
+test "the palette forgets every gone worktree through the runtime" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const app = session.gui.app;
+    const snapshot = &app.model.workspace_list_snapshot;
+    for ([_]core.WorktreeState{ .gone, .active, .gone }, 0..) |state, index| {
+        snapshot.worktrees[index] = .{
+            .worktree = @enumFromInt(index + 1),
+            .source = @enumFromInt(1),
+            .workspace = null,
+            .state = state,
+            .diff_added = 0,
+            .diff_removed = 0,
+            .diff_files = 0,
+            .commits_ahead = 0,
+            .command_state = .none,
+            .command_exit = 0,
+        };
+    }
+
+    snapshot.worktree_count = 3;
+    const queued = app.model.to_runtime.len;
+    const pending = app.model.request_lifecycle.tracker.count;
+
+    _ = client.name_prompt.beginCommandPalette(&app.model, .actions);
+    _ = try client.name_prompt.inputPrompt(app, .{ .command = .{ .insert = "Forget gone worktrees" } });
+    _ = try client.name_prompt.inputPrompt(app, .{ .key = .{ .code = .enter } });
+
+    try std.testing.expect(app.model.name_prompt.currentConst() == null);
+    try std.testing.expectEqual(queued + 2, app.model.to_runtime.len);
+    try std.testing.expectEqual(pending + 2, app.model.request_lifecycle.tracker.count);
 }
 
 test "native palette prints the bound chord from the native keymap" {
