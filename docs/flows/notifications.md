@@ -42,11 +42,11 @@ delegates to `notifications.publishNotification`.
 Diagnostic-producing procedures commit their banner before constructing
 the input. Publication commits its owned model state before it touches the
 timer. `deliverHostNotification` then follows the configured
-`notification_delivery`: `telar` shows only the in-app center, `terminal`
-pushes `.terminal_notification` into `model.to_host`, and `system` queues a
-best-effort `.system_notification` job on `client.to_background`. Neither the
-window nor the headless client has an outer terminal, so both drop
-`.terminal_notification`; with `terminal` only the in-app center shows.
+`notification_delivery`: `telar` shows only the in-app center, and `system`
+queues a best-effort `.system_notification` job on `client.to_background`;
+a saturated queue drops it. Configuration refuses `terminal`, the OSC 9
+channel of the retired terminal client, because neither the window nor the
+headless client has an outer terminal to write it to.
 
 `notifications.Center` copies title and message bytes into fixed buffers. It
 keeps at most four items, refreshes an equivalent active item and replaces the

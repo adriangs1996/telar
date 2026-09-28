@@ -368,7 +368,7 @@ fn deliverEffects(self: *HeadlessClient) !void {
                     .execution_id = @enumFromInt(request.sequence),
                     .result = error.NativeServiceUnavailable,
                 }),
-                .clipboard, .terminal_notification, .machine => {},
+                .clipboard, .machine => {},
             }
         }
 

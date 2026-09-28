@@ -1517,7 +1517,6 @@ fn deliverRequests(self: *GuiAdapter) !void {
                 error.HostRequestsFull, error.ClipboardTooLarge, error.InvalidUtf8 => std.log.warn("native clipboard update was not admitted: {s}", .{@errorName(err)}),
                 else => return err,
             },
-            .terminal_notification => {},
             .capture => |request| try client.clipboard_capture.completeClipboardCapture(self.app, .{
                 .execution_id = @enumFromInt(request.sequence),
                 .result = error.NativeServiceUnavailable,

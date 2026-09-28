@@ -89,8 +89,10 @@ return telar.config({
 })
 ```
 
-`client.sidebar.renderer`, which chose how the retired terminal client drew
-its sidebar, is still accepted so older files load, and has no effect.
+`client.sidebar.renderer` chose how the retired terminal client drew its
+sidebar. The window draws its own, so the field is an error that names it:
+remove it from older files. `client.notifications.delivery = "terminal"` is
+refused the same way; see [notifications](notifications.md#delivery-channels).
 
 `runtime.agent_descriptions` is an explicit privacy opt-in. When the first user
 request starts model work, Telar sends that request through standard input to
@@ -155,11 +157,11 @@ the client's startup `$EDITOR`; if neither is set, opening a file reports
 `EditorUnavailable`. Reloading the configuration changes future file openings
 without restarting existing editor panes.
 
-`client.icons` accepts `"unicode"`, the default, or `"nerd-font"`. The Nerd
-Font theme uses a glyph subset embedded in Telar and does not require a Nerd
-Font in the host terminal. It needs Kitty Graphics support and RGB theme
-colors. Telar keeps the Unicode cell icons as the fallback when either is
-unavailable.
+`client.icons` accepts `"unicode"`, the default, or `"nerd-font"`. The window
+draws its chrome icons from a Nerd Font glyph subset embedded in Telar, so no
+Nerd Font needs to be installed. It draws that subset whichever value is set:
+the option chose between the terminal client's two icon sets and has no
+effect in the window.
 
 `client.sound` controls audible agent notifications. All three fields default
 to `true`. `ready` applies only to `working -> ready`; `needs_input` applies

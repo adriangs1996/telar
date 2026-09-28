@@ -220,7 +220,7 @@ test "client config compiles theme, bindings, and callbacks" {
         \\    base = "vesper",
         \\    colors = { accent = "#010203" },
         \\  }),
-        \\  sidebar = { visible = false, renderer = "cells" },
+        \\  sidebar = { visible = false },
         \\  pane_gaps = false,
         \\  sound = { enabled = true, ready = false, needs_input = true },
         \\  input = { escape_timeout_ms = 40, sequence_timeout_ms = 750 },
@@ -1087,7 +1087,7 @@ test "profile overlays base config before CLI locks are applied" {
         \\  api_version = 2,
         \\  client = {
         \\    prefix = "ctrl+b",
-        \\    sidebar = { visible = true, renderer = "automatic" },
+        \\    sidebar = { visible = true },
         \\    keybindings = {
         \\      require("telar").bind_expr({ "f" }, function(ctx)
         \\        return require("telar").input.forward()
@@ -1099,7 +1099,7 @@ test "profile overlays base config before CLI locks are applied" {
         \\    remote = {
         \\      client = {
         \\        prefix = "ctrl+s",
-        \\        sidebar = { visible = false, renderer = "cells" },
+        \\        sidebar = { visible = false },
         \\      },
         \\      runtime = { graphics = { pane_mib = 16, global_mib = 64 } },
         \\    },
@@ -1174,7 +1174,7 @@ test "local modules are contained and participate in reload fingerprints" {
     {
         var module = try temp.dir.createFile(io, "settings.lua", .{});
         defer module.close(io);
-        try module.writeStreamingAll(io, "return { renderer = 'cells' }");
+        try module.writeStreamingAll(io, "return { visible = true }");
     }
     {
         var config = try temp.dir.createFile(io, "config.lua", .{});
@@ -1204,7 +1204,7 @@ test "local modules are contained and participate in reload fingerprints" {
     {
         var module = try temp.dir.createFile(io, "settings.lua", .{ .truncate = true });
         defer module.close(io);
-        try module.writeStreamingAll(io, "return { renderer = 'automatic', visible = false }");
+        try module.writeStreamingAll(io, "return { visible = false }");
     }
     try std.testing.expect(before != generation.watchFingerprint(io, config_path));
 }
@@ -1370,7 +1370,27 @@ test "notification delivery parses and rejects unknown channels" {
 
     var invalid: data.Diagnostic = .{};
     try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &invalid }, .{ .source = "return { api_version = 2, client = { notifications = { delivery = \"popup\" } } }", .source_name = "@config.lua", .number = 1 }));
-    try std.testing.expectEqualStrings("config.client.notifications.delivery must be telar, terminal or system", invalid.message());
+    try std.testing.expectEqualStrings("config.client.notifications.delivery must be telar or system", invalid.message());
+}
+
+test "options that only the retired terminal client honored are rejected" {
+    const cases = [_]struct { source: []const u8, message: []const u8 }{
+        .{
+            .source = "return { api_version = 2, client = { notifications = { delivery = \"terminal\" } } }",
+            .message = "config.client.notifications.delivery = \"terminal\" left with the terminal client; use telar or system",
+        },
+        .{
+            .source = "return { api_version = 2, client = { sidebar = { renderer = \"cells\" } } }",
+            .message = "config.client.sidebar.renderer left with the terminal client; remove it",
+        },
+    };
+
+    for (cases) |case| {
+        var diagnostic: data.Diagnostic = .{};
+
+        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = case.source, .source_name = "@config.lua", .number = 1 }));
+        try std.testing.expectEqualStrings(case.message, diagnostic.message());
+    }
 }
 
 test "appearance themes parse and reject unknown names" {

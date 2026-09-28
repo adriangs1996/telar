@@ -171,7 +171,10 @@ strip centered on it remains the resize handle.
 Visibility lives in the client model as `sidebar_visible`, and the runtime
 retains it for reconnecting clients. The runtime also retains a column-width
 preference in the client layout replica; the terminal client drew a cell
-sidebar at that width, and the window does not read it.
+sidebar at that width, and the window does not read it. `telar sidebar resize
+COLUMNS` and `telar sidebar get` still write and report that column value, so
+the command changes nothing the window shows: the model derives the workbench
+from it only when `model.host.grid_chrome` is set, and no adapter sets it.
 
 The window's sidebar is a band of device pixels (`widgets/SidebarBand.zig`)
 that the renderer takes off the window width before it counts columns, the
