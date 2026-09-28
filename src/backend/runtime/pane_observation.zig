@@ -13,6 +13,7 @@ const HistoryStats = @import("../history/Stats.zig");
 const Probe = @import("../process/Probe.zig");
 const ObservationCompletion = @import("events/ObservationCompletion.zig");
 const Cache = @import("../process/Cache.zig");
+const agent_control = @import("agent_control.zig");
 const agent_description = @import("agent_description.zig");
 const agent_identity = @import("agent_identity.zig");
 const agent_process = @import("../process/process.zig");
@@ -73,6 +74,9 @@ pub fn finish(model: *RuntimeModel, completion: ObservationCompletion) !void {
     recordProcessMetrics(model, completion.process_probe);
     reconcileProcess(model, pane, completion.process_probe, transition);
     recordHistoryMetrics(model, completion.stats);
+    // Before the screen can settle an interrupt: a composer that reads as
+    // ready may still hold the prompt the agent put back.
+    try agent_control.clearRestoredDraft(model, pane);
     reconcileScreen(model, pane, completion.stats, transition.shell_foreground);
 
     agent_description.start(model);

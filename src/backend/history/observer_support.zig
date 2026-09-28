@@ -162,6 +162,34 @@ test "Claude readiness comes from the prompt at the visible cursor" {
     try std.testing.expect(signal.ready_confirmed);
 }
 
+test "Claude readiness reads past the no-break space Claude writes after its prompt" {
+    const size: core.TerminalSize = .{
+        .cols = 40,
+        .rows = 8,
+        .cell_width_px = 0,
+        .cell_height_px = 0,
+    };
+    const signal = (try agentSignalForOutput("\x1b]0;\u{2733} Essay\x07\u{276f}\u{a0}", size)).?;
+    try std.testing.expectEqual(core.Status.ready, signal.status);
+    try std.testing.expect(signal.ready_confirmed);
+}
+
+test "a Claude prompt is not ready while Claude's title shows its working spinner" {
+    const size: core.TerminalSize = .{
+        .cols = 40,
+        .rows = 8,
+        .cell_width_px = 0,
+        .cell_height_px = 0,
+    };
+    try std.testing.expect(try agentSignalForOutput("\x1b]0;\u{25d1} Essay\x07\xe2\x9d\xaf ", size) == null);
+
+    const idle = (try agentSignalForOutput("\x1b]0;\u{2733} Essay\x07\xe2\x9d\xaf ", size)).?;
+    try std.testing.expect(idle.ready_confirmed);
+
+    const shell_title = (try agentSignalForOutput("\x1b]0;clear; claude\x07\xe2\x9d\xaf ", size)).?;
+    try std.testing.expect(shell_title.ready_confirmed);
+}
+
 test "a raw Claude prompt with a hidden cursor is not ready" {
     const size: core.TerminalSize = .{
         .cols = 40,

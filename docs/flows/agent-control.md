@@ -29,7 +29,8 @@ schema.send_pane_text{mode = prompt} -> client_request.receive -> pane_input.sen
         |
 pane_input.sendText: PaneStore.resolveControl(exact generation)
         |            agent_status.projectedStatus == blocked -> request_failed agent_blocked
-        |            bracketed paste framing if the child enabled mode 2004, then Enter
+        |            bracketed paste framing if the child enabled mode 2004,
+        |            then Enter for the child's keyboard mode (pane_input.enterBytes)
         |
 pane_input.forward  (history observer first, then the PTY queue)
         |
@@ -62,14 +63,43 @@ is shared with attached-client input, so history observation still precedes
 the PTY queue for both.
 
 A prompt to a blocked agent is refused in the runtime with `agent_blocked`.
-The CLI cannot bypass it; only `pane send-keys` (raw mode) reaches a blocked
+The CLI cannot bypass it; only `pane send-keys` (raw modes) reaches a blocked
 pane, which is how a script answers the prompt.
+
+## Enter
+
+The runtime presses Enter; no caller writes a carriage return for it.
+`send_pane_text` has three modes: `raw` sends the text unchanged, `raw_enter`
+follows it with Enter (its text may be empty: Enter alone), and `prompt`
+frames it as a paste when the child enabled mode 2004, then presses Enter.
+Enter is encoded from the modes the pane's `vt.Terminal` holds: a child that
+enabled any kitty keyboard flag gets `CSI 13 u`, any other child a carriage
+return, which is also what shell history reads as a submitted command.
+
+Agents read typed bursts as pastes, each by its own rule, so where Enter
+lands decides whether text is submitted. Claude Code 2.1.283 and Codex
+0.156.1 push kitty flags 5; measured in an isolated runtime:
+
+| Sent in one write | Claude Code | Codex |
+| --- | --- | --- |
+| paste, then Enter (`prompt`) | submits | submits |
+| under 100 raw bytes, then `\r` | submits | newline |
+| 100 raw bytes or more, then `\r` | stays as text | newline |
+| raw bytes, then `CSI 13 u` | submits | newline |
+| raw bytes; Enter in a later write | submits | submits |
+
+Codex does it on purpose: an Enter within 120 ms of a burst of three or more
+characters typed under 8 ms apart inserts a newline
+(`PASTE_ENTER_SUPPRESS_WINDOW` in `codex-rs/tui/src/bottom_pane/paste_burst.rs`).
+So `pane send-keys "text" --enter` sends the text as `raw`, waits 150 ms and
+sends `raw_enter` with no text, as a person presses Enter after typing, and
+`agent prompt` keeps the paste and its Enter in one write.
 
 Text reads are late-bound: the response queue stores the pane key, rows and
 source, and the encoder dumps the text into a fixed 64 KiB buffer when the send
 slot frees. A pane that closed in between yields `request_failed
-pane_not_found` instead of tearing the client down. The dump keeps the prefix
-and sets `truncated` when older rows do not fit.
+pane_not_found` instead of tearing the client down. When the rows do not fit,
+the dump keeps the newest whole lines and sets `truncated`.
 
 ## Session reports
 
@@ -91,11 +121,15 @@ endpoint. The CLI resolves `--socket`, then `TELAR_SOCKET`, then
 
 - `src/core/schema_contract_test.zig` pins `query_agents`, `read_pane`,
   `send_pane_text`, `pane_text` and `request_completed`.
-- `src/backend/runtime/tests/requests_test.zig` proves prompt framing,
-  raw passthrough, blocked refusal and stale-generation rejection through the
-  concrete request operation and the real PTY queue.
+- `src/backend/runtime/tests/agent_control_test.zig` proves, through the
+  request dispatch and the pane's PTY queue, raw passthrough, Enter for a
+  shell and for a kitty keyboard child, prompt framing, the focus rule, the
+  prompt budget, the interrupt keys, the wait for the idle prompt and the
+  cleared draft.
+- `src/backend/runtime/pane_input.zig` proves submission framing per mode.
 - `src/backend/runtime/tests/read_pane_test.zig` proves row selection,
-  truncation and late binding through the encoder.
+  truncation that keeps the newest lines, and reads of exited panes through
+  the encoder.
 - `src/backend/runtime/pane_launch.zig` proves the identity
   variables; `src/backend/proxy/proxy_namespace.zig` proves they survive proxy
   registration.
@@ -144,18 +178,73 @@ nothing, so answers travel through waits rather than prompts back.
 telar agent interrupt worktree:fix-tabs
         |
 schema.interrupt_agent -> agent_control.interrupt
-        |  focus rule; working agents only (agent_not_working)
-        |  manifest InterruptKey (escape for Claude Code and Codex)
-        |  pane_input.forwardControl
-        |  ready report "Interrupted by telar"
+        |  focus rule; an interrupt pressed under 2 s ago completes without
+        |    a key, an older pending one presses again
+        |  working agents only (agent_not_working)
+        |  manifest InterruptKey -> pane_input.press (encoded by keyinput)
+        |  settling report "Interrupted by telar"; agent.interrupt = pending
         |
 schema.request_completed
+        .
+        .  later, on the observation path
+        .
+pane_observation.finish
+        |  agent_control.clearRestoredDraft: Claude Code idle with its old
+        |    prompt back in an unfocused composer -> one more key press
+        |  agent_status.observeScreen: a ready_confirmed screen newer than
+        |    the key starts interrupt_idle_at; any other screen clears it
+        .
+agent_maintenance.tick (1 s) -> Agent.expire -> settleInterrupt
+        |  screen_shows_idle (Claude Code, Codex, Cursor Agent): idle
+        |    composer held interrupt_idle_ms (500 ms)
+        |  other agents: interrupt_blind_ms (3 s) after the last press
+        |  -> the settling report goes and weaker evidence decides
 ```
 
-Claude Code runs no `Stop` hook for an interrupted turn, so the runtime
-records the ready report itself; the agent's next hook overrides it.
-`agent prompt --interrupt` interrupts, waits up to 15 s for the agent to
-leave `working`, then sends the prompt.
+| Agent | Key | Source |
+| --- | --- | --- |
+| Claude Code | Ctrl+C | measured, and docs: "Interrupts a running operation. If nothing is running, the first press clears the prompt input and a second press exits"; Escape only enters NORMAL mode in vim mode |
+| Codex | Escape | measured: the turn stops and the composer empties |
+| OpenCode | Escape twice | source of 1.18.30: `session_interrupt` aborts on the second press within 5 s; not measured |
+| Pi | Escape | source of 0.85.1: `app.interrupt` in `keybindings.js`; not measured |
+| Cursor Agent | Escape | source of 2026.09.26: aborts the run when the input is empty; not measured |
+
+Claude Code reports nothing when its turn is interrupted: with hooks on
+every event, 2.1.283 runs none after Ctrl+C. OpenCode and Pi report their
+next state through their integrations (`session.status` going idle,
+`agent_settled`), and that report replaces the runtime's. So the runtime no
+longer pretends the turn ended when it pressed the key. The settling report
+keeps the agent `working` until screens drawn after the key show the idle
+composer for 500 ms, the agent's next report replaces it, or it expires.
+OpenCode and Pi have no screen scan that shows them idle; without their
+integration, their interrupt settles 3 s after the key. A repeated
+interrupt presses the key again once 2 s have passed since the last press,
+so a key that did not take is not swallowed, while two presses never land
+inside the 0.8 s in which Claude Code exits on a second Ctrl+C. The wait is not a guess about how long an agent takes to stop: it
+starts only once the composer reads as idle, and it absorbs a measured
+race. Claude Code writes its idle title (`✳`) and, 1 ms later in a separate
+synchronized frame, the composer with the prompt it put back; an
+observation between the two sees an idle, empty composer that is about to
+change. `agent prompt --interrupt` interrupts, waits up to 15 s for the
+agent to leave `working`, then sends the prompt; `InterruptNotSettled`
+otherwise.
+
+Claude Code's idle prompt is only readable with two facts from 2.1.283: it
+writes a no-break space after `❯`, which the scan used to treat as text, so
+it never saw the prompt as idle; and it keeps the composer on screen during
+a turn, so the scan also needs its title: `◐` and `◑` while a turn runs, `✳`
+otherwise.
+
+Claude Code interrupted before it answered puts the prompt back in its
+composer, so the next prompt would be appended to it. Its title shows `✳`
+once the turn stopped; with that title and a prompt row that holds text,
+`prompt_scan.showsRestoredDraft` holds, and the runtime presses Ctrl+C once
+more, which clears input when nothing runs. It is a key decided by a screen
+reading, the one exception to "a heuristic never authorizes input", and it
+is bounded: once per interrupt, never at an empty prompt, where a second
+Ctrl+C would exit, and never in a pane a person has focused since the
+interrupt, whose text may be theirs. That press shows "Press Ctrl-C again to exit" for about
+0.8 s (measured); a Ctrl+C from anyone within that window exits Claude Code.
 
 ## Progress reports and final answers
 
@@ -172,6 +261,10 @@ hook's `cwd` to a worktree, registering an external one it did not know, and
 ## Reading finished commands
 
 A pane's last 16 KiB of text and its exit code survive its exit in the
-`ExitedPanes` ring (16 panes). `read_pane` on an exited pane is served from
-there with `exit_code` set, which is how `telar worktree exec --wait` prints
-a finished command's output and exits with its code.
+`ExitedPanes` ring (16 panes). The dump keeps the newest whole lines, so a
+verbose command keeps its test summary or final error. The record notes
+whether older rows were dropped, either past the 200 rows it keeps or past
+its 16 KiB. `read_pane` on an exited pane is served from
+there with `exit_code` set and `truncated` true when the requested rows reach
+the dropped ones, which is how `telar worktree exec --wait` prints a finished
+command's output and exits with its code.

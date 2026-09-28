@@ -134,7 +134,9 @@ analytics.
   session, sequence, timestamp and expiry. Official lifecycle reports outrank
   process state, OSC markers and screen heuristics.
 - A heuristic may change presentation. It never authorizes input, approval,
-  termination, restore or another destructive action.
+  termination, restore or another destructive action. One recorded
+  exception breaks this rule: the **interrupted draft** below, where a screen
+  reading decides one key press.
 - Process detection starts from `tcgetpgrp` or an equivalent constant-cost
   signal and inspects processes only after a relevant change.
 - Detection and Git status run in observation workers, never in a request,
@@ -210,6 +212,12 @@ better median never hides a worse tail.
 
 ## Recorded exceptions
 
+- **Interrupted draft** (`agent_control.clearRestoredDraft`), an exception to
+  "a heuristic never authorizes input": after a requested interrupt, Claude
+  Code's idle title and a composer holding text make the runtime press
+  Ctrl+C once more to clear the prompt Claude put back. Once per interrupt,
+  never at an empty prompt, where a second Ctrl+C exits, and never in a pane
+  a person has focused by then, whose text may be theirs.
 - **Windows resize** (`lib/console/WindowsResizeWatcher.zig`): one
   constant-cost poll per client, independent of pane count, until console
   records are translated centrally.

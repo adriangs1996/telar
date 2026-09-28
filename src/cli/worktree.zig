@@ -187,10 +187,18 @@ fn waitForExit(command: Command, opened: core.PaneOpened) !u8 {
         if (text.exit_code) |code| {
             const output = std.mem.trimEnd(u8, text.text, " \n");
             if (command.options.json) {
-                try std.json.Stringify.value(.{ .pane_id = pane.pane_id, .exit_code = code, .output = output }, .{}, command.writer);
+                try std.json.Stringify.value(.{
+                    .pane_id = pane.pane_id,
+                    .exit_code = code,
+                    .truncated = text.truncated,
+                    .output = output,
+                }, .{}, command.writer);
                 try command.writer.writeByte('\n');
             } else {
                 try command.writer.print("{s}\n", .{output});
+                if (text.truncated) {
+                    std.debug.print("telar worktree: older rows were omitted\n", .{});
+                }
             }
 
             return std.math.cast(u8, code) orelse agent.exit_failure;

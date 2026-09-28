@@ -72,6 +72,15 @@ title: Title = .{},
 /// False from a completed turn until a client acknowledges it; the projection
 /// reports `done` instead of `ready` while unseen.
 seen: bool = true,
+/// Where a turn the runtime interrupted stands. No agent reports the end
+/// of an interrupted turn, so its settling report keeps the agent working
+/// until newer screens show the idle composer for `interrupt_idle_ms`.
+interrupt: InterruptPhase = .none,
+/// When a screen newer than the interrupt first showed the idle composer;
+/// any other screen after it clears this.
+interrupt_idle_at_ms: ?i64 = null,
+/// When the runtime last pressed a key for the pending interrupt.
+interrupt_pressed_at_ms: i64 = 0,
 session_reference: ?SessionReference = null,
 /// The tracked worktree the agent reported working in.
 work_tree: core.WorktreeId = .invalid,
@@ -201,6 +210,8 @@ pub fn applyReport(self: *Agent, observation: ReportObservation) bool {
         return true;
     }
 
+    self.interrupt = .none;
+    self.interrupt_idle_at_ms = null;
     self.report_detail = .{
         .state = observation.state,
         .blocked_reason = observation.blocked_reason,
@@ -260,6 +271,10 @@ pub fn applyScreen(self: *Agent, observation: ScreenObservation) bool {
         return false;
     }
 
+    if (self.interrupt != .none) {
+        self.trackInterruptedScreen(observation);
+    }
+
     if (signal.status == .ready and self.projected.status == .working and !signal.ready_confirmed) {
         return false;
     }
@@ -281,13 +296,22 @@ pub fn applyScreen(self: *Agent, observation: ScreenObservation) bool {
                     return false;
                 }
 
-                self.report = null;
+                // An interrupted turn settles on the maintenance tick, once
+                // its idle composer held; see `settleInterrupt`.
+                if (self.interrupt == .none) {
+                    self.report = null;
+                }
             } else if (report.status == .ready) {
                 // SessionStart and Interrupt describe a moment, not a
                 // permanent veto of later visible activity.
                 self.report = null;
             }
         }
+    }
+
+    if (self.report == null) {
+        self.interrupt = .none;
+        self.interrupt_idle_at_ms = null;
     }
 
     self.screen = Evidence.fromScreen(known_provider, &observation);
@@ -308,6 +332,8 @@ pub fn applyScreen(self: *Agent, observation: ScreenObservation) bool {
 /// }
 /// ```
 pub fn expire(self: *Agent, now_ms: i64) bool {
+    self.settleInterrupt(now_ms);
+
     if (self.screen) |evidence| {
         if (evidence.isExpired(now_ms)) {
             self.screen = null;
@@ -317,6 +343,8 @@ pub fn expire(self: *Agent, now_ms: i64) bool {
     if (self.report) |evidence| {
         if (evidence.isExpired(now_ms)) {
             self.report = null;
+            self.interrupt = .none;
+            self.interrupt_idle_at_ms = null;
         }
     }
 
@@ -701,6 +729,51 @@ fn refreshEvent(self: *Agent, evidence: Evidence) bool {
     return true;
 }
 
+// Times how long the idle composer has shown since the interrupt. Only a
+// screen drawn after the key counts, and any other screen restarts the
+// wait: Claude Code titles itself idle a frame before it redraws the
+// composer with the prompt it put back.
+fn trackInterruptedScreen(self: *Agent, observation: ScreenObservation) void {
+    const report = self.report orelse return;
+
+    if (screenOrder(observation, report) != .gt) {
+        return;
+    }
+
+    const signal = observation.signal;
+    if (signal.status != .ready or !signal.ready_confirmed) {
+        self.interrupt_idle_at_ms = null;
+        return;
+    }
+
+    if (self.interrupt_idle_at_ms == null) {
+        self.interrupt_idle_at_ms = observation.observed_at_ms;
+    }
+}
+
+// Ends an interrupted turn once its idle composer held for
+// `interrupt_idle_ms`, withdrawing the settling report so the screen decides.
+// An agent whose screen cannot show it idle settles `interrupt_blind_ms`
+// after the key instead, unless its own report came first.
+fn settleInterrupt(self: *Agent, now_ms: i64) void {
+    if (self.interrupt == .none) {
+        return;
+    }
+
+    const settled = if (providers.of(self.provider()).screen_shows_idle)
+        if (self.interrupt_idle_at_ms) |idle_at| now_ms - idle_at >= types.interrupt_idle_ms else false
+    else
+        now_ms - self.interrupt_pressed_at_ms >= types.interrupt_blind_ms;
+
+    if (!settled) {
+        return;
+    }
+
+    self.report = null;
+    self.interrupt = .none;
+    self.interrupt_idle_at_ms = null;
+}
+
 // A turn that ended with helpers still at work keeps the agent working
 // until the report expires or the agent reports again.
 fn awaitsHelpers(self: *const Agent, now_ms: i64) bool {
@@ -865,4 +938,13 @@ const ReportDetail = struct {
     state: core.AgentReportState = .ready,
     blocked_reason: core.AgentBlockedReason = .none,
     event: EventLine = .{},
+};
+
+const InterruptPhase = enum {
+    none,
+    /// The runtime pressed the interrupt key; the turn has not visibly ended.
+    pending,
+    /// The agent put the interrupted prompt back as a draft and the runtime
+    /// pressed its interrupt key once more to clear it.
+    draft_cleared,
 };

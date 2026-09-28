@@ -4,6 +4,7 @@
 //! configuration rather than a rebuild.
 
 const GenericBoundedList = @import("GenericBoundedList.zig").Type;
+const keyinput = @import("keyinput");
 const types = @import("schema/types.zig");
 const std = @import("std");
 const Table = @import("Table.zig");
@@ -27,18 +28,31 @@ pub const Status = enum { working, blocked, ready };
 pub const InterruptKey = enum {
     none,
     escape,
+    /// OpenCode interrupts on the second Escape within five seconds.
+    escape_twice,
     ctrl_c,
 
-    /// The bytes a terminal sends for the key; empty for `none`.
-    /// Example: `try forward(pane, key.bytes());`.
-    pub fn bytes(self: InterruptKey) []const u8 {
+    /// The presses that interrupt, for the runtime to encode in the child's
+    /// keyboard mode; empty for `none`.
+    ///
+    /// ```zig
+    /// try pane_input.press(model, pane, key.presses());
+    /// ```
+    pub fn presses(self: InterruptKey) []const keyinput.Key {
         return switch (self) {
-            .none => "",
-            .escape => "\x1b",
-            .ctrl_c => "\x03",
+            .none => &.{},
+            .escape => &escape_presses,
+            .escape_twice => &(escape_presses ++ escape_presses),
+            .ctrl_c => &ctrl_c_presses,
         };
     }
 };
+
+const escape_presses = [_]keyinput.Key{.plain(.escape)};
+const ctrl_c_presses = [_]keyinput.Key{.{
+    .code = .{ .char = .{ .bytes = .{ 'c', 0, 0, 0 }, .len = 1 } },
+    .mods = .{ .ctrl = true },
+}};
 
 pub const ListError = error{ TooManyEntries, EntryTooLong, EmptyEntry };
 
@@ -125,7 +139,9 @@ fn buildBuiltin() Table {
     claude.brand.append("claude") catch unreachable;
     claude.identity.append("claude code") catch unreachable;
     claude.command_tools.append("Bash", "command") catch unreachable;
-    claude.interrupt = .escape;
+    // Escape only leaves INSERT mode when the user enabled vim mode; Ctrl+C
+    // interrupts a running turn in both editor modes.
+    claude.interrupt = .ctrl_c;
     for (shared_blocked) |phrase| claude.blocked.append(phrase) catch unreachable;
     for (shared_working) |phrase| claude.working.append(phrase) catch unreachable;
 
@@ -151,6 +167,7 @@ fn buildBuiltin() Table {
     pi.setDisplayName("Pi") catch unreachable;
     pi.attachments = .pasted_path;
     pi.process_names.append("pi") catch unreachable;
+    pi.interrupt = .escape;
     pi.command_tools.append("bash", "command") catch unreachable;
     for ([_][]const u8{
         "/@earendil-works/pi-coding-agent/",
@@ -171,6 +188,7 @@ fn buildBuiltin() Table {
     const cursor = table.add("cursor") catch unreachable;
     cursor.setDisplayName("Cursor Agent") catch unreachable;
     cursor.process_names.append("cursor-agent") catch unreachable;
+    cursor.interrupt = .escape;
     cursor.process_paths.append("/cursor-agent/versions/") catch unreachable;
     cursor.command_tools.append("Shell", "command") catch unreachable;
     for ([_][]const u8{
@@ -188,6 +206,7 @@ fn buildBuiltin() Table {
     const opencode = table.add("opencode") catch unreachable;
     opencode.setDisplayName("OpenCode") catch unreachable;
     opencode.process_names.append("opencode") catch unreachable;
+    opencode.interrupt = .escape_twice;
     opencode.command_tools.append("bash", "command") catch unreachable;
 
     return table;

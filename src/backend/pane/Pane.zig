@@ -309,8 +309,9 @@ pub fn mouseState(self: *const Pane) core.Mouse {
 }
 
 /// Copies visible or recent rows as plain text, newest rows last. Output
-/// is bounded by `storage`; when older rows do not fit the dump keeps the
-/// prefix and reports truncation. No styling or escape bytes are emitted.
+/// is bounded by `storage`; when the rows do not fit the dump keeps the
+/// newest whole lines and reports truncation, so a command's last lines
+/// survive a verbose run. No styling or escape bytes are emitted.
 ///
 /// ```zig
 /// var storage: [schema.max_pane_text_bytes]u8 = undefined;
@@ -320,10 +321,7 @@ pub fn mouseState(self: *const Pane) core.Mouse {
 pub fn dumpText(self: *const Pane, request: TextRequest, storage: []u8) TextDump {
     const screen: *const vt.Screen = self.terminal.screens.active;
     const pages = &screen.pages;
-    const total: usize = switch (request.source) {
-        .screen => pages.rows,
-        .recent => pages.total_rows,
-    };
+    const total = self.textRows(request.source);
     const wanted = @min(@as(usize, request.rows), total);
     if (wanted == 0) {
         return .{ .len = 0, .truncated = false };
@@ -339,14 +337,139 @@ pub fn dumpText(self: *const Pane, request: TextRequest, storage: []u8) TextDump
         .recent => .screen,
     }) orelse return .{ .len = 0, .truncated = false };
 
-    var writer = std.Io.Writer.fixed(storage);
-    var truncated = false;
-    screen.dumpString(&writer, .{ .tl = top_left, .br = bottom_right, .unwrap = false }) catch {
-        truncated = true;
+    var tail: TailWriter = .init(storage);
+    screen.dumpString(&tail.interface, .{ .tl = top_left, .br = bottom_right, .unwrap = false }) catch {
+        // Only a buffer smaller than one formatted piece refuses a write.
+        tail.wrapped = true;
     };
 
-    return .{ .len = writer.end, .truncated = truncated };
+    return tail.finish();
 }
+
+/// The rows `dumpText` can read from `source`: the screen, or the retained
+/// scrollback and the screen.
+///
+/// ```zig
+/// const dropped = pane.textRows(.recent) > kept_rows;
+/// ```
+pub fn textRows(self: *const Pane, source: core.PaneTextSource) usize {
+    const pages = &self.terminal.screens.active.pages;
+    return switch (source) {
+        .screen => pages.rows,
+        .recent => pages.total_rows,
+    };
+}
+
+/// A writer into a fixed buffer that keeps the last bytes written: once the
+/// buffer is full each write overwrites the oldest bytes.
+const TailWriter = struct {
+    interface: std.Io.Writer,
+    /// Whether older bytes were overwritten.
+    wrapped: bool = false,
+    /// Once wrapped, `buffer[end..lap_end]` holds the older bytes still kept.
+    lap_end: usize = 0,
+
+    fn init(storage: []u8) TailWriter {
+        return .{
+            .interface = .{
+                .vtable = &.{
+                    .drain = drain,
+                    .flush = std.Io.Writer.noopFlush,
+                    .rebase = rebase,
+                },
+                .buffer = storage,
+            },
+        };
+    }
+
+    fn drain(writer: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+        const self: *TailWriter = @fieldParentPtr("interface", writer);
+        var consumed: usize = 0;
+
+        for (data[0 .. data.len - 1]) |bytes| {
+            self.put(bytes);
+            consumed += bytes.len;
+        }
+
+        const pattern = data[data.len - 1];
+        for (0..splat) |_| {
+            self.put(pattern);
+            consumed += pattern.len;
+        }
+
+        return consumed;
+    }
+
+    /// Makes `minimum_len` bytes writable at the end by starting a new lap
+    /// early; the `preserve` newest bytes move to its front and the older
+    /// lap loses the few bytes past its end.
+    fn rebase(writer: *std.Io.Writer, preserve: usize, minimum_len: usize) std.Io.Writer.Error!void {
+        const self: *TailWriter = @fieldParentPtr("interface", writer);
+        if (writer.buffer.len < preserve + minimum_len) {
+            return error.WriteFailed;
+        }
+
+        if (writer.buffer.len - writer.end >= minimum_len) {
+            return;
+        }
+
+        const kept = @min(preserve, writer.end);
+        const older_end = writer.end - kept;
+        std.mem.copyForwards(u8, writer.buffer[0..kept], writer.buffer[older_end..writer.end]);
+        writer.end = kept;
+        self.lap_end = @max(older_end, kept);
+        self.wrapped = true;
+    }
+
+    fn put(self: *TailWriter, bytes: []const u8) void {
+        const writer = &self.interface;
+        if (writer.buffer.len == 0) {
+            self.wrapped = self.wrapped or bytes.len != 0;
+            return;
+        }
+
+        var rest = bytes;
+        while (rest.len != 0) {
+            if (writer.end == writer.buffer.len) {
+                self.lap_end = writer.buffer.len;
+                writer.end = 0;
+                self.wrapped = true;
+            }
+
+            const len = @min(rest.len, writer.buffer.len - writer.end);
+            @memcpy(writer.buffer[writer.end..][0..len], rest[0..len]);
+            writer.end += len;
+            self.lap_end = @max(self.lap_end, writer.end);
+            rest = rest[len..];
+        }
+    }
+
+    /// Moves the kept bytes to the front of the buffer, oldest first, and
+    /// drops the line the wrap cut.
+    fn finish(self: *TailWriter) TextDump {
+        const writer = &self.interface;
+        if (!self.wrapped) {
+            return .{ .len = writer.end, .truncated = false };
+        }
+
+        const kept = writer.buffer[0..self.lap_end];
+        std.mem.rotate(u8, kept, writer.end);
+        var start: usize = 0;
+        if (std.mem.indexOfScalar(u8, kept, '\n')) |newline| {
+            start = newline + 1;
+        } else {
+            while (start < kept.len and kept[start] & continuation_mask == continuation_bits) {
+                start += 1;
+            }
+        }
+
+        std.mem.copyForwards(u8, kept[0 .. kept.len - start], kept[start..]);
+        return .{ .len = kept.len - start, .truncated = true };
+    }
+
+    const continuation_mask = 0b1100_0000;
+    const continuation_bits = 0b1000_0000;
+};
 
 /// Finds `needle` in the most recent rows of scrollback and screen, in
 /// document order and absolute coordinates. ASCII case folds unless the
