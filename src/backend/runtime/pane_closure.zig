@@ -134,13 +134,17 @@ fn leaveEmptyWorkspace(model: *RuntimeModel, workspace: core.WorkspaceLocation) 
     }
 }
 
-/// Keeps a collected pane's final rows and exit status, so its output stays
-/// readable after the pane is gone.
+/// Keeps a collected pane's newest rows and exit status, so its output,
+/// down to a test summary or the final error, stays readable after the pane
+/// is gone.
 fn keepExitText(store: *PaneStore, pane: *const Pane) void {
     const exit = pane.exit orelse return;
     var storage: [ExitedPanes.max_text_bytes]u8 = undefined;
     const dump = pane.dumpText(.{ .rows = ExitedPanes.kept_rows, .source = .recent }, &storage);
-    store.exited.record(pane.key(), exit.code(), storage[0..dump.len]);
+    store.exited.record(pane.key(), exit.code(), .{
+        .text = storage[0..dump.len],
+        .truncated = dump.truncated,
+    });
 }
 
 fn exitOrSynthetic(result: anyerror!exit_module.Exit) exit_module.Exit {

@@ -164,11 +164,12 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
                         .code = .pane_not_found,
                         .message = "pane closed before its text was read",
                     });
+                const tail = panes.exited.tail(exited, read.rows);
                 break :payload try core.encodePaneText(buffer, .{
                     .request_id = read.request_id,
                     .pane_id = read.pane.id,
-                    .truncated = false,
-                    .text = panes.exited.tail(exited, read.rows),
+                    .truncated = tail.truncated,
+                    .text = tail.text,
                     .exit_code = panes.exited.exit_code[exited],
                 });
             };
