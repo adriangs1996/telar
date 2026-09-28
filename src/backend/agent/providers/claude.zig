@@ -6,6 +6,7 @@ const std = @import("std");
 
 pub const capabilities: Capabilities = .{
     .resume_prefix = "claude --resume ",
+    .screen_shows_idle = true,
 };
 
 test {

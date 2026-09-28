@@ -68,16 +68,28 @@ pub fn copy(self: *WorktreeCatalog, list: core.WorkspaceListView) !void {
 }
 
 /// The worktree a CLI reference names: its exact branch, else a unique
-/// case-insensitive title.
+/// case-insensitive title. Two projects may share a branch name; then the
+/// branch names neither and the title has to.
 ///
 /// ```zig
 /// const worktree = try catalog.find("fix-tabs") orelse return error.WorktreeNotFound;
 /// ```
 pub fn find(self: *const WorktreeCatalog, reference: []const u8) !?*const CatalogWorktree {
+    var by_branch: ?*const CatalogWorktree = null;
     for (self.worktrees.items) |*worktree| {
-        if (std.mem.eql(u8, worktree.branch, reference)) {
-            return worktree;
+        if (!std.mem.eql(u8, worktree.branch, reference)) {
+            continue;
         }
+
+        if (by_branch != null) {
+            return error.AmbiguousWorktree;
+        }
+
+        by_branch = worktree;
+    }
+
+    if (by_branch) |worktree| {
+        return worktree;
     }
 
     var found: ?*const CatalogWorktree = null;
@@ -156,6 +168,17 @@ test "references resolve by branch first and by unique title" {
 
     try catalog.worktrees.append(arena, sample(3, "other", "Path links"));
     try std.testing.expectError(error.AmbiguousWorktree, catalog.find("path links"));
+}
+
+test "a branch two projects share names neither of their worktrees" {
+    var catalog: WorktreeCatalog = .init(std.testing.allocator);
+    defer catalog.deinit();
+    const arena = catalog.arena.allocator();
+    try catalog.worktrees.append(arena, sample(1, "fix", "Fix tabs"));
+    try catalog.worktrees.append(arena, sample(2, "fix", "Fix links"));
+
+    try std.testing.expectError(error.AmbiguousWorktree, catalog.find("fix"));
+    try std.testing.expectEqual(@as(core.WorktreeId, @enumFromInt(2)), (try catalog.find("Fix links")).?.id);
 }
 
 fn sample(id: u64, branch: []const u8, title: []const u8) CatalogWorktree {

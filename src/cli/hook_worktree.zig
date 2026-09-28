@@ -46,6 +46,9 @@ fn create(init: std.process.Init, input: WorktreeHookInput, socket: ?[*:0]const 
     const directory = try worktree_git.deriveDirectory(root, branch, &directory_buffer);
     var base_buffer: [256]u8 = undefined;
     const base = try worktree_git.currentBranch(init, cwd, &base_buffer);
+    // The runtime records the base whole; refuse one it cannot hold before
+    // Git creates anything.
+    try workspace_grammar.validateWorktreeBranch(base);
 
     try worktree_git.add(init, .{
         .root = root,
@@ -109,9 +112,8 @@ fn register(init: std.process.Init, registration: Registration) !void {
         .source = workspace,
         .created_by = pane,
         .path = registration.directory,
-        .branch = registration.branch[0..@min(registration.branch.len, core.max_git_branch_bytes)],
-        .base = registration.base[0..@min(registration.base.len, core.max_git_branch_bytes)],
-        .title = registration.branch[0..@min(registration.branch.len, core.max_worktree_title_bytes)],
+        .branch = registration.branch,
+        .base = registration.base,
     });
 }
 

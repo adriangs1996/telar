@@ -10,6 +10,7 @@ pub const capabilities: Capabilities = .{
     .completion_requires_agent_signal = true,
     .resume_prefix = "codex resume ",
     .ready_prompt_settles_report = true,
+    .screen_shows_idle = true,
 };
 
 test {

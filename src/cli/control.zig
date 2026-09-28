@@ -107,7 +107,7 @@ pub fn describe(err: anyerror) []const u8 {
         error.PromptRateLimited => "prompt budget for that pane is spent; wait for its answer with `telar agent wait`",
         error.AgentNotWorking => "the agent is not working; nothing to interrupt",
         error.InterruptUnsupported => "that agent declares no interrupt key",
-        error.AmbiguousWorktree => "more than one worktree has that title; use its branch",
+        error.AmbiguousWorktree => "more than one worktree has that branch or title; name it by the other",
         error.WorktreeHasNoAgent => "no agent runs in that worktree",
         else => @errorName(err),
     };

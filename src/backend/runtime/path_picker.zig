@@ -143,7 +143,7 @@ fn advance(model: *RuntimeModel, index: *PathIndex) void {
         model.select.concurrent(
             .path_index_built,
             path_index_build.run,
-            .{ index, model.io },
+            .{ index, model.io, model.inherited_environment },
         ) catch {
             index.building = false;
             failWanted(

@@ -126,7 +126,7 @@ pub fn want(self: *PathIndex, root: []const u8, refresh: bool) void {
 ///
 /// ```zig
 /// index.reset();
-/// try model.select.concurrent(.path_index_built, path_index_build.run, .{ index, model.io });
+/// try model.select.concurrent(.path_index_built, path_index_build.run, .{ index, model.io, model.inherited_environment });
 /// ```
 pub fn reset(self: *PathIndex) void {
     std.debug.assert(!self.building and !self.querying);

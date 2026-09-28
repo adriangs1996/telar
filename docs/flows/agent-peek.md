@@ -21,7 +21,8 @@ every agent snapshot while open -> agent_peek.requestScreen (one read in flight)
 Enter -> agent_peek.submit
         |  empty or /open  -> agent_navigation.navigateAgent
         |  /stop           -> interrupt_agent
-        |  /diff           -> launch_worktree: diff against the merge base, then a shell
+        |  /diff           -> launch_worktree: `telar worktree diff BRANCH` (--stat,
+        |                     then the patch) with the pane's TELAR_BIN_PATH, then a shell
         |  text            -> send_pane_text{mode = prompt}
 Esc or submit -> agent_peek.settle -> PeekScreen.close
 ```

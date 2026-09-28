@@ -12,6 +12,7 @@ const WorktreeProbe = @import("../workspace/WorktreeProbe.zig");
 const WorktreeProbeCompletion = @import("resources/WorktreeProbeCompletion.zig");
 const worktree_probe = @import("resources/worktree_probe.zig");
 const WorktreeProbeJob = @import("resources/WorktreeProbeJob.zig");
+const session_checkpoint = @import("session_checkpoint.zig");
 
 /// Starts one due probe, rolling back its reservation on scheduling failure.
 ///
@@ -24,6 +25,7 @@ pub fn start(model: *RuntimeModel) void {
 
     model.select.concurrent(.worktree_git, worktree_probe.probe, .{WorktreeProbeJob{
         .io = model.io,
+        .environ = model.inherited_environment,
         .request = request,
     }}) catch cancel(&model.worktrees, request.worktree);
 }
@@ -37,6 +39,11 @@ pub fn finish(model: *RuntimeModel, completion: WorktreeProbeCompletion) void {
     const now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
     if (commit(&model.worktrees, completion, now_ms)) {
         model.workspaces.advanceRevision();
+    }
+
+    // A base learned by the probe is recorded; it is found once per row.
+    if (completion.found_base_len != 0) {
+        session_checkpoint.noteChange(model);
     }
 }
 
@@ -108,22 +115,32 @@ fn commit(worktrees: *Worktrees, completion: WorktreeProbeCompletion, now_ms: i6
         return !std.meta.eql(before, observed(worktrees, slot));
     }
 
-    worktrees.git_dirty[slot] = completion.dirty;
+    const found_base = completion.foundBaseSlice();
+    const learned_base = found_base.len != 0 and worktrees.base_len[slot] == 0;
+    if (learned_base) {
+        @memcpy(worktrees.base[slot][0..found_base.len], found_base);
+        worktrees.base_len[slot] = @intCast(found_base.len);
+    }
+
     const branch = completion.branchSlice();
     if (branch.len != 0) {
         @memcpy(worktrees.branch[slot][0..branch.len], branch);
         worktrees.branch_len[slot] = @intCast(branch.len);
     }
 
-    if (completion.measured) {
-        worktrees.probe_failures[slot] = 0;
-        worktrees.diff_added[slot] = completion.stat.added;
-        worktrees.diff_removed[slot] = completion.stat.removed;
-        worktrees.diff_files[slot] = completion.stat.files;
-        worktrees.commits_ahead[slot] = completion.stat.commits_ahead;
-    } else {
+    // A failed measurement says nothing about the work: the state and the
+    // numbers stay as the last measurement left them.
+    if (!completion.measured) {
         worktrees.probe_failures[slot] +|= 1;
+        return learned_base or !std.meta.eql(before, observed(worktrees, slot));
     }
+
+    worktrees.probe_failures[slot] = 0;
+    worktrees.git_dirty[slot] = completion.dirty;
+    worktrees.diff_added[slot] = completion.stat.added;
+    worktrees.diff_removed[slot] = completion.stat.removed;
+    worktrees.diff_files[slot] = completion.stat.files;
+    worktrees.commits_ahead[slot] = completion.stat.commits_ahead;
 
     const pending = completion.dirty or worktrees.diff_files[slot] != 0 or worktrees.commits_ahead[slot] != 0;
     if (pending) {
@@ -131,7 +148,7 @@ fn commit(worktrees: *Worktrees, completion: WorktreeProbeCompletion, now_ms: i6
     }
 
     worktrees.state[slot] = if (!pending and worktrees.had_changes[slot]) .integrated else .active;
-    return !std.meta.eql(before, observed(worktrees, slot));
+    return learned_base or !std.meta.eql(before, observed(worktrees, slot));
 }
 
 const Observed = struct {
@@ -187,6 +204,58 @@ test "a clean worktree turns integrated only after it held work, and a missing c
     try std.testing.expect(commit(table, .{ .worktree = registered.id }, 40));
     try std.testing.expectEqual(core.WorktreeState.gone, table.state[registered.slot]);
     try std.testing.expect(reserve(table, 100_000) == null);
+}
+
+test "a probe that measured nothing leaves the state as it was" {
+    const gpa = std.testing.allocator;
+    const table = try gpa.create(Worktrees);
+    defer gpa.destroy(table);
+    table.* = .{};
+    defer table.deinit(gpa);
+    const registered = try table.register(gpa, .{
+        .source = @enumFromInt(1),
+        .path = "/w/fix",
+        .branch = "fix",
+        .base = "main",
+    });
+
+    // Uncommitted work only: no commits, no diff yet.
+    table.git_probe = registered.id;
+    _ = commit(table, .{ .worktree = registered.id, .present = true, .measured = true, .dirty = true }, 10);
+    try std.testing.expectEqual(core.WorktreeState.active, table.state[registered.slot]);
+
+    // Git failed: nothing says the work went away.
+    table.git_probe = registered.id;
+    _ = commit(table, .{ .worktree = registered.id, .present = true }, 20);
+    try std.testing.expectEqual(core.WorktreeState.active, table.state[registered.slot]);
+    try std.testing.expect(table.git_dirty[registered.slot]);
+    try std.testing.expectEqual(@as(u8, 1), table.probe_failures[registered.slot]);
+}
+
+test "a base the probe found is kept once and a recorded base is never replaced" {
+    const gpa = std.testing.allocator;
+    const table = try gpa.create(Worktrees);
+    defer gpa.destroy(table);
+    table.* = .{};
+    defer table.deinit(gpa);
+    const external = try table.register(gpa, .{
+        .source = @enumFromInt(1),
+        .origin = .external,
+        .path = "/w/by-hand",
+        .branch = "by-hand",
+    });
+
+    var found: WorktreeProbeCompletion = .{ .worktree = external.id, .present = true, .measured = true };
+    found.found_base_len = 4;
+    @memcpy(found.found_base[0..4], "main");
+    table.git_probe = external.id;
+    try std.testing.expect(commit(table, found, 10));
+    try std.testing.expectEqualStrings("main", table.baseAt(external.slot));
+
+    @memcpy(found.found_base[0..4], "next");
+    table.git_probe = external.id;
+    _ = commit(table, found, 20);
+    try std.testing.expectEqualStrings("main", table.baseAt(external.slot));
 }
 
 test "a stale completion leaves the table untouched" {

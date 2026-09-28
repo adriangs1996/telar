@@ -20,6 +20,7 @@ const pane_observation = @import("pane_observation.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
 const tab_removal = @import("tab_removal.zig");
 const worktree_lifecycle = @import("worktree_lifecycle.zig");
+const PaneFixture = @import("tests/PaneFixture.zig");
 
 /// Requests PTY shutdown exactly once and marks review owners for
 /// rediscovery. Pane retirement stays with the later exit event.
@@ -134,13 +135,18 @@ fn leaveEmptyWorkspace(model: *RuntimeModel, workspace: core.WorkspaceLocation) 
     }
 }
 
-/// Keeps a collected pane's final rows and exit status, so its output stays
-/// readable after the pane is gone.
+/// Keeps a collected pane's newest rows and exit status, so its output,
+/// down to a test summary or the final error, stays readable after the pane
+/// is gone. The record is truncated when rows beyond `kept_rows` or bytes
+/// beyond the buffer were dropped.
 fn keepExitText(store: *PaneStore, pane: *const Pane) void {
     const exit = pane.exit orelse return;
     var storage: [ExitedPanes.max_text_bytes]u8 = undefined;
     const dump = pane.dumpText(.{ .rows = ExitedPanes.kept_rows, .source = .recent }, &storage);
-    store.exited.record(pane.key(), exit.code(), storage[0..dump.len]);
+    store.exited.record(pane.key(), exit.code(), .{
+        .text = storage[0..dump.len],
+        .truncated = dump.truncated or pane.textRows(.recent) > ExitedPanes.kept_rows,
+    });
 }
 
 fn exitOrSynthetic(result: anyerror!exit_module.Exit) exit_module.Exit {
@@ -156,4 +162,27 @@ test "wait failure becomes a synthetic SIGKILL exit" {
         exit_module.Exit{ .exited = 7 },
         exitOrSynthetic(exit_module.Exit{ .exited = 7 }),
     );
+}
+
+test "an exited pane's record is truncated when it printed more rows than it keeps" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    var line_buffer: [16]u8 = undefined;
+    for (1..2001) |number| {
+        _ = try fixture.pane.ingest(std.testing.io, try std.fmt.bufPrint(&line_buffer, "l{d}\r\n", .{number}));
+    }
+
+    const store = try std.testing.allocator.create(PaneStore);
+    defer std.testing.allocator.destroy(store);
+    store.* = .{};
+    fixture.pane.exit = .{ .exited = 0 };
+    defer fixture.pane.exit = null;
+
+    keepExitText(store, fixture.pane);
+    const slot = store.exited.find(fixture.pane.key()).?;
+
+    try std.testing.expectEqualStrings("l2000", store.exited.tail(slot, 1).text);
+    try std.testing.expect(!store.exited.tail(slot, 1).truncated);
+    try std.testing.expect(store.exited.tail(slot, ExitedPanes.kept_rows).truncated);
 }

@@ -141,6 +141,7 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
             },
         ),
         .leave_worktree => try leaveWorktree(client),
+        .forget_gone_worktrees => _ = try data.worktree_lifecycle.forgetGone(&client.model),
         .close_pane => _ = try pane_closure.requestPaneClose(&client.model),
         .new_tab => _ = try tab_creation.requestTabCreation(
             client,

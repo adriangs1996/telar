@@ -9,3 +9,14 @@ pub const report_working_expiry_ms: i64 = 10 * 60 * 1000;
 /// burst of subagent tool calls republishes the projection once, not per call.
 pub const report_renewal_margin_ms: i64 = report_working_expiry_ms / 2;
 pub const settled_expiry_ms: i64 = 30 * 60 * 1000;
+/// How long an interrupted agent's idle composer must hold before its turn
+/// counts as ended. Claude Code 2.1.283 redraws the prompt it restores 1 ms
+/// after it titles itself idle.
+pub const interrupt_idle_ms: i64 = 500;
+/// How long after its interrupt key an agent whose screen cannot show it idle,
+/// such as OpenCode or Pi without their integration, counts as stopped.
+pub const interrupt_blind_ms: i64 = 3 * 1000;
+/// A repeated interrupt presses the key again only this long after the last
+/// press. Claude Code exits on a second Ctrl+C within about 0.8 s at an
+/// empty prompt.
+pub const interrupt_repress_ms: i64 = 2 * 1000;
