@@ -79,7 +79,7 @@ fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Wr
     const workspace_id = core.raw(opened.location.workspace.workspace);
 
     if (options.json) {
-        try writer.print("{{\"workspace_id\":{d},\"pane_id\":{d},\"directory\":", .{ workspace_id, core.raw(opened.pane_id) });
+        try writer.print("{{\"workspace_id\":{d},\"tab_id\":{d},\"pane_id\":{d},\"directory\":", .{ workspace_id, core.raw(opened.location.tab_id), core.raw(opened.pane_id) });
         try control.writeJsonString(writer, directory);
         try writer.writeAll("}\n");
     } else {

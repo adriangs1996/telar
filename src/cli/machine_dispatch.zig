@@ -95,6 +95,17 @@ pub fn forward(init: std.process.Init, profile: *const core.MachineProfile, argv
 /// defer process_init.gpa.free(json);
 /// ```
 pub fn capture(init: std.process.Init, profile: *const core.MachineProfile, argv: []const [*:0]const u8) ![]u8 {
+    return captureWithInput(init, profile, argv, null);
+}
+
+/// `capture` with `input` as the command's standard input, for text that
+/// must not show in a process list here or there, such as a pasted login
+/// code for `pane send-keys ID --stdin`.
+///
+/// ```zig
+/// const output = try machine_dispatch.captureWithInput(process_init, &profile, argv, code);
+/// ```
+pub fn captureWithInput(init: std.process.Init, profile: *const core.MachineProfile, argv: []const [*:0]const u8, input: ?[]const u8) ![]u8 {
     const command = try init.gpa.alloc(u8, max_command_bytes);
     defer init.gpa.free(command);
 
@@ -102,11 +113,18 @@ pub fn capture(init: std.process.Init, profile: *const core.MachineProfile, argv
     const options = try SshOptions.prepare(init.io, init.minimal.environ, profile.destination());
     var child = try std.process.spawn(init.io, .{
         .argv = &sshArgv(&options, profile, remote_command),
-        .stdin = .ignore,
+        .stdin = if (input == null) .ignore else .pipe,
         .stdout = .pipe,
         .stderr = .inherit,
     });
     defer child.kill(init.io);
+
+    if (input) |bytes| {
+        var stdin = child.stdin.?.writerStreaming(init.io, &.{});
+        try stdin.interface.writeAll(bytes);
+        child.stdin.?.close(init.io);
+        child.stdin = null;
+    }
 
     var read_buffer: [4096]u8 = undefined;
     var reader = child.stdout.?.readerStreaming(init.io, &read_buffer);

@@ -11,6 +11,9 @@ target: values.Target = .current,
 workspace: ?entity_target.Target = null,
 tab: ?entity_target.Target = null,
 text: ?[*:0]const u8 = null,
+/// `send-keys ID --stdin`: the text comes on standard input, so it never
+/// shows in a process list.
+stdin: bool = false,
 enter: bool = false,
 lines: u16 = 40,
 source: core.PaneTextSource = .recent,
@@ -77,9 +80,13 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
             return error.MissingSendText;
         }
 
-        options.text = args[2];
-        if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > core.max_pane_text_input_bytes) {
-            return error.InvalidSendText;
+        if (std.mem.eql(u8, std.mem.span(args[2]), "--stdin")) {
+            options.stdin = true;
+        } else {
+            options.text = args[2];
+            if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > core.max_pane_text_input_bytes) {
+                return error.InvalidSendText;
+            }
         }
 
         index = 3;

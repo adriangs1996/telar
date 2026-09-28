@@ -154,9 +154,21 @@ pub fn run(init: std.process.Init, report: *SetupReport, profile: *const core.Ma
     while (iterator.next()) |agent| {
         const path = if (platform.agents.get(agent)) |*value| value.slice() else continue;
         const provider = try localProvider(arena, init.io, init.minimal.environ, agent);
-        if (try loggedIn(init, profile.destination(), agent, path, provider)) {
+        const logged_in = loggedIn(init, profile.destination(), agent, path, provider) catch |err| {
+            try report.note(.logins, "{s}: its login status could not be read there: {s}", .{ @tagName(agent), @errorName(err) });
+            logins.set(agent, .failed);
+            continue;
+        };
+
+        if (logged_in) {
             logins.set(agent, .done);
             try report.note(.logins, "{s}: logged in", .{@tagName(agent)});
+            // A login a person finished after an earlier setup left its
+            // pane open: it has nothing more to show.
+            if (planFor(agent, provider)) |plan| {
+                closeLeftover(init, arena, profile, plan.title);
+            }
+
             continue;
         }
 
@@ -183,7 +195,10 @@ pub fn run(init: std.process.Init, report: *SetupReport, profile: *const core.Ma
         try report.note(.logins, "{s}: {s}", .{ @tagName(agent), @tagName(login) });
     }
 
-    try record(init, profile.label(), request.profiles_path, logins);
+    record(init, profile.label(), request.profiles_path, logins) catch |err| {
+        try report.note(.logins, "machines.json keeps the logins it had: {s}", .{client.machine_profiles.describe(err)});
+    };
+
     const status = aggregate(logins, started);
     try report.end(.logins, status, "{s}", .{switch (status) {
         .ok => "every agent there is logged in",
@@ -234,9 +249,15 @@ fn loginOne(init: std.process.Init, report: *SetupReport, login: Login, interact
     defer arena_state.deinit();
     const arena = arena_state.allocator();
 
-    const pane = try openLoginPane(init, arena, login);
-    if (login.plan.keys) |keys| {
-        try sendKeys(init, arena, login.profile, pane, keys);
+    // A login an earlier setup left waiting keeps its pane: its link and
+    // code still stand, and a second login would only race it.
+    const existing = findLoginPane(init, arena, login.profile, login.plan.title) catch null;
+    const pane = existing orelse try openLoginPane(init, arena, login);
+    errdefer closeLoginPane(init, arena, login.profile, pane) catch {};
+    if (existing != null) {
+        try report.progress("{s} on {s}: the login setup started before is still open there", .{ login.plan.title, login.profile.label() });
+    } else if (login.plan.keys) |keys| {
+        try sendText(init, arena, login.profile, pane, keys);
     }
 
     if (login.plan.link) {
@@ -258,6 +279,8 @@ fn loginOne(init: std.process.Init, report: *SetupReport, login: Login, interact
         try report.progress("{s} on {s}: {s}", .{ login.plan.title, login.profile.label(), login.plan.instructions });
     }
 
+    // Without a terminal nobody can paste or wait here: the login stays open
+    // there, and the next setup sees it done or shows it again.
     if (!interactive) {
         return .pending;
     }
@@ -266,11 +289,23 @@ fn loginOne(init: std.process.Init, report: *SetupReport, login: Login, interact
         try pasteBack(init, arena, report, login, pane);
     }
 
-    return waitForLogin(init, login);
+    const outcome = try waitForLogin(init, login);
+    closeLoginPane(init, arena, login.profile, pane) catch |err| {
+        try report.note(.logins, "{s}: its login pane there stays open: {s}", .{ @tagName(login.agent), @errorName(err) });
+    };
+
+    return outcome;
 }
 
+/// Where one login runs on the machine.
+const LoginPane = struct {
+    workspace_id: u64,
+    tab_id: u64,
+    pane_id: u64,
+};
+
 // Starts the login in its own workspace there and returns its pane.
-fn openLoginPane(init: std.process.Init, arena: std.mem.Allocator, login: Login) ![]const u8 {
+fn openLoginPane(init: std.process.Init, arena: std.mem.Allocator, login: Login) !LoginPane {
     var words: std.ArrayList([*:0]const u8) = .empty;
     for ([_][]const u8{ "telar", "workspace", "create", "--directory" }) |word| {
         try words.append(arena, try arena.dupeZ(u8, word));
@@ -294,9 +329,51 @@ fn openLoginPane(init: std.process.Init, arena: std.mem.Allocator, login: Login)
     const output = try machine_dispatch.capture(init, login.profile, words.items);
     defer init.gpa.free(output);
 
-    const Created = struct { workspace_id: u64, pane_id: u64, directory: []const u8 };
-    const created = std.json.parseFromSliceLeaky(Created, arena, output, .{ .ignore_unknown_fields = true }) catch return error.LoginPaneUnreadable;
-    return std.fmt.allocPrint(arena, "{d}", .{created.pane_id});
+    return std.json.parseFromSliceLeaky(LoginPane, arena, output, .{ .ignore_unknown_fields = true }) catch error.LoginPaneUnreadable;
+}
+
+// The pane of a workspace there named `title`: a login an earlier setup
+// opened and nobody finished.
+fn findLoginPane(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, title: []const u8) !?LoginPane {
+    const Workspace = struct { workspace_id: u64, name: []const u8 };
+    const listed = try machine_dispatch.capture(init, profile, &.{ "telar", "workspace", "list", "--json" });
+    defer init.gpa.free(listed);
+
+    const workspaces = try std.json.parseFromSliceLeaky([]const Workspace, arena, listed, .{ .ignore_unknown_fields = true });
+    const workspace = for (workspaces) |entry| {
+        if (std.mem.eql(u8, entry.name, title)) {
+            break entry;
+        }
+    } else return null;
+
+    const id = try std.fmt.allocPrintSentinel(arena, "{d}", .{workspace.workspace_id}, 0);
+    const panes_output = try machine_dispatch.capture(init, profile, &.{ "telar", "pane", "list", "--workspace", id, "--json" });
+    defer init.gpa.free(panes_output);
+
+    const panes = try std.json.parseFromSliceLeaky([]const LoginPane, arena, panes_output, .{ .ignore_unknown_fields = true });
+    return if (panes.len == 0) null else panes[0];
+}
+
+// Closes the login's tab there, and with it its workspace.
+fn closeLoginPane(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, pane: LoginPane) !void {
+    const words = [_][*:0]const u8{
+        "telar",
+        "tab",
+        "close",
+        try std.fmt.allocPrintSentinel(arena, "{d}", .{pane.tab_id}, 0),
+        "--workspace",
+        try std.fmt.allocPrintSentinel(arena, "{d}", .{pane.workspace_id}, 0),
+        "--json",
+    };
+    const output = try machine_dispatch.capture(init, profile, &words);
+    init.gpa.free(output);
+}
+
+// Closes a login pane that outlived its login, if there is one; a failure
+// leaves it for the person.
+fn closeLeftover(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, title: []const u8) void {
+    const pane = (findLoginPane(init, arena, profile, title) catch return) orelse return;
+    closeLoginPane(init, arena, profile, pane) catch {};
 }
 
 const FoundLink = struct {
@@ -304,7 +381,7 @@ const FoundLink = struct {
     code: ?[]const u8 = null,
 };
 
-fn waitForLink(init: std.process.Init, arena: std.mem.Allocator, login: Login, pane: []const u8) !?FoundLink {
+fn waitForLink(init: std.process.Init, arena: std.mem.Allocator, login: Login, pane: LoginPane) !?FoundLink {
     var waited: u64 = 0;
     while (waited < link_wait_ms) : (waited += poll_ms) {
         const text = try readPane(init, arena, login.profile, pane);
@@ -320,8 +397,8 @@ fn waitForLink(init: std.process.Init, arena: std.mem.Allocator, login: Login, p
     return null;
 }
 
-fn readPane(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, pane: []const u8) ![]const u8 {
-    const words = [_][*:0]const u8{ "telar", "pane", "read", try arena.dupeZ(u8, pane), "--lines", read_lines };
+fn readPane(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, pane: LoginPane) ![]const u8 {
+    const words = [_][*:0]const u8{ "telar", "pane", "read", try std.fmt.allocPrintSentinel(arena, "{d}", .{pane.pane_id}, 0), "--lines", read_lines };
     const output = try machine_dispatch.capture(init, profile, &words);
     defer init.gpa.free(output);
     return arena.dupe(u8, output);
@@ -410,8 +487,9 @@ fn announce(init: std.process.Init, arena: std.mem.Allocator, login: Login, foun
 }
 
 // Asks for what the login wants pasted and types it into the login pane.
-// An empty answer leaves the pane for the person.
-fn pasteBack(init: std.process.Init, arena: std.mem.Allocator, report: *SetupReport, login: Login, pane: []const u8) !void {
+// An empty answer leaves the pane for the person. The pasted text reaches
+// the pane on standard input, never in a command line here or there.
+fn pasteBack(init: std.process.Init, arena: std.mem.Allocator, report: *SetupReport, login: Login, pane: LoginPane) !void {
     try report.writer.print("Paste {s} for {s} (Enter to finish in the pane instead): ", .{ login.plan.paste.?, @tagName(login.agent) });
     try report.writer.flush();
 
@@ -423,12 +501,14 @@ fn pasteBack(init: std.process.Init, arena: std.mem.Allocator, report: *SetupRep
         return;
     }
 
-    try sendKeys(init, arena, login.profile, pane, pasted);
+    try sendText(init, arena, login.profile, pane, pasted);
 }
 
-fn sendKeys(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, pane: []const u8, text: []const u8) !void {
-    const words = [_][*:0]const u8{ "telar", "pane", "send-keys", try arena.dupeZ(u8, pane), try arena.dupeZ(u8, text), "--enter" };
-    const output = try machine_dispatch.capture(init, profile, &words);
+// Types `text` and Enter into the pane: a pasted code, or the keys a login
+// needs to start (Pi's `/login`). The text travels on standard input.
+fn sendText(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, pane: LoginPane, text: []const u8) !void {
+    const words = [_][*:0]const u8{ "telar", "pane", "send-keys", try std.fmt.allocPrintSentinel(arena, "{d}", .{pane.pane_id}, 0), "--stdin", "--enter" };
+    const output = try machine_dispatch.captureWithInput(init, profile, &words, text);
     init.gpa.free(output);
 }
 

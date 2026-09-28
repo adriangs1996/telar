@@ -135,7 +135,7 @@ pub const text =
     \\  agent read       Print recent text from an agent's pane
     \\  agent report-session  Record an agent's own session id for restore
     \\  pane read        Print recent text from any pane
-    \\  pane send-keys   Send raw text (and --enter) to a pane no UI has focused
+    \\  pane send-keys   Send raw text, or --stdin, (and --enter) to a pane no UI has focused
     \\  pane focus       Move from Neovim into an adjacent Telar pane
     \\  worktree create Add a git worktree for a task; with a command (needs --title), run it there
     \\  worktree exec   Run a command in a new tab of a worktree; --wait prints its output and exit code
