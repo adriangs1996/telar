@@ -6,7 +6,6 @@ const std = @import("std");
 const RunOptions = @import("arguments/RunOptions.zig");
 const ClientPreparation = @import("ClientPreparation.zig");
 const config = @import("config.zig");
-const LaunchDefaults = client_module.LaunchDefaults;
 const plugin = @import("plugin.zig");
 const client = @import("client.zig");
 const Launch = @This();
@@ -36,7 +35,7 @@ pub fn prepare(self: *Launch, preparation: ClientPreparation) !void {
     };
     errdefer self.deinit();
 
-    try self.prepareChild(preparation.remote_defaults);
+    try self.prepareChild();
     self.generation = try config.loadGeneration(preparation.process, .{
         .path = preparation.options.config,
         .disabled = preparation.options.no_config,
@@ -59,22 +58,8 @@ pub fn prepare(self: *Launch, preparation: ClientPreparation) !void {
     }
 }
 
-pub fn prepareChild(self: *Launch, defaults: ?LaunchDefaults) !void {
-    if (defaults) |remote_launch| {
-        if (remote_launch.cwd.len > self.cwd_buffer.len) {
-            return error.NameTooLong;
-        }
-
-        @memcpy(self.cwd_buffer[0..remote_launch.cwd.len], remote_launch.cwd);
-        self.cwd_len = remote_launch.cwd.len;
-        if (!self.options.command_set) {
-            self.argument_storage[0] = remote_launch.shell;
-            self.argument_count = 1;
-            return;
-        }
-    } else {
-        self.cwd_len = try std.Io.Dir.cwd().realPathFile(self.process.io, ".", &self.cwd_buffer);
-    }
+fn prepareChild(self: *Launch) !void {
+    self.cwd_len = try std.Io.Dir.cwd().realPathFile(self.process.io, ".", &self.cwd_buffer);
 
     while (self.options.command.argv[self.argument_count]) |argument| : (self.argument_count += 1) {
         self.argument_storage[self.argument_count] = std.mem.span(argument);

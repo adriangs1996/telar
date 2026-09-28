@@ -135,29 +135,6 @@ pub fn configuredEditor(environ: std.process.Environ) []const u8 {
     return environ.getPosix("EDITOR") orelse "";
 }
 
-test "remote launch uses remote home and shell rather than client paths" {
-    var environment = try TestEnvironment.init(&.{.{ .name = "SHELL", .value = "/opt/homebrew/bin/local-shell" }});
-    defer environment.deinit();
-    const options = try RunOptions.parse(&.{ "--remote", "box" }, .{ .block = environment.block });
-    var prepared: ClientLaunch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
-    try prepared.prepareChild(.{ .cwd = "/home/remote-user", .shell = "/bin/remote-shell" });
-
-    try std.testing.expectEqualStrings("/home/remote-user", prepared.cwd_buffer[0..prepared.cwd_len]);
-    try std.testing.expectEqual(@as(usize, 1), prepared.argument_count);
-    try std.testing.expectEqualStrings("/bin/remote-shell", prepared.argument_storage[0]);
-}
-
-test "remote launch preserves explicit commands while keeping the remote home" {
-    const options = try RunOptions.parse(&.{ "--remote", "box", "/bin/bash", "-l" }, .empty);
-    var prepared: ClientLaunch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
-    try prepared.prepareChild(.{ .cwd = "/home/remote-user", .shell = "/bin/remote-shell" });
-
-    try std.testing.expectEqualStrings("/home/remote-user", prepared.cwd_buffer[0..prepared.cwd_len]);
-    try std.testing.expectEqual(@as(usize, 2), prepared.argument_count);
-    try std.testing.expectEqualStrings("/bin/bash", prepared.argument_storage[0]);
-    try std.testing.expectEqualStrings("-l", prepared.argument_storage[1]);
-}
-
 test "the client snapshots EDITOR without inventing a fallback" {
     var environment = try TestEnvironment.init(&.{.{ .name = "EDITOR", .value = "/usr/bin/nvim" }});
     defer environment.deinit();
