@@ -538,6 +538,7 @@ fn linkCommand(init: std.process.Init, report: *SetupReport, target: *const Setu
     try script.writeAll(
         \\link=$HOME/.local/bin/telar
         \\if [ -L "$link" ] && [ "$(readlink "$link")" = "$telar" ]; then exit 0; fi
+        \\if [ -e "$link" ] && [ ! -L "$link" ]; then echo 'it is a file telar did not link, so it stays; remove it to let setup link it' >&2; exit 1; fi
         \\mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/dev/null && echo linked
         \\
     );
