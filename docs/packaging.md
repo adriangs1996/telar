@@ -69,7 +69,9 @@ over a prefix such as `/usr/local` or `~/.local`.
 and every command line control, links no Wayland, Vulkan, ATK or GLib
 library, and builds without Cargo. `telar` and `telar gui` then exit with an
 error. This is the build for servers, which is where remote mode runs the
-runtime.
+runtime. The release adds `-Dtarget=<arch>-linux-musl`, which makes it a
+static executable that needs no library of the host
+([why](#why-the-headless-build-is-static-musl)).
 
 The desktop entry runs `telar gui --login-shell`, so the menu launch is the
 same path as the macOS bundle.
@@ -181,7 +183,7 @@ Sigstore. `gh attestation verify FILE --repo adriangs1996/telar` checks one.
 | macOS arm64 | `macos-26` | `aarch64-macos.26.0`, Apple M1 | `/usr/lib` and `/System/Library` only |
 | macOS x86_64 | `macos-26-intel` | `x86_64-macos.26.0`, core2 | same |
 | Linux desktop | `ubuntu-24.04`, `ubuntu-24.04-arm` | host glibc, baseline CPU | glibc, Wayland, Vulkan, xkbcommon, Fontconfig, ATK, GLib; glibc 2.38 or newer |
-| Linux headless | same | `<arch>-linux-gnu.2.28`, baseline CPU | glibc only, 2.28 or newer |
+| Linux headless | same | `<arch>-linux-musl`, baseline CPU | nothing: static musl, any Linux 4.11 or newer |
 
 The labels come from GitHub's
 [hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
@@ -200,8 +202,56 @@ would use whatever AVX-512 or SVE the runner has and crash on older
 machines.
 
 `packaging/release/check-linkage.sh` fails the build when a binary links
-anything outside that table, or when a headless binary asks for glibc newer
-than 2.28. It reads `otool -L` on macOS and `readelf -d` on Linux.
+anything outside that table, when the desktop build asks for glibc newer
+than 2.38, or when the headless build has any `NEEDED` entry or program
+interpreter. It reads `otool -L` on macOS and `readelf` on Linux.
+
+The desktop build's glibc floor is the runner's. On `ubuntu-24.04-arm`,
+glibc 2.38 headers turn `strtol` and `strtoul` into `__isoc23_strtol` and
+`__isoc23_strtoul`, the only `GLIBC_2.38` symbols of the aarch64 `telar`;
+its `telar-diagram-renderer` stops at 2.35. The x86_64 build was not
+measured outside CI, where the same check holds it to 2.38. Debian 12 ships
+glibc 2.36, so there `install.sh` finds that the desktop build does not
+start and installs the headless one.
+
+### Why the headless build is static musl
+
+A server gets whatever Linux it has: Alpine, an old enterprise release, a
+container without a desktop. A static binary needs no libc of the host at
+all, so the headless build targets `<arch>-linux-musl`, which Zig links
+statically. What differs from glibc, checked in this code:
+
+- Name resolution, TLS and the trust store never go through libc. The
+  proxy resolves upstream hosts with `std.Io.net.HostName.lookup`, Zig's
+  own resolver that reads `/etc/hosts` and `/etc/resolv.conf` on either
+  libc; `lib/localca` finds roots through `std.crypto.Certificate.Bundle`.
+  Neither reads `nsswitch.conf` under glibc either.
+- The passwd database appears once, in `src/cli/login_shell.zig`, as the
+  fallback after `SHELL` for `telar gui --login-shell`, which a headless
+  build refuses. musl reads only `/etc/passwd` there, without NSS, so an
+  LDAP or SSSD account would fall back to `/bin/sh` if it ever reached it.
+- A C `struct stat` cannot come through `@cImport` on musl: its `timespec`
+  pads with bit-fields, so translate-c makes the struct opaque. Ownership
+  checks read `privatefile.Inode` instead, which asks `statx` on Linux,
+  the call `std.Io` already makes for every stat, and `fstatat` elsewhere.
+  `statx` is why the floor is Linux 4.11. CI builds the headless binary for
+  musl, so an import that brings the struct back fails there.
+- `malloc` is musl's. In ReleaseFast the runtime allocates through libc,
+  and so do SQLite and Lua. Measured in one Debian 12 container, with
+  aarch64 builds of the same commit that differ only in libc: while
+  `telar history import` fed the runtime 1000 commands at a time, the
+  runtime used as much CPU on musl as on glibc or less (12.6 to 15.9 s
+  against 13.1 to 17.9 s for 50,000 commands over three runs each, 42.8 s
+  against 52.6 s for 150,000), and searches took the same time. Its
+  resident memory did not stay the same: glibc settled near 20 MiB, while
+  musl held 37 to 45 MiB after 50,000 commands and 65 MiB after 150,000.
+  Whether it levels off later was not measured; a runtime that serves
+  months of history should be watched for it.
+
+The binary was also started on Alpine 3.22, where `telar server`,
+`telar runtime status`, `telar agent list` and `telar server stop` worked
+with no library installed. The glibc build it replaces does not start
+there: Alpine has no `ld-linux-aarch64.so.1`.
 
 To reproduce a release build locally:
 
@@ -313,8 +363,8 @@ It runs `sudo` only with `--sudo`.
 On Linux it tries the desktop build when `ldconfig -p` lists
 `libwayland-client.so.0` and `libvulkan.so.1`, looking in `/sbin` and
 `/usr/sbin` too, since a regular Debian user's PATH has neither. The
-desktop build also needs xkbcommon, Fontconfig, ATK, GLib and a recent
-glibc (see [What each build pins](#what-each-build-pins)); when it does not
+desktop build also needs xkbcommon, Fontconfig, ATK, GLib and glibc 2.38
+(see [What each build pins](#what-each-build-pins)); when it does not
 start, the installer prints the loader's error and installs the headless
 build instead. `--gui` insists on the desktop build and aborts, keeping the
 install, when it does not start; `--headless` skips it. Remote mode needs

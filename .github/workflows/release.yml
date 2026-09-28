@@ -64,8 +64,9 @@ jobs:
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
           rustup default "$RUST_TOOLCHAIN"
 
-      # Builds the desktop and headless archives and fails if either links
-      # a library it must not, or the headless one needs glibc above 2.28.
+      # Builds the desktop and headless archives and fails if the desktop
+      # one links a library it must not or needs glibc above 2.38, or the
+      # headless one is not static.
       - name: Build and check linkage
         run: packaging/release/linux.sh dist
 
