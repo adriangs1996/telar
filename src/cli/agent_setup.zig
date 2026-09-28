@@ -15,6 +15,8 @@ const install_timeout_s = 900;
 const integration_timeout_s = 60;
 /// Room for every agent's name, comma separated.
 const names_bytes = 64;
+/// The longest script of one agent's installer.
+const max_installer_bytes = 512;
 /// Pi's installer needs Node 22.19 or newer (Pi's quickstart).
 const pi_node_major = 22;
 const pi_node_minor = 19;
@@ -27,8 +29,25 @@ const Installer = struct {
     tools: []const MachinePlatform.Tool,
     /// Whether its binary runs on musl.
     runs_on_musl: bool,
+    /// Runs after `installer_prelude`: `fetch URL` downloads the official
+    /// installer into `$installer`, which the script then runs.
     script: []const u8,
 };
+
+/// What every installer script starts with. The official installer is
+/// downloaded over https only into a private file and run from there, never
+/// piped: a download that fails stops the script with curl's status instead
+/// of feeding an empty or cut script to a shell that exits 0. The installer
+/// reads no standard input, which carries this script.
+const installer_prelude =
+    \\set -eu
+    \\installer=$(mktemp "${TMPDIR:-/tmp}/telar-agent-installer.XXXXXX")
+    \\trap 'rm -f "$installer"' EXIT
+    \\fetch() {
+    \\    curl --proto '=https' --tlsv1.2 -fsSL "$1" -o "$installer"
+    \\}
+    \\
+;
 
 fn installerFor(agent: Agent) Installer {
     return switch (agent) {
@@ -45,7 +64,8 @@ fn installerFor(agent: Agent) Installer {
             \\        exit 1
             \\    fi
             \\fi
-            \\curl -fsSL https://claude.ai/install.sh | bash
+            \\fetch https://claude.ai/install.sh
+            \\bash "$installer" </dev/null
             \\
             ,
         },
@@ -54,21 +74,33 @@ fn installerFor(agent: Agent) Installer {
             .command = "codex",
             .tools = &.{ .curl, .tar },
             .runs_on_musl = true,
-            .script = "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh\n",
+            .script =
+            \\fetch https://chatgpt.com/codex/install.sh
+            \\CODEX_NON_INTERACTIVE=1 sh "$installer" </dev/null
+            \\
+            ,
         },
         // github.com/earendil-works/pi, packages/coding-agent/docs/quickstart.md
         .pi => .{
             .command = "pi",
             .tools = &.{ .curl, .node, .npm },
             .runs_on_musl = true,
-            .script = "curl -fsSL https://pi.dev/install.sh | sh\n",
+            .script =
+            \\fetch https://pi.dev/install.sh
+            \\sh "$installer" </dev/null
+            \\
+            ,
         },
         // https://opencode.ai/docs; the installer detects musl itself.
         .opencode => .{
             .command = "opencode",
             .tools = &.{ .curl, .bash, .tar },
             .runs_on_musl = true,
-            .script = "curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path\n",
+            .script =
+            \\fetch https://opencode.ai/install
+            \\bash "$installer" --no-modify-path </dev/null
+            \\
+            ,
         },
         // https://cursor.com/docs/cli/installation.md; its bundled node links
         // glibc (checked in the Linux x64 package 2026.09.26-dd393fe).
@@ -76,7 +108,11 @@ fn installerFor(agent: Agent) Installer {
             .command = "cursor-agent",
             .tools = &.{ .curl, .bash },
             .runs_on_musl = false,
-            .script = "curl https://cursor.com/install -fsS | bash\n",
+            .script =
+            \\fetch https://cursor.com/install
+            \\bash "$installer" </dev/null
+            \\
+            ,
         },
     };
 }
@@ -146,7 +182,13 @@ pub fn install(init: std.process.Init, report: *SetupReport, destination: []cons
 
         ran = true;
         try report.progress("installing {s} there with its official installer", .{@tagName(agent)});
-        var result = try remote_shell.runScript(init, destination, installer.script, install_timeout_s);
+        var script_buffer: [installer_prelude.len + max_installer_bytes]u8 = undefined;
+        const script = std.fmt.bufPrint(&script_buffer, "{s}{s}", .{ installer_prelude, installer.script }) catch unreachable;
+        var result = remote_shell.runScript(init, destination, script, install_timeout_s) catch |err| {
+            try report.note(.agents, "{s}: its installer did not run to the end: {s}", .{ @tagName(agent), @errorName(err) });
+            failed = true;
+            continue;
+        };
         defer result.deinit(init.gpa);
         if (result.succeeded()) {
             try report.note(.agents, "{s}: installed with its official installer", .{@tagName(agent)});
@@ -224,7 +266,11 @@ pub fn integrate(init: std.process.Init, report: *SetupReport, destination: []co
         try remote_shell.assign(&script, "agent", @tagName(agent));
         try script.writeAll("exec \"$telar\" integration install \"$agent\"\n");
 
-        var result = try remote_shell.runScript(init, destination, script.buffered(), integration_timeout_s);
+        var result = remote_shell.runScript(init, destination, script.buffered(), integration_timeout_s) catch |err| {
+            try report.note(.integrations, "{s}: {s}", .{ @tagName(agent), @errorName(err) });
+            failed = true;
+            continue;
+        };
         defer result.deinit(init.gpa);
         if (!result.succeeded()) {
             try report.note(.integrations, "{s}: {s}", .{ @tagName(agent), result.errorLine() });
@@ -290,4 +336,40 @@ test "local agents are found on the PATH by their command" {
     try std.testing.expect(onPath(directory, "codex"));
     try std.testing.expect(!onPath(directory, "claude"));
     try std.testing.expect(!onPath("", "codex"));
+}
+
+test "every installer downloads over https only and stops when the download fails" {
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    const io = std.testing.io;
+    var bin_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const bin = bin_buffer[0..try temp.dir.realPath(io, &bin_buffer)];
+    // A curl that fails as curl -f does on a 404, after writing nothing.
+    var curl = try temp.dir.createFile(io, "curl", .{ .permissions = .fromMode(0o755) });
+    try curl.writeStreamingAll(io, "#!/bin/sh\nexit 22\n");
+    curl.close(io);
+
+    for (std.enums.values(Agent)) |agent| {
+        const installer = installerFor(agent);
+        try std.testing.expect(installer.script.len <= max_installer_bytes);
+        try std.testing.expect(std.mem.indexOf(u8, installer.script, "| sh") == null);
+        try std.testing.expect(std.mem.indexOf(u8, installer.script, "| bash") == null);
+
+        const script = try std.fmt.allocPrint(std.testing.allocator, "{s}{s}echo installed\n", .{ installer_prelude, installer.script });
+        defer std.testing.allocator.free(script);
+        const path = try std.fmt.allocPrint(std.testing.allocator, "PATH={s}:/usr/bin:/bin", .{bin});
+        defer std.testing.allocator.free(path);
+
+        const result = try std.process.run(std.testing.allocator, io, .{
+            .argv = &.{ "/usr/bin/env", "-i", path, "/bin/sh", "-c", script },
+        });
+        defer std.testing.allocator.free(result.stdout);
+        defer std.testing.allocator.free(result.stderr);
+
+        try std.testing.expect(result.term == .exited and result.term.exited != 0);
+        try std.testing.expect(std.mem.indexOf(u8, result.stdout, "installed") == null);
+    }
+
+    try std.testing.expect(std.mem.indexOf(u8, installer_prelude, "--proto '=https'") != null);
 }
