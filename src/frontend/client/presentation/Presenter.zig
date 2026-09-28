@@ -271,6 +271,8 @@ pub fn presentDue(self: *Presenter, projection: client.Projection, resources: Re
         projection.version.suggestion;
     const path_completion_changed = self.presentation_state.prepared.model.path_completion !=
         projection.version.path_completion;
+    const path_picker_changed = self.presentation_state.prepared.model.path_picker !=
+        projection.version.path_picker;
     const viewport_changed = self.presentation_state.prepared.model.viewport !=
         projection.version.viewport;
     const was_copy_mode = if (self.compositor.copy) |copy| !copy.view.pointer else false;
@@ -291,7 +293,7 @@ pub fn presentDue(self: *Presenter, projection: client.Projection, resources: Re
         proxy_status_changed or system_metrics_changed or bars_changed or notifications_changed or tabs_changed or
         active_tab_changed or panes_changed or pane_metadata_changed or chrome_changed or
         pane_progress_changed or
-        prompt_changed or history_changed or suggestion_changed or path_completion_changed or copy_status_changed or
+        prompt_changed or history_changed or suggestion_changed or path_completion_changed or path_picker_changed or copy_status_changed or
         view_interaction_changed or input_routing_changed)
     {
         resources.view.invalidate();

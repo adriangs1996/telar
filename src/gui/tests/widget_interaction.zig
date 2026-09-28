@@ -103,6 +103,33 @@ test "retired generations and modal scope consume captured releases without reta
     try std.testing.expect(dispatcher.maps.presented().find(first) == null);
 }
 
+test "GUI path picker Tab and Shift+Tab browse directories instead of moving widget focus" {
+    const session = try initSession();
+    defer session.deinit();
+    const model = &session.gui.app.model;
+    model.name_prompt.begin(.path_picker);
+    model.path_picker.begin(Session.pane_id, "/work/app");
+    model.path_picker.expect(3);
+
+    var buffer: [512]u8 = undefined;
+    const encoded = try core.encodePathResults(&buffer, .{
+        .request_id = @enumFromInt(3),
+        .root = "/work/app",
+        .matches = &.{.{
+            .path = "src/",
+            .kind = .directory,
+        }},
+    });
+    try std.testing.expect(try model.path_picker.receive((try core.decodeServer(encoded)).path_results));
+    try publish(session);
+
+    try send(session, .{ .key = .{ .code = .tab } });
+    try std.testing.expectEqualStrings("/work/app/src", model.path_picker.rootSlice());
+    try publish(session);
+    try send(session, .{ .key = .{ .code = .back_tab } });
+    try std.testing.expectEqualStrings("/work/app", model.path_picker.rootSlice());
+}
+
 fn publish(session: *Session) !void {
     const token = try session.draw();
     try input_support.presented(
@@ -523,7 +550,8 @@ test "context folder clicks complete without submitting and reject stale listing
     const gui = session.gui;
     gui.job_hook = .{
         .context = session,
-        .start = ignorePathCompletion,
+        .start = Session.startJob,
+        .start_background = ignorePathCompletion,
     };
     gui.app.model.name_prompt.begin(.create_workspace);
     _ = gui.app.model.name_prompt.apply(.tab);
@@ -547,12 +575,12 @@ test "context folder clicks complete without submitting and reject stale listing
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
 
-fn ignorePathCompletion(context: *anyopaque, job: client.Job) !void {
+fn ignorePathCompletion(context: *anyopaque, job: client.BackgroundJob) !void {
     if (job == .path_completion) {
         return;
     }
 
-    try Session.startJob(context, job);
+    try Session.startBackgroundJob(context, job);
 }
 
 test "context controls reject retired generations and expose native press actions" {
@@ -857,6 +885,9 @@ test "opening a file without a reachable editor creates an editor pane in its so
     session.gui.app.lua_generation = try client.Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { editor = '/usr/bin/nvim' } }", .source_name = "@config.lua", .number = 1 });
     try std.testing.expectEqualStrings("", session.gui.app.options.editor);
     try openFile(session, "/tmp/a b '$(touch nope).md");
+    try std.testing.expectEqual(@as(usize, 1), session.editor_open_count);
+    try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
+    try editorReply(session, .unavailable);
 
     try std.testing.expectEqual(@as(usize, 1), session.pane_creation_count);
     try std.testing.expectEqual(@as(usize, 0), session.tab_creation_count);
@@ -919,15 +950,16 @@ test "unavailable editor integration falls back once using the requested editor 
     try std.testing.expectEqual(@as(usize, 1), session.pane_creation_count);
 }
 
-test "nano always gets a new pane and failed remote opens never duplicate an editor" {
+test "nano gets a new pane once the runtime finds the file and failed remote opens never duplicate an editor" {
     for ([_][]const u8{ "nano", "nvim" }) |editor| {
         const session = try editorSession();
         defer session.deinit();
         session.gui.app.options.editor = editor;
         _ = try existingEditor(session, editor);
         try openFile(session, "/tmp/design.md");
+        try std.testing.expectEqual(@as(usize, 1), session.editor_open_count);
         if (std.mem.eql(u8, editor, "nano")) {
-            try std.testing.expectEqual(@as(usize, 0), session.editor_open_count);
+            try editorReply(session, .unavailable);
             try std.testing.expectEqual(@as(usize, 1), session.pane_creation_count);
         } else {
             try editorReply(session, .failed);
@@ -935,6 +967,55 @@ test "nano always gets a new pane and failed remote opens never duplicate an edi
             try std.testing.expect(session.gui.app.model.editor_open.pending == null);
         }
     }
+}
+
+test "a missing file is reported and opens no editor" {
+    const session = try editorSession();
+    defer session.deinit();
+    session.gui.app.options.editor = "nvim";
+    try openFile(session, "/tmp/absent.zig");
+    try editorReply(session, .missing);
+    try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
+    try std.testing.expect(session.gui.app.model.editor_open.pending == null);
+}
+
+test "a path from prose resolves against its pane and opens the editor at its line" {
+    const session = try editorSession();
+    defer session.deinit();
+    session.gui.app.options.editor = "/opt/homebrew/bin/nvim";
+    _ = try session.gui.app.model.panes.find(Session.pane_id).?.setCwd("/work/telar");
+    const target = try data.LinkTarget.initPath("src/../src/gui/routing.zig:435:7");
+    try std.testing.expect(try client.link_opening.openLink(&session.gui.app, target, Session.pane_id));
+    try session.settle();
+
+    const request = session.last_editor_open.?;
+    try std.testing.expectEqualStrings("/work/telar/src/gui/routing.zig", request.path());
+    try std.testing.expectEqual(@as(u32, 435), request.line);
+    try std.testing.expectEqual(@as(u32, 7), request.column);
+    try editorReply(session, .unavailable);
+    const split = (try core.decodeClient(session.pane_creation_wire[0..session.pane_creation_len])).create_pane;
+    var arguments = split.launch.arguments();
+    try std.testing.expectEqualStrings("/opt/homebrew/bin/nvim", (try arguments.next()).?);
+    try std.testing.expectEqualStrings("+call cursor(435, 7)", (try arguments.next()).?);
+    try std.testing.expectEqualStrings("/work/telar/src/gui/routing.zig", (try arguments.next()).?);
+    try std.testing.expect((try arguments.next()) == null);
+}
+
+test "a file URI fragment reaches the editor as its line" {
+    const session = try editorSession();
+    defer session.deinit();
+    session.gui.app.options.editor = "nvim";
+    const target = try data.LinkTarget.init("file:///tmp/a%20b.zig#L12");
+    try std.testing.expect(try client.link_opening.openLink(&session.gui.app, target, Session.pane_id));
+    try session.settle();
+    try std.testing.expectEqualStrings("/tmp/a b.zig", session.last_editor_open.?.path());
+    try std.testing.expectEqual(@as(u32, 12), session.last_editor_open.?.line);
+    try editorReply(session, .unavailable);
+    const split = (try core.decodeClient(session.pane_creation_wire[0..session.pane_creation_len])).create_pane;
+    var arguments = split.launch.arguments();
+    try std.testing.expectEqualStrings("nvim", (try arguments.next()).?);
+    try std.testing.expectEqualStrings("+12", (try arguments.next()).?);
+    try std.testing.expectEqualStrings("/tmp/a b.zig", (try arguments.next()).?);
 }
 
 test "editor reuse replies cannot act on a replaced source pane" {

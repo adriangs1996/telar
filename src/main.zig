@@ -180,6 +180,7 @@ test {
     _ = @import("cli/arguments/server.zig");
     _ = @import("cli/arguments/values.zig");
     _ = @import("cli/client.zig");
+    _ = @import("cli/CodexSubagents.zig");
     _ = @import("cli/config.zig");
     _ = @import("cli/control.zig");
     _ = @import("cli/history.zig");

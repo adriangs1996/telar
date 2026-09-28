@@ -31,19 +31,26 @@ test "chrome bands leave complete cells below them and share the pointer origin"
         const size = try renderer.measure(.{ .width = 1000, .height = 700, .scale = scale });
         const chrome = ChromeMetrics.resolve(renderer.config, scale);
         try std.testing.expectEqual(chrome, renderer.chrome);
-        try std.testing.expectEqual([2]u32{ 0, chrome.top_bar }, renderer.origin);
+        try std.testing.expectEqual([2]u32{ renderer.sidebar.reserved(), chrome.top_bar }, renderer.origin);
         try std.testing.expect(chrome.vertical() + @as(u32, size.rows) * size.cell_height_px <= 700);
         try std.testing.expect(chrome.vertical() + @as(u32, size.rows + 1) * size.cell_height_px > 700);
         var quads = QuadList.init(std.testing.allocator);
         defer quads.deinit();
-        const canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = data.theme_support.default_theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
+        const canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = data.theme_support.default_theme, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar };
         const bands = Bands.resolve(&canvas);
+        // The collapsed sidebar is the rail below navigation, which spans the
+        // window so the window's own controls can share its row.
+        const rail: f32 = @floatFromInt(renderer.sidebar.width);
+        try std.testing.expect(renderer.sidebar.rail and bands.rail);
+        try std.testing.expectEqual(@round(52 * scale), rail);
         try std.testing.expectEqual(@as(f32, @floatFromInt(renderer.origin[1])), bands.top_bar.y + bands.top_bar.height);
         try std.testing.expectEqual(@as(f32, 0), bands.top_bar.x);
-        try std.testing.expectEqual(@as(f32, 0), bands.sidebar.width);
+        try std.testing.expectEqual(rail, bands.sidebar.width);
+        try std.testing.expectEqual(bands.top_bar.height, bands.sidebar.y);
+        try std.testing.expectEqual(bands.status_bar.y, bands.sidebar.y + bands.sidebar.height);
         const grid_bottom = canvas.rect(.{ .x = 0, .y = size.rows - 1, .w = 1, .h = 1 });
         try std.testing.expect(grid_bottom.y + grid_bottom.height <= bands.status_bar.y);
-        try std.testing.expect(!bands.contains(bands.top_bar.x, @floatFromInt(renderer.origin[1])));
+        try std.testing.expect(!bands.contains(@floatFromInt(renderer.origin[0]), @floatFromInt(renderer.origin[1])));
         try std.testing.expect(bands.contains(bands.top_bar.x, bands.top_bar.y));
     }
 
@@ -52,7 +59,7 @@ test "chrome bands leave complete cells below them and share the pointer origin"
     try std.testing.expectEqual(@as(u16, @intCast(40 / renderer.metrics.cell_height)), tiny.rows);
     try std.testing.expect(tiny.rows >= 1);
     try std.testing.expectEqual(@as(u32, 0), renderer.chrome.vertical());
-    try std.testing.expectEqual([2]u32{ 0, 0 }, renderer.origin);
+    try std.testing.expectEqual([2]u32{ renderer.sidebar.reserved(), 0 }, renderer.origin);
 }
 
 test "tab strip hits keep stable tab identities and the plus creates a tab" {
@@ -152,7 +159,7 @@ test "a blocked agent marks its tab and project independently of selection" {
     try std.testing.expect(coloredQuads(quads, pill, palette.yellow) > 0);
     try std.testing.expectEqual(@as(usize, 0), coloredQuads(quads, other, palette.yellow));
 
-    // Failed wins the red dot; working alone shows nothing.
+    // Failed wins the red dot; working shows the teal spinner instead of a dot.
     var failed = try blockedAgents(second_location, .failed);
     projection.agents = &failed;
     try fixture.paint(projection);
@@ -168,15 +175,9 @@ test "a blocked agent marks its tab and project independently of selection" {
     var working = try blockedAgents(second_location, .working);
     projection.agents = &working;
     try fixture.paint(projection);
-    try std.testing.expectEqual(@as(usize, 0), dotQuads(
-        fixture.session.gui.renderer.quads.items(),
-        fixture.bandTarget(
-            .{
-                .select_tab = second_tab,
-            },
-        ).?,
-        palette.teal,
-    ));
+    const spinning = fixture.bandTarget(.{ .select_tab = second_tab }).?;
+    try std.testing.expect(dotQuads(fixture.session.gui.renderer.quads.items(), spinning, palette.teal) > 1);
+    try std.testing.expectEqual(@as(usize, 0), dotQuads(fixture.session.gui.renderer.quads.items(), spinning, palette.yellow));
 }
 
 fn ringQuads(quads: []const Quad, outer: Rect) usize {

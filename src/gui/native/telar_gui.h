@@ -84,6 +84,9 @@ typedef struct {
   uint32_t width;
   uint32_t height;
   float scale;
+  // Device pixels the window's own controls cover at the left of the top
+  // row: macOS traffic lights over a transparent titlebar, else zero.
+  uint32_t controls;
 } telar_gui_viewport;
 
 // Borrowed premultiplied RGBA8 rectangles. Empty slots are entirely zero.
@@ -111,6 +114,9 @@ typedef struct {
   float background[4];
   uint32_t background_blur;
   uint32_t titlebar;
+  // Device pixels of Telar's navigation row, so native window controls can
+  // center on it.
+  uint32_t navigation;
 } telar_gui_frame;
 
 // Input kinds: 1 committed UTF-8 text, 2 clipboard paste, 3 semantic key,

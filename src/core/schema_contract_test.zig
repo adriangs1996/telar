@@ -62,7 +62,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 114;
+const corpus_len = 120;
 const corpus_storage_size = 12 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -447,6 +447,38 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .pane_generation = 3,
             .state = .settling,
             .session = "abc",
+        }),
+    ));
+    helper.add(.{ .name = "report_agent_continuing", .direction = .client, .golden_hex = golden.report_agent_continuing }, helper.commit(
+        try agent_module.encodeReportAgent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .state = .continuing,
+        }),
+    ));
+    helper.add(.{ .name = "report_agent_waiting", .direction = .client, .golden_hex = golden.report_agent_waiting }, helper.commit(
+        try agent_module.encodeReportAgent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .state = .waiting,
+        }),
+    ));
+    helper.add(.{ .name = "report_agent_idle", .direction = .client, .golden_hex = golden.report_agent_idle }, helper.commit(
+        try agent_module.encodeReportAgent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .state = .idle,
+        }),
+    ));
+    helper.add(.{ .name = "report_agent_released", .direction = .client, .golden_hex = golden.report_agent_released }, helper.commit(
+        try agent_module.encodeReportAgent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .state = .released,
         }),
     ));
     helper.add(.{ .name = "report_agent_command", .direction = .client, .golden_hex = golden.report_agent_command }, helper.commit(
@@ -1056,7 +1088,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         try review.encodeChangeReviewChanged(helper.space(), .{ .pane_id = @enumFromInt(5), .pane_generation = 3, .session = "thread", .latest_edition_id = 2 }),
     ));
 
-    var editor_request: schema.OwnedEditorOpen = .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(6), .pane_generation = 7 };
+    var editor_request: schema.OwnedEditorOpen = .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(6), .pane_generation = 7, .line = 12, .column = 3 };
     try editor_request.setTarget("nvim", "/tmp/a");
     helper.add(.{ .name = "open_editor", .direction = .client, .golden_hex = golden.open_editor }, helper.commit(
         try schema.encodeOpenEditor(helper.space(), editor_request.view()),
@@ -1126,6 +1158,46 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .mode = .prompt,
             .text = "ls",
             .sender = @enumFromInt(9),
+        }),
+    ));
+    helper.add(.{
+        .name = "find_paths",
+        .direction = .client,
+        .golden_hex = golden.find_paths,
+    }, helper.commit(
+        try schema.encodeFindPaths(
+            helper.space(),
+            .{
+                .request_id = @enumFromInt(5),
+                .root = "/w",
+                .query = "ab",
+                .kind = .files,
+                .limit = 20,
+                .refresh = true,
+            },
+        ),
+    ));
+    helper.add(.{
+        .name = "path_results",
+        .direction = .server,
+        .golden_hex = golden.path_results,
+    }, helper.commit(
+        try schema.encodePathResults(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .root = "/w",
+            .scanned = 2,
+            .complete = false,
+            .matches = &.{
+                .{
+                    .path = "a/b",
+                    .kind = .file,
+                    .positions = &.{ 0, 2 },
+                },
+                .{
+                    .path = "a/",
+                    .kind = .directory,
+                },
+            },
         }),
     ));
 
@@ -2429,6 +2501,14 @@ test "editor requests own deferred paths and reject command controls and invalid
     try std.testing.expectEqualStrings("/usr/bin/nvim", retained.editor());
     try std.testing.expectError(error.InvalidEditorTarget, retained.setTarget("nvim", "/tmp/line\nbreak"));
     try std.testing.expectError(error.InvalidEditorTarget, retained.setTarget("nvim", "relative/file"));
+    retained.line = 0;
+    retained.column = 3;
+    try std.testing.expectError(error.InvalidEditorTarget, schema.encodeOpenEditor(&storage, retained.view()));
+    retained.line = 12;
+    const positioned = (try schema.decodeClient(try schema.encodeOpenEditor(&storage, retained.view()))).open_editor;
+    try std.testing.expectEqual(@as(u32, 12), positioned.line);
+    try std.testing.expectEqual(@as(u32, 3), positioned.column);
+    retained.column = 0;
     try std.testing.expectError(error.InvalidEditorTarget, retained.setTarget("-c", "/tmp/a"));
     try std.testing.expectError(error.InvalidByteString, retained.setTarget("nvim", "x" ** (schema.OpenEditor.max_bytes + 1)));
     retained.pane_generation = 0;

@@ -10,6 +10,10 @@ pane_id: id.PaneId,
 pane_generation: u64,
 editor: []const u8,
 path: []const u8,
+/// The line to show; zero leaves the editor's choice.
+line: u32 = 0,
+/// The column on `line`; zero means its start and requires nothing of `line`.
+column: u32 = 0,
 
 /// Validates borrowed wire data before dispatch. Example: `try request.validateWire();`
 pub fn validateWire(self: OpenEditor) !void {
@@ -20,6 +24,9 @@ pub fn validateWire(self: OpenEditor) !void {
     }
 
     try validateTarget(self.editor, self.path);
+    if (self.column != 0 and self.line == 0) {
+        return error.InvalidEditorTarget;
+    }
 }
 
 /// Checks file and executable values without interpreting shell syntax. Example: `try OpenEditor.validateTarget("nvim", "/tmp/a");`

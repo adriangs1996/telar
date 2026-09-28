@@ -38,6 +38,10 @@ pub const entries = [_]CommandEntry{
     .{ .action = .leave_worktree, .label = "Leave worktree for its project" },
     .{ .action = .enter_copy_mode, .label = "Enter copy mode" },
     .{ .action = .history_palette, .label = "Search command history" },
+    .{
+        .action = .path_picker,
+        .label = "Insert a path",
+    },
 };
 
 /// The mode the field text selects. Example: `switch (prefixOf(text)) { ... }`.

@@ -55,6 +55,17 @@ sidebar, bars, modals, pickers and Telar views. Its look belongs to the
 adapter; the state it shows belongs to the client model.
 _Avoid_: UI, widgets, decorations
 
+**Bar component**:
+One item a configuration places in a bar, a tooltip or a bar panel, from a
+closed vocabulary Telar draws itself: a label, a meter, a group and the like.
+The configuration says what it shows; the adapter decides how it looks.
+_Avoid_: Widget, segment, module
+
+**Bar panel**:
+The panel a bar component opens above the bottom bar, filled from its own
+configured source while it is open. Disposable client state.
+_Avoid_: Popup, modal, dropdown
+
 **Telar view**:
 Content Telar composes from client and runtime projections instead of from a
 PTY, such as a history browser or a change review. The layout may
@@ -155,6 +166,12 @@ _Avoid_: Scrollback mode, selection mode
 The input mode where host input edits a name — a tab rename, a workspace
 rename, or a new workspace — until submitted or cancelled.
 _Avoid_: Rename dialog, modal input
+
+**Path picker**:
+The prompt that fuzzy-finds a path under the focused pane's working directory
+and pastes it at the pane's cursor. The runtime indexes and ranks; the client
+keeps the browsed root, the page and the selection.
+_Avoid_: File finder, path completion (the new-workspace directory list)
 
 **Telar action**:
 A semantic instruction handled by Telar rather than forwarded as input to a

@@ -151,8 +151,21 @@ pub fn optionalMilliseconds(state: *lua_api.c.lua_State, input: OptionalMillisec
 
 pub fn ensureOnlyFields(state: *lua_api.c.lua_State, fields: Fields, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, fields.index);
+    const children = if (fields.children) lua_api.c.lua_rawlen(state, absolute) else 0;
     lua_api.c.lua_pushnil(state);
     while (lua_api.c.lua_next(state, absolute) != 0) {
+        if (children != 0 and lua_api.c.lua_isinteger(state, -2) != 0) {
+            const position = integer(state, -2).?;
+            pop(state, 1);
+            if (position < 1 or position > children) {
+                pop(state, 1);
+                diagnostic.set("{s} children must be a list", .{fields.path});
+                return error.InvalidConfig;
+            }
+
+            continue;
+        }
+
         const key = string(state, -2) orelse {
             pop(state, 2);
             diagnostic.set("{s} contains a non-string field", .{fields.path});
@@ -223,6 +236,8 @@ const Fields = struct {
     index: c_int,
     allowed: []const []const u8,
     path: []const u8,
+    /// Also accepts the array part, the children of a container.
+    children: bool = false,
 };
 
 const OptionalInteger = struct {

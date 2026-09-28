@@ -25,6 +25,10 @@ pub const Action = union(enum) {
     attachment_shelf_hold,
     attachment_modal_close,
     attachment_modal_hold,
+    bar_component: data.BarComponent,
+    toggle_bar_overflow,
+    panel_component: u8,
+    close_panel,
 };
 
 // Worst case is 64 visible agent cards plus a one-row scrollbar target for

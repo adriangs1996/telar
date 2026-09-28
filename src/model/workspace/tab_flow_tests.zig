@@ -22,6 +22,7 @@ const workspace_handoff = @import("workspace_handoff.zig");
 const workspace_reconciliation = @import("workspace_reconciliation.zig");
 const pane_split = @import("pane_split.zig");
 const model_invariants = @import("../state/model_invariants.zig");
+const AgentInput = @import("../agents/AgentInput.zig");
 
 test "selection wraps and moving tabs preserves the active identity" {
     var model = ClientModel.init(std.testing.allocator, true);
@@ -653,5 +654,53 @@ test "later tab reconciliation preserves the client layout order" {
     try std.testing.expectEqual(@as(u16, 1), model.tabs.layout[tab].displayIndex(@enumFromInt(10)).?);
     try std.testing.expectEqual(@as(u16, 2), model.tabs.layout[tab].displayIndex(@enumFromInt(77)).?);
     try std.testing.expectEqual(@as(u16, 3), model.tabs.layout[tab].displayIndex(@enumFromInt(42)).?);
+    try model_invariants.check(&model);
+}
+
+test "captions name the agent's session, else the directory beside the application" {
+    var model = ClientModel.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: core.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: core.PaneId = @enumFromInt(1);
+    try workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 10 } });
+    const tab = model.tabs.active;
+    var storage: [tab_label.caption_bytes]u8 = undefined;
+    try std.testing.expectEqualStrings("shell", tab_label.caption(&model, tab, &storage));
+
+    const pane = model.panes.find(pane_id).?;
+    _ = try pane.setCwd("/home/someone/apps/replay-web");
+    _ = pane.setForegroundName("fish");
+    try std.testing.expectEqualStrings("replay-web \u{00b7} fish", tab_label.caption(&model, tab, &storage));
+
+    // A placeholder title says nothing about the task, so the directory stays.
+    var agent: AgentInput = .{
+        .key = .{ .pane_id = pane_id, .pane_generation = 1 },
+        .location = location,
+        .pane_index = 1,
+        .provider = .claude,
+        .status = .working,
+        .session_title = "New Claude session",
+    };
+    _ = try model.agent_snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
+    try std.testing.expectEqualStrings("replay-web \u{00b7} fish", tab_label.caption(&model, tab, &storage));
+
+    agent.session_title = "Fix flaky login test";
+    agent.title_state = .ready;
+    _ = try model.agent_snapshot.replace(.{ .revision = 2, .agents = &.{agent} });
+    try std.testing.expectEqualStrings("Fix flaky login test", tab_label.caption(&model, tab, &storage));
+    // The name elsewhere (window title, accessibility) keeps the application.
+    try std.testing.expectEqualStrings("fish", tab_label.text(&model, tab));
+
+    // An agent in another tab never names this one.
+    agent.location.tab_id = @enumFromInt(2);
+    _ = try model.agent_snapshot.replace(.{ .revision = 3, .agents = &.{agent} });
+    try std.testing.expectEqualStrings("replay-web \u{00b7} fish", tab_label.caption(&model, tab, &storage));
+
+    // A manual label wins over everything.
+    _ = try tab_rename.rename(&model, location.tab_id, "server");
+    try std.testing.expectEqualStrings("server", tab_label.caption(&model, tab, &storage));
     try model_invariants.check(&model);
 }

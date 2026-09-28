@@ -626,7 +626,7 @@ test "system metrics commit before presenter-owned projection" {
     try std.testing.expectEqual(@as(u16, 0), expanded_bottom.x);
     try std.testing.expectEqual(terminal.presenter.screen.front.w, expanded_bottom.w);
     try std.testing.expect(std.mem.indexOf(u8, expanded_text, " 50%") != null);
-    try std.testing.expect(std.mem.indexOf(u8, expanded_text, " 1.0G") != null);
+    try std.testing.expect(std.mem.indexOf(u8, expanded_text, "1.0 GB") != null);
     try std.testing.expect(std.mem.indexOf(u8, expanded_text, "80%") != null);
 }
 
@@ -967,9 +967,9 @@ test "a sound the host cannot start releases its token and does not poison a lat
     });
 
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(message));
-    const job = client.to_workers.pop().?;
+    const job = client.to_background.pop().?;
     try std.testing.expect(job == .sound);
-    try client.failJob(job, error.SoundSchedulingFailed);
+    try client.failBackgroundJob(job, error.SoundSchedulingFailed);
 
     try std.testing.expect(!client.model.sound_playback.snapshot().active);
     try std.testing.expect(client.model.sound_playback.snapshot().queued == null);

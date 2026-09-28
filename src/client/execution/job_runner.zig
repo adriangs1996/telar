@@ -4,6 +4,8 @@ const pacing = @import("pacing");
 const std = @import("std");
 const core = @import("telar-core");
 const Job = @import("Job.zig").Job;
+const BackgroundJob = @import("BackgroundJob.zig").BackgroundJob;
+const PluginActionsJob = @import("../plugins/PluginActionsJob.zig");
 const Message = @import("Message.zig").Message;
 const command = @import("../bars/command.zig");
 const plugins = @import("../plugins/plugins.zig");
@@ -14,8 +16,8 @@ const system_notification = @import("../notifications/system_notification.zig");
 const config_reload = @import("../resources/config_reload.zig");
 
 /// Runs `job` to completion. The adapter starts it as an inbox producer:
-/// `try inbox.start(.client, .{ job_runner.run, .{ io, gpa, job } });`
-pub fn run(io: std.Io, gpa: std.mem.Allocator, job: Job) Message {
+/// `try inbox.start(.client, .{ job_runner.run, .{ io, job } });`
+pub fn run(io: std.Io, job: Job) Message {
     return switch (job) {
         .runtime_read => |state| .{ .server = state.read(io) },
         .runtime_send => |send| .{ .sent = sendRuntime(io, send) },
@@ -24,13 +26,20 @@ pub fn run(io: std.Io, gpa: std.mem.Allocator, job: Job) Message {
             .notification => .{ .notification_tick = pacing.deadline_timer.wait(io, timer.scheduler) },
             .sidebar_animation => .{ .sidebar_animation_tick = pacing.deadline_timer.wait(io, timer.scheduler) },
         },
+    };
+}
+
+/// Runs a background `job` to completion. The adapter starts it as an inbox
+/// producer: `try inbox.start(.client, .{ job_runner.runBackground, .{ io, gpa, job } });`
+pub fn runBackground(io: std.Io, gpa: std.mem.Allocator, job: BackgroundJob) Message {
+    return switch (job) {
         .bar_command => |bar| .{ .bar_command = .{
             .execution_id = bar.execution_id,
             .result = command.run(io, bar.command),
         } },
         .plugin => |plugin| .{ .plugin_result = .{
             .execution_id = plugin.execution_id,
-            .result = plugins.executeWorker(io, gpa, plugin.request),
+            .result = runPlugin(io, gpa, plugin),
         } },
         .path_completion => |completion| .{ .path_completion = .{
             .execution_id = completion.execution_id,
@@ -59,6 +68,16 @@ pub fn failed(job: Job, err: anyerror) Message {
             .notification => .{ .notification_tick = err },
             .sidebar_animation => .{ .sidebar_animation_tick = err },
         },
+    };
+}
+
+/// The completion of a background job that never ran, as `failed`.
+///
+/// ```zig
+/// _ = try client.update(job_runner.failedBackground(job, error.InboxFull));
+/// ```
+pub fn failedBackground(job: BackgroundJob, err: anyerror) Message {
+    return switch (job) {
         .bar_command => |bar| .{ .bar_command = .{
             .execution_id = bar.execution_id,
             .result = err,
@@ -76,6 +95,10 @@ pub fn failed(job: Job, err: anyerror) Message {
         .system_notification => .{ .notified = err },
         .config_watch => .{ .config_reload = err },
     };
+}
+
+fn runPlugin(io: std.Io, gpa: std.mem.Allocator, plugin: PluginActionsJob) anyerror!void {
+    plugin.result.* = try plugins.executeWorker(io, gpa, plugin.request);
 }
 
 fn sendRuntime(io: std.Io, send: Job.RuntimeSend) anyerror!void {

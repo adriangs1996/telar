@@ -26,7 +26,7 @@ Three fields describe what the agent wants from the person:
 
 | Field | Bound | Source |
 | --- | --- | --- |
-| `blocked_reason` | `none`, `permission`, `question`, `plan`, `other`; `none` unless the status is `blocked` | The lifecycle report when its hook names one (Claude Code `permission_prompt`, elicitation notifications, `AskUserQuestion` and `ExitPlanMode` tool starts; Codex `PermissionRequest`; Pi dialogs). Without a report, a blocked agent whose last proxy response closed on a tool request while no exchange is open is `permission`; any other blocked state is `other`. |
+| `blocked_reason` | `none`, `permission`, `question`, `plan`, `other`; `none` unless the status is `blocked` | The lifecycle report when its hook names one (Claude Code `permission_prompt`, elicitation notifications, `AskUserQuestion` and `ExitPlanMode` tool starts; Codex `PermissionRequest`; Pi dialogs). Cursor Agent has no hook for its approvals, so its approval and plan-review screens are `other`. Without a report, a blocked agent whose last proxy response closed on a tool request while no exchange is open is `permission`; any other blocked state is `other`. |
 | `last_event` | one control-free UTF-8 line of at most 96 bytes | The event line of the lifecycle report the projection follows: the prompt text while blocked, the last tool call (`» Edit src/client/bars/Output.zig`) while working, the first line of the final assistant message when done. Empty while any other evidence decides. |
 | `status_age_s` | `u32` seconds | The runtime clock at encode time minus the last projected status change. It is never part of the revision; the client adds the time since the snapshot arrived. |
 
@@ -203,7 +203,8 @@ way the top bar, tab strip and status bar come off the height. Its width is
 the display and rounded, and an 8 logical px gap separates the edge line
 from the first cell column. The band is clamped so the workbench keeps at
 least 20 columns after the gap and the right window padding; a window that
-cannot hold the narrowest band beside that workbench hides it. The width is
+cannot hold the narrowest band beside that workbench collapses it to the
+workspace rail, and one that cannot hold even the rail hides the band. The width is
 a disposable host preference (`SidebarPreference`) seeded from the Lua
 value: `resize_sidebar` moves it by 16 logical px, dragging the edge sets
 the exact width under the pointer, both clamp to the same bounds, and a
@@ -236,19 +237,63 @@ repaints retain manual scrolling. Headers and the resize gutter do not scroll.
 The viewports belong to the delivered hit map, so pending or failed frames
 cannot change which list receives a pointer event.
 
-When the sidebar is hidden or too short for a project line, the top bar shows
-compact project indicators: their one-based position and the existing favicon,
-or a folder glyph when no favicon is available. Names and pill backgrounds are
-absent. The active project uses the accent color and a small dot underneath;
-agent attention gets a separate dot at the top right. Each indicator occupies
-40 logical px with a 4 px gap. All projects that fit within the navigation
-region remain visible in runtime order, without a three-project limit. Only
-physical overflow uses counters that select the nearest hidden project and
-retain its group's attention signal. An unlisted workspace
-or worktree retains its current-context label there. Tab layout and behavior
-are unchanged in either case. All navigation still uses the shared client
-intents; the GUI keeps only bounded disposable scroll state. Configured
+A collapsed sidebar keeps a workspace rail (`widgets/WorkspaceRail.zig`):
+a band of `SidebarBand.logical_rail` (52) logical px with the same 8 px gap,
+running from under navigation to the status bar. One 36 px control per
+project in runtime order, 10 px apart below a 12 px inset, holds the favicon
+or, without one, a 20 px tile tinted with a hue the project's name picks from
+the palette's accents and holding its bold initial (`WorkspaceMark`), so
+projects without favicons still differ; the rail shows no numbers. Idle
+controls have no surface; hover draws `surface0` and the selected project
+`surface1` with a 3 px accent pill whose rounded end shows at the rail's edge. Agent attention is a dot in
+the top-right corner inside a ring of the rail's background. When the rail is too short for every project, the window
+centred on the selection keeps its marks and `+N` counters above and below
+select the nearest hidden project and keep the attention of the ones they
+hide. Hovering a mark shows `RailTooltip` beside the rail, above the panes:
+the project's name and what it runs, `N waiting`, else `N agents`, else
+`N tabs`. The tooltip paints only; the mark owns the target.
+
+Navigation spans the window and shares its row with the window's own
+controls. On macOS, with `gui.window.titlebar = false`, the traffic lights
+stay visible over a transparent titlebar: `TelarWindow` centres them on the
+navigation row the frame reports (`telar_gui_frame.navigation`) at a 14 pt
+lead and 20 pt pitch, and reports the points they cover through
+`telar_gui_viewport.controls`, zero in fullscreen, with the native titlebar
+and on Linux. After that room comes the sidebar toggle, a glyph with a quiet
+hover surface. Above the rail the context name follows, the listed project's
+name or the unlisted workspace or worktree label, then a separator, then the
+tabs; with the sidebar expanded the tabs start where the workbench starts.
+Only a window too narrow for the rail, or an expanded sidebar too short for
+project rows, falls back to the compact top-bar indicators
+(`WorkspaceIndicators`). All navigation still uses the shared client intents;
+the GUI keeps only bounded disposable scroll and pointer state. Configured
 metrics and other widgets belong in the bottom status bar.
+
+The tab strip (`widgets/TabStrip.zig`) packs tabs from the left, each a
+30 px pill with a 10 px radius: a 20 px translucent chip holding the
+application mark (`tab_label.mark`, the focused application's even for a
+renamed tab), the caption and a trailing status. While the prefix waits for a
+digit the chips show the tabs' numbers instead, so widths never change. The
+caption is `tab_label.caption`: a manual label, else the focused pane's agent
+session title once it is no longer a placeholder, else the focused directory
+beside the foreground application (`replay-web · fish`). The status is the
+selected pane's progress report, else the tab's most urgent agent: a spinner
+stepping every 120 ms while it works, a dot in the attention colour when it
+waits, fails or is done. Only the selected tab is filled, with no outline or
+shadow; hover gives the others a quieter fill and brightens their mark.
+The selected tab keeps its whole caption up to 300 px or 55 % of the strip.
+The others share the rest at the richest fit that holds all of them: whole
+captions up to 220 px, then captions truncated to a common cap no shorter
+than 56 px of text. When not every caption fits, the tabs nearest the
+selection keep one and the farther ones shrink to their chip, so no usable
+room is left over. Truncated captions fade over their last 20 px instead of
+ending in an ellipsis. Past the chips, the tabs farthest from the selection
+hide behind a `+N` counter that selects the nearest hidden tab and keeps
+their attention dot, and `+` follows the last visible control. While the
+pointer rests on the strip, widths stay laid out around the tab they were
+built for, so a click changes the selection without moving tabs under the
+pointer; leaving the strip relayouts it, and a selection the frozen layout
+would hide rebuilds it at once.
 
 During the empty tab-model phase of a workspace handoff, the top bar retains
 the last delivered project identity while it remains in the workspace list.
@@ -260,8 +305,11 @@ it. This retains no pane data and does not change navigation authority.
 independent scrolling, selected-row visibility, deferred delivery and display
 scaling. The existing sidebar warm-repaint test includes project names and
 paths, and the favicon tests verify that rows and cards reuse the same sprite.
-`src/gui/tests/top_navigation.zig` covers compact indicators, shared favicons
-at both display scales, stable positions, overflow navigation and tab bounds.
+`src/gui/tests/top_navigation.zig` covers the rail's marks, numbers,
+favicons at both display scales, stable positions, overflow counters and tab
+placement in both sidebar states. `src/gui/tests/tab_strip.zig` covers the
+selected tab's lift, compression and the hidden-tab counter, frozen widths,
+faded captions, the rail tooltip and session-title captions.
 
 ## Detector wiring
 

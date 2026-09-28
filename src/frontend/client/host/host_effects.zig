@@ -76,11 +76,20 @@ fn startJobs(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
     try client.flush();
-    while (client.to_workers.pop()) |job| {
-        terminal.inbox.start(.client, .{ client_module.job_runner.run, .{ client.io, client.gpa, job } }) catch |err| {
-            try client.failJob(job, err);
-            try client.flush();
-        };
+    while (true) {
+        if (client.to_workers.pop()) |job| {
+            terminal.inbox.start(.client, .{ client_module.job_runner.run, .{ client.io, job } }) catch |err| {
+                try client.failJob(job, err);
+                try client.flush();
+            };
+        } else if (client.to_background.pop()) |job| {
+            terminal.inbox.start(.client, .{ client_module.job_runner.runBackground, .{ client.io, client.gpa, job } }) catch |err| {
+                try client.failBackgroundJob(job, err);
+                try client.flush();
+            };
+        } else {
+            return;
+        }
     }
 }
 

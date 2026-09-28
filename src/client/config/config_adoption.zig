@@ -23,7 +23,7 @@ pub fn scheduleConfigReload(client: *Client) !void {
     const generation = client.lua_generation orelse return error.ConfigurationNotLoaded;
     const registry = client.plugin_registry orelse return error.ConfigurationNotLoaded;
 
-    try client.to_workers.push(config_reload.schedule(
+    try client.to_background.push(config_reload.schedule(
         &client.reload,
         .{
             .io = client.io,

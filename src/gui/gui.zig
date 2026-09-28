@@ -18,13 +18,16 @@ pub const PointerEvent = @import("input/PointerEvent.zig");
 pub const TextInput = @import("input/TextInput.zig");
 
 test {
+    _ = @import("tests/cache_trace.zig");
     _ = @import("tests/change_review.zig");
     _ = @import("tests/agent_peek.zig");
     _ = @import("tests/change_review_navigation.zig");
     _ = @import("tests/frame_pacer.zig");
     _ = @import("tests/input_pacing.zig");
     _ = @import("tests/top_navigation.zig");
+    _ = @import("tests/tab_strip.zig");
     _ = @import("tests/status_bar.zig");
+    _ = @import("tests/bar_components.zig");
     _ = @import("tests/widget_interaction.zig");
     _ = @import("diagrams/tests.zig");
     _ = @import("diagrams/theme.zig");
@@ -59,7 +62,9 @@ test {
     _ = @import("tests/composition_budget.zig");
     _ = @import("tests/overlays.zig");
     _ = @import("tests/history_modal.zig");
+    _ = @import("tests/path_picker.zig");
     _ = @import("tests/history_rendering.zig");
+    _ = @import("widgets/overlays/LoadingCue.zig");
     _ = @import("tests/notifications.zig");
     _ = @import("tests/scene.zig");
     _ = @import("tests/visual_language.zig");

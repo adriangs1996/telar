@@ -78,9 +78,43 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
             .notification_dismiss => "Dismiss notification",
             .attachment_dismiss => "Dismiss attachment",
             .prompt_row => "Choose result",
+            .bar_component => |component| blk: {
+                const content = projection.bar_state.layout.content(component.position) orelse break :blk "Bar item";
+                break :blk componentName(content, component.node) orelse "Bar item";
+            },
+            .panel_component => |index| componentName(&projection.bar_state.panel.content, index) orelse "Panel button",
+            .toggle_bar_overflow => "More bar items",
+            .close_panel => "Close panel",
             .none => "",
         },
     };
+}
+
+/// The words a screen reader says for a bar or panel component: its own
+/// text, else its mark, else its first child's text.
+fn componentName(content: anytype, index: u8) ?[]const u8 {
+    if (index >= content.node_count) {
+        return null;
+    }
+
+    const node = content.slice()[index];
+    if (node.text.len != 0) {
+        return content.text(node.text);
+    }
+    if (node.mark) |mark| {
+        return @tagName(mark);
+    }
+
+    for (content.slice()) |child| {
+        if (child.parent != index or child.in_tooltip or child.text.len == 0) {
+            continue;
+        }
+
+        // A clock's text is its format, not what it says.
+        return if (child.kind == .clock) "Clock" else content.text(child.text);
+    }
+
+    return null;
 }
 
 const std = @import("std");

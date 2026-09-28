@@ -143,10 +143,11 @@ pub fn authorizeBatch(self: *const Registry, authorization: BatchAuthorization) 
             .command_tab,
             .goto_picker,
             .history_palette,
+            .path_picker,
             .suggest_command,
             => null,
             .notification => .notifications,
-            .scroll_pane, .lua_callback, .lua_expr, .plugin => return error.InvalidPluginEffect,
+            .scroll_pane, .lua_callback, .lua_expr, .plugin, .open_panel, .close_panel, .refresh_panel => return error.InvalidPluginEffect,
         };
         if (capability) |required| {
             try self.authorize(authorization.package_index, required);

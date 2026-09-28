@@ -6,7 +6,7 @@ const Resolved = @import("Resolved.zig");
 const GenericKeymap = keyinput.GenericKeymap;
 const std = @import("std");
 
-pub const count = 42;
+pub const count = 43;
 pub const Binding = keyinput.GenericBinding(data.Action, data.config_values.max_binding_keys);
 
 pub fn load(prefix: keyinput.Key) ![count]Binding {
@@ -51,6 +51,12 @@ pub fn load(prefix: keyinput.Key) ![count]Binding {
         try prefixed(prefix, "g", .goto_picker),
 
         try prefixed(prefix, "/", .history_palette),
+
+        try prefixed(
+            prefix,
+            "f",
+            .path_picker,
+        ),
 
         try prefixed(prefix, "?", .suggest_command),
 

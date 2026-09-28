@@ -13,6 +13,7 @@ const client_connection = @import("client_connection.zig");
 const client_delivery = @import("client_delivery.zig");
 const command_history = @import("command_history.zig");
 const link_opening = @import("link_opening.zig");
+const path_picker = @import("path_picker.zig");
 const pane_closure = @import("pane_closure.zig");
 const pane_graphics = @import("pane_graphics.zig");
 const pane_input = @import("pane_input.zig");
@@ -176,6 +177,8 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
         .engine_response => |result| try suggest_command.finish(model, result),
         .change_review_completed => |job| change_review.finish(model, job),
         .editor_opened => |job| link_opening.finish(model, job),
+        .path_index_built => |index| path_picker.finishBuild(model, index),
+        .paths_found => |query| path_picker.finishQuery(model, query),
         .history_response => |result| try command_history.receive(model, result),
         .git_status => |completion| workspace_git.finish(model, completion),
         .worktree_git => |completion| worktree_git.finish(model, completion),

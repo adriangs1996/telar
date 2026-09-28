@@ -28,7 +28,7 @@ pub fn applyCopyMode(client: *Client, command: data.CopyModeCommand) !CopyModeOu
 
     const plan = data.copy_mode.planCommand(&client.model, command) orelse return .unchanged;
     if (plan.open_link) |target| {
-        _ = try link_opening.openLink(client, target);
+        _ = try link_opening.openLink(client, target, plan.previous.pane_id);
 
         return .unchanged;
     }

@@ -33,6 +33,12 @@ hovered: ?action_module.Action = null,
 gesture_button: ?u8 = null,
 band_gesture: ?u8 = null,
 sidebar_resize_active: bool = false,
+/// Whether the pointer rests on the delivered tab strip.
+pointer_in_tabs: bool = false,
+/// The tab the strip's widths were last laid out around. While the pointer
+/// rests on the strip this tab keeps the room of the selected one, so a click
+/// changes the selection without moving tabs under the pointer.
+tab_anchor: ?core.TabId = null,
 revision: u64 = 0,
 /// Monotonic time the driver stamps before each preparation.
 now_ns: u64 = 0,
@@ -45,10 +51,11 @@ pub fn begin(self: *Chrome, canvas: *Canvas, projection: *const client.Projectio
     const pending = self.maps.begin();
     try registerPanes(&pending.hits, projection.*);
     pending.bands = Bands.resolve(canvas);
-    pending.sidebar_regions = try SidebarRegions.resolve(canvas, pending.bands.sidebar, projection.workspaces.project_count);
+    pending.sidebar_regions = if (canvas.sidebar.expanded()) try SidebarRegions.resolve(canvas, pending.bands.sidebar, projection.workspaces.project_count) else .{};
+    pending.tab_strip = .{ .x = 0, .y = 0, .width = 0, .height = 0 };
     self.ages.observe(projection.agents, self.now_ns);
     self.progress.begin();
-    const context: Context = .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = self.hovered, .presented_workspace = self.presented().workspace, .ages = &self.ages, .favicons = &self.favicons, .progress = &self.progress, .sidebar_regions = &pending.sidebar_regions };
+    const context: Context = .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = self.hovered, .presented_workspace = self.presented().workspace, .ages = &self.ages, .favicons = &self.favicons, .progress = &self.progress, .sidebar_regions = &pending.sidebar_regions, .tab_strip = &pending.tab_strip, .pointer_in_tabs = self.pointer_in_tabs, .tab_anchor = &self.tab_anchor, .bar_panel = &pending.bar_panel, .bar_overflow = &pending.bar_overflow };
     pending.workspace = context.workspaceId();
     return context;
 }
@@ -57,10 +64,18 @@ pub fn begin(self: *Chrome, canvas: *Canvas, projection: *const client.Projectio
 /// The caller owns the context through draw. Example: `try chrome.compose(&context, &widgets);`
 pub fn compose(self: *Chrome, context: *Context, widgets: anytype) !void {
     const bands = self.maps.preparing().bands;
-    try widgets.append(.{ .top_bar = .{ .context = context, .area = bands.top_bar, .sidebar_visible = bands.sidebar.width > 0 } });
+    try widgets.append(.{ .top_bar = .{ .context = context, .area = bands.top_bar } });
     try widgets.append(.{ .status = .{ .context = context, .area = bands.status_bar } });
-    try widgets.append(.{ .sidebar = .{ .state = &self.sidebar, .context = context, .area = bands.sidebar } });
+    if (bands.rail) {
+        self.sidebar.hide();
+        try widgets.append(.{ .rail = .{ .context = context, .area = bands.sidebar } });
+    } else {
+        try widgets.append(.{ .sidebar = .{ .state = &self.sidebar, .context = context, .area = bands.sidebar } });
+    }
+
     try widgets.append(.{ .panes = .{ .context = context, .rings = &self.rings } });
+    try widgets.append(.{ .rail_tooltip = .{ .context = context, .area = bands.sidebar } });
+    try widgets.append(.{ .bar_overlay = .{ .context = context, .area = bands.status_bar } });
 }
 
 /// Seals hit records only after every composed widget has drawn successfully.
@@ -144,8 +159,11 @@ pub fn pointer(self: *Chrome, event: keyinput.Mouse) client.ViewInteractionComma
 /// Example: `if (chrome.bandPointer(event)) |command| return apply(command);`
 pub fn bandPointer(self: *Chrome, event: PointerEvent) ?BandCommand {
     const visible = self.presented();
+    self.trackTabs(Bands.within(visible.tab_strip, event.x, event.y));
     const action = visible.band_hits.at(.{ event.x, event.y });
-    const inside = action != null or visible.bands.contains(event.x, event.y);
+    const panel_open = visible.bar_panel.width > 0;
+    const in_panel = panel_open and Bands.within(visible.bar_panel, event.x, event.y);
+    const inside = action != null or in_panel or visible.bands.contains(event.x, event.y);
     if (self.band_gesture) |button| {
         if (event.kind == .release or event.kind == .drag) {
             const resize = self.sidebar_resize_active;
@@ -162,6 +180,12 @@ pub fn bandPointer(self: *Chrome, event: PointerEvent) ?BandCommand {
     }
 
     if (!inside) {
+        // A press on the panes while a bar panel is open only dismisses it.
+        if (panel_open and event.kind == .press) {
+            self.hover(null);
+            return .{ .interaction = .{ .intent = .close_panel, .consumed = true } };
+        }
+
         return null;
     }
 
@@ -233,6 +257,15 @@ fn buttonIntent(intent: client.Intent, button: u8) client.Intent {
     };
 }
 
+// Entering or leaving the strip relayouts it: inside, the widths hold still;
+// outside, they follow the selection again.
+fn trackTabs(self: *Chrome, inside: bool) void {
+    if (inside != self.pointer_in_tabs) {
+        self.pointer_in_tabs = inside;
+        self.invalidate();
+    }
+}
+
 fn hover(self: *Chrome, action: ?action_module.Action) void {
     if (!std.meta.eql(action, self.hovered)) {
         self.hovered = action;
@@ -250,10 +283,11 @@ fn registerPanes(hits: *HitMap, projection: client.Projection) !void {
 /// Clears gestures when window focus is lost and no release can arrive.
 /// Example: `chrome.cancelPointer();`
 pub fn cancelPointer(self: *Chrome) void {
-    if (self.gesture_button == null and self.band_gesture == null and self.hovered == null) {
+    if (self.gesture_button == null and self.band_gesture == null and self.hovered == null and !self.pointer_in_tabs) {
         return;
     }
 
+    self.pointer_in_tabs = false;
     self.gesture_button = null;
     self.band_gesture = null;
     self.sidebar_resize_active = false;
@@ -264,6 +298,7 @@ pub fn cancelPointer(self: *Chrome) void {
 /// Leaving the window clears hover while an acquired drag keeps its owner.
 /// Example: `chrome.leavePointer();`
 pub fn leavePointer(self: *Chrome) void {
+    self.trackTabs(false);
     if (self.hovered != null) {
         self.hovered = null;
         self.invalidate();

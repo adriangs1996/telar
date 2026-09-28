@@ -1722,7 +1722,9 @@ const TransmissionFixture = struct {
         .byte_len = 512 * 256 * 4,
     };
 
-    model: data.ClientModel,
+    /// On the heap: the client model is larger than a test thread's stack
+    /// holds in the several copies returning it by value would make.
+    model: *data.ClientModel,
     store: kitty_delivery.Store,
 
     pub fn init(pixels: []const u8) !TransmissionFixture {
@@ -1731,9 +1733,11 @@ const TransmissionFixture = struct {
             .workspace = .{ .workspace = @enumFromInt(1) },
             .tab_id = @enumFromInt(1),
         };
-        var model = data.ClientModel.init(std.testing.allocator, true);
+        const model = try std.testing.allocator.create(data.ClientModel);
+        errdefer std.testing.allocator.destroy(model);
+        model.* = data.ClientModel.init(std.testing.allocator, true);
         errdefer model.deinit();
-        try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
+        try data.workspace_handoff.bootstrap(model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
         var store = kitty_delivery.Store.init(std.testing.allocator);
         errdefer store.deinit();
         try store.applyImage(.{ .pane_id = @enumFromInt(1), .revision = 1, .image = metadata });
@@ -1761,12 +1765,13 @@ const TransmissionFixture = struct {
     pub fn deinit(self: *TransmissionFixture) void {
         self.store.deinit();
         self.model.deinit();
+        std.testing.allocator.destroy(self.model);
     }
 
     pub fn writer(self: *TransmissionFixture, budget: usize) KittyGraphicsWriter {
         return .{
             .store = &self.store,
-            .layout_snapshot = data.tab_layout.snapshot(&self.model, 0, .{ .w = 10, .h = 5 }),
+            .layout_snapshot = data.tab_layout.snapshot(self.model, 0, .{ .w = 10, .h = 5 }),
             .cell_width = 10,
             .cell_height = 20,
             .budget = budget,

@@ -1,16 +1,59 @@
 //! Bounded configuration and presentation state for client-owned bars.
 
 const cellgrid = @import("cellgrid");
-const Content = @import("Content.zig");
+const GenericContent = @import("GenericContent.zig").Type;
 const Dynamic = @import("Dynamic.zig");
 const Command = @import("BarCommand.zig");
 const std = @import("std");
 const ui_icons = @import("../layout/icons.zig");
 const Configuration = @import("BarConfiguration.zig");
 const State = @import("State.zig");
+const NodeKind = @import("NodeKind.zig").NodeKind;
+const MetricName = @import("MetricName.zig").MetricName;
 
 pub const max_segments = 16;
+/// Legacy plain command output without a render callback stays one line of
+/// at most this many bytes.
 pub const max_text_bytes = 512;
+pub const max_bar_nodes = 32;
+pub const max_bar_text_bytes = 1024;
+pub const max_bar_actions = 4;
+pub const max_panel_nodes = 64;
+pub const max_panel_text_bytes = 4096;
+pub const max_panel_actions = 8;
+/// Command output handed to a render callback, such as a JSON document.
+pub const max_command_output_bytes = 64 * 1024;
+
+/// The components of one bar slot.
+pub const Content = GenericContent(max_bar_nodes, max_bar_text_bytes, max_bar_actions);
+/// The components of one open panel.
+pub const PanelContent = GenericContent(max_panel_nodes, max_panel_text_bytes, max_panel_actions);
+pub const max_panels = 8;
+
+/// What `telar.bar.metrics()` shows: one group of CPU, memory and battery,
+/// each formatted by the adapter from the runtime's latest sample.
+pub const metrics_content: Content = metricsContent();
+
+fn metricsContent() Content {
+    @setEvalBranchQuota(100_000);
+    var content: Content = .{};
+    const group = content.append(.{
+        .kind = .group,
+        .priority = metric_priority,
+    }) catch unreachable;
+    for ([_]MetricName{ .cpu, .memory, .battery }) |name| {
+        _ = content.append(.{
+            .kind = .metric,
+            .parent = group,
+            .metric = name,
+            .priority = metric_priority,
+        }) catch unreachable;
+    }
+
+    return content;
+}
+
+const metric_priority: u8 = 40;
 pub const max_command_args = 32;
 pub const max_command_bytes = 4096;
 pub const min_interval_ms: u32 = 100;
@@ -82,7 +125,6 @@ pub const Source = union(enum) {
 pub const Slot = union(enum) {
     empty,
     tabs,
-    metrics,
     content: Content,
 };
 
@@ -95,7 +137,7 @@ pub fn presentationSlot(source: *const Source) Slot {
     return switch (source.*) {
         .empty => .empty,
         .tabs => .tabs,
-        .metrics => .metrics,
+        .metrics => .{ .content = metrics_content },
         .static => |content| .{ .content = content },
         .dynamic, .command => .{ .content = .{} },
     };
@@ -112,42 +154,21 @@ pub fn slotEql(left: *const Slot, right: *const Slot) bool {
     };
 }
 
-pub fn validText(text: []const u8) bool {
-    if (!std.unicode.utf8ValidateSlice(text)) {
-        return false;
-    }
-
-    for (text) |byte| {
-        if (byte < 0x20 or byte == 0x7f) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-test "bar content keeps bounded segment text and exact style" {
+test "legacy segments become labels that keep their exact style" {
     var content: Content = .{};
-    try content.append(.{
+    try content.appendSegment(.{
         .text = " CPU 20%",
         .icon = .cpu,
         .style = .{ .foreground = .{ .palette = .teal }, .bold = true },
     });
+    try content.appendSegment(.{ .text = "", .icon = .battery_full });
 
-    try std.testing.expectEqual(@as(u8, 1), content.segment_count);
-    try std.testing.expectEqualStrings(" CPU 20%", content.text(content.slice()[0]));
-    try std.testing.expectEqual(@as(u16, 9), content.width());
+    try std.testing.expectEqual(@as(u8, 2), content.node_count);
+    try std.testing.expectEqual(NodeKind.label, content.slice()[0].kind);
+    try std.testing.expectEqualStrings(" CPU 20%", content.text(content.slice()[0].text));
     try std.testing.expect(content.slice()[0].style.bold);
-}
-
-test "bar content reserves the rendered width of wide Unicode icons" {
-    var content: Content = .{};
-    try content.append(.{ .text = "", .icon = .battery_full });
-
-    try std.testing.expectEqual(
-        @max(@as(u16, 1), cellgrid.text.measure(ui_icons.Icon.battery_full.unicodeGlyph())),
-        content.width(),
-    );
+    try std.testing.expectEqual(NodeKind.icon, content.slice()[1].kind);
+    try std.testing.expectEqual(ui_icons.Icon.battery_full, content.slice()[1].icon.?);
 }
 
 test "bar state rejects stale dynamic updates and folds equal content" {
@@ -160,7 +181,7 @@ test "bar state rejects stale dynamic updates and folds equal content" {
     };
     var state = State.init(configuration.presentation());
     var content: Content = .{};
-    try content.append(.{ .text = "ready" });
+    try content.appendSegment(.{ .text = "ready" });
 
     try std.testing.expectError(error.StaleBarUpdate, state.update(.{ .generation = 6, .position = .bottom_left, .content = content }));
     try std.testing.expectEqual(Change.changed, try state.update(.{ .generation = 7, .position = .bottom_left, .content = content }));
@@ -170,6 +191,6 @@ test "bar state rejects stale dynamic updates and folds equal content" {
 test "bar text rejects terminal controls before it reaches the renderer" {
     var content: Content = .{};
 
-    try std.testing.expectError(error.InvalidBarText, content.append(.{ .text = "line\n" }));
-    try std.testing.expectError(error.InvalidBarText, content.append(.{ .text = "\x1b[31m" }));
+    try std.testing.expectError(error.InvalidBarText, content.appendSegment(.{ .text = "line\n" }));
+    try std.testing.expectError(error.InvalidBarText, content.appendSegment(.{ .text = "\x1b[31m" }));
 }

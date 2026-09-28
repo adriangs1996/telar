@@ -17,6 +17,11 @@ Recording permission of the terminal that runs the tool; without it every
 capture logs `could not create image from window` and the run fails on the
 missing files while the driven sequence still completes.
 
+`tools/gui_history_typing.py` takes the same two arguments. It types a query
+into the open panel, records every frame the window submits and fails when a
+frame dims the rows or draws the loading line, which is how a keystroke used
+to flash the panel. It needs no Screen Recording permission.
+
 The automated coverage lives in `src/gui/tests/history_modal.zig`,
 `src/gui/tests/history_rendering.zig` and `src/gui/tests/overlays.zig`: row
 selection without submission, stale-page rejection, chip clicks, inspector

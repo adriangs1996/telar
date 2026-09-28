@@ -10,13 +10,13 @@ const data = @import("model");
 const core = @import("telar-core");
 const Context = @import("Context.zig");
 const TopBarInput = @import("TopBarInput.zig");
-const status_bar = @import("status_bar.zig");
 const bar_content = @import("bar_content.zig");
 const std = @import("std");
 const widget = @import("context_support.zig");
 const Plan = @import("../ui/Plan.zig");
 
 pub const empty_right: data.bar_values.Slot = .empty;
+pub const empty_facts: data.BarFacts = .{};
 
 pub fn render(context: *Context, input: TopBarInput) void {
     const area = input.area;
@@ -128,8 +128,11 @@ pub fn render(context: *Context, input: TopBarInput) void {
 
 fn rightDesiredWidth(input: TopBarInput) u16 {
     return switch (input.right.*) {
-        .content => |*content| content.width(),
-        .metrics => status_bar.desiredWidth(input.system_metrics),
+        .content => |*content| bar_content.desiredWidth(.{
+            .content = content,
+            .facts = input.facts,
+            .position = .top_right,
+        }),
         .empty, .tabs => 0,
     };
 }
@@ -139,8 +142,9 @@ fn renderRight(context: *Context, area: cellgrid.Rect, input: TopBarInput) void 
         .content => |*content| bar_content.render(context, area, .{
             .content = content,
             .alignment = .right,
+            .facts = input.facts,
+            .position = .top_right,
         }),
-        .metrics => status_bar.render(context, area, input.system_metrics),
         .empty, .tabs => {},
     }
 }
@@ -585,7 +589,7 @@ test "configured right content stops before the permanent proxy badge" {
     };
     const workspaces: data.WorkspaceListSnapshot = .{};
     var content: data.Content = .{};
-    try content.append(.{ .text = "quota", .style = .{ .foreground = .{ .palette = .accent } } });
+    try content.appendSegment(.{ .text = "quota", .style = .{ .foreground = .{ .palette = .accent } } });
     const right: data.bar_values.Slot = .{ .content = content };
 
     render(&context, .{

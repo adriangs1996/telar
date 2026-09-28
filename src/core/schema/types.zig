@@ -47,6 +47,11 @@ pub const max_agent_final_message_bytes = 2048;
 pub const max_agent_plan_step_bytes = 96;
 pub const max_search_needle_bytes = 128;
 pub const max_search_matches = 64;
+/// A path picker query: fuzzy alignment cost grows with its length.
+pub const max_path_query_bytes = 64;
+pub const max_path_results = 50;
+/// One path relative to the picker's root.
+pub const max_path_match_bytes = 1024;
 pub const max_pane_text_rows = 200;
 pub const max_pane_text_bytes = 64 * 1024;
 pub const max_pane_text_input_bytes = 16 * 1024;
@@ -236,6 +241,17 @@ pub const HistoryScope = enum(u8) {
     pane = 3,
 };
 
+pub const PathKind = enum(u8) {
+    file = 0,
+    directory = 1,
+};
+
+pub const PathKindFilter = enum(u8) {
+    any = 0,
+    files = 1,
+    directories = 2,
+};
+
 pub const HistoryStatus = enum(u8) {
     completed = 0,
     interrupted = 1,
@@ -288,11 +304,12 @@ pub const AgentProvider = enum(u8) {
     claude = 1,
     codex = 2,
     pi = 3,
+    cursor = 4,
     _,
 };
 
 pub const max_agent_manifests = 16;
-pub const first_custom_agent_provider: u8 = 4;
+pub const first_custom_agent_provider: u8 = 5;
 pub const max_agent_provider_index: u8 = first_custom_agent_provider + max_agent_manifests - 1;
 pub const max_agent_provider_name_bytes = 32;
 /// Bound for a manifest display name such as "Claude Code".
@@ -367,6 +384,21 @@ pub const AgentReportState = enum(u8) {
     /// A Stop hook ran, but the agent may still continue. A newer idle
     /// composer must confirm completion before the runtime announces it.
     settling = 4,
+    /// A helper the agent started, such as a Claude Code subagent, is still
+    /// at work. It extends an unexpired `working` report and never changes
+    /// what the agent reports.
+    continuing = 5,
+    /// The turn ended while helpers the agent started, such as Claude Code
+    /// background subagents, are still at work. It projects as `working`,
+    /// `continuing` renews it, and `idle` cannot settle it.
+    waiting = 6,
+    /// The agent's prompt has sat idle. It settles the agent like `ready`,
+    /// except while an unexpired `waiting` report says helpers still work.
+    idle = 7,
+    /// The last helper a `waiting` report was waiting for has finished, and
+    /// the agent resumes no turn for it, as with Codex subagents. It settles
+    /// an unexpired `waiting` report like `ready` and changes nothing else.
+    released = 8,
 };
 
 pub const AgentAuthority = enum(u8) {
@@ -398,6 +430,9 @@ pub const AgentSessionFileKind = enum(u8) {
     claude_transcript = 0,
     /// Codex's state database; `/rename` updates `threads.name`.
     codex_state = 1,
+    /// Cursor Agent's chat metadata; `/rename` and its generated names
+    /// rewrite `title`.
+    cursor_meta = 2,
 };
 
 pub const AgentTitleState = enum(u8) {

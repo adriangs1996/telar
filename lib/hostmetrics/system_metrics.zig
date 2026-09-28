@@ -1,16 +1,16 @@
 //! Host health sampling for the runtime.
 //!
 //! A single-flight observation actor samples an owned copy. It keeps only
-//! the latest values plus the previous cpu tick counters,
-//! allocates nothing, and bumps a revision only when a value the user can see
+//! the latest values plus the previous cpu tick counters, holds no memory
+//! between samples (IOKit's power-source copies are released within one),
+//! and bumps a revision only when a value the user can see
 //! actually changed, so `pump` stays level-triggered like the agent snapshot.
 //!
 //! The runtime samples its own host on purpose: a remote client should see
 //! the machine the agents run on, not the laptop showing the UI. macOS reads
-//! mach host counters from libSystem; battery needs IOKit, which would add a
-//! framework dependency to a build that deliberately needs only a Zig
-//! compiler, so macOS reports no battery for now. Linux reads procfs and
-//! sysfs, battery included.
+//! mach host counters from libSystem and the battery from IOKit's power
+//! sources; Linux reads procfs and sysfs. A host without a battery reports
+//! none.
 
 const std = @import("std");
 const Raw = @import("Raw.zig");
@@ -92,8 +92,49 @@ fn readDarwin() ?Raw {
         .busy_ticks = user + system + nice,
         .total_ticks = user + system + nice + idle,
         .memory_used_bytes = used_pages * page_size,
-        .battery_percent = null,
+        .battery_percent = readDarwinBattery(),
     };
+}
+
+/// The first power source that reports a capacity, as a percentage of its
+/// maximum. Desktops list none.
+fn readDarwinBattery() ?u8 {
+    if (builtin.os.tag != .macos) {
+        return null;
+    }
+
+    const blob = darwin.IOPSCopyPowerSourcesInfo() orelse return null;
+    defer darwin.CFRelease(blob);
+    const sources = darwin.IOPSCopyPowerSourcesList(blob) orelse return null;
+    defer darwin.CFRelease(sources);
+
+    const current_key = darwin.__CFStringMakeConstantString(darwin.kIOPSCurrentCapacityKey);
+    const max_key = darwin.__CFStringMakeConstantString(darwin.kIOPSMaxCapacityKey);
+    const count = darwin.CFArrayGetCount(sources);
+    var index: isize = 0;
+    while (index < count) : (index += 1) {
+        // Descriptions belong to `blob`; they are not released separately.
+        const description = darwin.IOPSGetPowerSourceDescription(blob, darwin.CFArrayGetValueAtIndex(sources, index)) orelse continue;
+        const current = darwinInteger(darwin.CFDictionaryGetValue(description, current_key)) orelse continue;
+        const maximum = darwinInteger(darwin.CFDictionaryGetValue(description, max_key)) orelse continue;
+        if (maximum <= 0 or current < 0) {
+            continue;
+        }
+
+        return @intCast(@min(100, @divTrunc(current * 100, maximum)));
+    }
+
+    return null;
+}
+
+fn darwinInteger(number: darwin.CFTypeRef) ?i32 {
+    const value = number orelse return null;
+    var result: i32 = 0;
+    if (darwin.CFNumberGetValue(value, darwin.kCFNumberIntType, &result) == 0) {
+        return null;
+    }
+
+    return result;
 }
 
 // -- Linux ------------------------------------------------------------------
@@ -177,6 +218,20 @@ test "Linux system metrics read the live proc filesystem" {
     try std.testing.expect(raw.total_ticks > 0);
     try std.testing.expect(raw.busy_ticks <= raw.total_ticks);
     try std.testing.expect(raw.memory_used_bytes > 0);
+}
+
+test "macOS system metrics read mach counters and a bounded battery" {
+    if (builtin.os.tag != .macos) {
+        return error.SkipZigTest;
+    }
+
+    const raw = readDarwin() orelse return error.SystemMetricsUnavailable;
+    try std.testing.expect(raw.total_ticks > 0);
+    try std.testing.expect(raw.memory_used_bytes > 0);
+    // A desktop reports no battery; a laptop reports a percentage.
+    if (raw.battery_percent) |battery| {
+        try std.testing.expect(battery <= 100);
+    }
 }
 
 test "cpu percentage comes from tick deltas, never the since-boot average" {

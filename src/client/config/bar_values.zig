@@ -126,6 +126,15 @@ pub fn parseBarSegment(state: *lua_api.c.lua_State, index: c_int, diagnostic: *d
     };
     lua_value.pop(state, 1);
 
+    const style = try parseStyle(state, absolute, diagnostic);
+
+    return .{ .text = text_value, .icon = icon_value, .style = style };
+}
+
+/// Reads the legacy `fg`, `bg` and emphasis fields of a segment or label.
+/// Example: `const style = try bar_values.parseStyle(state, index, diagnostic);`
+pub fn parseStyle(state: *lua_api.c.lua_State, index: c_int, diagnostic: *data.Diagnostic) !data.Style {
+    const absolute = lua_api.c.lua_absindex(state, index);
     var style: data.Style = .{};
     inline for (.{ .{ "fg", "foreground" }, .{ "bg", "background" } }) |field| {
         _ = lua_api.c.lua_getfield(state, absolute, field[0]);
@@ -147,7 +156,7 @@ pub fn parseBarSegment(state: *lua_api.c.lua_State, index: c_int, diagnostic: *d
         lua_value.pop(state, 1);
     }
 
-    return .{ .text = text_value, .icon = icon_value, .style = style };
+    return style;
 }
 
 pub fn parseBarColor(state: *lua_api.c.lua_State, index: c_int, diagnostic: *data.Diagnostic) !data.bar_values.Color {

@@ -13,6 +13,7 @@ const request_failure = @import("request_failure.zig");
 const resync_required = @import("resync_required.zig");
 const copy_mode = @import("../input/copy_mode.zig");
 const history_palette = @import("../input/history_palette.zig");
+const path_picker = @import("../input/path_picker.zig");
 const editor_file_links = @import("../links/editor_file_links.zig");
 const notifications = @import("../notifications/notifications.zig");
 const pane_attachment = @import("../panes/pane_attachment.zig");
@@ -29,9 +30,17 @@ const workspace_list_snapshot = @import("../workspace/workspace_list_snapshot.zi
 const Client = @import("../execution/Client.zig");
 
 /// Applies one decoded reply while its borrowed payload remains valid.
-/// Example: `_ = try runtime_messages.handleServerMessage(client, message);`
+/// Example: `_ = try runtime_messages.handleServerMessage(client, try core.decodeServer(bytes));`
 pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
-    switch (message) {
+    return receiveServerMessage(client, &message);
+}
+
+/// Applies the message the transport owns in place. The union is kilobytes
+/// for its largest reply while a pane frame is 168 bytes, so the runtime
+/// read never copies it whole.
+/// Example: `_ = try runtime_messages.receiveServerMessage(client, &received.message);`
+pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage) !?u8 {
+    switch (message.*) {
         .change_review_changed => |notification| {
             _ = change_review.changeReviewChanged(&client.model, notification);
         },
@@ -96,7 +105,7 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
         },
         .pane_exited => |exited| _ = try pane_closure.applyPaneExit(client, exited),
         .request_failed => |failure| {
-            if (!client.model.history_palette.fail(failure)) {
+            if (!client.model.history_palette.fail(failure) and !client.model.path_picker.fail(failure)) {
                 _ = try request_failure.failRuntimeRequest(client, failure);
             }
         },
@@ -115,6 +124,7 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
         .history_output => |output| _ = client.model.history_palette.applyOutput(output),
         .command_suggestion => |suggested| _ = client.model.suggestion.apply(suggested),
         .pane_text => |text| try agent_peek.receiveScreen(&client.model, text),
+        .path_results => |results| try path_picker.receive(client, results),
         .client_command_result, .client_list, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
         .proxy_status => |status| _ = try proxy_status.applyProxyStatus(client, status),
         .agent_snapshot => |snapshot| {

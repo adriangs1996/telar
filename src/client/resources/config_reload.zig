@@ -17,7 +17,7 @@ const Generation = @import("../config/Generation.zig");
 const Orphans = @import("Orphans.zig");
 const Registry = @import("../plugins/Registry.zig");
 const std = @import("std");
-const Job = @import("../execution/Job.zig").Job;
+const BackgroundJob = @import("../execution/BackgroundJob.zig").BackgroundJob;
 
 pub const ConfigReload = union(enum) {
     unchanged: i128,
@@ -32,9 +32,9 @@ pub const ConfigReload = union(enum) {
 /// consumes a forced reload; the caller queues the job.
 ///
 /// ```zig
-/// try client.to_workers.push(schedule(&state, args));
+/// try client.to_background.push(schedule(&state, args));
 /// ```
-pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) Job {
+pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) BackgroundJob {
     defer state.force_next = false;
 
     return .{

@@ -3,6 +3,7 @@
 const core_module = @import("telar-core");
 const ReviewResult = @import("../../change_review/Result.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
+const PathQuery = @import("../../paths/PathQuery.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
 const Prepared = @import("../attachment/Prepared.zig");
@@ -29,6 +30,7 @@ pub const Effect = union(enum) {
         history_output: ?*OutputResult,
         history_stats: ?*StatsResult,
         change_review: ?*ReviewResult = null,
+        path_results: ?*PathQuery = null,
     },
     resync,
     clipboard,

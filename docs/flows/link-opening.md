@@ -15,8 +15,9 @@ context cancels a pending open.
 
 The GUI recognizes visible URLs across VT-confirmed soft wraps, inline Markdown
 links (`[label](destination)`, the form coding agents print) whose whole
-bracketed span acts as one link, and OSC 8 links whose label differs from their
-URI. Explicit links take precedence over textual recognition. The card
+bracketed span acts as one link, OSC 8 links whose label differs from their
+URI, and local file paths printed as plain text. Explicit links take precedence
+over textual recognition, and a URI over a path. The card
 (`LinkTooltip`) sits above the hovered row, or below it when the pane has no
 room above, stays inside the pane content and wraps the URI to at most twelve
 rows. Its delivered cells consume pointer gestures until another frame removes
@@ -25,11 +26,38 @@ keeps the underline alone. Distinct OSC 8 identities with the same URI remain
 distinct groups. A hard newline never joins text into a URL.
 
 Supported explicit schemes are `http`, `https`, `file`, `mailto`, `ftp`, `ssh`,
-`git`, `tel`, `magnet`, `ipfs`, `ipns`, `gemini`, `gopher` and `news`. Relative paths
-and user-defined link matchers are outside this implementation. An unsupported,
+`git`, `tel`, `magnet`, `ipfs`, `ipns`, `gemini`, `gopher` and `news`.
+User-defined link matchers are outside this implementation. An unsupported,
 invalid, overlong or omitted explicit destination cannot authorize its label as
 a substitute URL. A Markdown label is at most 512 bytes; a longer, unterminated
 or angle-bracketed form stays plain text, and its bare URI is still recognized.
+
+## File paths in prose
+
+Compilers and coding agents print paths as plain text: `src/main.zig:12`,
+`./a/b.c:7:2`, `~/.claude/settings.json`, `/tmp/report.md`. `urlscan.pathAt`
+recognizes them lexically, without touching the filesystem, as the last resort
+after OSC 8, Markdown and URIs:
+
+- an absolute path, a home path (`~/`) or a dot-relative path (`./`, `../`);
+- a project path with a slash whose file name has an extension
+  (`docs/flows/link-opening.md`); bare words with slashes such as `and/or` are
+  prose;
+- a bare file name only with a line (`main.zig:40`).
+
+A path never contains `:`, so each colon-separated segment of a token is a
+candidate and the digits after it are its `:line[:column]`. A range such as
+`:5-9` points at its first line. Sentence periods and the non-ASCII decoration a
+TUI draws around a path (box drawing, bullets, ellipses) are not part of it.
+
+A path is a guess, so the GUI treats it as a link only while the platform
+modifier is held: without Cmd (Ctrl on Linux) it is plain text for selection and
+shows no underline. The TUI keeps its row-local click policy. Nothing checks the
+file on hover; the runtime does when the link is opened.
+
+`file://` links carry a line too: a fragment of `12`, `L12`, `L12:3`, `L12C3` or
+a range such as `L12-L20` (kitty's and GitHub's forms) becomes the line and
+column. Any other fragment and any query still reject the link.
 
 ```text
 VT RenderState -> TextMetadataCapture -> pane_frame -> owned client Pane
@@ -41,7 +69,7 @@ GuiAdapter.drainInput -> dispatchPointer -> hover_target.resolve
                                       |              underline + card
                           HostChrome.link_pointer_fn
                                       |
-             link_opening.openLink -> file tab or links/host.zig worker
+             link_opening.openLink -> editor_file_links or links/host.zig worker
 ```
 
 ## Ownership and budgets
@@ -90,20 +118,29 @@ pending target per client. It starts the worker with
 argument, captures bounded output, and expires after five seconds. Failure emits
 an in-app warning.
 
-`file://` preserves Telar’s editor policy: decode a local absolute path and create
-a tab with `[$EDITOR, path]`. Empty authority and `localhost` are local. Remote
-hosts, user information, ports, query/fragment, malformed escapes and decoded NUL
-are rejected. No command or URI is evaluated through a shell.
+`file://` links and paths open through
+[editor file links](editor-file-links.md) from the pane they were printed in:
+the runtime checks that the file exists, reuses an editor running in that tab or
+the client splits one beside the source pane, and the editor starts at the
+line. A relative path resolves against the source pane's directory and `~`
+against HOME, lexically, before the request leaves the client. Without a source
+pane (a CLI `open-link` with no focused pane) an absolute file opens in a new
+tab. Empty authority and `localhost` are local. Remote hosts, user information,
+ports, queries, non-position fragments, malformed escapes and decoded NUL are
+rejected. No command or URI is evaluated through a shell.
 
 ## Validation
 
-- `lib/urlscan`: scheme allowlist, punctuation, Unicode, Markdown link bounds and length limits.
+- `lib/urlscan`: scheme allowlist, punctuation, Unicode, Markdown link bounds, length limits,
+  path recognition and `:line:column` and `#L` positions.
 - `src/model/links/cells.zig`: row, OSC 8 and soft-wrap resolution.
 - `src/backend/pane/TextMetadataCapture.zig`: VT identity, wide cells, wrap and quotas.
 - `src/gui/tests/links.zig`, `link_regressions.zig`, `link_metadata.zig`: release
   ownership, presented identity, cancellation, metadata and retained rendering.
 - `tools/gui_links.py`: isolated AppKit gestures, native cursor assertions,
   destination preview, recording editor and child survival.
+- `tools/gui_path_links.py`: Cmd+click on relative, home and missing paths and on a
+  `file://…#L4` link, against an editor stub named `nvim` that records its argv.
 - `tools/vm/gui-links-test.py`: Wayland gestures through QEMU, a recording
   `xdg-open`, OSC 8/soft-wrap targets, Vulkan validation and child survival.
 

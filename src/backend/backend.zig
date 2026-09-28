@@ -37,6 +37,7 @@ test {
     _ = @import("agent/EventLine.zig");
     _ = @import("agent/providers/claude.zig");
     _ = @import("agent/providers/codex.zig");
+    _ = @import("agent/providers/cursor.zig");
     _ = @import("agent/providers/pi.zig");
     _ = @import("agent/providers/providers.zig");
     _ = @import("agent/repository_support.zig");
@@ -48,9 +49,16 @@ test {
     _ = @import("history/agent_detection.zig");
     _ = @import("history/channel_support.zig");
     _ = @import("history/codex_screen.zig");
+    _ = @import("history/cursor_screen.zig");
+    _ = @import("history/ScreenRow.zig");
     _ = @import("history/history_tests.zig");
     _ = @import("history/metrics.zig");
     _ = @import("history/model.zig");
+    _ = @import("paths/PathIndex.zig");
+    _ = @import("paths/PathIndexes.zig");
+    _ = @import("paths/PathQuery.zig");
+    _ = @import("paths/path_index_build.zig");
+    _ = @import("paths/path_ranking.zig");
     _ = @import("history/observer_support.zig");
     _ = @import("history/persistence/history_sql.zig");
     _ = @import("history/prompt_scan.zig");
@@ -97,6 +105,7 @@ test {
     _ = @import("runtime/tab_creation.zig");
     _ = @import("runtime/workspace_creation.zig");
     _ = @import("runtime/link_opening.zig");
+    _ = @import("editors/Job.zig");
     _ = @import("runtime/suggest_command.zig");
     _ = @import("runtime/session_checkpoint.zig");
     _ = @import("runtime/pane_closure.zig");

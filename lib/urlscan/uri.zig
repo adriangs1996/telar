@@ -12,6 +12,9 @@ pub const Scheme = enum {
     http,
     https,
     external,
+    /// A local path found in prose by `pathAt`; never a URI, so `classify`
+    /// never returns it.
+    path,
 };
 
 const prefixes = [_]Prefix{
@@ -59,6 +62,7 @@ pub fn classify(uri: []const u8) ?Scheme {
                 return null;
             }
         },
+        .path => return null,
         .external => {
             if (uri.len <= parsed.scheme.len + 1) {
                 return null;

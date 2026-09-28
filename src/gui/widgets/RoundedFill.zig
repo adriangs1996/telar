@@ -2,3 +2,5 @@
 const cellgrid = @import("cellgrid");
 radius: f32,
 color: cellgrid.Color,
+/// Opacity of the fill, so a surface can tint whatever lies beneath it.
+alpha: f32 = 1,

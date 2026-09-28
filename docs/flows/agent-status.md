@@ -35,7 +35,12 @@ agent_snapshot.project -> agent_status.snapshot(&model.agents, ...)
 - Screen text refines a status but never creates an agent; process or
   lifecycle evidence does.
 - A lifecycle report outranks screen evidence until it expires: ten minutes
-  for `working`, two for `settling`, thirty for settled states.
+  for `working` and `waiting`, two for `settling`, thirty for settled states.
+- A `continuing` report renews an unexpired `working` or `waiting` report
+  and changes nothing else; it never creates an agent.
+- A `waiting` report is a finished turn whose helpers still work; it
+  projects as `working`. An `idle` report settles like `ready`, except while
+  an unexpired `waiting` report holds, when it changes nothing.
 - A pending resume is dropped when the observed process belongs to another
   provider or the agent reports a different session.
 

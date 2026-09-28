@@ -20,6 +20,8 @@ pub const Frame = extern struct {
     background: [4]f32,
     background_blur: u32 = 0,
     titlebar: u32 = 1,
+    /// Device pixels of the navigation row native window controls center on.
+    navigation: u32 = 0,
 };
 
 test "native diagram descriptors preserve the C frame layout" {
@@ -27,5 +29,6 @@ test "native diagram descriptors preserve the C frame layout" {
     try std.testing.expectEqual(@as(usize, 24), @sizeOf(diagram.DiagramTexture));
     try std.testing.expectEqual(@as(usize, 16), @offsetOf(diagram.DiagramTexture, "version"));
     try std.testing.expectEqual(@as(usize, 56), @offsetOf(Frame, "diagrams"));
-    try std.testing.expectEqual(@as(usize, 272), @sizeOf(Frame));
+    try std.testing.expectEqual(@as(usize, 280), @sizeOf(Frame));
+    try std.testing.expectEqual(@as(usize, 272), @offsetOf(Frame, "navigation"));
 }

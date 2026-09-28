@@ -26,6 +26,14 @@ pub const Intent = union(enum) {
     attachment_dismiss: model_data.AttachmentId,
     /// A pointer press on one visible row of the active list prompt.
     prompt_row: u16,
+    /// A click on a configured bar component with an action or a url.
+    bar_component: model_data.BarComponent,
+    /// A click on a button of the open panel, by its index in the panel.
+    panel_component: u8,
+    /// The `+N` chip of a bar too narrow for its components.
+    toggle_bar_overflow,
+    /// The panel's close control, or a press outside the open panel.
+    close_panel,
 };
 
 /// What a secondary (right) press on a target does: rename a tab, peek at an

@@ -11,6 +11,8 @@ editor_bytes: [max_bytes]u8 = undefined,
 editor_len: u16 = 0,
 path_bytes: [max_bytes]u8 = undefined,
 path_len: u16 = 0,
+line: u32 = 0,
+column: u32 = 0,
 
 /// Owns both strings before the producer reuses its buffers. Example: `try request.setTarget("nvim", "/tmp/a");`
 pub fn setTarget(self: *OwnedEditorOpen, executable: []const u8, file_path: []const u8) !void {
@@ -32,12 +34,26 @@ pub fn path(self: *const OwnedEditorOpen) []const u8 {
 
 /// Copies borrowed wire strings into bounded owned storage. Example: `const owned = try OwnedEditorOpen.init(message);`
 pub fn init(message: OpenEditor) !OwnedEditorOpen {
-    var owned: OwnedEditorOpen = .{ .request_id = message.request_id, .pane_id = message.pane_id, .pane_generation = message.pane_generation };
+    var owned: OwnedEditorOpen = .{
+        .request_id = message.request_id,
+        .pane_id = message.pane_id,
+        .pane_generation = message.pane_generation,
+        .line = message.line,
+        .column = message.column,
+    };
     try owned.setTarget(message.editor, message.path);
     return owned;
 }
 
 /// Borrows strings only for synchronous encoding. Example: `const message = owned.view();`
 pub fn view(self: *const OwnedEditorOpen) OpenEditor {
-    return .{ .request_id = self.request_id, .pane_id = self.pane_id, .pane_generation = self.pane_generation, .editor = self.editor(), .path = self.path() };
+    return .{
+        .request_id = self.request_id,
+        .pane_id = self.pane_id,
+        .pane_generation = self.pane_generation,
+        .editor = self.editor(),
+        .path = self.path(),
+        .line = self.line,
+        .column = self.column,
+    };
 }

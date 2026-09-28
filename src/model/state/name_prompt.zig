@@ -24,7 +24,7 @@ pub const Command = @import("PromptCommand.zig").PromptCommand;
 /// The suggestion palette lists one row, so Enter on an empty field can
 /// still paste it.
 pub fn selects(target: Target) bool {
-    return target == .goto or target == .history or target == .suggest or target == .palette;
+    return target == .goto or target == .history or target == .suggest or target == .palette or target == .paths;
 }
 
 /// Targets that act on Enter with an empty field: list prompts pick their

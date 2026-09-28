@@ -58,8 +58,7 @@ fn installTelar(self: *Host) !void {
     host_support.pop(state, 1);
 
     _ = lua_api.c.lua_getfield(state, -1, "json");
-    lua_api.c.lua_pushlightuserdata(state, self);
-    lua_api.c.lua_pushcclosure(state, host_support.decodeJson, 1);
+    lua_api.c.lua_pushcclosure(state, lua.json.decode, 0);
     lua_api.c.lua_setfield(state, -2, "decode");
     lua_api.c.lua_settop(state, 0);
 }

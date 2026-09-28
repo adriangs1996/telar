@@ -10,9 +10,11 @@ const Bands = @This();
 top_bar: Rect = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
 sidebar: Rect = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
 status_bar: Rect = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
+/// Whether the sidebar band holds the collapsed workspace rail.
+rail: bool = false,
 
-/// Places navigation across the window, independently of sidebar visibility.
-/// The sidebar starts below navigation and ends above the status bar.
+/// Places navigation across the window, where the window's own controls
+/// share its row, and the sidebar or the rail below it down to the status bar.
 /// Example: `const bands = Bands.resolve(canvas);`
 pub fn resolve(canvas: *const Canvas) Bands {
     const width: f32 = @floatFromInt(canvas.viewport[0]);
@@ -20,10 +22,27 @@ pub fn resolve(canvas: *const Canvas) Bands {
     const top: f32 = @floatFromInt(canvas.chrome.top_bar);
     const status: f32 = @floatFromInt(canvas.chrome.status_bar);
     const body_top = @min(height, top);
+    const band = @min(width, @as(f32, @floatFromInt(canvas.sidebar.width)));
     return .{
-        .top_bar = .{ .x = 0, .y = 0, .width = width, .height = @min(top, height) },
-        .sidebar = .{ .x = 0, .y = body_top, .width = @min(width, @as(f32, @floatFromInt(canvas.sidebar.width))), .height = @max(0, height - status - body_top) },
-        .status_bar = .{ .x = 0, .y = @max(0, height - status), .width = width, .height = @min(status, height) },
+        .top_bar = .{
+            .x = 0,
+            .y = 0,
+            .width = width,
+            .height = @min(top, height),
+        },
+        .sidebar = .{
+            .x = 0,
+            .y = body_top,
+            .width = band,
+            .height = @max(0, height - status - body_top),
+        },
+        .status_bar = .{
+            .x = 0,
+            .y = @max(0, height - status),
+            .width = width,
+            .height = @min(status, height),
+        },
+        .rail = canvas.sidebar.rail and band > 0,
     };
 }
 

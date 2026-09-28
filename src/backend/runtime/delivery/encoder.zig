@@ -4,6 +4,7 @@ const core = @import("telar-core");
 const ReviewResult = @import("../../change_review/Result.zig");
 const response_queue = @import("response_queue.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
+const PathQuery = @import("../../paths/PathQuery.zig");
 const std = @import("std");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
@@ -111,6 +112,14 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
             }
             @memcpy(buffer[0..result.len], result.bytes[0..result.len]);
             break :payload buffer[0..result.len];
+        },
+        .path_results => |query| payload: {
+            if (context.path_results) |owned| {
+                owned.* = query;
+            }
+
+            var match_storage: [core.max_path_results]core.PathMatch = undefined;
+            break :payload try core.encodePathResults(buffer, query.results(&match_storage));
         },
         .history_result => |result| payload: {
             history_result.* = result;
@@ -281,4 +290,5 @@ const EncodeContext = struct {
     history_output: *?*OutputResult,
     history_stats: *?*StatsResult,
     change_review: ?*?*ReviewResult = null,
+    path_results: ?*?*PathQuery = null,
 };

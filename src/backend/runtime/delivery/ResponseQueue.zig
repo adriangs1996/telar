@@ -38,6 +38,7 @@ pub fn pushOrDrop(self: *ResponseQueue, response: response_queue.PendingResponse
             .change_review => |result| result.deinit(),
             .history_output => |result| result.deinit(),
             .history_stats => |result| result.deinit(),
+            .path_results => |query| query.destroy(),
             .tab_closed => |closed| {
                 self.resync_workspace = closed.location.workspace;
                 self.resync_previous_workspace = closed.previous_workspace;
@@ -161,6 +162,7 @@ pub fn clear(self: *ResponseQueue) void {
             .change_review => |result| result.deinit(),
             .history_output => |result| result.deinit(),
             .history_stats => |result| result.deinit(),
+            .path_results => |query| query.destroy(),
             else => {},
         }
         self.pop();

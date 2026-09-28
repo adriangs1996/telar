@@ -20,4 +20,6 @@ pub const PromptTarget = union(enum) {
     palette,
     /// A peek at one agent: its task, plan, screen and a message field.
     peek: AgentKey,
+    /// Path picker; the root and results live in the path-picker model state.
+    paths,
 };

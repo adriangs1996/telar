@@ -18,12 +18,13 @@ pub fn draw(canvas: *Canvas, icon: data.icons.Icon, bounds: Rect, dimmed: bool) 
         .provider_claude => .claude,
         .provider_codex => .codex,
         .provider_pi => .pi,
+        .provider_cursor => .cursor,
         else => .unknown,
     };
     if (canvas.providerMark(provider)) |mark| {
         try canvas.spriteTintedAt(bounds, .{
             .sprite = mark,
-            .color = if (provider == .codex) palette.text else .default,
+            .color = if (data.icons.providerMarkFollowsTheme(provider)) palette.text else .default,
             .alpha = if (dimmed) dimmed_alpha else 1,
         });
         return;

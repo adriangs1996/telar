@@ -13,6 +13,7 @@ const client_layout_persistence = @import("client_layout_persistence.zig");
 const command_history = @import("command_history.zig");
 const copy_mode = @import("copy_mode.zig");
 const link_opening = @import("link_opening.zig");
+const path_picker = @import("path_picker.zig");
 const notifications = @import("notifications.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const pane_closure = @import("pane_closure.zig");
@@ -44,6 +45,11 @@ const agent_control = @import("agent_control.zig");
 pub fn receive(model: *RuntimeModel, session: *Session, message: core.ClientMessage) !void {
     return switch (message) {
         .open_editor => |request| link_opening.start(model, session, request),
+        .find_paths => |request| path_picker.request(
+            model,
+            session,
+            request,
+        ),
         .open_pane => |request| pane_attachment.open(model, session, request),
         .detach_pane => |request| pane_attachment.detach(model, session, request),
         .create_pane => |request| pane_split.split(model, session, request),

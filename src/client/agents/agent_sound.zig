@@ -34,7 +34,7 @@ pub fn applyAgentSound(client: *Client, notification: core.AgentSoundNotificatio
 }
 
 fn startAgentSound(client: *Client, kind: core.AgentSound) !void {
-    client.to_workers.push(.{ .sound = kind }) catch |err| {
+    client.to_background.push(.{ .sound = kind }) catch |err| {
         client.model.sound_playback.schedulingFailed();
         return err;
     };

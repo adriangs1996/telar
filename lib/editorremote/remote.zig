@@ -139,9 +139,18 @@ fn vimEndpoint(search: *Search, endpoint: []const u8) !void {
         return;
     }
 
-    const index = search.find(pid) orelse return;
+    const index = search.find(pid) orelse search.find(parentProcess(search, pid) orelse return) orelse return;
     var storage: [expressions.max_bytes]u8 = undefined;
-    const expression = try expressions.vim(&storage, .{ .pid = pid, .path = search.path, .hostname = local_host });
+    const expression = try expressions.vim(
+        &storage,
+        .{
+            .pid = pid,
+            .path = search.path,
+            .line = search.line,
+            .column = search.column,
+            .hostname = local_host,
+        },
+    );
     const output = try search.command(&.{ search.editor, server_option, endpoint, "--remote-expr", expression });
     defer Search.release(output);
     if (output.term != .exited or output.term.exited != 0 or !std.mem.eql(u8, std.mem.trim(u8, output.stdout, " \r\n"), "1")) {
@@ -149,6 +158,21 @@ fn vimEndpoint(search: *Search, endpoint: []const u8) !void {
     }
 
     search.opened = index;
+}
+
+/// Neovim 0.10 and later run the TUI and the server as two processes: the
+/// pane's foreground process is the TUI, and the socket answers from its
+/// child. The server's parent names the pane it draws in.
+fn parentProcess(search: *Search, pid: u32) ?u32 {
+    var pid_storage: [16]u8 = undefined;
+    const text = std.fmt.bufPrint(&pid_storage, "{d}", .{pid}) catch return null;
+    const output = search.command(&.{ "/bin/ps", "-p", text, "-o", "ppid=" }) catch return null;
+    defer Search.release(output);
+    if (output.term != .exited or output.term.exited != 0) {
+        return null;
+    }
+
+    return std.fmt.parseInt(u32, std.mem.trim(u8, output.stdout, " \r\n"), 10) catch null;
 }
 
 fn emacs(search: *Search) !void {
@@ -220,7 +244,17 @@ fn emacsEndpoint(search: *Search, endpoint: []const u8) !void {
         }
 
         var storage: [expressions.max_bytes]u8 = undefined;
-        const expression = try expressions.emacs(&storage, .{ .pid = pid, .path = search.path, .tty = candidate.tty(), .hostname = std.mem.sliceTo(&hostname, 0) });
+        const expression = try expressions.emacs(
+            &storage,
+            .{
+                .pid = pid,
+                .path = search.path,
+                .line = search.line,
+                .column = search.column,
+                .tty = candidate.tty(),
+                .hostname = std.mem.sliceTo(&hostname, 0),
+            },
+        );
         const output = try search.command(&.{ executable, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", expression });
         defer Search.release(output);
         if (output.term != .exited or output.term.exited != 0) {

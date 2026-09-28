@@ -13,6 +13,7 @@ const localsocket = @import("localsocket");
 const LocalListener = localsocket.LocalListener;
 const Sources = @import("Sources.zig");
 const client_control = @import("client_control.zig");
+const path_picker = @import("path_picker.zig");
 const client_request = @import("client_request.zig");
 const geometry_lease = @import("geometry_lease.zig");
 const pane_attachment = @import("pane_attachment.zig");
@@ -200,6 +201,7 @@ pub fn drop(model: *RuntimeModel, key: ClientKey) void {
     const session = model.clients.resolve(key) orelse return;
     if (!session.closing) {
         client_control.abandon(model, key);
+        path_picker.release(model, key);
         session.closing = true;
         session.connection.shutdown(model.io);
         pane_attachment.clear(model, session);

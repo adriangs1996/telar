@@ -68,7 +68,9 @@ test "hiding the only animated widget removes its frame deadline" {
     const snapshot = try core.encodeAgentSnapshot(&bytes, .{ .revision = 1, .entries = &.{.{
         .pane_id = Session.pane_id,
         .pane_generation = 1,
-        .location = Session.location,
+        // The agent lives in a tab this window does not show, so only its
+        // sidebar card animates; a visible tab would keep its own spinner.
+        .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(77) },
         .pane_index = 1,
         .process_id = 1,
         .session_id = @splat(0),

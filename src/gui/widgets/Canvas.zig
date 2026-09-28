@@ -51,6 +51,8 @@ chrome: ChromeMetrics = .{},
 viewport: [2]u32 = .{ 0, 0 },
 /// The sidebar band the renderer took off the left of the grid.
 sidebar: SidebarBand = .{},
+/// Device pixels the window's own controls cover at the left of navigation.
+controls: u32 = 0,
 /// The RGBA sprite page of the renderer; `null` while a fixture has none,
 /// in which case `spriteAt` draws nothing and `providerMark` finds nothing.
 sprites: ?*const SpritePage = null,
@@ -140,8 +142,10 @@ pub fn fillRoundedAt(self: *Canvas, bounds: Rect, fill_value: RoundedFill) !void
         return;
     }
 
+    var fill_color = self.color(fill_value.color, self.theme.terminal.background);
+    fill_color.a *= fill_value.alpha;
     try self.quads.pushRounded(bounds, .{
-        .fill = self.color(fill_value.color, self.theme.terminal.background),
+        .fill = fill_color,
         .radius = clampRadius(bounds, fill_value.radius),
     });
 }

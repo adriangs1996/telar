@@ -7,6 +7,7 @@ const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
+const WorkspaceLoad = @import("WorkspaceLoad.zig");
 
 /// One colour per meaning, the same in every surface.
 /// Example: `const color = attention.statusColor(palette, agent.status);`
@@ -45,16 +46,7 @@ pub fn paneDot(projection: *const client.Projection, palette: data.Palette, loca
 /// person; null when nothing in the tab is blocked or failed.
 /// Example: `const dot = attention.tabDot(projection, palette, tab.location);`
 pub fn tabDot(projection: *const client.Projection, palette: data.Palette, location: core.TabLocation) ?cellgrid.Color {
-    var urgent: ?*const data.Agent = null;
-    for (projection.agents.slice()) |*agent| {
-        if (!std.meta.eql(agent.location, location)) {
-            continue;
-        }
-
-        urgent = mostUrgent(urgent, agent);
-    }
-
-    return dotColor(palette, urgent);
+    return dotColor(palette, tabAgent(projection, location));
 }
 
 /// The status colour of a workspace's most urgent agent when it needs the
@@ -75,6 +67,70 @@ pub fn workspaceDot(projection: *const client.Projection, palette: data.Palette,
     }
 
     return dotColor(palette, urgent);
+}
+
+/// The status colour of the most urgent agent needing the person in the
+/// workspaces at list positions `range[0]..range[1]`, so an overflow control
+/// keeps the attention of the workspaces it hides.
+/// Example: `const dot = attention.listRangeDot(projection, palette, .{ 0, first });`
+pub fn listRangeDot(projection: *const client.Projection, palette: data.Palette, range: [2]usize) ?cellgrid.Color {
+    var urgent: ?*const data.Agent = null;
+    for (projection.agents.slice()) |*agent| {
+        if (!needsInput(agent.status)) {
+            continue;
+        }
+
+        const id = switch (agent.location.workspace) {
+            .workspace => |id| id,
+            .worktree => continue,
+        };
+        const index = projection.workspaces.indexOf(id) orelse continue;
+        if (index < range[0] or index >= range[1]) {
+            continue;
+        }
+
+        urgent = mostUrgent(urgent, agent);
+    }
+
+    return dotColor(palette, urgent);
+}
+
+/// How many agents a workspace runs and how many of them need the person.
+/// Example: `const load = attention.workspaceLoad(projection, id);`
+pub fn workspaceLoad(projection: *const client.Projection, workspace: core.WorkspaceId) WorkspaceLoad {
+    var load: WorkspaceLoad = .{};
+    for (projection.agents.slice()) |*agent| {
+        const owner = switch (agent.location.workspace) {
+            .workspace => |id| id,
+            .worktree => continue,
+        };
+        if (owner != workspace) {
+            continue;
+        }
+
+        load.agents += 1;
+        if (needsInput(agent.status)) {
+            load.waiting += 1;
+        }
+    }
+
+    return load;
+}
+
+/// The most urgent agent of one tab whatever its status, so a tab can show
+/// work in progress and finished work as well as a request for input.
+/// Example: `const agent = attention.tabAgent(projection, tab.location) orelse return;`
+pub fn tabAgent(projection: *const client.Projection, location: core.TabLocation) ?*const data.Agent {
+    var urgent: ?*const data.Agent = null;
+    for (projection.agents.slice()) |*agent| {
+        if (!std.meta.eql(agent.location, location)) {
+            continue;
+        }
+
+        urgent = mostUrgent(urgent, agent);
+    }
+
+    return urgent;
 }
 
 /// Formats an elapsed time the way the pane chip and the card show it.

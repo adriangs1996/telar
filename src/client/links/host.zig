@@ -15,7 +15,8 @@ const command_timeout: std.Io.Timeout = .{
 /// try open(io, target);
 /// ```
 pub fn open(io: std.Io, target: data.LinkTarget) !void {
-    if (target.scheme == .file) {
+    // Files and paths open in an editor pane, never through the desktop.
+    if (target.scheme == .file or target.scheme == .path) {
         return error.UnsupportedLinkScheme;
     }
 

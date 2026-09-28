@@ -70,7 +70,7 @@ pub const text =
     \\       telar agent acknowledge <pane|title|--current> [--json] [--socket PATH]
     \\       telar agent report-title <pane|title|--current> TITLE [--json] [--socket PATH]
     \\       telar agent report-command <pane|title|--current> started|finished COMMAND --provider NAME [--tool-call ID] [--cwd PATH] [--session ID] [--exit-code N] [--json] [--socket PATH]
-    \\       telar agent report-state <pane|title|--current> working|blocked|ready|exited|settling [--blocked-reason REASON] [--event TEXT] [--session ID] [--session-file PATH] [--session-file-kind KIND] [--json] [--socket PATH]
+    \\       telar agent report-state <pane|title|--current> working|blocked|ready|exited|settling|continuing|waiting|idle|released [--blocked-reason REASON] [--event TEXT] [--session ID] [--session-file PATH] [--session-file-kind KIND] [--json] [--socket PATH]
     \\       telar pane read|send-keys <pane|--current> [options]
     \\         telar pane list [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\         telar pane get <id|--current> [--workspace ID [--tab ID]] [--json] [--socket PATH]
@@ -93,11 +93,11 @@ pub const text =
     \\       telar workspace get <id|--current> [--json] [--socket PATH]
     \\       telar workspace rename <id|--current> NAME [--json] [--socket PATH]
     \\       telar api schema [--json]
-    \\       telar integration install|uninstall|status claude|codex|pi [--settings PATH]
+    \\       telar integration install|uninstall|status claude|codex|pi|cursor [--settings PATH]
     \\       telar proxy trust install|uninstall|status [--ca-dir PATH] [--linux BACKEND]
-    \\       telar hook claude|codex|pi
+    \\       telar hook claude|codex|pi|cursor
     \\       telar review list|show|comment|delete|submit|reviewed [pane|--current] [options]
-    \\       telar review feedback|ack --provider claude|codex|pi --session ID [options]
+    \\       telar review feedback|ack --provider claude|codex|pi|cursor --session ID [options]
     \\       telar --skill
     \\
     \\Run an interactive shell inside telar's multiplexer UI.
@@ -135,7 +135,7 @@ pub const text =
     \\  agent interrupt Stop an agent's turn with its provider's interrupt key
     \\  workspace create Alias of worktree create for a workspace on a new git worktree
     \\  api schema       Print the wire contract of this binary
-    \\  integration      Register telar's lifecycle reports with an agent (claude hooks, pi extension)
+    \\  integration      Register telar's lifecycle reports with an agent (claude, codex and cursor hooks, pi extension)
     \\  hook             Entry point that agent hooks run (reads JSON on stdin)
     \\  review           Inspect captured editions and submit line-range feedback
     \\  proxy trust      Install, remove, or inspect Telar's short-lived system CA

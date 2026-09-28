@@ -64,6 +64,7 @@ const GuiAdapter = @This();
 const JobHook = struct {
     context: *anyopaque,
     start: *const fn (*anyopaque, client.Job) anyerror!void,
+    start_background: *const fn (*anyopaque, client.BackgroundJob) anyerror!void,
 };
 
 const InputLimit = enum(u8) {
@@ -1204,11 +1205,11 @@ fn openArmedLink(self: *GuiAdapter) !void {
     const pointer = &self.pointer;
     pointer.hover.dirty = true;
     pointer.hover.refresh(self);
-    const target = if (self.pointerGeometryMatches() and pointer.hover.openable()) pointer.link_gesture.finish(pointer.hover.link, self.app.model.version()) else null;
+    const opened = if (self.pointerGeometryMatches() and pointer.hover.openable()) pointer.link_gesture.finish(pointer.hover.link, self.app.model.version()) else null;
     pointer.link_gesture.cancel();
 
-    if (target) |selected| {
-        _ = try client.link_opening.openLink(&self.app, selected);
+    if (opened) |hit| {
+        _ = try client.link_opening.openLink(&self.app, hit.match.target, hit.pane_id);
     }
 }
 
@@ -1476,12 +1477,22 @@ fn deliverRequests(self: *GuiAdapter) !void {
 /// which may queue its successor.
 fn startJobs(self: *GuiAdapter) !void {
     try self.app.flush();
-    while (self.app.to_workers.pop()) |job| {
-        const started = if (self.job_hook) |hook| hook.start(hook.context, job) else workers.start(self, job);
-        started catch |err| {
-            try self.app.failJob(job, err);
-            try self.app.flush();
-        };
+    while (true) {
+        if (self.app.to_workers.pop()) |job| {
+            const started = if (self.job_hook) |hook| hook.start(hook.context, job) else workers.start(self, job);
+            started catch |err| {
+                try self.app.failJob(job, err);
+                try self.app.flush();
+            };
+        } else if (self.app.to_background.pop()) |job| {
+            const started = if (self.job_hook) |hook| hook.start_background(hook.context, job) else workers.startBackground(self, job);
+            started catch |err| {
+                try self.app.failBackgroundJob(job, err);
+                try self.app.flush();
+            };
+        } else {
+            return;
+        }
     }
 }
 
@@ -1632,7 +1643,7 @@ pub fn resize(self: *GuiAdapter, size: core.TerminalSize, theme: shared_model.Te
 /// Retires captured damage after GPU delivery, preserving newer received state.
 fn complete(self: *GuiAdapter, token: u64, delivered: bool) !void {
     core.profiling.add(.gui_complete, 1);
-    const active = self.app.presentation.active orelse return;
+    const active = if (self.app.presentation.active) |*flight| flight else return;
 
     if (token == 0 or token != @intFromEnum(active.token)) {
         return;
@@ -2033,14 +2044,15 @@ const LinkGesture = struct {
         self.version = version;
     }
 
-    /// A release opens only the unchanged target. Cancellation never opens a URL.
-    /// Example: `const target = gesture.finish(current_hit, app.model.version());`
-    pub fn finish(self: *LinkGesture, current: ?Hit, version: data.Version) ?data.LinkTarget {
+    /// A release opens only the unchanged target, returned with the pane it
+    /// was printed in. Cancellation never opens a URL.
+    /// Example: `const hit = gesture.finish(current_hit, app.model.version());`
+    pub fn finish(self: *LinkGesture, current: ?Hit, version: data.Version) ?Hit {
         self.validate(current, version);
         const pressed = self.pressed orelse return null;
         self.pressed = null;
         const released = current orelse return null;
-        return if (pressed.eql(&released)) pressed.match.target else null;
+        return if (pressed.eql(&released)) pressed else null;
     }
 
     /// Navigation or an intervening target change cancels, even if later restored.

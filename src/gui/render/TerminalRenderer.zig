@@ -51,6 +51,8 @@ chrome: ChromeMetrics = .{},
 sidebar_request: SidebarRequest = .{},
 /// The band the last measurement took off the left of the grid.
 sidebar: SidebarBand = .{},
+/// Device pixels the window controls cover at the left of navigation.
+controls: u32 = 0,
 scale: f32 = 0,
 origin: [2]u32 = .{ 0, 0 },
 viewport: [2]u32 = .{ 0, 0 },
@@ -176,6 +178,7 @@ pub fn measure(self: *Renderer, viewport: native.Viewport) !core.TerminalSize {
 
     self.chrome = chrome;
     self.sidebar = sidebar;
+    self.controls = viewport.controls;
     self.origin = .{ left, chrome.top_bar + y };
     self.viewport = .{ viewport.width, viewport.height };
     const cells = @as(usize, size.cols) * size.rows;
@@ -471,6 +474,7 @@ pub fn frame(self: *const Renderer, token: u64) native.Frame {
         .background = .{ self.background.r, self.background.g, self.background.b, self.config.window.background_opacity },
         .background_blur = self.config.window.background_blur,
         .titlebar = @intFromBool(self.config.window.titlebar),
+        .navigation = self.chrome.top_bar,
     };
 }
 

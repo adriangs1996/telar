@@ -39,6 +39,17 @@ pub const AcknowledgeResult = enum {
 /// _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = now_ms });
 /// ```
 pub fn observeReport(model: *RuntimeModel, observation: ReportObservation) bool {
+    // A helper's activity is not identity evidence: it renews an agent the
+    // runtime already tracks and never registers one.
+    if (observation.state == .continuing) {
+        const agent = model.agents.find(observation.identity.key) orelse return false;
+        if (!agent.applyReport(observation)) {
+            return false;
+        }
+
+        return reproject(model, agent, observation.observed_at_ms);
+    }
+
     if (observation.session) |session| {
         supersedeRestoredSession(model, observation.identity.key, session);
     }

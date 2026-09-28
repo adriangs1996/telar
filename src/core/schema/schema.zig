@@ -146,6 +146,7 @@ pub const ClientMessage = messages.ClientMessage;
 pub const ServerMessage = messages.ServerMessage;
 pub const decodeClient = messages.decodeClient;
 pub const decodeServer = messages.decodeServer;
+pub const decodeServerInto = messages.decodeServerInto;
 
 pub const LaunchView = @import("messages/LaunchView.zig");
 pub const ArgumentIterator = @import("messages/ArgumentIterator.zig");
@@ -406,3 +407,17 @@ pub const encodeOpenEditor = editor_codec.encodeOpenEditor;
 pub const encodeEditorOpened = editor_codec.encodeEditorOpened;
 
 pub const OwnedEditorOpen = @import("messages/OwnedEditorOpen.zig");
+
+pub const PathMatch = @import("PathMatch.zig");
+pub const PathKind = types.PathKind;
+pub const PathKindFilter = types.PathKindFilter;
+pub const max_path_query_bytes = types.max_path_query_bytes;
+pub const max_path_results = types.max_path_results;
+pub const max_path_match_bytes = types.max_path_match_bytes;
+pub const FindPaths = @import("messages/FindPaths.zig");
+pub const PathResults = @import("messages/PathResults.zig");
+pub const PathResultsView = @import("messages/PathResultsView.zig");
+pub const PathMatchIterator = @import("messages/PathMatchIterator.zig");
+const paths_codec = @import("messages/paths.zig");
+pub const encodeFindPaths = paths_codec.encodeFindPaths;
+pub const encodePathResults = paths_codec.encodePathResults;

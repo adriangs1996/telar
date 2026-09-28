@@ -47,7 +47,7 @@ test "bar synchronization clears queued work but preserves one in-flight command
     var state: State = .{};
     state.pending_callbacks = model.Position.top_right.bit();
     state.pending_commands = model.Position.bottom_left.bit();
-    const execution = try state.reserveCommand(3, .bottom_left);
+    const execution = try state.reserveCommand(3, .{ .bar = .bottom_left });
 
     state.synchronize(.{ .generation = 4, .configuration = null, .now_ns = 2_000 });
 
@@ -56,4 +56,25 @@ test "bar synchronization clears queued work but preserves one in-flight command
     try std.testing.expectEqual(execution, state.command_execution.?);
     try std.testing.expectEqual(execution, state.finishCommand(execution.id).?);
     try std.testing.expect(state.command_execution == null);
+}
+
+test "an open panel runs its source at once and stops when it closes" {
+    const configuration: BarConfiguration = .{};
+    const source: model.Source = .{ .command = .{ .generation = 4, .interval_ns = 500, .timeout_ms = 100 } };
+    var state: State = .{};
+    state.startPanel(.{ .index = 0, .opening = 1 }, 1_000);
+
+    try std.testing.expectEqual(@as(?u64, 1_000), state.nextDeadline());
+    const due = state.takeDue(.{
+        .generation = 0,
+        .configuration = &configuration,
+        .now_ns = 1_200,
+        .panel_source = &source,
+    });
+
+    try std.testing.expect(due.panel_command);
+    try std.testing.expectEqual(@as(u64, 1_500), state.panel_deadline);
+
+    state.stopPanel();
+    try std.testing.expect(state.nextDeadline() == null);
 }

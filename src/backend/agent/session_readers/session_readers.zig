@@ -4,6 +4,7 @@ const Job = @import("Job.zig");
 const Completion = @import("../Completion.zig");
 const claude = @import("claude.zig");
 const codex = @import("codex.zig");
+const cursor = @import("cursor.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Watch = @import("../Watch.zig");
@@ -22,6 +23,7 @@ pub fn probe(job: Job) Completion {
     switch (job.watch.kind) {
         .claude_transcript => claude.probe(job, &completion),
         .codex_state => codex.probe(job, &completion),
+        .cursor_meta => cursor.probe(job, &completion),
     }
 
     return completion;
@@ -119,6 +121,35 @@ test "codex state probe reads the thread name, a NULL name as empty and nothing 
     var missing = watch;
     missing.path_len -= 1;
     try std.testing.expect(!probe(.{ .io = io, .watch = missing }).has_title);
+}
+
+test "cursor meta probe reads the chat title, an untitled chat as empty and nothing for another chat" {
+    const io = std.testing.io;
+    var directory = try TestDirectory.init(io);
+    defer directory.deinit();
+    try directory.temp.dir.createDirPath(io, "abc");
+    var watch = try directory.watch(.cursor_meta, "abc/meta.json");
+
+    try std.testing.expect(!probe(.{ .io = io, .watch = watch }).has_title);
+    try directory.temp.dir.writeFile(io, .{
+        .sub_path = "abc/meta.json",
+        .data = "{\"schemaVersion\":1,\"hasConversation\":true,\"title\":\"Shell Command\"}",
+    });
+    const named = probe(.{ .io = io, .watch = watch });
+    try std.testing.expect(named.has_title);
+    try std.testing.expectEqualStrings("Shell Command", named.titleSlice());
+    try std.testing.expect(named.offset == null);
+
+    try directory.temp.dir.writeFile(io, .{
+        .sub_path = "abc/meta.json",
+        .data = "{\"schemaVersion\":1,\"hasConversation\":false}",
+    });
+    const untitled = probe(.{ .io = io, .watch = watch });
+    try std.testing.expect(untitled.has_title);
+    try std.testing.expectEqualStrings("", untitled.titleSlice());
+
+    watch.session = try SessionReference.init("other", 1);
+    try std.testing.expect(!probe(.{ .io = io, .watch = watch }).has_title);
 }
 
 const TestDirectory = struct {

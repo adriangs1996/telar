@@ -24,8 +24,8 @@ try widgets.draw(&canvas);
 
 `Composition` owns the context borrowed by chrome widgets. Keep it and the
 projection at stable addresses until drawing returns; returning the list does
-not extend either lifetime. The list holds at most 73 widgets, derived from the
-64-pane limit, one link, four chrome sections, one focus indicator, two notices
+not extend either lifetime. The list holds at most 75 widgets, derived from the
+64-pane limit, one link, six chrome sections, one focus indicator, two notices
 and one modal. Its commit captures the generations and damage of the panes
 actually composed.
 
@@ -47,8 +47,11 @@ sidebar. Tests use the same compose, draw and seal steps as the scene.
 resolves both viewports once per preparation, and the delivered hit map owns
 scroll targeting. `SidebarState` retains separate `PixelScroll` values;
 `WorkspaceList` clips project rows and reveals the active runtime identity.
-`TopBar` preserves `TabStrip` geometry and shows workspace controls only when
-the project list cannot be shown. Unlisted contexts keep their label there.
+A collapsed sidebar draws `WorkspaceRail` in its band and `RailTooltip` above
+the panes. `TopBar` names the current context beside the rail, or keeps the
+toggle beside the expanded sidebar, and falls back to `WorkspaceIndicators`
+only when neither can show the projects. `TabStrip` packs tabs from the left
+and compresses them around the selection.
 Tabs are not a separate frame section. `StatusBar` owns configured bottom
 widgets and mode hints, with space reserved for TLS in every mode.
 
@@ -233,6 +236,20 @@ of escape sequences when the reply landed (`core.plainText`). Painting and
 the scroll bound count the same lines. Its metrics travel with `HitState`,
 so failed presentations preserve the visible geometry's scroll bound.
 
+## Path picker
+
+`PathPicker` is a popover at the focused pane's cursor, not a dialog: it
+does not dim the window, so the prompt it types into stays readable. It sits
+under the cursor, or above it when the rows below do not fit
+(`path_picker_placement`), and the search field is always the row next to
+the cursor. Rows show a folder or file glyph from the embedded symbols face,
+then the path laid out by `PathLabel`: directory in `subtext0`, file name in
+`text`, matched characters in the accent, and the middle of a long directory
+replaced by `…`. Directories use `blue`, never a status color. The footer
+shows how many paths the index holds, or `indexing` while it grows, and the
+host's key hints. Rows register in `PaletteHits`, so a press chooses one
+exactly as the command palette's rows do.
+
 ## Animation and invalidation
 
 Child progress uses `PaneProgress` capsules in pane headers and a compact ring
@@ -255,6 +272,13 @@ logical pixels. `Overlays` retains one `ModalMotion` keyed by prompt generation;
 edits, query results and toggling details do not restart it. Painting and input
 registration use the same shifted rectangles. Closing or finishing the entrance
 leaves no animation deadline.
+
+While a replacement page is pending, the previous rows stay as they were.
+`Overlays` retains one `LoadingCue`: only a wait longer than 150 ms dims the
+rows and runs the loading line, so a reply that lands within a few frames
+never flashes the panel on each keystroke. A new query while one is pending
+continues the same wait, and a reply ends it. Rows and submit controls stay
+disabled for the whole wait, visible or not.
 
 During scene preparation, `Canvas.animation` exposes a `FrameClock` with one
 monotonic timestamp and one earliest requested deadline. A sprite can choose

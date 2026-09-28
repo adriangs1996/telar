@@ -51,7 +51,7 @@ pub fn receiveRuntime(client: *Client, result: anyerror!*const data.RuntimeMessa
     core.mark(client.io, .client_frame);
     const received = try client.runtime_transport.completeRead(result);
     client.telemetry.recordMessage(received);
-    const status = try runtime_messages.handleServerMessage(client, received.message);
+    const status = try runtime_messages.receiveServerMessage(client, &received.message);
 
     if (status) |exit_status| {
         return exit_status;

@@ -10,6 +10,9 @@ const bytecodec = @import("bytecodec");
 const OpenEditor = @import("OpenEditor.zig");
 const EditorOpened = @import("EditorOpened.zig");
 const editor = @import("editor.zig");
+const FindPaths = @import("FindPaths.zig");
+const PathResultsView = @import("PathResultsView.zig");
+const paths = @import("paths.zig");
 const OpenPaneView = @import("OpenPaneView.zig");
 const PaneInput = @import("PaneInput.zig");
 const PaneResize = @import("PaneResize.zig");
@@ -177,6 +180,7 @@ pub const ClientMessage = union(enum) {
     update_client_layout: ClientLayoutUpdateView,
     request_pane_focus: RequestPaneFocus,
     open_editor: OpenEditor,
+    find_paths: FindPaths,
     complete_pane_focus: CompletePaneFocus,
     register_worktree: RegisterWorktree,
     launch_worktree: LaunchWorktreeView,
@@ -241,6 +245,7 @@ pub const ServerMessage = union(enum) {
     pane_focus_command: PaneFocusCommand,
     pane_focus_result: PaneFocusResult,
     editor_opened: EditorOpened,
+    path_results: PathResultsView,
     pane_progress: PaneProgress,
     worktree_registered: WorktreeRegistered,
 };
@@ -315,6 +320,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .read_history_output => .{ .read_history_output = try GenericDerived(ReadHistoryOutput).decode(&decoder) },
         .history_stats => .{ .history_stats = try history.decodeHistoryStatsQuery(&decoder) },
         .open_editor => .{ .open_editor = try editor.decodeOpenEditor(&decoder) },
+        .find_paths => .{ .find_paths = try paths.decodeFindPaths(&decoder) },
         .request_pane_focus => .{ .request_pane_focus = try focus.decodeRequestPaneFocus(&decoder) },
         .complete_pane_focus => .{ .complete_pane_focus = try focus.decodeCompletePaneFocus(&decoder) },
         .register_worktree => .{ .register_worktree = try worktree.decodeRegisterWorktree(&decoder) },
@@ -328,9 +334,20 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
 }
 
 pub fn decodeServer(payload: []const u8) !ServerMessage {
+    var message: ServerMessage = undefined;
+    try decodeServerInto(&message, payload);
+    return message;
+}
+
+/// Decodes into `message` and writes only the variant the payload carries.
+/// The union is kilobytes while a pane frame is 168 bytes, so a receiver
+/// that keeps the message in place never copies the rest. On error the
+/// destination holds no valid message.
+/// Example: `try core.decodeServerInto(&transport.received.message, bytes);`
+pub fn decodeServerInto(message: *ServerMessage, payload: []const u8) !void {
     var decoder = Decoder.init(payload);
     const tag = try decodeTag(tags.ServerTag, try decoder.readByte());
-    const message: ServerMessage = switch (tag) {
+    message.* = switch (tag) {
         .change_review_changed => .{ .change_review_changed = try change_review.decode(ChangeReviewChanged, &decoder) },
         .change_review_snapshot => .{ .change_review_snapshot = try change_review.decode(ChangeReviewSnapshotView, &decoder) },
         .pane_opened => .{ .pane_opened = try GenericDerived(PaneOpened).decode(&decoder) },
@@ -385,12 +402,12 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .history_stats_result => .{ .history_stats_result = try history.decodeHistoryStats(&decoder) },
         .pane_focus_command => .{ .pane_focus_command = try focus.decodePaneFocusCommand(&decoder) },
         .editor_opened => .{ .editor_opened = try editor.decodeEditorOpened(&decoder) },
+        .path_results => .{ .path_results = try paths.decodePathResults(&decoder) },
         .pane_focus_result => .{ .pane_focus_result = try focus.decodePaneFocusResult(&decoder) },
         .pane_progress => .{ .pane_progress = try pane.decodePaneProgress(&decoder) },
         .worktree_registered => .{ .worktree_registered = try GenericDerived(WorktreeRegistered).decode(&decoder) },
     };
     try decoder.ensureEnd();
-    return message;
 }
 
 fn decodeTag(comptime Tag: type, value: u8) error{UnknownMessage}!Tag {

@@ -30,12 +30,14 @@ test "file paths decode local URIs and reject remote authority" {
     try std.testing.expectError(error.RemoteFileLink, FilePath.init(&remote));
 }
 
-test "file paths reject query fragments malformed escapes and null bytes" {
+test "file paths reject queries, non-position fragments, malformed escapes and null bytes" {
     const query = try LinkTarget.init("file:///tmp/a?line=2");
+    const fragment = try LinkTarget.init("file:///tmp/a#section");
     const malformed = try LinkTarget.init("file:///tmp/a%xx");
     const null_byte = try LinkTarget.init("file:///tmp/a%00b");
 
     try std.testing.expectError(error.InvalidFileLink, FilePath.init(&query));
+    try std.testing.expectError(error.InvalidFileLink, FilePath.init(&fragment));
     try std.testing.expectError(error.InvalidFileLink, FilePath.init(&malformed));
     try std.testing.expectError(error.InvalidFileLink, FilePath.init(&null_byte));
 }

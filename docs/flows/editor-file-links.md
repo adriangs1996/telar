@@ -1,29 +1,61 @@
 # Reusing terminal editors for file links
 
 `editor_file_links.openFile(client, pane_id, path)` opens a local file linked
-from a pane. Nothing calls it yet: terminal file links still open the editor in
-a new tab through `link_opening.openLinkFile`. It is the entry point for giving
-every pane this behavior.
+from a pane, at the line the link names. `link_opening.openLink` calls it for
+every `file://` link and every path found in prose (see
+[link opening](link-opening.md#file-paths-in-prose)); the GUI, the TUI, copy
+mode and `telar client open-link` pass the pane the link came from.
 
-The client looks for the configured editor in the source pane's tab. If there is a candidate, `open_editor` asks the runtime to open
-the file in an existing instance. `editor_opened` reports the exact pane and
-runtime generation; `editor_file_links.completeEditorOpen` focuses that pane
-through the existing pane focus path.
+The client anchors the path first, without touching the filesystem: an absolute
+path stays literal, `~` resolves against the client's HOME and a relative path
+against the source pane's directory, and `.` and `..` collapse. The pane's
+directory is the runtime's, so a relative path is right over `telar remote` too;
+`~` is not, and a remote runtime whose home differs answers `missing`. The request
+carries the absolute path, the line and the column; zero means the link named
+none. `open_editor` always goes to the runtime once the source pane has a
+runtime generation. `editor_opened` reports the exact pane and runtime
+generation; `editor_file_links.completeEditorOpen` focuses that pane through
+the existing pane focus path, splits a new editor on `unavailable`, and reports
+`missing` as a warning without opening anything.
 
 The runtime's `link_opening.start` admits the request: it checks the source
 generation and collects live terminal panes in the same tab.
-`editors/Job.zig` runs an `editorremote.Search` on an observation worker,
-which discovers servers and opens the file, and maps the accepting candidate
-back to its pane; `link_opening.finish` delivers the reply. It never writes
-commands or simulated keys to a PTY. Names only select candidates; the remote editor's process identity, and
-for Emacs the frame's terminal device, identify the destination.
+`editors/Job.zig` runs on an observation worker: it first requires a regular
+file at the path, then runs an `editorremote.Search`, which discovers servers,
+opens the file, moves the cursor, and maps the accepting candidate back to its
+pane; `link_opening.finish` delivers the reply. It never writes commands or
+simulated keys to a PTY. Names only select candidates; the remote editor's
+process identity, and for Emacs the frame's terminal device, identify the
+destination.
+
+## Lines
+
+A reused editor moves the cursor inside the same remote evaluation that opens
+the file: Vim and Neovim call `cursor(line, column)` after `drop`, Emacs runs
+`goto-char`, `forward-line` and `move-to-column` after `find-file`. Only
+integers join those expressions.
+
+A new editor gets the line on its command line through `editorremote.Launch`:
+
+| Editor | Arguments |
+| --- | --- |
+| `nvim`, `vim`, `vi` | `+12 path`, or `+call cursor(12, 3) path` with a column |
+| `emacs`, `emacsclient`, `kak`, `micro` | `+12:3 path` |
+| `nano` | `+12,3 path` |
+| `hx`, `helix` | `path:12:3` |
+| `code`, `code-insiders`, `codium`, `cursor` | `-g path:12:3` |
+| anything else | `path`, without a position |
+
+The path is always absolute, so it can never read as an option.
 
 ## Supported connections
 
 - Neovim: local default sockets below `XDG_RUNTIME_DIR` or
   `${TMPDIR:-/tmp}/nvim.$USER`. Discovery visits the root and one directory
-  level below it. The remote PID must match a candidate's foreground process
-  group. Custom sockets outside these locations are not discovered.
+  level below it. The remote PID, or its parent's, must match a candidate's
+  foreground process group: Neovim 0.10 and later run the TUI in the pane and
+  the server that owns the socket as its child. Custom sockets outside these
+  locations are not discovered.
 - Vim and `vi`: servers advertised by `--serverlist`. The installation must
   support client-server commands and the editor must have a running server.
   PID and hostname must match the runtime's local candidate.
@@ -34,8 +66,9 @@ for Emacs the frame's terminal device, identify the destination.
   local server frame attached to that device, checking PID and hostname again
   in the opening command. Other frames are left alone.
 - Nano, unrecognized executable wrappers and editors without a discoverable
-  connection: the existing split flow launches the configured executable with
-  the file as its own argv entry.
+  connection: the runtime replies `unavailable` once the file exists, and the
+  split flow launches the configured executable with the file as its own argv
+  entry and the line as the editor reads it.
 
 Opening a new pane does not enable an editor server or change editor settings.
 Vim/Neovim filenames are quoted as Vim strings and passed through `fnameescape`.
@@ -69,8 +102,9 @@ the editor process.
 ## Verification
 
 `zig build test-editors` checks the wire corpus, path validation and quoting,
-real Neovim identity and file opening when Neovim is installed, runtime tab
-selection, admission bounds and stale sources. When the GUI adapter is enabled,
+real Neovim identity, file opening and cursor placement when Neovim is
+installed, a server whose parent is the pane's process, missing files in the
+runtime worker, runtime tab selection, admission bounds and stale sources. When the GUI adapter is enabled,
 it also runs the relevant GUI tests. `zig build test-gui` calls `openFile`
 directly and follows the request through `model.to_runtime` and reply dispatch,
 including fallback, duplicate replies, Nano and replaced pane identities.

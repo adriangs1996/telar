@@ -108,6 +108,10 @@ pub fn begin(self: *State, command: name_prompt.Begin) void {
             .mode = .suggest,
             .field = .init(""),
         },
+        .path_picker => .{
+            .mode = .{ .paths = .{} },
+            .field = .init(""),
+        },
         .palette => |prefix| .{
             .mode = .{ .palette = .{} },
             .field = .init(&[_]u8{prefix.byte()}),
@@ -301,6 +305,10 @@ pub fn apply(self: *State, command: name_prompt.Command) PromptTransition {
                 self.revision +%= 1;
                 return .changed;
             }
+            if (prompt.target() == .paths) {
+                return if (prompt.pasting) .unchanged else .{ .descend_requested = prompt.selection() };
+            }
+
             if (prompt.target() != .history) {
                 return .unchanged;
             }
@@ -311,6 +319,10 @@ pub fn apply(self: *State, command: name_prompt.Command) PromptTransition {
             return .changed;
         },
         .back_tab => {
+            if (prompt.target() == .paths) {
+                return if (prompt.pasting) .unchanged else .ascend_requested;
+            }
+
             if (prompt.target() == .history) {
                 prompt.mode.history.author = nextAuthor(prompt.mode.history.author);
                 prompt.setSelection(0);
@@ -364,6 +376,11 @@ pub fn apply(self: *State, command: name_prompt.Command) PromptTransition {
             return .{ .copied = prompt.selection() };
         },
         .visit_pane => {
+            // Alt+Enter inserts the selected path absolute.
+            if (prompt.target() == .paths) {
+                return self.apply(.submit_alternate);
+            }
+
             if (prompt.target() != .history or prompt.pasting) {
                 return .unchanged;
             }
@@ -460,6 +477,23 @@ pub fn replaceDirectory(self: *State, text: []const u8) void {
 
     prompt.directory.setText(text);
     prompt.mode.create_workspace = .{ .focus = .directory };
+    self.revision +%= 1;
+}
+
+/// Empties the path picker's query and selection after its root moved, so
+/// the new directory lists from its first entry.
+///
+/// ```zig
+/// state.clearPathQuery();
+/// ```
+pub fn clearPathQuery(self: *State) void {
+    const prompt = self.mutable() orelse return;
+    if (prompt.mode != .paths) {
+        return;
+    }
+
+    prompt.field.setText("");
+    prompt.setSelection(0);
     self.revision +%= 1;
 }
 
@@ -573,5 +607,9 @@ const PromptTransition = union(enum) {
     /// The directory field asked for its selected completion; the
     /// controller owns the list and answers with `replaceDirectory`.
     completion_requested,
+    /// The path picker asked to browse the selected directory.
+    descend_requested: u16,
+    /// The path picker asked to browse the parent of its root.
+    ascend_requested,
     submitted: Submission,
 };

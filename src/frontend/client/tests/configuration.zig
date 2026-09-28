@@ -251,7 +251,7 @@ test "dynamic bar ticks commit current Lua content before paced presentation" {
 
     const slot = client.model.bars.layout.slot(.bottom_left);
     try std.testing.expect(slot.* == .content);
-    try std.testing.expectEqualStrings("tick 1", slot.content.text(slot.content.slice()[0]));
+    try std.testing.expectEqualStrings("tick 1", slot.content.text(slot.content.slice()[0].text));
     try std.testing.expect(slot.content.slice()[0].style.bold);
     var expected_version = version_before;
     expected_version.configuration += 1;
@@ -311,7 +311,7 @@ test "command completion from a replaced bar generation is discarded" {
     try client_module.bar_updates.completeCommand(client, completed);
 
     const slot = client.model.bars.layout.slot(.bottom_left);
-    try std.testing.expectEqualStrings("new", slot.content.text(slot.content.slice()[0]));
+    try std.testing.expectEqualStrings("new", slot.content.text(slot.content.slice()[0].text));
     try std.testing.expect(client.model.bar_updates.command_execution == null);
     try std.testing.expectEqualDeep(version_after_reload, client.model.version());
     try std.testing.expect(data.client_diagnostic.shown(&client.model) == null);
@@ -332,15 +332,19 @@ test "plugin completion applies one authorized batch through model observation" 
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    const exit = try client_module.plugin_actions.completePluginAction(client, .{
-        .execution_id = execution.id,
-        .result = data.WorkerResult{
-            .package_index = 0,
-            .plugin_id = installed.action.plugin,
-            .digest = installed.digest,
-            .batch = batch,
+    client.plugin_result = .{
+        .package_index = 0,
+        .plugin_id = installed.action.plugin,
+        .digest = installed.digest,
+        .batch = batch,
+    };
+    const exit = try client_module.plugin_actions.completePluginAction(
+        client,
+        .{
+            .execution_id = execution.id,
+            .result = {},
         },
-    });
+    );
 
     try std.testing.expect(!exit);
     try std.testing.expect(client.model.plugins.pluginExecution() == null);
@@ -376,15 +380,19 @@ test "plugin completion from an old configuration is consumed without effects" {
     const version_after_reload = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    const exit = try client_module.plugin_actions.completePluginAction(client, .{
-        .execution_id = execution.id,
-        .result = data.WorkerResult{
-            .package_index = 0,
-            .plugin_id = installed.action.plugin,
-            .digest = installed.digest,
-            .batch = batch,
+    client.plugin_result = .{
+        .package_index = 0,
+        .plugin_id = installed.action.plugin,
+        .digest = installed.digest,
+        .batch = batch,
+    };
+    const exit = try client_module.plugin_actions.completePluginAction(
+        client,
+        .{
+            .execution_id = execution.id,
+            .result = {},
         },
-    });
+    );
 
     try std.testing.expect(!exit);
     try std.testing.expect(client.model.plugins.pluginExecution() == null);
@@ -409,15 +417,19 @@ test "plugin authorization denial consumes the run before publishing failure" {
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    const exit = try client_module.plugin_actions.completePluginAction(client, .{
-        .execution_id = execution.id,
-        .result = data.WorkerResult{
-            .package_index = 0,
-            .plugin_id = installed.action.plugin,
-            .digest = installed.digest,
-            .batch = batch,
+    client.plugin_result = .{
+        .package_index = 0,
+        .plugin_id = installed.action.plugin,
+        .digest = installed.digest,
+        .batch = batch,
+    };
+    const exit = try client_module.plugin_actions.completePluginAction(
+        client,
+        .{
+            .execution_id = execution.id,
+            .result = {},
         },
-    });
+    );
 
     try std.testing.expect(!exit);
     try std.testing.expect(client.model.plugins.pluginExecution() == null);
@@ -1034,4 +1046,76 @@ test "the configuration a client starts with governs history and notifications b
     try std.testing.expect(config.history_enter_runs);
     try std.testing.expect(config.history_show_agent_commands);
     try std.testing.expectEqual(data.NotificationDelivery.system, config.notification_delivery);
+}
+
+test "a bar component opens its Lua panel above the bar and escape closes it" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const terminal = harness.terminal;
+    const adoption = try support.testingConfigAdoptionSource(1,
+        \\local telar = require("telar")
+        \\local ui = telar.ui
+        \\return { api_version = 2, client = {
+        \\  panels = {
+        \\    usage = telar.panel({ title = "Usage", render = function()
+        \\      return { ui.heading("On track"), ui.meter_row({ label = "Session", value = 0.22, marker = 0.7 }) }
+        \\    end }),
+        \\  },
+        \\  bars = { bottom = {
+        \\    left = telar.bar.static({
+        \\      ui.group({ mark = "claude", on_click = telar.action.open_panel("usage"), ui.meter({ label = "5h", value = 0.22 }) }),
+        \\    }),
+        \\    right = telar.bar.tabs(),
+        \\  } },
+        \\} }
+    );
+    _ = try support.reloadConfiguration(terminal, adoption);
+    try presentation_lifecycle.observe(terminal);
+    try harness.settleModelPresentation();
+
+    const component: data.BarComponent = .{ .position = .bottom_left, .node = 0 };
+    var drawn = false;
+    for (terminal.view.hits.registered()) |entry| {
+        drawn = drawn or (entry.action == .bar_component and std.meta.eql(entry.action.bar_component, component));
+    }
+    try std.testing.expect(drawn);
+
+    _ = try client_module.view_interactions.apply(client, client.model.tabs.active, .{
+        .intent = .{ .bar_component = component },
+        .consumed = true,
+    });
+    try std.testing.expect(client.model.bars.panel.configured().? == 0);
+    try std.testing.expectEqualDeep(component, client.model.bars.panel.anchor.?);
+    switch (try support.receiveClient(terminal)) {
+        .bar_tick => |result| try client_module.bar_updates.handleTick(client, result),
+        else => return error.UnexpectedEvent,
+    }
+    try std.testing.expectEqual(data.PanelStatus.ready, client.model.bars.panel.status);
+    try std.testing.expectEqual(@as(u8, 2), client.model.bars.panel.content.node_count);
+
+    try presentation_lifecycle.observe(terminal);
+    try harness.settleModelPresentation();
+    const screen = &terminal.presenter.screen.front;
+    var heading = false;
+    for (0..terminal.view.regions.bottom.y) |row| {
+        var line: [512]u8 = undefined;
+        var len: usize = 0;
+        for (0..screen.w) |column| {
+            const text = screen.cells[row * screen.w + column].text();
+            if (len + text.len > line.len) {
+                break;
+            }
+
+            @memcpy(line[len..][0..text.len], text);
+            len += text.len;
+        }
+        heading = heading or std.mem.indexOf(u8, line[0..len], "On track") != null;
+    }
+    try std.testing.expect(heading);
+
+    _ = try client_module.key_routing.routeKeyInput(client, .{ .key = .{ .code = .escape } });
+    try std.testing.expect(!client.model.bars.panel.isOpen());
 }

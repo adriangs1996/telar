@@ -17,6 +17,7 @@ pub const PromptBegin = union(enum) {
     goto_picker,
     history_palette,
     suggest_palette,
+    path_picker,
     /// Opens the palette with the prefix already typed.
     palette: command_palette.Prefix,
     peek: AgentKey,

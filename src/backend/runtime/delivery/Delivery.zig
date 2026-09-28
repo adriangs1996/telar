@@ -9,6 +9,7 @@ const std = @import("std");
 const response_queue = @import("response_queue.zig");
 const Sources = @import("Sources.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
+const PathQuery = @import("../../paths/PathQuery.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
 const runtime_encoder = @import("encoder.zig");
@@ -161,6 +162,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         var history_output: ?*OutputResult = null;
         var history_stats: ?*StatsResult = null;
         var change_review: ?*ReviewResult = null;
+        var path_results: ?*PathQuery = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,
             .panes = sources.panes,
@@ -169,6 +171,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_output = &history_output,
             .history_stats = &history_stats,
             .change_review = &change_review,
+            .path_results = &path_results,
         }, entry.response);
         return self.stage(payload, .{ .response = .{
             .offset = entry.offset,
@@ -176,6 +179,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_output = history_output,
             .history_stats = history_stats,
             .change_review = change_review,
+            .path_results = path_results,
         } });
     }
 
@@ -320,6 +324,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         var history_output: ?*OutputResult = null;
         var history_stats: ?*StatsResult = null;
         var change_review: ?*ReviewResult = null;
+        var path_results: ?*PathQuery = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,
             .panes = sources.panes,
@@ -328,6 +333,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_output = &history_output,
             .history_stats = &history_stats,
             .change_review = &change_review,
+            .path_results = &path_results,
         }, entry.response);
         return self.stage(payload, .{ .response = .{
             .offset = entry.offset,
@@ -335,6 +341,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_output = history_output,
             .history_stats = history_stats,
             .change_review = change_review,
+            .path_results = path_results,
         } });
     }
     return null;
@@ -373,6 +380,9 @@ pub fn commit(self: *Delivery, operation: Commit) void {
             }
             if (response.change_review) |result| {
                 result.deinit();
+            }
+            if (response.path_results) |query| {
+                query.destroy();
             }
             self.responses.removeAt(response.offset);
         },

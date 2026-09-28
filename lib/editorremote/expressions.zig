@@ -19,7 +19,12 @@ pub fn vim(buffer: []u8, target: Target) ![]const u8 {
 
     try writer.writeAll(" ? [execute('drop ' . fnameescape(");
     try vimString(&writer, target.path);
-    try writer.writeAll(")), 1][1] : 0");
+    try writer.writeAll("))");
+    if (target.line != 0) {
+        try writer.print(", cursor({d}, {d})", .{ target.line, @max(target.column, 1) });
+    }
+
+    try writer.writeAll(", 1][-1] : 0");
     return writer.buffered();
 }
 
@@ -50,7 +55,12 @@ pub fn emacs(buffer: []u8, target: Target) ![]const u8 {
     try lispString(&writer, target.tty);
     try writer.writeAll(")) (throw 'found f)))))) (if f (with-selected-frame f (find-file (concat \"/:\" ");
     try lispString(&writer, target.path);
-    try writer.writeAll(")) 1) 0)) 0)");
+    try writer.writeAll("))");
+    if (target.line != 0) {
+        try writer.print(" (goto-char (point-min)) (forward-line {d}) (move-to-column {d})", .{ target.line - 1, target.column -| 1 });
+    }
+
+    try writer.writeAll(" 1) 0)) 0)");
     return writer.buffered();
 }
 
@@ -77,4 +87,25 @@ test "editor paths remain literal data across Vim and Lisp quoting" {
     const emacs_expression = try emacs(&buffer, target);
     try std.testing.expect(std.mem.indexOf(u8, emacs_expression, "(find-file (concat \"/:\" \"/tmp/a'|quit!\\\"\\\\$().txt\"))") != null);
     try std.testing.expect(std.mem.startsWith(u8, emacs_expression, "(if (and (= (emacs-pid) 42)"));
+}
+
+test "a line moves the cursor after the file opens and only integers join the expression" {
+    var buffer: [max_bytes]u8 = undefined;
+    const target: Target = .{
+        .pid = 42,
+        .path = "/tmp/a.zig",
+        .line = 12,
+        .column = 3,
+    };
+    const vim_expression = try vim(&buffer, target);
+    try std.testing.expect(std.mem.endsWith(u8, vim_expression, "fnameescape('/tmp/a.zig')), cursor(12, 3), 1][-1] : 0"));
+
+    const emacs_expression = try emacs(&buffer, target);
+    try std.testing.expect(std.mem.indexOf(u8, emacs_expression, "(goto-char (point-min)) (forward-line 11) (move-to-column 2) 1)") != null);
+
+    const unpositioned = try vim(&buffer, .{
+        .pid = 42,
+        .path = "/tmp/a.zig",
+    });
+    try std.testing.expect(std.mem.endsWith(u8, unpositioned, "fnameescape('/tmp/a.zig')), 1][-1] : 0"));
 }

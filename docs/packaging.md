@@ -42,12 +42,14 @@ CLI's argument grammar untouched. The executable lives under `Resources`
 because macOS file systems fold case: `Telar` and `telar` cannot share
 `Contents/MacOS`.
 
-The icon is rendered from `src/assets/telar-mark.svg`:
+The icon comes from two sources drawn for different sizes:
+`src/assets/telar-mark.svg` for 16 to 64 px and `src/assets/telar-icon.svg`
+for 128 to 1024 px. One script renders the iconset, runs `iconutil` and
+also writes `packaging/linux/telar.png`, the top bar mark and the site's
+brand files:
 
 ```sh
-rsvg-convert -w 1024 -h 1024 src/assets/telar-mark.svg -o icon_1024.png
-# then sips into a telar.iconset at 16..512 @1x and @2x, and
-iconutil -c icns telar.iconset -o packaging/macos/telar.icns
+uv run --no-project --with pillow==12.2.0 python tools/build_brand_icons.py
 ```
 
 Signing and notarization are not part of the build. An unsigned bundle runs

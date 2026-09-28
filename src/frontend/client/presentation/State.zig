@@ -25,7 +25,11 @@ const Context = @import("../../widgets/Context.zig");
 const composition_module = @import("../../widgets/composition.zig");
 const history_browser_module = @import("../../widgets/history_browser.zig");
 const goto_picker_module = @import("../../widgets/goto_picker.zig");
+const path_picker_module = @import("../../widgets/path_picker.zig");
 const toast_module = @import("../../widgets/toast.zig");
+const bar_content_module = @import("../../widgets/bar_content.zig");
+const bar_panel_module = @import("../../widgets/bar_panel.zig");
+const BarPanelInput = @import("../../widgets/BarPanelInput.zig");
 const Cursor = @import("../../widgets/Cursor.zig");
 const SidebarProviderPlacement = @import("../../graphics/SidebarProviderPlacement.zig");
 const kitty_sidebar_module = @import("../../graphics/kitty_sidebar.zig");
@@ -63,6 +67,8 @@ graphics_plan_dirty: bool = false,
 cell_width_px: u16 = 0,
 cell_height_px: u16 = 0,
 modal_overlay_area: cellgrid.Rect = .{},
+/// The bar components this frame's slots had no room for.
+bar_overflow: data.BarOverflow = .{},
 
 pub fn init(gpa: std.mem.Allocator, width: u16, height: u16) !State {
     return initWithTheme(gpa, .{ .width = width, .height = height }, data.theme_support.default_theme);
@@ -578,6 +584,22 @@ pub fn handleMouse(self: *State, mouse: keyinput.Mouse) client.ViewInteractionCo
             _ = self.closeAttachmentModal();
         },
         .attachment_modal_hold => result.consumed = true,
+        .bar_component => |component| {
+            result.intent = .{ .bar_component = component };
+            result.consumed = true;
+        },
+        .toggle_bar_overflow => {
+            result.intent = .toggle_bar_overflow;
+            result.consumed = true;
+        },
+        .panel_component => |index| {
+            result.intent = .{ .panel_component = index };
+            result.consumed = true;
+        },
+        .close_panel => {
+            result.intent = .close_panel;
+            result.consumed = true;
+        },
     }
     return result;
 }
@@ -619,12 +641,13 @@ pub fn render(self: *State, screen: *Screen, input: RenderInput) !RenderStats {
     // repainted the bottom row — so it lands on both exit paths.
     defer self.renderDiagnosticBanner(screen, input.diagnostic);
     if (!input.force and !self.dirty and !self.attachment_store.hasModal() and
-        view_ops.pickerPrompt(input.prompt) == null and
+        view_ops.pickerPrompt(input.prompt) == null and !input.bar_state.panel.isOpen() and
         !input.notifications.hasItems() and !self.toast_overlay_drawn)
     {
         return .{};
     }
     self.hits.clear();
+    self.bar_overflow = .{};
     self.scratch.clear(.{});
     self.graphics_plan.icons.reset();
     const hybrid = self.sidebar_rendering == .kitty_hybrid or
@@ -640,6 +663,7 @@ pub fn render(self: *State, screen: *Screen, input: RenderInput) !RenderStats {
             &self.graphics_plan.icons
         else
             null,
+        .bar_overflow = &self.bar_overflow,
     };
     var fallback_layout: data.LayoutSnapshot = .{};
     var fallback_attachment_area: cellgrid.Rect = .{};
@@ -697,15 +721,33 @@ pub fn render(self: *State, screen: *Screen, input: RenderInput) !RenderStats {
     );
     const picker_prompt = view_ops.pickerPrompt(input.prompt);
     const application_area = context.buffer.area();
+    var cpu_buffer: [data.CpuHistory.capacity]u8 = undefined;
+    const bar_facts = bar_content_module.barFacts(input.model, input.bar_state, &cpu_buffer);
+    const panel_input: BarPanelInput = .{
+        .application = application_area,
+        .bottom = self.regions.bottom,
+        .bar_state = input.bar_state,
+        .facts = &bar_facts,
+        .overflow = &self.bar_overflow,
+    };
+    const panel_area = bar_panel_module.area(&context, panel_input);
+    const path_placement = path_picker_module.modalArea(
+        application_area,
+        input.model,
+        input.tab,
+        layout,
+    );
     const current_modal_area = if (attachment_snapshot.modal != null)
         attachment_preview_module.modalArea(application_area)
     else if (picker_prompt) |prompt|
         if (prompt.target() == .history)
             history_browser_module.modalArea(application_area, .{ .count = input.history.len, .inspecting = prompt.inspecting() })
+        else if (prompt.target() == .paths)
+            path_placement.area
         else
             goto_picker_module.modalArea(application_area)
     else
-        cellgrid.Rect{};
+        panel_area;
     const graphical_modal = self.graphicalModalCovers(current_modal_area);
     if (input.compositor) |compositor| {
         if (!self.modal_overlay_area.isEmpty()) {
@@ -751,7 +793,17 @@ pub fn render(self: *State, screen: *Screen, input: RenderInput) !RenderStats {
     });
     var picker_cursor: ?Cursor = null;
     if (picker_prompt) |prompt| {
-        if (drawn_modal_area.isEmpty()) {
+        if (drawn_modal_area.isEmpty() and prompt.target() == .paths) {
+            const picker_output = path_picker_module.render(&context, .{
+                .placement = path_placement,
+                .field = &prompt.field,
+                .selection = prompt.selection(),
+                .state = &input.model.path_picker,
+                .graphical_frame = graphical_modal,
+            });
+            drawn_modal_area = picker_output.area;
+            picker_cursor = picker_output.cursor;
+        } else if (drawn_modal_area.isEmpty()) {
             const picker_output = view_ops.renderGotoPicker(&context, application_area, .{
                 .prompt = prompt,
                 .agents = input.agents,
@@ -764,6 +816,9 @@ pub fn render(self: *State, screen: *Screen, input: RenderInput) !RenderStats {
             drawn_modal_area = picker_output.area;
             picker_cursor = picker_output.cursor;
         }
+    }
+    if (drawn_modal_area.isEmpty() and picker_prompt == null and !panel_area.isEmpty()) {
+        drawn_modal_area = bar_panel_module.render(&context, panel_input, panel_area);
     }
     if (hybrid) {
         var provider_marks: [core.max_agent_snapshot_entries]SidebarProviderPlacement = undefined;
@@ -856,6 +911,10 @@ pub fn mousePointerShape(self: *State, input: RenderInput) core.PointerShape {
         .attachment_open,
         .attachment_dismiss,
         .attachment_modal_close,
+        .bar_component,
+        .toggle_bar_overflow,
+        .panel_component,
+        .close_panel,
         => .pointer,
         .focus_pane => |pane_id| self.panePointerShape(input, pane_id),
         .active_workspace, .attachment_shelf_hold, .attachment_modal_hold => .default,

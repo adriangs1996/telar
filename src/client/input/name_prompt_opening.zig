@@ -14,6 +14,7 @@ pub const Intent = union(enum) {
     goto_picker,
     history_palette,
     suggest_palette,
+    path_picker,
     /// The command palette with its prefix already typed.
     palette: model_data.CommandPalettePrefix,
     /// A peek at one agent, opened from its task card.

@@ -7,6 +7,7 @@ const RoundedRect = @import("RoundedRect.zig");
 const SpriteQuad = @import("SpriteQuad.zig");
 const quad = @import("Quad.zig");
 const OpacityWave = @import("OpacityWave.zig");
+const OpacityEdge = @import("OpacityEdge.zig");
 const Quad = quad.Quad;
 const QuadList = @This();
 
@@ -146,6 +147,15 @@ pub fn items(self: *const QuadList) []const Quad {
 pub fn highlightFrom(self: *QuadList, start: usize, wave: OpacityWave) void {
     for (self.quads.items[start..]) |*glyph| {
         glyph.a *= wave.at(glyph.x + glyph.width / 2);
+    }
+}
+
+/// Fades existing ink toward an edge by each quad's center, so a label cut
+/// by its box dissolves instead of ending mid-glyph.
+/// Example: `list.fadeEdgeFrom(first_glyph, .{ .from = right - 24, .to = right });`
+pub fn fadeEdgeFrom(self: *QuadList, start: usize, edge: OpacityEdge) void {
+    for (self.quads.items[start..]) |*item| {
+        item.a *= edge.at(item.x + item.width / 2);
     }
 }
 

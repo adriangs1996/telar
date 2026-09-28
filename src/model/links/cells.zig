@@ -103,11 +103,14 @@ fn matchGrid(grid: LinkGrid, position: Position) ?LinkMatch {
 
     const offset = cursor_offset orelse return null;
     const window = storage[0..len];
-    // A Markdown link claims its label and markup too; bare URI text is the fallback.
-    const span, const destination = if (urlscan.markdownLinkAt(window, offset)) |link|
-        .{ [2]usize{ link.start, link.end }, link.destinationText(window) }
+    // A Markdown link claims its label and markup too; bare URI text comes
+    // next, and a local path such as `src/main.zig:12` is the last resort.
+    const span, const destination, const scheme: ?urlscan.Scheme = if (urlscan.markdownLinkAt(window, offset)) |link|
+        .{ [2]usize{ link.start, link.end }, link.destinationText(window), null }
     else if (urlscan.extractAt(window, offset)) |found|
-        .{ [2]usize{ found.start, found.end }, found.text(window) }
+        .{ [2]usize{ found.start, found.end }, found.text(window), found.scheme }
+    else if (urlscan.pathAt(window, offset)) |found|
+        .{ [2]usize{ found.start, found.end }, found.text(window), found.scheme }
     else
         return null;
     const range = positions(grid, start, span) orelse return null;
@@ -116,7 +119,7 @@ fn matchGrid(grid: LinkGrid, position: Position) ?LinkMatch {
     }
 
     return .{
-        .target = data.LinkTarget.init(destination) catch return null,
+        .target = (if (scheme == .path) data.LinkTarget.initPath(destination) else data.LinkTarget.init(destination)) catch return null,
         .start = range[0],
         .end = range[1],
     };
@@ -288,14 +291,34 @@ test "maximum URI length remains bounded inside a larger row window" {
 }
 
 test "matching retains supported schemes and does not join physical rows" {
-    var buffer = try testBuffer(&.{ "https://example", ".com/path", "javascript:alert(1)", "data:text/plain,hi", "./src/main.zig" });
+    var buffer = try testBuffer(&.{ "https://example", ".com/path", "javascript:alert(1)", "data:text/plain,hi" });
     defer buffer.deinit();
-    const scroll: core_module.Scroll = .{ .total_rows = 5, .offset = 0 };
+    const scroll: core_module.Scroll = .{ .total_rows = 4, .offset = 0 };
     const found = match(&buffer, scroll, .{ .x = 8, .y = 0 }).?;
     try std.testing.expectEqualStrings("https://example", found.target.uri());
-    for (1..5) |y| {
+    for (1..4) |y| {
         try std.testing.expect(match(&buffer, scroll, .{ .x = 3, .y = @intCast(y) }) == null);
     }
+}
+
+test "local paths are the last resort and keep their position suffix" {
+    var buffer = try testBuffer(&.{ "at src/gui/routing.zig:435.", "open https://e/a.zig now", "en ~/.claude/settings.json." });
+    defer buffer.deinit();
+    const scroll: core_module.Scroll = .{ .total_rows = 3, .offset = 0 };
+    const expected = "src/gui/routing.zig:435";
+    for (3..3 + expected.len) |x| {
+        const found = match(&buffer, scroll, .{ .x = @intCast(x), .y = 0 }).?;
+        try std.testing.expectEqual(urlscan.Scheme.path, found.target.scheme);
+        try std.testing.expectEqualStrings(expected, found.target.uri());
+        try std.testing.expectEqualDeep(Position{ .x = 3, .y = 0 }, found.start);
+        try std.testing.expectEqualDeep(Position{ .x = 3 + expected.len, .y = 0 }, found.end);
+    }
+
+    try std.testing.expect(match(&buffer, scroll, .{ .x = 3 + expected.len, .y = 0 }) == null);
+    const web = match(&buffer, scroll, .{ .x = 12, .y = 1 }).?;
+    try std.testing.expectEqual(urlscan.Scheme.https, web.target.scheme);
+    const home = match(&buffer, scroll, .{ .x = 8, .y = 2 }).?;
+    try std.testing.expectEqualStrings("~/.claude/settings.json", home.target.uri());
 }
 
 fn testPane(size: [2]u16) !Pane {

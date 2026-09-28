@@ -11,6 +11,7 @@ const ObserverOutputObservation = @import("ObserverOutputObservation.zig");
 const Clock = cmdcapture.Clock;
 const Processing = @import("Processing.zig");
 const codex_screen = @import("codex_screen.zig");
+const cursor_screen = @import("cursor_screen.zig");
 const prompt_scan = @import("prompt_scan.zig");
 const Observer = @This();
 
@@ -30,7 +31,7 @@ sample: Sample = .{},
 manifests: *const core.Table = &core.builtin_table,
 last_signal: ?core.Signal = null,
 last_signal_ms: i64 = 0,
-codex_screen_lost: bool = false,
+composer_lost: bool = false,
 
 /// Initializes the disposable history emulator and its bounded event
 /// buffers for one pane.
@@ -70,7 +71,7 @@ pub fn init(self: *Observer, initialization: Initialization) !void {
     self.manifests = initialization.manifests;
     self.last_signal = null;
     self.last_signal_ms = 0;
-    self.codex_screen_lost = false;
+    self.composer_lost = false;
 }
 
 pub fn deinit(self: *Observer) void {
@@ -231,13 +232,15 @@ pub fn processSealed(self: *Observer, processing: Processing, sink: anytype) voi
         codex
     else if (processing.provider == .unknown and phrase_signal != null and phrase_signal.?.provider == .codex)
         null
+    else if (processing.provider == .cursor)
+        observer_support.mergeCursorSignals(phrase_signal, cursor_screen.scan(&self.terminal))
     else
         observer_support.mergeSignals(self.manifests, phrase_signal, prompt_scan.scanReadyPrompt(&self.terminal));
     if (signal) |candidate| {
-        if (candidate.provider == .codex) {
+        if (candidate.provider == .codex or candidate.provider == .cursor) {
             if (candidate.status == .working) {
-                self.codex_screen_lost = false;
-            } else if (self.codex_screen_lost) {
+                self.composer_lost = false;
+            } else if (self.composer_lost) {
                 // A dropped status row must not turn an incremental
                 // composer repaint into proof of completion.
                 return;
@@ -338,7 +341,7 @@ fn resetState(self: *Observer, cwd: []const u8, size: core.TerminalSize) !void {
     self.enabled = false;
     self.last_signal = null;
     self.last_signal_ms = 0;
-    self.codex_screen_lost = true;
+    self.composer_lost = true;
     self.terminal.fullReset();
     var handler = self.terminal.vtHandler();
     handler.apc_handler.enable(.kitty, false);

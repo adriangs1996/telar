@@ -22,6 +22,8 @@ const tab_bar = @import("tab_bar.zig");
 const bar_content = @import("bar_content.zig");
 
 pub fn render(context: *Context, input: CompositionInput) CompositionOutput {
+    var cpu_buffer: [data.CpuHistory.capacity]u8 = undefined;
+    const facts = bar_content.barFacts(input.model, input.bar_state, &cpu_buffer);
     top_bar.render(context, .{
         .area = input.regions.top,
         .sidebar_visible = !input.regions.sidebar.isEmpty(),
@@ -34,6 +36,7 @@ pub fn render(context: *Context, input: CompositionInput) CompositionOutput {
         .proxy_system_trusted = input.proxy_system_trusted,
         .right = input.bar_state.layout.slot(.top_right),
         .system_metrics = input.system_metrics,
+        .facts = &facts,
     });
 
     const focused_agent = block: {
@@ -73,7 +76,7 @@ pub fn render(context: *Context, input: CompositionInput) CompositionOutput {
         })
     else switch (input.status_mode) {
         .normal => block: {
-            renderBottom(context, input);
+            renderBottom(context, input, &facts);
             break :block null;
         },
         .prefix, .copy => block: {
@@ -89,7 +92,7 @@ pub fn render(context: *Context, input: CompositionInput) CompositionOutput {
     };
 }
 
-fn renderBottom(context: *Context, input: CompositionInput) void {
+fn renderBottom(context: *Context, input: CompositionInput, facts: *const data.BarFacts) void {
     const slots = &input.bar_state.layout.bottom;
     const tab_index: u2 = for (slots, 0..) |slot, index| {
         if (slot == .tabs) {
@@ -98,7 +101,7 @@ fn renderBottom(context: *Context, input: CompositionInput) void {
     } else 2;
     var desired: [3]u16 = @splat(0);
     for (slots, 0..) |*slot, index| {
-        desired[index] = bottomDesiredWidth(slot, input);
+        desired[index] = bottomDesiredWidth(slot, .{ .composition = input, .facts = facts, .index = index });
     }
     const regions = BarLayoutRegions.calculate(input.regions.bottom, .{
         .desired = desired,
@@ -120,20 +123,27 @@ fn renderBottom(context: *Context, input: CompositionInput) void {
                 .alignment = alignment,
                 .animation_frame = input.sidebar_animation_frame,
             }),
-            .metrics => status_bar.render(context, area, input.system_metrics),
             .content => |*content| bar_content.render(context, area, .{
                 .content = content,
                 .alignment = alignment,
+                .facts = facts,
+                .position = bottom_positions[index],
             }),
         }
     }
 }
 
-fn bottomDesiredWidth(slot: *const data.bar_values.Slot, input: CompositionInput) u16 {
+const bottom_positions = [_]data.bar_values.Position{ .bottom_left, .bottom_center, .bottom_right };
+
+fn bottomDesiredWidth(slot: *const data.bar_values.Slot, measured: BottomMeasure) u16 {
+    const input = measured.composition;
     return switch (slot.*) {
         .empty => 0,
-        .content => |*content| content.width(),
-        .metrics => status_bar.desiredWidth(input.system_metrics),
+        .content => |*content| bar_content.desiredWidth(.{
+            .content = content,
+            .facts = measured.facts,
+            .position = bottom_positions[measured.index],
+        }),
         .tabs => tab_bar.desiredWidth(.{
             .area = input.regions.bottom,
             .model = input.model,
@@ -141,6 +151,12 @@ fn bottomDesiredWidth(slot: *const data.bar_values.Slot, input: CompositionInput
         }),
     };
 }
+
+const BottomMeasure = struct {
+    composition: CompositionInput,
+    facts: *const data.BarFacts,
+    index: usize,
+};
 
 fn bottomStyle(context: *const Context) cellgrid.Style {
     return .{

@@ -20,6 +20,7 @@ mode: union(enum) {
     suggest,
     palette: struct { selection: u16 = 0 },
     peek: AgentKey,
+    paths: struct { selection: u16 = 0 },
 },
 field: name_prompt.Field,
 /// Working directory of the new-context form; unused by other targets.
@@ -38,6 +39,7 @@ pub fn target(self: *const Prompt) name_prompt.Target {
         .suggest => .suggest,
         .palette => .palette,
         .peek => |key| .{ .peek = key },
+        .paths => .paths,
     };
 }
 
@@ -48,6 +50,7 @@ pub fn selection(self: *const Prompt) u16 {
         .history => |history| history.selection,
         .create_workspace => |form_state| form_state.selection,
         .palette => |palette| palette.selection,
+        .paths => |paths| paths.selection,
         else => 0,
     };
 }
@@ -92,6 +95,7 @@ pub fn setSelection(self: *Prompt, selected: u16) void {
         .history => |*history| history.selection = selected,
         .create_workspace => |*form_state| form_state.selection = selected,
         .palette => |*palette| palette.selection = selected,
+        .paths => |*paths| paths.selection = selected,
         else => {},
     }
 }

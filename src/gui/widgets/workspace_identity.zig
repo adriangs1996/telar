@@ -1,5 +1,26 @@
 const client = @import("telar-client");
 const core = @import("telar-core");
+const data = @import("model");
+const std = @import("std");
+
+/// Bytes a generated context label can need.
+pub const label_bytes = 64;
+
+/// What navigation calls the context the tabs belong to: the workspace's
+/// name, else a numbered placeholder naming its kind.
+/// Example: `var storage: [workspace_identity.label_bytes]u8 = undefined; const text = workspace_identity.contextLabel(model, &storage);`
+pub fn contextLabel(model: *const data.ClientModel, storage: *[label_bytes]u8) []const u8 {
+    const name = model.workspaceName();
+    if (name.len != 0) {
+        return name;
+    }
+
+    const location = model.workspace orelse return "workspace";
+    return switch (location) {
+        .workspace => |id| std.fmt.bufPrint(storage, "workspace {d}", .{@intFromEnum(id)}) catch unreachable,
+        .worktree => |id| std.fmt.bufPrint(storage, "worktree {d}", .{@intFromEnum(id)}) catch unreachable,
+    };
+}
 
 /// The workspace the tabs model currently shows, if it is not a worktree.
 /// Example: `const active = workspace_identity.activeId(projection);`

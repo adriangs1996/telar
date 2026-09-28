@@ -15,6 +15,7 @@ test {
 const lua_api = @import("lua-api");
 const BarCallbackContext = @import("BarCallbackContext.zig");
 const bar_values = @import("bar_values.zig");
+const component_values = @import("component_values.zig");
 const lua_value = @import("lua_value.zig");
 const plugins_config = @import("plugins.zig");
 const commands_config = @import("commands.zig");
@@ -77,6 +78,7 @@ pub fn loadSource(context: LoadContext, spec: SourceInput) !*Generation {
         context.diagnostic.set("failed to initialize telar Lua API: {s}", .{generation.vm.errorMessage()});
         return err;
     };
+    generation.installJson();
     generation.installRequire();
     generation.vm.execute(.{ .source = spec.source, .name = spec.source_name, .results = 1 }) catch |err| {
         context.diagnostic.set("{s}", .{generation.vm.errorMessage()});
@@ -138,6 +140,14 @@ pub fn pluginSlice(self: *const Generation) []const data.PluginSpec {
     return self.snapshot.plugins[0..self.snapshot.plugin_count];
 }
 
+/// Adds `telar.json.decode` for render callbacks that read command output.
+fn installJson(self: *Generation) void {
+    const state = self.vm.state;
+    _ = lua_api.c.lua_getglobal(state, "telar");
+    lua.json.install(state);
+    lua_api.c.lua_settop(state, 0);
+}
+
 fn installRequire(self: *Generation) void {
     return self.modules.installRequire();
 }
@@ -169,7 +179,10 @@ pub fn invokeExpression(self: *Generation, invocation: CallbackInvocation, diagn
     return generation_support.parseInputDecision(state, .{ .index = -1, .callback = callback }, diagnostic);
 }
 
-pub fn invokeBar(self: *Generation, invocation: BarInvocation, diagnostic: *data.Diagnostic) !data.Content {
+/// Runs a bar or panel render callback and parses the components it returns
+/// into `content`, a `data.Content` or a `data.PanelContent`.
+/// Example: `try generation.invokeBar(.{ .reference = ref, .context = context }, &content, diagnostic);`
+pub fn invokeBar(self: *Generation, invocation: BarInvocation, content: anytype, diagnostic: *data.Diagnostic) !void {
     const reference = invocation.reference;
     if (reference.generation != self.number or reference.id >= self.bar_callback_count) {
         diagnostic.set("bar callback belongs to an obsolete configuration generation", .{});
@@ -187,7 +200,10 @@ pub fn invokeBar(self: *Generation, invocation: BarInvocation, diagnostic: *data
         return error.LuaBarCallbackFailed;
     }
 
-    return bar_values.parseBarContent(state, -1, diagnostic);
+    try component_values.parse(self, content, .{
+        .index = -1,
+        .surface = invocation.surface,
+    }, diagnostic);
 }
 
 fn prepareCallback(self: *Generation, preparation: CallbackPreparation, diagnostic: *data.Diagnostic) !*const Callback {
@@ -243,6 +259,13 @@ fn parseEffectBatch(self: *Generation, index: c_int, diagnostic: *data.Diagnosti
     }
     batch.len = @intCast(count);
     return batch;
+}
+
+/// Parses the action a component runs when clicked. Like a callback's
+/// returned actions, it cannot be another Lua function.
+/// Example: `const action = try generation.parseComponentAction(-1, diagnostic);`
+pub fn parseComponentAction(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !data.Action {
+    return self.parseReturnedAction(index, diagnostic);
 }
 
 fn parseReturnedAction(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !data.Action {
@@ -489,7 +512,7 @@ fn parseClient(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !v
     }
     try lua_value.ensureOnlyFields(state, .{
         .index = absolute,
-        .allowed = &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "history" },
+        .allowed = &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "panels", "history" },
         .path = "config.client",
     }, diagnostic);
 
@@ -601,6 +624,13 @@ fn parseClient(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !v
     }
     lua_value.pop(state, 1);
 
+    // Panels come first: bindings and bars name them in open_panel.
+    _ = lua_api.c.lua_getfield(state, absolute, "panels");
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        try self.parsePanels(-1, diagnostic);
+    }
+    lua_value.pop(state, 1);
+
     _ = lua_api.c.lua_getfield(state, absolute, "keybindings");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
         try self.parseBindings(-1, diagnostic);
@@ -641,6 +671,129 @@ fn parseBars(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !voi
         try self.parseSidebarFooter(-1, diagnostic);
     }
     lua_value.pop(state, 1);
+}
+
+/// Reads `client.panels`, a table from panel names to `telar.panel` values.
+/// Names are sorted so a panel keeps its index across equal reloads.
+fn parsePanels(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
+    const state = self.vm.state;
+    const absolute = lua_api.c.lua_absindex(state, index);
+    if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
+        diagnostic.set("config.client.panels must be a table of telar.panel values", .{});
+        return error.InvalidConfig;
+    }
+
+    var names: [data.bar_values.max_panels][]const u8 = undefined;
+    var count: usize = 0;
+    lua_api.c.lua_pushnil(state);
+    while (lua_api.c.lua_next(state, absolute) != 0) {
+        lua_value.pop(state, 1);
+        const name = lua_value.string(state, -1) orelse {
+            lua_value.pop(state, 1);
+            diagnostic.set("config.client.panels keys must be panel names", .{});
+            return error.InvalidConfig;
+        };
+        if (count == names.len) {
+            lua_value.pop(state, 1);
+            diagnostic.set("config.client.panels accepts at most {d} panels", .{names.len});
+            return error.InvalidConfig;
+        }
+
+        names[count] = name;
+        count += 1;
+    }
+
+    std.mem.sort([]const u8, names[0..count], {}, lessName);
+    for (names[0..count], 0..) |name, panel_index| {
+        // Lua strings are NUL-terminated, and the key keeps this one alive.
+        _ = lua_api.c.lua_getfield(state, absolute, @ptrCast(name.ptr));
+        defer lua_value.pop(state, 1);
+        self.snapshot.bars.panels[panel_index] = try self.parsePanel(.{ .index = -1, .name = name }, diagnostic);
+    }
+
+    self.snapshot.bars.panel_count = @intCast(count);
+}
+
+fn parsePanel(self: *Generation, input: PanelInput, diagnostic: *data.Diagnostic) !data.PanelDefinition {
+    const state = self.vm.state;
+    const absolute = lua_api.c.lua_absindex(state, input.index);
+    if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
+        diagnostic.set("config.client.panels.{s} must be a telar.panel value", .{input.name});
+        return error.InvalidConfig;
+    }
+
+    try lua_value.ensureOnlyFields(state, .{
+        .index = absolute,
+        .allowed = &.{ "panel_kind", "title", "mark", "icon", "width", "source", "refresh" },
+        .path = "telar.panel",
+    }, diagnostic);
+
+    var definition: data.PanelDefinition = .{};
+    definition.heading.setName(input.name) catch {
+        diagnostic.set("panel name '{s}' must be 1..{d} letters, digits, '-' or '_'", .{ input.name, data.PanelHeading.max_name_bytes });
+        return error.InvalidConfig;
+    };
+    const title = try lua_value.optionalStringField(state, .{ .index = absolute, .name = "title", .default = input.name }, diagnostic);
+    definition.heading.setTitle(title) catch {
+        diagnostic.set("panel title must be printable text of at most {d} bytes", .{data.PanelHeading.max_title_bytes});
+        return error.InvalidConfig;
+    };
+
+    _ = lua_api.c.lua_getfield(state, absolute, "mark");
+    if (lua_value.string(state, -1)) |name| {
+        definition.heading.mark = std.meta.stringToEnum(data.Mark, name) orelse {
+            lua_value.pop(state, 1);
+            diagnostic.set("unknown panel mark '{s}'", .{name});
+            return error.InvalidConfig;
+        };
+    }
+    lua_value.pop(state, 1);
+
+    _ = lua_api.c.lua_getfield(state, absolute, "icon");
+    if (lua_value.string(state, -1)) |name| {
+        definition.heading.icon = bar_values.parseBarIcon(name) orelse {
+            lua_value.pop(state, 1);
+            diagnostic.set("unknown panel icon '{s}'", .{name});
+            return error.InvalidConfig;
+        };
+    }
+    lua_value.pop(state, 1);
+
+    const width = try lua_value.optionalIntegerField(state, .{ .index = absolute, .name = "width", .default = data.PanelHeading.default_width }, diagnostic);
+    if (width < data.PanelHeading.min_width or width > data.PanelHeading.max_width) {
+        diagnostic.set("panel width must be in {d}..{d}", .{ data.PanelHeading.min_width, data.PanelHeading.max_width });
+        return error.InvalidConfig;
+    }
+    definition.heading.width = @intCast(width);
+
+    _ = lua_api.c.lua_getfield(state, absolute, "source");
+    definition.source = self.parseBarSource(-1, diagnostic) catch |err| {
+        lua_value.pop(state, 1);
+        return err;
+    };
+    lua_value.pop(state, 1);
+    if (definition.source != .dynamic and definition.source != .command) {
+        diagnostic.set("panel '{s}' needs a render function or a command", .{input.name});
+        return error.InvalidConfig;
+    }
+
+    _ = lua_api.c.lua_getfield(state, absolute, "refresh");
+    const refresh = lua_api.c.lua_toboolean(state, -1) != 0;
+    lua_value.pop(state, 1);
+    // Without every_ms a panel renders once per opening and on refresh_panel.
+    if (!refresh) {
+        switch (definition.source) {
+            .dynamic => |*value| value.interval_ns = 0,
+            .command => |*value| value.interval_ns = 0,
+            else => unreachable,
+        }
+    }
+
+    return definition;
+}
+
+fn lessName(_: void, left: []const u8, right: []const u8) bool {
+    return std.mem.lessThan(u8, left, right);
 }
 
 fn parseSidebarFooter(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
@@ -757,7 +910,12 @@ fn parseBarSource(self: *Generation, index: c_int, diagnostic: *data.Diagnostic)
         try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "bar_kind", "value" }, .path = "bar static block" }, diagnostic);
         _ = lua_api.c.lua_getfield(state, absolute, "value");
         defer lua_value.pop(state, 1);
-        return .{ .static = try bar_values.parseBarContent(state, -1, diagnostic) };
+        var content: data.Content = .{};
+        try component_values.parse(self, &content, .{
+            .index = -1,
+            .surface = .bar,
+        }, diagnostic);
+        return .{ .static = content };
     }
     if (std.mem.eql(u8, kind, "dynamic")) {
         try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "bar_kind", "every_ms", "render" }, .path = "bar dynamic block" }, diagnostic);
@@ -1410,6 +1568,19 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
             return error.InvalidConfig;
         } };
     }
+    if (std.mem.eql(u8, kind, "open-panel")) {
+        try lua_value.ensureOnlyFields(state, .{
+            .index = absolute,
+            .allowed = &.{ "kind", "panel" },
+            .path = "action",
+        }, diagnostic);
+        const name = try lua_value.requiredStringField(state, .{ .index = absolute, .name = "panel" }, diagnostic);
+        const index = self.snapshot.bars.panelIndex(name) orelse {
+            diagnostic.set("open_panel names an unknown panel '{s}'", .{name});
+            return error.InvalidConfig;
+        };
+        return .{ .open_panel = index };
+    }
     if (std.mem.eql(u8, kind, "plugin")) {
         try lua_value.ensureOnlyFields(state, .{
             .index = absolute,
@@ -1438,6 +1609,12 @@ const BarCallback = struct {
 const BarInvocation = struct {
     reference: data.CallbackRef,
     context: BarCallbackContext,
+    surface: component_values.Surface = .bar,
+};
+
+const PanelInput = struct {
+    index: c_int,
+    name: []const u8,
 };
 
 const SourceInput = struct {
