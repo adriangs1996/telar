@@ -86,6 +86,7 @@ pub fn next(self: *Reader) !?checkpoint.Record {
                     .base = try self.inner.readSized16(),
                     .title = try self.inner.readSized16(),
                     .brief = try self.inner.readSized16(),
+                    .dispatched_from = if (self.version >= checkpoint.dispatched_from_version) try self.inner.readSized16() else "",
                 } };
                 try checkpoint.validateWorktree(record.worktree);
                 return record;

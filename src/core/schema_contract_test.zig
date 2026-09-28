@@ -931,6 +931,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .base = "main",
         .title = "Fix tabs",
         .brief = "Reorder\ntabs",
+        .dispatched_from = "laptop",
         .diff_added = 12,
         .diff_removed = 3,
         .diff_files = 2,
@@ -1109,6 +1110,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .base = "main",
             .title = "Fix tabs",
             .brief = "Reorder tabs",
+            .dispatched_from = "laptop",
         }),
     ));
     helper.add(.{ .name = "worktree_registered", .direction = .server, .golden_hex = golden.worktree_registered }, helper.commit(

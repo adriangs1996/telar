@@ -55,6 +55,7 @@ pub fn copy(self: *WorktreeCatalog, list: core.WorkspaceListView) !void {
             .base = try arena.dupe(u8, entry.base),
             .title = try arena.dupe(u8, entry.title),
             .brief = try arena.dupe(u8, entry.brief),
+            .dispatched_from = try arena.dupe(u8, entry.dispatched_from),
             .diff_added = entry.diff_added,
             .diff_removed = entry.diff_removed,
             .diff_files = entry.diff_files,

@@ -17,3 +17,6 @@ branch: []const u8,
 base: []const u8 = "",
 title: []const u8 = "",
 brief: []const u8 = "",
+/// The label of the machine that dispatched the worktree here, when another
+/// machine did. Attribution only: the runtime never reaches that machine.
+dispatched_from: []const u8 = "",

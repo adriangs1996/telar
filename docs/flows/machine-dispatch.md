@@ -57,6 +57,9 @@ minutes reuse that connection.
   refuses `--remote` or a second machine beside it.
 - A disabled profile still receives dispatch; `enabled` only decides whether
   windows connect.
+- `worktree create --machine` and `worktree fetch --machine` cannot be
+  forwarded whole, because their Git transfer starts here; see
+  [Worktree dispatch](worktree-dispatch.md).
 
 ## Validation
 

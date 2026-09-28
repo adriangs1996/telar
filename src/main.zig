@@ -215,6 +215,10 @@ test {
     _ = @import("cli/dispatch_argv.zig");
     _ = @import("cli/machine_profiles.zig");
     _ = @import("cli/machine_dispatch.zig");
+    _ = @import("cli/arguments/WorktreeOptions.zig");
+    _ = @import("cli/repository_identity.zig");
+    _ = @import("cli/worktree_dispatch.zig");
+    _ = @import("cli/worktree_git.zig");
     _ = @import("cli/runtime.zig");
     _ = @import("cli/DiagnosticLog.zig");
     _ = @import("cli/arguments/DiagnosticsOptions.zig");

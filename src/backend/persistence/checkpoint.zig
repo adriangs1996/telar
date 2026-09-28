@@ -21,10 +21,13 @@ const Counters = @import("Counters.zig");
 pub const magic: *const [8]u8 = "TELARCKP";
 /// Version 2 added pane titles; version 3 permits automatic tab labels.
 /// Version 4 added pane kinds for agent panes; version 5 drops them again.
-/// Version 6 adds worktree records.
+/// Version 6 adds worktree records; version 7 adds the machine that
+/// dispatched each worktree.
 /// Older labels remain explicit because their naming intent was not recorded.
-pub const version: u16 = 6;
+pub const version: u16 = 7;
 pub const oldest_readable_version: u16 = 1;
+/// The first version whose worktree records end with `dispatched_from`.
+pub const dispatched_from_version: u16 = 7;
 pub const max_file_bytes = 4 * 1024 * 1024;
 pub const max_launch_arguments = 32;
 pub const max_launch_bytes = 1024;
@@ -87,7 +90,8 @@ pub fn validateWorktree(record: WorktreeRecord) !void {
     const within = record.branch.len != 0 and record.branch.len <= core.max_git_branch_bytes and
         record.base.len <= core.max_git_branch_bytes and
         record.title.len <= core.max_worktree_title_bytes and
-        record.brief.len <= core.max_worktree_brief_bytes;
+        record.brief.len <= core.max_worktree_brief_bytes and
+        record.dispatched_from.len <= core.MachineProfile.max_label_bytes;
     if (!within) {
         return error.InvalidCheckpoint;
     }
@@ -335,5 +339,39 @@ test "version 3 pane records restore without a kind byte" {
     const pane = (try reader.next()).?.pane;
     try std.testing.expectEqualStrings("Legacy title", pane.agent_title);
     try std.testing.expectEqualStrings("/bin/sh\x00", pane.arguments);
+    try std.testing.expect(try reader.next() == null);
+}
+
+test "worktree records keep the dispatching machine from version 7 on" {
+    var buffer: [512]u8 = undefined;
+    const counters: Counters = .{ .next_workspace_id = 2, .next_tab_id = 1, .next_pane_id = 1, .next_pane_generation = 1 };
+    const record: WorktreeRecord = .{
+        .id = 4,
+        .source_workspace_id = 1,
+        .path = "/work/telar-worktrees/fix",
+        .branch = "fix",
+        .dispatched_from = "laptop",
+    };
+    var encoder = try Encoder.init(&buffer, counters);
+    try encoder.worktree(record);
+    var reader = try Reader.init(try encoder.finish());
+    try std.testing.expectEqualStrings("laptop", (try reader.next()).?.worktree.dispatched_from);
+
+    // A version 6 record ends at its brief.
+    var local = record;
+    local.dispatched_from = "";
+    encoder = try Encoder.init(&buffer, counters);
+    try encoder.worktree(local);
+    const bytes = try encoder.finish();
+    var legacy: [512]u8 = undefined;
+    const trailing_empty_text = 2;
+    const body = bytes.len - 1 - trailing_empty_text;
+    @memcpy(legacy[0..body], bytes[0..body]);
+    legacy[body] = bytes[bytes.len - 1];
+    std.mem.writeInt(u16, legacy[magic.len..][0..2], dispatched_from_version - 1, .little);
+    reader = try Reader.init(legacy[0 .. body + 1]);
+    const restored = (try reader.next()).?.worktree;
+    try std.testing.expectEqualStrings("fix", restored.branch);
+    try std.testing.expectEqualStrings("", restored.dispatched_from);
     try std.testing.expect(try reader.next() == null);
 }

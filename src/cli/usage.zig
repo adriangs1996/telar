@@ -81,7 +81,9 @@ pub const text =
     \\         telar pane list [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\         telar pane get <id|--current> [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\       telar pane focus --current --direction left|right|up|down [--json]
-    \\       telar worktree create BRANCH [--title TITLE] [--from BASE] [--directory DIR] [--label L] [--workspace ID] [-- COMMAND...]
+    \\       telar worktree create BRANCH [--title TITLE] [--from BASE] [--directory DIR] [--label L] [--workspace ID] [--machine LABEL] [-- COMMAND...]
+    \\       telar worktree fetch BRANCH --machine LABEL [--json]
+    \\       telar worktree resolve --repository IDENTITY [--workspace PATH] [--json]
     \\       telar worktree exec BRANCH [--label L] [--wait [--timeout S]] -- COMMAND...
     \\       telar worktree list [--workspace ID] [--json]
     \\       telar worktree open BRANCH [--client ID]
@@ -140,6 +142,8 @@ pub const text =
     \\  worktree open   Show a worktree in the UI client used last
     \\  worktree diff   Print the worktree's diff against its base
     \\  worktree remove Close a worktree's tabs and remove its checkout; refused with changes
+    \\  worktree fetch  Bring a branch back from another machine into refs/remotes/LABEL/BRANCH
+    \\  worktree resolve Find the clone of a repository among this machine's workspaces
     \\  agent interrupt Stop an agent's turn with its provider's interrupt key
     \\  workspace create Alias of worktree create for a workspace on a new git worktree
     \\  api schema       Print the wire contract of this binary

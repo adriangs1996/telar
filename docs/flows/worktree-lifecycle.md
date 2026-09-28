@@ -60,7 +60,9 @@ worktree_git.remove, worktree_git.deleteBranch
 
 The runtime owns the `Worktrees` table (`src/backend/workspace/Worktrees.zig`):
 path, branch, base, origin, source workspace, creator pane, title, brief,
-state, diffstat and the last command. Its tabs belong to an ordinary child
+the machine that dispatched it (`dispatched_from`, see
+[Worktree dispatch](worktree-dispatch.md)), state, diffstat and the last
+command. Its tabs belong to an ordinary child
 workspace (`WorkspaceLocation.workspace`), so every tab, pane, layout and
 navigation path works unchanged; the row names that workspace and
 `Worktrees.slotOfWorkspace` answers the reverse question. When the child
@@ -81,8 +83,8 @@ never changes focus of the pane it runs in.
 
 ## Persistence
 
-`session_checkpoint` writes one `WorktreeRecord` per row (checkpoint version
-6, record kind `worktree`). Restore rebuilds rows before workspaces, then
+`session_checkpoint` writes one `WorktreeRecord` per row (record kind
+`worktree`, since checkpoint version 6; version 7 adds `dispatched_from`). Restore rebuilds rows before workspaces, then
 `releaseMissingWorkspaces` unbinds rows whose child workspace did not come
 back. See [Session checkpoint](session-checkpoint.md).
 

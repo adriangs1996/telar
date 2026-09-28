@@ -77,6 +77,28 @@ pub fn arguments(self: *const SshOptions) [option_count][]const u8 {
     };
 }
 
+/// The options as one `GIT_SSH_COMMAND`, so Git's pushes and fetches join
+/// the same control master. Git hands the value to `sh`, so every word is
+/// single-quoted, and a word that holds a quote is refused.
+///
+/// ```zig
+/// const command = try options.gitCommand(&buffer);
+/// try map.put("GIT_SSH_COMMAND", command);
+/// ```
+pub fn gitCommand(self: *const SshOptions, buffer: []u8) ![]const u8 {
+    var writer: std.Io.Writer = .fixed(buffer);
+    writer.writeAll("ssh") catch return error.SshCommandTooLong;
+    for (self.arguments()) |word| {
+        if (std.mem.indexOfScalar(u8, word, '\'') != null) {
+            return error.UnquotableSshOption;
+        }
+
+        writer.print(" '{s}'", .{word}) catch return error.SshCommandTooLong;
+    }
+
+    return writer.buffered();
+}
+
 test "managed options keep ssh quiet, alive and shared" {
     var options: SshOptions = .{};
     const control = "ControlPath=/tmp/telar-501/ssh-0123456789ab";
@@ -88,4 +110,21 @@ test "managed options keep ssh quiet, alive and shared" {
     try std.testing.expectEqualStrings("ServerAliveInterval=15", managed[3]);
     try std.testing.expectEqualStrings("ForwardAgent=no", managed[7]);
     try std.testing.expectEqualStrings(control, managed[13]);
+}
+
+test "the git command quotes every managed option for the shell" {
+    var options: SshOptions = .{};
+    const control = "ControlPath=/tmp/telar 501/ssh-0123456789ab";
+    @memcpy(options.control_storage[0..control.len], control);
+    options.control_len = control.len;
+
+    var buffer: [512]u8 = undefined;
+    const command = try options.gitCommand(&buffer);
+    try std.testing.expect(std.mem.startsWith(u8, command, "ssh '-o' 'BatchMode=yes'"));
+    try std.testing.expect(std.mem.endsWith(u8, command, " '-o' 'ControlPath=/tmp/telar 501/ssh-0123456789ab'"));
+
+    const quoted = "ControlPath=/tmp/it's";
+    @memcpy(options.control_storage[0..quoted.len], quoted);
+    options.control_len = quoted.len;
+    try std.testing.expectError(error.UnquotableSshOption, options.gitCommand(&buffer));
 }

@@ -40,9 +40,29 @@ Implementation must follow the [invariants](../invariants.md) and the
     added with `telar machine add`.
   - Picker rows act through keys (Shift+Enter, Ctrl+R, Ctrl+D) and Enter on
     an unreachable machine is "Reconnect now".
-- **Phase 3** (worktrees on another machine): not started. It needs the
-  [worktrees plan](worktrees.md) merged first.
-- **Phase 4** (coordinator across machines): not started.
+- **Phase 3** (worktrees on another machine): done. Flow:
+  [Worktree dispatch](../flows/worktree-dispatch.md). It differs from the
+  design below in four places:
+  - The repository that dispatches is the one the current directory is in.
+    `create --machine` never contacts the local runtime, so the calling
+    pane's workspace is not consulted; `--workspace` names the clone on the
+    other machine (a path or one of its workspace ids) and settles an
+    ambiguous identity there.
+  - What is pushed follows `worktree_git.add`: the local branch when it
+    exists, else `--from`, else `HEAD`. A new branch's start commit is passed
+    on as `--from`, so the other machine records it as the base and `worktree
+    diff` there shows only the task's work, not commits its default branch
+    lacks.
+  - `--directory` is refused beside `--machine`: it would name a path on the
+    other machine that this one cannot check.
+  - A destination with `:`, `/` or brackets is refused for Git transfers,
+    since Git would read it as part of the URL; an SSH alias works.
+- **Phase 4** (coordinator across machines): done, as skill text. The
+  `telar` and `telar-coordinator` skills describe `--machine`, `worktree
+  create --machine`, `worktree fetch` and prefixing every later command for
+  that task with `telar --machine`. Placement stays manual (decision 14): the
+  coordinator uses the machine the user names, and only when asked to choose
+  compares `telar --machine LABEL runtime metrics --json` and says why.
 - **Retiring the TUI**: done. `telar` opens the window and refuses without a
   display; `src/frontend` is gone. What changed on the way:
   - The headless client exists (`zig build headless`,

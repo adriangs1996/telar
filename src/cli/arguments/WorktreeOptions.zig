@@ -8,8 +8,10 @@ const WorktreeOptions = @This();
 /// Most arguments a command after `--` may carry.
 pub const max_command_arguments = 32;
 pub const default_wait_seconds = 600;
+/// Longest repository identity `resolve` accepts, in bytes.
+pub const max_repository_bytes = 512;
 
-pub const Action = enum { create, exec, list, open, diff, remove };
+pub const Action = enum { create, exec, list, open, diff, remove, resolve, fetch };
 
 action: Action,
 branch: ?[*:0]const u8 = null,
@@ -21,6 +23,12 @@ workspace: ?[*:0]const u8 = null,
 /// Overrides the derived checkout directory.
 directory: ?[*:0]const u8 = null,
 client: u64 = 0,
+/// `create` and `fetch`: the machine the worktree lives on.
+machine: ?[*:0]const u8 = null,
+/// `create`: the label of the machine that dispatched it here.
+dispatched_from: ?[*:0]const u8 = null,
+/// `resolve`: the repository identity to find among the workspaces.
+repository: ?[*:0]const u8 = null,
 socket: ?[*:0]const u8 = null,
 json: bool = false,
 uncommitted: bool = false,
@@ -46,7 +54,7 @@ pub fn parse(args: []const [*:0]const u8) !WorktreeOptions {
     const action = std.meta.stringToEnum(Action, std.mem.span(args[0])) orelse return error.UnknownWorktreeAction;
     var options: WorktreeOptions = .{ .action = action };
     var index: usize = 1;
-    if (action != .list) {
+    if (action != .list and action != .resolve) {
         if (args.len < 2 or std.mem.startsWith(u8, std.mem.span(args[1]), "-")) {
             return error.MissingWorktreeBranch;
         }
@@ -76,7 +84,16 @@ pub fn parse(args: []const [*:0]const u8) !WorktreeOptions {
         } else if (std.mem.eql(u8, arg, "--label") and (action == .create or action == .exec)) {
             options.label = try single(options.label, try cursor.require(error.MissingTabLabel));
             try validateText(std.mem.span(options.label.?), core.max_tab_label_bytes);
-        } else if (std.mem.eql(u8, arg, "--workspace") and (action == .create or action == .list)) {
+        } else if (std.mem.eql(u8, arg, "--machine") and (action == .create or action == .fetch)) {
+            options.machine = try single(options.machine, try cursor.require(error.MissingMachineLabel));
+            try core.MachineProfile.validateLabel(std.mem.span(options.machine.?));
+        } else if (std.mem.eql(u8, arg, "--dispatched-from") and action == .create) {
+            options.dispatched_from = try single(options.dispatched_from, try cursor.require(error.MissingMachineLabel));
+            try validateText(std.mem.span(options.dispatched_from.?), core.MachineProfile.max_label_bytes);
+        } else if (std.mem.eql(u8, arg, "--repository") and action == .resolve) {
+            options.repository = try single(options.repository, try cursor.require(error.MissingRepository));
+            try validateText(std.mem.span(options.repository.?), max_repository_bytes);
+        } else if (std.mem.eql(u8, arg, "--workspace") and (action == .create or action == .list or action == .resolve)) {
             options.workspace = try single(options.workspace, try cursor.require(error.MissingWorkspaceTarget));
         } else if (std.mem.eql(u8, arg, "--client") and action == .open) {
             const value = std.mem.span(try cursor.require(error.MissingClientId));
@@ -111,6 +128,18 @@ pub fn parse(args: []const [*:0]const u8) !WorktreeOptions {
 
     if (action == .create and options.command_len != 0 and options.title == null) {
         return error.MissingWorktreeTitle;
+    }
+
+    if (action == .fetch and options.machine == null) {
+        return error.MissingMachineLabel;
+    }
+
+    if (action == .resolve and options.repository == null) {
+        return error.MissingRepository;
+    }
+
+    if (options.machine != null and options.directory != null) {
+        return error.DirectoryOnAnotherMachine;
     }
 
     return options;
@@ -192,4 +221,23 @@ test "branches that look like options or escape a ref are refused" {
     try std.testing.expectError(error.RelativeWorktreeDirectory, WorktreeOptions.parse(&.{ "create", "fix", "--directory", "rel" }));
     const removal = try WorktreeOptions.parse(&.{ "remove", "fix", "--force", "--delete-branch" });
     try std.testing.expect(removal.force and removal.delete_branch);
+}
+
+test "a worktree on another machine names it; fetch needs one and resolve a repository" {
+    const remote = try WorktreeOptions.parse(&.{ "create", "fix", "--machine", "box", "--from", "HEAD", "--title", "Fix", "--", "claude", "go" });
+    try std.testing.expectEqualStrings("box", std.mem.span(remote.machine.?));
+
+    const fetched = try WorktreeOptions.parse(&.{ "fetch", "fix", "--machine", "box", "--json" });
+    try std.testing.expectEqual(Action.fetch, fetched.action);
+    try std.testing.expectError(error.MissingMachineLabel, WorktreeOptions.parse(&.{ "fetch", "fix" }));
+    try std.testing.expectError(error.InvalidMachineLabel, WorktreeOptions.parse(&.{ "create", "fix", "--machine", "-box" }));
+    try std.testing.expectError(error.DirectoryOnAnotherMachine, WorktreeOptions.parse(&.{ "create", "fix", "--machine", "box", "--directory", "/src/fix" }));
+    try std.testing.expectError(error.UnknownWorktreeOption, WorktreeOptions.parse(&.{ "exec", "fix", "--machine", "box", "--", "ls" }));
+
+    const resolved = try WorktreeOptions.parse(&.{ "resolve", "--repository", "github.com/o/r", "--json" });
+    try std.testing.expectEqualStrings("github.com/o/r", std.mem.span(resolved.repository.?));
+    try std.testing.expectError(error.MissingRepository, WorktreeOptions.parse(&.{"resolve"}));
+
+    const dispatched = try WorktreeOptions.parse(&.{ "create", "fix", "--dispatched-from", "laptop" });
+    try std.testing.expectEqualStrings("laptop", std.mem.span(dispatched.dispatched_from.?));
 }

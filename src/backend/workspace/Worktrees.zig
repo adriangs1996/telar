@@ -28,6 +28,9 @@ title: [capacity][core.max_worktree_title_bytes]u8 = undefined,
 title_len: [capacity]u8 = @splat(0),
 brief: [capacity][core.max_worktree_brief_bytes]u8 = undefined,
 brief_len: [capacity]u16 = @splat(0),
+/// The machine that dispatched the worktree here; empty when none did.
+dispatched_from: [capacity][core.MachineProfile.max_label_bytes]u8 = undefined,
+dispatched_from_len: [capacity]u8 = @splat(0),
 diff_added: [capacity]u32 = @splat(0),
 diff_removed: [capacity]u32 = @splat(0),
 diff_files: [capacity]u32 = @splat(0),
@@ -83,6 +86,7 @@ pub fn register(self: *Worktrees, gpa: std.mem.Allocator, request: WorktreeRegis
     self.base_len[slot] = @intCast(copyText(&self.base[slot], request.base));
     self.title_len[slot] = @intCast(copyText(&self.title[slot], request.title));
     self.brief_len[slot] = @intCast(copyText(&self.brief[slot], request.brief));
+    self.dispatched_from_len[slot] = @intCast(copyText(&self.dispatched_from[slot], request.dispatched_from));
     self.diff_added[slot] = 0;
     self.diff_removed[slot] = 0;
     self.diff_files[slot] = 0;
@@ -286,6 +290,7 @@ pub fn listEntries(self: *const Worktrees, output: *[capacity]core.WorktreeListE
             .base = self.baseAt(slot),
             .title = self.titleAt(slot),
             .brief = self.briefAt(slot),
+            .dispatched_from = self.dispatchedFromAt(slot),
             .diff_added = self.diff_added[slot],
             .diff_removed = self.diff_removed[slot],
             .diff_files = self.diff_files[slot],
@@ -314,6 +319,10 @@ pub fn titleAt(self: *const Worktrees, slot: usize) []const u8 {
 
 pub fn briefAt(self: *const Worktrees, slot: usize) []const u8 {
     return self.brief[slot][0..self.brief_len[slot]];
+}
+
+pub fn dispatchedFromAt(self: *const Worktrees, slot: usize) []const u8 {
+    return self.dispatched_from[slot][0..self.dispatched_from_len[slot]];
 }
 
 pub fn commandLabelAt(self: *const Worktrees, slot: usize) []const u8 {
@@ -356,7 +365,8 @@ fn validate(request: WorktreeRegistration) !void {
     const within = request.branch.len != 0 and request.branch.len <= core.max_git_branch_bytes and
         request.base.len <= core.max_git_branch_bytes and
         request.title.len <= core.max_worktree_title_bytes and
-        request.brief.len <= core.max_worktree_brief_bytes;
+        request.brief.len <= core.max_worktree_brief_bytes and
+        request.dispatched_from.len <= core.MachineProfile.max_label_bytes;
     if (!within) {
         return error.InvalidWorktreeText;
     }

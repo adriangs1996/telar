@@ -24,6 +24,25 @@ telar worktree create <branch> --title "<task title>" --json -- <agent> "<brief>
 The JSON names the worktree, its path and the pane running the agent. Tell the
 user which tasks you delegated, by title.
 
+## Other machines
+
+When the user says where a task runs ("on box"), add `--machine <label>`:
+
+```sh
+telar worktree create <branch> --machine <label> --title "<task title>" --json -- <agent> "<brief>"
+```
+
+Commit what the task needs first: the branch starts from `HEAD` (or
+`--from <ref>`), and only commits travel. `telar machine list --json` names the
+saved machines. Never choose a machine the user did not name; if they ask you
+to, compare `telar --machine <label> runtime metrics --json` (`cpu_percent`,
+`cpu_count`, `memory_used_decigib`, `memory_total_decigib`) and say which one
+you picked and why.
+
+From then on, every command about that task goes to its machine: prefix it
+with `telar --machine <label>`. Keep a note of which task runs where; `worktree
+list` on each machine shows `dispatched_from` for tasks you sent.
+
 ## Steer
 
 Name a task's agent as `worktree:<branch>` (or `worktree:<title>`):
@@ -36,6 +55,10 @@ Name a task's agent as `worktree:<branch>` (or `worktree:<title>`):
 | what changed in X | `telar worktree diff <branch> --stat`, then `telar worktree diff <branch>`; answer from the diff |
 | let me know when X is done | `telar agent wait worktree:<branch> --until finished --timeout 3600s --json` in the background |
 | run the tests / linter / server in X | `telar worktree exec <branch> --label <name> -- <command...>` |
+| bring X's work here | `telar worktree fetch <branch> --machine <label> --json`, then review `refs/remotes/<label>/<branch>` |
+
+For a task on another machine, every row above runs as `telar --machine
+<label> …`, except `worktree fetch`, which runs here.
 
 Match the user's words against `title`, `brief` and `branch` in
 `telar worktree list --json`. When two tasks fit, ask which one.

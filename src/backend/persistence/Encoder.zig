@@ -86,6 +86,7 @@ pub fn worktree(self: *Encoder, record: WorktreeRecord) !void {
     try self.inner.writeSized16(record.base);
     try self.inner.writeSized16(record.title);
     try self.inner.writeSized16(record.brief);
+    try self.inner.writeSized16(record.dispatched_from);
 }
 
 pub fn layout(self: *Encoder, record: LayoutRecord) !void {

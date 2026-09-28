@@ -24,6 +24,10 @@ telar worktree list [--workspace <id|dir>] [--json]
 telar worktree open <branch> [--client ID]
 telar worktree diff <branch> [--stat] [--uncommitted]
 telar worktree remove <branch> [--force] [--delete-branch]
+telar worktree create <branch> --machine <label> --title "title" [--from <ref>] [--json] [-- <command...>]
+telar worktree fetch <branch> --machine <label> [--json]
+telar machine list [--json]
+telar --machine <label> <any command above>
 telar --skill [coordinator]
 telar integration install|uninstall|status claude|codex|pi|cursor
 ```
@@ -32,6 +36,21 @@ A `<target>` is a pane's numeric id, its agent's session title
 (case-insensitive, must be unique), `--current`, or `worktree:<branch|title>`
 for the agent working in a tracked worktree. To coordinate agents in
 worktrees, read `telar --skill coordinator`.
+
+## Machines
+
+`telar machine list --json` names the machines the user saved, and this one.
+`telar --machine <label> <command>` runs any command on that machine's
+runtime and returns its output and exit code; the label of this machine runs
+it here. A failure there is a failure: nothing falls back to this machine.
+`--machine` is never inherited: pass it on every command meant for another
+machine.
+
+`telar worktree create <branch> --machine <label>` pushes the branch's commits
+to that machine's clone of this repository and creates the worktree there.
+Only commits travel; uncommitted files stay here. `telar worktree fetch
+<branch> --machine <label>` brings the branch back as
+`refs/remotes/<label>/<branch>`.
 
 ## Agent states
 

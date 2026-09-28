@@ -17,6 +17,8 @@ pub const Target = union(enum) {
 const ssh_failure: u8 = 255;
 /// The longest remote command line, in bytes.
 const max_command_bytes = 64 * 1024;
+/// The most output `capture` keeps, in bytes.
+const max_captured_bytes = 64 * 1024;
 
 /// Finds the machine a label names: a saved profile first, then this
 /// machine's own label.
@@ -41,6 +43,22 @@ pub fn resolve(init: std.process.Init, label: []const u8) !Target {
     return error.UnknownMachine;
 }
 
+/// This machine's label: the one `machines.json` gives it, or its host
+/// name, cut to a label's length.
+///
+/// ```zig
+/// const label = try machine_dispatch.localLabel(process_init, &buffer);
+/// ```
+pub fn localLabel(init: std.process.Init, buffer: *[std.posix.HOST_NAME_MAX]u8) ![]const u8 {
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try client.profile_file.path(init.minimal.environ, &path_buffer);
+    const profiles = try client.profile_file.load(init.io, init.gpa, path);
+    const label = client.profile_file.localLabel(&profiles, buffer);
+    const len = @min(label.len, core.MachineProfile.max_label_bytes);
+    std.mem.copyForwards(u8, buffer[0..len], label[0..len]);
+    return buffer[0..len];
+}
+
 /// Runs `argv[1..]` as a telar command on the machine and returns the exit
 /// status it reported. Standard input, output and error pass through, so
 /// streaming commands such as `pane watch` work unchanged.
@@ -54,10 +72,8 @@ pub fn forward(init: std.process.Init, profile: *const core.MachineProfile, argv
 
     const remote_command = try encodeCommand(argv[1..], command);
     const options = try SshOptions.prepare(init.io, init.minimal.environ, profile.destination());
-    const managed = options.arguments();
-
     var child = try std.process.spawn(init.io, .{
-        .argv = &(.{ "ssh", "-T" } ++ managed ++ .{ "--", profile.destination(), remote_command }),
+        .argv = &sshArgv(&options, profile, remote_command),
         .stdin = .inherit,
         .stdout = .inherit,
         .stderr = .inherit,
@@ -68,6 +84,45 @@ pub fn forward(init: std.process.Init, profile: *const core.MachineProfile, argv
         .exited => |code| code,
         else => ssh_failure,
     };
+}
+
+/// Runs `argv[1..]` on the machine like `forward`, but returns what it
+/// printed on stdout; its stderr passes through. A non-zero exit is
+/// `error.MachineCommandFailed`. The caller frees the result.
+///
+/// ```zig
+/// const json = try machine_dispatch.capture(process_init, &profile, argv);
+/// defer process_init.gpa.free(json);
+/// ```
+pub fn capture(init: std.process.Init, profile: *const core.MachineProfile, argv: []const [*:0]const u8) ![]u8 {
+    const command = try init.gpa.alloc(u8, max_command_bytes);
+    defer init.gpa.free(command);
+
+    const remote_command = try encodeCommand(argv[1..], command);
+    const options = try SshOptions.prepare(init.io, init.minimal.environ, profile.destination());
+    var child = try std.process.spawn(init.io, .{
+        .argv = &sshArgv(&options, profile, remote_command),
+        .stdin = .ignore,
+        .stdout = .pipe,
+        .stderr = .inherit,
+    });
+    defer child.kill(init.io);
+
+    var read_buffer: [4096]u8 = undefined;
+    var reader = child.stdout.?.readerStreaming(init.io, &read_buffer);
+    const output = reader.interface.allocRemaining(init.gpa, .limited(max_captured_bytes)) catch return error.MachineCommandFailed;
+    errdefer init.gpa.free(output);
+
+    const term = try child.wait(init.io);
+    if (term != .exited or term.exited != 0) {
+        return error.MachineCommandFailed;
+    }
+
+    return output;
+}
+
+fn sshArgv(options: *const SshOptions, profile: *const core.MachineProfile, remote_command: []const u8) [SshOptions.option_count + 5][]const u8 {
+    return .{ "ssh", "-T" } ++ options.arguments() ++ .{ "--", profile.destination(), remote_command };
 }
 
 /// Decodes the words `forward` sent into an argv whose element 0 is the

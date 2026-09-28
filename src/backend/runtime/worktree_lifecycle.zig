@@ -34,6 +34,7 @@ pub fn register(model: *RuntimeModel, session: *Session, request: core.RegisterW
         .base = request.base,
         .title = request.title,
         .brief = request.brief,
+        .dispatched_from = request.dispatched_from,
     }) catch |err| return switch (err) {
         error.WorktreeLimitReached => client_request.fail(session, request.request_id, .resource_limit, "worktree limit reached"),
         error.OutOfMemory => err,

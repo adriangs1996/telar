@@ -16,6 +16,7 @@ const LaunchWorktree = @import("LaunchWorktree.zig");
 const LaunchWorktreeView = @import("LaunchWorktreeView.zig");
 const ForgetWorktree = @import("ForgetWorktree.zig");
 const WorktreeListEntry = @import("WorktreeListEntry.zig");
+const MachineProfile = @import("../../MachineProfile.zig");
 
 /// Encodes a registration after validating every bounded field.
 ///
@@ -36,6 +37,7 @@ pub fn encodeRegisterWorktree(buffer: []u8, message: RegisterWorktree) ![]const 
     try encoder.writeSized16(message.base);
     try encoder.writeSized16(message.title);
     try encoder.writeSized16(message.brief);
+    try encoder.writeSized16(message.dispatched_from);
     return encoder.finish();
 }
 
@@ -51,6 +53,7 @@ pub fn decodeRegisterWorktree(decoder: *Decoder) !RegisterWorktree {
         .base = try decoder.readSized16(),
         .title = try decoder.readSized16(),
         .brief = try decoder.readSized16(),
+        .dispatched_from = try decoder.readSized16(),
     };
     try validateRegistration(message);
     return message;
@@ -117,6 +120,7 @@ pub fn encodeWorktreeListEntry(encoder: *Encoder, entry: WorktreeListEntry) !voi
     try encoder.writeSized16(entry.base);
     try encoder.writeSized16(entry.title);
     try encoder.writeSized16(entry.brief);
+    try encoder.writeSized16(entry.dispatched_from);
     try encoder.writeInt(u32, entry.diff_added);
     try encoder.writeInt(u32, entry.diff_removed);
     try encoder.writeInt(u32, entry.diff_files);
@@ -141,6 +145,7 @@ pub fn decodeWorktreeListEntry(decoder: *Decoder) !WorktreeListEntry {
         .base = try decoder.readSized16(),
         .title = try decoder.readSized16(),
         .brief = try decoder.readSized16(),
+        .dispatched_from = try decoder.readSized16(),
         .diff_added = try decoder.readInt(u32),
         .diff_removed = try decoder.readInt(u32),
         .diff_files = try decoder.readInt(u32),
@@ -165,6 +170,7 @@ fn validateRegistration(message: RegisterWorktree) !void {
         .base = message.base,
         .title = message.title,
         .brief = message.brief,
+        .dispatched_from = message.dispatched_from,
     });
 }
 
@@ -179,6 +185,7 @@ fn validateListEntry(entry: WorktreeListEntry) !void {
         .base = entry.base,
         .title = entry.title,
         .brief = entry.brief,
+        .dispatched_from = entry.dispatched_from,
     });
     try codec.validateDisplayText(entry.command_label, types.max_worktree_command_label_bytes, true);
 }
@@ -189,6 +196,7 @@ const WorktreeText = struct {
     base: []const u8,
     title: []const u8,
     brief: []const u8,
+    dispatched_from: []const u8,
 };
 
 fn validateWorktreeText(text: WorktreeText) !void {
@@ -201,6 +209,7 @@ fn validateWorktreeText(text: WorktreeText) !void {
     try codec.validateDisplayText(text.base, types.max_git_branch_bytes, true);
     try codec.validateDisplayText(text.title, types.max_worktree_title_bytes, true);
     try codec.validateMessageText(text.brief, types.max_worktree_brief_bytes);
+    try codec.validateDisplayText(text.dispatched_from, MachineProfile.max_label_bytes, true);
 }
 
 fn encodeOptionalPane(encoder: *Encoder, pane: ?id.PaneId) !void {
