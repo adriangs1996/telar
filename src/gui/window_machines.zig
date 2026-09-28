@@ -9,7 +9,6 @@ const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
-const pacing = @import("pacing");
 const GuiAdapter = @import("GuiAdapter.zig");
 const host_ports = @import("host_ports.zig");
 const workers = @import("workers.zig");
@@ -181,10 +180,9 @@ pub fn reconcile(gui: *GuiAdapter) !void {
         }
     }
 
-    const now_ns = pacing.clock.monotonic(window(gui).io);
     for (machines.live, 0..) |live, index| {
         if (live) {
-            _ = machines.summarize(@intCast(index), &gui.clients[index].model, now_ns);
+            _ = machines.summarize(@intCast(index), &gui.clients[index].model, gui.clients[index].io);
         }
     }
 }
@@ -260,7 +258,7 @@ pub fn choose(gui: *GuiAdapter, request: data.MachineRequest) !void {
 pub fn handle(gui: *GuiAdapter, slot: u8, message: client.Message) !?u8 {
     const app = &gui.clients[slot];
     const status = try app.update(message);
-    _ = gui.machines.summarize(slot, &app.model, pacing.clock.monotonic(app.io));
+    _ = gui.machines.summarize(slot, &app.model, app.io);
     try client.machine_presentation.settle(app);
 
     if (slot != gui.machines.active) {
