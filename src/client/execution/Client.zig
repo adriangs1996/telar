@@ -42,6 +42,7 @@ const runtime_io = @import("../connection/runtime_io.zig");
 const link_opening = @import("../links/link_opening.zig");
 const notifications = @import("../notifications/notifications.zig");
 const plugin_actions = @import("../plugins/plugin_actions.zig");
+const client_telemetry = @import("../resources/client_telemetry.zig");
 
 /// Jobs one event can start: most kinds keep at most one in flight, and
 /// system notices arrive in short bursts.
@@ -209,6 +210,7 @@ pub fn init(self: *Client, params: ClientInit) !void {
     try self.model.history_palette.prepare(gpa);
     try self.model.to_runtime.reservePayloads(gpa);
     _ = data.sidebar.setVisible(&self.model, params.options.sidebar_visible);
+    try client_telemetry.start(self);
 }
 
 /// The key bindings of the live configuration, borrowed from its
@@ -308,6 +310,8 @@ pub fn update(self: *Client, message: Message) !?u8 {
         .runtime_connected => |result| try runtime_link.finishConnect(self, result),
         .runtime_retry_tick => |result| try runtime_link.retry(self, result),
         .machine_edited => |result| try machine_profiles.finish(self, result),
+        .telemetry_tick => |result| try client_telemetry.finishTick(self, result),
+        .telemetry_written => |result| client_telemetry.finishWrite(self, result),
     }
 
     return null;

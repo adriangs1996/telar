@@ -183,6 +183,8 @@ test {
     _ = @import("presentation/headless_tests.zig");
     _ = @import("presentation/lifecycle.zig");
     _ = @import("presentation/window_title.zig");
+    _ = @import("resources/client_telemetry.zig");
+    _ = @import("resources/TelemetryState.zig");
     _ = @import("resources/config_reload.zig");
     _ = @import("resources/local_time.zig");
     _ = @import("workspace/metrics_tests.zig");

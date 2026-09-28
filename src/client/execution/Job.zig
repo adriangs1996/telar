@@ -6,12 +6,17 @@
 //! `Message`; `job_runner.run` executes it.
 const pacing = @import("pacing");
 const RuntimeTransportState = @import("../connection/RuntimeTransportState.zig");
+const TelemetryState = @import("../resources/TelemetryState.zig");
 
 pub const Job = union(enum) {
     runtime_read: *RuntimeTransportState,
     runtime_send: RuntimeSend,
     /// Waits for a client deadline; the timer names the completion.
     timer: Timer,
+    /// Waits one diagnostics interval (`client_telemetry`).
+    telemetry_tick,
+    /// Appends the formatted telemetry line to its sink.
+    telemetry_write: *TelemetryState,
 
     pub const RuntimeSend = struct {
         state: *RuntimeTransportState,
