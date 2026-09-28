@@ -231,13 +231,13 @@ schema.report_agent, schema.report_agent_title or schema.report_agent_command
 | `session.status` `busy` or `retry` | `working`, once per change: OpenCode repeats `busy` several times a turn |
 | `session.status` `idle` | `ready` (projects as `done` until seen), open prompts forgotten |
 | `permission.asked` | `blocked`, reason `permission`, event `» <permission> <argument>` |
-| `question.asked` | `blocked`, reason `question`, event: the first question |
-| `permission.replied`, `question.replied`, `question.rejected` | `blocked` while another prompt stays open, otherwise the busy state |
-| `tool.execute.before` hook | `working`, event `» <tool> <argument>`; a mapped `bash` call opens a running command row |
+| `question.asked` | `blocked`, reason `question`, event: the first question; an open permission keeps deciding |
+| `permission.replied`, `question.replied`, `question.rejected` | `blocked`, naming the prompt, while another prompt stays open (the newest permission, else the newest question), otherwise the busy state |
+| `tool.execute.before` hook | `working`, event `» <tool> <argument>`, or nothing while a prompt is open; a mapped `bash` call opens a running command row |
 | `tool.execute.after` hook | the matching command row is completed with `metadata.exit` |
 | `session.updated` of the root session | its title, once per change; OpenCode's default title clears it |
-| renewal | the current state every 30 seconds while busy or blocked |
-| `dispose` of the last instance | `exited` |
+| renewal | the current state every 30 seconds while busy or blocked, with the open prompt's request: the event line follows the latest report |
+| `dispose` of the last instance | `exited`; the plugin forgets the turn and its prompts |
 
 Captured on OpenCode 1.18.32 with a plugin that logged every event and hook
 under an isolated configuration. A turn publishes `session.status` `busy`
@@ -255,10 +255,33 @@ while their permissions and questions block the pane under the root session.
 `!` shell commands typed in the TUI bypass the tool hooks and carry no exit
 code, so they are not recorded.
 
+OpenCode runs the tool calls of one step on their own and each asks for its
+permission inside the tool, after `tool.execute.before`
+(`packages/opencode/src/session/tools.ts`, `permission/index.ts` in
+v1.18.30). A call can therefore start while another call's permission is
+open; the plugin sends the open prompt with it and the hook reports no state,
+so the pane stays blocked with the prompt's event line. Measured on 1.18.32:
+with `bash` set to ask, one step's `bash`, two `read` and two `glob` calls
+ran the four others while the `bash` permission waited. The edit, write and
+apply_patch tools ask as `edit` with the path in `metadata.filepath` and the
+whole diff in `metadata.diff`, which has no bound. A payload past 64 KiB keeps
+only the tool input's string fields up to 4096 characters and its first
+question, so the prompt still reaches the runtime at once.
+
 OpenCode's `dispose` hook runs for every instance before the process exits,
 and OpenCode waits for it; the last instance reports `exited` and waits up to
-2.5 seconds for the queue to drain. Delivery is serialized like Pi's: one
-child at a time with a two-second limit and 32 pending payloads of at most
+2.5 seconds for the queue to drain. A reload disposes every instance too
+(`SIGUSR2` to the TUI, a configuration change through the server), rejects
+open prompts without replying, and loads the plugin again from the same
+module in the same process (`cli/tui/worker.ts`, `plugin/index.ts`), so
+`dispose` forgets the turn and its prompts and the new first instance reports
+`ready` after the exit. Measured on 1.18.32 with `SIGUSR2`: an idle pane
+reported `exited`, fell back to `unknown` and reported `ready` seven seconds
+later; with a permission open, the turn ended with `session.status` `idle`,
+one more `idle` arrived after `dispose`, and the pane settled on `ready`.
+OpenCode's TUI kept drawing that permission, but it no longer answers: Enter
+and Escape did nothing and the command never ran, so the pane does not report
+it as blocked. Delivery is serialized like Pi's: one child at a time with a two-second limit and 32 pending payloads of at most
 64 KiB, dropping the oldest. The session reference is OpenCode's
 `ses_`-prefixed id, which `opencode --session <id>` resumes; OpenCode prints
 that command when it exits. Uninstall deletes the file only when it starts
@@ -471,9 +494,18 @@ for `SessionEnd` and `Interrupt`.
 - `src/cli/integration_support.zig` proves idempotent install and selective removal
   for Claude Code and Cursor Agent's flat layout, and rendering, marker detection and atomic owner-only
   installation for the Pi extension and the OpenCode plugin.
-- `src/cli/integration/opencode.test.mjs` (run with `node --test`) proves the
-  plugin's ordered delivery, deduplicated busy reports, prompt tracking,
-  interrupt settlement, subagent filtering, title and exit reports.
+- `src/cli/integration/opencode.test.mjs` proves the plugin's ordered
+  delivery, deduplicated busy reports, prompt tracking and renewal with the
+  open prompt's request, tool calls under an open prompt, oversized prompts,
+  interrupt settlement, reloads, subagent filtering, title and exit reports.
+- `src/cli/integration/install.test.mjs` drives a built `telar integration`
+  for Pi and OpenCode in a throwaway home: status, install, update,
+  uninstall, a foreign file left untouched, and `--settings` paths.
+- `zig build test-integrations`, part of `zig build test`, runs both with
+  Node (22.13 or newer, for `module.stripTypeScriptTypes`) along with
+  `pi.test.mjs`.
+- `src/cli/TempFile.zig` proves that installation writes through an
+  exclusive owner-only temporary and never through a planted symlink.
 - `src/backend/history/persistence/history_sql.zig` proves that native start/finish
   updates one row and a later plugin observation with the same tool call id is
   deduplicated.

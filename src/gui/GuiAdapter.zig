@@ -134,7 +134,9 @@ chrome: Chrome = .{},
 /// The sidebar band width preference; the shared model keeps only visibility.
 sidebar: SidebarPreference = .{},
 overlays: Overlays = .{},
-graphics_store: graphics_delivery.Store,
+/// The images each machine's runtime sent, one store per client slot:
+/// every runtime numbers its panes from the same start.
+graphics_stores: [machine_slots]graphics_delivery.Store,
 diagrams: DiagramService,
 syntax: SyntaxService,
 review: *ReviewPanel,
@@ -206,7 +208,10 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
         .router = &gui.router,
     };
 
-    gui.graphics_store = .init(params.gpa);
+    for (&gui.graphics_stores) |*store| {
+        store.* = .init(params.gpa);
+    }
+
     gui.diagrams = .init(params.gpa);
 
     gui.syntax = .{
@@ -222,7 +227,7 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.review.widget.widgets = &gui.widgets;
 
     gui.app.machines = &gui.machines;
-    gui.app.graphics = host_ports.graphicsRetention(gui);
+    gui.app.graphics = host_ports.graphicsRetention(gui, client.Machines.local_slot);
     gui.app.chrome = host_ports.chrome(gui);
     gui.app.host_input_source = host_ports.hostInput(gui);
 
@@ -239,7 +244,10 @@ pub fn deinit(self: *GuiAdapter) void {
         _ = self.app.presentation.complete(flight.token, .cancelled);
     }
 
-    self.graphics_store.deinit();
+    for (&self.graphics_stores) |*store| {
+        store.deinit();
+    }
+
     self.diagrams.deinit();
     self.chrome.favicons.deinit(gpa);
     gpa.destroy(self.review);
@@ -1733,20 +1741,6 @@ fn complete(self: *GuiAdapter, token: u64, delivered: bool) !void {
     if (self.pending_machine) |slot| {
         try window_machines.select(self, slot);
     }
-}
-
-/// Applies runtime graphics commands to this connection's retained resources.
-/// Example: `try gui.applyGraphics(command);`
-pub fn applyGraphics(self: *GuiAdapter, command: shared_model.pane_graphics.Command) !void {
-    return switch (command) {
-        .snapshot => |value| self.graphics_store.applySnapshot(value),
-        .image => |value| self.graphics_store.applyImage(value),
-        .shared_image => |value| self.graphics_store.applySharedImage(value),
-        .image_chunk => |value| self.graphics_store.applyChunk(value),
-        .placement => |value| self.graphics_store.applyPlacement(value),
-        .delete_image => |value| self.graphics_store.deleteImage(value),
-        .delete_placement => |value| self.graphics_store.deletePlacement(value),
-    };
 }
 
 /// Borrows the projection synchronously and seals only the rendered pane frames.

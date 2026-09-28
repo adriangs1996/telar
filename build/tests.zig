@@ -148,6 +148,17 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         editor_step.dependOn(&b.addRunArtifact(editor_gui_tests).step);
     }
 
+    // Pi and OpenCode load their Telar integration as TypeScript source, so
+    // Node runs its tests and drives the built executable's install flows
+    // in a throwaway home.
+    const integrations_step = b.step("test-integrations", "Run the Pi extension and OpenCode plugin tests and their installation with Node");
+    const integration_tests = b.addSystemCommand(&.{ "node", "--test", b.pathFromRoot("src/cli/integration/opencode.test.mjs"), b.pathFromRoot("src/cli/integration/pi.test.mjs") });
+    const install_tests = b.addSystemCommand(&.{ "node", b.pathFromRoot("src/cli/integration/install.test.mjs") });
+    install_tests.addArtifactArg(app.exe);
+    integrations_step.dependOn(&integration_tests.step);
+    integrations_step.dependOn(&install_tests.step);
+    test_step.dependOn(integrations_step);
+
     const media_tests = b.addTest(.{ .root_module = app.modules.backend, .filters = &.{"PNG"} });
     b.step("test-png", "Run PNG decoding and pane ingestion tests").dependOn(&b.addRunArtifact(media_tests).step);
     const isolation_tests = b.addTest(.{ .root_module = app.modules.backend, .filters = &.{"performance probe"} });

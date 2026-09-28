@@ -10,7 +10,6 @@ type Tile = { value: number; unit?: string; digits?: number; label: string; sour
 const TILES: Tile[] = [
   { value: 0, label: "allocations on the interactive path in steady state", source: "engineering invariants" },
   { value: 60, unit: "Hz", label: "frame cap; an obsolete frame is folded, never queued", source: "engineering invariants" },
-  { value: 58, unit: "fps", label: "floor for a 4K RGBA stream through telar into Ghostty", source: "graphics gate, CI" },
   { value: 10, unit: "%", label: "p99 regression that fails the build (5% at p50, 8% at p95)", source: "performance gates" },
 ];
 
@@ -60,7 +59,7 @@ function Count({ to, digits = 0 }: { to: number; digits?: number }) {
 
 export default function Proof() {
   return (
-    <Reveal as="section" className="rails hairline grid md:grid-cols-4" aria-label="Engineering budgets">
+    <Reveal as="section" className="rails hairline grid md:grid-cols-3" aria-label="Engineering budgets">
       {TILES.map((tile, index) => (
         <div key={tile.label} className="tile" style={{ ["--i" as string]: index }}>
           <div className="tile-value text-text">

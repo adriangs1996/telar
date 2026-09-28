@@ -119,33 +119,23 @@ documents overrides, profiles and hot reload.
 
 ## Kitty graphics
 
-Telar probes the exterior terminal instead of trusting `TERM`. With a compatible
-terminal, `automatic` selects the hybrid Kitty sidebar; otherwise the existing
-cell renderer remains active:
-
-```sh
-zig build run -- --sidebar-renderer automatic
-zig build run -- --sidebar-renderer cells
-zig build run -- --sidebar-renderer kitty-hybrid
-```
-
+The runtime terminates Kitty graphics commands at each pane and sends the
+images to the window, which keeps a bounded replica but does not draw them yet.
 Run a graphical child like any other command:
 
 ```sh
 zig build run -- terminal-browser open https://example.com
 ```
 
-`kitty-hybrid` fails with a concrete error when the exterior terminal rejects
-the KGP query. `kitty-full` is reserved and currently uses the hybrid behavior;
-text remains selectable cells. Runtime decoded-image quotas default to 64 MiB
-per pane and 256 MiB globally and can be lowered on an explicit server:
+Runtime decoded-image quotas default to 64 MiB per pane and 256 MiB globally
+and can be lowered on an explicit server:
 
 ```sh
 zig build run -- server --graphics-pane-mib 32 --graphics-global-mib 128
 ```
 
 See [docs/kitty-graphics.md](docs/kitty-graphics.md) for the supported protocol
-subset, ownership boundaries, limits, and verified terminal matrix.
+subset, ownership boundaries, limits, and verification.
 
 ## Development diagnostics
 
@@ -241,15 +231,6 @@ zig build bench -- --filter client.keybind --samples 20 --sample-ms 100
 zig build bench -- --list
 ```
 
-The pinned terminal-browser exterior check currently requires Ghostty.app on
-macOS. It builds the upstream revision, runs it inside Telar, validates KGP and
-hybrid-sidebar telemetry, checks response drops and history isolation, then
-writes `zig-out/terminal-browser-verification.json`:
-
-```sh
-zig build verify-terminal-browser
-```
-
 Save JSON Lines before and after a change, then compare median time and payload
 bytes per operation. The comparison rejects runs built with different Zig
 versions, optimization modes, CPUs, targets, screen sizes, sample counts or
@@ -284,9 +265,9 @@ CI cadence and release-candidate requirements are recorded in
 ### End-to-end latency against tmux and herdr
 
 The microbenchmarks above time telar's own code. The numbers a user feels are
-end to end: from a byte written to the host terminal until the echo is
-visible, through both processes. `tools/latency_bench.sh` measures that for
-one telar binary against an isolated runtime:
+end to end, through both processes. `tools/latency_bench.sh` measures them for
+one telar binary against an isolated runtime, through its headless client
+(`zig build headless`):
 
 ```sh
 zig build -Doptimize=ReleaseFast --prefix /tmp/telar-candidate
@@ -295,12 +276,16 @@ tools/latency_bench.sh /tmp/telar-candidate/bin/telar candidate
 
 How the measurement works:
 
-- `tools/echo_latency.py` opens a pty of 160x40 columns, makes the
-  multiplexer its session leader with a controlling terminal, and gives it
-  `SHELL` pointing at a script that execs `/bin/cat`. The kernel line
-  discipline of the pane's pty echoes every byte immediately, so what is timed
-  is only the multiplexer: pty read, emulation, IPC, render, host write.
-- Each sample writes one token to the pty master and waits until that token
+- `tools/echo_latency.py` gives the multiplexer `SHELL` pointing at a script
+  that execs `/bin/cat`. The kernel line discipline of the pane's pty echoes
+  every byte immediately, so what is timed is only the multiplexer.
+- telar runs as `telar-headless`. Each sample sends one token as an input
+  line, and the latency runs from the client taking the line to the first
+  frame of that pane the client presents, read from its exit trace
+  ([headless client](docs/flows/headless-client.md#reports)). It ends where
+  the client has the frame, not where a window or host terminal shows it.
+- Comparators run in a pty of 160x40 columns as its session leader. Each
+  sample writes one token to the pty master and waits until that token
   is visible in the multiplexer's output. Escape sequences (CSI, OSC, DCS) are
   stripped before matching, so a cursor move between two painted frames does
   not hide the token. Tokens are letters that never appear as final bytes of a
@@ -312,11 +297,13 @@ How the measurement works:
   redraws its prompt behaves like the two-byte case.
 - Samples: 200 per case, 50 ms apart, after a warm-up. The script reports
   p50, p95, p99, min, max and mean in microseconds.
-- `tools/flood.py` runs `/bin/sh` in the same pty, types
-  `seq 1 300000; echo <marker>` and times until the marker is visible. The
-  marker is unique per repetition because the previous one is still on screen
-  and the diff repaints it when rows scroll. `host_bytes` is what reached the
-  host terminal: a multiplexer that folds intermediate frames writes far less.
+- `tools/flood.py` runs `/bin/sh`, types `seq 1 300000; echo <marker>` and
+  times until the marker is visible. The marker is unique per repetition
+  because the previous one is still on screen and the diff repaints it when
+  rows scroll. For telar the time runs from the client taking Enter to the
+  last frame it presented for that pane. For comparators, `host_bytes` is what
+  reached the host terminal: a multiplexer that folds intermediate frames
+  writes far less.
 - Isolation is mandatory. A telar runtime reads and writes the session
   checkpoint and `history.db` under `XDG_DATA_HOME`, and connects to the
   socket under `TELAR_SOCKET_PATH`. The script sets all three to fresh
@@ -329,7 +316,9 @@ How the measurement works:
   with `HOME` and `XDG_CONFIG_HOME` pointing at a short empty directory.
 
 Results on 2026-09-03, Apple Silicon macOS 26.6, Zig 0.16.0, ReleaseFast,
-one client, no config, everything else idle. Latencies are p50 / p99:
+one client, no config, everything else idle. Latencies are p50 / p99. They
+predate the headless client: telar was measured the way the comparators are,
+through its retired terminal client in a pty, up to the host write.
 
 | Multiplexer | 1 byte | 2 bytes | Flood, 300k lines |
 | --- | --- | --- | --- |
@@ -353,15 +342,16 @@ same machine, which is the floor for every row.
 `tools/load_bench.sh <binary> <label>` runs `tools/load_latency.py`: it opens
 `FLOODS` extra panes (default `0 1 2 4 8`), each running `while :; do seq 1
 100000; done`, then measures single-byte echo latency in one idle pane. telar
-panes are opened by typing the default `ctrl+b %` and `ctrl+b "` bindings;
-tmux panes with `split-window -d` plus `select-layout tiled`. Each token is
+panes are opened by sending the default `ctrl+b %` and `ctrl+b "` bindings to
+its headless client; tmux panes with `split-window -d` plus `select-layout tiled`. Each token is
 erased with backspace after it is seen, because a later repaint of the input
 line would otherwise match the next token early. A runtime whose panes are
 still flooding does not finish `telar server stop`; the script kills it by
 socket after five seconds.
 
 Results on 2026-09-03, same machine as above but with a browser and a
-build-on-save watcher active (load average 4-6), p50 / p99:
+build-on-save watcher active (load average 4-6), p50 / p99, also through the
+retired terminal client:
 
 | Flooding panes | telar before input grace | telar with input grace | tmux 3.7c |
 | --- | --- | --- | --- |

@@ -1,9 +1,10 @@
 //! Which machine a window presents (docs/flows/machine-presentation.md).
 //! The presented client attaches panes and receives their screens; a hidden
 //! one keeps metadata only: workspace list, agents, notifications and
-//! metrics. Hiding a machine leaves its workspace, remembering it; showing
-//! it again reopens that workspace, or opens its first pane when it never
-//! had one.
+//! metrics. Hiding a machine leaves its workspace or worktree, remembering
+//! it; showing it again reopens that one, or opens its first pane when it
+//! never had one.
+const core = @import("telar-core");
 const Client = @import("../execution/Client.zig");
 const client_layout = @import("../workspace/client_layout.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
@@ -33,9 +34,28 @@ pub fn show(client: *Client) !void {
         return;
     }
 
-    const workspace = client.left_workspace orelse return;
+    const location = client.left_workspace orelse return;
     client.left_workspace = null;
-    _ = try workspace_handoff.requestWorkspace(client, workspace);
+    switch (location) {
+        .workspace => |workspace| _ = try workspace_handoff.requestWorkspace(client, workspace),
+        .worktree => |worktree| try reopenWorktree(client, location, worktree),
+    }
+}
+
+// A worktree reopens at the pane the client left focused there. Should
+// that pane be gone, the runtime opens the worktree's source workspace.
+fn reopenWorktree(client: *Client, location: core.WorkspaceLocation, worktree: core.WorktreeId) !void {
+    const row = client.model.workspace_list_snapshot.worktree(worktree);
+    const source: ?core.WorkspaceId = if (row) |value| value.source else null;
+    const bookmark = client.model.navigation_history.find(location) orelse {
+        if (source) |workspace| {
+            _ = try workspace_handoff.requestWorkspace(client, workspace);
+        }
+
+        return;
+    };
+
+    _ = try workspace_handoff.requestWorkspacePane(client, bookmark.pane_id, source);
 }
 
 /// Stops presenting the client's machine: leaves its workspace so the
@@ -71,10 +91,7 @@ pub fn settle(client: *Client) !void {
         return;
     }
 
-    client.left_workspace = switch (location) {
-        .workspace => |workspace| workspace,
-        .worktree => null,
-    };
+    client.left_workspace = location;
     _ = try workspace_handoff.leaveWorkspace(client);
     client.leave_pending = false;
 }
