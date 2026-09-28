@@ -5,6 +5,7 @@ const client = @import("telar-client");
 const data = @import("model");
 const Session = @import("Session.zig");
 const Fixture = @import("ChromeFixture.zig");
+const gui_event = @import("../gui_event.zig");
 const host_ports = @import("../host_ports.zig");
 const window_machines = @import("../window_machines.zig");
 
@@ -33,8 +34,11 @@ fn socketPair() !Peer {
 fn openMachine(session: *Session, connection: *localsocket.SocketChannel) !u8 {
     const gui = session.gui;
     const own = window_machines.window(gui);
-    _ = try gui.machines.add(.{ .label = "laptop" }, Machines.local_slot);
-    gui.machines.live[Machines.local_slot] = true;
+    if (!gui.machines.used[Machines.local_slot]) {
+        _ = try gui.machines.add(.{ .label = "laptop" }, Machines.local_slot);
+        gui.machines.live[Machines.local_slot] = true;
+    }
+
     const slot = try gui.machines.add(.{ .label = "box", .destination = "dev@box" }, null);
 
     const app = &gui.clients[slot];
@@ -163,6 +167,47 @@ test "a hidden machine never hides the shown machine's pane graphics" {
     try gui.clients[slot].graphics.setPaneVisible(Session.pane_id, false);
     try std.testing.expect(own.graphics.paneVisible(Session.pane_id));
     try std.testing.expect(!gui.clients[slot].graphics.paneVisible(Session.pane_id));
+}
+
+test "sixteen machines reading their runtimes fit in the window's inbox" {
+    // The reads in flight hold the sockets until the window cancels them,
+    // so the sockets close after the window.
+    var peers: [Machines.capacity - 1]Peer = undefined;
+    for (&peers) |*peer| {
+        peer.* = try socketPair();
+    }
+
+    defer for (&peers) |*peer| {
+        peer.channel.deinit(std.testing.io);
+        peer.peer.deinit(std.testing.io);
+    };
+
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+
+    for (&peers) |*peer| {
+        const slot = try openMachine(session, &peer.channel);
+        const app = &gui.clients[slot];
+        try client.runtime_io.startRuntimeIo(app);
+        try client.notifications.publishNotificationNow(app, .{
+            .title = "agent finished",
+            .message = "box",
+        });
+    }
+
+    try window_machines.startJobs(gui);
+    const tickets = gui.driver.inbox.snapshot();
+    for (gui.clients[1..Machines.capacity]) |*app| {
+        try std.testing.expectEqual(data.RuntimeLink.Phase.connected, app.model.runtime_link.phase);
+    }
+
+    // Each machine holds its read and its notification's wait, well within
+    // what each adds to the window's inbox.
+    try std.testing.expectEqual(@as(u64, 0), tickets.rejected);
+    try std.testing.expect(tickets.high_water >= peers.len);
+    try std.testing.expect(tickets.high_water <= peers.len * gui_event.Message.tickets_per_machine);
 }
 
 test "the top bar names the machine only while the window holds several" {
