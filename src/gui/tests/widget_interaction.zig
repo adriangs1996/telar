@@ -222,6 +222,82 @@ test "GUI field focus and key release do not move editing back to an old widget"
     try std.testing.expect(name.id.eql(gui.widgets.dispatcher.focused.?));
 }
 
+// AppKit sends Tab addressed to the editor that owns the native text context.
+fn pressAddressed(session: *Session, code: keyinput.Key.Code, target: Target) !void {
+    const physical: keyinput.Key.Physical = .{ .value = 49 };
+    try send(session, .{ .key = .{ .code = code, .physical = physical, .target_id = target.id.target_id, .generation = target.id.generation } });
+    try send(session, .{ .key = .{ .code = code, .physical = physical, .phase = .release, .target_id = target.id.target_id, .generation = target.id.generation } });
+}
+
+fn expectDrawnFocus(session: *Session, focused: Target, other: Target) !void {
+    const editors = session.gui.widgets.editors.presented();
+    try std.testing.expect(editors.find(focused.id).?.preferred);
+    try std.testing.expect(!editors.find(other.id).?.preferred);
+    try std.testing.expect(focused.id.eql(session.gui.widgets.dispatcher.focused.?));
+}
+
+test "context form Tab and Shift+Tab addressed to a field move between its fields" {
+    const session = try initSession();
+    defer session.deinit();
+    const gui = session.gui;
+    gui.app.model.name_prompt.begin(.create_workspace);
+    try publish(session);
+    const name = try editorTarget(session, .name);
+    const directory = try editorTarget(session, .directory);
+    try expectDrawnFocus(session, name, directory);
+
+    try pressAddressed(session, .tab, name);
+    try std.testing.expect(gui.app.model.name_prompt.currentConst().?.form().?.focus == .directory);
+    try publish(session);
+    try expectDrawnFocus(session, directory, name);
+
+    try pressAddressed(session, .back_tab, directory);
+    try std.testing.expect(gui.app.model.name_prompt.currentConst().?.form().?.focus == .name);
+    try publish(session);
+    try expectDrawnFocus(session, name, directory);
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+}
+
+test "context form Tab in the directory completes the selected folder" {
+    const session = try initSession();
+    defer session.deinit();
+    const gui = session.gui;
+    gui.job_hook = .{
+        .context = session,
+        .start = Session.startJob,
+        .start_background = ignorePathCompletion,
+    };
+    const shapes = [_]bool{ false, true };
+    for (shapes) |addressed| {
+        gui.app.model.name_prompt.begin(.create_workspace);
+        _ = gui.app.model.name_prompt.apply(.tab);
+        _ = gui.app.model.name_prompt.apply(.{ .insert = "/work/te" });
+        var result: data.PathCompletionResult = .{};
+        try result.setBase("/work");
+        try result.append("telar");
+        try result.append("tests");
+        gui.app.model.path_completion.begin();
+        _ = gui.app.model.path_completion.want("/work/te");
+        gui.app.model.path_completion.land(.{ .query = "/work/te", .result = &result });
+        try publish(session);
+        const directory = try editorTarget(session, .directory);
+
+        if (addressed) {
+            try pressAddressed(session, .tab, directory);
+        } else {
+            try send(session, .{ .key = .{ .code = .tab } });
+        }
+
+        const prompt = gui.app.model.name_prompt.currentConst().?;
+        try std.testing.expect(prompt.form().?.focus == .directory);
+        try std.testing.expectEqualStrings("/work/telar/", prompt.directory.text());
+        try publish(session);
+        try expectDrawnFocus(session, directory, try editorTarget(session, .name));
+    }
+
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+}
+
 test "clipboard and accessibility edit the delivered field and reject delayed retired owners" {
     const session = try initSession();
     defer session.deinit();
