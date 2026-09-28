@@ -46,7 +46,8 @@ def sized16(text):
 def workspace_list():
     entry = struct.pack("<Q", 42) + sized16('CLI "workspace"') + sized16("/tmp/project")
     entry += struct.pack("<H", 2) + sized16("feature/cli") + bytes([1])
-    return bytes([0x98]) + struct.pack("<QH", 3, 1) + entry
+    # An empty worktree section closes the list.
+    return bytes([0x98]) + struct.pack("<QH", 3, 1) + entry + struct.pack("<H", 0)
 
 
 def workspace_snapshot(request_id, name="Renamed", tabs=b"", count=0):
@@ -58,6 +59,8 @@ def agent_snapshot(status=1):
     entry += sized16("") * 3 + bytes([0, 0]) + sized16("/tmp") + bytes([2])
     entry += sized16("codex") + sized16("Codex") + sized16("")
     entry += bytes([0, status, 0]) + sized16("") + struct.pack("<IBBBQqq", 0, 3, 1, 100, 1, 1, 10)
+    # No worktree, final message or plan.
+    entry += struct.pack("<Q", 0) + sized16("") + struct.pack("<HH", 0, 0) + sized16("")
     return bytes([0x96]) + struct.pack("<QH", 1, 1) + entry
 
 
@@ -129,7 +132,7 @@ class ControlTests(unittest.TestCase):
         def exchange(connection):
             self.assertEqual(receive_frame(connection)[0], 0x14)
             send_frame(connection, bytes([0x95, 0, 0, 0]))
-            send_frame(connection, bytes([0x98]) + struct.pack("<QH", 2, 0))
+            send_frame(connection, bytes([0x98]) + struct.pack("<QHH", 2, 0, 0))
 
         result = self.run_control(["runtime", "watch", "--jsonl", "--count", "2"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -658,7 +661,7 @@ class ControlTests(unittest.TestCase):
                 self.assertEqual(request[0], 0x1D)
                 self.assertEqual(struct.unpack_from("<QQ", request, 9), (5, 9))
                 data = text.encode()
-                send_frame(connection, bytes([0xA0]) + request[1:9] + struct.pack("<QBI", 5, 0, len(data)) + data)
+                send_frame(connection, bytes([0xA0]) + request[1:9] + struct.pack("<QBI", 5, 0, len(data)) + data + bytes([0]))  # no exit code
 
         result = self.run_control(["pane", "watch", "5", "--workspace", "42", "--tab", "8", "--interval-ms", "10", "--count", "2"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
