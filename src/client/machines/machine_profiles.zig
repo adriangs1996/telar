@@ -117,6 +117,7 @@ pub fn describe(err: anyerror) []const u8 {
         error.InsecureFile => "machines.json must be a regular file only its owner can read and write (chmod 600)",
         error.UnknownMachine => "no saved machine has that label; see `telar machine list`",
         error.DuplicateMachineLabel => "that label is already taken, by a saved machine or by this machine",
+        error.DuplicateMachineDestination => "two saved machines cannot share one SSH destination",
         error.TooManyMachines => "machines.json already holds the most machines it can",
         error.InvalidMachineLabel => "labels are 1 to 32 letters, digits, '.', '_' or '-', starting with a letter or a digit",
         error.InvalidMachineColor => "colors are #RRGGBB or a theme role such as red or accent",
