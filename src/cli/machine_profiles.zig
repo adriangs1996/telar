@@ -50,7 +50,9 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
                 .enabled = !options.disabled,
             }) catch |err| return report(init, err);
 
-            if (options.check) {
+            // Setup reaches the machine first and checks it last, in its own
+            // report, so `--check` beside `--setup` adds no second one.
+            if (options.check and !options.setup) {
                 const status = try check(init, &profile, options.json);
                 if (status != 0) {
                     return status;

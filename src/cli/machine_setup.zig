@@ -48,6 +48,9 @@ const SetupTarget = struct {
     destination_bytes: [core.ssh_destination.max_bytes]u8 = undefined,
     destination_len: u8 = 0,
     saved: ?core.MachineProfile = null,
+    /// Whether setup enables the profile; `add --disabled --setup` keeps it
+    /// disabled.
+    enable: bool = true,
 
     fn label(self: *const SetupTarget) []const u8 {
         return self.label_bytes[0..self.label_len];
@@ -90,9 +93,10 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
     const path = try profile_file.path(init.minimal.environ, &path_buffer);
     const profiles = try profile_file.load(init.io, init.gpa, path);
     const name = std.mem.span(options.label.?);
-    const target = resolve(init.io, &profiles, name, if (options.new_label) |text| std.mem.span(text) else null) catch |err| {
+    var target = resolve(init.io, &profiles, name, if (options.new_label) |text| std.mem.span(text) else null) catch |err| {
         return refuse(init, err, name);
     };
+    target.enable = !options.disabled;
 
     const directory = buildDirectory(init, options.binary) catch |err| return refuse(init, err, name);
     if (!options.json) {
@@ -641,7 +645,7 @@ fn saveProfile(init: std.process.Init, report: *SetupReport, target: *const Setu
         count += 1;
     }
 
-    if (saved != null and !saved.?.enabled) {
+    if (saved != null and !saved.?.enabled and target.enable) {
         edits[count] = .{
             .kind = .enable,
             .label = target.label(),
@@ -649,8 +653,10 @@ fn saveProfile(init: std.process.Init, report: *SetupReport, target: *const Setu
         count += 1;
     }
 
+    const enabled = if (saved) |*profile| profile.enabled or target.enable else target.enable;
+    const state = if (enabled) "enabled" else "disabled, as asked";
     if (count == 0) {
-        try report.end(.profile, .ok, "{s} is saved, enabled and names {s}", .{ target.label(), telar_path });
+        try report.end(.profile, .ok, "{s} is saved, {s} and names {s}", .{ target.label(), state, telar_path });
         return;
     }
 
@@ -659,7 +665,7 @@ fn saveProfile(init: std.process.Init, report: *SetupReport, target: *const Setu
         return;
     };
 
-    try report.end(.profile, .changed, "{s} {s}, enabled, telar at {s}", .{ target.label(), if (saved == null) "saved" else "updated", telar_path });
+    try report.end(.profile, .changed, "{s} {s}, {s}, telar at {s}", .{ target.label(), if (saved == null) "saved" else "updated", state, telar_path });
 }
 
 // Step 10: what a window does first, through the saved path.
