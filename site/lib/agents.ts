@@ -49,7 +49,7 @@ export const USAGE: { provider: Provider; label: string; text: string }[] = [
   { provider: "claude", label: "CL", text: "5h:8% 7d:2% F:4%" },
 ];
 
-// Mirrors src/frontend/ui/icons.zig and src/frontend/assets.
+// Mirrors src/model/layout/icons.zig and src/assets.
 export const PROVIDERS: Record<Provider, { name: string; short: string; mark: string; tone: string }> = {
   claude: { name: "Claude Code", short: "claude", mark: "/brand/providers/claude.png", tone: "text-chrome-accent" },
   codex: { name: "Codex", short: "codex", mark: "/brand/providers/codex.png", tone: "text-chrome-subtext" },

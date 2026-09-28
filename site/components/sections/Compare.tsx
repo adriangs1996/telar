@@ -6,7 +6,7 @@ const ROWS: { what: string; tmux: Cell; telar: Cell }[] = [
   { what: "Sessions survive the client dying", tmux: true, telar: true },
   { what: "Knows which agent is working, waiting or done", tmux: false, telar: "from its pty and TLS traffic" },
   { what: "Command history with workspace, directory and pane scope", tmux: false, telar: "SQLite, three scopes" },
-  { what: "Kitty graphics through the multiplexer", tmux: false, telar: "bounded, 58 fps floor at 4K" },
+  { what: "Kitty graphics through the multiplexer", tmux: false, telar: "bounded, not drawn yet" },
   { what: "Configuration", tmux: "a config file", telar: "Lua, atomic reload" },
   { what: "Extensions", tmux: "shell scripts", telar: "sandboxed Lua, trusted by digest" },
   { what: "Remote runtime", tmux: "ssh + attach", telar: "one flag, socket over SSH" },
