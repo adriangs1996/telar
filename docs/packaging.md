@@ -69,7 +69,9 @@ over a prefix such as `/usr/local` or `~/.local`.
 and every command line control, links no Wayland, Vulkan, ATK or GLib
 library, and builds without Cargo. `telar` and `telar gui` then exit with an
 error. This is the build for servers, which is where remote mode runs the
-runtime.
+runtime. The release adds `-Dtarget=<arch>-linux-musl`, which makes it a
+static executable that needs no library of the host
+([why](#why-the-headless-build-is-static-musl)).
 
 The desktop entry runs `telar gui --login-shell`, so the menu launch is the
 same path as the macOS bundle.
@@ -154,7 +156,8 @@ To publish a version:
 
 Every pull request and push to `main` runs [`ci.yml`](../.github/workflows/ci.yml):
 `zig build`, `zig build check` and `zig build test` on macOS arm64 and Linux
-x86_64, the headless linkage check, and shellcheck on the release scripts.
+x86_64 with Node 22 for the integration scripts' `node --test`, the headless linkage check, shellcheck on the release scripts and
+the installer tests.
 
 ### Assets
 
@@ -180,7 +183,7 @@ Sigstore. `gh attestation verify FILE --repo adriangs1996/telar` checks one.
 | macOS arm64 | `macos-26` | `aarch64-macos.26.0`, Apple M1 | `/usr/lib` and `/System/Library` only |
 | macOS x86_64 | `macos-26-intel` | `x86_64-macos.26.0`, core2 | same |
 | Linux desktop | `ubuntu-24.04`, `ubuntu-24.04-arm` | host glibc, baseline CPU | glibc, Wayland, Vulkan, xkbcommon, Fontconfig, ATK, GLib; glibc 2.38 or newer |
-| Linux headless | same | `<arch>-linux-gnu.2.28`, baseline CPU | glibc only, 2.28 or newer |
+| Linux headless | same | `<arch>-linux-musl`, baseline CPU | nothing: static musl, Linux 5.10 or newer |
 
 The labels come from GitHub's
 [hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
@@ -199,8 +202,72 @@ would use whatever AVX-512 or SVE the runner has and crash on older
 machines.
 
 `packaging/release/check-linkage.sh` fails the build when a binary links
-anything outside that table, or when a headless binary asks for glibc newer
-than 2.28. It reads `otool -L` on macOS and `readelf -d` on Linux.
+anything outside that table, when the desktop build asks for glibc newer
+than 2.38, or when the headless build has any `NEEDED` entry or program
+interpreter. It reads `otool -L` on macOS and `readelf` on Linux.
+
+The desktop build's glibc floor is the runner's. On `ubuntu-24.04-arm`,
+glibc 2.38 headers turn `strtol` and `strtoul` into `__isoc23_strtol` and
+`__isoc23_strtoul`, the only `GLIBC_2.38` symbols of the aarch64 `telar`;
+its `telar-diagram-renderer` stops at 2.35. The x86_64 build was not
+measured outside CI, where the same check holds it to 2.38. Debian 12 ships
+glibc 2.36, so there `install.sh` finds that the desktop build does not
+start and installs the headless one.
+
+### Why the headless build is static musl
+
+A server gets whatever Linux it has: Alpine, an old enterprise release, a
+container without a desktop. A static binary needs no libc of the host at
+all, so the headless build targets `<arch>-linux-musl`, which Zig links
+statically. What differs from glibc, checked in this code:
+
+- Name resolution, TLS and the trust store never go through libc. The
+  proxy resolves upstream hosts with `std.Io.net.HostName.lookup`, Zig's
+  own resolver that reads `/etc/hosts` and `/etc/resolv.conf` on either
+  libc; `lib/localca` finds roots through `std.crypto.Certificate.Bundle`.
+  Neither reads `nsswitch.conf` under glibc either.
+- The passwd database appears once, in `src/cli/login_shell.zig`, as the
+  fallback after `SHELL` for `telar gui --login-shell`, which a headless
+  build refuses. musl reads only `/etc/passwd` there, without NSS, so an
+  LDAP or SSSD account would fall back to `/bin/sh` if it ever reached it.
+- A C `struct stat` cannot come through `@cImport` on musl: its `timespec`
+  pads with bit-fields, so translate-c makes the struct opaque. Ownership
+  checks read `privatefile.Inode` instead, which asks `statx` on Linux,
+  the call `std.Io` already makes for every stat, and `fstatat` elsewhere.
+  CI builds the headless binary for musl, so an import that brings the
+  struct back fails there.
+- The kernel floor is Zig's, not libc's. Without a version in the target,
+  Zig 0.16 builds Linux executables for 5.10 or newer
+  (`default_min` in `std/Target.zig`), and the standard library may use
+  what that version has without a fallback. The release does not lower
+  it, so it supports Linux 5.10 and later; `statx` alone would need only
+  4.11. Every run described here used OrbStack's 7.0 kernel; no older
+  kernel was tried.
+- `malloc` is musl's. In ReleaseFast the runtime's general allocator is
+  libc's, and SQLite, Lua and the `std.Io` thread pool call `malloc`
+  directly. Measured in one Debian 12 container with 4 CPUs, feeding the
+  runtime 150,000 commands through `telar history import`, 1000 at a time,
+  with aarch64 builds of one commit that differ only as named, two runs
+  each:
+
+  | Build | Resident at the end | Runtime CPU |
+  | --- | --- | --- |
+  | glibc, `c_allocator` | 21 and 21 MiB | 25.6 and 23.5 s |
+  | musl, `c_allocator` (the release) | 98 and 113 MiB | 31.5 and 28.0 s |
+  | musl, `std.heap.smp_allocator` as the runtime's allocator | 100 and 116 MiB | 26.7 and 31.9 s |
+
+  Searches took 0.01 to 0.02 s for 20 in every build. glibc stays flat,
+  so the growth is not a leak in this workload; under musl the heap grows
+  with the history written (37 to 45 MiB after 50,000 commands in an
+  earlier run of an older commit). Zig's allocator does not change it, so
+  the memory sits with a direct `malloc` caller; which one was not
+  measured, nor whether it levels off later. A runtime that serves months
+  of history should be watched for it.
+
+The binary was also started on Alpine 3.22, where `telar server`,
+`telar runtime status`, `telar agent list` and `telar server stop` worked
+with no library installed. The glibc build it replaces does not start
+there: Alpine has no `ld-linux-aarch64.so.1`.
 
 To reproduce a release build locally:
 
@@ -211,9 +278,23 @@ packaging/release/linux.sh dist   # Ubuntu 24.04, after install-linux-deps.sh
 
 ### Signing and notarization
 
-The macOS job signs and notarizes only when the secrets exist. Without them
-it still publishes. The Linux and command line assets are unaffected, and
-the release notes say the disk images are not notarized.
+The macOS release runs in two jobs per architecture. `macos` builds and
+uploads the stage as an artifact; `macos-sign` downloads it on a fresh
+runner, signs, packages and notarizes. The build runs Cargo build scripts
+and other third-party code, and a step can reach every later step of its
+job through `GITHUB_ENV`, `GITHUB_PATH` or the checkout, so the build job
+sees no secret. In `macos-sign` each secret is in the `env` of only the
+steps that use it, and nothing is built there.
+
+It signs and notarizes only when the secrets exist. Without them it still
+publishes. The Linux and command line assets are unaffected, and the
+release notes say the disk images are not notarized. The three signing
+secrets go together, and so do the three notary secrets: a job with only
+some of a group fails, instead of publishing an ad hoc signature as if it
+were signed. The notes' "signed" comes from the bundle itself:
+`packaging/release/signed-by-developer-id.sh` requires a valid signature
+whose chain `codesign -dvv` reports as Developer ID Application, Developer
+ID Certification Authority and Apple Root CA.
 
 | Secret | Value |
 | --- | --- |
@@ -288,13 +369,48 @@ executable inside the app. It refuses to replace a regular `telar` file left
 by a command line install.
 
 It picks the asset for the system and architecture, downloads it with
-`SHA256SUMS`, aborts unless the checksum matches, and copies `telar` and
-`telar-diagram-renderer` into `~/.local/bin` or `--bin-dir`. It runs `sudo`
-only with `--sudo`. On Linux it installs the desktop build when `ldconfig`
-knows `libwayland-client.so.0` and `libvulkan.so.1`, and the headless one
-otherwise; `--gui` and `--headless` override the choice. Remote mode needs
+`SHA256SUMS` and aborts unless the checksum matches. It copies `telar` and
+`telar-diagram-renderer` beside their targets in `~/.local/bin` or
+`--bin-dir` as `.telar.new` and `.telar-diagram-renderer.new`, and runs them
+from there with `LD_BIND_NOW=1`: `telar --version`, and the helper on an
+empty request, which it rejects with status 2 while a loader failure exits
+127. A build that the dynamic loader cannot load, for a missing library or
+symbol, so never replaces a working install. The check runs in the bin
+directory rather than the download directory because hardened servers
+mount `/tmp` noexec, where nothing can run. Only when both start does it
+rename them into place; otherwise it removes the copies. `--app` checks
+the copied `Telar.app` the same way before swapping it in. It runs `sudo`
+only with `--sudo`.
+
+On Linux it tries the desktop build when `ldconfig -p` lists
+`libwayland-client.so.0` and `libvulkan.so.1`, looking in `/sbin` and
+`/usr/sbin` too, since a regular Debian user's PATH has neither. The
+desktop build also needs xkbcommon, Fontconfig, ATK, GLib and glibc 2.38
+(see [What each build pins](#what-each-build-pins)); when it does not
+start, the installer prints the loader's error and installs the headless
+build instead. `--gui` insists on the desktop build and aborts, keeping the
+install, when it does not start; `--headless` skips it. Remote mode needs
 the same version on both machines, so pin `--version` on the server.
 `TELAR_RELEASES_URL` points it at a mirror or a local `file://` copy.
+
+It needs `curl`. A stock Alpine has only busybox `wget`, so install curl
+first there, which the one-line install needs anyway:
+
+```sh
+apk add curl
+curl -fsSL https://github.com/adriangs1996/telar/releases/latest/download/install.sh | sh
+```
+
+`--proto '=https,file'` refuses plain http, redirects to http included. `wget` has no equivalent: its `--https-only` applies only to
+recursive downloads, and GNU Wget 1.21.3 fetched an http URL with it.
+Ctrl-C, SIGTERM and SIGHUP stop it after removing its temporary directory.
+
+`packaging/release/test-install.sh` runs the installer against fake
+releases through `file://`, with `uname`, `sw_vers` and `ldconfig`
+stubbed: fallback, refusal, checksum, http and signal cases, plus `--app`
+where `hdiutil` exists. The http case serves the release over plain http,
+so only `--proto` refuses it. With `NOEXEC_TMPDIR` naming a directory on a
+noexec mount, as CI mounts one, it also installs with that as `TMPDIR`.
 
 The checksums come from the same release as the archive. They catch a
 corrupt download, not a tampered release; the attestation covers that.

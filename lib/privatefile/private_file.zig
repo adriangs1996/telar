@@ -1,7 +1,5 @@
 const std = @import("std");
-const native = @cImport({
-    @cInclude("sys/stat.h");
-});
+const Inode = @import("Inode.zig");
 
 /// Permission bits a private file and its directory carry.
 pub const Mode = enum(u32) {
@@ -146,21 +144,13 @@ pub fn prepareDirectory(io: std.Io, path: []const u8) !void {
 
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{path}) catch return error.NameTooLong;
-    var stat: native.struct_stat = undefined;
-    if (native.fstatat(std.c.AT.FDCWD, path_z, &stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
+    const inode = Inode.fromPath(path_z, .no_follow) catch return error.InsecureDirectory;
+    if (inode.kind() != .directory) {
         return error.InsecureDirectory;
     }
 
-    if (!isDirectory(stat.st_mode)) {
-        return error.InsecureDirectory;
-    }
-
-    try requireOwner(stat.st_uid, std.c.getuid());
+    try requireOwner(inode.owner, std.c.getuid());
     try std.Io.Dir.cwd().setFilePermissions(io, path, permissions, .{ .follow_symlinks = false });
-}
-
-fn isDirectory(mode: native.mode_t) bool {
-    return (@as(u32, mode) & @as(u32, native.S_IFMT)) == @as(u32, native.S_IFDIR);
 }
 
 fn requireOwner(owner: std.c.uid_t, current_user: std.c.uid_t) error{WrongOwner}!void {

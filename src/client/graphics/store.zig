@@ -5,10 +5,6 @@ const core = @import("telar-core");
 const builtin = @import("builtin");
 const ImageIdentity = @import("ImageIdentity.zig");
 
-pub const native = @cImport({
-    @cInclude("sys/stat.h");
-});
-
 pub fn supportsSharedMemory() bool {
     return builtin.os.tag != .windows and !builtin.abi.isAndroid() and builtin.link_libc;
 }

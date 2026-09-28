@@ -3,10 +3,11 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const LocalListener = @import("LocalListener.zig");
+const privatefile = @import("privatefile");
 
+const Inode = privatefile.Inode;
 const c = @cImport({
     @cInclude("sys/socket.h");
-    @cInclude("sys/stat.h");
     @cInclude("unistd.h");
 });
 
@@ -99,12 +100,8 @@ pub fn validateEndpointDirectory(path: []const u8) !void {
 }
 
 fn directoryTrust(path: [:0]const u8) !DirectoryTrust {
-    var stat: c.struct_stat = undefined;
-    if (c.fstatat(std.c.AT.FDCWD, path, &stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
-        return error.InvalidEndpoint;
-    }
-
-    return classifyEndpointDirectory(@intCast(stat.st_mode), @intCast(stat.st_uid), @intCast(std.c.geteuid()));
+    const inode = Inode.fromPath(path, .no_follow) catch return error.InvalidEndpoint;
+    return classifyEndpointDirectory(inode.mode, inode.owner, std.c.geteuid());
 }
 
 pub fn localAddress(path: []const u8) !std.Io.net.UnixAddress {
