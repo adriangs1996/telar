@@ -4,7 +4,8 @@
 const std = @import("std");
 const Coverage = @import("Coverage.zig");
 const External = @import("LibraryExternal.zig");
-const Prefix = @import("LibraryPrefix.zig");
+const NativeLibrary = @import("NativeLibrary.zig");
+const macos_sdk = @import("macos_sdk.zig");
 const Libraries = @This();
 
 /// Imports a spec may declare.
@@ -19,11 +20,13 @@ const Spec = struct {
     libc: bool = false,
     /// Built only for POSIX targets.
     posix: bool = false,
+    /// C libraries it links: the caller's `NativeLibrary` of that name, or
+    /// else the system's. A system copy links only for a target that runs on
+    /// the host; other targets still analyze packages that import it.
     system_libraries: []const []const u8 = &.{},
     /// Frameworks linked when the target is macOS.
     macos_frameworks: []const []const u8 = &.{},
-    /// Links its system libraries only for the host; other targets can still
-    /// analyze packages that import it, and portability checks skip it.
+    /// Portability checks skip it.
     host_only: bool = false,
 };
 
@@ -198,9 +201,9 @@ externals: []const External,
 /// library replaces it, as the portability checks do with the width table.
 ///
 /// ```zig
-/// const libraries = Libraries.create(b, target, optimize, &.{.{ .name = "ghostty-vt", .module = ghostty_vt }}, &.{});
+/// const libraries = Libraries.create(b, target, optimize, &.{.{ .name = "ghostty-vt", .module = ghostty_vt }}, natives);
 /// ```
-pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, externals: []const External, prefixes: []const Prefix) Libraries {
+pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, externals: []const External, natives: []const NativeLibrary) Libraries {
     var self: Libraries = .{
         .modules = undefined,
         .externals = b.allocator.dupe(External, externals) catch @panic("OOM"),
@@ -218,7 +221,7 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
             dependencies[position] = find(externals, name) orelse self.declared(name, index) orelse break;
         } else {
             self.modules[index] = build(b, spec, target, optimize, dependencies[0..spec.imports.len]);
-            addPrefixes(b, self.modules[index].?, spec, prefixes);
+            linkNatives(b, self.modules[index].?, spec, natives);
         }
     }
 
@@ -236,12 +239,8 @@ fn build(b: *std.Build, spec: Spec, target: std.Build.ResolvedTarget, optimize: 
         module.addImport(name, dependency);
     }
 
-    if (!spec.host_only or target.query.isNative()) {
-        for (spec.system_libraries) |name| {
-            module.linkSystemLibrary(name, .{});
-        }
-    }
-    if (target.result.os.tag == .macos) {
+    if (target.result.os.tag == .macos and spec.macos_frameworks.len > 0) {
+        macos_sdk.addPaths(b, module);
         for (spec.macos_frameworks) |name| {
             module.linkFramework(name, .{});
         }
@@ -374,17 +373,46 @@ fn declared(self: Libraries, name: []const u8, limit: usize) ?*std.Build.Module 
     return null;
 }
 
-fn addPrefixes(b: *std.Build, module: *std.Build.Module, spec: Spec, prefixes: []const Prefix) void {
+fn linkNatives(b: *std.Build, module: *std.Build.Module, spec: Spec, natives: []const NativeLibrary) void {
     for (spec.system_libraries) |library| {
-        for (prefixes) |prefix| {
-            if (!std.mem.eql(u8, prefix.library, library)) {
-                continue;
-            }
+        const native = findNative(natives, library);
+        switch (native.source) {
+            .built => |static| module.linkLibrary(static),
+            .system => |maybe_prefix| {
+                if (!onHost(b, module.resolved_target.?)) {
+                    continue;
+                }
 
-            module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ prefix.path, "include" }) });
-            module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ prefix.path, "lib" }) });
+                module.linkSystemLibrary(library, .{});
+                macos_sdk.addPaths(b, module);
+                if (maybe_prefix) |prefix| {
+                    module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ prefix, "include" }) });
+                    module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ prefix, "lib" }) });
+                }
+            },
         }
     }
+}
+
+/// Whether `target` runs on this machine's system, where its libraries are
+/// found. A pinned CPU or OS version still counts, as release builds use them.
+fn onHost(b: *std.Build, target: std.Build.ResolvedTarget) bool {
+    const host = b.graph.host.result;
+    return target.result.os.tag == host.os.tag and target.result.cpu.arch == host.cpu.arch and target.result.abi == host.abi;
+}
+
+/// The caller's provider for `library`, or the system's default search paths.
+fn findNative(natives: []const NativeLibrary, library: []const u8) NativeLibrary {
+    for (natives) |native| {
+        if (std.mem.eql(u8, native.library, library)) {
+            return native;
+        }
+    }
+
+    return .{
+        .library = library,
+        .source = .{ .system = null },
+    };
 }
 
 fn find(externals: []const External, name: []const u8) ?*std.Build.Module {

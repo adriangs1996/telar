@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_TOOLCHAIN: 1.93.1
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo packaging/release/install-linux-deps.sh
+
+      - name: Install Zig
+        run: |
+          packaging/release/install-zig.sh "$RUNNER_TEMP/zig"
+          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+
+      - name: Build
+        run: zig build
+
+      - name: Check
+        run: zig build check
+
+      - name: Test
+        run: zig build test
+
+      # The server build must never link a desktop library.
+      - name: Headless build links glibc only
+        if: runner.os == 'Linux'
+        run: |
+          zig build -Dgui=false -Dtarget=x86_64-linux-gnu.2.28 --prefix zig-out/headless
+          TELAR_GLIBC_MAX=2.28 packaging/release/check-linkage.sh linux-headless zig-out/headless/bin/telar
+
+  scripts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Shellcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck install.sh packaging/release/*.sh packaging/homebrew/*.sh packaging/macos/*.sh

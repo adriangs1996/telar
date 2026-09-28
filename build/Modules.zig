@@ -1,6 +1,7 @@
 const std = @import("std");
 const Suite = @import("Suite.zig");
 const Libraries = @import("Libraries.zig");
+const NativeLibrary = @import("NativeLibrary.zig");
 const Modules = @This();
 
 libraries: Libraries,
@@ -18,8 +19,9 @@ headless: ?*std.Build.Module = null,
 syntax_library: ?std.Build.LazyPath = null,
 ghostty_vt: *std.Build.Module,
 wuffs: *std.Build.Module,
-nghttp2_prefix: []const u8,
-brotli_prefix: []const u8,
+natives: []const NativeLibrary,
+/// Whether this graph builds the native client and its helpers.
+native_client: bool,
 target: std.Build.ResolvedTarget,
 optimize: std.builtin.OptimizeMode,
 build_options: *std.Build.Step.Options,

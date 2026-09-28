@@ -37,7 +37,7 @@ const MachineDispatchOptions = @import("cli/arguments/MachineDispatchOptions.zig
 /// Exit status of a `--machine` command that never reached its machine.
 const machine_dispatch_failure: u8 = 1;
 
-const version = "0.0.0";
+const version = build_options.version;
 
 // Zig tests use the compiler runner as root, not this bootstrap. Check the
 // declarations here; executable probes exercise their root-level effects.

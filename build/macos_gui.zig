@@ -1,5 +1,6 @@
 const std = @import("std");
 const c_flags = @import("c_flags.zig");
+const macos_sdk = @import("macos_sdk.zig");
 
 /// Compile the native window adapter: `macos_gui.add(b, module, false)`.
 pub fn add(b: *std.Build, module: *std.Build.Module, disable_coverage: bool) void {
@@ -22,6 +23,7 @@ pub fn add(b: *std.Build, module: *std.Build.Module, disable_coverage: bool) voi
         },
         .flags = c_flags.forCoverage(b, &.{ "-fobjc-arc", "-std=c23" }, disable_coverage),
     });
+    macos_sdk.addPaths(b, module);
     module.linkFramework("AppKit", .{});
     module.linkFramework("CoreText", .{});
     module.linkFramework("CoreGraphics", .{});

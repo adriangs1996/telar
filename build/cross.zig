@@ -2,6 +2,7 @@ const std = @import("std");
 const freetype_build = @import("freetype.zig");
 const model_build = @import("model.zig");
 const Libraries = @import("Libraries.zig");
+const native_libraries = @import("native_libraries.zig");
 
 /// Register portability checks: `cross.add(b)`.
 pub fn add(b: *std.Build) *std.Build.Step {
@@ -38,7 +39,7 @@ pub fn add(b: *std.Build) *std.Build.Step {
                 .name = "freetype",
                 .module = freetype_build.add(b, .{ .target = cross_target, .optimize = .Debug, .disable_coverage = false }),
             },
-        }, &.{});
+        }, native_libraries.portable(b, cross_target, .Debug));
         cross_libraries.addImports(cross_core);
         const cross_data = model_build.create(b, cross_core, cross_libraries);
         cross_libraries.addChecks(b, cross_step, cross_target);

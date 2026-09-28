@@ -5,6 +5,7 @@ const client = @import("telar-client");
 const core = @import("telar-core");
 const std = @import("std");
 const builtin = @import("builtin");
+const build_options = @import("build_options");
 const RunOptions = @import("arguments/RunOptions.zig");
 const RuntimeConnector = client.RuntimeConnector;
 const ClientLaunch = @import("ClientLaunch.zig");
@@ -18,8 +19,8 @@ const TestEnvironment = @import("TestEnvironment.zig");
 /// const exit_code = try client.runNative(process_init, options);
 /// ```
 pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
-    if (builtin.os.tag != .macos and builtin.os.tag != .linux) {
-        std.debug.print("telar: the window is only built on macOS and Linux\n", .{});
+    if (comptime !build_options.native_client) {
+        std.debug.print("telar: this build has no window; build with -Dgui=true on macOS or Linux\n", .{});
         return error.UnsupportedPlatform;
     }
 

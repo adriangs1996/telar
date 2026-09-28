@@ -192,7 +192,7 @@ pub fn main(init: std.process.Init) !void {
 /// Registers the executable and its checks. Example: run_widget.addBuild(b, app);
 pub fn addBuild(b: *std.Build, app: BuildApplication) void {
     const os = app.modules.target.result.os.tag;
-    if (os != .macos and os != .linux) {
+    if (!app.modules.native_client) {
         return;
     }
 

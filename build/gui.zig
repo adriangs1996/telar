@@ -8,7 +8,7 @@ pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath)
     // GPU chrome over the shared client. Mermaid rasterization runs in an
     // isolated Rust helper.
     var gui_module: ?*std.Build.Module = null;
-    if (app.modules.target.result.os.tag == .macos or app.modules.target.result.os.tag == .linux) {
+    if (app.modules.native_client) {
         const gui = b.createModule(.{
             .root_source_file = b.path("src/gui/gui.zig"),
             .target = app.modules.target,

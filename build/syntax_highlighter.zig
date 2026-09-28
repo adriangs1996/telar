@@ -5,7 +5,7 @@ const Modules = @import("Modules.zig");
 /// Example: `const archive = syntax_highlighter.add(b, app.modules);`
 pub fn add(b: *std.Build, modules: Modules) ?std.Build.LazyPath {
     const target = modules.target.result;
-    if (target.os.tag != .macos and target.os.tag != .linux) {
+    if (!modules.native_client) {
         return null;
     }
 
