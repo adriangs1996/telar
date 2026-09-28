@@ -1,6 +1,8 @@
 # Machine setup
 
-Status: plan, not implemented. It builds on
+Status: implemented on the `worktree-machine-setup` branch; flow:
+[machine setup](../flows/machine-setup.md). Differences from the plan below
+are listed under [As built](#as-built). It builds on
 [machine profiles](../flows/machine-profiles.md),
 [remote attach](../flows/remote-attach.md),
 [machine dispatch](../flows/machine-dispatch.md) and the
@@ -314,3 +316,21 @@ Settled with Adrian on 2026-09-28.
    the existing link policy when the card is clicked, and `telar
    notification show --link URL`. The wire changes, so `schema_version`
    goes up.
+
+## As built
+
+- Versions live in `~/.local/share/telar/versions/`, not beside the history
+  database in `~/.local/share/telar/`.
+- The link on a notification is at most 1024 bytes, not 2 KiB: a runtime
+  response slot holds it inline, and 1 KiB keeps the slot at the size another
+  response already gives it (4,152 bytes, measured). Only the CLI sends a
+  link; a client's own notification requests refuse one, so the client's
+  outbox slots stay under 512 bytes.
+- `pane read` keeps soft wraps, so the login workspace is created 1024
+  columns wide (`workspace create --columns`) instead of changing the wire.
+- A login pane closes itself when the login command exits.
+- Pi has no command-line login: setup opens `pi`, types `/login` and leaves
+  the provider choice to the person in that pane; its notification carries
+  no link.
+- The headless client gained `notification activate`, which clicks the
+  newest notification, for end-to-end tests.

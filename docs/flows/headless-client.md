@@ -46,6 +46,7 @@ One command per line on stdin:
 | `text UTF-8` | each character pressed in order |
 | `resize COLSxROWS` | the host grid changes |
 | `mark LABEL` | a labelled timestamp in the trace |
+| `notification activate` | the newest notification is clicked, as its card in a window would be |
 | `quit` | leave with status 0; the end of stdin does the same |
 
 It is not a terminal escape parser. Keys are delivered as presses only, as

@@ -76,6 +76,9 @@ taken meanwhile is refused.
   parses. Discovery, the bridge and dispatch run it instead of `telar`
   from the PATH of non-interactive SSH sessions; without it they run
   `telar`. A window reconnects a machine whose path changed.
+- `logins` maps an agent (`claude`, `codex`, `pi`, `cursor`, `opencode`) to
+  `pending`, `done` or `failed`: how `telar machine setup` last saw its login
+  on that machine. `machine list` prints it. It is never a credential.
 - `local_label` names the local machine; without it, the host name does.
 
 Hand edits are valid. A file that fails validation, is readable by anyone but

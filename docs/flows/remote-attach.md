@@ -138,9 +138,13 @@ becomes the link's failure text.
 
 ## SSH requirements
 
-Install matching Telar builds on both machines and make the Linux binary
-available on the non-interactive SSH PATH. Authenticate with a key and verify
-the host key before connecting:
+`telar machine setup box` does all of this for a saved machine
+([machine setup](machine-setup.md)): it installs this build under the
+remote home, saves its path so the remote PATH no longer matters, and
+refuses to go on until batch-mode SSH works. By hand: install matching Telar
+builds on both machines and make the Linux binary available on the
+non-interactive SSH PATH. Authenticate with a key and verify the host key
+before connecting:
 
 ```sh
 ssh dev@box 'command -v telar; telar --version'

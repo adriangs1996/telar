@@ -122,6 +122,7 @@ The `:` list holds every saved machine, disabled ones included, and an
 | Key | Row | Effect |
 | --- | --- | --- |
 | Enter | a machine | shows it; an unreachable one is also tried again now, skipping the rest of its backoff (`runtime_link.retryNow`); a disabled one is enabled |
+| Enter | a machine that lacks this build | runs `telar machine setup LABEL` in a new tab of this machine, which the window shows ([machine setup](machine-setup.md)); its row says `no telar for this build · enter sets it up` |
 | Shift+Enter | a saved machine | enables or disables it |
 | Ctrl+R | a saved machine | asks for a new label |
 | Ctrl+D or ⌘⌫ | a saved machine | removes it |
