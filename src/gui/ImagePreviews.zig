@@ -11,6 +11,7 @@ const data = @import("model");
 const client = @import("telar-client");
 const gfx = @import("gfx");
 const native = @import("native/native.zig");
+const diagram_texture = @import("native/DiagramTexture.zig");
 const DiagramStore = @import("diagrams/Store.zig");
 const PreviewImage = @import("image/PreviewImage.zig");
 const PremultipliedImage = @import("image/PremultipliedImage.zig");
@@ -36,6 +37,7 @@ const pane_minimum_rows: u16 = 3;
 
 comptime {
     std.debug.assert(modal_slot < gfx.Quad.diagram_slot_count);
+    std.debug.assert(diagram_texture.max_frame_pixels == DiagramStore.max_pixels + max_frame_pixels);
 }
 
 catalog: Catalog,

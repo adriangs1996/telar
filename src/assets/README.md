@@ -14,40 +14,22 @@ contains the complete FreeType License and GPLv2 alternative.
 Text shaping links HarfBuzz 11.0.0 from the source archive pinned in
 `build.zig.zon`. Its complete Old MIT notice is in `HarfBuzz-COPYING.txt`.
 
-`TelarNerdIcons-Regular.ttf` is a 7,504-byte subset of
-`SymbolsNerdFontMono-Regular.ttf` from Nerd Fonts v3.5.1. It contains only the
-29 icon glyphs used by the embedded `nerd-font` icon theme. The source release
-archive SHA-256 is
-`01172f37db8543edb102e5cb5c64101c9f4686630804d49b419aa07b23a69996`;
-the source TTF SHA-256 is
-`fe471e538392f51910faab985fa8e192a39dd3426125edd15b71b3680df0e749`;
-and the subset SHA-256 is
-`ce82497ed90883082d9246e43a16821659b210135916762bdd787745511dac7d`.
 `NerdFonts-LICENSE.txt` and `NerdFonts-README.md` record the license and
 upstream attribution shipped in the release archive.
 
-The GUI additionally embeds the complete `SymbolsNerdFontMono-Regular.ttf`
-from [Nerd Fonts v3.5.1](https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.5.1)
-as a missing-glyph fallback. It retains the configured font for covered text;
-the TUI continues using the small `TelarNerdIcons-Regular.ttf` subset above.
-The full face is 2,610,012 bytes and has the source TTF SHA-256 above. It can
+The GUI embeds the complete `SymbolsNerdFontMono-Regular.ttf` from
+[Nerd Fonts v3.5.1](https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.5.1)
+as a missing-glyph fallback and for its chrome icons. It retains the
+configured font for covered text. The face is 2,610,012 bytes; the source
+release archive SHA-256 is
+`01172f37db8543edb102e5cb5c64101c9f4686630804d49b419aa07b23a69996` and the
+TTF SHA-256 is
+`fe471e538392f51910faab985fa8e192a39dd3426125edd15b71b3680df0e749`. It can
 be reproduced by downloading
 `https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/NerdFontsSymbolsOnly.zip`
 (SHA-256 `fdca3682534f6f65e1ccb2345b0362ccf67d9b8eca7c8025330946e93e2473bc`)
 and extracting `SymbolsNerdFontMono-Regular.ttf` without modification. The
 same bundled Nerd Fonts license and attribution apply.
-
-The subset includes U+E62B (`custom-vim`) and U+E702 (`dev-git`) for foreground
-application tabs, U+F02D8 (`md-hexagon`) for Cursor Agent and U+F0763
-(`md-square-outline`) for OpenCode. It is reproducible with fonttools 4.63.0:
-
-```sh
-SOURCE_DATE_EPOCH=1787335283 pyftsubset SymbolsNerdFontMono-Regular.ttf \
-  --output-file=TelarNerdIcons-Regular.ttf \
-  --unicodes=U+E62B,U+E702,U+EA76,U+EACD,U+EB53,U+F4BC,U+EFC5,U+F240-F244,U+EC20,U+EA85,U+EB32,U+EE06-EE09,U+EA6C,U+EBB3,U+EBA4,U+EA87,U+EAB5-EAB6,U+EB4C,U+F03FF,U+F02D8,U+F0763 \
-  --layout-features='*' --name-IDs='*' --name-legacy \
-  --name-languages='*' --notdef-glyph --recommended-glyphs
-```
 
 `IBMPlexSans-Regular.ttf` (200,500 bytes) and `IBMPlexSans-SemiBold.ttf`
 (202,632 bytes) are the GUI's embedded proportional chrome face. They are the
@@ -65,8 +47,8 @@ Font Name "Plex"; the release's `LICENSE.txt` is copied verbatim as
 `IBMPlexSans-OFL.txt`. Only native chrome labels use these faces; terminal
 cells never select them.
 
-The original app icons below are retained as source assets. Both adapters now
-embed the T3 Code provider atlas described below.
+The original app icons below are retained as source assets. The window embeds
+the T3 Code provider atlas described below.
 
 `Claude.png` was downloaded on 2026-08-26 from the Apple touch icon linked by
 Anthropic's official Claude download page. It is a 256 x 256 RGBA PNG with
@@ -149,18 +131,12 @@ uv run --no-project --with pillow==12.2.0 python tools/build_brand_icons.py
 `provider-symbols-320x64.rgba` contains five 64 × 64 RGBA symbols in
 Claude, OpenAI, Pi, Cursor, OpenCode order. Its SHA-256 is
 `4be9ed259a5eff22249ade14ea174b4ccc503bf05c8dc857863206185dab4b05`.
-Both adapters embed this 81,920-byte atlas. Its first four slots are byte for
+The window embeds this 81,920-byte atlas. Its first four slots are byte for
 byte those of the previous four-symbol atlas. The GUI box-filters the symbols
 into its existing sprite page, premultiplies them, and draws them at 60%
 opacity. OpenAI, Cursor and OpenCode follow the theme's `text` color; Claude
 and Pi retain their source colors. Tint and opacity are quad attributes; changing selection or theme does not rebuild
 or upload the symbols. Workspace favicons retain their own colors.
-
-The TUI resamples the same 64 px slots with premultiplied-alpha bilinear
-filtering and centers each symbol inside the terminal cell aspect ratio.
-OpenAI, Cursor and OpenCode follow the sidebar foreground. A foreground change rebuilds and
-retransmits the existing atlas without reallocating it; an unchanged frame
-does neither. Terminals without KGP retain the existing cell glyphs.
 
 `Claude-symbol.svg` and `OpenAI-symbol.svg` preserve the path and viewBox of
 `ClaudeAI` and `OpenAI` in

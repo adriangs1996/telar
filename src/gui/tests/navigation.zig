@@ -66,7 +66,7 @@ test "update processes a horizontal split shortcut and its correlated runtime re
     try std.testing.expect(first.x < second.x);
 }
 
-test "native semantic router resolves every TUI default action" {
+test "native semantic router resolves every default action" {
     const defaults = try client.default_bindings.load(data.keybind.default_prefix);
     for (defaults) |binding| {
         var router = try client.key_router.build(

@@ -196,7 +196,6 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.previews_prepared = 0;
     gui.app.model.host.clipboard_capture = clipboard_image.supported();
 
-    // Native chrome uses the shared semantic projection, never TUI Kitty output.
     gui.driver.configuration.inbox = &gui.driver.inbox;
     gui.input_queue = .{};
     gui.router = router;

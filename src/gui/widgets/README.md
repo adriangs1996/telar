@@ -226,8 +226,7 @@ and close without buttons; the inspector adds a button row (paste, run, copy,
 delete, go to pane). The row above the oldest command asks for the previous
 page. A row click selects without submitting. Rows and every submit control
 carry the delivered history revision, so a replaced or pending page cannot
-run an unseen command. The search field retains keyboard and IME focus. The
-TUI keeps its own layout.
+run an unseen command. The search field retains keyboard and IME focus.
 
 The inspector walks `HistoryDetails.lines`: the wrapped command, its facts
 (local time and age, duration, exit, directory, pane with its tab or
@@ -265,7 +264,7 @@ generation. Only painted indicators renew their entries and deadlines; hidden,
 removed and reattached panes cannot inherit a previous animation. `ProgressRing`
 uses at most 66 rounded quads with a precomputed circle, without font shaping,
 texture uploads or frame-time allocation. The frame budget reserves space for
-one capsule per visible pane. The runtime and TUI keep their progress protocol.
+one capsule per visible pane. The runtime keeps its progress protocol.
 
 History opens with a 220 ms cubic ease-out, fading in while moving up twelve
 logical pixels. `Overlays` retains one `ModalMotion` keyed by prompt generation;
@@ -289,7 +288,7 @@ list. Attention rings demonstrate attachment-scoped ownership and retirement.
 
 Each preparation resets the deadline requests and only visible widgets renew
 them. Finished transitions request nothing. The GUI uses the host animation
-clock instead of the model's TUI animation timer. The driver merges widget and
+clock instead of the model's animation timer. The driver merges widget and
 cursor deadlines, parks widget timers while a presentation is in flight or a
 requested draw awaits the compositor, and resumes when preparation begins.
 Late frames sample current time rather than
