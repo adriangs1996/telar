@@ -20,9 +20,50 @@ pub const connect_interval_ms = 100;
 /// The largest `telar api schema --json` output read back, in bytes.
 const schema_output_limit = 256 * 1024;
 
+/// The most SSH error output kept, in bytes.
+const ssh_error_limit = 16 * 1024;
+
 const endpoint_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(30) },
 };
+
+/// Failures of an `ssh` call, told apart by whether retrying can fix them
+/// (`machine_connection.permanent`).
+pub const SshFailure = error{
+    SshHostKeyRejected,
+    SshAuthenticationFailed,
+    RemoteTelarMissing,
+    RemoteRuntimeIncompatible,
+    RemoteEndpointUnavailable,
+};
+
+/// Exit statuses that name a cause: OpenSSH exits 255 when it fails itself
+/// (ssh(1), EXIT STATUS), and a POSIX shell exits 127 for a command it
+/// cannot find and 126 for one it cannot run (sh(1p), EXIT STATUS).
+const ExitStatus = enum(u8) {
+    command_not_executable = 126,
+    command_not_found = 127,
+    ssh_failed = 255,
+    _,
+};
+
+/// What OpenSSH prints when the host key is unknown or changed and strict
+/// checking is on, as batch mode makes it (sshconnect.c).
+const host_key_texts = [_][]const u8{
+    "Host key verification failed",
+    "REMOTE HOST IDENTIFICATION HAS CHANGED",
+};
+
+/// What OpenSSH prints when the server accepts none of the offered
+/// credentials (sshconnect2.c) or stops after too many (sshd).
+const authentication_texts = [_][]const u8{
+    "Permission denied (",
+    "Too many authentication failures",
+};
+
+/// What `telar server endpoint` prints when the runtime it reaches speaks
+/// another schema (`RuntimeConnector.finishHandshake` without a report).
+const runtime_mismatch_text = "telar protocol mismatch";
 
 /// Discovers the remote home, shell and runtime socket over SSH, then starts
 /// one `ssh -L` forward and waits until its private socket exists. The
@@ -93,8 +134,9 @@ pub fn connectForwarded(io: std.Io, connector: *const RuntimeConnector) !localso
 
 /// Asks the machine for its home, login shell and runtime socket over the
 /// managed SSH connection, starting its runtime when none is running. It
-/// never installs anything. SSH's error output goes to `report` when given,
-/// and to standard error otherwise.
+/// never installs anything. What went wrong goes to `report` when given,
+/// and to standard error otherwise; the error says whether retrying can fix
+/// it.
 ///
 /// ```zig
 /// const found = try remote.discover(io, gpa, environ, "dev@box", null);
@@ -106,23 +148,82 @@ pub fn discover(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ
     const result = std.process.run(gpa, io, .{
         .argv = &(.{ "ssh", "-T" } ++ managed ++ .{ "--", destination, command }),
         .stdout_limit = .limited(Discovery.max_output_bytes),
-        .stderr_limit = .limited(16 * 1024),
+        .stderr_limit = .limited(ssh_error_limit),
         .timeout = endpoint_timeout,
     }) catch return error.RemoteEndpointUnavailable;
     defer gpa.free(result.stdout);
     defer gpa.free(result.stderr);
 
     if (result.term != .exited or result.term.exited != 0) {
+        const failure = sshFailure(result.term, result.stderr);
         if (report) |writer| {
-            writer.writeAll(result.stderr) catch {};
+            writeFailure(writer, failure, result.stderr);
         } else {
             std.debug.print("telar: `ssh {s} telar server endpoint` failed:\n{s}", .{ destination, result.stderr });
         }
 
-        return error.RemoteEndpointUnavailable;
+        return failure;
     }
 
     return Discovery.parse(result.stdout);
+}
+
+/// Why an `ssh` call that did not succeed failed, from its exit status and
+/// error output. A refused host key, a refused login, a `telar` the remote
+/// shell cannot run and a remote runtime of another build stay until
+/// someone fixes them; anything else, such as a refused or timed-out
+/// connection, may pass.
+///
+/// ```zig
+/// return remote.sshFailure(result.term, result.stderr);
+/// ```
+pub fn sshFailure(term: std.process.Child.Term, stderr: []const u8) SshFailure {
+    const status = switch (term) {
+        .exited => |code| code,
+        else => return error.RemoteEndpointUnavailable,
+    };
+
+    if (std.mem.indexOf(u8, stderr, runtime_mismatch_text) != null) {
+        return error.RemoteRuntimeIncompatible;
+    }
+
+    switch (@as(ExitStatus, @enumFromInt(status))) {
+        .command_not_found, .command_not_executable => return error.RemoteTelarMissing,
+        .ssh_failed => {
+            if (mentionsAny(stderr, &host_key_texts)) {
+                return error.SshHostKeyRejected;
+            }
+
+            if (mentionsAny(stderr, &authentication_texts)) {
+                return error.SshAuthenticationFailed;
+            }
+
+            return error.RemoteEndpointUnavailable;
+        },
+        _ => return error.RemoteEndpointUnavailable,
+    }
+}
+
+fn mentionsAny(text: []const u8, needles: []const []const u8) bool {
+    for (needles) |needle| {
+        if (std.mem.indexOf(u8, text, needle) != null) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// Names a permanent cause before SSH's own words, which are clear for host
+// keys and logins but not for a missing command or an old runtime.
+fn writeFailure(writer: *std.Io.Writer, failure: SshFailure, stderr: []const u8) void {
+    const cause: []const u8 = switch (failure) {
+        error.RemoteTelarMissing => "telar is not on the PATH of non-interactive SSH sessions there: ",
+        error.RemoteRuntimeIncompatible => "the runtime there is another telar build; run `telar server stop` there: ",
+        else => "",
+    };
+    writer.writeAll(cause) catch {};
+    writer.writeAll(stderr) catch {};
 }
 
 /// Asks the machine which wire schema its `telar` speaks, over the managed
@@ -177,6 +278,25 @@ fn waitForSocket(io: std.Io, path: []const u8) !void {
     }
 
     return error.RemoteForwardUnavailable;
+}
+
+test "ssh failures that retrying cannot fix are told apart from passing ones" {
+    const cases = [_]struct { std.process.Child.Term, []const u8, SshFailure }{
+        .{ .{ .exited = 255 }, "No ED25519 host key is known for [127.0.0.1]:2222 and you have requested strict checking.\r\nHost key verification failed.\r\n", error.SshHostKeyRejected },
+        .{ .{ .exited = 255 }, "@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@\n", error.SshHostKeyRejected },
+        .{ .{ .exited = 255 }, "telar@127.0.0.1: Permission denied (publickey).\r\n", error.SshAuthenticationFailed },
+        .{ .{ .exited = 127 }, "sh: 1: exec: telar: not found\n", error.RemoteTelarMissing },
+        .{ .{ .exited = 126 }, "sh: 1: exec: telar: Permission denied\n", error.RemoteTelarMissing },
+        .{ .{ .exited = 1 }, "telar protocol mismatch: runtime expects schema v0000000\n", error.RemoteRuntimeIncompatible },
+        .{ .{ .exited = 255 }, "ssh: connect to host box port 22: Connection refused\r\n", error.RemoteEndpointUnavailable },
+        .{ .{ .exited = 255 }, "ssh: Could not resolve hostname box: nodename nor servname provided\r\n", error.RemoteEndpointUnavailable },
+        .{ .{ .exited = 1 }, "error: RuntimeUnavailable\n", error.RemoteEndpointUnavailable },
+        .{ .{ .signal = .KILL }, "", error.RemoteEndpointUnavailable },
+    };
+
+    for (cases) |case| {
+        try std.testing.expectEqual(case[2], sshFailure(case[0], case[1]));
+    }
 }
 
 test {

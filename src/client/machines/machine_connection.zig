@@ -33,3 +33,33 @@ pub fn connect(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ,
         },
     }
 }
+
+/// Whether a failed `connect` stays failed however often it is tried again:
+/// a host key or login SSH refuses, a `telar` the remote shell cannot run,
+/// a runtime of another build, `--fresh` beside a running runtime, or a
+/// runtime directory someone else could use. Anything else may pass.
+///
+/// ```zig
+/// link.phase = if (machine_connection.permanent(err)) .failed else .lost;
+/// ```
+pub fn permanent(err: anyerror) bool {
+    return switch (err) {
+        error.SshHostKeyRejected,
+        error.SshAuthenticationFailed,
+        error.RemoteTelarMissing,
+        error.RemoteRuntimeIncompatible,
+        error.IncompatibleSchema,
+        error.RuntimeAlreadyRunning,
+        error.InvalidRuntimeDirectory,
+        error.InvalidRemoteDestination,
+        => true,
+        else => false,
+    };
+}
+
+test "only failures that retrying cannot fix are permanent" {
+    try std.testing.expect(permanent(error.SshHostKeyRejected));
+    try std.testing.expect(permanent(error.IncompatibleSchema));
+    try std.testing.expect(!permanent(error.RemoteEndpointUnavailable));
+    try std.testing.expect(!permanent(error.ConnectionRefused));
+}

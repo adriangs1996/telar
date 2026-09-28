@@ -87,11 +87,19 @@ pub fn finishConnect(client: *Client, result: anyerror!void) !void {
     }
 
     result catch |err| {
+        const link = &client.model.runtime_link;
         const report = client.connect_report.text();
-        client.model.runtime_link.fail(if (report.len != 0) report else @errorName(err));
-        client.model.runtime_link.phase = .lost;
+        link.fail(if (report.len != 0) report else @errorName(err));
         client.model.link_revision +%= 1;
 
+        // Retrying cannot fix an unknown host key, a refused login or
+        // another build; the link waits for the person instead.
+        if (machine_connection.permanent(err)) {
+            link.phase = .failed;
+            return;
+        }
+
+        link.phase = .lost;
         return scheduleRetry(client);
     };
 
@@ -230,16 +238,17 @@ pub fn retry(client: *Client, result: anyerror!void) !void {
     try queueConnect(client, client.options.machine.?);
 }
 
-/// Connects a lost machine now instead of when its backoff ends, as the
-/// person asked. The pending retry finds the link connecting and does
-/// nothing.
+/// Connects a lost machine now instead of when its backoff ends, or a
+/// failed one that waits for the person, as the person asked. A pending
+/// retry finds the link connecting and does nothing.
 ///
 /// ```zig
 /// try runtime_link.retryNow(client);
 /// ```
 pub fn retryNow(client: *Client) !void {
     const link = &client.model.runtime_link;
-    if (link.phase != .lost or client.channel_owned or client.connect_pending) {
+    const waiting = link.phase == .lost or link.phase == .failed;
+    if (!waiting or client.channel_owned or client.connect_pending) {
         return;
     }
 
@@ -377,4 +386,43 @@ test "a lost runtime is reached again and its session starts fresh" {
 
 test "a failed attempt shows its report and waits to retry, unless retried now" {
     try client_tests.failedAttemptWaits(start, retryNow);
+}
+
+test "a failure retrying cannot fix waits for the person without a retry" {
+    const gpa = std.testing.allocator;
+    const app = try gpa.create(Client);
+    defer gpa.destroy(app);
+
+    try app.init(.{
+        .gpa = gpa,
+        .io = std.testing.io,
+        .host_size = .{
+            .cols = 40,
+            .rows = 10,
+            .cell_width_px = 0,
+            .cell_height_px = 0,
+        },
+        .options = .{
+            .arguments = &.{},
+            .cwd = "",
+            .endpoint = "",
+            .machine = .{ .remote = .{ .destination = "dev@box" } },
+        },
+    });
+    defer app.deinit();
+
+    try start(app);
+    _ = app.to_background.pop().?;
+
+    const report = "telar@box: Permission denied (publickey).";
+    @memcpy(app.connect_report.bytes[0..report.len], report);
+    app.connect_report.len = report.len;
+    try std.testing.expectEqual(@as(?u8, null), try app.update(.{ .runtime_connected = error.SshAuthenticationFailed }));
+    try std.testing.expect(app.model.runtime_link.phase == .failed);
+    try std.testing.expectEqualStrings(report, app.model.runtime_link.failure().?);
+    try std.testing.expect(app.to_workers.pop() == null);
+
+    try retryNow(app);
+    try std.testing.expect(app.model.runtime_link.phase == .connecting);
+    try std.testing.expect(app.to_background.pop().? == .runtime_connect);
 }

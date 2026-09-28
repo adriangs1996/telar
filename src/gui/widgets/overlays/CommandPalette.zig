@@ -215,6 +215,7 @@ fn machineRow(self: CommandPalette, slot: u8, storage: *[data.goto_picker.max_la
         .connected => if (machines.cpu_percent[slot]) |cpu| std.fmt.bufPrint(storage, "{d}% cpu", .{cpu}) catch "connected" else "connected",
         .connecting => "connecting",
         .lost => "unreachable · enter retries",
+        .failed => "failed · enter retries",
         .stopped => "disabled",
     };
     const destination = machines.destination(slot);
