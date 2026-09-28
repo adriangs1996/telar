@@ -135,8 +135,9 @@ pub fn mapPiTitle(buffer: *[core.max_agent_session_title_bytes]u8, input: PiHook
 /// Maps one event of the OpenCode plugin to a report. The plugin keeps the
 /// pane state OpenCode implies: a busy root session works, an open
 /// permission or question blocks, and an idle one is ready, including after
-/// an interrupt. Prompts and tool calls name themselves in `buffer`; the
-/// last plugin instance to be disposed reports the exit.
+/// an interrupt. Prompts and tool calls name themselves in `buffer`, but a
+/// tool call under an open prompt reports nothing; the last plugin instance
+/// to be disposed reports the exit.
 ///
 /// ```zig
 /// const report = mapOpenCodeHook(input, &buffer) orelse return;
@@ -164,6 +165,12 @@ pub fn mapOpenCodeHook(input: OpenCodeHookInput, buffer: *hook_event.Buffer) ?Re
     }
 
     if (std.mem.eql(u8, event, "tool.execute.before")) {
+        // A call that starts while another call's prompt is open leaves
+        // that prompt, and its event line, in place.
+        if (input.blocked != .none) {
+            return null;
+        }
+
         return .{
             .state = .working,
             .event = hook_event.toolCall(buffer, input.tool_name, input.tool_input) orelse "",
@@ -1277,4 +1284,28 @@ test "OpenCode bash calls open and close a command row with the exit status" {
         .exit_code = null,
     }) == null);
     try std.testing.expectEqualStrings("» read /work/proj/README.md", mapOpenCodeHook(.{ .event = "tool.execute.before", .tool_name = "read", .tool_input = read.value }, &buffer).?.event);
+}
+
+test "An OpenCode tool call that starts under an open prompt keeps the prompt" {
+    // OpenCode runs the calls of one step on their own, so a bash call can
+    // start while another call's permission waits for the user.
+    const source =
+        \\{"event":"tool.execute.before","session_id":"ses_f212e24b9ffeeaehDu3OFjSrh8","blocked":"permission","tool_name":"bash",
+        \\"tool_call_id":"call-2","tool_input":{"command":"git status"},"cwd":"/work/proj"}
+    ;
+    const parsed = try std.json.parseFromSlice(OpenCodeHookInput, std.testing.allocator, source, .{ .ignore_unknown_fields = true });
+    defer parsed.deinit();
+    var buffer: hook_event.Buffer = undefined;
+    try std.testing.expect(mapOpenCodeHook(parsed.value, &buffer) == null);
+
+    const started = mapToolCommand(.opencode, .{
+        .event = parsed.value.event,
+        .tool_name = parsed.value.tool_name,
+        .tool_call_id = parsed.value.tool_call_id,
+        .tool_input = parsed.value.tool_input,
+        .cwd = parsed.value.cwd,
+        .session = parsed.value.session_id,
+        .exit_code = parsed.value.exit_code,
+    }).?;
+    try std.testing.expectEqualStrings("git status", started.command);
 }

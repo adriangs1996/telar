@@ -160,12 +160,16 @@ export const TelarPlugin = async ({ directory }: { directory: string }) => {
   instances++;
   if (instances === 1) report("load");
 
+  // OpenCode runs each tool call of a step on its own and asks for
+  // permission inside the tool, so a call can start while another one's
+  // prompt is open; `blocked` tells the hook the prompt still stands.
   const reportTool = (event: string, input: { tool: string; sessionID: string; callID: string }, args: any, exit?: unknown) => {
     if (isChild(input.sessionID)) return;
     adopt(input.sessionID);
     send({
       event,
       session_id: root,
+      blocked: blockedReason(),
       tool_name: input.tool,
       tool_call_id: input.callID,
       tool_input: args,

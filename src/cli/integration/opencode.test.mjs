@@ -208,3 +208,20 @@ test("OpenCode reports the exit from the last disposed instance and waits for de
   assert.equal(f.children[1].payload.session_id, root);
   assert.equal(f.intervals.size, 0);
 });
+
+test("OpenCode keeps an open permission while another tool call of the turn starts", async () => {
+  const f = await fixture();
+  await f.hooks["chat.message"]({ sessionID: root });
+  await f.hooks["tool.execute.before"]({ tool: "bash", sessionID: root, callID: "call-1" }, { args: { command: "rm -rf build" } });
+  await f.event("permission.asked", { id: "per_1", sessionID: root, permission: "bash", metadata: { command: "rm -rf build" } });
+  // OpenCode runs each call of a step on its own, and asks inside the tool, after this hook.
+  await f.hooks["tool.execute.before"]({ tool: "read", sessionID: root, callID: "call-2" }, { args: { filePath: "/work/proj/README.md" } });
+  await f.event("permission.replied", { sessionID: root, requestID: "per_1", reply: "once" });
+  const [, first, asked, second, replied] = f.payloads();
+  assert.equal(first.blocked, undefined);
+  assert.equal(asked.blocked, "permission");
+  assert.equal(second.event, "tool.execute.before");
+  assert.equal(second.blocked, "permission");
+  assert.equal(replied.blocked, undefined);
+  assert.equal(replied.busy, true);
+});
