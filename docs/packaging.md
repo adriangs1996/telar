@@ -156,7 +156,7 @@ To publish a version:
 
 Every pull request and push to `main` runs [`ci.yml`](../.github/workflows/ci.yml):
 `zig build`, `zig build check` and `zig build test` on macOS arm64 and Linux
-x86_64, the headless linkage check, shellcheck on the release scripts and
+x86_64 with Node 22 for the integration scripts' `node --test`, the headless linkage check, shellcheck on the release scripts and
 the installer tests.
 
 ### Assets
