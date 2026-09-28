@@ -35,9 +35,8 @@ pub fn open(model: *RuntimeModel, session: *Session, request: core.OpenPaneView)
             error.GeometryUnavailable => client_request.fail(session, request.request_id, .resource_limit, "workspace geometry is leased by another client"),
             error.PaneLimitReached => client_request.fail(session, request.request_id, .resource_limit, "pane limit reached"),
             error.UnsupportedEnvironment => client_request.fail(session, request.request_id, .invalid_request, "custom pane environment is not supported"),
-            error.PaneSpawnFailed => client_request.fail(session, request.request_id, .spawn_failed, "could not start pane process"),
             error.PaneResizeFailed => client_request.fail(session, request.request_id, .internal, "could not resize pane"),
-            else => err,
+            else => if (pane_launch.spawnFailure(err)) |reason| client_request.fail(session, request.request_id, .spawn_failed, reason) else err,
         };
     };
 

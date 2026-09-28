@@ -47,6 +47,13 @@ pub fn launch(model: *RuntimeModel, request: LaunchRequest) !*Pane {
     return fresh;
 }
 
+/// What a client reads when a launch names a program the runtime cannot find.
+/// The runtime searches its own PATH, the environment it was started with.
+pub const program_not_found = "could not start the command: the program does not exist or is not on the runtime's PATH";
+pub const program_not_executable = "could not start the command: the program is not executable";
+pub const directory_unusable = "could not start the command: its working directory does not exist or cannot be entered";
+pub const spawn_failed = "could not start the command";
+
 /// Narrows a launch failure to the errors requests report to clients.
 ///
 /// ```zig
@@ -54,9 +61,30 @@ pub fn launch(model: *RuntimeModel, request: LaunchRequest) !*Pane {
 /// ```
 pub fn requestError(launch_error: anyerror) anyerror {
     return switch (launch_error) {
-        error.PaneLimitReached => error.PaneLimitReached,
-        error.UnsupportedEnvironment => error.UnsupportedEnvironment,
+        error.PaneLimitReached,
+        error.UnsupportedEnvironment,
+        error.ExecutableNotFound,
+        error.ExecutableAccessDenied,
+        error.InvalidExecutable,
+        error.InvalidWorkingDirectory,
+        => launch_error,
         else => error.PaneSpawnFailed,
+    };
+}
+
+/// The reason a request whose child could not start fails with, or null
+/// when `launch_error` is not about starting the child.
+///
+/// ```zig
+/// else => if (pane_launch.spawnFailure(err)) |reason| client_request.fail(session, id, .spawn_failed, reason) else err,
+/// ```
+pub fn spawnFailure(launch_error: anyerror) ?[]const u8 {
+    return switch (launch_error) {
+        error.ExecutableNotFound => program_not_found,
+        error.ExecutableAccessDenied, error.InvalidExecutable => program_not_executable,
+        error.InvalidWorkingDirectory => directory_unusable,
+        error.PaneSpawnFailed => spawn_failed,
+        else => null,
     };
 }
 

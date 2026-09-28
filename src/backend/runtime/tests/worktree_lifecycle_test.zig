@@ -3,7 +3,9 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const bytecodec = @import("bytecodec");
 const RequestFixture = @import("RequestFixture.zig");
+const pane_launch = @import("../pane_launch.zig");
 
 const request: core.RequestId = @enumFromInt(41);
 
@@ -107,6 +109,37 @@ test "a launch into a worktree the runtime does not track fails without a worksp
 
     try std.testing.expectError(error.LaunchFailed, launch(&fixture, @enumFromInt(7), ""));
     try std.testing.expectEqual(workspaces_before, fixture.runtime.model.workspaces.count);
+}
+
+test "a launch whose program the runtime cannot find says so" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const registered = try register(&fixture, try temporaryPath(&fixture, &path_buffer));
+
+    var argument_buffer: [64]u8 = undefined;
+    var encoder = bytecodec.Encoder.init(&argument_buffer);
+    try encoder.writeSized16("telar-test-missing-program");
+    try fixture.send(.{ .launch_worktree = .{
+        .request_id = request,
+        .worktree = registered.worktree,
+        .label = "",
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = .{
+            .cwd = "/",
+            .argument_count = 1,
+            .encoded_arguments = encoder.finish(),
+            .environment_mode = .inherit_runtime,
+            .environment_count = 0,
+            .encoded_environment = "",
+        },
+    } });
+
+    const response = fixture.response().?;
+    try std.testing.expect(response.* == .request_failed);
+    try std.testing.expectEqual(core.FailureCode.spawn_failed, response.request_failed.code);
+    try std.testing.expectEqualStrings(pane_launch.program_not_found, response.request_failed.message);
 }
 
 test "registration refuses a source workspace the runtime does not have" {

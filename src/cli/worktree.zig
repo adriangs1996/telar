@@ -37,10 +37,14 @@ pub fn run(init: std.process.Init, options: WorktreeOptions) !u8 {
     return execute(init, options, writer) catch |err| {
         writer.flush() catch {};
         std.debug.print("telar worktree: {s}\n", .{describe(err)});
-        return switch (err) {
-            error.WorktreeNotFound, error.WorkspaceNotFound, error.WorktreeHasNoWorkspace => agent.exit_not_found,
-            else => agent.exit_failure,
-        };
+        return exitStatus(err);
+    };
+}
+
+fn exitStatus(err: anyerror) u8 {
+    return switch (err) {
+        error.WorktreeNotFound, error.WorkspaceNotFound, error.WorktreeHasNoWorkspace => agent.exit_not_found,
+        else => agent.exit_failure,
     };
 }
 
@@ -73,7 +77,18 @@ fn execute(init: std.process.Init, options: WorktreeOptions, writer: *std.Io.Wri
         .writer = writer,
         .arena = arena.allocator(),
     };
-    return switch (options.action) {
+    return perform(init, command) catch |err| {
+        // The runtime's own words say what it refused; the error names only
+        // the kind of refusal. They borrow the session, so print them here.
+        const reason = session.failure_reason orelse return err;
+        writer.flush() catch {};
+        std.debug.print("telar worktree: {s}\n", .{reason});
+        return exitStatus(err);
+    };
+}
+
+fn perform(init: std.process.Init, command: Command) !u8 {
+    return switch (command.options.action) {
         .create => create(init, command),
         .exec => exec(init, command),
         .list => list(init, command),

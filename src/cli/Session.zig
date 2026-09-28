@@ -17,7 +17,9 @@ gpa: std.mem.Allocator,
 connection: localsocket.SocketChannel,
 receive_buffer: []u8,
 next_request: u64 = 1,
-review_failure: ?[]const u8 = null,
+/// The runtime's reason for the last refused request. It borrows the
+/// receive buffer and clears when the next message arrives.
+failure_reason: ?[]const u8 = null,
 
 /// Connects to the runtime named by the CLI socket option or the process
 /// environment, starting it when necessary.
@@ -138,17 +140,27 @@ fn receiveMessage(self: *Session) !core.ServerMessage {
 
 /// Waits for subscription traffic without an idle timeout. Example: `const event = try session.nextEvent();`
 pub fn nextEvent(self: *Session) !core.ServerMessage {
-    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    const response = try self.decodeNext();
     switch (response) {
-        .request_failed => |failure| return control.failureError(failure),
+        .request_failed => |failure| return self.refuse(failure),
         else => return response,
     }
+}
+
+fn decodeNext(self: *Session) !core.ServerMessage {
+    self.failure_reason = null;
+    return core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+}
+
+/// Keeps the runtime's reason for a refused request beside the error it maps to.
+fn refuse(self: *Session, failure: core.RequestFailed) control.ControlError {
+    self.failure_reason = failure.message;
+    return control.failureError(failure);
 }
 
 /// Reads one immutable edition; returned strings borrow the next receive buffer.
 /// Example: `const review = try session.fetchReview(pane, .{});`
 pub fn fetchReview(self: *Session, pane: PaneRef, selection: ReviewSelection) !core.ChangeReviewSnapshotView {
-    self.review_failure = null;
     const id = self.requestId();
     var buffer: [256]u8 = undefined;
     try self.connection.send(self.io, try core.encodeQueryChangeReview(&buffer, .{
@@ -164,7 +176,6 @@ pub fn fetchReview(self: *Session, pane: PaneRef, selection: ReviewSelection) !c
 /// Issues an explicit review action, replacing only its transport request ID.
 /// Example: `const review = try session.commandReview(command);`
 pub fn commandReview(self: *Session, command: core.ChangeReviewCommand) !core.ChangeReviewSnapshotView {
-    self.review_failure = null;
     var request = command;
     request.request_id = self.requestId();
     var buffer: [16 * 1024]u8 = undefined;
@@ -179,24 +190,21 @@ pub fn reportReviewSample(self: *Session, sample: core.ReportChangeReviewSample)
     request.request_id = self.requestId();
     var buffer: [32 * 1024]u8 = undefined;
     try self.connection.send(self.io, try core.encodeReportChangeReviewSample(&buffer, request));
-    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    const response = try self.decodeNext();
     switch (response) {
         .request_completed => |completed| if (completed.request_id != request.request_id) {
             return error.UnexpectedRuntimeResponse;
         },
-        .request_failed => |failure| return control.failureError(failure),
+        .request_failed => |failure| return self.refuse(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
 }
 
 fn receiveReview(self: *Session, id: core.RequestId) !core.ChangeReviewSnapshotView {
-    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    const response = try self.decodeNext();
     const review = switch (response) {
         .change_review_snapshot => |view| view,
-        .request_failed => |failure| {
-            self.review_failure = failure.message;
-            return control.failureError(failure);
-        },
+        .request_failed => |failure| return self.refuse(failure),
         else => return error.UnexpectedRuntimeResponse,
     };
     if (review.request_id != id) {
@@ -218,10 +226,10 @@ pub fn fetchAgents(self: *Session, snapshot: *Snapshot) !void {
         .request_id = self.requestId(),
     }));
 
-    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    const response = try self.decodeNext();
     const view = switch (response) {
         .agent_snapshot => |view| view,
-        .request_failed => |failure| return control.failureError(failure),
+        .request_failed => |failure| return self.refuse(failure),
         else => return error.UnexpectedRuntimeResponse,
     };
 
@@ -262,7 +270,7 @@ pub fn readPane(self: *Session, pane: PaneRef, options: ReadOptions) !Text {
     });
     return switch (response) {
         .pane_text => |text| .{ .pane_id = pane.pane_id, .truncated = text.truncated, .text = text.text, .exit_code = text.exit_code },
-        .request_failed => |failure| control.failureError(failure),
+        .request_failed => |failure| self.refuse(failure),
         else => error.UnexpectedRuntimeResponse,
     };
 }
@@ -283,10 +291,10 @@ pub fn sendText(self: *Session, pane: PaneRef, input: TextInput) !void {
         .sender = if (input.sender) |sender| try core.pane(sender) else null,
     }));
 
-    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    const response = try self.decodeNext();
     switch (response) {
         .request_completed => {},
-        .request_failed => |failure| return control.failureError(failure),
+        .request_failed => |failure| return self.refuse(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
 }
@@ -305,10 +313,10 @@ pub fn focusPane(self: *Session, pane: PaneRef, direction: core.PaneDirection) !
         .direction = direction,
     }));
 
-    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    const response = try self.decodeNext();
     return switch (response) {
         .pane_focus_result => |result| result,
-        .request_failed => |failure| control.failureError(failure),
+        .request_failed => |failure| self.refuse(failure),
         else => error.UnexpectedRuntimeResponse,
     };
 }
@@ -327,10 +335,10 @@ pub fn reportSession(self: *Session, pane: PaneRef, reference: []const u8) !void
         .session = reference,
     }));
 
-    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    const response = try self.decodeNext();
     switch (response) {
         .request_completed => {},
-        .request_failed => |failure| return control.failureError(failure),
+        .request_failed => |failure| return self.refuse(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
 }
@@ -356,10 +364,10 @@ pub fn reportAgent(self: *Session, pane: PaneRef, report: AgentReport) !void {
         .session_file_kind = report.session_file_kind,
     }));
 
-    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    const response = try self.decodeNext();
     switch (response) {
         .request_completed => {},
-        .request_failed => |failure| return control.failureError(failure),
+        .request_failed => |failure| return self.refuse(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
 }
@@ -384,10 +392,10 @@ pub fn reportAgentCommand(self: *Session, pane: PaneRef, command: AgentCommandRe
         .exit_code = command.exit_code,
     }));
 
-    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    const response = try self.decodeNext();
     switch (response) {
         .request_completed => {},
-        .request_failed => |failure| return control.failureError(failure),
+        .request_failed => |failure| return self.refuse(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
 }
@@ -406,10 +414,10 @@ pub fn reportAgentTitle(self: *Session, pane: PaneRef, title: []const u8) !void 
         .title = title,
     }));
 
-    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    const response = try self.decodeNext();
     switch (response) {
         .request_completed => {},
-        .request_failed => |failure| return control.failureError(failure),
+        .request_failed => |failure| return self.refuse(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
 }
@@ -432,10 +440,10 @@ pub fn createWorkspace(self: *Session, request: WorkspaceCreation) !u64 {
         .launch = .{ .cwd = request.cwd, .arguments = request.arguments },
     }));
 
-    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    const response = try self.decodeNext();
     switch (response) {
         .pane_opened => |opened| return core.raw(opened.location.workspace.workspace),
-        .request_failed => |failure| return control.failureError(failure),
+        .request_failed => |failure| return self.refuse(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
 }
@@ -468,7 +476,7 @@ pub fn registerWorktree(self: *Session, request: core.RegisterWorktree) !core.Wo
     const response = try self.exchange(core.encodeRegisterWorktree, request);
     return switch (response) {
         .worktree_registered => |registered| registered,
-        .request_failed => |failure| control.failureError(failure),
+        .request_failed => |failure| self.refuse(failure),
         else => error.UnexpectedRuntimeResponse,
     };
 }
@@ -482,7 +490,7 @@ pub fn launchWorktree(self: *Session, request: core.LaunchWorktree) !core.PaneOp
     const response = try self.exchange(core.encodeLaunchWorktree, request);
     return switch (response) {
         .pane_opened => |opened| opened,
-        .request_failed => |failure| control.failureError(failure),
+        .request_failed => |failure| self.refuse(failure),
         else => error.UnexpectedRuntimeResponse,
     };
 }
@@ -499,7 +507,7 @@ pub fn forgetWorktree(self: *Session, worktree: core.WorktreeId) !void {
     });
     return switch (response) {
         .request_completed => {},
-        .request_failed => |failure| control.failureError(failure),
+        .request_failed => |failure| self.refuse(failure),
         else => error.UnexpectedRuntimeResponse,
     };
 }
@@ -517,7 +525,7 @@ pub fn interruptAgent(self: *Session, pane: PaneRef) !void {
     });
     return switch (response) {
         .request_completed => {},
-        .request_failed => |failure| control.failureError(failure),
+        .request_failed => |failure| self.refuse(failure),
         else => error.UnexpectedRuntimeResponse,
     };
 }
@@ -531,7 +539,7 @@ pub fn reportProgress(self: *Session, report: core.ReportAgentProgress) !void {
     const response = try self.exchange(core.encodeReportAgentProgress, report);
     return switch (response) {
         .request_completed => {},
-        .request_failed => |failure| control.failureError(failure),
+        .request_failed => |failure| self.refuse(failure),
         else => error.UnexpectedRuntimeResponse,
     };
 }

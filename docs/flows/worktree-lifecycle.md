@@ -65,6 +65,12 @@ schema.forget_worktree -> worktree_lifecycle.forget
 worktree_git.remove, worktree_git.deleteBranch (git branch -d, or -D with --force)
 ```
 
+A launch the runtime cannot start fails with `spawn_failed` and a reason
+from `pane_launch.spawnFailure`: the program is not on the runtime's PATH,
+is not executable, or its directory cannot be entered. The CLI keeps the
+runtime's words (`Session.failure_reason`) and prints them instead of the
+error's kind.
+
 ## Naming a worktree
 
 `exec`, `open`, `diff` and `remove` take a reference: the worktree's exact
