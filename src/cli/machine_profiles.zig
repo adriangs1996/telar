@@ -1,6 +1,6 @@
 //! `telar machine …`: add, rename, enable, disable, remove, list and check
-//! the saved machines in `machines.json`. Every change replaces the file
-//! atomically; open windows follow it through their configuration watch.
+//! the saved machines in `machines.json`. Every change holds the file's lock,
+//! then replaces it atomically; open windows follow it through their watch.
 //! Removing or disabling a machine never touches its runtime.
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -22,7 +22,7 @@ const failure: u8 = 1;
 pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try profile_file.path(init.minimal.environ, &path_buffer);
-    var profiles = profile_file.load(init.io, init.gpa, path) catch |err| return report(init, err);
+    const profiles = profile_file.load(init.io, init.gpa, path) catch |err| return report(init, err);
 
     switch (options.action) {
         .list => return list(init, &profiles, options.json),
@@ -31,6 +31,8 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
             return check(init, &profiles.rows[row], options.json);
         },
         .add => {
+            // Refuses a bad field before the check, which can take seconds;
+            // the change itself is made again under the file's lock.
             const profile = machine_profiles.newProfile(init.io, &profiles, .{
                 .label = std.mem.span(options.label.?),
                 .destination = std.mem.span(options.value.?),
@@ -44,23 +46,25 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
                     return status;
                 }
             }
-
-            profiles.add(profile) catch |err| return report(init, err);
         },
-        .remove, .rename, .enable, .disable => machine_profiles.change(init.io, &profiles, .{
-            .kind = switch (options.action) {
-                .remove => .remove,
-                .rename => .rename,
-                .enable => .enable,
-                .disable => .disable,
-                else => unreachable,
-            },
-            .label = std.mem.span(options.label.?),
-            .value = if (options.value) |value| std.mem.span(value) else "",
-        }) catch |err| return report(init, err),
+        .remove, .rename, .enable, .disable => {},
     }
 
-    try profile_file.save(init.io, path, &profiles);
+    machine_profiles.store(init.io, init.gpa, path, .{
+        .kind = switch (options.action) {
+            .add => .add,
+            .remove => .remove,
+            .rename => .rename,
+            .enable => .enable,
+            .disable => .disable,
+            .list, .check => unreachable,
+        },
+        .label = std.mem.span(options.label.?),
+        .value = if (options.value) |value| std.mem.span(value) else "",
+        .color = if (options.color) |color| std.mem.span(color) else null,
+        .enabled = !options.disabled,
+    }) catch |err| return report(init, err);
+
     return 0;
 }
 

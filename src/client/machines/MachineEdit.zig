@@ -18,3 +18,5 @@ label: []const u8,
 value: []const u8 = "",
 /// The new machine's color, for `add` only.
 color: ?[]const u8 = null,
+/// Whether windows connect to the new machine, for `add` only.
+enabled: bool = true,
