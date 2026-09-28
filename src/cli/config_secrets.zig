@@ -22,6 +22,7 @@ const Kind = enum {
     webhook,
     token_prefix,
     private_key,
+    command_password,
 
     pub fn describe(self: Kind) []const u8 {
         return switch (self) {
@@ -31,6 +32,7 @@ const Kind = enum {
             .webhook => "a webhook URL, whose path is its key",
             .token_prefix => "a token of a well-known format",
             .private_key => "a private key",
+            .command_password => "a password on a command line",
         };
     }
 };
@@ -60,7 +62,12 @@ const secret_name_fragments = [_][]const u8{
     "authorization",
     "credential",
     "webhook",
+    "cookie",
 };
+
+/// Name endings that mark an assigned value as a secret: a whole header
+/// (`AUTH_HEADER=Basic …`) or an application key (`PUSHOVER_APP=…`).
+const secret_name_suffixes = [_][]const u8{ "_key", "-key", "_header", "-header", "_app", "-app" };
 
 /// Whole names that mark an assigned value as a secret.
 const secret_names = [_][]const u8{ "key", "auth", "pat", "pwd" };
@@ -77,6 +84,8 @@ const webhook_markers = [_][]const u8{
     "hooks.zapier.com/hooks/",
     "api.telegram.org/bot",
     "chat.googleapis.com/v1/spaces/",
+    // An ntfy topic has no password: whoever knows its name reads it.
+    "ntfy.sh/",
 };
 
 /// A token format recognized by its prefix and the characters after it.
@@ -104,6 +113,9 @@ const token_prefixes = [_]TokenPrefix{
     .{ .prefix = "AIza", .min_rest = 30 },
     .{ .prefix = "npm_", .min_rest = 30 },
     .{ .prefix = "pypi-", .min_rest = 30 },
+    .{ .prefix = "hf_", .min_rest = 30 },
+    .{ .prefix = "r8_", .min_rest = 30 },
+    .{ .prefix = "tvly-", .min_rest = 20 },
 };
 
 /// The first line of `bytes` that looks like it holds a secret.
@@ -147,6 +159,10 @@ fn findInLine(line: []const u8) ?Kind {
 
     if (urlCredentials(line)) {
         return .url_credentials;
+    }
+
+    if (commandPassword(line)) {
+        return .command_password;
     }
 
     if (assignment(line)) {
@@ -303,7 +319,47 @@ fn secretName(name: []const u8) bool {
         }
     }
 
-    return std.mem.endsWith(u8, lower, "_key") or std.mem.endsWith(u8, lower, "-key");
+    for (secret_name_suffixes) |suffix| {
+        if (std.mem.endsWith(u8, lower, suffix)) {
+            return true;
+        }
+    }
+
+    return std.mem.startsWith(u8, lower, "auth_") or std.mem.startsWith(u8, lower, "auth-");
+}
+
+// `curl -u user:password`, `--user user:password`, and MySQL's or
+// MariaDB's password glued to `-p` (`mysql -phunter2`).
+fn commandPassword(line: []const u8) bool {
+    const database = std.ascii.indexOfIgnoreCase(line, "mysql") != null or std.ascii.indexOfIgnoreCase(line, "mariadb") != null;
+    var words = std.mem.tokenizeAny(u8, line, " \t");
+    var after_user = false;
+    while (words.next()) |raw| {
+        const word = std.mem.trim(u8, raw, "\"'");
+        if (after_user) {
+            after_user = false;
+            if (userPassword(word)) {
+                return true;
+            }
+        }
+
+        if (std.mem.eql(u8, word, "-u") or std.mem.eql(u8, word, "--user")) {
+            after_user = true;
+        } else if (std.mem.startsWith(u8, word, "--user=") and userPassword(word["--user=".len..])) {
+            return true;
+        } else if (database and std.mem.startsWith(u8, word, "-p") and word.len > "-p".len and !placeholder(word["-p".len])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// `user:password` with a password written out.
+fn userPassword(word: []const u8) bool {
+    const colon = std.mem.indexOfScalar(u8, word, ':') orelse return false;
+    const password = word[colon + 1 ..];
+    return password.len != 0 and !placeholder(password[0]);
 }
 
 // A count of tokens (`max_tokens = 4096`) is a number; any other secret
@@ -392,6 +448,17 @@ test "the auditor's inline secrets are found" {
         .{ .text = "-----BEGIN OPENSSH PRIVATE KEY-----", .kind = .private_key },
         .{ .text = "SLACK=xoxb-1234567890-abcdef", .kind = .token_prefix },
         .{ .text = "key = \"AKIAABCDEFGHIJKLMNOP\"", .kind = .token_prefix },
+        .{ .text = "curl -u admin:hunter22 https://api.example.com", .kind = .command_password },
+        .{ .text = "curl --user 'admin:hunter22' https://api.example.com", .kind = .command_password },
+        .{ .text = "mysql -u root -phunter2 app", .kind = .command_password },
+        .{ .text = "curl -H 'Cookie: session=abc123' https://x", .kind = .assignment },
+        .{ .text = "AUTH_HEADER=Basic Zm9vOmJhcg== ./send", .kind = .assignment },
+        .{ .text = "PUSHOVER_APP=azGDORePK8gMaC0QOYAMyEEuzJnyUi", .kind = .assignment },
+        .{ .text = "SLACK_HEADER=xyz-value", .kind = .assignment },
+        .{ .text = "export HF=hf_abcdefghijklmnopqrstuvwxyzABCDEFGH", .kind = .token_prefix },
+        .{ .text = "REPLICATE=r8_abcdefghijklmnopqrstuvwxyz0123456789", .kind = .token_prefix },
+        .{ .text = "tavily tvly-dev-abcdefghijklmnopqrstuvwxyz", .kind = .token_prefix },
+        .{ .text = "curl -d done https://ntfy.sh/adrian-private-topic-x7q", .kind = .webhook },
     };
 
     for (cases) |case| {
@@ -418,6 +485,11 @@ test "references, numbers and plain prose are not secrets" {
         "\"command\": \"/home/dev/.claude/hooks/notify.sh\"",
         "keybindings: vim",
         "a == b",
+        "curl -u \"$USER:$PASS\" https://x",
+        "mysql -p app",
+        "mysql -p$MYSQL_PASSWORD app",
+        "mkdir -p ~/.claude/hooks",
+        "ssh -p22 dev@box",
     }) |text| {
         if (find(text)) |finding| {
             std.debug.print("false positive ({s}): {s}\n", .{ @tagName(finding.kind), text });

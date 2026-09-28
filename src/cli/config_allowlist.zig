@@ -115,6 +115,8 @@ const credential_names = [_][]const u8{
     ".git-credentials",
     "hosts.yml",
     "models.json",
+    "keys.json",
+    "sa.json",
 };
 
 /// Fragments of a file name, in any case, that mark it as a credential:
@@ -123,6 +125,25 @@ const credential_fragments = [_][]const u8{ "credential", "secret", "token", "pa
 
 /// Extensions of key and certificate files.
 const credential_extensions = [_][]const u8{ ".pem", ".key", ".p12", ".pfx", ".keychain", ".keychain-db" };
+
+/// Extensions of session transcripts, history, databases and logs.
+const session_extensions = [_][]const u8{ ".jsonl", ".db", ".sqlite", ".sqlite3", ".log" };
+
+/// Directories right under an agent's directory where it keeps sessions,
+/// transcripts, history, caches, logs and plans. None is allowlisted, but a
+/// hook may name a file in one; it is never sent.
+const session_directories = [_][]const u8{
+    "projects",
+    "sessions",
+    "history",
+    "todos",
+    "shell-snapshots",
+    "file-history",
+    "statsig",
+    "logs",
+    "cache",
+    "plans",
+};
 
 /// Directories no synced path may lead into, even through a symlink.
 const credential_directories = [_][]const u8{
@@ -137,9 +158,10 @@ const credential_directories = [_][]const u8{
 };
 
 /// Whether a path, here or where a symlink leads, may never leave this
-/// machine: a credential file by name or by a word in its name, a key by
-/// extension, anything under a credential directory, an `.env` file or an
-/// SSH key.
+/// machine: a credential file by name or by a word in its name, a key or a
+/// session store by extension, anything under a credential directory, an
+/// `.env` file or an SSH key. Names are compared without case, as macOS
+/// finds `Auth.json` for `auth.json`.
 ///
 /// ```zig
 /// if (config_allowlist.denied("/home/dev/.codex/auth.json")) continue;
@@ -148,7 +170,7 @@ pub fn denied(path: []const u8) bool {
     var components = std.mem.splitScalar(u8, path, '/');
     while (components.next()) |component| {
         for (credential_directories) |directory| {
-            if (std.mem.eql(u8, component, directory)) {
+            if (std.ascii.eqlIgnoreCase(component, directory)) {
                 return true;
             }
         }
@@ -156,12 +178,12 @@ pub fn denied(path: []const u8) bool {
 
     const name = std.fs.path.basename(path);
     for (credential_names) |credential| {
-        if (std.mem.eql(u8, name, credential)) {
+        if (std.ascii.eqlIgnoreCase(name, credential)) {
             return true;
         }
     }
 
-    for (credential_extensions) |extension| {
+    for (credential_extensions ++ session_extensions) |extension| {
         if (std.ascii.endsWithIgnoreCase(name, extension)) {
             return true;
         }
@@ -173,9 +195,9 @@ pub fn denied(path: []const u8) bool {
         }
     }
 
-    return std.mem.eql(u8, name, ".env") or std.mem.startsWith(u8, name, ".env.") or std.ascii.endsWithIgnoreCase(name, ".env") or
-        std.mem.startsWith(u8, name, "id_rsa") or std.mem.startsWith(u8, name, "id_ed25519") or
-        std.mem.startsWith(u8, name, "id_ecdsa") or std.mem.startsWith(u8, name, "id_dsa");
+    return std.ascii.eqlIgnoreCase(name, ".env") or std.ascii.startsWithIgnoreCase(name, ".env.") or std.ascii.endsWithIgnoreCase(name, ".env") or
+        std.ascii.startsWithIgnoreCase(name, "id_rsa") or std.ascii.startsWithIgnoreCase(name, "id_ed25519") or
+        std.ascii.startsWithIgnoreCase(name, "id_ecdsa") or std.ascii.startsWithIgnoreCase(name, "id_dsa");
 }
 
 /// Whether `relative`, a path under an agent's directory, is a file telar's
@@ -192,7 +214,8 @@ pub fn telarOwned(relative: []const u8) bool {
 
 /// Whether the machine may write `relative`, a path under its home: it lies
 /// under an accepted root, has no empty, `.` or `..` component, no hidden
-/// component below the root, no control byte, and is not denied.
+/// component below the root, is not in one of an agent's session stores, has
+/// no control byte, and is not denied.
 ///
 /// ```zig
 /// if (!config_allowlist.acceptable(".claude/settings.json")) return error.RefusedPath;
@@ -214,6 +237,14 @@ pub fn acceptable(relative: []const u8) bool {
         }
 
         var components = std.mem.splitScalar(u8, relative[root.len..], '/');
+        const first = components.first();
+        for (session_directories) |directory| {
+            if (std.ascii.eqlIgnoreCase(first, directory)) {
+                return false;
+            }
+        }
+
+        components.reset();
         while (components.next()) |component| {
             if (component.len == 0 or component[0] == '.') {
                 return false;
@@ -254,6 +285,12 @@ test "every known credential file is denied" {
         "/Users/a/.claude/skills/deploy/secrets.env",
         "/Users/a/.claude/skills/deploy/token.txt",
         "/Users/a/.claude/skills/deploy/GitHub-Token.md",
+        "/Users/a/.codex/Auth.json",
+        "/Users/a/.SSH/config",
+        "/Users/a/.claude/skills/x/KEYS.json",
+        "/Users/a/.claude/skills/x/sa.json",
+        "/Users/a/.claude/history.jsonl",
+        "/Users/a/.claude/skills/x/state.sqlite",
     };
 
     for (credentials) |path| {
@@ -293,6 +330,10 @@ test "the machine accepts only paths under the agents' directories" {
         ".claude.json",
         ".claude/skills/x\x1b[2J",
         ".local/share/opencode/auth.json",
+        ".claude/projects/-Users-a/notes.md",
+        ".codex/sessions/2026/summary.md",
+        ".claude/todos/list.md",
+        ".pi/agent/sessions/x.md",
     }) |path| {
         try std.testing.expect(!acceptable(path));
     }

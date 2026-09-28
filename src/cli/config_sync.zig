@@ -982,3 +982,36 @@ test "a file that is not valid JSON first in the list is left out without overfl
     try std.testing.expectEqualStrings(".claude/CLAUDE.md", staged.staging.files.items[0].remote_path);
     try std.testing.expectEqual(@as(usize, 2), staged.staging.left.items.len);
 }
+
+test "a hook never brings a session, history or project file along" {
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    const io = std.testing.io;
+    var home_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const home = home_buffer[0..try temp.dir.realPath(io, &home_buffer)];
+    try temp.dir.createDirPath(io, ".claude/projects/-Users-a");
+    try temp.dir.createDirPath(io, ".claude/hooks");
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/history.jsonl", .data = "PLANTED-history" });
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/projects/-Users-a/notes.md", .data = "PLANTED-project" });
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/hooks/log.sh", .data = "#!/bin/sh\n" });
+    const settings = try std.fmt.allocPrint(std.testing.allocator,
+        \\{{"hooks":{{"Stop":[{{"hooks":[{{"type":"command","command":"{s}/.claude/hooks/log.sh {s}/.claude/history.jsonl ~/.claude/projects/-Users-a/notes.md"}}]}}]}}}}
+    , .{ home, home });
+    defer std.testing.allocator.free(settings);
+    try temp.dir.writeFile(io, .{ .sub_path = ".claude/settings.json", .data = settings });
+
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    var environment: std.process.Environ.Map = .init(std.testing.allocator);
+    defer environment.deinit();
+    try environment.put("HOME", home);
+
+    const staged = try stageForTest(arena_state.allocator(), home, &environment);
+    try std.testing.expect(std.mem.indexOf(u8, staged.stream, "PLANTED") == null);
+    try std.testing.expect(std.mem.indexOf(u8, staged.stream, "file 644 10 .claude/hooks/log.sh") != null);
+    for (staged.staging.files.items) |*file| {
+        try std.testing.expect(std.mem.indexOf(u8, file.remote_path, "history") == null);
+        try std.testing.expect(std.mem.indexOf(u8, file.remote_path, "projects") == null);
+    }
+}

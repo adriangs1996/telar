@@ -69,7 +69,12 @@ the card keeps its end, where the domain that owns it is. A window takes
 links only from this machine's runtime: a notification from a remote
 machine's runtime arrives without its link, so a process on another machine
 cannot put a page of its choosing one click away in this machine's browser.
-Setup announces a login through the local runtime for that reason. `--socket PATH` selects an explicit runtime; otherwise
+Setup announces a login through the local runtime for that reason.
+"Remote" means a connection the client made over SSH itself (`--remote`, a
+saved machine). A connection it believes local, or one with no machine,
+keeps its links even when its socket is forwarded from another machine by
+hand (`ssh -L` to a local path, then `--socket`): the client cannot tell,
+so whoever forwards a runtime also trusts the links its processes send. `--socket PATH` selects an explicit runtime; otherwise
 the normal `TELAR_SOCKET` and managed-runtime resolution applies.
 
 The command exits successfully only when at least one UI client accepted the

@@ -187,8 +187,13 @@ Keychain, session and history stores, caches, logs, databases, and any file
 whose name or resolved target is in the credential denylist (the files of
 [Agent facts](#agent-facts) marked secret, plus `~/.claude.json`, `~/.ssh`,
 `~/.gnupg`, `~/.aws`, `~/.netrc`, `~/.npmrc`, `~/.pgpass`, `~/.vault-token`,
-the GitHub CLI's `hosts.yml`, `*.pem`, `*.key`, `.env*`, `*.env`, and any
-name holding `credential`, `secret`, `token`, `password` or `passwd`).
+the GitHub CLI's `hosts.yml`, `keys.json`, `sa.json`, `*.pem`, `*.key`,
+`.env*`, `*.env`, and any name holding `credential`, `secret`, `token`,
+`password` or `passwd`), compared without case. Session stores are never
+synced either, even when a hook names a file in one: `*.jsonl`, `*.db`,
+`*.sqlite`, `*.sqlite3`, `*.log`, and anything under an agent's
+`projects/`, `sessions/`, `history/`, `todos/`, `shell-snapshots/`,
+`file-history/`, `statsig/`, `logs/`, `cache/` or `plans/`.
 
 Symlinks never lead out of an agent's directory. The sync reads under one
 root per agent (`~/.claude`, `~/.codex`, …, and `~/.agents/skills`), and
@@ -204,11 +209,14 @@ since its other name could be any file. Depth is bounded, so a cycle ends.
 Secrets written inline are held back. After filtering, every file's bytes
 are scanned (`config_secrets`) for the shapes secrets are written in: an
 assignment or header whose name says secret (`TOKEN=…`, `x-api-key: …`,
-`GITHUB_PERSONAL_ACCESS_TOKEN: …` in a subagent's frontmatter), `Bearer`
-tokens, a password inside a URL, webhook URLs whose path is their key
-(Slack, Discord, Teams, Zapier, Telegram, Google Chat), the prefixes of
-well-known tokens (`ghp_`, `github_pat_`, `sk-`, `xoxb-`, `AKIA`, …) and
-private key blocks. A file with a finding stays here, whole, and the report
+`Cookie: …`, `AUTH_HEADER=Basic …`, `PUSHOVER_APP=…`, names ending in
+`_KEY`, `_HEADER` or `_APP`, `GITHUB_PERSONAL_ACCESS_TOKEN: …` in a
+subagent's frontmatter), `Bearer` tokens, a password inside a URL or on a
+command line (`curl -u user:password`, `mysql -ppassword`), webhook URLs
+whose path is their key (Slack, Discord, Teams, Zapier, Telegram, Google
+Chat, ntfy.sh topics), the prefixes of well-known tokens (`ghp_`,
+`github_pat_`, `sk-`, `xoxb-`, `AKIA`, `hf_`, `r8_`, `tvly-`, …) and private
+key blocks. A file with a finding stays here, whole, and the report
 names it with the line and the shape, never the value, so the person can
 move the secret into a variable (`TOKEN=$(…)`, `$TOKEN`), which the scan
 leaves alone, and sync again. A settings file whose hook holds a secret is
