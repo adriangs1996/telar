@@ -257,20 +257,17 @@ fn parseFacts(listing: []const u8, facts: *RepositoryFacts) ?void {
 
         const key_end = std.mem.indexOfScalar(u8, entry, '\n') orelse entry.len;
         const key = entry[0..key_end];
-        const value = if (key_end < entry.len) entry[key_end + 1 ..] else "";
         if (std.mem.eql(u8, key, "extensions.partialclone")) {
             facts.partial_clone = true;
             continue;
         }
 
-        if (std.mem.startsWith(u8, key, "remote.") and std.mem.endsWith(u8, key, ".promisor")) {
-            facts.partial_clone = facts.partial_clone or configTrue(value);
-            continue;
-        }
-
-        // A filter makes its remote a promisor even without `promisor`.
-        if (std.mem.startsWith(u8, key, "remote.") and std.mem.endsWith(u8, key, ".partialclonefilter")) {
-            facts.partial_clone = facts.partial_clone or std.mem.trim(u8, value, " \t").len != 0;
+        // Presence alone counts, whatever the value: Git reads any non-zero
+        // integer (`2`, `1k`) as true, and an empty filter still makes its
+        // remote a promisor.
+        const promisor = std.mem.endsWith(u8, key, ".promisor") or std.mem.endsWith(u8, key, ".partialclonefilter");
+        if (std.mem.startsWith(u8, key, "remote.") and promisor) {
+            facts.partial_clone = true;
             continue;
         }
 
@@ -309,17 +306,6 @@ fn addDriver(key: []const u8, facts: *RepositoryFacts) ?void {
 
     facts.drivers[facts.driver_count] = name;
     facts.driver_count += 1;
-}
-
-fn configTrue(value: []const u8) bool {
-    const trimmed = std.mem.trim(u8, value, " \t");
-    for ([_][]const u8{ "true", "yes", "on", "1" }) |word| {
-        if (std.ascii.eqlIgnoreCase(trimmed, word)) {
-            return true;
-        }
-    }
-
-    return trimmed.len == 0;
 }
 
 /// Whether this Git honours `GIT_NO_LAZY_FETCH`.
@@ -402,6 +388,19 @@ test "the repository's own config names its drivers and whether it is a partial 
     var filtered: RepositoryFacts = .{};
     parseFacts("local\x00remote.origin.partialclonefilter\nblob:none\x00", &filtered).?;
     try std.testing.expect(filtered.partial_clone);
+
+    // Git reads any non-zero integer, suffixed or not, as true, and an
+    // empty filter still makes a promisor: presence alone counts.
+    for ([_][]const u8{
+        "local\x00remote.origin.partialclonefilter\n\x00",
+        "local\x00remote.origin.promisor\n2\x00",
+        "local\x00remote.origin.promisor\n1k\x00",
+        "local\x00remote.origin.promisor\nfalse\x00",
+    }) |present_listing| {
+        var present: RepositoryFacts = .{};
+        parseFacts(present_listing, &present).?;
+        try std.testing.expect(present.partial_clone);
+    }
 
     var upload: RepositoryFacts = .{};
     parseFacts("local\x00remote.origin.uploadpack\n/tmp/marker\x00", &upload).?;

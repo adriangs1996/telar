@@ -63,7 +63,7 @@ through `gitstatus.untrusted_git`:
 | hooks, from the hooks directory or config (`hook.<name>.command` with `hook.<name>.event`) | `-c hook.<event>.enabled=false` for every event `githooks(5)` lists, `-c core.hooksPath=/dev/null`, `GIT_OPTIONAL_LOCKS=0` |
 | filter drivers (`clean`, `process`) from `.gitattributes` or `.git/info/attributes`, including `[filter ""]` | `-c filter.<name>.clean=` (and `smudge`, `process`) for every driver the repository's own config defines, listed by `git config --show-scope`; more than 8, or a name `-c` cannot carry, and nothing runs |
 | `diff.external`, a diff driver's `textconv` | `--no-ext-diff --no-textconv` |
-| a partial clone's lazy fetch (`uploadpack`, `core.sshCommand`) | `GIT_NO_LAZY_FETCH=1`; with a Git older than 2.45, which ignores it, a repository that is a partial clone (`remote.*.promisor`, `remote.*.partialclonefilter` alone, `extensions.partialClone`) or names a `remote.*.uploadpack` of its own is not measured |
+| a partial clone's lazy fetch (`uploadpack`, `core.sshCommand`) | `GIT_NO_LAZY_FETCH=1`; with a Git older than 2.45, which ignores it, a repository that is a partial clone (`remote.*.promisor` or `remote.*.partialclonefilter` present with any value, `extensions.partialClone`) or names a `remote.*.uploadpack` of its own is not measured |
 | submodules | `--ignore-submodules=all` |
 | `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` and every other `GIT_*` variable of the runtime's environment | removed from the child's environment |
 
