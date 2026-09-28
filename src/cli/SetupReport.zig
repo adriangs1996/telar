@@ -41,6 +41,8 @@ pub const Status = enum { ok, changed, skipped, failed, pending };
 const step_count = @typeInfo(Step).@"enum".fields.len;
 /// The longest detail or note kept, in bytes.
 const max_text_bytes = 512;
+/// The longest progress line, in bytes: room for a login link.
+const max_progress_bytes = 2048;
 const max_notes = 96;
 
 const Note = struct {
@@ -87,6 +89,8 @@ pub fn end(self: *SetupReport, step: Step, status: Status, comptime format: []co
 }
 
 /// Says what a long step is doing now, in text mode only; nothing is kept.
+/// Like a detail it is one line without control bytes, since it may quote
+/// what a machine printed, but long enough for a login link.
 ///
 /// ```zig
 /// try report.progress("installing {s} there", .{"codex"});
@@ -96,9 +100,8 @@ pub fn progress(self: *SetupReport, comptime format: []const u8, arguments: anyt
         return;
     }
 
-    try self.writer.writeAll("    ... ");
-    try self.writer.print(format, arguments);
-    try self.writer.writeByte('\n');
+    var buffer: [max_progress_bytes]u8 = undefined;
+    try self.writer.print("    ... {s}\n", .{bounded(&buffer, format, arguments)});
     try self.writer.flush();
 }
 
@@ -153,7 +156,19 @@ pub fn changed(self: *const SetupReport) bool {
     return false;
 }
 
-/// Ends the report: a closing line, or the whole JSON object.
+/// Whether a step, a login, still waits for the person.
+pub fn pending(self: *const SetupReport) bool {
+    for (self.status) |status| {
+        if (status == .pending) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/// Ends the report: a closing line, or the whole JSON object. A machine is
+/// ready when no step failed and none waits for the person.
 ///
 /// ```zig
 /// try report.finish("box", "dev@box");
@@ -162,6 +177,8 @@ pub fn finish(self: *SetupReport, label: []const u8, destination: []const u8) !v
     if (!self.json) {
         const verdict = if (self.failed())
             "is not ready; see the failed steps above"
+        else if (self.pending())
+            "takes windows, but a login waits for you there; see Logins above and run setup again once it is done"
         else if (self.changed())
             "is ready"
         else
@@ -175,7 +192,7 @@ pub fn finish(self: *SetupReport, label: []const u8, destination: []const u8) !v
     try control.writeJsonString(self.writer, label);
     try self.writer.writeAll(",\"destination\":");
     try control.writeJsonString(self.writer, destination);
-    try self.writer.print(",\"ready\":{},\"changed\":{},\"steps\":[", .{ !self.failed(), self.changed() });
+    try self.writer.print(",\"ready\":{},\"pending\":{},\"changed\":{},\"steps\":[", .{ !self.failed() and !self.pending(), self.pending(), self.changed() });
     var first = true;
     for (self.status, 0..) |maybe_status, index| {
         const status = maybe_status orelse continue;
@@ -209,14 +226,15 @@ pub fn finish(self: *SetupReport, label: []const u8, destination: []const u8) !v
     try self.writer.flush();
 }
 
-// Formats into `buffer`, cutting what does not fit and anything past the
-// first line break, so one step stays one line.
-fn bounded(buffer: *[max_text_bytes]u8, comptime format: []const u8, arguments: anytype) []const u8 {
+// Formats into `buffer`, cutting what does not fit, and turns every control
+// byte into a space, so one step stays one line and nothing a machine
+// printed can move the cursor or recolor the terminal.
+fn bounded(buffer: []u8, comptime format: []const u8, arguments: anytype) []const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
     writer.print(format, arguments) catch {};
     const text = writer.buffered();
     for (text) |*byte| {
-        if (byte.* < 0x20 and byte.* != '\t') {
+        if ((byte.* < 0x20 and byte.* != '\t') or byte.* == 0x7f) {
             byte.* = ' ';
         }
     }
@@ -252,9 +270,35 @@ test "json mode writes one object with every step and its notes" {
     try report.finish("box", "dev@box");
 
     try std.testing.expectEqualStrings(
-        "{\"label\":\"box\",\"destination\":\"dev@box\",\"ready\":false,\"changed\":false,\"steps\":[" ++
+        "{\"label\":\"box\",\"destination\":\"dev@box\",\"ready\":false,\"pending\":false,\"changed\":false,\"steps\":[" ++
             "{\"step\":\"ssh\",\"status\":\"ok\",\"detail\":\"batch mode works\",\"notes\":[]}," ++
             "{\"step\":\"check\",\"status\":\"failed\",\"detail\":\"schema differs\",\"notes\":[\"run \\\"setup\\\" again\"]}]}\n",
         writer.buffered(),
     );
+}
+
+test "a login still waiting is neither ready nor nothing changed" {
+    var buffer: [1024]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+    var report: SetupReport = .{ .json = false, .writer = &writer };
+    try report.end(.ssh, .ok, "batch mode works", .{});
+    try report.end(.logins, .pending, "a login waits for you", .{});
+    try report.finish("box", "dev@box");
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "nothing changed") == null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "box takes windows, but a login waits for you") != null);
+
+    var json_buffer: [1024]u8 = undefined;
+    var json_writer: std.Io.Writer = .fixed(&json_buffer);
+    var json: SetupReport = .{ .json = true, .writer = &json_writer };
+    try json.end(.logins, .pending, "a login waits for you", .{});
+    try json.finish("box", "dev@box");
+    try std.testing.expect(std.mem.indexOf(u8, json_writer.buffered(), "\"ready\":false,\"pending\":true") != null);
+}
+
+test "progress keeps what a machine printed to one line without control bytes" {
+    var buffer: [256]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+    var report: SetupReport = .{ .json = false, .writer = &writer };
+    try report.progress("link: {s}", .{"https://x\x1b]52;c;AAAA\x07\nnext\x7f"});
+    try std.testing.expectEqualStrings("    ... link: https://x ]52;c;AAAA  next\n", writer.buffered());
 }
