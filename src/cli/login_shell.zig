@@ -29,7 +29,7 @@ pub fn relaunch(init: std.process.Init, args: []const [*:0]const u8) !void {
 
     var argv: [pty.command_support.max_args + 6][]const u8 = undefined;
     var argc: usize = 0;
-    for ([_][]const u8{ shell, "-l", "-c", command(shell), executable, "gui" }) |arg| {
+    for ([_][]const u8{ shell, "-l", "-c", pty.login_shell.script(shell), executable, "gui" }) |arg| {
         argv[argc] = arg;
         argc += 1;
     }
@@ -69,21 +69,6 @@ pub fn loginShell(environ: std.process.Environ) []const u8 {
     }
 
     return "/bin/sh";
-}
-
-/// The one-liner each shell family runs: fish has no `$0`, POSIX has no `$argv`.
-pub fn command(shell: []const u8) []const u8 {
-    if (std.mem.eql(u8, std.fs.path.basename(shell), "fish")) {
-        return "exec $argv";
-    }
-
-    return "exec \"$0\" \"$@\"";
-}
-
-test "posix shells exec through positional parameters and fish through argv" {
-    try std.testing.expectEqualStrings("exec \"$0\" \"$@\"", command("/bin/zsh"));
-    try std.testing.expectEqualStrings("exec \"$0\" \"$@\"", command("/usr/bin/bash"));
-    try std.testing.expectEqualStrings("exec $argv", command("/opt/homebrew/bin/fish"));
 }
 
 test "an empty SHELL falls back instead of executing nothing" {

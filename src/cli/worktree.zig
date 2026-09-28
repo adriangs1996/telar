@@ -5,6 +5,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const pty = @import("pty");
 const WorktreeOptions = @import("arguments/WorktreeOptions.zig");
 const Session = @import("Session.zig");
 const Snapshot = @import("Snapshot.zig");
@@ -18,10 +19,17 @@ const CatalogWorktree = @import("CatalogWorktree.zig");
 const machine_dispatch = @import("machine_dispatch.zig");
 const worktree_dispatch = @import("worktree_dispatch.zig");
 const workspace_grammar = @import("arguments/workspace.zig");
+const login_shell = @import("login_shell.zig");
 
 /// Size of a pane launched before any UI sized it; a UI resizes it on view.
 const launch_size: core.TerminalSize = .{ .cols = 160, .rows = 48 };
 const wait_poll_ms = 250;
+/// Most arguments a launch carries: the command and the login shell around it.
+const max_launch_arguments = WorktreeOptions.max_command_arguments + pty.login_shell.wrapper_len;
+
+comptime {
+    std.debug.assert(max_launch_arguments <= core.max_argument_count);
+}
 
 /// Runs one worktree command and returns the process exit code.
 ///
@@ -158,12 +166,13 @@ fn create(init: std.process.Init, command: Command) !u8 {
         .dispatched_from = if (options.dispatched_from) |label| std.mem.span(label) else "",
     });
 
-    const shell = [_][]const u8{shellArgument(init.minimal.environ)};
+    const shell = [_][]const u8{login_shell.loginShell(init.minimal.environ)};
+    var launch_storage: [max_launch_arguments][]const u8 = undefined;
     const opened = try launch(command.session, .{
         .worktree = registered.worktree,
         .directory = checkout,
         .label = if (options.label) |label| std.mem.span(label) else "",
-        .argv = if (argv.len == 0) &shell else argv,
+        .argv = if (argv.len == 0) &shell else try userCommand(init.minimal.environ, argv, &launch_storage),
     });
 
     try writeLaunch(command.writer, .{
@@ -179,11 +188,12 @@ fn create(init: std.process.Init, command: Command) !u8 {
 fn exec(init: std.process.Init, command: Command) !u8 {
     const worktree = try findOrAdopt(init, command);
     var argv_storage: [WorktreeOptions.max_command_arguments][]const u8 = undefined;
+    var launch_storage: [max_launch_arguments][]const u8 = undefined;
     const opened = try launch(command.session, .{
         .worktree = worktree.id,
         .directory = worktree.path,
         .label = if (command.options.label) |label| std.mem.span(label) else "",
-        .argv = command.options.argv(&argv_storage),
+        .argv = try userCommand(init.minimal.environ, command.options.argv(&argv_storage), &launch_storage),
     });
 
     if (command.options.wait) {
@@ -587,7 +597,7 @@ fn sourceWorkspace(init: std.process.Init, command: Command, root: []const u8) !
     return creator.createWorkspace(.{
         .name = std.fs.path.basename(root),
         .cwd = root,
-        .arguments = &.{shellArgument(init.minimal.environ)},
+        .arguments = &.{login_shell.loginShell(init.minimal.environ)},
     });
 }
 
@@ -826,9 +836,13 @@ fn copyInto(buffer: []u8, value: []const u8) ![]const u8 {
     return buffer[0..value.len];
 }
 
-fn shellArgument(environ: std.process.Environ) []const u8 {
-    const configured = environ.getPosix("SHELL") orelse return "/bin/sh";
-    return if (configured.len == 0) "/bin/sh" else configured;
+/// A worktree's command sees what a shell in one of its panes sees: it runs
+/// through the user's interactive login shell, whose rc files may add to
+/// PATH, and replaces it. Its arguments are the shell's positional
+/// parameters, never shell code, and its exit status is the pane's. What
+/// the rc files print before the command starts lands in the pane too.
+fn userCommand(environ: std.process.Environ, argv: []const []const u8, storage: *[max_launch_arguments][]const u8) ![]const []const u8 {
+    return pty.login_shell.wrap(login_shell.loginShell(environ), argv, storage);
 }
 
 fn describe(err: anyerror) []const u8 {

@@ -5,6 +5,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const pty = @import("pty");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const Pane = @import("../pane/Pane.zig");
@@ -223,8 +224,10 @@ fn addTab(model: *RuntimeModel, session: *Session, tab: TabLaunch) !core.PaneOpe
 }
 
 fn startCommand(model: *RuntimeModel, slot: usize, pane: *Pane, request: core.LaunchWorktreeView) void {
+    // The CLI runs a worktree's command through the user's login shell; the
+    // row names the command, not the shell.
     var arguments = request.launch.arguments();
-    const program = (arguments.next() catch null) orelse "";
+    const program = pty.login_shell.program(&arguments) orelse "";
     model.worktrees.startCommand(slot, pane.id, commandLabel(program));
     announce(model);
 }

@@ -8,6 +8,7 @@ pub const Session = @import("Session.zig");
 pub const Size = @import("Size.zig");
 pub const command_support = @import("command_support.zig");
 pub const exit = @import("exit.zig");
+pub const login_shell = @import("login_shell.zig");
 
 test {
     _ = @import("ChildDescriptor.zig");
@@ -21,6 +22,7 @@ test {
     _ = @import("command_support.zig");
     _ = @import("environment.zig");
     _ = @import("exit.zig");
+    _ = @import("login_shell.zig");
     _ = @import("native.zig");
     _ = @import("native_darwin.zig");
     _ = @import("native_linux.zig");

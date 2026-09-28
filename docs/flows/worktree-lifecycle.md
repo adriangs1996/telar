@@ -32,6 +32,7 @@ client_request.receive (control) -> worktree_lifecycle.register
 schema.worktree_registered{worktree}
         |
 schema.launch_worktree{worktree, label, argv, cwd, size}
+        |  argv = $SHELL -l -i -c 'exec "$0" "$@"' COMMAND... (see below)
         |
 worktree_lifecycle.launch
         |  first launch: a child workspace named by the title or branch, bound
@@ -64,6 +65,25 @@ schema.forget_worktree -> worktree_lifecycle.forget
         |  closes the child workspace's panes, drops the row
 worktree_git.remove, worktree_git.deleteBranch (git branch -d, or -D with --force)
 ```
+
+## The command's environment
+
+A worktree's command sees what a shell in one of its panes sees. The CLI
+runs it through the user's login shell (`SHELL`, else the account's),
+interactive so the rc files where PATH additions live are read:
+`$SHELL -l -i -c 'exec "$0" "$@"' ARGV...`, or `exec $argv` for fish
+(`pty.login_shell.wrap`). The arguments are the shell's positional
+parameters, never shell code, and the shell execs the command, so its exit
+status is the pane's and reaches `exec --wait`. A program the rc files do
+not find exits 127 with the shell's message in the pane. The worktree row
+names the command, not the shell (`pty.login_shell.program`), and a
+restored pane relaunches through the same shell.
+
+What cannot be avoided: anything the rc files print before the command
+starts is in the pane, so `exec --wait` returns it above the command's
+output. bash as a login shell reads `.bash_profile` (or `.profile`), which
+usually sources `.bashrc`. `worktree create` without a command starts the
+plain `$SHELL`, as a new pane does.
 
 A launch the runtime cannot start fails with `spawn_failed` and a reason
 from `pane_launch.spawnFailure`: the program is not on the runtime's PATH,
