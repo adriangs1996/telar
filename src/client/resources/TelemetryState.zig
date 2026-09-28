@@ -1,3 +1,5 @@
+//! The client's diagnostics: its counters, the fail-closed sink and the one
+//! line `client_telemetry` hands a worker to write.
 const data = @import("model");
 const core = @import("telar-core");
 const Metrics = @import("Metrics.zig");
@@ -9,6 +11,8 @@ pub const buffer_size = 8192;
 metrics: Metrics,
 sink: core.Sink,
 buffer: [buffer_size]u8 = undefined,
+/// The formatted line in `buffer` a write job borrows while `write_pending`.
+line_len: usize = 0,
 write_pending: bool = false,
 enabled: bool,
 
@@ -48,10 +52,13 @@ pub fn deinit(self: *State, io: std.Io) void {
     self.sink.deinit(io);
 }
 
+/// Example: `if (!telemetry.available()) return;`
 pub fn available(self: *const State) bool {
     return self.enabled and self.sink.available();
 }
 
+/// Takes the single write token, or reports that a write is in flight.
+/// Example: `if (!telemetry.reserveWrite()) return;`
 pub fn reserveWrite(self: *State) bool {
     if (!self.available() or self.write_pending) {
         return false;
@@ -62,12 +69,34 @@ pub fn reserveWrite(self: *State) bool {
     return true;
 }
 
+/// Stops later observations; a write in flight keeps the sink until it ends.
+/// Example: `telemetry.disable(io);`
 pub fn disable(self: *State, io: std.Io) void {
     self.enabled = false;
 
     if (!self.write_pending) {
         self.sink.deinit(io);
     }
+}
+
+/// Returns the write token. A failed write disables the sink, and a sink
+/// disabled while the write ran closes now.
+/// Example: `telemetry.finishWrite(io, result);`
+pub fn finishWrite(self: *State, io: std.Io, result: anyerror!void) void {
+    self.write_pending = false;
+    result catch {
+        self.enabled = false;
+    };
+
+    if (!self.enabled) {
+        self.sink.deinit(io);
+    }
+}
+
+/// The line a write job appends to the sink.
+/// Example: `try telemetry.write(io);`
+pub fn write(self: *State, io: std.Io) anyerror!void {
+    try self.sink.write(io, self.buffer[0..self.line_len]);
 }
 
 /// Records a decoded message before the client rearms its borrowed receive buffer.
@@ -96,4 +125,63 @@ pub fn recordMessage(self: *State, observation: *const data.RuntimeMessage) void
     }
 
     self.metrics.decode.observe(observation.decode_ns);
+}
+
+test "client telemetry stays disabled when no runtime endpoint exists" {
+    const io = std.testing.io;
+    var state = State.init(io, "");
+    defer state.deinit(io);
+
+    try std.testing.expect(!state.enabled);
+    try std.testing.expect(!state.sink.available());
+}
+
+test "client telemetry coalesces writes and defers sink shutdown until completion" {
+    if (!core.enabled) {
+        return;
+    }
+
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    const file = try temp.dir.createFile(io, "telemetry.log", .{});
+    var state: State = .{
+        .metrics = .{ .started_ns = 0 },
+        .sink = .{ .file = file },
+        .enabled = true,
+    };
+    defer state.deinit(io);
+
+    try std.testing.expect(state.reserveWrite());
+    try std.testing.expect(!state.reserveWrite());
+    state.disable(io);
+    try std.testing.expect(!state.available());
+    try std.testing.expect(state.sink.available());
+
+    state.finishWrite(io, {});
+    try std.testing.expect(!state.write_pending);
+    try std.testing.expect(!state.sink.available());
+}
+
+test "client telemetry write failure releases its token and disables the sink" {
+    if (!core.enabled) {
+        return;
+    }
+
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    const file = try temp.dir.createFile(io, "telemetry.log", .{});
+    var state: State = .{
+        .metrics = .{ .started_ns = 0 },
+        .sink = .{ .file = file },
+        .write_pending = true,
+        .enabled = true,
+    };
+    defer state.deinit(io);
+
+    state.finishWrite(io, error.WriteFailed);
+    try std.testing.expect(!state.write_pending);
+    try std.testing.expect(!state.available());
+    try std.testing.expect(!state.sink.available());
 }

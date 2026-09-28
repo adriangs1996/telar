@@ -229,13 +229,11 @@ return telar.config({
 	client = {
 		window_title = "{pane_title}",
 		editor = "nvim",
-		icons = "nerd-font",
 		prefix = "ctrl+s",
 		pane_gaps = false,
 
 		sidebar = {
 			visible = true,
-			renderer = "automatic",
 		},
 
 		panels = {

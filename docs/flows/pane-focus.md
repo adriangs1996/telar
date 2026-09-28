@@ -27,8 +27,8 @@ leaf order without wrapping; up/down does nothing. The split tree is retained.
 pane revision because compound input transactions also call it with a captured
 focus commit. It synchronizes attachments before focus reports: a pending
 `acknowledge_agent` is queued, and a bound attachment shelf whose reservation
-changed would re-offer geometry. Neither the window nor the headless client
-binds a shelf. A fullscreen focus change
+changed re-offers geometry; only the window's own client binds one. A
+fullscreen focus change
 invalidates placements and offers the visible pane size, then requests missing
 attachments. A newly visible detached pane cannot receive input until its
 correlated `pane_opened` confirmation arrives. Pending requests are deduplicated.

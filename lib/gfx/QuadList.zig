@@ -117,6 +117,13 @@ pub fn pushSprite(self: *QuadList, rect: Rect, sprite: SpriteQuad) !void {
 /// Appends one complete diagram texture. Pane clipping also adjusts its UVs.
 /// Example: `try list.pushDiagram(bounds, 0);`
 pub fn pushDiagram(self: *QuadList, rect: Rect, slot: u8) !void {
+    try self.pushDiagramRegion(rect, slot, .{ 0, 0, 1, 1 });
+}
+
+/// Appends the part `uv` (u0, v0, u1, v1) of one diagram texture, so one
+/// texture can hold several images side by side.
+/// Example: `try list.pushDiagramRegion(bounds, 6, .{ 0, 0, 0.25, 1 });`
+pub fn pushDiagramRegion(self: *QuadList, rect: Rect, slot: u8, uv: [4]f32) !void {
     if (slot >= quad.diagram_slot_count) {
         return error.InvalidDiagramSlot;
     }
@@ -126,10 +133,10 @@ pub fn pushDiagram(self: *QuadList, rect: Rect, slot: u8) !void {
         .y = rect.y,
         .width = rect.width,
         .height = rect.height,
-        .u0 = 0,
-        .v0 = 0,
-        .u1 = 1,
-        .v1 = 1,
+        .u0 = uv[0],
+        .v0 = uv[1],
+        .u1 = uv[2],
+        .v1 = uv[3],
         .r = 1,
         .g = 1,
         .b = 1,
@@ -338,4 +345,15 @@ test "diagram quads retain slot and UV cropping through clipping" {
     try std.testing.expectEqual(@as(f32, 0.75), image.v1);
     try std.testing.expectError(error.InvalidDiagramSlot, list.pushDiagram(.{ .x = 0, .y = 0, .width = 1, .height = 1 }, 8));
     try std.testing.expectEqual(@as(usize, 1), list.items().len);
+}
+
+test "a diagram region samples only its part of the texture" {
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    try list.pushDiagramRegion(.{ .x = 0, .y = 0, .width = 40, .height = 20 }, 6, .{ 0.25, 0, 0.5, 0.5 });
+    const image = list.items()[0];
+    try std.testing.expectEqual(@as(f32, 8), image.texture);
+    try std.testing.expectEqual(@as(f32, 0.25), image.u0);
+    try std.testing.expectEqual(@as(f32, 0.5), image.u1);
+    try std.testing.expectEqual(@as(f32, 0.5), image.v1);
 }

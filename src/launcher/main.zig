@@ -1,8 +1,9 @@
-//! The executable an application bundle starts. Finder passes no arguments,
-//! and `telar` without arguments is the terminal client, so the bundle names
-//! this launcher instead: it execs `telar gui --login-shell`. The binary lives
-//! under Resources because macOS file systems fold case and `Telar` and
-//! `telar` cannot share `Contents/MacOS`.
+//! The executable an application bundle starts. Finder passes no arguments
+//! and starts the app without the user's login environment, so the bundle
+//! names this launcher: it execs `telar gui --login-shell`, which reads that
+//! environment before the window opens. The binary lives under Resources
+//! because macOS file systems fold case and `Telar` and `telar` cannot share
+//! `Contents/MacOS`.
 const std = @import("std");
 
 pub fn main(init: std.process.Init) !void {

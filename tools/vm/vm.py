@@ -451,7 +451,7 @@ mkdir -p -m 700 .zig-out/dev
 export TELAR_SOCKET="$PWD/.zig-out/dev/runtime.sock"
 export TELAR_HISTORY="$PWD/.zig-out/dev/history.db"
 exec ./zig-out/bin/telar "$@"
-''', *(args or ["--no-config"]), tty=True)
+''', *(args or ["--help"]), tty=True)
     elif command == "stop-runtime":
         guest(f'cd "$HOME/{GUEST_SRC}" && TELAR_SOCKET="$PWD/.zig-out/dev/runtime.sock" exec ./zig-out/bin/telar server stop')
     elif command == "shell":

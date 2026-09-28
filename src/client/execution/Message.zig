@@ -26,13 +26,17 @@ pub const Message = union(enum) {
     runtime_retry_tick: anyerror!void,
     /// A change to `machines.json` was written, or why it was not.
     machine_edited: anyerror!void,
+    /// A diagnostics interval passed.
+    telemetry_tick: anyerror!void,
+    /// The telemetry line was written, or why it was not.
+    telemetry_written: anyerror!void,
 
     /// The budget the event runs under.
     /// Example: `const path = core.enter(message.path());`
     pub fn path(self: Message) core.Path {
         return switch (self) {
             .server, .sent, .sidebar_animation_tick, .runtime_connected => .interactive,
-            .notification_tick, .bar_tick, .bar_command, .plugin_result, .path_completion, .link_opened, .sound_played, .notified, .config_reload, .runtime_retry_tick, .machine_edited => .observation,
+            .notification_tick, .bar_tick, .bar_command, .plugin_result, .path_completion, .link_opened, .sound_played, .notified, .config_reload, .runtime_retry_tick, .machine_edited, .telemetry_tick, .telemetry_written => .observation,
         };
     }
 };

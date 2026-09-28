@@ -1,7 +1,6 @@
 //! Human-readable key chords for palette and history hints. macOS prints
-//! the modifier glyphs its menus use; every other host prints words. The
-//! terminal client keeps its own words in the mode bar. Nothing here
-//! allocates; callers pass a buffer.
+//! the modifier glyphs its menus use; every other host prints words.
+//! Nothing here allocates; callers pass a buffer.
 const builtin = @import("builtin");
 const keyinput = @import("keyinput");
 const std = @import("std");

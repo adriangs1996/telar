@@ -16,8 +16,10 @@ const PaneDecorations = @import("PaneDecorations.zig");
 const ChromeFocus = @import("ChromeFocus.zig");
 const NotificationCard = @import("overlays/NotificationCard.zig");
 const LinkStatus = @import("LinkStatus.zig");
+const ImagePreviewShelf = @import("ImagePreviewShelf.zig");
+const ImagePreviewModal = @import("overlays/ImagePreviewModal.zig");
 
-pub const capacity = core.max_panes_per_tab + 1 + 7 + 1 + Notifications.max_visible + 1;
+pub const capacity = core.max_panes_per_tab + 1 + 7 + 1 + Notifications.max_visible + 1 + 2;
 pub const List = GenericWidgetList(Widget, capacity);
 
 pub const Widget = union(enum) {
@@ -34,6 +36,8 @@ pub const Widget = union(enum) {
     chrome_focus: ChromeFocus,
     notification: NotificationCard,
     modal: modal_widget.Widget,
+    image_shelf: ImagePreviewShelf,
+    image_modal: ImagePreviewModal,
 
     /// Example: `try widget.draw(canvas);`
     pub fn draw(self: Widget, canvas: *Canvas) !void {

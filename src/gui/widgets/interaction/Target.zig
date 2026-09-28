@@ -1,6 +1,7 @@
 //! Owned input semantics for one delivered widget. No projection, text slice,
 //! Canvas or widget pointer crosses the presentation boundary.
 const core = @import("telar-core");
+const data = @import("model");
 const client = @import("telar-client");
 const history_action = @import("history_action.zig");
 const Id = @import("Id.zig");
@@ -25,6 +26,13 @@ label_len: u8 = 0,
 
 pub const Field = enum { name, directory };
 pub const PromptAction = enum { submit, cancel };
+/// The window's image preview shelf and modal: open one preview, close the
+/// modal, or hold a press inside it.
+pub const PreviewAction = union(enum) {
+    open: data.AttachmentId,
+    close,
+    hold,
+};
 pub const Action = union(enum) {
     intent: client.Intent,
     text_field: Field,
@@ -33,6 +41,7 @@ pub const Action = union(enum) {
     complete_path: PathCompletionChoice,
     history: history_action.Action,
     resize_sidebar,
+    preview: PreviewAction,
     custom: u64,
 };
 
@@ -47,7 +56,7 @@ pub fn paneId(self: Target) ?core.PaneId {
 /// Example: `if (target.activatable()) exposePressAction();`
 pub fn activatable(self: Target) bool {
     return switch (self.action) {
-        .change_review, .intent, .prompt, .complete_path, .history => true,
+        .change_review, .intent, .prompt, .complete_path, .history, .preview => true,
         else => false,
     };
 }

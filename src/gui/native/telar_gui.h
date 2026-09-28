@@ -12,7 +12,8 @@
 #define TELAR_GUI_DIAGRAM_SLOTS 8
 #define TELAR_GUI_DIAGRAM_MAX_SIDE 4096
 #define TELAR_GUI_DIAGRAM_MAX_PIXELS (4u * 1024u * 1024u)
-#define TELAR_GUI_DIAGRAM_FRAME_PIXELS (8u * 1024u * 1024u)
+// The diagrams' 8 Mi pixels and the image previews' sheet and modal copy.
+#define TELAR_GUI_DIAGRAM_FRAME_PIXELS (8u * 1024u * 1024u + 256u * 1024u + 2u * 1024u * 1024u)
 
 #define TELAR_GUI_RANGE_NONE UINT32_MAX
 #define TELAR_GUI_TEXT_CAPACITY 4096

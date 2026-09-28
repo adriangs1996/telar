@@ -59,7 +59,6 @@ pub fn init(params: client.ClientInit, options: HeadlessOptions) !*HeadlessClien
     const router = try client.key_router.build(.{
         .prefix = params.options.prefix,
         .bindings = params.options.bindings,
-        .escape_timeout_ns = params.options.input_escape_timeout_ns,
         .sequence_timeout_ns = params.options.input_sequence_timeout_ns,
     });
 
@@ -266,7 +265,6 @@ fn focusedPane(self: *const HeadlessClient) u64 {
 fn press(self: *HeadlessClient, key: keyinput.Key, now_ns: u64) !keyinput.Control {
     const decision = self.router.routeEvent(.{
         .key = key,
-        .raw = "",
         .now_ns = now_ns,
     }, .{
         .captures_keys = data.key_routing.captures(client.key_routing.keyRoutingAuthority(&self.app)),
@@ -278,7 +276,7 @@ fn press(self: *HeadlessClient, key: keyinput.Key, now_ns: u64) !keyinput.Contro
 
 fn decide(self: *HeadlessClient, decision: client.key_router.Type.Decision) !keyinput.Control {
     switch (decision) {
-        .forward => |value| _ = try client.key_routing.routeKeyInput(&self.app, .{ .key = value.key }),
+        .forward => |value| _ = try client.key_routing.routeKeyInput(&self.app, .{ .key = value }),
         .replay => |value| {
             for (value.held_keys[0..value.held_key_len]) |held| {
                 _ = try client.key_routing.routeKeyInput(&self.app, .{ .key = held });
@@ -376,7 +374,7 @@ fn deliverEffects(self: *HeadlessClient) !void {
                     .execution_id = @enumFromInt(request.sequence),
                     .result = error.NativeServiceUnavailable,
                 }),
-                .clipboard, .terminal_notification, .machine => {},
+                .clipboard, .machine => {},
             }
         }
 

@@ -19,8 +19,9 @@ const PaneSet = @import("PaneSet.zig");
 const Mouse = keyinput.Mouse;
 const multiplexer = @import("multiplexer.zig");
 
-/// Geometry of one tab for `area`, rebuilt only when the tab, its layout
-/// revision or the area changed since the previous query.
+/// Geometry of one tab for `area` with `model.pane_bottom_reservation`
+/// applied, rebuilt only when the tab, its layout revision, the area or the
+/// reservation changed since the previous query.
 /// Example: `const snapshot = tab_layout.snapshot(model, slot, area);`
 pub fn snapshot(model: *ClientModel, slot: usize, area: cellgrid.Rect) *const LayoutSnapshot {
     core.profiling.add(.layout_query, 1);
@@ -28,10 +29,12 @@ pub fn snapshot(model: *ClientModel, slot: usize, area: cellgrid.Rect) *const La
     const layout = &model.tabs.layout[slot];
     if (model.layout_snapshot_tab != tab_id or
         model.layout_snapshot.revision != layout.currentRevision() or
-        !std.meta.eql(model.layout_snapshot.area, area))
+        !std.meta.eql(model.layout_snapshot.area, area) or
+        !std.meta.eql(model.layout_snapshot.reservation, model.pane_bottom_reservation))
     {
         core.profiling.add(.layout_rebuild, 1);
         layout.snapshot(area, &model.layout_snapshot);
+        _ = model.layout_snapshot.reserveBelowPane(model.pane_bottom_reservation);
         model.layout_snapshot_tab = tab_id;
     }
 

@@ -3,7 +3,7 @@ const std = @import("std");
 const PaneStore = @import("../pane/PaneStore.zig");
 const Workspaces = @import("../workspace/Workspaces.zig");
 const LayoutSnapshotStorage = @import("LayoutSnapshotStorage.zig");
-/// Layouts retained for reconnecting terminal clients: one bounded record
+/// Layouts retained for reconnecting clients: one bounded record
 /// per client identity, checked against runtime panes and workspaces before
 /// it is stored and again before it is restored. The least recently used
 /// record makes room for a new identity.

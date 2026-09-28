@@ -147,6 +147,7 @@ test {
     _ = @import("config/bar_update.zig");
     _ = @import("config/component_values.zig");
     _ = @import("config/client_diagnostic.zig");
+    _ = @import("config/retired_config.zig");
     _ = @import("input/action_routing.zig");
     _ = @import("input/attachment_prompt.zig");
     _ = @import("input/clipboard_image.zig");
@@ -183,6 +184,8 @@ test {
     _ = @import("presentation/headless_tests.zig");
     _ = @import("presentation/lifecycle.zig");
     _ = @import("presentation/window_title.zig");
+    _ = @import("resources/client_telemetry.zig");
+    _ = @import("resources/TelemetryState.zig");
     _ = @import("resources/config_reload.zig");
     _ = @import("resources/local_time.zig");
     _ = @import("workspace/metrics_tests.zig");
@@ -202,7 +205,6 @@ test {
     _ = @import("connection/resync_required.zig");
     _ = @import("connection/runtime_io.zig");
     _ = @import("connection/runtime_messages.zig");
-    _ = @import("host/host_capabilities.zig");
     _ = @import("host/host_resize.zig");
     _ = @import("input/actions.zig");
     _ = @import("input/copy_mode.zig");
@@ -258,6 +260,7 @@ pub const FontFamily = @import("config/FontFamily.zig");
 pub const presentation_delivery = @import("connection/presentation_delivery.zig");
 pub const history_browser = @import("input/history_browser.zig");
 pub const client_diagnostic = @import("config/client_diagnostic.zig");
+pub const retired_config = @import("config/retired_config.zig");
 
 pub const TabDrag = @import("workspace/TabDrag.zig");
 pub const agent_navigation = @import("agents/agent_navigation.zig");
@@ -287,7 +290,6 @@ pub const RuntimeConfigSelection = @import("machines/RuntimeConfigSelection.zig"
 pub const RuntimeConnector = @import("machines/RuntimeConnector.zig");
 pub const SshOptions = @import("machines/SshOptions.zig");
 pub const runtime_messages = @import("connection/runtime_messages.zig");
-pub const host_capabilities = @import("host/host_capabilities.zig");
 pub const host_resize = @import("host/host_resize.zig");
 pub const actions = @import("input/actions.zig");
 pub const copy_mode = @import("input/copy_mode.zig");

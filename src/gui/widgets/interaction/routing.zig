@@ -168,6 +168,11 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
                 gui.adoptSidebarWidth(@intFromFloat(@max(1, @min(65535, @floor(event.pointer.x) + 1))));
             }
         },
+        .preview => |action| {
+            if (buttonActivated(event, target)) {
+                showPreview(gui, action);
+            }
+        },
         .custom => {},
     }
 
@@ -273,7 +278,7 @@ pub fn continueFallback(gui: *GuiAdapter, event: event_module.Event) !bool {
         _ = gui.widgets.dispatcher.keys.release(physical);
     }
 
-    _ = try gui.routeKey(.{ .key = key, .raw = "", .now_ns = pacing.clock.monotonic(gui.app.io) });
+    _ = try gui.routeKey(.{ .key = key, .now_ns = pacing.clock.monotonic(gui.app.io) });
     return true;
 }
 
@@ -550,7 +555,18 @@ fn activateControl(gui: *GuiAdapter, target: Target) !void {
             }
         },
         .intent => |intent| try dispatchIntent(gui, intent),
+        .preview => |action| showPreview(gui, action),
         else => {},
+    }
+}
+
+/// Opens a preview in the modal or closes it; a press inside the modal only
+/// keeps it from reaching what lies behind.
+fn showPreview(gui: *GuiAdapter, action: Target.PreviewAction) void {
+    switch (action) {
+        .open => |id| gui.previews.openModal(id),
+        .close => gui.previews.closeModal(),
+        .hold => {},
     }
 }
 

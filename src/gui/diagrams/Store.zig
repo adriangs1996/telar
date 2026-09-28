@@ -8,7 +8,8 @@ const Completion = @import("Completion.zig");
 const Entry = @import("Entry.zig");
 const Store = @This();
 
-pub const capacity = 8;
+/// The window's image previews take the last two of the frame's slots.
+pub const capacity = 6;
 pub const max_pixels = 8 * 1024 * 1024;
 
 allocator: std.mem.Allocator,

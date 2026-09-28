@@ -53,30 +53,6 @@ pub fn reconcileHost(self: *State, update: model_data.HostUpdate) !?model_data.H
     };
 }
 
-/// Example: `const result = state.observeHostCapability(...);`.
-pub fn observeHostCapability(self: *State, observation: model_data.HostCapabilityObservation) !?model_data.HostCommit {
-    const capabilities = self.host_capabilities.withObservation(observation);
-    if (std.meta.eql(self.host_capabilities, capabilities)) {
-        return null;
-    }
-
-    return self.reconcileHost(.{
-        .capabilities = capabilities,
-        .size = self.resolveHostSize(capabilities),
-    });
-}
-
-fn resolveHostSize(self: *const State, capabilities: model_data.HostCapabilities) core.TerminalSize {
-    const cell_size = capabilities.cellSize(self.host_size.cols, self.host_size.rows);
-
-    return .{
-        .cols = self.host_size.cols,
-        .rows = self.host_size.rows,
-        .cell_width_px = cell_size.width,
-        .cell_height_px = cell_size.height,
-    };
-}
-
 fn commitHostResize(self: *State, size: core.TerminalSize) model_data.HostResizeCommit {
     const previous = self.host_size;
     self.host_size = size;

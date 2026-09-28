@@ -4,6 +4,11 @@ const data = @import("model");
 const lua_api = @import("lua-api");
 const Snapshot = @import("Snapshot.zig");
 const value = @import("lua_value.zig");
+const std = @import("std");
+
+/// OSC 9 to the terminal client's outer terminal. The window and the
+/// headless client have none, so the channel is refused rather than dropped.
+const retired_terminal_delivery = "terminal";
 
 pub fn parse(state: *lua_api.c.lua_State, snapshot: *Snapshot, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
@@ -27,8 +32,15 @@ pub fn parse(state: *lua_api.c.lua_State, snapshot: *Snapshot, diagnostic: *data
         diagnostic.set("config.client.notifications.delivery must be a string", .{});
         return error.InvalidConfig;
     };
+    // The terminal client wrote notices to its host terminal; the key is
+    // ignored and reported, and the default delivery stays.
+    if (std.mem.eql(u8, delivery, retired_terminal_delivery)) {
+        snapshot.retired.insert(.terminal_delivery);
+        return;
+    }
+
     snapshot.notification_delivery = data.NotificationDelivery.parse(delivery) orelse {
-        diagnostic.set("config.client.notifications.delivery must be telar, terminal or system", .{});
+        diagnostic.set("config.client.notifications.delivery must be telar or system", .{});
         return error.InvalidConfig;
     };
 }

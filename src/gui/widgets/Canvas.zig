@@ -212,6 +212,16 @@ pub fn diagramAt(self: *Canvas, bounds: Rect, slot: u8) !void {
     try self.quads.pushDiagram(bounds, slot);
 }
 
+/// Draws the part `uv` of a diagram texture that holds several images.
+/// Example: `try canvas.diagramRegionAt(card_image, ImagePreviews.sheet_slot, uv);`
+pub fn diagramRegionAt(self: *Canvas, bounds: Rect, slot: u8, uv: [4]f32) !void {
+    if (bounds.width <= 0 or bounds.height <= 0) {
+        return;
+    }
+
+    try self.quads.pushDiagramRegion(bounds, slot, uv);
+}
+
 /// The embedded mark of a built-in provider when the canvas has a page.
 /// Example: `if (canvas.providerMark(agent.provider)) |mark| ...`
 pub fn providerMark(self: *const Canvas, provider: core.AgentProvider) ?Sprite {
