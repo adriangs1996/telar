@@ -60,6 +60,14 @@ const host_key_texts = [_][]const u8{
     "REMOTE HOST IDENTIFICATION HAS CHANGED",
 };
 
+/// The lines of a refused host key worth keeping: which key and why
+/// ("No ED25519 host key is known for box and you have requested strict
+/// checking.", "Host key for box has changed and …") and the verdict.
+const host_key_verdict_texts = [_][]const u8{
+    "you have requested strict checking",
+    "Host key verification failed",
+};
+
 /// What OpenSSH prints when the server accepts none of the offered
 /// credentials (sshconnect2.c) or stops after too many (sshd).
 const authentication_texts = [_][]const u8{
@@ -90,9 +98,16 @@ pub fn connect(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ,
 
     const ends = try localsocket.pair();
     var local = ends[0];
-    errdefer local.deinit(io);
-    var bridge = ends[1];
-    defer bridge.deinit(io);
+    // `negotiate` owns this end once called and closes it when it fails.
+    var local_owned = true;
+    errdefer if (local_owned) {
+        local.deinit(io);
+    };
+    // The child holds its own descriptors for this end; only this process's
+    // copy closes. `SocketChannel.deinit` would shut the socket down, which
+    // ends the child's standard input and output with it.
+    const bridge = ends[1];
+    defer bridge.stream.close(io);
 
     const options = try SshOptions.prepare(io, environ, machine.destination);
     const managed = options.arguments();
@@ -112,6 +127,7 @@ pub fn connect(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ,
     // waits for more.
     try setNonblocking(forward.child.stderr.?.handle);
 
+    local_owned = false;
     const channel = RuntimeConnector.negotiate(io, local, report) catch |err| {
         forward.reportErrors(report);
         return err;
@@ -215,6 +231,8 @@ fn mentionsAny(text: []const u8, needles: []const []const u8) bool {
 
 // Names a permanent cause before SSH's own words, which are clear for host
 // keys and logins but not for a missing command or an old runtime.
+// A changed host key comes with a banner longer than the link keeps, so
+// only the lines that name the key and the verdict are kept.
 fn writeFailure(writer: *std.Io.Writer, failure: SshFailure, stderr: []const u8) void {
     const cause: []const u8 = switch (failure) {
         error.RemoteTelarMissing => "telar is not on the PATH of non-interactive SSH sessions there: ",
@@ -222,7 +240,17 @@ fn writeFailure(writer: *std.Io.Writer, failure: SshFailure, stderr: []const u8)
         else => "",
     };
     writer.writeAll(cause) catch {};
-    writer.writeAll(stderr) catch {};
+    if (failure != error.SshHostKeyRejected) {
+        writer.writeAll(stderr) catch {};
+        return;
+    }
+
+    var lines = std.mem.splitScalar(u8, stderr, '\n');
+    while (lines.next()) |line| {
+        if (mentionsAny(line, &host_key_verdict_texts)) {
+            writer.print("{s} ", .{std.mem.trim(u8, line, " \r")}) catch {};
+        }
+    }
 }
 
 fn setNonblocking(fd: std.posix.fd_t) !void {
@@ -254,6 +282,22 @@ test "ssh failures that retrying cannot fix are told apart from passing ones" {
     for (cases) |case| {
         try std.testing.expectEqual(case[2], sshFailure(case[0], case[1]));
     }
+}
+
+test "a refused host key keeps which key and the verdict, not the banner" {
+    const changed =
+        "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n" ++
+        "@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\r\n" ++
+        "IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!\r\n" ++
+        "It is also possible that a host key has just been changed.\r\n" ++
+        "Add correct host key in /home/dev/.ssh/known_hosts to get rid of this message.\r\n" ++
+        "Host key for box has changed and you have requested strict checking.\r\n" ++
+        "Host key verification failed.\r\n";
+    var buffer: [256]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+    writeFailure(&writer, sshFailure(.{ .exited = 255 }, changed), changed);
+
+    try std.testing.expectEqualStrings("Host key for box has changed and you have requested strict checking. Host key verification failed. ", writer.buffered());
 }
 
 test {
