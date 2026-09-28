@@ -487,9 +487,18 @@ for `SessionEnd` and `Interrupt`.
 - `src/cli/integration_support.zig` proves idempotent install and selective removal
   for Claude Code and Cursor Agent's flat layout, and rendering, marker detection and atomic owner-only
   installation for the Pi extension and the OpenCode plugin.
-- `src/cli/integration/opencode.test.mjs` (run with `node --test`) proves the
-  plugin's ordered delivery, deduplicated busy reports, prompt tracking,
-  interrupt settlement, subagent filtering, title and exit reports.
+- `src/cli/integration/opencode.test.mjs` proves the plugin's ordered
+  delivery, deduplicated busy reports, prompt tracking and renewal with the
+  open prompt's request, tool calls under an open prompt, oversized prompts,
+  interrupt settlement, reloads, subagent filtering, title and exit reports.
+- `src/cli/integration/install.test.mjs` drives a built `telar integration`
+  for Pi and OpenCode in a throwaway home: status, install, update,
+  uninstall, a foreign file left untouched, and `--settings` paths.
+- `zig build test-integrations`, part of `zig build test`, runs both with
+  Node (22.13 or newer, for `module.stripTypeScriptTypes`) along with
+  `pi.test.mjs`.
+- `src/cli/TempFile.zig` proves that installation writes through an
+  exclusive owner-only temporary and never through a planted symlink.
 - `src/backend/history/persistence/history_sql.zig` proves that native start/finish
   updates one row and a later plugin observation with the same tool call id is
   deduplicated.

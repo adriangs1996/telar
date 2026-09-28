@@ -87,7 +87,8 @@ silent.
   monotonic ordering within a millisecond, stale evidence expiry, and model
   responses that finish before the agent turn, including Pi tools running
   beyond the report lifetime.
-- `node --test src/cli/integration/pi.test.mjs` exercises serialized delivery,
+- `src/cli/integration/pi.test.mjs`, run by `zig build test` through Node,
+  exercises serialized delivery,
   long-run renewal, nested dialogs, hung hooks, queue saturation, missed
   settlement and shutdown.
 
