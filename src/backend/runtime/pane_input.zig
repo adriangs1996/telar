@@ -69,7 +69,13 @@ pub fn sendText(model: *RuntimeModel, session: *Session, request: core.SendPaneT
     const modes = pane.inputModeState();
     const bytes = switch (request.mode) {
         .raw => request.text,
-        .raw_enter => submissionBytes(&storage, .{ .text = request.text }, modes),
+        .raw_enter => submissionBytes(
+            &storage,
+            .{
+                .text = request.text,
+            },
+            modes,
+        ),
         .prompt => prompt: {
             if (agent_status.projectedStatus(model, pane.key()) == .blocked) {
                 return client_request.fail(session, request.request_id, .agent_blocked, "agent is waiting for a decision");
@@ -86,11 +92,15 @@ pub fn sendText(model: *RuntimeModel, session: *Session, request: core.SendPaneT
                 break :line agent_control.senderLine(model, sender, &sender_buffer);
             } else "";
 
-            break :prompt submissionBytes(&storage, .{
-                .prefix = sender_line,
-                .text = request.text,
-                .paste = true,
-            }, modes);
+            break :prompt submissionBytes(
+                &storage,
+                .{
+                    .prefix = sender_line,
+                    .text = request.text,
+                    .paste = true,
+                },
+                modes,
+            );
         },
     };
 
@@ -339,16 +349,42 @@ fn enterBytes(modes: keyinput.InputModes) []const u8 {
 
 test "submissions frame a paste only when asked and the child enabled it" {
     var storage: [core.max_pane_text_input_bytes + agent_control.max_sender_line_bytes + prompt_overhead]u8 = undefined;
-    const bracketed: keyinput.InputModes = .{ .bracketed_paste = true };
-
-    try std.testing.expectEqualStrings("hello\r", submissionBytes(&storage, .{ .text = "hello", .paste = true }, .{}));
-    try std.testing.expectEqualStrings("\x1b[200~hello\x1b[201~\r", submissionBytes(&storage, .{ .text = "hello", .paste = true }, bracketed));
-    try std.testing.expectEqualStrings("hello\r", submissionBytes(&storage, .{ .text = "hello" }, bracketed));
-    try std.testing.expectEqualStrings("\x1b[200~[telar: from fix, pane 3] hi\x1b[201~\r", submissionBytes(&storage, .{
+    const bracketed: keyinput.InputModes = .{
+        .bracketed_paste = true,
+    };
+    const pasted: Submission = .{
+        .text = "hello",
+        .paste = true,
+    };
+    const typed: Submission = .{
+        .text = "hello",
+    };
+    const named: Submission = .{
         .prefix = "[telar: from fix, pane 3] ",
         .text = "hi",
         .paste = true,
-    }, bracketed));
+    };
+
+    try std.testing.expectEqualStrings("hello\r", submissionBytes(
+        &storage,
+        pasted,
+        .{},
+    ));
+    try std.testing.expectEqualStrings("\x1b[200~hello\x1b[201~\r", submissionBytes(
+        &storage,
+        pasted,
+        bracketed,
+    ));
+    try std.testing.expectEqualStrings("hello\r", submissionBytes(
+        &storage,
+        typed,
+        bracketed,
+    ));
+    try std.testing.expectEqualStrings("\x1b[200~[telar: from fix, pane 3] hi\x1b[201~\r", submissionBytes(
+        &storage,
+        named,
+        bracketed,
+    ));
 }
 
 test "submissions press Enter as the kitty protocol encodes it once the child enabled it" {
@@ -357,12 +393,24 @@ test "submissions press Enter as the kitty protocol encodes it once the child en
         .bracketed_paste = true,
         .kitty_keyboard_flags = 0b101,
     };
-
-    try std.testing.expectEqualStrings("y\x1b[13u", submissionBytes(&storage, .{ .text = "y" }, kitty));
-    try std.testing.expectEqualStrings("\x1b[200~hi\x1b[201~\x1b[13u", submissionBytes(&storage, .{
+    const typed: Submission = .{
+        .text = "y",
+    };
+    const pasted: Submission = .{
         .text = "hi",
         .paste = true,
-    }, kitty));
+    };
+
+    try std.testing.expectEqualStrings("y\x1b[13u", submissionBytes(
+        &storage,
+        typed,
+        kitty,
+    ));
+    try std.testing.expectEqualStrings("\x1b[200~hi\x1b[201~\x1b[13u", submissionBytes(
+        &storage,
+        pasted,
+        kitty,
+    ));
 }
 
 const ResponseWrite = struct {
