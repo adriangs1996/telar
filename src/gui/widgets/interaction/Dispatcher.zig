@@ -236,9 +236,11 @@ fn key(self: *Dispatcher, event: Key, navigate: bool) Route {
     }
     if (navigate and event.phase == .press and self.window_focused) {
         const target = self.focusedTarget();
-        // Tab moves focus only when another control can take it; a lone
-        // field keeps the key, so its prompt can give Tab its own meaning.
-        if ((event.code == .tab or event.code == .back_tab) and (target != null or self.maps.presented().modal_layer != 0) and self.canTraverse()) {
+        // Tab moves focus only when another control can take it. A prompt
+        // field keeps the key: its prompt owns what Tab means, from moving
+        // between the context form's fields to completing a folder.
+        const prompt_field = target != null and target.?.action == .text_field;
+        if ((event.code == .tab or event.code == .back_tab) and !prompt_field and (target != null or self.maps.presented().modal_layer != 0) and self.canTraverse()) {
             result = .{ .consumed = true, .focus_changed = self.traverse(event.code == .back_tab or event.mods.shift) };
         } else if (event.code == .escape and target != null and self.maps.presented().modal_layer == 0) {
             result = .{ .consumed = true, .focus_changed = self.focus(null) };

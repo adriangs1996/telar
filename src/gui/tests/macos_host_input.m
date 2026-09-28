@@ -146,6 +146,16 @@ int telar_test_host_input(NSView *host) {
       windowNumber:view.window.windowNumber context:nil characters:@"a" charactersIgnoringModifiers:@"a" isARepeat:NO keyCode:0]];
   if (fixture.last.kind != 4 || fixture.last.code != 'a' || fixture.last.mods != 8 || fixture.last.target_id != 41) { fprintf(stderr, "native host input assertion failed at line %d\n", __LINE__); failures++; }
   [view releasePressedKeys];
+  // Tab reaches the focused editor as a key addressed to it, so a form can move between its fields.
+  [view keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0
+      windowNumber:view.window.windowNumber context:nil characters:@"\t" charactersIgnoringModifiers:@"\t" isARepeat:NO keyCode:48]];
+  if (fixture.last.kind != 3 || fixture.last.code != 2 || fixture.last.mods != 0 || fixture.last.physical != 49 || fixture.last.target_id != 41 ||
+      fixture.last.generation != fixture.text.generation) { fprintf(stderr, "native host input assertion failed at line %d\n", __LINE__); failures++; }
+  [view releasePressedKeys];
+  [view keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:NSEventModifierFlagShift timestamp:0
+      windowNumber:view.window.windowNumber context:nil characters:@"\x19" charactersIgnoringModifiers:@"\x19" isARepeat:NO keyCode:48]];
+  if (fixture.last.kind != 3 || fixture.last.code != 2 || fixture.last.mods != 1 || fixture.last.target_id != 41) { fprintf(stderr, "native host input assertion failed at line %d\n", __LINE__); failures++; }
+  [view releasePressedKeys];
   fixture.text = (telar_gui_text_context){0};
   [view refreshTextContext];
   unsigned before_terminal_preedit = fixture.received;
