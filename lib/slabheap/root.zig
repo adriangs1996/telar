@@ -1,10 +1,24 @@
-//! A process-wide, thread-safe allocator for release builds whose libc
-//! allocator strands freed memory: slots of power-of-two size classes carved
-//! from 64 KiB slabs, one free list per thread slot, and a slab mapped only
-//! after every slot came up empty for that class.
+//! The process allocator of musl release builds: power-of-two size classes
+//! carved from 64 KiB slabs, one free list per thread slot, and a slab mapped
+//! only after the other slots came up empty for that class.
 
-pub const allocator = @import("slab_heap.zig").allocator;
+const std = @import("std");
+
+const SlabHeap = @import("SlabHeap.zig");
+
+var process_heap: SlabHeap = .{};
+
+/// The process-wide slab heap. Every thread may use it.
+///
+/// ```zig
+/// const bytes = try slabheap.allocator.alloc(u8, 256);
+/// defer slabheap.allocator.free(bytes);
+/// ```
+pub const allocator: std.mem.Allocator = .{
+    .ptr = &process_heap,
+    .vtable = &SlabHeap.vtable,
+};
 
 test {
-    _ = @import("slab_heap.zig");
+    _ = @import("SlabHeap.zig");
 }
