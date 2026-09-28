@@ -31,6 +31,15 @@ pub const Kind = enum(u32) {
 
 const kind_mask: u32 = 0o170000;
 
+/// The fields `statx` must return; a reply missing any is refused.
+const request: linux.STATX = .{
+    .TYPE = true,
+    .MODE = true,
+    .NLINK = true,
+    .UID = true,
+    .SIZE = true,
+};
+
 /// Reads the inode at `path`. Fails when it does not exist or cannot be read.
 ///
 /// ```zig
@@ -41,17 +50,19 @@ const kind_mask: u32 = 0o170000;
 /// ```
 pub fn fromPath(path: [*:0]const u8, links: Links) error{InodeUnavailable}!Inode {
     if (builtin.os.tag == .linux) {
-        const flags: u32 = if (links == .no_follow) linux.AT.SYMLINK_NOFOLLOW else 0;
-        return statx(linux.AT.FDCWD, path, flags);
+        const no_follow: u32 = if (links == .no_follow) linux.AT.SYMLINK_NOFOLLOW else 0;
+        return statx(linux.AT.FDCWD, path, linux.AT.NO_AUTOMOUNT | no_follow);
     }
 
     const flags: u32 = if (links == .no_follow) std.c.AT.SYMLINK_NOFOLLOW else 0;
     var stat: std.c.Stat = undefined;
-    if (std.c.fstatat(std.c.AT.FDCWD, path, &stat, flags) != 0) {
-        return error.InodeUnavailable;
+    while (true) {
+        switch (std.posix.errno(std.c.fstatat(std.c.AT.FDCWD, path, &stat, flags))) {
+            .SUCCESS => return fromStat(stat),
+            .INTR => continue,
+            else => return error.InodeUnavailable,
+        }
     }
-
-    return fromStat(stat);
 }
 
 /// Reads the inode behind an open descriptor, so a path swapped after the
@@ -69,11 +80,13 @@ pub fn fromDescriptor(fd: std.posix.fd_t) error{InodeUnavailable}!Inode {
     }
 
     var stat: std.c.Stat = undefined;
-    if (std.c.fstat(fd, &stat) != 0) {
-        return error.InodeUnavailable;
+    while (true) {
+        switch (std.posix.errno(std.c.fstat(fd, &stat))) {
+            .SUCCESS => return fromStat(stat),
+            .INTR => continue,
+            else => return error.InodeUnavailable,
+        }
     }
-
-    return fromStat(stat);
 }
 
 /// The file type, from the type bits of `mode`.
@@ -87,17 +100,24 @@ pub fn kind(self: Inode) Kind {
     return @enumFromInt(self.mode & kind_mask);
 }
 
+// Retries an interrupted call, as `std.Io` does.
 fn statx(directory: std.posix.fd_t, path: [*:0]const u8, flags: u32) error{InodeUnavailable}!Inode {
-    const request: linux.STATX = .{
-        .TYPE = true,
-        .MODE = true,
-        .NLINK = true,
-        .UID = true,
-        .SIZE = true,
-    };
+    while (true) {
+        var buffer = std.mem.zeroes(linux.Statx);
+        switch (linux.errno(linux.statx(directory, path, flags, request, &buffer))) {
+            .SUCCESS => return fromStatx(buffer),
+            .INTR => continue,
+            else => return error.InodeUnavailable,
+        }
+    }
+}
 
-    var buffer: linux.Statx = undefined;
-    if (linux.errno(linux.statx(directory, path, flags, request, &buffer)) != .SUCCESS) {
+// A file system may leave out fields it cannot provide; `stx_mask` says
+// which it filled, and an ownership check must not read a zero as root.
+fn fromStatx(buffer: linux.Statx) error{InodeUnavailable}!Inode {
+    const returned: u32 = @bitCast(buffer.mask);
+    const wanted: u32 = @bitCast(request);
+    if (returned & wanted != wanted) {
         return error.InodeUnavailable;
     }
 
@@ -169,6 +189,17 @@ test "a descriptor reports the file it was opened on" {
     try std.testing.expectEqual(Kind.regular, inode.kind());
     try std.testing.expectEqual(@as(u64, 8), inode.size);
     try std.testing.expectEqual(std.c.getuid(), inode.owner);
+}
+
+test "a statx reply without every requested field is refused" {
+    var buffer = std.mem.zeroes(linux.Statx);
+    buffer.mask = request;
+    buffer.mode = @intFromEnum(Kind.regular) | 0o600;
+    buffer.nlink = 1;
+    _ = try fromStatx(buffer);
+
+    buffer.mask.UID = false;
+    try std.testing.expectError(error.InodeUnavailable, fromStatx(buffer));
 }
 
 test "a missing path is unavailable" {
