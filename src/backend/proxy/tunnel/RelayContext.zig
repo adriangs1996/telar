@@ -24,6 +24,7 @@ const RelayContext = @This();
 const RelayConnection = GenericConnection(RelayContext);
 
 io: std.Io,
+gpa: std.mem.Allocator,
 session: *Session,
 exchange: *Exchange,
 captures: ?*Producer = null,
@@ -67,7 +68,7 @@ fn relayDirection(self: *RelayContext, direction: relay_module.Direction) Stats 
     defer if (captures) |*streams| streams.deinit();
     var observer: EventObserver = .{ .captures = if (captures) |*streams| streams else null };
 
-    return h2.relay(self.session, h2.relayOptions(direction, .{}), &observer);
+    return h2.relay(self.session, h2.relayOptions(direction, .{ .gpa = self.gpa }), &observer);
 }
 
 /// Counts a direction whose header decoding failed.
@@ -93,6 +94,7 @@ test "decode failure increments only the HTTP2 counter" {
     harness.init();
     var context: RelayContext = .{
         .io = std.testing.io,
+        .gpa = std.testing.allocator,
         .session = undefined,
         .exchange = &harness.exchange,
     };

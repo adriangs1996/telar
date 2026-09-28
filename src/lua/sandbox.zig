@@ -38,7 +38,7 @@ fn openLibrary(state: *lua_api.c.lua_State, name: [*:0]const u8, function: lua_a
 }
 
 test "sandbox does not expose filesystem or process libraries" {
-    var vm = try Vm.init(std.testing.io, .{});
+    var vm = try Vm.init(std.testing.io, std.testing.allocator, .{});
     defer vm.deinit();
     try open(vm.state);
 

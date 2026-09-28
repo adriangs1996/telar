@@ -17,7 +17,7 @@ pub fn monotonic(io: std.Io) u64 {
 }
 
 test "VM evaluates source under a bounded allocator" {
-    var vm = try Vm.init(std.testing.io, .{
+    var vm = try Vm.init(std.testing.io, std.testing.allocator, .{
         .memory = 1024 * 1024,
         .instructions = 100_000,
         .deadline_after_ns = std.time.ns_per_s,
@@ -29,7 +29,7 @@ test "VM evaluates source under a bounded allocator" {
 }
 
 test "VM interrupts an instruction loop" {
-    var vm = try Vm.init(std.testing.io, .{
+    var vm = try Vm.init(std.testing.io, std.testing.allocator, .{
         .memory = 1024 * 1024,
         .instructions = 10_000,
         .deadline_after_ns = std.time.ns_per_s,

@@ -1,4 +1,5 @@
 const std = @import("std");
+const cblocks = @import("cblocks");
 const lua_api = @import("lua-api");
 const Meter = @import("Meter.zig");
 const Limits = @import("Limits.zig");
@@ -7,24 +8,27 @@ const Execution = @import("Execution.zig");
 /// Owns the Lua allocator and execution budgets for one isolated VM.
 ///
 /// ```zig
-/// const vm = try Vm.init(io, .{});
+/// const vm = try Vm.init(io, gpa, .{});
 /// defer vm.deinit();
 /// try vm.evaluate("return {}", "@config.lua");
 /// ```
 const Vm = @This();
 
 io: std.Io,
+/// What the VM, its Lua heap and `json.decode` allocate from.
+gpa: std.mem.Allocator,
 state: *lua_api.c.lua_State,
 meter: Meter,
 instruction_count: u64 = 0,
 instruction_limit: u64,
 deadline_ns: u64,
 
-pub fn init(io: std.Io, limits: Limits) !*Vm {
-    const owned = std.heap.c_allocator.create(Vm) catch return error.OutOfMemory;
-    errdefer std.heap.c_allocator.destroy(owned);
+pub fn init(io: std.Io, gpa: std.mem.Allocator, limits: Limits) !*Vm {
+    const owned = gpa.create(Vm) catch return error.OutOfMemory;
+    errdefer gpa.destroy(owned);
     owned.* = .{
         .io = io,
+        .gpa = gpa,
         .state = undefined,
         .meter = .{ .limit = limits.memory },
         .instruction_limit = limits.instructions,
@@ -38,7 +42,7 @@ pub fn init(io: std.Io, limits: Limits) !*Vm {
 pub fn deinit(self: *Vm) void {
     lua_api.c.lua_close(self.state);
     std.debug.assert(self.meter.used == 0);
-    std.heap.c_allocator.destroy(self);
+    self.gpa.destroy(self);
 }
 
 pub fn resetBudget(self: *Vm, instructions: u64, deadline_after_ns: u64) void {
@@ -67,13 +71,30 @@ pub fn errorMessage(self: *Vm) []const u8 {
     return message[0..len];
 }
 
+/// The VM that owns `state`, from the userdata of its allocator.
+///
+/// ```zig
+/// const gpa = Vm.of(state).gpa;
+/// ```
+pub fn of(state: *lua_api.c.lua_State) *Vm {
+    var userdata: ?*anyopaque = null;
+    _ = lua_api.c.lua_getallocf(state, &userdata);
+    return @ptrCast(@alignCast(userdata.?));
+}
+
 // Lua fixes this four-parameter allocator signature as part of its C ABI.
+// Blocks come from `cblocks`, which remembers each block's real length, so a
+// shrink that cannot move keeps the old block: Lua requires shrinking never
+// to fail.
 // codestyle: allow(maximum-parameter-count)
 fn allocate(userdata: ?*anyopaque, pointer: ?*anyopaque, old_size: usize, new_size: usize) callconv(.c) ?*anyopaque {
     const vm: *Vm = @ptrCast(@alignCast(userdata.?));
     if (new_size == 0) {
-        std.c.free(pointer);
-        vm.meter.used -|= old_size;
+        if (pointer) |existing| {
+            cblocks.free(vm.gpa, existing);
+            vm.meter.used -|= old_size;
+        }
+
         return null;
     }
 
@@ -83,18 +104,20 @@ fn allocate(userdata: ?*anyopaque, pointer: ?*anyopaque, old_size: usize, new_si
         return null;
     }
 
-    const result = if (pointer) |existing| std.c.realloc(existing, new_size) else std.c.malloc(new_size);
-    if (result != null) {
-        vm.meter.used = next;
-    }
+    const result = cblocks.realloc(vm.gpa, pointer, new_size) orelse shrunk: {
+        const existing = pointer orelse return null;
+        if (new_size > old_size) {
+            return null;
+        }
 
+        break :shrunk existing;
+    };
+    vm.meter.used = next;
     return result;
 }
 
 fn instructionHook(state: ?*lua_api.c.lua_State, _: ?*lua_api.c.lua_Debug) callconv(.c) void {
-    var userdata: ?*anyopaque = null;
-    _ = lua_api.c.lua_getallocf(state.?, &userdata);
-    const vm: *Vm = @ptrCast(@alignCast(userdata.?));
+    const vm = of(state.?);
     vm.instruction_count +|= vm_support.hook_instruction_interval;
     if (vm.instruction_count <= vm.instruction_limit and vm_support.monotonic(vm.io) <= vm.deadline_ns) {
         return;

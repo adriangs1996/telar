@@ -95,6 +95,7 @@ pub fn init(b: *std.Build) ?@This() {
         .optimize = optimize,
     });
     libraries.addImports(core);
+    libraries.addImports(telar_lua);
     coverage.instrumentModule(core);
     const data = model_build.create(b, core, libraries);
     b.modules.put(

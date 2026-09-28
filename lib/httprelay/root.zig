@@ -38,6 +38,7 @@ test {
     _ = @import("http2/Decoded.zig");
     _ = @import("http2/GenericConnection.zig");
     _ = @import("http2/H2Route.zig");
+    _ = @import("http2/header_memory.zig");
     _ = @import("http2/IntegrationContext.zig");
     _ = @import("http2/Lifecycle.zig");
     _ = @import("http2/Observer.zig");
