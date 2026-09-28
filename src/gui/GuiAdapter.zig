@@ -57,6 +57,9 @@ const animate = @import("animate");
 const FrameClock = animate.FrameClock;
 const native_callbacks = @import("native/window_callbacks.zig");
 const window_machines = @import("window_machines.zig");
+const clipboard_image = @import("clipboard_image.zig");
+const ImagePreviews = @import("ImagePreviews.zig");
+const DiagramStore = @import("diagrams/Store.zig");
 const TestSession = @import("tests/Session.zig");
 const input_test_support = @import("tests/input_support.zig");
 const GuiAdapter = @This();
@@ -138,6 +141,10 @@ sidebar: SidebarPreference = .{},
 overlays: Overlays = .{},
 graphics_store: graphics_delivery.Store,
 diagrams: DiagramService,
+/// The window client's clipboard image previews, bound as its attachment shelf.
+previews: ImagePreviews,
+/// The preview revision the chrome was last prepared at.
+previews_prepared: u64 = 0,
 syntax: SyntaxService,
 review: *ReviewPanel,
 
@@ -184,6 +191,9 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.window_title = .{};
     gui.hostname_len = 0;
     try client.Client.init(gui.app, params);
+    gui.previews = .init(params.gpa);
+    gui.previews_prepared = 0;
+    gui.app.model.host.clipboard_capture = clipboard_image.supported();
 
     // Native chrome uses the shared semantic projection, never TUI Kitty output.
     gui.driver.configuration.inbox = &gui.driver.inbox;
@@ -228,6 +238,7 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.app.graphics = host_ports.graphicsRetention(gui);
     gui.app.chrome = host_ports.chrome(gui);
     gui.app.host_input_source = host_ports.hostInput(gui);
+    gui.app.attachments = gui.previews.port();
 
     return gui;
 }
@@ -244,6 +255,7 @@ pub fn deinit(self: *GuiAdapter) void {
 
     self.graphics_store.deinit();
     self.diagrams.deinit();
+    self.previews.deinit();
     self.chrome.favicons.deinit(gpa);
     gpa.destroy(self.review);
     // Other machines share the window client's configuration, so they go
@@ -633,6 +645,7 @@ fn dispatch(self: *GuiAdapter, event: gui_event.Message) !?u8 {
         .diagram_ready => self.landDiagram(),
         .syntax_ready => self.landSyntax(),
         .change_review_ready => self.landChangeReview(),
+        .clipboard_image => |completion| try clipboard_image.finish(self, completion),
     }
 
     return if (self.stopped) @as(u8, 0) else null;
@@ -1491,8 +1504,8 @@ fn deliverHostEffects(self: *GuiAdapter) !void {
     }
 }
 
-/// The window has no outer terminal and no media capture, and it redraws
-/// every image placement each frame.
+/// The window has no outer terminal, and it redraws every image placement
+/// each frame. Only its own client captures clipboard images.
 fn deliverRequests(self: *GuiAdapter) !void {
     const effects = &self.app.model.to_host;
     _ = effects.takePlacementInvalidation();
@@ -1518,10 +1531,16 @@ fn deliverRequests(self: *GuiAdapter) !void {
                 else => return err,
             },
             .terminal_notification => {},
-            .capture => |request| try client.clipboard_capture.completeClipboardCapture(self.app, .{
-                .execution_id = @enumFromInt(request.sequence),
-                .result = error.NativeServiceUnavailable,
-            }),
+            .capture => |request| {
+                const started = if (self.app == window_machines.window(self)) clipboard_image.start(self, request) else error.NativeServiceUnavailable;
+                started catch |err| try client.clipboard_capture.completeClipboardCapture(
+                    self.app,
+                    .{
+                        .execution_id = @enumFromInt(request.sequence),
+                        .result = err,
+                    },
+                );
+            },
             .machine => |request| try window_machines.choose(self, request),
         }
     }
@@ -1767,6 +1786,7 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
 
     self.chrome.now_ns = pacing.clock.monotonic(self.app.io);
     self.diagrams.beginFrame();
+    self.previews.beginFrame();
     self.syntax.beginFrame();
     try self.review.synchronize(self.app);
     self.review.widget.theme_override = self.app.model.theme;
@@ -1786,7 +1806,13 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
         .diagrams = &self.diagrams.store,
         .syntax = &self.syntax.store,
         .review = if (self.review.active) &self.review.widget else null,
+        .previews = if (self.showsPreviews()) &self.previews else null,
     };
+
+    if (self.previews.revision != self.previews_prepared) {
+        self.previews_prepared = self.previews.revision;
+        self.chrome.invalidate();
+    }
 
     const commit = try scene.prepare(projected);
     const diagram_revision = self.diagrams.store.revision;
@@ -1798,7 +1824,8 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
             .inbox = &self.driver.inbox,
         },
     );
-    renderer.diagrams = self.diagrams.store.textures();
+    renderer.diagrams[0..DiagramStore.capacity].* = self.diagrams.store.textures();
+    renderer.diagrams[ImagePreviews.sheet_slot..][0..2].* = self.previews.textures(self.showsPreviews());
 
     if (self.diagrams.store.revision != diagram_revision) {
         self.chrome.invalidate();
@@ -1821,6 +1848,11 @@ fn tooltipCover(self: *const GuiAdapter, renderer: *const Renderer) ?cellgrid.Re
     const hit = if (self.pointer.hover.link) |*value| value else return null;
     const area = LinkTooltip.place(hit, renderer.metrics, renderer.origin, renderer.chrome) orelse return null;
     return LinkTooltip.cover(area, renderer.metrics, renderer.origin);
+}
+
+/// The previews belong to the window's own client and show only with it.
+fn showsPreviews(self: *const GuiAdapter) bool {
+    return self.app == &self.clients[client.Machines.local_slot];
 }
 
 /// Defers image adoption until the current GPU consumer releases its frame.
@@ -1932,6 +1964,7 @@ pub fn observation(self: *const GuiAdapter) client.Observation {
     version.link +%= self.machines.revision;
     return .{
         .model = version,
+        .attachment_ingress = self.previews.revision,
         .geometry_revision = shared_model.workbench.region(&self.app.model).revision,
         .presentation_ingress = self.ingress(),
     };

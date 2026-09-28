@@ -91,11 +91,13 @@ Implementation must follow the [invariants](../invariants.md) and the
     runtime sends but has no GPU consumer for them and reports
     `images = .unsupported`, so panes show the cell fallback), OSC 9
     notifications to the host terminal (`delivery = "terminal"` is now
-    dropped), and the clipboard image previews below.
+    dropped), and, until the window bound them again, the clipboard image
+    previews below.
   - Clipboard image previews below an agent's pane (`AttachmentShelf`,
-    [clipboard image](../flows/clipboard-image.md)) existed only in the TUI and
-    are gone: the window never bound a shelf. The agent still receives the
-    paste and reads the image itself; only the preview is missing.
+    [clipboard image](../flows/clipboard-image.md)) existed only in the TUI.
+    The window binds them again for its own client on macOS
+    (`ImagePreviews`); other machines' clients and the headless client bind
+    no shelf.
   - Not found in the inventory but also a TUI consumer:
     `verify_terminal_browser.py`.
   - `client.sidebar.renderer` is still accepted, with no effect, because the

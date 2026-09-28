@@ -13,6 +13,7 @@ const Overlays = @import("../widgets/overlays/Overlays.zig");
 const LinkHit = @import("../input/LinkHit.zig");
 const State = @import("../widgets/interaction/State.zig");
 const Store = @import("../diagrams/Store.zig");
+const ImagePreviews = @import("../ImagePreviews.zig");
 const Scene = @This();
 
 terminal: *TerminalRenderer,
@@ -24,6 +25,7 @@ widgets: ?*State = null,
 diagrams: ?*Store = null,
 syntax: ?*SyntaxStore = null,
 review: ?*ReviewWidget = null,
+previews: ?*const ImagePreviews = null,
 
 /// Nothing retained by a layer may borrow the projection after this returns.
 /// Example: `const commit = try scene.prepare(projection);`
@@ -48,7 +50,7 @@ pub fn prepare(self: *Scene, projection: client.Projection) !data.PresentationCo
         widgets.prompt_generation = if (projection.prompt) |prompt| prompt.generation else 0;
     }
     self.overlays.scale = renderer.scale;
-    var composition: Composition = .{ .chrome = self.chrome, .overlays = self.overlays, .canvas = &canvas, .link = self.link };
+    var composition: Composition = .{ .chrome = self.chrome, .overlays = self.overlays, .canvas = &canvas, .link = self.link, .previews = self.previews };
     const widgets = try composition.render(&projection);
     try widgets.draw(&canvas);
 

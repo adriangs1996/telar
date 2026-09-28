@@ -24,9 +24,9 @@ try widgets.draw(&canvas);
 
 `Composition` owns the context borrowed by chrome widgets. Keep it and the
 projection at stable addresses until drawing returns; returning the list does
-not extend either lifetime. The list holds at most 75 widgets, derived from the
-64-pane limit, one link, six chrome sections, one focus indicator, two notices
-and one modal. Its commit captures the generations and damage of the panes
+not extend either lifetime. The list holds at most 78 widgets, derived from the
+64-pane limit, one link, seven chrome sections, one focus indicator, two
+notices, one modal and the image preview shelf and modal. Its commit captures the generations and damage of the panes
 actually composed.
 
 `frame_widget.zig` declares the frame's tagged union. Add a variant and select it
