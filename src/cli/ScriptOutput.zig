@@ -54,8 +54,16 @@ test "the error line is the last one printed" {
 }
 
 test "ssh's own failure is told from the command's" {
-    const refused: ScriptOutput = .{ .term = .{ .exited = 255 }, .stdout = &.{}, .stderr = &.{} };
-    const answered: ScriptOutput = .{ .term = .{ .exited = 1 }, .stdout = &.{}, .stderr = &.{} };
+    const refused: ScriptOutput = .{
+        .term = .{ .exited = 255 },
+        .stdout = &.{},
+        .stderr = &.{},
+    };
+    const answered: ScriptOutput = .{
+        .term = .{ .exited = 1 },
+        .stdout = &.{},
+        .stderr = &.{},
+    };
     try std.testing.expect(refused.sshFailed());
     try std.testing.expect(!answered.sshFailed());
 }

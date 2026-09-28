@@ -403,7 +403,13 @@ fn startJobs(self: *HeadlessClient) !void {
             };
         } else if (app.to_background.pop()) |job| {
             if (recordedInstead(job)) |completion| {
-                self.trace.record(.{ .kind = .effect, .t_ns = pacing.clock.monotonic(self.io) }, @tagName(job));
+                self.trace.record(
+                    .{
+                        .kind = .effect,
+                        .t_ns = pacing.clock.monotonic(self.io),
+                    },
+                    @tagName(job),
+                );
                 const status = try app.update(completion);
                 std.debug.assert(status == null);
                 try app.flush();
