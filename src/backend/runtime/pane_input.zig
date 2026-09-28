@@ -62,7 +62,7 @@ pub fn sendText(model: *RuntimeModel, session: *Session, request: core.SendPaneT
     }
 
     if (agent_control.focusedByClient(model, pane.id)) {
-        return client_request.fail(session, request.request_id, .pane_focused, "a person is typing in this pane");
+        return client_request.fail(session, request.request_id, .pane_focused, "the pane has the focus in an attached window");
     }
 
     var storage: [core.max_pane_text_input_bytes + agent_control.max_sender_line_bytes + prompt_overhead]u8 = undefined;

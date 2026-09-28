@@ -1,4 +1,5 @@
 const DiagnosticsOptions = @import("arguments/DiagnosticsOptions.zig");
+const core = @import("telar-core");
 const std = @import("std");
 const Log = @This();
 pub const max_tail_bytes = 64 * 1024;
@@ -8,23 +9,16 @@ pid: u32,
 
 /// Recognizes only exact telemetry suffixes for the selected socket. Example: `const log = DiagnosticLog.parse(name, base);`
 pub fn parse(name: []const u8, base: []const u8) ?Log {
-    if (!std.mem.startsWith(u8, name, base) or !std.mem.endsWith(u8, name, ".log")) {
+    const log = core.DiagnosticLogName.parse(name) orelse return null;
+    if (log.rotated or !std.mem.eql(u8, name[0..log.endpoint_len], base)) {
         return null;
     }
 
-    const suffix = name[base.len..];
-    const component: DiagnosticsOptions.Component = if (std.mem.startsWith(u8, suffix, ".runtime-")) .runtime else if (std.mem.startsWith(u8, suffix, ".client-")) .client else return null;
-    const prefix_len: usize = if (component == .runtime) ".runtime-".len else ".client-".len;
-    if (suffix.len <= prefix_len + ".log".len) {
-        return null;
-    }
-
-    const id = std.fmt.parseUnsigned(u32, suffix[prefix_len .. suffix.len - ".log".len], 10) catch return null;
-    if (id == 0) {
-        return null;
-    }
-
-    return .{ .name = name, .component = component, .pid = id };
+    const component: DiagnosticsOptions.Component = switch (log.role) {
+        .runtime => .runtime,
+        .client => .client,
+    };
+    return .{ .name = name, .component = component, .pid = log.pid };
 }
 
 /// Returns a tail aligned to whole starting lines. Example: `const text = DiagnosticLog.tail(bytes, 20);`

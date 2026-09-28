@@ -22,7 +22,7 @@ pub fn run(init: std.process.Init, options: Options) !u8 {
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     defer output.interface.flush() catch {};
     execute(&session, options, .{ .writer = &output.interface, .environ = init.minimal.environ }) catch |err| {
-        std.debug.print("telar review: {s}\n", .{session.review_failure orelse control.describe(err)});
+        std.debug.print("telar review: {s}\n", .{session.failure_reason orelse control.describe(err)});
         return 1;
     };
     return 0;

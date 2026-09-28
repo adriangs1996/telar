@@ -151,8 +151,8 @@ pub const FailureCode = enum(u16) {
     agent_blocked = 9,
     pane_exited = 10,
     worktree_not_found = 11,
-    /// Text aimed at the pane a person is typing in; refused so automation
-    /// never interleaves with their input.
+    /// Text aimed at a pane that has the focus in an attached UI; refused so
+    /// automation never interleaves with what a person types there.
     pane_focused = 12,
     /// The sender exceeded its prompt budget for this target.
     prompt_rate_limited = 13,

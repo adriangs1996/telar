@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const LaunchTestFault = @import("../LaunchTestFault.zig");
 const RequestFixture = @import("RequestFixture.zig");
+const agent_control = @import("../agent_control.zig");
 
 const missing_pane: core.PaneId = @enumFromInt(99);
 const missing_location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(99) }, .tab_id = @enumFromInt(99) };
@@ -271,4 +272,71 @@ test "runtime dispatch owns routed command text and keeps its exact pending corr
     try std.testing.expect(fixture.session.pending_client_command == null);
     try std.testing.expectEqual(target.key.id, fixture.response().?.client_command_result.route.id);
     try std.testing.expectEqualStrings("original draft", fixture.response().?.client_command_result.text());
+}
+
+test "a tab launched in the background keeps every focus where it was and takes text" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const model = &fixture.runtime.model;
+    const focused = try fixture.openPane();
+    const identity: core.ClientIdentity = @enumFromInt(5);
+    fixture.session.delivery.client_identity = identity;
+    const record = &model.client_layouts.records[0];
+    record.identity = identity;
+    record.active_tab = focused.location;
+    record.tabs[0] = .{
+        .location = focused.location,
+        .focused_pane = focused.id,
+        .fullscreen = false,
+        .workspace_active = true,
+        .node_count = 0,
+    };
+    record.tab_count = 1;
+    const tabs_before = model.workspaces.totalTabs();
+
+    var launch_buffer: [64]u8 = undefined;
+    try fixture.send(.{ .launch_tab = .{
+        .request_id = @enumFromInt(41),
+        .workspace = focused.location.workspace.workspace,
+        .label = "dispatch",
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try RequestFixture.sleepLaunch(&launch_buffer),
+    } });
+    const response = fixture.response() orelse return error.MissingReply;
+    try std.testing.expect(response.* == .pane_opened);
+    const opened = response.pane_opened;
+    fixture.clearResponses();
+
+    try std.testing.expectEqual(tabs_before + 1, model.workspaces.totalTabs());
+    try std.testing.expect(model.attachments.find(fixture.session.slot, opened.pane_id) == null);
+    try std.testing.expect(agent_control.focusedByClient(model, focused.id));
+    try std.testing.expect(!agent_control.focusedByClient(model, opened.pane_id));
+
+    const background = model.panes.find(opened.pane_id).?;
+    background.input_write_pending = true;
+    defer {
+        background.input_write_pending = false;
+        background.input_queue.clear();
+    }
+    try fixture.send(.{ .send_pane_text = .{
+        .request_id = @enumFromInt(41),
+        .pane_id = opened.pane_id,
+        .pane_generation = opened.pane_generation,
+        .mode = .raw,
+        .text = "echo hi",
+    } });
+    const typed = fixture.response() orelse return error.MissingReply;
+    try std.testing.expect(typed.* == .request_completed);
+    fixture.clearResponses();
+    try std.testing.expectEqualStrings("echo hi", background.input_queue.nextChunk().?);
+
+    try fixture.send(.{ .launch_tab = .{
+        .request_id = @enumFromInt(41),
+        .workspace = @enumFromInt(99),
+        .label = "",
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try RequestFixture.sleepLaunch(&launch_buffer),
+    } });
+    try expectFailure(&fixture, .workspace_not_found);
 }

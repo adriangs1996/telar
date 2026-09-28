@@ -37,6 +37,15 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     }
 
     const action = std.meta.stringToEnum(core.ClientAction, name) orelse return null;
+    // A tab created in the background never reaches a UI: the runtime opens it.
+    if (action == .tab_create) {
+        for (args[2..]) |argument| {
+            if (std.mem.eql(u8, std.mem.span(argument), "--background")) {
+                return null;
+            }
+        }
+    }
+
     if (action == .pane_focus) {
         for (args[2..]) |argument| {
             const arg = std.mem.span(argument);
@@ -147,4 +156,9 @@ test "routed commands require an explicit positive UI client and target" {
     const options = (try parse(&.{ "workspace", "select", "42", "--client", "7", "--json" })).?;
     try std.testing.expectEqual(@as(u64, 42), options.target_id);
     try std.testing.expectEqual(@as(u64, 7), options.client_id);
+}
+
+test "a background tab is left to the runtime, not routed to a UI" {
+    try std.testing.expect((try parse(&.{ "tab", "create", "--background", "--label", "x" })) == null);
+    try std.testing.expectError(error.MissingClientId, parse(&.{ "tab", "create", "--label", "x" }));
 }

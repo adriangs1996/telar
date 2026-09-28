@@ -108,6 +108,7 @@ pub fn receive(model: *RuntimeModel, session: *Session, message: core.ClientMess
         .complete_pane_focus => |request| client_control.finishFocus(model, session, request),
         .register_worktree => |request| worktree_lifecycle.register(model, session, request),
         .launch_worktree => |request| worktree_lifecycle.launch(model, session, request),
+        .launch_tab => |request| tab_creation.launch(model, session, request),
         .forget_worktree => |request| worktree_lifecycle.forget(model, session, request),
         .interrupt_agent => |request| agent_control.interrupt(model, session, request),
         .report_agent_progress => |request| agent_hooks.receiveProgress(model, session, request),

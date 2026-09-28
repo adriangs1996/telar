@@ -22,6 +22,10 @@ enabled: bool,
 /// var telemetry = State.init(io, runtime_endpoint);
 /// ```
 pub fn init(io: std.Io, endpoint: []const u8) State {
+    if (endpoint.len != 0) {
+        core.Sink.removeOrphans(io, endpoint);
+    }
+
     if (!core.enabled or endpoint.len == 0) {
         return .{
             .metrics = .{ .started_ns = core.now(io) },

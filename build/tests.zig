@@ -199,6 +199,8 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         // never run unless they are their own suite roots.
         .{ .path = "src/core/graphics.zig" },
         .{ .path = "src/core/diagnostics.zig" },
+        .{ .path = "src/core/Sink.zig", .libc = true },
+        .{ .path = "src/core/DiagnosticLogName.zig" },
         .{ .path = "src/core/ProfileStore.zig", .libc = true },
         .{ .path = "src/core/MachineProfiles.zig" },
         .{ .path = "src/core/schema/handshake.zig", .schema = true },

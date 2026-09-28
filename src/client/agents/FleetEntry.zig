@@ -9,5 +9,9 @@ card: FleetCard,
 /// The project heading the group; null when the agent's workspace is not
 /// in the workspace list.
 project: ?core.WorkspaceId,
+/// The agent, by index, whose pane created this task's worktree; the task
+/// is drawn indented under it. Null for agents and for tasks whose creator
+/// is gone, is itself a task, or is the task's own pane.
+creator: ?u8 = null,
 /// Whether this entry opens a new project group.
 first_in_project: bool = false,

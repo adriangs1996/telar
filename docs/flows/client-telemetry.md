@@ -66,9 +66,27 @@ disabled and `finishWrite` closes the file once that write completes. Clients
 whose sink cannot be created, and release builds, schedule no telemetry work.
 Adapters cancel their jobs before `Client.deinit` closes the sink.
 
+## Where the lines go
+
+The runtime writes `<endpoint>.runtime-<pid>.log` the same way, once a
+second. Both go through `core.Sink`, which bounds them: a file that would
+pass `Sink.max_file_bytes` (4 MiB, about 17 minutes of runtime lines)
+becomes `<name>.log.1`, replacing the previous one, and writing restarts
+in an empty file, so a process keeps at most 8 MiB. A failed rotation
+retires the sink like any failed write. When a runtime or a client starts,
+`Sink.removeOrphans` removes, from the socket's directory, the
+`<endpoint>.runtime-<pid>.log` and `<endpoint>.client-<pid>.log` (and their
+`.1`) whose process no longer runs, when the endpoint is this one or its
+name ends in `.sock`, so a socket in a directory of other files never
+removes a file telar did not write; release builds, which write no lines, clean up
+too. `telar diagnostics logs` reads the current files, not the `.1`.
+
 ## Validation
 
 - `src/client/resources/client_telemetry.zig` proves the bounded line.
+- `src/core/Sink.zig` proves rotation into one previous generation and
+  that cleanup removes the logs of ended processes and keeps the rest;
+  `src/core/DiagnosticLogName.zig` the names it recognizes.
 - `src/client/resources/TelemetryState.zig` proves the one write token,
   deferred shutdown and write-failure recovery, and that a client without an
   endpoint stays disabled.

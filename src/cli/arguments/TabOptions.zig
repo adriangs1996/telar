@@ -13,6 +13,8 @@ target: ?entity_target.Target = null,
 label: ?[*:0]const u8 = null,
 direction: ?core.TabMoveDirection = null,
 relative_to: ?core.TabId = null,
+/// `create`: open the tab without any UI switching to it.
+background: bool = false,
 
 /// Parses tab commands without runtime access. Example: `try TabOptions.parse(&.{"list", "--workspace", "1"});`
 pub fn parse(args: []const [*:0]const u8) !TabOptions {
@@ -24,7 +26,7 @@ pub fn parse(args: []const [*:0]const u8) !TabOptions {
     var self: TabOptions = .{ .action = action };
     var workspace_seen = false;
     var index: usize = 1;
-    if (action != .list) {
+    if (action != .list and action != .create) {
         if (args.len < 2) {
             return error.MissingTabTarget;
         }
@@ -71,6 +73,24 @@ pub fn parse(args: []const [*:0]const u8) !TabOptions {
             }
 
             self.relative_to = @enumFromInt(target.id);
+        } else if (std.mem.eql(u8, arg, "--background") and action == .create) {
+            if (self.background) {
+                return error.DuplicateBackgroundOption;
+            }
+
+            self.background = true;
+        } else if (std.mem.eql(u8, arg, "--label") and action == .create) {
+            if (self.label != null) {
+                return error.DuplicateLabelOption;
+            }
+
+            const value = try cursor.require(error.MissingTabLabel);
+            const label = std.mem.span(value);
+            if (label.len > core.max_tab_label_bytes or !std.unicode.utf8ValidateSlice(label)) {
+                return error.InvalidTabLabel;
+            }
+
+            self.label = value;
         } else if (std.mem.eql(u8, arg, "--workspace")) {
             if (workspace_seen) {
                 return error.DuplicateWorkspaceOption;
@@ -96,7 +116,21 @@ pub fn parse(args: []const [*:0]const u8) !TabOptions {
         }
     }
 
+    // Without --background, `tab create` goes to a UI and needs --client.
+    if (action == .create and !self.background) {
+        return error.MissingClientId;
+    }
+
     return self;
+}
+
+test "a background tab takes a workspace and a label but no target" {
+    const options = try TabOptions.parse(&.{ "create", "--background", "--label", "tests", "--workspace", "4", "--json" });
+    try std.testing.expect(options.background);
+    try std.testing.expectEqualStrings("tests", std.mem.span(options.label.?));
+    try std.testing.expectEqual(@as(u64, 4), options.workspace.id);
+    try std.testing.expectError(error.MissingClientId, TabOptions.parse(&.{"create"}));
+    try std.testing.expectError(error.UnknownTabOption, TabOptions.parse(&.{ "get", "8", "--background" }));
 }
 
 test "tab move validates direction and its optional anchor" {

@@ -30,6 +30,8 @@ bounds: Rect,
 agent: *const data.Agent,
 task: *const data.WorktreeRow,
 card: FleetCard,
+/// Drawn under the agent that created the task, with a guide line.
+nested: bool = false,
 geometry: CardGeometry,
 age_s: u32,
 
@@ -45,7 +47,10 @@ pub fn draw(self: TaskCard, canvas: *Canvas) !void {
         try canvas.fillRoundedAt(self.bounds, .{ .radius = radius, .color = palette.surface1 });
     }
 
-    try canvas.fillAt(.{ .x = self.bounds.x - self.geometry.px(CardGeometry.task_indent) / 2, .y = self.bounds.y, .width = 1, .height = self.bounds.height }, palette.surface1);
+    if (self.nested) {
+        try canvas.fillAt(.{ .x = self.bounds.x - self.geometry.px(CardGeometry.task_indent) / 2, .y = self.bounds.y, .width = 1, .height = self.bounds.height }, palette.surface1);
+    }
+
     switch (self.card) {
         .task_compact => try self.drawCompact(canvas),
         .agent, .task_full => try self.drawFull(canvas),

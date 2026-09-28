@@ -162,8 +162,17 @@ ambiguity error that lists their panes.
 `send_pane_text` and `interrupt_agent` fail with `pane_focused` when the pane
 is the focused pane of the active tab of any attached UI client
 (`agent_control.focusedByClient`, over the `ClientLayouts` each client
-reports). A person is presumably typing there; the coordinator asks them
-instead. `pane send-keys` is not exempt.
+reports). The rule checks focus, not typing: a person may type into a
+focused pane at any moment, so the coordinator asks them instead. `pane
+send-keys` is not exempt, and the message says what was checked.
+
+`telar tab create --client ID` asks that UI to open the tab, and the UI
+moves its focus to it, as when the person opens one; the new pane then
+refuses text. `telar tab create --background` sends `launch_tab` instead:
+the runtime opens the tab and its shell in the workspace's directory
+(`tab_creation.launch`), leases no geometry and attaches nobody, so every
+UI keeps its focus and a script may type into the new pane at once. It is
+the path `worktree exec` already took (`tab_creation.open` serves both).
 
 ## Sender line and budget
 

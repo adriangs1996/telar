@@ -39,7 +39,7 @@ pub fn interrupt(model: *RuntimeModel, session: *Session, request: core.Interrup
     }
 
     if (focusedByClient(model, pane.id)) {
-        return client_request.fail(session, request.request_id, .pane_focused, "a person is typing in this pane");
+        return client_request.fail(session, request.request_id, .pane_focused, "the pane has the focus in an attached window");
     }
 
     const exact = pane.key();

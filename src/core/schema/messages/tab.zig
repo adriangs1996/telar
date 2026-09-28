@@ -10,6 +10,8 @@ const id = @import("../id.zig");
 const launch_mod = @import("launch.zig");
 const Decoder = bytecodec.Decoder;
 const CreateTabView = @import("CreateTabView.zig");
+const LaunchTab = @import("LaunchTab.zig");
+const LaunchTabView = @import("LaunchTabView.zig");
 const RenameTab = @import("RenameTab.zig");
 const CloseTab = @import("CloseTab.zig");
 const MoveTab = @import("MoveTab.zig");
@@ -52,6 +54,41 @@ pub fn decodeCreateTab(decoder: *Decoder) !CreateTabView {
     return .{
         .request_id = request_id,
         .workspace = location,
+        .label = label,
+        .size = size,
+        .launch = try launch_mod.decodeLaunch(decoder),
+    };
+}
+
+/// Encodes a request for a tab opened without attaching the sender.
+///
+/// ```zig
+/// const bytes = try encodeLaunchTab(&buffer, .{ .request_id = request, .workspace = workspace, .size = size, .launch = launch });
+/// ```
+pub fn encodeLaunchTab(buffer: []u8, message: LaunchTab) ![]const u8 {
+    try codec.validateRequestId(message.request_id);
+    _ = try id.workspace(id.raw(message.workspace));
+    try message.size.validate();
+    try codec.validateTabLabel(message.label, true);
+    var encoder = Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(tags.ClientTag.launch_tab));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u64, id.raw(message.workspace));
+    try encoder.writeSized16(message.label);
+    try codec.encodeSize(&encoder, message.size);
+    try launch_mod.encodeLaunch(&encoder, message.launch);
+    return encoder.finish();
+}
+
+pub fn decodeLaunchTab(decoder: *Decoder) !LaunchTabView {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const workspace = try id.workspace(try decoder.readInt(u64));
+    const label = try decoder.readSized16();
+    try codec.validateTabLabel(label, true);
+    const size = try codec.decodeSize(decoder);
+    return .{
+        .request_id = request_id,
+        .workspace = workspace,
         .label = label,
         .size = size,
         .launch = try launch_mod.decodeLaunch(decoder),
