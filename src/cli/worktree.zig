@@ -114,8 +114,12 @@ fn create(init: std.process.Init, command: Command) !u8 {
     var base_buffer: [256]u8 = undefined;
     const base = if (options.from) |from| std.mem.span(from) else try worktree_git.currentBranch(init, root, &base_buffer);
     // The runtime records the base whole; refuse one it cannot hold before
-    // Git creates anything.
+    // Git creates anything, and a worktree it has no row left for.
     workspace_grammar.validateWorktreeBranch(base) catch return error.UnusableBase;
+    if (command.catalog.worktrees.items.len >= core.max_worktree_entries) {
+        return error.WorktreeLimitReached;
+    }
+
     const source = try sourceWorkspace(init, command, root);
     try worktree_git.add(init, .{
         .root = root,
@@ -134,7 +138,7 @@ fn create(init: std.process.Init, command: Command) !u8 {
         .path = checkout,
         .branch = branch,
         .base = base,
-        .title =if (options.title) |title| std.mem.span(title) else "",
+        .title = if (options.title) |title| std.mem.span(title) else "",
         .brief = briefOf(argv, &brief_buffer),
         .dispatched_from = if (options.dispatched_from) |label| std.mem.span(label) else "",
     });
@@ -821,6 +825,7 @@ fn describe(err: anyerror) []const u8 {
         error.PathTooLong => "the worktree path exceeds the supported length",
         error.InvalidWorktreeBranch => "the branch name is not usable for a worktree",
         error.UnusableBase => "the base branch name is too long or not usable; pass --from REF",
+        error.WorktreeLimitReached => "the runtime tracks as many worktrees as it can; remove one first",
         error.GitDiffFailed => "git diff failed",
         error.UnknownMachine => "no saved machine or local label has that name; see `telar machine list`",
         error.FetchNeedsAnotherMachine => "fetch brings a branch from another machine; this label names this one",

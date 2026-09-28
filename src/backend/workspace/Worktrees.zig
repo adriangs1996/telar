@@ -9,6 +9,9 @@ const RegisteredWorktree = @import("RegisteredWorktree.zig");
 const Worktrees = @This();
 
 pub const capacity = core.max_worktree_entries;
+/// Rows only `telar worktree create` and its hook may take, so worktrees
+/// found by observation never leave a checkout Git just added untracked.
+pub const reserved_for_telar = 16;
 const Rows = std.bit_set.IntegerBitSet(capacity);
 
 id: [capacity]core.WorktreeId = @splat(.invalid),
@@ -66,6 +69,10 @@ pub fn register(self: *Worktrees, gpa: std.mem.Allocator, request: WorktreeRegis
     if (self.slotOfPath(request.path)) |slot| {
         self.rename(slot, request.title, request.brief);
         return .{ .id = self.id[slot], .slot = slot, .created = false };
+    }
+
+    if (request.origin == .external and self.count >= capacity - reserved_for_telar) {
+        return error.WorktreeLimitReached;
     }
 
     var free = self.rows.complement().iterator(.{});
@@ -480,6 +487,27 @@ test "commands and workspace links follow their panes" {
     try std.testing.expectEqual(@as(usize, 1), table.listEntries(&entries).len);
     try std.testing.expect(table.remove(gpa, registered.id));
     try std.testing.expectEqual(@as(usize, 0), table.listEntries(&entries).len);
+}
+
+test "found worktrees leave room for the ones telar creates" {
+    const gpa = std.testing.allocator;
+    const table = try testingTable();
+    defer destroyTestingTable(table);
+    const source: core.WorkspaceId = @enumFromInt(1);
+
+    var buffer: [32]u8 = undefined;
+    for (0..capacity - reserved_for_telar) |index| {
+        const path = try std.fmt.bufPrint(&buffer, "/w/found-{d}", .{index});
+        _ = try table.register(gpa, .{ .source = source, .origin = .external, .path = path, .branch = "b" });
+    }
+
+    try std.testing.expectError(error.WorktreeLimitReached, table.register(gpa, .{ .source = source, .origin = .external, .path = "/w/one-more", .branch = "b" }));
+    for (0..reserved_for_telar) |index| {
+        const path = try std.fmt.bufPrint(&buffer, "/w/made-{d}", .{index});
+        _ = try table.register(gpa, .{ .source = source, .path = path, .branch = "b" });
+    }
+
+    try std.testing.expectEqual(@as(usize, capacity), table.count);
 }
 
 test "registration refuses text no client could decode" {

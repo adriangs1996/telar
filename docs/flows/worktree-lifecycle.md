@@ -19,7 +19,8 @@ cli.worktree.create
         |  worktree_git.mainRoot (git rev-parse --git-common-dir)
         |  worktree_git.deriveDirectory -> <repo>-worktrees/<branch>
         |  base: --from, else the main checkout's branch; one the runtime
-        |        cannot record whole is refused before Git runs
+        |        cannot record whole, or a full Worktrees table, is refused
+        |        before Git runs
         |  worktree_git.add (git worktree add -b <branch> <dir> <base>)
         |
 schema.register_worktree{source, created_by, path, branch, base, title, brief}
@@ -106,16 +107,20 @@ for that workspace; the CLI never changes focus of the pane it runs in.
 
 A row whose checkout disappeared turns `gone` and stays listed. The command
 palette's "Forget gone worktrees" (`forget-gone-worktrees`) sends a
-`forget_worktree` for every gone row the client lists
-(`src/model/workspace/worktree_lifecycle.zig`); there is nothing left on disk
-to remove. `telar worktree remove BRANCH` forgets one row the same way.
+`forget_worktree` for every gone row the client lists whose tabs are all
+closed (`src/model/workspace/worktree_lifecycle.zig`); there is nothing left
+on disk to remove. Forgetting closes a worktree's tabs, so a gone row with a
+tab still open, such as a shell left in the deleted directory, waits for the
+user to close it. `telar worktree remove BRANCH` forgets one row the same way.
 Plugins cannot trigger it.
 
 ## Persistence
 
 `session_checkpoint` writes one `WorktreeRecord` per row (record kind
 `worktree`, since checkpoint version 6; version 7 adds `dispatched_from`),
-checked by `checkpoint.validateWorktree` with the same text rule. Restore
+checked by `checkpoint.validateWorktree` with the same text rule. A record
+that fails it is skipped (`Reader.skipped_worktrees`) rather than
+quarantining the whole checkpoint with its workspaces and panes. Restore
 rebuilds rows before workspaces, then `releaseMissingWorkspaces` unbinds rows
 whose child workspace did not come back. See
 [Session checkpoint](session-checkpoint.md).

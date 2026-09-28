@@ -8,8 +8,8 @@ const core = @import("telar-core");
 const ClientModel = @import("../state/ClientModel.zig");
 const WorktreeRow = @import("WorktreeRow.zig");
 
-/// Queues a `forget_worktree` for every gone row the replica lists and
-/// returns how many it sent. A row forgotten meanwhile fails with
+/// Queues a `forget_worktree` for every gone row the replica lists whose
+/// tabs are all closed, and returns how many it sent. A row forgotten meanwhile fails with
 /// `worktree_not_found`, which nobody needs to hear about.
 ///
 /// ```zig
@@ -19,7 +19,9 @@ pub fn forgetGone(model: *ClientModel) !usize {
     const snapshot = &model.workspace_list_snapshot;
     var sent: usize = 0;
     for (snapshot.worktrees[0..snapshot.worktree_count]) |*row| {
-        if (row.state != .gone) {
+        // Forgetting closes the worktree's tabs; one with tabs open (a shell
+        // left in the deleted directory) is the user's to close first.
+        if (row.state != .gone or row.workspace != null) {
             continue;
         }
 
@@ -70,6 +72,19 @@ test "only gone worktrees are forgotten" {
     try std.testing.expectEqual(@as(usize, 2), try forgetGone(&model));
     try std.testing.expectEqual(@as(usize, 2), model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(u8, 2), model.to_runtime.len);
+}
+
+test "a gone worktree whose tabs are still open is left for the user to close" {
+    var model = ClientModel.init(std.testing.allocator, true);
+    defer model.deinit();
+    try model.to_runtime.reservePayloads(model.gpa);
+    var open = testingRow(3, .gone);
+    open.workspace = @enumFromInt(9);
+    model.workspace_list_snapshot.worktrees[0] = open;
+    model.workspace_list_snapshot.worktrees[1] = testingRow(4, .gone);
+    model.workspace_list_snapshot.worktree_count = 2;
+
+    try std.testing.expectEqual(@as(usize, 1), try forgetGone(&model));
 }
 
 test "nothing is sent when no worktree is gone" {
