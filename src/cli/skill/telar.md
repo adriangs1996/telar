@@ -66,14 +66,23 @@ Only commits travel; uncommitted files stay here. `telar worktree fetch
 
 1. `agent prompt` sends the text as one paste followed by Enter and returns
    immediately. Add `--wait` to block until the agent finishes or blocks;
-   exit code 3 means it never started working or timed out.
-2. `agent wait` polls the runtime; it never guesses. Exit codes: 0 reached,
+   exit code 3 means it never started working or timed out. telar encodes
+   Enter the way the agent's keyboard mode reads it. `pane send-keys
+   --enter` presses Enter 150 ms after the text, so an agent that reads fast
+   typing as a paste still submits it.
+2. `agent interrupt` presses the agent's own interrupt key (Ctrl+C for
+   Claude Code, Escape twice for OpenCode, Escape for the others). The agent
+   stays `working` until its screen shows the idle prompt. `agent prompt
+   --interrupt` waits up to 15 s for that before it sends the new prompt, and
+   fails if the turn does not stop. When Claude Code puts the unanswered
+   prompt back in its composer, telar clears it first.
+3. `agent wait` polls the runtime; it never guesses. Exit codes: 0 reached,
    2 the agent or pane is gone, 3 timed out.
-3. `agent read` and `pane read` return a plain-text snapshot of the most
+4. `agent read` and `pane read` return a plain-text snapshot of the most
    recent rows (`--source recent`, default) or the visible screen. Text is
    bounded; `truncated` in JSON output means older rows were dropped.
-4. Nothing here changes layout or focus; those belong to the user's client.
-5. `agent report-session` stores your own session id with your pane. After a
+5. Nothing here changes layout or focus; those belong to the user's client.
+6. `agent report-session` stores your own session id with your pane. After a
    runtime restart, telar relaunches the pane's shell and types the resume
    command for it (`claude --resume`, `codex resume`, `pi --session`, `cursor-agent --resume`,
    `opencode --session`). Agent hooks report the

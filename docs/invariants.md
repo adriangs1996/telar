@@ -210,6 +210,10 @@ better median never hides a worse tail.
 
 ## Recorded exceptions
 
+- **Interrupted draft** (`agent_control.clearRestoredDraft`): after a requested
+  interrupt, Claude Code's idle title and a composer holding text make the
+  runtime press Ctrl+C once more to clear the prompt Claude put back. Once
+  per interrupt, never at an empty prompt, where a second Ctrl+C exits.
 - **Windows resize** (`lib/console/WindowsResizeWatcher.zig`): one
   constant-cost poll per client, independent of pane count, until console
   records are translated centrally.
