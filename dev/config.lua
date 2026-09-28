@@ -235,7 +235,6 @@ return telar.config({
 
 		sidebar = {
 			visible = true,
-			renderer = "automatic",
 		},
 
 		panels = {

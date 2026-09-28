@@ -2,7 +2,6 @@ const std = @import("std");
 
 pub const NotificationDelivery = enum {
     telar,
-    terminal,
     system,
 
     pub fn parse(text: []const u8) ?NotificationDelivery {

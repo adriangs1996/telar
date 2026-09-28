@@ -254,7 +254,7 @@ def run(options):
 
     config = directory / "config.lua"
     config.write_text("local t = require('telar')\nreturn { api_version = 2, client = { "
-                      "sidebar = { visible = false, renderer = 'cells' }, pane_gaps = false, "
+                      "sidebar = { visible = false }, pane_gaps = false, "
                       "bars = { bottom = { left = t.bar.static(' '), center = t.bar.static(' '), "
                       "right = t.bar.tabs() } } } }\n")
     env = {key: value for key, value in os.environ.items()

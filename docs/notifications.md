@@ -25,14 +25,17 @@ worker lifecycle is documented in [Agent sound](flows/agent-sound.md).
 
 ## Delivery channels
 
-`config.client.notifications = { delivery = "telar" | "terminal" | "system" }`
-chooses where a published notice is surfaced besides the in-app center, which
-always shows it. `terminal` queued OSC 9 for the terminal client's outer
-terminal; the window and the headless client have none, so they drop that
-request and `terminal` adds nothing to the in-app center. `system` posts through the operating system (`osascript` on macOS,
-`notify-send` on Linux) from a bounded worker with a three-second timeout;
-titles and messages are sanitized before they reach either channel. Each
-client applies its own policy, like sounds.
+`config.client.notifications = { delivery = "telar" | "system" }` chooses
+where a published notice is surfaced besides the in-app center, which always
+shows it. `telar` adds nothing to the center. `system` posts through the
+operating system (`osascript` on macOS, `notify-send` on Linux) from a bounded
+worker with a three-second timeout; titles and messages are sanitized before
+they reach it. Each client applies its own policy, like sounds.
+
+`terminal`, which sent OSC 9 to the terminal client's outer terminal, left
+with that client. The window and the headless client have no outer terminal,
+so a configuration that still names it fails to load with a message that says
+so, instead of loading a channel that shows nothing.
 
 ## CLI
 

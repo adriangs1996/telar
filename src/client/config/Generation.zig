@@ -1122,15 +1122,15 @@ fn parseSidebar(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !
     }
     lua_value.pop(state, 1);
 
+    // The terminal client chose how to draw its sidebar here; the window
+    // draws its own, so a file that still sets it is told to drop it.
     _ = lua_api.c.lua_getfield(state, absolute, "renderer");
-    // The terminal client's renderer choice has no effect in the window; the
-    // key stays valid so configurations that set it still load.
-    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL and lua_value.string(state, -1) == null) {
-        lua_value.pop(state, 1);
-        diagnostic.set("config.client.sidebar.renderer must be a string", .{});
+    const renderer_set = lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL;
+    lua_value.pop(state, 1);
+    if (renderer_set) {
+        diagnostic.set("config.client.sidebar.renderer left with the terminal client; remove it", .{});
         return error.InvalidConfig;
     }
-    lua_value.pop(state, 1);
 }
 
 fn parseBindings(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {

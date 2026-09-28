@@ -28,12 +28,12 @@ class BoundariesTest(unittest.TestCase):
         self.assertEqual([], violations(self.root))
 
     def test_reverse_module_dependency_is_rejected(self):
-        for module in ("telar-frontend", "telar-backend", "ghostty-vt", "kitty_protocol", "freetype"):
+        for module in ("telar-gui", "telar-headless", "telar-backend", "ghostty-vt", "kitty_protocol", "freetype"):
             self.write("client.zig", f'const forbidden = @import("{module}");')
             self.assertIn("forbidden module", violations(self.root)[0])
 
     def test_relative_escape_and_missing_files_are_rejected(self):
-        self.write("client.zig", 'const frontend = @import("../frontend/frontend.zig");')
+        self.write("client.zig", 'const window = @import("../gui/gui.zig");')
         self.assertIn("leaves telar-client", violations(self.root)[0])
         self.write("client.zig", 'const missing = @import("missing.zig");')
         self.assertIn("missing import", violations(self.root)[0])
@@ -54,7 +54,7 @@ class BoundariesTest(unittest.TestCase):
 
     def test_comments_and_strings_do_not_introduce_dependencies(self):
         source = '\n'.join([
-            '// @import("telar-frontend")',
+            '// @import("telar-gui")',
             '\\\\ @import("telar-backend")',
             'const text = "@import(\\"fake\\")";',
             'const std = @import(\n"std"\n);',

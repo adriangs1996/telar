@@ -39,11 +39,6 @@ through `window_machines.shareHost`. `HeadlessClient.start` reports images and
 pixel mouse coordinates as unsupported and derives window pixels from a fixed
 8 x 16 pixel cell.
 
-`host_capabilities.observeHostCapability` and `reconcileHostCapabilities` still
-exist in the shared client and feed the same model transaction from a semantic
-`HostCapabilityObservation`. Only the client integration tests call them
-today.
-
 ## Model transaction
 
 `ClientModel` owns `HostCapabilities` in `model.host`. It stores independent
@@ -94,11 +89,10 @@ frame.
   observations, pixel precedence, atomic geometry and validation before
   mutation.
 - `src/client_tests/host_resources.zig` proves commit-before-delivery, no-op
-  suppression and that presentation follows committed grid, cell-size and
-  image-support changes.
+  suppression and that presentation follows committed grid and cell-size
+  changes.
 - `src/client_tests/host_interaction.zig` proves oversized measurements change
-  nothing, pixel responses keep model geometry authoritative, and a graphics
-  capability commits before fallback projection and presentation.
+  nothing.
 - The owner test in `src/client/host/host_resize.zig` checks empty and stale
   commits (`client_tests.rejectStaleHostCommits`) before any effect runs.
 - `src/client/panes/pane_graphics.zig` owns bounded fallback traversal;

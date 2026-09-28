@@ -157,7 +157,7 @@ pub fn testingConfigAdoption(number: u64, changed: bool) !client_module.ConfigAd
         \\  prefix = "ctrl+s",
         \\  icons = "nerd-font",
         \\  theme = telar.theme({ base = "catppuccin" }),
-        \\  sidebar = { visible = false, renderer = "cells" },
+        \\  sidebar = { visible = false },
         \\  pane_gaps = false,
         \\  sound = { enabled = false },
         \\  input = { escape_timeout_ms = 40, sequence_timeout_ms = 750 },

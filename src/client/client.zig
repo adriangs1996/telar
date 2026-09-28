@@ -202,7 +202,6 @@ test {
     _ = @import("connection/resync_required.zig");
     _ = @import("connection/runtime_io.zig");
     _ = @import("connection/runtime_messages.zig");
-    _ = @import("host/host_capabilities.zig");
     _ = @import("host/host_resize.zig");
     _ = @import("input/actions.zig");
     _ = @import("input/copy_mode.zig");
@@ -287,7 +286,6 @@ pub const RuntimeConfigSelection = @import("machines/RuntimeConfigSelection.zig"
 pub const RuntimeConnector = @import("machines/RuntimeConnector.zig");
 pub const SshOptions = @import("machines/SshOptions.zig");
 pub const runtime_messages = @import("connection/runtime_messages.zig");
-pub const host_capabilities = @import("host/host_capabilities.zig");
 pub const host_resize = @import("host/host_resize.zig");
 pub const actions = @import("input/actions.zig");
 pub const copy_mode = @import("input/copy_mode.zig");

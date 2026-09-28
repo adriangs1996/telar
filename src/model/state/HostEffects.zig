@@ -1,11 +1,9 @@
 //! Host requests that procedures leave for the adapter: write the clipboard,
-//! show a notice on the outer terminal, capture clipboard media, drop stale
-//! image placements. The adapter drains it after every event with an
+//! capture clipboard media, switch machines, drop stale image placements. The adapter drains it after every event with an
 //! exhaustive switch; a host without a feature writes an empty arm.
 const core = @import("telar-core");
 const MachineRequest = @import("MachineRequest.zig").MachineRequest;
 const std = @import("std");
-const NotificationPayload = @import("../notifications/NotificationPayload.zig");
 const CaptureRequest = @import("../attachments/CaptureRequest.zig");
 const HostEffects = @This();
 
@@ -15,7 +13,6 @@ pub const capacity = 8;
 pub const Effect = union(enum) {
     /// Write `HostEffects.clipboard` to the host clipboard.
     clipboard,
-    terminal_notification: NotificationPayload,
     capture: CaptureRequest,
     /// Switch the machine the window presents.
     machine: MachineRequest,
@@ -101,19 +98,19 @@ test "host effects keep order and coalesce clipboard writes" {
     defer effects.deinit(std.testing.allocator);
 
     try effects.writeClipboard(std.testing.allocator, "first");
-    try effects.push(.{ .terminal_notification = .init("title", "body") });
+    try effects.push(.{ .machine = .{ .offset = 1 } });
     try effects.writeClipboard(std.testing.allocator, "second");
 
     try std.testing.expect(effects.pop().? == .clipboard);
     try std.testing.expectEqualStrings("second", effects.clipboard.items);
-    try std.testing.expect(effects.pop().? == .terminal_notification);
+    try std.testing.expect(effects.pop().? == .machine);
     try std.testing.expect(effects.pop() == null);
 }
 
 test "a full queue rejects requests without losing queued ones" {
     var effects: HostEffects = .{};
     for (0..capacity) |_| {
-        try effects.push(.{ .terminal_notification = .{} });
+        try effects.push(.{ .machine = .{ .offset = 1 } });
     }
 
     try std.testing.expectError(error.HostEffectsFull, effects.push(.clipboard));
