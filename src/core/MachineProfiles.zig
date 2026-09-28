@@ -32,6 +32,7 @@ pub fn parse(gpa: std.mem.Allocator, source: []const u8) !MachineProfiles {
         destination: []const u8,
         color: ?[]const u8 = null,
         enabled: bool = true,
+        telar_path: ?[]const u8 = null,
     };
     const WireFile = struct {
         version: u16,
@@ -66,6 +67,7 @@ pub fn parse(gpa: std.mem.Allocator, source: []const u8) !MachineProfiles {
             .destination = wire.destination,
             .color = wire.color,
             .enabled = wire.enabled,
+            .telar_path = wire.telar_path,
         }));
     }
 
@@ -117,7 +119,12 @@ pub fn writeProfileJson(writer: *std.Io.Writer, profile: *const MachineProfile) 
         try writer.print(",\"color\":\"{s}\"", .{text});
     }
 
-    try writer.print(",\"enabled\":{}}}", .{profile.enabled});
+    try writer.print(",\"enabled\":{}", .{profile.enabled});
+    if (profile.telarPath()) |path| {
+        try writer.print(",\"telar_path\":\"{s}\"", .{path});
+    }
+
+    try writer.writeByte('}');
 }
 
 pub fn slice(self: *const MachineProfiles) []const MachineProfile {
@@ -211,6 +218,17 @@ pub fn enable(self: *MachineProfiles, label: []const u8, enabled: bool) !void {
     self.rows[row].enabled = enabled;
 }
 
+/// Records where `telar machine setup` installed telar on the machine with
+/// `label`, so commands stop depending on its PATH.
+///
+/// ```zig
+/// try profiles.placeTelar("box", "/home/dev/.local/share/telar/0.3.0/telar");
+/// ```
+pub fn placeTelar(self: *MachineProfiles, label: []const u8, path: []const u8) !void {
+    const row = self.find(label) orelse return error.UnknownMachine;
+    try self.rows[row].placeTelar(path);
+}
+
 fn relabelLocal(self: *MachineProfiles, text: []const u8) !void {
     try MachineProfile.validateLabel(text);
     self.local_label_len = @intCast(text.len);
@@ -248,6 +266,7 @@ test "profiles round-trip through their JSON" {
         .label = "gpu",
         .destination = "odd\"name",
         .enabled = false,
+        .telar_path = "/home/dev/.local/share/telar/0.3.0/telar",
     }));
 
     var buffer: [max_file_bytes]u8 = undefined;
@@ -259,6 +278,8 @@ test "profiles round-trip through their JSON" {
     try std.testing.expectEqualStrings("red", parsed.rows[0].color().?);
     try std.testing.expectEqualStrings("odd\"name", parsed.rows[1].destination());
     try std.testing.expect(!parsed.rows[1].enabled);
+    try std.testing.expectEqual(@as(?[]const u8, null), parsed.rows[0].telarPath());
+    try std.testing.expectEqualStrings("/home/dev/.local/share/telar/0.3.0/telar", parsed.rows[1].telarPath().?);
     try std.testing.expectEqual(@as(?[]const u8, null), parsed.localLabel());
 }
 
@@ -285,6 +306,7 @@ test "malformed and conflicting files are refused" {
         .{ "{\"version\":1,\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"a\"},{\"id\":\"m-000000000001\",\"label\":\"b\",\"destination\":\"b\"}]}", error.DuplicateMachineId },
         .{ "{\"version\":1,\"local_label\":\"a\",\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"a\"}]}", error.DuplicateMachineLabel },
         .{ "{\"version\":1,\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"dev@box\"},{\"id\":\"m-000000000002\",\"label\":\"b\",\"destination\":\"dev@box\"}]}", error.DuplicateMachineDestination },
+        .{ "{\"version\":1,\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"a\",\"telar_path\":\"bin/telar\"}]}", error.InvalidRemoteTelarPath },
         .{ "{\"version\":1,\"machines\":[{\"id\":\"1\",\"label\":\"a\",\"destination\":\"a\"}]}", error.InvalidMachineId },
     };
 

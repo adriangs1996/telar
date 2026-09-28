@@ -70,6 +70,12 @@ taken meanwhile is refused.
 - `color` is `#RRGGBB` or a theme role name; windows resolve the name.
 - `enabled` says whether windows connect to the machine. The CLI dispatches to
   a disabled machine all the same.
+- `telar_path` is where `telar machine setup` installed telar on that
+  machine: absolute, at most 255 bytes, only ASCII letters, digits and
+  `/._+-`, since it goes unquoted into command lines any remote shell
+  parses. Discovery, the bridge and dispatch run it instead of `telar`
+  from the PATH of non-interactive SSH sessions; without it they run
+  `telar`. A window reconnects a machine whose path changed.
 - `local_label` names the local machine; without it, the host name does.
 
 Hand edits are valid. A file that fails validation, is readable by anyone but

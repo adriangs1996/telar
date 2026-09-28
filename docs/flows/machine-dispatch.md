@@ -34,8 +34,8 @@ for one of them is wrong for another. Each argument therefore travels as `a`
 followed by its unpadded base64url form (`src/cli/dispatch_argv.zig`): only
 letters, digits, `-` and `_`, which no shell treats as syntax, and never an
 empty word. The remote side refuses anything else and any decoded NUL byte.
-The command still needs `telar` on the remote non-interactive PATH, as remote
-attach does.
+The command runs the profile's `telar_path` when it has one, and otherwise
+needs `telar` on the remote non-interactive PATH, as remote attach does.
 
 ## SSH
 

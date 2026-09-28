@@ -9,12 +9,14 @@ pub const Kind = enum {
     rename,
     enable,
     disable,
+    place_telar,
 };
 
 kind: Kind,
 /// The machine's label; the new machine's label for `add`.
 label: []const u8,
-/// The new label for `rename`, the destination for `add`, unused otherwise.
+/// The new label for `rename`, the destination for `add`, the absolute
+/// telar path for `place_telar`, unused otherwise.
 value: []const u8 = "",
 /// The new machine's color, for `add` only.
 color: ?[]const u8 = null,

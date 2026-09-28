@@ -118,7 +118,10 @@ fn check(init: std.process.Init, profile: *const core.MachineProfile, json: bool
 
     var detail_buffer: [detail_bytes]u8 = undefined;
     var detail: std.Io.Writer = .fixed(&detail_buffer);
-    const found = remote.discover(init.io, init.gpa, init.minimal.environ, profile.destination(), &detail) catch |err| {
+    const found = remote.discover(init.io, init.gpa, init.minimal.environ, .{
+        .destination = profile.destination(),
+        .telar_path = profile.telarPath(),
+    }, &detail) catch |err| {
         if (json) {
             try writer.writeAll("{\"label\":");
             try control.writeJsonString(writer, profile.label());

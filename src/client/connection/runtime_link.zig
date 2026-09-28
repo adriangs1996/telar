@@ -281,6 +281,15 @@ fn queueConnect(client: *Client, target: MachineTarget) !void {
             const copy = client.connect_destination[0..machine.destination.len];
             @memcpy(copy, machine.destination);
             machine.destination = copy;
+            if (machine.telar_path) |path| {
+                if (path.len > client.connect_telar_path.len) {
+                    return error.RemoteTelarPathTooLong;
+                }
+
+                const path_copy = client.connect_telar_path[0..path.len];
+                @memcpy(path_copy, path);
+                machine.telar_path = path_copy;
+            }
         },
     }
 

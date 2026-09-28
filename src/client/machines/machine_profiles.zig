@@ -41,6 +41,7 @@ pub fn change(io: std.Io, profiles: *core.MachineProfiles, edit: MachineEdit) !v
         },
         .enable => try profiles.enable(edit.label, true),
         .disable => try profiles.enable(edit.label, false),
+        .place_telar => try profiles.placeTelar(edit.label, edit.value),
     }
 }
 
@@ -129,6 +130,7 @@ pub fn describe(err: anyerror) []const u8 {
         error.InvalidMachineLabel => "labels are 1 to 32 letters, digits, '.', '_' or '-', starting with a letter or a digit",
         error.InvalidMachineColor => "colors are #RRGGBB or a theme role such as red or accent",
         error.InvalidRemoteDestination => "destinations are an ssh host alias or user@host, without spaces or a leading '-'",
+        error.InvalidRemoteTelarPath => "telar paths are absolute and hold only letters, digits, '/', '.', '_', '+' or '-'",
         error.InvalidMachineProfiles, error.IncompatibleMachineProfiles => "machines.json is not a file this telar can read",
         else => @errorName(err),
     };
@@ -161,6 +163,10 @@ test "changes add, rename, disable and remove a machine but never take this mach
     try change(std.testing.io, &profiles, .{ .kind = .rename, .label = "box", .value = "gpu" });
     try change(std.testing.io, &profiles, .{ .kind = .disable, .label = "gpu" });
     try std.testing.expect(!profiles.slice()[0].enabled);
+
+    try change(std.testing.io, &profiles, .{ .kind = .place_telar, .label = "gpu", .value = "/home/dev/.local/share/telar/0.3.0/telar" });
+    try std.testing.expectEqualStrings("/home/dev/.local/share/telar/0.3.0/telar", profiles.slice()[0].telarPath().?);
+    try std.testing.expectError(error.InvalidRemoteTelarPath, change(std.testing.io, &profiles, .{ .kind = .place_telar, .label = "gpu", .value = "telar" }));
 
     try change(std.testing.io, &profiles, .{ .kind = .remove, .label = "gpu" });
     try std.testing.expectEqual(@as(usize, 0), profiles.slice().len);

@@ -77,7 +77,9 @@ when its `ssh` died.
 
 A window's client identity mixes its window identity with the destination,
 so the runtime keeps one layout per window and machine. Discovery and the
-bridge require `telar` on the remote PATH for non-interactive SSH, the same
+bridge run the profile's `telar_path` when it has one
+([machine profiles](machine-profiles.md#the-file)) and otherwise require
+`telar` on the remote PATH for non-interactive SSH, the same
 build on both machines (discovery compares the schema), and accept exactly
 three bounded absolute paths and the schema, rejecting control bytes, extra
 output and socket paths containing `:`. SSH destinations cannot start with

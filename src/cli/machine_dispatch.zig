@@ -70,7 +70,7 @@ pub fn forward(init: std.process.Init, profile: *const core.MachineProfile, argv
     const command = try init.gpa.alloc(u8, max_command_bytes);
     defer init.gpa.free(command);
 
-    const remote_command = try encodeCommand(argv[1..], command);
+    const remote_command = try encodeCommand(profile.telarPath(), argv[1..], command);
     const options = try SshOptions.prepare(init.io, init.minimal.environ, profile.destination());
     var child = try std.process.spawn(init.io, .{
         .argv = &sshArgv(&options, profile, remote_command),
@@ -98,7 +98,7 @@ pub fn capture(init: std.process.Init, profile: *const core.MachineProfile, argv
     const command = try init.gpa.alloc(u8, max_command_bytes);
     defer init.gpa.free(command);
 
-    const remote_command = try encodeCommand(argv[1..], command);
+    const remote_command = try encodeCommand(profile.telarPath(), argv[1..], command);
     const options = try SshOptions.prepare(init.io, init.minimal.environ, profile.destination());
     var child = try std.process.spawn(init.io, .{
         .argv = &sshArgv(&options, profile, remote_command),
@@ -161,9 +161,13 @@ pub fn freeDecoded(gpa: std.mem.Allocator, argv: []const [*:0]const u8) void {
     gpa.free(argv);
 }
 
-fn encodeCommand(arguments: []const [*:0]const u8, buffer: []u8) ![]const u8 {
+fn encodeCommand(telar_path: ?[]const u8, arguments: []const [*:0]const u8, buffer: []u8) ![]const u8 {
+    if (telar_path) |path| {
+        try core.remote_telar.validate(path);
+    }
+
     var writer: std.Io.Writer = .fixed(buffer);
-    writer.writeAll("telar dispatch-argv") catch return error.MachineCommandTooLong;
+    writer.print("{s} dispatch-argv", .{core.remote_telar.program(telar_path)}) catch return error.MachineCommandTooLong;
 
     for (arguments) |argument| {
         const text = std.mem.span(argument);
@@ -182,7 +186,7 @@ fn encodeCommand(arguments: []const [*:0]const u8, buffer: []u8) ![]const u8 {
 
 test "the remote command holds only shell-inert words that decode back" {
     var buffer: [256]u8 = undefined;
-    const command = try encodeCommand(&.{ "pane", "send-keys", "--current", "it's $(x)" }, &buffer);
+    const command = try encodeCommand(null, &.{ "pane", "send-keys", "--current", "it's $(x)" }, &buffer);
 
     var words = std.mem.tokenizeScalar(u8, command, ' ');
     try std.testing.expectEqualStrings("telar", words.next().?);
@@ -210,5 +214,12 @@ test "the remote command holds only shell-inert words that decode back" {
 
 test "a command too long for the buffer is refused" {
     var buffer: [24]u8 = undefined;
-    try std.testing.expectError(error.MachineCommandTooLong, encodeCommand(&.{ "pane", "list", "--json" }, &buffer));
+    try std.testing.expectError(error.MachineCommandTooLong, encodeCommand(null, &.{ "pane", "list", "--json" }, &buffer));
+}
+
+test "a saved telar path replaces the PATH lookup" {
+    var buffer: [128]u8 = undefined;
+    const command = try encodeCommand("/home/dev/.local/share/telar/0.3.0/telar", &.{"version"}, &buffer);
+    try std.testing.expect(std.mem.startsWith(u8, command, "/home/dev/.local/share/telar/0.3.0/telar dispatch-argv a"));
+    try std.testing.expectError(error.InvalidRemoteTelarPath, encodeCommand("/home/dev/$(id)", &.{"version"}, &buffer));
 }

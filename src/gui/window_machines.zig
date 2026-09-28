@@ -54,6 +54,7 @@ pub fn open(gui: *GuiAdapter) !void {
             .destination = profile.destination(),
             .color = profile.color(),
             .enabled = profile.enabled,
+            .telar_path = profile.telarPath(),
         }, null);
     }
 
@@ -146,6 +147,7 @@ pub fn reconcile(gui: *GuiAdapter) !void {
             .destination = profile.destination(),
             .color = profile.color(),
             .enabled = profile.enabled,
+            .telar_path = profile.telarPath(),
         };
 
         const slot = machines.find(profile.id) orelse temporaryFor(machines, profile.destination()) orelse {
@@ -165,7 +167,10 @@ pub fn reconcile(gui: *GuiAdapter) !void {
 
         row.enabled = profile.enabled or machines.pinned[slot];
         const was_enabled = machines.enabled[slot];
-        const moved = !std.mem.eql(u8, machines.destination(slot), profile.destination());
+        // A new telar path is a move too: setup installed another build
+        // there, and the next connection has to run it.
+        const moved = !std.mem.eql(u8, machines.destination(slot), profile.destination()) or
+            !std.mem.eql(u8, machines.telarPath(slot) orelse "", profile.telarPath() orelse "");
         machines.update(slot, row);
         if (!row.enabled) {
             if (was_enabled) {
@@ -364,6 +369,7 @@ fn openClient(gui: *GuiAdapter, slot: u8, arguments: []const []const u8) !void {
     var options = own.options;
     options.machine = .{ .remote = .{
         .destination = destination,
+        .telar_path = machines.telarPath(slot),
         .arguments = arguments,
     } };
     options.open_machine = null;
@@ -424,6 +430,7 @@ fn admit(gui: *GuiAdapter, slot: u8) !void {
     const identity = machineIdentity(window(gui).client_identity, destination);
     app.options.machine = .{ .remote = .{
         .destination = destination,
+        .telar_path = gui.machines.telarPath(slot),
         .arguments = &.{},
     } };
     app.client_identity = identity;

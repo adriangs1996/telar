@@ -70,7 +70,7 @@ telar machine setup box
  4. Runtime            discovery through the absolute path: same schema, or
         |                none running: ok. Another build running: ask on the
         |                terminal whether to stop it, else report and continue.
- 5. Profile            machines.json: add or update `telar` (absolute path),
+ 5. Profile            machines.json: add or update `telar_path`,
         |                enable. Under the file lock, like every change.
  6. Agents             for each agent installed here and missing there: its
         |                official installer, without sudo. A prerequisite the
@@ -140,17 +140,17 @@ a symlink; interactive shells there then find `telar` as before.
 
 ```json
 {"id":"m-3f9c2a00b001","label":"box","destination":"dev@box","enabled":true,
- "telar":"/home/dev/.local/share/telar/0.3.0/telar"}
+ "telar_path":"/home/dev/.local/share/telar/0.3.0/telar"}
 ```
 
-- `telar` is absolute, at most 255 bytes, and holds only ASCII letters,
+- `telar_path` is absolute, at most 255 bytes, and holds only ASCII letters,
   digits and `/._+-`: it goes into remote command lines unquoted, so no
   character any shell reads specially is allowed. A home that needs more
   keeps the PATH lookup, and setup says so.
 - Discovery runs `/bin/sh -c '…; exec PATH server endpoint'`, the bridge
   `exec PATH server bridge`, dispatch `PATH dispatch-argv …`.
 - A profile without the field works as today, through `telar` on the PATH.
-- `RemoteMachine` gains `telar: ?[]const u8`; `Machines` gains a column; a
+- `RemoteMachine` gains `telar_path: ?[]const u8`; `Machines` gains a column; a
   changed path is a moved machine for `window_machines.reconcile`, so open
   windows reconnect through the new executable.
 - The runtime the machine starts inherits that executable, so panes get it

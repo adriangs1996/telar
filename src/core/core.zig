@@ -164,6 +164,7 @@ pub const ReadPane = @import("schema/messages/ReadPane.zig");
 pub const Recorder = @import("Recorder.zig");
 pub const profiling = @import("profiling.zig");
 pub const ssh_destination = @import("ssh_destination.zig");
+pub const remote_telar = @import("remote_telar.zig");
 pub const ProfileStore = @import("ProfileStore.zig");
 pub const ProfileCounters = @import("ProfileCounters.zig");
 pub const ProfileHistogram = @import("ProfileHistogram.zig");
@@ -473,6 +474,7 @@ test {
     _ = @import("schema/messages/paths.zig");
     _ = @import("schema_contract_test.zig");
     _ = @import("ssh_destination.zig");
+    _ = @import("remote_telar.zig");
 }
 
 pub const TextMetadata = @import("text_metadata/Storage.zig");
