@@ -256,16 +256,32 @@ Gatekeeper assesses files that carry the `com.apple.quarantine` attribute.
 Browsers and Homebrew casks set it; `curl` does not. On macOS 26.6.2 the ad
 hoc signed `shellcheck` 0.11.0 from GitHub, downloaded with `curl`, had no
 quarantine attribute and ran, even though `spctl --assess` rejected it. A
-copy with the attribute added did not start. The command line archives
-therefore work unsigned through `install.sh`, while the DMG needs
-notarization before anyone opens it from a browser.
+copy with the attribute added did not start. An ad hoc signed `Telar.app`
+installed by `install.sh --app` also opened through `open` without a
+prompt. So without an Apple Developer membership, 99 USD a year, the
+archives and `install.sh --app` still work; only a DMG opened from a
+browser needs the user to click Open Anyway in System Settings, Privacy &
+Security ([Apple](https://support.apple.com/en-us/102445)). Apple waives
+the fee only for nonprofits, accredited schools and governments, never for
+individuals ([fee waivers](https://developer.apple.com/help/account/membership/fee-waivers/)).
+
+Without the Developer ID secrets, `sign-macos.sh` signs the bundle ad hoc,
+so its signature seals the resources instead of stopping at the linker's
+signatures of each executable.
 
 ### install.sh
 
 ```sh
 curl -fsSL https://github.com/adriangs1996/telar/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/adriangs1996/telar/releases/latest/download/install.sh | sh -s -- --app
 curl -fsSL https://github.com/adriangs1996/telar/releases/latest/download/install.sh | sh -s -- --version 0.3.0 --headless
 ```
+
+With `--app` on macOS it downloads the DMG instead, checks it, mounts it
+read-only, copies `Telar.app` into `~/Applications` or `--app-dir`, and runs
+the bundled `telar cli install` to link `telar` in the bin directory to the
+executable inside the app. It refuses to replace a regular `telar` file left
+by a command line install.
 
 It picks the asset for the system and architecture, downloads it with
 `SHA256SUMS`, aborts unless the checksum matches, and copies `telar` and

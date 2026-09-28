@@ -2,6 +2,8 @@ const std = @import("std");
 const Application = @import("Application.zig");
 const manifest = @import("../build.zig.zon");
 
+const max_info_plist_bytes = 64 * 1024;
+
 /// Register packaging for the selected target: `packaging.add(b, app, diagram_helper)`.
 pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath) void {
     // Application packaging. The shipped binary is the same `telar`; a bundle
@@ -33,16 +35,7 @@ pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath)
             .install_subdir = contents ++ "/Resources/licenses/diagram-renderer",
         }).step);
         bundle_step.dependOn(&b.addInstallArtifact(launcher, .{ .dest_dir = .{ .override = .{ .custom = contents ++ "/MacOS" } } }).step);
-        const info = b.addConfigHeader(
-            .{
-                .style = .{ .autoconf_at = b.path("packaging/macos/Info.plist.in") },
-                .include_path = "Info.plist",
-            },
-            .{
-                .VERSION = manifest.version,
-            },
-        );
-        bundle_step.dependOn(&b.addInstallFile(info.getOutputFile(), contents ++ "/Info.plist").step);
+        bundle_step.dependOn(&b.addInstallFile(infoPlist(b), contents ++ "/Info.plist").step);
         bundle_step.dependOn(&b.addInstallFile(b.path("packaging/macos/telar.icns"), contents ++ "/Resources/telar.icns").step);
         bundle_step.dependOn(&b.addInstallDirectory(.{
             .source_dir = b.path("tools/syntax-highlighter/licenses"),
@@ -67,6 +60,14 @@ pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath)
         b.getInstallStep().dependOn(&icon.step);
         addLinuxArchive(b, app, "");
     }
+}
+
+/// The bundle's Info.plist with the version from build.zig.zon. A config
+/// header would prepend a C comment, which is not valid XML.
+fn infoPlist(b: *std.Build) std.Build.LazyPath {
+    const template = b.build_root.handle.readFileAlloc(b.graph.io, "packaging/macos/Info.plist.in", b.allocator, .limited(max_info_plist_bytes)) catch @panic("Cannot read packaging/macos/Info.plist.in");
+    const plist = std.mem.replaceOwned(u8, b.allocator, template, "@VERSION@", manifest.version) catch @panic("OOM");
+    return b.addWriteFiles().add("Info.plist", plist);
 }
 
 fn addLinuxArchive(b: *std.Build, app: Application, variant: []const u8) void {

@@ -4,7 +4,7 @@
 # signed executables.
 #
 #   packaging/release/macos.sh build STAGE
-#   packaging/release/sign-macos.sh STAGE             # optional
+#   packaging/release/sign-macos.sh STAGE             # Developer ID or ad hoc
 #   packaging/release/macos.sh package STAGE OUT_DIR
 #
 # `package` writes telar-macos-ARCH.tar.gz, with the command line tools and
@@ -30,6 +30,7 @@ build() {
     app=$stage/prefix/Telar.app/Contents
     TELAR_MACOS_MIN=$macos_min "$root/packaging/release/check-linkage.sh" macos \
         "$app/MacOS/Telar" "$app/Resources/bin/telar" "$app/Resources/bin/telar-diagram-renderer"
+    plutil -lint "$app/Info.plist"
     "$app/Resources/bin/telar" --version
 }
 
