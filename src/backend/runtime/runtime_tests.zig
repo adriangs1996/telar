@@ -54,4 +54,5 @@ test {
     _ = @import("tests/runtime_state_test.zig");
     _ = @import("tests/search_pane_test.zig");
     _ = @import("tests/shared_frame_test.zig");
+    _ = @import("tests/worktree_lifecycle_test.zig");
 }
