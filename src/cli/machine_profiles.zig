@@ -8,6 +8,7 @@ const std = @import("std");
 const MachineOptions = @import("arguments/MachineOptions.zig");
 const control = @import("control.zig");
 const machine_setup = @import("machine_setup.zig");
+const config_receive = @import("config_receive.zig");
 const remote = client.remote;
 const profile_file = client.profile_file;
 const machine_profiles = client.machine_profiles;
@@ -23,12 +24,17 @@ const detail_bytes = 1024;
 /// const status = try machine_profiles.run(process_init, options);
 /// ```
 pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
+    if (options.action == .receive_config) {
+        return config_receive.run(init);
+    }
+
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try profile_file.path(init.minimal.environ, &path_buffer);
     const profiles = profile_file.load(init.io, init.gpa, path) catch |err| return report(init, err);
 
     switch (options.action) {
         .setup => return machine_setup.run(init, options),
+        .receive_config => unreachable,
         .list => return list(init, &profiles, options.json),
         .check => {
             const row = profiles.find(std.mem.span(options.label.?)) orelse return report(init, error.UnknownMachine);
@@ -61,7 +67,7 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
             .rename => .rename,
             .enable => .enable,
             .disable => .disable,
-            .list, .check, .setup => unreachable,
+            .list, .check, .setup, .receive_config => unreachable,
         },
         .label = std.mem.span(options.label.?),
         .value = if (options.value) |value| std.mem.span(value) else "",

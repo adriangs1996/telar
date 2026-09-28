@@ -57,6 +57,16 @@ pub fn assign(writer: *std.Io.Writer, name: []const u8, value: []const u8) !void
 /// defer output.deinit(process_init.gpa);
 /// ```
 pub fn runScript(init: std.process.Init, destination: []const u8, script: []const u8, timeout_s: u32) !ScriptOutput {
+    return runWithBytes(init, destination, script_command, script, timeout_s);
+}
+
+/// Runs `remote_command` on the machine with `bytes` as its standard input,
+/// through the same owner-only file as `runScript`.
+///
+/// ```zig
+/// const output = try remote_shell.runWithBytes(process_init, "dev@box", "/opt/telar machine receive-config", stream, 120);
+/// ```
+pub fn runWithBytes(init: std.process.Init, destination: []const u8, remote_command: []const u8, bytes: []const u8, timeout_s: u32) !ScriptOutput {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try scriptPath(init, &path_buffer);
     const cwd = std.Io.Dir.cwd();
@@ -69,8 +79,8 @@ pub fn runScript(init: std.process.Init, destination: []const u8, script: []cons
     defer file.close(init.io);
 
     // A positional write leaves the offset at 0, where the child reads.
-    try file.writePositionalAll(init.io, script, 0);
-    return runWithInput(init, destination, script_command, file, timeout_s);
+    try file.writePositionalAll(init.io, bytes, 0);
+    return runWithInput(init, destination, remote_command, file, timeout_s);
 }
 
 /// Runs `remote_command` on the machine with `input` as its standard input,

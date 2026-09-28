@@ -16,6 +16,7 @@ const SetupReport = @import("SetupReport.zig");
 const remote_shell = @import("remote_shell.zig");
 const telar_release = @import("telar_release.zig");
 const agent_setup = @import("agent_setup.zig");
+const config_sync = @import("config_sync.zig");
 const remote = client.remote;
 const profile_file = client.profile_file;
 const machine_profiles = client.machine_profiles;
@@ -107,14 +108,21 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
     }
 
     try saveProfile(init, &report, &target, path, telar_path);
+    const wanted = agent_setup.detectLocal(init.minimal.environ);
     var current = platform;
     if (options.skip.contains(.agents)) {
         try report.end(.agents, .skipped, "--skip agents", .{});
-    } else if (try agent_setup.install(init, &report, target.destination(), &platform, agent_setup.detectLocal(init.minimal.environ))) {
+    } else if (try agent_setup.install(init, &report, target.destination(), &platform, wanted)) {
         current = try probeAgain(init, &target, directory.slice()) orelse platform;
     }
 
     try agent_setup.integrate(init, &report, target.destination(), &current);
+    if (options.skip.contains(.config)) {
+        try report.end(.configuration, .skipped, "--skip config", .{});
+    } else {
+        try config_sync.run(init, &report, target.destination(), &current, wanted);
+    }
+
     try check(init, &report, &target, telar_path);
     return finish(&report, &target);
 }

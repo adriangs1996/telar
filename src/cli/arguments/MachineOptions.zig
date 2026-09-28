@@ -3,7 +3,7 @@
 const std = @import("std");
 const MachineOptions = @This();
 
-pub const Action = enum { add, remove, rename, enable, disable, list, check, setup };
+pub const Action = enum { add, remove, rename, enable, disable, list, check, setup, receive_config };
 
 /// Setup steps a person may leave out.
 pub const SetupSkip = enum { agents, config, login };
@@ -33,10 +33,19 @@ pub fn parse(args: []const [*:0]const u8) !MachineOptions {
         return error.MissingMachineAction;
     }
 
-    const action = std.meta.stringToEnum(Action, std.mem.span(args[0])) orelse return error.UnknownMachineAction;
+    // `receive-config` is what setup runs on the machine it sets up.
+    const action_name = std.mem.span(args[0]);
+    const action = if (std.mem.eql(u8, action_name, "receive-config"))
+        .receive_config
+    else
+        std.meta.stringToEnum(Action, action_name) orelse return error.UnknownMachineAction;
+    if (action == .receive_config and args.len != 1) {
+        return error.UnknownMachineOption;
+    }
+
     var options: MachineOptions = .{ .action = action };
     const positional_count: usize = switch (action) {
-        .list => 0,
+        .list, .receive_config => 0,
         .remove, .enable, .disable, .check, .setup => 1,
         .add, .rename => 2,
     };

@@ -259,6 +259,12 @@ test {
     _ = @import("cli/machine_dispatch.zig");
     _ = @import("cli/machine_setup.zig");
     _ = @import("cli/agent_setup.zig");
+    _ = @import("cli/config_allowlist.zig");
+    _ = @import("cli/ConfigEntry.zig");
+    _ = @import("cli/ConfigRoot.zig");
+    _ = @import("cli/config_filter.zig");
+    _ = @import("cli/config_receive.zig");
+    _ = @import("cli/config_sync.zig");
     _ = @import("cli/ScriptOutput.zig");
     _ = @import("cli/ProbeValue.zig");
     _ = @import("cli/MachinePlatform.zig");
