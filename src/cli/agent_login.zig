@@ -166,7 +166,7 @@ pub fn run(init: std.process.Init, report: *SetupReport, profile: *const core.Ma
             // A login a person finished after an earlier setup left its
             // pane open: it has nothing more to show.
             if (planFor(agent, provider)) |plan| {
-                closeLeftover(init, arena, profile, plan.title);
+                closeLeftover(init, arena, profile, agent, plan.title);
             }
 
             continue;
@@ -251,9 +251,9 @@ fn loginOne(init: std.process.Init, report: *SetupReport, login: Login, interact
 
     // A login an earlier setup left waiting keeps its pane: its link and
     // code still stand, and a second login would only race it.
-    const existing = findLoginPane(init, arena, login.profile, login.plan.title) catch null;
+    const existing = findLoginPane(init, arena, login.profile, login.agent, login.plan.title) catch null;
     const pane = existing orelse try openLoginPane(init, arena, login);
-    errdefer closeLoginPane(init, arena, login.profile, pane) catch {};
+    errdefer closeLoginPane(init, arena, login.profile, login.agent, pane) catch {};
     if (existing != null) {
         try report.progress("{s} on {s}: the login setup started before is still open there", .{ login.plan.title, login.profile.label() });
     } else if (login.plan.keys) |keys| {
@@ -290,7 +290,7 @@ fn loginOne(init: std.process.Init, report: *SetupReport, login: Login, interact
     }
 
     const outcome = try waitForLogin(init, login);
-    closeLoginPane(init, arena, login.profile, pane) catch |err| {
+    closeLoginPane(init, arena, login.profile, login.agent, pane) catch |err| {
         try report.note(.logins, "{s}: its login pane there stays open: {s}", .{ @tagName(login.agent), @errorName(err) });
     };
 
@@ -329,33 +329,129 @@ fn openLoginPane(init: std.process.Init, arena: std.mem.Allocator, login: Login)
     const output = try machine_dispatch.capture(init, login.profile, words.items);
     defer init.gpa.free(output);
 
-    return std.json.parseFromSliceLeaky(LoginPane, arena, output, .{ .ignore_unknown_fields = true }) catch error.LoginPaneUnreadable;
+    const pane = std.json.parseFromSliceLeaky(LoginPane, arena, output, .{ .ignore_unknown_fields = true }) catch return error.LoginPaneUnreadable;
+    errdefer closeTab(init, arena, login.profile, pane) catch {};
+    try rememberLoginPane(init, login.profile.destination(), login.agent, pane);
+    return pane;
 }
 
-// The pane of a workspace there named `title`: a login an earlier setup
-// opened and nobody finished.
-fn findLoginPane(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, title: []const u8) !?LoginPane {
-    const Workspace = struct { workspace_id: u64, name: []const u8 };
+/// Where setup notes, on the machine, which pane each login it opened runs
+/// in: a file per agent holding `WORKSPACE TAB PANE`. Only setup writes it,
+/// so a workspace a person named "Log in to Codex" is never taken for a
+/// login, nor closed.
+const login_records = "$HOME/.local/state/telar/setup-logins";
+
+fn rememberLoginPane(init: std.process.Init, destination: []const u8, agent: Agent, pane: LoginPane) !void {
+    var script_buffer: [512]u8 = undefined;
+    var script: std.Io.Writer = .fixed(&script_buffer);
+    try script.print("umask 077 && mkdir -p \"{s}\" && printf '%s\\n' '{d} {d} {d}' > \"{s}/{s}\"\n", .{
+        login_records,
+        pane.workspace_id,
+        pane.tab_id,
+        pane.pane_id,
+        login_records,
+        @tagName(agent),
+    });
+    try runRecordScript(init, destination, script.buffered());
+}
+
+fn forgetLoginPane(init: std.process.Init, destination: []const u8, agent: Agent) !void {
+    var script_buffer: [256]u8 = undefined;
+    const script = try std.fmt.bufPrint(&script_buffer, "rm -f \"{s}/{s}\"\n", .{ login_records, @tagName(agent) });
+    try runRecordScript(init, destination, script);
+}
+
+fn recordedLoginPane(init: std.process.Init, destination: []const u8, agent: Agent) !?LoginPane {
+    var script_buffer: [256]u8 = undefined;
+    const script = try std.fmt.bufPrint(&script_buffer, "cat \"{s}/{s}\" 2>/dev/null || true\n", .{ login_records, @tagName(agent) });
+    var result = try remote_shell.runScript(init, destination, script, status_timeout_s);
+    defer result.deinit(init.gpa);
+    if (!result.succeeded()) {
+        return error.LoginRecordUnreadable;
+    }
+
+    return parseRecord(result.stdout);
+}
+
+fn runRecordScript(init: std.process.Init, destination: []const u8, script: []const u8) !void {
+    var result = try remote_shell.runScript(init, destination, script, status_timeout_s);
+    defer result.deinit(init.gpa);
+    if (!result.succeeded()) {
+        return error.LoginRecordUnwritable;
+    }
+}
+
+// `WORKSPACE TAB PANE` as `rememberLoginPane` wrote it; null for anything
+// else.
+fn parseRecord(text: []const u8) ?LoginPane {
+    var words = std.mem.tokenizeAny(u8, text, " \n");
+    const workspace = std.fmt.parseUnsigned(u64, words.next() orelse return null, 10) catch return null;
+    const tab = std.fmt.parseUnsigned(u64, words.next() orelse return null, 10) catch return null;
+    const pane = std.fmt.parseUnsigned(u64, words.next() orelse return null, 10) catch return null;
+    if (words.next() != null) {
+        return null;
+    }
+
+    return .{
+        .workspace_id = workspace,
+        .tab_id = tab,
+        .pane_id = pane,
+    };
+}
+
+const ListedWorkspace = struct { workspace_id: u64, name: []const u8 };
+
+// Whether the recorded pane still runs there, in a workspace named for the
+// login: a runtime that restarted may have given its ids to other panes.
+fn claimed(noted: LoginPane, title: []const u8, workspaces: []const ListedWorkspace, panes: []const LoginPane) bool {
+    const named = for (workspaces) |workspace| {
+        if (workspace.workspace_id == noted.workspace_id) {
+            break std.mem.eql(u8, workspace.name, title);
+        }
+    } else false;
+
+    if (!named) {
+        return false;
+    }
+
+    for (panes) |pane| {
+        if (std.meta.eql(pane, noted)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// The pane of a login an earlier setup opened there and nobody finished:
+// the one its record names, still in its workspace named `title`. A record
+// that no longer matches is dropped.
+fn findLoginPane(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, agent: Agent, title: []const u8) !?LoginPane {
+    const noted = try recordedLoginPane(init, profile.destination(), agent) orelse return null;
     const listed = try machine_dispatch.capture(init, profile, &.{ "telar", "workspace", "list", "--json" });
     defer init.gpa.free(listed);
+    const workspaces = try std.json.parseFromSliceLeaky([]const ListedWorkspace, arena, listed, .{ .ignore_unknown_fields = true });
 
-    const workspaces = try std.json.parseFromSliceLeaky([]const Workspace, arena, listed, .{ .ignore_unknown_fields = true });
-    const workspace = for (workspaces) |entry| {
-        if (std.mem.eql(u8, entry.name, title)) {
-            break entry;
-        }
-    } else return null;
+    const id = try std.fmt.allocPrintSentinel(arena, "{d}", .{noted.workspace_id}, 0);
+    // A workspace that is gone has no panes to list.
+    const panes_output = machine_dispatch.capture(init, profile, &.{ "telar", "pane", "list", "--workspace", id, "--json" }) catch null;
+    defer if (panes_output) |output| init.gpa.free(output);
+    const panes = try std.json.parseFromSliceLeaky([]const LoginPane, arena, panes_output orelse "[]", .{ .ignore_unknown_fields = true });
+    if (claimed(noted, title, workspaces, panes)) {
+        return noted;
+    }
 
-    const id = try std.fmt.allocPrintSentinel(arena, "{d}", .{workspace.workspace_id}, 0);
-    const panes_output = try machine_dispatch.capture(init, profile, &.{ "telar", "pane", "list", "--workspace", id, "--json" });
-    defer init.gpa.free(panes_output);
-
-    const panes = try std.json.parseFromSliceLeaky([]const LoginPane, arena, panes_output, .{ .ignore_unknown_fields = true });
-    return if (panes.len == 0) null else panes[0];
+    try forgetLoginPane(init, profile.destination(), agent);
+    return null;
 }
 
-// Closes the login's tab there, and with it its workspace.
-fn closeLoginPane(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, pane: LoginPane) !void {
+// Closes the login's tab there, and with it its workspace, and its record.
+fn closeLoginPane(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, agent: Agent, pane: LoginPane) !void {
+    try closeTab(init, arena, profile, pane);
+    try forgetLoginPane(init, profile.destination(), agent);
+}
+
+fn closeTab(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, pane: LoginPane) !void {
     const words = [_][*:0]const u8{
         "telar",
         "tab",
@@ -371,9 +467,9 @@ fn closeLoginPane(init: std.process.Init, arena: std.mem.Allocator, profile: *co
 
 // Closes a login pane that outlived its login, if there is one; a failure
 // leaves it for the person.
-fn closeLeftover(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, title: []const u8) void {
-    const pane = (findLoginPane(init, arena, profile, title) catch return) orelse return;
-    closeLoginPane(init, arena, profile, pane) catch {};
+fn closeLeftover(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, agent: Agent, title: []const u8) void {
+    const pane = (findLoginPane(init, arena, profile, agent, title) catch return) orelse return;
+    closeLoginPane(init, arena, profile, agent, pane) catch {};
 }
 
 const FoundLink = struct {
@@ -663,4 +759,28 @@ test "agents without a browser login for their provider are left to the person" 
     try std.testing.expect(planFor(.pi, null) == null);
     try std.testing.expect(planFor(.claude, null).?.paste != null);
     try std.testing.expect(std.mem.startsWith(u8, statusScript(.pi), "[ -n \"$provider\" ]"));
+}
+
+test "only the pane setup recordeded, in its login workspace, is taken for a login" {
+    const noted = parseRecord("7 12 31\n").?;
+    try std.testing.expectEqual(@as(u64, 12), noted.tab_id);
+    try std.testing.expectEqual(@as(?LoginPane, null), parseRecord(""));
+    try std.testing.expectEqual(@as(?LoginPane, null), parseRecord("7 12"));
+    try std.testing.expectEqual(@as(?LoginPane, null), parseRecord("7 12 31 4"));
+
+    const title = "Log in to Codex";
+    const panes = [_]LoginPane{noted};
+    const own = [_]ListedWorkspace{.{ .workspace_id = 7, .name = title }};
+    try std.testing.expect(claimed(noted, title, &own, &panes));
+
+    // A person's workspace with the same name and other ids is not setup's.
+    const persons = [_]ListedWorkspace{.{ .workspace_id = 9, .name = title }};
+    try std.testing.expect(!claimed(noted, title, &persons, &panes));
+
+    // A runtime that restarted gave the ids to a workspace named otherwise.
+    const reused = [_]ListedWorkspace{.{ .workspace_id = 7, .name = "notes" }};
+    try std.testing.expect(!claimed(noted, title, &reused, &panes));
+
+    // The workspace is there but the pane is gone.
+    try std.testing.expect(!claimed(noted, title, &own, &.{}));
 }
