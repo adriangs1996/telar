@@ -62,7 +62,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 120;
+const corpus_len = 121;
 const corpus_storage_size = 12 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -418,6 +418,15 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
             .mode = .prompt,
+            .text = "ls",
+        }),
+    ));
+    helper.add(.{ .name = "send_pane_text_raw_enter", .direction = .client, .golden_hex = golden.send_pane_text_raw_enter }, helper.commit(
+        try pane_module.encodeSendPaneText(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .mode = .raw_enter,
             .text = "ls",
         }),
     ));

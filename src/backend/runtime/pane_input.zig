@@ -17,10 +17,13 @@ const agent_control = @import("agent_control.zig");
 const InputCompletion = @import("events/InputCompletion.zig");
 const ResponseCompletion = @import("events/ResponseCompletion.zig");
 
+const keyinput = @import("keyinput");
+
 const paste_start = "\x1b[200~";
 const paste_end = "\x1b[201~";
-const enter = "\r";
-const prompt_overhead = paste_start.len + paste_end.len + enter.len;
+const legacy_enter = "\r";
+const kitty_enter = "\x1b[13u";
+const prompt_overhead = paste_start.len + paste_end.len + kitty_enter.len;
 
 /// Forwards a client's keystrokes to an attached terminal pane.
 ///
@@ -63,8 +66,10 @@ pub fn sendText(model: *RuntimeModel, session: *Session, request: core.SendPaneT
     }
 
     var storage: [core.max_pane_text_input_bytes + agent_control.max_sender_line_bytes + prompt_overhead]u8 = undefined;
+    const modes = pane.inputModeState();
     const bytes = switch (request.mode) {
         .raw => request.text,
+        .raw_enter => submissionBytes(&storage, .{ .text = request.text }, modes),
         .prompt => prompt: {
             if (agent_status.projectedStatus(model, pane.key()) == .blocked) {
                 return client_request.fail(session, request.request_id, .agent_blocked, "agent is waiting for a decision");
@@ -81,29 +86,42 @@ pub fn sendText(model: *RuntimeModel, session: *Session, request: core.SendPaneT
                 break :line agent_control.senderLine(model, sender, &sender_buffer);
             } else "";
 
-            break :prompt promptBytes(&storage, .{
+            break :prompt submissionBytes(&storage, .{
                 .prefix = sender_line,
                 .text = request.text,
-            }, pane.terminal.modes.get(.bracketed_paste));
+                .paste = true,
+            }, modes);
         },
     };
 
     try forward(model, pane, bytes);
-    if (request.mode == .prompt or std.mem.indexOfScalar(u8, bytes, '\r') != null) {
+    if (request.mode != .raw or std.mem.indexOfScalar(u8, bytes, '\r') != null) {
         pane.noteInjectedSubmission();
     }
 
     try client_request.complete(session, request.request_id);
 }
 
-/// Forwards control bytes such as an interrupt key through the same path as
-/// typed input, so history and agent observation see them.
+/// Presses keys such as an interrupt in a pane's child, encoded for the
+/// keyboard mode the child enabled, through the same path as typed input
+/// so history and agent observation see them.
 ///
 /// ```zig
-/// try pane_input.forwardControl(model, pane, "\x1b");
+/// try pane_input.press(model, pane, &.{keyinput.Key.plain(.escape)});
 /// ```
-pub fn forwardControl(model: *RuntimeModel, pane: *Pane, bytes: []const u8) !void {
-    try forward(model, pane, bytes);
+pub fn press(model: *RuntimeModel, pane: *Pane, keys: []const keyinput.Key) !void {
+    const max_keys = 4;
+    std.debug.assert(keys.len <= max_keys);
+    var encoded: [max_keys * keyinput.max_key_bytes]u8 = undefined;
+    const modes = pane.inputModeState();
+    var len: usize = 0;
+
+    for (keys) |key| {
+        const bytes = try keyinput.encodeKey(encoded[len..], key, modes);
+        len += bytes.len;
+    }
+
+    try forward(model, pane, encoded[0..len]);
 }
 
 /// Queues bytes for a restored pane's child and starts the input write.
@@ -270,16 +288,19 @@ fn writeResponse(write: ResponseWrite) ResponseCompletion {
     };
 }
 
-/// Frames one prompt the way a terminal paste followed by Enter would arrive.
-const PromptText = struct {
-    /// Names the sending pane; written inside the paste, before the text.
+/// Text that ends by pressing Enter, as a person would submit it.
+const Submission = struct {
+    /// Names the sending pane; written before the text, inside the paste.
     prefix: []const u8 = "",
     text: []const u8,
+    /// Frames the text as a bracketed paste when the child enabled mode 2004.
+    paste: bool = false,
 };
 
-fn promptBytes(storage: *[core.max_pane_text_input_bytes + agent_control.max_sender_line_bytes + prompt_overhead]u8, prompt: PromptText, bracketed: bool) []const u8 {
-    std.debug.assert(prompt.text.len <= core.max_pane_text_input_bytes);
-    std.debug.assert(prompt.prefix.len <= agent_control.max_sender_line_bytes);
+fn submissionBytes(storage: *[core.max_pane_text_input_bytes + agent_control.max_sender_line_bytes + prompt_overhead]u8, submission: Submission, modes: keyinput.InputModes) []const u8 {
+    std.debug.assert(submission.text.len <= core.max_pane_text_input_bytes);
+    std.debug.assert(submission.prefix.len <= agent_control.max_sender_line_bytes);
+    const bracketed = submission.paste and modes.bracketed_paste;
     var len: usize = 0;
 
     if (bracketed) {
@@ -287,27 +308,61 @@ fn promptBytes(storage: *[core.max_pane_text_input_bytes + agent_control.max_sen
         len += paste_start.len;
     }
 
-    @memcpy(storage[len .. len + prompt.prefix.len], prompt.prefix);
-    len += prompt.prefix.len;
-    @memcpy(storage[len .. len + prompt.text.len], prompt.text);
-    len += prompt.text.len;
+    @memcpy(storage[len .. len + submission.prefix.len], submission.prefix);
+    len += submission.prefix.len;
+    @memcpy(storage[len .. len + submission.text.len], submission.text);
+    len += submission.text.len;
 
     if (bracketed) {
         @memcpy(storage[len .. len + paste_end.len], paste_end);
         len += paste_end.len;
     }
 
+    const enter = enterBytes(modes);
     @memcpy(storage[len .. len + enter.len], enter);
     len += enter.len;
     return storage[0..len];
 }
 
-test "promptBytes frames a paste only when the child asked for it" {
-    var storage: [core.max_pane_text_input_bytes + agent_control.max_sender_line_bytes + prompt_overhead]u8 = undefined;
+/// The Enter key a submission ends with. A child that enabled the kitty
+/// keyboard protocol receives `CSI 13 u`, which it cannot read as text:
+/// Claude Code takes an unbracketed burst of 100 bytes or more for a paste
+/// and keeps a carriage return inside it as part of the text. Any other
+/// child receives the carriage return a terminal sends for Enter.
+fn enterBytes(modes: keyinput.InputModes) []const u8 {
+    if (modes.kitty_keyboard_flags != 0) {
+        return kitty_enter;
+    }
 
-    try std.testing.expectEqualStrings("hello\r", promptBytes(&storage, .{ .text = "hello" }, false));
-    try std.testing.expectEqualStrings("\x1b[200~hello\x1b[201~\r", promptBytes(&storage, .{ .text = "hello" }, true));
-    try std.testing.expectEqualStrings("\x1b[200~[telar: from fix, pane 3] hi\x1b[201~\r", promptBytes(&storage, .{ .prefix = "[telar: from fix, pane 3] ", .text = "hi" }, true));
+    return legacy_enter;
+}
+
+test "submissions frame a paste only when asked and the child enabled it" {
+    var storage: [core.max_pane_text_input_bytes + agent_control.max_sender_line_bytes + prompt_overhead]u8 = undefined;
+    const bracketed: keyinput.InputModes = .{ .bracketed_paste = true };
+
+    try std.testing.expectEqualStrings("hello\r", submissionBytes(&storage, .{ .text = "hello", .paste = true }, .{}));
+    try std.testing.expectEqualStrings("\x1b[200~hello\x1b[201~\r", submissionBytes(&storage, .{ .text = "hello", .paste = true }, bracketed));
+    try std.testing.expectEqualStrings("hello\r", submissionBytes(&storage, .{ .text = "hello" }, bracketed));
+    try std.testing.expectEqualStrings("\x1b[200~[telar: from fix, pane 3] hi\x1b[201~\r", submissionBytes(&storage, .{
+        .prefix = "[telar: from fix, pane 3] ",
+        .text = "hi",
+        .paste = true,
+    }, bracketed));
+}
+
+test "submissions press Enter as the kitty protocol encodes it once the child enabled it" {
+    var storage: [core.max_pane_text_input_bytes + agent_control.max_sender_line_bytes + prompt_overhead]u8 = undefined;
+    const kitty: keyinput.InputModes = .{
+        .bracketed_paste = true,
+        .kitty_keyboard_flags = 0b101,
+    };
+
+    try std.testing.expectEqualStrings("y\x1b[13u", submissionBytes(&storage, .{ .text = "y" }, kitty));
+    try std.testing.expectEqualStrings("\x1b[200~hi\x1b[201~\x1b[13u", submissionBytes(&storage, .{
+        .text = "hi",
+        .paste = true,
+    }, kitty));
 }
 
 const ResponseWrite = struct {

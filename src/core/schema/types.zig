@@ -221,12 +221,14 @@ pub const PaneTextSource = enum(u8) {
     recent = 1,
 };
 
-/// How text sent to a pane is delivered. `prompt` wraps it in bracketed paste
-/// when the child enabled that mode, appends Enter, and is refused while the
-/// agent is blocked.
+/// How text sent to a pane is delivered. `raw_enter` follows the text with
+/// the Enter key encoded for the child's keyboard mode. `prompt` wraps it in
+/// bracketed paste when the child enabled that mode, presses Enter the same
+/// way, and is refused while the agent is blocked.
 pub const PaneTextMode = enum(u8) {
     raw = 0,
     prompt = 1,
+    raw_enter = 2,
 };
 
 pub const PaneLifecycle = enum(u8) {

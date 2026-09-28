@@ -49,7 +49,7 @@ pub fn interrupt(model: *RuntimeModel, session: *Session, request: core.Interrup
         return client_request.fail(session, request.request_id, .interrupt_unsupported, "agent declares no interrupt key");
     }
 
-    try pane_input.forwardControl(model, pane, interrupt_key.bytes());
+    try pane_input.press(model, pane, interrupt_key.presses());
     // Claude Code runs no stop hook for an interrupted turn, so the working
     // report would outlive the turn. The runtime pressed the key itself; the
     // agent's next hook corrects this if the turn somehow went on.

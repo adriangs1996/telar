@@ -112,16 +112,10 @@ fn execute(session: *Session, options: PaneOptions, context: ExecutionContext) !
             }
         },
         .send_keys => {
-            var storage: [core.max_pane_text_input_bytes + 1]u8 = undefined;
-            const text = std.mem.span(options.text.?);
-            @memcpy(storage[0..text.len], text);
-            var len = text.len;
-            if (options.enter) {
-                storage[len] = '\r';
-                len += 1;
-            }
-
-            try session.sendText(pane, .{ .mode = .raw, .text = storage[0..len] });
+            try session.sendText(pane, .{
+                .mode = if (options.enter) .raw_enter else .raw,
+                .text = std.mem.span(options.text.?),
+            });
         },
         .focus => {
             const result = try session.focusPane(pane, options.direction.?);
