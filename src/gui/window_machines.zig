@@ -253,9 +253,12 @@ pub fn choose(gui: *GuiAdapter, request: data.MachineRequest) !void {
     }
 }
 
-/// Runs `telar machine setup` for a machine in a new tab of this machine,
-/// where the person sees each step and answers OpenSSH or a login if asked.
-/// The window follows `machines.json` as setup saves the machine.
+/// Runs `telar machine setup --confirm` for a machine in a new tab of this
+/// machine, where the person first agrees to it, then sees each step and
+/// answers OpenSSH or a login if asked. The window follows `machines.json`
+/// as setup saves the machine. A row `--remote` opened has no profile, and
+/// its label is cut from its destination, so setup is given the
+/// destination.
 ///
 /// ```zig
 /// try window_machines.setUp(gui, slot);
@@ -272,10 +275,11 @@ pub fn setUp(gui: *GuiAdapter, slot: u8) !void {
     var title_buffer: [core.max_tab_label_bytes]u8 = undefined;
     const title = std.fmt.bufPrint(&title_buffer, "Set up {s}", .{machines.label(slot)}) catch "Set up telar";
 
+    const name = if (machines.id[slot] == .invalid) machines.destination(slot) else machines.label(slot);
     try select(gui, Machines.local_slot);
     _ = try client.tab_creation.requestTabCreation(own, .{
         .label = title,
-        .arguments = &.{ executable, "machine", "setup", machines.label(slot) },
+        .arguments = &.{ executable, "machine", "setup", name, "--confirm" },
     });
 }
 

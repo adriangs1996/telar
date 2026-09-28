@@ -8,7 +8,7 @@ pub const text =
     \\       telar cli install|uninstall|status [--dir DIR]
     \\       telar --machine LABEL COMMAND [args...]
     \\       telar machine add LABEL DESTINATION [--color COLOR] [--disabled] [--check] [--setup [--binary PATH] [--skip agents,config,login]] [--json]
-    \\       telar machine setup LABEL|DESTINATION [--label LABEL] [--binary PATH] [--skip agents,config,login] [--json]
+    \\       telar machine setup LABEL|DESTINATION [--label LABEL] [--binary PATH] [--skip agents,config,login] [--confirm] [--json]
     \\       telar machine remove|enable|disable LABEL
     \\       telar machine rename LABEL NEW_LABEL
     \\       telar machine list [--json]

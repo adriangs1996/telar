@@ -23,6 +23,9 @@ json: bool = false,
 setup: bool = false,
 /// `setup`'s label for a destination no profile names yet.
 new_label: ?[*:0]const u8 = null,
+/// `setup --confirm` asks on the terminal before it changes anything; the
+/// window passes it, since one key press there starts setup.
+confirm: bool = false,
 /// A telar executable built for the machine, for development builds.
 binary: ?[*:0]const u8 = null,
 skip: std.EnumSet(SetupSkip) = .initEmpty(),
@@ -70,6 +73,8 @@ pub fn parse(args: []const [*:0]const u8) !MachineOptions {
             options.json = true;
         } else if (std.mem.eql(u8, arg, "--setup") and action == .add) {
             options.setup = true;
+        } else if (std.mem.eql(u8, arg, "--confirm") and action == .setup) {
+            options.confirm = true;
         } else if (std.mem.eql(u8, arg, "--label") and action == .setup) {
             options.new_label = try optionValue(args, &index);
         } else if (std.mem.eql(u8, arg, "--binary") and takes_setup) {
@@ -136,6 +141,9 @@ test "machine setup takes a label or destination and its options" {
     try std.testing.expectEqualStrings("/tmp/telar", std.mem.span(options.binary.?));
     try std.testing.expect(options.skip.contains(.login) and options.skip.contains(.config) and !options.skip.contains(.agents));
     try std.testing.expect(options.json);
+    try std.testing.expect(!options.confirm);
+    try std.testing.expect((try MachineOptions.parse(&.{ "setup", "box", "--confirm" })).confirm);
+    try std.testing.expectError(error.UnknownMachineOption, MachineOptions.parse(&.{ "add", "box", "dev@box", "--confirm" }));
 
     const added = try MachineOptions.parse(&.{ "add", "box", "dev@box", "--skip", "agents", "--setup" });
     try std.testing.expect(added.setup and added.skip.contains(.agents));

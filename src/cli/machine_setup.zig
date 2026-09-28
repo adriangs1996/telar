@@ -105,6 +105,12 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
     }
 
     const interactive = !options.json and (std.Io.File.stdin().isTty(init.io) catch false);
+    if (options.confirm and !try confirmSetup(init, &output.interface, &target, interactive)) {
+        try output.interface.print("Nothing was changed on {s}.\n", .{target.label()});
+        try output.interface.flush();
+        return 0;
+    }
+
     const platform = try reach(init, &report, &target, directory.slice(), interactive) orelse return finish(&report, &target);
     const telar_path = platform.target.slice();
     if (!try installTelar(init, &report, &target, &platform, &directory)) {
@@ -180,6 +186,33 @@ fn probeAgain(init: std.process.Init, target: *const SetupTarget, directory: []c
 fn finish(report: *SetupReport, target: *const SetupTarget) !u8 {
     try report.finish(target.label(), target.destination());
     return if (report.failed()) failure else 0;
+}
+
+// `--confirm`: says what setup is about to do and waits for a yes on the
+// terminal; without one, nothing is done.
+fn confirmSetup(init: std.process.Init, writer: *std.Io.Writer, target: *const SetupTarget, interactive: bool) !bool {
+    if (!interactive) {
+        try writer.writeAll("telar machine setup --confirm needs a terminal to ask on.\n");
+        return false;
+    }
+
+    try writer.print(
+        "This installs telar {s} on {s} ({s}), and the agents you have here with their official installers; " ++
+            "it copies their configuration, never a credential, and opens their logins there. Set it up? [y/N] ",
+        .{ version, target.label(), target.destination() },
+    );
+    try writer.flush();
+
+    return answeredYes(init);
+}
+
+// Reads one line from the terminal; only `y` or `yes` agrees.
+fn answeredYes(init: std.process.Init) bool {
+    var line_buffer: [16]u8 = undefined;
+    var stdin = std.Io.File.stdin().readerStreaming(init.io, &line_buffer);
+    const answer = stdin.interface.takeDelimiterExclusive('\n') catch return false;
+    const trimmed = std.mem.trim(u8, answer, " \r\t");
+    return std.ascii.eqlIgnoreCase(trimmed, "y") or std.ascii.eqlIgnoreCase(trimmed, "yes");
 }
 
 // Says why setup cannot start on `name`, before anything touched a machine.
@@ -567,11 +600,7 @@ fn askToStop(init: std.process.Init, report: *SetupReport, target: *const SetupT
     );
     try report.writer.flush();
 
-    var line_buffer: [16]u8 = undefined;
-    var stdin = std.Io.File.stdin().readerStreaming(init.io, &line_buffer);
-    const answer = stdin.interface.takeDelimiterExclusive('\n') catch return false;
-    const trimmed = std.mem.trim(u8, answer, " \r\t");
-    return std.ascii.eqlIgnoreCase(trimmed, "y") or std.ascii.eqlIgnoreCase(trimmed, "yes");
+    return answeredYes(init);
 }
 
 // Asks every other telar there to stop its runtime: only the build that
