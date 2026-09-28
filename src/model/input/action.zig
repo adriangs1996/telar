@@ -30,6 +30,8 @@ pub const Action = union(enum) {
     select_workspace: u8,
     /// Leaves a worktree's tabs for the project it hangs from.
     leave_worktree,
+    /// Forgets every worktree whose checkout is gone.
+    forget_gone_worktrees,
     close_pane,
     new_tab,
     select_tab_offset: i8,
@@ -275,6 +277,13 @@ pub const Action = union(enum) {
             "leave-worktree",
         )) {
             return .leave_worktree;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "forget-gone-worktrees",
+        )) {
+            return .forget_gone_worktrees;
         }
         if (std.mem.eql(
             u8,
