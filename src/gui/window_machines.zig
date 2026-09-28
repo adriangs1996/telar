@@ -390,7 +390,7 @@ fn openClient(gui: *GuiAdapter, slot: u8, arguments: []const []const u8) !void {
     machines.live[slot] = true;
 
     app.owns_configuration = false;
-    app.graphics = host_ports.graphicsRetention(gui);
+    app.graphics = host_ports.graphicsRetention(gui, slot);
     app.chrome = host_ports.chrome(gui);
     app.host_input_source = host_ports.hostInput(gui);
     app.presented = false;

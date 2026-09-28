@@ -52,7 +52,7 @@ fn openMachine(session: *Session, connection: *localsocket.SocketChannel) !u8 {
         },
     });
     gui.machines.live[slot] = true;
-    app.graphics = host_ports.graphicsRetention(gui);
+    app.graphics = host_ports.graphicsRetention(gui, slot);
     app.chrome = host_ports.chrome(gui);
     app.host_input_source = host_ports.hostInput(gui);
     app.presented = false;
@@ -144,6 +144,25 @@ test "a machine hidden in a worktree reopens that worktree when shown again" {
     try std.testing.expect(gui.app == own);
     try std.testing.expect(own.left_workspace == null);
     try std.testing.expect(!own.model.request_lifecycle.tracker.isEmpty());
+}
+
+test "a hidden machine never hides the shown machine's pane graphics" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+
+    var box = try socketPair();
+    defer box.channel.deinit(std.testing.io);
+    defer box.peer.deinit(std.testing.io);
+    const slot = try openMachine(session, &box.channel);
+    const own = window_machines.window(gui);
+
+    // Both runtimes number their panes from the same start, so the hidden
+    // machine's pane can carry the id of the shown one's.
+    try gui.clients[slot].graphics.setPaneVisible(Session.pane_id, false);
+    try std.testing.expect(own.graphics.paneVisible(Session.pane_id));
+    try std.testing.expect(!gui.clients[slot].graphics.paneVisible(Session.pane_id));
 }
 
 test "the top bar names the machine only while the window holds several" {
