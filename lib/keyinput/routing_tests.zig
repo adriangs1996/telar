@@ -38,6 +38,29 @@ test "native key routing needs no decoder and retains binding ownership through 
     try std.testing.expect(router.inputDeadline() == null);
 }
 
+test "binding timer expiries with nothing pending are a no-op" {
+    var router = try Router.init(&.{try Binding.parse(&.{ "a", "b" }, .next)});
+    var capture: Capture = .{};
+
+    try std.testing.expect(router.expireBinding(std.math.maxInt(u64)) == .pending);
+    try std.testing.expect(router.bindingDeadline() == null);
+
+    const first = try chord.parseKey("a");
+    _ = try capture.apply(router.routeEvent(.{ .key = first, .raw = "", .now_ns = 1 }, .{}));
+    const deadline = router.bindingDeadline().?;
+    try std.testing.expect(router.expireBinding(deadline - 1) == .pending);
+    try std.testing.expectEqual(@as(usize, 0), capture.key_count);
+
+    _ = try capture.apply(router.expireBinding(deadline));
+    try std.testing.expectEqual(@as(usize, 1), capture.key_count);
+    try std.testing.expectEqualDeep(first, capture.keys[0]);
+    try std.testing.expect(router.bindingDeadline() == null);
+
+    _ = try capture.apply(router.expireBinding(deadline));
+    try std.testing.expectEqual(@as(usize, 1), capture.key_count);
+    try std.testing.expectEqual(@as(usize, 0), capture.action_count);
+}
+
 test "native persistent prefix consumes unmatched keys without forwarding bytes" {
     const prefix = try chord.parseKey("ctrl+b");
     var router = try Router.initWithPrefix(&.{try Binding.parse(&.{ "ctrl+b", "n" }, .next)}, prefix);
