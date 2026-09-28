@@ -23,6 +23,8 @@ pub const Intent = union(enum) {
         label: []const u8,
     },
     add_machine,
+    /// A peek at one agent, opened from its task card.
+    peek: model_data.AgentKey,
 };
 
 pub fn renameTab(tab_id: core.TabId, label: []const u8) model_data.PromptBegin {

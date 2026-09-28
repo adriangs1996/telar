@@ -19,6 +19,7 @@ const tab_selection = @import("../workspace/tab_selection.zig");
 const workspace_creation = @import("../workspace/workspace_creation.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 const workspace_rename = @import("../workspace/workspace_rename.zig");
+const agent_peek = @import("../agents/agent_peek.zig");
 const Client = @import("../execution/Client.zig");
 
 /// Opens the command palette with `prefix` already typed. A `?` palette
@@ -110,6 +111,7 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
         try prompt_paths.acceptPathCompletion(client);
     } else if (outcome == .cancelled or outcome == .finished) {
         prompt_paths.closePathCompletion(&client.model);
+        agent_peek.settle(&client.model);
     } else if (directory_before != null and !std.meta.eql(directory_before, promptDirectoryVersion(&client.model.name_prompt))) {
         try prompt_paths.refreshPathCompletion(client);
     }
@@ -204,6 +206,13 @@ pub fn openNamePrompt(model: *data.ClientModel, intent: name_prompt_opening.Inte
             },
         },
         .add_machine => .add_machine,
+        .peek => |key| peek: {
+            if (model.agent_snapshot.find(key) == null) {
+                return false;
+            }
+
+            break :peek .{ .peek = key };
+        },
         .copy_search => unreachable,
     };
 
@@ -494,6 +503,7 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
             break :blk true;
         },
         .suggest => suggest_command.submitSuggestion(&client.model, submission.name),
+        .peek => |key| try agent_peek.submit(client, key, submission.name),
         // The palette closes like the list its prefix selects; `>` closes
         // only when a catalogue entry matches, so Enter on no match is inert.
         .palette => blk: {

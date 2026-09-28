@@ -1,4 +1,5 @@
 const core = @import("telar-core");
+const AgentKey = @import("../agents/AgentKey.zig");
 const copy_mode_module = @import("../input/copy_mode.zig");
 const History = @import("History.zig");
 const name_prompt = @import("name_prompt.zig");
@@ -19,6 +20,7 @@ mode: union(enum) {
     history: History,
     suggest,
     palette: struct { selection: u16 = 0 },
+    peek: AgentKey,
     paths: struct { selection: u16 = 0 },
     machine: MachinePrompt,
 },
@@ -38,6 +40,7 @@ pub fn target(self: *const Prompt) name_prompt.Target {
         .history => .history,
         .suggest => .suggest,
         .palette => .palette,
+        .peek => |key| .{ .peek = key },
         .paths => .paths,
         .machine => |machine| .{ .machine = machine },
     };

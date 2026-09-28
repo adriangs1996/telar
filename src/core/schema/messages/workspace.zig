@@ -18,6 +18,7 @@ const ResyncRequired = @import("ResyncRequired.zig");
 const WorkspaceList = @import("WorkspaceList.zig");
 const WorkspaceListView = @import("WorkspaceListView.zig");
 const WorkspaceListEntry = @import("WorkspaceListEntry.zig");
+const worktree = @import("worktree.zig");
 
 /// A close that removed a workspace names the surviving predecessor; any
 /// other close must not.
@@ -237,6 +238,22 @@ pub fn encodeWorkspaceList(buffer: []u8, message: WorkspaceList) ![]const u8 {
         try encoder.writeSized16(entry.branch);
         try encoder.writeByte(@intFromBool(entry.dirty));
     }
+
+    if (message.worktrees.len > types.max_worktree_entries) {
+        return error.TooManyWorktrees;
+    }
+
+    try encoder.writeInt(u16, @intCast(message.worktrees.len));
+    for (message.worktrees, 0..) |entry, index| {
+        for (message.worktrees[0..index]) |previous| {
+            if (previous.worktree == entry.worktree) {
+                return error.DuplicateWorktree;
+            }
+        }
+
+        try worktree.encodeWorktreeListEntry(&encoder, entry);
+    }
+
     return encoder.finish();
 }
 
@@ -260,10 +277,32 @@ pub fn decodeWorkspaceList(decoder: *Decoder) !WorkspaceListView {
         }
         seen[index] = entry.workspace;
     }
+    const encoded_entries = decoder.consumed(entries_start);
+
+    const worktree_count = try decoder.readInt(u16);
+    if (worktree_count > types.max_worktree_entries) {
+        return error.TooManyWorktrees;
+    }
+
+    const worktrees_start = decoder.index;
+    var seen_worktrees: [types.max_worktree_entries]id.WorktreeId = undefined;
+    for (0..worktree_count) |index| {
+        const entry = try worktree.decodeWorktreeListEntry(decoder);
+        for (seen_worktrees[0..index]) |previous| {
+            if (previous == entry.worktree) {
+                return error.DuplicateWorktree;
+            }
+        }
+
+        seen_worktrees[index] = entry.worktree;
+    }
+
     return .{
         .revision = revision,
         .entry_count = entry_count,
-        .encoded_entries = decoder.consumed(entries_start),
+        .encoded_entries = encoded_entries,
+        .worktree_count = worktree_count,
+        .encoded_worktrees = decoder.consumed(worktrees_start),
     };
 }
 

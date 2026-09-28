@@ -260,6 +260,46 @@ changes a provider option on a running agent. Its effect is confirmed only by
 the transcript.
 _Avoid_: Slash command, remote setting
 
+**Worktree**:
+A Git linked worktree the runtime tracks as a place where work happens. It
+belongs to one project and hangs from one source workspace; its tabs live in
+a child workspace bound to it.
+_Avoid_: Checkout, Worktree workspace
+
+**Source workspace**:
+The project workspace a worktree hangs from in the UI and returns to with
+`leave-worktree`.
+_Avoid_: Parent workspace
+
+**Worktree handle**:
+The branch name shown for a worktree, without the `worktree-` prefix Claude
+Code adds. Paths are never shown in its place.
+_Avoid_: Worktree path, Worktree name
+
+**Worktree origin**:
+`telar` for a worktree created through `telar worktree` or its hooks,
+`external` for one found by observing an agent's directory.
+
+**Coordinator**:
+An agent in a project's own checkout that delegates tasks to agents in
+worktrees and follows them through `telar agent` and `telar worktree`.
+_Avoid_: Orchestrator, Manager agent
+
+**Task**:
+The work delegated to one worktree, named by its required title. It is what
+the user and the coordinator refer to.
+_Avoid_: Job, Ticket
+
+**Task card**:
+The sidebar card of an agent that works in a worktree: task title, what it is
+doing now, its branch handle and diffstat.
+_Avoid_: Worktree card
+
+**Peek**:
+A modal that shows one agent's state and last pane rows, and sends it a
+message, interrupt, diff or open, without changing tab or focus.
+_Avoid_: Preview, Popover
+
 ## Machines
 
 **Machine**:

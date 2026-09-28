@@ -1,4 +1,5 @@
 const core = @import("telar-core");
+const AgentKey = @import("../agents/AgentKey.zig");
 const copy_mode = @import("../input/copy_mode.zig");
 const MachinePrompt = @import("MachinePrompt.zig").MachinePrompt;
 
@@ -18,6 +19,8 @@ pub const PromptTarget = union(enum) {
     /// One field whose first byte selects actions (`>`), the goto picker
     /// (`@`) or the suggestion engine (`?`); see `command_palette`.
     palette,
+    /// A peek at one agent: its task, plan, screen and a message field.
+    peek: AgentKey,
     /// Path picker; the root and results live in the path-picker model state.
     paths,
     /// Renames or adds one of the window's machines.

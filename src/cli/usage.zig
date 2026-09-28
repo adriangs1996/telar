@@ -81,6 +81,13 @@ pub const text =
     \\         telar pane list [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\         telar pane get <id|--current> [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\       telar pane focus --current --direction left|right|up|down [--json]
+    \\       telar worktree create BRANCH [--title TITLE] [--from BASE] [--directory DIR] [--label L] [--workspace ID] [-- COMMAND...]
+    \\       telar worktree exec BRANCH [--label L] [--wait [--timeout S]] -- COMMAND...
+    \\       telar worktree list [--workspace ID] [--json]
+    \\       telar worktree open BRANCH [--client ID]
+    \\       telar worktree diff BRANCH [--stat] [--uncommitted]
+    \\       telar worktree remove BRANCH [--force] [--delete-branch]
+    \\       telar agent interrupt <pane|title|worktree:BRANCH> [--json] [--socket PATH]
     \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
     \\       telar workspace create --directory DIR [--name NAME] [--json] [--socket PATH]
     \\       telar workspace list [--json] [--socket PATH]
@@ -120,14 +127,21 @@ pub const text =
     \\  notification show  Show a toast in every connected UI client
     \\  agent list       List the agents the runtime knows about
     \\  agent get        Show one agent by pane id, title or --current
-    \\  agent wait       Block until an agent reaches a status (default: done)
-    \\  agent prompt     Send a prompt to an agent; refused while it is blocked
+    \\  agent wait       Block until an agent reaches a status (default: done; finished = done or ready)
+    \\  agent prompt     Send a prompt to an agent; refused while blocked or focused (--interrupt stops it first)
     \\  agent read       Print recent text from an agent's pane
     \\  agent report-session  Record an agent's own session id for restore
     \\  pane read        Print recent text from any pane
     \\  pane send-keys   Send raw text (and --enter) to any pane
     \\  pane focus       Move from Neovim into an adjacent Telar pane
-    \\  workspace create Add a git worktree and open a workspace on it
+    \\  worktree create Add a git worktree for a task; with a command (needs --title), run it there
+    \\  worktree exec   Run a command in a new tab of a worktree; --wait prints its output and exit code
+    \\  worktree list   List worktrees with their task, state, diffstat and last command
+    \\  worktree open   Show a worktree in the UI client used last
+    \\  worktree diff   Print the worktree's diff against its base
+    \\  worktree remove Close a worktree's tabs and remove its checkout; refused with changes
+    \\  agent interrupt Stop an agent's turn with its provider's interrupt key
+    \\  workspace create Alias of worktree create for a workspace on a new git worktree
     \\  api schema       Print the wire contract of this binary
     \\  integration      Register telar's lifecycle reports with an agent (claude, codex and cursor hooks, pi extension)
     \\  hook             Entry point that agent hooks run (reads JSON on stdin)

@@ -1,5 +1,6 @@
 const localsocket = @import("localsocket");
 const Workspaces = @import("../../workspace/Workspaces.zig");
+const Worktrees = @import("../../workspace/Worktrees.zig");
 const core = @import("telar-core");
 const ReviewResult = @import("../../change_review/Result.zig");
 const ResponseQueue = @import("ResponseQueue.zig");
@@ -278,11 +279,13 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         self.workspace_list_revision_sent < workspaces.revision)
     {
         var entries: [Workspaces.capacity]core.WorkspaceListEntry = undefined;
+        var worktree_entries: [Worktrees.capacity]core.WorktreeListEntry = undefined;
         const revision = workspaces.revision;
         return self.stage(
             try core.encodeWorkspaceList(buffer, .{
                 .revision = revision,
                 .entries = workspaces.listEntries(&entries),
+                .worktrees = sources.worktrees.listEntries(&worktree_entries),
             }),
             .{ .workspace_list_revision = revision },
         );

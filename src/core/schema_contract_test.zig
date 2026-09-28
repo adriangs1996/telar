@@ -16,6 +16,8 @@ const EntryMetadata = @import("EntryMetadata.zig");
 const golden = @import("golden.zig");
 const pane_module = @import("schema/messages/pane.zig");
 const workspace_module = @import("schema/messages/workspace.zig");
+const worktree_module = @import("schema/messages/worktree.zig");
+const WorktreeListEntry = @import("schema/messages/WorktreeListEntry.zig");
 const runtime = @import("schema/messages/runtime.zig");
 const tab_module = @import("schema/messages/tab.zig");
 const history = @import("schema/messages/history.zig");
@@ -60,8 +62,8 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 113;
-const corpus_storage_size = 8 * 1024;
+const corpus_len = 120;
+const corpus_storage_size = 12 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     var entries: [corpus_len]Entry = undefined;
@@ -880,6 +882,11 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .sequence = 11,
         .observed_at_ms = 1000,
         .expires_at_ms = 2000,
+        .work_tree = @enumFromInt(4),
+        .final_message = "Done.\nTests pass.",
+        .plan_done = 2,
+        .plan_total = 5,
+        .plan_step = "Add the reorder test",
     }};
     helper.add(.{ .name = "agent_snapshot", .direction = .server, .golden_hex = golden.agent_snapshot }, helper.commit(
         try agent_module.encodeAgentSnapshot(helper.space(), .{
@@ -914,10 +921,28 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .tab_count = 1,
         },
     };
+    const worktree_list_entries = [_]WorktreeListEntry{.{
+        .worktree = @enumFromInt(4),
+        .source = @enumFromInt(7),
+        .workspace = @enumFromInt(9),
+        .created_by = @enumFromInt(5),
+        .path = "/work/telar-worktrees/fix",
+        .branch = "fix",
+        .base = "main",
+        .title = "Fix tabs",
+        .brief = "Reorder\ntabs",
+        .diff_added = 12,
+        .diff_removed = 3,
+        .diff_files = 2,
+        .commits_ahead = 1,
+        .command_label = "claude",
+        .command_state = .running,
+    }};
     helper.add(.{ .name = "workspace_list", .direction = .server, .golden_hex = golden.workspace_list }, helper.commit(
         try workspace_module.encodeWorkspaceList(helper.space(), .{
             .revision = 3,
             .entries = &workspace_list_entries,
+            .worktrees = &worktree_list_entries,
         }),
     ));
     helper.add(.{ .name = "pane_cwd", .direction = .server, .golden_hex = golden.pane_cwd }, helper.commit(
@@ -1074,6 +1099,69 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         try schema.encodeEditorOpened(helper.space(), .{ .request_id = @enumFromInt(5), .outcome = .opened, .pane_id = @enumFromInt(8), .pane_generation = 9 }),
     ));
 
+    helper.add(.{ .name = "register_worktree", .direction = .client, .golden_hex = golden.register_worktree }, helper.commit(
+        try worktree_module.encodeRegisterWorktree(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .source = @enumFromInt(7),
+            .created_by = @enumFromInt(5),
+            .path = "/work/telar-worktrees/fix",
+            .branch = "fix",
+            .base = "main",
+            .title = "Fix tabs",
+            .brief = "Reorder tabs",
+        }),
+    ));
+    helper.add(.{ .name = "worktree_registered", .direction = .server, .golden_hex = golden.worktree_registered }, helper.commit(
+        try worktree_module.encodeWorktreeRegistered(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .worktree = @enumFromInt(4),
+            .created = true,
+        }),
+    ));
+    helper.add(.{ .name = "launch_worktree", .direction = .client, .golden_hex = golden.launch_worktree }, helper.commit(
+        try worktree_module.encodeLaunchWorktree(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .worktree = @enumFromInt(4),
+            .label = "tests",
+            .size = .{ .cols = 80, .rows = 24 },
+            .launch = .{ .cwd = "/work/telar-worktrees/fix", .arguments = &arguments },
+        }),
+    ));
+    helper.add(.{ .name = "forget_worktree", .direction = .client, .golden_hex = golden.forget_worktree }, helper.commit(
+        try worktree_module.encodeForgetWorktree(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .worktree = @enumFromInt(4),
+        }),
+    ));
+    helper.add(.{ .name = "interrupt_agent", .direction = .client, .golden_hex = golden.interrupt_agent }, helper.commit(
+        try agent_module.encodeInterruptAgent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+        }),
+    ));
+    helper.add(.{ .name = "report_agent_progress", .direction = .client, .golden_hex = golden.report_agent_progress }, helper.commit(
+        try agent_module.encodeReportAgentProgress(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .cwd = "/work/telar-worktrees/fix/src",
+            .work_tree_path = "/work/telar-worktrees/fix",
+            .work_tree_branch = "fix",
+            .plan_op = .add,
+            .plan_text = "Add the reorder test",
+        }),
+    ));
+    helper.add(.{ .name = "send_pane_text_sender", .direction = .client, .golden_hex = golden.send_pane_text_sender }, helper.commit(
+        try pane_module.encodeSendPaneText(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .mode = .prompt,
+            .text = "ls",
+            .sender = @enumFromInt(9),
+        }),
+    ));
     helper.add(.{
         .name = "find_paths",
         .direction = .client,

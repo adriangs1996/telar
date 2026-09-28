@@ -10,6 +10,7 @@ const WorkspaceForm = @import("WorkspaceForm.zig");
 const PickerModal = @import("PickerModal.zig");
 const HistoryModal = @import("HistoryModal.zig");
 const SuggestionModal = @import("SuggestionModal.zig");
+const PeekModal = @import("PeekModal.zig");
 const CommandPalette = @import("CommandPalette.zig");
 const PathPicker = @import("PathPicker.zig");
 const OverlayComposition = @import("OverlayComposition.zig");
@@ -21,6 +22,7 @@ pub const Widget = union(enum) {
     picker: PickerModal,
     history: HistoryModal,
     suggestion: SuggestionModal,
+    peek: PeekModal,
     palette: CommandPalette,
     paths: PathPicker,
 
@@ -83,12 +85,14 @@ pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) 
     const area = switch (prompt.target()) {
         .goto => Modal.bounds(host, .{ .w = 84, .h = 18 }),
         .suggest => Modal.bounds(host, .{ .w = 84, .h = 9 }),
+        .peek => Modal.bounds(host, .{ .w = 96, .h = 24 }),
         else => Modal.bounds(host, .{ .w = 64, .h = 7 }),
     };
     pending.modal = area;
     const widget: Widget = switch (prompt.target()) {
         .goto => .{ .picker = .{ .area = area, .projection = input.projection } },
         .suggest => .{ .suggestion = .{ .area = area, .projection = input.projection } },
+        .peek => .{ .peek = .{ .area = area, .projection = input.projection } },
         .rename_tab => .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = "Rename tab" } },
         .rename_workspace => .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = "Rename workspace" } },
         .machine => |machine| .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = switch (machine) {

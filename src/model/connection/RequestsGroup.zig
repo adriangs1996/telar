@@ -10,5 +10,6 @@ pub const RequestsGroup = enum {
     tab_operation,
     notification,
     editor_open,
+    peek,
     ignored,
 };

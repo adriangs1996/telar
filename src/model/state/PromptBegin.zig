@@ -1,4 +1,5 @@
 const core = @import("telar-core");
+const AgentKey = @import("../agents/AgentKey.zig");
 const copy_mode = @import("../input/copy_mode.zig");
 const command_palette = @import("command_palette.zig");
 
@@ -24,4 +25,5 @@ pub const PromptBegin = union(enum) {
         label: []const u8,
     },
     add_machine,
+    peek: AgentKey,
 };

@@ -62,6 +62,9 @@ pub const Message = union(enum) {
     /// Encoded `find_paths` length in the slot's payload.
     find_paths: u16,
     complete_pane_focus: core.CompletePaneFocus,
+    /// A control request the client encoded itself into the item's payload:
+    /// peek reads, prompts, interrupts and worktree launches.
+    encoded: u16,
 };
 
 pub fn messageLaunchCwd(message: Message) ?[]const u8 {

@@ -134,8 +134,8 @@ fn showsIndicators(self: TopBar, canvas: *Canvas) !bool {
     }
 
     const active = self.context.workspaceId();
-    const listed = if (active) |id| self.context.projection.workspaces.indexOf(id) != null else false;
-    const regions = if (self.context.sidebar_regions) |prepared| prepared.* else try SidebarRegions.resolve(canvas, Bands.resolve(canvas).sidebar, self.context.projection.workspaces.count, MachineSegment.shown(self.context));
+    const listed = if (active) |id| if (self.context.projection.workspaces.indexOf(id)) |index| index < self.context.projection.workspaces.project_count else false else false;
+    const regions = if (self.context.sidebar_regions) |prepared| prepared.* else try SidebarRegions.resolve(canvas, Bands.resolve(canvas).sidebar, self.context.projection.workspaces.project_count, MachineSegment.shown(self.context));
     return !listed or regions.projects.height <= 0;
 }
 

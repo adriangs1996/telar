@@ -22,6 +22,7 @@ const SessionTitle = @import("SessionTitle.zig");
 const types = @import("types.zig");
 const EventLine = @import("EventLine.zig");
 
+const Progress = @import("Progress.zig");
 const Agent = @This();
 
 pub const ProjectionContext = @import("ProjectionContext.zig");
@@ -72,6 +73,9 @@ title: Title = .{},
 /// reports `done` instead of `ready` while unseen.
 seen: bool = true,
 session_reference: ?SessionReference = null,
+/// The tracked worktree the agent reported working in.
+work_tree: core.WorktreeId = .invalid,
+progress: Progress = .{},
 projected: core.AgentSnapshotEntry,
 
 /// Creates the candidate aggregate for one exact pane generation.
@@ -407,6 +411,11 @@ pub fn snapshot(self: *const Agent, now_ms: i64) core.AgentSnapshotEntry {
     entry.title_state = self.title.state;
     entry.last_event = self.event.slice();
     entry.status_age_s = self.statusAgeSeconds(now_ms);
+    entry.work_tree = self.work_tree;
+    entry.final_message = self.progress.finalMessage();
+    entry.plan_done = self.progress.done();
+    entry.plan_total = self.progress.total();
+    entry.plan_step = self.progress.step();
     return entry;
 }
 

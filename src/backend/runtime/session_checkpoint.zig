@@ -20,6 +20,7 @@ const checkpoint = @import("../persistence/checkpoint.zig");
 const PersistenceReader = @import("../persistence/Reader.zig");
 const Counters = @import("../persistence/Counters.zig");
 const PaneRecord = @import("../persistence/PaneRecord.zig");
+const WorktreeRecord = @import("../persistence/WorktreeRecord.zig");
 const ArgumentIterator = @import("../persistence/ArgumentIterator.zig");
 const LayoutRecord = @import("../persistence/LayoutRecord.zig");
 const PersistenceEncoder = @import("../persistence/Encoder.zig");
@@ -244,6 +245,7 @@ fn apply(model: *RuntimeModel, bytes: []const u8) !void {
             pane_count += 1;
         },
         .layout => {},
+        .worktree => |worktree| restoreWorktree(model, worktree) catch continue,
     };
 
     // Reused slots serialize newer identities before older live panes.
@@ -257,11 +259,42 @@ fn apply(model: *RuntimeModel, bytes: []const u8) !void {
     model.workspaces.next_workspace_id = @max(model.workspaces.next_workspace_id, reader.counters.next_workspace_id);
     model.workspaces.next_tab_id = @max(model.workspaces.next_tab_id, reader.counters.next_tab_id);
     dropEmptyTabs(model);
+    releaseMissingWorkspaces(model);
 
     reader = try PersistenceReader.init(bytes);
     while (try reader.next()) |record| {
         if (record == .layout) {
             restoreLayout(model, record.layout) catch continue;
+        }
+    }
+}
+
+fn restoreWorktree(model: *RuntimeModel, record: WorktreeRecord) !void {
+    const registered = try model.worktrees.register(model.gpa, .{
+        .id = try core.worktree(record.id),
+        .source = try core.workspace(record.source_workspace_id),
+        .created_by = if (record.created_by != 0) try core.pane(record.created_by) else null,
+        .origin = std.enums.fromInt(core.WorktreeOrigin, record.origin) orelse return error.InvalidCheckpoint,
+        .path = record.path,
+        .branch = record.branch,
+        .base = record.base,
+        .title = record.title,
+        .brief = record.brief,
+    });
+    if (record.workspace_id != 0) {
+        model.worktrees.workspace[registered.slot] = try core.workspace(record.workspace_id);
+    }
+}
+
+/// A restored worktree keeps its workspace link only while that workspace
+/// came back with at least one tab.
+fn releaseMissingWorkspaces(model: *RuntimeModel) void {
+    const worktrees = &model.worktrees;
+    var rows = worktrees.rows.iterator(.{});
+    while (rows.next()) |slot| {
+        const workspace_id = worktrees.workspace[slot] orelse continue;
+        if (!model.workspaces.containsWorkspace(.{ .workspace = workspace_id })) {
+            worktrees.workspace[slot] = null;
         }
     }
 }
@@ -456,6 +489,23 @@ pub fn encode(model: *RuntimeModel, buffer: []u8) !usize {
                 .label = tab.label,
             });
         }
+    }
+
+    const worktrees = &model.worktrees;
+    var worktree_rows = worktrees.rows.iterator(.{});
+    while (worktree_rows.next()) |slot| {
+        try encoder.worktree(.{
+            .id = core.raw(worktrees.id[slot]),
+            .source_workspace_id = core.raw(worktrees.source[slot]),
+            .workspace_id = if (worktrees.workspace[slot]) |workspace_id| core.raw(workspace_id) else 0,
+            .created_by = if (worktrees.created_by[slot]) |pane_id| core.raw(pane_id) else 0,
+            .origin = @intFromEnum(worktrees.origin[slot]),
+            .path = worktrees.path[slot],
+            .branch = worktrees.branchAt(slot),
+            .base = worktrees.baseAt(slot),
+            .title = worktrees.titleAt(slot),
+            .brief = worktrees.briefAt(slot),
+        });
     }
 
     for (panes.items) |slot| {

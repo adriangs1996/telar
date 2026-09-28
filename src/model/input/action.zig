@@ -28,6 +28,8 @@ pub const Action = union(enum) {
     new_workspace,
     rename_workspace,
     select_workspace: u8,
+    /// Leaves a worktree's tabs for the project it hangs from.
+    leave_worktree,
     close_pane,
     new_tab,
     select_tab_offset: i8,
@@ -266,6 +268,13 @@ pub const Action = union(enum) {
             "toggle-workspace-list",
         )) {
             return .toggle_workspace_list;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
+            "leave-worktree",
+        )) {
+            return .leave_worktree;
         }
         if (std.mem.eql(
             u8,

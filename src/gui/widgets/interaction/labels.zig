@@ -57,11 +57,19 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
 
                 break :blk "Workspace";
             },
+            .peek_agent => "Peek at agent",
             .focus_agent => |key| blk: {
                 for (projection.agents.slice()) |*agent| {
-                    if (std.meta.eql(agent.key, key)) {
-                        break :blk agent.displayName();
+                    if (!std.meta.eql(agent.key, key)) {
+                        continue;
                     }
+
+                    // A task card is known by its task, like the card shows it.
+                    if (client.fleet_order.taskRow(projection.workspaces, agent)) |task| {
+                        break :blk task.displayName();
+                    }
+
+                    break :blk agent.displayName();
                 }
 
                 break :blk "Agent";

@@ -15,7 +15,7 @@ pub fn run(self: *Watcher) !void {
     const wanted = switch (self.options.target) {
         .current => try control.currentPaneId(self.context.environ),
         .pane => |id| id,
-        .name => return error.InvalidPaneId,
+        .name, .worktree => return error.InvalidPaneId,
     };
     var catalog: PaneCatalog = .{
         .session = self.session,

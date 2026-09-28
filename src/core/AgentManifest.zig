@@ -35,6 +35,8 @@ blocked: agent_manifest.PhraseList = .{},
 ready_prompt: agent_manifest.PhraseList = .{},
 /// Tool names whose object input contains a shell command field.
 command_tools: CommandTools = .{},
+/// What stops the agent's current turn; `none` refuses interrupts.
+interrupt: agent_manifest.InterruptKey = .none,
 
 pub fn nameSlice(self: *const Manifest) []const u8 {
     return self.name[0..self.name_len];

@@ -56,6 +56,11 @@ pub const ClientTag = enum(u8) {
     query_change_review = 0x37,
     change_review_command = 0x38,
     report_change_review_sample = 0x39,
+    register_worktree = 0x3c,
+    launch_worktree = 0x3d,
+    forget_worktree = 0x3e,
+    interrupt_agent = 0x3f,
+    report_agent_progress = 0x40,
 };
 
 pub const ServerTag = enum(u8) {
@@ -108,4 +113,5 @@ pub const ServerTag = enum(u8) {
     pane_progress = 0xaa,
     editor_opened = 0xb2,
     path_results = 0xb3,
+    worktree_registered = 0xb4,
 };

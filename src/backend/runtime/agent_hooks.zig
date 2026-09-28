@@ -14,6 +14,8 @@ const agent_identity = @import("agent_identity.zig");
 const agent_sound = @import("agent_sound.zig");
 const client_request = @import("client_request.zig");
 const sound = @import("../agent/sound.zig");
+const Pane = @import("../pane/Pane.zig");
+const worktree_lifecycle = @import("worktree_lifecycle.zig");
 
 pub const TitleReport = enum { recorded, unchanged, pane_not_found, invalid_title };
 
@@ -101,6 +103,82 @@ pub fn receive(model: *RuntimeModel, session: *Session, report: core.ReportAgent
         .pane_generation = report.pane_generation,
         .sound = transition,
     });
+}
+
+/// Receives what an agent works on: the worktree its working directory
+/// resolves to, one plan change and its final answer. A linked worktree
+/// nobody registered is tracked as external under the pane's workspace.
+///
+/// ```zig
+/// try agent_hooks.receiveProgress(model, session, report);
+/// ```
+pub fn receiveProgress(model: *RuntimeModel, session: *Session, report: core.ReportAgentProgress) !void {
+    const pane = model.panes.resolveConst(.{ .id = report.pane_id, .generation = report.pane_generation }) orelse {
+        return client_request.fail(session, report.request_id, .pane_not_found, "pane not found");
+    };
+
+    if (pane.exit != null) {
+        return client_request.fail(session, report.request_id, .pane_not_found, "pane not found");
+    }
+
+    const work_tree = try resolveWorkTree(model, pane, report);
+    _ = agent_status.observeProgress(model, .{
+        .identity = agent_identity.fromPane(pane),
+        .work_tree = work_tree,
+        .plan = .{
+            .op = report.plan_op,
+            .index = report.plan_index,
+            .status = report.plan_status,
+            .done = report.plan_done,
+            .total = report.plan_total,
+            .text = report.plan_text,
+        },
+        .final_message = report.final_message,
+    });
+    try client_request.complete(session, report.request_id);
+}
+
+/// The worktree a report's directory lies in: a tracked checkout that
+/// contains it, else the linked worktree the hook resolved, registered as
+/// external, else none. A report without a directory keeps the current one.
+fn resolveWorkTree(model: *RuntimeModel, pane: *const Pane, report: core.ReportAgentProgress) !?core.WorktreeId {
+    if (report.cwd.len == 0) {
+        return null;
+    }
+
+    if (model.worktrees.slotContaining(report.cwd)) |slot| {
+        return model.worktrees.id[slot];
+    }
+
+    if (report.work_tree_path.len == 0) {
+        return .invalid;
+    }
+
+    const source = workspaceOf(pane) orelse return .invalid;
+    const branch = if (report.work_tree_branch.len != 0) report.work_tree_branch else std.fs.path.basename(report.work_tree_path);
+    const registered = model.worktrees.register(model.gpa, .{
+        .source = model.worktrees.sourceFor(source),
+        .created_by = pane.key().id,
+        .origin = .external,
+        .path = report.work_tree_path,
+        .branch = branch[0..@min(branch.len, core.max_git_branch_bytes)],
+    }) catch |err| return switch (err) {
+        error.OutOfMemory => err,
+        else => .invalid,
+    };
+
+    if (registered.created) {
+        worktree_lifecycle.announce(model);
+    }
+
+    return registered.id;
+}
+
+fn workspaceOf(pane: *const Pane) ?core.WorkspaceId {
+    return switch (pane.location.workspace) {
+        .workspace => |id| id,
+        .worktree => null,
+    };
 }
 
 /// Receives one shell command the agent ran, for command history.

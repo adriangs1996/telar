@@ -124,6 +124,10 @@ pub fn begin(self: *State, command: name_prompt.Begin) void {
             .mode = .{ .machine = .add_label },
             .field = .init(""),
         },
+        .peek => |key| .{
+            .mode = .{ .peek = key },
+            .field = .init(""),
+        },
     };
     self.value.?.generation = self.generation;
     self.revision +%= 1;
@@ -245,7 +249,7 @@ pub fn apply(self: *State, command: name_prompt.Command) PromptTransition {
                     .create_directory = form_state.confirm_create,
                 } };
             }
-            if (prompt.field.text().len == 0 and !name_prompt.selects(prompt.target())) {
+            if (prompt.field.text().len == 0 and !name_prompt.acceptsEmpty(prompt.target())) {
                 return .unchanged;
             }
 

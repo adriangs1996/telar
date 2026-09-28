@@ -60,6 +60,45 @@ pub fn validateTabLabel(label: []const u8, empty_allowed: bool) !void {
     for (label) |byte| if (byte < 0x20 or byte == 0x7f) return error.InvalidTabLabel;
 }
 
+/// Printable UTF-8 on one line: no C0 or DEL bytes, so the value is safe in a
+/// wire frame, a checkpoint record and a host escape.
+///
+/// ```zig
+/// try validateDisplayText(title, types.max_worktree_title_bytes, true);
+/// ```
+pub fn validateDisplayText(bytes: []const u8, maximum: usize, empty_allowed: bool) !void {
+    try validateBytes(bytes, maximum, empty_allowed);
+    if (!std.unicode.utf8ValidateSlice(bytes)) {
+        return error.InvalidUtf8;
+    }
+
+    for (bytes) |byte| {
+        if (byte < 0x20 or byte == 0x7f) {
+            return error.InvalidAgentDisplayText;
+        }
+    }
+}
+
+/// Printable UTF-8 that may span lines: newlines and tabs are the only
+/// control bytes allowed, so no escape sequence can ride inside it.
+///
+/// ```zig
+/// try validateMessageText(message, types.max_agent_final_message_bytes);
+/// ```
+pub fn validateMessageText(bytes: []const u8, maximum: usize) !void {
+    try validateBytes(bytes, maximum, true);
+    if (!std.unicode.utf8ValidateSlice(bytes)) {
+        return error.InvalidUtf8;
+    }
+
+    for (bytes) |byte| {
+        const allowed = byte == '\n' or byte == '\t';
+        if ((byte < 0x20 and !allowed) or byte == 0x7f) {
+            return error.InvalidMessageText;
+        }
+    }
+}
+
 // -- composite values -------------------------------------------------------
 
 pub fn encodeSize(encoder: *Encoder, size: TerminalSize) !void {

@@ -11,6 +11,7 @@ const WorkspaceRecord = @import("WorkspaceRecord.zig");
 const TabRecord = @import("TabRecord.zig");
 const PaneRecord = @import("PaneRecord.zig");
 const LayoutRecord = @import("LayoutRecord.zig");
+const WorktreeRecord = @import("WorktreeRecord.zig");
 const std = @import("std");
 const Encoder = @import("Encoder.zig");
 const Reader = @import("Reader.zig");
@@ -20,8 +21,9 @@ const Counters = @import("Counters.zig");
 pub const magic: *const [8]u8 = "TELARCKP";
 /// Version 2 added pane titles; version 3 permits automatic tab labels.
 /// Version 4 added pane kinds for agent panes; version 5 drops them again.
+/// Version 6 adds worktree records.
 /// Older labels remain explicit because their naming intent was not recorded.
-pub const version: u16 = 5;
+pub const version: u16 = 6;
 pub const oldest_readable_version: u16 = 1;
 pub const max_file_bytes = 4 * 1024 * 1024;
 pub const max_launch_arguments = 32;
@@ -32,6 +34,7 @@ pub const Record = union(enum) {
     tab: TabRecord,
     pane: PaneRecord,
     layout: LayoutRecord,
+    worktree: WorktreeRecord,
 };
 
 /// The only version whose pane records end with a kind byte. Its agent
@@ -49,6 +52,7 @@ pub const Kind = enum(u8) {
     tab = 2,
     pane = 3,
     layout = 4,
+    worktree = 5,
 };
 
 /// An empty title carries no source. A present one must be printable and
@@ -66,6 +70,26 @@ pub fn validateTitle(title: []const u8, source: u8) !void {
     switch (std.enums.fromInt(core.AgentTitleSource, source) orelse return error.InvalidCheckpoint) {
         .generated, .manual, .agent => {},
         .telar, .terminal => return error.InvalidCheckpoint,
+    }
+}
+
+/// A worktree record carries bounded, printable text and an absolute path.
+pub fn validateWorktree(record: WorktreeRecord) !void {
+    try validatePath(record.path);
+    if (record.id == 0 or record.source_workspace_id == 0 or !std.fs.path.isAbsolutePosix(record.path)) {
+        return error.InvalidCheckpoint;
+    }
+
+    if (std.enums.fromInt(core.WorktreeOrigin, record.origin) == null) {
+        return error.InvalidCheckpoint;
+    }
+
+    const within = record.branch.len != 0 and record.branch.len <= core.max_git_branch_bytes and
+        record.base.len <= core.max_git_branch_bytes and
+        record.title.len <= core.max_worktree_title_bytes and
+        record.brief.len <= core.max_worktree_brief_bytes;
+    if (!within) {
+        return error.InvalidCheckpoint;
     }
 }
 

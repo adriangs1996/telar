@@ -1,5 +1,6 @@
 const data = @import("../model.zig");
 const core = @import("telar-core");
+const std = @import("std");
 const snapshot_support = @import("snapshot_support.zig");
 const Agent = @This();
 
@@ -30,6 +31,19 @@ last_event: [core.max_agent_last_event_bytes]u8 = undefined,
 last_event_len: u8 = 0,
 /// Seconds the status had held when the runtime encoded this revision.
 status_age_s: u32,
+/// The tracked worktree the agent works in; `invalid` when none.
+work_tree: core.WorktreeId = .invalid,
+/// The start of the agent's final answer, lines kept, cut on a UTF-8
+/// boundary; the peek shows it and a task card its first line.
+final_message: [max_final_message_bytes]u8 = undefined,
+final_message_len: u16 = 0,
+plan_done: u16 = 0,
+plan_total: u16 = 0,
+plan_step: [core.max_agent_plan_step_bytes]u8 = undefined,
+plan_step_len: u8 = 0,
+
+/// Bytes of the final answer a client keeps.
+pub const max_final_message_bytes = 512;
 
 /// Manifest name of the provider ("claude"), or "agent" when the runtime
 /// sent none because the provider is unknown.
@@ -90,8 +104,48 @@ pub fn init(input: data.AgentInput) !Agent {
     agent.display_name_len = try snapshot_support.copyLabel(&agent.display_name, input.display_name);
     agent.icon_len = try snapshot_support.copyLabel(&agent.icon, input.icon);
     agent.last_event_len = try snapshot_support.copyLabel(&agent.last_event, input.last_event);
+    agent.work_tree = input.work_tree;
+    agent.plan_done = input.plan_done;
+    agent.plan_total = input.plan_total;
+    agent.plan_step_len = try snapshot_support.copyLabel(&agent.plan_step, input.plan_step);
+    agent.final_message_len = @intCast(copyPrefix(&agent.final_message, input.final_message));
 
     return agent;
+}
+
+/// The kept start of the agent's final answer.
+///
+/// ```zig
+/// const answer = agent.finalMessage();
+/// ```
+pub fn finalMessage(self: *const Agent) []const u8 {
+    return self.final_message[0..self.final_message_len];
+}
+
+/// The first non-empty line of the final answer.
+///
+/// ```zig
+/// const summary = agent.finalLine();
+/// ```
+pub fn finalLine(self: *const Agent) []const u8 {
+    var lines = std.mem.tokenizeScalar(u8, self.finalMessage(), '\n');
+    while (lines.next()) |line| {
+        const trimmed = std.mem.trim(u8, line, " \t");
+        if (trimmed.len != 0) {
+            return trimmed;
+        }
+    }
+
+    return "";
+}
+
+/// The task in progress or the last one reported; empty without a plan.
+///
+/// ```zig
+/// const step = agent.planStep();
+/// ```
+pub fn planStep(self: *const Agent) []const u8 {
+    return self.plan_step[0..self.plan_step_len];
 }
 
 /// Borrows the last event line: the pending prompt while blocked, the last
@@ -158,4 +212,15 @@ pub fn sessionTitle(self: *const Agent) []const u8 {
 /// ```
 pub fn cwdLabel(self: *const Agent) []const u8 {
     return self.cwd_label[0..self.cwd_label_len];
+}
+
+/// Copies the start of `source`, cut on a UTF-8 boundary.
+fn copyPrefix(destination: []u8, source: []const u8) usize {
+    var len = @min(source.len, destination.len);
+    while (len > 0 and len < source.len and (source[len] & 0xc0) == 0x80) {
+        len -= 1;
+    }
+
+    @memcpy(destination[0..len], source[0..len]);
+    return len;
 }

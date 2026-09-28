@@ -24,7 +24,7 @@ const Watch = @import("../agent/Watch.zig");
 const Completion = @import("../agent/Completion.zig");
 const Agent = @import("../agent/Agent.zig");
 const description = @import("../agent/description.zig");
-
+const ProgressObservation = @import("../agent/ProgressObservation.zig");
 
 pub const AcknowledgeResult = enum {
     unknown_agent,
@@ -77,6 +77,32 @@ pub fn observeReport(model: *RuntimeModel, observation: ReportObservation) bool 
     }
 
     return reproject(model, agent, observation.observed_at_ms) or changed;
+}
+
+/// Applies an agent's reported working tree, plan change and final answer.
+/// The aggregate is created when the report precedes other evidence.
+///
+/// ```zig
+/// _ = agent_status.observeProgress(model, .{ .identity = identity, .work_tree = worktree });
+/// ```
+pub fn observeProgress(model: *RuntimeModel, observation: ProgressObservation) bool {
+    const agent = ensure(model, observation.identity) orelse return false;
+    var changed = false;
+    if (observation.work_tree) |work_tree| {
+        changed = agent.work_tree != work_tree;
+        agent.work_tree = work_tree;
+    }
+
+    changed = agent.progress.applyPlan(observation.plan) or changed;
+    if (observation.final_message.len != 0) {
+        changed = agent.progress.setFinalMessage(observation.final_message) or changed;
+    }
+
+    if (changed) {
+        bumpRevision(model);
+    }
+
+    return changed;
 }
 
 /// Records the session reference an agent reported for itself. The

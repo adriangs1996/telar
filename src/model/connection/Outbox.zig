@@ -104,6 +104,21 @@ pub fn pushBootstrap(self: *Outbox, request: RuntimeBootstrap) !void {
     try self.push(.{ .request_runtime_state = .{ .client_identity = request.client_identity } });
 }
 
+/// Queues one control request encoded by `encode`, the core encoder of
+/// `value`'s message.
+///
+/// ```zig
+/// try outbox.pushEncoded(core.encodeInterruptAgent, request);
+/// ```
+pub fn pushEncoded(self: *Outbox, comptime encode: anytype, value: anytype) !void {
+    var scratch: [data.input_limits.max_encoded_bytes]u8 = undefined;
+    const encoded = try encode(&scratch, value);
+    const index = try self.reserve();
+    self.item_launch_cwd[index] = null;
+    self.items[index] = .{ .encoded = @intCast(encoded.len) };
+    @memcpy(self.payloadAt(index)[0..encoded.len], encoded);
+}
+
 pub fn pushClientCompletion(self: *Outbox, reply: core.ClientCommand) !void {
     try reply.validateWire();
     const index = try self.reserve();
@@ -141,7 +156,7 @@ pub fn push(self: *Outbox, message: outbox_support.Message) !void {
                 }
             }
         },
-        .pane_input, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout, .query_change_review, .change_review_command, .complete_client_command, .find_paths => unreachable,
+        .pane_input, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout, .query_change_review, .change_review_command, .complete_client_command, .encoded, .find_paths => unreachable,
         else => {},
     }
     try self.append(message);
@@ -474,7 +489,7 @@ fn encodeNext(self: *const Outbox, buffer: []u8) ![]const u8 {
             break :encode core.encodeOpenEditor(buffer, request);
         },
         .complete_pane_focus => |value| core.encodeCompletePaneFocus(buffer, value),
-        .query_change_review, .change_review_command => |len| self.payloadAt(self.head)[0..len],
+        .query_change_review, .change_review_command, .encoded => |len| self.payloadAt(self.head)[0..len],
     };
 }
 

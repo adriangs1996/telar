@@ -9,6 +9,8 @@ pub const Intent = union(enum) {
     resize_sidebar: u16,
     toggle_workspace_list,
     focus_agent: model_data.AgentKey,
+    /// A secondary press on an agent card: peek at it without leaving the tab.
+    peek_agent: model_data.AgentKey,
     select_tab: core.TabId,
     move_tab: TabMoveIntent,
     focus_pane: core.PaneId,
@@ -38,9 +40,23 @@ pub const Intent = union(enum) {
     select_machine: u8,
 };
 
+/// What a secondary (right) press on a target does: rename a tab, peek at an
+/// agent, nothing elsewhere.
+///
+/// ```zig
+/// const intent = view_interaction.secondary(.{ .focus_agent = key });
+/// ```
+pub fn secondary(intent: Intent) Intent {
+    return switch (intent) {
+        .select_tab => |tab_id| .{ .rename_tab = tab_id },
+        .focus_agent => |key| .{ .peek_agent = key },
+        else => .none,
+    };
+}
+
 pub fn capturesPaneInput(intent: Intent) bool {
     return switch (intent) {
-        .select_tab, .focus_agent => true,
+        .select_tab, .focus_agent, .peek_agent => true,
         else => false,
     };
 }

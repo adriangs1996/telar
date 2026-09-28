@@ -224,7 +224,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `sqlite` | the one SQLite binding, statement helpers, additive migrations, FTS5 quoting |
 | `imaging` | PNG through Wuffs with limits checked first, ICO frames, box-filter and bilinear resampling |
 | `hostmetrics` | cpu, memory and battery of the host; nothing is kept between samples |
-| `gitstatus` | a working tree's branch and whether it has changes |
+| `gitstatus` | a working tree's branch and whether it has changes, the linked worktree a directory belongs to, and a worktree's diffstat and commits ahead of its base |
 | `localsocket` | same-user Unix sockets and length-prefixed framing |
 | `bytecodec` | bounds-checked little-endian encoding into caller buffers and decoding from borrowed bytes |
 | `urlscan` | classifying a URI by scheme, finding the URI or the local file path under an offset in a line, and the line and column a link points at |

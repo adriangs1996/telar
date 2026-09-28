@@ -19,6 +19,7 @@ const plugin_module = @import("cli/plugin.zig");
 const agent_module = @import("cli/agent.zig");
 const pane_module = @import("cli/pane.zig");
 const workspace_module = @import("cli/workspace.zig");
+const worktree_module = @import("cli/worktree.zig");
 const api_module = @import("cli/api.zig");
 const hook_module = @import("cli/hook.zig");
 const review_module = @import("cli/review.zig");
@@ -133,12 +134,13 @@ fn dispatch(init: std.process.Init, args: []const [*:0]const u8) anyerror!void {
         .agent => |options| std.process.exit(try agent_module.run(init, options)),
         .pane => |options| std.process.exit(try pane_module.run(init, options)),
         .workspace => |options| std.process.exit(try workspace_module.run(init, options)),
+        .worktree => |options| std.process.exit(try worktree_module.run(init, options)),
         .api => |options| try api_module.run(init, options),
         .hook => |options| try hook_module.run(init, options),
         .review => |options| std.process.exit(try review_module.run(init, options)),
         .integration => |options| std.process.exit(try integration_support.run(init, options)),
         .proxy => |options| std.process.exit(try proxy_module.run(init, options)),
-        .skill => try skill_module.run(init),
+        .skill => |which| try skill_module.run(init, which),
         .run => |options| {
             const status = try client_module.runNative(init, options);
             dumpEchoTrace(init);

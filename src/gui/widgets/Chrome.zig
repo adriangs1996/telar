@@ -51,7 +51,7 @@ pub fn begin(self: *Chrome, canvas: *Canvas, projection: *const client.Projectio
     const pending = self.maps.begin();
     try registerPanes(&pending.hits, projection.*);
     pending.bands = Bands.resolve(canvas);
-    pending.sidebar_regions = if (canvas.sidebar.expanded()) try SidebarRegions.resolve(canvas, pending.bands.sidebar, projection.workspaces.count, machinesShown(projection)) else .{};
+    pending.sidebar_regions = if (canvas.sidebar.expanded()) try SidebarRegions.resolve(canvas, pending.bands.sidebar, projection.workspaces.project_count, machinesShown(projection)) else .{};
     pending.tab_strip = .{ .x = 0, .y = 0, .width = 0, .height = 0 };
     self.ages.observe(projection.agents, self.now_ns);
     self.progress.begin();
@@ -253,16 +253,11 @@ fn edgeWidth(x: f64) u32 {
 }
 
 fn buttonIntent(intent: client.Intent, button: u8) client.Intent {
-    if (intent == .select_tab) {
-        const tab_id = intent.select_tab;
-        return switch (button) {
-            0 => .{ .select_tab = tab_id },
-            2 => .{ .rename_tab = tab_id },
-            else => .none,
-        };
-    }
-
-    return if (button != 0) .none else intent;
+    return switch (button) {
+        0 => intent,
+        2 => client.secondaryIntent(intent),
+        else => .none,
+    };
 }
 
 // Entering or leaving the strip relayouts it: inside, the widths hold still;

@@ -97,11 +97,27 @@ pub fn project(sources: Sources, entries: *[max_entries]core.AgentSnapshotEntry,
         }
 
         enriched.cwd_label = delivery_namespace.shortenCwd(&display[count].cwd, pane.cwd.slice(), sources.home);
+        if (enriched.work_tree == .invalid) {
+            enriched.work_tree = worktreeOfWorkspace(sources, pane.location.workspace);
+        }
+
         entries[count] = enriched;
         count += 1;
     }
 
     return entries[0..count];
+}
+
+/// An agent without a reported directory works in the worktree whose
+/// workspace holds its pane.
+fn worktreeOfWorkspace(sources: Sources, workspace: core.WorkspaceLocation) core.WorktreeId {
+    const workspace_id = switch (workspace) {
+        .workspace => |id| id,
+        .worktree => |id| return id,
+    };
+
+    const slot = sources.worktrees.slotOfWorkspace(workspace_id) orelse return .invalid;
+    return sources.worktrees.id[slot];
 }
 
 test "display context changes advance the snapshot revision once each" {

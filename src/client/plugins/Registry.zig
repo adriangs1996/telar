@@ -136,6 +136,7 @@ pub fn authorizeBatch(self: *const Registry, authorization: BatchAuthorization) 
             .resize_sidebar,
             .toggle_workspace_list,
             .select_workspace,
+            .leave_worktree,
             .select_tab_offset,
             .select_tab,
             .enter_copy_mode,
