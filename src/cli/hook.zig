@@ -20,6 +20,10 @@ const Target = @import("Target.zig");
 const Reports = @import("Reports.zig");
 const Session = @import("Session.zig");
 const hook_event = @import("hook_event.zig");
+const hook_progress = @import("hook_progress.zig");
+const hook_worktree = @import("hook_worktree.zig");
+const ProgressStorage = @import("ProgressStorage.zig");
+const WorktreeHookInput = @import("WorktreeHookInput.zig");
 const CodexSubagents = @import("CodexSubagents.zig");
 const agentfiles = @import("agentfiles");
 
@@ -399,21 +403,37 @@ fn cursorChatMeta(init: std.process.Init, input: *const CursorHookInput, buffer:
     return agentfiles.cursor.locate(init.io, root, input.workspace(), input.conversation_id, buffer) orelse "";
 }
 
-/// Runs the hook for `options.agent`. Always exits 0.
+/// Runs the hook for `options.agent`. Lifecycle hooks always exit 0 and
+/// do nothing outside a telar pane. Claude Code's worktree hooks run
+/// everywhere and fail loudly, because Claude Code uses their answer.
 ///
 /// ```zig
 /// try hook.run(process_init, options);
 /// ```
 pub fn run(init: std.process.Init, options: HookOptions) !void {
     const environ = init.minimal.environ;
-    const pane_id = control.currentPaneId(environ) catch return;
-    const generation_text = std.process.Environ.getPosix(environ, "TELAR_PANE_GENERATION") orelse return;
-    const pane_generation = std.fmt.parseUnsigned(u64, generation_text, 10) catch return;
-
     const input = try init.gpa.alloc(u8, max_input_bytes);
     defer init.gpa.free(input);
     var stdin_reader = std.Io.File.stdin().readerStreaming(init.io, &.{});
     const len = stdin_reader.interface.readSliceShort(input) catch return;
+
+    if (options.agent == .claude) {
+        const worktree_hook = std.json.parseFromSlice(WorktreeHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch null;
+        if (worktree_hook) |parsed| {
+            defer parsed.deinit();
+            if (hook_worktree.handles(parsed.value.hook_event_name)) {
+                hook_worktree.answer(init, parsed.value, options.socket) catch |err| {
+                    std.debug.print("telar hook: {s} failed: {s}\n", .{ parsed.value.hook_event_name, control.describe(err) });
+                    std.process.exit(1);
+                };
+                return;
+            }
+        }
+    }
+
+    const pane_id = control.currentPaneId(environ) catch return;
+    const generation_text = std.process.Environ.getPosix(environ, "TELAR_PANE_GENERATION") orelse return;
+    const pane_generation = std.fmt.parseUnsigned(u64, generation_text, 10) catch return;
     const target: Target = .{
         .socket = options.socket,
         .pane = .{ .pane_id = pane_id, .pane_generation = pane_generation },
@@ -435,11 +455,20 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
             const command = mapToolCommand(.claude, tool);
             var title_buffer: [core.max_agent_session_title_bytes]u8 = undefined;
             var event_buffer: hook_event.Buffer = undefined;
+            var progress_storage: ProgressStorage = .{};
             sendReports(init, target, .{
                 .lifecycle = mapClaudeHook(parsed.value, &event_buffer),
                 .command = command,
                 .title = mapClaudeTitle(&title_buffer, parsed.value),
                 .review = .{ .provider = .claude, .input = tool },
+                .progress = hook_progress.map(init.io, .{
+                    .event = parsed.value.hook_event_name,
+                    .agent_id = parsed.value.agent_id,
+                    .tool_name = parsed.value.tool_name,
+                    .tool_input = parsed.value.tool_input,
+                    .cwd = parsed.value.cwd,
+                    .last_assistant_message = parsed.value.last_assistant_message,
+                }, &progress_storage),
             });
         },
         .codex => {
@@ -464,7 +493,20 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
             };
             const command = mapToolCommand(.codex, tool);
             var event_buffer: hook_event.Buffer = undefined;
-            sendReports(init, target, .{ .lifecycle = mapCodexHook(parsed.value, &event_buffer), .command = command, .review = .{ .provider = .codex, .input = tool } });
+            var progress_storage: ProgressStorage = .{};
+            sendReports(init, target, .{
+                .lifecycle = mapCodexHook(parsed.value, &event_buffer),
+                .command = command,
+                .review = .{ .provider = .codex, .input = tool },
+                .progress = hook_progress.map(init.io, .{
+                    .event = parsed.value.hook_event_name,
+                    .agent_id = parsed.value.agent_id,
+                    .tool_name = parsed.value.tool_name,
+                    .tool_input = parsed.value.tool_input,
+                    .cwd = parsed.value.cwd,
+                    .last_assistant_message = parsed.value.last_assistant_message orelse "",
+                }, &progress_storage),
+            });
         },
         .pi => {
             const parsed = std.json.parseFromSlice(PiHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
@@ -513,7 +555,7 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
 }
 
 fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
-    if (reports.lifecycle == null and reports.command == null and reports.title == null and reports.review == null) {
+    if (reports.lifecycle == null and reports.command == null and reports.title == null and reports.review == null and reports.progress == null) {
         return;
     }
 
@@ -522,6 +564,14 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     var session = Session.attach(init, target.socket) catch return;
     defer session.close();
     const pane = target.pane;
+    // Progress goes first: a final answer is stored before the lifecycle
+    // report marks the turn finished, so a waiter never reads a stale one.
+    if (reports.progress) |progress| {
+        var report = progress;
+        report.pane_id = core.pane(pane.pane_id) catch return;
+        report.pane_generation = pane.pane_generation;
+        session.reportProgress(report) catch {};
+    }
     if (reports.lifecycle) |lifecycle| {
         session.reportAgent(pane, .{
             .state = lifecycle.state,

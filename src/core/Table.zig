@@ -113,6 +113,16 @@ pub fn attachments(self: *const Table, provider: types.AgentProvider) types.Agen
     return manifest.attachments;
 }
 
+/// The key that stops one provider's current turn.
+///
+/// ```zig
+/// const key = table.interrupt(.claude);
+/// ```
+pub fn interrupt(self: *const Table, provider: types.AgentProvider) agent_manifest.InterruptKey {
+    const manifest = self.find(provider) orelse return .none;
+    return manifest.interrupt;
+}
+
 /// Returns the object field holding a command for one provider tool.
 ///
 /// ```zig

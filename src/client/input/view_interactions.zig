@@ -7,6 +7,7 @@ const ViewInteractionCommand = @import("ViewInteractionCommand.zig");
 const ViewInteractionOutcome = @import("ViewInteractionOutcome.zig");
 const IntentOutcome = @import("IntentOutcome.zig");
 const agent_attachments = @import("../attachments/agent_attachments.zig");
+const agent_peek = @import("../agents/agent_peek.zig");
 const bar_components = @import("bar_components.zig");
 const bar_updates = @import("../config/bar_updates.zig");
 const agent_navigation = @import("../agents/agent_navigation.zig");
@@ -71,6 +72,7 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
             _ = data.workspace_list.toggle(&client.model);
         },
         .focus_agent => |key| _ = try agent_navigation.navigateAgent(client, key),
+        .peek_agent => |key| _ = try agent_peek.open(client, key),
         .select_tab => |tab_id| {
             _ = try tab_selection.selectTab(
                 client,

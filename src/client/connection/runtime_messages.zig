@@ -3,6 +3,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const pane_graphics = @import("../panes/pane_graphics.zig");
+const agent_peek = @import("../agents/agent_peek.zig");
 const agent_snapshot = @import("../agents/agent_snapshot.zig");
 const agent_sound = @import("../agents/agent_sound.zig");
 const proxy_status = @import("../agents/proxy_status.zig");
@@ -51,11 +52,13 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
         },
         .request_completed => |reply| {
             const continuation = client.model.request_lifecycle.tracker.take(reply.request_id) orelse return error.UnexpectedControlReply;
-            if (continuation != .ignored) {
+            if (continuation != .ignored and continuation != .peek_action) {
                 return error.UnexpectedControlReply;
             }
         },
         .pane_opened => |opened| _ = try pane_attachment.completePaneOpen(client, opened),
+        // Worktree registration is a CLI request; a UI never asks for it.
+        .worktree_registered => return error.UnexpectedControlReply,
         .tab_snapshot => |snapshot| _ = try tab_snapshot.applyTabSnapshot(client, snapshot),
         .workspace_snapshot => |snapshot| try workspace_list_snapshot.applyWorkspaceSnapshot(client, snapshot),
         .tab_created => |created| _ = try tab_creation.completeTabCreation(client, created),
@@ -120,10 +123,14 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
         .history_pruned => |confirmation| _ = try history_palette.completeHistoryPrune(&client.model, confirmation),
         .history_output => |output| _ = client.model.history_palette.applyOutput(output),
         .command_suggestion => |suggested| _ = client.model.suggestion.apply(suggested),
+        .pane_text => |text| try agent_peek.receiveScreen(&client.model, text),
         .path_results => |results| try path_picker.receive(client, results),
-        .client_command_result, .client_list, .pane_text, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
+        .client_command_result, .client_list, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
         .proxy_status => |status| _ = try proxy_status.applyProxyStatus(client, status),
-        .agent_snapshot => |snapshot| _ = try agent_snapshot.applyAgentSnapshot(client, snapshot),
+        .agent_snapshot => |snapshot| {
+            _ = try agent_snapshot.applyAgentSnapshot(client, snapshot);
+            try agent_peek.requestScreen(&client.model);
+        },
         .system_metrics => |metrics| _ = try data.system_metrics.reconcile(&client.model, 
             .{
                 .runtime_revision = metrics.revision,

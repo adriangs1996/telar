@@ -54,7 +54,7 @@ pub fn draw(self: WorkspaceRail, canvas: *Canvas) !void {
 
 fn drawList(self: WorkspaceRail, canvas: *Canvas, list: Rect) !void {
     const snapshot = self.context.projection.workspaces;
-    if (snapshot.count == 0 or list.height <= 0) {
+    if (snapshot.project_count == 0 or list.height <= 0) {
         return;
     }
 
@@ -63,13 +63,14 @@ fn drawList(self: WorkspaceRail, canvas: *Canvas, list: Rect) !void {
     const pitch = list.width + gap;
     const counter = chrome.px(counter_height);
     var capacity: usize = @intFromFloat(@max(0, @floor((list.height + gap) / pitch)));
-    const counters = capacity < snapshot.count and list.height >= list.width + 2 * (counter + gap);
+    const counters = capacity < snapshot.project_count and list.height >= list.width + 2 * (counter + gap);
     if (counters) {
         capacity = @intFromFloat(@max(0, @floor((list.height - 2 * (counter + gap) + gap) / pitch)));
     }
 
-    const current = if (self.context.workspaceId()) |id| snapshot.indexOf(id) orelse 0 else 0;
-    const window = WorkspaceWindow.centered(snapshot.count, current, @max(1, capacity));
+    // A worktree's workspace keeps its project in view; only projects have marks.
+    const current = if (self.context.workspaceId()) |id| snapshot.indexOf(snapshot.projectOf(id)) orelse 0 else 0;
+    const window = WorkspaceWindow.centered(snapshot.project_count, current, @max(1, capacity));
     var y = list.y;
     if (counters) {
         if (window.previous()) |index| {
@@ -90,7 +91,7 @@ fn drawList(self: WorkspaceRail, canvas: *Canvas, list: Rect) !void {
 
     if (counters) {
         if (window.next()) |index| {
-            try self.drawCounter(canvas, .{ .x = list.x, .y = y, .width = list.width, .height = counter }, .{ index, snapshot.count });
+            try self.drawCounter(canvas, .{ .x = list.x, .y = y, .width = list.width, .height = counter }, .{ index, snapshot.project_count });
         }
     }
 }

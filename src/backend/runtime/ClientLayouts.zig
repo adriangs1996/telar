@@ -131,6 +131,34 @@ pub fn exportRecord(self: *const ClientLayouts, index: usize, buffer: []u8) !?Ex
     };
 }
 
+/// The pane focused in the active tab of the layout `identity` last
+/// reported, or null when no layout is retained for it.
+///
+/// ```zig
+/// if (client_layouts.focusedPane(identity) == pane_id) refuse();
+/// ```
+pub fn focusedPane(self: *const ClientLayouts, identity: core.ClientIdentity) ?core.PaneId {
+    if (identity == .invalid) {
+        return null;
+    }
+
+    for (self.records) |*record| {
+        if (record.identity != identity) {
+            continue;
+        }
+
+        for (record.tabs[0..record.tab_count]) |*tab| {
+            if (std.meta.eql(tab.location, record.active_tab)) {
+                return tab.focused_pane;
+            }
+        }
+
+        return null;
+    }
+
+    return null;
+}
+
 pub fn capacity(self: *const ClientLayouts) usize {
     return self.records.len;
 }

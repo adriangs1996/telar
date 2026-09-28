@@ -74,6 +74,22 @@ pub fn next(self: *Reader) !?checkpoint.Record {
                     .first_tab_label = first_tab_label,
                 } };
             },
+            .worktree => {
+                const record: checkpoint.Record = .{ .worktree = .{
+                    .id = try self.inner.readInt(u64),
+                    .source_workspace_id = try self.inner.readInt(u64),
+                    .workspace_id = try self.inner.readInt(u64),
+                    .created_by = try self.inner.readInt(u64),
+                    .origin = try self.inner.readByte(),
+                    .path = try self.inner.readSized16(),
+                    .branch = try self.inner.readSized16(),
+                    .base = try self.inner.readSized16(),
+                    .title = try self.inner.readSized16(),
+                    .brief = try self.inner.readSized16(),
+                } };
+                try checkpoint.validateWorktree(record.worktree);
+                return record;
+            },
             .tab => {
                 const workspace_id = try self.inner.readInt(u64);
                 const tab_id = try self.inner.readInt(u64);

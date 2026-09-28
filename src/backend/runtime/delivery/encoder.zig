@@ -39,6 +39,7 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
             .message = failure.message,
         }),
         .pane_opened => |opened| try core.encodePaneOpened(buffer, opened),
+        .worktree_registered => |registered| try core.encodeWorktreeRegistered(buffer, registered),
         .tab_snapshot => |snapshot| try core.encodeTabSnapshot(buffer, .{
             .request_id = snapshot.request_id,
             .location = snapshot.location,
@@ -156,18 +157,28 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
             .matches = found.matches.slice(),
         }),
         .pane_text => |*read| payload: {
-            const target = panes.resolveControlConst(read.pane) orelse
-                break :payload try core.encodeRequestFailed(buffer, .{
+            const target = panes.resolveControlConst(read.pane) orelse {
+                const exited = panes.exited.find(read.pane) orelse
+                    break :payload try core.encodeRequestFailed(buffer, .{
+                        .request_id = read.request_id,
+                        .code = .pane_not_found,
+                        .message = "pane closed before its text was read",
+                    });
+                break :payload try core.encodePaneText(buffer, .{
                     .request_id = read.request_id,
-                    .code = .pane_not_found,
-                    .message = "pane closed before its text was read",
+                    .pane_id = read.pane.id,
+                    .truncated = false,
+                    .text = panes.exited.tail(exited, read.rows),
+                    .exit_code = panes.exited.exit_code[exited],
                 });
+            };
             const dump = target.dumpText(.{ .rows = read.rows, .source = read.source }, &text_storage);
             break :payload try core.encodePaneText(buffer, .{
                 .request_id = read.request_id,
                 .pane_id = read.pane.id,
                 .truncated = dump.truncated,
                 .text = text_storage[0..dump.len],
+                .exit_code = if (target.exit) |exit| exit.code() else null,
             });
         },
         .client_command => |command| try core.encodeClientCommand(buffer, command),

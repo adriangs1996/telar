@@ -16,9 +16,11 @@ const Store = @import("client/Store.zig");
 const GenericState = @import("client/GenericState.zig").Type;
 const LifecycleState = @import("lifecycle/State.zig");
 const Workspaces = @import("../workspace/Workspaces.zig");
+const Worktrees = @import("../workspace/Worktrees.zig");
 const PaneStore = @import("../pane/PaneStore.zig");
 const Attachments = @import("attachment/Attachments.zig");
 const Agents = @import("../agent/Agents.zig");
+const PromptBudget = @import("../agent/PromptBudget.zig");
 const RestoredAgents = @import("../agent/RestoredAgents.zig");
 const Watches = @import("../agent/Watches.zig");
 const agent_status = @import("agent_status.zig");
@@ -55,9 +57,12 @@ clients: Store = .{},
 client_admission: GenericState(localsocket.SocketChannel) = .{},
 shutdown: LifecycleState = .{},
 workspaces: Workspaces = .{},
+worktrees: Worktrees = .{},
 panes: PaneStore,
 attachments: Attachments = .{},
 agents: Agents = .{},
+/// Prompts panes sent each other in the current window.
+prompt_budget: PromptBudget = .{},
 /// Titles and resumes restored from a checkpoint, waiting for their agent.
 restored_agents: RestoredAgents = .{},
 /// Session files watched for names an agent gives its session.
@@ -153,6 +158,7 @@ pub fn deinit(model: *RuntimeModel) void {
 
     model.client_layouts.deinit();
     model.workspaces.deinit(model.gpa);
+    model.worktrees.deinit(model.gpa);
 }
 
 const GraphicsLimits = @import("../media/GraphicsLimits.zig");

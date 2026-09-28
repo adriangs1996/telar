@@ -144,7 +144,7 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
             if (activated(event)) {
                 var value = intent;
                 if (event == .pointer and event.pointer.button != .left) {
-                    value = if (event.pointer.button == .right and intent == .select_tab) .{ .rename_tab = intent.select_tab } else .none;
+                    value = if (event.pointer.button == .right) client.secondaryIntent(intent) else .none;
                 }
 
                 try dispatchIntent(gui, value);

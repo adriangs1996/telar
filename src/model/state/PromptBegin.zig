@@ -1,4 +1,5 @@
 const core = @import("telar-core");
+const AgentKey = @import("../agents/AgentKey.zig");
 const copy_mode = @import("../input/copy_mode.zig");
 const command_palette = @import("command_palette.zig");
 
@@ -19,4 +20,5 @@ pub const PromptBegin = union(enum) {
     path_picker,
     /// Opens the palette with the prefix already typed.
     palette: command_palette.Prefix,
+    peek: AgentKey,
 };

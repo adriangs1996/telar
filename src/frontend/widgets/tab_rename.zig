@@ -9,7 +9,7 @@ const TabRenameInput = @import("TabRenameInput.zig");
 const Cursor = @import("Cursor.zig");
 
 pub const Field = textfield.GenericField(core.max_tab_label_bytes);
-pub const Kind = enum { rename_tab, create_workspace, rename_workspace, copy_search_forward, copy_search_backward };
+pub const Kind = enum { rename_tab, create_workspace, rename_workspace, copy_search_forward, copy_search_backward, peek };
 
 pub const create_hint = " create? ↵";
 
@@ -33,6 +33,7 @@ pub fn render(context: *Context, input: TabRenameInput) Cursor {
         .rename_workspace => " rename workspace: ",
         .copy_search_forward => " /",
         .copy_search_backward => " ?",
+        .peek => " message agent (/stop /diff, empty opens): ",
     };
     _ = context.buffer.writeText(area, .{ .point = .{ .x = area.x, .y = area.y }, .text = prefix, .style = .{
         .fg = context.palette.accent,

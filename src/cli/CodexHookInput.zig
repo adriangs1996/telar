@@ -10,6 +10,8 @@ tool_name: []const u8 = "",
 tool_use_id: []const u8 = "",
 tool_input: std.json.Value = .null,
 cwd: []const u8 = "",
+/// Present on `Stop`: the final assistant message of the turn.
+last_assistant_message: ?[]const u8 = null,
 /// The rollout of the thread the event belongs to: the session's own for
 /// `Stop` and `Interrupt`, the parent's for `SubagentStop`.
 transcript_path: []const u8 = "",

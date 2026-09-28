@@ -55,6 +55,7 @@ pub fn encode(buffer: []u8, batch: *const data.EffectBatch) ![]const u8 {
             try writer.writeByte(17);
             try writer.writeByte(value);
         },
+        .leave_worktree => try writer.writeByte(20),
         .enter_copy_mode, .command_tab, .goto_picker, .history_palette, .path_picker, .suggest_command => return error.InvalidWorkerEffect,
         .notification => |*value| {
             try writer.writeByte(18);
@@ -159,6 +160,7 @@ pub fn decode(bytes: []const u8) !data.EffectBatch {
                 data.ActionSidebarDirection,
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
+            20 => .leave_worktree,
             else => return error.UnknownWorkerEffect,
         };
     }

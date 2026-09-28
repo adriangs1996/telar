@@ -97,6 +97,13 @@ const HistoryStatsView = @import("HistoryStatsView.zig");
 const PaneFocusCommand = @import("PaneFocusCommand.zig");
 const PaneFocusResult = @import("PaneFocusResult.zig");
 const PaneProgress = @import("PaneProgress.zig");
+const RegisterWorktree = @import("RegisterWorktree.zig");
+const WorktreeRegistered = @import("WorktreeRegistered.zig");
+const LaunchWorktreeView = @import("LaunchWorktreeView.zig");
+const ForgetWorktree = @import("ForgetWorktree.zig");
+const InterruptAgent = @import("InterruptAgent.zig");
+const ReportAgentProgress = @import("ReportAgentProgress.zig");
+const worktree = @import("worktree.zig");
 const Decoder = bytecodec.Decoder;
 const tags = @import("tags.zig");
 const pane = @import("pane.zig");
@@ -175,6 +182,11 @@ pub const ClientMessage = union(enum) {
     open_editor: OpenEditor,
     find_paths: FindPaths,
     complete_pane_focus: CompletePaneFocus,
+    register_worktree: RegisterWorktree,
+    launch_worktree: LaunchWorktreeView,
+    forget_worktree: ForgetWorktree,
+    interrupt_agent: InterruptAgent,
+    report_agent_progress: ReportAgentProgress,
 };
 
 const ChangeReviewChanged = @import("ChangeReviewChanged.zig");
@@ -235,6 +247,7 @@ pub const ServerMessage = union(enum) {
     editor_opened: EditorOpened,
     path_results: PathResultsView,
     pane_progress: PaneProgress,
+    worktree_registered: WorktreeRegistered,
 };
 
 pub fn decodeClient(payload: []const u8) !ClientMessage {
@@ -310,6 +323,11 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .find_paths => .{ .find_paths = try paths.decodeFindPaths(&decoder) },
         .request_pane_focus => .{ .request_pane_focus = try focus.decodeRequestPaneFocus(&decoder) },
         .complete_pane_focus => .{ .complete_pane_focus = try focus.decodeCompletePaneFocus(&decoder) },
+        .register_worktree => .{ .register_worktree = try worktree.decodeRegisterWorktree(&decoder) },
+        .launch_worktree => .{ .launch_worktree = try worktree.decodeLaunchWorktree(&decoder) },
+        .forget_worktree => .{ .forget_worktree = try GenericDerived(ForgetWorktree).decode(&decoder) },
+        .interrupt_agent => .{ .interrupt_agent = try GenericDerived(InterruptAgent).decode(&decoder) },
+        .report_agent_progress => .{ .report_agent_progress = try agent.decodeReportAgentProgress(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -387,6 +405,7 @@ pub fn decodeServerInto(message: *ServerMessage, payload: []const u8) !void {
         .path_results => .{ .path_results = try paths.decodePathResults(&decoder) },
         .pane_focus_result => .{ .pane_focus_result = try focus.decodePaneFocusResult(&decoder) },
         .pane_progress => .{ .pane_progress = try pane.decodePaneProgress(&decoder) },
+        .worktree_registered => .{ .worktree_registered = try GenericDerived(WorktreeRegistered).decode(&decoder) },
     };
     try decoder.ensureEnd();
 }

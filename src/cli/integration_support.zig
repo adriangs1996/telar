@@ -10,6 +10,7 @@ const values = @import("arguments/values.zig");
 const Integration = @import("Integration.zig");
 const TempFile = @import("TempFile.zig");
 const HookSet = @import("HookSet.zig");
+const skill = @import("skill.zig");
 
 const max_settings_bytes = 4 * 1024 * 1024;
 const max_extension_bytes = 64 * 1024;
@@ -19,6 +20,22 @@ pub const codex_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "Per
 /// Cursor Agent fires no hook for approvals or plan reviews; the screen
 /// reports those.
 pub const cursor_events = [_][]const u8{ "sessionStart", "beforeSubmitPrompt", "preToolUse", "postToolUse", "postToolUseFailure", "stop", "sessionEnd" };
+/// Claude Code asks these hooks to create and remove its worktrees, so they
+/// run in every session and answer with a path, never through the pane guard.
+pub const claude_worktree_events = [_][]const u8{ "WorktreeCreate", "WorktreeRemove" };
+/// Worktree hooks run `git worktree add`, which may take a while.
+pub const worktree_timeout_seconds = 60;
+/// The coordinator skill, installed next to an agent's settings so the agent
+/// finds it among its own skills.
+pub const coordinator_skill_directory = "skills/telar-coordinator";
+pub const coordinator_skill_header =
+    \\---
+    \\name: telar-coordinator
+    \\description: Delegate tasks to agents in their own Git worktrees and steer them through telar. Use when the user asks to implement, fix or build something in a separate worktree, or asks about, stops, redirects or reviews agents working in worktrees.
+    \\---
+    \\
+    \\
+;
 pub const claude_marker = " hook claude";
 pub const codex_marker = " hook codex";
 pub const cursor_marker = " hook cursor";
@@ -57,6 +74,14 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
     var command_buffer: [std.fs.max_path_bytes + pane_guard.len + 32]u8 = undefined;
     const command = try renderHookCommand(&command_buffer, executable, integration.marker);
     const hook_set = hookSetFor(integration, command);
+    var worktree_command_buffer: [std.fs.max_path_bytes + 32]u8 = undefined;
+    const worktree_command = try renderUnguardedCommand(&worktree_command_buffer, executable, integration.marker);
+    const worktree_hooks: HookSet = .{
+        .events = integration.worktree_events,
+        .marker = integration.marker,
+        .command = worktree_command,
+        .timeout_seconds = worktree_timeout_seconds,
+    };
     var output_buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
@@ -82,22 +107,33 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
             for (integration.events) |event| {
                 try writer.print("{s}: {s}\n", .{ event, if (hasHook(parsed.value, event, hook_set)) "installed" else "absent" });
             }
+            for (integration.worktree_events) |event| {
+                try writer.print("{s}: {s}\n", .{ event, if (hasHook(parsed.value, event, worktree_hooks)) "installed" else "absent" });
+            }
             return 0;
         },
         .install => {
-            const changed = try installHooks(parsed.arena.allocator(), &parsed.value, hook_set);
+            const lifecycle_changed = try installHooks(parsed.arena.allocator(), &parsed.value, hook_set);
+            const worktree_changed = try installHooks(parsed.arena.allocator(), &parsed.value, worktree_hooks);
+            const changed = lifecycle_changed or worktree_changed;
             if (changed) {
                 try writeSettings(init.io, path, parsed.value);
             }
             try writer.print("telar integration: {s} hooks {s} in {s}\n", .{ integration.name, if (changed) "installed" else "already present", path });
+            var skill_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            const skill_path = try installSkill(init.io, path, &skill_buffer);
+            try writer.print("telar integration: coordinator skill written to {s}\n", .{skill_path});
             return 0;
         },
         .uninstall => {
-            const changed = uninstallHooks(&parsed.value, hook_set);
+            const lifecycle_changed = uninstallHooks(&parsed.value, hook_set);
+            const worktree_changed = uninstallHooks(&parsed.value, worktree_hooks);
+            const changed = lifecycle_changed or worktree_changed;
             if (changed) {
                 try writeSettings(init.io, path, parsed.value);
             }
             try writer.print("telar integration: {s} hooks {s} in {s}\n", .{ integration.name, if (changed) "removed" else "not present", path });
+            removeSkill(init.io, path);
             return 0;
         },
     }
@@ -112,6 +148,7 @@ fn integrationFor(agent: values.HookAgent) Integration {
             .settings_file = "settings.json",
             .marker = claude_marker,
             .events = &claude_events,
+            .worktree_events = &claude_worktree_events,
             .timeout_seconds = 5,
         },
         .codex => .{
@@ -270,6 +307,21 @@ pub fn renderHookCommand(buffer: []u8, executable: []const u8, marker: []const u
     }
 
     return std.fmt.bufPrint(buffer, pane_guard ++ "'{s}'{s}", .{ executable, marker });
+}
+
+/// Renders a hook command without the pane guard, for hooks an agent needs
+/// answered in every session.
+///
+/// ```zig
+/// const command = try renderUnguardedCommand(&buffer, "/opt/telar", claude_marker);
+/// // exec '/opt/telar' hook claude
+/// ```
+pub fn renderUnguardedCommand(buffer: []u8, executable: []const u8, marker: []const u8) ![]const u8 {
+    if (std.mem.indexOfScalar(u8, executable, '\'') != null) {
+        return error.UnsupportedExecutablePath;
+    }
+
+    return std.fmt.bufPrint(buffer, "exec '{s}'{s}", .{ executable, marker });
 }
 
 fn hookSetFor(integration: Integration, command: []const u8) HookSet {
@@ -477,6 +529,36 @@ fn ensureArray(arena: std.mem.Allocator, object: *std.json.ObjectMap, name: []co
 
     try object.put(arena, name, .{ .array = std.json.Array.init(arena) });
     return object.getPtr(name).?;
+}
+
+/// Writes the coordinator skill into `skills/telar-coordinator/SKILL.md`
+/// beside the agent's settings file and returns its path.
+fn installSkill(io: std.Io, settings_path: []const u8, buffer: *[std.fs.max_path_bytes]u8) ![]const u8 {
+    const directory = std.fs.path.dirname(settings_path) orelse return error.InvalidSettingsPath;
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const skill_directory = try std.fmt.bufPrint(&directory_buffer, "{s}/{s}", .{ directory, coordinator_skill_directory });
+    try std.Io.Dir.cwd().createDirPath(io, skill_directory);
+    const path = try std.fmt.bufPrint(buffer, "{s}/SKILL.md", .{skill_directory});
+    var temp = try TempFile.begin(io, path);
+    var file_buffer: [4096]u8 = undefined;
+    var file_writer = temp.file.writerStreaming(io, &file_buffer);
+    file_writer.interface.writeAll(coordinator_skill_header ++ skill.coordinator_text) catch |err| {
+        temp.discard();
+        return err;
+    };
+    file_writer.interface.flush() catch |err| {
+        temp.discard();
+        return err;
+    };
+    try temp.commit();
+    return path;
+}
+
+fn removeSkill(io: std.Io, settings_path: []const u8) void {
+    const directory = std.fs.path.dirname(settings_path) orelse return;
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = std.fmt.bufPrint(&buffer, "{s}/{s}/SKILL.md", .{ directory, coordinator_skill_directory }) catch return;
+    std.Io.Dir.deleteFileAbsolute(io, path) catch {};
 }
 
 // An agent that never ran has no settings directory yet.

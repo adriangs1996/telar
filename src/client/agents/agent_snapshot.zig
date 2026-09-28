@@ -37,6 +37,11 @@ pub fn applyAgentSnapshot(client: *Client, snapshot: core.AgentSnapshotView) !?d
             .blocked_reason = entry.blocked_reason,
             .last_event = entry.last_event,
             .status_age_s = entry.status_age_s,
+            .work_tree = entry.work_tree,
+            .final_message = entry.final_message,
+            .plan_done = entry.plan_done,
+            .plan_total = entry.plan_total,
+            .plan_step = entry.plan_step,
         };
         count += 1;
     }

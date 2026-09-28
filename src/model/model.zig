@@ -157,6 +157,8 @@ pub const EditorOpening = @import("links/EditorOpening.zig");
 pub const EditorOpenOperation = @import("connection/EditorOpenOperation.zig");
 pub const EffectBatch = @import("config/EffectBatch.zig");
 pub const EntryInput = @import("workspace/EntryInput.zig");
+pub const WorktreeInput = @import("workspace/WorktreeInput.zig");
+pub const WorktreeRow = @import("workspace/WorktreeRow.zig");
 pub const EnvironmentSupport = @import("environment/EnvironmentSupport.zig").EnvironmentSupport;
 pub const Failure = @import("input/Failure.zig");
 pub const FailurePublication = @import("input/FailurePublication.zig");
@@ -197,6 +199,7 @@ pub const MarkerRemoval = @import("attachments/MarkerRemoval.zig");
 pub const Metrics = @import("workspace/Metrics.zig");
 pub const ClientModel = @import("state/ClientModel.zig");
 pub const NamePromptState = @import("state/NamePromptState.zig");
+pub const PeekScreen = @import("state/PeekScreen.zig");
 pub const NavigationHistory = @import("workspace/NavigationHistory.zig");
 pub const Notification = @import("input/Notification.zig");
 pub const NotificationActivation = @import("state/NotificationActivation.zig");
@@ -460,6 +463,7 @@ test {
     _ = @import("workspace/PendingLayoutRestore.zig");
     _ = @import("workspace/RootTab.zig");
     _ = @import("workspace/WorkspaceListInput.zig");
+    _ = @import("workspace/WorktreeRow.zig");
     _ = @import("workspace/WorkspaceSnapshotInput.zig");
 
     _ = @import("agents/sound_playback.zig");

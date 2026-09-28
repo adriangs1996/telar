@@ -229,6 +229,7 @@ for _, name in ipairs({
 	"toggle-pane-fullscreen",
 	"toggle-sidebar",
 	"toggle-workspace-list",
+	"leave-worktree",
 	"new-workspace",
 	"rename-workspace",
 	"close-pane",

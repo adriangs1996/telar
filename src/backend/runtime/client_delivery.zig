@@ -95,6 +95,7 @@ pub fn deliverySources(model: *RuntimeModel) Sources {
     return .{
         .panes = &model.panes,
         .workspaces = &model.workspaces,
+        .worktrees = &model.worktrees,
         .agents = &model.agents,
         .manifests = &model.resources.agent_manifests,
         .system_metrics = &model.system_metrics,

@@ -9,7 +9,9 @@ const AgentOptions = @This();
 
 action: agent.AgentAction,
 target: ?values.Target = null,
-until: core.AgentStatus = .done,
+until: values.WaitCondition = .{ .status = .done },
+/// `prompt --interrupt`: stop the current turn before sending.
+interrupt_first: bool = false,
 timeout_seconds: u32 = values.default_wait_timeout_seconds,
 text: ?[*:0]const u8 = null,
 wait_after_prompt: bool = false,
@@ -36,6 +38,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .prompt
     else if (std.mem.eql(u8, action_text, "read"))
         .read
+    else if (std.mem.eql(u8, action_text, "interrupt"))
+        .interrupt
     else if (std.mem.eql(u8, action_text, "report-session"))
         .report_session
     else if (std.mem.eql(u8, action_text, "report-title"))
@@ -150,6 +154,12 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
             options.report.?.session_file = std.mem.span(try cursor.require(error.MissingSessionFile));
         } else if (std.mem.eql(u8, arg, "--session-file-kind") and action == .report_state) {
             options.report.?.session_file_kind = std.meta.stringToEnum(core.AgentSessionFileKind, std.mem.span(try cursor.require(error.MissingSessionFileKind))) orelse return error.InvalidSessionFileKind;
+        } else if (std.mem.eql(u8, arg, "--interrupt")) {
+            if (action != .prompt) {
+                return error.UnknownAgentOption;
+            }
+
+            options.interrupt_first = true;
         } else if (std.mem.eql(u8, arg, "--wait")) {
             if (action != .prompt) {
                 return error.UnknownAgentOption;
@@ -162,7 +172,7 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
             }
             const value = try cursor.require(error.MissingWaitStatus);
 
-            options.until = try values.parseWaitStatus(std.mem.span(value));
+            options.until = try values.parseWaitCondition(std.mem.span(value));
         } else if (std.mem.eql(u8, arg, "--timeout")) {
             if (action != .wait and action != .prompt) {
                 return error.UnknownAgentOption;

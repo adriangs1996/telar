@@ -40,6 +40,14 @@ pub fn handleDraw(terminal: *TerminalAdapter, result: anyerror!void) !void {
 pub fn presentNow(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
+    // An event earlier in this inbox turn may have changed the model after
+    // the last observation; the turn's closing observation asks for the
+    // draw that presents it.
+    const projection = presentation_projection.projection(terminal);
+    if (!terminal.presenter.hasObserved(projection)) {
+        return;
+    }
+
     core.mark(client.io, .compose_start);
     if (terminal.output) |*output| {
         if (output.pending) {
@@ -51,7 +59,7 @@ pub fn presentNow(terminal: *TerminalAdapter) !void {
     }
 
     const delivery = try terminal.presenter.presentDue(
-        presentation_projection.projection(terminal),
+        projection,
         presentation_projection.resources(terminal),
     ) orelse return;
     errdefer _ = terminal.presenter.presentation_state.complete(delivery, .failed);

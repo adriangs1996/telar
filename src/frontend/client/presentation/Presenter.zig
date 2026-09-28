@@ -196,6 +196,17 @@ pub fn completeMediaTick(self: *Presenter, result: anyerror!void) !void {
     try result;
 }
 
+/// Whether `projection` is the model the presenter last observed, which is
+/// the only one it may present.
+///
+/// ```zig
+/// if (!presenter.hasObserved(projection)) return;
+/// ```
+pub fn hasObserved(self: *const Presenter, projection: client.Projection) bool {
+    return std.meta.eql(projection.version, self.presentation_state.observed.model) and
+        std.meta.eql(projection.presentation_ingress, self.presentation_state.observed.presentation_ingress);
+}
+
 /// The `.draw` event: presents the latest client model, including its
 /// explicit empty state during startup and workspace handoff.
 ///

@@ -8,6 +8,7 @@ const PaneKey = @import("PaneKey.zig");
 const pty = @import("pty");
 const exit_module = pty.exit;
 const PaneExitTransition = @import("PaneExitTransition.zig");
+const ExitedPanes = @import("ExitedPanes.zig");
 const PaneStore = @This();
 
 /// Panes the whole runtime holds. It equals the wire's per-tab bound, so a
@@ -21,6 +22,8 @@ count: usize = 0,
 /// `collectFinished` runs on every event; this makes the common case -
 /// nothing exited - one branch instead of a store scan.
 exited_count: usize = 0,
+/// Final text of the panes that exited last, readable after they are gone.
+exited: ExitedPanes = .{},
 index: core.GenericSlotIndex(2 * capacity) = .{},
 next_id: u64 = 1,
 next_generation: u64 = 1,

@@ -40,3 +40,12 @@ confidence: u8,
 sequence: u64,
 observed_at_ms: i64,
 expires_at_ms: i64,
+/// The tracked worktree the agent works in; `invalid` when it works in its
+/// workspace's own checkout or telar tracks no worktree for it.
+work_tree: id.WorktreeId = .invalid,
+/// The agent's last final answer, bounded, lines kept.
+final_message: []const u8 = "",
+plan_done: u16 = 0,
+plan_total: u16 = 0,
+/// The task in progress, or the last one reported.
+plan_step: []const u8 = "",

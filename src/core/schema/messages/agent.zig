@@ -15,6 +15,8 @@ const Decoder = bytecodec.Decoder;
 const ReportAgent = @import("ReportAgent.zig");
 const ReportAgentCommand = @import("ReportAgentCommand.zig");
 const ReportAgentTitle = @import("ReportAgentTitle.zig");
+const ReportAgentProgress = @import("ReportAgentProgress.zig");
+const InterruptAgent = @import("InterruptAgent.zig");
 const AgentSoundNotification = @import("../AgentSoundNotification.zig");
 const AgentSnapshot = @import("AgentSnapshot.zig");
 const AgentSnapshotView = @import("AgentSnapshotView.zig");
@@ -172,6 +174,70 @@ pub fn decodeReportAgent(decoder: *Decoder) !ReportAgent {
         .blocked_reason = blocked_reason,
         .event = event,
     };
+}
+
+/// Encodes what an agent works on and how far it got.
+///
+/// ```zig
+/// const bytes = try encodeReportAgentProgress(&buffer, .{ .request_id = request, .pane_id = pane, .pane_generation = 3, .cwd = "/src/fix" });
+/// ```
+pub fn encodeReportAgentProgress(buffer: []u8, message: ReportAgentProgress) ![]const u8 {
+    try codec.validateRequestId(message.request_id);
+    try codec.validatePaneId(message.pane_id);
+    try validateProgressReport(message);
+    var encoder = Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(tags.ClientTag.report_agent_progress));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeInt(u64, message.pane_generation);
+    try encoder.writeSized16(message.cwd);
+    try encoder.writeSized16(message.work_tree_path);
+    try encoder.writeSized16(message.work_tree_branch);
+    try encoder.writeSized16(message.final_message);
+    try encoder.writeByte(@intFromEnum(message.plan_op));
+    try encoder.writeInt(u16, message.plan_index);
+    try encoder.writeByte(@intFromEnum(message.plan_status));
+    try encoder.writeInt(u16, message.plan_done);
+    try encoder.writeInt(u16, message.plan_total);
+    try encoder.writeSized16(message.plan_text);
+    return encoder.finish();
+}
+
+pub fn decodeReportAgentProgress(decoder: *Decoder) !ReportAgentProgress {
+    const message: ReportAgentProgress = .{
+        .request_id = try id.request(try decoder.readInt(u64)),
+        .pane_id = try id.pane(try decoder.readInt(u64)),
+        .pane_generation = try decoder.readInt(u64),
+        .cwd = try decoder.readSized16(),
+        .work_tree_path = try decoder.readSized16(),
+        .work_tree_branch = try decoder.readSized16(),
+        .final_message = try decoder.readSized16(),
+        .plan_op = std.enums.fromInt(types.AgentPlanOp, try decoder.readByte()) orelse
+            return error.InvalidAgentPlanOp,
+        .plan_index = try decoder.readInt(u16),
+        .plan_status = std.enums.fromInt(types.AgentPlanStatus, try decoder.readByte()) orelse
+            return error.InvalidAgentPlanStatus,
+        .plan_done = try decoder.readInt(u16),
+        .plan_total = try decoder.readInt(u16),
+        .plan_text = try decoder.readSized16(),
+    };
+    try validateProgressReport(message);
+    return message;
+}
+
+pub fn encodeInterruptAgent(buffer: []u8, message: InterruptAgent) ![]const u8 {
+    return codec.encodeDerived(@intFromEnum(tags.ClientTag.interrupt_agent), buffer, message);
+}
+
+fn validateProgressReport(message: ReportAgentProgress) !void {
+    try codec.validateBytes(message.cwd, types.max_cwd_bytes, true);
+    try codec.validateBytes(message.work_tree_path, types.max_cwd_bytes, true);
+    try validateAgentDisplayText(message.work_tree_branch, types.max_git_branch_bytes, true);
+    try codec.validateMessageText(message.final_message, types.max_agent_final_message_bytes);
+    try validateAgentDisplayText(message.plan_text, types.max_agent_plan_step_bytes, true);
+    if (message.plan_done > message.plan_total) {
+        return error.InvalidAgentPlan;
+    }
 }
 
 pub fn encodeReportAgentCommand(buffer: []u8, message: ReportAgentCommand) ![]const u8 {
@@ -372,6 +438,7 @@ fn encodeAgentSnapshotEntry(encoder: *Encoder, entry: AgentSnapshotEntry) !void 
     try validateAgentDisplayText(entry.display_name, types.max_agent_display_name_bytes, true);
     try validateAgentDisplayText(entry.icon, types.max_agent_icon_bytes, true);
     try validateAgentDisplayText(entry.last_event, types.max_agent_last_event_bytes, true);
+    try validateAgentProgress(entry);
     try validateAgentProvider(entry.provider);
     try validateAgentTitle(entry);
     try validateEntryBlockedReason(entry.status, entry.blocked_reason);
@@ -402,6 +469,11 @@ fn encodeAgentSnapshotEntry(encoder: *Encoder, entry: AgentSnapshotEntry) !void 
     try encoder.writeInt(u64, entry.sequence);
     try encoder.writeInt(i64, entry.observed_at_ms);
     try encoder.writeInt(i64, entry.expires_at_ms);
+    try encoder.writeInt(u64, id.raw(entry.work_tree));
+    try encoder.writeSized16(entry.final_message);
+    try encoder.writeInt(u16, entry.plan_done);
+    try encoder.writeInt(u16, entry.plan_total);
+    try encoder.writeSized16(entry.plan_step);
 }
 
 pub fn decodeAgentSnapshotEntry(decoder: *Decoder) !AgentSnapshotEntry {
@@ -440,6 +512,11 @@ pub fn decodeAgentSnapshotEntry(decoder: *Decoder) !AgentSnapshotEntry {
         .sequence = try decoder.readInt(u64),
         .observed_at_ms = try decoder.readInt(i64),
         .expires_at_ms = try decoder.readInt(i64),
+        .work_tree = @enumFromInt(try decoder.readInt(u64)),
+        .final_message = try decoder.readSized16(),
+        .plan_done = try decoder.readInt(u16),
+        .plan_total = try decoder.readInt(u16),
+        .plan_step = try decoder.readSized16(),
     };
     if (entry.pane_generation == 0 or entry.pane_index == 0 or
         entry.sequence == 0 or entry.confidence > 100)
@@ -457,9 +534,18 @@ pub fn decodeAgentSnapshotEntry(decoder: *Decoder) !AgentSnapshotEntry {
     try validateAgentDisplayText(entry.display_name, types.max_agent_display_name_bytes, true);
     try validateAgentDisplayText(entry.icon, types.max_agent_icon_bytes, true);
     try validateAgentDisplayText(entry.last_event, types.max_agent_last_event_bytes, true);
+    try validateAgentProgress(entry);
     try validateAgentTitle(entry);
     try validateEntryBlockedReason(entry.status, entry.blocked_reason);
     return entry;
+}
+
+fn validateAgentProgress(entry: AgentSnapshotEntry) !void {
+    try codec.validateMessageText(entry.final_message, types.max_agent_final_message_bytes);
+    try validateAgentDisplayText(entry.plan_step, types.max_agent_plan_step_bytes, true);
+    if (entry.plan_done > entry.plan_total) {
+        return error.InvalidAgentPlan;
+    }
 }
 
 fn validateAgentProvider(provider: types.AgentProvider) !void {
@@ -476,12 +562,7 @@ fn decodeAgentProvider(value: u8) !types.AgentProvider {
 }
 
 fn validateAgentDisplayText(bytes: []const u8, maximum: usize, empty_allowed: bool) !void {
-    try codec.validateBytes(bytes, maximum, empty_allowed);
-    if (!std.unicode.utf8ValidateSlice(bytes)) {
-        return error.InvalidUtf8;
-    }
-    for (bytes) |byte| if (byte < 0x20 or byte == 0x7f)
-        return error.InvalidAgentDisplayText;
+    try codec.validateDisplayText(bytes, maximum, empty_allowed);
 }
 
 // A reason without a blocked status would let a stale chip outlive the

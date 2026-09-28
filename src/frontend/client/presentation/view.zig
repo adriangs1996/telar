@@ -39,6 +39,7 @@ pub fn promptKind(prompt: ?*const data.Prompt) tab_rename_module.Kind {
 
     return switch (current.target()) {
         .rename_tab, .goto, .history, .suggest, .palette, .paths => .rename_tab,
+        .peek => .peek,
         .create_workspace => .create_workspace,
         .rename_workspace => .rename_workspace,
         .copy_search => |direction| switch (direction) {

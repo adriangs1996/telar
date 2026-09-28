@@ -50,6 +50,7 @@ fn producerSlots(tag: Tag) usize {
         .metrics_sampled,
         .checkpoint_written,
         .git_status,
+        .worktree_git,
         .editor_opened,
         .session_name,
         .stopped,
