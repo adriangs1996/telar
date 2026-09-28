@@ -12,8 +12,10 @@ const git_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(2) },
 };
 
-/// Measures `checkout` against `base`, or null when Git fails or runs out
-/// of time. Uncommitted changes to tracked files count. Git runs with every
+/// Measures `checkout` against `base`, or null when any Git step fails or
+/// runs out of time, so a failure never reads as "no changes". Uncommitted
+/// changes to tracked files count. Revisions end at `--`, so a file named
+/// after the merge base cannot turn them into paths. Git runs with every
 /// repository-chosen program turned off (`untrusted_git`).
 ///
 /// ```zig
@@ -29,15 +31,15 @@ pub fn run(io: std.Io, checkout: Checkout, base: []const u8) ?DiffStat {
     var stat: DiffStat = .{};
 
     var shortstat_buffer: [max_output_bytes]u8 = undefined;
-    const diff = [_][]const u8{ "diff", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all", "--shortstat", merge_base };
-    const shortstat = gitLine(io, checkout, &diff, &shortstat_buffer) orelse "";
+    const diff = [_][]const u8{ "diff", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all", "--shortstat", merge_base, "--" };
+    const shortstat = gitLine(io, checkout, &diff, &shortstat_buffer) orelse return null;
     parseShortstat(shortstat, &stat);
 
     var range_buffer: [160]u8 = undefined;
     const range = std.fmt.bufPrint(&range_buffer, "{s}..HEAD", .{merge_base}) catch return null;
     var count_buffer: [32]u8 = undefined;
-    const count = gitLine(io, checkout, &.{ "rev-list", "--count", range }, &count_buffer) orelse "0";
-    stat.commits_ahead = std.fmt.parseUnsigned(u32, count, 10) catch 0;
+    const count = gitLine(io, checkout, &.{ "rev-list", "--count", range, "--" }, &count_buffer) orelse return null;
+    stat.commits_ahead = std.fmt.parseUnsigned(u32, count, 10) catch return null;
     return stat;
 }
 

@@ -4,13 +4,16 @@
 //! that read-only commands run. Checked against Git 2.55:
 //!
 //! - `status` runs `core.fsmonitor` and, when it refreshes the index, the
-//!   `post-index-change` hook;
+//!   `post-index-change` hook, from the hooks directory or from config
+//!   (`hook.<name>.command` with `hook.<name>.event`);
 //! - `status` and `diff` run a filter driver's `clean` (or `process`) on a
 //!   file whose stat data went stale, whether `.gitattributes` or
-//!   `.git/info/attributes` names it;
+//!   `.git/info/attributes` names it, even a driver named `""`;
 //! - `diff` runs `diff.external` and a diff driver's `textconv`;
 //! - a partial clone fetches missing objects lazily through its promisor
-//!   remote, running its `uploadpack` or `core.sshCommand`.
+//!   remote, running its `uploadpack` or `core.sshCommand`;
+//! - `GIT_DIR`, `GIT_WORK_TREE` and their kin in the environment point Git
+//!   at another repository than the one asked about.
 //!
 //! Every call here turns each of them off, so observation never runs a
 //! program the repository chose.
@@ -21,101 +24,69 @@ const GitOutput = @import("GitOutput.zig");
 /// Filter drivers the repository may define before it is refused outright.
 pub const max_filter_drivers = 8;
 
-const max_arguments = 64;
+const max_arguments = 128;
 const max_stderr_bytes = 4096;
 const max_config_bytes = 64 * 1024;
 
-/// Options that stop Git from running `core.fsmonitor` or any hook.
-const hardened_options = [_][]const u8{
-    "-c", "core.fsmonitor=false",
-    "-c", "core.hooksPath=/dev/null",
+/// Every hook event `githooks(5)` lists for Git 2.55. `hook.<event>.enabled`
+/// turns off every hook of that event, from the hooks directory or config.
+const hook_events = [_][]const u8{
+    "applypatch-msg",   "pre-applypatch",        "post-applypatch",    "pre-commit",
+    "pre-merge-commit", "prepare-commit-msg",    "commit-msg",         "post-commit",
+    "pre-rebase",       "post-checkout",         "post-merge",         "pre-push",
+    "pre-receive",      "update",                "proc-receive",       "post-receive",
+    "post-update",      "reference-transaction", "push-to-checkout",   "pre-auto-gc",
+    "post-rewrite",     "sendemail-validate",    "fsmonitor-watchman", "post-index-change",
+};
+
+/// Options that stop Git from running `core.fsmonitor` or any hook, whether
+/// the hooks directory or config defines it.
+pub const hardened_options = hardened: {
+    var options: []const []const u8 = &.{
+        "-c", "core.fsmonitor=false",
+        "-c", "core.hooksPath=/dev/null",
+    };
+    for (hook_events) |event| {
+        options = options ++ [_][]const u8{ "-c", "hook." ++ event ++ ".enabled=false" };
+    }
+
+    break :hardened options[0..options.len].*;
 };
 
 /// No index write (so no `post-index-change`), no lazy fetch (Git 2.45 and
-/// later; older Git ignores it) and no credential prompt.
+/// later) and no credential prompt.
 const hardened_environment = [_][2][]const u8{
     .{ "GIT_OPTIONAL_LOCKS", "0" },
     .{ "GIT_NO_LAZY_FETCH", "1" },
     .{ "GIT_TERMINAL_PROMPT", "0" },
 };
 
+/// The first Git that honours `GIT_NO_LAZY_FETCH`; an older one would fetch
+/// for a partial clone.
+const lazy_fetch_switch: std.SemanticVersion = .{ .major = 2, .minor = 45, .patch = 0 };
+
 const filter_keys = [_][]const u8{ "clean", "smudge", "process" };
 
 /// Runs one read-only Git command with every repository-chosen program
-/// turned off. Null when Git fails, times out, or the repository defines
-/// filter drivers that cannot be turned off safely.
+/// turned off and returns what it printed. Null when Git fails, times out,
+/// or the repository cannot be read safely.
 ///
 /// ```zig
 /// const output = untrusted_git.run(io, .{ .environ = environ, .path = path, .arguments = &.{ "status", "--porcelain" }, .timeout = timeout, .stdout_limit = 4096 }) orelse return null;
 /// defer output.deinit();
 /// ```
 pub fn run(io: std.Io, request: GitRequest) ?GitOutput {
-    const gpa = std.heap.page_allocator;
-    var environ_map = request.environ.createMap(gpa) catch return null;
-    defer environ_map.deinit();
-    for (hardened_environment) |entry| {
-        environ_map.put(entry[0], entry[1]) catch return null;
-    }
+    var command: HardenedCommand = undefined;
+    command.prepare(io, request) orelse return null;
+    defer command.deinit();
 
-    var arena_state: std.heap.ArenaAllocator = .init(gpa);
-    defer arena_state.deinit();
-    const arena = arena_state.allocator();
-    var drivers: [max_filter_drivers][]const u8 = undefined;
-    const driver_count = localFilterDrivers(io, request, &environ_map, arena, &drivers) orelse return null;
-
-    var argv: [max_arguments][]const u8 = undefined;
-    var len: usize = 0;
-    argv[len] = "git";
-    len += 1;
-    for (hardened_options) |option| {
-        argv[len] = option;
-        len += 1;
-    }
-
-    // An empty command turns the driver off; Git then compares raw content.
-    for (drivers[0..driver_count]) |driver| {
-        for (filter_keys) |key| {
-            argv[len] = "-c";
-            argv[len + 1] = std.fmt.allocPrint(arena, "filter.{s}.{s}=", .{ driver, key }) catch return null;
-            len += 2;
-        }
-    }
-
-    if (len + 2 + request.arguments.len > argv.len) {
-        return null;
-    }
-
-    argv[len] = "-C";
-    argv[len + 1] = request.path;
-    len += 2;
-    for (request.arguments) |argument| {
-        argv[len] = argument;
-        len += 1;
-    }
-
-    return spawn(io, .{
-        .argv = argv[0..len],
-        .environ_map = &environ_map,
-        .timeout = request.timeout,
-        .stdout_limit = request.stdout_limit,
-    });
-}
-
-const Spawn = struct {
-    argv: []const []const u8,
-    environ_map: *const std.process.Environ.Map,
-    timeout: std.Io.Timeout,
-    stdout_limit: usize,
-};
-
-fn spawn(io: std.Io, command: Spawn) ?GitOutput {
     const gpa = std.heap.page_allocator;
     const result = std.process.run(gpa, io, .{
-        .argv = command.argv,
-        .stdout_limit = .limited(command.stdout_limit),
+        .argv = command.argvSlice(),
+        .stdout_limit = .limited(request.stdout_limit),
         .stderr_limit = .limited(max_stderr_bytes),
-        .timeout = command.timeout,
-        .environ_map = command.environ_map,
+        .timeout = request.timeout,
+        .environ_map = &command.environ_map,
     }) catch return null;
     gpa.free(result.stderr);
     if (result.term != .exited or result.term.exited != 0) {
@@ -126,16 +97,118 @@ fn spawn(io: std.Io, command: Spawn) ?GitOutput {
     return .{ .stdout = result.stdout };
 }
 
-/// The filter drivers the repository's own config defines (local and
-/// worktree scope, including files it includes). The user's global and
-/// system drivers, such as Git LFS, stay trusted. Reading config runs no
-/// program. Null when there are too many drivers or a name `-c` cannot carry.
-/// The names are copied into `arena`.
-fn localFilterDrivers(io: std.Io, request: GitRequest, environ_map: *const std.process.Environ.Map, arena: std.mem.Allocator, drivers: *[max_filter_drivers][]const u8) ?usize {
-    const argv = hardened_options ++ [_][]const u8{ "-C", request.path, "config", "--show-scope", "-z", "--get-regexp", "^filter\\." };
+/// Starts one read-only Git command, hardened as `run` does, with its
+/// output on a pipe for a caller that streams it; the caller waits for or
+/// kills the child. `request.timeout` bounds only the config read before
+/// it; `request.stdout_limit` is unused.
+///
+/// ```zig
+/// var child = untrusted_git.spawn(io, .{ .environ = environ, .path = root, .arguments = &.{ "ls-files", "-z" }, .timeout = timeout, .stdout_limit = 0 }) orelse return;
+/// defer child.kill(io);
+/// ```
+pub fn spawn(io: std.Io, request: GitRequest) ?std.process.Child {
+    var command: HardenedCommand = undefined;
+    command.prepare(io, request) orelse return null;
+    defer command.deinit();
+
+    return std.process.spawn(io, .{
+        .argv = command.argvSlice(),
+        .stdin = .ignore,
+        .stdout = .pipe,
+        .stderr = .ignore,
+        .environ_map = &command.environ_map,
+    }) catch null;
+}
+
+/// The argv and environment of one hardened Git command; both live until
+/// `deinit`, after the child started.
+const HardenedCommand = struct {
+    environ_map: std.process.Environ.Map,
+    arena_state: std.heap.ArenaAllocator,
+    argv: [max_arguments][]const u8,
+    len: usize,
+
+    fn prepare(self: *HardenedCommand, io: std.Io, request: GitRequest) ?void {
+        const gpa = std.heap.page_allocator;
+        self.environ_map = request.environ.createMap(gpa) catch return null;
+        self.arena_state = .init(gpa);
+        self.len = 0;
+
+        removeGitVariables(&self.environ_map) catch return self.fail();
+        for (hardened_environment) |entry| {
+            self.environ_map.put(entry[0], entry[1]) catch return self.fail();
+        }
+
+        var facts: RepositoryFacts = .{};
+        readRepositoryFacts(io, request, &self.environ_map, self.arena_state.allocator(), &facts) orelse return self.fail();
+        if (facts.partial_clone and !lazyFetchSwitchable(io, request, &self.environ_map)) {
+            return self.fail();
+        }
+
+        self.push("git");
+        for (hardened_options) |option| {
+            self.push(option);
+        }
+
+        // An empty command turns the driver off; Git then compares raw content.
+        for (facts.drivers[0..facts.driver_count]) |driver| {
+            for (filter_keys) |key| {
+                self.push("-c");
+                self.push(std.fmt.allocPrint(self.arena_state.allocator(), "filter.{s}.{s}=", .{ driver, key }) catch return self.fail());
+            }
+        }
+
+        if (self.len + 2 + request.arguments.len > self.argv.len) {
+            return self.fail();
+        }
+
+        self.push("-C");
+        self.push(request.path);
+        for (request.arguments) |argument| {
+            self.push(argument);
+        }
+    }
+
+    fn push(self: *HardenedCommand, argument: []const u8) void {
+        self.argv[self.len] = argument;
+        self.len += 1;
+    }
+
+    fn argvSlice(self: *const HardenedCommand) []const []const u8 {
+        return self.argv[0..self.len];
+    }
+
+    /// Releases what `prepare` took and reports that it could not finish.
+    fn fail(self: *HardenedCommand) ?void {
+        self.deinit();
+        return null;
+    }
+
+    fn deinit(self: *HardenedCommand) void {
+        self.environ_map.deinit();
+        self.arena_state.deinit();
+    }
+};
+
+/// What the repository's own config makes Git do on its own: the filter
+/// drivers it defines and whether it is a partial clone.
+const RepositoryFacts = struct {
+    drivers: [max_filter_drivers][]const u8 = undefined,
+    driver_count: usize = 0,
+    partial_clone: bool = false,
+};
+
+/// Reads the repository's own config (local and worktree scope, including
+/// the files it includes); the user's global and system config, such as a
+/// Git LFS driver, stays trusted. Reading config runs no program. Null when
+/// there are too many drivers or a name `-c` cannot carry. Driver names are
+/// copied into `arena`.
+fn readRepositoryFacts(io: std.Io, request: GitRequest, environ_map: *const std.process.Environ.Map, arena: std.mem.Allocator, facts: *RepositoryFacts) ?void {
+    const pattern = "^(filter\\.|extensions\\.partialclone$|remote\\..*\\.promisor$)";
+    const argv = [_][]const u8{"git"} ++ hardened_options ++ [_][]const u8{ "-C", request.path, "config", "--show-scope", "-z", "--get-regexp", pattern };
     const gpa = std.heap.page_allocator;
     const result = std.process.run(gpa, io, .{
-        .argv = &([_][]const u8{"git"} ++ argv),
+        .argv = &argv,
         .stdout_limit = .limited(max_config_bytes),
         .stderr_limit = .limited(max_stderr_bytes),
         .timeout = request.timeout,
@@ -150,22 +223,18 @@ fn localFilterDrivers(io: std.Io, request: GitRequest, environ_map: *const std.p
     // `git config --get-regexp` exits 1 when nothing matches.
     switch (result.term.exited) {
         0 => {},
-        1 => return 0,
+        1 => return,
         else => return null,
     }
 
-    const count = parseDrivers(result.stdout, drivers) orelse return null;
-    for (drivers[0..count]) |*driver| {
+    parseFacts(result.stdout, facts) orelse return null;
+    for (facts.drivers[0..facts.driver_count]) |*driver| {
         driver.* = arena.dupe(u8, driver.*) catch return null;
     }
-
-    return count;
 }
 
-/// Reads `scope\0key\nvalue\0` records into distinct driver names that
-/// borrow `listing`.
-fn parseDrivers(listing: []const u8, drivers: *[max_filter_drivers][]const u8) ?usize {
-    var count: usize = 0;
+/// Reads `scope\0key\nvalue\0` records. Driver names borrow `listing`.
+fn parseFacts(listing: []const u8, facts: *RepositoryFacts) ?void {
     var fields = std.mem.splitScalar(u8, listing, 0);
     while (fields.next()) |scope| {
         if (scope.len == 0) {
@@ -179,45 +248,172 @@ fn parseDrivers(listing: []const u8, drivers: *[max_filter_drivers][]const u8) ?
 
         const key_end = std.mem.indexOfScalar(u8, entry, '\n') orelse entry.len;
         const key = entry[0..key_end];
-        const variable_start = std.mem.lastIndexOfScalar(u8, key, '.') orelse return null;
-        if (!std.mem.startsWith(u8, key, "filter.") or variable_start <= "filter.".len) {
+        const value = if (key_end < entry.len) entry[key_end + 1 ..] else "";
+        if (std.mem.eql(u8, key, "extensions.partialclone")) {
+            facts.partial_clone = true;
             continue;
         }
 
-        const name = key["filter.".len..variable_start];
-        if (std.mem.indexOfAny(u8, name, "=\n\x00") != null) {
-            return null;
+        if (std.mem.startsWith(u8, key, "remote.") and std.mem.endsWith(u8, key, ".promisor")) {
+            facts.partial_clone = facts.partial_clone or configTrue(value);
+            continue;
         }
 
-        const known = for (drivers[0..count]) |driver| {
-            if (std.mem.eql(u8, driver, name)) {
+        addDriver(key, facts) orelse return null;
+    }
+}
+
+/// Records the driver a `filter.<name>.<key>` names; `[filter ""]` is one
+/// too, reached by the attribute `filter=`.
+fn addDriver(key: []const u8, facts: *RepositoryFacts) ?void {
+    const prefix = "filter.";
+    const variable_start = std.mem.lastIndexOfScalar(u8, key, '.') orelse return null;
+    if (!std.mem.startsWith(u8, key, prefix) or variable_start < prefix.len) {
+        return;
+    }
+
+    const name = key[prefix.len..variable_start];
+    if (std.mem.indexOfAny(u8, name, "=\n\x00") != null) {
+        return null;
+    }
+
+    for (facts.drivers[0..facts.driver_count]) |driver| {
+        if (std.mem.eql(u8, driver, name)) {
+            return;
+        }
+    }
+
+    if (facts.driver_count == max_filter_drivers) {
+        return null;
+    }
+
+    facts.drivers[facts.driver_count] = name;
+    facts.driver_count += 1;
+}
+
+fn configTrue(value: []const u8) bool {
+    const trimmed = std.mem.trim(u8, value, " \t");
+    for ([_][]const u8{ "true", "yes", "on", "1" }) |word| {
+        if (std.ascii.eqlIgnoreCase(trimmed, word)) {
+            return true;
+        }
+    }
+
+    return trimmed.len == 0;
+}
+
+/// Whether this Git honours `GIT_NO_LAZY_FETCH`.
+fn lazyFetchSwitchable(io: std.Io, request: GitRequest, environ_map: *const std.process.Environ.Map) bool {
+    const gpa = std.heap.page_allocator;
+    const result = std.process.run(gpa, io, .{
+        .argv = &.{ "git", "version" },
+        .stdout_limit = .limited(256),
+        .stderr_limit = .limited(max_stderr_bytes),
+        .timeout = request.timeout,
+        .environ_map = environ_map,
+    }) catch return false;
+    defer gpa.free(result.stdout);
+    defer gpa.free(result.stderr);
+    if (result.term != .exited or result.term.exited != 0) {
+        return false;
+    }
+
+    const version = parseVersion(result.stdout) orelse return false;
+    return version.order(lazy_fetch_switch) != .lt;
+}
+
+/// Reads `git version 2.55.0` or `git version 2.39.5 (Apple Git-154)`.
+fn parseVersion(output: []const u8) ?std.SemanticVersion {
+    var words = std.mem.tokenizeAny(u8, output, " \r\n");
+    if (!std.mem.eql(u8, words.next() orelse return null, "git") or !std.mem.eql(u8, words.next() orelse return null, "version")) {
+        return null;
+    }
+
+    var numbers = std.mem.splitScalar(u8, words.next() orelse return null, '.');
+    return .{
+        .major = std.fmt.parseUnsigned(usize, numbers.next() orelse return null, 10) catch return null,
+        .minor = std.fmt.parseUnsigned(usize, numbers.next() orelse return null, 10) catch return null,
+        .patch = 0,
+    };
+}
+
+/// Drops every `GIT_*` variable: `GIT_DIR`, `GIT_WORK_TREE`,
+/// `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_CONFIG_*` and the rest
+/// would point Git at another repository or feed it config.
+fn removeGitVariables(environ_map: *std.process.Environ.Map) !void {
+    var name_buffer: [256]u8 = undefined;
+    var index: usize = 0;
+    while (index < environ_map.count()) {
+        const name = environ_map.keys()[index];
+        if (!std.mem.startsWith(u8, name, "GIT_")) {
+            index += 1;
+            continue;
+        }
+
+        if (name.len > name_buffer.len) {
+            return error.NameTooLong;
+        }
+
+        @memcpy(name_buffer[0..name.len], name);
+        _ = environ_map.swapRemove(name_buffer[0..name.len]);
+    }
+}
+
+test "the repository's own config names its drivers and whether it is a partial clone" {
+    var facts: RepositoryFacts = .{};
+    const listing = "local\x00filter.evil.clean\n/tmp/x\x00local\x00filter.evil.smudge\ncat\x00" ++
+        "global\x00filter.lfs.clean\ngit-lfs clean -- %f\x00worktree\x00filter.sp ace.process\ny\x00" ++
+        "local\x00filter..clean\n/tmp/unnamed\x00local\x00filter.clean\nignored\x00";
+    parseFacts(listing, &facts).?;
+    try std.testing.expectEqual(@as(usize, 3), facts.driver_count);
+    try std.testing.expectEqualStrings("evil", facts.drivers[0]);
+    try std.testing.expectEqualStrings("sp ace", facts.drivers[1]);
+    try std.testing.expectEqualStrings("", facts.drivers[2]);
+    try std.testing.expect(!facts.partial_clone);
+
+    var partial: RepositoryFacts = .{};
+    parseFacts("local\x00remote.origin.promisor\ntrue\x00", &partial).?;
+    try std.testing.expect(partial.partial_clone);
+    var extension: RepositoryFacts = .{};
+    parseFacts("local\x00extensions.partialclone\norigin\x00", &extension).?;
+    try std.testing.expect(extension.partial_clone);
+
+    var empty: RepositoryFacts = .{};
+    parseFacts("", &empty).?;
+    try std.testing.expectEqual(@as(usize, 0), empty.driver_count);
+    try std.testing.expect(parseFacts("local\x00filter.a=b.clean\nx\x00", &empty) == null);
+}
+
+test "Git versions before 2.45 cannot switch lazy fetching off" {
+    try std.testing.expectEqual(std.math.Order.lt, parseVersion("git version 2.39.5 (Apple Git-154)\n").?.order(lazy_fetch_switch));
+    try std.testing.expect(parseVersion("git version 2.55.0\n").?.order(lazy_fetch_switch) != .lt);
+    try std.testing.expect(parseVersion("git version 2.45.0.windows.1\n").?.order(lazy_fetch_switch) != .lt);
+    try std.testing.expect(parseVersion("hub version 2.14") == null);
+}
+
+test "every GIT_ variable leaves the environment Git gets" {
+    var environ_map = std.process.Environ.Map.init(std.testing.allocator);
+    defer environ_map.deinit();
+    try environ_map.put("PATH", "/usr/bin");
+    try environ_map.put("GIT_DIR", "/elsewhere/.git");
+    try environ_map.put("HOME", "/home/me");
+    try environ_map.put("GIT_CONFIG_COUNT", "1");
+    try environ_map.put("GIT_WORK_TREE", "/elsewhere");
+
+    try removeGitVariables(&environ_map);
+    try std.testing.expectEqual(@as(usize, 2), environ_map.count());
+    try std.testing.expect(environ_map.get("PATH") != null and environ_map.get("HOME") != null);
+}
+
+test "hooks are off for every event, whatever defines them" {
+    for (hook_events) |event| {
+        var option_buffer: [64]u8 = undefined;
+        const option = try std.fmt.bufPrint(&option_buffer, "hook.{s}.enabled=false", .{event});
+        const present = for (hardened_options) |candidate| {
+            if (std.mem.eql(u8, candidate, option)) {
                 break true;
             }
         } else false;
-        if (known) {
-            continue;
-        }
-
-        if (count == max_filter_drivers) {
-            return null;
-        }
-
-        drivers[count] = name;
-        count += 1;
+        try std.testing.expect(present);
     }
-
-    return count;
-}
-
-test "filter drivers come from the repository's own scopes only" {
-    var drivers: [max_filter_drivers][]const u8 = undefined;
-    const listing = "local\x00filter.evil.clean\n/tmp/x\x00local\x00filter.evil.smudge\ncat\x00" ++
-        "global\x00filter.lfs.clean\ngit-lfs clean -- %f\x00worktree\x00filter.sp ace.process\ny\x00";
-    const count = parseDrivers(listing, &drivers).?;
-    try std.testing.expectEqual(@as(usize, 2), count);
-    try std.testing.expectEqualStrings("evil", drivers[0]);
-    try std.testing.expectEqualStrings("sp ace", drivers[1]);
-
-    try std.testing.expectEqual(@as(usize, 0), parseDrivers("", &drivers).?);
-    try std.testing.expect(parseDrivers("local\x00filter.a=b.clean\nx\x00", &drivers) == null);
 }

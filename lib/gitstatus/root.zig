@@ -8,6 +8,7 @@ pub const Linked = @import("Linked.zig");
 pub const linked_worktree = @import("linked_worktree.zig");
 pub const DiffStat = @import("DiffStat.zig");
 pub const base_distance = @import("base_distance.zig");
+pub const untrusted_git = @import("untrusted_git.zig");
 
 test {
     _ = @import("Status.zig");
