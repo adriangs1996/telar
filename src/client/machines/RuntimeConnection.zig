@@ -1,5 +1,5 @@
 //! One connected runtime as a worker hands it to its client: the socket
-//! after a successful handshake and, for a remote machine, the SSH forward
+//! after a successful handshake and, for a remote machine, the SSH session
 //! that carries it, whose discovery holds the remote home and login shell.
 const localsocket = @import("localsocket");
 const std = @import("std");
@@ -9,8 +9,8 @@ const RuntimeConnection = @This();
 channel: localsocket.SocketChannel,
 forward: ?Forward = null,
 
-/// Closes a connection its client never adopted: the socket, then the
-/// forward.
+/// Closes a connection its client never adopted: the socket, then the SSH
+/// session.
 ///
 /// ```zig
 /// connection.close(io);

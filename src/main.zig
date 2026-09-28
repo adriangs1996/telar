@@ -257,6 +257,7 @@ test {
     _ = @import("cli/hook.zig");
     _ = @import("cli/hook_event.zig");
     _ = @import("cli/integration_support.zig");
+    _ = @import("cli/TempFile.zig");
     _ = @import("cli/login_shell.zig");
     _ = @import("cli/notification.zig");
     _ = @import("cli/pane.zig");

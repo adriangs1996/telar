@@ -18,19 +18,30 @@ GuiAdapter.start                          the window's own client, this machine
     machines.add(local_slot)              label: local_label or the host name
     machines.add(profile) per profile     the window's rows, enabled or not
     --remote / --machine                  a saved row by destination or label,
-                                          or a temporary row never written back
+                                          or a temporary row never written back;
+                                          pinned unless its profile enables it
     openClient per enabled row            Client.init, follows own's config,
                                           presented = false, runtime_link.start
     select(requested)                     when --remote or --machine named one
     watchProfiles                         a worker waits for the file to change
 
 next-machine | previous-machine | machine picker | sidebar tab | top bar
-  host effect .machine                    MachineRequest: offset or slot
+  host effect .machine                    MachineRequest: offset, slot, or unpin
+                                          when the picker disables a machine
   window_machines.choose -> select
     a frame in flight                     pending_machine, shown after it
-    machine_presentation.hide(app)        leave the workspace once idle
+    machine_presentation.hide(app)        leave the workspace or worktree once idle
     machines.active = slot, app = &clients[slot]
-    machine_presentation.show(app)        open the deferred or left workspace
+    machine_presentation.show(app)        open the deferred pane, or reopen the
+                                          workspace or worktree it left
+
+a machine's event
+  window_machines.handle
+    app.update(message)
+    machines.summarize                    three comparisons; a new agent
+                                          snapshot, metrics sample or link
+                                          phase rewrites the row
+    machine_presentation.settle           finish leaving once idle
 
 machines.json replaced
   profile_file.waitForChange              stat fingerprint once per second
@@ -53,10 +64,35 @@ machines.json replaced
   `owns_configuration = false`) and takes each reload after it.
 - **A hidden client never touches the host.** Its host effects are dropped,
   a pending clipboard capture fails, and its first pane waits until it is
-  shown (`open_deferred`). Hiding a client leaves its workspace once no
-  request is in flight (`leave_pending`, `machine_presentation.settle`), so
-  the runtime stops sending it frames; showing it opens that workspace
-  again.
+  shown (`open_deferred`). Hiding a client leaves its workspace or worktree
+  once no request is in flight (`leave_pending`,
+  `machine_presentation.settle`), so the runtime stops sending it frames.
+  Showing it again reopens a workspace through its remembered pane, and a
+  worktree through the pane the navigation history kept for it, with the
+  worktree's source workspace as the fallback.
+- **Each client keeps its own images.** Every runtime numbers its panes
+  from the same start, so the window keeps one graphics store per slot
+  (`GuiAdapter.graphics_stores`, `host_ports.graphicsRetention(gui, slot)`).
+  A hidden client clearing or hiding its pane's images never touches a pane
+  with the same id on the shown machine.
+- **A row is written when its machine's facts change.** After each of a
+  client's events, `Machines.summarize` compares the client's agent
+  revision, metrics revision and link phase with the ones the row last
+  read. Only a change reads the clock (a new metrics sample) or walks the
+  agent snapshot (a new one); a pane frame costs the three comparisons.
+- **The inbox holds every machine's link.** A client holds at most eight
+  tickets for its link and its timers: a runtime read
+  (`RuntimeTransportState.beginRead`), a runtime write
+  (`Outbox.send_pending`), one wait per timer kind
+  (`DeadlineScheduler.pending`), a connection attempt (`connect_pending`)
+  and a sound (`SoundPlayback.active`). The window's inbox keeps the default
+  64 for its own work and for best-effort work such as system notices, and
+  adds eight per other machine (`gui_event.Message.inbox_capacity`, 192
+  with sixteen). A runtime read the inbox rejects loses that machine's link
+  (`runtime_io.receiveRuntime`). With these budgets sixteen busy machines
+  leave the window's own and best-effort work the headroom it has beside
+  one machine; a read is rejected only when that work alone fills it, as
+  with one machine.
 - **One identity per window and machine.** `machineIdentity` hashes the
   window identity with the destination, so each runtime keeps this window's
   layout for its own machine.
@@ -76,7 +112,7 @@ machines.json replaced
   `previous-machine`, `machine-picker` and `add-machine` are actions and Lua
   helpers (`telar.action.next_machine()` and so on). Plugins cannot run them.
 - **Link state.** `LinkStatus` covers the workbench while the shown machine
-  is connecting, lost or disabled.
+  is connecting, lost, failed or disabled.
 
 ## Managing machines from the window
 
@@ -106,7 +142,7 @@ soon as the file is applied, and its row shows whether that worked.
 `reconcile` applies the file the CLI or an editor just replaced:
 
 - a new enabled machine gets a client and connects;
-- a disabled machine's link stops: the socket closes once idle, the forward
+- a disabled machine's link stops: the socket closes once idle, the SSH session
   stops and no retry follows. Enabling it again connects the same client;
 - a removed machine's row goes. Its client stays live in the slot, stopped,
   and the next machine added there reuses it with the new destination;
@@ -114,6 +150,13 @@ soon as the file is applied, and its row shows whether that worked.
   identity for that destination;
 - a new profile for the destination of a temporary `--remote` row takes that
   row, so one destination never gets two clients;
+- a machine `--remote` or `--machine` opened without a profile that enables
+  it is pinned (`Machines.pinned`): it stays open while its profile stays
+  disabled, whatever else the file changes. Once the profile enables it the
+  profile decides, and disabling it in the machine list closes it even when
+  the profile was already disabled (`MachineRequest.unpin`). `telar machine
+  disable` on a profile that is already disabled changes nothing, so it
+  does not close a pinned machine;
 - the window shows this machine first when the machine it shows is disabled
   or removed, and a notice says so;
 - a label or color change only redraws.
@@ -145,9 +188,14 @@ limits.
 - `src/client/execution/client_tests.zig` tests that a hidden machine defers
   its first pane and leaves its workspace once idle.
 - `src/gui/tests/machines.zig` tests switching both ways, a switch during a
-  frame, the top bar segment, the sidebar tabs and their fold, and a
-  `machines.json` sequence of add, disable, move during a running attempt,
-  and removal of the shown machine.
+  frame, reopening a worktree, separate graphics per client, sixteen
+  machines' reads in the window's inbox, the top bar segment, the sidebar
+  tabs and their fold, a pinned machine across `machines.json` changes and
+  the machine list, and a `machines.json` sequence of add, disable, move
+  during a running attempt, and removal of the shown machine.
+- `frontend.client.machine_frame_event` in `telar-benchmarks` times a
+  one-cell frame through a machine's client with a full agent snapshot,
+  followed by the row refresh the window runs after each event.
 - `src/client/config/generation_support.zig` tests `telar.bar.machines()` and
   the machine actions from Lua.
 - `src/model/state/name_prompt.zig` tests the two steps of adding a machine

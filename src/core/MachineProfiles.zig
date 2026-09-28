@@ -1,5 +1,5 @@
 //! The machines one account saved, as `machines.json` holds them: at most
-//! `capacity` profiles with unique ids and labels, and an optional label for
+//! `capacity` profiles with unique ids, labels and destinations, and an optional label for
 //! the local machine. The CLI edits it and every window follows it, so the
 //! file format is plain JSON with strict bounds and no unknown fields.
 const std = @import("std");
@@ -148,7 +148,9 @@ pub fn find(self: *const MachineProfiles, label: []const u8) ?usize {
     return null;
 }
 
-/// Adds one profile whose id and label no other profile uses.
+/// Adds one profile whose id, label and destination no other profile uses.
+/// One destination is one runtime, so a second profile for it would give a
+/// window two clients with one identity on that runtime.
 ///
 /// ```zig
 /// try profiles.add(try MachineProfile.init(id, .{ .label = "box", .destination = "dev@box" }));
@@ -162,6 +164,10 @@ pub fn add(self: *MachineProfiles, profile: MachineProfile) !void {
     for (self.slice()) |*existing| {
         if (existing.id == profile.id) {
             return error.DuplicateMachineId;
+        }
+
+        if (std.mem.eql(u8, existing.destination(), profile.destination())) {
+            return error.DuplicateMachineDestination;
         }
     }
 
@@ -278,6 +284,7 @@ test "malformed and conflicting files are refused" {
         .{ "{\"version\":1,\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"a\"},{\"id\":\"m-000000000002\",\"label\":\"a\",\"destination\":\"b\"}]}", error.DuplicateMachineLabel },
         .{ "{\"version\":1,\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"a\"},{\"id\":\"m-000000000001\",\"label\":\"b\",\"destination\":\"b\"}]}", error.DuplicateMachineId },
         .{ "{\"version\":1,\"local_label\":\"a\",\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"a\"}]}", error.DuplicateMachineLabel },
+        .{ "{\"version\":1,\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"dev@box\"},{\"id\":\"m-000000000002\",\"label\":\"b\",\"destination\":\"dev@box\"}]}", error.DuplicateMachineDestination },
         .{ "{\"version\":1,\"machines\":[{\"id\":\"1\",\"label\":\"a\",\"destination\":\"a\"}]}", error.InvalidMachineId },
     };
 
@@ -309,8 +316,16 @@ test "the table refuses a profile past its capacity" {
     for (0..capacity) |index| {
         var label_buffer: [8]u8 = undefined;
         const label = try std.fmt.bufPrint(&label_buffer, "m{d}", .{index});
-        try profiles.add(try testProfile(index + 1, label, "host"));
+        try profiles.add(try testProfile(index + 1, label, label));
     }
 
-    try std.testing.expectError(error.TooManyMachines, profiles.add(try testProfile(99, "extra", "host")));
+    try std.testing.expectError(error.TooManyMachines, profiles.add(try testProfile(99, "extra", "host-extra")));
+}
+
+test "the table refuses a second profile for one destination" {
+    var profiles: MachineProfiles = .{};
+    try profiles.add(try testProfile(1, "box", "dev@box"));
+
+    try std.testing.expectError(error.DuplicateMachineDestination, profiles.add(try testProfile(2, "other", "dev@box")));
+    try profiles.add(try testProfile(3, "other", "ops@box"));
 }

@@ -3,16 +3,17 @@
 `telar gui --remote <ssh-destination>` (and `telar --remote`, which opens the
 same window) runs a client against the runtime on another machine. The
 remote transport is the local transport: the same framing, schema handshake,
-bounds and backpressure travel through one OpenSSH Unix-socket forward, so the
-runtime cannot tell a forwarded client from a local one.
+bounds and backpressure travel through one SSH session whose remote end
+relays bytes to the runtime's Unix socket unchanged, so the runtime cannot
+tell a remote client from a local one.
 
 The window keeps its own client for this machine and opens the remote one
 beside it, in its own machine slot, and shows it first
 ([machine presentation](machine-presentation.md)). The window opens first and
 connects on a worker, and a lost connection does not close it:
-[runtime link](runtime-link.md) covers connecting, reconnecting and what the
-window shows meanwhile. `telar-headless --remote` attaches its one client to
-the remote runtime the same way ([headless client](headless-client.md)).
+[runtime link](runtime-link.md) covers connecting, reconnecting, failing and
+what the window shows meanwhile. `telar-headless --remote` attaches its one
+client to the remote runtime the same way ([headless client](headless-client.md)).
 
 ## End-to-end path
 
@@ -27,20 +28,26 @@ window_machines.open                   a saved row by destination or label, or
         |
 runtime_link.start -> machine_connection.connect (connection job)
         |
-remote.establish
+remote.connect
         |
-ssh -T <managed options> dev@box 'printf ... "$HOME" "${SHELL:-/bin/sh}"; exec telar server endpoint'
+ssh -T <managed options> dev@box '/bin/sh -c ... exec telar server endpoint'
         |     BatchMode, keepalives, no agent forwarding, the destination's
-        |     control master; 30 s timeout; discovers remote home, shell and
-        |     socket; starts the remote runtime if needed
+        |     control master; 30 s timeout. Prints the remote home, shell,
+        |     runtime socket and wire schema; starts the remote runtime if
+        |     needed. Another schema stops here.
         |
-ssh -T <forward options> -L <local>/remote-<hash>-<slot>.sock:<remote>.sock dev@box 'cat >/dev/null'
-        |     StreamLocalBindUnlink, ExitOnForwardFailure, ControlPath=none;
-        |     stdin is a pipe only this process holds
+localsocket.pair                       two connected sockets, close-on-exec
         |
-local managed 0700 directory holds the forwarded socket
+ssh -T <managed options> dev@box 'exec telar server bridge'
+        |     stdin and stdout: one end of the pair; stderr: a pipe read
+        |     only after a failure. Same control master: no new connection
+        |     or authentication.
         |
-remote.connectForwarded (bounded retries) + schema handshake
+telar server bridge (on dev@box)       connects to the runtime socket and
+        |                              copies bytes both ways, one thread per
+        |                              direction; exits when either side ends
+        |
+RuntimeConnector.negotiate             schema handshake over the other end
         |
 the machine's client runs unchanged; shared-memory graphics are disabled, so
 the runtime delivers image chunks instead of /dev/shm names
@@ -48,19 +55,33 @@ the runtime delivers image chunks instead of /dev/shm names
 
 ## Ownership
 
-The forward is a child process owned by the client; exiting the client kills
-it and removes the forwarded socket file. If the client dies without that,
-the pipe on the forward's stdin closes, the remote `cat` ends and ssh exits,
-so a crashed window leaves no forward behind. The forward never joins the
-control master: a forward the master owned would outlive the `ssh` that
-asked for it. The forwarded path carries a hash of the destination and the
-window slot, so two remotes never collide, two windows on one machine never
-share or remove each other's socket, and a window reconnecting reuses its
-name. A window's client identity mixes its slot with the destination, so the
-runtime keeps one layout per window and machine. Discovery requires `telar` on the remote PATH for
-non-interactive SSH. Discovery accepts exactly three bounded absolute paths
-and rejects control bytes, extra output and socket paths containing `:`. SSH
-destinations cannot start with an option or contain whitespace/control bytes.
+The bridge session is a child process owned by the client (`Forward`);
+stopping it kills that `ssh`, the control master closes the session, and
+the remote bridge reads the end of its input and exits. If the client dies
+without stopping it, its end of the pair closes and the same happens, so a
+crashed window leaves nothing behind. No socket file exists on the local
+machine, so two windows, a headless client and a window, or two profiles
+never share or remove each other's connection.
+
+Every call to one destination shares its control master
+(`src/client/machines/SshOptions.zig`): discovery, each window's bridge,
+`telar machine check`, `telar --machine` dispatch and Git transfers. The
+first one authenticates; the rest reuse that connection while it lives
+(`ControlPersist=600`). An `ssh -L` forward cannot share it: OpenSSH hands
+a forward asked for through a master to the master, where it outlives the
+`ssh` that asked for it. With the macOS OpenSSH 10.3p1 client against the
+Debian test box, a socket forwarded through the master still accepted
+connections after the `ssh` that asked for it was killed with SIGKILL,
+while a stdio session through the same master ended its remote command
+when its `ssh` died.
+
+A window's client identity mixes its window identity with the destination,
+so the runtime keeps one layout per window and machine. Discovery and the
+bridge require `telar` on the remote PATH for non-interactive SSH, the same
+build on both machines (discovery compares the schema), and accept exactly
+three bounded absolute paths and the schema, rejecting control bytes, extra
+output and socket paths containing `:`. SSH destinations cannot start with
+an option or contain whitespace/control bytes.
 
 Initial launches use the remote home and login shell, not the client's current
 directory or `$SHELL`. An explicit command still selects the remote program to
@@ -70,10 +91,34 @@ A remote machine's client never starts a runtime locally, and
 `--config`/`--profile` affect only the local client: the remote runtime reads
 its own configuration.
 
+## Failures
+
+`remote.sshFailure` reads a failed call's exit status and error output.
+OpenSSH exits 255 for its own failures; `Host key verification failed` or a
+changed host key, and `Permission denied (…)`, are permanent. A remote shell
+exits 127 or 126 when it cannot find or run `telar`. Discovery output this
+telar cannot read, another schema, and `telar protocol mismatch` (the remote
+runtime is another build) are permanent too. The link stays failed with that
+text until the person retries ([runtime link](runtime-link.md)). Anything
+else, such as a refused or timed-out connection, is retried with backoff.
+When the bridge session fails, what `ssh` printed on standard error so far
+becomes the link's failure text.
+
 ## Validation
 
 - `src/core/ssh_destination.zig` tests destination validation and hashing.
-- `src/client/machines/remote_discovery.zig` tests bounded discovery and malformed paths.
+- `src/client/machines/remote_discovery.zig` tests bounded discovery, the
+  schema line and malformed output.
+- `src/client/machines/remote.zig` tests which SSH failures are permanent.
+- `lib/localsocket/pair.zig` tests the pair and its close-on-exec flag;
+  `src/cli/runtime_bridge.zig` tests that the relay copies frames unchanged.
+- Against two Debian boxes built from this tree: two windows, each with
+  this machine and both boxes, then `telar-headless --remote` to one box,
+  gave each client its own id on each runtime; the boxes logged no new SSH
+  login during the run, every window and the headless client riding the
+  control master an earlier check had opened; no socket file appeared in the local runtime
+  directory; closing the headless client left both windows attached, and
+  closing the windows left no `telar server bridge` on the box.
 - `src/gui/run.zig` tests that one window slot gets a distinct identity on each machine.
 - `src/cli/client.zig` tests remote launch defaults and explicit commands.
 - `telar server endpoint` is covered by the parser tests and prints through
@@ -100,8 +145,6 @@ ssh dev@box 'command -v telar; telar --version'
 ./zig-out/bin/telar gui --no-config --remote dev@box
 ```
 
-The SSH server must support Unix-socket forwarding and connect to the runtime
-as the authenticated user. OrbStack's built-in SSH forwarded our probe as UID
-0 rather than UID 501, so Telar correctly rejected it. The local VM setup uses
-an OpenSSH daemon inside Linux instead. Do not weaken peer-UID checks to work
-around an SSH server's behavior.
+The runtime checks that its peer is the same user; over SSH that peer is
+the bridge, which runs as the authenticated user. Do not weaken peer-UID
+checks to work around an SSH server's behavior.

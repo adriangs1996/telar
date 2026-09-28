@@ -140,3 +140,26 @@ test "concurrent producers publish once and cannot lose a wake while draining" {
     try std.testing.expectEqual(@as(usize, 0), inbox.snapshot().reserved);
     try std.testing.expectEqual(@as(usize, 0), inbox.snapshot().depth);
 }
+
+const WideEvent = union(enum) {
+    value: u32,
+
+    pub const inbox_capacity = GenericInbox(Event).max_capacity;
+};
+
+test "a message that declares its capacity gets that many tickets, in order" {
+    const WideInbox = GenericInbox(WideEvent);
+    var inbox: WideInbox = .init(std.testing.io, .{});
+    defer inbox.deinit();
+
+    try std.testing.expectEqual(Inbox.default_capacity, Inbox.capacity);
+    try std.testing.expectEqual(@as(usize, 256), WideInbox.capacity);
+    for (0..WideInbox.capacity) |index| {
+        try inbox.post(.{ .value = @intCast(index) });
+    }
+
+    try std.testing.expectError(error.InboxFull, inbox.reserve());
+    for (0..WideInbox.capacity) |index| {
+        try std.testing.expectEqual(@as(u32, @intCast(index)), (try inbox.receive()).value);
+    }
+}

@@ -432,10 +432,14 @@ and Mode 2031 forwarding to children stays with ghostty-vt.
 
 ## P12. Remote thin client over SSH — done
 
-Deviation: instead of a stdio bridge, `--remote` forwards the remote Unix
-socket over OpenSSH (`-L local.sock:remote.sock`), which preserves the local
-transport byte for byte. `telar server endpoint` is the discovery command,
-and shared-memory graphics are disabled for forwarded clients.
+Like herdr, a remote client reaches its runtime through a stdio bridge,
+`ssh … telar server bridge`, over the destination's control master; the
+bridge relays bytes to the remote Unix socket unchanged, which preserves the
+local transport byte for byte. An earlier `-L local.sock:remote.sock`
+forward could not share the master: a forward the master owns outlives the
+`ssh` that asked for it ([remote attach](../flows/remote-attach.md)).
+`telar server endpoint` is the discovery command, and shared-memory graphics
+are disabled for remote clients.
 
 The invariant already states remote transport keeps local framing, bounds,
 negotiation and backpressure.

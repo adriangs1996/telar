@@ -11,7 +11,9 @@ const std = @import("std");
 /// try dump.write(writer, &client.model);
 /// ```
 pub fn write(writer: *std.Io.Writer, model: *const data.ClientModel) !void {
-    try writer.print("{{\"link\":\"{s}\",\"tabs\":[", .{@tagName(model.runtime_link.phase)});
+    try writer.print("{{\"link\":\"{s}\",\"link_failure\":", .{@tagName(model.runtime_link.phase)});
+    try std.json.Stringify.value(model.runtime_link.failure(), .{}, writer);
+    try writer.writeAll(",\"tabs\":[");
     const active = model.tabs.activeSlot();
     for (0..model.tabs.count) |slot| {
         if (slot != 0) {

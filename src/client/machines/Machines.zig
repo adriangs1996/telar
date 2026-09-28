@@ -6,6 +6,7 @@
 const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
+const pacing = @import("pacing");
 const agent_attention = @import("../agents/attention.zig");
 const MachineRow = @import("MachineRow.zig");
 const Machines = @This();
@@ -30,6 +31,10 @@ color_bytes: [capacity][max_color_bytes]u8 = undefined,
 color_len: [capacity]u8 = @splat(0),
 /// Whether the window keeps a connection to the machine.
 enabled: [capacity]bool = @splat(false),
+/// A row `--remote` or `--machine` opened without a profile that enables
+/// it. It stays enabled whatever its profile says until the profile enables
+/// it or the person disables it; from then on the profile decides.
+pinned: [capacity]bool = @splat(false),
 /// Whether the slot's client is initialized.
 live: [capacity]bool = @splat(false),
 phase: [capacity]data.RuntimeLink.Phase = @splat(.connecting),
@@ -42,8 +47,10 @@ cpu_count: [capacity]u16 = @splat(0),
 memory_used_decigib: [capacity]u16 = @splat(0),
 memory_total_decigib: [capacity]u16 = @splat(0),
 sampled_ns: [capacity]u64 = @splat(0),
-/// The client's metrics revision the row last copied.
+/// The client's metrics and agent revisions the row last read, so an event
+/// that changed neither costs two comparisons.
 metrics_revision: [capacity]u64 = @splat(0),
+agent_revision: [capacity]u64 = @splat(0),
 /// The slot the window presents.
 active: u8 = local_slot,
 /// Advances when any column a surface draws changes.
@@ -59,6 +66,7 @@ pub fn add(self: *Machines, row: MachineRow, wanted: ?u8) !u8 {
     std.debug.assert(!self.used[slot]);
     self.used[slot] = true;
     self.write(slot, row);
+    self.pinned[slot] = false;
     self.phase[slot] = .connecting;
     self.attention[slot] = false;
     self.cpu_percent[slot] = null;
@@ -67,6 +75,7 @@ pub fn add(self: *Machines, row: MachineRow, wanted: ?u8) !u8 {
     self.memory_total_decigib[slot] = 0;
     self.sampled_ns[slot] = 0;
     self.metrics_revision[slot] = 0;
+    self.agent_revision[slot] = 0;
     self.revision +%= 1;
     return slot;
 }
@@ -88,6 +97,7 @@ pub fn remove(self: *Machines, slot: u8) void {
     std.debug.assert(self.used[slot] and slot != local_slot);
     self.used[slot] = false;
     self.enabled[slot] = false;
+    self.pinned[slot] = false;
     self.id[slot] = .invalid;
     self.revision +%= 1;
 }
@@ -145,26 +155,39 @@ pub fn shown(self: *const Machines, slot: u8) bool {
     return self.used[slot] and self.enabled[slot];
 }
 
-/// Refreshes a row's summary from its client's model, stamping a new
-/// metrics sample with `now_ns`. Returns whether a column a surface draws
-/// changed.
+/// Refreshes a row's summary from its client's model after one of the
+/// client's events. Only a new agent snapshot, a new metrics sample or a
+/// link change rewrites the row; any other event, such as a pane frame,
+/// compares three values and returns. A new sample is stamped with the
+/// monotonic clock. Returns whether a column a surface draws changed.
 ///
 /// ```zig
-/// _ = machines.summarize(slot, &client.model, pacing.clock.monotonic(io));
+/// _ = machines.summarize(slot, &client.model, client.io);
 /// ```
-pub fn summarize(self: *Machines, slot: u8, model: *const data.ClientModel, now_ns: u64) bool {
-    if (model.system_metrics) |metrics| {
-        if (model.system_metrics_revision != self.metrics_revision[slot]) {
-            self.metrics_revision[slot] = model.system_metrics_revision;
+pub fn summarize(self: *Machines, slot: u8, model: *const data.ClientModel, io: std.Io) bool {
+    const phase = model.runtime_link.phase;
+    const metrics_changed = model.system_metrics_revision != self.metrics_revision[slot];
+    const agents_changed = model.agent_revision != self.agent_revision[slot];
+    if (self.phase[slot] == phase and !metrics_changed and !agents_changed) {
+        return false;
+    }
+
+    if (metrics_changed) {
+        self.metrics_revision[slot] = model.system_metrics_revision;
+        if (model.system_metrics) |metrics| {
             self.cpu_count[slot] = metrics.cpu_count;
             self.memory_used_decigib[slot] = metrics.memory_used_decigib;
             self.memory_total_decigib[slot] = metrics.memory_total_decigib;
-            self.sampled_ns[slot] = now_ns;
+            self.sampled_ns[slot] = pacing.clock.monotonic(io);
         }
     }
 
-    const phase = model.runtime_link.phase;
-    const attention_now = needsAttention(model);
+    var attention_now = self.attention[slot];
+    if (agents_changed) {
+        self.agent_revision[slot] = model.agent_revision;
+        attention_now = needsAttention(model);
+    }
+
     const cpu: ?u8 = if (model.system_metrics) |metrics| metrics.cpu_percent else null;
     if (self.phase[slot] == phase and self.attention[slot] == attention_now and std.meta.eql(self.cpu_percent[slot], cpu)) {
         return false;
@@ -249,9 +272,9 @@ test "a summary changes the revision only when a drawn column changes" {
     defer model.deinit();
 
     model.runtime_link.phase = .connected;
-    try std.testing.expect(machines.summarize(slot, &model, 10));
+    try std.testing.expect(machines.summarize(slot, &model, std.testing.io));
     const revision = machines.revision;
-    try std.testing.expect(!machines.summarize(slot, &model, 20));
+    try std.testing.expect(!machines.summarize(slot, &model, std.testing.io));
     try std.testing.expectEqual(revision, machines.revision);
     try std.testing.expect(!machines.attentionElsewhere());
 }
@@ -270,10 +293,55 @@ test "a new metrics sample records placement data with its arrival time" {
         .cpu_count = 16,
         .memory_total_decigib = 640,
     });
-    _ = machines.summarize(slot, &model, 5);
-    _ = machines.summarize(slot, &model, 9);
+    _ = machines.summarize(slot, &model, std.testing.io);
+    const sampled_ns = machines.sampled_ns[slot];
+    _ = machines.summarize(slot, &model, std.testing.io);
 
     try std.testing.expectEqual(@as(u16, 16), machines.cpu_count[slot]);
     try std.testing.expectEqual(@as(u16, 640), machines.memory_total_decigib[slot]);
-    try std.testing.expectEqual(@as(u64, 5), machines.sampled_ns[slot]);
+    try std.testing.expect(sampled_ns != 0);
+    try std.testing.expectEqual(sampled_ns, machines.sampled_ns[slot]);
+}
+
+test "only a new agent snapshot changes a row's attention" {
+    var machines: Machines = .{};
+    const slot = try machines.add(.{ .label = "box" }, null);
+    var model = data.ClientModel.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const blocked: data.AgentInput = .{
+        .key = .{
+            .pane_id = @enumFromInt(4),
+            .pane_generation = 1,
+        },
+        .location = .{
+            .workspace = .{
+                .workspace = @enumFromInt(1),
+            },
+            .tab_id = @enumFromInt(1),
+        },
+        .pane_index = 0,
+        .provider = .claude,
+        .status = .blocked,
+    };
+    _ = try data.agent_snapshot.reconcile(&model, .{
+        .revision = 1,
+        .agents = &.{blocked},
+    });
+    try std.testing.expect(machines.summarize(slot, &model, std.testing.io));
+    try std.testing.expect(machines.attention[slot]);
+    try std.testing.expect(machines.attentionElsewhere());
+
+    // A frame or any other event leaves the agent revision alone, so the
+    // row is not read again.
+    const revision = machines.revision;
+    try std.testing.expect(!machines.summarize(slot, &model, std.testing.io));
+    try std.testing.expectEqual(revision, machines.revision);
+
+    _ = try data.agent_snapshot.reconcile(&model, .{
+        .revision = 2,
+        .agents = &.{},
+    });
+    try std.testing.expect(machines.summarize(slot, &model, std.testing.io));
+    try std.testing.expect(!machines.attention[slot]);
 }

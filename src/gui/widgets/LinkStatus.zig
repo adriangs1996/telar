@@ -90,6 +90,7 @@ fn headlineText(link: *const data.RuntimeLink, buffer: []u8) []const u8 {
         else
             std.fmt.bufPrint(buffer, "Reconnecting to {s} (attempt {d})…", .{ target, link.attempt + 1 }) catch "Reconnecting…",
         .lost => std.fmt.bufPrint(buffer, "{s} is unreachable; trying again shortly", .{target}) catch "The runtime is unreachable",
+        .failed => std.fmt.bufPrint(buffer, "Cannot connect to {s}; retry it from the machine list", .{target}) catch "Cannot connect to the runtime",
         .stopped => std.fmt.bufPrint(buffer, "{s} is disabled", .{target}) catch "The machine is disabled",
     };
 }
@@ -107,4 +108,7 @@ test "the headline names the machine and the attempt" {
     link.phase = .connecting;
     link.attempt = 2;
     try std.testing.expectEqualStrings("Reconnecting to dev@box (attempt 3)…", headlineText(&link, &buffer));
+
+    link.phase = .failed;
+    try std.testing.expectEqualStrings("Cannot connect to dev@box; retry it from the machine list", headlineText(&link, &buffer));
 }

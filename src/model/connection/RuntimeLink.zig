@@ -1,13 +1,16 @@
 //! Whether a client reaches its runtime, as the chrome shows it. A link is
 //! connecting until its handshake succeeds, connected while the socket
 //! works, and lost from the moment a read or write fails until a new
-//! connection succeeds. A lost link keeps what failed, so the window can say
-//! why it is waiting.
+//! connection succeeds. An attempt that fails for a reason retrying cannot
+//! fix leaves it failed until the person asks again. A lost or failed link
+//! keeps what failed, so the window can say why it is waiting.
 const std = @import("std");
 const RuntimeLink = @This();
 
+/// `lost`: a later attempt follows on its own after a backoff.
+/// `failed`: no attempt follows until the person asks for one.
 /// `stopped`: the window does not keep this machine connected.
-pub const Phase = enum { connecting, connected, lost, stopped };
+pub const Phase = enum { connecting, connected, lost, failed, stopped };
 
 /// The longest failure text kept, in bytes.
 pub const max_failure_bytes = 256;

@@ -4,12 +4,21 @@ const data = @import("model");
 const core = @import("telar-core");
 const chrome_module = @import("ports/chrome.zig");
 const host_input = @import("ports/host_input.zig");
+const graphics_delivery = @import("graphics_delivery.zig");
 const GuiAdapter = @import("GuiAdapter.zig");
 
-/// Example: `const port = graphicsRetention(app);`.
-pub fn graphicsRetention(gui: *GuiAdapter) client_module.GraphicsRetention {
+const Store = graphics_delivery.Store;
+
+/// The graphics port of the client in `slot`: it keeps that client's images
+/// in the slot's own store, so two machines' panes with one id never touch
+/// each other's images.
+///
+/// ```zig
+/// app.graphics = host_ports.graphicsRetention(gui, slot);
+/// ```
+pub fn graphicsRetention(gui: *GuiAdapter, slot: u8) client_module.GraphicsRetention {
     return .{
-        .context = gui,
+        .context = &gui.graphics_stores[slot],
         .apply_fn = applyGraphics,
         .clear_pane_fn = clearPaneGraphics,
         .set_pane_visible_fn = setPaneGraphicsVisible,
@@ -21,44 +30,49 @@ pub fn graphicsRetention(gui: *GuiAdapter) client_module.GraphicsRetention {
     };
 }
 
+fn store(context: *anyopaque) *Store {
+    return @ptrCast(@alignCast(context));
+}
+
 fn applyGraphics(context: *anyopaque, command: data.PaneGraphicsCommand) !void {
-    const gui: *GuiAdapter = @ptrCast(@alignCast(context));
-    return gui.applyGraphics(command);
+    const graphics = store(context);
+    return switch (command) {
+        .snapshot => |value| graphics.applySnapshot(value),
+        .image => |value| graphics.applyImage(value),
+        .shared_image => |value| graphics.applySharedImage(value),
+        .image_chunk => |value| graphics.applyChunk(value),
+        .placement => |value| graphics.applyPlacement(value),
+        .delete_image => |value| graphics.deleteImage(value),
+        .delete_placement => |value| graphics.deletePlacement(value),
+    };
 }
 
 fn clearPaneGraphics(context: *anyopaque, pane_id: core.PaneId) void {
-    const gui: *GuiAdapter = @ptrCast(@alignCast(context));
-    gui.graphics_store.clearPane(pane_id);
+    store(context).clearPane(pane_id);
 }
 
 fn consumeGraphicsCredit(context: *anyopaque, credit: client_module.GraphicsCredit) void {
-    const gui: *GuiAdapter = @ptrCast(@alignCast(context));
-    gui.graphics_store.consumeCredit(credit);
+    store(context).consumeCredit(credit);
 }
 
 fn graphicsIngressVersion(context: *anyopaque) u64 {
-    const gui: *GuiAdapter = @ptrCast(@alignCast(context));
-    return gui.graphics_store.ingressVersion();
+    return store(context).ingressVersion();
 }
 
 fn hasPaneGraphics(context: *anyopaque, pane_id: core.PaneId) bool {
-    const gui: *GuiAdapter = @ptrCast(@alignCast(context));
-    return gui.graphics_store.hasPaneGraphics(pane_id);
+    return store(context).hasPaneGraphics(pane_id);
 }
 
 fn paneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId) bool {
-    const gui: *GuiAdapter = @ptrCast(@alignCast(context));
-    return gui.graphics_store.paneVisible(pane_id);
+    return store(context).paneVisible(pane_id);
 }
 
 fn peekGraphicsCredit(context: *anyopaque) ?client_module.GraphicsCredit {
-    const gui: *GuiAdapter = @ptrCast(@alignCast(context));
-    return gui.graphics_store.peekCredit();
+    return store(context).peekCredit();
 }
 
 fn setPaneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId, visible: bool) !void {
-    const gui: *GuiAdapter = @ptrCast(@alignCast(context));
-    try gui.graphics_store.setPaneVisible(pane_id, visible);
+    try store(context).setPaneVisible(pane_id, visible);
 }
 
 pub const chrome = chrome_module.port;

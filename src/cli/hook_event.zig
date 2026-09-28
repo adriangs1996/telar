@@ -11,8 +11,8 @@ pub const Buffer = [core.max_agent_last_event_bytes]u8;
 /// The tool input keys worth showing next to the tool name, in the order
 /// they are tried. Shell commands and paths come first because they name
 /// what the person will be asked about. OpenCode's file tools name their
-/// path `filePath`.
-const argument_keys = [_][]const u8{ "command", "cmd", "file_path", "filePath", "path", "pattern", "url", "query", "prompt", "description" };
+/// path `filePath` and its edit permissions `filepath`.
+const argument_keys = [_][]const u8{ "command", "cmd", "file_path", "filePath", "filepath", "path", "pattern", "url", "query", "prompt", "description" };
 
 /// Copies the first control-free line of `text` into `buffer`, cut to the
 /// wire bound on a UTF-8 boundary.
@@ -143,6 +143,10 @@ test "tool calls show the tool and its first known argument on one line" {
     try std.testing.expectEqualStrings("» TodoWrite", toolCall(&buffer, "TodoWrite", bare.value).?);
     try std.testing.expect(toolCall(&buffer, "", bare.value) == null);
     try std.testing.expectEqualStrings("» Read", toolCall(&buffer, "Read", .null).?);
+
+    const permission = try parse("{\"filepath\":\"/work/proj/src/main.ts\",\"diff\":\"@@ -1 +1 @@\"}");
+    defer permission.deinit();
+    try std.testing.expectEqualStrings("» edit /work/proj/src/main.ts", toolCall(&buffer, "edit", permission.value).?);
 }
 
 test "event lines are cut to the wire bound on a UTF-8 boundary" {

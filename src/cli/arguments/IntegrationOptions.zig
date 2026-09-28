@@ -27,7 +27,21 @@ pub fn parse(args: []const [*:0]const u8) !IntegrationOptions {
         if (!std.mem.eql(u8, std.mem.span(args[index]), "--settings") or index + 1 >= args.len) {
             return error.UnknownIntegrationOption;
         }
+        // Install and uninstall rename and delete by absolute path.
+        if (!std.fs.path.isAbsolute(std.mem.span(args[index + 1]))) {
+            return error.RelativeSettingsPath;
+        }
+
         options.settings = args[index + 1];
     }
     return options;
+}
+
+test "integration settings paths must be absolute" {
+    const options = try IntegrationOptions.parse(&.{ "install", "opencode", "--settings", "/home/me/.config/opencode/plugins/telar.ts" });
+    try std.testing.expectEqualStrings("/home/me/.config/opencode/plugins/telar.ts", std.mem.span(options.settings.?));
+    try std.testing.expectError(error.RelativeSettingsPath, IntegrationOptions.parse(&.{ "install", "opencode", "--settings", "plugins/telar.ts" }));
+    try std.testing.expectError(error.RelativeSettingsPath, IntegrationOptions.parse(&.{ "uninstall", "pi", "--settings", "./telar.ts" }));
+    try std.testing.expectError(error.RelativeSettingsPath, IntegrationOptions.parse(&.{ "install", "claude", "--settings", "" }));
+    try std.testing.expectError(error.UnknownIntegrationOption, IntegrationOptions.parse(&.{ "install", "pi", "--settings" }));
 }

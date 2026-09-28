@@ -25,6 +25,11 @@ type Report = {
   exit_code?: number;
 };
 
+type Asked = Pick<Report, "tool_name" | "tool_input">;
+
+// An open permission or question and the request it shows the user.
+type Prompt = { kind: Blocked; asked: Asked };
+
 type SessionInfo = { id?: string; parentID?: string; title?: string };
 
 // OpenCode starts one plugin instance per project directory it serves, all in
@@ -37,7 +42,7 @@ let instances = 0;
 let root: string | undefined;
 const children = new Set<string>();
 let busy = false;
-const pending = new Map<string, Blocked>();
+const pending = new Map<string, Prompt>();
 // The last state and title sent, so OpenCode's repeated `busy` statuses and
 // `session.updated` touches spawn no process.
 let reported = "";
@@ -79,26 +84,47 @@ const drain = () => {
   }
 };
 
+// The hook reads only short strings from a tool input: the argument its
+// event line shows, a shell command and the first question. An edit's diff
+// or a write's content has no bound, so a payload past the hook's limit
+// keeps just those instead of being dropped.
+const brief = (input: unknown) => {
+  if (typeof input !== "object" || input === null) return undefined;
+  const kept: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (typeof value === "string" && value.length <= 4096) kept[key] = value;
+  }
+  const first = (input as { questions?: Array<{ question?: unknown }> }).questions?.[0]?.question;
+  if (typeof first === "string" && first.length <= 4096) kept.questions = [{ question: first }];
+  return kept;
+};
+
+// Queues one payload; false when it cannot be delivered at all.
 const send = (report: Report) => {
   let bytes: string;
   try {
     bytes = JSON.stringify(report);
+    if (Buffer.byteLength(bytes) > 64 * 1024) bytes = JSON.stringify({ ...report, tool_input: brief(report.tool_input) });
   } catch {
-    return;
+    return false;
   }
-  if (Buffer.byteLength(bytes) > 64 * 1024) return;
+  if (Buffer.byteLength(bytes) > 64 * 1024) return false;
   if (queue.length === 32) queue.shift();
   queue.push(bytes);
   drain();
+  return true;
 };
 
-const blockedReason = (): Blocked | undefined => {
-  let reason: Blocked | undefined;
-  for (const kind of pending.values()) {
-    if (kind === "permission") return kind;
-    reason = kind;
+// The prompt that blocks the pane, with its id: the newest permission, else
+// the newest question.
+const openPrompt = (): [string, Prompt] | undefined => {
+  let permission: [string, Prompt] | undefined;
+  let question: [string, Prompt] | undefined;
+  for (const entry of pending) {
+    if (entry[1].kind === "permission") permission = entry;
+    else question = entry;
   }
-  return reason;
+  return permission ?? question;
 };
 
 const stopRefresh = () => {
@@ -106,15 +132,16 @@ const stopRefresh = () => {
   refresh = undefined;
 };
 
-// Reports the pane's state when it changed, or always when the event names
-// what the user is asked. A running turn or an open prompt renews it every 30
-// seconds so the runtime never expires live work.
-const report = (event: string, asked?: Pick<Report, "tool_name" | "tool_input">) => {
-  const state: Report = { event, session_id: root, busy, blocked: blockedReason(), ...asked };
-  const key = JSON.stringify([state.session_id, state.busy, state.blocked]);
-  if (asked !== undefined || event === "state_snapshot" || key !== reported) {
+// Reports the pane's state when it changed. An open prompt goes with the
+// request it shows, because the runtime's event line follows the latest
+// report. A running turn or an open prompt renews it every 30 seconds so the
+// runtime never expires live work.
+const report = (event: string) => {
+  const [id, prompt] = openPrompt() ?? [];
+  const state: Report = { event, session_id: root, busy, blocked: prompt?.kind, ...prompt?.asked };
+  const key = JSON.stringify([state.session_id, state.busy, id]);
+  if ((event === "state_snapshot" || key !== reported) && send(state)) {
     reported = key;
-    send(state);
   }
 
   if (!busy && pending.size === 0) {
@@ -160,12 +187,16 @@ export const TelarPlugin = async ({ directory }: { directory: string }) => {
   instances++;
   if (instances === 1) report("load");
 
+  // OpenCode runs each tool call of a step on its own and asks for
+  // permission inside the tool, so a call can start while another one's
+  // prompt is open; `blocked` tells the hook the prompt still stands.
   const reportTool = (event: string, input: { tool: string; sessionID: string; callID: string }, args: any, exit?: unknown) => {
     if (isChild(input.sessionID)) return;
     adopt(input.sessionID);
     send({
       event,
       session_id: root,
+      blocked: openPrompt()?.[1].kind,
       tool_name: input.tool,
       tool_call_id: input.callID,
       tool_input: args,
@@ -204,13 +235,13 @@ export const TelarPlugin = async ({ directory }: { directory: string }) => {
         // A subagent's prompt blocks the pane too; it reports the root session.
         case "permission.asked":
           adopt(properties.sessionID);
-          pending.set(properties.id, "permission");
-          report(event.type, { tool_name: properties.permission, tool_input: properties.metadata });
+          pending.set(properties.id, { kind: "permission", asked: { tool_name: properties.permission, tool_input: properties.metadata } });
+          report(event.type);
           return;
         case "question.asked":
           adopt(properties.sessionID);
-          pending.set(properties.id, "question");
-          report(event.type, { tool_input: { questions: properties.questions } });
+          pending.set(properties.id, { kind: "question", asked: { tool_input: { questions: properties.questions } } });
+          report(event.type);
           return;
         case "permission.replied":
         case "question.replied":
@@ -221,11 +252,17 @@ export const TelarPlugin = async ({ directory }: { directory: string }) => {
       }
     },
     // OpenCode disposes every instance before it exits and waits for this
-    // promise, so the last one reports the exit before the process ends.
+    // promise, so the last one reports the exit before the process ends. A
+    // reload (SIGUSR2, a configuration change) disposes them too, rejecting
+    // open prompts without replies, and loads the plugin again from this
+    // module, whose `load` must then reach the runtime.
     dispose: async () => {
       instances--;
       if (instances > 0) return;
       stopRefresh();
+      busy = false;
+      pending.clear();
+      reported = "";
       send({ event: "dispose", session_id: root });
       await new Promise<void>((resolve) => {
         drained.push(resolve);
