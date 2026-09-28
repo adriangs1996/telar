@@ -286,8 +286,12 @@ not show them beside the live state of each machine's link.
 
 A login that ends, done or failed, closes its tab there. One still waiting
 when setup returns (no terminal to wait on) keeps its pane; the next setup
-finds it by its name and shows its link again instead of opening another,
-and closes it once the agent reports the login done. What the person pastes
+shows its link again instead of opening another, and closes it once the
+agent reports the login done. Setup knows its login panes by a record only
+it writes on the machine, `~/.local/state/telar/setup-logins/AGENT` holding
+`WORKSPACE TAB PANE`, and takes a pane only while that pane is still in a
+workspace with the login's name; a workspace a person named "Log in to
+Codex" is never reused or closed. What the person pastes
 travels on standard input (`pane send-keys ID --stdin`), never in an argv
 here or there.
 
@@ -298,7 +302,8 @@ A machine whose link failed with `RemoteTelarMissing`,
 action "Set up telar on this machine". It opens a tab on this machine that
 runs `TELAR machine setup LABEL --confirm`, so one key press in the list
 installs nothing: setup says what it will do and waits for a yes on the
-tab's terminal, then the person sees each step and can answer OpenSSH if it
+tab's terminal (without a terminal, or with `--json`, it changes nothing
+and exits 1, as one JSON object with `refused` under `--json`), then the person sees each step and can answer OpenSSH if it
 asks. A row `--remote` opened has no profile and a label cut from its
 destination, so setup gets the destination.
 
@@ -431,7 +436,7 @@ Settled with Adrian on 2026-09-28.
 - `machines.json` says version 2 when a profile holds `telar_path` or
   `logins`, and 1 otherwise, so a person who never ran setup keeps a file
   every earlier build reads. Sixteen profiles at every field's longest take
-  16,381 bytes, inside the 16 KiB bound.
+  16,381 bytes; the bound doubles to 32 KiB to leave the next field room.
 - A new destination whose label (derived or `--label`) another profile has
   is refused before anything is installed; the logins run only on the
   profile whose destination is the one set up.
@@ -445,6 +450,21 @@ Settled with Adrian on 2026-09-28.
   window drops the link of a notification from a remote machine's runtime;
   setup shows only a link to a host its agent's login is known to use
   ([Agent facts](#agent-facts)).
+
+### Changes users see outside setup
+
+For the release notes, since two of them change what existing commands do:
+
+- A notification from a remote machine's runtime arrives without its link:
+  the card shows it with no action, and only this machine's runtime can
+  put a link one click away ([notifications](../notifications.md)). A
+  runtime reached through a socket forwarded by hand looks local and keeps
+  its links.
+- `telar-headless` no longer opens links, plays sounds or posts desktop
+  notices: it records each in its trace as an `effect` entry and completes
+  it ([headless client](../flows/headless-client.md)).
+- `pane send-keys ID --stdin` and `tab_id` in `workspace create --json` are
+  new; nothing that existed changed.
 
 ## Verification
 
@@ -473,7 +493,11 @@ fixed, and the same test shows the fix.
   output past 256 KiB, at the probe, `integration install`,
   `receive-config` and the login status) fails that step alone with the
   report printed; a taken label refused before installing; `add --disabled
-  --check --setup --json` stays disabled with one object. On the audited
+  --check --setup --json` stays disabled with one object; `--confirm`
+  without a terminal exits 1; a workspace a person named like a login is
+  neither reused nor closed. CI runs it on macOS and Linux; it needs no
+  network and no privileges (checked in a Linux container with
+  `--network none` as an unprivileged user). On the audited
   binary five of these failed: no report after `RemoteOutputTooLong`, a
   failed status check read as a login to open with `ready:true`, the taken
   label accepted, two JSON objects.

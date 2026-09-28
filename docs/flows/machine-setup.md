@@ -21,7 +21,8 @@ telar machine setup box [--label L] [--binary PATH] [--skip agents,config,login]
 MachineOptions.parse -> machine_profiles.run -> machine_setup.run
         |   resolve: a saved label or destination, or a new destination
         |   whose label is --label or its host, refused when another
-        |   profile has that label; --confirm: a yes on the terminal first
+        |   profile has that label; --confirm: a yes on the terminal first,
+        |   without a terminal (or with --json) exit 1 and change nothing
         |
  1-2 reach: remote_shell.runScript(MachinePlatform.probe_script)
         |     ssh -T <SshOptions> DEST 'exec /bin/sh -s', the script on stdin;
@@ -54,7 +55,8 @@ MachineOptions.parse -> machine_profiles.run -> machine_setup.run
         |     a file with an inline secret (config_secrets) stays here
  9   agent_login.run: per agent not logged in there, its official login in a
         |     workspace of that runtime (`workspace create --columns 1024 --`),
-        |     or the one an earlier setup left waiting, the link read with
+        |     or the one an earlier setup left waiting (its record in
+        |     ~/.local/state/telar/setup-logins there), the link read with
         |     `pane read` and taken only on an allowed host, a notification
         |     here whose click opens it, a pasted code typed with `pane
         |     send-keys --stdin`, the agent's status command polled, the
@@ -125,11 +127,12 @@ is 1 when any step failed.
 
 ## Validation
 
-- `python3 tools/test_machine_setup.py` after `zig build`: the whole of
-  `run` against a machine simulated here by a fake `ssh`, with SSH failures
-  injected per step, idempotence and the refusals.
+- `python3 tools/test_machine_setup.py` after `zig build`, in CI on macOS
+  and Linux: the whole of `run` against a machine simulated here by a fake
+  `ssh`, with SSH failures injected per step, idempotence, the refusals and
+  a person's workspace named like a login.
 - Unit tests: `remote_telar`, `MachineProfile(s)` (path, logins, version,
-  the 16 KiB worst case; `zig build test-machine-profiles`),
+  the worst case within the bound; `zig build test-machine-profiles`),
   `notification_link`, `config_secrets`, `remote_shell`
   (quoting through `/bin/sh`), `MachinePlatform`, `telar_release`,
   `SetupReport`, `agent_setup`, `config_allowlist` (every known credential
