@@ -84,12 +84,12 @@ pub const text =
     \\       telar worktree create BRANCH [--title TITLE] [--from BASE] [--directory DIR] [--label L] [--workspace ID] [--machine LABEL] [-- COMMAND...]
     \\       telar worktree fetch BRANCH --machine LABEL [--json]
     \\       telar worktree resolve --repository IDENTITY [--workspace PATH] [--json]
-    \\       telar worktree exec BRANCH [--label L] [--wait [--timeout S]] -- COMMAND...
+    \\       telar worktree exec BRANCH|TITLE [--label L] [--wait [--timeout S]] -- COMMAND...
     \\       telar worktree list [--workspace ID] [--json]
-    \\       telar worktree open BRANCH [--client ID]
-    \\       telar worktree diff BRANCH [--stat] [--uncommitted]
-    \\       telar worktree remove BRANCH [--force] [--delete-branch]
-    \\       telar agent interrupt <pane|title|worktree:BRANCH> [--json] [--socket PATH]
+    \\       telar worktree open BRANCH|TITLE [--client ID]
+    \\       telar worktree diff BRANCH|TITLE [--stat] [--uncommitted]
+    \\       telar worktree remove BRANCH|TITLE [--force] [--delete-branch]
+    \\       telar agent interrupt <pane|title|worktree:BRANCH|TITLE> [--json] [--socket PATH]
     \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
     \\       telar workspace create --directory DIR [--name NAME] [--json] [--socket PATH]
     \\       telar workspace list [--json] [--socket PATH]
@@ -134,14 +134,14 @@ pub const text =
     \\  agent read       Print recent text from an agent's pane
     \\  agent report-session  Record an agent's own session id for restore
     \\  pane read        Print recent text from any pane
-    \\  pane send-keys   Send raw text (and --enter) to any pane
+    \\  pane send-keys   Send raw text (and --enter) to a pane no UI has focused
     \\  pane focus       Move from Neovim into an adjacent Telar pane
     \\  worktree create Add a git worktree for a task; with a command (needs --title), run it there
     \\  worktree exec   Run a command in a new tab of a worktree; --wait prints its output and exit code
     \\  worktree list   List worktrees with their task, state, diffstat and last command
     \\  worktree open   Show a worktree in the UI client used last
     \\  worktree diff   Print the worktree's diff against its base
-    \\  worktree remove Close a worktree's tabs and remove its checkout; refused with changes
+    \\  worktree remove Close a worktree's tabs and remove its checkout; refused with uncommitted changes
     \\  worktree fetch  Bring a branch back from another machine into refs/remotes/LABEL/BRANCH
     \\  worktree resolve Find the clone of a repository among this machine's workspaces
     \\  agent interrupt Stop an agent's turn with its provider's interrupt key

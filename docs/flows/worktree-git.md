@@ -14,12 +14,17 @@ worktree_git.start -> reserve: the stalest due row, one probe in flight
         |
 WorktreeProbeJob on the observation pool
         |  stat the checkout directory     (missing -> not present)
-        |  gitstatus.probe.run             (branch from HEAD, git status -> dirty)
+        |  gitstatus.probe.run             (branch from HEAD, git status -> dirty;
+        |                                   a branch the row cannot hold whole
+        |                                   keeps the recorded one)
+        |  no base recorded? gitstatus.linked_worktree.mainBranch
+        |                                  (the main checkout's branch, from files)
         |  gitstatus.base_distance.run     (merge-base with the base,
         |                                   diff --shortstat, rev-list --count)
         |
 event .worktree_git -> worktree_git.finish -> commit
         |  present? no -> state = gone
+        |  a base found for a row without one is kept, once, and checkpointed
         |  pending changes seen once, now none -> state = integrated
         |
 Delivery: workspace_list{worktrees} when a visible value changed
@@ -35,9 +40,18 @@ in flight, so a slow repository delays its own numbers and nothing else.
 `integrated` means the worktree once had changes and now has none against
 its base: its branch was merged or its work reverted. `gone` means the
 checkout directory disappeared. Both are shown dimmed; neither removes the
-row, which only `telar worktree remove` or the `WorktreeRemove` hook does.
+row, which only `telar worktree remove`, the `WorktreeRemove` hook or the
+palette's "Forget gone worktrees" does.
+
+A worktree found by [detection](worktree-detection.md) or an agent hook has
+no base when it is registered. Its first probe measures it against the
+branch its repository's main checkout stands on, which is what `telar
+worktree create` would have recorded, and the row keeps that base. A
+detached main checkout gives no base, and the row stays unmeasured.
 
 ## Proof
 
-`gitstatus` linked-worktree and base-distance tests, and the Worktrees table
-tests.
+`gitstatus` linked-worktree and base-distance tests; `worktree_probe.zig`
+measures a hand-made worktree in a real repository against its main
+checkout's branch; `worktree_git.zig` keeps a found base once and turns rows
+`integrated` and `gone`; the Worktrees table tests.
