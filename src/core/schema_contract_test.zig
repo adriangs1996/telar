@@ -2528,3 +2528,23 @@ test "editor requests own deferred paths and reject command controls and invalid
     try std.testing.expectError(error.InvalidPaneGeneration, schema.encodeOpenEditor(&storage, retained.view()));
     try std.testing.expectError(error.InvalidPaneId, schema.encodeEditorOpened(&storage, .{ .request_id = @enumFromInt(5), .outcome = .opened }));
 }
+
+test "only raw_enter carries empty text: the Enter key alone" {
+    var storage: [128]u8 = undefined;
+    const enter: schema.SendPaneText = .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+        .mode = .raw_enter,
+        .text = "",
+    };
+    const decoded = (try schema.decodeClient(try pane_module.encodeSendPaneText(&storage, enter))).send_pane_text;
+    try std.testing.expectEqual(types.PaneTextMode.raw_enter, decoded.mode);
+    try std.testing.expectEqualStrings("", decoded.text);
+
+    for ([_]types.PaneTextMode{ .raw, .prompt }) |mode| {
+        var empty = enter;
+        empty.mode = mode;
+        try std.testing.expectError(error.InvalidByteString, pane_module.encodeSendPaneText(&storage, empty));
+    }
+}

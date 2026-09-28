@@ -14,6 +14,10 @@ const PaneRef = @import("PaneRef.zig");
 const values = @import("arguments/values.zig");
 const Snapshot = @import("Snapshot.zig");
 
+/// How long `send-keys --enter` waits between the text and Enter. Codex's
+/// `PASTE_ENTER_SUPPRESS_WINDOW` is 120 ms.
+const submit_delay_ms = 150;
+
 /// Runs one pane command and returns the process exit code.
 ///
 /// ```zig
@@ -113,9 +117,20 @@ fn execute(session: *Session, options: PaneOptions, context: ExecutionContext) !
         },
         .send_keys => {
             try session.sendText(pane, .{
-                .mode = if (options.enter) .raw_enter else .raw,
+                .mode = .raw,
                 .text = std.mem.span(options.text.?),
             });
+
+            if (options.enter) {
+                // Enter pressed as a person would, after the text: Codex
+                // takes an Enter within 120 ms of a fast burst of typed
+                // characters for a newline inside a paste.
+                session.sleepMs(submit_delay_ms);
+                try session.sendText(pane, .{
+                    .mode = .raw_enter,
+                    .text = "",
+                });
+            }
         },
         .focus => {
             const result = try session.focusPane(pane, options.direction.?);
