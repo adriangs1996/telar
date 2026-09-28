@@ -22,6 +22,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -156,6 +157,12 @@ class MachineSetupTest(unittest.TestCase):
         for telar in (self.remote / ".local/share/telar/versions").glob("*/telar"):
             subprocess.run([str(telar), "server", "stop"], env=self.remote_environment, capture_output=True, timeout=20)
 
+        # `server stop` returns once the runtime agreed; it still closes its
+        # panes and history before its socket goes.
+        deadline = time.monotonic() + 20
+        while list((self.root / "rt").glob("telar-*/*.sock")) and time.monotonic() < deadline:
+            time.sleep(0.1)
+
     def telar(self, *arguments, environment=None, timeout=240):
         return subprocess.run(
             [str(BINARY), *arguments],
@@ -192,7 +199,7 @@ class MachineSetupTest(unittest.TestCase):
             env=self.remote_environment, capture_output=True, text=True, timeout=20,
         )
         self.assertEqual(0, listed.returncode, listed.stderr)
-        return [workspace["name"] for workspace in json.loads(listed.stdout)]
+        return [(workspace["workspace_id"], workspace["name"]) for workspace in json.loads(listed.stdout)]
 
     def assert_nothing_planted_there(self):
         for path in self.remote.rglob("*"):
@@ -217,7 +224,7 @@ class MachineSetupTest(unittest.TestCase):
         self.assertFalse((self.remote / ".claude.json").exists())
         self.assert_nothing_planted_there()
         self.assertEqual(os.readlink(self.remote / ".local/bin/telar"), str(self.remote_telar()))
-        self.assertIn("Log in to Codex", self.remote_workspaces())
+        self.assertEqual(["Log in to Codex"], [name for _, name in self.remote_workspaces()])
 
         # The person finishes the Codex login in the browser.
         (self.remote / ".codex-fake-auth").touch()
@@ -227,11 +234,32 @@ class MachineSetupTest(unittest.TestCase):
         self.assertEqual({"ok"}, set(steps.values()), report)
         self.assertTrue(report["ready"])
         self.assertFalse(report["changed"])
-        self.assertNotIn("Log in to Codex", self.remote_workspaces())
+        self.assertEqual([], self.remote_workspaces())
 
         third = self.setup()
         self.assertEqual(0, third.returncode, third.stdout + third.stderr)
         self.assertTrue(third.stdout.rstrip().endswith(f"{LABEL} was already set up; nothing changed."), third.stdout)
+
+    def test_a_workspace_named_like_a_login_is_never_taken_for_one(self):
+        self.assertEqual(0, self.setup("--skip", "login").returncode)
+        created = subprocess.run(
+            [str(self.remote_telar()), "workspace", "create", "--directory", str(self.remote), "--name", "Log in to Codex", "--json"],
+            env=self.remote_environment, capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(0, created.returncode, created.stderr)
+        persons = (json.loads(created.stdout)["workspace_id"], "Log in to Codex")
+
+        # Setup opens its own login beside the person's workspace...
+        report, steps = self.report(self.setup("--json"))
+        self.assertEqual("pending", steps["logins"], report)
+        self.assertIn(persons, self.remote_workspaces())
+        self.assertEqual(2, len(self.remote_workspaces()))
+
+        # ...and closes only its own once the login is done.
+        (self.remote / ".codex-fake-auth").touch()
+        report, steps = self.report(self.setup("--json"))
+        self.assertEqual("ok", steps["logins"], report)
+        self.assertEqual([persons], self.remote_workspaces())
 
     def test_a_failing_ssh_call_fails_its_step_and_the_report_still_comes(self):
         (self.remote / ".codex-fake-auth").touch()
@@ -268,6 +296,17 @@ class MachineSetupTest(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertIn("--label", result.stderr)
         self.assertFalse((self.remote / ".local/share/telar").exists())
+
+    def test_confirm_without_a_terminal_changes_nothing_and_fails(self):
+        for arguments in (("--confirm",), ("--confirm", "--json")):
+            with self.subTest(arguments=arguments):
+                result = self.setup(*arguments)
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                self.assertFalse((self.remote / ".local/share/telar").exists())
+
+        report, steps = self.report(self.setup("--confirm", "--json"))
+        self.assertEqual({}, steps)
+        self.assertIn("terminal", report["refused"])
 
     def test_add_with_setup_keeps_disabled_and_prints_one_report(self):
         (self.remote / ".codex-fake-auth").touch()
