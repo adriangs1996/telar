@@ -102,15 +102,17 @@ Implementation must follow the [invariants](../invariants.md) and the
     `client.keybind.route` over semantic keys.
   - The TUI's client integration tests moved to `src/client_tests`, which
     drives the shared client over a real socket without a window
-    (`ClientHarness`); tests about the TUI itself (its parser, screen, host
-    probes, telemetry writer) retired.
-  - The window lacked three things the TUI provided, and they are gone with
-    it: inline Kitty images in panes (the window keeps the images the
-    runtime sends but has no GPU consumer for them and reports
-    `images = .unsupported`, so panes show the cell fallback), OSC 9
-    notifications to the host terminal (`delivery = "terminal"` is now
-    dropped), and, until the window bound them again, the clipboard image
-    previews below.
+    (`ClientHarness`); tests about the TUI itself (its parser, screen and host
+    probes) retired. The TUI's telemetry writer left with it and came back in
+    the shared client ([client telemetry](../flows/client-telemetry.md)), so
+    the window and the headless client write `<endpoint>.client-<pid>.log`
+    again in builds with diagnostics.
+  - The window lacked three things the TUI provided. Two are gone with it:
+    inline Kitty images in panes (the window keeps the images the runtime
+    sends but has no GPU consumer for them and reports
+    `images = .unsupported`, so panes show the cell fallback) and OSC 9
+    notifications to the host terminal. The third, the clipboard image
+    previews, the window binds again (below).
   - Clipboard image previews below an agent's pane (`AttachmentShelf`,
     [clipboard image](../flows/clipboard-image.md)) existed only in the TUI.
     The window binds them again for its own client on macOS
@@ -118,8 +120,13 @@ Implementation must follow the [invariants](../invariants.md) and the
     no shelf.
   - Not found in the inventory but also a TUI consumer:
     `verify_terminal_browser.py`.
-  - `client.sidebar.renderer` is still accepted, with no effect, because the
-    shipped example configuration set it; `--sidebar-renderer` is gone.
+  - The keys only the TUI honored, `client.sidebar.renderer`,
+    `client.notifications.delivery = "terminal"`,
+    `client.input.escape_timeout_ms` and `client.icons`, load ignored: the
+    window and `telar config check` say which ones a file still sets, and
+    none keeps Telar from starting
+    ([retired keys](../configuration.md#retired-keys)). `--sidebar-renderer`
+    is gone.
   - `telar agent watch`, named in decision 19, does not exist on this branch;
     the no-display message names the commands that do.
 
