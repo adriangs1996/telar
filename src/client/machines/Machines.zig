@@ -30,6 +30,10 @@ color_bytes: [capacity][max_color_bytes]u8 = undefined,
 color_len: [capacity]u8 = @splat(0),
 /// Whether the window keeps a connection to the machine.
 enabled: [capacity]bool = @splat(false),
+/// A row `--remote` or `--machine` opened without a profile that enables
+/// it. It stays enabled whatever its profile says until the profile enables
+/// it or the person disables it; from then on the profile decides.
+pinned: [capacity]bool = @splat(false),
 /// Whether the slot's client is initialized.
 live: [capacity]bool = @splat(false),
 phase: [capacity]data.RuntimeLink.Phase = @splat(.connecting),
@@ -59,6 +63,7 @@ pub fn add(self: *Machines, row: MachineRow, wanted: ?u8) !u8 {
     std.debug.assert(!self.used[slot]);
     self.used[slot] = true;
     self.write(slot, row);
+    self.pinned[slot] = false;
     self.phase[slot] = .connecting;
     self.attention[slot] = false;
     self.cpu_percent[slot] = null;
@@ -88,6 +93,7 @@ pub fn remove(self: *Machines, slot: u8) void {
     std.debug.assert(self.used[slot] and slot != local_slot);
     self.used[slot] = false;
     self.enabled[slot] = false;
+    self.pinned[slot] = false;
     self.id[slot] = .invalid;
     self.revision +%= 1;
 }

@@ -59,7 +59,8 @@ pub fn open(gui: *GuiAdapter) !void {
     }
 
     // `--remote` names a saved machine by destination or label, or opens a
-    // temporary one that is never written back.
+    // temporary one that is never written back. Either stays open while no
+    // profile enables it.
     var requested: ?u8 = null;
     var requested_arguments: []const []const u8 = &.{};
     if (own.options.open_machine) |remote| {
@@ -67,6 +68,7 @@ pub fn open(gui: *GuiAdapter) !void {
             .label = remote.destination,
             .destination = remote.destination,
         }, null);
+        machines.pinned[slot] = machines.id[slot] == .invalid or !machines.enabled[slot];
         machines.enabled[slot] = true;
         requested = slot;
         requested_arguments = remote.arguments;
@@ -139,7 +141,7 @@ pub fn reconcile(gui: *GuiAdapter) !void {
     }
 
     for (profiles.slice()) |*profile| {
-        const row: client.MachineRow = .{
+        var row: client.MachineRow = .{
             .id = profile.id,
             .label = profile.label(),
             .destination = profile.destination(),
@@ -156,10 +158,17 @@ pub fn reconcile(gui: *GuiAdapter) !void {
             continue;
         };
 
+        // A machine a flag opened stays open while its profile stays
+        // disabled; once the profile enables it, the profile decides.
+        if (profile.enabled) {
+            machines.pinned[slot] = false;
+        }
+
+        row.enabled = profile.enabled or machines.pinned[slot];
         const was_enabled = machines.enabled[slot];
         const moved = !std.mem.eql(u8, machines.destination(slot), profile.destination());
         machines.update(slot, row);
-        if (!profile.enabled) {
+        if (!row.enabled) {
             if (was_enabled) {
                 try retire(gui, slot, .disabled);
             }
@@ -209,8 +218,9 @@ pub fn select(gui: *GuiAdapter, slot: u8) !void {
     gui.app.model.to_host.resume_input = true;
 }
 
-/// Resolves what the person asked for: the machine the picker chose, or
-/// the next or previous one in slot order, wrapping around.
+/// Resolves what the person asked for: the machine the picker chose, the
+/// next or previous one in slot order, wrapping around, or that a machine
+/// the picker disabled closes once the file says so.
 ///
 /// ```zig
 /// try window_machines.choose(gui, .{ .offset = 1 });
@@ -235,6 +245,7 @@ pub fn choose(gui: *GuiAdapter, request: data.MachineRequest) !void {
                 }
             }
         },
+        .unpin => |slot| machines.pinned[slot] = false,
     }
 }
 
