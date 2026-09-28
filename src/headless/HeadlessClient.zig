@@ -29,6 +29,8 @@ pub const Inbox = mailbox.GenericInbox(Event);
 /// Queue slots the runtime outbox keeps free before another line is read,
 /// so input never outruns the runtime.
 const minimum_outbox_slots = 4;
+/// Exit status when the link failed for a reason retrying cannot fix.
+const link_failed_status: u8 = 1;
 /// Pixels one cell stands for in the fixed host facts.
 const cell_width_px = 8;
 const cell_height_px = 16;
@@ -120,6 +122,12 @@ pub fn run(self: *HeadlessClient) !u8 {
         try self.inbox.wait();
         if (try self.update()) |value| {
             break value;
+        }
+
+        // Only a person retries a failed link, and this client has none;
+        // it leaves with the failure in its dump instead of waiting forever.
+        if (self.app.model.runtime_link.phase == .failed) {
+            break link_failed_status;
         }
     };
 

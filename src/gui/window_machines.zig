@@ -365,7 +365,6 @@ fn openClient(gui: *GuiAdapter, slot: u8, arguments: []const []const u8) !void {
     options.machine = .{ .remote = .{
         .destination = destination,
         .arguments = arguments,
-        .window_slot = gui.window_slot,
     } };
     options.open_machine = null;
     options.cwd = "";
@@ -426,7 +425,6 @@ fn admit(gui: *GuiAdapter, slot: u8) !void {
     app.options.machine = .{ .remote = .{
         .destination = destination,
         .arguments = &.{},
-        .window_slot = gui.window_slot,
     } };
     app.client_identity = identity;
     if (app.bootstrap) |*bootstrap| {

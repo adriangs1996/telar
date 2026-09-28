@@ -112,7 +112,7 @@ machines.json replaced
   `previous-machine`, `machine-picker` and `add-machine` are actions and Lua
   helpers (`telar.action.next_machine()` and so on). Plugins cannot run them.
 - **Link state.** `LinkStatus` covers the workbench while the shown machine
-  is connecting, lost or disabled.
+  is connecting, lost, failed or disabled.
 
 ## Managing machines from the window
 
@@ -142,7 +142,7 @@ soon as the file is applied, and its row shows whether that worked.
 `reconcile` applies the file the CLI or an editor just replaced:
 
 - a new enabled machine gets a client and connects;
-- a disabled machine's link stops: the socket closes once idle, the forward
+- a disabled machine's link stops: the socket closes once idle, the SSH session
   stops and no retry follows. Enabling it again connects the same client;
 - a removed machine's row goes. Its client stays live in the slot, stopped,
   and the next machine added there reuses it with the new destination;

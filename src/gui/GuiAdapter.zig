@@ -94,8 +94,6 @@ app: *client.Client,
 machines: client.Machines = .{},
 /// A machine chosen while a frame was in flight, shown when it completes.
 pending_machine: ?u8 = null,
-/// The window's lease slot, which keeps its forwarded sockets apart.
-window_slot: u8 = 0,
 /// Where `machines.json` lives, empty when it cannot be resolved, and the
 /// fingerprint the window last applied.
 profiles_path: [std.fs.max_path_bytes]u8 = undefined,
@@ -163,7 +161,6 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.app = &gui.clients[client.Machines.local_slot];
     gui.machines = .{};
     gui.pending_machine = null;
-    gui.window_slot = 0;
     gui.profiles_path_len = 0;
     gui.profiles_seen = 0;
 

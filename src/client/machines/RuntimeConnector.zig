@@ -144,14 +144,25 @@ fn startRuntime(self: *const RuntimeConnector, config: RuntimeConfigSelection) !
 }
 
 fn finishHandshake(self: *const RuntimeConnector, connection: localsocket.SocketChannel) !localsocket.SocketChannel {
-    var result = connection;
-    errdefer result.deinit(self.io);
+    return negotiate(self.io, connection, self.report);
+}
 
-    const response = try handshake.perform(self.io, &result);
+/// Completes the schema handshake on a connected channel, closing it on
+/// failure. A refusal explains itself in `report`, or on standard error
+/// when null.
+///
+/// ```zig
+/// const channel = try RuntimeConnector.negotiate(io, connection, &report);
+/// ```
+pub fn negotiate(io: std.Io, connection: localsocket.SocketChannel, report: ?*std.Io.Writer) !localsocket.SocketChannel {
+    var result = connection;
+    errdefer result.deinit(io);
+
+    const response = try handshake.perform(io, &result);
     switch (response) {
         .accepted => return result,
         .rejected => |rejected| {
-            if (self.report) |writer| {
+            if (report) |writer| {
                 writer.print("the runtime speaks wire schema {s}; this telar speaks {s}. Update telar on one side", .{ &rejected.expected_schema, &core.schema_id }) catch {};
             } else {
                 std.debug.print("telar protocol mismatch: runtime expects schema {s}\n", .{&rejected.expected_schema});
