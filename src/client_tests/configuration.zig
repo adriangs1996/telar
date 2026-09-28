@@ -106,10 +106,6 @@ test "configuration adoption swaps ownership after commit and presents by versio
     const router = client.routerConfig();
     try std.testing.expectEqualDeep(try keyinput.chord.parseKey("ctrl+s"), router.prefix);
     try std.testing.expectEqual(
-        @as(u64, 40 * std.time.ns_per_ms),
-        router.escape_timeout_ns,
-    );
-    try std.testing.expectEqual(
         @as(u64, 750 * std.time.ns_per_ms),
         router.sequence_timeout_ns,
     );

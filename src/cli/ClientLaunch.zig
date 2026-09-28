@@ -119,10 +119,6 @@ pub fn frontendOptions(self: *const Launch) client_module.Options {
         .pane_gaps = if (snapshot) |value| value.pane_gaps else true,
         .sound = if (snapshot) |value| value.sound else .{},
         .bars = if (snapshot) |value| value.bars.presentation() else .{},
-        .input_escape_timeout_ns = if (snapshot) |value|
-            value.input_escape_timeout_ns
-        else
-            data.keybind.default_escape_timeout_ns,
         .input_sequence_timeout_ns = if (snapshot) |value|
             value.input_sequence_timeout_ns
         else

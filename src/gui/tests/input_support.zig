@@ -60,7 +60,6 @@ pub fn action(gui: *GuiAdapter, value: data.actions.Action) !keyinput.Control {
     gui.adoptBindings(.{
         .prefix = data.keybind.default_prefix,
         .bindings = &.{binding},
-        .escape_timeout_ns = std.time.ns_per_s,
         .sequence_timeout_ns = std.time.ns_per_s,
     });
     try accept(gui, .{

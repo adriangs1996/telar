@@ -1052,17 +1052,21 @@ fn parseInputOptions(self: *Generation, index: c_int, diagnostic: *data.Diagnost
         diagnostic.set("config.client.input must be a table", .{});
         return error.InvalidConfig;
     }
+    // The terminal client waited this long for the rest of an escape
+    // sequence; the window receives whole keys, so a file that still sets
+    // it is told to drop it.
+    _ = lua_api.c.lua_getfield(state, absolute, "escape_timeout_ms");
+    const escape_timeout_set = lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL;
+    lua_value.pop(state, 1);
+    if (escape_timeout_set) {
+        diagnostic.set("config.client.input.escape_timeout_ms left with the terminal client; remove it", .{});
+        return error.InvalidConfig;
+    }
+
     try lua_value.ensureOnlyFields(state, .{
         .index = absolute,
-        .allowed = &.{ "escape_timeout_ms", "sequence_timeout_ms" },
+        .allowed = &.{"sequence_timeout_ms"},
         .path = "config.client.input",
-    }, diagnostic);
-    self.snapshot.input_escape_timeout_ns = try lua_value.optionalMilliseconds(state, .{
-        .index = absolute,
-        .name = "escape_timeout_ms",
-        .default_ns = self.snapshot.input_escape_timeout_ns,
-        .minimum_ms = 1,
-        .maximum_ms = 1000,
     }, diagnostic);
     self.snapshot.input_sequence_timeout_ns = try lua_value.optionalMilliseconds(state, .{
         .index = absolute,

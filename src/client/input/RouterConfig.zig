@@ -5,5 +5,4 @@ const RouterConfig = @This();
 
 prefix: keyinput.Key,
 bindings: []const data.config_values.ConfiguredBinding,
-escape_timeout_ns: u64,
 sequence_timeout_ns: u64,

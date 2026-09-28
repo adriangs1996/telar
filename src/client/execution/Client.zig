@@ -222,7 +222,6 @@ pub fn routerConfig(self: *const Client) RouterConfig {
         return .{
             .prefix = snapshot.prefix,
             .bindings = snapshot.bindingSlice(),
-            .escape_timeout_ns = snapshot.input_escape_timeout_ns,
             .sequence_timeout_ns = snapshot.input_sequence_timeout_ns,
         };
     }
@@ -230,7 +229,6 @@ pub fn routerConfig(self: *const Client) RouterConfig {
     return .{
         .prefix = self.options.prefix,
         .bindings = self.options.bindings,
-        .escape_timeout_ns = self.options.input_escape_timeout_ns,
         .sequence_timeout_ns = self.options.input_sequence_timeout_ns,
     };
 }

@@ -16,7 +16,7 @@ pub fn writeSection(snapshot: *const Snapshot, query: Query, writer: *std.Io.Wri
             const gui = &snapshot.gui;
             try std.json.Stringify.value(.{ .font = .{ .family = gui.font.family.name(), .size = gui.font.size, .line_height = gui.font.line_height, .letter_spacing = gui.font.letter_spacing, .thicken = gui.font.thicken, .thicken_strength = gui.font.thicken_strength }, .cursor = gui.cursor, .window = gui.window, .chrome = gui.chrome, .sidebar = gui.sidebar }, .{}, writer);
         },
-        .input => try std.json.Stringify.value(.{ .prefix = snapshot.prefix, .escape_timeout_ns = snapshot.input_escape_timeout_ns, .sequence_timeout_ns = snapshot.input_sequence_timeout_ns, .binding_count = snapshot.binding_count }, .{}, writer),
+        .input => try std.json.Stringify.value(.{ .prefix = snapshot.prefix, .sequence_timeout_ns = snapshot.input_sequence_timeout_ns, .binding_count = snapshot.binding_count }, .{}, writer),
         .binding => {
             if (query.index >= snapshot.binding_count) {
                 return error.BindingNotFound;

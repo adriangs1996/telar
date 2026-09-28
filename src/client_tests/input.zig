@@ -748,7 +748,6 @@ test "held scroll suffixes pace both viewport directions without queued steps" {
         _ = try routeKey(client, &router, repeated, 2000 * ms);
         try std.testing.expectEqualDeep(version, client.model.version());
         try std.testing.expectEqual(pending, client.model.to_runtime.len);
-        try std.testing.expect(router.inputDeadline() == null);
         try std.testing.expect(router.bindingDeadline() == null);
 
         _ = try routeKey(client, &router, prefix_key, 2001 * ms);
@@ -1166,7 +1165,6 @@ fn routeKey(client: *client_module.Client, router: *KeyRouter, key: keyinput.Key
 
     const decision = router.routeEvent(.{
         .key = key,
-        .raw = "",
         .now_ns = now_ns,
     }, .{
         .captures_keys = data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)),
@@ -1174,7 +1172,7 @@ fn routeKey(client: *client_module.Client, router: *KeyRouter, key: keyinput.Key
     });
 
     switch (decision) {
-        .forward => |value| _ = try client_module.key_routing.routeKeyInput(client, .{ .key = value.key }),
+        .forward => |value| _ = try client_module.key_routing.routeKeyInput(client, .{ .key = value }),
         .replay => |value| {
             for (value.held_keys[0..value.held_key_len]) |held| {
                 _ = try client_module.key_routing.routeKeyInput(client, .{ .key = held });

@@ -278,7 +278,7 @@ pub fn continueFallback(gui: *GuiAdapter, event: event_module.Event) !bool {
         _ = gui.widgets.dispatcher.keys.release(physical);
     }
 
-    _ = try gui.routeKey(.{ .key = key, .raw = "", .now_ns = pacing.clock.monotonic(gui.app.io) });
+    _ = try gui.routeKey(.{ .key = key, .now_ns = pacing.clock.monotonic(gui.app.io) });
     return true;
 }
 

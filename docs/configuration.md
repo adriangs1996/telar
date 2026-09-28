@@ -31,7 +31,7 @@ return telar.config({
     icons = "nerd-font",
     sidebar = { visible = true },
     sound = { enabled = true, ready = true, needs_input = true },
-    input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },
+    input = { sequence_timeout_ms = 1000 },
     keybindings = {
       telar.bind({ "s" }, telar.action.toggle_sidebar()),
       telar.bind({ "alt+left" }, telar.action.resize_sidebar({ direction = "left" })),
@@ -93,6 +93,8 @@ return telar.config({
 sidebar. The window draws its own, so the field is an error that names it:
 remove it from older files. `client.notifications.delivery = "terminal"` is
 refused the same way; see [notifications](notifications.md#delivery-channels).
+So is `client.input.escape_timeout_ms`: the terminal client waited that long
+for the rest of an escape sequence, and the window receives whole keys.
 
 `runtime.agent_descriptions` is an explicit privacy opt-in. When the first user
 request starts model work, Telar sends that request through standard input to

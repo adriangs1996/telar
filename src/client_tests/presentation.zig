@@ -39,7 +39,6 @@ test "host input presentation state schedules only through observation" {
 
     const decision = router.routeEvent(.{
         .key = router.prefix.?,
-        .raw = "",
         .now_ns = 0,
     }, .{
         .captures_keys = data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)),

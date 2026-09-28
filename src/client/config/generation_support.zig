@@ -223,7 +223,7 @@ test "client config compiles theme, bindings, and callbacks" {
         \\  sidebar = { visible = false },
         \\  pane_gaps = false,
         \\  sound = { enabled = true, ready = false, needs_input = true },
-        \\  input = { escape_timeout_ms = 40, sequence_timeout_ms = 750 },
+        \\  input = { sequence_timeout_ms = 750 },
         \\  keybindings = {
         \\    telar.bind({ "%" }, telar.action.split_pane({ direction = "horizontal" })),
         \\    telar.bind({ "g" }, function(ctx)
@@ -249,7 +249,6 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expect(!generation.snapshot.sound.ready);
     try std.testing.expect(generation.snapshot.sound.needs_input);
     try std.testing.expectEqual(data.icons.Theme.nerd_font, generation.snapshot.icon_theme);
-    try std.testing.expectEqual(@as(u64, 40 * std.time.ns_per_ms), generation.snapshot.input_escape_timeout_ns);
     try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
     try std.testing.expectEqualDeep(
         cellgrid.Color.rgb(.{ 1, 2, 3 }),
@@ -1382,6 +1381,10 @@ test "options that only the retired terminal client honored are rejected" {
         .{
             .source = "return { api_version = 2, client = { sidebar = { renderer = \"cells\" } } }",
             .message = "config.client.sidebar.renderer left with the terminal client; remove it",
+        },
+        .{
+            .source = "return { api_version = 2, client = { input = { escape_timeout_ms = 25 } } }",
+            .message = "config.client.input.escape_timeout_ms left with the terminal client; remove it",
         },
     };
 

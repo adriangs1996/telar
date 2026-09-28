@@ -19,16 +19,12 @@ pub fn key(self: *Capture, value: Key) !void {
     self.key_count += 1;
 }
 
-pub fn forward(_: *Capture, _: []const u8) !void {
-    return error.UnexpectedRawInput;
-}
-
 const GenericRouter = @import("GenericRouter.zig").Type;
-const Router = GenericRouter(routing_tests.Action, routing_tests.limits, void);
+const Router = GenericRouter(routing_tests.Action, routing_tests.limits);
 
 pub fn apply(self: *Capture, decision: Router.Decision) !Control {
     switch (decision) {
-        .forward => |value| try self.key(value.key),
+        .forward => |value| try self.key(value),
         .replay => |value| {
             for (value.held_keys[0..value.held_key_len]) |held| {
                 try self.key(held);

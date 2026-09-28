@@ -155,7 +155,6 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
         .{
             .prefix = params.options.prefix,
             .bindings = params.options.bindings,
-            .escape_timeout_ns = params.options.input_escape_timeout_ns,
             .sequence_timeout_ns = params.options.input_sequence_timeout_ns,
         },
     );
@@ -786,7 +785,6 @@ fn drainInput(self: *GuiAdapter) !void {
                     _ = try self.routeKey(
                         .{
                             .key = text.key(),
-                            .raw = "",
                             .now_ns = pacing.clock.monotonic(app.io),
                         },
                     );
@@ -920,7 +918,7 @@ fn applyInputDecision(self: *GuiAdapter, decision: client.key_router.Type.Decisi
             _ = try client.key_routing.routeKeyInput(
                 self.app,
                 .{
-                    .key = value.key,
+                    .key = value,
                 },
             );
         },
@@ -1022,7 +1020,6 @@ fn dispatchKey(self: *GuiAdapter, key: KeyInput) !void {
     _ = try self.routeKey(
         .{
             .key = key.terminalKey(),
-            .raw = "",
             .now_ns = pacing.clock.monotonic(self.app.io),
         },
     );
