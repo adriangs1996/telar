@@ -5,6 +5,7 @@ const client = @import("telar-client");
 const data = @import("model");
 const Session = @import("Session.zig");
 const Fixture = @import("ChromeFixture.zig");
+const gui_event = @import("../gui_event.zig");
 const host_ports = @import("../host_ports.zig");
 const window_machines = @import("../window_machines.zig");
 
@@ -33,8 +34,11 @@ fn socketPair() !Peer {
 fn openMachine(session: *Session, connection: *localsocket.SocketChannel) !u8 {
     const gui = session.gui;
     const own = window_machines.window(gui);
-    _ = try gui.machines.add(.{ .label = "laptop" }, Machines.local_slot);
-    gui.machines.live[Machines.local_slot] = true;
+    if (!gui.machines.used[Machines.local_slot]) {
+        _ = try gui.machines.add(.{ .label = "laptop" }, Machines.local_slot);
+        gui.machines.live[Machines.local_slot] = true;
+    }
+
     const slot = try gui.machines.add(.{ .label = "box", .destination = "dev@box" }, null);
 
     const app = &gui.clients[slot];
@@ -52,7 +56,7 @@ fn openMachine(session: *Session, connection: *localsocket.SocketChannel) !u8 {
         },
     });
     gui.machines.live[slot] = true;
-    app.graphics = host_ports.graphicsRetention(gui);
+    app.graphics = host_ports.graphicsRetention(gui, slot);
     app.chrome = host_ports.chrome(gui);
     app.host_input_source = host_ports.hostInput(gui);
     app.presented = false;
@@ -87,7 +91,7 @@ test "the next machine is shown and the window's own leaves its workspace once i
     try client.machine_presentation.settle(own);
     try std.testing.expect(!own.leave_pending);
     try std.testing.expect(own.model.workspace == null);
-    try std.testing.expectEqual(@as(?core.WorkspaceId, Session.location.workspace.workspace), own.left_workspace);
+    try std.testing.expectEqual(@as(?core.WorkspaceLocation, Session.location.workspace), own.left_workspace);
 
     try window_machines.choose(gui, .{ .offset = 1 });
     try std.testing.expect(gui.app == own);
@@ -112,6 +116,98 @@ test "a machine chosen while a frame is in flight is shown after it" {
     try window_machines.choose(gui, .{ .slot = slot });
     try std.testing.expect(gui.app == window_machines.window(gui));
     try std.testing.expectEqual(@as(?u8, slot), gui.pending_machine);
+}
+
+test "a machine hidden in a worktree reopens that worktree when shown again" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrapAt(.{
+        .workspace = .{
+            .worktree = @enumFromInt(3),
+        },
+        .tab_id = @enumFromInt(1),
+    });
+    const gui = session.gui;
+
+    var box = try socketPair();
+    defer box.channel.deinit(std.testing.io);
+    defer box.peer.deinit(std.testing.io);
+    _ = try openMachine(session, &box.channel);
+    const own = window_machines.window(gui);
+
+    try window_machines.choose(gui, .{ .offset = 1 });
+    own.model.request_lifecycle = .{};
+    try client.machine_presentation.settle(own);
+    try std.testing.expect(own.model.workspace == null);
+    const left: core.WorkspaceLocation = .{
+        .worktree = @enumFromInt(3),
+    };
+    try std.testing.expectEqual(@as(?core.WorkspaceLocation, left), own.left_workspace);
+
+    try window_machines.choose(gui, .{ .offset = 1 });
+    try std.testing.expect(gui.app == own);
+    try std.testing.expect(own.left_workspace == null);
+    try std.testing.expect(!own.model.request_lifecycle.tracker.isEmpty());
+}
+
+test "a hidden machine never hides the shown machine's pane graphics" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+
+    var box = try socketPair();
+    defer box.channel.deinit(std.testing.io);
+    defer box.peer.deinit(std.testing.io);
+    const slot = try openMachine(session, &box.channel);
+    const own = window_machines.window(gui);
+
+    // Both runtimes number their panes from the same start, so the hidden
+    // machine's pane can carry the id of the shown one's.
+    try gui.clients[slot].graphics.setPaneVisible(Session.pane_id, false);
+    try std.testing.expect(own.graphics.paneVisible(Session.pane_id));
+    try std.testing.expect(!gui.clients[slot].graphics.paneVisible(Session.pane_id));
+}
+
+test "sixteen machines reading their runtimes fit in the window's inbox" {
+    // The reads in flight hold the sockets until the window cancels them,
+    // so the sockets close after the window.
+    var peers: [Machines.capacity - 1]Peer = undefined;
+    for (&peers) |*peer| {
+        peer.* = try socketPair();
+    }
+
+    defer for (&peers) |*peer| {
+        peer.channel.deinit(std.testing.io);
+        peer.peer.deinit(std.testing.io);
+    };
+
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+
+    for (&peers) |*peer| {
+        const slot = try openMachine(session, &peer.channel);
+        const app = &gui.clients[slot];
+        try client.runtime_io.startRuntimeIo(app);
+        try client.notifications.publishNotificationNow(app, .{
+            .title = "agent finished",
+            .message = "box",
+        });
+    }
+
+    try window_machines.startJobs(gui);
+    const tickets = gui.driver.inbox.snapshot();
+    for (gui.clients[1..Machines.capacity]) |*app| {
+        try std.testing.expectEqual(data.RuntimeLink.Phase.connected, app.model.runtime_link.phase);
+    }
+
+    // Each machine holds its read and its notification's wait, well within
+    // what each adds to the window's inbox.
+    try std.testing.expectEqual(@as(u64, 0), tickets.rejected);
+    try std.testing.expect(tickets.high_water >= peers.len);
+    try std.testing.expect(tickets.high_water <= peers.len * gui_event.Message.tickets_per_machine);
 }
 
 test "the top bar names the machine only while the window holds several" {
@@ -189,6 +285,120 @@ fn boxProfile(destination: []const u8, enabled: bool) !core.MachineProfiles {
     profile.enabled = enabled;
     try profiles.add(profile);
     return profiles;
+}
+
+// A configuration home in a temporary directory for the window's own
+// client, so `machines.json` resolves inside it.
+const ConfigHome = struct {
+    temp: std.testing.TmpDir,
+    environment: std.process.Environ.Map,
+    block: std.process.Environ.PosixBlock,
+
+    fn open(self: *ConfigHome, app: *client.Client) !void {
+        self.temp = std.testing.tmpDir(.{});
+        errdefer self.temp.cleanup();
+
+        var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const directory_len = try self.temp.dir.realPath(std.testing.io, &directory_buffer);
+        self.environment = std.process.Environ.Map.init(std.testing.allocator);
+        errdefer self.environment.deinit();
+
+        try self.environment.put("XDG_CONFIG_HOME", directory_buffer[0..directory_len]);
+        try self.environment.put("HOME", directory_buffer[0..directory_len]);
+        self.block = try self.environment.createPosixBlock(std.testing.allocator, .{});
+        app.options.environ = .{ .block = self.block };
+    }
+
+    fn close(self: *ConfigHome) void {
+        self.block.deinit(std.testing.allocator);
+        self.environment.deinit();
+        self.temp.cleanup();
+    }
+};
+
+test "a machine opened by name stays open until its own profile is disabled" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+    const own = window_machines.window(gui);
+
+    var home: ConfigHome = undefined;
+    try home.open(own);
+    defer home.close();
+
+    var profiles = try boxProfile("dev@box", false);
+    try saveProfiles(session, &home.temp, &profiles);
+    own.options.open_machine = .{
+        .destination = "box",
+    };
+    try window_machines.open(gui);
+    const slot = gui.machines.find(@enumFromInt(7)).?;
+    const box = &gui.clients[slot];
+    try std.testing.expect(gui.machines.shown(slot) and gui.app == box);
+
+    // Another machine's change rewrites the file; box's profile is still
+    // disabled, as it was when the window opened it.
+    var gpu = try core.MachineProfile.init(@enumFromInt(8), .{
+        .label = "gpu",
+        .destination = "dev@gpu",
+    });
+    gpu.enabled = false;
+    try profiles.add(gpu);
+    try saveProfiles(session, &home.temp, &profiles);
+    try window_machines.reconcile(gui);
+    try std.testing.expect(gui.machines.shown(slot) and gui.app == box);
+    try std.testing.expect(box.model.runtime_link.phase != .stopped);
+
+    // Enabling it and then disabling it is a decision about box, so the
+    // window follows it.
+    profiles = try boxProfile("dev@box", true);
+    try saveProfiles(session, &home.temp, &profiles);
+    try window_machines.reconcile(gui);
+    try std.testing.expect(gui.machines.shown(slot) and gui.app == box);
+
+    profiles = try boxProfile("dev@box", false);
+    try saveProfiles(session, &home.temp, &profiles);
+    try window_machines.reconcile(gui);
+    try std.testing.expect(!gui.machines.shown(slot));
+    try std.testing.expect(gui.app == own);
+    try std.testing.expectEqual(data.RuntimeLink.Phase.stopped, box.model.runtime_link.phase);
+}
+
+test "the machine list closes a machine opened by name whose profile is disabled" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+    const own = window_machines.window(gui);
+
+    var home: ConfigHome = undefined;
+    try home.open(own);
+    defer home.close();
+
+    var profiles = try boxProfile("dev@box", false);
+    try saveProfiles(session, &home.temp, &profiles);
+    own.options.open_machine = .{
+        .destination = "box",
+    };
+    try window_machines.open(gui);
+    const slot = gui.machines.find(@enumFromInt(7)).?;
+    const box = &gui.clients[slot];
+
+    // Shift+Enter on box, the shown machine, writes a profile that was
+    // already disabled; the window closes it anyway.
+    pick(box, 1);
+    try press(box, .{ .key = .{ .code = .enter, .mods = .{ .shift = true } } });
+    while (box.model.to_host.pop()) |effect| {
+        if (effect == .machine) {
+            try window_machines.choose(gui, effect.machine);
+        }
+    }
+
+    try writeChanges(box);
+    try window_machines.reconcile(gui);
+    try std.testing.expect(!gui.machines.shown(slot));
+    try std.testing.expect(gui.app == own);
 }
 
 test "machines.json changes connect, stop, move and remove the window's machines" {
@@ -269,20 +479,12 @@ test "the machine list adds, disables, renames and removes machines through mach
     _ = try gui.machines.add(.{ .label = "laptop" }, Machines.local_slot);
     gui.machines.live[Machines.local_slot] = true;
 
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(std.testing.io, &directory_buffer);
-    var environment = std.process.Environ.Map.init(std.testing.allocator);
-    defer environment.deinit();
-    try environment.put("XDG_CONFIG_HOME", directory_buffer[0..directory_len]);
-    try environment.put("HOME", directory_buffer[0..directory_len]);
-    var block = try environment.createPosixBlock(std.testing.allocator, .{});
-    defer block.deinit(std.testing.allocator);
-    app.options.environ = .{ .block = block };
+    var home: ConfigHome = undefined;
+    try home.open(app);
+    defer home.close();
 
     var profiles: core.MachineProfiles = .{};
-    try saveProfiles(session, &temp, &profiles);
+    try saveProfiles(session, &home.temp, &profiles);
 
     // The "Add machine" row follows this machine.
     pick(app, 1);

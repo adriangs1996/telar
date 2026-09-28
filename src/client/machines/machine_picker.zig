@@ -69,6 +69,12 @@ pub fn choose(client: *Client, chosen: ?u8, alternate: bool) !void {
 
     const enabled = machines.enabled[slot];
     if (alternate or !enabled) {
+        // Disabling is the person's decision, so a machine a flag kept open
+        // closes even when its profile was already disabled.
+        if (enabled) {
+            try client.model.to_host.push(.{ .machine = .{ .unpin = slot } });
+        }
+
         return machine_profiles.start(client, .{
             .kind = if (enabled) .disable else .enable,
             .label = machines.label(slot),

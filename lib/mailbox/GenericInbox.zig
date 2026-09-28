@@ -7,13 +7,23 @@ const Snapshot = @import("InboxSnapshot.zig");
 const DrainBudget = @import("DrainBudget.zig");
 
 /// Message values own their data or retain an explicit owner-side borrow.
+/// A consumer whose producers can hold more than `default_capacity`
+/// tickets at once declares `pub const inbox_capacity` on `Message`, up to
+/// `max_capacity`.
 /// Example: `const Inbox = GenericInbox(ClientEvent);`
 pub fn Type(comptime Message: type) type {
     return struct {
         const Inbox = @This();
         const Field = std.meta.FieldEnum(Message);
         const SlotState = enum { free, reserved, ready };
-        pub const capacity = 64;
+        pub const default_capacity = 64;
+        /// Tickets name their slot in a byte.
+        pub const max_capacity = std.math.maxInt(u8) + 1;
+        pub const capacity: usize = if (@hasDecl(Message, "inbox_capacity")) Message.inbox_capacity else default_capacity;
+
+        comptime {
+            std.debug.assert(capacity > 0 and capacity <= max_capacity);
+        }
 
         io: std.Io,
         wakeup: Wakeup = .{},
