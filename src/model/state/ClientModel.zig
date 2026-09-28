@@ -11,6 +11,7 @@ const Tabs = @import("../workspace/Tabs.zig");
 const Config = @import("Config.zig");
 const Panes = @import("../panes/Panes.zig");
 const LayoutSnapshot = @import("../workspace/LayoutSnapshot.zig");
+const PaneBottomReservation = @import("../workspace/PaneBottomReservation.zig");
 const PendingLayoutRestore = @import("../workspace/PendingLayoutRestore.zig");
 const tab_layout = @import("../workspace/tab_layout.zig");
 const tab_label = @import("../workspace/tab_label.zig");
@@ -114,6 +115,10 @@ pane_gaps: bool = true,
 pending_layout_restore: ?PendingLayoutRestore = null,
 /// Geometry of the most recently queried tab, see `tab_layout.snapshot`.
 layout_snapshot: LayoutSnapshot = .{},
+/// The rows the attachment shelf asks for below one pane. Every layout
+/// snapshot applies it, so the pane sizes sent to the runtime, the drawn
+/// panes and pointer targeting agree on the same geometry.
+pane_bottom_reservation: ?PaneBottomReservation = null,
 layout_snapshot_tab: core.TabId = .invalid,
 saved_layouts: SavedLayouts = .{},
 clipboard: ClipboardCaptureState = .{},
