@@ -215,6 +215,8 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `pi_rpc` | a client for Pi's JSONL RPC mode, generic over who asked |
 | `console` | the controlling terminal: raw mode, resize notifications, writer, escape sequences, a screen that sends only changed cells, and decoding the keys, mouse reports and replies it sends |
 | `mailbox` | the bounded inbox between worker tasks and one consumer |
+| `slabheap` | the process allocator of musl release builds: size-class slabs whose threads reuse memory freed on any thread before mapping more |
+| `cblocks` | `malloc`-style blocks from a Zig allocator for C libraries whose hooks free by pointer alone |
 | `animate` | springs, transitions and the frame clock that advances them |
 | `gfx` | rectangles, colors, quads, the quad list a frame is built in, and one-axis layout |
 | `unicode` | grapheme widths from the emulator's tables; builds may bind another provider |

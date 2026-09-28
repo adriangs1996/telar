@@ -55,7 +55,7 @@ pub fn loadSource(context: LoadContext, spec: SourceInput) !*Generation {
     generation.* = .{
         .gpa = context.gpa,
         .number = spec.number,
-        .vm = try lua.Vm.init(context.io, .{
+        .vm = try lua.Vm.init(context.io, context.gpa, .{
             .memory = data.config_values.default_memory_limit,
             .instructions = data.config_values.default_load_instruction_limit,
             .deadline_after_ns = (Limits{}).deadline_after_ns,

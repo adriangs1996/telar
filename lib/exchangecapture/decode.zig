@@ -1,6 +1,7 @@
 //! Bounded content decoding for completed captures.
 
 const std = @import("std");
+const cblocks = @import("cblocks");
 
 const c = @cImport({
     @cInclude("brotli/decode.h");
@@ -113,6 +114,18 @@ fn decodeOne(gpa: std.mem.Allocator, input: DecodeInput) !Result {
     return error.UnknownEncoding;
 }
 
+// Brotli's decoder state and window come from the caller's allocator, not
+// libc's `malloc`, like every other allocation of a capture.
+fn brotliAlloc(allocator: ?*anyopaque, bytes: usize) callconv(.c) ?*anyopaque {
+    const gpa: *const std.mem.Allocator = @ptrCast(@alignCast(allocator.?));
+    return cblocks.alloc(gpa.*, bytes);
+}
+
+fn brotliFree(allocator: ?*anyopaque, pointer: ?*anyopaque) callconv(.c) void {
+    const gpa: *const std.mem.Allocator = @ptrCast(@alignCast(allocator.?));
+    cblocks.free(gpa.*, pointer);
+}
+
 fn decodeFlate(gpa: std.mem.Allocator, input: DecodeInput, container: std.compress.flate.Container) !Result {
     var source: std.Io.Reader = .fixed(input.input);
     var decoder: std.compress.flate.Decompress = .init(&source, container, &.{});
@@ -126,7 +139,8 @@ fn decodeBrotli(gpa: std.mem.Allocator, input: DecodeInput) !Result {
         std.crypto.secureZero(u8, temporary);
         gpa.free(temporary);
     }
-    const state = c.BrotliDecoderCreateInstance(null, null, null) orelse return error.BrotliOutOfMemory;
+    var hooks_allocator = gpa;
+    const state = c.BrotliDecoderCreateInstance(&brotliAlloc, &brotliFree, &hooks_allocator) orelse return error.BrotliOutOfMemory;
     defer c.BrotliDecoderDestroyInstance(state);
     var available_in = input.input.len;
     var next_in: [*c]const u8 = input.input.ptr;

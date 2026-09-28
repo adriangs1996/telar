@@ -30,7 +30,7 @@ pub const RelayConfiguration = @import("RelayConfiguration.zig");
 /// Builds the route for one relay direction.
 ///
 /// ```zig
-/// const request = relayOptions(.request, .{ .watched_routes = &inference_routes });
+/// const request = relayOptions(.request, .{ .gpa = gpa, .watched_routes = &inference_routes });
 /// ```
 pub fn relayOptions(direction: relay_mod.Direction, configuration: RelayConfiguration) RelayOptions {
     const route: Route = switch (direction) {
@@ -40,6 +40,7 @@ pub fn relayOptions(direction: relay_mod.Direction, configuration: RelayConfigur
 
     return .{
         .route = route,
+        .gpa = configuration.gpa,
         .watched_routes = configuration.watched_routes,
     };
 }
@@ -50,6 +51,7 @@ pub fn relayOptions(direction: relay_mod.Direction, configuration: RelayConfigur
 /// ```zig
 /// const stats = relay(session, .{
 ///     .route = .{ .from = .child, .to = .origin, .direction = .request },
+///     .gpa = gpa,
 ///     .watched_routes = &inference_routes,
 /// }, &sink);
 /// ```
@@ -61,6 +63,7 @@ pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
             .from = route.from,
             .to = route.to,
             .direction = route.direction,
+            .gpa = options.gpa,
             .watched_routes = options.watched_routes,
         },
         sink,
@@ -69,12 +72,15 @@ pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
 
 test "relay options map each direction to its route" {
     const watched = [_]RouteMatch{.{ .method = "POST", .paths = &.{"/v1/messages"} }};
-    const request = relayOptions(.request, .{ .watched_routes = &watched });
+    const request = relayOptions(.request, .{
+        .gpa = std.testing.allocator,
+        .watched_routes = &watched,
+    });
     try std.testing.expectEqual(Session.Side.child, request.route.from);
     try std.testing.expectEqual(Session.Side.origin, request.route.to);
     try std.testing.expect(request.watched_routes.ptr == &watched);
 
-    const response = relayOptions(.response, .{});
+    const response = relayOptions(.response, .{ .gpa = std.testing.allocator });
     try std.testing.expectEqual(Session.Side.origin, response.route.from);
     try std.testing.expectEqual(Session.Side.child, response.route.to);
     try std.testing.expectEqual(@as(usize, 0), response.watched_routes.len);

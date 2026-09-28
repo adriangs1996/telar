@@ -60,6 +60,9 @@ const specs = [_]Spec{
         .name = "mailbox",
     },
     .{
+        .name = "slabheap",
+    },
+    .{
         .name = "pacing",
         .libc = true,
     },
@@ -72,7 +75,11 @@ const specs = [_]Spec{
         .posix = true,
     },
     .{
+        .name = "cblocks",
+    },
+    .{
         .name = "sqlite",
+        .imports = &.{"cblocks"},
         .libc = true,
         .system_libraries = &.{"sqlite3"},
         .host_only = true,
@@ -151,12 +158,13 @@ const specs = [_]Spec{
     },
     .{
         .name = "exchangecapture",
+        .imports = &.{"cblocks"},
         .libc = true,
         .system_libraries = &.{"brotlidec"},
     },
     .{
         .name = "httprelay",
-        .imports = &.{ "localca", "h2frames" },
+        .imports = &.{ "localca", "h2frames", "cblocks" },
         .libc = true,
         .system_libraries = &.{"nghttp2"},
     },

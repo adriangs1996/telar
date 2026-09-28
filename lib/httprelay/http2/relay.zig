@@ -6,6 +6,7 @@
 const h2frames = @import("h2frames");
 const framing = h2frames.framing;
 const Observer = @import("Observer.zig");
+const header_memory = @import("header_memory.zig");
 const std = @import("std");
 const BodyCollector = @import("BodyCollector.zig");
 const RouteMatch = @import("../RouteMatch.zig");
@@ -67,7 +68,8 @@ pub const HeaderKind = enum { none, headers, push_promise };
 /// const stats = relay(session, route, &sink);
 /// ```
 pub fn relay(session: anytype, route: Route, sink: anytype) Stats {
-    var observer = Observer.init(route.watched_routes, route.direction);
+    var memory = header_memory.of(&route.gpa);
+    var observer = Observer.init(&memory, route.watched_routes, route.direction);
     defer observer.deinit();
     var preface_offset: usize = 0;
     var buffer: [32 * 1024]u8 = undefined;
@@ -154,7 +156,8 @@ test "HTTP2 observer exposes request DATA across every two-chunk split" {
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
-        var observer = Observer.init(&claude_routes, .request);
+        var memory = header_memory.of(&std.testing.allocator);
+        var observer = Observer.init(&memory, &claude_routes, .request);
         defer observer.deinit();
 
         observer.observe(wire[0..split], &collector);
@@ -178,7 +181,8 @@ test "HTTP2 observer finishes a bodyless request across every two-chunk split" {
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
-        var observer = Observer.init(&claude_routes, .request);
+        var memory = header_memory.of(&std.testing.allocator);
+        var observer = Observer.init(&memory, &claude_routes, .request);
         defer observer.deinit();
 
         observer.observe(wire[0..split], &collector);
@@ -199,7 +203,8 @@ test "HTTP2 observer exposes DATA payload across every two-chunk split" {
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
-        var observer = Observer.init(&claude_routes, .response);
+        var memory = header_memory.of(&std.testing.allocator);
+        var observer = Observer.init(&memory, &claude_routes, .response);
         defer observer.deinit();
 
         observer.observe(wire[0..split], &collector);
@@ -248,7 +253,8 @@ test "HTTP2 observer attaches the decoded final status to response DATA" {
     writeFrameHeader(data[0..framing.header_bytes], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 17 });
     @memcpy(data[framing.header_bytes..], payload);
     var collector: BodyCollector = .{};
-    var observer = Observer.init(&claude_routes, .response);
+    var memory = header_memory.of(&std.testing.allocator);
+    var observer = Observer.init(&memory, &claude_routes, .response);
     defer observer.deinit();
 
     observer.observe(&header, &collector);
@@ -276,7 +282,8 @@ test "HTTP2 observer excludes the pad length and padding from DATA payload" {
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
-        var observer = Observer.init(&claude_routes, .response);
+        var memory = header_memory.of(&std.testing.allocator);
+        var observer = Observer.init(&memory, &claude_routes, .response);
         defer observer.deinit();
 
         observer.observe(wire[0..split], &collector);
@@ -293,7 +300,8 @@ test "HTTP2 observer drops invalid DATA padding from observation only" {
     writeFrameHeader(wire[0..framing.header_bytes], .{ .length = 2, .frame_type = frame_data, .flags = flag_padded | flag_end_stream, .stream_id = 11 });
     wire[framing.header_bytes] = 2;
     var collector: BodyCollector = .{};
-    var observer = Observer.init(&claude_routes, .response);
+    var memory = header_memory.of(&std.testing.allocator);
+    var observer = Observer.init(&memory, &claude_routes, .response);
     defer observer.deinit();
 
     observer.observe(&wire, &collector);
@@ -350,7 +358,8 @@ test "HPACK status turns a completed HTTP2 error stream into failure" {
         }
     };
     var collector: Collector = .{};
-    var observer = Observer.init(&claude_routes, .response);
+    var memory = header_memory.of(&std.testing.allocator);
+    var observer = Observer.init(&memory, &claude_routes, .response);
     defer observer.deinit();
     for (frames[0 .. 2 * framing.header_bytes + encoded_len]) |byte|
         observer.observe(&.{byte}, &collector);
@@ -376,7 +385,8 @@ test "request trailers do not emit a second request start" {
         }
     };
     var collector: Collector = .{};
-    var observer = Observer.init(&claude_routes, .request);
+    var memory = header_memory.of(&std.testing.allocator);
+    var observer = Observer.init(&memory, &claude_routes, .request);
     defer observer.deinit();
     var request_fields = [_]c.nghttp2_nv{
         .{ .name = @constCast(":method"), .value = @constCast("POST"), .namelen = 7, .valuelen = 4, .flags = 0 },
@@ -451,7 +461,8 @@ test "HTTP2 requests outside the watched routes start as auxiliary" {
         }
     };
     var collector: Collector = .{};
-    var observer = Observer.init(&openai_routes, .request);
+    var memory = header_memory.of(&std.testing.allocator);
+    var observer = Observer.init(&memory, &openai_routes, .request);
     defer observer.deinit();
     observer.observe(&header, &collector);
     observer.observe(block[0..@intCast(block_len)], &collector);
@@ -477,7 +488,8 @@ test "HPACK dynamic table survives padded response blocks" {
         }
     };
     var collector: Collector = .{};
-    var observer = Observer.init(&claude_routes, .response);
+    var memory = header_memory.of(&std.testing.allocator);
+    var observer = Observer.init(&memory, &claude_routes, .response);
     defer observer.deinit();
     for (1..3) |stream_id| {
         var fields = [_]c.nghttp2_nv{

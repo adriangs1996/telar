@@ -99,6 +99,7 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
     if (negotiated_h2) {
         var connection = H2Connection.init(.{
             .io = io,
+            .gpa = dependencies.tls.gpa,
             .session = session,
             .exchange = &exchange,
             .captures = dependencies.captures,

@@ -26,10 +26,21 @@ block: [relay.max_header_block_bytes]u8 = undefined,
 block_len: usize = 0,
 streams: Tracker = .{},
 
-pub fn init(watched_routes: []const RouteMatch, direction: relay.Direction) Observer {
+/// Starts observing one direction. The inflater allocates through `memory`
+/// (see `header_memory.of`), which must outlive the observer.
+///
+/// ```zig
+/// var memory = header_memory.of(&gpa);
+/// var observer = Observer.init(&memory, routes, .request);
+/// defer observer.deinit();
+/// ```
+pub fn init(memory: *relay.c.nghttp2_mem, watched_routes: []const RouteMatch, direction: relay.Direction) Observer {
     std.debug.assert(watched_routes.len <= 64);
-    var observer: Observer = .{ .watched_routes = watched_routes, .direction = direction };
-    if (relay.c.nghttp2_hd_inflate_new(&observer.inflater) != 0 or
+    var observer: Observer = .{
+        .watched_routes = watched_routes,
+        .direction = direction,
+    };
+    if (relay.c.nghttp2_hd_inflate_new2(&observer.inflater, memory) != 0 or
         relay.c.nghttp2_hd_inflate_change_table_size(
             observer.inflater,
             relay.max_header_block_bytes,

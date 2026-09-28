@@ -2,6 +2,7 @@
 //! configuration VM and the plugin host.
 const lua_api = @import("lua-api");
 const std = @import("std");
+const Vm = @import("Vm.zig");
 
 pub const max_input_bytes = 1024 * 1024;
 const max_depth: u8 = 64;
@@ -32,7 +33,7 @@ pub fn decode(state_optional: ?*lua_api.c.lua_State) callconv(.c) c_int {
         return raise(state, "JSON input is too large");
     }
 
-    var parsed = std.json.parseFromSlice(std.json.Value, std.heap.c_allocator, text[0..len], .{
+    var parsed = std.json.parseFromSlice(std.json.Value, Vm.of(state).gpa, text[0..len], .{
         .max_value_len = max_input_bytes,
     }) catch return raise(state, "invalid JSON");
     lua_api.c.lua_pushcclosure(state, pushDocument, 0);

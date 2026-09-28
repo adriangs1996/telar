@@ -243,26 +243,83 @@ statically. What differs from glibc, checked in this code:
   it, so it supports Linux 5.10 and later; `statx` alone would need only
   4.11. Every run described here used OrbStack's 7.0 kernel; no older
   kernel was tried.
-- `malloc` is musl's. In ReleaseFast the runtime's general allocator is
-  libc's, and SQLite, Lua and the `std.Io` thread pool call `malloc`
-  directly. Measured in one Debian 12 container with 4 CPUs, feeding the
-  runtime 150,000 commands through `telar history import`, 1000 at a time,
-  with aarch64 builds of one commit that differ only as named, two runs
-  each:
+- `malloc` is not musl's. Zig 0.16 links its own `malloc` into musl
+  builds (`c/malloc.zig` in its lib directory), a wrapper over
+  `std.heap.SmpAllocator`; the binary's `malloc` is `c.malloc.malloc`.
+  That allocator keeps one free list per thread slot, never unmaps a slab
+  of 64 KiB or less, and searches only one other slot before mapping a
+  new slab. The runtime allocates a history batch on one thread and frees
+  it on the history worker, and threads move between slots under
+  contention, so freed memory piled up on slots the allocating threads
+  never searched: at 150,000 commands a counting build had 72 MiB of
+  slabs, most of it on free lists. Its own symbol cannot be replaced
+  either: a second `export fn malloc` collides inside the Zig compilation,
+  and a C definition is not used by Zig's calls.
 
-  | Build | Resident at the end | Runtime CPU |
+  Release builds for musl therefore start through `mainOnSlabHeap` in
+  `src/main.zig`, with `lib/slabheap` as the process's general allocator
+  and its `std.Io`'s. That allocator is the same one, except that a thread
+  whose slot is empty visits every other slot before it maps a slab,
+  spinning up to 128 times for a busy one, and maps outside every lock.
+  The C libraries allocate from the caller's allocator, not `malloc`:
+  SQLite through `sqlite.routeMemory`, and Lua, brotli and nghttp2 through
+  the hooks each takes, over `lib/cblocks`. Debug builds, glibc and macOS
+  keep the standard start, where the general allocator is libc's or Zig's
+  leak-checking one.
+
+  Measured in one Debian 12 container with 4 CPUs, feeding the runtime
+  commands through `telar history import`, 1000 at a time, with aarch64
+  ReleaseFast builds, two runs each, alternating builds. The "before" rows
+  come from an earlier batch of the same binary:
+
+  | Build | Commands | Resident at the end | Runtime CPU |
+  | --- | --- | --- | --- |
+  | glibc | 150,000 | 21.2 and 21.2 MiB | 23.0 and 23.4 s |
+  | musl, Zig's `malloc` (before) | 150,000 | 118 and 188 MiB | 24.0 and 24.0 s |
+  | musl, `slabheap` | 150,000 | 19.4 and 19.4 MiB | 23.2 and 23.0 s |
+  | glibc | 300,000 | 20.6 and 20.8 MiB | 66.2 and 66.2 s |
+  | musl, Zig's `malloc` (before) | 300,000 | 85 and 80 MiB | 65.7 and 65.4 s |
+  | musl, `slabheap` | 300,000 | 18.8 and 19.2 MiB | 66.7 and 67.3 s |
+
+  Searches took 0.01 to 0.03 s for 20 in every build. Before, resident
+  memory varied from run to run and still grew by 5 to 19 MiB per 50,000
+  commands between 200,000 and 300,000. With `slabheap`, anonymous memory
+  went from 10,132 to 10,164 KiB between 150,000 and 300,000 commands in
+  one run and from 10,368 to 10,560 KiB in the other. SQLite reported
+  2.1 MiB in use from the first 10,000 commands on and a high-water mark
+  of 4.2 MiB.
+
+  How long a thread may wait for a busy slot was measured with a scratch
+  program on the macOS host (8 cores, 1 µs clock), three runs each: one
+  thread allocating 400 batches of 2000 blocks of 16 to 3000 bytes, which
+  six or 24 threads free.
+
+  | Busy slot | Worst allocation | 99.99th percentile | Slabs mapped |
+  | --- | --- | --- | --- |
+  | waited for without bound | 277 to 477 µs | 2 to 85 µs | 92 to 373 |
+  | skipped after 128 spins | 16 to 30 µs | 7 µs | 103 to 147 |
+
+  With six freeing threads and ten times as many batches, 128 spins mapped
+  214 to 572 slabs and the unbounded wait 438 to 560. In the container,
+  where up to 25 threads share 4 CPUs, the worst allocation reached 43 ms
+  with 128 spins and 51 ms with the wait: the allocating thread itself was
+  descheduled.
+
+  The proxy's pattern was measured apart, since no end-to-end proxy load
+  ran: a scratch aarch64 musl program in the same container ran six
+  threads that each, 60,000 times, encoded and decoded an HPACK block of
+  twelve headers through nghttp2 with `header_memory` hooks, decoded a
+  brotli body through `exchangecapture.decode`, and allocated a capture
+  record of 64 to 8192 bytes, two runs per allocator:
+
+  | Capture records freed by | Zig's `malloc` | `slabheap` |
   | --- | --- | --- |
-  | glibc, `c_allocator` | 21 and 21 MiB | 25.6 and 23.5 s |
-  | musl, `c_allocator` (the release) | 98 and 113 MiB | 31.5 and 28.0 s |
-  | musl, `std.heap.smp_allocator` as the runtime's allocator | 100 and 116 MiB | 26.7 and 31.9 s |
+  | one consumer thread | 2,282 and 1,855 MiB, still growing | 2.7 and 3.0 MiB |
+  | the thread that made them | 198 and 205 MiB | 1.6 and 1.6 MiB |
 
-  Searches took 0.01 to 0.02 s for 20 in every build. glibc stays flat,
-  so the growth is not a leak in this workload; under musl the heap grows
-  with the history written (37 to 45 MiB after 50,000 commands in an
-  earlier run of an older commit). Zig's allocator does not change it, so
-  the memory sits with a direct `malloc` caller; which one was not
-  measured, nor whether it levels off later. A runtime that serves months
-  of history should be watched for it.
+  Both allocators took 9.3 to 11.2 s. The second row has no handoff
+  between threads at all: threads moving between slots under contention
+  are enough to strand memory under Zig's `malloc`.
 
 The binary was also started on Alpine 3.22, where `telar server`,
 `telar runtime status`, `telar agent list` and `telar server stop` worked

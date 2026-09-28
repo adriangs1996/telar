@@ -26,6 +26,7 @@ pub fn run(self: *Connection) void {
     const options = self.options;
     var relay: RelayContext = .{
         .io = options.io,
+        .gpa = options.gpa,
         .session = options.session,
         .exchange = options.exchange,
         .captures = options.captures,
@@ -36,6 +37,7 @@ pub fn run(self: *Connection) void {
 
 const H2Options = struct {
     io: std.Io,
+    gpa: std.mem.Allocator,
     session: *Session,
     exchange: *Exchange,
     captures: ?*Producer = null,

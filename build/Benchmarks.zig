@@ -51,6 +51,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
         .optimize = bench_optimize,
     });
     bench_libraries.addImports(bench_core);
+    bench_libraries.addImports(bench_lua);
     const bench_backend = b.createModule(.{
         .root_source_file = b.path("src/backend/backend.zig"),
         .target = app.modules.target,

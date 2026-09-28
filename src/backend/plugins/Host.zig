@@ -22,7 +22,7 @@ pub fn initWithResources(io: std.Io, gpa: std.mem.Allocator, entry_path: []const
     var host: Host = .{
         .io = io,
         .gpa = gpa,
-        .vm = try lua.Vm.init(io, .{
+        .vm = try lua.Vm.init(io, gpa, .{
             .memory = 64 * 1024 * 1024,
             .instructions = 5_000_000,
             .deadline_after_ns = 200 * std.time.ns_per_ms,
