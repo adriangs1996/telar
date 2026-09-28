@@ -321,10 +321,7 @@ pub fn mouseState(self: *const Pane) core.Mouse {
 pub fn dumpText(self: *const Pane, request: TextRequest, storage: []u8) TextDump {
     const screen: *const vt.Screen = self.terminal.screens.active;
     const pages = &screen.pages;
-    const total: usize = switch (request.source) {
-        .screen => pages.rows,
-        .recent => pages.total_rows,
-    };
+    const total = self.textRows(request.source);
     const wanted = @min(@as(usize, request.rows), total);
     if (wanted == 0) {
         return .{ .len = 0, .truncated = false };
@@ -347,6 +344,20 @@ pub fn dumpText(self: *const Pane, request: TextRequest, storage: []u8) TextDump
     };
 
     return tail.finish();
+}
+
+/// The rows `dumpText` can read from `source`: the screen, or the retained
+/// scrollback and the screen.
+///
+/// ```zig
+/// const dropped = pane.textRows(.recent) > kept_rows;
+/// ```
+pub fn textRows(self: *const Pane, source: core.PaneTextSource) usize {
+    const pages = &self.terminal.screens.active.pages;
+    return switch (source) {
+        .screen => pages.rows,
+        .recent => pages.total_rows,
+    };
 }
 
 /// A writer into a fixed buffer that keeps the last bytes written: once the
