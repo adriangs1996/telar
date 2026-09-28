@@ -44,8 +44,15 @@ const specs = [_]Spec{
         .name = "jsonl",
         .libc = true,
     },
+    // Before its importers: a library imports only those declared above it.
+    .{
+        .name = "privatefile",
+        .libc = true,
+        .posix = true,
+    },
     .{
         .name = "localsocket",
+        .imports = &.{"privatefile"},
         .libc = true,
         .posix = true,
     },
@@ -82,6 +89,7 @@ const specs = [_]Spec{
     },
     .{
         .name = "editorremote",
+        .imports = &.{"privatefile"},
         .libc = true,
         .posix = true,
     },
@@ -184,11 +192,6 @@ const specs = [_]Spec{
     },
     .{
         .name = "touchtrace",
-    },
-    .{
-        .name = "privatefile",
-        .libc = true,
-        .posix = true,
     },
 };
 

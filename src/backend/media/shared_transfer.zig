@@ -15,10 +15,8 @@ const PreparedTransfer = @import("PreparedTransfer.zig");
 const GraphicsBudget = @import("GraphicsBudget.zig");
 const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
 const PreparedTransfers = @import("PreparedTransfers.zig");
-
-const native = @cImport({
-    @cInclude("sys/stat.h");
-});
+const privatefile = @import("privatefile");
+const Inode = privatefile.Inode;
 
 const shm_supported =
     builtin.os.tag != .windows and !builtin.abi.isAndroid() and builtin.link_libc;
@@ -123,12 +121,8 @@ pub fn mapChildObject(encoded_name: []const u8, byte_len: usize) ?ChildObject {
         return null;
     }
     defer _ = std.c.close(fd);
-    var stat: native.struct_stat = undefined;
-    if (native.fstat(fd, &stat) != 0) {
-        return null;
-    }
-
-    if (stat.st_size < 0 or @as(u64, @intCast(stat.st_size)) < byte_len) {
+    const inode = Inode.fromDescriptor(fd) catch return null;
+    if (inode.size < byte_len) {
         return null;
     }
     const pixels = std.posix.mmap(null, byte_len, .{ .READ = true }, std.c.MAP{ .TYPE = .SHARED }, fd, 0) catch
@@ -164,12 +158,12 @@ fn openChildFile(encoded_path: []const u8, byte_len: usize) ?std.c.fd_t {
     if (fd < 0) {
         return null;
     }
-    var stat: native.struct_stat = undefined;
-    const acceptable = native.fstat(fd, &stat) == 0 and
-        std.c.S.ISREG(@intCast(stat.st_mode)) and
-        stat.st_uid == std.c.getuid() and
-        stat.st_size >= 0 and @as(u64, @intCast(stat.st_size)) >= byte_len;
-    if (!acceptable) {
+    const inode = Inode.fromDescriptor(fd) catch {
+        _ = std.c.close(fd);
+        return null;
+    };
+
+    if (inode.kind() != .regular or inode.owner != std.c.getuid() or inode.size < byte_len) {
         _ = std.c.close(fd);
         return null;
     }

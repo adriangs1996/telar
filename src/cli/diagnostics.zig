@@ -3,9 +3,10 @@ const std = @import("std");
 const Options = @import("arguments/DiagnosticsOptions.zig");
 const RuntimeConnector = client.RuntimeConnector;
 const Log = @import("DiagnosticLog.zig");
+const privatefile = @import("privatefile");
+const Inode = privatefile.Inode;
 const native = @cImport({
     @cInclude("fcntl.h");
-    @cInclude("sys/stat.h");
     @cInclude("unistd.h");
 });
 const max_files = 64;
@@ -83,13 +84,12 @@ fn execute(init: std.process.Init, options: Options) !void {
 
         const file: std.Io.File = .{ .handle = fd, .flags = .{ .nonblocking = true } };
         defer file.close(init.io);
-        var stat: native.struct_stat = undefined;
-        if (native.fstat(fd, &stat) != 0 or (stat.st_mode & native.S_IFMT) != native.S_IFREG or stat.st_uid != native.getuid()) {
+        const inode = Inode.fromDescriptor(fd) catch return error.UnsafeDiagnosticLog;
+        if (inode.kind() != .regular or inode.owner != native.getuid()) {
             return error.UnsafeDiagnosticLog;
         }
 
-        const size = std.math.cast(u64, stat.st_size) orelse return error.InvalidLogSize;
-        const offset = size -| Log.max_tail_bytes;
+        const offset = inode.size -| Log.max_tail_bytes;
         var bytes: [Log.max_tail_bytes]u8 = undefined;
         const read = try file.readPositionalAll(init.io, &bytes, offset);
         const start = if (offset != 0) (std.mem.indexOfScalar(u8, bytes[0..read], '\n') orelse return error.DiagnosticLineTooLong) + 1 else 0;
