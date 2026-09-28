@@ -268,3 +268,16 @@ test("OpenCode trims every question but the first from an oversized prompt", asy
   assert.equal(asked.blocked, "question");
   assert.deepEqual(asked.tool_input, { questions: [{ question: "Question 0?" }] });
 });
+
+test("OpenCode renews an open prompt with its request and a reply names the prompt still open", async () => {
+  const f = await fixture();
+  await f.hooks["chat.message"]({ sessionID: root });
+  await f.event("permission.asked", { id: "per_1", sessionID: root, permission: "bash", metadata: { command: "rm -rf build" } });
+  await f.event("permission.asked", { id: "per_2", sessionID: root, permission: "edit", metadata: { filepath: "/work/proj/a.ts" } });
+  f.tick();
+  await f.event("permission.replied", { sessionID: root, requestID: "per_2", reply: "once" });
+  const [, , second, renewed, replied] = f.payloads();
+  assert.deepEqual([second.tool_name, second.tool_input], ["edit", { filepath: "/work/proj/a.ts" }]);
+  assert.deepEqual([renewed.event, renewed.blocked, renewed.tool_name, renewed.tool_input], ["state_snapshot", "permission", "edit", { filepath: "/work/proj/a.ts" }]);
+  assert.deepEqual([replied.event, replied.blocked, replied.tool_name, replied.tool_input], ["permission.replied", "permission", "bash", { command: "rm -rf build" }]);
+});

@@ -231,12 +231,12 @@ schema.report_agent, schema.report_agent_title or schema.report_agent_command
 | `session.status` `busy` or `retry` | `working`, once per change: OpenCode repeats `busy` several times a turn |
 | `session.status` `idle` | `ready` (projects as `done` until seen), open prompts forgotten |
 | `permission.asked` | `blocked`, reason `permission`, event `» <permission> <argument>` |
-| `question.asked` | `blocked`, reason `question`, event: the first question |
-| `permission.replied`, `question.replied`, `question.rejected` | `blocked` while another prompt stays open, otherwise the busy state |
+| `question.asked` | `blocked`, reason `question`, event: the first question; an open permission keeps deciding |
+| `permission.replied`, `question.replied`, `question.rejected` | `blocked`, naming the prompt, while another prompt stays open (the newest permission, else the newest question), otherwise the busy state |
 | `tool.execute.before` hook | `working`, event `» <tool> <argument>`, or nothing while a prompt is open; a mapped `bash` call opens a running command row |
 | `tool.execute.after` hook | the matching command row is completed with `metadata.exit` |
 | `session.updated` of the root session | its title, once per change; OpenCode's default title clears it |
-| renewal | the current state every 30 seconds while busy or blocked |
+| renewal | the current state every 30 seconds while busy or blocked, with the open prompt's request: the event line follows the latest report |
 | `dispose` of the last instance | `exited`; the plugin forgets the turn and its prompts |
 
 Captured on OpenCode 1.18.32 with a plugin that logged every event and hook
