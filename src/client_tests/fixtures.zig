@@ -174,7 +174,6 @@ pub fn testingConfigAdoption(number: u64, changed: bool) !client_module.ConfigAd
         \\local config = telar.config({ api_version = 2 })
         \\config.client = {
         \\  prefix = "ctrl+s",
-        \\  icons = "nerd-font",
         \\  theme = telar.theme({ base = "catppuccin" }),
         \\  sidebar = { visible = false },
         \\  pane_gaps = false,

@@ -43,6 +43,7 @@ const link_opening = @import("../links/link_opening.zig");
 const notifications = @import("../notifications/notifications.zig");
 const plugin_actions = @import("../plugins/plugin_actions.zig");
 const client_telemetry = @import("../resources/client_telemetry.zig");
+const retired_config = @import("../config/retired_config.zig");
 
 /// Jobs one event can start: most kinds keep at most one in flight, and
 /// system notices arrive in short bursts.
@@ -198,7 +199,6 @@ pub fn init(self: *Client, params: ClientInit) !void {
         .sidebar_width = data.sidebar.default_width,
         .config = if (snapshot) |value| config_adoption.configFrom(value) else .{},
         .theme = params.options.theme,
-        .icon_theme = params.options.icon_theme,
         .window_title = if (snapshot) |value| value.windowTitle() else "",
     });
     errdefer self.model.deinit();
@@ -212,6 +212,9 @@ pub fn init(self: *Client, params: ClientInit) !void {
     try self.model.to_runtime.reservePayloads(gpa);
     _ = data.sidebar.setVisible(&self.model, params.options.sidebar_visible);
     try client_telemetry.start(self);
+    if (snapshot) |value| {
+        try retired_config.announce(self, value.retired);
+    }
 }
 
 /// The key bindings of the live configuration, borrowed from its

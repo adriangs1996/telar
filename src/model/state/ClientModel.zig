@@ -82,7 +82,6 @@ config: Config = .{},
 /// The color and icon themes the chrome draws with. Changing either
 /// advances `chrome_revision`.
 theme: model_data.ColorTheme = model_data.theme_support.default_theme,
-icon_theme: model_data.icons.Theme = .unicode,
 startup: model_data.StartupState = .{},
 /// Whether the runtime is reachable; the chrome shows it and pane input
 /// waits for it.
@@ -230,7 +229,6 @@ pub fn initInto(model: *ClientModel, gpa: std.mem.Allocator, initial: InitialCli
         .gpa = gpa,
         .config = initial.config,
         .theme = initial.theme,
-        .icon_theme = initial.icon_theme,
         .pane_gaps = initial.pane_gaps,
         .configuration_generation = initial.configuration_generation,
         .bars = .init(initial.bars),

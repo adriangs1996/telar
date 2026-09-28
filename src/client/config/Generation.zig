@@ -528,18 +528,11 @@ fn parseClient(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !v
     }
     lua_value.pop(state, 1);
 
+    // The terminal client chose Nerd Font or Unicode icons here; the window
+    // draws its own, so the key is ignored and reported.
     _ = lua_api.c.lua_getfield(state, absolute, "icons");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
-        const value = lua_value.string(state, -1) orelse {
-            lua_value.pop(state, 1);
-            diagnostic.set("config.client.icons must be a string", .{});
-            return error.InvalidConfig;
-        };
-        self.snapshot.icon_theme = data.icons.Theme.parse(value) catch {
-            diagnostic.set("unknown config.client.icons: {s}", .{value});
-            lua_value.pop(state, 1);
-            return error.InvalidConfig;
-        };
+        self.snapshot.retired.insert(.icons);
     }
     lua_value.pop(state, 1);
 
@@ -1053,19 +1046,17 @@ fn parseInputOptions(self: *Generation, index: c_int, diagnostic: *data.Diagnost
         return error.InvalidConfig;
     }
     // The terminal client waited this long for the rest of an escape
-    // sequence; the window receives whole keys, so a file that still sets
-    // it is told to drop it.
+    // sequence; the window receives whole keys, so the key is ignored and
+    // reported.
     _ = lua_api.c.lua_getfield(state, absolute, "escape_timeout_ms");
-    const escape_timeout_set = lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL;
-    lua_value.pop(state, 1);
-    if (escape_timeout_set) {
-        diagnostic.set("config.client.input.escape_timeout_ms left with the terminal client; remove it", .{});
-        return error.InvalidConfig;
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        self.snapshot.retired.insert(.escape_timeout);
     }
+    lua_value.pop(state, 1);
 
     try lua_value.ensureOnlyFields(state, .{
         .index = absolute,
-        .allowed = &.{"sequence_timeout_ms"},
+        .allowed = &.{ "escape_timeout_ms", "sequence_timeout_ms" },
         .path = "config.client.input",
     }, diagnostic);
     self.snapshot.input_sequence_timeout_ns = try lua_value.optionalMilliseconds(state, .{
@@ -1127,14 +1118,12 @@ fn parseSidebar(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !
     lua_value.pop(state, 1);
 
     // The terminal client chose how to draw its sidebar here; the window
-    // draws its own, so a file that still sets it is told to drop it.
+    // draws its own, so the key is ignored and reported.
     _ = lua_api.c.lua_getfield(state, absolute, "renderer");
-    const renderer_set = lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL;
-    lua_value.pop(state, 1);
-    if (renderer_set) {
-        diagnostic.set("config.client.sidebar.renderer left with the terminal client; remove it", .{});
-        return error.InvalidConfig;
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        self.snapshot.retired.insert(.sidebar_renderer);
     }
+    lua_value.pop(state, 1);
 }
 
 fn parseBindings(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {

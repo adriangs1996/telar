@@ -40,7 +40,7 @@ both messages run on the observation budget.
 ## What a line holds
 
 `client_telemetry.capture` copies the active tab, tab and pane counts, the
-focused pane, theme and icon names, outbox counters, cell size and the Lua
+focused pane, theme name, outbox counters, cell size and the Lua
 meter; `format` adds the counters components record in `Metrics` (input
 events and bytes, key lease overflows, pointer events, runtime messages and
 bytes, graphics messages and images, applied frames, cells, spans and

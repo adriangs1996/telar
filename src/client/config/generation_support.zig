@@ -248,7 +248,7 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expect(generation.snapshot.sound.enabled);
     try std.testing.expect(!generation.snapshot.sound.ready);
     try std.testing.expect(generation.snapshot.sound.needs_input);
-    try std.testing.expectEqual(data.icons.Theme.nerd_font, generation.snapshot.icon_theme);
+    try std.testing.expect(generation.snapshot.retired.contains(.icons));
     try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
     try std.testing.expectEqualDeep(
         cellgrid.Color.rgb(.{ 1, 2, 3 }),
@@ -381,18 +381,6 @@ test "client config rejects non-boolean sound settings" {
     );
     try std.testing.expectEqualStrings(
         "config.client.sound.ready must be a boolean",
-        diagnostic.message(),
-    );
-}
-
-test "client config rejects an unknown icon theme" {
-    var diagnostic: data.Diagnostic = .{};
-    try std.testing.expectError(
-        error.InvalidConfig,
-        Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { icons = 'emoji' } }", .source_name = "@config.lua", .number = 1 }),
-    );
-    try std.testing.expectEqualStrings(
-        "unknown config.client.icons: emoji",
         diagnostic.message(),
     );
 }
@@ -1372,28 +1360,27 @@ test "notification delivery parses and rejects unknown channels" {
     try std.testing.expectEqualStrings("config.client.notifications.delivery must be telar or system", invalid.message());
 }
 
-test "options that only the retired terminal client honored are rejected" {
-    const cases = [_]struct { source: []const u8, message: []const u8 }{
-        .{
-            .source = "return { api_version = 2, client = { notifications = { delivery = \"terminal\" } } }",
-            .message = "config.client.notifications.delivery = \"terminal\" left with the terminal client; use telar or system",
-        },
-        .{
-            .source = "return { api_version = 2, client = { sidebar = { renderer = \"cells\" } } }",
-            .message = "config.client.sidebar.renderer left with the terminal client; remove it",
-        },
-        .{
-            .source = "return { api_version = 2, client = { input = { escape_timeout_ms = 25 } } }",
-            .message = "config.client.input.escape_timeout_ms left with the terminal client; remove it",
-        },
-    };
+test "keys only the retired terminal client honored load ignored and reported" {
+    const source =
+        \\return { api_version = 2, client = {
+        \\  icons = "nerd-font",
+        \\  sidebar = { visible = false, renderer = "automatic" },
+        \\  notifications = { delivery = "terminal" },
+        \\  input = { escape_timeout_ms = 25, sequence_timeout_ms = 750 },
+        \\} }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
+    defer generation.deinit();
 
-    for (cases) |case| {
-        var diagnostic: data.Diagnostic = .{};
+    try std.testing.expectEqual(@as(usize, 4), generation.snapshot.retired.count());
+    try std.testing.expect(!generation.snapshot.sidebar_visible);
+    try std.testing.expectEqual(data.NotificationDelivery.telar, generation.snapshot.notification_delivery);
+    try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
 
-        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = case.source, .source_name = "@config.lua", .number = 1 }));
-        try std.testing.expectEqualStrings(case.message, diagnostic.message());
-    }
+    const plain = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@config.lua", .number = 2 });
+    defer plain.deinit();
+    try std.testing.expectEqual(@as(usize, 0), plain.snapshot.retired.count());
 }
 
 test "appearance themes parse and reject unknown names" {

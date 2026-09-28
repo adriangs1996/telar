@@ -114,7 +114,6 @@ pub fn frontendOptions(self: *const Launch) client_module.Options {
             value.theme
         else
             options.theme,
-        .icon_theme = if (snapshot) |value| value.icon_theme else .unicode,
         .sidebar_visible = if (snapshot) |value| value.sidebar_visible else true,
         .pane_gaps = if (snapshot) |value| value.pane_gaps else true,
         .sound = if (snapshot) |value| value.sound else .{},

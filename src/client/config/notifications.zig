@@ -32,9 +32,11 @@ pub fn parse(state: *lua_api.c.lua_State, snapshot: *Snapshot, diagnostic: *data
         diagnostic.set("config.client.notifications.delivery must be a string", .{});
         return error.InvalidConfig;
     };
+    // The terminal client wrote notices to its host terminal; the key is
+    // ignored and reported, and the default delivery stays.
     if (std.mem.eql(u8, delivery, retired_terminal_delivery)) {
-        diagnostic.set("config.client.notifications.delivery = \"terminal\" left with the terminal client; use telar or system", .{});
-        return error.InvalidConfig;
+        snapshot.retired.insert(.terminal_delivery);
+        return;
     }
 
     snapshot.notification_delivery = data.NotificationDelivery.parse(delivery) orelse {

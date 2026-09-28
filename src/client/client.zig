@@ -147,6 +147,7 @@ test {
     _ = @import("config/bar_update.zig");
     _ = @import("config/component_values.zig");
     _ = @import("config/client_diagnostic.zig");
+    _ = @import("config/retired_config.zig");
     _ = @import("input/action_routing.zig");
     _ = @import("input/attachment_prompt.zig");
     _ = @import("input/clipboard_image.zig");
@@ -259,6 +260,7 @@ pub const FontFamily = @import("config/FontFamily.zig");
 pub const presentation_delivery = @import("connection/presentation_delivery.zig");
 pub const history_browser = @import("input/history_browser.zig");
 pub const client_diagnostic = @import("config/client_diagnostic.zig");
+pub const retired_config = @import("config/retired_config.zig");
 
 pub const TabDrag = @import("workspace/TabDrag.zig");
 pub const agent_navigation = @import("agents/agent_navigation.zig");

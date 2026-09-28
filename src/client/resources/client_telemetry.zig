@@ -72,7 +72,7 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
     const state = request.state;
     var writer = std.Io.Writer.fixed(buffer);
     try writer.print("{{\"ts_ms\":{d},\"uptime_ms\":{d},\"role\":\"client\"," ++
-        "\"theme\":\"{s}\",\"icons\":\"{s}\"," ++
+        "\"theme\":\"{s}\"," ++
         "\"active_tab\":{d},\"tab_count\":{d},\"focused_pane\":{d},\"pane_count\":{d}," ++
         "\"outbox_depth\":{d},\"outbox_high_water\":{d},\"outbox_saturated\":{d}," ++
         "\"outbox_coalesced_input\":{d},\"outbox_coalesced_resize\":{d}," ++
@@ -81,7 +81,6 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         request.now_ns / std.time.ns_per_ms,
         core.elapsed(metrics.started_ns, request.now_ns) / std.time.ns_per_ms,
         state.theme_name,
-        state.icon_theme_name,
         core.raw(state.active_tab),
         state.tab_count,
         core.raw(state.focused_pane),
@@ -134,7 +133,6 @@ fn capture(client: *const Client) Snapshot {
     const generation = client.lua_generation;
     return .{
         .theme_name = model.theme.base.canonicalName(),
-        .icon_theme_name = model.icon_theme.canonicalName(),
         .active_tab = if (active) |slot| model.tabs.location[slot].tab_id else .invalid,
         .tab_count = model.tabs.count,
         .focused_pane = if (active) |slot| model.tabs.layout[slot].focused() orelse .invalid else .invalid,
@@ -156,7 +154,6 @@ const FormatRequest = struct {
 /// The client state one line reports, copied before formatting.
 const Snapshot = struct {
     theme_name: []const u8,
-    icon_theme_name: []const u8,
     active_tab: core.TabId,
     tab_count: usize,
     focused_pane: core.PaneId,
@@ -180,7 +177,6 @@ test "a telemetry line reports the counters and the client state" {
         .metrics = &metrics,
         .state = .{
             .theme_name = "vesper",
-            .icon_theme_name = "nerd-font",
             .active_tab = @enumFromInt(1),
             .tab_count = 1,
             .focused_pane = @enumFromInt(2),
@@ -195,7 +191,7 @@ test "a telemetry line reports the counters and the client state" {
 
     try std.testing.expect(std.mem.endsWith(u8, line, "}\n"));
     try std.testing.expect(std.mem.indexOf(u8, line, "\"uptime_ms\":2000") != null);
-    try std.testing.expect(std.mem.indexOf(u8, line, "\"icons\":\"nerd-font\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"theme\":\"vesper\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"outbox_coalesced_layout\":2") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"key_lease_overflows\":3") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"frames\":5") != null);

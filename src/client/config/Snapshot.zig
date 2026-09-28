@@ -2,11 +2,15 @@ const keyinput = @import("keyinput");
 const data = @import("model");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const GuiConfig = @import("GuiConfig.zig");
+const retired_config = @import("retired_config.zig");
 const Snapshot = @This();
+
+/// Keys only the retired terminal client used that this file still sets;
+/// they are ignored and reported (`retired_config`).
+retired: retired_config.Set = .initEmpty(),
 
 theme: data.ColorTheme = data.theme_support.default_theme,
 gui: GuiConfig = .{},
-icon_theme: data.icons.Theme = .unicode,
 sidebar_visible: bool = true,
 pane_gaps: bool = true,
 editor_bytes: [data.config_values.max_editor_bytes]u8 = undefined,

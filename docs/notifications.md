@@ -34,8 +34,9 @@ they reach it. Each client applies its own policy, like sounds.
 
 `terminal`, which sent OSC 9 to the terminal client's outer terminal, left
 with that client. The window and the headless client have no outer terminal,
-so a configuration that still names it fails to load with a message that says
-so, instead of loading a channel that shows nothing.
+so a configuration that still names it loads with the default `telar`
+delivery and a notice naming the ignored key (see
+[retired keys](configuration.md#retired-keys)).
 
 ## CLI
 
