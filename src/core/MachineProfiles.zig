@@ -6,15 +6,25 @@ const std = @import("std");
 const MachineId = @import("MachineId.zig").MachineId;
 const MachineProfile = @import("MachineProfile.zig");
 const AgentLogin = @import("AgentLogin.zig").AgentLogin;
+const ssh_destination = @import("ssh_destination.zig");
+const remote_telar = @import("remote_telar.zig");
 const MachineProfiles = @This();
 
 /// Profiles one file holds.
 pub const capacity = 16;
-/// The largest `machines.json` read or written, in bytes.
+/// The largest `machines.json` read or written, in bytes. Sixteen profiles
+/// with every field at its longest, a destination of quotes escaped to
+/// twice its length and every login take 16,381 bytes; the test below fails
+/// when a new field no longer fits.
 pub const max_file_bytes = 16 * 1024;
 
-/// The file format this build reads and writes.
-const format_version = 1;
+/// The file formats this build reads. Version 2 added `telar_path` and
+/// `logins`, which a telar that reads only version 1 refuses as unknown
+/// fields; the version says why instead. A file whose profiles use neither
+/// is still written as version 1, so a person who never ran `machine setup`
+/// keeps a file every earlier build reads.
+const format_version = 2;
+const plain_format_version = 1;
 
 rows: [capacity]MachineProfile = undefined,
 count: u8 = 0,
@@ -57,7 +67,7 @@ pub fn parse(gpa: std.mem.Allocator, source: []const u8) !MachineProfiles {
     };
     defer parsed.deinit();
 
-    if (parsed.value.version != format_version) {
+    if (parsed.value.version < plain_format_version or parsed.value.version > format_version) {
         return error.IncompatibleMachineProfiles;
     }
 
@@ -96,7 +106,7 @@ pub fn parse(gpa: std.mem.Allocator, source: []const u8) !MachineProfiles {
 /// try profiles.writeJson(&writer);
 /// ```
 pub fn writeJson(self: *const MachineProfiles, writer: *std.Io.Writer) !void {
-    try writer.print("{{\"version\":{d}", .{format_version});
+    try writer.print("{{\"version\":{d}", .{self.version()});
     if (self.localLabel()) |text| {
         try writer.print(",\"local_label\":\"{s}\"", .{text});
     }
@@ -153,6 +163,23 @@ pub fn writeProfileJson(writer: *std.Io.Writer, profile: *const MachineProfile) 
     }
 
     try writer.writeByte('}');
+}
+
+// The oldest format that holds every field these profiles use.
+fn version(self: *const MachineProfiles) u16 {
+    for (self.slice()) |*profile| {
+        if (profile.telarPath() != null) {
+            return format_version;
+        }
+
+        for (std.enums.values(MachineProfile.LoginAgent)) |agent| {
+            if (profile.logins.get(agent) != null) {
+                return format_version;
+            }
+        }
+    }
+
+    return plain_format_version;
 }
 
 pub fn slice(self: *const MachineProfiles) []const MachineProfile {
@@ -342,7 +369,8 @@ test "a hand-written file with a local label parses" {
 
 test "malformed and conflicting files are refused" {
     const cases = [_]struct { []const u8, anyerror }{
-        .{ "{\"version\":2,\"machines\":[]}", error.IncompatibleMachineProfiles },
+        .{ "{\"version\":3,\"machines\":[]}", error.IncompatibleMachineProfiles },
+        .{ "{\"version\":0,\"machines\":[]}", error.IncompatibleMachineProfiles },
         .{ "{\"version\":1,\"machines\":[],\"extra\":1}", error.InvalidMachineProfiles },
         .{ "not json", error.InvalidMachineProfiles },
         .{ "{\"version\":1,\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"-x\"}]}", error.InvalidRemoteDestination },
@@ -396,4 +424,49 @@ test "the table refuses a second profile for one destination" {
 
     try std.testing.expectError(error.DuplicateMachineDestination, profiles.add(try testProfile(2, "other", "dev@box")));
     try profiles.add(try testProfile(3, "other", "ops@box"));
+}
+
+test "a file names version 2 only when a profile uses what version 2 added" {
+    var profiles: MachineProfiles = .{};
+    try profiles.add(try testProfile(1, "box", "dev@box"));
+
+    var buffer: [max_file_bytes]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+    try profiles.writeJson(&writer);
+    try std.testing.expect(std.mem.startsWith(u8, writer.buffered(), "{\"version\":1,"));
+
+    try profiles.recordLogin("box", .codex, .pending);
+    writer = .fixed(&buffer);
+    try profiles.writeJson(&writer);
+    try std.testing.expect(std.mem.startsWith(u8, writer.buffered(), "{\"version\":2,"));
+    _ = try MachineProfiles.parse(std.testing.allocator, writer.buffered());
+}
+
+test "sixteen profiles with every field at its longest fit the file" {
+    var profiles: MachineProfiles = .{};
+    try profiles.relabelLocal("l" ** MachineProfile.max_label_bytes);
+    for (0..capacity) |index| {
+        var label: [MachineProfile.max_label_bytes]u8 = @splat('a');
+        var destination: [ssh_destination.max_bytes]u8 = @splat('"');
+        var path: [remote_telar.max_path_bytes]u8 = @splat('p');
+        _ = std.fmt.bufPrint(&label, "m{d:0>2}", .{index}) catch unreachable;
+        _ = std.fmt.bufPrint(&destination, "d{d:0>2}", .{index}) catch unreachable;
+        path[0] = '/';
+        try profiles.add(try MachineProfile.init(@enumFromInt(index + 1), .{
+            .label = &label,
+            .destination = &destination,
+            .color = "c" ** MachineProfile.max_color_bytes,
+            .enabled = false,
+            .telar_path = &path,
+        }));
+        for (std.enums.values(MachineProfile.LoginAgent)) |agent| {
+            try profiles.recordLogin(&label, agent, .pending);
+        }
+    }
+
+    var buffer: [max_file_bytes]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+    try profiles.writeJson(&writer);
+    const parsed = try MachineProfiles.parse(std.testing.allocator, writer.buffered());
+    try std.testing.expectEqual(@as(u8, capacity), parsed.count);
 }

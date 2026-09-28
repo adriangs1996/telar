@@ -15,7 +15,7 @@ MachineOptions.parse                      src/cli/arguments/MachineOptions.zig
         |
 machine_profiles.run                      src/cli/machine_profiles.zig
         |   profile_file.load: privatefile.read, owner-only regular file, 16 KiB,
-        |   MachineProfiles.parse: version 1, no unknown fields
+        |   MachineProfiles.parse: version 1 or 2, no unknown fields
         |
 machine_profiles.newProfile              src/client/machines/machine_profiles.zig:
         |   refuses this machine's label, MachineId.generate + MachineProfile.init
@@ -80,6 +80,14 @@ taken meanwhile is refused.
   `pending`, `done` or `failed`: how `telar machine setup` last saw its login
   on that machine. `machine list` prints it. It is never a credential.
 - `local_label` names the local machine; without it, the host name does.
+
+`version` is 2 when a profile holds `telar_path` or `logins`, which version 2
+added, and 1 otherwise, so a file of a person who never ran `machine setup`
+stays readable by every earlier build. A build that reads only version 1
+refuses a version 2 file as one it cannot read; this build names a newer
+version as written by a newer telar. Sixteen profiles with every field at
+its longest take 16,381 bytes, inside the 16 KiB bound;
+`zig build test-machine-profiles` fails when a new field no longer fits.
 
 Hand edits are valid. A file that fails validation, is readable by anyone but
 its owner, or is a symlink, is refused and left untouched.

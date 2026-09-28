@@ -145,7 +145,8 @@ pub fn describe(err: anyerror) []const u8 {
         error.InvalidMachineColor => "colors are #RRGGBB or a theme role such as red or accent",
         error.InvalidRemoteDestination => "destinations are an ssh host alias or user@host, without spaces or a leading '-'",
         error.InvalidRemoteTelarPath => "telar paths are absolute and hold only letters, digits, '/', '.', '_', '+' or '-'",
-        error.InvalidMachineProfiles, error.IncompatibleMachineProfiles => "machines.json is not a file this telar can read",
+        error.InvalidMachineProfiles => "machines.json is not a file this telar can read",
+        error.IncompatibleMachineProfiles => "machines.json was written by a newer telar; update this one to read it",
         else => @errorName(err),
     };
 }
