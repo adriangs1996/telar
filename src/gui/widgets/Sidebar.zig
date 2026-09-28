@@ -124,7 +124,8 @@ fn drawList(self: Sidebar, canvas: *Canvas, list: SidebarList) !void {
         const first = canvas.quads.items().len;
         const task = if (entry.card == .agent) null else client.fleet_order.taskRow(context.projection.workspaces, agent);
         if (task) |row| {
-            const indent = geometry.px(CardGeometry.task_indent);
+            // Only a task with a live creator hangs, indented, under it.
+            const indent = if (entry.creator != null) geometry.px(CardGeometry.task_indent) else 0;
             const bounds: Rect = .{ .x = list.bounds.x + indent, .y = top, .width = @max(0, card_width - indent), .height = height };
             const card: TaskCard = .{
                 .context = context,
@@ -132,6 +133,7 @@ fn drawList(self: Sidebar, canvas: *Canvas, list: SidebarList) !void {
                 .agent = agent,
                 .task = row,
                 .card = entry.card,
+                .nested = entry.creator != null,
                 .geometry = geometry,
                 .age_s = context.statusAgeAt(entry.index),
             };

@@ -1,9 +1,23 @@
 # Task cards
 
-The sidebar shows the fleet: agents grouped by project, the agents of a
-project's main checkout first, and below them one task card per agent that
-works in one of its worktrees. A task card names the task, not the project
-the group already names.
+The sidebar shows the fleet: agents grouped by project, and one task card
+per agent that works in one of the project's worktrees. A task card hangs,
+indented with a guide line, under the agent whose pane created its
+worktree (`WorktreeListEntry.created_by`), while that agent lives. A task
+card names the task, not the project the group already names.
+
+## Who a task hangs under
+
+Inside a project, each agent of the main checkout comes in attention
+order, followed by the tasks it created. A task has no parent to show
+when its creator's pane closed, when a plain shell created it, when its
+creator is itself a task, or when the pane that created the worktree is
+the one working in it (Claude Code's `WorktreeCreate` hook registers the
+session that then moves into the worktree). Those tasks close the group,
+full ones first, and are drawn flush with the agents, without indent or
+guide line: indenting them would name a parent that does not exist. A
+"Tasks" heading would say the same with one more row of chrome, so there
+is none.
 
 ## End-to-end path
 
@@ -15,10 +29,12 @@ agent_snapshot.applyAgentSnapshot                   workspace_list_snapshot.appl
         |                                               |  projects ordered first
         +---------------------+-------------------------+
                               |
-fleet_order.order(FleetSources) -> FleetEntry{index, card, first_in_project}
+fleet_order.order(FleetSources) -> FleetEntry{index, card, creator, first_in_project}
         |  group: the project that owns the agent's workspace or worktree
-        |  inside a group: main-checkout agents, then full task cards,
-        |  then compact ones, each part in the shared attention order
+        |  creator: the main-checkout agent in the worktree's created_by pane
+        |  inside a group: each main-checkout agent, then its tasks (full,
+        |  then compact); then the tasks without a live creator; each part
+        |  in the shared attention order
         |  card: agent | task_full | task_compact
         |
 GUI SidebarState.observe -> Sidebar.drawList -> AgentCard | TaskCard
@@ -46,4 +62,8 @@ bar reads `project › ⎇ handle` in a distinct accent, and `leave-worktree`
 
 ## Proof
 
-Fleet order, snapshot mapping and sidebar card geometry tests.
+Fleet order (`src/client/agents/fleet_order.zig`: a task under its live
+creator even when another agent of the project comes between them in
+attention order; a closed creator, a hook-registered worktree and a
+worktree without creator close the group), snapshot mapping and sidebar
+card geometry tests.
