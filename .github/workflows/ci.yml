@@ -65,7 +65,10 @@ jobs:
         run: |
           zig build -Dgui=false -Dtarget=x86_64-linux-musl --prefix zig-out/headless
           packaging/release/check-linkage.sh linux-headless zig-out/headless/bin/telar
-          zig-out/headless/bin/telar --version
+
+      - name: Headless runtime starts and answers
+        if: runner.os == 'Linux'
+        run: packaging/release/smoke-headless.sh zig-out/headless/bin/telar
 
   scripts:
     runs-on: ubuntu-24.04
@@ -80,5 +83,9 @@ jobs:
           sudo apt-get install -y -qq shellcheck
           shellcheck install.sh packaging/release/*.sh packaging/homebrew/*.sh packaging/macos/*.sh
 
+      # Hardened servers mount /tmp noexec; the installer must still work.
       - name: Installer
-        run: packaging/release/test-install.sh
+        run: |
+          sudo mkdir -p /mnt/noexec
+          sudo mount -t tmpfs -o noexec,nosuid,nodev,mode=1777 tmpfs /mnt/noexec
+          NOEXEC_TMPDIR=/mnt/noexec packaging/release/test-install.sh
