@@ -210,6 +210,21 @@ pub fn find(self: *const MachineProfiles, label: []const u8) ?usize {
     return null;
 }
 
+/// The row of the profile for `destination`, if any.
+///
+/// ```zig
+/// const row = profiles.findDestination("dev@box") orelse return null;
+/// ```
+pub fn findDestination(self: *const MachineProfiles, destination: []const u8) ?usize {
+    for (self.slice(), 0..) |*profile, row| {
+        if (std.mem.eql(u8, profile.destination(), destination)) {
+            return row;
+        }
+    }
+
+    return null;
+}
+
 /// Adds one profile whose id, label and destination no other profile uses.
 /// One destination is one runtime, so a second profile for it would give a
 /// window two clients with one identity on that runtime.
@@ -469,4 +484,12 @@ test "sixteen profiles with every field at its longest fit the file" {
     try profiles.writeJson(&writer);
     const parsed = try MachineProfiles.parse(std.testing.allocator, writer.buffered());
     try std.testing.expectEqual(@as(u8, capacity), parsed.count);
+}
+
+test "a profile is found by its destination" {
+    var profiles: MachineProfiles = .{};
+    try profiles.add(try testProfile(1, "box", "dev@box"));
+
+    try std.testing.expectEqual(@as(?usize, 0), profiles.findDestination("dev@box"));
+    try std.testing.expectEqual(@as(?usize, null), profiles.findDestination("box"));
 }
