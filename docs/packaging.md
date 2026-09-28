@@ -243,17 +243,26 @@ statically. What differs from glibc, checked in this code:
   it, so it supports Linux 5.10 and later; `statx` alone would need only
   4.11. Every run described here used OrbStack's 7.0 kernel; no older
   kernel was tried.
-- `malloc` is musl's. In ReleaseFast the runtime allocates through libc,
-  and so do SQLite and Lua. Measured in one Debian 12 container, with
-  aarch64 builds of the same commit that differ only in libc: while
-  `telar history import` fed the runtime 1000 commands at a time, the
-  runtime used as much CPU on musl as on glibc or less (12.6 to 15.9 s
-  against 13.1 to 17.9 s for 50,000 commands over three runs each, 42.8 s
-  against 52.6 s for 150,000), and searches took the same time. Its
-  resident memory did not stay the same: glibc settled near 20 MiB, while
-  musl held 37 to 45 MiB after 50,000 commands and 65 MiB after 150,000.
-  Whether it levels off later was not measured; a runtime that serves
-  months of history should be watched for it.
+- `malloc` is musl's. In ReleaseFast the runtime's general allocator is
+  libc's, and SQLite, Lua and the `std.Io` thread pool call `malloc`
+  directly. Measured in one Debian 12 container with 4 CPUs, feeding the
+  runtime 150,000 commands through `telar history import`, 1000 at a time,
+  with aarch64 builds of one commit that differ only as named, two runs
+  each:
+
+  | Build | Resident at the end | Runtime CPU |
+  | --- | --- | --- |
+  | glibc, `c_allocator` | 21 and 21 MiB | 25.6 and 23.5 s |
+  | musl, `c_allocator` (the release) | 98 and 113 MiB | 31.5 and 28.0 s |
+  | musl, `std.heap.smp_allocator` as the runtime's allocator | 100 and 116 MiB | 26.7 and 31.9 s |
+
+  Searches took 0.01 to 0.02 s for 20 in every build. glibc stays flat,
+  so the growth is not a leak in this workload; under musl the heap grows
+  with the history written (37 to 45 MiB after 50,000 commands in an
+  earlier run of an older commit). Zig's allocator does not change it, so
+  the memory sits with a direct `malloc` caller; which one was not
+  measured, nor whether it levels off later. A runtime that serves months
+  of history should be watched for it.
 
 The binary was also started on Alpine 3.22, where `telar server`,
 `telar runtime status`, `telar agent list` and `telar server stop` worked
