@@ -6,6 +6,12 @@
 const core = @import("telar-core");
 const std = @import("std");
 const PathIndex = @import("PathIndex.zig");
+const gitstatus = @import("gitstatus");
+
+/// Bound for reading the repository's config before `git ls-files` starts.
+const config_read_timeout: std.Io.Timeout = .{
+    .duration = .{ .clock = .awake, .raw = .fromSeconds(2) },
+};
 
 /// How many appended entries a query waits for at most.
 const publish_every = 1024;
@@ -21,16 +27,16 @@ const skipped_directories = [_][]const u8{
 /// stops at the next entry. Runs on the observation path.
 ///
 /// ```zig
-/// try model.select.concurrent(.path_index_built, path_index_build.run, .{ index, model.io });
+/// try model.select.concurrent(.path_index_built, path_index_build.run, .{ index, model.io, model.inherited_environment });
 /// ```
-pub fn run(index: *PathIndex, io: std.Io) *PathIndex {
-    build(index, io);
+pub fn run(index: *PathIndex, io: std.Io, environ: std.process.Environ) *PathIndex {
+    build(index, io, environ);
     index.publish();
     index.complete.store(true, .release);
     return index;
 }
 
-fn build(index: *PathIndex, io: std.Io) void {
+fn build(index: *PathIndex, io: std.Io, environ: std.process.Environ) void {
     const root = index.rootSlice();
     var directory = std.Io.Dir.cwd().openDir(
         io,
@@ -43,7 +49,7 @@ fn build(index: *PathIndex, io: std.Io) void {
     defer directory.close(io);
 
     if (insideWorkTree(io, root)) {
-        listTracked(index, io) catch {};
+        listTracked(index, io, environ) catch {};
         if (index.entry_count != 0 or index.cancelled.load(.acquire)) {
             return;
         }
@@ -87,14 +93,16 @@ fn insideWorkTree(io: std.Io, root: []const u8) bool {
 }
 
 /// Streams `git ls-files` into the index, adding each file's directories
-/// before the file the first time they appear.
-fn listTracked(index: *PathIndex, io: std.Io) !void {
-    var child = try std.process.spawn(io, .{
-        .argv = &.{ "git", "-C", index.rootSlice(), "ls-files", "-z", "--cached", "--others", "--exclude-standard" },
-        .stdin = .ignore,
-        .stdout = .pipe,
-        .stderr = .ignore,
-    });
+/// before the file the first time they appear. The root may be any
+/// repository, so Git runs with every program its config names turned off.
+fn listTracked(index: *PathIndex, io: std.Io, environ: std.process.Environ) !void {
+    var child = gitstatus.untrusted_git.spawn(io, .{
+        .environ = environ,
+        .path = index.rootSlice(),
+        .arguments = &.{ "ls-files", "-z", "--cached", "--others", "--exclude-standard" },
+        .timeout = config_read_timeout,
+        .stdout_limit = 0,
+    }) orelse return error.GitUnavailable;
     defer child.kill(io);
 
     var seen: std.StringHashMapUnmanaged(void) = .empty;
@@ -293,7 +301,7 @@ fn buildIn(temp: *testing.TmpDir, index: *PathIndex) !void {
     const root = root_buffer[0..try temp.dir.realPath(testing.io, &root_buffer)];
     index.want(root, true);
     index.reset();
-    _ = run(index, testing.io);
+    _ = run(index, testing.io, testing.environ);
 }
 
 fn contains(index: *const PathIndex, relative: []const u8) bool {
@@ -340,6 +348,42 @@ test "a walk lists shallow entries first and skips hidden and dependency directo
     try testing.expect(contains(index, "src/types/"));
     try testing.expect(!contains(index, "node_modules/"));
     try testing.expect(!contains(index, ".cache/"));
+}
+
+test "listing a planted repository runs no program its config names" {
+    var temp = testing.tmpDir(.{});
+    defer temp.cleanup();
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = root_buffer[0..try temp.dir.realPath(testing.io, &root_buffer)];
+    var repo_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const repo = try std.fmt.bufPrint(&repo_buffer, "{s}/repo", .{root});
+    const init = std.process.run(testing.allocator, testing.io, .{ .argv = &.{ "git", "init", "-q", repo } }) catch return error.SkipZigTest;
+    testing.allocator.free(init.stdout);
+    testing.allocator.free(init.stderr);
+
+    // `ls-files --others` asks core.fsmonitor which files changed.
+    var script_buffer: [std.fs.max_path_bytes + 32]u8 = undefined;
+    try temp.dir.writeFile(testing.io, .{ .sub_path = "fsmonitor.sh", .data = try std.fmt.bufPrint(&script_buffer, "#!/bin/sh\ntouch {s}/ran\n", .{root}) });
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const script = try std.fmt.bufPrint(&path_buffer, "{s}/fsmonitor.sh", .{root});
+    for ([_][]const []const u8{
+        &.{ "chmod", "+x", script },
+        &.{ "git", "-C", repo, "config", "core.fsmonitor", script },
+    }) |argv| {
+        const result = try std.process.run(testing.allocator, testing.io, .{ .argv = argv });
+        testing.allocator.free(result.stdout);
+        testing.allocator.free(result.stderr);
+    }
+
+    try temp.dir.writeFile(testing.io, .{ .sub_path = "repo/notes.txt", .data = "" });
+    const index = try PathIndex.create(testing.allocator, .{ .id = 1, .generation = 1 });
+    defer index.destroy();
+    index.want(repo, true);
+    index.reset();
+    _ = run(index, testing.io, testing.environ);
+
+    try testing.expect(contains(index, "notes.txt"));
+    try testing.expectError(error.FileNotFound, temp.dir.statFile(testing.io, "ran", .{}));
 }
 
 test "inside a git work tree the index is what git lists, ignores included" {
@@ -410,7 +454,7 @@ test "an unreadable root fails the build without entries" {
 
     index.want("/nonexistent/telar-path-picker", true);
     index.reset();
-    _ = run(index, testing.io);
+    _ = run(index, testing.io, testing.environ);
     try testing.expectEqual(PathIndex.Failure.unreadable, index.failure);
     try testing.expectEqual(@as(u32, 0), index.published.load(.acquire));
 }
@@ -434,6 +478,6 @@ test "a cancelled build stops before listing" {
     index.want(root, true);
     index.reset();
     index.cancelled.store(true, .release);
-    _ = run(index, testing.io);
+    _ = run(index, testing.io, testing.environ);
     try testing.expect(index.entry_count <= 1);
 }
