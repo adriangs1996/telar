@@ -576,7 +576,7 @@ pub fn restoreAgentTitle(model: *RuntimeModel, pane: *const Pane, title: Session
     });
 }
 
-test "resume commands exist only for built-in providers and UUID references" {
+test "resume commands exist only for built-in providers and references in their session format" {
     var buffer: [max_resume_command_bytes]u8 = undefined;
     const session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000";
 

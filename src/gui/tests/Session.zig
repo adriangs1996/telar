@@ -216,6 +216,12 @@ pub fn settle(self: *Session) !void {
 }
 
 pub fn bootstrap(self: *Session) !void {
+    return self.bootstrapAt(location);
+}
+
+/// Opens the first pane in `at`, a workspace's or a worktree's tab.
+/// Example: `try session.bootstrapAt(.{ .workspace = .{ .worktree = worktree }, .tab_id = tab });`
+pub fn bootstrapAt(self: *Session, at: core.TabLocation) !void {
     const app = self.gui.app;
     try app.model.request_lifecycle.tracker.add(
         client.initial_request_id,
@@ -224,7 +230,7 @@ pub fn bootstrap(self: *Session) !void {
         },
     );
     var buffer: [128]u8 = undefined;
-    const opened = try core.encodePaneOpened(&buffer, .{ .request_id = client.initial_request_id, .pane_id = pane_id, .location = location, .created = true });
+    const opened = try core.encodePaneOpened(&buffer, .{ .request_id = client.initial_request_id, .pane_id = pane_id, .location = at, .created = true });
     _ = try client.runtime_messages.handleServerMessage(app, try core.decodeServer(opened));
     app.model.startup.phase = .active;
     try self.settle();

@@ -1,6 +1,7 @@
 # Machines
 
-Status: phases 0, 1 and 2 are implemented on `feat/machines`; see
+Status: phases 0 to 4 and the retirement of the TUI are implemented and
+merged into `main` (`7950e160`); see
 [Implementation status](#implementation-status). It builds on
 [remote attach](../flows/remote-attach.md), the
 [worktrees and agent coordination plan](worktrees.md) and the agent control
@@ -40,6 +41,23 @@ Implementation must follow the [invariants](../invariants.md) and the
     added with `telar machine add`.
   - Picker rows act through keys (Shift+Enter, Ctrl+R, Ctrl+D) and Enter on
     an unreachable machine is "Reconnect now".
+  - Client configuration does not move to the adapter. The window's own
+    client, this machine's, loads Lua, runs the configuration watch and
+    draws the bars; every other machine's client follows its generation
+    (`config_adoption.followConfiguration`, `owns_configuration = false`,
+    `window_machines.openClient`) and takes each reload after it.
+  - The identity hashes the window identity with the destination, not
+    with a machine id (`window_machines.machineIdentity`). A temporary
+    `--remote` row has no id; a saved machine whose destination changes
+    presents a new identity (`window_machines.admit`).
+  - There is no `failed` state. A row's link is `connecting`, `connected`,
+    `lost` or `stopped` (`RuntimeLink.Phase`); a machine that cannot be
+    reached stays `lost` and retries with a capped backoff, and "Reconnect
+    now" applies to it.
+  - In progress on the `fix-machine-links` batch, not on `main` yet: the
+    `failed` state, and forwards that join the managed ControlMaster.
+    Forwards pass `ControlPath=none` today
+    (`SshOptions.forward_arguments`), so each one authenticates on its own.
 - **Phase 3** (worktrees on another machine): done. Flow:
   [Worktree dispatch](../flows/worktree-dispatch.md). It differs from the
   design below in four places:
@@ -846,9 +864,9 @@ at network speed.
   The remote runtime then sends shared-memory names the client cannot map,
   and the client appears to fall back after the first image. Moot if the TUI
   is retired.
-- Two GUI windows on the same remote share one forwarded socket path, and
-  either one's exit unlinks it (see
-  [The GUI as a remote client](#the-gui-as-a-remote-client)).
+- Fixed: two GUI windows on the same remote shared one forwarded socket
+  path, and either one's exit unlinked it. The path now carries the window
+  slot (`remote-<hash>-<slot>.sock`, `remote.establish`).
 - `--socket` pointing at a forwarded socket whose forward is gone may start a
   local runtime at that path, because `Session.open` uses `connectOrStart`.
 - `herdr-adoption.md` P12 still lists `endpoint.Remote`, `attach-stdio` and

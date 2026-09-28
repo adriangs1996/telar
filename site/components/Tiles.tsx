@@ -4,7 +4,7 @@
 // list at sw.kovidgoyal.net/kitty/graphics-protocol. Decoration, so they sit
 // just outside the content and only appear when the viewport leaves room.
 //
-// Marks: Claude, Codex and Pi from src/frontend/assets; Ghostty from
+// Marks: Claude, Codex and Pi from src/assets; Ghostty from
 // github.com/ghostty-org/ghostty; kitty from sw.kovidgoyal.net/kitty; WezTerm
 // from github.com/wez/wezterm; Konsole is KDE Breeze's utilities-terminal,
 // the icon Konsole ships with; iTerm2 and Warp via simpleicons.org.
@@ -27,7 +27,7 @@ const TILES: Tile[] = [
   { name: "Claude Code", mark: "/brand/providers/claude.png", side: "left", top: "14%", offset: 9, size: 88, delay: 0, duration: 7.2 },
   { name: "Codex", mark: "/brand/providers/codex.png", side: "left", top: "44%", offset: 12, size: 80, delay: 1.4, duration: 8.6 },
   { name: "Pi", mark: "/brand/providers/pi.svg", side: "left", top: "72%", offset: 9.5, size: 84, delay: 2.6, duration: 7.9 },
-  { name: "Ghostty, the tested host terminal", mark: "/brand/stack/ghostty.png", side: "right", top: "9%", offset: 9, size: 84, glyph: 0.68, delay: 0.7, duration: 8.2 },
+  { name: "Ghostty, whose emulator telar embeds", mark: "/brand/stack/ghostty.png", side: "right", top: "9%", offset: 9, size: 84, glyph: 0.68, delay: 0.7, duration: 8.2 },
   { name: "kitty", mark: "/brand/stack/kitty.svg", side: "right", top: "26%", offset: 12.5, size: 76, glyph: 0.64, delay: 2.1, duration: 9.1 },
   { name: "WezTerm", mark: "/brand/stack/wezterm.svg", side: "right", top: "42%", offset: 8.5, size: 80, glyph: 0.72, delay: 3.3, duration: 7.6 },
   { name: "Konsole", mark: "/brand/stack/konsole.svg", side: "right", top: "58%", offset: 12.5, size: 72, glyph: 0.7, delay: 1.0, duration: 8.8 },

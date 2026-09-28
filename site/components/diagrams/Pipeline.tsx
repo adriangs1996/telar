@@ -6,8 +6,8 @@ const STAGES = [
   ["child", "the agent's process"],
   ["pty", "telar owns it"],
   ["vt.Terminal", "one per pane"],
-  ["cells", "ui.Buffer"],
-  ["your terminal", "screen diff"],
+  ["pane_frame", "CellSync"],
+  ["window", "Metal / Vulkan"],
 ];
 
 export default function Pipeline() {
@@ -46,8 +46,8 @@ export default function Pipeline() {
 
       <p className="mt-6 border-t border-line pt-4 font-mono text-[12px] leading-relaxed text-subtext">
         The emulator decides what a screen <span className="text-text">is</span>, so telar never parses a child&apos;s escape
-        sequences. The diff is the last step before bytes leave, so anything that changes what you see changes the buffer,
-        never the output stream.
+        sequences. The client model is the last shared step before pixels, so anything that changes what you see changes the
+        model or the frame, never the renderer&apos;s output.
       </p>
     </div>
   );

@@ -1,3 +1,4 @@
+const std = @import("std");
 const client = @import("telar-client");
 const data = @import("model");
 const mailbox = @import("mailbox");
@@ -21,6 +22,18 @@ pub const Message = union(enum) {
     change_review_ready,
     /// A clipboard image capture finished reading and decoding the pasteboard.
     clipboard_image: data.Completion,
+
+    /// Tickets one machine's client holds at most for its link and timers:
+    /// a runtime read, a runtime write and one wait per timer kind, each
+    /// armed once at most, plus a connection attempt and a sound, which
+    /// never overlap their own kind either.
+    pub const tickets_per_machine = 2 + std.meta.fields(client.Job.Kind).len + 2;
+
+    /// A window with one machine keeps the inbox's default, which also
+    /// holds best-effort work such as system notices; each other machine
+    /// adds what its client can hold, so sixteen busy machines leave that
+    /// work the headroom it has beside one machine.
+    pub const inbox_capacity = Inbox.default_capacity + (client.Machines.capacity - 1) * tickets_per_machine;
 };
 
 pub const Inbox = mailbox.GenericInbox(Message);
