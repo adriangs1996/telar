@@ -12,7 +12,8 @@ pub const marker = "TELAR_LOGIN_SHELL";
 
 /// Replaces this process with `shell -l -c 'exec telar gui ARGS'`, dropping the
 /// flag that asked for it. Returns only when the replacement fails, or at once
-/// when this process already came through a login shell.
+/// when this process already came through a login shell or the shell is one
+/// `pty.login_shell.script` does not know.
 ///
 /// ```zig
 /// try login_shell.relaunch(init, args[2..]);
@@ -29,7 +30,10 @@ pub fn relaunch(init: std.process.Init, args: []const [*:0]const u8) !void {
 
     var argv: [pty.command_support.max_args + 6][]const u8 = undefined;
     var argc: usize = 0;
-    for ([_][]const u8{ shell, "-l", "-c", pty.login_shell.script(shell), executable, "gui" }) |arg| {
+    // A shell whose flags telar does not know would refuse `-l` and never
+    // start the window; the window then starts with this environment.
+    const line = pty.login_shell.script(shell) orelse return;
+    for ([_][]const u8{ shell, "-l", "-c", line, executable, "gui" }) |arg| {
         argv[argc] = arg;
         argc += 1;
     }

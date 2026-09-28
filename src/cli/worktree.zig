@@ -841,7 +841,9 @@ fn copyInto(buffer: []u8, value: []const u8) ![]const u8 {
 /// through the user's interactive login shell, whose rc files may add to
 /// PATH, and replaces it. Its arguments are the shell's positional
 /// parameters, never shell code, and its exit status is the pane's. What
-/// the rc files print before the command starts lands in the pane too.
+/// the rc files print before the command starts lands in the pane too. A
+/// shell `pty.login_shell` does not know (tcsh, nu) gets the command as it
+/// is, with the runtime's environment.
 fn userCommand(environ: std.process.Environ, argv: []const []const u8, storage: *[max_launch_arguments][]const u8) ![]const []const u8 {
     return pty.login_shell.wrap(login_shell.loginShell(environ), argv, storage);
 }
