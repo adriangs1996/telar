@@ -89,9 +89,12 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try profile_file.path(init.minimal.environ, &path_buffer);
     const profiles = try profile_file.load(init.io, init.gpa, path);
-    const target = try resolve(&profiles, std.mem.span(options.label.?), if (options.new_label) |text| std.mem.span(text) else null);
+    const name = std.mem.span(options.label.?);
+    const target = resolve(init.io, &profiles, name, if (options.new_label) |text| std.mem.span(text) else null) catch |err| {
+        return refuse(init, err, name);
+    };
 
-    const directory = try buildDirectory(init, options.binary);
+    const directory = buildDirectory(init, options.binary) catch |err| return refuse(init, err, name);
     if (!options.json) {
         try output.interface.print("Setting up {s} ({s}) with telar {s}\n", .{ target.label(), target.destination(), version });
         try output.interface.flush();
@@ -107,6 +110,11 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
     if (!try startRuntime(init, &report, &target, telar_path, interactive)) {
         return finish(&report, &target);
     }
+
+    // Only now that this build's runtime runs there does the command
+    // interactive shells find move to it; declining to stop the old runtime
+    // leaves both where they were.
+    try linkCommand(init, &report, &target, telar_path);
 
     try saveProfile(init, &report, &target, path, telar_path);
     const wanted = agent_setup.detectLocal(init.minimal.environ);
@@ -126,7 +134,7 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
 
     if (options.skip.contains(.login)) {
         try report.end(.logins, .skipped, "--skip login", .{});
-    } else if (try savedProfile(init, path, target.label())) |profile| {
+    } else if (savedProfile(init, path, &target)) |profile| {
         try agent_login.run(init, &report, &profile, &current, .{
             .wanted = wanted,
             .interactive = interactive,
@@ -140,16 +148,23 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
     return finish(&report, &target);
 }
 
-// The profile as saved now, with the telar path setup just recorded.
-fn savedProfile(init: std.process.Init, path: []const u8, label: []const u8) !?core.MachineProfile {
-    const profiles = try profile_file.load(init.io, init.gpa, path);
-    const row = profiles.find(label) orelse return null;
-    return profiles.rows[row];
+// The profile as saved now, with the telar path setup just recorded; null
+// when the file cannot be read or its label names another destination, so
+// no login ever runs on a machine other than the one set up.
+fn savedProfile(init: std.process.Init, path: []const u8, target: *const SetupTarget) ?core.MachineProfile {
+    const profiles = profile_file.load(init.io, init.gpa, path) catch return null;
+    const row = profiles.find(target.label()) orelse return null;
+    const profile = profiles.rows[row];
+    if (!std.mem.eql(u8, profile.destination(), target.destination())) {
+        return null;
+    }
+
+    return profile;
 }
 
 // What the machine has after installers ran; null keeps the first probe.
 fn probeAgain(init: std.process.Init, target: *const SetupTarget, directory: []const u8) !?MachinePlatform {
-    var probe = try runProbe(init, target, directory);
+    var probe = runProbe(init, target, directory) catch return null;
     defer probe.deinit(init.gpa);
     if (!probe.succeeded()) {
         return null;
@@ -163,9 +178,23 @@ fn finish(report: *SetupReport, target: *const SetupTarget) !u8 {
     return if (report.failed()) failure else 0;
 }
 
+// Says why setup cannot start on `name`, before anything touched a machine.
+fn refuse(init: std.process.Init, err: anyerror, name: []const u8) u8 {
+    var buffer: [512]u8 = undefined;
+    const message = switch (err) {
+        error.DuplicateMachineLabel => std.fmt.bufPrint(&buffer, "telar machine setup: the label for {s} is taken by another machine; name it with --label\n", .{name}),
+        else => std.fmt.bufPrint(&buffer, "telar machine setup: {s}\n", .{machine_profiles.describe(err)}),
+    } catch return failure;
+    std.Io.File.stderr().writeStreamingAll(init.io, message) catch {};
+    return failure;
+}
+
 // A saved label, a saved destination, or a new destination whose label is
-// `--label` or its host name.
-fn resolve(profiles: *const core.MachineProfiles, name: []const u8, new_label: ?[]const u8) !SetupTarget {
+// `--label` or its host name. A new one must be one `machine add` would
+// save: a label already taken, here or by this machine, is refused before
+// setup installs anything, so the logins never go to the machine that
+// label names.
+fn resolve(io: std.Io, profiles: *const core.MachineProfiles, name: []const u8, new_label: ?[]const u8) !SetupTarget {
     var target: SetupTarget = .{};
     for (profiles.slice()) |*profile| {
         if (std.mem.eql(u8, profile.label(), name) or std.mem.eql(u8, profile.destination(), name)) {
@@ -181,6 +210,13 @@ fn resolve(profiles: *const core.MachineProfiles, name: []const u8, new_label: ?
     var label_buffer: [core.MachineProfile.max_label_bytes]u8 = undefined;
     const label = new_label orelse try deriveLabel(name, &label_buffer);
     try core.MachineProfile.validateLabel(label);
+    var trial = profiles.*;
+    try machine_profiles.change(io, &trial, .{
+        .kind = .add,
+        .label = label,
+        .value = name,
+    });
+
     try copyInto(&target.label_bytes, &target.label_len, label);
     return target;
 }
@@ -245,15 +281,16 @@ fn buildDirectory(init: std.process.Init, binary: ?[*:0]const u8) !BuildDirector
 // login with a terminal attached gets one interactive attempt, where
 // OpenSSH asks the person and telar answers nothing.
 fn reach(init: std.process.Init, report: *SetupReport, target: *const SetupTarget, directory: []const u8, interactive: bool) !?MachinePlatform {
-    var probe = try runProbe(init, target, directory);
+    var probe = runProbe(init, target, directory) catch |err| return unreachableBy(report, err);
     defer probe.deinit(init.gpa);
 
     var confirmed = false;
     if (!probe.succeeded() and interactive and refusedLogin(&probe)) {
-        confirmed = try confirmInteractively(init, report, target);
+        confirmed = confirmInteractively(init, report, target) catch false;
         if (confirmed) {
+            const again = runProbe(init, target, directory) catch |err| return unreachableBy(report, err);
             probe.deinit(init.gpa);
-            probe = try runProbe(init, target, directory);
+            probe = again;
         }
     }
 
@@ -276,6 +313,13 @@ fn reach(init: std.process.Init, report: *SetupReport, target: *const SetupTarge
     try report.end(.platform, .ok, "{s} {s}{s}, {s}", .{ system, @tagName(platform.arch), libc, platform.assetName() });
 
     return platform;
+}
+
+// Step 1 failed before ssh could answer: it did not start, timed out or
+// printed more than a probe ever does.
+fn unreachableBy(report: *SetupReport, err: anyerror) !?MachinePlatform {
+    try report.end(.ssh, .failed, "ssh did not run to the end: {s}", .{@errorName(err)});
+    return null;
 }
 
 // Runs the probe in batch mode, with the directory this build goes to.
@@ -409,7 +453,10 @@ fn installTelar(init: std.process.Init, report: *SetupReport, target: *const Set
         \\
     );
 
-    var result = try remote_shell.runScript(init, target.destination(), script.buffered(), install_timeout_s);
+    var result = remote_shell.runScript(init, target.destination(), script.buffered(), install_timeout_s) catch |err| {
+        try report.end(.telar, .failed, "the installer did not run to the end: {s}", .{@errorName(err)});
+        return false;
+    };
     defer result.deinit(init.gpa);
     if (!result.succeeded()) {
         try report.end(.telar, .failed, "the installer refused: {s}", .{result.errorLine()});
@@ -417,7 +464,6 @@ fn installTelar(init: std.process.Init, report: *SetupReport, target: *const Set
     }
 
     try report.end(.telar, .changed, "installed telar {s} at {s}", .{ version, telar_path });
-    try linkCommand(init, report, target, telar_path);
     return true;
 }
 
@@ -438,7 +484,10 @@ fn upload(init: std.process.Init, report: *SetupReport, target: *const SetupTarg
     };
     defer binary.close(init.io);
 
-    var result = try remote_shell.runWithInput(init, target.destination(), command, binary, install_timeout_s);
+    var result = remote_shell.runWithInput(init, target.destination(), command, binary, install_timeout_s) catch |err| {
+        try report.end(.telar, .failed, "the upload did not run to the end: {s}", .{@errorName(err)});
+        return false;
+    };
     defer result.deinit(init.gpa);
     if (!result.succeeded()) {
         try report.end(.telar, .failed, "the upload failed: {s}", .{result.errorLine()});
@@ -448,20 +497,29 @@ fn upload(init: std.process.Init, report: *SetupReport, target: *const SetupTarg
     return true;
 }
 
-// Links `~/.local/bin/telar` there to the new executable, so interactive
-// shells find the same build. `telar cli install` replaces only a symlink.
+// Links `~/.local/bin/telar` there to the executable whose runtime runs, so
+// interactive shells find the same build. `telar cli install` replaces only
+// a symlink; a link already there is left alone and not reported.
 fn linkCommand(init: std.process.Init, report: *SetupReport, target: *const SetupTarget, telar_path: []const u8) !void {
-    var script_buffer: [512]u8 = undefined;
+    var script_buffer: [1024]u8 = undefined;
     var script: std.Io.Writer = .fixed(&script_buffer);
     try remote_shell.assign(&script, "telar", telar_path);
-    try script.writeAll("mkdir -p \"$HOME/.local/bin\" && \"$telar\" cli install --dir \"$HOME/.local/bin\"\n");
+    try script.writeAll(
+        \\link=$HOME/.local/bin/telar
+        \\if [ -L "$link" ] && [ "$(readlink "$link")" = "$telar" ]; then exit 0; fi
+        \\mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/dev/null && echo linked
+        \\
+    );
 
-    var result = try remote_shell.runScript(init, target.destination(), script.buffered(), probe_timeout_s);
+    var result = remote_shell.runScript(init, target.destination(), script.buffered(), probe_timeout_s) catch |err| {
+        try report.note(.runtime, "~/.local/bin/telar left as it was: {s}", .{@errorName(err)});
+        return;
+    };
     defer result.deinit(init.gpa);
-    if (result.succeeded()) {
-        try report.note(.telar, "~/.local/bin/telar links to it", .{});
-    } else {
-        try report.note(.telar, "~/.local/bin/telar left as it was: {s}", .{result.errorLine()});
+    if (!result.succeeded()) {
+        try report.note(.runtime, "~/.local/bin/telar left as it was: {s}", .{result.errorLine()});
+    } else if (std.mem.indexOf(u8, result.stdout, "linked") != null) {
+        try report.note(.runtime, "~/.local/bin/telar now links to {s}", .{telar_path});
     }
 }
 
@@ -520,7 +578,7 @@ fn stopOldRuntime(init: std.process.Init, report: *SetupReport, target: *const S
     try remote_shell.assign(&script, "target", machine.telar_path.?);
     try remote_shell.assign(&script, "stopping", stopping_text);
     try script.writeAll(
-        \\for candidate in "$HOME"/.local/share/telar/versions/*/telar $(command -v telar 2>/dev/null); do
+        \\for candidate in "$HOME/.local/bin/telar" "$HOME"/.local/share/telar/versions/*/telar $(command -v telar 2>/dev/null); do
         \\    [ -x "$candidate" ] && [ "$candidate" != "$target" ] || continue
         \\    if "$candidate" server stop 2>/dev/null | grep -q "$stopping"; then
         \\        exit 0
@@ -531,7 +589,10 @@ fn stopOldRuntime(init: std.process.Init, report: *SetupReport, target: *const S
         \\
     );
 
-    var result = try remote_shell.runScript(init, target.destination(), script.buffered(), probe_timeout_s);
+    var result = remote_shell.runScript(init, target.destination(), script.buffered(), probe_timeout_s) catch |err| {
+        try report.end(.runtime, .failed, "stopping the old runtime did not run to the end: {s}", .{@errorName(err)});
+        return false;
+    };
     defer result.deinit(init.gpa);
     if (!result.succeeded()) {
         try report.end(.runtime, .failed, "{s}", .{result.errorLine()});
@@ -642,20 +703,37 @@ test "setup finds a saved machine by label or destination, or names a new one" {
         .destination = "dev@box",
     }));
 
-    const by_label = try resolve(&profiles, "box", null);
+    const io = std.testing.io;
+    const by_label = try resolve(io, &profiles, "box", null);
     try std.testing.expect(by_label.saved != null);
     try std.testing.expectEqualStrings("dev@box", by_label.destination());
 
-    const by_destination = try resolve(&profiles, "dev@box", null);
+    const by_destination = try resolve(io, &profiles, "dev@box", null);
     try std.testing.expectEqualStrings("box", by_destination.label());
 
-    const fresh = try resolve(&profiles, "ops@gpu.lan", null);
+    const fresh = try resolve(io, &profiles, "ops@gpu.lan", null);
     try std.testing.expect(fresh.saved == null);
     try std.testing.expectEqualStrings("gpu.lan", fresh.label());
 
-    const named = try resolve(&profiles, "ops@gpu.lan", "gpu");
+    const named = try resolve(io, &profiles, "ops@gpu.lan", "gpu");
     try std.testing.expectEqualStrings("gpu", named.label());
-    try std.testing.expectError(error.InvalidRemoteDestination, resolve(&profiles, "-oProxyCommand=x", null));
+    try std.testing.expectError(error.InvalidRemoteDestination, resolve(io, &profiles, "-oProxyCommand=x", null));
+}
+
+test "a new destination whose label another machine has is refused before setup starts" {
+    var profiles: core.MachineProfiles = .{};
+    try profiles.add(try core.MachineProfile.init(@enumFromInt(1), .{
+        .label = "box",
+        .destination = "dev@box",
+    }));
+
+    const io = std.testing.io;
+    try std.testing.expectError(error.DuplicateMachineLabel, resolve(io, &profiles, "root@box", null));
+    try std.testing.expectError(error.DuplicateMachineLabel, resolve(io, &profiles, "ops@gpu", "box"));
+
+    const renamed = try resolve(io, &profiles, "root@box", "box-root");
+    try std.testing.expectEqualStrings("box-root", renamed.label());
+    try std.testing.expectEqualStrings("root@box", renamed.destination());
 }
 
 test "the line kept from unreadable output is the first" {

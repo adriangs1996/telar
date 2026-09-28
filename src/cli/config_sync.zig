@@ -235,7 +235,8 @@ fn targetKind(io: std.Io, path: []const u8) std.Io.File.Kind {
 }
 
 /// Sends the configuration of the `wanted` agents to the machine and
-/// reports what it wrote, what it left here and why.
+/// reports what it wrote, what it left here and why. A failure, SSH's
+/// included, fails this step and no other.
 ///
 /// ```zig
 /// try config_sync.run(process_init, &report, "dev@box", &platform, wanted);
@@ -246,6 +247,12 @@ pub fn run(init: std.process.Init, report: *SetupReport, destination: []const u8
         return;
     }
 
+    sync(init, report, destination, platform, wanted) catch |err| {
+        try report.end(.configuration, .failed, "{s}; nothing more was written there", .{@errorName(err)});
+    };
+}
+
+fn sync(init: std.process.Init, report: *SetupReport, destination: []const u8, platform: *const MachinePlatform, wanted: std.EnumSet(Agent)) !void {
     var arena_state: std.heap.ArenaAllocator = .init(init.gpa);
     defer arena_state.deinit();
 
