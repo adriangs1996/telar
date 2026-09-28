@@ -20,13 +20,13 @@ const TestEnvironment = @import("TestEnvironment.zig");
 /// ```
 pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
     if (comptime !build_options.native_client) {
-        std.debug.print("telar: this build has no window; build with -Dgui=true on macOS or Linux\n", .{});
-        return error.UnsupportedPlatform;
+        std.debug.print("{s}", .{no_window_build_message});
+        return no_window_status;
     }
 
     if (!displayAvailable(init.minimal.environ)) {
         std.debug.print("{s}", .{no_display_message});
-        return no_display_status;
+        return no_window_status;
     }
 
     // The window's identity lease lives in the local runtime directory,
@@ -100,14 +100,25 @@ fn defaultShell(environ: std.process.Environ) []const u8 {
 }
 
 /// Exit status when no window can open here.
-const no_display_status: u8 = 1;
+const no_window_status: u8 = 1;
 
-const no_display_message =
-    \\telar: no display to open a window here (an SSH login, or Linux without WAYLAND_DISPLAY).
+const cli_hint =
     \\From a terminal, reach the panes and agents through the CLI:
     \\  telar pane read|watch|send-keys, telar agent prompt, telar --machine LABEL COMMAND
     \\
 ;
+
+const no_display_message =
+    \\telar: no display to open a window here (an SSH login, or Linux without WAYLAND_DISPLAY).
+    \\
+++ cli_hint;
+
+// A headless release leaves the window out on purpose: it ships the
+// runtime and the CLI.
+const no_window_build_message =
+    \\telar: this build has no window; it ships the runtime and the CLI.
+    \\
+++ cli_hint;
 
 // A window needs a display: Wayland on Linux (X11 is not supported), and
 // on macOS a login session rather than an SSH one, whose window server
