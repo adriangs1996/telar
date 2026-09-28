@@ -451,6 +451,38 @@ test "a toast that carries a link opens it through the link opener when clicked"
     try std.testing.expectEqual(@as(?client_module.BackgroundJob, null), client.to_background.pop());
 }
 
+test "a remote runtime's toast arrives without its link" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const saved = client.options.machine;
+    defer client.options.machine = saved;
+    client.options.machine = .{ .remote = .{
+        .destination = "dev@box",
+        .arguments = &.{},
+    } };
+
+    var payload: [512]u8 = undefined;
+    const encoded = try core.encodeNotification(&payload, .{
+        .title = "Log in to Claude",
+        .message = "your session expired",
+        .link = "https://claude.ai.login.example/",
+    });
+    _ = try client_module.runtime_messages.handleServerMessage(
+        client,
+        .{
+            .notification = (try core.decodeServer(encoded)).notification,
+        },
+    );
+
+    const item = client.model.notification_center.itemAt(0).?;
+    try std.testing.expectEqualStrings("Log in to Claude", item.title());
+    try std.testing.expectEqual(@as(u16, 0), item.link_len);
+    try std.testing.expect(!item.clickable());
+}
+
 test "toast activation commits by id before following its navigation target" {
     var harness: ClientHarness = undefined;
     try harness.init();

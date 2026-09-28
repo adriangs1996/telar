@@ -57,7 +57,19 @@ a pane; `telar machine setup` uses it to bring an agent's login page from
 another machine to this window. The body holds 192 bytes, too few for an
 OAuth URL, so the link travels in its own field. Only the CLI sends one: a
 client's own notification requests never carry a link, which keeps the
-client's outbox slots small. `--socket PATH` selects an explicit runtime; otherwise
+client's outbox slots small.
+
+Any process that can reach a runtime can send a link, so the link is held
+to what a card can show honestly (`core.notification_link`): its authority
+is a plain host of letters, digits, dots and hyphens, with no user info
+(`https://claude.ai@evil.example/` opens evil.example), no port, no
+percent-encoding and no backslash. The card names that host on its action
+line, "Open auth.openai.com ↗", before anyone clicks; a host too long for
+the card keeps its end, where the domain that owns it is. A window takes
+links only from this machine's runtime: a notification from a remote
+machine's runtime arrives without its link, so a process on another machine
+cannot put a page of its choosing one click away in this machine's browser.
+Setup announces a login through the local runtime for that reason. `--socket PATH` selects an explicit runtime; otherwise
 the normal `TELAR_SOCKET` and managed-runtime resolution applies.
 
 The command exits successfully only when at least one UI client accepted the

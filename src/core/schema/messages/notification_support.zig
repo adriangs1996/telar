@@ -10,6 +10,7 @@ const Decoder = bytecodec.Decoder;
 const Notification = @import("Notification.zig");
 const std = @import("std");
 const types = @import("../types.zig");
+const notification_link = @import("../notification_link.zig");
 const NotificationShown = @import("NotificationShown.zig");
 
 pub fn encodeShowNotification(buffer: []u8, message: ShowNotification) ![]const u8 {
@@ -108,22 +109,10 @@ fn validateNotification(notification: Notification) !void {
     try validateNotificationLink(notification.link);
 }
 
-/// A link is empty, or an https URL of printable ASCII without spaces, so
-/// the only thing a click can open is a web page.
+/// A link is empty, or an https URL whose host a card can show as it is,
+/// so the only thing a click can open is the web page the card names.
 fn validateNotificationLink(link: []const u8) !void {
-    if (link.len == 0) {
-        return;
-    }
-
-    if (link.len > types.max_notification_link_bytes or !std.mem.startsWith(u8, link, "https://") or link.len == "https://".len) {
-        return error.InvalidNotificationLink;
-    }
-
-    for (link) |byte| {
-        if (byte <= ' ' or byte >= 0x7f) {
-            return error.InvalidNotificationLink;
-        }
-    }
+    try notification_link.validate(link);
 }
 
 test "a notification carries an https link and refuses any other" {

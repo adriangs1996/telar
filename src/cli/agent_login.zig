@@ -50,6 +50,10 @@ const LoginPlan = struct {
     keys: ?[]const u8 = null,
     /// Whether the login prints a link to open.
     link: bool = true,
+    /// The only hosts a link from this login may name, from the agent's
+    /// source or shipped bundle (docs/plans/machine-setup.md, Agent facts).
+    /// Any other link in the pane, or one with user info, is never shown.
+    hosts: []const []const u8 = &.{},
     /// Text before the one-time code a device login prints.
     code_marker: ?[]const u8 = null,
     /// What the person pastes back into the pane, when the login asks.
@@ -76,26 +80,36 @@ fn planFor(agent: Agent, provider: ?[]const u8) ?LoginPlan {
         // https://code.claude.com/docs/en/troubleshoot-install: `claude auth
         // login` prints the URL and reads the pasted code from stdin;
         // `claude auth status` exits 0 when logged in (cli-reference).
+        // Hosts: CLAUDE_AI_AUTHORIZE_URL (claude.com), CONSOLE_AUTHORIZE_URL
+        // (platform.claude.com) in the 2.1.284 binary; claude.ai as Pi and
+        // older releases use it.
         .claude => .{
             .title = "Log in to Claude Code",
             .arguments = &.{ "auth", "login" },
+            .hosts = &.{ "claude.com", "claude.ai", "platform.claude.com" },
             .paste = "the code the browser shows",
             .instructions = "open the page, sign in, and paste the code it shows into this terminal",
         },
         // https://learn.chatgpt.com/docs/auth.md; device login must be on in
         // ChatGPT's security settings. `codex login status` exits 0 when
         // logged in (codex-rs/cli/src/login.rs).
+        // Host: DEFAULT_ISSUER in codex-rs/login/src/server.rs, and the
+        // device page `{issuer}/codex/device` (device_code_auth.rs).
         .codex => .{
             .title = "Log in to Codex",
             .arguments = &.{ "login", "--device-auth" },
+            .hosts = &.{"auth.openai.com"},
             .code_marker = "one-time code",
             .instructions = "open the page, sign in and enter the code",
         },
         // https://cursor.com/docs/cli/reference/authentication.md: the URL
         // is printed and the CLI polls (Linux package 2026.09.26-dd393fe).
+        // Host: `new URL("/loginDeepControl", "https://cursor.com")` in the
+        // bundle's index.js.
         .cursor => .{
             .title = "Log in to Cursor Agent",
             .arguments = &.{"login"},
+            .hosts = &.{"cursor.com"},
             .environment = "NO_OPEN_BROWSER=1",
             .instructions = "open the page and sign in",
         },
@@ -115,6 +129,8 @@ fn planFor(agent: Agent, provider: ?[]const u8) ?LoginPlan {
         .opencode => if (provider == null or !std.mem.eql(u8, provider.?, "openai")) null else .{
             .title = "Log in to OpenCode",
             .arguments = &.{ "auth", "login", "-p", "openai", "-m", "ChatGPT Pro/Plus (headless)" },
+            // Host: ISSUER in packages/opencode/src/plugin/openai/codex.ts.
+            .hosts = &.{"auth.openai.com"},
             .code_marker = "Enter code:",
             .instructions = "open the page, sign in and enter the code",
         },
@@ -292,7 +308,7 @@ fn waitForLink(init: std.process.Init, arena: std.mem.Allocator, login: Login, p
     var waited: u64 = 0;
     while (waited < link_wait_ms) : (waited += poll_ms) {
         const text = try readPane(init, arena, login.profile, pane);
-        if (findLink(text, login.plan.code_marker)) |found| {
+        if (findLink(text, login.plan.hosts, login.plan.code_marker)) |found| {
             if (login.plan.code_marker == null or found.code != null) {
                 return found;
             }
@@ -311,28 +327,25 @@ fn readPane(init: std.process.Init, arena: std.mem.Allocator, profile: *const co
     return arena.dupe(u8, output);
 }
 
-/// The first https URL a login printed and, when `code_marker` is given,
-/// the one-time code after it: on the marker's line, or first on the next
-/// line that has text.
+/// The first https URL a login printed whose host is one of `hosts` and
+/// which a notification may carry (no user info, a plain host), and, when
+/// `code_marker` is given, the one-time code after it: on the marker's
+/// line, or first on the next line that has text. Any other URL in the pane,
+/// printed there by whatever runs in it, is passed over.
 ///
 /// ```zig
-/// const found = findLink(pane_text, "one-time code").?;
+/// const found = findLink(pane_text, &.{"auth.openai.com"}, "one-time code").?;
 /// ```
-fn findLink(text: []const u8, code_marker: ?[]const u8) ?FoundLink {
-    const start = std.mem.indexOf(u8, text, "https://") orelse return null;
-    var end = start;
-    while (end < text.len and text[end] > ' ' and text[end] < 0x7f and text[end] != '"' and text[end] != '\'' and text[end] != '<' and text[end] != '>' and text[end] != '`') {
-        end += 1;
-    }
-
-    var url = text[start..end];
-    while (url.len > "https://".len and std.mem.indexOfScalar(u8, ".,;:)]}", url[url.len - 1]) != null) {
-        url = url[0 .. url.len - 1];
-    }
-
-    if (url.len > core.max_notification_link_bytes) {
-        return null;
-    }
+fn findLink(text: []const u8, hosts: []const []const u8, code_marker: ?[]const u8) ?FoundLink {
+    var from: usize = 0;
+    const url = while (std.mem.indexOfPos(u8, text, from, "https://")) |start| {
+        from = start + 1;
+        const candidate = urlAt(text, start);
+        core.notification_link.validate(candidate) catch continue;
+        if (allowedHost(core.notification_link.host(candidate), hosts)) {
+            break candidate;
+        }
+    } else return null;
 
     var found: FoundLink = .{ .url = url };
     const marker = code_marker orelse return found;
@@ -350,6 +363,32 @@ fn findLink(text: []const u8, code_marker: ?[]const u8) ?FoundLink {
     }
 
     return found;
+}
+
+// The URL that starts at `start`, without the punctuation that ends a
+// sentence around it.
+fn urlAt(text: []const u8, start: usize) []const u8 {
+    var end = start;
+    while (end < text.len and text[end] > ' ' and text[end] < 0x7f and text[end] != '"' and text[end] != '\'' and text[end] != '<' and text[end] != '>' and text[end] != '`') {
+        end += 1;
+    }
+
+    var url = text[start..end];
+    while (url.len > "https://".len and std.mem.indexOfScalar(u8, ".,;:)]}", url[url.len - 1]) != null) {
+        url = url[0 .. url.len - 1];
+    }
+
+    return url;
+}
+
+fn allowedHost(host: []const u8, hosts: []const []const u8) bool {
+    for (hosts) |allowed| {
+        if (std.ascii.eqlIgnoreCase(host, allowed)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 // Shows the login in this machine's window, where one click opens the
@@ -485,17 +524,40 @@ test "a login's link and one-time code are read from its pane" {
         \\2. Enter this one-time code (expires in 15 minutes)
         \\   ABCD-1234
     ;
-    const found = findLink(codex, "one-time code").?;
+    const openai: []const []const u8 = &.{"auth.openai.com"};
+    const found = findLink(codex, openai, "one-time code").?;
     try std.testing.expectEqualStrings("https://auth.openai.com/codex/device", found.url);
     try std.testing.expectEqualStrings("ABCD-1234", found.code.?);
 
     const claude = "Browser didn't open? Use the url below to sign in:\n\nhttps://claude.ai/oauth/authorize?code=true&client_id=x&state=y.\n\nPaste code here if prompted >";
-    const link = findLink(claude, null).?;
+    const link = findLink(claude, planFor(.claude, null).?.hosts, null).?;
     try std.testing.expectEqualStrings("https://claude.ai/oauth/authorize?code=true&client_id=x&state=y", link.url);
     try std.testing.expectEqual(@as(?[]const u8, null), link.code);
 
-    try std.testing.expectEqual(@as(?FoundLink, null), findLink("Logging in...", null));
-    try std.testing.expectEqualStrings("XY-99", findLink("url: https://auth.openai.com/codex/device\nEnter code: XY-99\n", "Enter code:").?.code.?);
+    try std.testing.expectEqual(@as(?FoundLink, null), findLink("Logging in...", openai, null));
+    try std.testing.expectEqualStrings("XY-99", findLink("url: https://auth.openai.com/codex/device\nEnter code: XY-99\n", openai, "Enter code:").?.code.?);
+}
+
+test "a link to another host, or with user info, is never taken for the login" {
+    const claude = planFor(.claude, null).?.hosts;
+    for ([_][]const u8{
+        "Open https://claude.ai@evil.example/oauth/authorize to sign in",
+        "Open https://claude.ai.evil.example/oauth/authorize to sign in",
+        "Open https://evil.example/?next=https:claude.ai to sign in",
+        "Open https://claude.ai:8443/oauth to sign in",
+        "Open http://claude.ai/oauth to sign in",
+    }) |text| {
+        try std.testing.expectEqual(@as(?FoundLink, null), findLink(text, claude, null));
+    }
+
+    // A decoy printed first is passed over for the login's own link.
+    const found = findLink("See https://evil.example/login first\nhttps://claude.com/cai/oauth/authorize?code=true\n", claude, null).?;
+    try std.testing.expectEqualStrings("https://claude.com/cai/oauth/authorize?code=true", found.url);
+
+    for (std.enums.values(Agent)) |agent| {
+        const plan = planFor(agent, "openai") orelse continue;
+        try std.testing.expect(!plan.link or plan.hosts.len != 0);
+    }
 }
 
 test "the step says ok, changed, pending or failed from the logins" {

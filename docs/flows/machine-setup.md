@@ -99,6 +99,12 @@ SetupReport: one numbered line per step as it ends, or one JSON object
   code from its pane and shows them, but stores neither; what the person
   pastes is typed into the login pane and nowhere else. A provider with no
   browser login (OpenCode with Anthropic) is left to the person.
+- **A login link names an allowed host.** Each agent's login has a list of
+  the hosts its link may name (`agent_login.planFor`, sources in the plan's
+  Agent facts); setup takes the first link in the pane on one of them with
+  no user info or port, and passes over any other link something printed
+  there. The notification it sends goes to the local runtime, and its card
+  shows the host before the click ([notifications](../notifications.md)).
 
 ## Failures
 

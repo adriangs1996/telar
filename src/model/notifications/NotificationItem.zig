@@ -31,6 +31,12 @@ pub fn link(self: *const Item) []const u8 {
     return self.link_buffer[0..self.link_len];
 }
 
+/// The host a click opens, shown on the card before anyone clicks; empty
+/// without a link.
+pub fn linkHost(self: *const Item) []const u8 {
+    return core.notification_link.host(self.link());
+}
+
 /// Applies f(t) = 3t² - 2t³ and rounds to the nearest terminal cell.
 /// u128 intermediates keep the integer-only render path exact and bounded.
 pub fn animatedWidth(self: *const Item, full_width: u16) u16 {

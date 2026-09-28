@@ -296,6 +296,21 @@ Logins from a machine without a browser, and how setup knows they are done:
 | OpenCode | `opencode auth login -p PROVIDER -m METHOD`; OpenAI has a device flow `"ChatGPT Pro/Plus (headless)"` (source); Anthropic is API key only ([providers](https://opencode.ai/docs/providers)) | open the link, type the code | `opencode auth list` lists the provider; it has no exit status for it |
 | Cursor Agent | `NO_OPEN_BROWSER=1 agent login` prints the URL and polls ([authentication](https://cursor.com/docs/cli/reference/authentication.md), bundle) | open the link | `agent status --format json` says `authenticated` (it exits 0 either way, bundle) |
 
+Hosts a login link may name, checked on 2026-09-28; setup shows no link
+to any other host ([decision 3](#decisions)). No vendor's documentation
+names them, so they come from source or the shipped build:
+
+| Agent | Hosts | Source |
+| --- | --- | --- |
+| Claude Code | `claude.com`, `platform.claude.com`, `claude.ai` | 2.1.284 binary: `CLAUDE_AI_AUTHORIZE_URL:"https://claude.com/cai/oauth/authorize"`, `CONSOLE_AUTHORIZE_URL:"https://platform.claude.com/oauth/authorize"`; `claude.ai/oauth/authorize` is Pi's Anthropic login (`packages/ai/src/auth/oauth/anthropic.ts`) |
+| Codex | `auth.openai.com` | `codex-rs/login/src/server.rs`: `DEFAULT_ISSUER: &str = "https://auth.openai.com"`; `device_code_auth.rs`: `format!("{base_url}/codex/device")` |
+| OpenCode (OpenAI) | `auth.openai.com` | `packages/opencode/src/plugin/openai/codex.ts`: `const ISSUER = "https://auth.openai.com"` |
+| Cursor Agent | `cursor.com` | bundle `index.js`: `new URL("/loginDeepControl", t)` with `"https://cursor.com"` |
+
+Each can be moved by the agent's own override (`CLAUDE_CODE_CUSTOM_OAUTH_URL`,
+Codex's `--experimental_issuer`, `CURSOR_WEBSITE_URL`); a login moved that
+way shows no link, and the person opens it from the pane.
+
 Secret files, never read or sent (the denylist starts with these):
 `~/.claude/.credentials.json`, `~/.claude.json` (OAuth session, MCP servers,
 project history), `~/.codex/auth.json`, `~/.codex/.credentials.json` (MCP
@@ -355,7 +370,10 @@ Settled with Adrian on 2026-09-28.
    2 KiB) on `show_notification` and the notification event, opened through
    the existing link policy when the card is clicked, and `telar
    notification show --link URL`. The wire changes, so `schema_version`
-   goes up.
+   goes up. Any process that reaches a runtime can send one, so a link has
+   a plain host (no user info, port or encoding), the card shows that host
+   before the click, a window takes links only from this machine's runtime,
+   and setup shows only a link to a host its agent's login is known to use.
 
 ## As built
 

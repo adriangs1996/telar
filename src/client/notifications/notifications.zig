@@ -99,8 +99,13 @@ pub fn completeNotificationDelivery(client: *Client, shown: core.NotificationSho
     return .undelivered;
 }
 
-/// Translates and publishes one notification pushed by the runtime.
+/// Translates and publishes one notification pushed by the runtime. Only
+/// this machine's own runtime may attach a link: a process on another
+/// machine could otherwise put a page of its choosing one click away in
+/// this machine's browser, so a remote runtime's notification arrives
+/// without its link. Setup announces a login through the local runtime.
 pub fn applyRuntimeNotification(client: *Client, notification: core.Notification) !data.NotificationPublication {
+    const remote = if (client.options.machine) |machine| machine == .remote else false;
     return publishNotification(
         client,
         pacing.clock.monotonic(client.io),
@@ -113,7 +118,7 @@ pub fn applyRuntimeNotification(client: *Client, notification: core.Notification
             },
             .title = notification.title,
             .message = notification.message,
-            .link = notification.link,
+            .link = if (remote) "" else notification.link,
             .target = switch (notification.target) {
                 .none => .none,
                 .pane => |pane_id| .{
