@@ -95,6 +95,7 @@ fn statx(directory: std.posix.fd_t, path: [*:0]const u8, flags: u32) error{Inode
         .UID = true,
         .SIZE = true,
     };
+
     var buffer: linux.Statx = undefined;
     if (linux.errno(linux.statx(directory, path, flags, request, &buffer)) != .SUCCESS) {
         return error.InodeUnavailable;
@@ -132,6 +133,7 @@ test "a path reports its type, owner, links and size, and a symlink is not follo
         .sub_path = "file",
         .data = "four",
     });
+
     try temp.dir.symLink(io, "file", "link", .{});
 
     var file_buffer: [std.fs.max_path_bytes]u8 = undefined;
