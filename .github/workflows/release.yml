@@ -140,8 +140,12 @@ jobs:
           name: stage-macos-${{ matrix.arch }}
           path: ${{ runner.temp }}
 
+      # Into an empty directory of its own, so the tarball cannot replace
+      # anything else in RUNNER_TEMP, such as the keychain made below.
       - name: Unpack the stage
-        run: tar -xzf "$RUNNER_TEMP/stage-macos-${{ matrix.arch }}.tar.gz" -C "$RUNNER_TEMP"
+        run: |
+          mkdir "$RUNNER_TEMP/unpacked"
+          tar -xzf "$RUNNER_TEMP/stage-macos-${{ matrix.arch }}.tar.gz" -C "$RUNNER_TEMP/unpacked"
 
       # Each group of secrets is all set or all empty; half a group would
       # otherwise publish an ad hoc signature or skip notarization silently.
@@ -207,10 +211,10 @@ jobs:
       - name: Sign
         env:
           MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
-        run: packaging/release/sign-macos.sh "$RUNNER_TEMP/stage"
+        run: packaging/release/sign-macos.sh "$RUNNER_TEMP/unpacked/stage"
 
       - name: Package
-        run: packaging/release/macos.sh package "$RUNNER_TEMP/stage" dist
+        run: packaging/release/macos.sh package "$RUNNER_TEMP/unpacked/stage" dist
 
       - name: Notarize
         id: notarize
@@ -231,7 +235,7 @@ jobs:
         run: |
           signed=no
           notarized=no
-          if packaging/release/signed-by-developer-id.sh "$RUNNER_TEMP/stage/prefix/Telar.app"; then
+          if packaging/release/signed-by-developer-id.sh "$RUNNER_TEMP/unpacked/stage/prefix/Telar.app"; then
             signed=yes
           fi
 
