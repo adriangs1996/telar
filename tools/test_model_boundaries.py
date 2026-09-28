@@ -25,7 +25,7 @@ class ModelBoundaries(unittest.TestCase):
         self.assertEqual([], violations(self.root))
 
     def test_model_rejects_service_dependencies(self):
-        for dependency in ("telar-client", "telar-backend", "telar-gui", "telar-frontend", "telar-lua"):
+        for dependency in ("telar-client", "telar-backend", "telar-gui", "telar-headless", "telar-lua"):
             with self.subTest(dependency=dependency):
                 self.write("src/model/Value.zig", f'const service = @import("{dependency}");')
                 self.assertTrue(any("forbidden model dependency" in e for e in violations(self.root)))
