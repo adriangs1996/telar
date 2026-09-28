@@ -377,6 +377,28 @@ test "worktree records keep the dispatching machine from version 7 on" {
     try std.testing.expect(try reader.next() == null);
 }
 
+test "a worktree record no client could decode is skipped, not the whole checkpoint" {
+    var buffer: [1024]u8 = undefined;
+    var encoder = try Encoder.init(&buffer, .{ .next_workspace_id = 2, .next_tab_id = 2, .next_pane_id = 1, .next_pane_generation = 1 });
+    try encoder.workspace(.{ .id = 1, .path = "/work/telar", .name = "", .first_tab_id = 1, .first_tab_label = "main" });
+    try encoder.worktree(.{ .id = 4, .source_workspace_id = 1, .path = "/work/telar-worktrees/fix-a", .branch = "fix-a" });
+    try encoder.worktree(.{ .id = 5, .source_workspace_id = 1, .path = "/work/telar-worktrees/fix-b", .branch = "fix-b" });
+    const bytes = try encoder.finish();
+
+    // Cut the first branch inside a character, as a torn write could.
+    var corrupt: [1024]u8 = undefined;
+    @memcpy(corrupt[0..bytes.len], bytes);
+    const branch = std.mem.indexOf(u8, bytes, "\x05\x00fix-a").? + 2;
+    corrupt[branch + 4] = 0xc3;
+
+    var reader = try Reader.init(corrupt[0..bytes.len]);
+    try std.testing.expect((try reader.next()).? == .workspace);
+    const kept = (try reader.next()).?;
+    try std.testing.expectEqual(@as(u64, 5), kept.worktree.id);
+    try std.testing.expect(try reader.next() == null);
+    try std.testing.expectEqual(@as(u16, 1), reader.skipped_worktrees);
+}
+
 test "a worktree record with text no client could decode is refused" {
     const valid: WorktreeRecord = .{
         .id = 4,

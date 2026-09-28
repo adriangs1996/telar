@@ -16,6 +16,9 @@ inner: bytecodec.Decoder,
 counters: Counters,
 version: u16,
 finished: bool = false,
+/// Worktree records dropped because their text no longer validates; the
+/// rest of the checkpoint still restores.
+skipped_worktrees: u16 = 0,
 
 pub fn init(bytes: []const u8) !Reader {
     var decoder = bytecodec.Decoder.init(bytes);
@@ -88,7 +91,13 @@ pub fn next(self: *Reader) !?checkpoint.Record {
                     .brief = try self.inner.readSized16(),
                     .dispatched_from = if (self.version >= checkpoint.dispatched_from_version) try self.inner.readSized16() else "",
                 } };
-                try checkpoint.validateWorktree(record.worktree);
+                // A worktree is observation, not session state: losing one
+                // must not quarantine every workspace, tab and pane with it.
+                checkpoint.validateWorktree(record.worktree) catch {
+                    self.skipped_worktrees +|= 1;
+                    continue;
+                };
+
                 return record;
             },
             .tab => {
