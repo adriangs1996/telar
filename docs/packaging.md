@@ -212,9 +212,23 @@ packaging/release/linux.sh dist   # Ubuntu 24.04, after install-linux-deps.sh
 
 ### Signing and notarization
 
-The macOS job signs and notarizes only when the secrets exist. Without them
-it still publishes. The Linux and command line assets are unaffected, and
-the release notes say the disk images are not notarized.
+The macOS release runs in two jobs per architecture. `macos` builds and
+uploads the stage as an artifact; `macos-sign` downloads it on a fresh
+runner, signs, packages and notarizes. The build runs Cargo build scripts
+and other third-party code, and a step can reach every later step of its
+job through `GITHUB_ENV`, `GITHUB_PATH` or the checkout, so the build job
+sees no secret. In `macos-sign` each secret is in the `env` of only the
+steps that use it, and nothing is built there.
+
+It signs and notarizes only when the secrets exist. Without them it still
+publishes. The Linux and command line assets are unaffected, and the
+release notes say the disk images are not notarized. The three signing
+secrets go together, and so do the three notary secrets: a job with only
+some of a group fails, instead of publishing an ad hoc signature as if it
+were signed. The notes' "signed" comes from the bundle itself:
+`packaging/release/signed-by-developer-id.sh` requires a valid signature
+whose chain `codesign -dvv` reports as Developer ID Application, Developer
+ID Certification Authority and Apple Root CA.
 
 | Secret | Value |
 | --- | --- |
