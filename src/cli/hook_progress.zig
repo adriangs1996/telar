@@ -30,9 +30,10 @@ pub fn map(io: std.Io, input: ProgressHookInput, storage: *ProgressStorage) ?cor
         .pane_id = .invalid,
         .pane_generation = 0,
     };
-    if (input.cwd.len != 0 and input.cwd.len <= core.max_cwd_bytes and std.fs.path.isAbsolute(input.cwd)) {
-        report.cwd = input.cwd;
-        if (gitstatus.linked_worktree.find(io, input.cwd, &storage.root, &storage.head)) |linked| {
+    const cwd = if (input.new_cwd.len != 0) input.new_cwd else input.cwd;
+    if (cwd.len != 0 and cwd.len <= core.max_cwd_bytes and std.fs.path.isAbsolute(cwd)) {
+        report.cwd = cwd;
+        if (gitstatus.linked_worktree.find(io, cwd, &storage.root, &storage.head)) |linked| {
             // A branch the runtime cannot hold whole names no worktree: a
             // cut one would never match `telar worktree` or `worktree:`.
             if (core.validateWorktreeText(.{ .path = linked.root, .branch = linked.branch })) |_| {
@@ -242,6 +243,17 @@ test "whole-plan tools count completed steps and name the current one" {
     try std.testing.expectEqual(@as(u16, 1), codex.plan_done);
     try std.testing.expectEqual(@as(u16, 2), codex.plan_total);
     try std.testing.expectEqualStrings("Patch", codex.plan_text);
+}
+
+test "a directory change reports where the agent went, not where it was" {
+    // Claude Code 2.1.283 sends CwdChanged with `cwd` still naming the old
+    // directory and `new_cwd` the one it moved to.
+    var storage: ProgressStorage = .{};
+    const moved = map(std.testing.io, .{ .event = "CwdChanged", .cwd = "/src/telar", .new_cwd = "/src/telar-worktrees/fix" }, &storage).?;
+    try std.testing.expectEqualStrings("/src/telar-worktrees/fix", moved.cwd);
+
+    const unchanged = map(std.testing.io, .{ .event = "PostToolUse", .cwd = "/src/telar" }, &storage).?;
+    try std.testing.expectEqualStrings("/src/telar", unchanged.cwd);
 }
 
 test "a stop keeps the final answer's lines and drops escape sequences" {

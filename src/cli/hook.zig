@@ -583,6 +583,7 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
                     .tool_name = parsed.value.tool_name,
                     .tool_input = parsed.value.tool_input,
                     .cwd = parsed.value.cwd,
+                    .new_cwd = parsed.value.new_cwd,
                     .last_assistant_message = parsed.value.last_assistant_message,
                 }, &progress_storage),
             });

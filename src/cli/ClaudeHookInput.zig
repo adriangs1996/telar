@@ -21,6 +21,9 @@ tool_name: []const u8 = "",
 tool_use_id: []const u8 = "",
 tool_input: std.json.Value = .null,
 cwd: []const u8 = "",
+/// `CwdChanged` only: where the session moved. Its `cwd` is the directory
+/// it left (checked against Claude Code 2.1.283).
+new_cwd: []const u8 = "",
 
 const BackgroundTask = struct {
     type: []const u8 = "",
