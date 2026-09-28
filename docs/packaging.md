@@ -259,37 +259,51 @@ statically. What differs from glibc, checked in this code:
   Release builds for musl therefore start through `mainOnSlabHeap` in
   `src/main.zig`, with `lib/slabheap` as the process's general allocator
   and its `std.Io`'s. That allocator is the same one, except that a thread
-  whose slot is empty visits every other slot, waiting for a busy one,
-  before it maps a slab. The C libraries allocate from the caller's
-  allocator, not `malloc`: SQLite through `sqlite.routeMemory`, and Lua,
-  brotli and nghttp2 through the hooks each takes, over `lib/cblocks`.
-  Debug builds, glibc and macOS keep the standard start, where the general
-  allocator is libc's or Zig's leak-checking one.
+  whose slot is empty visits every other slot before it maps a slab,
+  spinning up to 128 times for a busy one, and maps outside every lock.
+  The C libraries allocate from the caller's allocator, not `malloc`:
+  SQLite through `sqlite.routeMemory`, and Lua, brotli and nghttp2 through
+  the hooks each takes, over `lib/cblocks`. Debug builds, glibc and macOS
+  keep the standard start, where the general allocator is libc's or Zig's
+  leak-checking one.
 
   Measured in one Debian 12 container with 4 CPUs, feeding the runtime
   commands through `telar history import`, 1000 at a time, with aarch64
-  ReleaseFast builds, two runs each, alternating builds. The glibc and
-  "before" binaries are the same in every row; the 300,000 rows for them
-  come from an earlier batch than the `slabheap` row:
+  ReleaseFast builds, two runs each, alternating builds. The "before" rows
+  come from an earlier batch of the same binary:
 
   | Build | Commands | Resident at the end | Runtime CPU |
   | --- | --- | --- | --- |
-  | glibc | 150,000 | 21.1 and 21.4 MiB | 22.6 and 23.7 s |
+  | glibc | 150,000 | 21.2 and 21.2 MiB | 23.0 and 23.4 s |
   | musl, Zig's `malloc` (before) | 150,000 | 118 and 188 MiB | 24.0 and 24.0 s |
-  | musl, `slabheap` | 150,000 | 19.3 and 19.4 MiB | 23.1 and 24.6 s |
-  | glibc | 300,000 | 21.0 and 20.6 MiB | 65.9 and 65.4 s |
+  | musl, `slabheap` | 150,000 | 19.4 and 19.4 MiB | 23.2 and 23.0 s |
+  | glibc | 300,000 | 20.6 and 20.8 MiB | 66.2 and 66.2 s |
   | musl, Zig's `malloc` (before) | 300,000 | 85 and 80 MiB | 65.7 and 65.4 s |
-  | musl, `slabheap` | 300,000 | 18.8 and 18.4 MiB | 68.5 and 67.5 s |
+  | musl, `slabheap` | 300,000 | 18.8 and 19.2 MiB | 66.7 and 67.3 s |
 
-  Searches took 0.01 to 0.04 s for 20 in every build. Before, resident
+  Searches took 0.01 to 0.03 s for 20 in every build. Before, resident
   memory varied from run to run and still grew by 5 to 19 MiB per 50,000
   commands between 200,000 and 300,000. With `slabheap`, anonymous memory
-  stayed at 10,148 KiB from 150,000 to 300,000 commands in both runs. An
-  earlier `slabheap` that skipped busy slots instead of waiting ended at
-  20.4 to 27.8 MiB at 300,000 and a stress test showed why: a thread that
-  allocates while others free finds their slots busy and keeps mapping.
-  SQLite reported 2.1 MiB in use from the first 10,000 commands on and a
-  high-water mark of 4.2 MiB.
+  went from 10,132 to 10,164 KiB between 150,000 and 300,000 commands in
+  one run and from 10,368 to 10,560 KiB in the other. SQLite reported
+  2.1 MiB in use from the first 10,000 commands on and a high-water mark
+  of 4.2 MiB.
+
+  How long a thread may wait for a busy slot was measured with a scratch
+  program on the macOS host (8 cores, 1 µs clock), three runs each: one
+  thread allocating 400 batches of 2000 blocks of 16 to 3000 bytes, which
+  six or 24 threads free.
+
+  | Busy slot | Worst allocation | 99.99th percentile | Slabs mapped |
+  | --- | --- | --- | --- |
+  | waited for without bound | 277 to 477 µs | 2 to 85 µs | 92 to 373 |
+  | skipped after 128 spins | 16 to 30 µs | 7 µs | 103 to 147 |
+
+  With six freeing threads and ten times as many batches, 128 spins mapped
+  214 to 572 slabs and the unbounded wait 438 to 560. In the container,
+  where up to 25 threads share 4 CPUs, the worst allocation reached 43 ms
+  with 128 spins and 51 ms with the wait: the allocating thread itself was
+  descheduled.
 
   The proxy's pattern was measured apart, since no end-to-end proxy load
   ran: a scratch aarch64 musl program in the same container ran six

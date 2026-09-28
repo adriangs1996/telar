@@ -12,15 +12,18 @@
 //! batch.
 //!
 //! Here, when a thread's own slot has nothing for a class, it releases it and
-//! visits each other slot once, waiting for a slot another thread holds; it
-//! never holds two slots, so the wait cannot deadlock. The first slot with a
-//! free slot or unused slab space serves the allocation and becomes the
-//! thread's slot. Only when every slot was empty for the class as it was
-//! visited is a slab mapped, so the slabs of a class stay near its peak live
-//! bytes, rounded up to the class, plus what other threads freed during the
-//! search. Skipping busy slots instead let a thread that allocates while
-//! others free keep mapping slabs. The search costs one lock per slot, on the
-//! allocations that find their own slot empty.
+//! visits each other slot once. It spins a bounded while for a slot another
+//! thread holds and skips it after that, so an allocation never waits for a
+//! holder that was preempted; it never holds two slots, so nothing can
+//! deadlock. The first slot with a free slot or unused slab space serves the
+//! allocation and becomes the thread's slot. Only when no visited slot had
+//! any is a slab mapped, outside every lock, so the slabs of a class stay
+//! near its peak live bytes, rounded up to the class, plus what sat in slots
+//! skipped at that moment. Skipping a busy slot at once let a thread that
+//! allocates while others free keep mapping slabs; waiting without a bound
+//! kept an allocation waiting 0.3 to 0.5 ms at worst in a stress test. The
+//! search costs one lock per slot, on the allocations that find their own
+//! slot empty.
 const std = @import("std");
 
 const Allocator = std.mem.Allocator;
@@ -33,7 +36,9 @@ const slab_len: usize = @max(std.heap.page_size_max, 64 * 1024);
 /// Free lists store a pointer in each free slot, so the smallest class holds one.
 const min_class = std.math.log2(@sizeOf(usize));
 const size_class_count = std.math.log2(slab_len) - min_class;
-const spins_before_yield = 64;
+/// How long to spin for a busy slot before skipping it: a slot is held for
+/// a few instructions unless its holder was preempted.
+const spins_before_skip = 128;
 
 /// One thread slot: a free list and a bump address per size class.
 const Slot = struct {
@@ -96,15 +101,7 @@ fn alloc(context: *anyopaque, len: usize, alignment: Alignment, return_address: 
         return address;
     }
 
-    const slot = self.lockSlot();
-    defer slot.mutex.unlock();
-
-    // Another thread may have freed into this slot during the search.
-    if (takeFreeSlot(slot, class, slot_size)) |address| {
-        return address;
-    }
-
-    return self.mapSlab(slot, class, slot_size);
+    return self.mapSlab(class, slot_size);
 }
 
 fn resize(context: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, return_address: usize) bool {
@@ -172,15 +169,18 @@ fn takeFreeSlot(slot: *Slot, class: usize, slot_size: usize) ?[*]u8 {
     return null;
 }
 
-// Visits each other slot once, waiting for one another thread holds. The
-// caller holds no slot meanwhile, so no two slots are ever held together.
+// Visits each other slot once, skipping one held past `spins_before_skip`.
+// The caller holds no slot meanwhile, so no two slots are ever held together.
 fn takeFromOtherSlot(self: *SlabHeap, class: usize, slot_size: usize) ?[*]u8 {
     const count = self.slotCount();
     const start = slot_index;
     for (1..count) |offset| {
         const index: u32 = @intCast((start + offset) % count);
         const other = &self.slots[index];
-        waitForSlot(other);
+        if (!lockWithin(other)) {
+            continue;
+        }
+
         defer other.mutex.unlock();
         if (takeFreeSlot(other, class, slot_size)) |address| {
             slot_index = index;
@@ -191,23 +191,33 @@ fn takeFromOtherSlot(self: *SlabHeap, class: usize, slot_size: usize) ?[*]u8 {
     return null;
 }
 
-// A slot is held for a few instructions, so spinning usually wins; a holder
-// that was preempted gets the CPU back through yield.
-fn waitForSlot(slot: *Slot) void {
+fn lockWithin(slot: *Slot) bool {
     var spins: u32 = 0;
     while (!slot.mutex.tryLock()) {
-        spins +|= 1;
-        if (spins < spins_before_yield) {
-            std.atomic.spinLoopHint();
-        } else {
-            std.Thread.yield() catch {};
+        if (spins == spins_before_skip) {
+            return false;
         }
+
+        spins += 1;
+        std.atomic.spinLoopHint();
     }
+
+    return true;
 }
 
-fn mapSlab(self: *SlabHeap, slot: *Slot, class: usize, slot_size: usize) ?[*]u8 {
+// Maps before taking a slot, so no thread spins on one held across mmap. A
+// slot that meanwhile received a free serves it and the new slab goes back.
+fn mapSlab(self: *SlabHeap, class: usize, slot_size: usize) ?[*]u8 {
     const slab = PageAllocator.map(slab_len, .fromByteUnits(slab_len)) orelse return null;
+    const slot = self.lockSlot();
+    if (takeFreeSlot(slot, class, slot_size)) |address| {
+        slot.mutex.unlock();
+        PageAllocator.unmap(@alignCast(slab[0..slab_len]));
+        return address;
+    }
+
     slot.next_addrs[class] = @intFromPtr(slab) + slot_size;
+    slot.mutex.unlock();
     _ = @atomicRmw(usize, &self.mapped_slabs, .Add, 1, .monotonic);
     return slab;
 }
@@ -357,7 +367,7 @@ test "one thread allocating while three free keeps the mapped slabs near the liv
 
     // At most 768 blocks are alive at once, 3 slabs; never reusing a block
     // would map 782. SmpAllocator's single-slot search mapped 39 to 236 here,
-    // and skipping busy slots 5 to 85.
+    // and skipping a busy slot at once 5 to 85.
     const live_slabs = freeing_threads * Handoff.capacity * block_len / slab_len;
     try std.testing.expect(heap.mappedSlabs() <= live_slabs + heap.slot_count);
 }
