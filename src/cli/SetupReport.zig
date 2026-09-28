@@ -156,6 +156,29 @@ pub fn changed(self: *const SetupReport) bool {
     return false;
 }
 
+/// Ends a setup that never started: one line, or the JSON object with no
+/// steps and `refused` saying why.
+///
+/// ```zig
+/// try report.refuse("box", "dev@box", "--confirm needs a terminal to ask on");
+/// ```
+pub fn refuse(self: *SetupReport, label: []const u8, destination: []const u8, reason: []const u8) !void {
+    if (!self.json) {
+        try self.writer.print("telar machine setup {s}: {s}.\n", .{ label, reason });
+        try self.writer.flush();
+        return;
+    }
+
+    try self.writer.writeAll("{\"label\":");
+    try control.writeJsonString(self.writer, label);
+    try self.writer.writeAll(",\"destination\":");
+    try control.writeJsonString(self.writer, destination);
+    try self.writer.writeAll(",\"ready\":false,\"pending\":false,\"changed\":false,\"refused\":");
+    try control.writeJsonString(self.writer, reason);
+    try self.writer.writeAll(",\"steps\":[]}\n");
+    try self.writer.flush();
+}
+
 /// Whether a step, a login, still waits for the person.
 pub fn pending(self: *const SetupReport) bool {
     for (self.status) |status| {
@@ -301,4 +324,15 @@ test "progress keeps what a machine printed to one line without control bytes" {
     var report: SetupReport = .{ .json = false, .writer = &writer };
     try report.progress("link: {s}", .{"https://x\x1b]52;c;AAAA\x07\nnext\x7f"});
     try std.testing.expectEqualStrings("    ... link: https://x ]52;c;AAAA  next\n", writer.buffered());
+}
+
+test "a setup refused before it starts says why in one object" {
+    var buffer: [512]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+    var report: SetupReport = .{ .json = true, .writer = &writer };
+    try report.refuse("box", "dev@box", "--confirm needs a terminal");
+    try std.testing.expectEqualStrings(
+        "{\"label\":\"box\",\"destination\":\"dev@box\",\"ready\":false,\"pending\":false,\"changed\":false,\"refused\":\"--confirm needs a terminal\",\"steps\":[]}\n",
+        writer.buffered(),
+    );
 }

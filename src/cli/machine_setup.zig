@@ -105,10 +105,19 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
     }
 
     const interactive = !options.json and (std.Io.File.stdin().isTty(init.io) catch false);
-    if (options.confirm and !try confirmSetup(init, &output.interface, &target, interactive)) {
-        try output.interface.print("Nothing was changed on {s}.\n", .{target.label()});
-        try output.interface.flush();
-        return 0;
+    if (options.confirm) {
+        // Without a terminal nobody can agree, so nothing is done and the
+        // caller learns it from the status; `--json` has no terminal either.
+        if (!interactive) {
+            try report.refuse(target.label(), target.destination(), "--confirm needs a terminal to ask on; nothing was changed");
+            return failure;
+        }
+
+        if (!try confirmSetup(init, &output.interface, &target)) {
+            try output.interface.print("Nothing was changed on {s}.\n", .{target.label()});
+            try output.interface.flush();
+            return 0;
+        }
     }
 
     const platform = try reach(init, &report, &target, directory.slice(), interactive) orelse return finish(&report, &target);
@@ -189,13 +198,8 @@ fn finish(report: *SetupReport, target: *const SetupTarget) !u8 {
 }
 
 // `--confirm`: says what setup is about to do and waits for a yes on the
-// terminal; without one, nothing is done.
-fn confirmSetup(init: std.process.Init, writer: *std.Io.Writer, target: *const SetupTarget, interactive: bool) !bool {
-    if (!interactive) {
-        try writer.writeAll("telar machine setup --confirm needs a terminal to ask on.\n");
-        return false;
-    }
-
+// terminal.
+fn confirmSetup(init: std.process.Init, writer: *std.Io.Writer, target: *const SetupTarget) !bool {
     try writer.print(
         "This installs telar {s} on {s} ({s}), and the agents you have here with their official installers; " ++
             "it copies their configuration, never a credential, and opens their logins there. Set it up? [y/N] ",
