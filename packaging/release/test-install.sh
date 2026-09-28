@@ -6,6 +6,10 @@
 #
 #   packaging/release/test-install.sh
 #   SH=dash packaging/release/test-install.sh    # the shell that runs install.sh
+#   NOEXEC_TMPDIR=/mnt/noexec packaging/release/test-install.sh
+#
+# NOEXEC_TMPDIR names a directory on a noexec mount, as /tmp is on hardened
+# servers; install.sh then gets it as TMPDIR. The http case needs python3.
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -55,10 +59,24 @@ EOF
     chmod 755 "$1"
 }
 
-# Writes a release whose desktop and headless builds start or not.
+# A diagram helper that rejects the empty request it reads from stdin with
+# status 2, as the real one does, or one the dynamic loader refuses.
+write_renderer() {
+    if [ "$2" = starts ]; then
+        printf '#!/bin/sh\ncat >/dev/null\necho "invalid diagram input" >&2\nexit 2\n' >"$1"
+    else
+        printf '#!/bin/sh\necho "telar-diagram-renderer: error while loading shared libraries: libgcc_s.so.1" >&2\nexit 127\n' >"$1"
+    fi
+
+    chmod 755 "$1"
+}
+
+# Writes a release whose desktop and headless builds start or not, and
+# whose desktop diagram helper starts unless RENDERER says fails.
 release() {
     gui=$1
     headless=$2
+    renderer=${3:-starts}
     dir=$work/releases/download/v$version
     rm -rf "$work/releases" "$work/tree"
     mkdir -p "$dir"
@@ -73,7 +91,7 @@ release() {
         mkdir -p "$work/tree/$asset/bin"
         write_telar "$work/tree/$asset/bin/telar" "$behavior" "$name"
         if [ "$name" = gui ]; then
-            write_telar "$work/tree/$asset/bin/telar-diagram-renderer" starts renderer
+            write_renderer "$work/tree/$asset/bin/telar-diagram-renderer" "$renderer"
         fi
 
         tar -czf "$dir/$asset.tar.gz" -C "$work/tree" "$asset"
@@ -130,6 +148,15 @@ installed() {
     "$work/bin/telar" --version 2>/dev/null
 }
 
+# True when a refused install left no staged copy behind.
+clean() {
+    for staged in "$work/bin"/.*.new; do
+        if [ -e "$staged" ]; then
+            return 1
+        fi
+    done
+}
+
 stubs linux-desktop
 release starts starts
 previous
@@ -149,10 +176,26 @@ fi
 
 release fails starts
 previous
-if ! install --gui && [ "$(installed)" = "telar $version (previous)" ] && [ ! -e "$work/bin/telar-diagram-renderer" ]; then
+if ! install --gui && [ "$(installed)" = "telar $version (previous)" ] && [ ! -e "$work/bin/telar-diagram-renderer" ] && clean; then
     pass "--gui with a native client that does not start keeps the previous install"
 else
     flunk "--gui with a native client that does not start keeps the previous install"
+fi
+
+release starts starts fails
+previous
+if ! install --gui && [ "$(installed)" = "telar $version (previous)" ] && [ ! -e "$work/bin/telar-diagram-renderer" ] && clean; then
+    pass "--gui with a diagram helper that does not start keeps the previous install"
+else
+    flunk "--gui with a diagram helper that does not start keeps the previous install"
+fi
+
+release starts starts fails
+previous
+if install && [ "$(installed)" = "telar $version (headless)" ] && [ ! -e "$work/bin/telar-diagram-renderer" ] && clean; then
+    pass "a diagram helper that does not start falls back to headless"
+else
+    flunk "a diagram helper that does not start falls back to headless"
 fi
 
 stubs linux-server
@@ -181,13 +224,39 @@ else
     flunk "a checksum mismatch keeps the previous install"
 fi
 
-release starts starts
-previous
-if ! PATH="$work/stub:$PATH" HOME="$work/home" TELAR_RELEASES_URL="http://127.0.0.1:9/releases" \
-    "$shell" "$root/install.sh" --bin-dir "$work/bin" >"$work/log" 2>&1 && [ "$(installed)" = "telar $version (previous)" ]; then
-    pass "a plain http release URL is refused"
-else
-    flunk "a plain http release URL is refused"
+# An http server that would serve the release, so only --proto refuses it.
+if command -v python3 >/dev/null 2>&1; then
+    release starts starts
+    previous
+    python3 -c '
+import http.server, sys
+server = http.server.HTTPServer(("127.0.0.1", 0), lambda *a: http.server.SimpleHTTPRequestHandler(*a, directory=sys.argv[1]))
+print(server.server_address[1], flush=True)
+server.serve_forever()
+' "$work" >"$work/port" 2>/dev/null &
+    server=$!
+    while [ ! -s "$work/port" ]; do
+        sleep 0.1
+    done
+
+    url=http://127.0.0.1:$(cat "$work/port")/releases
+    served=no
+    if curl -fsS -o /dev/null "$url/download/v$version/SHA256SUMS"; then
+        served=yes
+    fi
+
+    if [ "$served" = yes ] && ! PATH="$work/stub:$PATH" HOME="$work/home" TELAR_RELEASES_URL="$url" \
+        "$shell" "$root/install.sh" --version "$version" --bin-dir "$work/bin" >"$work/log" 2>&1 && [ "$(installed)" = "telar $version (previous)" ]; then
+        pass "a plain http release URL is refused although it serves the release"
+    else
+        printf 'served over http: %s\n' "$served" >>"$work/log"
+        flunk "a plain http release URL is refused although it serves the release"
+    fi
+
+    {
+        kill "$server"
+        wait "$server"
+    } 2>/dev/null || true
 fi
 
 # The installer gets SIGNAL while curl finishes its download, as with a
@@ -223,6 +292,7 @@ disk_image() {
     rm -rf "${work:?}/releases" "${work:?}/volume" "${work:?}/home" "${work:?}/bin"
     mkdir -p "$dir" "$work/volume/Telar.app/Contents/Resources/bin" "$work/home/Applications/Telar.app"
     write_telar "$work/volume/Telar.app/Contents/Resources/bin/telar" "$1" app
+    write_renderer "$work/volume/Telar.app/Contents/Resources/bin/telar-diagram-renderer" starts
     hdiutil create -quiet -volname Telar -srcfolder "$work/volume" -format UDZO "$dir/Telar-macos-aarch64.dmg"
     printf '%s  Telar-macos-aarch64.dmg\n' "$(sha256 "$dir/Telar-macos-aarch64.dmg")" >"$dir/SHA256SUMS"
     : >"$work/home/Applications/Telar.app/previous"
@@ -243,6 +313,29 @@ if command -v hdiutil >/dev/null 2>&1; then
     else
         flunk "--app with an app that does not start keeps the previous Telar.app"
     fi
+fi
+
+# Hardened servers mount /tmp noexec, where nothing downloaded can run.
+if [ -n "${NOEXEC_TMPDIR:-}" ]; then
+    printf '#!/bin/sh\n' >"$NOEXEC_TMPDIR/probe"
+    chmod 755 "$NOEXEC_TMPDIR/probe"
+    if "$NOEXEC_TMPDIR/probe" 2>/dev/null; then
+        printf '%s runs executables\n' "$NOEXEC_TMPDIR" >"$work/log"
+        flunk "NOEXEC_TMPDIR is a noexec mount"
+    fi
+
+    rm -f "$NOEXEC_TMPDIR/probe"
+    stubs linux-desktop
+    for build in gui headless; do
+        release starts starts
+        previous
+        flag=--$build
+        if TMPDIR=$NOEXEC_TMPDIR install "$flag" && [ "$(installed)" = "telar $version ($build)" ] && clean; then
+            pass "$flag installs with a noexec temporary directory"
+        else
+            flunk "$flag installs with a noexec temporary directory"
+        fi
+    done
 fi
 
 if [ "$failures" -gt 0 ]; then

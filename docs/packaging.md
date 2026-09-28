@@ -360,12 +360,18 @@ executable inside the app. It refuses to replace a regular `telar` file left
 by a command line install.
 
 It picks the asset for the system and architecture, downloads it with
-`SHA256SUMS`, aborts unless the checksum matches, and runs the downloaded
-`telar --version` with `LD_BIND_NOW=1`, so a build that the dynamic loader
-cannot load, for a missing library or symbol, never replaces a working
-install. Only then does it copy `telar` and `telar-diagram-renderer` beside
-their targets in `~/.local/bin` or `--bin-dir` and rename them into place.
-It runs `sudo` only with `--sudo`.
+`SHA256SUMS` and aborts unless the checksum matches. It copies `telar` and
+`telar-diagram-renderer` beside their targets in `~/.local/bin` or
+`--bin-dir` as `.telar.new` and `.telar-diagram-renderer.new`, and runs them
+from there with `LD_BIND_NOW=1`: `telar --version`, and the helper on an
+empty request, which it rejects with status 2 while a loader failure exits
+127. A build that the dynamic loader cannot load, for a missing library or
+symbol, so never replaces a working install. The check runs in the bin
+directory rather than the download directory because hardened servers
+mount `/tmp` noexec, where nothing can run. Only when both start does it
+rename them into place; otherwise it removes the copies. `--app` checks
+the copied `Telar.app` the same way before swapping it in. It runs `sudo`
+only with `--sudo`.
 
 On Linux it tries the desktop build when `ldconfig -p` lists
 `libwayland-client.so.0` and `libvulkan.so.1`, looking in `/sbin` and
@@ -393,7 +399,9 @@ Ctrl-C, SIGTERM and SIGHUP stop it after removing its temporary directory.
 `packaging/release/test-install.sh` runs the installer against fake
 releases through `file://`, with `uname`, `sw_vers` and `ldconfig`
 stubbed: fallback, refusal, checksum, http and signal cases, plus `--app`
-where `hdiutil` exists.
+where `hdiutil` exists. The http case serves the release over plain http,
+so only `--proto` refuses it. With `NOEXEC_TMPDIR` naming a directory on a
+noexec mount, as CI mounts one, it also installs with that as `TMPDIR`.
 
 The checksums come from the same release as the archive. They catch a
 corrupt download, not a tampered release; the attestation covers that.

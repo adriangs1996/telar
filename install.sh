@@ -6,10 +6,11 @@
 #   sh install.sh --version 0.3.0 --bin-dir /usr/local/bin --sudo
 #
 # It downloads the archive for this system, or the disk image with --app,
-# checks it against the release's SHA256SUMS, runs the downloaded `telar
-# --version` to prove it starts here, and only then replaces what is
-# installed. The only downloaded code it runs is that `telar`, after the
-# checksum matched, and with --app its `cli install`, which links the app's
+# checks it against the release's SHA256SUMS, copies it beside what it
+# replaces, proves from there that it starts, and only then renames it into
+# place. The only downloaded code it runs is what it installs, after the
+# checksum matched: `telar --version`, the diagram helper on an empty
+# request, and with --app `telar cli install`, which links the app's
 # executable into the bin directory.
 set -eu
 
@@ -196,17 +197,56 @@ fetch() {
     [ "$actual" = "$expected" ] || fail "checksum mismatch for $1: expected $expected, got $actual"
 }
 
-# Prints the version of a downloaded telar, or fails when it does not start,
-# as when the dynamic loader misses a library. LD_BIND_NOW makes glibc
-# resolve every symbol before main instead of at its first call.
+# Prints the version of a staged telar, or fails when it does not start, as
+# when the dynamic loader misses a library. LD_BIND_NOW makes glibc resolve
+# every symbol before main instead of at its first call. Staged copies run
+# where they will be installed: hardened servers mount /tmp noexec.
 starts() {
     LD_BIND_NOW=1 "$1" --version 2>"$work/start.log"
 }
 
-# Stops without touching the install because FILE's telar does not start.
+# Succeeds when a staged diagram helper runs: it reads a JSON request from
+# stdin and rejects an empty one with this status, while a loader failure
+# exits 127 and a refused exec 126.
+renderer_rejects_empty_request=2
+renders() {
+    status=0
+    LD_BIND_NOW=1 "$1" </dev/null 2>"$work/start.log" || status=$?
+    [ "$status" -eq "$renderer_rejects_empty_request" ]
+}
+
+# Removes the staged copies of a build that did not start.
+discard() {
+    for tool in $staged; do
+        run rm -f "$bin_dir/.$tool.new"
+    done
+
+    staged=
+}
+
+# Stops without touching the install because FILE's build does not start.
 refuse() {
+    discard
     sed 's/^/  /' "$work/start.log" >&2
-    fail "the telar in $1 does not start on this system; nothing was installed"
+    fail "the build in $1 does not start on this system; nothing was installed"
+}
+
+# Copies the unpacked tools beside their targets as .TOOL.new and runs them
+# from there; sets staged and installed. A failed copy or check changes
+# nothing installed, and a running telar keeps its file.
+stage() {
+    for tool in telar telar-diagram-renderer; do
+        if [ -f "$source_dir/$tool" ]; then
+            staged="$staged $tool"
+            run cp "$source_dir/$tool" "$bin_dir/.$tool.new"
+            run chmod 755 "$bin_dir/.$tool.new"
+        fi
+    done
+
+    installed=$(starts "$bin_dir/.telar.new") || return 1
+    if [ -f "$bin_dir/.telar-diagram-renderer.new" ]; then
+        renders "$bin_dir/.telar-diagram-renderer.new" || return 1
+    fi
 }
 
 # Downloads and unpacks the archive of VARIANT; sets file and source_dir.
@@ -221,7 +261,8 @@ unpack() {
     mkdir "$work/$1"
     tar -xzf "$work/$file" -C "$work/$1"
     source_dir=$work/$1/$asset/bin
-    [ -x "$source_dir/telar" ] || fail "$file has no bin/telar"
+    # -f, not -x: a noexec mount makes every file there fail -x.
+    [ -f "$source_dir/telar" ] || fail "$file has no bin/telar"
 }
 
 prepare "$bin_dir"
@@ -235,11 +276,18 @@ fi
 
 work=$(mktemp -d)
 mount=
+staged=
+new_app=
 cleanup() {
     if [ -n "$mount" ]; then
         hdiutil detach -quiet "$mount" || true
     fi
 
+    if [ -n "$new_app" ]; then
+        run rm -rf "$new_app" || true
+    fi
+
+    discard || true
     rm -rf "$work"
 }
 
@@ -258,43 +306,39 @@ if [ "$install_app" = true ]; then
     mkdir "$mount"
     hdiutil attach -quiet -nobrowse -readonly -noautoopen -mountpoint "$mount" "$work/$file" || fail "could not open $file"
     [ -d "$mount/Telar.app" ] || fail "$file has no Telar.app"
-    installed=$(starts "$mount/Telar.app/Contents/Resources/bin/telar") || refuse "$file"
 
-    # Copy beside the target and swap, so a failed copy keeps the old app.
-    run rm -rf "$app_dir/.Telar.app.new"
-    run ditto "$mount/Telar.app" "$app_dir/.Telar.app.new"
-    run rm -rf "$app_dir/Telar.app"
-    run mv "$app_dir/.Telar.app.new" "$app_dir/Telar.app"
+    # Copy beside the target, check the copy and swap, so a failed copy or
+    # an app that does not start keeps the old one.
+    new_app=$app_dir/.Telar.app.new
+    run rm -rf "$new_app"
+    run ditto "$mount/Telar.app" "$new_app"
     hdiutil detach -quiet "$mount"
     mount=
+    installed=$(starts "$new_app/Contents/Resources/bin/telar") || refuse "$file"
+    renders "$new_app/Contents/Resources/bin/telar-diagram-renderer" || refuse "$file"
+    run rm -rf "$app_dir/Telar.app"
+    run mv "$new_app" "$app_dir/Telar.app"
+    new_app=
 
     run "$app_dir/Telar.app/Contents/Resources/bin/telar" cli install --dir "$bin_dir" >/dev/null
     printf 'Installed %s as %s/Telar.app, linked from %s/telar\n' "$installed" "$app_dir" "$bin_dir"
 else
     unpack "$variant"
-    if ! installed=$(starts "$source_dir/telar"); then
+    if ! stage; then
         [ -n "$fallback" ] || refuse "$file"
+        discard
         printf 'install.sh: the native client does not start on this system:\n' >&2
         sed 's/^/  /' "$work/start.log" >&2
         printf 'install.sh: installing the headless build instead; --gui insists on the native client\n' >&2
         unpack "$fallback"
-        installed=$(starts "$source_dir/telar") || refuse "$file"
+        stage || refuse "$file"
     fi
 
-    # Copy every tool beside its target before renaming any: a failed copy
-    # changes nothing, and a running telar keeps its file.
-    tools=
-    for tool in telar telar-diagram-renderer; do
-        if [ -f "$source_dir/$tool" ]; then
-            run cp "$source_dir/$tool" "$bin_dir/.$tool.new"
-            run chmod 755 "$bin_dir/.$tool.new"
-            tools="$tools $tool"
-        fi
-    done
-
-    for tool in $tools; do
+    for tool in $staged; do
         run mv -f "$bin_dir/.$tool.new" "$bin_dir/$tool"
     done
+
+    staged=
 
     printf 'Installed %s into %s\n' "$installed" "$bin_dir"
 fi
