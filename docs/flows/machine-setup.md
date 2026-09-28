@@ -16,11 +16,12 @@ flow, revocable on its own.
 ## End-to-end path
 
 ```text
-telar machine setup box [--label L] [--binary PATH] [--skip agents,config,login] [--json]
+telar machine setup box [--label L] [--binary PATH] [--skip agents,config,login] [--confirm] [--json]
         |
 MachineOptions.parse -> machine_profiles.run -> machine_setup.run
         |   resolve: a saved label or destination, or a new destination
-        |   whose label is --label or its host
+        |   whose label is --label or its host, refused when another
+        |   profile has that label; --confirm: a yes on the terminal first
         |
  1-2 reach: remote_shell.runScript(MachinePlatform.probe_script)
         |     ssh -T <SshOptions> DEST 'exec /bin/sh -s', the script on stdin;
@@ -37,22 +38,27 @@ MachineOptions.parse -> machine_profiles.run -> machine_setup.run
         |       --bin-dir; the machine downloads and both hashes must match
         |       --binary: upload (`cat >` over the same connection) ->
         |       install.sh --binary --sha256
-        |     then `TARGET cli install --dir ~/.local/bin`
  4   startRuntime: remote.discover through the saved path
         |     another build's runtime: with a terminal, ask; `y` runs
-        |     `server stop` with the telar that started it, then waits
+        |     `server stop` with the telar that started it, then waits;
+        |     otherwise the step fails and setup stops
+        |   linkCommand: `TARGET cli install --dir ~/.local/bin`, only now
  5   saveProfile: machine_profiles.storeAll, one locked change:
-        |     add, place_telar (telar_path), enable
+        |     add, place_telar (telar_path), enable (not after add --disabled)
  6   agent_setup.install: agents on this PATH missing there, each with its
-        |     official installer; a missing prerequisite is a note
+        |     official installer, downloaded over https into a file first;
+        |     a missing prerequisite is a note
  7   agent_setup.integrate: `TARGET integration install AGENT` there
  8   config_sync.run: allowlisted files, filtered here, written there by
-        |     `TARGET machine receive-config` (config_receive) when they differ
+        |     `TARGET machine receive-config` (config_receive) when they differ;
+        |     a file with an inline secret (config_secrets) stays here
  9   agent_login.run: per agent not logged in there, its official login in a
         |     workspace of that runtime (`workspace create --columns 1024 --`),
-        |     the link read with `pane read`, a notification here whose click
-        |     opens it, a pasted code typed with `pane send-keys`, the agent's
-        |     status command polled; each outcome saved as `logins`
+        |     or the one an earlier setup left waiting, the link read with
+        |     `pane read` and taken only on an allowed host, a notification
+        |     here whose click opens it, a pasted code typed with `pane
+        |     send-keys --stdin`, the agent's status command polled, the
+        |     tab closed when the login ends; each outcome saved as `logins`
 10   check: remote.discover again, schemas equal
         |
 SetupReport: one numbered line per step as it ends, or one JSON object
@@ -109,23 +115,37 @@ SetupReport: one numbered line per step as it ends, or one JSON object
 ## Failures
 
 A step that fails stops what depends on it: no SSH, no telar, no runtime
-means no profile change. A login that is still waiting is `pending`, not a
-failure; the next setup reports it done. The exit status is 1 when any step
-failed.
+means no profile change. SSH failing inside a step (ssh not starting, a
+timeout, exit 255, a script's output past 256 KiB) fails that step and no
+other, and the report always comes; a status check or a question about the
+machine that SSH did not answer is never read as a "no". A login that is
+still waiting is `pending`, not a failure, and the machine is reported as
+waiting for it, not ready; the next setup reports it done. The exit status
+is 1 when any step failed.
 
 ## Validation
 
-- Unit tests: `remote_telar`, `MachineProfile(s)` (path, logins), `remote_shell`
+- `python3 tools/test_machine_setup.py` after `zig build`: the whole of
+  `run` against a machine simulated here by a fake `ssh`, with SSH failures
+  injected per step, idempotence and the refusals.
+- Unit tests: `remote_telar`, `MachineProfile(s)` (path, logins, version,
+  the 16 KiB worst case; `zig build test-machine-profiles`),
+  `notification_link`, `config_secrets`, `remote_shell`
   (quoting through `/bin/sh`), `MachinePlatform`, `telar_release`,
   `SetupReport`, `agent_setup`, `config_allowlist` (every known credential
   denied, only agent directories accepted), `config_filter`, `config_receive`
   (symlinks, traversal, bounds), `config_sync` (no credential of any agent in
-  the stream, hooks pruned), `agent_login` (links and codes from pane text),
+  the stream, however linked or written; hooks pruned), `agent_login`
+  (links and codes from pane text, allowed hosts only), `agent_setup`
+  (installers stop on a failed download),
   `MachineOptions`, `WorkspaceOptions`.
 - `packaging/release/test-install.sh`: `--sha256` and `--binary`.
 - `src/client_tests`: a notification's link opens through the link opener
-  when clicked. `src/gui/tests/machines.zig`: a machine that lacks this build
-  is set up in a tab of this machine from the machine list.
+  when clicked, and a remote runtime's notification loses its link.
+  `src/gui/tests`: a card names its link's host; a machine that lacks this
+  build is set up in a tab of this machine with `--confirm`, a `--remote`
+  row by its destination. `src/headless`: links, sounds and desktop notices
+  complete without running anything.
 - Against Debian 12 and Alpine 3.22 containers without telar or agents, from
   a macOS client, with an isolated SSH configuration: see the plan's
-  verification notes.
+  [Verification](../plans/machine-setup.md#verification).

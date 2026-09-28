@@ -63,7 +63,8 @@ behavior. The socket test uses a temporary directory without a Git repository.
 shell, and `--columns N` (20 to 1024) sets that pane's width until a window
 attaches and sizes it; `telar machine setup` opens an agent's login this way,
 wide enough that `pane read` returns its URL on one line. `--json` also
-reports the first pane's id.
+reports the first tab's and pane's ids, so a caller can close what it
+opened with `tab close`.
 
 `telar workspace rename ID NAME [--json]` sends `rename_workspace` and waits
 for the matching request ID in `workspace_snapshot`. It reports the canonical

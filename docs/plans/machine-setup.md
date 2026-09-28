@@ -1,6 +1,7 @@
 # Machine setup
 
-Status: implemented on the `worktree-machine-setup` branch; flow:
+Status: implemented on the `worktree-machine-setup` branch, audited and
+corrected (see [Verification](#verification)); flow:
 [machine setup](../flows/machine-setup.md). Differences from the plan below
 are listed under [As built](#as-built). It builds on
 [machine profiles](../flows/machine-profiles.md),
@@ -71,7 +72,10 @@ telar machine setup box
         |                this version: unchanged. Otherwise install (below).
  4. Runtime            discovery through the absolute path: same schema, or
         |                none running: ok. Another build running: ask on the
-        |                terminal whether to stop it, else report and continue.
+        |                terminal whether to stop it; without a terminal or a
+        |                yes, report it and stop: the profile and every later
+        |                step need this build's runtime.
+        |                Then ~/.local/bin/telar moves to this build.
  5. Profile            machines.json: add or update `telar_path`,
         |                enable. Under the file lock, like every change.
  6. Agents             for each agent installed here and missing there: its
@@ -92,7 +96,11 @@ or `failed` and its detail. `--json` prints one object at the end with the
 same steps. A failed step stops the steps that depend on it (no telar, no
 integrations) and not the others (a failed login does not undo the sync).
 The exit status is 0 only when every step that ran succeeded; a login that
-is still pending when setup returns is `pending`, not a failure.
+is still pending when setup returns is `pending`, not a failure, and the
+report says the machine waits for it (`"ready":false,"pending":true`). A
+failure of SSH itself (ssh not starting, a timeout, exit 255, a script's
+output past its bound) is a failure of the step it happened in, never of
+setup as a whole: the report always comes.
 
 Every remote step runs `exec /bin/sh -s` and sends its script on standard
 input, so the login shell (sh, bash, zsh or fish) parses only that constant
@@ -131,10 +139,14 @@ and discovery must report this client's schema; its directory is
 digits of its hash, so two development builds never share a path.
 
 Versions live side by side. A runtime started by the old executable keeps
-it; nothing removes an old version (a later `machine prune` could).
-`~/.local/bin/telar` becomes a symlink to the new executable through
-`telar cli install --dir ~/.local/bin`, which refuses to replace anything but
-a symlink; interactive shells there then find `telar` as before.
+it. Old versions are never removed, for now: a later `telar machine prune`
+will remove the versions no runtime runs (decided with Adrian on
+2026-09-28). `~/.local/bin/telar` becomes a symlink to the new executable
+through `telar cli install --dir ~/.local/bin` only once this build's
+runtime runs there, so declining to stop the old runtime, or having no
+terminal to ask on, leaves the command interactive shells find on the old
+build. `cli install` refuses to replace anything but a symlink: a file
+there stays, and setup says so.
 
 ## No more PATH
 
@@ -261,16 +273,26 @@ other ([link opening](../flows/link-opening.md)).
 
 Login states are `pending`, `done` and `failed`. They are printed by setup
 and kept per machine in `machines.json` as `logins`, which `machine list`
-and the window's machine list show. They are what setup last saw, not a
-live fact.
+shows. They are what setup last saw, not a live fact, so the window does
+not show them beside the live state of each machine's link.
+
+A login that ends, done or failed, closes its tab there. One still waiting
+when setup returns (no terminal to wait on) keeps its pane; the next setup
+finds it by its name and shows its link again instead of opening another,
+and closes it once the agent reports the login done. What the person pastes
+travels on standard input (`pane send-keys ID --stdin`), never in an argv
+here or there.
 
 ## The window
 
 A machine whose link failed with `RemoteTelarMissing`,
 `RemoteTelarIncompatible` or `RemoteRuntimeIncompatible` gets a row
 action "Set up telar on this machine". It opens a tab on this machine that
-runs `TELAR machine setup LABEL`, so the person sees each step and can
-answer OpenSSH if it asks.
+runs `TELAR machine setup LABEL --confirm`, so one key press in the list
+installs nothing: setup says what it will do and waits for a yes on the
+tab's terminal, then the person sees each step and can answer OpenSSH if it
+asks. A row `--remote` opened has no profile and a label cut from its
+destination, so setup gets the destination.
 
 ## Agent facts
 
@@ -285,6 +307,12 @@ public Linux x64 package `2026.09.26-dd393fe`, marked (bundle).
 | Pi | `curl -fsSL https://pi.dev/install.sh \| sh` ([quickstart](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/quickstart.md)) | `~/.pi/agent/install`, link in the first writable of `~/.local/bin`… | Node 22.19+; without it the installer wants sudo or a tty, so setup reports it |
 | OpenCode | `curl -fsSL https://opencode.ai/install \| bash -s -- --no-modify-path` (installer source) | `~/.opencode/bin/opencode` | tar; detects musl |
 | Cursor Agent | `curl https://cursor.com/install -fsS \| bash` ([installation](https://cursor.com/docs/cli/installation.md)) | `~/.local/bin/agent`, `cursor-agent` | its bundled `node` is glibc (bundle): refused on Alpine |
+
+Setup runs each installer from the URL above, but never through a pipe:
+`curl --proto '=https' --tlsv1.2 -fsSL URL -o FILE` into a private
+temporary file under `set -eu`, then the shell on that file with no
+standard input. A download that fails fails the install, where `curl … |
+sh` handed the shell an empty script that exited 0.
 
 Logins from a machine without a browser, and how setup knows they are done:
 
@@ -392,3 +420,76 @@ Settled with Adrian on 2026-09-28.
   no link.
 - The headless client gained `notification activate`, which clicks the
   newest notification, for end-to-end tests.
+- `machines.json` says version 2 when a profile holds `telar_path` or
+  `logins`, and 1 otherwise, so a person who never ran setup keeps a file
+  every earlier build reads. Sixteen profiles at every field's longest take
+  16,381 bytes, inside the 16 KiB bound.
+- A new destination whose label (derived or `--label`) another profile has
+  is refused before anything is installed; the logins run only on the
+  profile whose destination is the one set up.
+- `machine add --disabled --setup` keeps the machine disabled; with
+  `--setup`, `--check` adds no second check or JSON object.
+- `telar-headless --remote DESTINATION` runs the telar a saved profile for
+  that destination names, as a window does, and never opens a link, plays a
+  sound or posts a desktop notice: it records them in its trace.
+- A notification's link has a plain host (no user info, port,
+  percent-encoding or backslash); the card names it before the click; a
+  window drops the link of a notification from a remote machine's runtime;
+  setup shows only a link to a host its agent's login is known to use
+  ([Agent facts](#agent-facts)).
+
+## Verification
+
+Two audits reviewed the branch on 2026-09-28; every finding below was
+reproduced against the audited code (commit `23e127c7`) before it was
+fixed, and the same test shows the fix.
+
+- Unit tests (`zig build test-cli`, `test-machine-profiles`, `test-wire`,
+  `test-gui`, `test-client-integration`, `test-headless`): the auditor's
+  symlinks (`skills/notes.json -> ~/.claude.json`, `skills/x -> ~`, links
+  to `gh`'s `hosts.yml`, `~/.cargo/credentials.toml`, `~/.vault-token`,
+  `~/.pgpass`, a hard link to `~/.claude.json`, a root linked into a
+  dotfiles checkout), the TOML shapes (`[model_providers.x.http_headers]`,
+  `[otel.exporter."otlp-http".headers]`, `http_headers.Authorization`, a
+  `"""` value), a hook posting to a Slack webhook, `TOKEN=… cmd` in a
+  script and `GITHUB_TOKEN` in a subagent's frontmatter; none reaches the
+  stream. On the audited code the symlinked `~/.claude.json` and the
+  `Authorization` header were sent, a first file that was not JSON
+  panicked with an integer overflow, `https://claude.ai@evil.com/` was
+  taken as Claude's login link, and a card with a link and no target
+  reached `unreachable`. A failed download made every installer exit 0
+  through its pipe.
+- `tools/test_machine_setup.py` (fake `ssh` running each command here as a
+  separate machine): setup, nothing planted there, the login finished and a
+  second run that changes nothing; one SSH failure at a time (exit 255 and
+  output past 256 KiB, at the probe, `integration install`,
+  `receive-config` and the login status) fails that step alone with the
+  report printed; a taken label refused before installing; `add --disabled
+  --check --setup --json` stays disabled with one object. On the audited
+  binary five of these failed: no report after `RemoteOutputTooLong`, a
+  failed status check read as a login to open with `ready:true`, the taken
+  label accepted, two JSON objects.
+- Containers (OrbStack, aarch64), each reached from macOS through an
+  isolated `ssh -F` configuration with a test key and its host key scanned
+  beforehand; fake `claude` and `codex` in the machine's `~/.local/bin`;
+  `--binary` a `zig build -Dgui=false -Dtarget=aarch64-linux-musl` telar:
+  - Debian 12 (`debian:bookworm-slim`, login shell bash) and Alpine 3.22
+    (ash, musl detected): all ten steps, the configuration without any
+    planted secret (`.claude.json` and the subagent with a token stayed
+    here and were listed), Codex's login pending with its pane open; after
+    the login, a second run reported every step `ok`, "was already set up;
+    nothing changed", and the login's workspace was gone.
+  - Debian 12 with `main`'s telar (another wire schema) running from a
+    regular `~/.local/bin/telar`: without a terminal, and answering `n`,
+    the runtime step failed, setup stopped and `~/.local/bin/telar` stayed
+    the old build; answering `y` stopped the old runtime through that
+    file, started this build's and finished, leaving the file in place
+    with a note.
+  - A fresh container whose host key was not yet in `known_hosts`: setup
+    stopped at step 1 with "the host key … is not confirmed".
+- Logins against real accounts were not run; Adrian runs them.
+
+Open: the heuristic secret scan misses a secret with no recognizable shape
+([What is synced](#what-is-synced)); old versions stay until `machine
+prune` exists.
+
