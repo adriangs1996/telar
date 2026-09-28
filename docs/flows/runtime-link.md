@@ -114,8 +114,24 @@ machine disabled or moved (machine-presentation.md)
   the message being written.
 - `src/gui/widgets/LinkStatus.zig` tests the headlines; the widget
   composition tests include it as an optional layer.
-- Against the Linux SSH box (`tools/local-docker`), with a GUI window on
-  `--remote telar-docker`:
+- `src/client/connection/runtime_link.zig` tests that a permanent failure
+  leaves the link failed with its report and no retry timer, and that
+  retrying now connects it again; `src/client/machines/remote.zig` tests
+  which SSH failures are permanent.
+- Against two Debian boxes built from this tree and one with an older
+  telar (September 2026, macOS OpenSSH 10.3p1 client): an unknown host key,
+  a changed host key, a refused key, `telar` missing from the remote PATH,
+  another wire schema, an older `telar` and a remote runtime of another
+  build each left the link failed with its cause in the headless dump, and
+  a window holding that machine made exactly one ssh call to it in 45
+  seconds. A stopped box was retried 0.5, 1, 2, 4, 8, 16 and 30 seconds
+  apart. Cutting a box's network under a connected client lost the link 22
+  seconds later (keepalives), retried 1, 2, 4, 8, 16, 30, 30 and 30 seconds
+  apart, and reattached on the first attempt after the network returned.
+- Not verified against a real window: choosing a failed machine in the
+  machine list, because this session cannot drive the window's input.
+- Earlier, against the Linux SSH box (`tools/local-docker`), with a GUI
+  window on `--remote telar-docker` and the old `ssh -L` forward:
   - killing the local `ssh` forward: the window stays, opens a new forward
     and reattaches with the same identity within two seconds;
   - SIGKILL of the remote runtime: the retry's discovery starts it again and

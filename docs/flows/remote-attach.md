@@ -112,6 +112,13 @@ becomes the link's failure text.
 - `src/client/machines/remote.zig` tests which SSH failures are permanent.
 - `lib/localsocket/pair.zig` tests the pair and its close-on-exec flag;
   `src/cli/runtime_bridge.zig` tests that the relay copies frames unchanged.
+- Against two Debian boxes built from this tree: two windows, each with
+  this machine and both boxes, then `telar-headless --remote` to one box,
+  gave each client its own id on each runtime; the boxes logged no new SSH
+  login during the run, every window and the headless client riding the
+  control master an earlier check had opened; no socket file appeared in the local runtime
+  directory; closing the headless client left both windows attached, and
+  closing the windows left no `telar server bridge` on the box.
 - `src/gui/run.zig` tests that one window slot gets a distinct identity on each machine.
 - `src/cli/client.zig` tests remote launch defaults and explicit commands.
 - `telar server endpoint` is covered by the parser tests and prints through

@@ -97,3 +97,5 @@ attaching would; it never installs anything.
 - `src/client/machines/profile_file.zig` tests that a saved file loads back;
   `src/client/machines/machine_profiles.zig` tests that four writers adding
   at once all reach the file.
+- Two `telar machine add` loops of eight adds each, run at once 20 times:
+  without the lock, 4 rounds lost an add; with it, none did.
