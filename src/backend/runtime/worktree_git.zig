@@ -12,6 +12,7 @@ const WorktreeProbe = @import("../workspace/WorktreeProbe.zig");
 const WorktreeProbeCompletion = @import("resources/WorktreeProbeCompletion.zig");
 const worktree_probe = @import("resources/worktree_probe.zig");
 const WorktreeProbeJob = @import("resources/WorktreeProbeJob.zig");
+const session_checkpoint = @import("session_checkpoint.zig");
 
 /// Starts one due probe, rolling back its reservation on scheduling failure.
 ///
@@ -37,6 +38,11 @@ pub fn finish(model: *RuntimeModel, completion: WorktreeProbeCompletion) void {
     const now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
     if (commit(&model.worktrees, completion, now_ms)) {
         model.workspaces.advanceRevision();
+    }
+
+    // A base learned by the probe is recorded; it is found once per row.
+    if (completion.found_base_len != 0) {
+        session_checkpoint.noteChange(model);
     }
 }
 
@@ -109,6 +115,13 @@ fn commit(worktrees: *Worktrees, completion: WorktreeProbeCompletion, now_ms: i6
     }
 
     worktrees.git_dirty[slot] = completion.dirty;
+    const found_base = completion.foundBaseSlice();
+    const learned_base = found_base.len != 0 and worktrees.base_len[slot] == 0;
+    if (learned_base) {
+        @memcpy(worktrees.base[slot][0..found_base.len], found_base);
+        worktrees.base_len[slot] = @intCast(found_base.len);
+    }
+
     const branch = completion.branchSlice();
     if (branch.len != 0) {
         @memcpy(worktrees.branch[slot][0..branch.len], branch);
@@ -131,7 +144,7 @@ fn commit(worktrees: *Worktrees, completion: WorktreeProbeCompletion, now_ms: i6
     }
 
     worktrees.state[slot] = if (!pending and worktrees.had_changes[slot]) .integrated else .active;
-    return !std.meta.eql(before, observed(worktrees, slot));
+    return learned_base or !std.meta.eql(before, observed(worktrees, slot));
 }
 
 const Observed = struct {
@@ -187,6 +200,32 @@ test "a clean worktree turns integrated only after it held work, and a missing c
     try std.testing.expect(commit(table, .{ .worktree = registered.id }, 40));
     try std.testing.expectEqual(core.WorktreeState.gone, table.state[registered.slot]);
     try std.testing.expect(reserve(table, 100_000) == null);
+}
+
+test "a base the probe found is kept once and a recorded base is never replaced" {
+    const gpa = std.testing.allocator;
+    const table = try gpa.create(Worktrees);
+    defer gpa.destroy(table);
+    table.* = .{};
+    defer table.deinit(gpa);
+    const external = try table.register(gpa, .{
+        .source = @enumFromInt(1),
+        .origin = .external,
+        .path = "/w/by-hand",
+        .branch = "by-hand",
+    });
+
+    var found: WorktreeProbeCompletion = .{ .worktree = external.id, .present = true, .measured = true };
+    found.found_base_len = 4;
+    @memcpy(found.found_base[0..4], "main");
+    table.git_probe = external.id;
+    try std.testing.expect(commit(table, found, 10));
+    try std.testing.expectEqualStrings("main", table.baseAt(external.slot));
+
+    @memcpy(found.found_base[0..4], "next");
+    table.git_probe = external.id;
+    _ = commit(table, found, 20);
+    try std.testing.expectEqualStrings("main", table.baseAt(external.slot));
 }
 
 test "a stale completion leaves the table untouched" {

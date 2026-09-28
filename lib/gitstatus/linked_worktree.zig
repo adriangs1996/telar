@@ -67,6 +67,42 @@ fn linkedBranch(io: std.Io, gitfile_path: []const u8, head_buffer: []u8) ?[]cons
     return if (branch.len == 0) null else branch;
 }
 
+/// The branch the repository's main checkout stands on, read from the
+/// linked worktree at `root`: its `.git` file names its git dir, whose
+/// `commondir` names the repository's, whose `HEAD` is the main checkout's.
+/// Null for a main checkout, a detached main HEAD or an unreadable tree.
+///
+/// ```zig
+/// var head: [256]u8 = undefined;
+/// const base = gitstatus.linked_worktree.mainBranch(io, "/src/telar-worktrees/fix", &head) orelse return;
+/// ```
+pub fn mainBranch(io: std.Io, root: []const u8, head_buffer: []u8) ?[]const u8 {
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const gitfile_path = std.fmt.bufPrint(&path_buffer, "{s}/.git", .{std.mem.trimEnd(u8, root, "/")}) catch return null;
+    var gitfile_buffer: [std.fs.max_path_bytes + 16]u8 = undefined;
+    const gitfile = std.mem.trim(u8, readSmall(io, gitfile_path, &gitfile_buffer) orelse return null, " \r\n");
+    if (!std.mem.startsWith(u8, gitfile, "gitdir:")) {
+        return null;
+    }
+
+    const git_dir = std.mem.trim(u8, gitfile["gitdir:".len..], " ");
+    const common_path = std.fmt.bufPrint(&path_buffer, "{s}/commondir", .{git_dir}) catch return null;
+    var common_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const common = std.mem.trim(u8, readSmall(io, common_path, &common_buffer) orelse return null, " \r\n");
+    const head_path = if (std.fs.path.isAbsolute(common))
+        std.fmt.bufPrint(&path_buffer, "{s}/HEAD", .{common}) catch return null
+    else
+        std.fmt.bufPrint(&path_buffer, "{s}/{s}/HEAD", .{ git_dir, common }) catch return null;
+
+    const head = std.mem.trim(u8, readSmall(io, head_path, head_buffer) orelse return null, " \r\n");
+    const prefix = "ref: refs/heads/";
+    if (!std.mem.startsWith(u8, head, prefix) or head.len == prefix.len) {
+        return null;
+    }
+
+    return head[prefix.len..];
+}
+
 fn readSmall(io: std.Io, path: []const u8, buffer: []u8) ?[]const u8 {
     const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch return null;
     defer file.close(io);
@@ -103,4 +139,12 @@ test "a linked worktree is found from a nested directory and a main checkout is 
     const main = try std.fmt.bufPrint(&main_buffer, "{s}/main", .{base});
     try std.testing.expect(find(io, main, &root, &head) == null);
     try std.testing.expect(find(io, "relative/path", &root, &head) == null);
+
+    try temp.dir.writeFile(io, .{ .sub_path = "main/.git/HEAD", .data = "ref: refs/heads/trunk\n" });
+    var main_head: [256]u8 = undefined;
+    try std.testing.expectEqualStrings("trunk", mainBranch(io, linked.root, &main_head).?);
+    try std.testing.expect(mainBranch(io, main, &main_head) == null);
+
+    try temp.dir.writeFile(io, .{ .sub_path = "main/.git/HEAD", .data = "0123456789abcdef0123456789abcdef01234567\n" });
+    try std.testing.expect(mainBranch(io, linked.root, &main_head) == null);
 }
