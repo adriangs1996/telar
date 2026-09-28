@@ -32,6 +32,7 @@ HeadlessClient.run
     present                           capture, begin, complete as delivered,
                                       presentation_delivery.apply (frame acks)
     deliverEffects                    host requests recorded, jobs started
+    link failed (runtime-link.md)     exit 1: nobody here can retry it
   writeReports                        --trace and --dump, after the loop
 ```
 
