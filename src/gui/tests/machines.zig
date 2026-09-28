@@ -87,7 +87,7 @@ test "the next machine is shown and the window's own leaves its workspace once i
     try client.machine_presentation.settle(own);
     try std.testing.expect(!own.leave_pending);
     try std.testing.expect(own.model.workspace == null);
-    try std.testing.expectEqual(@as(?core.WorkspaceId, Session.location.workspace.workspace), own.left_workspace);
+    try std.testing.expectEqual(@as(?core.WorkspaceLocation, Session.location.workspace), own.left_workspace);
 
     try window_machines.choose(gui, .{ .offset = 1 });
     try std.testing.expect(gui.app == own);
@@ -112,6 +112,38 @@ test "a machine chosen while a frame is in flight is shown after it" {
     try window_machines.choose(gui, .{ .slot = slot });
     try std.testing.expect(gui.app == window_machines.window(gui));
     try std.testing.expectEqual(@as(?u8, slot), gui.pending_machine);
+}
+
+test "a machine hidden in a worktree reopens that worktree when shown again" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrapAt(.{
+        .workspace = .{
+            .worktree = @enumFromInt(3),
+        },
+        .tab_id = @enumFromInt(1),
+    });
+    const gui = session.gui;
+
+    var box = try socketPair();
+    defer box.channel.deinit(std.testing.io);
+    defer box.peer.deinit(std.testing.io);
+    _ = try openMachine(session, &box.channel);
+    const own = window_machines.window(gui);
+
+    try window_machines.choose(gui, .{ .offset = 1 });
+    own.model.request_lifecycle = .{};
+    try client.machine_presentation.settle(own);
+    try std.testing.expect(own.model.workspace == null);
+    const left: core.WorkspaceLocation = .{
+        .worktree = @enumFromInt(3),
+    };
+    try std.testing.expectEqual(@as(?core.WorkspaceLocation, left), own.left_workspace);
+
+    try window_machines.choose(gui, .{ .offset = 1 });
+    try std.testing.expect(gui.app == own);
+    try std.testing.expect(own.left_workspace == null);
+    try std.testing.expect(!own.model.request_lifecycle.tracker.isEmpty());
 }
 
 test "the top bar names the machine only while the window holds several" {

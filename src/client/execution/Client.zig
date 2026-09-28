@@ -133,8 +133,9 @@ presented: bool = true,
 /// runtime restored for it.
 open_deferred: bool = false,
 deferred_layout: ?data.SavedLayout = null,
-/// The workspace a hidden client left, reopened when it is shown again.
-left_workspace: ?core.WorkspaceId = null,
+/// The workspace or worktree a hidden client left, reopened when it is
+/// shown again.
+left_workspace: ?core.WorkspaceLocation = null,
 /// Leaving waits for requests in flight to finish.
 leave_pending: bool = false,
 /// The machines of the window this client belongs to, for the palette's
