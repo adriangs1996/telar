@@ -1207,6 +1207,16 @@ test "OpenCode permission and question prompts block with their request as the e
     try std.testing.expectEqual(core.AgentBlockedReason.question, asking.blocked_reason);
     try std.testing.expectEqualStrings("Which database?", asking.event);
 
+    // OpenCode's edit, write and apply_patch ask as `edit` with the path in
+    // `metadata.filepath` (packages/opencode/src/tool/edit.ts in v1.18.30).
+    const edit_source =
+        \\{"event":"permission.asked","session_id":"ses_f212d4cc3ffeR3t3CA08EwN5Ap","busy":true,"blocked":"permission",
+        \\"tool_name":"edit","tool_input":{"filepath":"/work/proj/src/main.ts"}}
+    ;
+    const edit = try std.json.parseFromSlice(OpenCodeHookInput, std.testing.allocator, edit_source, .{ .ignore_unknown_fields = true });
+    defer edit.deinit();
+    try std.testing.expectEqualStrings("» edit /work/proj/src/main.ts", mapOpenCodeHook(edit.value, &buffer).?.event);
+
     try std.testing.expectError(error.InvalidEnumTag, std.json.parseFromSlice(OpenCodeHookInput, std.testing.allocator, "{\"event\":\"state_snapshot\",\"blocked\":\"approval\"}", .{ .ignore_unknown_fields = true }));
 }
 
