@@ -204,6 +204,7 @@ pub const ShmName = @import("ShmName.zig");
 pub const ShowNotification = @import("schema/messages/ShowNotification.zig");
 pub const Signal = @import("Signal.zig");
 pub const Sink = @import("Sink.zig");
+pub const DiagnosticLogName = @import("DiagnosticLogName.zig");
 pub const Snapshot = @import("schema/Snapshot.zig");
 pub const SnapshotSnapshot = @import("Snapshot.zig");
 pub const Span = @import("schema/Span.zig");
@@ -456,7 +457,9 @@ test {
     _ = ProfileCounters;
     _ = ProfileHistogram;
     _ = @import("agent_manifest.zig");
+    _ = @import("DiagnosticLogName.zig");
     _ = @import("diagnostics.zig");
+    _ = @import("Sink.zig");
     _ = @import("echo_trace.zig");
     _ = @import("fixed_index.zig");
     _ = @import("fuzzy.zig");
