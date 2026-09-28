@@ -125,6 +125,42 @@ test "a decoded preview of another capture is not adopted" {
     try std.testing.expect(!previews.modalReady());
 }
 
+test "a capture waiting behind one whose completion fails still starts" {
+    const session = try review.base();
+    defer session.deinit();
+    const gui = session.gui;
+    const app = gui.app;
+    try agentSnapshot(session);
+
+    app.model.host.clipboard_capture = true;
+    const running = (try client.clipboard_capture.startClipboardCapture(&app.model)).started;
+    _ = app.model.to_host.pop().?.capture;
+    gui.previews.capturing = true;
+
+    // An invalid target fails in the worker before it reads the pasteboard.
+    const waiting: data.CaptureRequest = .{
+        .target = .{ .pane_id = .invalid, .pane_generation = 0 },
+        .sequence = @intFromEnum(running.id) + 1,
+    };
+    try clipboard_image.start(gui, waiting);
+    try std.testing.expect(gui.previews.queued != null);
+
+    // A full job queue makes publishing the failure notice fail.
+    while (true) {
+        app.to_workers.push(.telemetry_tick) catch break;
+    }
+
+    try std.testing.expectError(
+        error.RingFull,
+        clipboard_image.finish(gui, .{ .execution_id = running.id, .result = error.ClipboardReadFailed }),
+    );
+    while (app.to_workers.pop()) |_| {}
+
+    try std.testing.expect(app.model.clipboard.capture == null);
+    try std.testing.expect(gui.previews.queued == null);
+    try std.testing.expect(gui.previews.capturing);
+}
+
 fn agentSnapshot(session: *Session) !void {
     var bytes: [4096]u8 = undefined;
     const snapshot = try core.encodeAgentSnapshot(&bytes, .{ .revision = 1, .entries = &.{.{

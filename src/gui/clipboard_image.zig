@@ -50,7 +50,8 @@ pub fn start(gui: *GuiAdapter, request: data.CaptureRequest) !void {
 }
 
 /// Completes the capture in the window's own client, frees a preview it did
-/// not adopt and starts the capture waiting behind it.
+/// not adopt and starts the capture waiting behind it, even when that
+/// completion failed, so the client never stays busy on a waiting capture.
 ///
 /// ```zig
 /// try clipboard_image.finish(gui, completion);
@@ -61,17 +62,19 @@ pub fn finish(gui: *GuiAdapter, completion: data.Completion) !void {
     previews.capturing = false;
     const completed = client.clipboard_capture.completeClipboardCapture(app, completion);
     previews.dropLanding();
-    try completed;
 
-    const queued = previews.queued orelse return;
-    previews.queued = null;
-    start(gui, queued) catch |err| try client.clipboard_capture.completeClipboardCapture(
-        app,
-        .{
-            .execution_id = @enumFromInt(queued.sequence),
-            .result = err,
-        },
-    );
+    if (previews.queued) |queued| {
+        previews.queued = null;
+        start(gui, queued) catch |err| try client.clipboard_capture.completeClipboardCapture(
+            app,
+            .{
+                .execution_id = @enumFromInt(queued.sequence),
+                .result = err,
+            },
+        );
+    }
+
+    return completed;
 }
 
 fn capture(gpa: std.mem.Allocator, request: data.CaptureRequest, orphan: *?*data.Capture, landing: *?PreviewImage) data.Completion {
