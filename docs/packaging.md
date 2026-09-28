@@ -183,7 +183,7 @@ Sigstore. `gh attestation verify FILE --repo adriangs1996/telar` checks one.
 | macOS arm64 | `macos-26` | `aarch64-macos.26.0`, Apple M1 | `/usr/lib` and `/System/Library` only |
 | macOS x86_64 | `macos-26-intel` | `x86_64-macos.26.0`, core2 | same |
 | Linux desktop | `ubuntu-24.04`, `ubuntu-24.04-arm` | host glibc, baseline CPU | glibc, Wayland, Vulkan, xkbcommon, Fontconfig, ATK, GLib; glibc 2.38 or newer |
-| Linux headless | same | `<arch>-linux-musl`, baseline CPU | nothing: static musl, any Linux 4.11 or newer |
+| Linux headless | same | `<arch>-linux-musl`, baseline CPU | nothing: static musl, Linux 5.10 or newer |
 
 The labels come from GitHub's
 [hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
@@ -234,8 +234,15 @@ statically. What differs from glibc, checked in this code:
   pads with bit-fields, so translate-c makes the struct opaque. Ownership
   checks read `privatefile.Inode` instead, which asks `statx` on Linux,
   the call `std.Io` already makes for every stat, and `fstatat` elsewhere.
-  `statx` is why the floor is Linux 4.11. CI builds the headless binary for
-  musl, so an import that brings the struct back fails there.
+  CI builds the headless binary for musl, so an import that brings the
+  struct back fails there.
+- The kernel floor is Zig's, not libc's. Without a version in the target,
+  Zig 0.16 builds Linux executables for 5.10 or newer
+  (`default_min` in `std/Target.zig`), and the standard library may use
+  what that version has without a fallback. The release does not lower
+  it, so it supports Linux 5.10 and later; `statx` alone would need only
+  4.11. Every run described here used OrbStack's 7.0 kernel; no older
+  kernel was tried.
 - `malloc` is musl's. In ReleaseFast the runtime allocates through libc,
   and so do SQLite and Lua. Measured in one Debian 12 container, with
   aarch64 builds of the same commit that differ only in libc: while
@@ -371,8 +378,15 @@ install, when it does not start; `--headless` skips it. Remote mode needs
 the same version on both machines, so pin `--version` on the server.
 `TELAR_RELEASES_URL` points it at a mirror or a local `file://` copy.
 
-It needs `curl`. `--proto '=https,file'` refuses plain http, redirects to
-http included. `wget` has no equivalent: its `--https-only` applies only to
+It needs `curl`. A stock Alpine has only busybox `wget`, so install curl
+first there, which the one-line install needs anyway:
+
+```sh
+apk add curl
+curl -fsSL https://github.com/adriangs1996/telar/releases/latest/download/install.sh | sh
+```
+
+`--proto '=https,file'` refuses plain http, redirects to http included. `wget` has no equivalent: its `--https-only` applies only to
 recursive downloads, and GNU Wget 1.21.3 fetched an http URL with it.
 Ctrl-C, SIGTERM and SIGHUP stop it after removing its temporary directory.
 
