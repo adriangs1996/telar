@@ -897,6 +897,60 @@ test "Pi report renewal keeps a long tool working and loss cannot announce compl
     try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
 }
 
+test "OpenCode plugin reports follow a turn through a permission, a reload and renewal" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    const session = try SessionReference.init("ses_f212d4cc3ffeR3t3CA08EwN5Ap", 200);
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+    try std.testing.expect(agent_status.observeProcess(model, .{ .identity = identity, .provider = .opencode, .process_id = 42, .observed_at_ms = 100 }));
+
+    // The plugin reports the idle TUI it loads into, then the prompt.
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .ready, .observed_at_ms = 150 }));
+    try std.testing.expectEqual(core.AgentStatus.ready, agent_status.projectedStatus(model, identity.key).?);
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .working, .session = session, .observed_at_ms = 200 }));
+    try std.testing.expectEqualStrings("ses_f212d4cc3ffeR3t3CA08EwN5Ap", agent_status.sessionReference(model, identity.key).?.slice());
+
+    // A permission blocks. A tool call that starts under it reports
+    // nothing, so only the 30-second renewal reaches the runtime; it names
+    // the prompt again and keeps it past the first report's expiry.
+    const asked: []const u8 = "» edit /work/proj/src/main.ts";
+    var now: i64 = 300;
+    while (now < 300 + types.settled_expiry_ms + 60_000) : (now += 30_000) {
+        _ = agent_status.observeReport(model, .{
+            .identity = identity,
+            .state = .blocked,
+            .blocked_reason = .permission,
+            .event = asked,
+            .session = session,
+            .observed_at_ms = now,
+        });
+        _ = agent_status.expire(model, now + 29_999);
+    }
+
+    var snapshot = agent_status.snapshot(&model.agents, &entries, now);
+    try std.testing.expectEqual(core.AgentStatus.blocked, snapshot[0].status);
+    try std.testing.expectEqual(core.AgentSource.lifecycle_report, snapshot[0].source);
+    try std.testing.expectEqual(core.AgentBlockedReason.permission, snapshot[0].blocked_reason);
+    try std.testing.expectEqualStrings(asked, snapshot[0].last_event);
+
+    // Answered, the turn works on and ends; the finished turn waits to be seen.
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .working, .session = session, .observed_at_ms = now + 1 }));
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .ready, .session = session, .observed_at_ms = now + 2 }));
+    try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
+
+    // A reload disposes the plugin, which reports the exit, then loads it
+    // again: the new `ready` report decides once more.
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .exited, .observed_at_ms = now + 3 }));
+    snapshot = agent_status.snapshot(&model.agents, &entries, now + 3);
+    try std.testing.expect(snapshot[0].source != core.AgentSource.lifecycle_report);
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .ready, .session = session, .observed_at_ms = now + 4 }));
+    snapshot = agent_status.snapshot(&model.agents, &entries, now + 4);
+    try std.testing.expectEqual(core.AgentSource.lifecycle_report, snapshot[0].source);
+    try std.testing.expectEqual(core.AgentProvider.opencode, snapshot[0].provider);
+    try std.testing.expectEqualStrings("ses_f212d4cc3ffeR3t3CA08EwN5Ap", agent_status.sessionReference(model, identity.key).?.slice());
+}
+
 test "a blocked report names its reason and event and a blocked screen alone names none" {
     const model = try testModel();
     defer std.testing.allocator.destroy(model);
