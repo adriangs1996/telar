@@ -149,12 +149,7 @@ fn savedProfile(init: std.process.Init, path: []const u8, label: []const u8) !?c
 
 // What the machine has after installers ran; null keeps the first probe.
 fn probeAgain(init: std.process.Init, target: *const SetupTarget, directory: []const u8) !?MachinePlatform {
-    var script_buffer: [MachinePlatform.probe_script.len + 256]u8 = undefined;
-    var script: std.Io.Writer = .fixed(&script_buffer);
-    try remote_shell.assign(&script, "dir", directory);
-    try script.writeAll(MachinePlatform.probe_script);
-
-    var probe = try remote_shell.runScript(init, target.destination(), script.buffered(), probe_timeout_s);
+    var probe = try runProbe(init, target, directory);
     defer probe.deinit(init.gpa);
     if (!probe.succeeded()) {
         return null;
@@ -250,12 +245,7 @@ fn buildDirectory(init: std.process.Init, binary: ?[*:0]const u8) !BuildDirector
 // login with a terminal attached gets one interactive attempt, where
 // OpenSSH asks the person and telar answers nothing.
 fn reach(init: std.process.Init, report: *SetupReport, target: *const SetupTarget, directory: []const u8, interactive: bool) !?MachinePlatform {
-    var script_buffer: [MachinePlatform.probe_script.len + 256]u8 = undefined;
-    var script: std.Io.Writer = .fixed(&script_buffer);
-    try remote_shell.assign(&script, "dir", directory);
-    try script.writeAll(MachinePlatform.probe_script);
-
-    var probe = try remote_shell.runScript(init, target.destination(), script.buffered(), probe_timeout_s);
+    var probe = try runProbe(init, target, directory);
     defer probe.deinit(init.gpa);
 
     var confirmed = false;
@@ -263,7 +253,7 @@ fn reach(init: std.process.Init, report: *SetupReport, target: *const SetupTarge
         confirmed = try confirmInteractively(init, report, target);
         if (confirmed) {
             probe.deinit(init.gpa);
-            probe = try remote_shell.runScript(init, target.destination(), script.buffered(), probe_timeout_s);
+            probe = try runProbe(init, target, directory);
         }
     }
 
@@ -286,6 +276,15 @@ fn reach(init: std.process.Init, report: *SetupReport, target: *const SetupTarge
     try report.end(.platform, .ok, "{s} {s}{s}, {s}", .{ system, @tagName(platform.arch), libc, platform.assetName() });
 
     return platform;
+}
+
+// Runs the probe in batch mode, with the directory this build goes to.
+fn runProbe(init: std.process.Init, target: *const SetupTarget, directory: []const u8) !ScriptOutput {
+    var script_buffer: [MachinePlatform.probe_script.len + 256]u8 = undefined;
+    var script: std.Io.Writer = .fixed(&script_buffer);
+    try remote_shell.assign(&script, "dir", directory);
+    try script.writeAll(MachinePlatform.probe_script);
+    return remote_shell.runScript(init, target.destination(), script.buffered(), probe_timeout_s);
 }
 
 fn refusedLogin(probe: *const ScriptOutput) bool {
