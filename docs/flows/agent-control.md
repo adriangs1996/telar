@@ -178,7 +178,8 @@ nothing, so answers travel through waits rather than prompts back.
 telar agent interrupt worktree:fix-tabs
         |
 schema.interrupt_agent -> agent_control.interrupt
-        |  focus rule; an interrupt already pending completes without a key
+        |  focus rule; an interrupt pressed under 2 s ago completes without
+        |    a key, an older pending one presses again
         |  working agents only (agent_not_working)
         |  manifest InterruptKey -> pane_input.press (encoded by keyinput)
         |  settling report "Interrupted by telar"; agent.interrupt = pending
@@ -189,13 +190,15 @@ schema.request_completed
         .
 pane_observation.finish
         |  agent_control.clearRestoredDraft: Claude Code idle with its old
-        |    prompt back in the composer -> one more interrupt key press
+        |    prompt back in an unfocused composer -> one more key press
         |  agent_status.observeScreen: a ready_confirmed screen newer than
         |    the key starts interrupt_idle_at; any other screen clears it
         .
 agent_maintenance.tick (1 s) -> Agent.expire -> settleInterrupt
-        |  idle composer held interrupt_idle_ms (500 ms): the settling
-        |    report goes and the screen decides (done)
+        |  screen_shows_idle (Claude Code, Codex, Cursor Agent): idle
+        |    composer held interrupt_idle_ms (500 ms)
+        |  other agents: interrupt_blind_ms (3 s) after the last press
+        |  -> the settling report goes and weaker evidence decides
 ```
 
 | Agent | Key | Source |
@@ -206,12 +209,18 @@ agent_maintenance.tick (1 s) -> Agent.expire -> settleInterrupt
 | Pi | Escape | source of 0.85.1: `app.interrupt` in `keybindings.js`; not measured |
 | Cursor Agent | Escape | source of 2026.09.26: aborts the run when the input is empty; not measured |
 
-No agent reports the end of an interrupted turn: with hooks on every event,
-Claude Code 2.1.283 runs none after Ctrl+C. So the runtime no longer
-pretends the turn ended when it pressed the key. The settling report keeps
-the agent `working` until screens drawn after the key show the idle
-composer for 500 ms, the agent's next hook replaces the report, or it
-expires. The wait is not a guess about how long an agent takes to stop: it
+Claude Code reports nothing when its turn is interrupted: with hooks on
+every event, 2.1.283 runs none after Ctrl+C. OpenCode and Pi report their
+next state through their integrations (`session.status` going idle,
+`agent_settled`), and that report replaces the runtime's. So the runtime no
+longer pretends the turn ended when it pressed the key. The settling report
+keeps the agent `working` until screens drawn after the key show the idle
+composer for 500 ms, the agent's next report replaces it, or it expires.
+OpenCode and Pi have no screen scan that shows them idle; without their
+integration, their interrupt settles 3 s after the key. A repeated
+interrupt presses the key again once 2 s have passed since the last press,
+so a key that did not take is not swallowed, while two presses never land
+inside the 0.8 s in which Claude Code exits on a second Ctrl+C. The wait is not a guess about how long an agent takes to stop: it
 starts only once the composer reads as idle, and it absorbs a measured
 race. Claude Code writes its idle title (`✳`) and, 1 ms later in a separate
 synchronized frame, the composer with the prompt it put back; an
@@ -233,7 +242,8 @@ once the turn stopped; with that title and a prompt row that holds text,
 more, which clears input when nothing runs. It is a key decided by a screen
 reading, the one exception to "a heuristic never authorizes input", and it
 is bounded: once per interrupt, never at an empty prompt, where a second
-Ctrl+C would exit. That press shows "Press Ctrl-C again to exit" for about
+Ctrl+C would exit, and never in a pane a person has focused since the
+interrupt, whose text may be theirs. That press shows "Press Ctrl-C again to exit" for about
 0.8 s (measured); a Ctrl+C from anyone within that window exits Claude Code.
 
 ## Progress reports and final answers
@@ -252,8 +262,9 @@ hook's `cwd` to a worktree, registering an external one it did not know, and
 
 A pane's last 16 KiB of text and its exit code survive its exit in the
 `ExitedPanes` ring (16 panes). The dump keeps the newest whole lines, so a
-verbose command keeps its test summary or final error, and the record notes
-whether older rows were dropped. `read_pane` on an exited pane is served from
+verbose command keeps its test summary or final error. The record notes
+whether older rows were dropped, either past the 200 rows it keeps or past
+its 16 KiB. `read_pane` on an exited pane is served from
 there with `exit_code` set and `truncated` true when the requested rows reach
 the dropped ones, which is how `telar worktree exec --wait` prints a finished
 command's output and exits with its code.
