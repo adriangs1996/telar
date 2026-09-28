@@ -11,6 +11,7 @@ const Session = @import("client/Session.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const Pane = @import("../pane/Pane.zig");
 const prompt_scan = @import("../history/prompt_scan.zig");
+const agent_types = @import("../agent/types.zig");
 const agent_status = @import("agent_status.zig");
 const client_request = @import("client_request.zig");
 const pane_input = @import("pane_input.zig");
@@ -42,10 +43,13 @@ pub fn interrupt(model: *RuntimeModel, session: *Session, request: core.Interrup
     }
 
     const exact = pane.key();
+    const now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
     if (model.agents.find(exact)) |agent| {
-        // A second press could reach an agent whose turn already stopped:
-        // Claude Code exits on a second Ctrl+C at an empty prompt.
-        if (agent.interrupt != .none) {
+        // A press right after another could reach an agent whose turn just
+        // stopped: Claude Code exits on a second Ctrl+C at an empty prompt.
+        // Later, a repeated interrupt presses again in case the first key
+        // did not take.
+        if (agent.interrupt != .none and now_ms - agent.interrupt_pressed_at_ms < agent_types.interrupt_repress_ms) {
             return client_request.complete(session, request.request_id);
         }
     }
@@ -60,18 +64,21 @@ pub fn interrupt(model: *RuntimeModel, session: *Session, request: core.Interrup
     }
 
     try pane_input.press(model, pane, interrupt_key.presses());
-    // No agent reports the end of an interrupted turn: Claude Code runs no
-    // hook at all. The settling report keeps the agent working until a newer
-    // screen shows its idle composer, or its next hook replaces the report.
+    // Claude Code runs no hook when its turn is interrupted. OpenCode and
+    // Pi report their next state through their integrations when installed
+    // (`session.status`, `agent_settled`), which replaces this report.
+    // Until then the settling report keeps the agent working: see
+    // `Agent.settleInterrupt` for when the turn counts as ended.
     _ = agent_status.observeReport(model, .{
         .identity = agent_identity.fromPane(pane),
         .state = .settling,
         .event = interrupted_event,
-        .observed_at_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
+        .observed_at_ms = now_ms,
         .observed_at_ns = @intCast(std.Io.Timestamp.now(model.io, .awake).toNanoseconds()),
     });
     if (model.agents.find(exact)) |agent| {
         agent.interrupt = .pending;
+        agent.interrupt_pressed_at_ms = now_ms;
     }
 
     try client_request.complete(session, request.request_id);
@@ -81,7 +88,8 @@ pub fn interrupt(model: *RuntimeModel, session: *Session, request: core.Interrup
 /// turn can settle and the next prompt is not appended to the old one.
 /// Claude Code restores a prompt it had not answered yet; its interrupt key,
 /// Ctrl+C, clears the input once nothing runs, and exits only on a second
-/// press at an empty prompt. The key is pressed once per interrupt.
+/// press at an empty prompt. The key is pressed once per interrupt, and
+/// never into a pane a person has focused since: the text may be theirs.
 ///
 /// ```zig
 /// try agent_control.clearRestoredDraft(model, pane);
@@ -97,7 +105,12 @@ pub fn clearRestoredDraft(model: *RuntimeModel, pane: *Pane) !void {
         return;
     }
 
+    if (focusedByClient(model, pane.id)) {
+        return;
+    }
+
     agent.interrupt = .draft_cleared;
+    agent.interrupt_pressed_at_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
     try pane_input.press(model, pane, model.resources.agent_manifests.interrupt(provider).presses());
 }
 

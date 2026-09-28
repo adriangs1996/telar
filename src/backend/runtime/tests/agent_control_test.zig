@@ -318,3 +318,75 @@ test "an interrupted turn whose composer is empty or still spinning gets no extr
     try agent_control.clearRestoredDraft(fixture.model, fixture.pane);
     try std.testing.expectEqualStrings("", queued(fixture.pane));
 }
+
+test "a restored draft stays in a pane a person focused after the interrupt" {
+    var fixture: EventFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    holdWrites(fixture.pane);
+    defer releaseWrites(fixture.pane);
+    try startClaudeTurn(&fixture);
+    try interrupt(&fixture);
+    try expectCompleted(&fixture);
+    fixture.pane.input_queue.clear();
+
+    focusPane(&fixture);
+    try ingest(fixture.pane, "\x1b]0;\u{2733} Essay\x07\x1b[H\x1b[2J\u{276f} their own words");
+    try agent_control.clearRestoredDraft(fixture.model, fixture.pane);
+
+    try std.testing.expectEqualStrings("", queued(fixture.pane));
+}
+
+test "a repeated interrupt presses again once the last press is old enough" {
+    var fixture: EventFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    holdWrites(fixture.pane);
+    defer releaseWrites(fixture.pane);
+    try startClaudeTurn(&fixture);
+    try interrupt(&fixture);
+    try expectCompleted(&fixture);
+    fixture.pane.input_queue.clear();
+
+    try interrupt(&fixture);
+    try expectCompleted(&fixture);
+    try std.testing.expectEqualStrings("", queued(fixture.pane));
+
+    fixture.model.agents.find(fixture.pane.key()).?.interrupt_pressed_at_ms -= types.interrupt_repress_ms;
+    try interrupt(&fixture);
+    try expectCompleted(&fixture);
+    try std.testing.expectEqualStrings("\x03", queued(fixture.pane));
+    try std.testing.expectEqual(core.AgentStatus.working, status(&fixture));
+}
+
+test "an agent whose screen cannot show it idle settles its interrupt after a fixed wait" {
+    var fixture: EventFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    holdWrites(fixture.pane);
+    defer releaseWrites(fixture.pane);
+    const identity = agent_identity.fromPane(fixture.pane);
+    const now_ms = std.Io.Timestamp.now(std.testing.io, .real).toMilliseconds();
+    _ = agent_status.observeProcess(fixture.model, .{
+        .identity = identity,
+        .provider = .opencode,
+        .process_id = 84,
+        .observed_at_ms = now_ms,
+    });
+    _ = agent_status.observeReport(fixture.model, .{
+        .identity = identity,
+        .state = .working,
+        .observed_at_ms = now_ms,
+        .observed_at_ns = 1_000,
+    });
+
+    try interrupt(&fixture);
+    try expectCompleted(&fixture);
+    try std.testing.expectEqualStrings("\x1b\x1b", queued(fixture.pane));
+    const pressed_at_ms = fixture.model.agents.find(fixture.pane.key()).?.interrupt_pressed_at_ms;
+
+    _ = agent_status.expire(fixture.model, pressed_at_ms + types.interrupt_blind_ms - 1);
+    try std.testing.expectEqual(core.AgentStatus.working, status(&fixture));
+    _ = agent_status.expire(fixture.model, pressed_at_ms + types.interrupt_blind_ms);
+    try std.testing.expect(status(&fixture) != .working);
+}

@@ -9,6 +9,7 @@ pub const capabilities: Capabilities = .{
     .completion_requires_agent_signal = true,
     .resume_prefix = "cursor-agent --resume ",
     .screen_reports_blocked = true,
+    .screen_shows_idle = true,
 };
 
 test {

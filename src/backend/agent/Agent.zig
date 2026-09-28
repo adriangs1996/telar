@@ -79,6 +79,8 @@ interrupt: InterruptPhase = .none,
 /// When a screen newer than the interrupt first showed the idle composer;
 /// any other screen after it clears this.
 interrupt_idle_at_ms: ?i64 = null,
+/// When the runtime last pressed a key for the pending interrupt.
+interrupt_pressed_at_ms: i64 = 0,
 session_reference: ?SessionReference = null,
 /// The tracked worktree the agent reported working in.
 work_tree: core.WorktreeId = .invalid,
@@ -733,6 +735,7 @@ fn refreshEvent(self: *Agent, evidence: Evidence) bool {
 // composer with the prompt it put back.
 fn trackInterruptedScreen(self: *Agent, observation: ScreenObservation) void {
     const report = self.report orelse return;
+
     if (screenOrder(observation, report) != .gt) {
         return;
     }
@@ -750,13 +753,19 @@ fn trackInterruptedScreen(self: *Agent, observation: ScreenObservation) void {
 
 // Ends an interrupted turn once its idle composer held for
 // `interrupt_idle_ms`, withdrawing the settling report so the screen decides.
+// An agent whose screen cannot show it idle settles `interrupt_blind_ms`
+// after the key instead, unless its own report came first.
 fn settleInterrupt(self: *Agent, now_ms: i64) void {
     if (self.interrupt == .none) {
         return;
     }
 
-    const idle_at = self.interrupt_idle_at_ms orelse return;
-    if (now_ms - idle_at < types.interrupt_idle_ms) {
+    const settled = if (providers.of(self.provider()).screen_shows_idle)
+        if (self.interrupt_idle_at_ms) |idle_at| now_ms - idle_at >= types.interrupt_idle_ms else false
+    else
+        now_ms - self.interrupt_pressed_at_ms >= types.interrupt_blind_ms;
+
+    if (!settled) {
         return;
     }
 

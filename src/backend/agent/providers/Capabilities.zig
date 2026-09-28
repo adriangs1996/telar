@@ -11,6 +11,9 @@ session_format: SessionFormat = .uuid,
 /// Active work cannot be settled by a prompt, and process or model
 /// completion alone does not establish readiness.
 ready_prompt_settles_report: bool = false,
+/// A screen scan confirms the agent's idle composer (`ready_confirmed`), so
+/// an interrupted turn waits for it rather than for a fixed time.
+screen_shows_idle: bool = false,
 /// Process presence alone does not prove an idle agent.
 completion_requires_agent_signal: bool = false,
 /// The agent has no hook for its approval prompts, so a blocked screen
