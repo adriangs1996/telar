@@ -5,8 +5,9 @@ helper. Building the GUI also requires Cargo and Rust 1.93.1 or newer; packaged
 applications do not need that toolchain. See the [helper build and protocol](../tools/diagram-renderer/README.md).
 Packaging adds what a desktop expects around
 it: something to double-click, an icon, and a way for shells and agents to
-find `telar` afterwards. Nothing in the client changes; `telar` typed in a
-terminal is still the terminal client.
+find `telar` afterwards. `telar` typed in a terminal opens the same window as
+the launchers; without a display (an SSH login, or Linux without
+`WAYLAND_DISPLAY`) it says so and names the CLI commands to use instead.
 
 ## macOS
 

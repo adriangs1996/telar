@@ -11,22 +11,14 @@ const profile_options = @import("profile_options");
 const data = @import("model");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
-const frontend = @import("telar-frontend");
 const client = @import("telar-client");
 const std = @import("std");
 const DamageContext = @import("DamageContext.zig");
 const FrameContext = @import("FrameContext.zig");
 const EncodeContext = @import("EncodeContext.zig");
-const PipelineContext = @import("PipelineContext.zig");
 const KeybindContext = @import("KeybindContext.zig");
-const ClientUiContext = @import("ClientUiContext.zig");
 const BlitContext = @import("BlitContext.zig");
-const CursorContext = @import("CursorContext.zig");
 const LayoutContext = @import("LayoutContext.zig");
-const MultiplexerContext = @import("MultiplexerContext.zig");
-const IncrementalComposeContext = @import("IncrementalComposeContext.zig");
-const GraphicsContext = @import("GraphicsContext.zig");
-const TransmitContext = @import("TransmitContext.zig");
 const KgpIngestContext = @import("KgpIngestContext.zig");
 const SharedFrameContext = @import("SharedFrameContext.zig");
 const IdleDeliveryContext = @import("IdleDeliveryContext.zig");
@@ -50,7 +42,6 @@ const fragmented_span_cells = 2;
 const fragmented_gap_cells = 2;
 pub const fragmented_span_count = fragmented_rows * fragmented_spans_per_row;
 const history_input = "\x1b[200~echo one\necho two\x1b[201~\r";
-const client_ui_tab_counts = [_]usize{ 1, 8, 64 };
 
 pub const Workload = enum { one_cell, fragmented, full_screen };
 const workloads = [_]Workload{ .one_cell, .fragmented, .full_screen };
@@ -81,20 +72,11 @@ const cases = [_]Case{
     .{ .name = "schema.decode.one_cell", .work_per_op = 1, .work_unit = "cells" },
     .{ .name = "schema.decode.fragmented", .work_per_op = fragmented_span_count * fragmented_span_cells, .work_unit = "cells" },
     .{ .name = "schema.decode.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
-    .{ .name = "frontend.pipeline.one_cell", .work_per_op = 1, .work_unit = "cells" },
-    .{ .name = "frontend.pipeline.fragmented", .work_per_op = fragmented_span_count * fragmented_span_cells, .work_unit = "cells" },
-    .{ .name = "frontend.pipeline.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
     .{ .name = "frontend.outbox.input", .work_per_op = 12, .work_unit = "bytes" },
-    .{ .name = "frontend.keybind.route", .work_per_op = 12, .work_unit = "keys" },
+    .{ .name = "client.keybind.route", .work_per_op = keybind_keys.len, .work_unit = "keys" },
     .{ .name = "frontend.lua.callback", .work_per_op = 1, .work_unit = "callbacks" },
     .{ .name = "frontend.pacer.late_frame", .work_per_op = 1, .work_unit = "frames" },
-    .{ .name = "frontend.flush.cursor_only", .work_per_op = 1, .work_unit = "frames" },
-    .{ .name = "frontend.client_ui.chrome.tabs_1", .work_per_op = 2 * cols + data.sidebar.default_width * (rows - 2), .work_unit = "cells" },
-    .{ .name = "frontend.client_ui.chrome.tabs_8", .work_per_op = 2 * cols + data.sidebar.default_width * (rows - 2), .work_unit = "cells" },
-    .{ .name = "frontend.client_ui.chrome.tabs_64", .work_per_op = 2 * cols + data.sidebar.default_width * (rows - 2), .work_unit = "cells" },
     .{ .name = "frontend.layout.directional_focus", .work_per_op = 4, .work_unit = "panes" },
-    .{ .name = "frontend.multiplexer.compose_four", .work_per_op = cell_count, .work_unit = "cells" },
-    .{ .name = "frontend.multiplexer.patch_one_cell", .work_per_op = 1, .work_unit = "cells" },
     .{
         .name = "backend.kitty.ingest_zlib_rgba_1920x1080",
         .work_per_op = 1920 * 1080,
@@ -119,20 +101,6 @@ const cases = [_]Case{
         .work_unit = "pixels",
         .p99_budget_ns = 100 * std.time.ns_per_ms,
     },
-    .{ .name = "frontend.kitty.transmit_rgba_64x64", .work_per_op = 64 * 64, .work_unit = "pixels" },
-    .{ .name = "frontend.kitty.idle", .work_per_op = 1, .work_unit = "frames" },
-    .{
-        .name = "frontend.kitty.transmit_rgba_480x360",
-        .work_per_op = 480 * 360,
-        .work_unit = "pixels",
-        .p99_budget_ns = 5 * std.time.ns_per_ms,
-    },
-    .{
-        .name = "frontend.kitty.transmit_rgba_480x360_zlib",
-        .work_per_op = 480 * 360,
-        .work_unit = "pixels",
-        .p99_budget_ns = 10 * std.time.ns_per_ms,
-    },
     .{
         .name = "frontend.text.rasterize_jetbrains_mono",
         .work_per_op = 51,
@@ -149,7 +117,7 @@ const cases = [_]Case{
     .{ .name = "frontend.client.inbox_event", .work_per_op = 1, .work_unit = "events" },
 };
 
-/// A TUI and a GUI on one eight-pane tab, and one client on a crowded tab.
+/// Two clients on one eight-pane tab, and one client on a crowded tab.
 const idle_delivery_shapes = [_]IdleDeliveryShape{
     .{ .clients = 2, .panes = 8, .size = .{ .cols = cols, .rows = rows } },
     .{ .clients = 1, .panes = 32, .size = .{ .cols = cols, .rows = rows } },
@@ -323,18 +291,6 @@ fn runDecode(context: *DecodeContext, iterations: usize) !u64 {
     return checksum;
 }
 
-fn runPipeline(context: *PipelineContext, iterations: usize) !u64 {
-    var checksum: u64 = 0;
-    for (0..iterations) |iteration| {
-        const message = try core.decodeServer(context.payloads[iteration & 1]);
-        const applied = try frontend.apply(&context.screen, message.pane_frame);
-        var writer = std.Io.Writer.fixed(context.output);
-        const flushed = try context.screen.flush(&writer);
-        checksum +%= applied.cells + flushed.cells + flushed.scanned + flushed.bytes;
-    }
-    return checksum;
-}
-
 fn runOutboxInput(context: *OutboxContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |_| {
@@ -348,7 +304,7 @@ fn runOutboxInput(context: *OutboxContext, iterations: usize) !u64 {
 
 pub const KeybindAction = enum(u8) { detach, palette };
 pub const KeybindBinding = keyinput.GenericBinding(KeybindAction, 4);
-pub const KeybindRouter = frontend.GenericRouter(KeybindAction, .{
+pub const KeybindRouter = keyinput.GenericRouter(KeybindAction, .{
     .max_bindings = 16,
     .max_keys = 4,
     .input_capacity = 64,
@@ -356,25 +312,17 @@ pub const KeybindRouter = frontend.GenericRouter(KeybindAction, .{
     .max_physical_leases = data.keybind.max_physical_leases,
     .escape_timeout_ns = data.keybind.default_escape_timeout_ns,
     .sequence_timeout_ns = data.keybind.default_sequence_timeout_ns,
-});
+}, struct {});
+
+/// What one iteration routes: typing, then the detach chord.
+pub const keybind_keys = "cargo test";
 
 fn runKeybind(context: *KeybindContext, iterations: usize) !u64 {
-    const input = "cargo test\x02d";
     for (0..iterations) |iteration| {
-        var feed: KeybindRouter.Feed = .{ .bytes = input, .now_ns = iteration };
-        while (context.router.next(&feed)) |decoded| {
-            const key = switch (decoded.event) {
-                .key => |key| key,
-                else => return error.UnexpectedBenchmarkEvent,
-            };
-            const decision = context.router.routeEvent(.{ .key = key, .raw = decoded.raw, .now_ns = iteration }, .{});
+        for (context.keys) |key| {
+            const decision = context.router.routeEvent(.{ .key = key, .raw = "", .now_ns = iteration }, .{});
             switch (decision) {
-                .forward => |forward| {
-                    context.checksum +%= forward.raw.len;
-                    if (forward.raw.len != 0) {
-                        context.checksum +%= forward.raw[0];
-                    }
-                },
+                .forward => |forward| context.checksum +%= @intFromEnum(forward.key.code),
                 .action => |request| {
                     context.checksum +%= @intFromEnum(request.value) + 1;
                     context.router.actionCompleted(request, null);
@@ -405,31 +353,6 @@ fn runLuaCallback(context: *LuaCallbackContext, iterations: usize) !u64 {
     return checksum;
 }
 
-fn runClientUi(context: *ClientUiContext, iterations: usize) !u64 {
-    var checksum: u64 = 0;
-    for (0..iterations) |iteration| {
-        context.view.hovered = if (iteration & 1 == 0) .active_workspace else .toggle_workspace_list;
-        context.view.invalidate();
-        const stats = try context.view.render(&context.screen, .{
-            .model = context.model,
-            .tab = context.model.tabs.active,
-        });
-        checksum +%= stats.scanned + stats.damaged;
-    }
-    return checksum;
-}
-
-fn runCursor(context: *CursorContext, iterations: usize) !u64 {
-    var checksum: u64 = 0;
-    for (0..iterations) |iteration| {
-        context.screen.cursor = .{ .x = @intCast(iteration % cols), .y = @intCast(iteration % rows) };
-        var writer = std.Io.Writer.fixed(context.output);
-        const flushed = try context.screen.flush(&writer);
-        checksum +%= flushed.bytes;
-    }
-    return checksum;
-}
-
 fn runPacer(context: *PacerContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |_| {
@@ -452,79 +375,6 @@ fn runLayoutFocus(context: *LayoutContext, iterations: usize) !u64 {
             checksum +%= core.raw(pane_id);
         }
     }
-    return checksum;
-}
-
-/// Composes one model over the whole host screen with the default palette,
-/// the way the presenter does for a client without chrome.
-pub fn composeFullScreen(compositor: *frontend.Compositor, model: *const data.ClientModel, tab: usize, screen: *frontend.Screen) !frontend.CompositionResult {
-    return compositor.render(.{
-        .model = model,
-        .tab = tab,
-        .screen = screen,
-        .input = .{ .area = screen.back.area(), .palette = &data.theme_support.default_theme.palette },
-    });
-}
-
-fn runMultiplexerCompose(context: *MultiplexerContext, iterations: usize) !u64 {
-    var checksum: u64 = 0;
-    for (0..iterations) |iteration| {
-        _ = context.model.tabs.layout[0].focusPane(@enumFromInt(iteration % 4 + 1));
-        const composed = try composeFullScreen(&context.compositor, context.model, 0, &context.screen);
-        checksum +%= composed.stats.cells + composed.stats.panes;
-    }
-    return checksum;
-}
-
-fn runIncrementalCompose(context: *IncrementalComposeContext, iterations: usize) !u64 {
-    var checksum: u64 = 0;
-    for (0..iterations) |iteration| {
-        context.model.panes.find(@enumFromInt(1)).?.applied_frame_id = 1;
-        const frame_view = (try core.decodeServer(
-            context.payloads[iteration & 1],
-        )).pane_frame;
-        _ = try context.model.panes.find(frame_view.pane_id).?.applyFrame(frame_view);
-        const composed = try composeFullScreen(&context.compositor, context.model, 0, &context.screen);
-        checksum +%= composed.stats.cells + composed.stats.damaged_cells;
-    }
-    return checksum;
-}
-
-fn runGraphicsTransmission(context: *GraphicsContext, iterations: usize) !u64 {
-    var checksum: u64 = 0;
-    for (0..iterations) |_| {
-        var images = context.store.images.iterator();
-        while (images.next()) |entry| {
-            entry.value_ptr.delivery.transmitted = false;
-        }
-
-        var placements = context.store.placements.iterator();
-        while (placements.next()) |entry| {
-            entry.value_ptr.delivery.emitted_image_id = null;
-            entry.value_ptr.delivery.dirty = true;
-        }
-        context.store.damage = true;
-        var output = std.Io.Writer.fixed(context.output);
-        var graphics_writer = context.writer();
-        checksum +%= try graphics_writer.write(&output);
-    }
-    return checksum;
-}
-
-fn runGraphicsIdle(context: *GraphicsContext, iterations: usize) !u64 {
-    context.store.damage = false;
-    var checksum: u64 = 0;
-    for (0..iterations) |_| {
-        var output = std.Io.Writer.fixed(context.output);
-        var graphics_writer = context.writer();
-        checksum +%= try graphics_writer.write(&output);
-    }
-    return checksum;
-}
-
-fn runTransmitDelivery(context: *TransmitContext, iterations: usize) !u64 {
-    var checksum: u64 = 0;
-    for (0..iterations) |_| checksum +%= try context.deliver();
     return checksum;
 }
 
@@ -652,18 +502,6 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
         }
     }
 
-    inline for (workloads) |workload| {
-        var case = cases[case_index];
-        case_index += 1;
-        if (config.includes(case.name)) {
-            const payloads = fixture.payloads(workload);
-            case.payload_bytes_per_op = (payloads[0].len + payloads[1].len) / 2;
-            var context = try PipelineContext.init(gpa, fixture, workload);
-            defer context.deinit();
-            try result_writer.write(case, try measure(.{ .io = io, .config = config, .context = &context }, runPipeline));
-        }
-    }
-
     const outbox_case = cases[case_index];
     case_index += 1;
     if (config.includes(outbox_case.name)) {
@@ -697,54 +535,11 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
         try result_writer.write(pacer_case, try measure(.{ .io = io, .config = config, .context = &context }, runPacer));
     }
 
-    const cursor_case = cases[case_index];
-    case_index += 1;
-    if (config.includes(cursor_case.name)) {
-        var context = try CursorContext.init(gpa, fixture.terminal_output);
-        defer context.deinit();
-        try result_writer.write(cursor_case, try measure(.{ .io = io, .config = config, .context = &context }, runCursor));
-    }
-
-    inline for (client_ui_tab_counts) |tab_count| {
-        const client_ui_case = cases[case_index];
-        case_index += 1;
-        if (config.includes(client_ui_case.name)) {
-            var context = try ClientUiContext.init(gpa, tab_count);
-            defer context.deinit();
-            try result_writer.write(
-                client_ui_case,
-                try measure(.{ .io = io, .config = config, .context = &context }, runClientUi),
-            );
-        }
-    }
-
     const layout_case = cases[case_index];
     case_index += 1;
     if (config.includes(layout_case.name)) {
         var context = try LayoutContext.init();
         try result_writer.write(layout_case, try measure(.{ .io = io, .config = config, .context = &context }, runLayoutFocus));
-    }
-
-    const multiplexer_case = cases[case_index];
-    case_index += 1;
-    if (config.includes(multiplexer_case.name)) {
-        var context = try MultiplexerContext.init(gpa);
-        defer context.deinit();
-        try result_writer.write(
-            multiplexer_case,
-            try measure(.{ .io = io, .config = config, .context = &context }, runMultiplexerCompose),
-        );
-    }
-
-    const incremental_case = cases[case_index];
-    case_index += 1;
-    if (config.includes(incremental_case.name)) {
-        var context = try IncrementalComposeContext.init(gpa, fixture);
-        defer context.deinit();
-        try result_writer.write(
-            incremental_case,
-            try measure(.{ .io = io, .config = config, .context = &context }, runIncrementalCompose),
-        );
     }
 
     var kgp_case = cases[case_index];
@@ -784,42 +579,6 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
             try result_writer.write(
                 shared_freeze_case,
                 try measure(.{ .io = io, .config = config, .context = &context }, runSharedFrameFreeze),
-            );
-        }
-    }
-
-    var graphics_context = try GraphicsContext.init(gpa, fixture.terminal_output);
-    defer graphics_context.deinit();
-    var graphics_transmit_case = cases[case_index];
-    case_index += 1;
-    if (config.includes(graphics_transmit_case.name)) {
-        var output = std.Io.Writer.fixed(fixture.terminal_output);
-        var graphics_writer = graphics_context.writer();
-        graphics_transmit_case.payload_bytes_per_op = try graphics_writer.write(&output);
-        try result_writer.write(
-            graphics_transmit_case,
-            try measure(.{ .io = io, .config = config, .context = &graphics_context }, runGraphicsTransmission),
-        );
-    }
-    const graphics_idle_case = cases[case_index];
-    case_index += 1;
-    if (config.includes(graphics_idle_case.name)) {
-        try result_writer.write(
-            graphics_idle_case,
-            try measure(.{ .io = io, .config = config, .context = &graphics_context }, runGraphicsIdle),
-        );
-    }
-
-    inline for ([_]bool{ false, true }) |zlib| {
-        var transmit_case = cases[case_index];
-        case_index += 1;
-        if (config.includes(transmit_case.name)) {
-            var context = try TransmitContext.init(gpa, zlib);
-            defer context.deinit();
-            transmit_case.payload_bytes_per_op = try context.deliver();
-            try result_writer.write(
-                transmit_case,
-                try measure(.{ .io = io, .config = config, .context = &context }, runTransmitDelivery),
             );
         }
     }

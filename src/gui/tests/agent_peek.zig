@@ -9,7 +9,7 @@ test "a secondary press on an agent card opens a drawable peek that reads its pa
     const session = try review.base();
     defer session.deinit();
     const gui = session.gui;
-    const app = &gui.app;
+    const app = gui.app;
     var bytes: [4096]u8 = undefined;
     const snapshot = try core.encodeAgentSnapshot(&bytes, .{ .revision = 1, .entries = &.{.{
         .pane_id = Session.pane_id,

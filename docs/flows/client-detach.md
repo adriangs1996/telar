@@ -36,7 +36,7 @@ the runtime continues.
 
 Source: `src/client/workspace/tab_removal.zig` and
 `src/model/state/ClientModel.zig`.
-Tests: `src/frontend/client/tests/pane_lifecycle.zig` covers stable multi-tab
+Tests: `src/client_tests/pane_lifecycle.zig` covers stable multi-tab
 wire order, local attachment cleanup, exact paste/focus ownership, version
 silence and the final stop directive. Tab close/handoff tests exercise capacity
 checks and partial failures in the same attachment retirement operation.

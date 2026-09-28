@@ -1,25 +1,20 @@
 #!/usr/bin/env python3
-"""Opt-in CLI integration against an isolated real runtime and a PTY client.
+"""Opt-in CLI integration against an isolated real runtime and the headless client.
 
-Run after `zig build`: python3 tools/test_cli_live.py
+Run after `zig build` and `zig build headless`: python3 tools/test_cli_live.py
 All sockets, configuration, plugins and persistent data live in temporary paths.
 """
 
-import fcntl
 import json
 import os
 from pathlib import Path
-import pty
-import select
 import shutil
-import signal
-import struct
 import subprocess
 import tempfile
-import termios
-import threading
 import time
 import unittest
+
+from headless_client import HeadlessClient
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = Path(os.environ.get("TELAR_TEST_BINARY", ROOT / "zig-out/bin/telar"))
@@ -133,54 +128,13 @@ class LiveCliTest(unittest.TestCase):
             'return t.config({api_version=2, '
             'plugins={t.plugin({path="plugin", enabled=false})}})\n'
         )
-        client_pid, master = pty.fork()
-        if client_pid == 0:
-            os.chdir(self.root)
-            os.execve(
-                str(BINARY),
-                [str(BINARY), "--config", str(configuration), "--sidebar-renderer", "cells", "--", "/bin/sh"],
-                self.environment,
-            )
-        fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 140, 0, 0))
-        stopped = threading.Event()
-        captured = bytearray()
-
-        def drain():
-            while not stopped.is_set():
-                try:
-                    if select.select([master], [], [], 0.1)[0]:
-                        data = os.read(master, 65536)
-                        if not data:
-                            return
-                        if len(captured) < 200000:
-                            captured.extend(data)
-                except OSError:
-                    return
-
-        thread = threading.Thread(target=drain, daemon=True)
-        thread.start()
-
-        def stop_client():
-            try:
-                os.kill(client_pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            deadline = time.monotonic() + 5
-            while os.waitpid(client_pid, os.WNOHANG)[0] == 0:
-                if time.monotonic() >= deadline:
-                    os.kill(client_pid, signal.SIGKILL)
-                    os.waitpid(client_pid, 0)
-                    break
-                time.sleep(0.05)
-            stopped.set()
-            thread.join(timeout=1)
-            os.close(master)
-
-        self.addCleanup(stop_client)
-        # Admission owns one handshake slot. Let the UI finish negotiation
-        # before opening a polling observer that would preempt that slot.
-        time.sleep(0.5)
-        self.eventually(lambda: bool(self.call("client", "list")), repr(captured[-4000:]))
+        client = HeadlessClient(
+            ["--config", configuration, "--", "/bin/sh"], env=self.environment, cwd=self.root,
+            size=(140, 40), log=self.root / "client.log", binary=BINARY.with_name("telar-headless"),
+        )
+        self.addCleanup(client.terminate)
+        client.wait_ready()
+        self.eventually(lambda: bool(self.call("client", "list")), (self.root / "client.log").read_text()[-4000:])
         return self.call("client", "list")[0]["id"]
 
     def test_routed_layout_configuration_and_plugin_lifecycle(self):

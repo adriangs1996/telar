@@ -249,7 +249,6 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expect(!generation.snapshot.sound.ready);
     try std.testing.expect(generation.snapshot.sound.needs_input);
     try std.testing.expectEqual(data.icons.Theme.nerd_font, generation.snapshot.icon_theme);
-    try std.testing.expectEqual(data.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     try std.testing.expectEqual(@as(u64, 40 * std.time.ns_per_ms), generation.snapshot.input_escape_timeout_ns);
     try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
     try std.testing.expectEqualDeep(
@@ -782,6 +781,30 @@ test "client bars default the sidebar footer to metrics and accept a bounded slo
     try std.testing.expectEqualDeep([3]data.bar_values.Source{ .empty, .empty, .empty }, hidden.snapshot.bars.sidebar_footer);
 }
 
+test "client bars accept the machines component" {
+    var diagnostic: data.Diagnostic = .{};
+    const source = "local t = require('telar') return { api_version = 2, client = { bars = { bottom = { left = t.bar.machines(), right = t.bar.tabs() } } } }";
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
+    defer generation.deinit();
+
+    try std.testing.expect(generation.snapshot.bars.bottom[0] == .machines);
+    const presented = generation.snapshot.bars.presentation().bottom;
+    try std.testing.expect(presented[0].content.eql(&data.bar_values.machines_content));
+}
+
+test "machine actions bind from Lua" {
+    var diagnostic: data.Diagnostic = .{};
+    const source = "local t = require('telar') return { api_version = 2, client = { keybindings = { t.bind({ 'm' }, t.action.machine_picker()), t.bind({ ']' }, t.action.next_machine()), t.bind({ '[' }, t.action.previous_machine()) } } }";
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
+    defer generation.deinit();
+
+    const bindings = generation.snapshot.bindingSlice();
+    try std.testing.expectEqual(@as(usize, 3), bindings.len);
+    try std.testing.expectEqualDeep(data.Action.machine_picker, bindings[0].action);
+    try std.testing.expectEqualDeep(data.Action{ .select_machine_offset = 1 }, bindings[1].action);
+    try std.testing.expectEqualDeep(data.Action{ .select_machine_offset = -1 }, bindings[2].action);
+}
+
 test "client bars reject invalid positions timing and tab ownership" {
     const cases = [_]struct { source: []const u8, message: []const u8 }{
         .{
@@ -1096,7 +1119,6 @@ test "profile overlays base config before CLI locks are applied" {
     });
     defer generation.deinit();
     try std.testing.expect(!generation.snapshot.sidebar_visible);
-    try std.testing.expectEqual(data.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     try std.testing.expectEqual(@as(usize, 16 * 1024 * 1024), generation.snapshot.runtime.graphics_pane_bytes);
     try std.testing.expectEqual(@as(usize, 64 * 1024 * 1024), generation.snapshot.runtime.graphics_global_bytes);
     const binding = generation.snapshot.bindings[0];
@@ -1178,7 +1200,6 @@ test "local modules are contained and participate in reload fingerprints" {
     }, .{ .path = config_path, .number = 1 });
     defer generation.deinit();
     try std.testing.expectEqual(@as(u8, 1), generation.modules.dependency_count);
-    try std.testing.expectEqual(data.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     const before = generation.watchFingerprint(io, config_path);
     {
         var module = try temp.dir.createFile(io, "settings.lua", .{ .truncate = true });

@@ -91,7 +91,7 @@ share glyphs or advances. A chrome scale change re-measures the chrome on
 the next frame and reuses the atlas; the PTY size never changes with it.
 
 The GUI embeds the complete Nerd Symbols font, including supplementary-plane
-icons used by terminal applications. The TUI keeps its small chrome-only subset.
+icons used by terminal applications.
 [Asset provenance](../../src/assets/README.md) records the pinned version,
 checksum and licenses. No font installation or extra Lua setting is required.
 
@@ -209,7 +209,7 @@ device-pixel rectangle, snapped to whole pixels, as one quad with zero shape.
 Workspace favicons never cross the wire. `widgets/Favicons` keeps one entry per
 workspace of the list; each preparation places the one landed image into the
 page and asks `client/workspace/favicons.request` for a lookup job for the next
-wanted workspace (the TUI never asks). The GUI runs that job as
+wanted workspace. The GUI runs that job as
 `image/favicon_worker.execute` on an inbox task: the shared `favicon_lookup` reads
 `favicon.png`, `favicon.ico`, then `.telar/icon.png` under the workspace root (regular files,
 1 MiB at most). `imaging.ico` inspects at most 64 directory entries without
@@ -295,21 +295,21 @@ toplevel; a manager advertised after mapping cannot create a late decoration.
 
 ## Hot reload
 
-`GuiAdapter.start` calls `config_adoption.scheduleConfigReload`, which selects the
-live configuration resources for `config_reload.schedule`. That procedure
-starts a `.config_watch` job through `client.workers`; the GUI's
-`ports/workers.zig` hands that job to `ConfigurationReload.schedule` instead of
-the shared runner, without recovering it through `Client`. `ConfigurationReload` owns one worker and one
+`GuiAdapter.start` calls `config_adoption.scheduleConfigReload`, which selects
+the live configuration resources for `config_reload.schedule`. That procedure
+queues a `.config_watch` job for the adapter; the GUI's `workers.zig` hands that
+job to `ConfigurationReload.schedule` instead of the shared runner, without
+recovering it through `Client`. `ConfigurationReload` owns one worker and one
 pending result. Its worker calls the shared `config_reload.wait`: the same
 one-second fingerprint watch, selected profile, local modules, plugin registry
-and trust-store loading as the TUI. It also prepares a replacement
-`TerminalRenderer` when effective font settings change, including font bytes, metrics, atlas
-fallbacks and grid capacity. Theme, cursor and window-only changes retain the active atlas.
-`text/font_rendering.same` excludes disabled strength and macOS-only settings
-on other platforms, avoiding an unnecessary atlas replacement. On macOS an
-optical weight change stages a new native context and page on that worker;
-it follows the same consumer lifetime as any other font replacement and does
-not alter the terminal geometry.
+and trust-store loading as every client. It also prepares a replacement
+`TerminalRenderer` when effective font settings change, including font bytes,
+metrics, atlas fallbacks and grid capacity. Theme, cursor and window-only
+changes retain the active atlas. `text/font_rendering.same` excludes disabled
+strength and macOS-only settings on other platforms, avoiding an unnecessary
+atlas replacement. On macOS an optical weight change stages a new native context
+and page on that worker; it follows the same consumer lifetime as any other font
+replacement and does not alter the terminal geometry.
 
 The worker receives copied appearance/viewport values and borrowed current Lua
 owners for fingerprinting. It never reads a live renderer or mutates the model.
@@ -326,7 +326,7 @@ through the existing orphan cleanup and becomes a shared rejected reload. The
 old generation, font and colors remain active. Shared validation rejection
 also discards the staged renderer. Diagnostics use the model's existing
 diagnostic state and the `gui_config` stderr log scope; the GUI does not yet
-paint the TUI diagnostic banner.
+paint a diagnostic banner.
 
 Successful adoption uses `config_adoption.completeConfigReload` to commit the shared model and
 swap its Lua owners. The GUI then installs the prepared renderer, applies the

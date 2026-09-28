@@ -101,6 +101,7 @@ test "complete widget list fits the maximum pane count with every optional layer
     _ = data.notifications.publish(&gui.app.model, 0, .{ .title = "Second", .message = "Ready" });
     _ = data.notifications.advance(&gui.app.model, data.notifications.transition_duration_ns);
     gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "All panes" } });
+    gui.app.model.runtime_link.phase = .lost;
     const projection = fixture.projection();
     const hit = try linkFor(&fixture);
     var canvas = begin(&fixture, &projection);

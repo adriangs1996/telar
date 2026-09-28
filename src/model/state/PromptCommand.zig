@@ -26,6 +26,8 @@ pub const PromptCommand = union(enum) {
     /// Shows only failed commands, or all of them again.
     toggle_failed,
     remove_entry,
+    /// Ctrl+R: renames the selected machine of the palette's machine list.
+    rename_entry,
     /// Puts the selected command on the host clipboard.
     copy_entry,
     /// Leaves the palette on the pane the selected command ran in.

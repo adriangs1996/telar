@@ -34,6 +34,10 @@ pub const Intent = union(enum) {
     toggle_bar_overflow,
     /// The panel's close control, or a press outside the open panel.
     close_panel,
+    /// The top bar's machine segment: the palette on the window's machines.
+    machine_picker,
+    /// One machine of the sidebar's switcher, by its slot.
+    select_machine: u8,
 };
 
 /// What a secondary (right) press on a target does: rename a tab, peek at an

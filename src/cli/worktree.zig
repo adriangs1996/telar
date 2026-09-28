@@ -15,6 +15,8 @@ const control = @import("control.zig");
 const worktree_git = @import("worktree_git.zig");
 const ListedWorktree = @import("ListedWorktree.zig");
 const CatalogWorktree = @import("CatalogWorktree.zig");
+const machine_dispatch = @import("machine_dispatch.zig");
+const worktree_dispatch = @import("worktree_dispatch.zig");
 
 /// Size of a pane launched before any UI sized it; a UI resizes it on view.
 const launch_size: core.TerminalSize = .{ .cols = 160, .rows = 48 };
@@ -42,6 +44,19 @@ pub fn run(init: std.process.Init, options: WorktreeOptions) !u8 {
 }
 
 fn execute(init: std.process.Init, options: WorktreeOptions, writer: *std.Io.Writer) !u8 {
+    if (options.machine) |label| {
+        // The machine's own label runs here like any other create.
+        switch (try machine_dispatch.resolve(init, std.mem.span(label))) {
+            .remote => |profile| return switch (options.action) {
+                .fetch => worktree_dispatch.fetch(init, options, profile, writer),
+                else => worktree_dispatch.create(init, options, profile),
+            },
+            .local => if (options.action == .fetch) {
+                return error.FetchNeedsAnotherMachine;
+            },
+        }
+    }
+
     var catalog: WorktreeCatalog = .init(init.gpa);
     defer catalog.deinit();
     var arena: std.heap.ArenaAllocator = .init(init.gpa);
@@ -64,6 +79,8 @@ fn execute(init: std.process.Init, options: WorktreeOptions, writer: *std.Io.Wri
         .open => open(init, command),
         .diff => diff(init, command),
         .remove => remove(init, command),
+        .resolve => resolve(init, command),
+        .fetch => error.FetchNeedsAnotherMachine,
     };
 }
 
@@ -115,6 +132,7 @@ fn create(init: std.process.Init, command: Command) !u8 {
         .base = base[0..@min(base.len, core.max_git_branch_bytes)],
         .title = if (options.title) |title| std.mem.span(title) else "",
         .brief = briefOf(argv, &brief_buffer),
+        .dispatched_from = if (options.dispatched_from) |label| std.mem.span(label) else "",
     });
 
     const shell = [_][]const u8{shellArgument(init.minimal.environ)};
@@ -434,6 +452,56 @@ fn remove(init: std.process.Init, command: Command) !u8 {
     return agent.exit_ok;
 }
 
+/// `telar worktree resolve --repository IDENTITY`: the main checkout of the
+/// one project among this runtime's workspaces whose origin has that
+/// identity. Another machine asks this before it pushes a branch here.
+fn resolve(init: std.process.Init, command: Command) !u8 {
+    const wanted = std.mem.span(command.options.repository.?);
+    var found_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var found: ?[]const u8 = null;
+    if (command.options.workspace != null) {
+        var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const directory = try originDirectory(init, command, &directory_buffer);
+        found = try matchingRoot(init, directory, wanted, &found_buffer) orelse return error.RepositoryNotInWorkspace;
+    } else {
+        for (command.catalog.workspaces.items) |*workspace| {
+            var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            const root = matchingRoot(init, workspace.path, wanted, &root_buffer) catch null orelse continue;
+            if (found) |previous| {
+                if (!std.mem.eql(u8, previous, root)) {
+                    return error.AmbiguousRepository;
+                }
+
+                continue;
+            }
+
+            found = try copyInto(&found_buffer, root);
+        }
+    }
+
+    const path = found orelse return error.RepositoryNotFound;
+    if (command.options.json) {
+        try std.json.Stringify.value(.{
+            .repository = wanted,
+            .path = path,
+        }, .{}, command.writer);
+        try command.writer.writeByte('\n');
+    } else {
+        try command.writer.print("{s}\n", .{path});
+    }
+
+    return agent.exit_ok;
+}
+
+/// The main checkout `directory` belongs to, when its origin has the
+/// identity `wanted`.
+fn matchingRoot(init: std.process.Init, directory: []const u8, wanted: []const u8, buffer: []u8) !?[]const u8 {
+    const root = try worktree_git.mainRoot(init, directory, buffer);
+    var identity_buffer: [WorktreeOptions.max_repository_bytes]u8 = undefined;
+    const identity = try worktree_git.originIdentity(init, root, &identity_buffer);
+    return if (std.mem.eql(u8, identity, wanted)) root else null;
+}
+
 /// The directory whose repository a new worktree comes from: `--workspace`
 /// (an id or a directory), else the calling pane's workspace, else the
 /// current directory.
@@ -564,6 +632,8 @@ fn writeWorktreeJson(writer: *std.Io.Writer, worktree: *const CatalogWorktree, s
     try control.writeJsonString(writer, worktree.brief);
     try writer.writeAll(",\"base\":");
     try control.writeJsonString(writer, worktree.base);
+    try writer.writeAll(",\"dispatched_from\":");
+    try control.writeJsonString(writer, worktree.dispatched_from);
     try writer.writeAll(",\"path\":");
     try control.writeJsonString(writer, worktree.path);
     try writer.print(",\"origin\":\"{s}\",\"state\":\"{s}\",\"source_workspace_id\":{d},\"workspace_id\":", .{
@@ -745,6 +815,20 @@ fn describe(err: anyerror) []const u8 {
         error.PathTooLong => "the worktree path exceeds the supported length",
         error.InvalidWorktreeBranch => "the branch name is not usable for a worktree",
         error.GitDiffFailed => "git diff failed",
+        error.UnknownMachine => "no saved machine or local label has that name; see `telar machine list`",
+        error.FetchNeedsAnotherMachine => "fetch brings a branch from another machine; this label names this one",
+        error.NoOriginRemote => "the repository has no `origin` remote to find its clone by on the other machine",
+        error.UnsupportedOrigin => "the `origin` remote is a local path, which names no clone on another machine",
+        error.RepositoryNotFound => "no workspace on the machine holds this repository; open one there or pass --workspace PATH",
+        error.RepositoryNotInWorkspace => "that workspace holds another repository",
+        error.AmbiguousRepository => "several clones of this repository are open on the machine; pass --workspace PATH",
+        error.UnexpectedResolveOutput => "the machine answered `worktree resolve` with something else; is its telar up to date?",
+        error.MachineCommandFailed => "the command failed on the machine",
+        error.UnknownRevision => "that revision names no commit here",
+        error.GitPushFailed => "git push to the machine failed; a branch with other history there is never overwritten",
+        error.GitFetchFailed => "git fetch from the machine failed",
+        error.DestinationNotUsableByGit => "the machine's SSH destination has ':', '/' or brackets; save it as a host alias",
+        error.UnquotableSshOption => "telar's runtime directory has a quote in its path, which git cannot be given safely",
         else => control.describe(err),
     };
 }

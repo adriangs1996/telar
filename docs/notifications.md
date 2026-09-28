@@ -27,9 +27,9 @@ worker lifecycle is documented in [Agent sound](flows/agent-sound.md).
 
 `config.client.notifications = { delivery = "telar" | "terminal" | "system" }`
 chooses where a published notice is surfaced besides the in-app center, which
-always shows it. `terminal` writes OSC 9 to the outer terminal, so its own
-notification handling reacts even when the telar window is unfocused.
-`system` posts through the operating system (`osascript` on macOS,
+always shows it. `terminal` queued OSC 9 for the terminal client's outer
+terminal; the window and the headless client have none, so they drop that
+request and `terminal` adds nothing to the in-app center. `system` posts through the operating system (`osascript` on macOS,
 `notify-send` on Linux) from a bounded worker with a three-second timeout;
 titles and messages are sanitized before they reach either channel. Each
 client applies its own policy, like sounds.
@@ -108,10 +108,10 @@ The layout scales with GUI chrome metrics and fits the workbench viewport.
 
 Entry and exit translate and fade the whole card over 200 ms, keeping its
 text layout fixed. Stack positions interpolate over 180 ms when notices are
-added or removed. The host frame clock samples current monotonic time and
+added or removed. The window's frame clock samples current monotonic time and
 requests frames only while visible cards move. The shared notification timer
-wakes at lifecycle boundaries on the GUI; the TUI retains its frame cadence.
-Neither animation stores a queue of missed frames.
+wakes only at lifecycle boundaries, because the window reports no host
+animation frame interval. Neither animation stores a queue of missed frames.
 
 The widget dispatcher registers card and close bounds in device pixels, with
 accessible labels and keyboard focus. It publishes them only after successful
@@ -129,26 +129,3 @@ sound in the same burst.
 
 The [Agent sound flow](flows/agent-sound.md) records the exact identity gate,
 configuration replacement, host adapters, process bounds and failure policy.
-
-## Rendering
-
-When the client has confirmed Kitty Graphics support and knows the host cell
-size, it shapes UTF-8 with HarfBuzz and rasterizes the resulting glyphs into
-RGBA with FreeType and the embedded JetBrains Mono face. Cell composition first
-records a fixed-size media plan and flushes the cell fallback. Rasterization is
-deferred to a lower-priority media pass after host input has been quiet for 250
-ms. A texture is regenerated only when its content, theme, or pixel geometry
-changes; the 200 ms transition updates only a native-size KGP source crop and
-placement, so the smoothstep curve keeps pixel precision instead of snapping to
-columns.
-
-The renderer owns at most four 1.5 MiB images. It transmits one texture at a
-time and emits at most 256 KiB of encoded KGP data per media pass, so a texture
-larger than that budget is continued over several passes. Until every visible
-image has reached the host, the whole stack remains cell-rendered. Unsupported
-KGP, terminal-derived colors, missing glyphs, oversized geometry, allocation
-failure, resize, and renderer initialization failure all take the same path:
-remove graphical placements and keep the clickable cell renderer. The hit
-targets remain cell-owned even while KGP supplies the pixels. Debug telemetry
-reports the cache as `toast_cache_bytes` and attributes its wire traffic to
-`toast_graphics_flushed_bytes` and `media_flush_*` rather than cell `flush_*`.

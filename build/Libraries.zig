@@ -182,6 +182,11 @@ const specs = [_]Spec{
     .{
         .name = "touchtrace",
     },
+    .{
+        .name = "privatefile",
+        .libc = true,
+        .posix = true,
+    },
 };
 
 /// Null for a library whose external dependency this graph does not provide.

@@ -651,3 +651,22 @@ test "queued editor requests own paths without enlarging queue metadata" {
     try std.testing.expect(@sizeOf(Message) < 512);
     try std.testing.expect(@sizeOf(Outbox) < 720 * 1024);
 }
+
+test "discarding keeps only the message being written" {
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
+    try outbox.pushInput(@enumFromInt(1), "sent");
+    var buffer: [64]u8 = undefined;
+    _ = (try outbox.beginSend(&buffer)).?;
+    try outbox.pushInput(@enumFromInt(2), "queued");
+    try outbox.pushInput(@enumFromInt(3), "also queued");
+
+    outbox.discardQueued();
+    try std.testing.expectEqual(@as(u8, 1), outbox.len);
+    try outbox.finishSend({});
+    try std.testing.expectEqual(@as(u8, 0), outbox.len);
+
+    try outbox.pushInput(@enumFromInt(4), "idle");
+    outbox.discardQueued();
+    try std.testing.expectEqual(@as(u8, 0), outbox.len);
+}

@@ -79,6 +79,8 @@ test "a non-reading peer cannot block receive admission or local input and shutd
         .memory_used_decigib = 10,
         .has_battery = false,
         .battery_percent = 0,
+        .cpu_count = 4,
+        .memory_total_decigib = 160,
     }));
     var input_seen = false;
     var server_seen = false;

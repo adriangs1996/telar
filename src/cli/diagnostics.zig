@@ -1,6 +1,7 @@
+const client = @import("telar-client");
 const std = @import("std");
 const Options = @import("arguments/DiagnosticsOptions.zig");
-const RuntimeConnector = @import("RuntimeConnector.zig");
+const RuntimeConnector = client.RuntimeConnector;
 const Log = @import("DiagnosticLog.zig");
 const native = @cImport({
     @cInclude("fcntl.h");
@@ -20,7 +21,7 @@ pub fn run(init: std.process.Init, options: Options) u8 {
 }
 
 fn execute(init: std.process.Init, options: Options) !void {
-    const connector = try RuntimeConnector.init(init, options.socket);
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, options.socket);
     const endpoint = connector.endpointPath();
     const parent = std.fs.path.dirname(endpoint) orelse return error.InvalidSocketPath;
     const base = std.fs.path.basename(endpoint);

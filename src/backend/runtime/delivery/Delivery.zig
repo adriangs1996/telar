@@ -266,6 +266,8 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
                     .memory_used_decigib = values.memory_used_decigib,
                     .has_battery = values.battery_percent != null,
                     .battery_percent = values.battery_percent orelse 0,
+                    .cpu_count = values.cpu_count,
+                    .memory_total_decigib = values.memory_total_decigib,
                 }),
                 .{ .system_metrics_revision = revision },
             );

@@ -22,7 +22,6 @@ fleet_order.order(FleetSources) -> FleetEntry{index, card, first_in_project}
         |  card: agent | task_full | task_compact
         |
 GUI SidebarState.observe -> Sidebar.drawList -> AgentCard | TaskCard
-TUI widgets/sidebar.refreshFleet -> drawAgentLine | drawTaskLine
 ```
 
 ## Density
@@ -47,4 +46,4 @@ bar reads `project › ⎇ handle` in a distinct accent, and `leave-worktree`
 
 ## Proof
 
-Fleet order, snapshot mapping, sidebar card geometry and TUI sidebar tests.
+Fleet order, snapshot mapping and sidebar card geometry tests.

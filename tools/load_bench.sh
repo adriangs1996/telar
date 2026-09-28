@@ -1,11 +1,14 @@
 #!/bin/sh
-# Echo latency under load: telar (isolated runtime) and tmux, with 0..8 panes
-# flooding output while one idle pane is measured.
+# Echo latency under load: telar through its headless client (isolated
+# runtime) and tmux, with 0..8 panes flooding output while one idle pane is
+# measured. telar's figure ends at the client's frame and tmux's at host
+# output, so the two are not a like-for-like comparison.
 #
 #   tools/load_bench.sh zig-out/bin/telar label
 set -eu
 binary=$1
 label=$2
+headless=$(dirname "$binary")/telar-headless
 for name in $(env | sed -n 's/^\(TELAR_[A-Z_]*\)=.*/\1/p'); do unset "$name"; done
 tools=$(cd "$(dirname "$0")" && pwd)
 dir=${TMPDIR:-/tmp}/telar-load-$$
@@ -24,7 +27,7 @@ for floods in ${FLOODS:-0 1 2 4 8}; do
   rm -rf "$dir/data"; mkdir -p -m 700 "$dir/data"
   python3 "$tools/load_latency.py" --mux telar --floods "$floods" \
     --env TELAR_SOCKET_PATH="$sock" --env XDG_DATA_HOME="$dir/data" --env XDG_CONFIG_HOME="$dir/config" \
-    "$label" -- "$binary" --no-config
+    --work "$dir/data" "$label" -- "$headless"
   stop
 done
 for floods in ${FLOODS:-0 1 2 4 8}; do

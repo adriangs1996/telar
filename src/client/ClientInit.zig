@@ -9,7 +9,9 @@ const ClientInit = @This();
 
 gpa: std.mem.Allocator,
 io: std.Io,
-connection: *localsocket.SocketChannel,
+/// A socket already connected and past its handshake, or null when the
+/// client connects to `options.machine` itself.
+connection: ?*localsocket.SocketChannel = null,
 host_size: core.TerminalSize,
 window_width_px: u32 = 0,
 window_height_px: u32 = 0,

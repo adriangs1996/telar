@@ -28,5 +28,7 @@ pub const Job = union(enum) {
         bar,
         notification,
         sidebar_animation,
+        /// The wait before connecting again to a lost runtime.
+        runtime_retry,
     };
 };

@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""Paired local latency and shutdown measurements with isolated runtimes."""
+"""Paired local latency and shutdown measurements with isolated runtimes.
+
+Each build is measured through its headless client (`telar-headless`
+beside the given `telar`), so latency runs from the client taking a key to
+its first frame of the pane. The TUI-only `slow-host` and `graphics` cases
+left with the TUI."""
 import argparse
 import json
 import os
 from pathlib import Path
 import signal
-import shlex
-import sys
 import subprocess
+import tempfile
 import time
 from types import SimpleNamespace
 
 import echo_latency
-import graphics_roundtrip
 import load_latency
 
 
@@ -112,44 +115,6 @@ def stop_runtime(binary, env):
     return result
 
 
-def slow_host(binary, directory, env):
-    master, slave = load_latency.pty.openpty()
-    load_latency.set_winsize(slave, 70, 240)
-    proc = subprocess.Popen([binary, '--no-config'], stdin=slave, stdout=slave,
-                            stderr=slave, env=env,
-                            preexec_fn=load_latency.become_session_leader,
-                            close_fds=True)
-    os.close(slave)
-    try:
-        load_latency.drain(master, 3)
-        load_latency.open_telar_floods(master, 2)
-        receipt = directory / 'input-received.txt'
-        reader = directory / 'input-reader.py'
-        reader.write_text("import os, tty\nfrom pathlib import Path\n"
-                          f"receipt = Path({str(receipt)!r})\n"
-                          "tty.setraw(0)\ncount = 0\nreceipt.write_text('0')\n"
-                          "while True:\n data = os.read(0, 4096)\n"
-                          " if not data: break\n count += len(data)\n"
-                          " temp = receipt.with_suffix('.tmp')\n temp.write_text(str(count))\n temp.replace(receipt)\n")
-        os.write(master, (shlex.join([sys.executable, str(reader)]) + '\n').encode())
-        load_latency.drain(master, 2)
-        if not receipt.exists() or receipt.read_text() != '0':
-            raise RuntimeError('slow-host input reader did not become ready')
-        # Do not drain the host while the panes continue producing frames.
-        time.sleep(3)
-        before = int(receipt.read_text())
-        os.write(master, b'k' * 32)
-        time.sleep(1.5)
-        during = int(receipt.read_text())
-        load_latency.drain(master, 1.5)
-        after = int(receipt.read_text())
-        return dict(endpoint="bytes read by the foreground PTY child", input_sent=32, input_while_host_blocked=during - before,
-                    input_after_drain=after - before)
-    finally:
-        load_latency.terminate(proc)
-        os.close(master)
-
-
 def isolated_environment(directory):
     directory.mkdir(mode=0o700, parents=True)
     env = {k: v for k, v in os.environ.items()
@@ -160,31 +125,39 @@ def isolated_environment(directory):
                XDG_DATA_HOME=str(directory / 'data'),
                XDG_CONFIG_HOME=str(directory / 'config'),
                XDG_CACHE_HOME=str(directory / 'cache'),
-               TELAR_SOCKET_PATH=str(directory / 'runtime.sock'))
+               TELAR_SOCKET_PATH=str(short_socket_path(directory)))
     return env
+
+
+def short_socket_path(directory):
+    """A Unix socket path must fit in about 100 bytes; a deep output
+    directory would not, so the socket lives in a short private directory
+    that `directory` links to."""
+    path = directory / 'runtime.sock'
+    if len(str(path)) < 100:
+        return path
+    socket_directory = Path(tempfile.mkdtemp(prefix='tlr-'))
+    (directory / 'runtime-socket-dir').symlink_to(socket_directory)
+    return socket_directory / 'runtime.sock'
 
 
 def measure(binary, directory, case, samples):
     env = isolated_environment(directory)
     previous = os.getcwd()
     os.chdir(directory)
+    headless = str(Path(binary).with_name('telar-headless'))
     try:
-        if case == 'slow-host':
-            return slow_host(binary, directory, env)
-        if case == 'graphics':
-            return graphics_roundtrip.measure(binary, directory, env)
         if case == 'echo':
             shell = directory / 'catshell'
             shell.write_text('#!/bin/sh\nexec /bin/cat\n')
             shell.chmod(0o700)
             env['SHELL'] = str(shell)
-            values, timeouts = echo_latency.measure(
-                [binary, '--no-config'], env, samples, .05, 40, 160, 3,
-                echo_latency.SINGLE)
+            values, timeouts = echo_latency.measure_headless(
+                headless, env, samples, .05, 40, 160, 3, echo_latency.SINGLE, directory)
         else:
-            args = SimpleNamespace(cmd=[binary, '--no-config'], rows=70,
-                                   cols=240, warmup=3, mux='telar', floods=2,
-                                   dump_screen=False, samples=samples, gap=.05)
+            args = SimpleNamespace(cmd=[headless], rows=70, cols=240, warmup=3,
+                                   mux='telar', floods=2, samples=samples, gap=.05,
+                                   work=str(directory))
             values, timeouts = load_latency.measure(args, env)
         return dict(raw_us=values, timeouts=timeouts,
                     **{name: echo_latency.percentile(values, p)

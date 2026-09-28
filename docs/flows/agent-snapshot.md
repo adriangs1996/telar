@@ -48,25 +48,27 @@ focus or remote handoff selected from that plan.
 ## Effects and presentation
 
 After the model accepts a newer snapshot, the operation calls
-`pane_attachment.synchronizePaneAttachments`. A shelf geometry change calls
-`pane_resize.resizeAttachedPanes`. This attachment-only synchronization does not
-emit child focus reports. The operation then translates transitions to
-`blocked`, `done` and `failed` into owned notifications, bounded by the center's
-capacity. It finally calls `sidebar_animation.synchronizeSidebarAnimation` to arm working-agent
+`pane_attachment.synchronizePaneAttachments`, which first queues any pending
+`acknowledge_agent` for a completed agent. It would also resync an attachment
+shelf bound in `Client.attachments`, but neither the window nor the headless
+client binds one. This attachment-only synchronization does not emit child focus
+reports. The operation then translates transitions to `blocked`, `done` and
+`failed` into owned notifications, bounded by the center's capacity. It finally
+calls `sidebar_animation.synchronizeSidebarAnimation` to arm working-agent
 animation without advancing a frame during snapshot application.
 
 Failure stops later delivery stages and preserves the canonical agent revision.
 There is no public callback boundary between the commit and its delivery.
 [Sidebar animation](sidebar-animation.md) describes the separate timer lifetime.
 
-The snapshot itself does not request a draw. At the event boundary,
-`presentation_lifecycle.observe` publishes the current version. `Presenter` compares
-`Version.agents` with the version it last painted, resets transient sidebar
-scroll, invalidates chrome and passes the projection's `agents`
-(`&model.agent_snapshot`) to the view on the paced frame.
+The snapshot itself does not request a draw. After the inbox turn,
+`GuiAdapter.update` passes the current version to `Client.presentation.observe`.
+A changed `Version.agents` asks for another frame. `GuiAdapter.prepare` then
+captures `client.Projection`, whose `agents` field borrows
+`model.agent_snapshot`, and the `Sidebar` widget draws its cards from it.
 
-Sidebar composition derives focused highlighting and any active-layout pane
-index during rendering. The stored runtime entry remains unchanged. Several
+The sidebar derives focused highlighting and any active-layout pane index
+while drawing. The stored runtime entry remains unchanged. Several
 accepted snapshots inside one frame interval fold into one render of the
 latest revision.
 
@@ -86,8 +88,7 @@ usable replica and its local version.
 
 Agent snapshot/model tests cover ownership, duplicate identities, bounded text,
 revision rejection and transition detection. The real client tests in
-`src/frontend/client/tests/notifications_and_agents.zig` cover wire admission,
-alert limits, exact sound identity, attachment synchronization and retained
-canonical state after host-publication failure. Renderer tests cover derived
-pane labels without mutating the replica. Runtime delivery tests cover per-client
+`src/client_tests/notifications_and_agents.zig` cover wire admission,
+alert limits, exact sound identity and retained canonical state after
+host-publication failure. Runtime delivery tests cover per-client
 revision cursors and enrichment.

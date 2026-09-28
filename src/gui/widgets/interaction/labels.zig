@@ -37,6 +37,8 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
         },
         .intent => |intent| switch (intent) {
             .toggle_sidebar => "Toggle sidebar",
+            .machine_picker => "Switch machine",
+            .select_machine => |slot| if (projection.machines) |machines| machines.label(slot) else "Machine",
             .toggle_workspace_list => "Toggle workspace list",
             .create_tab => "Create tab",
             .toggle_pane_fullscreen => "Leave fullscreen",

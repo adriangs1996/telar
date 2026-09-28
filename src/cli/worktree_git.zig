@@ -10,12 +10,24 @@ const workspace = @import("arguments/workspace.zig");
 const WorktreeCheckout = @import("WorktreeCheckout.zig");
 const DiffRequest = @import("DiffRequest.zig");
 const ListedWorktrees = @import("ListedWorktrees.zig");
+const GitTransfer = @import("GitTransfer.zig");
+const repository_identity = @import("repository_identity.zig");
 
 const git_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(60) },
 };
 
+/// A push or fetch crosses the network and may carry a whole history.
+const transfer_timeout: std.Io.Timeout = .{
+    .duration = .{ .clock = .awake, .raw = .fromSeconds(600) },
+};
+
 const max_git_output_bytes = 64 * 1024;
+
+/// Longest commit hash Git prints: SHA-256 in hex.
+pub const max_commit_bytes = 64;
+/// Longest `origin` URL read to derive a repository identity.
+const max_origin_url_bytes = 2048;
 
 /// The main checkout of the repository `directory` lies in, even when
 /// `directory` is inside a linked worktree, so worktrees never nest.
@@ -124,6 +136,15 @@ pub fn deleteBranch(init: std.process.Init, root: []const u8, branch: []const u8
 /// if (try worktree_git.hasChanges(init, directory)) return error.WorktreeHasChanges;
 /// ```
 pub fn hasChanges(init: std.process.Init, directory: []const u8) !bool {
+    return try changedFiles(init, directory) != 0;
+}
+
+/// How many files in the checkout are modified, staged or untracked.
+///
+/// ```zig
+/// const left = try worktree_git.changedFiles(init, root);
+/// ```
+pub fn changedFiles(init: std.process.Init, directory: []const u8) !usize {
     const result = std.process.run(init.gpa, init.io, .{
         .argv = &.{ "git", "-C", directory, "status", "--porcelain" },
         .stdout_limit = .limited(max_git_output_bytes),
@@ -136,7 +157,13 @@ pub fn hasChanges(init: std.process.Init, directory: []const u8) !bool {
         return error.GitFailed;
     }
 
-    return std.mem.trim(u8, result.stdout, " \r\n").len != 0;
+    var lines = std.mem.tokenizeScalar(u8, result.stdout, '\n');
+    var count: usize = 0;
+    while (lines.next()) |_| {
+        count += 1;
+    }
+
+    return count;
 }
 
 /// Streams `git diff` for a worktree to this process's stdout.
@@ -198,7 +225,49 @@ pub fn listed(bytes: []const u8) ListedWorktrees {
     return .{ .lines = std.mem.splitScalar(u8, bytes, '\n') };
 }
 
-fn branchExists(init: std.process.Init, root: []const u8, branch: []const u8) bool {
+/// The repository identity of the clone at `root`, from its `origin`.
+///
+/// ```zig
+/// const identity = try worktree_git.originIdentity(init, root, &buffer);
+/// // "github.com/o/telar"
+/// ```
+pub fn originIdentity(init: std.process.Init, root: []const u8, buffer: []u8) ![]const u8 {
+    var url_buffer: [max_origin_url_bytes]u8 = undefined;
+    const url = gitLine(init, &.{ "git", "-C", root, "config", "--get", "remote.origin.url" }, &url_buffer) catch return error.NoOriginRemote;
+    return repository_identity.normalize(url, buffer);
+}
+
+/// The commit a revision names, as a full hash.
+///
+/// ```zig
+/// const commit = try worktree_git.commitOf(init, root, "HEAD", &buffer);
+/// ```
+pub fn commitOf(init: std.process.Init, root: []const u8, revision: []const u8, buffer: []u8) ![]const u8 {
+    var spec_buffer: [workspace.max_worktree_branch_bytes + 16]u8 = undefined;
+    const spec = std.fmt.bufPrint(&spec_buffer, "{s}^{{commit}}", .{revision}) catch return error.InvalidWorktreeBranch;
+    return gitLine(init, &.{ "git", "-C", root, "rev-parse", "--verify", "--quiet", "--end-of-options", spec }, buffer) catch error.UnknownRevision;
+}
+
+/// Sends one ref to another machine's clone. Never forced, so Git refuses a
+/// branch that exists there with other history.
+///
+/// ```zig
+/// try worktree_git.push(init, .{ .root = root, .url = url, .refspec = "abc:refs/heads/fix", .environ_map = &map });
+/// ```
+pub fn push(init: std.process.Init, transfer: GitTransfer) !void {
+    return transferRun(init, &.{ "git", "-C", transfer.root, "push", "--quiet", "--", transfer.url, transfer.refspec }, transfer.environ_map, error.GitPushFailed);
+}
+
+/// Fetches one ref from another machine's clone into this clone.
+///
+/// ```zig
+/// try worktree_git.fetch(init, .{ .root = root, .url = url, .refspec = "+refs/heads/fix:refs/remotes/box/fix", .environ_map = &map });
+/// ```
+pub fn fetch(init: std.process.Init, transfer: GitTransfer) !void {
+    return transferRun(init, &.{ "git", "-C", transfer.root, "fetch", "--quiet", "--no-tags", "--", transfer.url, transfer.refspec }, transfer.environ_map, error.GitFetchFailed);
+}
+
+pub fn branchExists(init: std.process.Init, root: []const u8, branch: []const u8) bool {
     var ref_buffer: [workspace.max_worktree_branch_bytes + 16]u8 = undefined;
     const ref = std.fmt.bufPrint(&ref_buffer, "refs/heads/{s}", .{branch}) catch return false;
     var output: [256]u8 = undefined;
@@ -212,6 +281,23 @@ fn run(init: std.process.Init, argv: []const []const u8, failure: anyerror) !voi
         .stdout_limit = .limited(max_git_output_bytes),
         .stderr_limit = .limited(max_git_output_bytes),
         .timeout = git_timeout,
+    }) catch return failure;
+    defer init.gpa.free(result.stdout);
+    defer init.gpa.free(result.stderr);
+
+    if (result.term != .exited or result.term.exited != 0) {
+        std.debug.print("{s}", .{result.stderr});
+        return failure;
+    }
+}
+
+fn transferRun(init: std.process.Init, argv: []const []const u8, environ_map: *const std.process.Environ.Map, failure: anyerror) !void {
+    const result = std.process.run(init.gpa, init.io, .{
+        .argv = argv,
+        .stdout_limit = .limited(max_git_output_bytes),
+        .stderr_limit = .limited(max_git_output_bytes),
+        .timeout = transfer_timeout,
+        .environ_map = environ_map,
     }) catch return failure;
     defer init.gpa.free(result.stdout);
     defer init.gpa.free(result.stderr);

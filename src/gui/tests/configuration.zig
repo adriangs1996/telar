@@ -185,7 +185,7 @@ test "GUI reload restages fonts for a changed viewport before adopting and joins
     try std.testing.expectEqual(@as(u16, 40), session.gui.renderer.atlas.?.pixel_height);
     try std.testing.expectEqual(@as(f32, 2), session.gui.renderer.scale);
     try session.startJobs();
-    try reload.poll(&session.gui.app);
+    try reload.poll(session.gui.app);
     try std.testing.expect(reload.worker != null);
     // Deferred fixture teardown cancels this waiting worker before its borrows die.
 }
@@ -416,7 +416,7 @@ test "editor reload overrides EDITOR and removal restores the startup fallback" 
     var fixture = try Fixture.init("return { api_version = 2, client = { editor = '/opt/nvim' } }", null);
     defer fixture.deinit();
     const session = fixture.session;
-    const app = &session.gui.app;
+    const app = session.gui.app;
     const reload = &session.gui.driver.configuration;
     app.options.editor = "vi";
     try std.testing.expectEqualStrings("/opt/nvim", client.editor_file_links.editorExecutable(app));

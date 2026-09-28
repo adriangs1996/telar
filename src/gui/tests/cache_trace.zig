@@ -33,7 +33,7 @@ test "cache trace: frame, key and draw events through the native event loop" {
     try session.bootstrap();
 
     const gui = session.gui;
-    const app = &gui.app;
+    const app = gui.app;
     const pane = app.model.panes.find(Session.pane_id) orelse return error.MissingPane;
     var wire: Wire = .{};
     var frame: Frame = .{};
@@ -83,7 +83,7 @@ const Frame = struct {
     /// Decodes one frame into the transport's slot as the read worker does,
     /// then delivers it through the native inbox.
     fn receive(self: *Frame, session: *Session, wire: *Wire, traced: bool) !void {
-        const app = &session.gui.app;
+        const app = session.gui.app;
         const pane = app.model.panes.find(Session.pane_id).?;
         var cells: [@intFromEnum(Trace.screen_cells)]cellgrid.Cell = @splat(.{});
         const count = pane.buffer.cells.len;

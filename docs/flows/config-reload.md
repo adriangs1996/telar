@@ -21,23 +21,23 @@ changed config, module, plugin or trust fingerprint
                 publish success notification
        scheduleConfigReload rearms the watcher
 
-next presentation observation -> Presenter compares model versions
+Client.presentation.observe after the turn -> paced frame of the new versions
 ```
 
-`client_startup` asks `config_adoption.scheduleConfigReload` to start the watcher
-after initiating runtime reads; the GUI schedules it from `GuiAdapter.start`
-after bootstrap. The owner selects the current generation, plugin registry and
-paths, then calls `config_reload.schedule` with explicit arguments; it starts
-the `config_watch` job through `client.workers`. No configured
-path means no watch; missing required resources return `ConfigurationNotLoaded`.
-`config_adoption.completeConfigReload` asks the same owner to rearm after every successfully
-handled outcome. The worker loads a new Lua VM,
-typed snapshot, plugin registry and trust store without touching the active
-client. `config_reload.resolve` checks the sidebar
-renderer against host capabilities, compiles the input router, clears the
-worker's orphan slots and transfers one `Adoption` to `Client`. Rejection
-frees all three owned objects in one place. The client applies the corresponding
-model changes, resource transfer, notification and watcher scheduling.
+`GuiAdapter.start` and the headless client's start ask
+`config_adoption.scheduleConfigReload` to start the watcher after bootstrap. The
+owner selects the current generation, plugin registry and paths, then calls
+`config_reload.schedule` with explicit arguments; it starts the `config_watch`
+job through `client.workers`. No configured path means no watch; missing
+required resources return `ConfigurationNotLoaded`.
+`config_adoption.completeConfigReload` asks the same owner to rearm after every
+successfully handled outcome. The worker loads a new Lua VM, typed snapshot,
+plugin registry and trust store without touching the active client.
+`config_reload.resolve` validates the reloaded keymap with
+`default_bindings.validate`, clears the worker's orphan slots and transfers one
+`Adoption` to `Client`. Rejection frees all three owned objects in one place.
+The client applies the corresponding model changes, resource transfer,
+notification and watcher scheduling.
 
 The native adapter adds font preparation before delivering the result to
 `config_adoption.completeConfigReload`. `gui/ConfigurationReload` stages resources off-thread,
@@ -77,9 +77,9 @@ are adopted.
 attempt only rearms. A rejection commits and publishes its diagnostic before
 rearming. An adoption commits the new state, delivers dependent resources, publishes
 success and then rearms. `config_adoption.completeConfigReload` owns the synchronous adoption order: after the
-model commit and diagnostic clear, it adopts concrete resources, projects
-appearance, configures sidebar resources and chooses exactly one sidebar or
-pane-gap geometry branch. The pane-gap branch sets
+model commit and diagnostic clear, it adopts concrete resources, projects the
+theme and icon theme and chooses exactly one sidebar or pane-gap geometry
+branch. The pane-gap branch sets
 `model.to_host.invalidate_placements` before offering active pane geometry
 with direct operation calls.
 A sidebar change takes precedence when the same generation also changes pane
@@ -90,20 +90,19 @@ releases the unaccepted adoption instead of leaking its VM or plugin objects.
 ## Ownership and effects
 
 The operation swaps the generation, registry and trust store, then sets
-`model.to_host.rebind_input` so the adapter rebuilds its input router after
-the event, and stores the resolved sidebar renderer in
-`model.config.sidebar_rendering`, which the view follows after every event. It
-replaces sound policy through `SoundPlayback.configure`, marks the adoption
-consumed and destroys the previous owned objects. It is
-infallible, so any later failure cannot leave the new semantic generation
-without its concrete owners. The client event loop cannot interleave another
-event during this synchronous operation. When the bar layout changed, the next
-stage replaces its tick deadlines against the newly owned generation. A
-failure to arm that scheduler retains the committed generation and layout;
-stale command completions still fail their generation check.
+`model.to_host.rebind_input` so the adapter rebuilds its input router after the
+event (`GuiAdapter.adoptBindings` in the window). It replaces sound policy
+through `SoundPlayback.configure`, marks the adoption consumed and destroys the
+previous owned objects. It is infallible, so any later failure cannot leave the
+new semantic generation without its concrete owners. The client event loop
+cannot interleave another event during this synchronous operation. When the bar
+layout changed, the next stage replaces its tick deadlines against the newly
+owned generation. A failure to arm that scheduler retains the committed
+generation and layout; stale command completions still fail their generation
+check.
 
-Theme, icon and sidebar resources are updated after the ownership swap. CLI
-theme and sidebar-renderer locks still override reloaded values. A sidebar or
+The theme and icon theme are updated after the ownership swap. A CLI theme
+lock still overrides the reloaded theme. A sidebar or
 pane-gap change invalidates host graphics placements and re-offers the current
 pane geometry to the runtime. Sidebar changes pass through
 `sidebar_toggle.deliverSidebarLayout`, the same
@@ -122,12 +121,12 @@ the old Lua generation.
 
 ## Presentation
 
-The config use case never requests a draw. After the event returns, the loop
-publishes `ClientModel.Version`. `Presenter` compares configuration and
-diagnostic revisions with the version it last painted, invalidates the view and
-folds accepted changes into one paced frame. A rejection presents its
-diagnostic without depending on the failure notification as an accidental draw
-trigger.
+The config use case never requests a draw. After the inbox turn,
+`GuiAdapter.update` passes `ClientModel.Version` to
+`Client.presentation.observe`. Changed configuration and diagnostic revisions
+ask for a frame, and the window folds accepted changes into one paced frame. A
+rejection presents its diagnostic without depending on the failure notification
+as an accidental draw trigger.
 
 ## Validation
 
@@ -136,7 +135,7 @@ trigger.
 - `src/model/state/ClientModel.zig` validates generation ordering and commits settings.
 - `src/client/config/config_adoption.zig` performs the resource transfer and physical
   effects, preserving the adopted generation after a downstream failure.
-- `src/frontend/client/tests/configuration.zig` exercises reload outcomes,
+- `src/client_tests/configuration.zig` exercises reload outcomes,
   ownership replacement, stale cleanup, geometry failure and presentation.
 - `src/gui/tests/configuration.zig` covers real file watches, font preparation,
   native frame boundaries, rejected candidates and shutdown ownership.

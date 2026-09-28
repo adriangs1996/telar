@@ -44,6 +44,9 @@ const battery_cap_top: f32 = 0.3;
 const battery_cap_height: f32 = 0.4;
 const battery_cap_width: f32 = 0.75;
 const full_scale: f32 = @floatFromInt(data.Node.full_scale);
+/// Logical pixels between two machines, and bytes of one CPU reading.
+const machine_gap: f32 = 12;
+const machine_cpu_bytes = 8;
 
 /// The width of a leaf at `level`, zero when it shows nothing.
 /// Example: `const width = try inline_nodes.width(canvas, view, .full);`
@@ -66,6 +69,7 @@ pub fn width(canvas: *Canvas, view: data.NodeView, level: data.FitLevel) !f32 {
             break :clock try canvas.measure(value(clockText(&buffer, view), .neutral, canvas));
         },
         .metric => try metricWidth(canvas, view),
+        .machines => try machinesWidth(canvas, view),
         .kv => try canvas.measure(caption(view.text)) + chrome.px(part_gap) + try canvas.measure(value(view.detail, node.tone, canvas)),
         .group, .meter_row, .callout, .actions, .button, .divider => 0,
     };
@@ -107,6 +111,7 @@ pub fn draw(canvas: *Canvas, view: data.NodeView, placement: InlinePlacement) !v
             _ = try canvas.textAt(bounds, value(clockText(&buffer, view), node.tone, canvas));
         },
         .metric => try drawMetric(canvas, view, bounds),
+        .machines => try drawMachines(canvas, view, bounds),
         .kv => {
             const key = try canvas.textAt(bounds, caption(view.text));
             const gap = key + canvas.chrome.px(part_gap);
@@ -517,4 +522,75 @@ fn isIcon(text: []const u8) bool {
     return (codepoint >= 0xe000 and codepoint <= 0xf8ff) or
         (codepoint >= 0xf0000 and codepoint <= 0xffffd) or
         (codepoint >= 0x100000 and codepoint <= 0x10fffd);
+}
+
+/// One entry per machine: a status glyph, the label (bold for the one
+/// shown) and the CPU of a connected machine.
+fn machinesWidth(canvas: *Canvas, view: data.NodeView) !f32 {
+    const chrome = canvas.chrome;
+    var total: f32 = 0;
+    for (view.facts.machines, 0..) |fact, index| {
+        if (index != 0) {
+            total += chrome.px(machine_gap);
+        }
+
+        total += try machineWidth(canvas, fact);
+    }
+
+    return total;
+}
+
+fn machineWidth(canvas: *Canvas, fact: data.MachineFact) !f32 {
+    const chrome = canvas.chrome;
+    var buffer: [machine_cpu_bytes]u8 = undefined;
+    var total = try canvas.measure(machineGlyph(canvas, fact)) + chrome.px(part_gap) + try canvas.measure(machineLabel(canvas, fact));
+    if (machineCpu(&buffer, fact)) |cpu| {
+        total += chrome.px(part_gap) + try canvas.measure(value(cpu, .neutral, canvas));
+    }
+
+    return total;
+}
+
+fn drawMachines(canvas: *Canvas, view: data.NodeView, bounds_value: Rect) !void {
+    const chrome = canvas.chrome;
+    var bounds = bounds_value;
+    for (view.facts.machines, 0..) |fact, index| {
+        if (index != 0) {
+            bounds = shift(bounds, chrome.px(machine_gap));
+        }
+
+        bounds = shift(bounds, try canvas.textAt(bounds, machineGlyph(canvas, fact)) + chrome.px(part_gap));
+        bounds = shift(bounds, try canvas.textAt(bounds, machineLabel(canvas, fact)));
+        var buffer: [machine_cpu_bytes]u8 = undefined;
+        if (machineCpu(&buffer, fact)) |cpu| {
+            bounds = shift(bounds, chrome.px(part_gap));
+            bounds = shift(bounds, try canvas.textAt(bounds, value(cpu, .neutral, canvas)));
+        }
+    }
+}
+
+fn machineGlyph(canvas: *const Canvas, fact: data.MachineFact) Label {
+    const palette = canvas.theme.palette;
+    const glyph: []const u8, const color = if (fact.attention)
+        .{ "●", palette.yellow }
+    else switch (fact.phase) {
+        .connected => .{ "●", palette.green },
+        .connecting => .{ "◌", palette.overlay1 },
+        .lost => .{ "✕", palette.red },
+        .stopped => .{ "○", palette.overlay0 },
+    };
+    return .{ .text = glyph, .color = color, .face = .sans, .size = .small };
+}
+
+fn machineLabel(canvas: *const Canvas, fact: data.MachineFact) Label {
+    return .{ .text = fact.label, .color = canvas.theme.palette.text, .bold = fact.active, .face = .sans, .size = .small };
+}
+
+fn machineCpu(buffer: *[machine_cpu_bytes]u8, fact: data.MachineFact) ?[]const u8 {
+    if (fact.phase != .connected) {
+        return null;
+    }
+
+    const cpu = fact.cpu_percent orelse return null;
+    return std.fmt.bufPrint(buffer, "{d}%", .{cpu}) catch null;
 }

@@ -28,6 +28,8 @@ const ProxyOptions = @import("arguments/ProxyOptions.zig");
 const RunOptions = @import("arguments/RunOptions.zig");
 const GuiOptions = @import("arguments/GuiOptions.zig");
 const CliOptions = @import("arguments/CliOptions.zig");
+const MachineOptions = @import("arguments/MachineOptions.zig");
+const MachineDispatchOptions = @import("arguments/MachineDispatchOptions.zig");
 const std = @import("std");
 const server_module = @import("arguments/server.zig");
 const plugin_module = @import("arguments/plugin.zig");
@@ -67,6 +69,11 @@ pub const Cli = union(enum) {
     run: RunOptions,
     gui: GuiOptions,
     cli: CliOptions,
+    machine: MachineOptions,
+    /// `telar --machine LABEL COMMAND…`.
+    machine_dispatch: MachineDispatchOptions,
+    /// The encoded words `--machine` sends to the other machine.
+    dispatch_argv: []const [*:0]const u8,
 
     /// Parses one complete argv into a validated command without performing
     /// filesystem, transport or process work.
@@ -81,6 +88,10 @@ pub const Cli = union(enum) {
         }
         if (args.len == 1) {
             return .{ .run = try RunOptions.parse(&.{}, environ) };
+        }
+
+        if (try MachineDispatchOptions.parse(args)) |options| {
+            return .{ .machine_dispatch = options };
         }
 
         if (try RoutedOptions.parse(args[1..])) |options| {
@@ -181,6 +192,12 @@ pub const Cli = union(enum) {
         if (std.mem.eql(u8, first, "cli")) {
             return .{ .cli = try CliOptions.parse(args[2..]) };
         }
+        if (std.mem.eql(u8, first, "machine")) {
+            return .{ .machine = try MachineOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "dispatch-argv")) {
+            return .{ .dispatch_argv = args[2..] };
+        }
         return .{ .run = try RunOptions.parse(args[1..], environ) };
     }
 };
@@ -235,15 +252,6 @@ test "CLI rejects unknown and duplicate themes" {
     try std.testing.expectError(error.DuplicateThemeOption, Cli.parse(&duplicate, .empty));
 }
 
-test "CLI selects and validates the sidebar renderer" {
-    const args = [_][*:0]const u8{ "telar", "--sidebar-renderer=kitty-hybrid", "/bin/sh" };
-    const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(data.SidebarRendering.kitty_hybrid, cli.run.sidebar_rendering);
-
-    const invalid = [_][*:0]const u8{ "telar", "--sidebar-renderer", "sixel" };
-    try std.testing.expectError(error.UnknownSidebarRenderer, Cli.parse(&invalid, .empty));
-}
-
 test "CLI rejects an empty command after the delimiter" {
     const args = [_][*:0]const u8{ "telar", "--" };
     try std.testing.expectError(error.MissingCommand, Cli.parse(&args, .empty));
@@ -261,6 +269,22 @@ test "CLI parses config profiles and rejects profile without config" {
     const parsed_check = try Cli.parse(&check, .empty);
     try std.testing.expectEqualStrings("config.lua", std.mem.span(parsed_check.config_check.path.?));
     try std.testing.expectEqualStrings("remote", std.mem.span(parsed_check.config_check.profile.?));
+}
+
+test "gui --machine names a saved machine and excludes --remote" {
+    const machine = [_][*:0]const u8{ "telar", "gui", "--machine", "box", "htop" };
+    const parsed = try Cli.parse(&machine, .empty);
+    try std.testing.expectEqualStrings("box", std.mem.span(parsed.gui.run.machine.?));
+    try std.testing.expect(parsed.gui.run.command_set);
+
+    const inline_form = [_][*:0]const u8{ "telar", "gui", "--machine=box" };
+    try std.testing.expectEqualStrings("box", std.mem.span((try Cli.parse(&inline_form, .empty)).gui.run.machine.?));
+
+    const both = [_][*:0]const u8{ "telar", "gui", "--machine", "box", "--remote", "dev@box" };
+    try std.testing.expectError(error.MachineWithRemote, Cli.parse(&both, .empty));
+
+    const missing = [_][*:0]const u8{ "telar", "gui", "--machine" };
+    try std.testing.expectError(error.MissingMachineLabel, Cli.parse(&missing, .empty));
 }
 
 test "CLI parses --fresh for the client and the server and rejects it elsewhere" {

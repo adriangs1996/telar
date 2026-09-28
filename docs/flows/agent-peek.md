@@ -7,7 +7,7 @@ pane, with a field whose text goes to the agent.
 ## End-to-end path
 
 ```text
-right press on a card (view_interaction.secondary from GUI bands and widget routing; TUI State.handleMouse)
+right press on a card (view_interaction.secondary from GUI bands and widget routing)
         |
 Intent.peek_agent -> agent_peek.open
         |  name_prompt: PromptTarget.peek
@@ -32,9 +32,9 @@ Everything here is client state: the prompt, the peeked agent and up to
 4 KiB of its pane text. The actions are the same requests the coordinator
 sends, so the focus rule, the blocked refusal and the interrupt key apply
 unchanged; a refusal arrives as a request-failure notice. The GUI draws the
-pane rows in `PeekModal`; the TUI shows the field only, since the sidebar
-card already carries the state.
+pane rows in `PeekModal`.
 
 ## Proof
 
-Command parsing and pane-row selection tests.
+Command parsing and pane-row selection tests; `src/gui/tests/agent_peek.zig`
+opens a peek from a task card and reads its pane.

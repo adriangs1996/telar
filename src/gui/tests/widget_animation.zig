@@ -63,7 +63,7 @@ test "a blocked pane animates without working agents and folds a rejected and la
 test "hiding the only animated widget removes its frame deadline" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const app = &fixture.session.gui.app;
+    const app = fixture.session.gui.app;
     var bytes: [4096]u8 = undefined;
     const snapshot = try core.encodeAgentSnapshot(&bytes, .{ .revision = 1, .entries = &.{.{
         .pane_id = Session.pane_id,
@@ -112,7 +112,7 @@ test "hiding the only animated widget removes its frame deadline" {
 test "native indeterminate progress paints each frame without model ticks and folds rejected frames" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const app = &fixture.session.gui.app;
+    const app = fixture.session.gui.app;
     const pane = app.model.panes.find(Session.pane_id).?;
     _ = pane.setProgress(.{ .pane_id = Session.pane_id, .state = .indeterminate });
     const version = app.model.version();

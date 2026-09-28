@@ -83,6 +83,10 @@ config: Config = .{},
 theme: model_data.ColorTheme = model_data.theme_support.default_theme,
 icon_theme: model_data.icons.Theme = .unicode,
 startup: model_data.StartupState = .{},
+/// Whether the runtime is reachable; the chrome shows it and pane input
+/// waits for it.
+runtime_link: model_data.RuntimeLink = .{},
+link_revision: u64 = 0,
 request_lifecycle: model_data.RequestLifecycle = .{},
 /// Retained tab layouts sent to the runtime for reconnect.
 client_layouts: model_data.ClientLayoutsState = .{},
@@ -303,6 +307,7 @@ pub fn version(model: *const ClientModel) Version {
         .path_picker = model.path_picker.version(),
         .copy = model.copy_revision,
         .viewport = model.viewport_revision,
+        .link = model.link_revision,
     };
 }
 

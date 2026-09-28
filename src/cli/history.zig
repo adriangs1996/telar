@@ -1,10 +1,11 @@
 //! The `telar history` command and its terminal-safe text presentation.
 
+const client = @import("telar-client");
 const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const std = @import("std");
 const HistoryOptions = @import("arguments/HistoryOptions.zig");
-const RuntimeConnector = @import("RuntimeConnector.zig");
+const RuntimeConnector = client.RuntimeConnector;
 const UtcTimestamp = @import("UtcTimestamp.zig");
 const BatchSender = @import("BatchSender.zig");
 const ImportParser = @import("ImportParser.zig");
@@ -34,7 +35,7 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
         return runStats(init, options);
     }
 
-    const connector = try RuntimeConnector.init(init, options.socket);
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, options.socket);
     var connection = try connector.connectOrStart(.{});
     defer connection.deinit(init.io);
 
@@ -200,7 +201,7 @@ fn runImport(init: std.process.Init, options: HistoryOptions) !void {
     const source_data = try std.Io.Dir.cwd().readFileAlloc(init.io, resolved.path, init.gpa, .limited(max_histfile_bytes));
     defer init.gpa.free(source_data);
 
-    const connector = try RuntimeConnector.init(init, options.socket);
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, options.socket);
     var connection = try connector.connectOrStart(.{});
     defer connection.deinit(init.io);
 
@@ -319,7 +320,7 @@ test "fish history pairs cmd and when lines" {
 /// `--yes` it shows the newest matches (a dry run) and asks for
 /// confirmation on stdin.
 fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
-    const connector = try RuntimeConnector.init(init, options.socket);
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, options.socket);
     var connection = try connector.connectOrStart(.{});
     defer connection.deinit(init.io);
     var stdout_buffer: [512]u8 = undefined;
@@ -445,7 +446,7 @@ fn receivePruned(init: std.process.Init, connection: *localsocket.SocketChannel)
 
 /// Prints the captured output of one exact entry, raw, to stdout.
 fn runShow(init: std.process.Init, options: HistoryOptions) !void {
-    const connector = try RuntimeConnector.init(init, options.socket);
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, options.socket);
     var connection = try connector.connectOrStart(.{});
     defer connection.deinit(init.io);
 
@@ -483,7 +484,7 @@ fn runShow(init: std.process.Init, options: HistoryOptions) !void {
 
 /// Prints aggregate history statistics for one scope and period.
 fn runStats(init: std.process.Init, options: HistoryOptions) !void {
-    const connector = try RuntimeConnector.init(init, options.socket);
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, options.socket);
     var connection = try connector.connectOrStart(.{});
     defer connection.deinit(init.io);
 

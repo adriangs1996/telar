@@ -901,6 +901,8 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .memory_used_decigib = 92,
             .has_battery = true,
             .battery_percent = 84,
+            .cpu_count = 12,
+            .memory_total_decigib = 360,
         }),
     ));
     const workspace_list_entries = [_]WorkspaceListEntry{
@@ -929,6 +931,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .base = "main",
         .title = "Fix tabs",
         .brief = "Reorder\ntabs",
+        .dispatched_from = "laptop",
         .diff_added = 12,
         .diff_removed = 3,
         .diff_files = 2,
@@ -1107,6 +1110,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .base = "main",
             .title = "Fix tabs",
             .brief = "Reorder tabs",
+            .dispatched_from = "laptop",
         }),
     ));
     helper.add(.{ .name = "worktree_registered", .direction = .server, .golden_hex = golden.worktree_registered }, helper.commit(

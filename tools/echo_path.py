@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Measure a single key through controlled PTYs; validate echo and erase with VT."""
+"""Measure a single key through controlled PTYs; validate echo and erase with VT.
+
+Controls run in a PTY and are validated with a VT oracle on their output.
+telar builds run through their headless client: each key is a protocol line
+and its time runs to the client's first frame of the pane, read from the
+client's trace, since the headless client writes nothing to a host."""
 import argparse
 import hashlib
 import json
@@ -16,6 +21,8 @@ import termios
 import time
 
 import echo_latency
+import headless_client
+import load_latency
 import perf_e2e
 
 
@@ -83,8 +90,62 @@ def exchange(master, oracle, stimulus, expected):
     raise TimeoutError(f'expected {expected} visible tildes; got {oracle.count}, sync={oracle.synchronized}')
 
 
+# Samples dropped before the ones that count, as for the controls.
+WARMUP_SAMPLES = 20
+
+
+def measure_headless(spec, directory, args):
+    name, binary = spec
+    env = perf_e2e.isolated_environment(directory)
+    command = f'{shlex.quote(args.probe)} app' if args.application else '/bin/cat'
+    shell = directory / 'shell'
+    shell.write_text('#!/bin/sh\nexec ' + ('/bin/sh' if args.floods else command) + '\n')
+    shell.chmod(0o700)
+    if args.floods:
+        env.update(ENV='/dev/null', BASH_ENV='/dev/null', PS1='')
+    env['SHELL'] = str(shell)
+    if args.trace:
+        env['TELAR_ECHO_TRACE_DIR'] = str(directory)
+    client = headless_client.HeadlessClient(
+        ['--no-config'], env=env, cwd=directory, size=(160, 40),
+        trace=directory / 'headless-trace.json', log=directory / 'headless.log',
+        binary=Path(binary).with_name('telar-headless'),
+    )
+    try:
+        client.wait_ready()
+        time.sleep(2)
+        if args.floods:
+            load_latency.open_headless_floods(client, args.floods)
+            client.text('exec ' + command)
+            client.key('enter')
+            time.sleep(2)
+        client.mark('measure')
+        for _ in range(args.samples + WARMUP_SAMPLES):
+            client.text('~')
+            time.sleep(args.gap)
+            client.key('backspace')
+            time.sleep(args.gap)
+        exit_status = client.quit()
+    finally:
+        client.terminate()
+        (directory / 'client-exit.json').write_text(json.dumps([dict(pid=client.process.pid, returncode=client.process.poll())]))
+        shutdown = perf_e2e.stop_runtime(binary, env)
+        (directory / 'shutdown.json').write_text(json.dumps(shutdown))
+
+    if exit_status != 0:
+        raise RuntimeError(f'{name}: headless client exited with {exit_status}')
+    values, timeouts = headless_client.echo_latencies(client.trace(), since='measure')
+    values = values[WARMUP_SAMPLES:]
+    return dict(name=name, samples=[dict(us=value) for value in values], timeouts=timeouts, **{
+        label: echo_latency.percentile(values, p)
+        for label, p in [('p50_us', .5), ('p95_us', .95), ('p99_us', .99), ('min_us', 0)]})
+
+
 def measure(spec, directory, args):
     name, binary = spec
+    if binary:
+        return measure_headless(spec, directory, args)
+
     env = perf_e2e.isolated_environment(directory)
     shell = directory / 'shell'
     command = f'{shlex.quote(args.probe)} app' if args.application else '/bin/cat'
@@ -110,15 +171,13 @@ def measure(spec, directory, args):
                 cmd = [args.probe, 'app']
             elif name == 'one':
                 cmd = [args.probe, 'one', str(shell)]
-            elif name == 'two':
+            else:
                 left, right = socket.socketpair()
                 sockets = [left, right]
                 procs.append(subprocess.Popen([args.probe, 'server', str(right.fileno()), str(shell)],
                                                pass_fds=(right.fileno(),), env=env,
                                                start_new_session=True, cwd=directory))
                 cmd = [args.probe, 'client', str(left.fileno())]
-            else:
-                cmd = [binary, '--no-config', '--sidebar-renderer', 'cells']
             procs.append(subprocess.Popen(cmd, stdin=slave, stdout=slave, stderr=slave,
                                          pass_fds=tuple(s.fileno() for s in sockets[:1]), env=env,
                                          cwd=directory, preexec_fn=echo_latency.become_session_leader))
@@ -127,19 +186,14 @@ def measure(spec, directory, args):
         for channel in sockets:
             channel.close()
         consume(master, oracle, 2)
-        if args.floods:
-            perf_e2e.load_latency.open_telar_floods(master, args.floods,
-                                                  lambda fd, seconds: consume(fd, oracle, seconds))
-            os.write(master, ('exec ' + command + '\r').encode())
-            consume(master, oracle, 2)
         initial = oracle.count
         samples = []
         # Verified erase, not a timed assumption, separates every sample.
-        for index in range(args.samples + 20):
+        for index in range(args.samples + WARMUP_SAMPLES):
             sample = exchange(master, oracle, b'~', initial + 1)
             exchange(master, oracle, b'\x7f', initial)
             consume(master, oracle, args.gap)
-            if index >= 20:
+            if index >= WARMUP_SAMPLES:
                 samples.append(sample)
         values = [s['us'] for s in samples]
         return dict(name=name, samples=samples, **{
@@ -147,22 +201,6 @@ def measure(spec, directory, args):
             for label, p in [('p50_us', .5), ('p95_us', .95), ('p99_us', .99), ('min_us', 0)]})
     finally:
         sessions = perf_e2e.owned_sessions(perf_e2e.descendants([proc.pid for proc in procs]))
-        if binary and procs and procs[-1].poll() is None:
-            os.write(master, perf_e2e.load_latency.TELAR_PREFIX + b'd')
-            deadline = time.perf_counter() + 2
-            while procs[-1].poll() is None and time.perf_counter() < deadline:
-                # Terminal restoration can wait for its output to be consumed.
-                if select.select([master], [], [], .02)[0]:
-                    try:
-                        data = os.read(master, 65536)
-                    except OSError:
-                        break
-                    if data:
-                        oracle.feed(data)
-            try:
-                procs[-1].wait(timeout=.2)
-            except subprocess.TimeoutExpired:
-                pass
         (directory / 'client-exit.json').write_text(json.dumps([
             dict(pid=proc.pid, returncode=proc.poll()) for proc in procs]))
         for proc in reversed(procs):
@@ -175,9 +213,6 @@ def measure(spec, directory, args):
                         echo_latency.terminate(proc)
                 else:
                     echo_latency.terminate(proc)
-        if binary:
-            shutdown = perf_e2e.stop_runtime(binary, env)
-            (directory / 'shutdown.json').write_text(json.dumps(shutdown))
         survivors = perf_e2e.session_members(sessions) if sessions else []
         perf_e2e.cleanup_sessions(sessions)
         (directory / 'relay-cleanup.json').write_text(json.dumps(dict(
@@ -219,6 +254,8 @@ def main():
         parser.error('traced fixtures are limited to 200 samples')
     if args.floods and (args.controls or args.trace):
         parser.error('floods require --controls with no names, and cannot use the single-pane tracer')
+    if args.floods and not (args.baseline or args.candidate):
+        parser.error('floods need a telar build')
     if len(set(args.controls)) != len(args.controls):
         parser.error('controls must be unique')
     args.probe = str(Path(args.probe).resolve())
@@ -234,7 +271,7 @@ def main():
                     binaries={name: dict(path=path, sha256=hashlib.sha256(Path(path).read_bytes()).hexdigest())
                               for name, path in paths.items()},
                     tools={name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
-                           for name in ['echo_path.py', 'echo_latency.py', 'perf_e2e.py', 'load_latency.py']},
+                           for name in ['echo_path.py', 'echo_latency.py', 'perf_e2e.py', 'load_latency.py', 'headless_client.py']},
                     order=[[name for name, _ in ordered_specs(specs, repetition)]
                            for repetition in range(args.repetitions)])
     (args.output / 'metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')

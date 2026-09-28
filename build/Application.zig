@@ -104,8 +104,8 @@ pub fn init(b: *std.Build) ?@This() {
         coverage.instrumentModule(library.?);
     }
 
-    // Runtime and client share values through core. The TUI additionally
-    // imports client behavior; neither common package imports an adapter.
+    // Runtime and client share values through core; neither common package
+    // imports an adapter.
     const core = b.addModule("telar-core", .{
         .root_source_file = b.path("src/core/core.zig"),
         .target = target,
@@ -148,32 +148,7 @@ pub fn init(b: *std.Build) ?@This() {
     libraries.addImports(backend);
     coverage.instrumentModule(backend);
 
-    const frontend = b.addModule("telar-frontend", .{
-        .root_source_file = b.path("src/frontend/frontend.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    frontend.addImport("model", data);
-    frontend.addImport("telar-core", core);
-    frontend.addImport("telar-client", client);
-    frontend.addImport("telar-lua", telar_lua);
-    frontend.addImport("lua-api", lua_api);
-    frontend.addImport("freetype", freetype);
-    libraries.addImports(frontend);
     const assets = assets_build.add(b, target, optimize);
-    frontend.addImport("assets", assets);
-    if (target.result.os.tag == .macos) {
-        frontend.addCSourceFile(.{
-            .file = b.path("src/frontend/attachments/darwin.m"),
-            .flags = c_flags.forCoverage(b, &.{"-fobjc-arc"}, coverage.enabled),
-        });
-        frontend.linkFramework("AppKit", .{});
-        frontend.linkFramework("ImageIO", .{});
-        frontend.linkFramework("CoreGraphics", .{});
-    } else if (target.result.os.tag == .windows) {
-        frontend.linkSystemLibrary("user32", .{});
-    }
     // One shipped binary contains both the client and runtime entry points.
     const exe = b.addExecutable(.{
         .name = "telar",
@@ -185,7 +160,6 @@ pub fn init(b: *std.Build) ?@This() {
         }),
     });
     exe.root_module.addImport("telar-backend", backend);
-    exe.root_module.addImport("telar-frontend", frontend);
     exe.root_module.addImport("telar-client", client);
     exe.root_module.addImport("model", data);
     exe.root_module.addImport("telar-core", core);
@@ -226,7 +200,6 @@ pub fn init(b: *std.Build) ?@This() {
         .data = data,
         .core = core,
         .backend = backend,
-        .frontend = frontend,
         .client = client,
         .lua_api = lua_api,
         .telar_lua = telar_lua,

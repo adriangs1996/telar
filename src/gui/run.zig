@@ -5,8 +5,11 @@ const client = @import("telar-client");
 const GuiAdapter = @import("GuiAdapter.zig");
 const WindowIdentity = @import("WindowIdentity.zig");
 
-/// Opens a native terminal session. Example: `const status = try run(init, connection, options);`
-pub fn run(init: std.process.Init, connection: *localsocket.SocketChannel, options: client.Options) !u8 {
+/// Opens a native terminal session. Without a connection, the window
+/// connects to `options.machine` itself once it is on screen, and opens the
+/// saved machines and `options.open_machine` beside it.
+/// Example: `const status = try run(init, null, options);`
+pub fn run(init: std.process.Init, connection: ?*localsocket.SocketChannel, options: client.Options) !u8 {
     var adopted = false;
     errdefer if (!adopted) {
         if (options.lua_generation) |generation| {
@@ -35,5 +38,6 @@ pub fn run(init: std.process.Init, connection: *localsocket.SocketChannel, optio
 
     adopted = true;
     defer app.deinit();
+    app.window_slot = identity.slot;
     return app.run("Telar");
 }

@@ -1,6 +1,6 @@
 # Pane mouse input
 
-A host pointer event first crosses client chrome and copy-mode ownership. If
+A window pointer event first crosses client chrome and copy-mode ownership. If
 neither consumes it, textual links get first refusal. Remaining events resolve
 one pane and select one effect: begin mouse selection, move its viewport,
 translate an alternate-screen wheel into cursor keys, or send an SGR mouse
@@ -21,9 +21,11 @@ reports use a 64-byte stack buffer, while delivery reuses the bounded
 ## Boundary and ownership
 
 ```text
-host mouse event
+native pointer or scroll event
         |
-host_inputs.mouse (TUI) / GuiAdapter pointer input
+GuiAdapter.acceptInput -> InputQueue
+        |
+GuiAdapter.drainInput -> widget input, else dispatchPointer / dispatchScroll
         |
 pointer_routing.apply
         |
@@ -33,7 +35,7 @@ copy_mode_pointer.apply
         |
 unowned only
         |
-HostChrome.pointer -> State.handleMouse
+HostChrome.pointer -> window overlays, link tooltip, chrome hit map
         |
 view_interactions.apply
         |
@@ -62,9 +64,13 @@ pane_viewport.applyPaneViewport      +---------+----------+
                               runtime attachment
 ```
 
-`host_inputs.mouse` only delegates the host event after TUI tab dragging
-declines it; the GUI calls `pointer_routing.apply` from its own pointer
-ownership. `pointer_routing.apply` counts the event. Its `resolve` step
+`GuiAdapter.drainInput` first offers the event to delivered widgets.
+`dispatchPointer` sends samples outside the cell grid to chrome bands and keeps
+a button's owner (child capture, link or discarded) through its drag and
+release. It calls
+`pointer_routing.apply` for the rest. `dispatchScroll` turns wheel deltas into
+whole-line scroll events and sends each through `dispatchPointer`. The headless
+client takes no pointer input. `pointer_routing.apply` counts the event. Its `resolve` step
 rejects input while a name prompt owns the client, except for a captured
 selection gesture, or while no active tab exists, and converts supported raw
 pixel coordinates to host cells.
@@ -103,9 +109,9 @@ revision.
 ## Focused scroll entry
 
 ```text
-host binding or client Lua action
+window binding or client Lua action
         |
-host_inputs.applyDecision / GuiAdapter.applyInputDecision
+GuiAdapter.applyInputDecision / HeadlessClient.decide
         |
 actions.executeAction, then scroll_pane dispatch
         |
@@ -172,29 +178,23 @@ remain queued. Every selected effect failure propagates to the event loop.
 
 Mouse reports and alternate-scroll inputs do not change client presentation
 state. A viewport effect advances `ClientModel.Version.viewport` only when the
-offset changes. `Presenter` observes that revision on the paced loop and
-recomposes the affected projection. No use case requests a draw directly.
+offset changes. The window observes that revision after the event and
+prepares the next frame. No use case requests a draw directly.
 
 ## Validation
 
-- `src/frontend/workspace/multiplexer.zig` proves focused button ownership,
-  pointer-local wheel targeting, focus-only scroll targeting, empty-target
-  rejection and value-copy planning.
 - `src/client/input/pane_mouse_inputs.zig` proves exact raw-pixel and
   cell-center SGR encoding.
-- `src/frontend/client/client_tests.zig` proves SGR buttons and pane-relative
-  coordinates.
-- `src/frontend/client/tests/host_interaction.zig` proves link ownership of a
+- `src/client_tests/host_interaction.zig` proves link ownership of a
   complete gesture and copy-mode pointer ownership.
-- `src/frontend/client/tests/input.zig` proves default scroll bindings through
-  host byte routing, focus rather than hover, synthetic SGR cell/pixel reports,
-  alternate-screen keys, viewport no-ops, return to live output and copy-mode
-  retirement. Physical hold tests cover both viewport directions, bounded
-  repetition, endpoint no-ops and cancellation on focus or copy-mode changes.
-- `src/frontend/client/tests/` proves prompt rejection after host
-  telemetry, focus-before-press delivery, scrollback preservation, exact
-  host-pixel delivery and pointer-local alternate-screen scrolling through the
-  complete input entrypoint.
+- `src/client_tests/input.zig` proves focus rather than hover, synthetic SGR
+  cell/pixel reports, alternate-screen keys, viewport no-ops, return to live
+  output and copy-mode retirement. Physical hold tests cover both viewport
+  directions, bounded repetition, endpoint no-ops and cancellation on focus or
+  copy-mode changes. It also proves prompt rejection after host telemetry,
+  scrollback preservation, exact host-pixel delivery and pointer-local
+  alternate-screen scrolling.
+- `src/client_tests/pane_lifecycle.zig` proves focus-before-press delivery.
 - `lib/keyinput/mouse_protocol.zig`, [Pane input](pane-input.md) and
   [Pane viewport](pane-viewport.md) cover protocol encoding and the two
   downstream effects.

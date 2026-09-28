@@ -35,7 +35,6 @@ const SyntaxService = @import("syntax/Service.zig");
 const ReviewPanel = @import("change_review/Panel.zig");
 const review_dispatch = @import("change_review/dispatch.zig");
 
-const input_routing = @import("input/router.zig");
 const widget_routing = @import("widgets/interaction/routing.zig");
 const KeyInput = @import("input/KeyInput.zig");
 const ClipboardResult = @import("input/ClipboardResult.zig");
@@ -57,9 +56,13 @@ const CursorClock = @import("CursorClock.zig");
 const animate = @import("animate");
 const FrameClock = animate.FrameClock;
 const native_callbacks = @import("native/window_callbacks.zig");
+const window_machines = @import("window_machines.zig");
 const TestSession = @import("tests/Session.zig");
 const input_test_support = @import("tests/input_support.zig");
 const GuiAdapter = @This();
+
+/// Clients one window can hold: the local machine and every saved one.
+pub const machine_slots = core.MachineProfiles.capacity + 1;
 
 const JobHook = struct {
     context: *anyopaque,
@@ -82,7 +85,22 @@ const TabDragStep = enum(u8) {
     logical_pixels = 4,
 };
 
-app: client.Client,
+/// Every client this window holds, one per machine, reserved once so no
+/// address moves under a job.
+clients: *[machine_slots]client.Client,
+/// The client of the machine this window presents.
+app: *client.Client,
+/// The machines this window holds, one row per client slot.
+machines: client.Machines = .{},
+/// A machine chosen while a frame was in flight, shown when it completes.
+pending_machine: ?u8 = null,
+/// The window's lease slot, which keeps its forwarded sockets apart.
+window_slot: u8 = 0,
+/// Where `machines.json` lives, empty when it cannot be resolved, and the
+/// fingerprint the window last applied.
+profiles_path: [std.fs.max_path_bytes]u8 = undefined,
+profiles_path_len: usize = 0,
+profiles_seen: u64 = 0,
 driver: NativeLoop,
 renderer: Renderer,
 failure: ?anyerror = null,
@@ -95,7 +113,7 @@ window_title: client.WindowTitleState = .{},
 hostname: [std.posix.HOST_NAME_MAX]u8 = undefined,
 hostname_len: usize = 0,
 input_queue: InputQueue = .{},
-router: input_routing.Type,
+router: client.key_router.Type,
 binding_timeout: pacing.DeadlineScheduler = .{},
 /// Replaces the time of noted pane input; pacing tests pin it so scheduler
 /// delays cannot expire their grace.
@@ -126,7 +144,7 @@ review: *ReviewPanel,
 /// Adopts options on success and binds all ports before receiving messages.
 /// Example: `const gui = try GuiAdapter.init(params);`
 pub fn init(params: client.ClientInit) !*GuiAdapter {
-    const router = try input_routing.build(
+    const router = try client.key_router.build(
         .{
             .prefix = params.options.prefix,
             .bindings = params.options.bindings,
@@ -137,6 +155,15 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
 
     const gui = try params.gpa.create(GuiAdapter);
     errdefer params.gpa.destroy(gui);
+
+    gui.clients = try params.gpa.create([machine_slots]client.Client);
+    errdefer params.gpa.destroy(gui.clients);
+    gui.app = &gui.clients[client.Machines.local_slot];
+    gui.machines = .{};
+    gui.pending_machine = null;
+    gui.window_slot = 0;
+    gui.profiles_path_len = 0;
+    gui.profiles_seen = 0;
 
     const review = try params.gpa.create(ReviewPanel);
     errdefer params.gpa.destroy(review);
@@ -156,10 +183,9 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.observed_input_revision = 0;
     gui.window_title = .{};
     gui.hostname_len = 0;
-    try client.Client.init(&gui.app, params);
+    try client.Client.init(gui.app, params);
 
     // Native chrome uses the shared semantic projection, never TUI Kitty output.
-    gui.app.options.sidebar_renderer_locked = true;
     gui.driver.configuration.inbox = &gui.driver.inbox;
     gui.input_queue = .{};
     gui.router = router;
@@ -198,6 +224,7 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.review.widget.host_port = &gui.host;
     gui.review.widget.widgets = &gui.widgets;
 
+    gui.app.machines = &gui.machines;
     gui.app.graphics = host_ports.graphicsRetention(gui);
     gui.app.chrome = host_ports.chrome(gui);
     gui.app.host_input_source = host_ports.hostInput(gui);
@@ -219,7 +246,16 @@ pub fn deinit(self: *GuiAdapter) void {
     self.diagrams.deinit();
     self.chrome.favicons.deinit(gpa);
     gpa.destroy(self.review);
-    self.app.deinit();
+    // Other machines share the window client's configuration, so they go
+    // first.
+    for (self.machines.live, 0..) |live, slot| {
+        if (live and slot != client.Machines.local_slot) {
+            self.clients[slot].deinit();
+        }
+    }
+
+    window_machines.window(self).deinit();
+    gpa.destroy(self.clients);
     gpa.destroy(self);
 }
 
@@ -431,7 +467,7 @@ pub fn windowTitle(self: *GuiAdapter, out: *native.WindowTitle) !bool {
                 .workspace = model.workspaceName(),
                 .tab = tab_label,
                 .pane_title = data.pane_title.focusedTitle(model),
-                .hostname = self.hostname[0..self.hostname_len],
+                .hostname = if (self.machines.count() != 0) self.machines.label(self.machines.active) else self.hostname[0..self.hostname_len],
             },
         },
     );
@@ -458,7 +494,7 @@ fn start(self: *GuiAdapter, colors: core.TerminalColors) !void {
     capabilities.pointer_pixels = .supported;
 
     _ = try client.host_resize.applyHostUpdate(
-        &self.app,
+        self.app,
         .{
             .size = self.app.model.host.host_size,
             .capabilities = capabilities,
@@ -466,18 +502,22 @@ fn start(self: *GuiAdapter, colors: core.TerminalColors) !void {
     );
 
     self.app.model.startup.phase = .opening;
+    self.app.bootstrap = .{
+        .graphics_shared = false,
+        .client_identity = self.app.client_identity,
+        .terminal_colors = colors,
+    };
 
-    try self.app.model.to_runtime.pushBootstrap(
-        .{
-            .graphics_shared = false,
-            .client_identity = self.app.client_identity,
-            .terminal_colors = colors,
-        },
-    );
+    if (self.app.runtime_transport.connection == null) {
+        try client.runtime_link.start(self.app);
+    } else {
+        try self.app.model.to_runtime.pushBootstrap(self.app.bootstrap.?);
+        try client.runtime_io.startRuntimeIo(self.app);
+    }
 
-    try client.runtime_io.startRuntimeIo(&self.app);
-    try client.config_adoption.scheduleConfigReload(&self.app);
-    try client.bar_updates.synchronizeBars(&self.app);
+    try client.config_adoption.scheduleConfigReload(self.app);
+    try client.bar_updates.synchronizeBars(self.app);
+    try window_machines.open(self);
     self.started = true;
 }
 
@@ -537,7 +577,7 @@ pub fn update(self: *GuiAdapter) !?u8 {
             try client.client_layout.synchronizeClientLayout(&self.app.model);
         }
 
-        try loop.configuration.poll(&self.app);
+        try loop.configuration.poll(window_machines.window(self));
         try self.deliverHostEffects();
 
         break :turn null;
@@ -574,18 +614,20 @@ fn dispatch(self: *GuiAdapter, event: gui_event.Message) !?u8 {
     core.profiling.add(.gui_dispatch, 1);
     switch (event) {
         .client => |message| {
-            if (try self.app.update(message)) |status| {
+            if (try self.dispatchMachine(client.Machines.local_slot, message)) |status| {
                 return status;
             }
-
-            if (message == .server) {
-                try self.resumeAfterRuntime();
+        },
+        .machine => |machine_event| {
+            if (try self.dispatchMachine(machine_event.slot, machine_event.message)) |status| {
+                return status;
             }
         },
+        .profiles_changed => |fingerprint| try window_machines.profilesChanged(self, fingerprint),
         .input_ready => try self.inputReady(),
         .focus => |focused| try self.focus(focused),
         .presented => |result| try self.complete(result.token, result.delivered),
-        .configuration_ready => try self.driver.configuration.accept(&self.app),
+        .configuration_ready => try self.driver.configuration.accept(window_machines.window(self)),
         .binding_timeout => |result| try self.expireBinding(result),
         .favicon => |result| self.landFavicon(result),
         .diagram_ready => self.landDiagram(),
@@ -596,10 +638,24 @@ fn dispatch(self: *GuiAdapter, event: gui_event.Message) !?u8 {
     return if (self.stopped) @as(u8, 0) else null;
 }
 
+fn dispatchMachine(self: *GuiAdapter, slot: u8, message: client.Message) !?u8 {
+    if (try window_machines.handle(self, slot, message)) |status| {
+        return status;
+    }
+
+    if (slot == self.machines.active and message == .server) {
+        try self.resumeAfterRuntime();
+    }
+
+    return null;
+}
+
 fn pathFor(event: gui_event.Message) core.Path {
     return switch (event) {
         .client => |message| message.path(),
+        .machine => |event_value| event_value.message.path(),
         .configuration_ready,
+        .profiles_changed,
         .favicon,
         .diagram_ready,
         .syntax_ready,
@@ -611,10 +667,7 @@ fn pathFor(event: gui_event.Message) core.Path {
 
 /// Finishes startup and resumes input once a runtime message lands.
 fn resumeAfterRuntime(self: *GuiAdapter) !void {
-    if (self.app.model.startup.phase == .opening and self.app.model.activeTabLocation() != null) {
-        self.app.model.startup.phase = .active;
-    }
-
+    client.client_startup.finish(&self.app.model);
     try self.resumeInput();
     self.refreshPointer();
 }
@@ -632,7 +685,7 @@ fn inputReady(self: *GuiAdapter) !void {
 /// Replaces bindings without transferring held keys to their new meanings.
 /// Example: `gui.adoptBindings(config);`
 pub fn adoptBindings(self: *GuiAdapter, config: client.RouterConfig) void {
-    var replacement = input_routing.build(config) catch unreachable;
+    var replacement = client.key_router.build(config) catch unreachable;
 
     replacement.inheritPhysicalLeases(&self.router);
     self.router = replacement;
@@ -648,7 +701,7 @@ pub fn cancelBinding(self: *GuiAdapter) void {
 
 fn statusMode(self: *const GuiAdapter) client.Mode {
     if (!self.router.prefixPending()) {
-        return if (client.copy_mode.copyModeActive(&self.app)) .copy else .normal;
+        return if (client.copy_mode.copyModeActive(self.app)) .copy else .normal;
     }
 
     var hints: client.Hints = .{};
@@ -696,7 +749,7 @@ fn statusMode(self: *const GuiAdapter) client.Mode {
 /// Stops before the shared outbox fills, resuming on transport completion.
 fn drainInput(self: *GuiAdapter) !void {
     core.profiling.add(.gui_input_drain, 1);
-    const app = &self.app;
+    const app = self.app;
     const pending_input = &self.input_queue;
 
     if (app.model.startup.holdsInput()) {
@@ -831,14 +884,14 @@ fn drainInput(self: *GuiAdapter) !void {
 
 /// Resolve and execute one semantic key before accepting the next event.
 /// Example: `_ = try gui.routeKey(event);`
-pub fn routeKey(self: *GuiAdapter, event: input_routing.Type.KeyInput) !keyinput.Control {
+pub fn routeKey(self: *GuiAdapter, event: client.key_router.Type.KeyInput) !keyinput.Control {
     errdefer self.router.eventFailed(event.key);
 
     const decision = self.router.routeEvent(
         event,
         .{
-            .captures_keys = shared_model.key_routing.captures(client.key_routing.keyRoutingAuthority(&self.app)),
-            .repeat_policy = if (self.router.repeatAction()) |held| client.repeatPolicy(held, client.actions.repeatPane(&self.app)) else null,
+            .captures_keys = shared_model.key_routing.captures(client.key_routing.keyRoutingAuthority(self.app)),
+            .repeat_policy = if (self.router.repeatAction()) |held| client.repeatPolicy(held, client.actions.repeatPane(self.app)) else null,
         },
     );
 
@@ -848,11 +901,11 @@ pub fn routeKey(self: *GuiAdapter, event: input_routing.Type.KeyInput) !keyinput
     return control;
 }
 
-fn applyInputDecision(self: *GuiAdapter, decision: input_routing.Type.Decision) !keyinput.Control {
+fn applyInputDecision(self: *GuiAdapter, decision: client.key_router.Type.Decision) !keyinput.Control {
     switch (decision) {
         .forward => |value| {
             _ = try client.key_routing.routeKeyInput(
-                &self.app,
+                self.app,
                 .{
                     .key = value.key,
                 },
@@ -864,9 +917,9 @@ fn applyInputDecision(self: *GuiAdapter, decision: input_routing.Type.Decision) 
             }
 
             if (value.current_key) |current| {
-                if (shared_model.key_routing.captures(client.key_routing.keyRoutingAuthority(&self.app))) {
+                if (shared_model.key_routing.captures(client.key_routing.keyRoutingAuthority(self.app))) {
                     _ = try client.key_routing.routeKeyInput(
-                        &self.app,
+                        self.app,
                         .{
                             .key = current,
                         },
@@ -880,7 +933,7 @@ fn applyInputDecision(self: *GuiAdapter, decision: input_routing.Type.Decision) 
             const control = try self.executeAction(request.value);
 
             if (control == .continue_routing) {
-                self.router.actionCompleted(request, client.repeatPolicy(request.value, client.actions.repeatPane(&self.app)));
+                self.router.actionCompleted(request, client.repeatPolicy(request.value, client.actions.repeatPane(self.app)));
             }
 
             return control;
@@ -893,7 +946,7 @@ fn applyInputDecision(self: *GuiAdapter, decision: input_routing.Type.Decision) 
 
 fn deliverKey(self: *GuiAdapter, value: keyinput.Key) !void {
     _ = try client.key_routing.routeKeyInput(
-        &self.app,
+        self.app,
         .{
             .key = value,
         },
@@ -909,7 +962,7 @@ fn executeAction(self: *GuiAdapter, value: shared_model.actions.Action) !keyinpu
         .goto_picker => .goto,
         .suggest_command => .suggest,
         .resize_sidebar => |direction| {
-            _ = try client.copy_mode.leaveCopyMode(&self.app);
+            _ = try client.copy_mode.leaveCopyMode(self.app);
 
             if (self.sidebar.step(direction)) {
                 self.chrome.invalidate();
@@ -917,11 +970,11 @@ fn executeAction(self: *GuiAdapter, value: shared_model.actions.Action) !keyinpu
 
             return .continue_routing;
         },
-        else => return client.actions.executeAction(&self.app, value, .binding),
+        else => return client.actions.executeAction(self.app, value, .binding),
     };
 
-    if (client.copy_mode.copyModeActive(&self.app)) {
-        _ = try client.copy_mode.leaveCopyMode(&self.app);
+    if (client.copy_mode.copyModeActive(self.app)) {
+        _ = try client.copy_mode.leaveCopyMode(self.app);
     }
 
     _ = client.name_prompt.beginCommandPalette(&self.app.model, prefix);
@@ -1040,7 +1093,7 @@ fn dispatchClipboard(self: *GuiAdapter, result: ClipboardResult) !bool {
         }
 
         _ = try self.applyInputDecision(self.router.interrupt());
-        _ = try client.pane_input.startPanePaste(&self.app);
+        _ = try client.pane_input.startPanePaste(self.app);
         self.terminal_clipboard.offset = 0;
 
         return false;
@@ -1050,13 +1103,13 @@ fn dispatchClipboard(self: *GuiAdapter, result: ClipboardResult) !bool {
 
     if (offset < result.text.len) {
         const count = PasteChunk.nextSize(result.text[offset..]);
-        _ = try client.pane_input.appendPanePaste(&self.app, result.text[offset..][0..count]);
+        _ = try client.pane_input.appendPanePaste(self.app, result.text[offset..][0..count]);
         self.terminal_clipboard.offset = offset + count;
 
         return false;
     }
 
-    _ = try client.pane_input.finishPanePaste(&self.app);
+    _ = try client.pane_input.finishPanePaste(self.app);
     self.terminal_clipboard.offset = null;
 
     return true;
@@ -1065,7 +1118,7 @@ fn dispatchClipboard(self: *GuiAdapter, result: ClipboardResult) !bool {
 /// New gestures require current physical geometry; child drags keep their
 /// original pane while copy-mode and chrome retain their own owners.
 fn dispatchPointer(self: *GuiAdapter, value: PointerSample) !void {
-    const app = &self.app;
+    const app = self.app;
     const pointer = &self.pointer;
 
     const event = value.event;
@@ -1209,12 +1262,12 @@ fn openArmedLink(self: *GuiAdapter) !void {
     pointer.link_gesture.cancel();
 
     if (opened) |hit| {
-        _ = try client.link_opening.openLink(&self.app, hit.match.target, hit.pane_id);
+        _ = try client.link_opening.openLink(self.app, hit.match.target, hit.pane_id);
     }
 }
 
 fn dispatchBandPointer(self: *GuiAdapter, event: PointerEvent) !void {
-    const app = &self.app;
+    const app = self.app;
     const command = self.chrome.bandPointer(event) orelse {
         if (event.kind == .move) {
             self.chrome.leavePointer();
@@ -1246,7 +1299,7 @@ fn dispatchBandPointer(self: *GuiAdapter, event: PointerEvent) !void {
 /// Closes existing gestures on focus loss, without assigning their releases
 /// to chrome or to a pane that happens to be focused. Example: `try gui.releasePointer();`
 fn releasePointer(self: *GuiAdapter) !void {
-    const app = &self.app;
+    const app = self.app;
     const pointer = &self.pointer;
 
     pointer.hover.clear();
@@ -1285,7 +1338,7 @@ fn releasePointer(self: *GuiAdapter) !void {
 /// New widget and terminal gestures share the same delivered geometry guard.
 /// Example: `const current = gui.pointerGeometryMatches();`
 pub fn pointerGeometryMatches(self: *GuiAdapter) bool {
-    const app = &self.app;
+    const app = self.app;
     const delivered = app.presentation.delivered_geometry orelse return false;
     const snapshot = client.capture(
         &app.model,
@@ -1362,7 +1415,7 @@ fn dispatchScroll(self: *GuiAdapter, sample: *ScrollSample) !bool {
 }
 
 fn finishInput(self: *GuiAdapter, pending: bool) !void {
-    const app = &self.app;
+    const app = self.app;
 
     if (pending != self.router.prefixPending()) {
         self.binding_revision +%= 1;
@@ -1389,7 +1442,7 @@ fn cancelPointer(self: *GuiAdapter) !void {
 }
 
 fn expireBinding(self: *GuiAdapter, result: anyerror!void) !void {
-    const app = &self.app;
+    const app = self.app;
 
     try self.binding_timeout.complete(result);
     const pending = self.router.prefixPending();
@@ -1465,10 +1518,11 @@ fn deliverRequests(self: *GuiAdapter) !void {
                 else => return err,
             },
             .terminal_notification => {},
-            .capture => |request| try client.clipboard_capture.completeClipboardCapture(&self.app, .{
+            .capture => |request| try client.clipboard_capture.completeClipboardCapture(self.app, .{
                 .execution_id = @enumFromInt(request.sequence),
                 .result = error.NativeServiceUnavailable,
             }),
+            .machine => |request| try window_machines.choose(self, request),
         }
     }
 }
@@ -1476,24 +1530,27 @@ fn deliverRequests(self: *GuiAdapter) !void {
 /// Starts each queued job; one the inbox rejects finishes as a failure,
 /// which may queue its successor.
 fn startJobs(self: *GuiAdapter) !void {
-    try self.app.flush();
+    const own = window_machines.window(self);
+    try own.flush();
     while (true) {
-        if (self.app.to_workers.pop()) |job| {
+        if (own.to_workers.pop()) |job| {
             const started = if (self.job_hook) |hook| hook.start(hook.context, job) else workers.start(self, job);
             started catch |err| {
-                try self.app.failJob(job, err);
-                try self.app.flush();
+                try own.failJob(job, err);
+                try own.flush();
             };
-        } else if (self.app.to_background.pop()) |job| {
+        } else if (own.to_background.pop()) |job| {
             const started = if (self.job_hook) |hook| hook.start_background(hook.context, job) else workers.startBackground(self, job);
             started catch |err| {
-                try self.app.failBackgroundJob(job, err);
-                try self.app.flush();
+                try own.failBackgroundJob(job, err);
+                try own.flush();
             };
         } else {
-            return;
+            break;
         }
     }
+
+    try window_machines.startJobs(self);
 }
 
 pub fn requestClipboardWrite(self: *GuiAdapter, bytes: []const u8) !void {
@@ -1544,6 +1601,19 @@ fn focus(self: *GuiAdapter, focused: bool) !void {
         self.overlays.cancelPointer();
         try self.cancelPointer();
     }
+}
+
+/// Drops what the pointer and gestures held on the machine the window
+/// stops showing; its panes are gone from the frame.
+/// Example: `gui.forgetMachineView();`
+pub fn forgetMachineView(self: *GuiAdapter) void {
+    self.pointer.hover.clear();
+    self.pointer.link_gesture.cancel();
+    self.chrome.cancelPointer();
+    self.overlays.cancelPointer();
+    self.cancelPointer() catch {};
+    self.widgets.tab_drag.cancel();
+    self.chrome.invalidate();
 }
 
 /// Queue one readiness notification only when input can make progress.
@@ -1632,12 +1702,13 @@ pub fn resize(self: *GuiAdapter, size: core.TerminalSize, theme: shared_model.Te
     };
 
     _ = try client.host_resize.applyHostUpdate(
-        &self.app,
+        window_machines.window(self),
         .{
             .size = size,
             .capabilities = capabilities,
         },
     );
+    try window_machines.shareHost(self);
 }
 
 /// Retires captured damage after GPU delivery, preserving newer received state.
@@ -1662,6 +1733,9 @@ fn complete(self: *GuiAdapter, token: u64, delivered: bool) !void {
     self.pointer.hover.present(delivered);
     const delivery = self.app.presentation.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
     try client.presentation_delivery.apply(&self.app.model, delivery.commit);
+    if (self.pending_machine) |slot| {
+        try window_machines.select(self, slot);
+    }
 }
 
 /// Applies runtime graphics commands to this connection's retained resources.
@@ -1694,7 +1768,7 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
     self.chrome.now_ns = pacing.clock.monotonic(self.app.io);
     self.diagrams.beginFrame();
     self.syntax.beginFrame();
-    try self.review.synchronize(&self.app);
+    try self.review.synchronize(self.app);
     self.review.widget.theme_override = self.app.model.theme;
 
     self.refreshPointer();
@@ -1720,7 +1794,7 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
     self.syntax.start(&self.driver.inbox);
     self.review.start(
         .{
-            .app = &self.app,
+            .app = self.app,
             .inbox = &self.driver.inbox,
         },
     );
@@ -1764,7 +1838,7 @@ fn landSyntax(self: *GuiAdapter) void {
 /// Opens a runtime review for either a terminal pane or a managed agent.
 /// Example: `try gui.openChangeReview(pane_id);`
 pub fn openChangeReview(self: *GuiAdapter, pane_id: core.PaneId) !void {
-    try self.review.open(&self.app, pane_id);
+    try self.review.open(self.app, pane_id);
     try self.releasePointer();
     self.pointer.invalidateGestures();
     self.widgets.dispatcher.cancel();
@@ -1783,7 +1857,7 @@ fn landChangeReview(self: *GuiAdapter) void {
 
 /// Lands one favicon lookup from the inbox; the next preparation places it.
 fn landFavicon(self: *GuiAdapter, completion: client.FaviconCompletion) void {
-    const image: ?*client.FaviconImage = switch (client.favicons.complete(&self.app, completion)) {
+    const image: ?*client.FaviconImage = switch (client.favicons.complete(self.app, completion)) {
         .stale => return,
         .missing => null,
         .image => |owned| owned,
@@ -1830,7 +1904,7 @@ fn refreshPointer(self: *GuiAdapter) void {
 /// Captures semantic state plus adapter-owned routing and interaction revisions.
 /// Example: `const projected = gui.projection();`
 pub fn projection(self: *GuiAdapter) client.Projection {
-    return client.capture(
+    var projected = client.capture(
         &self.app.model,
         .{
             .geometry = shared_model.workbench.region(&self.app.model),
@@ -1838,13 +1912,26 @@ pub fn projection(self: *GuiAdapter) client.Projection {
             .presentation_ingress = self.ingress(),
         },
     );
+    // Bars belong to the window, whichever machine it shows.
+    projected.bar_state = &window_machines.window(self).model.bars;
+    projected.machines = &self.machines;
+    return projected;
 }
 
 /// Captures the revisions used to decide whether another presentation is needed.
 /// Example: `_ = gui.app.presentation.observe(gui.observation());`
 pub fn observation(self: *const GuiAdapter) client.Observation {
+    var version = self.app.model.version();
+    const own = &self.clients[client.Machines.local_slot];
+    if (self.app != own) {
+        // The window's bars advance in its own client, and the machine
+        // switcher in the table.
+        version.bars = self.app.model.bars_revision +% own.model.bars_revision;
+    }
+
+    version.link +%= self.machines.revision;
     return .{
-        .model = self.app.model.version(),
+        .model = version,
         .geometry_revision = shared_model.workbench.region(&self.app.model).revision,
         .presentation_ingress = self.ingress(),
     };

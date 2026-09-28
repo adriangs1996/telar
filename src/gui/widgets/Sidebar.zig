@@ -14,6 +14,8 @@ const SidebarList = @import("SidebarList.zig");
 const Label = @import("Label.zig");
 const WorkspaceList = @import("WorkspaceList.zig");
 const SidebarRegions = @import("SidebarRegions.zig");
+const MachineSwitcher = @import("MachineSwitcher.zig");
+const MachineSegment = @import("MachineSegment.zig");
 const Sidebar = @This();
 
 pub const margin = SidebarRegions.margin;
@@ -40,8 +42,9 @@ pub fn draw(self: Sidebar, canvas: *Canvas) !void {
     try canvas.panelAt(.{ .x = area.x, .y = area.y, .width = area.width - 1, .height = area.height });
     try canvas.fillAt(.{ .x = area.x + area.width - 1, .y = area.y, .width = 1, .height = area.height }, palette.surface1);
     self.state.observe(context.projection);
-    const regions = if (context.sidebar_regions) |prepared| prepared.* else try SidebarRegions.resolve(canvas, area, context.projection.workspaces.project_count);
+    const regions = if (context.sidebar_regions) |prepared| prepared.* else try SidebarRegions.resolve(canvas, area, context.projection.workspaces.project_count, MachineSegment.shown(context));
 
+    try (MachineSwitcher{ .context = context, .area = regions.machines }).draw(canvas);
     try drawHeader(canvas, regions.projects_header, "projects");
     try (WorkspaceList{ .state = self.state, .context = context, .bounds = regions.projects }).draw(canvas);
     try drawHeader(canvas, regions.agents_header, "agents");

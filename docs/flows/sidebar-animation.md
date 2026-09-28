@@ -1,92 +1,56 @@
 # Sidebar animation
 
-The client animates the status icon of each working agent. The frame is visible
-client state, so `ClientModel` owns it. `model.sidebar_animation_scheduler`
-owns only its pending timer. The view receives the current frame as render input and does not advance
-time.
+The status icon of each working agent pulses. The window draws that pulse from
+its own frame clock; no model state advances and no timer job runs. The model
+tick described below was driven by the terminal client, and no current client
+arms it.
 
-The scheduler arms each next tick 120 milliseconds after processing while at
-least one agent is working. A tick only commits state; paced presentation
-remains the presenter's responsibility.
-
-## End-to-end path
+## Window path
 
 ```text
-accepted agent snapshot or pane progress
+Scene.prepare -> chrome.animation.begin(now) -> canvas.animation
         |
-agent_snapshot.applyAgentSnapshot / applyPaneProgress
+AgentCard (working agent) -> clock.step(120 ms) -> status_glyph.pulse(frame)
         |
-sidebar_animation.synchronizeSidebarAnimation
+FrameClock.requestAt(next step boundary)
         |
-model.sidebar_animation_scheduler, one pending timer
+GuiAdapter.wakeupAfter -> native wake at the deadline
         |
-client.workers.start(.timer, .sidebar_animation)
-        |
-Message.sidebar_animation_tick -> Client.update
-        |
-sidebar_animation.completeSidebarAnimationTick
-        |
-sidebar_animation.advance
-        |
-frame + Version.sidebar_animation
-        |
-presentation_lifecycle.observe
-        |
-Presenter -> State.render(RenderInput.sidebar_animation_frame)
+GuiAdapter.update -> chrome.animation.requestPreparation -> needs_draw
 ```
 
-`sidebar_animation.synchronizeSidebarAnimation` checks
-`sidebar_animation.isActive` and asks the scheduler for a future tick
-without changing the frame. The scheduler's `pending` bit coalesces repeated
-agent snapshots and rearm attempts into one timer job. A host that reports no
-`model.host.animation_frame_ns` gets no timer.
+`animate.FrameClock` keeps one frame timestamp and one coalesced deadline for
+every visible widget; a later widget cannot postpone an earlier deadline.
+`AgentCard` selects the pulse step from the clock every 120 milliseconds, and
+the clock asks for a frame at the next step boundary. Only the window thread
+owns the timer, and drawing never starts a worker. A frame that shows no
+working agent requests no deadline, so the window stops waking.
 
-When the timer completes, `sidebar_animation.completeSidebarAnimationTick` first releases the
-pending token. `sidebar_animation.advance` then advances the frame if
-a working agent or a pane with active progress still exists, and the client
-rearms the scheduler. If none is left, the tick is a semantic no-op and the
-loop stops.
+The pulse changes no `ClientModel.Version`. Agent snapshot revisions and
+sidebar scroll stay independent of it.
 
-## Model and presentation
+## Model tick
 
-`ClientModel.sidebar_animation_frame` is the only stored render frame.
-`advanceSidebarAnimation` increments it with wrapping arithmetic and advances
-only `model.sidebar_animation_revision`, reported as
-`Version.sidebar_animation`. Agent snapshot revisions and transient
-sidebar scroll remain independent; an animation tick cannot look like a new
-runtime snapshot or reset scroll position.
-
-The client and adapter never request a draw. After dispatch,
-`presentation_lifecycle.observe` publishes the committed version. `Presenter`
-compares it with the last observed and painted versions, invalidates the view,
-and passes `Projection.sidebar_animation_frame` into the view's `render` through
-`RenderInput`. The tick joins other committed
-updates in the next paced frame.
-
-## Failure and recovery
-
-Failure to arm the first timer leaves the model unchanged. A rearm failure
-after a successful tick preserves the new frame and revision because the model
-commit precedes the effect. The adapter also clears the pending token before it
-propagates a failed timer completion.
-
-The client loop propagates these errors, and the disposable client exits.
-Runtime processes and PTYs continue running. Reconnection starts a fresh client
-model, and the next current agent snapshot starts a new animation loop when
-needed.
+`ClientModel.sidebar_animation_frame`, its revision
+(`Version.sidebar_animation`) and `model.sidebar_animation_scheduler` remain.
+`sidebar_animation.synchronizeSidebarAnimation` arms a `.sidebar_animation`
+timer only when the host reports `model.host.animation_frame_ns`. Neither the
+window nor the headless client reports it, so in both the scheduler stays
+idle. When armed, each tick releases the pending token, advances the frame
+while an agent works or a pane shows progress, and rearms. The projection
+carries the frame as `Projection.sidebar_animation_frame`, which `AgentCard`
+reads only when it paints without a frame clock.
 
 ## Validation
 
+- `src/gui/tests/sidebar_cards.zig` proves the working pulse samples its
+  alpha from presentation time.
+- `src/gui/tests/widget_animation.zig` proves widget frames paint without
+  model ticks, fold rejected and late frames, and drop their deadline when the
+  animated widget is hidden.
 - `src/model/state/tests/observations.zig` proves active-only frame
   advancement and isolated versioning.
-- `src/client/notifications/sidebar_animation.zig` arms the single pending timer and releases
-  it before handling completion; `src/client/notifications/sidebar_animation.zig`
-  names its `Activity` result.
-- `src/model/state/ClientModel.zig` owns the frame, its revision and the
-  scheduler.
-- `src/frontend/client/presentation/Presenter.zig` observes the dedicated revision and
-  supplies the model frame to the view.
 - `sidebar animation commits model state before the presenter observes it` in
-  `src/frontend/client/tests/notifications_and_agents.zig` proves a real
-  scheduled tick mutates the model without requesting presentation before
-  `presentation_lifecycle.observe`.
+  `src/client_tests/notifications_and_agents.zig` sets a host frame interval
+  and proves a scheduled tick mutates the model without requesting
+  presentation.

@@ -56,7 +56,7 @@ for recovery. Presentation is driven by the committed revision.
 Source: `src/client/workspace/workspace_creation.zig`, `src/model/state/ClientModel.zig`,
 `src/model/workspace/workspace_handoff.zig` and
 `src/model/workspace/NavigationHistory.zig`.
-Tests: `src/frontend/client/tests/workspace_lifecycle.zig`,
+Tests: `src/client_tests/workspace_lifecycle.zig`,
 `src/model/state/tests/workspaces.zig`, bounded outbox tests and runtime
 creation tests cover owned requests, atomic replacement, no stale detach/focus,
 snapshot ordering, full-outbox failure and retained canonical state after

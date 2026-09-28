@@ -11,7 +11,7 @@ pub const Section = enum { client, theme, gui, input, runtime, binding };
 pub fn writeSection(snapshot: *const Snapshot, query: Query, writer: *std.Io.Writer) !void {
     switch (query.section) {
         .client => unreachable,
-        .theme => try std.json.Stringify.value(.{ .base = snapshot.theme, .light = snapshot.theme_light, .dark = snapshot.theme_dark, .icons = snapshot.icon_theme, .sidebar_rendering = snapshot.sidebar_rendering }, .{}, writer),
+        .theme => try std.json.Stringify.value(.{ .base = snapshot.theme, .light = snapshot.theme_light, .dark = snapshot.theme_dark, .icons = snapshot.icon_theme }, .{}, writer),
         .gui => {
             const gui = &snapshot.gui;
             try std.json.Stringify.value(.{ .font = .{ .family = gui.font.family.name(), .size = gui.font.size, .line_height = gui.font.line_height, .letter_spacing = gui.font.letter_spacing, .thicken = gui.font.thicken, .thicken_strength = gui.font.thicken_strength }, .cursor = gui.cursor, .window = gui.window, .chrome = gui.chrome, .sidebar = gui.sidebar }, .{}, writer);

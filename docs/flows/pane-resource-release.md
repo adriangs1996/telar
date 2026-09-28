@@ -30,5 +30,5 @@ Source: `src/client/panes/pane_closure.zig`.
 Tests: exact model-owner tests in `src/model/state/tests/input_and_frames.zig`,
 plus concrete pane
 exit, tab removal and snapshot cleanup in
-`src/frontend/client/tests/pane_lifecycle.zig`, `tab_lifecycle.zig` and
+`src/client_tests/pane_lifecycle.zig`, `tab_lifecycle.zig` and
 `synchronization.zig`.

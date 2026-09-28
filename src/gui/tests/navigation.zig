@@ -7,14 +7,13 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Session = @import("Session.zig");
 const GuiAdapter = @import("../GuiAdapter.zig");
-const routing = @import("../input/router.zig");
 
 test "update processes a horizontal split shortcut and its correlated runtime reply" {
     const session = try Session.init();
     defer session.deinit();
     try session.bootstrap();
     const gui = session.gui;
-    const app = &gui.app;
+    const app = gui.app;
     const before = app.model.version();
     const request_area = app.geometry().area;
     try std.testing.expect(try gui.acceptInput(
@@ -70,7 +69,7 @@ test "update processes a horizontal split shortcut and its correlated runtime re
 test "native semantic router resolves every TUI default action" {
     const defaults = try client.default_bindings.load(data.keybind.default_prefix);
     for (defaults) |binding| {
-        var router = try routing.build(
+        var router = try client.key_router.build(
             .{
                 .prefix = data.keybind.default_prefix,
                 .bindings = &.{},
@@ -160,7 +159,7 @@ test "native child drag keeps its pane across focus and ignores replacement atta
     try session.bootstrap();
     try session.receiveFrame(1);
     try session.settle();
-    const app = &session.gui.app;
+    const app = session.gui.app;
     const tab = app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
     try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
@@ -186,7 +185,7 @@ test "native pointer rejects queued presses after geometry replacement" {
     const session = try Session.init();
     defer session.deinit();
     try session.bootstrap();
-    const app = &session.gui.app;
+    const app = session.gui.app;
     session.gui.pointer.configure(.{ 0, 0 }, app.model.host.host_size);
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 1, .x = 20, .y = 20 });
     session.gui.pointer.configure(.{ 8, 8 }, app.model.host.host_size);
@@ -236,7 +235,7 @@ test "native child release crosses a newly opened prompt only with its acquired 
     try session.bootstrap();
     try session.receiveFrame(1);
     try session.settle();
-    const app = &session.gui.app;
+    const app = session.gui.app;
     const tab = app.model.tabs.active;
     const pane = app.model.panes.find(Session.pane_id).?;
     pane.mouse = .{ .sgr = true, .tracking = .button };
@@ -270,7 +269,7 @@ test "native pointer rejects a newer layout even before a GPU flight starts" {
         true,
     );
     try session.settle();
-    const app = &session.gui.app;
+    const app = session.gui.app;
     const tab = app.model.tabs.active;
     session.gui.pointer.configure(.{ 0, 0 }, app.model.host.host_size);
     try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(11), .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
@@ -288,7 +287,7 @@ test "native focus loss releases an acquired child mouse gesture" {
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const app = &session.gui.app;
+    const app = session.gui.app;
     const tab = app.model.tabs.active;
     const pane = app.model.panes.find(Session.pane_id).?;
     pane.mouse = .{ .sgr = true, .tracking = .button };
@@ -317,7 +316,7 @@ test "native mouse release reaches its original tab and a pane hidden by fullscr
     const session = try Session.init();
     defer session.deinit();
     try prepareMouse(session);
-    const app = &session.gui.app;
+    const app = session.gui.app;
     const gui = session.gui;
     const press = pointerPress(session);
     try input_support.acceptNative(gui, press);
@@ -516,7 +515,7 @@ test "native application repeat keeps its pane when focus changes" {
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const app = &session.gui.app;
+    const app = session.gui.app;
     const tab = app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
     try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });

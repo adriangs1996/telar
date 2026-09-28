@@ -53,7 +53,7 @@ repairs disposable state. Decoding/retirement lists use fixed pane bounds.
 
 Source: `src/client/workspace/tab_snapshot.zig`, `src/model/state/ClientModel.zig`
 and `src/model/workspace/tab_snapshot_reconciliation.zig`.
-Tests: `src/frontend/client/tests/synchronization.zig`, `pane_lifecycle.zig`,
+Tests: `src/client_tests/synchronization.zig`, `pane_lifecycle.zig`,
 `src/model/state/tests/tabs.zig`, `src/model/workspace/tab_flow_tests.zig`,
 workspace layout tests, and bounded request
 tracker/outbox tests.

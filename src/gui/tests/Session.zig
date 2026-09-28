@@ -147,7 +147,7 @@ pub fn sent(self: *Session) ![]const u8 {
 /// Starts the runtime write and every job a direct GUI call queued.
 /// Example: `try session.startJobs();`
 pub fn startJobs(self: *Session) !void {
-    const app = &self.gui.app;
+    const app = self.gui.app;
 
     try app.flush();
     while (true) {
@@ -210,13 +210,13 @@ pub fn settle(self: *Session) !void {
         }
 
         self.pending = null;
-        try client.runtime_io.completeRuntimeSend(&self.gui.app.model, {});
+        try client.runtime_io.completeRuntimeSend(self.gui.app, {});
         try self.startJobs();
     }
 }
 
 pub fn bootstrap(self: *Session) !void {
-    const app = &self.gui.app;
+    const app = self.gui.app;
     try app.model.request_lifecycle.tracker.add(
         client.initial_request_id,
         .{
@@ -251,7 +251,7 @@ pub fn receiveFrame(self: *Session, frame_id: u64) !void {
         .input_modes = .{ .bracketed_paste = true },
         .spans = &.{.{ .start = 0, .cells = if (frame_id == 1) cells[0..count] else cells[0..1] }},
     });
-    _ = try client.runtime_messages.handleServerMessage(&self.gui.app, try core.decodeServer(encoded));
+    _ = try client.runtime_messages.handleServerMessage(self.gui.app, try core.decodeServer(encoded));
     @memset(&wire, 0xff);
 }
 

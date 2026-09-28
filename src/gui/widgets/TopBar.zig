@@ -18,6 +18,7 @@ const Label = @import("Label.zig");
 const PixelButton = @import("PixelButton.zig");
 const ChangeReviewButton = @import("ChangeReviewButton.zig");
 const workspace_identity = @import("workspace_identity.zig");
+const MachineSegment = @import("MachineSegment.zig");
 const TopBar = @This();
 
 const padding: f32 = 8;
@@ -84,6 +85,18 @@ pub fn draw(self: TopBar, canvas: *Canvas) !void {
     try toggle.draw(canvas);
     left += side + chrome.px(control_gap);
 
+    // The machine comes first in the context: which computer, then which
+    // workspace on it.
+    if (MachineSegment.shown(self.context)) {
+        const width = @max(0, @min(try MachineSegment.preferredWidth(canvas, self.context), (right - left) / 3));
+        const segment: MachineSegment = .{
+            .context = self.context,
+            .area = .{ .x = left, .y = middle, .width = width, .height = height },
+        };
+        try segment.draw(canvas);
+        left += width + chrome.px(control_gap);
+    }
+
     if (try self.showsIndicators(canvas)) {
         const width = @max(0, @min(chrome.px(WorkspaceIndicators.preferredWidth(self.context)), @floor((right - left) / 2)));
         const indicators: WorkspaceIndicators = .{
@@ -122,7 +135,7 @@ fn showsIndicators(self: TopBar, canvas: *Canvas) !bool {
 
     const active = self.context.workspaceId();
     const listed = if (active) |id| if (self.context.projection.workspaces.indexOf(id)) |index| index < self.context.projection.workspaces.project_count else false else false;
-    const regions = if (self.context.sidebar_regions) |prepared| prepared.* else try SidebarRegions.resolve(canvas, Bands.resolve(canvas).sidebar, self.context.projection.workspaces.project_count);
+    const regions = if (self.context.sidebar_regions) |prepared| prepared.* else try SidebarRegions.resolve(canvas, Bands.resolve(canvas).sidebar, self.context.projection.workspaces.project_count, MachineSegment.shown(self.context));
     return !listed or regions.projects.height <= 0;
 }
 

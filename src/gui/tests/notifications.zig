@@ -152,7 +152,7 @@ test "notification controls use pixel edges and warm frames keep allocation boun
 test "GUI notification lifecycle wakes at semantic boundaries while the host owns frames" {
     var fixture = try ChromeFixture.init();
     defer fixture.deinit();
-    const app = &fixture.session.gui.app;
+    const app = fixture.session.gui.app;
     const now = pacing.clock.monotonic(app.io);
     _ = try client.notifications.publishNotification(
         app,

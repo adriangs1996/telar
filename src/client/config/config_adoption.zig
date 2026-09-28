@@ -8,6 +8,7 @@ const config_queries = @import("config_queries.zig");
 const bar_updates = @import("bar_updates.zig");
 const client_diagnostic = @import("client_diagnostic.zig");
 const Snapshot = @import("Snapshot.zig");
+const Generation = @import("Generation.zig");
 const Adoption = @import("../resources/Adoption.zig");
 const notifications = @import("../notifications/notifications.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
@@ -46,11 +47,6 @@ pub fn completeConfigReload(client: *Client, result: anyerror!config_reload.Conf
         .{
             .gpa = client.gpa,
             .reload = reload,
-            .checks = .{
-                .kitty_support = client.model.host.host_capabilities.images,
-                .sidebar_renderer_locked = client.options.sidebar_renderer_locked,
-                .current_sidebar = client.model.config.sidebar_rendering,
-            },
         },
     )) {
         .unchanged => .unchanged,
@@ -114,16 +110,7 @@ fn adoptConfiguration(client: *Client, adoption: Adoption) !data.ConfigurationCo
     var consumed = false;
     errdefer if (!consumed) adoption.deinit(client.gpa);
     const snapshot = &adoption.generation.snapshot;
-    const commit = try data.config_reload.apply(&client.model, 
-        .{
-            .generation = adoption.generation.number,
-            .sidebar_visible = snapshot.sidebar_visible,
-            .pane_gaps = snapshot.pane_gaps,
-            .window_title = snapshot.windowTitle(),
-            .bars = snapshot.bars.presentation(),
-            .config = configFrom(snapshot),
-        },
-    );
+    const commit = try data.config_reload.apply(&client.model, reloadInput(adoption.generation));
     _ = data.client_diagnostic.clear(&client.model);
     std.debug.assert(adoption.generation.number == commit.generation);
     const previous_generation = client.lua_generation;
@@ -134,7 +121,6 @@ fn adoptConfiguration(client: *Client, adoption: Adoption) !data.ConfigurationCo
     client.plugin_registry = adoption.registry;
     client.trust_store = adoption.trust_store;
     client.model.to_host.rebind_input = true;
-    client.model.config.sidebar_rendering = adoption.sidebar_rendering;
     client.model.sound_playback.configure(snapshot.sound);
     consumed = true;
 
@@ -223,4 +209,34 @@ pub fn showConfiguration(client: *Client, reply: *core.ClientCommand) !void {
 
     reply.length = @intCast(writer.buffered().len);
     reply.status = .applied;
+}
+
+/// Makes a client that shares its window's configuration take the one the
+/// window's own client just adopted: the same generation, plugins and trust,
+/// applied to its model the way an adoption would.
+///
+/// ```zig
+/// try config_adoption.followConfiguration(machine_client, window_client);
+/// ```
+pub fn followConfiguration(client: *Client, owner: *const Client) !void {
+    std.debug.assert(!client.owns_configuration);
+    const generation = owner.lua_generation orelse return;
+    _ = try data.config_reload.apply(&client.model, reloadInput(generation));
+    client.lua_generation = owner.lua_generation;
+    client.plugin_registry = owner.plugin_registry;
+    client.trust_store = owner.trust_store;
+    client.model.to_host.rebind_input = true;
+    client.model.sound_playback.configure(generation.snapshot.sound);
+}
+
+fn reloadInput(generation: *const Generation) data.ConfigurationInput {
+    const snapshot = &generation.snapshot;
+    return .{
+        .generation = generation.number,
+        .sidebar_visible = snapshot.sidebar_visible,
+        .pane_gaps = snapshot.pane_gaps,
+        .window_title = snapshot.windowTitle(),
+        .bars = snapshot.bars.presentation(),
+        .config = configFrom(snapshot),
+    };
 }

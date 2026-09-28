@@ -66,6 +66,7 @@ const kind_names = [_]struct { []const u8, data.NodeKind }{
     .{ "badge", .badge },
     .{ "clock", .clock },
     .{ "metric", .metric },
+    .{ "machines", .machines },
     .{ "group", .group },
     .{ "heading", .heading },
     .{ "text", .text },
@@ -217,6 +218,7 @@ fn readComponent(reader: Reader, content: anytype, target: Target) !void {
         .metric => {
             input.metric = try metricField(reader, index);
         },
+        .machines => {},
         .group => {
             input.mark = try markField(reader, index);
             input.icon = try iconField(reader, index, "icon");
@@ -322,6 +324,7 @@ fn fieldsOf(kind: data.NodeKind) []const []const u8 {
         .badge, .heading, .text => &.{ "ui", "text", "tone", "priority" },
         .clock => &.{ "ui", "format", "tone", "priority" },
         .metric => &.{ "ui", "name", "priority" },
+        .machines => &.{ "ui", "priority" },
         .group => &.{ "ui", "mark", "icon", "tooltip", "on_click", "url", "priority", "tone" },
         .kv => &.{ "ui", "key", "value", "tone", "priority" },
         .callout => &.{ "ui", "icon", "text", "detail", "button", "tone", "priority" },

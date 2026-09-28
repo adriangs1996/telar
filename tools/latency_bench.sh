@@ -1,11 +1,13 @@
 #!/bin/sh
-# Measures keystroke-to-echo latency and flood throughput of one telar binary
-# against an isolated runtime socket, so the live runtime is never touched.
+# Measures keystroke-to-echo latency and flood throughput of one telar build
+# through its headless client, against an isolated runtime socket, so the live
+# runtime is never touched. The build needs `zig build headless`.
 #
 #   tools/latency_bench.sh zig-out/bin/telar label
 set -eu
 binary=$1
 label=$2
+headless=$(dirname "$binary")/telar-headless
 # A shell running inside telar inherits pane identity; none of it may leak
 # into the measured processes.
 for name in $(env | sed -n 's/^\(TELAR_[A-Z_]*\)=.*/\1/p'); do unset "$name"; done
@@ -26,9 +28,9 @@ serving() { ps -axo command | grep "[s]erver --daemonized --socket $sock" || ech
 stop() { serving; TELAR_SOCKET_PATH=$sock XDG_DATA_HOME=$dir/data-flood XDG_CONFIG_HOME=$dir/config "$binary" server stop >/dev/null 2>&1 || true; sleep 0.5; }
 trap 'stop; rm -rf "$dir"' EXIT
 python3 "$tools/echo_latency.py" --shell "$shell" --samples 200 --gap 0.05 --warmup 3 --single \
-  $(isolation 1B) "$label-1B" -- "$binary" --no-config
+  --headless --work "$dir/data-1B" $(isolation 1B) "$label-1B" -- "$headless"
 stop
 python3 "$tools/echo_latency.py" --shell "$shell" --samples 200 --gap 0.05 --warmup 3 \
-  $(isolation 2B) "$label-2B" -- "$binary" --no-config
+  --headless --work "$dir/data-2B" $(isolation 2B) "$label-2B" -- "$headless"
 stop
-python3 "$tools/flood.py" $(isolation flood) "$label-flood" -- "$binary" --no-config
+python3 "$tools/flood.py" --headless --work "$dir/data-flood" $(isolation flood) "$label-flood" -- "$headless"

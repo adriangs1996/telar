@@ -6,6 +6,10 @@ sample writes a two-byte token to the pty master, then measures the time until
 that token appears in the multiplexer's output. The inner pty's line discipline
 echoes the token immediately, so the measured time is the multiplexer's own
 pty-read -> emulate -> render -> host-write pipeline.
+
+telar is measured through its headless client (`--headless`): each token is
+a `text` line and the latency runs from the client taking the line to the
+client presenting the first frame of that pane, read from its exit trace.
 """
 
 import argparse
@@ -20,7 +24,11 @@ import struct
 import subprocess
 import sys
 import termios
+import tempfile
 import time
+from pathlib import Path
+
+import headless_client
 
 TOKENS = [b"zq", b"qz", b"xz", b"zx", b"jq", b"qj", b"kz", b"zk"]
 SINGLE = [b"z", b"j", b"k", b"x"]
@@ -127,6 +135,35 @@ def measure(cmd, env, samples, gap, rows, cols, warmup, tokens):
     return latencies, timeouts
 
 
+def measure_headless(binary, env, samples, gap, rows, cols, warmup, tokens, directory):
+    """Echo latency through telar-headless in `directory`, which receives the
+    client's trace and log."""
+    directory = Path(directory)
+    client = headless_client.HeadlessClient(
+        ["--no-config"], env=env, cwd=directory, size=(cols, rows),
+        trace=directory / "headless-trace.json", log=directory / "headless.log",
+        binary=binary,
+    )
+    try:
+        client.wait_ready()
+        time.sleep(warmup)
+        if not client.running():
+            raise SystemExit(f"{binary} exited early: {(directory / 'headless.log').read_text()}")
+        client.mark("measure")
+        for i in range(samples):
+            token = tokens[i % len(tokens)].decode()
+            client.text(token)
+            time.sleep(gap)
+            # Erase the token so the next echo lands on a quiet line.
+            client.send(*["key backspace"] * len(token))
+            time.sleep(gap)
+        if client.quit() != 0:
+            raise SystemExit(f"{binary} failed: {(directory / 'headless.log').read_text()}")
+    finally:
+        client.terminate()
+    return headless_client.echo_latencies(client.trace(), since="measure")
+
+
 def percentile(values, p):
     values = sorted(values)
     k = (len(values) - 1) * p
@@ -147,6 +184,9 @@ def main():
     parser.add_argument("--shell", required=True, help="path of the cat shell")
     parser.add_argument("--env", action="append", default=[], help="KEY=VALUE set after cleanup")
     parser.add_argument("--single", action="store_true", help="one-byte tokens")
+    parser.add_argument("--headless", action="store_true",
+                        help="cmd[0] is telar-headless; measure through its trace")
+    parser.add_argument("--work", help="directory for the headless client's trace and log")
     args = parser.parse_args()
 
     env = dict(os.environ)
@@ -159,10 +199,18 @@ def main():
         key, _, value = pair.partition("=")
         env[key] = value
 
-    latencies, timeouts = measure(
-        args.cmd, env, args.samples, args.gap, args.rows, args.cols, args.warmup,
-        SINGLE if args.single else TOKENS,
-    )
+    tokens = SINGLE if args.single else TOKENS
+    if args.headless:
+        work = args.work or tempfile.mkdtemp(prefix="telar-echo-")
+        latencies, timeouts = measure_headless(
+            args.cmd[0], env, args.samples, args.gap, args.rows, args.cols,
+            args.warmup, tokens, work,
+        )
+    else:
+        latencies, timeouts = measure(
+            args.cmd, env, args.samples, args.gap, args.rows, args.cols, args.warmup,
+            tokens,
+        )
     if not latencies:
         raise SystemExit(f"{args.name}: no samples ({timeouts} timeouts)")
     print(

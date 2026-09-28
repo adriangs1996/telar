@@ -3,6 +3,8 @@
 //! presentation adapter supplies its host. Adapters embed it, build it in
 //! place and bind the ports before the first event.
 const sidebar_animation = @import("../notifications/sidebar_animation.zig");
+const localsocket = @import("localsocket");
+const pacing = @import("pacing");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
@@ -12,6 +14,12 @@ const client_tests = @import("client_tests.zig");
 const Options = @import("../Options.zig");
 const ClientInit = @import("../ClientInit.zig");
 const RuntimeTransportState = @import("../connection/RuntimeTransportState.zig");
+const ConnectReport = @import("../connection/ConnectReport.zig");
+const Forward = @import("../machines/Forward.zig");
+const RuntimeConnection = @import("../machines/RuntimeConnection.zig");
+const runtime_link = @import("../connection/runtime_link.zig");
+const machine_profiles = @import("../machines/machine_profiles.zig");
+const Machines = @import("../machines/Machines.zig");
 const TelemetryState = @import("../resources/TelemetryState.zig");
 const Generation = @import("../config/Generation.zig");
 const Snapshot = @import("../config/Snapshot.zig");
@@ -55,6 +63,9 @@ model: data.ClientModel,
 lua_generation: ?*Generation,
 plugin_registry: ?*Registry,
 trust_store: ?*core.TrustStore,
+/// Whether this client frees the configuration above. A window's other
+/// machines share its client's configuration and follow its reloads.
+owns_configuration: bool = true,
 reload: ConfigReloadState,
 /// Transient: the alternate flag of the list submission being finished.
 list_submission_alternate: bool = false,
@@ -81,6 +92,54 @@ attachments: ?AttachmentShelf = null,
 /// by every adapter.
 presentation: PresentationLifecycle = .{},
 host_input_source: HostInputSource = undefined,
+/// What every session sends first; the adapter stores it before the link
+/// starts.
+bootstrap: ?data.RuntimeBootstrap = null,
+/// The socket a connection job produced; `runtime_transport` borrows it.
+channel: localsocket.SocketChannel = undefined,
+channel_owned: bool = false,
+/// The SSH forward carrying `channel` to a remote machine.
+forward: ?Forward = null,
+/// Written by the connection worker before its completion.
+connect_result: RuntimeConnection = undefined,
+connect_report: ConnectReport = .{},
+/// A connection job is running; its result lands in `connect_result`.
+connect_pending: bool = false,
+/// The target changed while a job ran; its result is closed and a new
+/// attempt starts.
+connect_outdated: bool = false,
+/// A connection that landed while the previous socket was still in use
+/// waits in `connect_result` until that socket closes.
+connect_parked: bool = false,
+/// The text of the machine change being written; one change at a time.
+machine_edit_label: [core.MachineProfile.max_label_bytes]u8 = undefined,
+machine_edit_value: [core.ssh_destination.max_bytes]u8 = undefined,
+machine_edit_pending: bool = false,
+/// The destination the running connection job reads. It is written only
+/// when no job runs, so a machine renamed meanwhile never changes it.
+connect_destination: [core.ssh_destination.max_bytes]u8 = undefined,
+/// The wait before connecting again to a lost runtime.
+runtime_retry: pacing.DeadlineScheduler = .{},
+connected_at_ns: u64 = 0,
+/// A remote machine's home and login shell for the first pane, copied
+/// from its discovery because the forward that holds them can stop.
+launch_cwd: [std.fs.max_path_bytes]u8 = undefined,
+launch_shell: [std.fs.max_path_bytes]u8 = undefined,
+launch_arguments: [1][]const u8 = undefined,
+/// Whether the window shows this client's machine. A hidden client keeps
+/// metadata only: it defers its first pane and leaves its workspace.
+presented: bool = true,
+/// The first pane a hidden client did not open yet, and the layout the
+/// runtime restored for it.
+open_deferred: bool = false,
+deferred_layout: ?data.SavedLayout = null,
+/// The workspace a hidden client left, reopened when it is shown again.
+left_workspace: ?core.WorkspaceId = null,
+/// Leaving waits for requests in flight to finish.
+leave_pending: bool = false,
+/// The machines of the window this client belongs to, for the palette's
+/// machine mode; null in a host that holds one machine.
+machines: ?*const Machines = null,
 
 /// Builds the shared state in its final address. The model is megabytes, so
 /// nothing here passes it by value. Ports remain unbound.
@@ -135,16 +194,17 @@ pub fn init(self: *Client, params: ClientInit) !void {
         .host_size = host_size,
         .host_capabilities = capabilities,
         .sidebar_width = data.sidebar.default_width,
-        .config = config: {
-            var config: data.Config = if (snapshot) |value| config_adoption.configFrom(value) else .{};
-            config.sidebar_rendering = params.options.sidebar_rendering;
-            break :config config;
-        },
+        .config = if (snapshot) |value| config_adoption.configFrom(value) else .{},
         .theme = params.options.theme,
         .icon_theme = params.options.icon_theme,
         .window_title = if (snapshot) |value| value.windowTitle() else "",
     });
     errdefer self.model.deinit();
+    if (params.connection != null) {
+        self.model.runtime_link.phase = .connected;
+        self.model.runtime_link.sessions = 1;
+    }
+
     self.model.sound_playback = .init(params.options.sound);
     try self.model.history_palette.prepare(gpa);
     try self.model.to_runtime.reservePayloads(gpa);
@@ -189,20 +249,33 @@ pub fn deinit(self: *Client) void {
     const gpa = self.gpa;
     self.telemetry.deinit(self.io);
     self.reload.deinit(gpa);
-    if (self.lua_generation) |generation| {
-        generation.deinit();
-    }
+    if (self.owns_configuration) {
+        if (self.lua_generation) |generation| {
+            generation.deinit();
+        }
 
-    if (self.plugin_registry) |registry| {
-        gpa.destroy(registry);
-    }
+        if (self.plugin_registry) |registry| {
+            gpa.destroy(registry);
+        }
 
-    if (self.trust_store) |store| {
-        gpa.destroy(store);
+        if (self.trust_store) |store| {
+            gpa.destroy(store);
+        }
     }
 
     self.model.deinit();
     self.runtime_transport.deinit(gpa);
+    if (self.channel_owned) {
+        self.channel.deinit(self.io);
+    }
+
+    if (self.forward) |*forward| {
+        forward.stop(self.io);
+    }
+
+    if (self.connect_parked) {
+        self.connect_result.close(self.io);
+    }
 }
 
 /// Handles one client event an adapter delivered and returns an exit
@@ -217,7 +290,7 @@ pub fn update(self: *Client, message: Message) !?u8 {
 
     switch (message) {
         .server => |result| return runtime_io.receiveRuntime(self, result),
-        .sent => |result| try runtime_io.completeRuntimeSend(&self.model, result),
+        .sent => |result| try runtime_io.completeRuntimeSend(self, result),
         .sidebar_animation_tick => |result| _ = try sidebar_animation.completeSidebarAnimationTick(self, result),
         .notification_tick => |result| _ = try notifications.completeNotificationTick(self, result),
         .bar_tick => |result| try bar_updates.handleTick(self, result),
@@ -232,6 +305,9 @@ pub fn update(self: *Client, message: Message) !?u8 {
         .sound_played => |result| try agent_sound.completeAgentSound(self, result),
         .notified => |result| result catch {},
         .config_reload => |result| _ = try config_adoption.completeConfigReload(self, result),
+        .runtime_connected => |result| try runtime_link.finishConnect(self, result),
+        .runtime_retry_tick => |result| try runtime_link.retry(self, result),
+        .machine_edited => |result| try machine_profiles.finish(self, result),
     }
 
     return null;
@@ -268,8 +344,15 @@ pub fn failBackgroundJob(self: *Client, job: BackgroundJob, err: anyerror) !void
 /// try client.flush();
 /// ```
 pub fn flush(self: *Client) !void {
-    self.queueGraphicsCredits();
     const transport = &self.runtime_transport;
+    if (transport.connection == null) {
+        // Nothing reaches a runtime this client is not connected to; a new
+        // session starts from its bootstrap.
+        self.model.to_runtime.discardQueued();
+        return;
+    }
+
+    self.queueGraphicsCredits();
     const payload = try self.model.to_runtime.beginSend(transport.send_buffer) orelse return;
 
     self.to_workers.push(.{ .runtime_send = .{ .state = transport, .bytes = payload } }) catch |err| {

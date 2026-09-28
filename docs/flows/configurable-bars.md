@@ -13,13 +13,13 @@ Generation.parsePanels / parseBars / component_values.parse
           |
 BarConfiguration (sources, panels) + callback registry
           |
-config_adoption.completeConfigReload / client_startup
+config_adoption.completeConfigReload / initial generation
           |
 BarLayout -> ClientModel.bars
           |                 |
           |   bar_updates.synchronizeBars -> model.bar_updates
           |                 |
-          |   bar_updates.rearm -> workers.start(bar timer or bar_command)
+          |   bar_updates.rearm -> to_workers (bar timer) or to_background (bar_command)
           |                 |
           |   bar_updates.handleTick / completeCommand
           |                 |
@@ -29,11 +29,11 @@ BarLayout -> ClientModel.bars
           |                 |
           +------ Version.bars
                          |
-             presentation_lifecycle.observe
+             Client.presentation.observe
                          |
-               Presenter -> composition
+               GuiAdapter.prepare -> client.Projection
                          |
-     GUI: StatusBar -> BarRow, BarOverlay     TUI: bar_content, bar_panel
+               StatusBar -> BarRow, BarOverlay
                          |
                bar_fitting.fit (shared)
 ```
@@ -49,7 +49,7 @@ A slot's content is a flat list of `Node`s in document order, bounded by
 `GenericContent`: a child names its container by index, and text, sparkline
 samples and click actions live in the list's own fixed storage. Bar slots and
 panels use the same shape with different bounds (`Content`, `PanelContent`),
-so one parser and one painter per adapter serve both.
+so one parser and one painter serve both.
 
 `component_values.parse` validates every table against the fields its
 component accepts and the place it appears in: inline components in a bar
@@ -58,14 +58,14 @@ actions row. A rejected component rejects the whole render and keeps the last
 valid content. Legacy segment tables become labels.
 
 Tones map to palette roles in the model (`Tone.inkRole`, `Tone.markRole`), so
-both adapters colour the same meaning the same way. Built-in metrics format
+the same meaning always gets the same colour. Built-in metrics format
 and choose their tone in `bar_metrics`; clocks format in `bar_clock`.
 
 ## Fitting
 
-`bar_fitting.fit` degrades a row by priority until it fits. Each adapter
-measures every component at full and compact level in its own unit (pixels in
-the GUI, cells in the TUI) and draws the levels it gets back. A meter drops
+`bar_fitting.fit` degrades a row by priority until it fits. The window
+measures every component at full and compact level in pixels and draws the
+levels it gets back. A meter drops
 its track before it disappears; a group disappears after all its children; a
 warning or danger tone raises a component's effective priority. The function
 is pure and bounded by the slot capacity: every node reduces at most twice.
@@ -76,11 +76,11 @@ counted in a `+N` chip; the overflow panel lists them.
 ## Interaction and panels
 
 The GUI registers a band target for every group with an action, a url or a
-tooltip, and the TUI a cell target; both report `Intent.bar_component`. The
+tooltip; each reports `Intent.bar_component`. The
 client resolves it against the current layout in `bar_components.activate`:
 `open_panel` toggles the panel anchored to that component, any other action
 runs through `actions.executeAction`, and a url goes to the link opening
-worker. The adapters never call Lua. Tooltips are native only: the GUI paints
+worker. The adapter never calls Lua. The GUI paints
 the hovered group's tooltip children above it.
 
 `model.bars.panel` holds the open panel: its target (a configured index or the
@@ -116,10 +116,11 @@ budget. `telar.json.decode` builds its tables inside a protected call, so a
 Lua error there frees the parsed document. Rendering reads fixed values,
 formats built-in components in fixed buffers, and allocates nothing.
 
-Configuration may choose bottom left, center and right content, but exactly
-one slot belongs to built-in tabs in the TUI. It may choose only the top-right content
-and still accepts up to three sidebar footer slots (`sidebar_footer_left`,
-`_center`, `_right`) for compatibility. Neither adapter displays footer slots.
+Configuration may choose bottom left, center and right content, with exactly
+one slot holding the built-in tabs source. It may choose only the top-right
+content and still accepts up to three sidebar footer slots
+(`sidebar_footer_left`, `_center`, `_right`) for compatibility. The window
+displays no footer slots.
 The native top bar owns workspace navigation and tabs. `StatusBar` paints the
 bottom slots through `BarRow`, which omits the tabs source and appends legacy
 `top_right` content before the far-right TLS badge. Prefix and copy mode
@@ -127,13 +128,10 @@ replace all components with `ModeBar`; they retain both the TLS badge and the
 top navigation.
 
 Workspace navigation, the sidebar toggle and the permanent ProxyTLS signal
-remain authoritative Telar UI. Narrow TUI rows reserve a usable tabs region.
-Both adapters fit custom content before it can cover the proxy badge.
-Its peach color denotes an exact-host policy, red denotes a
-suffix or global wildcard, and yellow denotes installed system trust while the
-proxy is off. The native bars span the window. In the TUI, a visible sidebar
-owns the complete left column, so both bars start at the workbench edge.
-Hiding it expands them to the full client width.
+remain authoritative Telar UI. The window fits custom content before it can
+cover the proxy badge. Its peach color denotes an exact-host policy, red
+denotes a suffix or global wildcard, and yellow denotes installed system trust
+while the proxy is off. The native bars span the window.
 
 ## Bounds and scheduling
 
@@ -192,9 +190,9 @@ and intentionally reset when their generation is replaced.
 - `src/gui/tests/bar_components.zig` proves band targets, tooltips above the
   bar, the anchored panel with its buttons, closing on an outside press and the
   overflow list; `status_bar.zig` slot order, legacy content and TLS priority.
-- `src/frontend/client/tests/configuration.zig` crosses reload, Lua, a click,
-  the panel tick, the TUI panel on screen and Escape, and proves that an old
-  command completion is discarded.
+- `src/client_tests/configuration.zig` crosses reload, Lua, a click, the
+  panel tick and Escape, and proves that an old command completion is
+  discarded.
 - `tools/gui_bar.py` drives `docs/examples/bar` in a real window against an
   isolated runtime: hover, both panels, Escape, prefix mode and, where the
   window manager allows the resize, the overflow chip.

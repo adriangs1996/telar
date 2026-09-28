@@ -2,7 +2,7 @@
 
 A child's OSC 0/2 window title is free evidence the emulator already parses.
 The runtime keeps a sanitized bounded copy per pane, every client mirrors it,
-and the host terminal's own window title can follow the focused pane.
+and the window's title can follow the focused pane.
 
 ## End-to-end path
 
@@ -23,9 +23,9 @@ pane_metadata.update(.title) -> Pane.setTitle
         |
 pane_metadata_revision
         |
-Presenter.syncWindowTitle -> WindowTitleState.sync -> OSC 0 to the host
-                             (only when the rendered `client.window_title`
-                             template changes)
+native pump -> GuiAdapter.windowTitle -> WindowTitleState.sync
+            -> NSWindow title (macOS) / xdg_toplevel_set_title (Linux)
+               (only when the rendered `client.window_title` changes)
         +-> Lua bar context `pane_title`
         +-> agent snapshot `session_title` fallback (source `terminal`)
 ```
@@ -35,7 +35,7 @@ Presenter.syncWindowTitle -> WindowTitleState.sync -> OSC 0 to the host
 `TitleState.observe` runs on the interactive path after each ingest: one
 bounded compare, no allocation. It drops C0/DEL bytes and invalid UTF-8
 sequences and cuts at `core.max_pane_title_bytes` on a code point boundary,
-so the stored value is safe in a wire frame and in a host escape sequence.
+so the stored value is safe in a wire frame and in a window title.
 
 Attachments start at the empty-title revision. A fresh attachment therefore
 receives a `pane_title` only for a title a child actually set; a cleared title
@@ -52,11 +52,12 @@ the working directory, because a fixed buffer per pane would cost megabytes
 per client model.
 
 `client.window_title` is a template with `{hostname}`, `{workspace}`, `{tab}`
-and `{pane_title}`. An empty template, the default, never touches the host
-title. The presenter renders it with `pane_title.focusedTitle`,
-`workspaceName` and `tab_label.text` on every presentation and writes OSC 0
-only when the rendered text differs from the last one sent; the bytes ride the
-frame flush already in progress.
+and `{pane_title}`. An empty template, the default, never touches the window
+title. After each client pump the native loop asks `GuiAdapter.windowTitle`,
+which renders the template with `pane_title.focusedTitle`, `workspaceName`,
+`tab_label.text`, and the active machine's label (or the local hostname) as
+`{hostname}`. `WindowTitleState.sync` hands the text to the platform only when
+it differs from the last one sent.
 
 Bar callbacks receive `context.pane_title` for the focused pane of the active
 tab.
@@ -68,6 +69,5 @@ tab.
 - `src/core/schema_contract_test.zig` pins the `pane_title` bytes.
 - `src/model/state/tests/observations.zig` proves per-pane storage,
   no-op repeats and the focused-pane accessor.
-- `src/frontend/presentation/window_title.zig` and
-  `src/client/presentation/window_title.zig` prove token rendering,
-  send-on-change, retry after failure and bounded Unicode truncation.
+- `src/client/presentation/window_title.zig` proves send-on-change, retry
+  after failure and bounded Unicode truncation.

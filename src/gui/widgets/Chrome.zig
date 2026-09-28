@@ -51,7 +51,7 @@ pub fn begin(self: *Chrome, canvas: *Canvas, projection: *const client.Projectio
     const pending = self.maps.begin();
     try registerPanes(&pending.hits, projection.*);
     pending.bands = Bands.resolve(canvas);
-    pending.sidebar_regions = if (canvas.sidebar.expanded()) try SidebarRegions.resolve(canvas, pending.bands.sidebar, projection.workspaces.project_count) else .{};
+    pending.sidebar_regions = if (canvas.sidebar.expanded()) try SidebarRegions.resolve(canvas, pending.bands.sidebar, projection.workspaces.project_count, machinesShown(projection)) else .{};
     pending.tab_strip = .{ .x = 0, .y = 0, .width = 0, .height = 0 };
     self.ages.observe(projection.agents, self.now_ns);
     self.progress.begin();
@@ -74,6 +74,9 @@ pub fn compose(self: *Chrome, context: *Context, widgets: anytype) !void {
     }
 
     try widgets.append(.{ .panes = .{ .context = context, .rings = &self.rings } });
+    if (context.projection.model.runtime_link.phase != .connected) {
+        try widgets.append(.{ .link_status = .{ .context = context } });
+    }
     try widgets.append(.{ .rail_tooltip = .{ .context = context, .area = bands.sidebar } });
     try widgets.append(.{ .bar_overlay = .{ .context = context, .area = bands.status_bar } });
 }
@@ -303,4 +306,9 @@ pub fn leavePointer(self: *Chrome) void {
         self.hovered = null;
         self.invalidate();
     }
+}
+
+fn machinesShown(projection: *const client.Projection) bool {
+    const machines = projection.machines orelse return false;
+    return machines.count() > 1;
 }

@@ -55,6 +55,6 @@ capacity. Presentation follows model revisions, not an explicit draw request.
 
 Source: `src/client/panes/pane_closure.zig`, particularly `requestPaneClose`,
 `applyPaneExit` and `releasePaneResources`.
-Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
-`src/frontend/client/tests/tab_lifecycle.zig`,
+Tests: `src/client_tests/pane_lifecycle.zig`,
+`src/client_tests/pane_updates.zig`, `src/client_tests/tab_lifecycle.zig`,
 `src/model/state/tests/panes.zig`, and transport lifecycle integration tests.

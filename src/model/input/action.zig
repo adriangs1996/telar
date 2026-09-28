@@ -55,9 +55,35 @@ pub const Action = union(enum) {
     close_panel,
     /// Runs the open panel's source now instead of at its next interval.
     refresh_panel,
+    /// Presents the next (1) or previous (-1) machine the window holds.
+    select_machine_offset: i8,
+    /// Opens the command palette on the window's machines.
+    machine_picker,
+    /// Asks for a new machine's label and destination and saves it.
+    add_machine,
 
     /// Parses stable built-in action names used by configuration and tests.
     pub fn parse(name: []const u8) !Action {
+        if (std.mem.eql(u8, name, "next-machine")) {
+            return .{
+                .select_machine_offset = 1,
+            };
+        }
+
+        if (std.mem.eql(u8, name, "previous-machine")) {
+            return .{
+                .select_machine_offset = -1,
+            };
+        }
+
+        if (std.mem.eql(u8, name, "machine-picker")) {
+            return .machine_picker;
+        }
+
+        if (std.mem.eql(u8, name, "add-machine")) {
+            return .add_machine;
+        }
+
         if (std.mem.eql(
             u8,
             name,

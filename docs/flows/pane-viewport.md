@@ -37,13 +37,13 @@ changes. Neither failure rolls the viewport back.
 The runtime clamps and pins the attachment viewport; reaching the bottom clears
 the pin. Its next frame contains the accepted scroll projection. Frame
 application advances the frame revision independently from local viewport
-changes. The presenter reads those revisions and recomposes the active model;
+changes. The window observes those revisions and prepares its next frame;
 operations do not invalidate presentation caches or schedule draws.
 
 This work performs bounded arithmetic and at most one viewport enqueue.
 Client death discards the attachment projection without changing the PTY.
 Source: `src/client/panes/pane_viewport.zig`.
 Tests: `src/model/state/tests/input_and_frames.zig`,
-`src/frontend/client/tests/host_interaction.zig`, `input.zig` and
+`src/client_tests/host_interaction.zig`, `input.zig` and
 `mouse_selection.zig`; runtime attachment tests cover pinning and live-screen
 restoration.

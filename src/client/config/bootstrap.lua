@@ -23,6 +23,10 @@ function telar.bar.metrics()
 	return { bar_kind = "metrics" }
 end
 
+function telar.bar.machines()
+	return { bar_kind = "machines" }
+end
+
 function telar.bar.static(value)
 	return { bar_kind = "static", value = value }
 end
@@ -243,6 +247,10 @@ for _, name in ipairs({
 	"suggest-command",
 	"close-panel",
 	"refresh-panel",
+	"next-machine",
+	"previous-machine",
+	"machine-picker",
+	"add-machine",
 }) do
 	local stable_name = name
 	telar.action[name:gsub("-", "_")] = function()

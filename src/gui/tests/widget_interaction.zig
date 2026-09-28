@@ -264,7 +264,7 @@ test "whole widget paste preserves selection when its bounded field cannot hold 
     gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "keep" } });
     try publish(session);
     _ = try client.name_prompt.inputPrompt(
-        &gui.app,
+        gui.app,
         .{
             .command = .select_all,
         },
@@ -354,7 +354,7 @@ test "cut waits for matching host success and preserves text on failure or inter
     const target = try editorTarget(session, .name);
     for ([_]ClipboardResult.Status{ .unavailable, .cancelled, .success }) |status| {
         _ = try client.name_prompt.inputPrompt(
-            &gui.app,
+            gui.app,
             .{
                 .command = .select_all,
             },
@@ -371,7 +371,7 @@ test "cut waits for matching host success and preserves text on failure or inter
 
     try send(session, .{ .text = .{ .bytes = "original" } });
     _ = try client.name_prompt.inputPrompt(
-        &gui.app,
+        gui.app,
         .{
             .command = .select_all,
         },
@@ -399,7 +399,7 @@ test "clipboard capacity leaves cut selection intact and composition follows out
     }
 
     _ = try client.name_prompt.inputPrompt(
-        &gui.app,
+        gui.app,
         .{
             .command = .select_all,
         },
@@ -495,7 +495,7 @@ test "accessibility widget focus cancels terminal prefix without transferring it
     try input_support.focus(gui, false);
     try input_support.focus(gui, true);
     _ = try client.name_prompt.inputPrompt(
-        &gui.app,
+        gui.app,
         .{
             .command = .cancel,
         },
@@ -722,7 +722,7 @@ test "native tab drag sends one anchored move after release and waits for runtim
     try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.tabs.find(third));
     try session.settle();
     _ = try client.runtime_messages.handleServerMessage(
-        &session.gui.app,
+        session.gui.app,
         .{
             .tab_moved = .{
                 .request_id = request.request_id,
@@ -810,7 +810,7 @@ test "hook editions show one terminal review action and retired availability rej
     _ = pane.identify(77);
     const notice: core.ChangeReviewChanged = .{ .pane_id = Session.pane_id, .pane_generation = 77, .session = "hook-thread", .latest_edition_id = 1 };
     _ = try client.runtime_messages.handleServerMessage(
-        &gui.app,
+        gui.app,
         .{
             .change_review_changed = notice,
         },
@@ -824,7 +824,7 @@ test "hook editions show one terminal review action and retired availability rej
     try std.testing.expect(routing.eligible(gui, target));
     try std.testing.expectEqual(target.id, registry.at(.{ target.bounds.x + target.bounds.width / 2, target.bounds.y + target.bounds.height / 2 }).?.id);
     _ = try client.runtime_messages.handleServerMessage(
-        &gui.app,
+        gui.app,
         .{
             .change_review_changed = .{
                 .pane_id = Session.pane_id,
@@ -839,7 +839,7 @@ test "hook editions show one terminal review action and retired availability rej
     try std.testing.expectEqual(@as(usize, 0), reviewControlCount(session));
 
     _ = try client.runtime_messages.handleServerMessage(
-        &gui.app,
+        gui.app,
         .{
             .change_review_changed = notice,
         },
@@ -857,7 +857,7 @@ fn editorSession() !*Session {
 }
 
 fn openFile(session: *Session, path: []const u8) !void {
-    _ = try client.editor_file_links.openFile(&session.gui.app, Session.pane_id, try data.FilePath.fromDestination(path));
+    _ = try client.editor_file_links.openFile(session.gui.app, Session.pane_id, try data.FilePath.fromDestination(path));
     try session.settle();
 }
 
@@ -874,7 +874,7 @@ fn existingEditor(session: *Session, name: []const u8) !core.PaneId {
 fn editorReply(session: *Session, outcome: core.EditorOpened.Outcome) !void {
     const reply: core.EditorOpened = .{ .request_id = session.last_editor_open.?.request_id, .outcome = outcome, .pane_id = @enumFromInt(99), .pane_generation = 88 };
     var buffer: [128]u8 = undefined;
-    _ = try client.runtime_messages.handleServerMessage(&session.gui.app, try core.decodeServer(try core.encodeEditorOpened(&buffer, reply)));
+    _ = try client.runtime_messages.handleServerMessage(session.gui.app, try core.decodeServer(try core.encodeEditorOpened(&buffer, reply)));
     try session.settle();
 }
 
@@ -903,7 +903,7 @@ test "opening a file without a reachable editor creates an editor pane in its so
     var response: [128]u8 = undefined;
     const editor_id: core.PaneId = @enumFromInt(99);
     const opened = try core.encodePaneOpened(&response, .{ .request_id = request.request_id, .pane_id = editor_id, .location = request.location, .created = true });
-    _ = try client.runtime_messages.handleServerMessage(&session.gui.app, try core.decodeServer(opened));
+    _ = try client.runtime_messages.handleServerMessage(session.gui.app, try core.decodeServer(opened));
     try session.settle();
     const tab = session.gui.app.model.tabs.active;
     try std.testing.expectEqualDeep(Session.location, session.gui.app.model.tabs.location[tab]);
@@ -985,7 +985,7 @@ test "a path from prose resolves against its pane and opens the editor at its li
     session.gui.app.options.editor = "/opt/homebrew/bin/nvim";
     _ = try session.gui.app.model.panes.find(Session.pane_id).?.setCwd("/work/telar");
     const target = try data.LinkTarget.initPath("src/../src/gui/routing.zig:435:7");
-    try std.testing.expect(try client.link_opening.openLink(&session.gui.app, target, Session.pane_id));
+    try std.testing.expect(try client.link_opening.openLink(session.gui.app, target, Session.pane_id));
     try session.settle();
 
     const request = session.last_editor_open.?;
@@ -1006,7 +1006,7 @@ test "a file URI fragment reaches the editor as its line" {
     defer session.deinit();
     session.gui.app.options.editor = "nvim";
     const target = try data.LinkTarget.init("file:///tmp/a%20b.zig#L12");
-    try std.testing.expect(try client.link_opening.openLink(&session.gui.app, target, Session.pane_id));
+    try std.testing.expect(try client.link_opening.openLink(session.gui.app, target, Session.pane_id));
     try session.settle();
     try std.testing.expectEqualStrings("/tmp/a b.zig", session.last_editor_open.?.path());
     try std.testing.expectEqual(@as(u32, 12), session.last_editor_open.?.line);

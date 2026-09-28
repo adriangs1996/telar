@@ -1,9 +1,21 @@
 //! Client startup: the first pane request the client sends once it knows its
-//! geometry.
+//! geometry, and the end of startup once a tab is there.
 const lifecycle = @import("lifecycle.zig");
 const data = @import("model");
 const core = @import("telar-core");
 const Client = @import("../execution/Client.zig");
+
+/// Ends startup once a runtime message left the client with an active tab;
+/// input waits until then.
+///
+/// ```zig
+/// client_startup.finish(&client.model);
+/// ```
+pub fn finish(model: *data.ClientModel) void {
+    if (model.startup.phase == .opening and model.activeTabLocation() != null) {
+        model.startup.phase = .active;
+    }
+}
 
 pub fn initialPaneRequest(client: *Client, restored: ?data.SavedLayout, size: core.TerminalSize) data.ConnectionDelivery {
     const fallback_workspace: ?core.WorkspaceId = if (restored) |saved| switch (saved.location.workspace) {

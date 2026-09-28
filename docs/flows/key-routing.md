@@ -2,26 +2,28 @@
 
 The shared router returns a tagged `Decision`: `action`, `forward`, `replay`,
 `pending` or `discard`. It has no application callback or handler parameter.
-`Context` supplies current capture and repeat policy as data. The GUI and TUI
-execute each decision before routing the next event, including within a single
-host read. A focus change or newly opened prompt therefore affects the next key.
+`Context` supplies current capture and repeat policy as data. The window and
+the headless client execute each decision before routing the next event,
+including within a single drain turn. A focus change or newly opened prompt
+therefore affects the next key.
 
 The router owns bounded input/chord buffers, the compiled keymap and physical
-binding leases. It allocates no heap storage while routing. Host bytes borrowed
-from `next` remain valid until the next decoder call. The TUI forwards decoded
-keys; malformed host escape sequences never reach the child verbatim.
+binding leases. It allocates no heap storage while routing. Both adapters build
+it through `client.key_router` (`src/client/input/key_router.zig`) without an
+escape decoder: they hand it semantic keys, so no client parses terminal escape
+sequences.
 
 ## End-to-end path
 
 ```text
-GUI: GuiAdapter.drainInput → dispatchKey → routeKey
-TUI: host_inputs.handleRead → feed → router.next → decoded
+window:   GuiAdapter.drainInput → dispatchKey → routeKey
+headless: HeadlessClient.take (stdin key or text line) → press
                                         |
                               router.routeEvent(event, context)
                                         |
                                    Decision
                                         |
-                             host decision switch
+                          adapter decision switch
                           /                         \
                     action request             key / replay
                           |                         |
@@ -50,12 +52,13 @@ flags. The existing pure `key_routing.captures(authority)` decides whether bindi
 bypassed. `actions.repeatPane()` returns only the eligible attached pane
 ID, or null when an exclusive owner, copy mode or an unavailable pane prevents
 repetition. The pure `action_routing.repeatPolicy(action, eligible_pane)` receives these values,
-never an application pointer. GUI and TUI re-read eligibility after each action
-so a focus or mode change takes effect before the next repeat.
+never an application pointer. Both adapters re-read eligibility after each
+action so a focus or mode change takes effect before the next repeat.
 
-TUI mouse, paste and terminal responses are
-handled explicitly in `host_inputs.decoded`. Startup input similarly yields
-host responses while retaining early user input, without a callback object.
+Window pointer, paste and clipboard events are handled explicitly in
+`GuiAdapter.drainInput`. Startup retains early user input without a callback
+object: `drainInput` returns while `StartupState.holdsInput` is true, and the
+headless client reads no stdin line until then.
 
 `key_routing.routeKeyInput` reads current authority and retained physical leases, then
 calls the selected concrete operation. Priority, exclusivity and follow-up order
@@ -90,11 +93,12 @@ from a release lost during a terminal transition. If the table is full, the new
 press is dropped before any owner effect, the lifecycle remains unowned, and
 telemetry increments `key_lease_overflows`.
 
-Replayed bytes have already crossed semantic binding resolution. An empty
-slice is ignored. The name prompt receives non-empty bytes first, copy mode
+`KeyRoutingCommand.bytes` remains for byte input that has already crossed
+binding resolution. An empty slice is ignored. The name prompt receives
+non-empty bytes first through `HostInputSource.routePromptBytes`, copy mode
 consumes them without an effect, and every remaining value reaches the pane.
-The modal does not claim these prior buffered bytes. Its active capture applies
-to new semantic keys.
+The modal does not claim bytes. Neither the window nor the headless client
+produces byte commands today; both send semantic keys.
 
 A selected owner failure propagates and never falls through to another owner.
 If the pane target disappeared or is exclusively owned, `pane_input.sendPaneInput`
@@ -128,9 +132,9 @@ no scroll work, even if the host loses a release. Ordinary taps stay immediate.
 Client detach or destruction discards the state; neither IPC nor runtime state
 changes. Repeated scroll uses the existing viewport or child-input flows.
 
-This needs a physical lifecycle from the host. Current Kitty flags 7 report
-modified chords such as `alt+-`, but leave plain text suffixes as text.
-Legacy press-only input retains its old behavior. See
+This needs a physical key lifecycle. The window reports press, repeat and
+release with a physical identity. The headless client sends presses only, so a
+held binding never repeats there. See
 [Configuration](../configuration.md) and [Pane mouse input](pane-mouse-input.md).
 
 ## Clipboard preview order
@@ -142,9 +146,9 @@ starts a preview.
 
 Preview start is best effort. An unsupported platform, missing agent targets,
 a busy capture, worker scheduling failure and other preview errors cannot
-retract or fail the already accepted pane input. The media worker owns
-clipboard access, PNG allocation and image validation outside the interactive
-path. See [Clipboard image preview](clipboard-image.md).
+retract or fail the already accepted pane input. Neither the window nor the
+headless client supports capture, so today the start returns `unsupported`.
+See [Clipboard image preview](clipboard-image.md).
 
 ## State, presentation and failure
 
@@ -154,17 +158,13 @@ replacement. Modal,
 prompt and copy effects resolve their current owner again through their
 capability adapter. No asynchronous task retains the snapshot or input slice.
 
-A successful modal close advances the TUI view's `interactionVersion`
-(`presentation/State.zig`). Prompt and copy changes advance their own
-`Version` fields, read through `ClientModel.version()`. `Presenter` observes
-both through the paced loop. Pane input normally produces no presentation
-revision unless its viewport policy commits a scroll change. Removing a paired
-image marker also advances `interactionVersion`; removing the last marker
-re-offers pane geometry. Claude and Pi marker identities are additionally
-reconciled after committed pane frames: Claude's attachment context can remove
-a chip without editing it as Codex text, and Pi's plain-text path yields to
-word and line deletion bindings. Clipboard media follows its independent
-ingress version.
+Prompt and copy changes advance their own `Version` fields, read through
+`ClientModel.version()`. The adapter observes them after the turn through
+`Client.presentation.observe`. Pane input normally produces no presentation
+revision unless its viewport policy commits a scroll change. With a bound
+attachment shelf, removing a paired image marker re-offers pane geometry, and
+Claude and Pi marker identities are reconciled after committed pane frames; no
+current adapter binds one.
 
 Prompt, copy and pane failures preserve the transaction rules of their
 existing operations. The key router does not retry or reinterpret a failed
@@ -177,15 +177,15 @@ delivery.
 - `src/client/input/key_lease.zig` proves exact-owner leases, replacement and
   saturation policy; `lib/keyinput/routing_tests.zig` proves binding
   ownership through release and that repeats arm only after execution.
-- `src/frontend/input/keybind.zig` proves active editor capture before bindings,
-  semantic replay, binding/application physical ownership, persistent prefix
-  release, reload inheritance, repeat pacing, cancellation, clock bounds,
-  arbitrary repeat-report splits and bounded forwarding.
-- `src/frontend/client/tests/input.zig` proves attachment-modal capture, prompt
-  input, copy-mode keys, child-mode encoding, pane backpressure and `Ctrl+V`
-  delivery through the complete input entrypoint. Held-scroll tests cover both
-  viewport directions, burst suppression, endpoint no-ops, global bindings,
-  changed focus and copy-mode capture through the router and real adapters.
+- `lib/keyinput/GenericRouter.zig` and `routing_tests.zig` prove binding
+  admission, semantic replay, binding/application physical ownership,
+  persistent prefix handling and keymap replacement without decoders.
+- `src/client_tests/input.zig` proves child-mode encoding, prefix release
+  through client routing, detach and prompt opening inside one batch, and
+  held-scroll behavior: both viewport directions, burst suppression, endpoint
+  no-ops, global bindings, changed focus and copy-mode capture.
+- `src/client_tests/configuration.zig` proves attachment-modal capture against a
+  test shelf and `Ctrl+V` delivery without a preview target.
 - `src/client/input/action_routing.zig` proves that only
   native scroll actions receive a repeat policy and exact-pane owner token.
 - `name-prompt.md`, `copy-mode.md`, `pane-input.md` and `clipboard-image.md`

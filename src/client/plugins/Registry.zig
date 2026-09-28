@@ -147,7 +147,7 @@ pub fn authorizeBatch(self: *const Registry, authorization: BatchAuthorization) 
             .suggest_command,
             => null,
             .notification => .notifications,
-            .scroll_pane, .lua_callback, .lua_expr, .plugin, .open_panel, .close_panel, .refresh_panel => return error.InvalidPluginEffect,
+            .scroll_pane, .lua_callback, .lua_expr, .plugin, .open_panel, .close_panel, .refresh_panel, .select_machine_offset, .machine_picker, .add_machine => return error.InvalidPluginEffect,
         };
         if (capability) |required| {
             try self.authorize(authorization.package_index, required);

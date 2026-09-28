@@ -14,3 +14,5 @@ branch: []const u8,
 base: []const u8 = "",
 title: []const u8 = "",
 brief: []const u8 = "",
+/// Written from version 7 on; empty before.
+dispatched_from: []const u8 = "",

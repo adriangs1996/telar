@@ -29,7 +29,7 @@ return telar.config({
   client = {
     prefix = "ctrl+s",
     icons = "nerd-font",
-    sidebar = { visible = true, renderer = "automatic" },
+    sidebar = { visible = true },
     sound = { enabled = true, ready = true, needs_input = true },
     input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },
     keybindings = {
@@ -82,12 +82,15 @@ return telar.config({
   },
   profiles = {
     remote = {
-      client = { sidebar = { visible = false, renderer = "cells" } },
+      client = { sidebar = { visible = false } },
       runtime = { graphics = { pane_mib = 16, global_mib = 64 } },
     },
   },
 })
 ```
+
+`client.sidebar.renderer`, which chose how the retired terminal client drew
+its sidebar, is still accepted so older files load, and has no effect.
 
 `runtime.agent_descriptions` is an explicit privacy opt-in. When the first user
 request starts model work, Telar sends that request through standard input to
@@ -179,13 +182,11 @@ background, ANSI palette and cursor colors. Built-ins are `shade` (the default),
 palettes from Adrian's Neovim theme, including syntax and ANSI colors. Shade
 combines Vesper's neutral grays and terminal palette with green chrome accents.
 The old names `osaka-jade`, `osaka_jade`, and `osakajade` remain aliases for Shade.
-Shade's `panel_bg` is `default`:
-the chrome takes the terminal background, so the TUI keeps its host background
-and the GUI paints `#101010`. The TUI uses the chrome roles
-and keeps the host terminal's palette and defaults. The GUI uses the terminal
-colors too; child truecolor and OSC overrides still apply. The `terminal`
-preset uses host-relative chrome roles and a neutral explicit palette in the
-GUI, which has no exterior terminal to inherit from.
+Shade's `panel_bg` is `default`: the chrome takes the terminal background,
+which the window paints `#101010`. The window uses the preset's terminal
+colors; child truecolor and OSC overrides still apply. The `terminal` preset
+uses host-relative chrome roles and a neutral explicit palette, since the
+window has no exterior terminal to inherit from.
 
 To customize a preset, use the table form. Each section is optional:
 
@@ -236,7 +237,7 @@ profile can change only its background without copying a palette. `--theme`
 overrides the complete theme and remains locked across reloads; it does not
 lock fonts or cursor behavior.
 
-`client.theme` remains an alias for existing TUI configurations and selects the
+`client.theme` remains an alias for older configurations and selects the
 same complete theme. Set either `theme` or `client.theme` at a given root/profile
 level; declaring both is an error. The earlier `gui.theme` table has moved to
 `theme.terminal`. Likewise, `gui.cursor.color` and `gui.cursor.text_color` move
@@ -250,8 +251,7 @@ Telar retains its orange Vesper cursor with background-colored text.
 ## Graphical application
 
 `gui` configures the window, fonts and cursor behavior in `telar gui`. Colors come from the
-root `theme`. The TUI continues using its host terminal's font and default
-colors. Both clients can load the same Lua file.
+root `theme`.
 See [`examples/gui.lua`](../examples/gui.lua) for a complete runnable example:
 
 ```sh
@@ -299,7 +299,7 @@ gui = {
 | `cursor.style` | `block` | `block`, `bar`, `underline`, or `hollow`. |
 | `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
 | `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
-| `sidebar.width` | `284` | Width of the native sidebar band in logical pixels; `220..480`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the narrowest band hides it. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. The TUI ignores it: its sidebar stays a column preference retained by the runtime in the shared layout, which the GUI no longer reads. |
+| `sidebar.width` | `284` | Width of the native sidebar band in logical pixels; `220..480`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the narrowest band hides it. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
 | `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title and body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top navigation 42, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 26 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
 
 Padding is applied once at the display scale, then rounded to physical pixels.
@@ -474,9 +474,7 @@ Diagnostics name the entry and the field, for example
 
 `client.bars` declares three bottom slots, a `top.right` slot and the sidebar
 footer row. The shared configuration requires exactly one `telar.bar.tabs()`
-source in `bottom`. The TUI renders tabs in that position and `top.right` beside
-workspace navigation. Its bars start at the workbench edge while the sidebar
-is visible and expand to the full width when it is hidden.
+source in `bottom`.
 
 The native app keeps workspace navigation and tabs together in its top bar.
 Its configurable components occupy the full-width bottom bar: `bottom.left`,
@@ -489,8 +487,7 @@ or Telar's system trust is installed.
 
 A bar is built from components that Telar draws itself: the configuration says
 what to show and Telar decides how it looks, so a bar follows the theme, the
-chrome's type sizes and spacing in the native app and a cell rendering in the
-TUI. [`docs/examples/bar`](examples/bar/config.lua) recreates a clock, host
+chrome's type sizes and spacing. [`docs/examples/bar`](examples/bar/config.lua) recreates a clock, host
 metrics and agent quotas with detail panels from any data source.
 
 ```lua
@@ -528,11 +525,10 @@ tabs on the right and `top.right` is empty. If
 still has to contain the tabs.
 
 `sidebar_footer` remains accepted for compatibility, with at most three sources
-and no `telar.bar.tabs()`. Neither the GUI nor the TUI displays these slots.
+and no `telar.bar.tabs()`. The window does not display these slots.
 Place metrics and other visible components in `bottom` instead.
 Prefix and copy mode replace the native bottom components with the mode chip and
-key hints, preserving TLS and top navigation. The TUI also replaces its bottom
-row during prefix mode, copy mode and a rename prompt.
+key hints, preserving TLS and top navigation.
 
 Each position accepts one source:
 
@@ -540,6 +536,10 @@ Each position accepts one source:
   bottom bar.
 - `telar.bar.metrics()` renders the latest runtime CPU, used-memory and
   optional battery values, the same as `telar.bar.static(telar.ui.metrics())`.
+- `telar.bar.machines()` renders a chip per machine the window holds, with
+  its link state, attention and latest CPU sample, and nothing while the
+  window holds only this machine.
+  `telar.bar.metrics()` reports the machine the window shows.
 - `telar.bar.static(content)` parses fixed content when the configuration is
   loaded.
 - `telar.bar.dynamic({ every_ms, render })` calls `render` on a client-owned
@@ -844,6 +844,16 @@ bottom.
 binding is `prefix`, then `/`. Bind it with `telar.bind_global` when it should
 open without the prefix.
 
+`telar.action.next_machine()` and `telar.action.previous_machine()` switch
+the whole window to the next or previous enabled machine, wrapping around.
+`telar.action.machine_picker()` opens the command palette on the window's
+machines, which typing `:` in the palette also does; there Enter shows a
+machine, Shift+Enter enables or disables it, Ctrl+R renames it and Ctrl+D
+removes it. `telar.action.add_machine()` asks for a new machine's label and
+SSH destination. Each change is written to `machines.json`. They have no
+default binding, and plugins cannot run them. See
+[Machine presentation](flows/machine-presentation.md).
+
 `telar.action.path_picker()` opens a fuzzy finder over the files and
 directories under the focused pane's directory, anchored at its cursor. Enter
 pastes the chosen path relative to the pane's directory, Alt+Enter pastes it
@@ -886,16 +896,9 @@ pane keeps fullscreen active and focuses the new pane; closing back down to
 one pane does not exit the mode. Toggle again to leave fullscreen and restore
 borderless content when only one pane remains.
 
-In the TUI, `telar.action.toggle_workspace_list()` collapses the top bar's list
-of open workspaces to the active one plus a `+N` counter, and expands it again.
-Clicking `+N` expands it too; clicking a workspace name switches to it.
-The telar mark at the left edge of the bar is the sidebar toggle, not a
-list control. The collapse state belongs to the client layout, and the
-runtime retains it for the same terminal while the server is alive. The default
-binding is `prefix`, then `w`.
-
-The native app ignores that collapse preference, including values restored
-from earlier sessions. It shows up to three consecutive workspaces whenever
+`telar.action.toggle_workspace_list()` records a collapse preference in the
+client layout (default binding `prefix`, then `w`) that the window does not
+use: it shows up to three consecutive workspaces whenever
 they fit, centered on the active one except at either end. Narrow windows
 show the active workspace. Overflow counters show how many remain hidden and
 select the nearest hidden workspace; global workspace numbers do not change.
@@ -964,7 +967,7 @@ The client watches the main file, loaded local modules, configured plugin
 trees, and the trust store. A change builds a complete replacement generation.
 Theme, sidebar, keymap, callbacks, plugin registry, and grants swap only after
 all validation succeeds. A failure leaves the previous generation active and
-shows the error in the TUI; the GUI currently reports it on stderr. Closure
+shows the error as a notice in the window and on stderr. Closure
 state is intentionally lost on reload.
 The client model records the accepted generation, sidebar and pane-gap state;
 the presenter observes that version and paints the new appearance on its paced

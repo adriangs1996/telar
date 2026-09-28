@@ -68,10 +68,17 @@ fn execute(init: std.process.Init, options: RuntimeOptions) !void {
 fn writeMetrics(writer: *std.Io.Writer, metrics: core.SystemMetrics, json: bool) !void {
     if (json) {
         const battery: ?u8 = if (metrics.has_battery) metrics.battery_percent else null;
-        try std.json.Stringify.value(.{ .revision = metrics.revision, .cpu_percent = metrics.cpu_percent, .memory_used_decigib = metrics.memory_used_decigib, .battery_percent = battery }, .{}, writer);
+        try std.json.Stringify.value(.{ .revision = metrics.revision, .cpu_percent = metrics.cpu_percent, .memory_used_decigib = metrics.memory_used_decigib, .memory_total_decigib = metrics.memory_total_decigib, .cpu_count = metrics.cpu_count, .battery_percent = battery }, .{}, writer);
         try writer.writeByte('\n');
     } else {
-        try writer.print("CPU: {d}%\nMemory: {d}.{d} GiB\n", .{ metrics.cpu_percent, metrics.memory_used_decigib / 10, metrics.memory_used_decigib % 10 });
+        try writer.print("CPU: {d}% of {d}\nMemory: {d}.{d} of {d}.{d} GiB\n", .{
+            metrics.cpu_percent,
+            metrics.cpu_count,
+            metrics.memory_used_decigib / 10,
+            metrics.memory_used_decigib % 10,
+            metrics.memory_total_decigib / 10,
+            metrics.memory_total_decigib % 10,
+        });
         if (metrics.has_battery) {
             try writer.print("Battery: {d}%\n", .{metrics.battery_percent});
         } else {

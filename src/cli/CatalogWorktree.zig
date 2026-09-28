@@ -12,6 +12,8 @@ branch: []const u8,
 base: []const u8,
 title: []const u8,
 brief: []const u8,
+/// The machine that dispatched it here; empty when none did.
+dispatched_from: []const u8 = "",
 diff_added: u32,
 diff_removed: u32,
 diff_files: u32,

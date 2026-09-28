@@ -53,6 +53,19 @@ fn metricsContent() Content {
     return content;
 }
 
+/// What `telar.bar.machines()` shows: one component listing the window's
+/// machines, filled by the adapter from its machines at draw time.
+pub const machines_content: Content = machinesContent();
+
+fn machinesContent() Content {
+    var content: Content = .{};
+    _ = content.append(.{
+        .kind = .machines,
+        .priority = metric_priority,
+    }) catch unreachable;
+    return content;
+}
+
 const metric_priority: u8 = 40;
 pub const max_command_args = 32;
 pub const max_command_bytes = 4096;
@@ -109,6 +122,7 @@ pub const Source = union(enum) {
     empty,
     tabs,
     metrics,
+    machines,
     static: Content,
     dynamic: Dynamic,
     command: Command,
@@ -138,6 +152,7 @@ pub fn presentationSlot(source: *const Source) Slot {
         .empty => .empty,
         .tabs => .tabs,
         .metrics => .{ .content = metrics_content },
+        .machines => .{ .content = machines_content },
         .static => |content| .{ .content = content },
         .dynamic, .command => .{ .content = .{} },
     };

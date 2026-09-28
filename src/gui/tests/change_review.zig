@@ -45,9 +45,9 @@ pub fn reply(session: *Session, snapshot: core.ChangeReviewSnapshotView) !void {
     try session.settle();
     var bytes: [128 * 1024]u8 = undefined;
     const encoded = try core.encodeChangeReviewSnapshot(&bytes, snapshot);
-    _ = try client.runtime_messages.handleServerMessage(&session.gui.app, try core.decodeServer(encoded));
+    _ = try client.runtime_messages.handleServerMessage(session.gui.app, try core.decodeServer(encoded));
     @memset(&bytes, 0);
-    try session.gui.review.synchronize(&session.gui.app);
+    try session.gui.review.synchronize(session.gui.app);
 }
 
 pub fn adopt(session: *Session) !void {
@@ -63,7 +63,7 @@ pub fn adopt(session: *Session) !void {
     try std.testing.expect(slot.failure == null);
     panel.job = index;
     panel.notify();
-    try panel.synchronize(&session.gui.app);
+    try panel.synchronize(session.gui.app);
 }
 
 pub fn publish(session: *Session) !void {
@@ -104,7 +104,7 @@ test "runtime review autosave acknowledges only submitted text while later typin
     defer session.deinit();
     const panel = session.gui.review;
     const index = draft(session, "first");
-    try panel.synchronize(&session.gui.app);
+    try panel.synchronize(session.gui.app);
     const first = (try core.decodeClient(try session.sent())).change_review_command;
     try std.testing.expectEqualStrings("first", first.body);
     try std.testing.expectEqual(@as(u32, 1), first.first_line);
@@ -130,11 +130,11 @@ test "runtime review rejection preserves unsaved range draft and late success ca
     defer session.deinit();
     const panel = session.gui.review;
     const index = draft(session, "keep my feedback");
-    try panel.synchronize(&session.gui.app);
+    try panel.synchronize(session.gui.app);
     const stale = response(session, 2);
     try session.settle();
     _ = try client.runtime_messages.handleServerMessage(
-        &session.gui.app,
+        session.gui.app,
         .{
             .request_failed = .{
                 .request_id = stale.request_id,
@@ -143,17 +143,17 @@ test "runtime review rejection preserves unsaved range draft and late success ca
             },
         },
     );
-    try panel.synchronize(&session.gui.app);
+    try panel.synchronize(session.gui.app);
     try std.testing.expect(panel.blocked);
     try std.testing.expect(panel.widget.changed_comments != 0);
     try std.testing.expectEqualStrings("keep my feedback", panel.widget.model.comments[index].body.text());
     _ = try client.runtime_messages.handleServerMessage(
-        &session.gui.app,
+        session.gui.app,
         .{
             .change_review_snapshot = withComment(stale, "server reply"),
         },
     );
-    try panel.synchronize(&session.gui.app);
+    try panel.synchronize(session.gui.app);
     try std.testing.expectEqualStrings("keep my feedback", panel.widget.model.comments[index].body.text());
     try std.testing.expect(panel.blocked);
 }
@@ -163,10 +163,10 @@ test "runtime review close and reopen restores its acknowledged draft on the sam
     defer session.deinit();
     const panel = session.gui.review;
     const index = draft(session, "saved draft");
-    try panel.synchronize(&session.gui.app);
+    try panel.synchronize(session.gui.app);
     try reply(session, withComment(response(session, 2), "saved draft"));
     panel.widget.command = .close;
-    try panel.synchronize(&session.gui.app);
+    try panel.synchronize(session.gui.app);
     try std.testing.expect(!panel.active);
     try session.gui.openChangeReview(Session.pane_id);
     try std.testing.expectEqual(@as(u64, 1), (try core.decodeClient(try session.sent())).query_change_review.edition_id);
@@ -189,7 +189,7 @@ test "runtime review newer editions remain explicit while its immutable patch st
     try std.testing.expect(panel.widget.next_edition);
     try std.testing.expectEqualStrings(patch, panel.widget.model.current().source);
     panel.widget.command = .next_edition;
-    try panel.synchronize(&session.gui.app);
+    try panel.synchronize(session.gui.app);
     try std.testing.expectEqual(@as(u64, 2), (try core.decodeClient(try session.sent())).query_change_review.edition_id);
     snapshot = response(session, 3);
     snapshot.edition_id = 2;
@@ -215,7 +215,7 @@ test "runtime review failed preparation keeps the old edition read only and retr
     try std.testing.expectEqualStrings(snapshot.status, panel.widget.model.status);
     try std.testing.expectEqualStrings("Agent-reported patch", panel.widget.source_label);
     panel.widget.command = .next_edition;
-    try panel.synchronize(&gui.app);
+    try panel.synchronize(gui.app);
     try std.testing.expect(panel.widget.read_only);
     try std.testing.expect(panel.widget.loading);
     snapshot = response(session, 3);
@@ -230,14 +230,14 @@ test "runtime review failed preparation keeps the old edition read only and retr
     panel.slots[index].failure = error.SyntaxUnavailable;
     panel.job = index;
     panel.notify();
-    try panel.synchronize(&gui.app);
+    try panel.synchronize(gui.app);
     try std.testing.expectEqual(@as(u64, 1), panel.edition);
     try std.testing.expectEqualStrings(patch, panel.widget.model.current().source);
     try std.testing.expect(panel.widget.read_only);
     try std.testing.expect(!panel.widget.loading);
     try std.testing.expect(std.mem.indexOf(u8, panel.widget.model.status, "Syntax highlighting") != null);
     panel.widget.command = .refresh;
-    try panel.synchronize(&gui.app);
+    try panel.synchronize(gui.app);
     try std.testing.expectEqual(@as(u64, 2), (try core.decodeClient(try session.sent())).query_change_review.edition_id);
     snapshot.request_id = gui.app.model.change_review.pending.?;
     try reply(session, snapshot);
@@ -317,10 +317,10 @@ test "runtime review coalesces new edition notices behind pending saves without 
     defer session.deinit();
     const panel = session.gui.review;
     const index = draft(session, "feedback");
-    try panel.synchronize(&session.gui.app);
+    try panel.synchronize(session.gui.app);
     const save_id = session.gui.app.model.change_review.pending.?;
     _ = try client.runtime_messages.handleServerMessage(
-        &session.gui.app,
+        session.gui.app,
         .{
             .change_review_changed = .{
                 .pane_id = Session.pane_id,
@@ -350,11 +350,11 @@ test "runtime review retains a retired conversation draft and explicitly reopens
     defer session.deinit();
     const gui = session.gui;
     const index = draft(session, "copy this before closing");
-    try gui.review.synchronize(&gui.app);
+    try gui.review.synchronize(gui.app);
     const stale = response(session, 2);
     try session.settle();
     _ = try client.runtime_messages.handleServerMessage(
-        &gui.app,
+        gui.app,
         .{
             .change_review_changed = .{
                 .pane_id = Session.pane_id,
@@ -364,18 +364,18 @@ test "runtime review retains a retired conversation draft and explicitly reopens
             },
         },
     );
-    try gui.review.synchronize(&gui.app);
+    try gui.review.synchronize(gui.app);
     try std.testing.expect(gui.review.widget.read_only);
     try std.testing.expectEqualStrings("copy this before closing", gui.review.widget.model.comments[index].body.text());
     gui.review.widget.command = .close;
-    try gui.review.synchronize(&gui.app);
+    try gui.review.synchronize(gui.app);
     try std.testing.expect(!gui.review.active);
     try gui.openChangeReview(Session.pane_id);
     const request = (try core.decodeClient(try session.sent())).query_change_review;
     try std.testing.expectEqual(@as(u64, 0), request.edition_id);
     try std.testing.expectEqualStrings("", request.session);
     _ = try client.runtime_messages.handleServerMessage(
-        &gui.app,
+        gui.app,
         .{
             .change_review_snapshot = stale,
         },
@@ -410,7 +410,7 @@ test "runtime review loads through its real worker and inbox after the previous 
     defer session.deinit();
     const gui = session.gui;
     gui.job_hook = null;
-    try client.runtime_io.startRuntimeRead(&gui.app);
+    try client.runtime_io.startRuntimeRead(gui.app);
     try gui.openChangeReview(Session.pane_id);
     _ = try gui.update();
     var buffer: [128 * 1024]u8 = undefined;

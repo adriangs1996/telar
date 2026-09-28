@@ -55,7 +55,8 @@ at each major state. Each shell marker is written atomically and includes
 window looks plausible. Each marker and process wait has a fixed deadline.
 
 The script is a functional and lifetime regression probe. It does not measure
-latency, prove multi-day stability, or replace the TUI/runtime regression suites.
+latency, prove multi-day stability, or replace the client/runtime regression
+suites.
 
 On 2026-09-13, integration snapshot `b7232ad5` passed both navigation matrices
 on the existing Linux VM. The probes checked 82 shell receipts across 14 stages,

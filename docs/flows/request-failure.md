@@ -17,7 +17,7 @@ consume request ID -> typed Continuation
         |
 recover, ignore, publish a notification, or report fatal/error
         |
-presentation_lifecycle.observe -> Presenter
+GuiAdapter.update -> app.presentation.observe
 ```
 
 `runtime_messages.handleServerMessage` first lets `history_palette.fail` claim a
@@ -55,10 +55,9 @@ The pure `request_failure.notification` function maps each request kind to a sta
 notification target. `notifications.Center` copies the borrowed failure text
 into its fixed `schema.max_notification_message_bytes` buffer. Publication
 advances only `model.notifications_revision`, which `ClientModel.version`
-reports as `notifications`. After the event, the TUI's `events.zig` calls
-`presentation_lifecycle.observe`, which hands that version to `Presenter`; the
-presenter decides whether a paced frame is needed. No
-failure path requests a draw.
+reports as `notifications`. After the event, `GuiAdapter.update` passes its
+observation to `app.presentation.observe`, and the window decides whether a
+frame is needed. No failure path requests a draw.
 
 ## Bounds and lifetime
 
@@ -78,11 +77,11 @@ new client to rebuild its projection.
   title, target, message and duration mapping.
 - `src/client/connection/request_failure.zig` owns correlation,
   concrete recovery dispatch and error reporting.
-- `src/frontend/client/tests/pane_splits.zig` checks that failed recovery
+- `src/client_tests/pane_splits.zig` checks that failed recovery
   consumes correlation without publishing a notification.
 - `src/model/connection/RequestLifecycle.zig` proves bounded identity and
   exactly-once correlation entrypoints.
-- `src/frontend/client/tests/` proves wire correlation, continuation
+- `src/client_tests/` proves wire correlation, continuation
   consumption, recovery paths, targeted notices and fatal snapshot rejection.
 - `src/core/schema/schema.zig` and `src/core/schema/codec.zig` prove the bounded
   wire contract.

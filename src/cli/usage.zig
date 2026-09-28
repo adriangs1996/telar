@@ -3,9 +3,15 @@
 const std = @import("std");
 
 pub const text =
-    \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--sidebar-renderer MODE] [--fresh] [command [args...]]
-    \\       telar gui [--login-shell] [--config PATH | --no-config] [--profile NAME] [--theme NAME] [command [args...]]
+    \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--remote DESTINATION | --machine LABEL] [--fresh] [command [args...]]
+    \\       telar gui [--login-shell] [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--remote DESTINATION | --machine LABEL] [command [args...]]
     \\       telar cli install|uninstall|status [--dir DIR]
+    \\       telar --machine LABEL COMMAND [args...]
+    \\       telar machine add LABEL DESTINATION [--color COLOR] [--disabled] [--check] [--json]
+    \\       telar machine remove|enable|disable LABEL
+    \\       telar machine rename LABEL NEW_LABEL
+    \\       telar machine list [--json]
+    \\       telar machine check LABEL [--json]
     \\       telar server [--fresh]
     \\       telar server stop
     \\       telar server endpoint
@@ -75,7 +81,9 @@ pub const text =
     \\         telar pane list [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\         telar pane get <id|--current> [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\       telar pane focus --current --direction left|right|up|down [--json]
-    \\       telar worktree create BRANCH [--title TITLE] [--from BASE] [--directory DIR] [--label L] [--workspace ID] [-- COMMAND...]
+    \\       telar worktree create BRANCH [--title TITLE] [--from BASE] [--directory DIR] [--label L] [--workspace ID] [--machine LABEL] [-- COMMAND...]
+    \\       telar worktree fetch BRANCH --machine LABEL [--json]
+    \\       telar worktree resolve --repository IDENTITY [--workspace PATH] [--json]
     \\       telar worktree exec BRANCH [--label L] [--wait [--timeout S]] -- COMMAND...
     \\       telar worktree list [--workspace ID] [--json]
     \\       telar worktree open BRANCH [--client ID]
@@ -107,6 +115,8 @@ pub const text =
     \\Commands:
     \\  gui              Open the native client window; --login-shell adopts the login shell's environment
     \\  cli              Link this executable as `telar` into DIR (default /usr/local/bin)
+    \\  --machine        Run one telar command on a saved machine over SSH; never falls back to this one
+    \\  machine          Save, rename, enable, disable, remove, list and check machines in machines.json
     \\  server           Run the local runtime in the foreground
     \\  server stop      Stop the local runtime
     \\  history list     Show recent command history
@@ -132,6 +142,8 @@ pub const text =
     \\  worktree open   Show a worktree in the UI client used last
     \\  worktree diff   Print the worktree's diff against its base
     \\  worktree remove Close a worktree's tabs and remove its checkout; refused with changes
+    \\  worktree fetch  Bring a branch back from another machine into refs/remotes/LABEL/BRANCH
+    \\  worktree resolve Find the clone of a repository among this machine's workspaces
     \\  agent interrupt Stop an agent's turn with its provider's interrupt key
     \\  workspace create Alias of worktree create for a workspace on a new git worktree
     \\  api schema       Print the wire contract of this binary
@@ -188,6 +200,8 @@ pub const text =
     \\Remote:
     \\  --remote DEST    Attach to the runtime on an SSH host (forwards its
     \\                   socket; needs telar on the remote PATH)
+    \\  --machine LABEL  (gui) Show a saved machine first; the window still
+    \\                   holds every enabled one
     \\
     \\Options:
     \\  --config PATH     Load a specific Lua configuration
@@ -197,7 +211,6 @@ pub const text =
     \\                    aside (session.ckpt.previous) instead of restoring
     \\                    it; refused while a runtime is already running
     \\  --theme NAME      UI theme: shade, vesper, catppuccin, tokyo-night, terminal
-    \\  --sidebar-renderer MODE  automatic, cells, kitty-hybrid, kitty-full
     \\Server options:
     \\  --graphics-pane-mib N    Decoded KGP memory per pane (default 64)
     \\  --graphics-global-mib N  Decoded KGP memory for the runtime (default 256)
