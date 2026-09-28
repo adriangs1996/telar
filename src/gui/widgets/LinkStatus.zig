@@ -90,7 +90,10 @@ fn headlineText(link: *const data.RuntimeLink, buffer: []u8) []const u8 {
         else
             std.fmt.bufPrint(buffer, "Reconnecting to {s} (attempt {d})…", .{ target, link.attempt + 1 }) catch "Reconnecting…",
         .lost => std.fmt.bufPrint(buffer, "{s} is unreachable; trying again shortly", .{target}) catch "The runtime is unreachable",
-        .failed => std.fmt.bufPrint(buffer, "Cannot connect to {s}; retry it from the machine list", .{target}) catch "Cannot connect to the runtime",
+        .failed => if (link.setup_repairs)
+            std.fmt.bufPrint(buffer, "{s} lacks this telar build; choose it in the machine list to set it up", .{target}) catch "This machine lacks this telar build"
+        else
+            std.fmt.bufPrint(buffer, "Cannot connect to {s}; retry it from the machine list", .{target}) catch "Cannot connect to the runtime",
         .stopped => std.fmt.bufPrint(buffer, "{s} is disabled", .{target}) catch "The machine is disabled",
     };
 }

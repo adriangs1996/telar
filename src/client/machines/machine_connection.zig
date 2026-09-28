@@ -50,6 +50,31 @@ pub fn permanent(err: anyerror) bool {
     };
 }
 
+/// Whether `telar machine setup` repairs a failed `connect`: the machine
+/// has no telar a remote shell can run, or one or a runtime of another
+/// build.
+///
+/// ```zig
+/// link.setup_repairs = machine_connection.setupRepairs(err);
+/// ```
+pub fn setupRepairs(err: anyerror) bool {
+    return switch (err) {
+        error.RemoteTelarMissing,
+        error.RemoteDiscoveryUnreadable,
+        error.RemoteTelarIncompatible,
+        error.RemoteRuntimeIncompatible,
+        => true,
+        else => false,
+    };
+}
+
+test "only a missing telar or another build is setup's to repair" {
+    try std.testing.expect(setupRepairs(error.RemoteTelarMissing));
+    try std.testing.expect(setupRepairs(error.RemoteRuntimeIncompatible));
+    try std.testing.expect(!setupRepairs(error.SshHostKeyRejected));
+    try std.testing.expect(!setupRepairs(error.RemoteEndpointUnavailable));
+}
+
 test "only failures that retrying cannot fix are permanent" {
     try std.testing.expect(permanent(error.SshHostKeyRejected));
     try std.testing.expect(permanent(error.IncompatibleSchema));

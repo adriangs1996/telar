@@ -470,6 +470,54 @@ fn pick(app: *client.Client, row: u16) void {
     app.model.name_prompt.select(row);
 }
 
+test "a machine that lacks this telar build is set up in a tab of this machine" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+
+    var box = try socketPair();
+    defer box.channel.deinit(std.testing.io);
+    defer box.peer.deinit(std.testing.io);
+    const slot = try openMachine(session, &box.channel);
+    const own = window_machines.window(gui);
+    const remote = &gui.clients[slot];
+    remote.model.runtime_link.phase = .failed;
+    remote.model.runtime_link.setup_repairs = true;
+    try std.testing.expect(gui.machines.summarize(slot, &remote.model, std.testing.io));
+    try std.testing.expect(gui.machines.needs_setup[slot]);
+
+    // Enter on its row asks the window to set it up instead of retrying.
+    while (own.model.to_host.pop()) |_| {}
+    try client.machine_picker.choose(own, slot, false);
+    const effect = own.model.to_host.pop() orelse return error.TestExpectedSetupRequest;
+    try std.testing.expectEqual(data.MachineRequest{ .setup = slot }, effect.machine);
+
+    // The window shows this machine and runs setup in a new tab there.
+    try window_machines.choose(gui, effect.machine);
+    try std.testing.expect(gui.app == own);
+    for (0..64) |_| {
+        const bytes = try session.sent();
+        const message = try core.decodeClient(bytes);
+        try client.runtime_io.completeRuntimeSend(own, {});
+        session.pending = null;
+        if (message != .create_tab) {
+            continue;
+        }
+
+        var arguments = message.create_tab.launch.arguments();
+        const executable = (try arguments.next()).?;
+        try std.testing.expect(std.fs.path.isAbsolute(executable));
+        try std.testing.expectEqualStrings("machine", (try arguments.next()).?);
+        try std.testing.expectEqualStrings("setup", (try arguments.next()).?);
+        try std.testing.expectEqualStrings("box", (try arguments.next()).?);
+        try std.testing.expectEqualStrings("Set up box", message.create_tab.label);
+        return;
+    }
+
+    return error.TestExpectedSetupTab;
+}
+
 test "the machine list adds, disables, renames and removes machines through machines.json" {
     const session = try Session.init();
     defer session.deinit();

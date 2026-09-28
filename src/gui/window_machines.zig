@@ -249,7 +249,34 @@ pub fn choose(gui: *GuiAdapter, request: data.MachineRequest) !void {
             }
         },
         .unpin => |slot| machines.pinned[slot] = false,
+        .setup => |slot| try setUp(gui, slot),
     }
+}
+
+/// Runs `telar machine setup` for a machine in a new tab of this machine,
+/// where the person sees each step and answers OpenSSH or a login if asked.
+/// The window follows `machines.json` as setup saves the machine.
+///
+/// ```zig
+/// try window_machines.setUp(gui, slot);
+/// ```
+pub fn setUp(gui: *GuiAdapter, slot: u8) !void {
+    const machines = &gui.machines;
+    if (slot == Machines.local_slot or !machines.used[slot]) {
+        return;
+    }
+
+    const own = window(gui);
+    var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const executable = executable_buffer[0..try std.process.executablePath(own.io, &executable_buffer)];
+    var title_buffer: [core.max_tab_label_bytes]u8 = undefined;
+    const title = std.fmt.bufPrint(&title_buffer, "Set up {s}", .{machines.label(slot)}) catch "Set up telar";
+
+    try select(gui, Machines.local_slot);
+    _ = try client.tab_creation.requestTabCreation(own, .{
+        .label = title,
+        .arguments = &.{ executable, "machine", "setup", machines.label(slot) },
+    });
 }
 
 /// Delivers one event to the client in `slot`, refreshes its row, finishes

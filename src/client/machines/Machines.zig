@@ -42,6 +42,8 @@ pinned: [capacity]bool = @splat(false),
 /// Whether the slot's client is initialized.
 live: [capacity]bool = @splat(false),
 phase: [capacity]data.RuntimeLink.Phase = @splat(.connecting),
+/// A failed machine that `telar machine setup` repairs.
+needs_setup: [capacity]bool = @splat(false),
 attention: [capacity]bool = @splat(false),
 cpu_percent: [capacity]?u8 = @splat(null),
 /// What placement needs from the last sample: the CPU count, memory in
@@ -72,6 +74,7 @@ pub fn add(self: *Machines, row: MachineRow, wanted: ?u8) !u8 {
     self.write(slot, row);
     self.pinned[slot] = false;
     self.phase[slot] = .connecting;
+    self.needs_setup[slot] = false;
     self.attention[slot] = false;
     self.cpu_percent[slot] = null;
     self.cpu_count[slot] = 0;
@@ -178,9 +181,10 @@ pub fn shown(self: *const Machines, slot: u8) bool {
 /// ```
 pub fn summarize(self: *Machines, slot: u8, model: *const data.ClientModel, io: std.Io) bool {
     const phase = model.runtime_link.phase;
+    const needs_setup = phase == .failed and model.runtime_link.setup_repairs;
     const metrics_changed = model.system_metrics_revision != self.metrics_revision[slot];
     const agents_changed = model.agent_revision != self.agent_revision[slot];
-    if (self.phase[slot] == phase and !metrics_changed and !agents_changed) {
+    if (self.phase[slot] == phase and self.needs_setup[slot] == needs_setup and !metrics_changed and !agents_changed) {
         return false;
     }
 
@@ -201,11 +205,12 @@ pub fn summarize(self: *Machines, slot: u8, model: *const data.ClientModel, io: 
     }
 
     const cpu: ?u8 = if (model.system_metrics) |metrics| metrics.cpu_percent else null;
-    if (self.phase[slot] == phase and self.attention[slot] == attention_now and std.meta.eql(self.cpu_percent[slot], cpu)) {
+    if (self.phase[slot] == phase and self.needs_setup[slot] == needs_setup and self.attention[slot] == attention_now and std.meta.eql(self.cpu_percent[slot], cpu)) {
         return false;
     }
 
     self.phase[slot] = phase;
+    self.needs_setup[slot] = needs_setup;
     self.attention[slot] = attention_now;
     self.cpu_percent[slot] = cpu;
     self.revision +%= 1;

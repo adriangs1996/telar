@@ -91,6 +91,7 @@ pub fn finishConnect(client: *Client, result: anyerror!void) !void {
         const link = &client.model.runtime_link;
         const report = client.connect_report.text();
         link.fail(if (report.len != 0) report else @errorName(err));
+        link.setup_repairs = machine_connection.setupRepairs(err);
         client.model.link_revision +%= 1;
 
         // Retrying cannot fix an unknown host key, a refused login or

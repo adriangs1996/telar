@@ -28,6 +28,9 @@ attempt: u16 = 0,
 sessions: u32 = 0,
 failure_bytes: [max_failure_bytes]u8 = undefined,
 failure_len: u16 = 0,
+/// Whether the failure is one `telar machine setup` repairs: no telar
+/// there, or a telar or runtime of another build.
+setup_repairs: bool = false,
 target_bytes: [max_target_bytes]u8 = undefined,
 target_len: u8 = 0,
 
@@ -73,6 +76,7 @@ pub fn fail(self: *RuntimeLink, text: []const u8) void {
 
 pub fn clearFailure(self: *RuntimeLink) void {
     self.failure_len = 0;
+    self.setup_repairs = false;
 }
 
 fn boundedUtf8(text: []const u8, limit: usize) []const u8 {
