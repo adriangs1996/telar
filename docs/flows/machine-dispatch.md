@@ -42,8 +42,10 @@ attach does.
 `src/client/machines/SshOptions.zig` builds the options every managed call passes:
 `BatchMode=yes`, keepalives, `ForwardAgent=no`, and a control master per
 destination in telar's owner-only runtime directory with `ControlPersist=600`.
-The first call authenticates; later discovery, dispatch and checks within ten
-minutes reuse that connection.
+The first call authenticates; later discovery, dispatch, checks and every
+window's bridge session reuse that connection while it lives, and an idle
+master stays ten minutes after its last session
+([remote attach](remote-attach.md#ownership)).
 
 ## Rules
 

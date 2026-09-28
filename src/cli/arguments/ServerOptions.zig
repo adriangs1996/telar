@@ -37,6 +37,13 @@ pub fn parse(args: []const [*:0]const u8) !ServerOptions {
 
             options.action = .endpoint;
             action_explicit = true;
+        } else if (std.mem.eql(u8, arg, "bridge")) {
+            if (action_explicit) {
+                return error.DuplicateServerAction;
+            }
+
+            options.action = .bridge;
+            action_explicit = true;
         } else if (std.mem.eql(u8, arg, "--background")) {
             if (options.mode != .foreground) {
                 return error.ConflictingServerModes;

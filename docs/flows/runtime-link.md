@@ -1,7 +1,7 @@
 # Runtime link
 
 A window reaches its machine's runtime by itself and keeps running when it
-loses it. The link is connecting, connected, lost or stopped; the chrome
+loses it. The link is connecting, connected, lost, failed or stopped; the chrome
 shows it and pane input waits for it. Reconnecting starts a new session as a fresh
 client would, so nothing from the lost session is replayed.
 
@@ -15,23 +15,30 @@ GuiAdapter.start                        window on screen, host facts written
       runtime_link.runConnect           worker
         machine_connection.connect
           local:  RuntimeConnector.connectOrStart (starts the runtime)
-          remote: remote.establish (discovery, ssh -L), connectForwarded
+          remote: remote.connect (discovery, ssh … telar server bridge)
         writes client.connect_result, or client.connect_report
   .runtime_connected
     runtime_link.finishConnect
       ok:   adopt: forget the previous session if any, bind the socket,
             launch defaults from discovery, push bootstrap, start IO
-      fail: link.phase = lost, failure from the report, schedule retry
+      fail: failure from the report, then
+            machine_connection.permanent: link.phase = failed, no retry
+            otherwise:                    link.phase = lost, schedule retry
 
 runtime read or write fails
   runtime_io.receiveRuntime / completeRuntimeSend
     runtime_link.lose                   link.phase = lost
-      discard queued messages, shut the socket down, stop the forward,
+      failure: SSH's error output so far, or the error's name
+      discard queued messages, shut the socket down, stop the SSH session,
       close the socket once no read or write uses it, schedule retry
 
 .runtime_retry_tick
   runtime_link.retry                    link.phase = connecting, attempt + 1
     to_background: runtime_connect      (again)
+
+the person picks a lost or failed machine in the machine list
+  runtime_link.retryNow                 link.phase = connecting, attempt = 0
+    to_background: runtime_connect
 
 machine disabled or moved (machine-presentation.md)
   runtime_link.stop                     link.phase = stopped: no retry
@@ -44,8 +51,17 @@ machine disabled or moved (machine-presentation.md)
 
 - **The window never waits.** Connecting runs on a worker; the window draws
   from the first frame. `LinkStatus` dims the workbench and says
-  `Connecting to …`, `Reconnecting to … (attempt n)` or `… is unreachable`,
-  with SSH's error output or the runtime's refusal underneath.
+  `Connecting to …`, `Reconnecting to … (attempt n)`, `… is unreachable` or
+  `Cannot connect to …`, with SSH's error output or the runtime's refusal
+  underneath.
+- **Some failures wait for the person.** A host key or login SSH refuses,
+  a `telar` the remote shell cannot find or run, discovery output this
+  telar cannot read, another wire schema, a remote runtime of another
+  build, `--fresh` beside a running runtime and an unsafe runtime directory
+  (`machine_connection.permanent`) leave the link failed: no retry is
+  scheduled, and the chrome shows why until the person picks the machine
+  in the machine list, which calls `retryNow`. A lost connection is never
+  permanent: once connected, every failure is retried.
 - **Backoff.** The first retry waits half a second, then the wait doubles up
   to thirty seconds. A link that stayed up for a minute earns fast retries
   again. Retries never prompt: every SSH call runs in batch mode.
@@ -69,7 +85,7 @@ machine disabled or moved (machine-presentation.md)
   never sees its socket replaced. `stop` and the client's teardown close a
   parked connection.
 - **Stopped is not lost.** `stop` closes the socket once idle and stops the
-  forward like a loss, but schedules nothing; only `start` connects again.
+  SSH session like a loss, but schedules nothing; only `start` connects again.
 - **Pane resources go through the canonical release.** Before forgetting a
   session, each pane passes through `pane_closure.releasePaneResources`, so
   graphics, copy mode, paste and reported focus stop naming it.

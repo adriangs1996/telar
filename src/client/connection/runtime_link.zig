@@ -8,6 +8,7 @@ const pacing = @import("pacing");
 const std = @import("std");
 const Client = @import("../execution/Client.zig");
 const RuntimeConnectJob = @import("RuntimeConnectJob.zig");
+const ConnectReport = @import("ConnectReport.zig");
 const MachineTarget = @import("../machines/MachineTarget.zig").MachineTarget;
 const machine_connection = @import("../machines/machine_connection.zig");
 const runtime_io = @import("runtime_io.zig");
@@ -136,8 +137,17 @@ pub fn lose(client: *Client, err: anyerror) !void {
         link.attempt = 0;
     }
 
+    // A remote session says why it ended on SSH's error output, such as a
+    // server that stopped answering keepalives.
+    var report: ConnectReport = .{};
+    if (client.forward) |*forward| {
+        var writer: std.Io.Writer = .fixed(&report.bytes);
+        forward.reportErrors(&writer);
+        report.len = writer.end;
+    }
+
     link.phase = .lost;
-    link.fail(@errorName(err));
+    link.fail(if (report.len != 0) report.text() else @errorName(err));
     client.model.link_revision +%= 1;
     client.model.to_runtime.discardQueued();
 

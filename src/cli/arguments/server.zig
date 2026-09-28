@@ -11,9 +11,12 @@ pub const ServerMode = enum {
 pub const ServerAction = enum {
     run,
     stop,
-    /// Ensure the runtime is running and print its socket path. Used by
-    /// `telar --remote` over SSH to discover the remote endpoint.
+    /// Ensure the runtime is running and print its socket path and wire
+    /// schema. Used over SSH to discover a remote machine.
     endpoint,
+    /// Relay standard input and output to the running runtime's socket.
+    /// Used over SSH to carry one client's connection to a remote machine.
+    bridge,
 };
 
 pub fn parseMebibytes(value: [*:0]const u8) !usize {

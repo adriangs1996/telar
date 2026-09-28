@@ -13,6 +13,8 @@ const machine_profiles = client.machine_profiles;
 
 /// Exit status of a command that failed.
 const failure: u8 = 1;
+/// The most of SSH's error output a failed check prints, in bytes.
+const detail_bytes = 1024;
 
 /// Runs one `telar machine` action and returns its exit status.
 ///
@@ -114,23 +116,31 @@ fn check(init: std.process.Init, profile: *const core.MachineProfile, json: bool
     var output = std.Io.File.stdout().writerStreaming(init.io, &buffer);
     const writer = &output.interface;
 
-    const found = remote.discover(init.io, init.gpa, init.minimal.environ, profile.destination(), null) catch |err| {
+    var detail_buffer: [detail_bytes]u8 = undefined;
+    var detail: std.Io.Writer = .fixed(&detail_buffer);
+    const found = remote.discover(init.io, init.gpa, init.minimal.environ, profile.destination(), &detail) catch |err| {
         if (json) {
             try writer.writeAll("{\"label\":");
             try control.writeJsonString(writer, profile.label());
-            try writer.print(",\"reachable\":false,\"error\":\"{s}\"}}\n", .{@errorName(err)});
+            try writer.print(",\"reachable\":false,\"error\":\"{s}\",\"detail\":", .{@errorName(err)});
+            try control.writeJsonString(writer, std.mem.trim(u8, detail.buffered(), " \t\r\n"));
+            try writer.writeAll("}\n");
             try writer.flush();
         } else {
-            std.debug.print("telar machine: {s} ({s}) is not reachable: {s}\n", .{ profile.label(), profile.destination(), @errorName(err) });
+            std.debug.print("telar machine: {s} ({s}) is not reachable: {s}\n{s}\n", .{
+                profile.label(),
+                profile.destination(),
+                @errorName(err),
+                std.mem.trim(u8, detail.buffered(), " \t\r\n"),
+            });
         }
 
         return failure;
     };
 
     const defaults = found.launchDefaults();
-    const remote_schema: ?core.SchemaId = remote.schema(init.io, init.gpa, init.minimal.environ, profile.destination()) catch null;
-    const compatible = if (remote_schema) |id| std.mem.eql(u8, &id, &core.schema_id) else false;
-    const schema_text: []const u8 = if (remote_schema) |*id| id else "unknown";
+    const compatible = found.compatible();
+    const schema_text: []const u8 = &found.schema;
 
     if (json) {
         try writer.writeAll("{\"label\":");
