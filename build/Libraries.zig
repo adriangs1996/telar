@@ -60,6 +60,9 @@ const specs = [_]Spec{
         .name = "mailbox",
     },
     .{
+        .name = "slabheap",
+    },
+    .{
         .name = "pacing",
         .libc = true,
     },

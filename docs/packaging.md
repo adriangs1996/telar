@@ -243,26 +243,48 @@ statically. What differs from glibc, checked in this code:
   it, so it supports Linux 5.10 and later; `statx` alone would need only
   4.11. Every run described here used OrbStack's 7.0 kernel; no older
   kernel was tried.
-- `malloc` is musl's. In ReleaseFast the runtime's general allocator is
-  libc's, and SQLite, Lua and the `std.Io` thread pool call `malloc`
-  directly. Measured in one Debian 12 container with 4 CPUs, feeding the
-  runtime 150,000 commands through `telar history import`, 1000 at a time,
-  with aarch64 builds of one commit that differ only as named, two runs
-  each:
+- `malloc` is not musl's. Zig 0.16 links its own `malloc` into musl
+  builds (`c/malloc.zig` in its lib directory), a wrapper over
+  `std.heap.SmpAllocator`; the binary's `malloc` is `c.malloc.malloc`.
+  That allocator keeps one free list per thread slot, never unmaps a slab
+  of 64 KiB or less, and searches only one other slot before mapping a
+  new slab. The runtime allocates a history batch on one thread and frees
+  it on the history worker, and threads move between slots under
+  contention, so freed memory piled up on slots the allocating threads
+  never searched: at 150,000 commands a counting build had 72 MiB of
+  slabs, most of it on free lists. Its own symbol cannot be replaced
+  either: a second `export fn malloc` collides inside the Zig compilation,
+  and a C definition is not used by Zig's calls.
 
-  | Build | Resident at the end | Runtime CPU |
-  | --- | --- | --- |
-  | glibc, `c_allocator` | 21 and 21 MiB | 25.6 and 23.5 s |
-  | musl, `c_allocator` (the release) | 98 and 113 MiB | 31.5 and 28.0 s |
-  | musl, `std.heap.smp_allocator` as the runtime's allocator | 100 and 116 MiB | 26.7 and 31.9 s |
+  Release builds for musl therefore start through `mainOnSlabHeap` in
+  `src/main.zig`: the process's general allocator, its `std.Io` and SQLite
+  (`sqlite.routeMemory`) use `lib/slabheap`, the same allocator with a
+  search of every slot before a slab is mapped. Debug builds, glibc and
+  macOS keep the standard start. Lua in configuration and plugin
+  processes, and brotli and nghttp2 in the proxy, still call `malloc`.
 
-  Searches took 0.01 to 0.02 s for 20 in every build. glibc stays flat,
-  so the growth is not a leak in this workload; under musl the heap grows
-  with the history written (37 to 45 MiB after 50,000 commands in an
-  earlier run of an older commit). Zig's allocator does not change it, so
-  the memory sits with a direct `malloc` caller; which one was not
-  measured, nor whether it levels off later. A runtime that serves months
-  of history should be watched for it.
+  Measured in one Debian 12 container with 4 CPUs, feeding the runtime
+  commands through `telar history import`, 1000 at a time, with aarch64
+  ReleaseFast builds of one commit, two runs each, alternating builds:
+
+  | Build | Commands | Resident at the end | Runtime CPU |
+  | --- | --- | --- | --- |
+  | glibc | 150,000 | 21.2 and 20.8 MiB | 27.4 and 23.6 s |
+  | musl, Zig's `malloc` (before) | 150,000 | 87 and 158 MiB | 22.6 and 23.2 s |
+  | musl, `slabheap` | 150,000 | 22.4 and 20.5 MiB | 23.0 and 23.1 s |
+  | glibc | 300,000 | 21.0 and 20.6 MiB | 65.9 and 65.4 s |
+  | musl, Zig's `malloc` (before) | 300,000 | 85 and 80 MiB | 65.7 and 65.4 s |
+  | musl, `slabheap` | 300,000 | 24.0 and 20.4 MiB | 66.8 and 65.8 s |
+
+  Searches took 0.01 to 0.02 s for 20 in every build. Before, resident
+  memory still grew by 5 to 19 MiB per 50,000 commands between 200,000
+  and 300,000. With `slabheap` it stayed within 23.7 to 24.2 MiB over the
+  same stretch of the first run; a counting build reached 27.8 MiB at
+  300,000. What it holds above glibc is SQLite's peak: SQLite reported
+  2.1 MiB in use from the first 10,000 commands on and a high-water mark
+  of 4.2 MiB, and almost every slab mapped after startup was asked for by
+  `sqlite3Malloc`, most in the 8 KiB class that a page of 4 KiB plus its
+  header rounds up to.
 
 The binary was also started on Alpine 3.22, where `telar server`,
 `telar runtime status`, `telar agent list` and `telar server stop` worked

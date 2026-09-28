@@ -2,7 +2,10 @@ const pty = @import("pty");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
 const std = @import("std");
+const builtin = @import("builtin");
 const build_options = @import("build_options");
+const slabheap = @import("slabheap");
+const sqlite = @import("sqlite");
 const parser = @import("cli/parser.zig");
 const usage_module = @import("cli/usage.zig");
 const server_module = @import("cli/server.zig");
@@ -103,7 +106,46 @@ fn collectArgs(init: std.process.Init, storage: *[pty.command_support.max_args][
 /// ```sh
 /// telar server
 /// ```
-pub fn main(init: std.process.Init) !void {
+pub const main = if (slab_heap_process) mainOnSlabHeap else runMain;
+
+/// Zig 0.16 implements musl's `malloc` with `std.heap.SmpAllocator`, which
+/// maps more memory after searching one other thread's free list, so what
+/// the remaining threads freed stays unused and a runtime that allocates on
+/// one thread and frees on another grows with every history batch. Release
+/// builds for musl allocate from `slabheap` instead, for Zig and SQLite
+/// alike. Debug builds keep the leak-checking allocator.
+const slab_heap_process = builtin.target.abi.isMusl() and builtin.mode != .Debug;
+
+// The process setup `std.start` does for `main(std.process.Init)`, with the
+// slab heap as the general allocator of the command, its `Io` and SQLite.
+fn mainOnSlabHeap(minimal: std.process.Init.Minimal) !void {
+    const gpa = slabheap.allocator;
+    try sqlite.routeMemory(gpa);
+
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    var threaded: std.Io.Threaded = .init(gpa, .{
+        .argv0 = .init(minimal.args),
+        .environ = minimal.environ,
+    });
+    defer threaded.deinit();
+
+    var environ_map = try std.process.Environ.createMap(minimal.environ, gpa);
+    defer environ_map.deinit();
+
+    const preopens = try std.process.Preopens.init(arena.allocator());
+    try runMain(.{
+        .minimal = minimal,
+        .arena = &arena,
+        .gpa = gpa,
+        .io = threaded.io(),
+        .environ_map = &environ_map,
+        .preopens = preopens,
+    });
+}
+
+fn runMain(init: std.process.Init) !void {
     defer dumpEchoTrace(init);
     var arg_storage: [pty.command_support.max_args][*:0]const u8 = undefined;
     const args = try collectArgs(init, &arg_storage);
