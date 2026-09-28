@@ -927,30 +927,6 @@ test "agent snapshot limits alert publication while retaining every canonical st
     try std.testing.expectEqualDeep(version, client.model.version());
 }
 
-test "agent alert host failure preserves the canonical snapshot and owned notification without replay" {
-    var harness: ClientHarness = undefined;
-    try harness.init();
-    defer harness.deinit();
-    const client = harness.client;
-    var payload: [512]u8 = undefined;
-    const initial = try fixtures.encodeTestingAgentSnapshot(&payload, 1, .ready);
-    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(initial));
-    client.model.config.notification_delivery = .terminal;
-    try fillHostEffects(client);
-    const changed = try fixtures.encodeTestingAgentSnapshot(&payload, 2, .blocked);
-
-    try std.testing.expectError(error.HostEffectsFull, client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(changed)));
-
-    try std.testing.expectEqual(data.HostEffects.capacity, client.model.to_host.count);
-    try std.testing.expectEqual(@as(u64, 2), client.model.agent_snapshot.revision);
-    try std.testing.expectEqual(data.NotificationLevel.warning, client.model.notification_center.itemAt(0).?.level);
-    try std.testing.expect(client.model.notification_scheduler.pending);
-    const version = client.model.version();
-    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(changed));
-    try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(data.HostEffects.capacity, client.model.to_host.count);
-}
-
 test "attachment rejection consumes correlation but does not notify when recovery delivery fails" {
     var harness: ClientHarness = undefined;
     try harness.init();
@@ -981,48 +957,4 @@ test "attachment rejection consumes correlation but does not notify when recover
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(u8, 0), client.model.notification_center.count);
     try std.testing.expectError(error.UnexpectedRequestFailure, client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(failed)));
-}
-
-test "request failure retains canonical recovery when host notification delivery fails" {
-    var harness: ClientHarness = undefined;
-    try harness.init();
-    defer harness.deinit();
-    try harness.bootstrap();
-    const client = harness.client;
-    client.model.request_lifecycle.tracker = .{};
-    client.model.panes.find(ClientHarness.bootstrap_pane).?.attached = false;
-    const request_id = try client.model.request_lifecycle.nextId();
-    try client.model.request_lifecycle.tracker.add(request_id, .{ .attach_pane = .{
-        .pane_id = ClientHarness.bootstrap_pane,
-        .location = ClientHarness.bootstrap_location,
-    } });
-    client.model.config.notification_delivery = .terminal;
-    try fillHostEffects(client);
-    var payload: [256]u8 = undefined;
-    const failed = try core.encodeRequestFailed(&payload, .{
-        .request_id = request_id,
-        .code = .pane_not_found,
-        .message = "pane disappeared",
-    });
-
-    try std.testing.expectError(error.HostEffectsFull, client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(failed)));
-
-    try std.testing.expectEqual(data.HostEffects.capacity, client.model.to_host.count);
-    try std.testing.expect(client.model.request_lifecycle.tracker.has(.tab_snapshot));
-    try std.testing.expectEqual(@as(u8, 1), client.model.notification_center.count);
-    try std.testing.expectEqualStrings("pane disappeared", client.model.notification_center.itemAt(0).?.message());
-    try std.testing.expectError(error.UnexpectedRequestFailure, client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(failed)));
-    try std.testing.expectEqual(data.HostEffects.capacity, client.model.to_host.count);
-    try harness.settle();
-    var outgoing: [256]u8 = undefined;
-    const recovery = try harness.nextClientMessage(&outgoing);
-    try std.testing.expect(recovery == .request_tab_snapshot);
-    try std.testing.expectEqualDeep(ClientHarness.bootstrap_location, recovery.request_tab_snapshot.location);
-}
-
-/// Leaves no room for another host request.
-fn fillHostEffects(client: *client_module.Client) !void {
-    while (client.model.to_host.count < data.HostEffects.capacity) {
-        try client.model.to_host.push(.{ .terminal_notification = .{} });
-    }
 }

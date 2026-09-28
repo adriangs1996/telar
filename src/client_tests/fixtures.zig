@@ -7,6 +7,25 @@ const data = @import("model");
 const std = @import("std");
 const ClientHarness = @import("ClientHarness.zig");
 
+/// Reconciles `capabilities` on the current grid, as a host update does.
+/// Example: `try fixtures.reconcileCapabilities(&client.model, capabilities);`
+pub fn reconcileCapabilities(model: *data.ClientModel, capabilities: data.HostCapabilities) !void {
+    const size = model.host.host_size;
+    const cell = capabilities.cellSize(size.cols, size.rows);
+    _ = try data.host_capabilities.reconcile(
+        model,
+        .{
+            .capabilities = capabilities,
+            .size = .{
+                .cols = size.cols,
+                .rows = size.rows,
+                .cell_width_px = cell.width,
+                .cell_height_px = cell.height,
+            },
+        },
+    );
+}
+
 pub fn reportedPaneId(client: *const client_module.Client) ?core.PaneId {
     const reported = client.model.reported_pane_focus orelse return null;
 
@@ -155,12 +174,11 @@ pub fn testingConfigAdoption(number: u64, changed: bool) !client_module.ConfigAd
         \\local config = telar.config({ api_version = 2 })
         \\config.client = {
         \\  prefix = "ctrl+s",
-        \\  icons = "nerd-font",
         \\  theme = telar.theme({ base = "catppuccin" }),
-        \\  sidebar = { visible = false, renderer = "cells" },
+        \\  sidebar = { visible = false },
         \\  pane_gaps = false,
         \\  sound = { enabled = false },
-        \\  input = { escape_timeout_ms = 40, sequence_timeout_ms = 750 },
+        \\  input = { sequence_timeout_ms = 750 },
         \\}
         \\return config
     else
@@ -196,7 +214,6 @@ pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !client_modu
         .input = .{
             .prefix = generation.snapshot.prefix,
             .bindings = generation.snapshot.bindingSlice(),
-            .escape_timeout_ns = generation.snapshot.input_escape_timeout_ns,
             .sequence_timeout_ns = generation.snapshot.input_sequence_timeout_ns,
         },
     };

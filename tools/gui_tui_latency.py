@@ -263,7 +263,7 @@ def main():
                     str(Path(__file__).with_suffix('.m')), '-o', str(library)], check=True)
     config = directory / 'config.lua'
     config.write_text("local t = require('telar')\nreturn { api_version = 2, client = { "
-                      "sidebar = { visible = false, renderer = 'cells' }, pane_gaps = false, "
+                      "sidebar = { visible = false }, pane_gaps = false, "
                       "bars = { bottom = { left = t.bar.static(' '), center = t.bar.static(' '), "
                       "right = t.bar.tabs() } } }, gui = { font = { family = 'JetBrains Mono', size = 15 }, "
                       "window = { padding = { x = 0, y = 0 }, background_opacity = 1 }, "

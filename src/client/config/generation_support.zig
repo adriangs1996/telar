@@ -220,10 +220,10 @@ test "client config compiles theme, bindings, and callbacks" {
         \\    base = "vesper",
         \\    colors = { accent = "#010203" },
         \\  }),
-        \\  sidebar = { visible = false, renderer = "cells" },
+        \\  sidebar = { visible = false },
         \\  pane_gaps = false,
         \\  sound = { enabled = true, ready = false, needs_input = true },
-        \\  input = { escape_timeout_ms = 40, sequence_timeout_ms = 750 },
+        \\  input = { sequence_timeout_ms = 750 },
         \\  keybindings = {
         \\    telar.bind({ "%" }, telar.action.split_pane({ direction = "horizontal" })),
         \\    telar.bind({ "g" }, function(ctx)
@@ -248,8 +248,7 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expect(generation.snapshot.sound.enabled);
     try std.testing.expect(!generation.snapshot.sound.ready);
     try std.testing.expect(generation.snapshot.sound.needs_input);
-    try std.testing.expectEqual(data.icons.Theme.nerd_font, generation.snapshot.icon_theme);
-    try std.testing.expectEqual(@as(u64, 40 * std.time.ns_per_ms), generation.snapshot.input_escape_timeout_ns);
+    try std.testing.expect(generation.snapshot.retired.contains(.icons));
     try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
     try std.testing.expectEqualDeep(
         cellgrid.Color.rgb(.{ 1, 2, 3 }),
@@ -382,18 +381,6 @@ test "client config rejects non-boolean sound settings" {
     );
     try std.testing.expectEqualStrings(
         "config.client.sound.ready must be a boolean",
-        diagnostic.message(),
-    );
-}
-
-test "client config rejects an unknown icon theme" {
-    var diagnostic: data.Diagnostic = .{};
-    try std.testing.expectError(
-        error.InvalidConfig,
-        Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { icons = 'emoji' } }", .source_name = "@config.lua", .number = 1 }),
-    );
-    try std.testing.expectEqualStrings(
-        "unknown config.client.icons: emoji",
         diagnostic.message(),
     );
 }
@@ -1087,7 +1074,7 @@ test "profile overlays base config before CLI locks are applied" {
         \\  api_version = 2,
         \\  client = {
         \\    prefix = "ctrl+b",
-        \\    sidebar = { visible = true, renderer = "automatic" },
+        \\    sidebar = { visible = true },
         \\    keybindings = {
         \\      require("telar").bind_expr({ "f" }, function(ctx)
         \\        return require("telar").input.forward()
@@ -1099,7 +1086,7 @@ test "profile overlays base config before CLI locks are applied" {
         \\    remote = {
         \\      client = {
         \\        prefix = "ctrl+s",
-        \\        sidebar = { visible = false, renderer = "cells" },
+        \\        sidebar = { visible = false },
         \\      },
         \\      runtime = { graphics = { pane_mib = 16, global_mib = 64 } },
         \\    },
@@ -1174,7 +1161,7 @@ test "local modules are contained and participate in reload fingerprints" {
     {
         var module = try temp.dir.createFile(io, "settings.lua", .{});
         defer module.close(io);
-        try module.writeStreamingAll(io, "return { renderer = 'cells' }");
+        try module.writeStreamingAll(io, "return { visible = true }");
     }
     {
         var config = try temp.dir.createFile(io, "config.lua", .{});
@@ -1204,7 +1191,7 @@ test "local modules are contained and participate in reload fingerprints" {
     {
         var module = try temp.dir.createFile(io, "settings.lua", .{ .truncate = true });
         defer module.close(io);
-        try module.writeStreamingAll(io, "return { renderer = 'automatic', visible = false }");
+        try module.writeStreamingAll(io, "return { visible = false }");
     }
     try std.testing.expect(before != generation.watchFingerprint(io, config_path));
 }
@@ -1370,7 +1357,30 @@ test "notification delivery parses and rejects unknown channels" {
 
     var invalid: data.Diagnostic = .{};
     try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &invalid }, .{ .source = "return { api_version = 2, client = { notifications = { delivery = \"popup\" } } }", .source_name = "@config.lua", .number = 1 }));
-    try std.testing.expectEqualStrings("config.client.notifications.delivery must be telar, terminal or system", invalid.message());
+    try std.testing.expectEqualStrings("config.client.notifications.delivery must be telar or system", invalid.message());
+}
+
+test "keys only the retired terminal client honored load ignored and reported" {
+    const source =
+        \\return { api_version = 2, client = {
+        \\  icons = "nerd-font",
+        \\  sidebar = { visible = false, renderer = "automatic" },
+        \\  notifications = { delivery = "terminal" },
+        \\  input = { escape_timeout_ms = 25, sequence_timeout_ms = 750 },
+        \\} }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
+    defer generation.deinit();
+
+    try std.testing.expectEqual(@as(usize, 4), generation.snapshot.retired.count());
+    try std.testing.expect(!generation.snapshot.sidebar_visible);
+    try std.testing.expectEqual(data.NotificationDelivery.telar, generation.snapshot.notification_delivery);
+    try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
+
+    const plain = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@config.lua", .number = 2 });
+    defer plain.deinit();
+    try std.testing.expectEqual(@as(usize, 0), plain.snapshot.retired.count());
 }
 
 test "appearance themes parse and reject unknown names" {

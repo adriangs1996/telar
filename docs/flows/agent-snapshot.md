@@ -49,10 +49,9 @@ focus or remote handoff selected from that plan.
 
 After the model accepts a newer snapshot, the operation calls
 `pane_attachment.synchronizePaneAttachments`, which first queues any pending
-`acknowledge_agent` for a completed agent. It would also resync an attachment
-shelf bound in `Client.attachments`, but neither the window nor the headless
-client binds one. This attachment-only synchronization does not emit child focus
-reports. The operation then translates transitions to `blocked`, `done` and
+`acknowledge_agent` for a completed agent. It then resyncs the attachment
+shelf bound in `Client.attachments`, which only the window's own client has.
+This attachment-only synchronization does not emit child focus reports. The operation then translates transitions to `blocked`, `done` and
 `failed` into owned notifications, bounded by the center's capacity. It finally
 calls `sidebar_animation.synchronizeSidebarAnimation` to arm working-agent
 animation without advancing a frame during snapshot application.

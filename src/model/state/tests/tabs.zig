@@ -639,3 +639,50 @@ test "tab selection resolves identity position and wrapping offset" {
     try std.testing.expectError(error.TabNotFound, tab_selection.commitSelection(&model, .{ .tab_id = @enumFromInt(9) }));
     try std.testing.expectEqual(@as(u64, 4), model.version().active_tab);
 }
+
+test "the layout snapshot applies the pane bottom reservation and rebuilds when it changes" {
+    var model = ClientModel.init(std.testing.allocator, true);
+    defer model.deinit();
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const location: core.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: core.PaneId = @enumFromInt(1);
+    try model_data.workspace_handoff.bootstrap(
+        &model,
+        .{
+            .pane_id = pane_id,
+            .location = location,
+            .size = .{
+                .cols = 80,
+                .rows = 24,
+            },
+        },
+    );
+    const tab = model.tabs.activeSlot().?;
+    const area: cellgrid.Rect = .{
+        .w = 80,
+        .h = 24,
+    };
+    const whole = model_data.tab_layout.view(&model, tab, pane_id, area).?;
+
+    model.pane_bottom_reservation = .{
+        .pane_id = pane_id,
+        .preferred_height = 6,
+        .minimum_height = 3,
+        .minimum_pane_height = 3,
+    };
+    const reserved = model_data.tab_layout.snapshot(&model, tab, area);
+    const shortened = reserved.find(pane_id).?;
+
+    try std.testing.expectEqual(whole.outer.h - 6, shortened.outer.h);
+    try std.testing.expectEqual(@as(u16, 6), reserved.reserved.h);
+    try std.testing.expectEqual(shortened.outer.y + shortened.outer.h, reserved.reserved.y);
+
+    model.pane_bottom_reservation = null;
+    const restored = model_data.tab_layout.snapshot(&model, tab, area);
+
+    try std.testing.expectEqualDeep(whole, restored.find(pane_id).?);
+    try std.testing.expect(restored.reserved.isEmpty());
+}

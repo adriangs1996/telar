@@ -160,7 +160,6 @@ fn prefixAfterPointer(code: u32) !void {
         .{
             .prefix = try keyinput.chord.parseKey("ctrl+space"),
             .bindings = &.{},
-            .escape_timeout_ns = std.time.ns_per_s,
             .sequence_timeout_ns = 10 * std.time.ns_per_s,
         },
     );

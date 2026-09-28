@@ -11,6 +11,7 @@ const FrameWidget = @import("../widgets/frame_widget.zig");
 const gfx = @import("gfx");
 const Quad = gfx.Quad.Quad;
 const LinkHit = @import("../input/LinkHit.zig");
+const ImagePreviews = @import("../ImagePreviews.zig");
 
 test "projection composes split terminals link chrome notifications and modal before drawing" {
     var fixture = try Fixture.init();
@@ -102,10 +103,25 @@ test "complete widget list fits the maximum pane count with every optional layer
     _ = data.notifications.advance(&gui.app.model, data.notifications.transition_duration_ns);
     gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "All panes" } });
     gui.app.model.runtime_link.phase = .lost;
+
+    // An image preview on its shelf below the focused pane, open in its modal.
+    const focused = gui.app.model.tabs.layout[tab].focused().?;
+    var previews = ImagePreviews.init(std.testing.allocator);
+    defer previews.deinit();
+    const shelf = previews.port();
+    const target: data.AttachmentTarget = .{ .pane_id = focused, .pane_generation = 1 };
+    _ = shelf.syncTarget(target);
+    const captured = try std.testing.allocator.create(data.Capture);
+    captured.* = .{ .request = .{ .target = target, .sequence = 1 }, .png = try std.testing.allocator.dupe(u8, "png"), .width = 4, .height = 2 };
+    _ = try shelf.adopt(captured);
+    previews.openModal(@enumFromInt(1));
+    gui.app.model.pane_bottom_reservation = shelf.reservation();
+
     const projection = fixture.projection();
+    try std.testing.expect(!projection.layout.?.reserved.isEmpty());
     const hit = try linkFor(&fixture);
     var canvas = begin(&fixture, &projection);
-    var composition: Composition = .{ .chrome = &gui.chrome, .overlays = &gui.overlays, .canvas = &canvas, .link = &hit };
+    var composition: Composition = .{ .chrome = &gui.chrome, .overlays = &gui.overlays, .canvas = &canvas, .link = &hit, .previews = &previews };
     var widgets = try composition.render(&projection);
     try std.testing.expectEqual(core.max_panes_per_tab, composition.commit.len);
     try std.testing.expectEqual(FrameWidget.capacity, widgets.len);

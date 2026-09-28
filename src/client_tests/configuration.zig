@@ -106,10 +106,6 @@ test "configuration adoption swaps ownership after commit and presents by versio
     const router = client.routerConfig();
     try std.testing.expectEqualDeep(try keyinput.chord.parseKey("ctrl+s"), router.prefix);
     try std.testing.expectEqual(
-        @as(u64, 40 * std.time.ns_per_ms),
-        router.escape_timeout_ns,
-    );
-    try std.testing.expectEqual(
         @as(u64, 750 * std.time.ns_per_ms),
         router.sequence_timeout_ns,
     );
@@ -1024,3 +1020,62 @@ test "a bar component opens its Lua panel above the bar and escape closes it" {
     try std.testing.expect(!client.model.bars.panel.isOpen());
 }
 
+
+test "a reload that still sets retired keys adopts and warns which were ignored" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const source =
+        \\return { api_version = 2, client = {
+        \\  icons = "nerd-font",
+        \\  sidebar = { renderer = "automatic" },
+        \\} }
+    ;
+
+    _ = try fixtures.reloadConfiguration(&harness, try fixtures.testingConfigAdoptionSource(2, source));
+
+    try std.testing.expectEqual(@as(u64, 2), client.model.configuration_generation);
+    const center = &client.model.notification_center;
+    try std.testing.expectEqual(@as(u8, 2), center.count);
+    try std.testing.expectEqualStrings("Configuration reloaded", center.itemAt(1).?.title());
+    const warning = center.itemAt(0).?;
+    try std.testing.expectEqualStrings("Configuration keys ignored", warning.title());
+    try std.testing.expectEqualStrings(
+        "Ignored client.sidebar.renderer, client.icons: only the retired terminal client used them; remove them",
+        warning.message(),
+    );
+}
+
+test "a client started with retired keys adopts the file and warns once" {
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try client_module.Generation.loadSource(
+        .{
+            .gpa = std.testing.allocator,
+            .io = std.testing.io,
+            .diagnostic = &diagnostic,
+        },
+        .{
+            .source = "return { api_version = 2, client = { notifications = { delivery = 'terminal' }, input = { escape_timeout_ms = 25 } } }",
+            .source_name = "@config.lua",
+            .number = 1,
+        },
+    );
+    var harness: ClientHarness = undefined;
+    try harness.initWithOptions(.{
+        .arguments = &.{},
+        .cwd = "/",
+        .endpoint = "",
+        .lua_generation = generation,
+    });
+    defer harness.deinit();
+
+    const client = harness.client;
+    try std.testing.expectEqual(data.NotificationDelivery.telar, client.model.config.notification_delivery);
+    try std.testing.expectEqual(@as(u8, 1), client.model.notification_center.count);
+    try std.testing.expectEqualStrings(
+        "Ignored client.notifications.delivery = \"terminal\", client.input.escape_timeout_ms: only the retired terminal client used them; remove them",
+        client.model.notification_center.itemAt(0).?.message(),
+    );
+}

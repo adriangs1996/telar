@@ -16,6 +16,10 @@ area: cellgrid.Rect = .{},
 revision: u64 = 0,
 pane_gaps: bool = true,
 metrics: Metrics = .{},
+/// The reservation this geometry applied, and the area it took below its
+/// pane; empty when there is none or the pane has no room for it.
+reservation: ?PaneBottomReservation = null,
+reserved: cellgrid.Rect = .{},
 storage: [core.max_panes_per_tab]View = undefined,
 len: u8 = 0,
 index: layout_support.ViewIndex = .{},
@@ -39,6 +43,7 @@ pub fn find(self: *const Snapshot, pane_id: core.PaneId) ?View {
 /// const shelf = snapshot.reserveBelowPane(reservation);
 /// ```
 pub fn reserveBelowPane(self: *Snapshot, reservation: ?PaneBottomReservation) cellgrid.Rect {
+    self.reservation = reservation;
     const requested = reservation orelse return .{};
     const view_index = self.index.get(core.raw(requested.pane_id)) orelse return .{};
     const view = &self.storage[view_index];
@@ -52,6 +57,7 @@ pub fn reserveBelowPane(self: *Snapshot, reservation: ?PaneBottomReservation) ce
     const borderless = std.meta.eql(view.outer, view.content);
     view.outer = pane;
     view.content = if (borderless) pane else pane.inner(self.metrics.border);
+    self.reserved = reserved;
 
     return reserved;
 }
@@ -151,6 +157,8 @@ pub fn reset(self: *Snapshot, state: SnapshotReset) void {
     self.revision = state.revision;
     self.pane_gaps = state.pane_gaps;
     self.metrics = state.metrics;
+    self.reservation = null;
+    self.reserved = .{};
     self.len = 0;
     self.index.reset();
 }

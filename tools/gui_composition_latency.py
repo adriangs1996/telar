@@ -31,7 +31,7 @@ def main():
                     '-framework', 'QuartzCore', '-framework', 'Metal',
                     str(Path(__file__).with_name('gui_tui_latency.m')), '-o', str(library)], check=True)
     config = directory / 'config.lua'
-    config.write_text("return { api_version = 2, client = { sidebar = { visible = true, renderer = 'cells' } }, "
+    config.write_text("return { api_version = 2, client = { sidebar = { visible = true } }, "
                       "gui = { cursor = { blink = false } } }\n")
     binaries = dict(baseline=options.baseline.resolve(), candidate=options.candidate.resolve())
     report = dict(viewport=options.viewport, warmup=WARMUP,

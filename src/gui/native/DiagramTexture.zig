@@ -6,7 +6,8 @@ const quad = gfx.Quad;
 
 pub const max_side = 4096;
 pub const max_pixels = 4 * 1024 * 1024;
-pub const max_frame_pixels = 8 * 1024 * 1024;
+/// The diagrams' 8 Mi pixels and the image previews' sheet and modal copy.
+pub const max_frame_pixels = 8 * 1024 * 1024 + 256 * 1024 + 2 * 1024 * 1024;
 
 pub const DiagramTexture = extern struct {
     pixels: ?[*]const u8 = null,
@@ -66,7 +67,9 @@ test "diagram descriptors reject malformed dimensions and per-frame overflow wit
 
     try std.testing.expectError(error.DiagramTextureTooLarge, (DiagramTexture{ .pixels = &pixel, .width = 4096, .height = 1025, .version = 1 }).pixelCount());
     slots[0] = .{ .pixels = &pixel, .width = 4096, .height = 1024, .version = 1 };
-    slots[7] = slots[0];
+    slots[5] = slots[0];
+    slots[6] = .{ .pixels = &pixel, .width = 1024, .height = 256, .version = 1 };
+    slots[7] = .{ .pixels = &pixel, .width = 2048, .height = 1024, .version = 1 };
     try DiagramTexture.validate(&slots);
     slots[1] = .{ .pixels = &pixel, .width = 1, .height = 1, .version = 1 };
     try std.testing.expectError(error.DiagramFrameTooLarge, DiagramTexture.validate(&slots));

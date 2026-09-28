@@ -1,31 +1,6 @@
 const core = @import("telar-core");
 const std = @import("std");
 
-pub const Theme = enum {
-    unicode,
-    nerd_font,
-
-    pub fn parse(name: []const u8) !Theme {
-        if (std.ascii.eqlIgnoreCase(name, "unicode")) {
-            return .unicode;
-        }
-        if (std.ascii.eqlIgnoreCase(name, "nerd-font") or
-            std.ascii.eqlIgnoreCase(name, "nerdfont") or
-            std.ascii.eqlIgnoreCase(name, "nerd"))
-        {
-            return .nerd_font;
-        }
-        return error.UnknownIconTheme;
-    }
-
-    pub fn canonicalName(self: Theme) []const u8 {
-        return switch (self) {
-            .unicode => "unicode",
-            .nerd_font => "nerd-font",
-        };
-    }
-};
-
 pub const Icon = enum {
     sidebar_collapse,
     sidebar_expand,

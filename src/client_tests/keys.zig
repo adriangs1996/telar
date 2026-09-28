@@ -33,7 +33,6 @@ pub fn pressKey(client: *client_module.Client, key: keyinput.Key) !void {
     var router = try client_module.key_router.build(client.routerConfig());
     const decision = router.routeEvent(.{
         .key = key,
-        .raw = "",
         .now_ns = 0,
     }, .{
         .captures_keys = data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)),
@@ -41,7 +40,7 @@ pub fn pressKey(client: *client_module.Client, key: keyinput.Key) !void {
     });
 
     switch (decision) {
-        .forward => |value| try routeKey(client, value.key),
+        .forward => |value| try routeKey(client, value),
         .action => |request| _ = try client_module.actions.executeAction(client, request.value, .binding),
         .replay, .pending, .discard => return error.UnexpectedKeyDecision,
     }

@@ -586,11 +586,11 @@ test "mouse reports preserve exact host pixels relative to pane content" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    _ = try data.host_capabilities.observe(&client.model, .{ .cell_pixels = .{
-        .width = 10,
-        .height = 20,
-    } });
-    _ = try data.host_capabilities.observe(&client.model, .{ .pointer_pixels = .supported });
+    var capabilities = client.model.host.host_capabilities;
+    capabilities.cell_width_px = 10;
+    capabilities.cell_height_px = 20;
+    capabilities.pointer_pixels = .supported;
+    try fixtures.reconcileCapabilities(&client.model, capabilities);
     const pane = client.model.panes.find(ClientHarness.bootstrap_pane).?;
     pane.mouse = .{ .tracking = .normal, .sgr = true, .pixels = true };
     const pane_view = data.tab_layout.view(
@@ -748,7 +748,6 @@ test "held scroll suffixes pace both viewport directions without queued steps" {
         _ = try routeKey(client, &router, repeated, 2000 * ms);
         try std.testing.expectEqualDeep(version, client.model.version());
         try std.testing.expectEqual(pending, client.model.to_runtime.len);
-        try std.testing.expect(router.inputDeadline() == null);
         try std.testing.expect(router.bindingDeadline() == null);
 
         _ = try routeKey(client, &router, prefix_key, 2001 * ms);
@@ -820,8 +819,11 @@ test "focused scroll bindings emit unmodified SGR wheel reports in cells or pixe
         try harness.bootstrap();
         const client = harness.client;
         var router = try client_module.key_router.build(client.routerConfig());
-        _ = try data.host_capabilities.observe(&client.model, .{ .cell_pixels = .{ .width = 10, .height = 20 } });
-        _ = try data.host_capabilities.observe(&client.model, .{ .pointer_pixels = .supported });
+        var capabilities = client.model.host.host_capabilities;
+        capabilities.cell_width_px = 10;
+        capabilities.cell_height_px = 20;
+        capabilities.pointer_pixels = .supported;
+        try fixtures.reconcileCapabilities(&client.model, capabilities);
         const pane = client.model.panes.find(ClientHarness.bootstrap_pane).?;
         pane.mouse = .{ .tracking = .normal, .sgr = true, .pixels = pixels };
         pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
@@ -1163,7 +1165,6 @@ fn routeKey(client: *client_module.Client, router: *KeyRouter, key: keyinput.Key
 
     const decision = router.routeEvent(.{
         .key = key,
-        .raw = "",
         .now_ns = now_ns,
     }, .{
         .captures_keys = data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)),
@@ -1171,7 +1172,7 @@ fn routeKey(client: *client_module.Client, router: *KeyRouter, key: keyinput.Key
     });
 
     switch (decision) {
-        .forward => |value| _ = try client_module.key_routing.routeKeyInput(client, .{ .key = value.key }),
+        .forward => |value| _ = try client_module.key_routing.routeKeyInput(client, .{ .key = value }),
         .replay => |value| {
             for (value.held_keys[0..value.held_key_len]) |held| {
                 _ = try client_module.key_routing.routeKeyInput(client, .{ .key = held });

@@ -325,64 +325,6 @@ test "host resize rejects invalid and oversized grids without partial state" {
     try std.testing.expectEqualDeep(version, model.version());
 }
 
-test "presentation capabilities commit independently without probe policy" {
-    var model = ClientModel.init(std.testing.allocator, true);
-    defer model.deinit();
-
-    const graphics_commit = (try host_capabilities.observe(&model, .{ .images = .supported })).?;
-    try std.testing.expect(graphics_commit.resize == null);
-    try std.testing.expectEqual(model_data.EnvironmentSupport.supported, model.host.host_capabilities.images);
-    try std.testing.expectEqual(model_data.EnvironmentSupport.unknown, model.host.host_capabilities.pointer_pixels);
-
-    _ = try host_capabilities.observe(&model, .{ .pointer_pixels = .unsupported });
-    const version = model.version();
-    try std.testing.expect((try host_capabilities.observe(&model, .{ .pointer_pixels = .unsupported })) == null);
-    try std.testing.expectEqualDeep(version, model.version());
-}
-
-test "host pixel observations commit raw measurements and resolved geometry atomically" {
-    var model = ClientModel.init(std.testing.allocator, true);
-    defer model.deinit();
-
-    const window = (try host_capabilities.observe(&model, .{ .window_pixels = .{
-        .width = 800,
-        .height = 480,
-    } })).?;
-
-    try std.testing.expectEqual(core.TerminalSize{
-        .cols = 80,
-        .rows = 24,
-        .cell_width_px = 10,
-        .cell_height_px = 20,
-    }, model.host.host_size);
-    try std.testing.expect(window.capabilities != null);
-    try std.testing.expect(window.resize != null);
-    try std.testing.expectEqual(Version{
-        .host = 1,
-        .host_capabilities = 1,
-    }, model.version());
-
-    const cell = (try host_capabilities.observe(&model, .{ .cell_pixels = .{
-        .width = 12,
-        .height = 24,
-    } })).?;
-    try std.testing.expect(cell.resize != null);
-    try std.testing.expectEqual(@as(u16, 12), model.host.host_size.cell_width_px);
-    try std.testing.expectEqual(@as(u16, 24), model.host.host_size.cell_height_px);
-
-    const later_window = (try host_capabilities.observe(&model, .{ .window_pixels = .{
-        .width = 1600,
-        .height = 960,
-    } })).?;
-    try std.testing.expect(later_window.resize == null);
-    try std.testing.expectEqual(@as(u16, 12), model.host.host_size.cell_width_px);
-    try std.testing.expectEqual(@as(u16, 24), model.host.host_size.cell_height_px);
-    try std.testing.expectEqual(Version{
-        .host = 2,
-        .host_capabilities = 3,
-    }, model.version());
-}
-
 test "host reconciliation validates geometry before publishing capabilities" {
     var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();

@@ -482,3 +482,52 @@ test "escaping the prompt editor closes model state without changing mode" {
 
 // Routes each character as one semantic key through key routing, as an
 // adapter delivers typed text to the active prompt.
+
+test "client telemetry writes one snapshot without mutating semantic state" {
+    if (!core.enabled) {
+        return;
+    }
+
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const model_version = client.model.version();
+    const file = try temp.dir.createFile(io, "client.log", .{ .read = true });
+    client.telemetry.sink.deinit(io);
+    client.telemetry.sink = .{ .file = file };
+    client.telemetry.enabled = true;
+
+    try std.testing.expectEqual(@as(?u8, null), try client.update(.{ .telemetry_tick = {} }));
+    try std.testing.expect(client.telemetry.write_pending);
+    try std.testing.expect(client.to_workers.pop().? == .telemetry_tick);
+    const write = client.to_workers.pop().?;
+    try std.testing.expect(write == .telemetry_write);
+    try std.testing.expect(client.to_workers.pop() == null);
+
+    // A tick while the line is still being written folds into the next one.
+    _ = try client.update(.{ .telemetry_tick = {} });
+    try std.testing.expect(client.to_workers.pop().? == .telemetry_tick);
+    try std.testing.expect(client.to_workers.pop() == null);
+
+    _ = try client.update(client_module.job_runner.run(io, write));
+    try std.testing.expect(!client.telemetry.write_pending);
+    try std.testing.expect(client.telemetry.sink.available());
+    try std.testing.expectEqualDeep(model_version, client.model.version());
+
+    var written: [client_module.TelemetryState.buffer_size]u8 = undefined;
+    const len = try file.readPositionalAll(io, &written, 0);
+    const line = written[0..len];
+    try std.testing.expect(std.mem.endsWith(u8, line, "}\n"));
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, line, "\n"));
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"role\":\"client\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"active_tab\":1") != null);
+
+    _ = try client.update(.{ .telemetry_tick = error.TickFailed });
+    try std.testing.expect(!client.telemetry.enabled);
+    try std.testing.expect(!client.telemetry.sink.available());
+}

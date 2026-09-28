@@ -20,9 +20,10 @@ axes, bounded ratios and rectangles without usable content produce no change.
 A commit advances the pane revision. Fullscreen keeps its split tree, so a
 resize while fullscreen changes the hidden tiled layout.
 
-`pane_resize.resizeAttachedPanes` computes one bounded layout snapshot with
-`tab_layout.snapshot` and applies the attachment shelf reservation only to its
-owner. It emits one `pane_resize` per attached pane with visible content;
+`pane_resize.resizeAttachedPanes` records the attachment shelf's reservation in
+`model.pane_bottom_reservation` and reads one bounded layout snapshot with
+`tab_layout.snapshot`, which applies that reservation to its owner only, so the
+drawn panes and pointer targeting use the same shortened pane. It emits one `pane_resize` per attached pane with visible content;
 fullscreen selects its focused pane. Cell pixel metrics come from
 `model.host.host_size`. Callers resolve the target tab and geometry
 once before invoking the delivery methods. Empty clients skip pane delivery.

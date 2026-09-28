@@ -146,8 +146,8 @@ starts a preview.
 
 Preview start is best effort. An unsupported platform, missing agent targets,
 a busy capture, worker scheduling failure and other preview errors cannot
-retract or fail the already accepted pane input. Neither the window nor the
-headless client supports capture, so today the start returns `unsupported`.
+retract or fail the already accepted pane input. Only the window's own client
+on macOS captures; elsewhere the start returns `unsupported`.
 See [Clipboard image preview](clipboard-image.md).
 
 ## State, presentation and failure
@@ -162,9 +162,9 @@ Prompt and copy changes advance their own `Version` fields, read through
 `ClientModel.version()`. The adapter observes them after the turn through
 `Client.presentation.observe`. Pane input normally produces no presentation
 revision unless its viewport policy commits a scroll change. With a bound
-attachment shelf, removing a paired image marker re-offers pane geometry, and
-Claude and Pi marker identities are reconciled after committed pane frames; no
-current adapter binds one.
+attachment shelf (the window's own client), removing a paired image marker
+re-offers pane geometry, and Claude and Pi marker identities are reconciled
+after committed pane frames.
 
 Prompt, copy and pane failures preserve the transaction rules of their
 existing operations. The key router does not retry or reinterpret a failed

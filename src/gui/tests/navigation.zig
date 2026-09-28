@@ -66,20 +66,19 @@ test "update processes a horizontal split shortcut and its correlated runtime re
     try std.testing.expect(first.x < second.x);
 }
 
-test "native semantic router resolves every TUI default action" {
+test "native semantic router resolves every default action" {
     const defaults = try client.default_bindings.load(data.keybind.default_prefix);
     for (defaults) |binding| {
         var router = try client.key_router.build(
             .{
                 .prefix = data.keybind.default_prefix,
                 .bindings = &.{},
-                .escape_timeout_ns = 1,
                 .sequence_timeout_ns = 1,
             },
         );
         var capture: ActionCapture = .{};
         for (binding.keys[0..binding.len]) |key| {
-            switch (router.routeEvent(.{ .key = key, .raw = "", .now_ns = 1 }, .{})) {
+            switch (router.routeEvent(.{ .key = key, .now_ns = 1 }, .{})) {
                 .action => |request| {
                     _ = try capture.action(request.value);
                 },
@@ -117,7 +116,6 @@ test "native custom prefix navigates pane focus fullscreen and copy mode" {
         .{
             .prefix = try keyinput.chord.parseKey("ctrl+space"),
             .bindings = &.{},
-            .escape_timeout_ns = 1,
             .sequence_timeout_ns = 1,
         },
     );
@@ -207,7 +205,6 @@ test "native bindings preserve ownership through hot reload and matching release
             .bindings = &.{
                 binding,
             },
-            .escape_timeout_ns = 1,
             .sequence_timeout_ns = 1,
         },
     );
@@ -217,7 +214,6 @@ test "native bindings preserve ownership through hot reload and matching release
         .{
             .prefix = data.keybind.default_prefix,
             .bindings = &.{},
-            .escape_timeout_ns = 1,
             .sequence_timeout_ns = 1,
         },
     );

@@ -4,6 +4,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const ClientHarness = @import("ClientHarness.zig");
+const fixtures = @import("fixtures.zig");
 const std = @import("std");
 const client_module = @import("telar-client");
 
@@ -51,7 +52,9 @@ test "pane graphics commit their cell fallback before presenter observation" {
     harness.client.graphics = pixelRetention(&pixels);
     try harness.bootstrap();
     const client = harness.client;
-    _ = try data.host_capabilities.observe(&client.model, .{ .images = .unsupported });
+    var capabilities = client.model.host.host_capabilities;
+    capabilities.images = .unsupported;
+    try fixtures.reconcileCapabilities(&client.model, capabilities);
     const version_before = client.model.version();
     const observed_before = client.presentation.observed;
 
@@ -88,7 +91,9 @@ test "presenter observes physical graphics without a semantic fallback" {
     harness.client.graphics = pixelRetention(&pixels);
     try harness.bootstrap();
     const client = harness.client;
-    _ = try data.host_capabilities.observe(&client.model, .{ .images = .supported });
+    var capabilities = client.model.host.host_capabilities;
+    capabilities.images = .supported;
+    try fixtures.reconcileCapabilities(&client.model, capabilities);
     const version_before = client.model.version();
 
     var payload: [256]u8 = undefined;

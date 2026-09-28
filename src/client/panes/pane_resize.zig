@@ -23,11 +23,12 @@ pub fn togglePaneFullscreen(client: *Client, command: data.TogglePaneFullscreenR
     return change;
 }
 
-/// Offers sizes for attached visible panes, reserving space for the attachment shelf.
+/// Offers sizes for attached visible panes, reserving space for the attachment
+/// shelf. Every layout snapshot applies the reservation it records.
 /// Example: `try pane_resize.resizeAttachedPanes(client, tab, area);`
 pub fn resizeAttachedPanes(client: *Client, tab: usize, area: cellgrid.Rect) !void {
-    var layout = data.tab_layout.snapshot(&client.model, tab, area).*;
-    _ = layout.reserveBelowPane(if (client.attachments) |shelf| shelf.reservation() else null);
+    client.model.pane_bottom_reservation = if (client.attachments) |shelf| shelf.reservation() else null;
+    const layout = data.tab_layout.snapshot(&client.model, tab, area);
     var panes = client.model.panes.iterate(client.model.tabs.location[tab].tab_id);
 
     while (panes.next()) |pane| {

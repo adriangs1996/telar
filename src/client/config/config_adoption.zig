@@ -11,6 +11,7 @@ const Snapshot = @import("Snapshot.zig");
 const Generation = @import("Generation.zig");
 const Adoption = @import("../resources/Adoption.zig");
 const notifications = @import("../notifications/notifications.zig");
+const retired_config = @import("retired_config.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
 const sidebar_toggle = @import("../workspace/sidebar_toggle.zig");
 const Client = @import("../execution/Client.zig");
@@ -82,6 +83,9 @@ pub fn completeConfigReload(client: *Client, result: anyerror!config_reload.Conf
                     .message = "The new settings are active",
                 },
             );
+            if (client.lua_generation) |generation| {
+                try retired_config.announce(client, generation.snapshot.retired);
+            }
             break :adopted .{
                 .adopted = commit,
             };
@@ -139,7 +143,6 @@ fn adoptConfiguration(client: *Client, adoption: Adoption) !data.ConfigurationCo
     if (!client.options.theme_locked) {
         client.model.theme = snapshot.resolveTheme(client.model.host.host_capabilities.appearance, null);
     }
-    client.model.icon_theme = snapshot.icon_theme;
     if (commit.sidebar) |sidebar| {
         try sidebar_toggle.deliverSidebarLayout(client, sidebar);
     } else if (commit.pane_gaps_changed) {

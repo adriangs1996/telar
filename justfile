@@ -80,9 +80,9 @@ fuzz-check:
 fuzz target="schema-client":
     cd test/fuzz && zig build run-{{ target }}
 
-# Run frontend tests.
-test-frontend:
-    zig build test-frontend
+# Run the shared client's tests: its own, over a real socket, and headless.
+test-client:
+    zig build test-client test-client-integration test-headless
 
 # Run transport tests.
 test-transport:
@@ -92,20 +92,9 @@ test-transport:
 test-schema:
     zig build test-schema
 
-# Run the standalone proxy tests.
-test-proxy-example:
-    zig build test-proxy-example
-
+# Run the runtime proxy tests.
 test-backend-proxy:
     zig build test-backend-proxy
-
-# Build the standalone proxy example.
-proxy:
-    zig build proxy
-
-# Run the sidebar example.
-sidebar:
-    zig build sidebar
 
 # Run benchmarks. Extra arguments are passed to the benchmark executable.
 bench *args:
@@ -122,10 +111,6 @@ cross:
 # Run correctness, portability and performance release gates.
 verify-release:
     zig build verify-release
-
-# Exercise terminal-browser inside Telar. Extra arguments are forwarded.
-verify-terminal-browser *args:
-    zig build verify-terminal-browser -- {{ args }}
 
 alias b := build
 alias r := run
