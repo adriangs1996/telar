@@ -14,8 +14,8 @@ telar machine add box dev@box --color red --check
 MachineOptions.parse                      src/cli/arguments/MachineOptions.zig
         |
 machine_profiles.run                      src/cli/machine_profiles.zig
-        |   profile_file.load: privatefile.read, owner-only regular file, 16 KiB,
-        |   MachineProfiles.parse: version 1, no unknown fields
+        |   profile_file.load: privatefile.read, owner-only regular file, 32 KiB,
+        |   MachineProfiles.parse: version 1 or 2, no unknown fields
         |
 machine_profiles.newProfile              src/client/machines/machine_profiles.zig:
         |   refuses this machine's label, MachineId.generate + MachineProfile.init
@@ -70,7 +70,25 @@ taken meanwhile is refused.
 - `color` is `#RRGGBB` or a theme role name; windows resolve the name.
 - `enabled` says whether windows connect to the machine. The CLI dispatches to
   a disabled machine all the same.
+- `telar_path` is where `telar machine setup` installed telar on that
+  machine: absolute, at most 255 bytes, only ASCII letters, digits and
+  `/._+-`, since it goes unquoted into command lines any remote shell
+  parses. Discovery, the bridge and dispatch run it instead of `telar`
+  from the PATH of non-interactive SSH sessions; without it they run
+  `telar`. A window reconnects a machine whose path changed.
+- `logins` maps an agent (`claude`, `codex`, `pi`, `cursor`, `opencode`) to
+  `pending`, `done` or `failed`: how `telar machine setup` last saw its login
+  on that machine. `machine list` prints it. It is never a credential.
 - `local_label` names the local machine; without it, the host name does.
+
+`version` is 2 when a profile holds `telar_path` or `logins`, which version 2
+added, and 1 otherwise, so a file of a person who never ran `machine setup`
+stays readable by every earlier build. A build that reads only version 1
+refuses a version 2 file as one it cannot read; this build names a newer
+version as written by a newer telar. Sixteen profiles with every field at
+its longest take 16,381 bytes; the bound is 32 KiB so the next field has
+room, and `zig build test-machine-profiles` fails when one no longer fits.
+A version 1 file stays far under the 16 KiB earlier builds read.
 
 Hand edits are valid. A file that fails validation, is readable by anyone but
 its owner, or is a symlink, is refused and left untouched.

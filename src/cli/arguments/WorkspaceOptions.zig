@@ -5,6 +5,10 @@ const entity_target = @import("entity_target.zig");
 const core = @import("telar-core");
 const WorkspaceOptions = @This();
 
+/// The widths `--columns` accepts.
+const min_columns = 20;
+const max_columns = 1024;
+
 action: workspace.WorkspaceAction,
 branch: ?[*:0]const u8 = null,
 name: ?[*:0]const u8 = null,
@@ -12,6 +16,10 @@ directory: ?[*:0]const u8 = null,
 socket: ?[*:0]const u8 = null,
 json: bool = false,
 target: ?entity_target.Target = null,
+/// What the new workspace's first pane runs instead of the login shell.
+command: []const [*:0]const u8 = &.{},
+/// The first pane's width until a window attaches and sizes it.
+columns: ?u16 = null,
 
 pub fn parse(args: []const [*:0]const u8) !WorkspaceOptions {
     if (args.len == 0) {
@@ -47,7 +55,22 @@ pub fn parse(args: []const [*:0]const u8) !WorkspaceOptions {
     var cursor: Cursor = .{ .remaining = args[index..] };
     while (cursor.next()) |argument| {
         const arg = std.mem.span(argument);
-        if (std.mem.eql(u8, arg, "--worktree") and action == .create) {
+        if (std.mem.eql(u8, arg, "--") and action == .create) {
+            options.command = cursor.remaining;
+            if (options.command.len == 0) {
+                return error.MissingWorkspaceCommand;
+            }
+
+            break;
+        } else if (std.mem.eql(u8, arg, "--columns") and action == .create) {
+            const value = try cursor.require(error.MissingWorkspaceColumns);
+            const columns = std.fmt.parseUnsigned(u16, std.mem.span(value), 10) catch return error.InvalidWorkspaceColumns;
+            if (columns < min_columns or columns > max_columns) {
+                return error.InvalidWorkspaceColumns;
+            }
+
+            options.columns = columns;
+        } else if (std.mem.eql(u8, arg, "--worktree") and action == .create) {
             const value = try cursor.require(error.MissingWorktreeBranch);
             if (options.branch != null) {
                 return error.DuplicateWorktreeOption;
@@ -87,6 +110,12 @@ pub fn parse(args: []const [*:0]const u8) !WorkspaceOptions {
         return error.MissingWorktreeBranch;
     }
 
+    // A worktree workspace runs `telar worktree create`, which takes its
+    // command there.
+    if (options.branch != null and (options.command.len != 0 or options.columns != null)) {
+        return error.UnknownWorkspaceOption;
+    }
+
     if (options.directory) |directory| {
         if (std.mem.span(directory).len == 0) {
             return error.EmptyWorkspaceDirectory;
@@ -100,6 +129,17 @@ test "workspace list rejects creation options" {
     const options = try WorkspaceOptions.parse(&.{ "list", "--json" });
     try std.testing.expectEqual(workspace.WorkspaceAction.list, options.action);
     try std.testing.expectError(error.UnknownWorkspaceOption, WorkspaceOptions.parse(&.{ "list", "--worktree", "branch" }));
+}
+
+test "workspace creation takes a command and a width for its first pane" {
+    const options = try WorkspaceOptions.parse(&.{ "create", "--directory", "/home/dev", "--columns", "1024", "--", "codex", "login", "--device-auth" });
+    try std.testing.expectEqual(@as(?u16, 1024), options.columns);
+    try std.testing.expectEqual(@as(usize, 3), options.command.len);
+    try std.testing.expectEqualStrings("--device-auth", std.mem.span(options.command[2]));
+
+    try std.testing.expectError(error.MissingWorkspaceCommand, WorkspaceOptions.parse(&.{ "create", "--directory", "/home/dev", "--" }));
+    try std.testing.expectError(error.InvalidWorkspaceColumns, WorkspaceOptions.parse(&.{ "create", "--directory", "/home/dev", "--columns", "5000" }));
+    try std.testing.expectError(error.UnknownWorkspaceOption, WorkspaceOptions.parse(&.{ "create", "--worktree", "fix", "--", "claude" }));
 }
 
 test "workspace creation supports an existing directory without a worktree" {

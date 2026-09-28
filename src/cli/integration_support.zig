@@ -85,17 +85,8 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
         try defaultSettingsPath(init.minimal.environ, integration, &path_buffer);
     var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const executable = executable_buffer[0..try std.process.executablePath(init.io, &executable_buffer)];
-    var command_buffer: [std.fs.max_path_bytes + pane_guard.len + 32]u8 = undefined;
-    const command = try renderHookCommand(&command_buffer, executable, integration.marker);
-    const hook_set = hookSetFor(integration, command);
-    var worktree_command_buffer: [std.fs.max_path_bytes + 32]u8 = undefined;
-    const worktree_command = try renderUnguardedCommand(&worktree_command_buffer, executable, integration.marker);
-    const worktree_hooks: HookSet = .{
-        .events = integration.worktree_events,
-        .marker = integration.marker,
-        .command = worktree_command,
-        .timeout_seconds = worktree_timeout_seconds,
-    };
+    var commands: HookCommands = undefined;
+    const hook_set, const worktree_hooks = try hookSetsFor(integration, executable, &commands);
     var output_buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
@@ -417,6 +408,63 @@ pub fn renderUnguardedCommand(buffer: []u8, executable: []const u8, marker: []co
     }
 
     return std.fmt.bufPrint(buffer, "exec '{s}'{s}", .{ executable, marker });
+}
+
+/// The rendered commands a pair of hook sets borrows.
+const HookCommands = struct {
+    lifecycle: [std.fs.max_path_bytes + pane_guard.len + 32]u8,
+    worktree: [std.fs.max_path_bytes + 32]u8,
+};
+
+// The lifecycle hooks, guarded to telar panes, and the worktree hooks an
+// agent needs answered in every session, both running `executable`.
+fn hookSetsFor(integration: Integration, executable: []const u8, commands: *HookCommands) !struct { HookSet, HookSet } {
+    const command = try renderHookCommand(&commands.lifecycle, executable, integration.marker);
+    const worktree_command = try renderUnguardedCommand(&commands.worktree, executable, integration.marker);
+    return .{
+        hookSetFor(integration, command),
+        .{
+            .events = integration.worktree_events,
+            .marker = integration.marker,
+            .command = worktree_command,
+            .timeout_seconds = worktree_timeout_seconds,
+        },
+    };
+}
+
+/// Places telar's hooks for `agent` in parsed hook settings, running
+/// `executable`: what `integration install` would write with that telar,
+/// so `telar machine setup` can send settings the machine's own install
+/// then finds already done. Returns whether anything changed.
+///
+/// ```zig
+/// _ = try integration_support.placeHooks(arena, &settings, .claude, "/home/dev/.local/share/telar/versions/0.3.0/telar");
+/// ```
+pub fn placeHooks(arena: std.mem.Allocator, settings: *std.json.Value, agent: values.HookAgent, executable: []const u8) !bool {
+    if (settings.* != .object) {
+        return error.InvalidSettings;
+    }
+
+    var commands: HookCommands = undefined;
+    const hook_set, const worktree_hooks = try hookSetsFor(integrationFor(agent), executable, &commands);
+    const lifecycle_changed = try installHooks(arena, settings, hook_set);
+    const worktree_changed = try installHooks(arena, settings, worktree_hooks);
+    return lifecycle_changed or worktree_changed;
+}
+
+/// Whether a hook command is one of telar's, for any agent.
+///
+/// ```zig
+/// if (integration_support.telarCommand(command)) continue;
+/// ```
+pub fn telarCommand(command: []const u8) bool {
+    for ([_][]const u8{ claude_marker, codex_marker, cursor_marker }) |marker| {
+        if (std.mem.endsWith(u8, command, marker)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 fn hookSetFor(integration: Integration, command: []const u8) HookSet {

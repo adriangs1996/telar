@@ -4,7 +4,8 @@
 //! submission takes the chosen one, so both read the same list. Enter shows
 //! a machine or enables a disabled one, Shift+Enter enables or disables,
 //! Ctrl+R renames and Ctrl+D removes; each change is written to
-//! `machines.json`, which the window then follows.
+//! `machines.json`, which the window then follows. Enter on a machine that
+//! failed for want of telar, or for another build, sets telar up there.
 const core = @import("telar-core");
 const std = @import("std");
 const Machines = @import("Machines.zig");
@@ -64,6 +65,11 @@ pub fn choose(client: *Client, chosen: ?u8, alternate: bool) !void {
             try client.model.to_host.push(.{ .machine = .{ .slot = slot } });
         }
 
+        return;
+    }
+
+    if (!alternate and machines.needs_setup[slot]) {
+        try client.model.to_host.push(.{ .machine = .{ .setup = slot } });
         return;
     }
 

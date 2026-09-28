@@ -1,5 +1,5 @@
 //! What one row of `Machines` is made from: the profile's id, label,
-//! destination and color, and whether the window connects to it.
+//! destination, color and telar path, and whether the window connects to it.
 const core = @import("telar-core");
 const MachineRow = @This();
 
@@ -8,3 +8,4 @@ label: []const u8,
 destination: []const u8 = "",
 color: ?[]const u8 = null,
 enabled: bool = true,
+telar_path: ?[]const u8 = null,

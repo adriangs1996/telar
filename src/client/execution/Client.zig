@@ -117,9 +117,11 @@ connect_parked: bool = false,
 machine_edit_label: [core.MachineProfile.max_label_bytes]u8 = undefined,
 machine_edit_value: [core.ssh_destination.max_bytes]u8 = undefined,
 machine_edit_pending: bool = false,
-/// The destination the running connection job reads. It is written only
-/// when no job runs, so a machine renamed meanwhile never changes it.
+/// The destination and telar path the running connection job reads. They
+/// are written only when no job runs, so a machine renamed meanwhile never
+/// changes them.
 connect_destination: [core.ssh_destination.max_bytes]u8 = undefined,
+connect_telar_path: [core.remote_telar.max_path_bytes]u8 = undefined,
 /// The wait before connecting again to a lost runtime.
 runtime_retry: pacing.DeadlineScheduler = .{},
 connected_at_ns: u64 = 0,

@@ -244,6 +244,13 @@ fn take(self: *HeadlessClient, line: InputLine) !?u8 {
             });
         },
         .mark => |*label| self.trace.record(.{ .kind = .mark, .t_ns = now_ns }, label.slice()),
+        .notification_activate => {
+            self.trace.record(.{ .kind = .input, .t_ns = now_ns, .pane = pane }, "notification");
+            const center = &self.app.model.notification_center;
+            if (center.count != 0) {
+                _ = try client.notifications.activateNotificationNow(&self.app, center.itemAt(center.count - 1).?.id);
+            }
+        },
         .quit => return 0,
     }
 
@@ -395,6 +402,20 @@ fn startJobs(self: *HeadlessClient) !void {
                 try app.flush();
             };
         } else if (app.to_background.pop()) |job| {
+            if (recordedInstead(job)) |completion| {
+                self.trace.record(
+                    .{
+                        .kind = .effect,
+                        .t_ns = pacing.clock.monotonic(self.io),
+                    },
+                    @tagName(job),
+                );
+                const status = try app.update(completion);
+                std.debug.assert(status == null);
+                try app.flush();
+                continue;
+            }
+
             self.inbox.start(.client, .{ client.job_runner.runBackground, .{ self.io, self.gpa, job } }) catch |err| {
                 try app.failBackgroundJob(job, err);
                 try app.flush();
@@ -403,6 +424,36 @@ fn startJobs(self: *HeadlessClient) !void {
             return;
         }
     }
+}
+
+/// The completion of a host job the headless client records instead of
+/// running: opening a link, playing a sound, posting a desktop notice. There
+/// is no window to hand them to, so none of them may reach `open`,
+/// `xdg-open` or a sound player (docs/flows/headless-client.md, "No window,
+/// no host"). Null for a job that runs as in a window.
+///
+/// ```zig
+/// if (recordedInstead(job)) |completion| _ = try app.update(completion);
+/// ```
+fn recordedInstead(job: client.BackgroundJob) ?client.Message {
+    return switch (job) {
+        .link => .{ .link_opened = {} },
+        .sound => .{ .sound_played = {} },
+        .system_notification => .{ .notified = {} },
+        .bar_command, .plugin, .path_completion, .config_watch, .runtime_connect, .machine_edit => null,
+    };
+}
+
+test "links, sounds and desktop notices complete without running anything" {
+    const link = try data.LinkTarget.init("https://auth.openai.com/codex/device");
+    const opened = recordedInstead(.{ .link = link }) orelse return error.TestExpectedRecorded;
+    try opened.link_opened;
+
+    const played = recordedInstead(.{ .sound = .ready }) orelse return error.TestExpectedRecorded;
+    try played.sound_played;
+
+    const notified = recordedInstead(.{ .system_notification = .{} }) orelse return error.TestExpectedRecorded;
+    try notified.notified;
 }
 
 // Reads the next line once the startup lets input through and the runtime

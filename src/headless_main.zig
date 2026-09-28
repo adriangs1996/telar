@@ -62,10 +62,14 @@ fn launch(init: std.process.Init, args: []const [*:0]const u8) !u8 {
     var telar_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const telar = try siblingTelar(init.io, &telar_buffer);
 
+    // A saved machine is reached through the telar its profile names, as a
+    // window reaches it; `profiles` outlives the client that borrows it.
+    const profiles = loadProfiles(init);
     var client_options = prepared.frontendOptions();
     client_options.telar_executable = telar;
     client_options.machine = if (options.remote) |destination| .{ .remote = .{
         .destination = std.mem.span(destination),
+        .telar_path = if (profiles.findDestination(std.mem.span(destination))) |row| profiles.rows[row].telarPath() else null,
         .arguments = prepared.command(),
     } } else .{ .local = .{
         .path = options.config,
@@ -89,6 +93,14 @@ fn launch(init: std.process.Init, args: []const [*:0]const u8) !u8 {
     defer app.deinit();
 
     return app.run();
+}
+
+// The saved machines; a file this telar cannot read leaves none, so a
+// destination is reached through `telar` on its PATH as before.
+fn loadProfiles(init: std.process.Init) core.MachineProfiles {
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = client.profile_file.path(init.minimal.environ, &path_buffer) catch return .{};
+    return client.profile_file.load(init.io, init.gpa, path) catch .{};
 }
 
 fn siblingTelar(io: std.Io, buffer: *[std.fs.max_path_bytes]u8) ![]const u8 {

@@ -10,6 +10,8 @@ title_buffer: [core.max_notification_title_bytes]u8 = undefined,
 title_len: u8,
 message_buffer: [core.max_notification_message_bytes]u8 = undefined,
 message_len: u8,
+link_buffer: [core.max_notification_link_bytes]u8 = undefined,
+link_len: u16 = 0,
 phase: NotificationPhase = .entering,
 /// Linear position within the transition. Rendering maps it through a
 /// continuous smoothstep curve, keeping time and presentation separate.
@@ -23,6 +25,16 @@ pub fn title(self: *const Item) []const u8 {
 
 pub fn message(self: *const Item) []const u8 {
     return self.message_buffer[0..self.message_len];
+}
+
+pub fn link(self: *const Item) []const u8 {
+    return self.link_buffer[0..self.link_len];
+}
+
+/// The host a click opens, shown on the card before anyone clicks; empty
+/// without a link.
+pub fn linkHost(self: *const Item) []const u8 {
+    return core.notification_link.host(self.link());
 }
 
 /// Applies f(t) = 3t² - 2t³ and rounds to the nearest terminal cell.
@@ -53,7 +65,7 @@ pub fn animatedPixels(self: *const Item, full_width: u32) u32 {
 }
 
 pub fn clickable(self: *const Item) bool {
-    return std.meta.activeTag(self.target) != .none;
+    return std.meta.activeTag(self.target) != .none or self.link_len != 0;
 }
 
 pub fn beginExit(self: *Item, now_ns: u64) bool {

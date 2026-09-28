@@ -1,6 +1,7 @@
 //! One native card. Text and semantic state are borrowed only while drawing.
 const cellgrid = @import("cellgrid");
 const shared_model = @import("model");
+const core = @import("telar-core");
 const std = @import("std");
 const Canvas = @import("../Canvas.zig");
 const gfx = @import("gfx");
@@ -11,6 +12,9 @@ const Target = @import("../interaction/Target.zig");
 const Hits = @import("NotificationHits.zig");
 const Text = @import("NotificationText.zig");
 const Card = @This();
+
+/// Room for "Open …HOST ↗"; a host is at most a link's length.
+const link_label_bytes = 16 + core.max_notification_link_bytes;
 
 item: *const shared_model.NotificationItem,
 bounds: Rect,
@@ -59,7 +63,10 @@ pub fn draw(self: *const Card, canvas: *Canvas) !void {
     // Body and close can share a dismiss action, so use distinct namespaces.
     target.namespace = 2;
     var accessible: [128]u8 = undefined;
-    const label = std.fmt.bufPrint(&accessible, "{s}: {s}", .{ self.item.title(), self.item.message() }) catch self.item.title();
+    const label = if (self.item.link_len != 0)
+        std.fmt.bufPrint(&accessible, "{s}, opens {s}: {s}", .{ self.item.title(), self.item.linkHost(), self.item.message() }) catch self.item.title()
+    else
+        std.fmt.bufPrint(&accessible, "{s}: {s}", .{ self.item.title(), self.item.message() }) catch self.item.title();
     target = target.labelled(label);
     if (self.focused(canvas, target)) {
         try canvas.ringAt(bounds, .{ .color = accent, .width = px.px(1.5), .radius = radius });
@@ -92,13 +99,22 @@ pub fn draw(self: *const Card, canvas: *Canvas) !void {
     }
 
     if (self.item.clickable()) {
-        const action: Label = .{ .text = switch (self.item.target) {
+        const action_width = bounds.width - px.px(76);
+        var action: Label = .{ .text = switch (self.item.target) {
             .focus_pane => "Open pane \u{2192}",
             .select_tab => "Open tab \u{2192}",
             .select_workspace => "Open workspace \u{2192}",
-            .none => unreachable,
+            .none => "",
         }, .color = accent, .face = .sans, .size = .small, .bold = true, .underline = self.hovered(canvas, target) };
-        _ = try canvas.textAt(.{ .x = text_x, .y = bounds.y + bounds.height - px.px(14) - px.rowHeight(.small), .width = bounds.width - px.px(76), .height = px.rowHeight(.small) }, action);
+        // A link names its host before the click, so a card cannot pass one
+        // page off as another; a host too long to fit keeps its end, where
+        // the domain that owns it is.
+        var link_buffer: [link_label_bytes]u8 = undefined;
+        if (self.item.link_len != 0) {
+            action.text = try fitHost(canvas, action, self.item.linkHost(), action_width, &link_buffer);
+        }
+
+        _ = try canvas.textAt(.{ .x = text_x, .y = bounds.y + bounds.height - px.px(14) - px.rowHeight(.small), .width = action_width, .height = px.rowHeight(.small) }, action);
     }
 
     const close: Rect = .{ .x = bounds.x + bounds.width - px.px(34), .y = bounds.y + px.px(8), .width = px.px(26), .height = px.px(26) };
@@ -116,6 +132,27 @@ pub fn draw(self: *const Card, canvas: *Canvas) !void {
     self.register(dismiss);
     canvas.quads.fadeFrom(first, self.opacity);
     canvas.quads.clipFrom(first, self.clip);
+}
+
+// "Open HOST ↗", or "Open …END-OF-HOST ↗" cut from the front until it fits
+// `width`. Hosts are ASCII, so bytes are graphemes.
+fn fitHost(canvas: *Canvas, style: Label, host: []const u8, width: f32, buffer: *[link_label_bytes]u8) ![]const u8 {
+    var probe = style;
+    probe.text = std.fmt.bufPrint(buffer, "Open {s} \u{2197}", .{host}) catch return host;
+    const full = try canvas.measure(probe);
+    if (full <= width) {
+        return probe.text;
+    }
+
+    var keep: usize = @intFromFloat(@floor(@as(f32, @floatFromInt(host.len)) * width / full));
+    while (keep > 0) : (keep -= 1) {
+        probe.text = std.fmt.bufPrint(buffer, "Open \u{2026}{s} \u{2197}", .{host[host.len - keep ..]}) catch return host;
+        if (try canvas.measure(probe) <= width) {
+            return probe.text;
+        }
+    }
+
+    return std.fmt.bufPrint(buffer, "Open \u{2197}", .{}) catch "";
 }
 
 fn register(self: *const Card, value: Target) void {

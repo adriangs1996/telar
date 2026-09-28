@@ -315,8 +315,9 @@ _Avoid_: Localhost, home machine
 
 **Machine profile**:
 The saved record of how to reach a machine: a stable id, a label, an SSH
-destination, an optional color and whether windows connect to it. It never
-holds credentials.
+destination, an optional color, whether windows connect to it, and after
+setup the path of its telar and how its agent logins stood. It never holds
+credentials.
 _Avoid_: Remote config, connection, host entry
 
 **Machine label**:
@@ -328,6 +329,19 @@ _Avoid_: Alias, hostname
 The machine whose runtime a window presents and sends input to. A window has
 exactly one.
 _Avoid_: Current host, selected server
+
+**Machine setup**:
+Making a machine ready for the window with `telar machine setup`: this build
+of telar at a path the profile saves, the person's agents installed and
+configured there, and each agent's own login on that machine. It is
+idempotent, and it never moves a credential.
+_Avoid_: Provisioning, bootstrap, install
+
+**Agent login**:
+One agent's own account session on one machine, made through the agent's
+official flow and revocable there alone. Setup records whether it is
+`pending`, `done` or `failed` as it last saw it.
+_Avoid_: Credentials sync, token copy
 
 **Dispatch**:
 Starting work on another machine: one CLI command, a worktree or an agent. The

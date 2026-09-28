@@ -1,5 +1,5 @@
 //! `telar machine …`: add, rename, enable, disable, remove, list and check
-//! the saved machines in `machines.json`. Every change holds the file's lock,
+//! the saved machines in `machines.json`, and set one up. Every change holds the file's lock,
 //! then replaces it atomically; open windows follow it through their watch.
 //! Removing or disabling a machine never touches its runtime.
 const client = @import("telar-client");
@@ -7,6 +7,8 @@ const core = @import("telar-core");
 const std = @import("std");
 const MachineOptions = @import("arguments/MachineOptions.zig");
 const control = @import("control.zig");
+const machine_setup = @import("machine_setup.zig");
+const config_receive = @import("config_receive.zig");
 const remote = client.remote;
 const profile_file = client.profile_file;
 const machine_profiles = client.machine_profiles;
@@ -22,11 +24,17 @@ const detail_bytes = 1024;
 /// const status = try machine_profiles.run(process_init, options);
 /// ```
 pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
+    if (options.action == .receive_config) {
+        return config_receive.run(init);
+    }
+
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try profile_file.path(init.minimal.environ, &path_buffer);
     const profiles = profile_file.load(init.io, init.gpa, path) catch |err| return report(init, err);
 
     switch (options.action) {
+        .setup => return machine_setup.run(init, options),
+        .receive_config => unreachable,
         .list => return list(init, &profiles, options.json),
         .check => {
             const row = profiles.find(std.mem.span(options.label.?)) orelse return report(init, error.UnknownMachine);
@@ -42,7 +50,9 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
                 .enabled = !options.disabled,
             }) catch |err| return report(init, err);
 
-            if (options.check) {
+            // Setup reaches the machine first and checks it last, in its own
+            // report, so `--check` beside `--setup` adds no second one.
+            if (options.check and !options.setup) {
                 const status = try check(init, &profile, options.json);
                 if (status != 0) {
                     return status;
@@ -59,13 +69,17 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
             .rename => .rename,
             .enable => .enable,
             .disable => .disable,
-            .list, .check => unreachable,
+            .list, .check, .setup, .receive_config => unreachable,
         },
         .label = std.mem.span(options.label.?),
         .value = if (options.value) |value| std.mem.span(value) else "",
         .color = if (options.color) |color| std.mem.span(color) else null,
         .enabled = !options.disabled,
     }) catch |err| return report(init, err);
+
+    if (options.action == .add and options.setup) {
+        return machine_setup.run(init, options);
+    }
 
     return 0;
 }
@@ -103,6 +117,13 @@ fn list(init: std.process.Init, profiles: *const core.MachineProfiles, json: boo
                 try writer.print("\t{s}", .{color});
             }
 
+            var first_login = true;
+            for (std.enums.values(core.MachineProfile.LoginAgent)) |agent| {
+                const login = profile.logins.get(agent) orelse continue;
+                try writer.print("{s}{s} {s}", .{ if (first_login) "\tlogins: " else ", ", @tagName(agent), @tagName(login) });
+                first_login = false;
+            }
+
             try writer.writeByte('\n');
         }
     }
@@ -118,7 +139,10 @@ fn check(init: std.process.Init, profile: *const core.MachineProfile, json: bool
 
     var detail_buffer: [detail_bytes]u8 = undefined;
     var detail: std.Io.Writer = .fixed(&detail_buffer);
-    const found = remote.discover(init.io, init.gpa, init.minimal.environ, profile.destination(), &detail) catch |err| {
+    const found = remote.discover(init.io, init.gpa, init.minimal.environ, .{
+        .destination = profile.destination(),
+        .telar_path = profile.telarPath(),
+    }, &detail) catch |err| {
         if (json) {
             try writer.writeAll("{\"label\":");
             try control.writeJsonString(writer, profile.label());
