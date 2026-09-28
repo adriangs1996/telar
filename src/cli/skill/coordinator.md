@@ -74,7 +74,8 @@ theirs.
 ## Limits telar enforces
 
 - A task pane the user has focused refuses your text (`pane_focused`): the user
-  is typing there. Retry after telling them.
+  may be typing there. Retry after telling them. A tab you open yourself with
+  `telar tab create --background` does not take their focus.
 - Prompts to one agent are budgeted; wait for its answer before sending more.
 - Removing a worktree with local changes or deleting its branch needs the user
   at a terminal: suggest `telar worktree remove <branch>` and let them run it.

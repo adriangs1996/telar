@@ -103,7 +103,7 @@ pub fn describe(err: anyerror) []const u8 {
         error.UnexpectedRuntimeResponse => "unexpected reply from the runtime",
         error.WorktreeNotFound => "no tracked worktree matches that branch or title",
         error.WorkspaceNotFound => "workspace not found",
-        error.PaneFocused => "a person is typing in that pane; try again once they leave it",
+        error.PaneFocused => "that pane has the focus in an attached telar window, where a person may type; try again once another pane has it, or open tabs for automation with `telar tab create --background`",
         error.PromptRateLimited => "prompt budget for that pane is spent; wait for its answer with `telar agent wait`",
         error.AgentNotWorking => "the agent is not working; nothing to interrupt",
         error.InterruptUnsupported => "that agent declares no interrupt key",

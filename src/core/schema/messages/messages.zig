@@ -100,6 +100,7 @@ const PaneProgress = @import("PaneProgress.zig");
 const RegisterWorktree = @import("RegisterWorktree.zig");
 const WorktreeRegistered = @import("WorktreeRegistered.zig");
 const LaunchWorktreeView = @import("LaunchWorktreeView.zig");
+const LaunchTabView = @import("LaunchTabView.zig");
 const ForgetWorktree = @import("ForgetWorktree.zig");
 const InterruptAgent = @import("InterruptAgent.zig");
 const ReportAgentProgress = @import("ReportAgentProgress.zig");
@@ -187,6 +188,7 @@ pub const ClientMessage = union(enum) {
     forget_worktree: ForgetWorktree,
     interrupt_agent: InterruptAgent,
     report_agent_progress: ReportAgentProgress,
+    launch_tab: LaunchTabView,
 };
 
 const ChangeReviewChanged = @import("ChangeReviewChanged.zig");
@@ -328,6 +330,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .forget_worktree => .{ .forget_worktree = try GenericDerived(ForgetWorktree).decode(&decoder) },
         .interrupt_agent => .{ .interrupt_agent = try GenericDerived(InterruptAgent).decode(&decoder) },
         .report_agent_progress => .{ .report_agent_progress = try agent.decodeReportAgentProgress(&decoder) },
+        .launch_tab => .{ .launch_tab = try tab.decodeLaunchTab(&decoder) },
     };
     try decoder.ensureEnd();
     return message;

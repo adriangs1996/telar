@@ -50,6 +50,13 @@ Runtime rejection becomes an owned failure notice. Unknown, incompatible,
 wrong-workspace or replayed replies cannot mutate tabs. Presentation observes
 model revisions; this operation does not draw.
 
+A control client (`telar tab create --background`) sends `launch_tab`
+instead: the runtime opens the tab and its root pane in the named workspace
+with an explicit directory (`tab_creation.launch`), leases no geometry,
+attaches nobody and answers `pane_opened`. Clients showing the workspace
+reconcile the new tab from `resync_required` and keep their active tab and
+focus.
+
 Source: `src/client/workspace/tab_creation.zig`, `src/model/state/ClientModel.zig`
 and `src/model/workspace/tab_creation.zig`.
 Tests: `src/client_tests/tab_lifecycle.zig`,

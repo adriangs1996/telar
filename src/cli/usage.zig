@@ -19,6 +19,7 @@ pub const text =
     \\         telar client list [--json] [--socket PATH]
     \\         telar client get ID [--json] [--socket PATH]
     \\         telar tab create --client ID [--label TEXT] [--json] [--socket PATH]
+    \\         telar tab create --background [--workspace ID] [--label TEXT] [--json] [--socket PATH]
     \\         telar tab select ID --client ID [--json] [--socket PATH]
     \\         telar tab next --client ID [--json] [--socket PATH]
     \\         telar tab previous --client ID [--json] [--socket PATH]

@@ -13,8 +13,8 @@ const Worktrees = @import("../workspace/Worktrees.zig");
 const client_request = @import("client_request.zig");
 const delivery_namespace = @import("delivery/delivery_namespace.zig");
 const pane_launch = @import("pane_launch.zig");
-const resync_required = @import("resync_required.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
+const tab_creation = @import("tab_creation.zig");
 const tab_removal = @import("tab_removal.zig");
 
 /// Tracks the worktree a CLI created and answers with its identity.
@@ -191,33 +191,19 @@ const TabLaunch = struct {
 };
 
 fn addTab(model: *RuntimeModel, session: *Session, tab: TabLaunch) !core.PaneOpened {
-    const workspaces = &model.workspaces;
-    const workspace_id = workspaces.id[tab.workspace_slot];
-    const tab_id = try workspaces.nextTabId();
-    const position = try workspaces.addTab(tab.workspace_slot, tab_id, tab.request.label);
-    const location: core.TabLocation = .{ .workspace = .{ .workspace = workspace_id }, .tab_id = tab_id };
-    var committed = false;
-    defer if (!committed) {
-        std.debug.assert(workspaces.tab_count[tab.workspace_slot] == position + 1);
-        workspaces.tab_count[tab.workspace_slot] -= 1;
-    };
-
-    const pane = pane_launch.launch(model, .{
-        .location = location,
+    const pane = try tab_creation.open(model, session, .{
+        .workspace_slot = tab.workspace_slot,
+        .label = tab.request.label,
         .size = tab.request.size,
         .launch = tab.request.launch,
         .launch_cwd = model.worktrees.path[tab.worktree_slot],
-        .workspace_path = workspaces.path[tab.workspace_slot],
-    }) catch |err| return pane_launch.requestError(err);
+    });
 
-    workspaces.recordTabCreated(tab_id);
-    committed = true;
-    resync_required.notify(model, .{ .origin = session.key, .workspace = location.workspace });
     startCommand(model, tab.worktree_slot, pane, tab.request);
     return .{
         .request_id = tab.request.request_id,
         .pane_id = pane.id,
-        .location = location,
+        .location = pane.location,
         .created = false,
         .pane_generation = pane.generation,
     };

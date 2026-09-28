@@ -17,7 +17,7 @@ pub fn execute(self: *TabControl) !void {
         .rename => try self.rename(),
         .close => try self.close(),
         .move => try self.move(),
-        .list => return error.InvalidTabAction,
+        .list, .create => return error.InvalidTabAction,
     }
 }
 

@@ -34,6 +34,7 @@ pub fn classify(tag: Tag) RequestClass {
         .request_pane_focus,
         .register_worktree,
         .launch_worktree,
+        .launch_tab,
         .forget_worktree,
         .interrupt_agent,
         .report_agent_progress,

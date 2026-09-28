@@ -17,6 +17,7 @@ telar agent read <target> [--lines 40] [--source recent|screen] [--json]
 telar agent report-session <pane|--current> <session-id>
 telar pane read <pane|--current> [--lines 40] [--source recent|screen] [--json]
 telar pane send-keys <pane|--current> "text" [--enter]
+telar tab create --background [--workspace <id>] [--label name] [--json]
 telar api schema [--json]
 telar worktree create <branch> --title "title" [--from <ref>] [--workspace <id|dir>] [--json] [-- <command...>]
 telar worktree exec <branch> [--label name] [--json] -- <command...>

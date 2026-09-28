@@ -61,6 +61,7 @@ pub const ClientTag = enum(u8) {
     forget_worktree = 0x3e,
     interrupt_agent = 0x3f,
     report_agent_progress = 0x40,
+    launch_tab = 0x41,
 };
 
 pub const ServerTag = enum(u8) {

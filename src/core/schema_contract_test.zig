@@ -62,7 +62,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 121;
+const corpus_len = 122;
 const corpus_storage_size = 12 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -305,6 +305,18 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .launch = .{
                 .cwd = "/work",
                 .cwd_source = @enumFromInt(7),
+                .arguments = &.{"/bin/sh"},
+            },
+        }),
+    ));
+    helper.add(.{ .name = "launch_tab", .direction = .client, .golden_hex = golden.launch_tab }, helper.commit(
+        try tab_module.encodeLaunchTab(helper.space(), .{
+            .request_id = @enumFromInt(41),
+            .workspace = @enumFromInt(7),
+            .label = "logs",
+            .size = .{ .cols = 80, .rows = 24 },
+            .launch = .{
+                .cwd = "/work",
                 .arguments = &.{"/bin/sh"},
             },
         }),

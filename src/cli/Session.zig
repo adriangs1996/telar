@@ -495,6 +495,21 @@ pub fn launchWorktree(self: *Session, request: core.LaunchWorktree) !core.PaneOp
     };
 }
 
+/// Opens a tab in a workspace without attaching this session, so no UI
+/// moves its focus to it.
+///
+/// ```zig
+/// const opened = try session.launchTab(.{ .request_id = .none, .workspace = id, .size = size, .launch = launch });
+/// ```
+pub fn launchTab(self: *Session, request: core.LaunchTab) !core.PaneOpened {
+    const response = try self.exchange(core.encodeLaunchTab, request);
+    return switch (response) {
+        .pane_opened => |opened| opened,
+        .request_failed => |failure| self.refuse(failure),
+        else => error.UnexpectedRuntimeResponse,
+    };
+}
+
 /// Closes a worktree's tabs and stops tracking it.
 ///
 /// ```zig
