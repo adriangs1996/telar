@@ -29,7 +29,7 @@ telar worktree fetch <branch> --machine <label> [--json]
 telar machine list [--json]
 telar --machine <label> <any command above>
 telar --skill [coordinator]
-telar integration install|uninstall|status claude|codex|pi|cursor
+telar integration install|uninstall|status claude|codex|pi|cursor|opencode
 ```
 
 A `<target>` is a pane's numeric id, its agent's session title
@@ -75,7 +75,8 @@ Only commits travel; uncommitted files stay here. `telar worktree fetch
 4. Nothing here changes layout or focus; those belong to the user's client.
 5. `agent report-session` stores your own session id with your pane. After a
    runtime restart, telar relaunches the pane's shell and types the resume
-   command for it (`claude --resume`, `codex resume`, `cursor-agent --resume`). Agent hooks report the
+   command for it (`claude --resume`, `codex resume`, `pi --session`, `cursor-agent --resume`,
+   `opencode --session`). Agent hooks report the
    `session_id` they receive through the same runtime request.
 
 ## Orchestrating

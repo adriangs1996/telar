@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Rasterize the provider SVGs into the sidebar atlas.
 
-Claude and Pi retain their colors. OpenAI and Cursor are white so the renderer
-can tint them with the theme's foreground color.
+Claude and Pi retain their colors. OpenAI, Cursor and OpenCode are white so the
+renderer can tint them with the theme's foreground color.
 
 Requires rsvg-convert and Pillow. Run from any directory; output is reproducible
 with librsvg 2.62.3 and Pillow 12.2.0.
@@ -15,7 +15,7 @@ from PIL import Image
 
 
 ASSETS = Path(__file__).resolve().parents[1] / "src" / "assets"
-SOURCES = ("Claude-symbol.svg", "OpenAI-symbol.svg", "Pi-symbol.svg", "Cursor-symbol.svg")
+SOURCES = ("Claude-symbol.svg", "OpenAI-symbol.svg", "Pi-symbol.svg", "Cursor-symbol.svg", "OpenCode-symbol.svg")
 SIDE = 64
 
 

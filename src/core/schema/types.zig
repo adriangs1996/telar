@@ -305,11 +305,12 @@ pub const AgentProvider = enum(u8) {
     codex = 2,
     pi = 3,
     cursor = 4,
+    opencode = 5,
     _,
 };
 
 pub const max_agent_manifests = 16;
-pub const first_custom_agent_provider: u8 = 5;
+pub const first_custom_agent_provider: u8 = 6;
 pub const max_agent_provider_index: u8 = first_custom_agent_provider + max_agent_manifests - 1;
 pub const max_agent_provider_name_bytes = 32;
 /// Bound for a manifest display name such as "Claude Code".

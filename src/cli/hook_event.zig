@@ -10,8 +10,9 @@ pub const Buffer = [core.max_agent_last_event_bytes]u8;
 
 /// The tool input keys worth showing next to the tool name, in the order
 /// they are tried. Shell commands and paths come first because they name
-/// what the person will be asked about.
-const argument_keys = [_][]const u8{ "command", "cmd", "file_path", "path", "pattern", "url", "query", "prompt", "description" };
+/// what the person will be asked about. OpenCode's file tools name their
+/// path `filePath`.
+const argument_keys = [_][]const u8{ "command", "cmd", "file_path", "filePath", "path", "pattern", "url", "query", "prompt", "description" };
 
 /// Copies the first control-free line of `text` into `buffer`, cut to the
 /// wire bound on a UTF-8 boundary.

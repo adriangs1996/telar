@@ -317,6 +317,7 @@ test "manifest names select the built-in provider mark or none" {
     try std.testing.expectEqual(core.AgentProvider.codex, providerOf("codex"));
     try std.testing.expectEqual(core.AgentProvider.pi, providerOf("pi"));
     try std.testing.expectEqual(core.AgentProvider.cursor, providerOf("cursor"));
+    try std.testing.expectEqual(core.AgentProvider.opencode, providerOf("opencode"));
     try std.testing.expectEqual(core.AgentProvider.unknown, providerOf("aider"));
     try std.testing.expectEqual(core.AgentProvider.unknown, providerOf(""));
 }
