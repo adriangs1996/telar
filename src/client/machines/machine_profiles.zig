@@ -3,6 +3,7 @@
 //! `disable` and the window's machine picker, which writes the file on a
 //! worker. A change never touches a runtime; open windows follow the file.
 const core = @import("telar-core");
+const privatefile = @import("privatefile");
 const std = @import("std");
 const MachineEdit = @import("MachineEdit.zig");
 const MachineEditJob = @import("MachineEditJob.zig");
@@ -31,6 +32,7 @@ pub fn change(io: std.Io, profiles: *core.MachineProfiles, edit: MachineEdit) !v
             .label = edit.label,
             .destination = edit.value,
             .color = edit.color,
+            .enabled = edit.enabled,
         })),
         .remove => try profiles.remove(edit.label),
         .rename => {
@@ -42,12 +44,17 @@ pub fn change(io: std.Io, profiles: *core.MachineProfiles, edit: MachineEdit) !v
     }
 }
 
-/// Reads the file at `path`, makes one change and replaces the file.
+/// Reads the file at `path`, makes one change and replaces the file, all
+/// under the file's lock, so a change the CLI or another window makes
+/// meanwhile waits for this one instead of being overwritten by it.
 ///
 /// ```zig
 /// try machine_profiles.store(io, gpa, path, .{ .kind = .remove, .label = "box" });
 /// ```
 pub fn store(io: std.Io, gpa: std.mem.Allocator, path: []const u8, edit: MachineEdit) !void {
+    const held = try privatefile.lock(io, path);
+    defer held.close(io);
+
     var profiles = try profile_file.load(io, gpa, path);
     try change(io, &profiles, edit);
     try profile_file.save(io, path, &profiles);
@@ -117,6 +124,7 @@ pub fn describe(err: anyerror) []const u8 {
         error.InsecureFile => "machines.json must be a regular file only its owner can read and write (chmod 600)",
         error.UnknownMachine => "no saved machine has that label; see `telar machine list`",
         error.DuplicateMachineLabel => "that label is already taken, by a saved machine or by this machine",
+        error.DuplicateMachineDestination => "two saved machines cannot share one SSH destination",
         error.TooManyMachines => "machines.json already holds the most machines it can",
         error.InvalidMachineLabel => "labels are 1 to 32 letters, digits, '.', '_' or '-', starting with a letter or a digit",
         error.InvalidMachineColor => "colors are #RRGGBB or a theme role such as red or accent",
@@ -157,3 +165,44 @@ test "changes add, rename, disable and remove a machine but never take this mach
     try change(std.testing.io, &profiles, .{ .kind = .remove, .label = "gpu" });
     try std.testing.expectEqual(@as(usize, 0), profiles.slice().len);
 }
+
+test "changes stored at once by several writers all reach the file" {
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(std.testing.io, &directory_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const file_path = try std.fmt.bufPrint(&path_buffer, "{s}/telar/{s}", .{ directory_buffer[0..directory_len], profile_file.file_name });
+
+    const Writer = struct {
+        fn run(path: []const u8, writer: usize, failures: *std.atomic.Value(u32)) void {
+            for (0..adds_per_writer) |add| {
+                var label_buffer: [8]u8 = undefined;
+                const label = std.fmt.bufPrint(&label_buffer, "w{d}-{d}", .{ writer, add }) catch unreachable;
+                store(std.testing.io, std.testing.allocator, path, .{ .kind = .add, .label = label, .value = label }) catch {
+                    _ = failures.fetchAdd(1, .monotonic);
+                };
+            }
+        }
+    };
+
+    var failures: std.atomic.Value(u32) = .init(0);
+    var threads: [writers]std.Thread = undefined;
+    for (&threads, 0..) |*thread, writer| {
+        thread.* = try std.Thread.spawn(.{}, Writer.run, .{ file_path, writer, &failures });
+    }
+
+    for (threads) |thread| {
+        thread.join();
+    }
+
+    const loaded = try profile_file.load(std.testing.io, std.testing.allocator, file_path);
+    try std.testing.expectEqual(@as(u32, 0), failures.load(.monotonic));
+    try std.testing.expectEqual(@as(u8, writers * adds_per_writer), loaded.count);
+}
+
+/// Writers and changes in the concurrent store test; together they fill
+/// the file.
+const writers = 4;
+const adds_per_writer = core.MachineProfiles.capacity / writers;

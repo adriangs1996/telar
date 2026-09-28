@@ -814,7 +814,10 @@ pub fn hiddenMachineDefersAndLeaves(comptime show: fn (*Client) anyerror!void, c
 
     try hide(app);
     try std.testing.expect(app.model.workspace == null);
-    try std.testing.expectEqual(@as(?core.WorkspaceId, @enumFromInt(1)), app.left_workspace);
+    const left: core.WorkspaceLocation = .{
+        .workspace = @enumFromInt(1),
+    };
+    try std.testing.expectEqual(@as(?core.WorkspaceLocation, left), app.left_workspace);
     try std.testing.expect(app.model.to_runtime.peek().?.* == .detach_pane);
     app.model.to_runtime.discardQueued();
 

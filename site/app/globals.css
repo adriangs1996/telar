@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* Every color on the page is a theme token. Vesper, as
-   src/frontend/ui/theme.zig defines it, is the default; the switcher under the
+   src/model/appearance/theme_support.zig defines it, is the default; the switcher under the
    demo puts a `data-theme` on <html> and the whole page follows. The demo's
    pane content is the one exception: what runs inside a pane keeps its own
    colors, so it reads the `--vesper-*` constants. */

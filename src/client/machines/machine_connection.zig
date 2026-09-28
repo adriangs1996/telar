@@ -1,6 +1,6 @@
 //! Connecting a client to its machine's runtime, off the event loop: the
 //! local runtime, started when none is running, or a remote one through its
-//! SSH forward. A connection job runs this and hands the client the result.
+//! SSH bridge. A connection job runs this and hands the client the result.
 const std = @import("std");
 const MachineTarget = @import("MachineTarget.zig").MachineTarget;
 const RuntimeConnection = @import("RuntimeConnection.zig");
@@ -20,16 +20,39 @@ pub fn connect(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ,
             connector.report = report;
             return .{ .channel = try connector.connectOrStart(selection) };
         },
-        .remote => |machine| {
-            var forward = try remote.establish(io, gpa, environ, machine, report);
-            errdefer forward.stop(io);
-
-            var connector = try RuntimeConnector.init(io, environ, forward.localPathZ());
-            connector.report = report;
-            return .{
-                .channel = try remote.connectForwarded(io, &connector),
-                .forward = forward,
-            };
-        },
+        .remote => |machine| return remote.connect(io, gpa, environ, machine, report),
     }
+}
+
+/// Whether a failed `connect` stays failed however often it is tried again:
+/// a host key or login SSH refuses, a `telar` the remote shell cannot run
+/// or cannot be read, a `telar` or runtime of another build, `--fresh`
+/// beside a running runtime, or a runtime directory someone else could use.
+/// Anything else may pass.
+///
+/// ```zig
+/// link.phase = if (machine_connection.permanent(err)) .failed else .lost;
+/// ```
+pub fn permanent(err: anyerror) bool {
+    return switch (err) {
+        error.SshHostKeyRejected,
+        error.SshAuthenticationFailed,
+        error.RemoteTelarMissing,
+        error.RemoteDiscoveryUnreadable,
+        error.RemoteTelarIncompatible,
+        error.RemoteRuntimeIncompatible,
+        error.IncompatibleSchema,
+        error.RuntimeAlreadyRunning,
+        error.InvalidRuntimeDirectory,
+        error.InvalidRemoteDestination,
+        => true,
+        else => false,
+    };
+}
+
+test "only failures that retrying cannot fix are permanent" {
+    try std.testing.expect(permanent(error.SshHostKeyRejected));
+    try std.testing.expect(permanent(error.IncompatibleSchema));
+    try std.testing.expect(!permanent(error.RemoteEndpointUnavailable));
+    try std.testing.expect(!permanent(error.ConnectionRefused));
 }

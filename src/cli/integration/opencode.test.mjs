@@ -46,6 +46,7 @@ async function fixture(env = { TELAR_PANE_ID: "1", TELAR_PANE_GENERATION: "1" })
   const load = children.splice(0).map((process) => { process.emit("close"); return process.payload; });
   return {
     load,
+    plugin: () => sandbox.TelarPlugin({ directory: "/work/proj" }),
     hooks, children, intervals, timeouts, flush,
     event: (type, properties) => hooks.event({ event: { type, properties } }),
     payloads: () => { flush(); return children.map((process) => process.payload); },
@@ -207,4 +208,76 @@ test("OpenCode reports the exit from the last disposed instance and waits for de
   assert.deepEqual(f.children.map((process) => process.payload.event), ["chat.message", "dispose"]);
   assert.equal(f.children[1].payload.session_id, root);
   assert.equal(f.intervals.size, 0);
+});
+
+test("OpenCode keeps an open permission while another tool call of the turn starts", async () => {
+  const f = await fixture();
+  await f.hooks["chat.message"]({ sessionID: root });
+  await f.hooks["tool.execute.before"]({ tool: "bash", sessionID: root, callID: "call-1" }, { args: { command: "rm -rf build" } });
+  await f.event("permission.asked", { id: "per_1", sessionID: root, permission: "bash", metadata: { command: "rm -rf build" } });
+  // OpenCode runs each call of a step on its own, and asks inside the tool, after this hook.
+  await f.hooks["tool.execute.before"]({ tool: "read", sessionID: root, callID: "call-2" }, { args: { filePath: "/work/proj/README.md" } });
+  await f.event("permission.replied", { sessionID: root, requestID: "per_1", reply: "once" });
+  const [, first, asked, second, replied] = f.payloads();
+  assert.equal(first.blocked, undefined);
+  assert.equal(asked.blocked, "permission");
+  assert.equal(second.event, "tool.execute.before");
+  assert.equal(second.blocked, "permission");
+  assert.equal(replied.blocked, undefined);
+  assert.equal(replied.busy, true);
+});
+
+test("OpenCode reports the idle TUI again when it recreates its instances", async () => {
+  const f = await fixture();
+  await f.hooks["chat.message"]({ sessionID: root });
+  await f.event("permission.asked", { id: "per_1", sessionID: root, permission: "bash", metadata: { command: "ls" } });
+  // A reload (SIGUSR2, a config change) disposes every instance, which
+  // rejects open prompts without replies, then loads the plugin again from
+  // the same module.
+  const disposed = f.hooks.dispose();
+  f.flush();
+  await disposed;
+  await f.plugin();
+  const payloads = f.payloads();
+  assert.deepEqual(payloads.map((payload) => payload.event), ["chat.message", "permission.asked", "dispose", "load"]);
+  assert.equal(payloads[3].busy, false);
+  assert.equal(payloads[3].blocked, undefined);
+  assert.equal(payloads[3].session_id, root);
+  assert.equal(f.intervals.size, 0);
+});
+
+test("OpenCode trims a prompt too large to deliver instead of dropping it", async () => {
+  const f = await fixture();
+  await f.hooks["chat.message"]({ sessionID: root });
+  const diff = "+" + "x".repeat(80 * 1024);
+  await f.event("permission.asked", { id: "per_1", sessionID: root, permission: "edit", metadata: { filepath: "/work/proj/big.txt", diff } });
+  await f.hooks["tool.execute.before"]({ tool: "write", sessionID: root, callID: "call-1" }, { args: { filePath: "/work/proj/big.txt", content: diff } });
+  const [, asked, write] = f.payloads();
+  assert.equal(asked.event, "permission.asked");
+  assert.equal(asked.blocked, "permission");
+  assert.deepEqual(asked.tool_input, { filepath: "/work/proj/big.txt" });
+  assert.deepEqual(write.tool_input, { filePath: "/work/proj/big.txt" });
+  for (const child of f.children) assert.ok(Buffer.byteLength(JSON.stringify(child.payload)) <= 64 * 1024);
+});
+
+test("OpenCode trims every question but the first from an oversized prompt", async () => {
+  const f = await fixture();
+  const questions = Array.from({ length: 40 }, (_, i) => ({ question: `Question ${i}?`, header: "H", options: [{ label: "x".repeat(2048), description: "" }] }));
+  await f.event("question.asked", { id: "que_1", sessionID: root, questions });
+  const [asked] = f.payloads();
+  assert.equal(asked.blocked, "question");
+  assert.deepEqual(asked.tool_input, { questions: [{ question: "Question 0?" }] });
+});
+
+test("OpenCode renews an open prompt with its request and a reply names the prompt still open", async () => {
+  const f = await fixture();
+  await f.hooks["chat.message"]({ sessionID: root });
+  await f.event("permission.asked", { id: "per_1", sessionID: root, permission: "bash", metadata: { command: "rm -rf build" } });
+  await f.event("permission.asked", { id: "per_2", sessionID: root, permission: "edit", metadata: { filepath: "/work/proj/a.ts" } });
+  f.tick();
+  await f.event("permission.replied", { sessionID: root, requestID: "per_2", reply: "once" });
+  const [, , second, renewed, replied] = f.payloads();
+  assert.deepEqual([second.tool_name, second.tool_input], ["edit", { filepath: "/work/proj/a.ts" }]);
+  assert.deepEqual([renewed.event, renewed.blocked, renewed.tool_name, renewed.tool_input], ["state_snapshot", "permission", "edit", { filepath: "/work/proj/a.ts" }]);
+  assert.deepEqual([replied.event, replied.blocked, replied.tool_name, replied.tool_input], ["permission.replied", "permission", "bash", { command: "rm -rf build" }]);
 });

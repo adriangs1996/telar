@@ -135,8 +135,10 @@ pub fn mapPiTitle(buffer: *[core.max_agent_session_title_bytes]u8, input: PiHook
 /// Maps one event of the OpenCode plugin to a report. The plugin keeps the
 /// pane state OpenCode implies: a busy root session works, an open
 /// permission or question blocks, and an idle one is ready, including after
-/// an interrupt. Prompts and tool calls name themselves in `buffer`; the
-/// last plugin instance to be disposed reports the exit.
+/// an interrupt. Every report under an open prompt names that prompt in
+/// `buffer`, and a tool call names itself, but a tool call under an open
+/// prompt reports nothing; the last plugin instance to be disposed reports
+/// the exit.
 ///
 /// ```zig
 /// const report = mapOpenCodeHook(input, &buffer) orelse return;
@@ -145,25 +147,13 @@ pub fn mapOpenCodeHook(input: OpenCodeHookInput, buffer: *hook_event.Buffer) ?Re
     const event = input.event;
     const session = if (core.validateSessionReference(input.session_id)) |_| input.session_id else |_| "";
 
-    if (std.mem.eql(u8, event, "permission.asked")) {
-        return .{
-            .state = .blocked,
-            .blocked_reason = .permission,
-            .event = hook_event.toolCall(buffer, input.tool_name, input.tool_input) orelse "",
-            .session = session,
-        };
-    }
-
-    if (std.mem.eql(u8, event, "question.asked")) {
-        return .{
-            .state = .blocked,
-            .blocked_reason = .question,
-            .event = hook_event.question(buffer, input.tool_input) orelse "",
-            .session = session,
-        };
-    }
-
     if (std.mem.eql(u8, event, "tool.execute.before")) {
+        // A call that starts while another call's prompt is open leaves
+        // that prompt, and its event line, in place.
+        if (input.blocked != .none) {
+            return null;
+        }
+
         return .{
             .state = .working,
             .event = hook_event.toolCall(buffer, input.tool_name, input.tool_input) orelse "",
@@ -174,6 +164,8 @@ pub fn mapOpenCodeHook(input: OpenCodeHookInput, buffer: *hook_event.Buffer) ?Re
     if (std.mem.eql(u8, event, "load") or
         std.mem.eql(u8, event, "chat.message") or
         std.mem.eql(u8, event, "session.status") or
+        std.mem.eql(u8, event, "permission.asked") or
+        std.mem.eql(u8, event, "question.asked") or
         std.mem.eql(u8, event, "permission.replied") or
         std.mem.eql(u8, event, "question.replied") or
         std.mem.eql(u8, event, "question.rejected") or
@@ -183,6 +175,7 @@ pub fn mapOpenCodeHook(input: OpenCodeHookInput, buffer: *hook_event.Buffer) ?Re
             return .{
                 .state = .blocked,
                 .blocked_reason = input.blocked,
+                .event = openCodePromptLine(buffer, input),
                 .session = session,
             };
         }
@@ -200,6 +193,16 @@ pub fn mapOpenCodeHook(input: OpenCodeHookInput, buffer: *hook_event.Buffer) ?Re
     }
 
     return null;
+}
+
+/// The event line of the prompt a plugin report carries: the permission's
+/// request or the first question.
+fn openCodePromptLine(buffer: *hook_event.Buffer, input: OpenCodeHookInput) []const u8 {
+    return switch (input.blocked) {
+        .permission => hook_event.toolCall(buffer, input.tool_name, input.tool_input) orelse "",
+        .question => hook_event.question(buffer, input.tool_input) orelse "",
+        .none, .plan, .other => "",
+    };
 }
 
 /// Maps the root session's title to a title report. OpenCode names every
@@ -1201,6 +1204,36 @@ test "OpenCode permission and question prompts block with their request as the e
     try std.testing.expectEqual(core.AgentBlockedReason.question, asking.blocked_reason);
     try std.testing.expectEqualStrings("Which database?", asking.event);
 
+    // OpenCode's edit, write and apply_patch ask as `edit` with the path in
+    // `metadata.filepath` (packages/opencode/src/tool/edit.ts in v1.18.30).
+    const edit_source =
+        \\{"event":"permission.asked","session_id":"ses_f212d4cc3ffeR3t3CA08EwN5Ap","busy":true,"blocked":"permission",
+        \\"tool_name":"edit","tool_input":{"filepath":"/work/proj/src/main.ts"}}
+    ;
+    const edit = try std.json.parseFromSlice(OpenCodeHookInput, std.testing.allocator, edit_source, .{ .ignore_unknown_fields = true });
+    defer edit.deinit();
+    try std.testing.expectEqualStrings("» edit /work/proj/src/main.ts", mapOpenCodeHook(edit.value, &buffer).?.event);
+
+    // The renewal and a reply that leaves another prompt open carry that
+    // prompt's request, so the event line keeps naming it.
+    const renewal_source =
+        \\{"event":"state_snapshot","session_id":"ses_f212d4cc3ffeR3t3CA08EwN5Ap","busy":true,"blocked":"permission",
+        \\"tool_name":"bash","tool_input":{"command":"rm -rf build"}}
+    ;
+    const renewal = try std.json.parseFromSlice(OpenCodeHookInput, std.testing.allocator, renewal_source, .{ .ignore_unknown_fields = true });
+    defer renewal.deinit();
+    const renewed = mapOpenCodeHook(renewal.value, &buffer).?;
+    try std.testing.expectEqual(core.AgentBlockedReason.permission, renewed.blocked_reason);
+    try std.testing.expectEqualStrings("» bash rm -rf build", renewed.event);
+
+    const reply_source =
+        \\{"event":"permission.replied","session_id":"ses_f212d4cc3ffeR3t3CA08EwN5Ap","busy":true,"blocked":"question",
+        \\"tool_input":{"questions":[{"question":"Which database?"}]}}
+    ;
+    const reply = try std.json.parseFromSlice(OpenCodeHookInput, std.testing.allocator, reply_source, .{ .ignore_unknown_fields = true });
+    defer reply.deinit();
+    try std.testing.expectEqualStrings("Which database?", mapOpenCodeHook(reply.value, &buffer).?.event);
+
     try std.testing.expectError(error.InvalidEnumTag, std.json.parseFromSlice(OpenCodeHookInput, std.testing.allocator, "{\"event\":\"state_snapshot\",\"blocked\":\"approval\"}", .{ .ignore_unknown_fields = true }));
 }
 
@@ -1278,4 +1311,28 @@ test "OpenCode bash calls open and close a command row with the exit status" {
         .exit_code = null,
     }) == null);
     try std.testing.expectEqualStrings("» read /work/proj/README.md", mapOpenCodeHook(.{ .event = "tool.execute.before", .tool_name = "read", .tool_input = read.value }, &buffer).?.event);
+}
+
+test "An OpenCode tool call that starts under an open prompt keeps the prompt" {
+    // OpenCode runs the calls of one step on their own, so a bash call can
+    // start while another call's permission waits for the user.
+    const source =
+        \\{"event":"tool.execute.before","session_id":"ses_f212e24b9ffeeaehDu3OFjSrh8","blocked":"permission","tool_name":"bash",
+        \\"tool_call_id":"call-2","tool_input":{"command":"git status"},"cwd":"/work/proj"}
+    ;
+    const parsed = try std.json.parseFromSlice(OpenCodeHookInput, std.testing.allocator, source, .{ .ignore_unknown_fields = true });
+    defer parsed.deinit();
+    var buffer: hook_event.Buffer = undefined;
+    try std.testing.expect(mapOpenCodeHook(parsed.value, &buffer) == null);
+
+    const started = mapToolCommand(.opencode, .{
+        .event = parsed.value.event,
+        .tool_name = parsed.value.tool_name,
+        .tool_call_id = parsed.value.tool_call_id,
+        .tool_input = parsed.value.tool_input,
+        .cwd = parsed.value.cwd,
+        .session = parsed.value.session_id,
+        .exit_code = parsed.value.exit_code,
+    }).?;
+    try std.testing.expectEqualStrings("git status", started.command);
 }
