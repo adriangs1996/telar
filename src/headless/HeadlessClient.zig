@@ -244,6 +244,13 @@ fn take(self: *HeadlessClient, line: InputLine) !?u8 {
             });
         },
         .mark => |*label| self.trace.record(.{ .kind = .mark, .t_ns = now_ns }, label.slice()),
+        .notification_activate => {
+            self.trace.record(.{ .kind = .input, .t_ns = now_ns, .pane = pane }, "notification");
+            const center = &self.app.model.notification_center;
+            if (center.count != 0) {
+                _ = try client.notifications.activateNotificationNow(&self.app, center.itemAt(center.count - 1).?.id);
+            }
+        },
         .quit => return 0,
     }
 

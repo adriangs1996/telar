@@ -259,6 +259,8 @@ test {
     _ = @import("cli/machine_dispatch.zig");
     _ = @import("cli/machine_setup.zig");
     _ = @import("cli/agent_setup.zig");
+    _ = @import("cli/agent_login.zig");
+    _ = @import("cli/LoginRequest.zig");
     _ = @import("cli/config_allowlist.zig");
     _ = @import("cli/ConfigEntry.zig");
     _ = @import("cli/ConfigRoot.zig");

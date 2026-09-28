@@ -1,6 +1,7 @@
 //! One change to `machines.json`, as `telar machine` and the window's
 //! machine picker both make it. The slices are borrowed until the change is
 //! applied.
+const core = @import("telar-core");
 const MachineEdit = @This();
 
 pub const Kind = enum {
@@ -10,6 +11,7 @@ pub const Kind = enum {
     enable,
     disable,
     place_telar,
+    record_login,
 };
 
 kind: Kind,
@@ -22,3 +24,6 @@ value: []const u8 = "",
 color: ?[]const u8 = null,
 /// Whether windows connect to the new machine, for `add` only.
 enabled: bool = true,
+/// The agent and how its login stood, for `record_login` only.
+login_agent: core.MachineProfile.LoginAgent = .claude,
+login: core.AgentLogin = .pending,

@@ -5,6 +5,7 @@
 const std = @import("std");
 const MachineId = @import("MachineId.zig").MachineId;
 const MachineProfile = @import("MachineProfile.zig");
+const AgentLogin = @import("AgentLogin.zig").AgentLogin;
 const MachineProfiles = @This();
 
 /// Profiles one file holds.
@@ -26,6 +27,13 @@ local_label_len: u8 = 0,
 /// const profiles = try MachineProfiles.parse(gpa, bytes);
 /// ```
 pub fn parse(gpa: std.mem.Allocator, source: []const u8) !MachineProfiles {
+    const WireLogins = struct {
+        claude: ?AgentLogin = null,
+        codex: ?AgentLogin = null,
+        pi: ?AgentLogin = null,
+        cursor: ?AgentLogin = null,
+        opencode: ?AgentLogin = null,
+    };
     const WireProfile = struct {
         id: []const u8,
         label: []const u8,
@@ -33,6 +41,7 @@ pub fn parse(gpa: std.mem.Allocator, source: []const u8) !MachineProfiles {
         color: ?[]const u8 = null,
         enabled: bool = true,
         telar_path: ?[]const u8 = null,
+        logins: ?WireLogins = null,
     };
     const WireFile = struct {
         version: u16,
@@ -62,13 +71,20 @@ pub fn parse(gpa: std.mem.Allocator, source: []const u8) !MachineProfiles {
     }
 
     for (parsed.value.machines) |wire| {
-        try profiles.add(try MachineProfile.init(try MachineId.parse(wire.id), .{
+        var profile = try MachineProfile.init(try MachineId.parse(wire.id), .{
             .label = wire.label,
             .destination = wire.destination,
             .color = wire.color,
             .enabled = wire.enabled,
             .telar_path = wire.telar_path,
-        }));
+        });
+        if (wire.logins) |logins| {
+            inline for (@typeInfo(WireLogins).@"struct".fields) |field| {
+                profile.logins.set(@field(MachineProfile.LoginAgent, field.name), @field(logins, field.name));
+            }
+        }
+
+        try profiles.add(profile);
     }
 
     return profiles;
@@ -122,6 +138,18 @@ pub fn writeProfileJson(writer: *std.Io.Writer, profile: *const MachineProfile) 
     try writer.print(",\"enabled\":{}", .{profile.enabled});
     if (profile.telarPath()) |path| {
         try writer.print(",\"telar_path\":\"{s}\"", .{path});
+    }
+
+    var first_login = true;
+    for (std.enums.values(MachineProfile.LoginAgent)) |agent| {
+        const login = profile.logins.get(agent) orelse continue;
+        try writer.writeAll(if (first_login) ",\"logins\":{" else ",");
+        first_login = false;
+        try writer.print("\"{s}\":\"{s}\"", .{ @tagName(agent), @tagName(login) });
+    }
+
+    if (!first_login) {
+        try writer.writeByte('}');
     }
 
     try writer.writeByte('}');
@@ -218,6 +246,17 @@ pub fn enable(self: *MachineProfiles, label: []const u8, enabled: bool) !void {
     self.rows[row].enabled = enabled;
 }
 
+/// Records how an agent's login on the machine with `label` stood when
+/// setup last looked.
+///
+/// ```zig
+/// try profiles.recordLogin("box", .codex, .done);
+/// ```
+pub fn recordLogin(self: *MachineProfiles, label: []const u8, agent: MachineProfile.LoginAgent, login: AgentLogin) !void {
+    const row = self.find(label) orelse return error.UnknownMachine;
+    self.rows[row].logins.set(agent, login);
+}
+
 /// Records where `telar machine setup` installed telar on the machine with
 /// `label`, so commands stop depending on its PATH.
 ///
@@ -268,6 +307,8 @@ test "profiles round-trip through their JSON" {
         .enabled = false,
         .telar_path = "/home/dev/.local/share/telar/0.3.0/telar",
     }));
+    try profiles.recordLogin("gpu", .codex, .done);
+    try profiles.recordLogin("gpu", .claude, .pending);
 
     var buffer: [max_file_bytes]u8 = undefined;
     var writer: std.Io.Writer = .fixed(&buffer);
@@ -280,6 +321,9 @@ test "profiles round-trip through their JSON" {
     try std.testing.expect(!parsed.rows[1].enabled);
     try std.testing.expectEqual(@as(?[]const u8, null), parsed.rows[0].telarPath());
     try std.testing.expectEqualStrings("/home/dev/.local/share/telar/0.3.0/telar", parsed.rows[1].telarPath().?);
+    try std.testing.expectEqual(@as(?AgentLogin, .done), parsed.rows[1].logins.get(.codex));
+    try std.testing.expectEqual(@as(?AgentLogin, .pending), parsed.rows[1].logins.get(.claude));
+    try std.testing.expectEqual(@as(?AgentLogin, null), parsed.rows[0].logins.get(.codex));
     try std.testing.expectEqual(@as(?[]const u8, null), parsed.localLabel());
 }
 
@@ -307,6 +351,8 @@ test "malformed and conflicting files are refused" {
         .{ "{\"version\":1,\"local_label\":\"a\",\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"a\"}]}", error.DuplicateMachineLabel },
         .{ "{\"version\":1,\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"dev@box\"},{\"id\":\"m-000000000002\",\"label\":\"b\",\"destination\":\"dev@box\"}]}", error.DuplicateMachineDestination },
         .{ "{\"version\":1,\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"a\",\"telar_path\":\"bin/telar\"}]}", error.InvalidRemoteTelarPath },
+        .{ "{\"version\":1,\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"a\",\"logins\":{\"aider\":\"done\"}}]}", error.InvalidMachineProfiles },
+        .{ "{\"version\":1,\"machines\":[{\"id\":\"m-000000000001\",\"label\":\"a\",\"destination\":\"a\",\"logins\":{\"codex\":\"maybe\"}}]}", error.InvalidMachineProfiles },
         .{ "{\"version\":1,\"machines\":[{\"id\":\"1\",\"label\":\"a\",\"destination\":\"a\"}]}", error.InvalidMachineId },
     };
 

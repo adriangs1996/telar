@@ -13,6 +13,8 @@ pub const InputLine = union(enum) {
     resize: InputSize,
     /// A point in time the trace records under a label.
     mark: InputLabel,
+    /// The newest notification is clicked, as a window's card would be.
+    notification_activate,
     /// The client leaves with status 0.
     quit,
 };

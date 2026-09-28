@@ -17,6 +17,7 @@ const remote_shell = @import("remote_shell.zig");
 const telar_release = @import("telar_release.zig");
 const agent_setup = @import("agent_setup.zig");
 const config_sync = @import("config_sync.zig");
+const agent_login = @import("agent_login.zig");
 const remote = client.remote;
 const profile_file = client.profile_file;
 const machine_profiles = client.machine_profiles;
@@ -123,8 +124,27 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
         try config_sync.run(init, &report, target.destination(), &current, wanted);
     }
 
+    if (options.skip.contains(.login)) {
+        try report.end(.logins, .skipped, "--skip login", .{});
+    } else if (try savedProfile(init, path, target.label())) |profile| {
+        try agent_login.run(init, &report, &profile, &current, .{
+            .wanted = wanted,
+            .interactive = interactive,
+            .profiles_path = path,
+        });
+    } else {
+        try report.end(.logins, .skipped, "{s} is not saved, so its logins cannot be recorded", .{target.label()});
+    }
+
     try check(init, &report, &target, telar_path);
     return finish(&report, &target);
+}
+
+// The profile as saved now, with the telar path setup just recorded.
+fn savedProfile(init: std.process.Init, path: []const u8, label: []const u8) !?core.MachineProfile {
+    const profiles = try profile_file.load(init.io, init.gpa, path);
+    const row = profiles.find(label) orelse return null;
+    return profiles.rows[row];
 }
 
 // What the machine has after installers ran; null keeps the first probe.

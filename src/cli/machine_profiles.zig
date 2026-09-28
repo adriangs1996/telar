@@ -115,6 +115,13 @@ fn list(init: std.process.Init, profiles: *const core.MachineProfiles, json: boo
                 try writer.print("\t{s}", .{color});
             }
 
+            var first_login = true;
+            for (std.enums.values(core.MachineProfile.LoginAgent)) |agent| {
+                const login = profile.logins.get(agent) orelse continue;
+                try writer.print("{s}{s} {s}", .{ if (first_login) "\tlogins: " else ", ", @tagName(agent), @tagName(login) });
+                first_login = false;
+            }
+
             try writer.writeByte('\n');
         }
     }

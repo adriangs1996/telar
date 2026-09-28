@@ -120,6 +120,7 @@ pub const Launch = @import("schema/Launch.zig");
 pub const LaunchView = @import("schema/messages/LaunchView.zig");
 pub const MachineId = @import("MachineId.zig").MachineId;
 pub const MachineProfile = @import("MachineProfile.zig");
+pub const AgentLogin = @import("AgentLogin.zig").AgentLogin;
 pub const MachineProfileFields = @import("MachineProfileFields.zig");
 pub const MachineProfiles = @import("MachineProfiles.zig");
 pub const Mouse = @import("schema/Mouse.zig");
@@ -464,6 +465,7 @@ test {
     _ = @import("history_filter.zig");
     _ = @import("MachineId.zig");
     _ = @import("MachineProfile.zig");
+    _ = @import("AgentLogin.zig");
     _ = @import("MachineProfiles.zig");
     _ = @import("plain_text.zig");
     _ = @import("plugin.zig");

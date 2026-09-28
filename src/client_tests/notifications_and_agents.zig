@@ -412,6 +412,45 @@ test "runtime notifications and delivery failures reach the toasts" {
     try harness.settle();
 }
 
+test "a toast that carries a link opens it through the link opener when clicked" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const url = "https://auth.openai.com/codex/device";
+    var payload: [512]u8 = undefined;
+    const encoded = try core.encodeNotification(&payload, .{
+        .title = "Log in to Codex",
+        .message = "on box: open the page, sign in and enter the code",
+        .link = url,
+    });
+
+    _ = try client_module.runtime_messages.handleServerMessage(
+        client,
+        .{
+            .notification = (try core.decodeServer(encoded)).notification,
+        },
+    );
+    @memset(&payload, 'x');
+
+    const item = client.model.notification_center.itemAt(0).?;
+    try std.testing.expect(item.clickable());
+    try std.testing.expectEqualStrings(url, item.link());
+    while (client.to_background.pop()) |_| {}
+
+    const activation: client_module.ViewInteractionCommand = .{
+        .intent = .{
+            .notification_activate = item.id,
+        },
+    };
+    _ = try client_module.view_interactions.apply(client, client.model.tabs.active, activation);
+
+    const job = client.to_background.pop() orelse return error.TestExpectedLinkJob;
+    try std.testing.expectEqualStrings(url, job.link.uri());
+    try std.testing.expectEqual(@as(?client_module.BackgroundJob, null), client.to_background.pop());
+}
+
 test "toast activation commits by id before following its navigation target" {
     var harness: ClientHarness = undefined;
     try harness.init();

@@ -42,6 +42,7 @@ pub fn change(io: std.Io, profiles: *core.MachineProfiles, edit: MachineEdit) !v
         .enable => try profiles.enable(edit.label, true),
         .disable => try profiles.enable(edit.label, false),
         .place_telar => try profiles.placeTelar(edit.label, edit.value),
+        .record_login => try profiles.recordLogin(edit.label, edit.login_agent, edit.login),
     }
 }
 

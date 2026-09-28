@@ -6,6 +6,7 @@ const MachineId = @import("MachineId.zig").MachineId;
 const ssh_destination = @import("ssh_destination.zig");
 const MachineProfileFields = @import("MachineProfileFields.zig");
 const remote_telar = @import("remote_telar.zig");
+const AgentLogin = @import("AgentLogin.zig").AgentLogin;
 const MachineProfile = @This();
 
 /// The longest label, in bytes.
@@ -23,6 +24,12 @@ color_len: u8 = 0,
 enabled: bool,
 telar_path_bytes: [remote_telar.max_path_bytes]u8 = undefined,
 telar_path_len: u8 = 0,
+/// Each built-in agent's login there, as setup last saw it.
+logins: std.EnumArray(LoginAgent, ?AgentLogin) = .initFill(null),
+
+/// The agents whose logins a profile records, named as `telar integration`
+/// names them.
+pub const LoginAgent = enum { claude, codex, pi, cursor, opencode };
 
 /// Validates every field and copies it into a profile.
 ///
