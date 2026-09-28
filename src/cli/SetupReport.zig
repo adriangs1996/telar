@@ -1,7 +1,7 @@
 //! The steps of one `telar machine setup` and how each ended. In text mode
 //! each step prints its numbered line as it ends, with its notes under it,
-//! so the person sees progress; with `--json` nothing prints until `finish`
-//! writes one object. Details and notes are bounded copies, so a report
+//! and a long step prints what it is doing meanwhile, so the person sees
+//! progress; with `--json` nothing prints until `finish` writes one object. Details and notes are bounded copies, so a report
 //! never borrows from output that is freed after a step.
 const std = @import("std");
 const control = @import("control.zig");
@@ -77,10 +77,34 @@ pub fn end(self: *SetupReport, step: Step, status: Status, comptime format: []co
         @tagName(status),
         text,
     });
+    for (self.notes[0..self.note_count]) |*kept| {
+        if (kept.step == step) {
+            try self.writer.print("      {s}\n", .{kept.bytes[0..kept.len]});
+        }
+    }
+
     try self.writer.flush();
 }
 
-/// Adds one line under a step: an agent's result, a file left alone.
+/// Says what a long step is doing now, in text mode only; nothing is kept.
+///
+/// ```zig
+/// try report.progress("installing {s} there", .{"codex"});
+/// ```
+pub fn progress(self: *SetupReport, comptime format: []const u8, arguments: anytype) !void {
+    if (self.json) {
+        return;
+    }
+
+    try self.writer.writeAll("    ... ");
+    try self.writer.print(format, arguments);
+    try self.writer.writeByte('\n');
+    try self.writer.flush();
+}
+
+/// Adds one line under a step: an agent's result, a file left alone. It
+/// prints under the step's line once the step ends, or at once when it
+/// already has.
 ///
 /// ```zig
 /// try report.note(.agents, "codex: installed at {s}", .{path});
@@ -95,7 +119,7 @@ pub fn note(self: *SetupReport, step: Step, comptime format: []const u8, argumen
     const text = bounded(&kept.bytes, format, arguments);
     kept.len = @intCast(text.len);
     self.note_count += 1;
-    if (self.json) {
+    if (self.json or self.statusOf(step) == null) {
         return;
     }
 
@@ -205,8 +229,8 @@ test "text mode prints numbered steps and a verdict" {
     var writer: std.Io.Writer = .fixed(&buffer);
     var report: SetupReport = .{ .json = false, .writer = &writer };
     try report.end(.ssh, .ok, "batch mode works", .{});
-    try report.end(.telar, .changed, "installed telar {s}", .{"0.3.0"});
     try report.note(.telar, "linked ~/.local/bin/telar", .{});
+    try report.end(.telar, .changed, "installed telar {s}", .{"0.3.0"});
     try report.finish("box", "dev@box");
 
     try std.testing.expectEqualStrings(

@@ -15,6 +15,7 @@ const ScriptOutput = @import("ScriptOutput.zig");
 const SetupReport = @import("SetupReport.zig");
 const remote_shell = @import("remote_shell.zig");
 const telar_release = @import("telar_release.zig");
+const agent_setup = @import("agent_setup.zig");
 const remote = client.remote;
 const profile_file = client.profile_file;
 const machine_profiles = client.machine_profiles;
@@ -106,8 +107,32 @@ pub fn run(init: std.process.Init, options: MachineOptions) !u8 {
     }
 
     try saveProfile(init, &report, &target, path, telar_path);
+    var current = platform;
+    if (options.skip.contains(.agents)) {
+        try report.end(.agents, .skipped, "--skip agents", .{});
+    } else if (try agent_setup.install(init, &report, target.destination(), &platform, agent_setup.detectLocal(init.minimal.environ))) {
+        current = try probeAgain(init, &target, directory.slice()) orelse platform;
+    }
+
+    try agent_setup.integrate(init, &report, target.destination(), &current);
     try check(init, &report, &target, telar_path);
     return finish(&report, &target);
+}
+
+// What the machine has after installers ran; null keeps the first probe.
+fn probeAgain(init: std.process.Init, target: *const SetupTarget, directory: []const u8) !?MachinePlatform {
+    var script_buffer: [MachinePlatform.probe_script.len + 256]u8 = undefined;
+    var script: std.Io.Writer = .fixed(&script_buffer);
+    try remote_shell.assign(&script, "dir", directory);
+    try script.writeAll(MachinePlatform.probe_script);
+
+    var probe = try remote_shell.runScript(init, target.destination(), script.buffered(), probe_timeout_s);
+    defer probe.deinit(init.gpa);
+    if (!probe.succeeded()) {
+        return null;
+    }
+
+    return MachinePlatform.parse(probe.stdout) catch null;
 }
 
 fn finish(report: *SetupReport, target: *const SetupTarget) !u8 {
@@ -226,10 +251,11 @@ fn reach(init: std.process.Init, report: *SetupReport, target: *const SetupTarge
     };
 
     const system = switch (platform.os) {
-        .linux => if (platform.libc == .musl) "Linux, musl libc" else "Linux",
+        .linux => "Linux",
         .macos => "macOS",
     };
-    try report.end(.platform, .ok, "{s} {s}, {s}", .{ system, @tagName(platform.arch), platform.assetName() });
+    const libc = if (platform.libc == .musl) " (musl)" else "";
+    try report.end(.platform, .ok, "{s} {s}{s}, {s}", .{ system, @tagName(platform.arch), libc, platform.assetName() });
 
     return platform;
 }
@@ -263,7 +289,7 @@ fn reportUnreachable(report: *SetupReport, target: *const SetupTarget, probe: *c
     const failed = remote.sshFailure(probe.term, probe.stderr);
     if (probe.term == .exited and probe.term.exited != @intFromEnum(SshExit.failed) and failed != error.RemoteRuntimeIncompatible) {
         try report.end(.ssh, .ok, "batch-mode SSH to {s} works", .{target.destination()});
-        try report.end(.platform, .failed, "the probe failed there: {s}", .{lastLine(probe.stderr)});
+        try report.end(.platform, .failed, "the probe failed there: {s}", .{probe.errorLine()});
         return;
     }
 
@@ -275,8 +301,8 @@ fn reportUnreachable(report: *SetupReport, target: *const SetupTarget, probe: *c
                 try report.end(.ssh, .failed, "{s} refused the login in batch mode; add a key with `ssh-copy-id {s}` or run setup from a terminal", .{ target.destination(), target.destination() });
             }
         },
-        error.SshHostKeyRejected => try report.end(.ssh, .failed, "the host key of {s} is not confirmed: {s}", .{ target.destination(), lastLine(probe.stderr) }),
-        else => try report.end(.ssh, .failed, "{s}", .{lastLine(probe.stderr)}),
+        error.SshHostKeyRejected => try report.end(.ssh, .failed, "the host key of {s} is not confirmed: {s}", .{ target.destination(), probe.errorLine() }),
+        else => try report.end(.ssh, .failed, "{s}", .{probe.errorLine()}),
     }
 }
 
@@ -359,7 +385,7 @@ fn installTelar(init: std.process.Init, report: *SetupReport, target: *const Set
     var result = try remote_shell.runScript(init, target.destination(), script.buffered(), install_timeout_s);
     defer result.deinit(init.gpa);
     if (!result.succeeded()) {
-        try report.end(.telar, .failed, "the installer refused: {s}", .{lastLine(result.stderr)});
+        try report.end(.telar, .failed, "the installer refused: {s}", .{result.errorLine()});
         return false;
     }
 
@@ -388,7 +414,7 @@ fn upload(init: std.process.Init, report: *SetupReport, target: *const SetupTarg
     var result = try remote_shell.runWithInput(init, target.destination(), command, binary, install_timeout_s);
     defer result.deinit(init.gpa);
     if (!result.succeeded()) {
-        try report.end(.telar, .failed, "the upload failed: {s}", .{lastLine(result.stderr)});
+        try report.end(.telar, .failed, "the upload failed: {s}", .{result.errorLine()});
         return false;
     }
 
@@ -408,7 +434,7 @@ fn linkCommand(init: std.process.Init, report: *SetupReport, target: *const Setu
     if (result.succeeded()) {
         try report.note(.telar, "~/.local/bin/telar links to it", .{});
     } else {
-        try report.note(.telar, "~/.local/bin/telar left as it was: {s}", .{lastLine(result.stderr)});
+        try report.note(.telar, "~/.local/bin/telar left as it was: {s}", .{result.errorLine()});
     }
 }
 
@@ -481,7 +507,7 @@ fn stopOldRuntime(init: std.process.Init, report: *SetupReport, target: *const S
     var result = try remote_shell.runScript(init, target.destination(), script.buffered(), probe_timeout_s);
     defer result.deinit(init.gpa);
     if (!result.succeeded()) {
-        try report.end(.runtime, .failed, "{s}", .{lastLine(result.stderr)});
+        try report.end(.runtime, .failed, "{s}", .{result.errorLine()});
         return false;
     }
 
@@ -573,12 +599,6 @@ fn firstLine(text: []const u8) []const u8 {
     return text[0..end];
 }
 
-fn lastLine(text: []const u8) []const u8 {
-    const trimmed = std.mem.trimEnd(u8, text, " \r\n");
-    const start = if (std.mem.lastIndexOfScalar(u8, trimmed, '\n')) |at| at + 1 else 0;
-    return trimmed[start..];
-}
-
 test "a destination becomes a label from its host" {
     var buffer: [core.MachineProfile.max_label_bytes]u8 = undefined;
     try std.testing.expectEqualStrings("box.lan", try deriveLabel("dev@box.lan", &buffer));
@@ -611,7 +631,6 @@ test "setup finds a saved machine by label or destination, or names a new one" {
     try std.testing.expectError(error.InvalidRemoteDestination, resolve(&profiles, "-oProxyCommand=x", null));
 }
 
-test "the lines kept from a failure are the first and the last" {
+test "the line kept from unreadable output is the first" {
     try std.testing.expectEqualStrings("one", firstLine("one\ntwo\n"));
-    try std.testing.expectEqualStrings("two", lastLine("one\ntwo\n\n"));
 }

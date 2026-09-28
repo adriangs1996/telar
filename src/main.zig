@@ -258,6 +258,9 @@ test {
     _ = @import("cli/machine_profiles.zig");
     _ = @import("cli/machine_dispatch.zig");
     _ = @import("cli/machine_setup.zig");
+    _ = @import("cli/agent_setup.zig");
+    _ = @import("cli/ScriptOutput.zig");
+    _ = @import("cli/ProbeValue.zig");
     _ = @import("cli/MachinePlatform.zig");
     _ = @import("cli/SetupReport.zig");
     _ = @import("cli/remote_shell.zig");
