@@ -225,11 +225,11 @@ fn reach(init: std.process.Init, report: *SetupReport, target: *const SetupTarge
         return null;
     };
 
-    if (platform.os == .linux and platform.libc == .musl) {
-        try report.end(.platform, .ok, "Linux {s}, musl libc", .{@tagName(platform.arch)});
-    } else {
-        try report.end(.platform, .ok, "{s} {s}", .{ @tagName(platform.os), @tagName(platform.arch) });
-    }
+    const system = switch (platform.os) {
+        .linux => if (platform.libc == .musl) "Linux, musl libc" else "Linux",
+        .macos => "macOS",
+    };
+    try report.end(.platform, .ok, "{s} {s}, {s}", .{ system, @tagName(platform.arch), platform.assetName() });
 
     return platform;
 }
