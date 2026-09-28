@@ -12,9 +12,8 @@ const ProxyAuthorityNames = @import("ProxyAuthorityNames.zig");
 const HistoryPath = @import("HistoryPath.zig");
 const TestEnvironment = @import("TestEnvironment.zig");
 
-const native = @cImport({
-    @cInclude("sys/stat.h");
-});
+const privatefile = @import("privatefile");
+const Inode = privatefile.Inode;
 
 /// Executes the selected server action. A running action prepares persistent
 /// paths, initializes one public Runtime with production dependencies and owns
@@ -164,12 +163,8 @@ pub fn prepareProxyDirectory(io: std.Io, directory: []const u8) !void {
 
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{directory}) catch return error.NameTooLong;
-    var native_stat: native.struct_stat = undefined;
-    if (native.fstatat(std.c.AT.FDCWD, path_z, &native_stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
-        return error.InvalidProxyDirectory;
-    }
-
-    try checkDirectoryOwner(native_stat.st_uid, std.c.getuid());
+    const inode = Inode.fromPath(path_z, .no_follow) catch return error.InvalidProxyDirectory;
+    try checkDirectoryOwner(inode.owner, std.c.getuid());
     try std.Io.Dir.cwd().setFilePermissions(io, directory, permissions, .{ .follow_symlinks = false });
 }
 

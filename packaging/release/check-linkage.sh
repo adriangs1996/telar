@@ -1,12 +1,14 @@
 #!/bin/sh
 # Fails when a release executable links anything outside the base system of
-# its platform. A headless Linux build must not link a single desktop library.
+# its platform. A headless Linux build must be static: no shared library, not
+# even libc, and no program interpreter.
 #
 #   packaging/release/check-linkage.sh macos BIN...
 #   packaging/release/check-linkage.sh linux-gui BIN...
 #   packaging/release/check-linkage.sh linux-headless BIN...
 #
-# TELAR_MACOS_MIN, when set, is the newest macOS a binary may require. TELAR_GLIBC_MAX, when set, is the newest glibc symbol version a
+# TELAR_MACOS_MIN, when set, is the newest macOS a binary may require.
+# TELAR_GLIBC_MAX, when set, is the newest glibc symbol version a desktop
 # Linux binary may require.
 set -eu
 
@@ -74,6 +76,20 @@ check_linux() {
     printf '%s: needs %s; glibc %s\n' "$binary" "$(echo "$needed" | tr '\n' ' ')" "${glibc:-none}"
 }
 
+check_static() {
+    binary=$1
+    needed=$(readelf -d "$binary" | sed -n 's/.*(NEEDED).*\[\(.*\)\].*/\1/p')
+    if [ -n "$needed" ]; then
+        fail "$binary needs $(echo "$needed" | tr '\n' ' ')but must be static"
+    fi
+
+    if readelf -l "$binary" | grep -q 'program interpreter'; then
+        fail "$binary asks for a program interpreter but must be static"
+    fi
+
+    printf '%s: static, no shared library\n' "$binary"
+}
+
 [ $# -ge 2 ] || fail "usage: check-linkage.sh macos|linux-gui|linux-headless BIN..."
 kind=$1
 shift
@@ -82,7 +98,7 @@ for binary in "$@"; do
     case $kind in
         macos) check_macos "$binary" ;;
         linux-gui) check_linux "$binary" "$linux_base $linux_desktop" ;;
-        linux-headless) check_linux "$binary" "$linux_base" ;;
+        linux-headless) check_static "$binary" ;;
         *) fail "unknown kind $kind" ;;
     esac
 done
