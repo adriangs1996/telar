@@ -98,7 +98,9 @@ fn allocate(userdata: ?*anyopaque, pointer: ?*anyopaque, old_size: usize, new_si
         return null;
     }
 
-    const without_old = vm.meter.used -| old_size;
+    // For a new block Lua passes the object's type tag as `old_size`.
+    const old_len = if (pointer == null) 0 else old_size;
+    const without_old = vm.meter.used -| old_len;
     const next = std.math.add(usize, without_old, new_size) catch return null;
     if (next > vm.meter.limit) {
         return null;
@@ -106,7 +108,7 @@ fn allocate(userdata: ?*anyopaque, pointer: ?*anyopaque, old_size: usize, new_si
 
     const result = cblocks.realloc(vm.gpa, pointer, new_size) orelse shrunk: {
         const existing = pointer orelse return null;
-        if (new_size > old_size) {
+        if (new_size > old_len) {
             return null;
         }
 

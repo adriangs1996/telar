@@ -51,6 +51,12 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     const run_headless_tests = b.addRunArtifact(headless_tests);
     b.step("test-headless", "Run the headless client's tests").dependOn(&run_headless_tests.step);
     test_step.dependOn(&run_headless_tests.step);
+    // The Lua VM, its sandbox and json.decode test inside their own module;
+    // no suite root imports those files.
+    const lua_tests = b.addTest(.{ .root_module = app.modules.telar_lua });
+    const run_lua_tests = b.addRunArtifact(lua_tests);
+    b.step("test-lua", "Run the Lua VM, sandbox and JSON tests").dependOn(&run_lua_tests.step);
+    test_step.dependOn(&run_lua_tests.step);
     // ZLS uses "check" on save. Test artifacts are analyzed without codegen;
     // source validators run separately and never execute application tests.
     const check_step = b.step("check", "Analyze test suites and validate source organization");
@@ -75,6 +81,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     check_step.dependOn(&model_check.step);
     const client_check = b.addTest(.{ .root_module = app.modules.client });
     check_step.dependOn(&client_check.step);
+    check_step.dependOn(&b.addTest(.{ .root_module = app.modules.telar_lua }).step);
     check_step.dependOn(&client_boundaries.step);
     const check_client = b.step("check-client", "Semantic-analyze only the shared client");
     check_client.dependOn(&client_check.step);

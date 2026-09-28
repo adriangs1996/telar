@@ -39,3 +39,19 @@ test "VM interrupts an instruction loop" {
     try std.testing.expectError(error.LuaRuntimeFailed, vm.evaluate("while true do end", "@loop.lua"));
     try std.testing.expect(std.mem.indexOf(u8, vm.errorMessage(), "budget exceeded") != null);
 }
+
+test "the meter counts the bytes Lua holds, not the type tags of new blocks" {
+    var vm = try Vm.init(std.testing.io, std.testing.allocator, .{
+        .memory = 8 * 1024 * 1024,
+        .instructions = 10_000_000,
+        .deadline_after_ns = 10 * std.time.ns_per_s,
+    });
+    defer vm.deinit();
+
+    // Every table and string is a new block, for which Lua passes the type
+    // tag where the old size would go.
+    try vm.evaluate("kept = {} for i = 1, 2000 do kept[i] = { 'k' .. i } end return #kept", "@meter.lua");
+    const kib: usize = @intCast(lua_api.c.lua_gc(vm.state, lua_api.c.LUA_GCCOUNT));
+    const bytes: usize = @intCast(lua_api.c.lua_gc(vm.state, lua_api.c.LUA_GCCOUNTB));
+    try std.testing.expectEqual(kib * 1024 + bytes, vm.meter.used);
+}
