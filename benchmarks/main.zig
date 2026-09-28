@@ -308,12 +308,9 @@ pub const KeybindBinding = keyinput.GenericBinding(KeybindAction, 4);
 pub const KeybindRouter = keyinput.GenericRouter(KeybindAction, .{
     .max_bindings = 16,
     .max_keys = 4,
-    .input_capacity = 64,
-    .held_capacity = 32,
     .max_physical_leases = data.keybind.max_physical_leases,
-    .escape_timeout_ns = data.keybind.default_escape_timeout_ns,
     .sequence_timeout_ns = data.keybind.default_sequence_timeout_ns,
-}, struct {});
+});
 
 /// What one iteration routes: typing, then the detach chord.
 pub const keybind_keys = "cargo test";
@@ -321,9 +318,9 @@ pub const keybind_keys = "cargo test";
 fn runKeybind(context: *KeybindContext, iterations: usize) !u64 {
     for (0..iterations) |iteration| {
         for (context.keys) |key| {
-            const decision = context.router.routeEvent(.{ .key = key, .raw = "", .now_ns = iteration }, .{});
+            const decision = context.router.routeEvent(.{ .key = key, .now_ns = iteration }, .{});
             switch (decision) {
-                .forward => |forward| context.checksum +%= @intFromEnum(forward.key.code),
+                .forward => |forward| context.checksum +%= @intFromEnum(forward.code),
                 .action => |request| {
                     context.checksum +%= @intFromEnum(request.value) + 1;
                     context.router.actionCompleted(request, null);

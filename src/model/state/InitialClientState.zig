@@ -12,6 +12,5 @@ host_size: core.TerminalSize = .{ .cols = 80, .rows = 24 },
 host_capabilities: data.HostCapabilities = .{},
 config: Config = .{},
 theme: data.ColorTheme = data.theme_support.default_theme,
-icon_theme: data.icons.Theme = .unicode,
 /// Borrowed only during initialization; copied into the model.
 window_title: []const u8 = "",

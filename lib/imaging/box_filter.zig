@@ -1,9 +1,10 @@
-//! Area-averaging resample of straight-alpha artwork into a square cell.
+//! Area-averaging resample of straight-alpha artwork into a square cell or
+//! a rectangle.
 //! Every source pixel contributes the fraction of the destination pixel it
 //! covers, weighted by its alpha, so a transparent neighbour never bleeds
 //! colour into an edge. Reads each source pixel once: O(source area).
-//! Runs off the interactive path: at startup for the provider sheet and in
-//! the favicon worker for decoded files.
+//! Runs off the interactive path: at startup for the provider sheet, in
+//! the favicon worker for decoded files and in the clipboard image worker.
 const std = @import("std");
 const ImageView = @import("ImageView.zig");
 
@@ -11,12 +12,19 @@ const ImageView = @import("ImageView.zig");
 /// RGBA pixels. Upscaling replicates source pixels with fractional edges.
 /// Example: `box_filter.resample(slot, page_cell, 32);`
 pub fn resample(source: ImageView, destination: []u8, side: u32) void {
-    std.debug.assert(destination.len == @as(usize, side) * side * 4);
-    std.debug.assert(source.width != 0 and source.height != 0 and side != 0);
-    for (0..side) |row| {
-        const rows = FilterSpan.of(@intCast(row), side, source.height);
-        for (0..side) |column| {
-            const columns = FilterSpan.of(@intCast(column), side, source.width);
+    resampleRect(source, destination, side, side);
+}
+
+/// Resamples `source` into `destination`, which holds `width * height`
+/// straight RGBA pixels. The caller picks the aspect ratio.
+/// Example: `box_filter.resampleRect(image.view(), thumbnail, 256, 144);`
+pub fn resampleRect(source: ImageView, destination: []u8, width: u32, height: u32) void {
+    std.debug.assert(destination.len == @as(usize, width) * height * 4);
+    std.debug.assert(source.width != 0 and source.height != 0 and width != 0 and height != 0);
+    for (0..height) |row| {
+        const rows = FilterSpan.of(@intCast(row), height, source.height);
+        for (0..width) |column| {
+            const columns = FilterSpan.of(@intCast(column), width, source.width);
             var alpha: f32 = 0;
             var premultiplied: [3]f32 = .{ 0, 0, 0 };
             var total: f32 = 0;
@@ -36,7 +44,7 @@ pub fn resample(source: ImageView, destination: []u8, side: u32) void {
                 }
             }
 
-            const out = destination[(row * side + column) * 4 ..][0..4];
+            const out = destination[(row * width + column) * 4 ..][0..4];
             out.* = .{ 0, 0, 0, 0 };
             if (alpha <= 0 or total <= 0) {
                 continue;
@@ -84,6 +92,16 @@ test "a region samples only inside its origin" {
     for (0..9) |index| {
         try std.testing.expectEqualSlices(u8, &.{ 255, 255, 255, 255 }, out[index * 4 ..][0..4]);
     }
+}
+
+test "a rectangle keeps each axis's own scale" {
+    // Four columns: two red, two blue; two rows. Into 2x1 each column pair averages alone.
+    const pixels = [_]u8{ 255, 0, 0, 255, 255, 0, 0, 255, 0, 0, 255, 255, 0, 0, 255, 255 } ** 2;
+    const source: ImageView = .{ .pixels = &pixels, .stride = 16, .width = 4, .height = 2 };
+    var out: [2 * 1 * 4]u8 = undefined;
+    resampleRect(source, &out, 2, 1);
+    try std.testing.expectEqualSlices(u8, &.{ 255, 0, 0, 255 }, out[0..4]);
+    try std.testing.expectEqualSlices(u8, &.{ 0, 0, 255, 255 }, out[4..8]);
 }
 
 /// The source pixels one destination index covers on one axis of a box

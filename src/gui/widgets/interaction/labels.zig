@@ -10,6 +10,11 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
         .custom => "Agents",
         .text_field => |field| if (field == .name) "Name or query" else "Working directory",
         .change_review => "Review changes",
+        .preview => |preview| switch (preview) {
+            .open => "Open image preview",
+            .close => "Close image preview",
+            .hold => "Image preview",
+        },
         .prompt => |prompt_action| if (prompt_action == .submit) "Create context" else "Cancel",
         .complete_path => "Choose folder",
         .history => |action_value| switch (action_value) {

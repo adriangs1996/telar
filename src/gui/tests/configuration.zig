@@ -228,7 +228,7 @@ test "GUI watches imported modules across atomic saves and retains the selected 
     try fixture.write("colors.lua", "return { background = '#123456' }");
     try fixture.write("config.lua",
         \\return { api_version = 2, theme = { terminal = require("colors") },
-        \\  client = { sidebar = { renderer = "kitty-full" } },
+        \\  client = { sidebar = { visible = true } },
         \\  profiles = { large = { gui = { font = { size = 20 } } } }
         \\}
     );

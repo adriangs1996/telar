@@ -235,6 +235,28 @@ test "client startup waits for runtime layout before its initial open" {
     try std.testing.expect((try arguments.next()) == null);
 }
 
+test "client startup validates geometry before request registration" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    client.model.startup.phase = .opening;
+
+    // A window narrower than one cell leaves the workbench no column.
+    client.model.host.host_size.cols = 0;
+
+    var buffer: [256]u8 = undefined;
+    const empty_layout = try core.encodeClientLayoutSnapshot(&buffer, .{ .restored = false });
+
+    try std.testing.expectError(
+        error.TerminalTooSmall,
+        client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(empty_layout)),
+    );
+
+    try std.testing.expect(client.model.request_lifecycle.tracker.isEmpty());
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
+}
+
 test "restored client layout controls the initial attach geometry" {
     var harness: ClientHarness = undefined;
     try harness.init();

@@ -29,6 +29,8 @@ pub fn run(io: std.Io, job: Job) Message {
             .sidebar_animation => .{ .sidebar_animation_tick = pacing.deadline_timer.wait(io, timer.scheduler) },
             .runtime_retry => .{ .runtime_retry_tick = pacing.deadline_timer.wait(io, timer.scheduler) },
         },
+        .telemetry_tick => .{ .telemetry_tick = core.waitForTick(io) },
+        .telemetry_write => |telemetry| .{ .telemetry_written = telemetry.write(io) },
     };
 }
 
@@ -74,6 +76,8 @@ pub fn failed(job: Job, err: anyerror) Message {
             .sidebar_animation => .{ .sidebar_animation_tick = err },
             .runtime_retry => .{ .runtime_retry_tick = err },
         },
+        .telemetry_tick => .{ .telemetry_tick = err },
+        .telemetry_write => .{ .telemetry_written = err },
     };
 }
 

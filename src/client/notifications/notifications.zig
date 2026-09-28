@@ -130,7 +130,7 @@ pub fn applyRuntimeNotification(client: *Client, notification: core.Notification
 }
 
 /// Surfaces one published notice through the configured host channel. The
-/// in-app center always shows it; the host port owns `terminal` and `system`.
+/// in-app center always shows it; `system` also posts it to the desktop.
 fn deliverHostNotification(client: *Client, input: data.NotificationInput) !void {
     if (client.model.config.notification_delivery == .telar) {
         return;
@@ -139,7 +139,6 @@ fn deliverHostNotification(client: *Client, input: data.NotificationInput) !void
     const payload: data.NotificationPayload = .init(input.title, input.message);
     switch (client.model.config.notification_delivery) {
         .telar => unreachable,
-        .terminal => try client.model.to_host.push(.{ .terminal_notification = payload }),
         // A system notice is best effort; a saturated inbox drops it.
         .system => client.to_background.push(.{ .system_notification = payload }) catch {},
     }

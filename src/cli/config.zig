@@ -82,6 +82,12 @@ pub fn runCheck(init: std.process.Init, options: ConfigCheckOptions) !void {
         std.debug.print("telar config: keybindings do not compile: {s}\n", .{@errorName(err)});
         return err;
     };
+    var retired_buffer: [client.retired_config.max_description_bytes]u8 = undefined;
+    const retired = client.retired_config.describe(generation.snapshot.retired, &retired_buffer);
+    if (retired.len != 0) {
+        std.debug.print("telar config: warning: {s}\n", .{retired});
+    }
+
     try std.Io.File.stdout().writeStreamingAll(init.io, "telar config: OK\n");
 }
 

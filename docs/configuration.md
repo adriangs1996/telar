@@ -28,10 +28,9 @@ return telar.config({
   }),
   client = {
     prefix = "ctrl+s",
-    icons = "nerd-font",
     sidebar = { visible = true },
     sound = { enabled = true, ready = true, needs_input = true },
-    input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },
+    input = { sequence_timeout_ms = 1000 },
     keybindings = {
       telar.bind({ "s" }, telar.action.toggle_sidebar()),
       telar.bind({ "alt+left" }, telar.action.resize_sidebar({ direction = "left" })),
@@ -89,8 +88,24 @@ return telar.config({
 })
 ```
 
-`client.sidebar.renderer`, which chose how the retired terminal client drew
-its sidebar, is still accepted so older files load, and has no effect.
+### Retired keys
+
+Some keys only meant something to the retired terminal client. A file that
+still sets one loads without it: Telar ignores the key, keeps its default and
+says which keys it ignored, in a notice in the window when the file loads or
+reloads and as a warning from `telar config check`. A retired key never keeps
+the window or the runtime from starting. Remove them from older files:
+
+- `client.sidebar.renderer` chose how the terminal client drew its sidebar;
+  the window draws its own.
+- `client.notifications.delivery = "terminal"` wrote notices to the terminal
+  client's outer terminal; the delivery stays `telar`. See
+  [notifications](notifications.md#delivery-channels).
+- `client.input.escape_timeout_ms` was how long the terminal client waited
+  for the rest of an escape sequence; the window receives whole keys.
+- `client.icons` chose between the terminal client's Unicode and Nerd Font
+  icon sets; the window always draws the Nerd Font subset embedded in Telar,
+  so no Nerd Font needs to be installed.
 
 `runtime.agent_descriptions` is an explicit privacy opt-in. When the first user
 request starts model work, Telar sends that request through standard input to
@@ -154,12 +169,6 @@ The selected profile can override the base value. Removing the option restores
 the client's startup `$EDITOR`; if neither is set, opening a file reports
 `EditorUnavailable`. Reloading the configuration changes future file openings
 without restarting existing editor panes.
-
-`client.icons` accepts `"unicode"`, the default, or `"nerd-font"`. The Nerd
-Font theme uses a glyph subset embedded in Telar and does not require a Nerd
-Font in the host terminal. It needs Kitty Graphics support and RGB theme
-colors. Telar keeps the Unicode cell icons as the fallback when either is
-unavailable.
 
 `client.sound` controls audible agent notifications. All three fields default
 to `true`. `ready` applies only to `working -> ready`; `needs_input` applies

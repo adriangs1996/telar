@@ -40,7 +40,6 @@ fn pressRouted(router: *client_module.key_router.Type, client: *client_module.Cl
         .key = .{
             .code = code,
         },
-        .raw = "",
         .now_ns = 0,
     }, .{
         .captures_keys = data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)),
@@ -51,7 +50,7 @@ fn pressRouted(router: *client_module.key_router.Type, client: *client_module.Cl
         .forward => |value| _ = try client_module.key_routing.routeKeyInput(
             client,
             .{
-                .key = value.key,
+                .key = value,
             },
         ),
         else => return error.UnexpectedKeyDecision,

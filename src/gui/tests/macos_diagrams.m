@@ -36,12 +36,17 @@ int telar_test_diagrams(void) {
     }
     telar_gui_frame frame = {0};
     assert(telar_gui_diagrams_valid(&frame, 4096));
+    // Two full diagrams, the preview sheet and a modal copy fill the budget.
     frame.diagrams[0] = (telar_gui_diagram_texture){red, 4096, 1024, 1};
-    frame.diagrams[7] = frame.diagrams[0];
+    frame.diagrams[5] = frame.diagrams[0];
+    frame.diagrams[6] = (telar_gui_diagram_texture){red, 1024, 256, 1};
+    frame.diagrams[7] = (telar_gui_diagram_texture){red, 2048, 1024, 1};
     assert(telar_gui_diagrams_valid(&frame, 4096));
     frame.diagrams[1] = (telar_gui_diagram_texture){red, 1, 1, 1};
     assert(!telar_gui_diagrams_valid(&frame, 4096));
     frame.diagrams[1] = (telar_gui_diagram_texture){0};
+    frame.diagrams[5] = (telar_gui_diagram_texture){0};
+    frame.diagrams[6] = (telar_gui_diagram_texture){0};
     frame.diagrams[0].height++;
     assert(!telar_gui_diagrams_valid(&frame, 4096));
     frame.diagrams[0] = (telar_gui_diagram_texture){0};

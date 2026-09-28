@@ -64,35 +64,3 @@ test "the view and the presenter follow committed grid and cell changes" {
         try std.testing.expectEqual(data.workbench.region(&app.model).revision, app.presentation.prepared.geometry_revision);
     }
 }
-
-test "the view follows image support once and ignores repeated observations" {
-    var harness: ClientHarness = undefined;
-    try harness.init();
-    defer harness.deinit();
-    const app = harness.client;
-
-    _ = try client_module.host_capabilities.observeHostCapability(
-        app,
-        .{
-            .images = .supported,
-        },
-    );
-    try std.testing.expect(app.model.to_host.invalidate_placements);
-    try harness.deliverHostEffects();
-    try std.testing.expectEqual(data.environment.Support.supported, app.model.host.host_capabilities.images);
-    _ = try client_module.host_capabilities.reconcileHostCapabilities(app, app.model.host.host_capabilities.withObservation(
-        .{
-            .pointer_pixels = .unsupported,
-        },
-    ));
-    const version = app.model.version();
-
-    try std.testing.expect(try client_module.host_capabilities.observeHostCapability(
-        app,
-        .{
-            .images = .supported,
-        },
-    ) == null);
-    try std.testing.expect(try client_module.host_capabilities.reconcileHostCapabilities(app, app.model.host.host_capabilities) == null);
-    try std.testing.expectEqualDeep(version, app.model.version());
-}

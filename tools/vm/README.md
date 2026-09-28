@@ -1,8 +1,8 @@
 # Linux test machine
 
 `tools/vm/vm.py` runs a Fedora virtual machine under QEMU with a Wayland
-desktop, so Telar's Linux runtime, terminal client and native client can be
-exercised from any host: macOS on Apple Silicon (HVF, aarch64 guest), Linux
+desktop, so Telar's Linux runtime, CLI and native client can be exercised
+from any host: macOS on Apple Silicon (HVF, aarch64 guest), Linux
 (KVM, guest matches the host CPU), or anything else QEMU supports with TCG,
 which is slow but works.
 
@@ -49,8 +49,12 @@ tools/vm/vm.py test --summary all
 tools/vm/vm.py build test-gui-ime test-gui-clipboard-reader test-gui-pointer test-gui-keyboard
 tools/vm/vm.py build test-gui-accessibility test-gui-accessibility-bus
 
-# Sync, build and run the terminal client in your terminal.
-tools/vm/vm.py run --no-config
+# Sync, build and run a telar CLI command against the machine's development
+# runtime (--help without arguments). The runtime stays in the foreground, so
+# query it from a second host terminal. A window needs the desktop: use
+# gui-smoke, or `telar gui` from the foot terminal there.
+tools/vm/vm.py run server --no-config
+tools/vm/vm.py run runtime status
 
 tools/vm/vm.py shell
 tools/vm/vm.py exec uname -a

@@ -102,7 +102,6 @@ pub fn resolve(state: *ConfigReloadState, args: ResolveArgs) Outcome {
                 .input = .{
                     .prefix = snapshot.prefix,
                     .bindings = snapshot.bindingSlice(),
-                    .escape_timeout_ns = snapshot.input_escape_timeout_ns,
                     .sequence_timeout_ns = snapshot.input_sequence_timeout_ns,
                 },
             } };

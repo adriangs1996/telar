@@ -163,7 +163,6 @@ test "native palette prints the bound chord from the native keymap" {
         .{
             .prefix = data.keybind.default_prefix,
             .bindings = &.{},
-            .escape_timeout_ns = 1,
             .sequence_timeout_ns = 1,
         },
     );
@@ -181,7 +180,6 @@ test "native palette repaints warm without shaping rasterizing or allocating" {
         .{
             .prefix = data.keybind.default_prefix,
             .bindings = &.{},
-            .escape_timeout_ns = 1,
             .sequence_timeout_ns = 1,
         },
     );

@@ -9,12 +9,15 @@ const copy_selection = @import("../render/copy_selection.zig");
 const Chrome = @import("Chrome.zig");
 const Overlays = @import("overlays/Overlays.zig");
 const LinkHit = @import("../input/LinkHit.zig");
+const ImagePreviews = @import("../ImagePreviews.zig");
 const Composition = @This();
 
 chrome: *Chrome,
 overlays: *Overlays,
 canvas: *Canvas,
 link: ?*const LinkHit = null,
+/// The window client's image previews; null while another machine shows.
+previews: ?*const ImagePreviews = null,
 context: Context = undefined,
 commit: data.PresentationCommit = .{},
 
@@ -42,11 +45,23 @@ pub fn render(self: *Composition, projection: *const client.Projection) !frame_w
                 }
             }
         }
+
+        if (self.previews) |previews| {
+            if (!layout.reserved.isEmpty() and previews.catalog.hasVisibleItems()) {
+                try widgets.append(.{ .image_shelf = .{ .area = layout.reserved, .previews = previews } });
+            }
+        }
     }
 
     self.context = try self.chrome.begin(self.canvas, projection);
     try self.chrome.compose(&self.context, &widgets);
     try widgets.append(.{ .chrome_focus = .{ .chrome = self.chrome, .projection = projection } });
     try self.overlays.compose(.{ .canvas = self.canvas, .projection = projection }, &widgets);
+    if (self.previews) |previews| {
+        if (previews.catalog.hasModal()) {
+            try widgets.append(.{ .image_modal = .{ .area = .{ .w = projection.host_size.cols, .h = projection.host_size.rows }, .previews = previews } });
+        }
+    }
+
     return widgets;
 }
