@@ -24,6 +24,7 @@ const hostmetrics = @import("hostmetrics");
 const SystemMetricsSample = hostmetrics.SystemMetricsSample;
 const Completion = @import("resources/Completion.zig");
 const WorktreeProbeCompletion = @import("resources/WorktreeProbeCompletion.zig");
+const WorktreeDetectionCompletion = @import("resources/WorktreeDetectionCompletion.zig");
 const AgentCompletion = @import("../agent/Completion.zig");
 const std = @import("std");
 const Job = @import("../change_review/Job.zig");
@@ -58,6 +59,7 @@ pub const Event = union(enum) {
     checkpoint_written: anyerror!void,
     git_status: Completion,
     worktree_git: WorktreeProbeCompletion,
+    worktree_detected: WorktreeDetectionCompletion,
     editor_opened: *EditorJob,
     session_name: AgentCompletion,
     path_index_built: *PathIndex,
@@ -114,6 +116,7 @@ pub fn discard(completed: Event, io: std.Io) void {
         .checkpoint_written,
         .git_status,
         .worktree_git,
+        .worktree_detected,
         .session_name,
         .stopped,
         => {},
@@ -157,6 +160,7 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) core.Path {
         .checkpoint_written,
         .git_status,
         .worktree_git,
+        .worktree_detected,
         .editor_opened,
         .session_name,
         .path_index_built,

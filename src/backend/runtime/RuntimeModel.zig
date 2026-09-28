@@ -80,6 +80,8 @@ system_metrics_pending: bool = false,
 metrics: RuntimeMetrics,
 checkpoint: CheckpointWriter = .{},
 session_name_probe_in_flight: bool = false,
+/// Whether a worker is looking for the linked worktree of a pane's directory.
+worktree_detection_in_flight: bool = false,
 review_jobs: ReviewJobs = .{},
 review_service: ?*ReviewService = null,
 /// The agent snapshot's revision and the input revisions it last covered.
