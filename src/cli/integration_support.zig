@@ -15,7 +15,9 @@ const skill = @import("skill.zig");
 const max_settings_bytes = 4 * 1024 * 1024;
 const max_extension_bytes = 64 * 1024;
 
-pub const claude_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Notification", "SessionEnd" };
+/// `CwdChanged` reports a move into or out of a worktree when it happens,
+/// not at the next tool call.
+pub const claude_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Notification", "SessionEnd", "CwdChanged" };
 pub const codex_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "PermissionRequest", "PreToolUse", "PostToolUse", "Stop", "Interrupt", "SubagentStop", "SessionEnd" };
 /// Cursor Agent fires no hook for approvals or plan reviews; the screen
 /// reports those.

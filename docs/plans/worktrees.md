@@ -3,6 +3,7 @@
 Status: implemented (W1–W8), with the deviations listed in
 [Implementation](#implementation). The flows are
 [worktree lifecycle](../flows/worktree-lifecycle.md),
+[worktree detection](../flows/worktree-detection.md),
 [worktree git probe](../flows/worktree-git.md),
 [task cards](../flows/task-cards.md), [agent peek](../flows/agent-peek.md) and
 [agent control](../flows/agent-control.md).
@@ -454,7 +455,7 @@ What was built differs from the plan above in these points.
   panes keep their last 16 KiB and exit code in the runtime's `ExitedPanes`
   ring, and `pane_text` carries `exit_code`.
 - **Untracked worktrees** of the same repository appear in `worktree list`
-  and are adopted on their first `exec` or `open`.
+  and are adopted on their first `exec` or `diff`.
 - **Restart**: panes launched by `create`/`exec` follow the existing pane
   record policy. An agent with a session reference resumes; a pane without
   one relaunches its recorded arguments, so a worker whose provider reported
@@ -467,8 +468,29 @@ What was built differs from the plan above in these points.
   focused agent, not on hover.
 - **Peek**: a right click on a card opens it; its field sends a message, and
   `/stop`, `/diff` or an empty field interrupt, open a diff tab or open the
-  agent's tab. The GUI shows the last 16 rows of the pane; the TUI shows the
-  field only. It shows no per-file changes.
+  agent's tab. The diff tab runs the coordinator's `telar worktree diff`
+  through the pane's `TELAR_BIN_PATH`, then a shell. The GUI shows the last
+  16 rows of the pane; the TUI shows the field only. It shows no per-file
+  changes.
+- **External worktrees** are detected from a pane's directory as well as
+  from agent hooks ([worktree detection](../flows/worktree-detection.md)),
+  and hang from the pane's own project: the runtime does not know which
+  workspace holds the same repository, so "the workspace of the same
+  project" is not looked up. Detection from a pane links no agent; only an
+  agent's own hook sets its work tree, so an agent without hooks in an
+  external worktree keeps its ordinary card.
+- **Base of an external worktree**: the first probe measures it against the
+  branch its main checkout stands on and keeps that base, since nothing
+  recorded one.
+- **`gone` rows** are forgotten all at once from the command palette ("Forget
+  gone worktrees"), since a gone worktree whose agent exited has no card to
+  offer it on; `telar worktree remove` forgets one.
+- **Branches** are bounded at 200 bytes from the CLI to the checkpoint, the
+  same bound everywhere; a longer one is refused before Git runs, never cut.
+- **References**: `exec`, `open`, `diff` and `remove` take a branch or a
+  unique title. `open` does not adopt an untracked worktree; `exec` and
+  `diff` do. `remove` refuses uncommitted changes only; commits ahead stay
+  on the branch.
 - **`leave-worktree`** returns to the source workspace, bound to `prefix+u` ("up" to the project; `b` is a common sidebar binding).
 - **`PermissionRequest`** is not installed. The `claude --worktree` run
   worked in the returned path; whether an `EnterWorktree` mid-session asks
@@ -486,6 +508,9 @@ What was built differs from the plan above in these points.
 - **`WorktreeCreate`** receives `name` and `cwd` and expects the absolute path
   on stdout; `WorktreeRemove` receives `worktree_path`. Verified with
   `claude --worktree`.
+- **`CwdChanged`** (Claude Code 2.1.283, `claude -p` with a hook that saved
+  its input) carries `old_cwd` and `new_cwd`, and its `cwd` still names the
+  directory it left; the progress report reads `new_cwd`.
 - **Claude Code's task tools** are `TaskCreate {subject, description,
   activeForm}` and `TaskUpdate {taskId, status}`, numbered from one in
   creation order. `TodoWrite` is still mapped.

@@ -59,7 +59,7 @@ pub fn parse(args: []const [*:0]const u8) !WorktreeOptions {
             return error.MissingWorktreeBranch;
         }
 
-        try workspace_grammar.validateWorktreeBranch(std.mem.span(args[1]));
+        try validateReference(action, std.mem.span(args[1]));
         options.branch = args[1];
         index = 2;
     }
@@ -175,6 +175,17 @@ fn takeCommand(self: *WorktreeOptions, remaining: []const [*:0]const u8) !void {
     self.command_len = remaining.len;
 }
 
+/// `create` and `fetch` name a branch Git will make or move. The other
+/// actions name a worktree telar knows, by its branch or by its title, so
+/// they take any printable text a branch or a title could be.
+fn validateReference(action: Action, reference: []const u8) !void {
+    switch (action) {
+        .create, .fetch => try workspace_grammar.validateWorktreeBranch(reference),
+        .exec, .open, .diff, .remove => try validateText(reference, @max(workspace_grammar.max_worktree_branch_bytes, core.max_worktree_title_bytes)),
+        .list, .resolve => unreachable,
+    }
+}
+
 fn single(current: ?[*:0]const u8, value: [*:0]const u8) ![*:0]const u8 {
     if (current != null) {
         return error.DuplicateWorktreeOption;
@@ -216,11 +227,34 @@ test "a command needs a title on create and is required by exec" {
 
 test "branches that look like options or escape a ref are refused" {
     try std.testing.expectError(error.MissingWorktreeBranch, WorktreeOptions.parse(&.{ "exec", "--title" }));
-    try std.testing.expectError(error.InvalidWorktreeBranch, WorktreeOptions.parse(&.{ "diff", "a..b" }));
+    try std.testing.expectError(error.InvalidWorktreeBranch, WorktreeOptions.parse(&.{ "create", "a..b" }));
     try std.testing.expectError(error.UnknownWorktreeOption, WorktreeOptions.parse(&.{ "diff", "fix", "--force" }));
     try std.testing.expectError(error.RelativeWorktreeDirectory, WorktreeOptions.parse(&.{ "create", "fix", "--directory", "rel" }));
     const removal = try WorktreeOptions.parse(&.{ "remove", "fix", "--force", "--delete-branch" });
     try std.testing.expect(removal.force and removal.delete_branch);
+}
+
+test "commands on an existing worktree take its title as well as its branch" {
+    for ([_][*:0]const u8{ "open", "diff", "remove" }) |action| {
+        const options = try WorktreeOptions.parse(&.{ action, "Fix tabs" });
+        try std.testing.expectEqualStrings("Fix tabs", std.mem.span(options.branch.?));
+    }
+
+    _ = try WorktreeOptions.parse(&.{ "exec", "Ordenar pestañas", "--", "ls" });
+    try std.testing.expectError(error.InvalidWorktreeText, WorktreeOptions.parse(&.{ "open", "Fix\x1b[2J" }));
+    try std.testing.expectError(error.InvalidWorktreeBranch, WorktreeOptions.parse(&.{ "create", "Fix tabs" }));
+}
+
+test "every branch create accepts fits the protocol, so the runtime stores it whole" {
+    const longest = "b" ** workspace_grammar.max_worktree_branch_bytes;
+    const options = try WorktreeOptions.parse(&.{ "create", longest });
+    try core.validateWorktreeText(.{
+        .path = "/src/telar-worktrees/b",
+        .branch = std.mem.span(options.branch.?),
+        .base = std.mem.span(options.branch.?),
+    });
+
+    try std.testing.expectError(error.InvalidWorktreeBranch, WorktreeOptions.parse(&.{ "create", longest ++ "b" }));
 }
 
 test "a worktree on another machine names it; fetch needs one and resolve a repository" {

@@ -4,6 +4,7 @@ const agent_status = @import("agent_status.zig");
 const bytecodec = @import("bytecodec");
 const session_checkpoint = @import("session_checkpoint.zig");
 const pane_launch = @import("pane_launch.zig");
+const worktree_lifecycle = @import("worktree_lifecycle.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const Options = @import("Options.zig");
@@ -190,6 +191,113 @@ test "a restart drops tabs and workspaces whose panes did not come back" {
     try std.testing.expect(!reader.contains(logs_location));
     try std.testing.expect(!reader.containsWorkspace(dropped.workspace));
     try std.testing.expectEqual(@as(usize, 1), reader.count);
+}
+
+test "a restart restores worktrees and unbinds the ones whose workspace did not come back" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/worktrees.sock", .{directory});
+    var session_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const session_path = try std.fmt.bufPrint(&session_buffer, "{s}/session.ckpt", .{directory});
+    var gone_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const gone = try std.fmt.bufPrint(&gone_buffer, "{s}/gone", .{directory});
+    var other_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const other_directory = try std.fmt.bufPrint(&other_buffer, "{s}/other", .{directory});
+    try temp.dir.createDir(io, "gone", .default_dir);
+    try temp.dir.createDir(io, "other", .default_dir);
+    const initialization: Initialization = .{
+        .dependencies = .{ .io = io, .allocator = std.testing.allocator },
+        .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .session_path = session_path },
+    };
+
+    var first: Runtime = undefined;
+    try first.init(initialization);
+    const model = &first.model;
+    const source = try model.workspaces.insert(model.gpa, directory, null);
+    var source_buffer: [64]u8 = undefined;
+    const coordinator_pane = try pane_launch.launch(model, .{
+        .location = source,
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try sleepLaunch(&source_buffer),
+        .launch_cwd = directory,
+        .workspace_path = directory,
+    });
+    // The pane dies with the first runtime; only its id is compared later.
+    const coordinator = coordinator_pane.id;
+    const kept = try model.workspaces.insert(model.gpa, other_directory, "fix-a");
+    var kept_buffer: [64]u8 = undefined;
+    _ = try pane_launch.launch(model, .{
+        .location = kept,
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try sleepLaunchIn(&kept_buffer, other_directory),
+        .launch_cwd = other_directory,
+        .workspace_path = other_directory,
+    });
+    const dropped = try model.workspaces.insert(model.gpa, gone, "fix-b");
+    var dropped_buffer: [64]u8 = undefined;
+    _ = try pane_launch.launch(model, .{
+        .location = dropped,
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try sleepLaunchIn(&dropped_buffer, gone),
+        .launch_cwd = gone,
+        .workspace_path = gone,
+    });
+
+    const delegated = try model.worktrees.register(model.gpa, .{
+        .source = source.workspace.workspace,
+        .created_by = coordinator,
+        .path = other_directory,
+        .branch = "fix-a",
+        .base = "main",
+        .title = "Fix A",
+        .brief = "fix it\nwith tests",
+        .dispatched_from = "laptop",
+    });
+    model.worktrees.workspace[delegated.slot] = kept.workspace.workspace;
+    const external = try model.worktrees.register(model.gpa, .{
+        .source = source.workspace.workspace,
+        .origin = .external,
+        .path = gone,
+        .branch = "fix-b",
+    });
+    model.worktrees.workspace[external.slot] = dropped.workspace.workspace;
+    worktree_lifecycle.announce(model);
+    first.deinit();
+    try temp.dir.deleteDir(io, "gone");
+
+    var second: Runtime = undefined;
+    try second.init(initialization);
+    defer second.deinit();
+    const worktrees = &second.model.worktrees;
+
+    try std.testing.expect(!second.model.checkpoint.restore_failed);
+    try std.testing.expectEqual(@as(usize, 2), worktrees.count);
+    const a = worktrees.slotOf(delegated.id).?;
+    try std.testing.expectEqual(source.workspace.workspace, worktrees.source[a]);
+    try std.testing.expectEqual(kept.workspace.workspace, worktrees.workspace[a].?);
+    try std.testing.expectEqual(coordinator, worktrees.created_by[a].?);
+    try std.testing.expectEqual(core.WorktreeOrigin.telar, worktrees.origin[a]);
+    try std.testing.expectEqualStrings(other_directory, worktrees.path[a]);
+    try std.testing.expectEqualStrings("fix-a", worktrees.branchAt(a));
+    try std.testing.expectEqualStrings("main", worktrees.baseAt(a));
+    try std.testing.expectEqualStrings("Fix A", worktrees.titleAt(a));
+    try std.testing.expectEqualStrings("fix it\nwith tests", worktrees.briefAt(a));
+    try std.testing.expectEqualStrings("laptop", worktrees.dispatchedFromAt(a));
+
+    const b = worktrees.slotOf(external.id).?;
+    try std.testing.expectEqual(core.WorktreeOrigin.external, worktrees.origin[b]);
+    try std.testing.expect(worktrees.workspace[b] == null);
+
+    const later = try worktrees.register(second.model.gpa, .{
+        .source = source.workspace.workspace,
+        .path = "/w/later",
+        .branch = "later",
+    });
+    try std.testing.expect(core.raw(later.id) > core.raw(external.id));
 }
 
 test "a restart restores workspaces, tabs and panes from the session checkpoint" {

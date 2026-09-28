@@ -17,6 +17,8 @@ pub const capacity = core.max_panes_per_tab;
 
 items: [capacity]?*Pane = [_]?*Pane{null} ** capacity,
 shell_markers: [capacity]bool = @splat(false),
+/// The cwd revision `worktree_detection` last looked at; zero for never.
+worktree_checked_cwd: [capacity]u64 = @splat(0),
 count: usize = 0,
 /// Panes whose child has exited but which have not been collected yet.
 /// `collectFinished` runs on every event; this makes the common case -
@@ -255,6 +257,7 @@ pub fn insert(self: *PaneStore, pane: *Pane) !void {
         if (slot.* == null) {
             slot.* = pane;
             self.shell_markers[position] = false;
+            self.worktree_checked_cwd[position] = 0;
             self.index.put(core.raw(pane.id), position);
             self.count += 1;
             revisions.advance(&self.revision);

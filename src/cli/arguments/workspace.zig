@@ -1,8 +1,11 @@
 //! Workspace command grammar and validated options.
 
 const std = @import("std");
+const core = @import("telar-core");
 
-pub const max_worktree_branch_bytes = 200;
+/// A worktree's branch travels to the runtime whole, so the CLI accepts no
+/// longer name than the protocol carries.
+pub const max_worktree_branch_bytes = core.max_git_branch_bytes;
 
 pub const WorkspaceAction = enum { create, list, get, rename };
 
@@ -14,6 +17,9 @@ pub fn validateWorktreeBranch(branch: []const u8) !void {
         return error.InvalidWorktreeBranch;
     }
     if (std.mem.indexOf(u8, branch, "..") != null) {
+        return error.InvalidWorktreeBranch;
+    }
+    if (!std.unicode.utf8ValidateSlice(branch)) {
         return error.InvalidWorktreeBranch;
     }
 

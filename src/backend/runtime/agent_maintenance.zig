@@ -1,6 +1,7 @@
 //! The one-second maintenance tick expires stale agent evidence and starts
 //! the periodic observation work: the session checkpoint, one Git probe,
-//! one session-name probe, the idle engine check and capture expiry.
+//! one worktree detection, one session-name probe, the idle engine check
+//! and capture expiry.
 const agent_status = @import("agent_status.zig");
 
 const std = @import("std");
@@ -11,6 +12,7 @@ const session_checkpoint = @import("session_checkpoint.zig");
 const suggest_command = @import("suggest_command.zig");
 const workspace_git = @import("workspace_git.zig");
 const worktree_git = @import("worktree_git.zig");
+const worktree_detection = @import("worktree_detection.zig");
 
 /// Rearms the tick and runs one maintenance pass.
 ///
@@ -27,6 +29,7 @@ pub fn tick(model: *RuntimeModel, result: anyerror!void) !void {
     try session_checkpoint.start(model);
     workspace_git.start(model);
     worktree_git.start(model);
+    worktree_detection.start(model);
     agent_rename.start(model);
     suggest_command.stopIdleEngine(model);
     model.resources.proxy.expireCaptures(std.Io.Timestamp.now(model.io, .real).toMilliseconds(), model.resources.pluginService());

@@ -28,6 +28,7 @@ pub const client_detach = @import("workspace/client_detach.zig");
 pub const agent_snapshot = @import("agents/agent_snapshot.zig");
 pub const agent_done = @import("agents/agent_done.zig");
 pub const workspace_list_snapshot = @import("workspace/workspace_list_snapshot.zig");
+pub const worktree_lifecycle = @import("workspace/worktree_lifecycle.zig");
 pub const pane_graphics = @import("panes/pane_graphics.zig");
 pub const attachment_types = @import("attachments/types.zig");
 pub const attachments_path_marker = @import("attachments/path_marker.zig");
@@ -373,6 +374,7 @@ test {
     _ = @import("agents/snapshot_support.zig");
     _ = @import("appearance/SyntaxStyle.zig");
     _ = @import("workspace/workspace_list_snapshot.zig");
+    _ = @import("workspace/worktree_lifecycle.zig");
     _ = @import("bars/Argument.zig");
     _ = @import("bars/Dynamic.zig");
     _ = @import("bars/GenericContent.zig");
