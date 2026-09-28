@@ -233,11 +233,11 @@ schema.report_agent, schema.report_agent_title or schema.report_agent_command
 | `permission.asked` | `blocked`, reason `permission`, event `» <permission> <argument>` |
 | `question.asked` | `blocked`, reason `question`, event: the first question |
 | `permission.replied`, `question.replied`, `question.rejected` | `blocked` while another prompt stays open, otherwise the busy state |
-| `tool.execute.before` hook | `working`, event `» <tool> <argument>`; a mapped `bash` call opens a running command row |
+| `tool.execute.before` hook | `working`, event `» <tool> <argument>`, or nothing while a prompt is open; a mapped `bash` call opens a running command row |
 | `tool.execute.after` hook | the matching command row is completed with `metadata.exit` |
 | `session.updated` of the root session | its title, once per change; OpenCode's default title clears it |
 | renewal | the current state every 30 seconds while busy or blocked |
-| `dispose` of the last instance | `exited` |
+| `dispose` of the last instance | `exited`; the plugin forgets the turn and its prompts |
 
 Captured on OpenCode 1.18.32 with a plugin that logged every event and hook
 under an isolated configuration. A turn publishes `session.status` `busy`
@@ -255,9 +255,25 @@ while their permissions and questions block the pane under the root session.
 `!` shell commands typed in the TUI bypass the tool hooks and carry no exit
 code, so they are not recorded.
 
+OpenCode runs the tool calls of one step on their own and each asks for its
+permission inside the tool, after `tool.execute.before`
+(`packages/opencode/src/session/tools.ts`, `permission/index.ts` in
+v1.18.30). A call can therefore start while another call's permission is
+open; the plugin sends the open prompt with it and the hook reports no state,
+so the pane stays blocked with the prompt's event line. The edit, write and
+apply_patch tools ask as `edit` with the path in `metadata.filepath` and the
+whole diff in `metadata.diff`, which has no bound. A payload past 64 KiB keeps
+only the tool input's string fields up to 4096 characters and its first
+question, so the prompt still reaches the runtime at once.
+
 OpenCode's `dispose` hook runs for every instance before the process exits,
 and OpenCode waits for it; the last instance reports `exited` and waits up to
-2.5 seconds for the queue to drain. Delivery is serialized like Pi's: one
+2.5 seconds for the queue to drain. A reload disposes every instance too
+(`SIGUSR2` to the TUI, a configuration change through the server), rejects
+open prompts without replying, and loads the plugin again from the same
+module in the same process (`cli/tui/worker.ts`, `plugin/index.ts`), so
+`dispose` forgets the turn and its prompts and the new first instance reports
+`ready` after the exit. Delivery is serialized like Pi's: one
 child at a time with a two-second limit and 32 pending payloads of at most
 64 KiB, dropping the oldest. The session reference is OpenCode's
 `ses_`-prefixed id, which `opencode --session <id>` resumes; OpenCode prints

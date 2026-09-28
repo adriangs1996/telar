@@ -79,17 +79,35 @@ const drain = () => {
   }
 };
 
+// The hook reads only short strings from a tool input: the argument its
+// event line shows, a shell command and the first question. An edit's diff
+// or a write's content has no bound, so a payload past the hook's limit
+// keeps just those instead of being dropped.
+const brief = (input: unknown) => {
+  if (typeof input !== "object" || input === null) return undefined;
+  const kept: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (typeof value === "string" && value.length <= 4096) kept[key] = value;
+  }
+  const first = (input as { questions?: Array<{ question?: unknown }> }).questions?.[0]?.question;
+  if (typeof first === "string" && first.length <= 4096) kept.questions = [{ question: first }];
+  return kept;
+};
+
+// Queues one payload; false when it cannot be delivered at all.
 const send = (report: Report) => {
   let bytes: string;
   try {
     bytes = JSON.stringify(report);
+    if (Buffer.byteLength(bytes) > 64 * 1024) bytes = JSON.stringify({ ...report, tool_input: brief(report.tool_input) });
   } catch {
-    return;
+    return false;
   }
-  if (Buffer.byteLength(bytes) > 64 * 1024) return;
+  if (Buffer.byteLength(bytes) > 64 * 1024) return false;
   if (queue.length === 32) queue.shift();
   queue.push(bytes);
   drain();
+  return true;
 };
 
 const blockedReason = (): Blocked | undefined => {
@@ -112,9 +130,8 @@ const stopRefresh = () => {
 const report = (event: string, asked?: Pick<Report, "tool_name" | "tool_input">) => {
   const state: Report = { event, session_id: root, busy, blocked: blockedReason(), ...asked };
   const key = JSON.stringify([state.session_id, state.busy, state.blocked]);
-  if (asked !== undefined || event === "state_snapshot" || key !== reported) {
+  if ((asked !== undefined || event === "state_snapshot" || key !== reported) && send(state)) {
     reported = key;
-    send(state);
   }
 
   if (!busy && pending.size === 0) {
