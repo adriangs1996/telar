@@ -260,7 +260,9 @@ permission inside the tool, after `tool.execute.before`
 (`packages/opencode/src/session/tools.ts`, `permission/index.ts` in
 v1.18.30). A call can therefore start while another call's permission is
 open; the plugin sends the open prompt with it and the hook reports no state,
-so the pane stays blocked with the prompt's event line. The edit, write and
+so the pane stays blocked with the prompt's event line. Measured on 1.18.32:
+with `bash` set to ask, one step's `bash`, two `read` and two `glob` calls
+ran the four others while the `bash` permission waited. The edit, write and
 apply_patch tools ask as `edit` with the path in `metadata.filepath` and the
 whole diff in `metadata.diff`, which has no bound. A payload past 64 KiB keeps
 only the tool input's string fields up to 4096 characters and its first
@@ -273,8 +275,13 @@ and OpenCode waits for it; the last instance reports `exited` and waits up to
 open prompts without replying, and loads the plugin again from the same
 module in the same process (`cli/tui/worker.ts`, `plugin/index.ts`), so
 `dispose` forgets the turn and its prompts and the new first instance reports
-`ready` after the exit. Delivery is serialized like Pi's: one
-child at a time with a two-second limit and 32 pending payloads of at most
+`ready` after the exit. Measured on 1.18.32 with `SIGUSR2`: an idle pane
+reported `exited`, fell back to `unknown` and reported `ready` seven seconds
+later; with a permission open, the turn ended with `session.status` `idle`,
+one more `idle` arrived after `dispose`, and the pane settled on `ready`.
+OpenCode's TUI kept drawing that permission, but it no longer answers: Enter
+and Escape did nothing and the command never ran, so the pane does not report
+it as blocked. Delivery is serialized like Pi's: one child at a time with a two-second limit and 32 pending payloads of at most
 64 KiB, dropping the oldest. The session reference is OpenCode's
 `ses_`-prefixed id, which `opencode --session <id>` resumes; OpenCode prints
 that command when it exits. Uninstall deletes the file only when it starts
