@@ -9,3 +9,7 @@ pub const report_working_expiry_ms: i64 = 10 * 60 * 1000;
 /// burst of subagent tool calls republishes the projection once, not per call.
 pub const report_renewal_margin_ms: i64 = report_working_expiry_ms / 2;
 pub const settled_expiry_ms: i64 = 30 * 60 * 1000;
+/// How long an interrupted agent's idle composer must hold before its turn
+/// counts as ended. Claude Code 2.1.283 redraws the prompt it restores 1 ms
+/// after it titles itself idle.
+pub const interrupt_idle_ms: i64 = 500;

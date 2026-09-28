@@ -9,6 +9,8 @@ const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
+const Pane = @import("../pane/Pane.zig");
+const prompt_scan = @import("../history/prompt_scan.zig");
 const agent_status = @import("agent_status.zig");
 const client_request = @import("client_request.zig");
 const pane_input = @import("pane_input.zig");
@@ -40,6 +42,14 @@ pub fn interrupt(model: *RuntimeModel, session: *Session, request: core.Interrup
     }
 
     const exact = pane.key();
+    if (model.agents.find(exact)) |agent| {
+        // A second press could reach an agent whose turn already stopped:
+        // Claude Code exits on a second Ctrl+C at an empty prompt.
+        if (agent.interrupt != .none) {
+            return client_request.complete(session, request.request_id);
+        }
+    }
+
     if (agent_status.projectedStatus(model, exact) != .working) {
         return client_request.fail(session, request.request_id, .agent_not_working, "agent is not working");
     }
@@ -50,17 +60,45 @@ pub fn interrupt(model: *RuntimeModel, session: *Session, request: core.Interrup
     }
 
     try pane_input.press(model, pane, interrupt_key.presses());
-    // Claude Code runs no stop hook for an interrupted turn, so the working
-    // report would outlive the turn. The runtime pressed the key itself; the
-    // agent's next hook corrects this if the turn somehow went on.
+    // No agent reports the end of an interrupted turn: Claude Code runs no
+    // hook at all. The settling report keeps the agent working until a newer
+    // screen shows its idle composer, or its next hook replaces the report.
     _ = agent_status.observeReport(model, .{
         .identity = agent_identity.fromPane(pane),
-        .state = .ready,
+        .state = .settling,
         .event = interrupted_event,
         .observed_at_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
         .observed_at_ns = @intCast(std.Io.Timestamp.now(model.io, .awake).toNanoseconds()),
     });
+    if (model.agents.find(exact)) |agent| {
+        agent.interrupt = .pending;
+    }
+
     try client_request.complete(session, request.request_id);
+}
+
+/// Clears the draft an interrupted agent put back in its composer, so the
+/// turn can settle and the next prompt is not appended to the old one.
+/// Claude Code restores a prompt it had not answered yet; its interrupt key,
+/// Ctrl+C, clears the input once nothing runs, and exits only on a second
+/// press at an empty prompt. The key is pressed once per interrupt.
+///
+/// ```zig
+/// try agent_control.clearRestoredDraft(model, pane);
+/// ```
+pub fn clearRestoredDraft(model: *RuntimeModel, pane: *Pane) !void {
+    const agent = model.agents.find(pane.key()) orelse return;
+    if (agent.interrupt != .pending) {
+        return;
+    }
+
+    const provider = agent_status.projectedProvider(model, pane.key());
+    if (!prompt_scan.showsRestoredDraft(&pane.terminal, provider)) {
+        return;
+    }
+
+    agent.interrupt = .draft_cleared;
+    try pane_input.press(model, pane, model.resources.agent_manifests.interrupt(provider).presses());
 }
 
 /// Whether `pane_id` is the focused pane of the active tab of any attached

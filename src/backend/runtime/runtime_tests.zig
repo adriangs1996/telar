@@ -50,6 +50,7 @@ test {
     _ = @import("tests/cell_projection_test.zig");
     _ = @import("tests/pane_title_test.zig");
     _ = @import("tests/performance_isolation_test.zig");
+    _ = @import("tests/agent_control_test.zig");
     _ = @import("tests/read_pane_test.zig");
     _ = @import("tests/runtime_state_test.zig");
     _ = @import("tests/search_pane_test.zig");
