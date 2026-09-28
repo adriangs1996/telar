@@ -4,6 +4,7 @@
 #   curl -fsSL https://github.com/adriangs1996/telar/releases/latest/download/install.sh | sh
 #   curl -fsSL https://github.com/adriangs1996/telar/releases/latest/download/install.sh | sh -s -- --app
 #   sh install.sh --version 0.3.0 --bin-dir /usr/local/bin --sudo
+#   sh install.sh --binary ./telar --sha256 HEX --bin-dir DIR
 #
 # It downloads the archive for this system, or the disk image with --app,
 # checks it against the release's SHA256SUMS, copies it beside what it
@@ -23,6 +24,8 @@ variant=auto
 fallback=
 install_app=false
 use_sudo=false
+pinned=
+binary=
 
 usage() {
     cat <<'EOF'
@@ -42,6 +45,13 @@ Usage: install.sh [options]
                     replaces it when it does not start.
   --sudo            Write with sudo, for directories such as /usr/local/bin
                     or /Applications.
+  --sha256 HEX      The archive, disk image or --binary must have this
+                    SHA-256, besides matching the release's SHA256SUMS.
+                    telar machine setup passes the hash this machine's
+                    telar read from its own release.
+  --binary FILE     Install this telar executable instead of a release.
+                    Needs --sha256. For development builds, which have no
+                    release to download.
   -h, --help        Show this help.
 EOF
 }
@@ -104,6 +114,16 @@ while [ $# -gt 0 ]; do
             use_sudo=true
             shift
             ;;
+        --sha256)
+            [ $# -ge 2 ] || fail "--sha256 needs a value"
+            pinned=$2
+            shift 2
+            ;;
+        --binary)
+            [ $# -ge 2 ] || fail "--binary needs a value"
+            binary=$2
+            shift 2
+            ;;
         -h | --help)
             usage
             exit 0
@@ -116,6 +136,18 @@ case $version in
     '') ;;
     *[!0-9.]* | .* | *. | *..*) fail "version $version is not X.Y.Z" ;;
 esac
+
+case $pinned in
+    '') ;;
+    *[!0-9a-f]*) fail "--sha256 takes 64 lowercase hex digits" ;;
+    *) [ ${#pinned} -eq 64 ] || fail "--sha256 takes 64 lowercase hex digits" ;;
+esac
+
+if [ -n "$binary" ]; then
+    [ -n "$pinned" ] || fail "--binary needs --sha256"
+    [ "$install_app" = false ] || fail "--binary installs a bare executable; it cannot go with --app"
+    [ -f "$binary" ] || fail "$binary is not a file"
+fi
 
 case $(uname -m) in
     x86_64 | amd64) arch=x86_64 ;;
@@ -144,13 +176,21 @@ case $(uname -s) in
     *) fail "no release for $(uname -s)" ;;
 esac
 
+# With a pinned hash only one archive can match, so the fallback from the
+# desktop build to the headless one would always fail its check.
+if [ -n "$pinned" ] && [ -z "$binary" ] && [ -n "$fallback" ]; then
+    fail "--sha256 names one archive; pass --headless or --gui with it"
+fi
+
 if [ -n "$version" ]; then
     base=$releases/download/v$version
 else
     base=$releases/latest/download
 fi
 
-command -v curl >/dev/null 2>&1 || fail "curl is required"
+if [ -z "$binary" ]; then
+    command -v curl >/dev/null 2>&1 || fail "curl is required"
+fi
 
 # Only https, or file for a local mirror. --proto also binds redirects, so
 # an https URL never lands on http. wget has no such option: its
@@ -195,6 +235,14 @@ fetch() {
     [ -n "$expected" ] || fail "SHA256SUMS lists no $1"
     actual=$(sha256 "$work/$1")
     [ "$actual" = "$expected" ] || fail "checksum mismatch for $1: expected $expected, got $actual"
+    pin "$1" "$actual"
+}
+
+# Fails unless NAME, which hashes to ACTUAL, has the hash --sha256 asked for.
+pin() {
+    if [ -n "$pinned" ] && [ "$2" != "$pinned" ]; then
+        fail "checksum mismatch for $1: --sha256 expected $pinned, got $2"
+    fi
 }
 
 # Prints the version of a staged telar, or fails when it does not start, as
@@ -296,6 +344,23 @@ trap cleanup EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+if [ -n "$binary" ]; then
+    # A development build: no release, only the hash the caller computed
+    # where the file came from.
+    pin "$binary" "$(sha256 "$binary")"
+    mkdir "$work/binary"
+    source_dir=$work/binary
+    cp "$binary" "$source_dir/telar"
+    stage || refuse "$binary"
+    for tool in $staged; do
+        run mv -f "$bin_dir/.$tool.new" "$bin_dir/$tool"
+    done
+
+    staged=
+    printf 'Installed %s into %s\n' "$installed" "$bin_dir"
+    exit 0
+fi
 
 download "$base/SHA256SUMS" "$work/SHA256SUMS"
 

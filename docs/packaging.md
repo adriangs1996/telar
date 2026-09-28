@@ -450,6 +450,15 @@ install, when it does not start; `--headless` skips it. Remote mode needs
 the same version on both machines, so pin `--version` on the server.
 `TELAR_RELEASES_URL` points it at a mirror or a local `file://` copy.
 
+`--sha256 HEX` adds a second check: the archive (or disk image) must hash to
+that value as well as match `SHA256SUMS`. `telar machine setup` passes the
+hash the client read from its own release, so a machine never installs an
+archive the client did not name. Since it names one archive, a Linux
+install needs `--headless` or `--gui` beside it. `--binary FILE --sha256 HEX`
+installs a bare executable instead of a release, for development builds
+that have none; it is staged and started from the target directory like a
+downloaded one.
+
 It needs `curl`. A stock Alpine has only busybox `wget`, so install curl
 first there, which the one-line install needs anyway:
 
