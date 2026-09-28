@@ -115,7 +115,6 @@ fn commit(worktrees: *Worktrees, completion: WorktreeProbeCompletion, now_ms: i6
         return !std.meta.eql(before, observed(worktrees, slot));
     }
 
-    worktrees.git_dirty[slot] = completion.dirty;
     const found_base = completion.foundBaseSlice();
     const learned_base = found_base.len != 0 and worktrees.base_len[slot] == 0;
     if (learned_base) {
@@ -129,15 +128,19 @@ fn commit(worktrees: *Worktrees, completion: WorktreeProbeCompletion, now_ms: i6
         worktrees.branch_len[slot] = @intCast(branch.len);
     }
 
-    if (completion.measured) {
-        worktrees.probe_failures[slot] = 0;
-        worktrees.diff_added[slot] = completion.stat.added;
-        worktrees.diff_removed[slot] = completion.stat.removed;
-        worktrees.diff_files[slot] = completion.stat.files;
-        worktrees.commits_ahead[slot] = completion.stat.commits_ahead;
-    } else {
+    // A failed measurement says nothing about the work: the state and the
+    // numbers stay as the last measurement left them.
+    if (!completion.measured) {
         worktrees.probe_failures[slot] +|= 1;
+        return learned_base or !std.meta.eql(before, observed(worktrees, slot));
     }
+
+    worktrees.probe_failures[slot] = 0;
+    worktrees.git_dirty[slot] = completion.dirty;
+    worktrees.diff_added[slot] = completion.stat.added;
+    worktrees.diff_removed[slot] = completion.stat.removed;
+    worktrees.diff_files[slot] = completion.stat.files;
+    worktrees.commits_ahead[slot] = completion.stat.commits_ahead;
 
     const pending = completion.dirty or worktrees.diff_files[slot] != 0 or worktrees.commits_ahead[slot] != 0;
     if (pending) {
@@ -201,6 +204,32 @@ test "a clean worktree turns integrated only after it held work, and a missing c
     try std.testing.expect(commit(table, .{ .worktree = registered.id }, 40));
     try std.testing.expectEqual(core.WorktreeState.gone, table.state[registered.slot]);
     try std.testing.expect(reserve(table, 100_000) == null);
+}
+
+test "a probe that measured nothing leaves the state as it was" {
+    const gpa = std.testing.allocator;
+    const table = try gpa.create(Worktrees);
+    defer gpa.destroy(table);
+    table.* = .{};
+    defer table.deinit(gpa);
+    const registered = try table.register(gpa, .{
+        .source = @enumFromInt(1),
+        .path = "/w/fix",
+        .branch = "fix",
+        .base = "main",
+    });
+
+    // Uncommitted work only: no commits, no diff yet.
+    table.git_probe = registered.id;
+    _ = commit(table, .{ .worktree = registered.id, .present = true, .measured = true, .dirty = true }, 10);
+    try std.testing.expectEqual(core.WorktreeState.active, table.state[registered.slot]);
+
+    // Git failed: nothing says the work went away.
+    table.git_probe = registered.id;
+    _ = commit(table, .{ .worktree = registered.id, .present = true }, 20);
+    try std.testing.expectEqual(core.WorktreeState.active, table.state[registered.slot]);
+    try std.testing.expect(table.git_dirty[registered.slot]);
+    try std.testing.expectEqual(@as(u8, 1), table.probe_failures[registered.slot]);
 }
 
 test "a base the probe found is kept once and a recorded base is never replaced" {

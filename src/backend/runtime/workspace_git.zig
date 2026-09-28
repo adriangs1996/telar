@@ -33,7 +33,7 @@ pub fn start(model: *RuntimeModel) void {
 /// ```
 pub fn finish(model: *RuntimeModel, completion: Completion) void {
     const branch = if (completion.present) completion.branchSlice() else "";
-    const dirty = completion.present and completion.dirty;
+    const dirty: ?bool = if (completion.present) completion.dirty else false;
     _ = commit(&model.workspaces, completion.workspace, branch, dirty, std.Io.Timestamp.now(model.io, .real).toMilliseconds());
 }
 
@@ -71,8 +71,9 @@ fn cancel(workspaces: *Workspaces, workspace: core.WorkspaceId) void {
 }
 
 /// Retires the reservation, stores the observation and advances the list
-/// revision only when the branch or dirty state changed.
-fn commit(workspaces: *Workspaces, workspace: core.WorkspaceId, branch: []const u8, dirty: bool, checked_at_ms: i64) bool {
+/// revision only when the branch or dirty state changed. An unknown dirty
+/// state (Git failed) keeps the one shown before.
+fn commit(workspaces: *Workspaces, workspace: core.WorkspaceId, branch: []const u8, observed_dirty: ?bool, checked_at_ms: i64) bool {
     if (workspaces.git_probe != workspace) {
         return false;
     }
@@ -80,6 +81,7 @@ fn commit(workspaces: *Workspaces, workspace: core.WorkspaceId, branch: []const 
     cancel(workspaces, workspace);
     const slot = workspaces.slotOf(.{ .workspace = workspace }) orelse return false;
     workspaces.git_checked_at_ms[slot] = checked_at_ms;
+    const dirty = observed_dirty orelse workspaces.git_dirty[slot];
 
     const bounded = branch[0..@min(branch.len, core.max_git_branch_bytes)];
     const changed = !std.mem.eql(u8, workspaces.gitBranch(slot), bounded) or workspaces.git_dirty[slot] != dirty;

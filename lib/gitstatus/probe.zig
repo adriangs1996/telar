@@ -62,14 +62,16 @@ pub fn parseHead(bytes: []const u8) []const u8 {
     return trimmed[0..@min(trimmed.len, 8)];
 }
 
-fn statusDirty(io: std.Io, environ: std.process.Environ, workspace_path: []const u8) bool {
+/// Null when Git failed or ran out of time; a failure is no evidence the
+/// tree is clean.
+fn statusDirty(io: std.Io, environ: std.process.Environ, workspace_path: []const u8) ?bool {
     const output = untrusted_git.run(io, .{
         .environ = environ,
         .path = workspace_path,
         .arguments = &.{ "status", "--porcelain", "--no-renames", "--ignore-submodules=all" },
         .timeout = status_timeout,
         .stdout_limit = max_status_bytes,
-    }) orelse return false;
+    }) orelse return null;
     defer output.deinit();
     return output.line().len != 0;
 }

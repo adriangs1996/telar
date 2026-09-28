@@ -160,7 +160,7 @@ test "observation measures a planted repository without running any program it n
     var head: [256]u8 = undefined;
     const status = probe.run(io, std.testing.environ, planted.repo(), &head).?;
     try std.testing.expectEqualStrings("task", status.branch);
-    try std.testing.expect(status.dirty);
+    try std.testing.expect(status.dirty.?);
 
     const stat = base_distance.run(io, .{ .environ = std.testing.environ, .path = planted.repo() }, "main").?;
     try std.testing.expectEqual(@as(u32, 1), stat.commits_ahead);
@@ -178,6 +178,18 @@ test "the hardened options alone stop every hook, even when Git may write the in
     const argv = [_][]const u8{"git"} ++ untrusted_git.hardened_options ++ [_][]const u8{ "-c", "filter.evil.clean=", "-c", "filter..clean=", "-c", "filter.other.process=", "-C", planted.repo(), "status", "--porcelain" };
     try system(&argv);
     try planted.expectNothingRan();
+}
+
+test "a status Git could not finish reads as unknown, never as clean" {
+    var planted: Planted = undefined;
+    try plant(&planted);
+    defer planted.deinit();
+
+    try planted.temp.dir.writeFile(std.testing.io, .{ .sub_path = "repo/.git/index", .data = "not an index" });
+    var head: [256]u8 = undefined;
+    const status = probe.run(std.testing.io, std.testing.environ, planted.repo(), &head).?;
+    try std.testing.expectEqualStrings("task", status.branch);
+    try std.testing.expect(status.dirty == null);
 }
 
 test "files named after the merge base cannot fake a worktree's numbers" {
@@ -235,7 +247,7 @@ fn expectEnvironmentRedirectsNothing() !void {
     const environ: std.process.Environ = .{ .block = block };
 
     var head: [256]u8 = undefined;
-    try std.testing.expect(probe.run(io, environ, planted.repo(), &head).?.dirty);
+    try std.testing.expect(probe.run(io, environ, planted.repo(), &head).?.dirty.?);
     const stat = base_distance.run(io, .{ .environ = environ, .path = planted.repo() }, "main").?;
     try std.testing.expectEqual(@as(u32, 1), stat.commits_ahead);
 }

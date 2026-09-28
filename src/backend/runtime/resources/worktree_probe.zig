@@ -30,6 +30,7 @@ pub fn probe(job: WorktreeProbeJob) WorktreeProbeCompletion {
 
     completion.present = true;
     var head_buffer: [4096]u8 = undefined;
+    var status_known = false;
     if (gitstatus.probe.run(job.io, job.environ, path, &head_buffer)) |status| {
         // A branch the row cannot hold whole keeps the recorded one.
         if (fitsRow(path, status.branch)) {
@@ -37,7 +38,10 @@ pub fn probe(job: WorktreeProbeJob) WorktreeProbeCompletion {
             @memcpy(completion.branch[0..status.branch.len], status.branch);
         }
 
-        completion.dirty = status.dirty;
+        if (status.dirty) |dirty| {
+            completion.dirty = dirty;
+            status_known = true;
+        }
     }
 
     // A worktree found by observation has no base; measure it against the
@@ -52,6 +56,11 @@ pub fn probe(job: WorktreeProbeJob) WorktreeProbeCompletion {
                 base = completion.foundBaseSlice();
             }
         }
+    }
+
+    // A measurement needs both halves: local changes and the diff.
+    if (!status_known) {
+        return completion;
     }
 
     if (gitstatus.base_distance.run(job.io, .{ .environ = job.environ, .path = path }, base)) |measured| {

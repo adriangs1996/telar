@@ -63,13 +63,16 @@ through `gitstatus.untrusted_git`:
 | hooks, from the hooks directory or config (`hook.<name>.command` with `hook.<name>.event`) | `-c hook.<event>.enabled=false` for every event `githooks(5)` lists, `-c core.hooksPath=/dev/null`, `GIT_OPTIONAL_LOCKS=0` |
 | filter drivers (`clean`, `process`) from `.gitattributes` or `.git/info/attributes`, including `[filter ""]` | `-c filter.<name>.clean=` (and `smudge`, `process`) for every driver the repository's own config defines, listed by `git config --show-scope`; more than 8, or a name `-c` cannot carry, and nothing runs |
 | `diff.external`, a diff driver's `textconv` | `--no-ext-diff --no-textconv` |
-| a partial clone's lazy fetch (`uploadpack`, `core.sshCommand`) | `GIT_NO_LAZY_FETCH=1`; a partial clone with a Git older than 2.45, which ignores it, is not measured |
+| a partial clone's lazy fetch (`uploadpack`, `core.sshCommand`) | `GIT_NO_LAZY_FETCH=1`; with a Git older than 2.45, which ignores it, a repository that is a partial clone (`remote.*.promisor`, `remote.*.partialclonefilter` alone, `extensions.partialClone`) or names a `remote.*.uploadpack` of its own is not measured |
 | submodules | `--ignore-submodules=all` |
 | `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` and every other `GIT_*` variable of the runtime's environment | removed from the child's environment |
 
 Revisions end at `--`, so a file named after the merge base cannot turn a
-revision into a path, and any failed step leaves the row unmeasured rather
-than measured as zero.
+revision into a path. Any failed step, `git status` included, leaves the row
+unmeasured rather than measured as zero or clean: its numbers, its local
+changes and its state stay as the last measurement left them, so a failure
+never turns a row `integrated`. A workspace whose status failed keeps the
+dirty mark it showed.
 
 Filter drivers the user defines globally or system-wide, such as Git LFS,
 stay on. A repository that defines its own LFS driver locally is compared

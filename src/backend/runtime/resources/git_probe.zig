@@ -23,6 +23,7 @@ pub fn probe(job: Job) Completion {
     completion.present = true;
     completion.branch_len = @intCast(@min(status.branch.len, completion.branch.len));
     @memcpy(completion.branch[0..completion.branch_len], status.branch[0..completion.branch_len]);
+    // Unknown when Git failed; the workspace keeps what it showed before.
     completion.dirty = status.dirty;
     return completion;
 }

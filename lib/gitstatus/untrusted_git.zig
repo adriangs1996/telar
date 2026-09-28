@@ -141,7 +141,7 @@ const HardenedCommand = struct {
 
         var facts: RepositoryFacts = .{};
         readRepositoryFacts(io, request, &self.environ_map, self.arena_state.allocator(), &facts) orelse return self.fail();
-        if (facts.partial_clone and !lazyFetchSwitchable(io, request, &self.environ_map)) {
+        if (facts.fetchesLazily() and !lazyFetchSwitchable(io, request, &self.environ_map)) {
             return self.fail();
         }
 
@@ -191,11 +191,20 @@ const HardenedCommand = struct {
 };
 
 /// What the repository's own config makes Git do on its own: the filter
-/// drivers it defines and whether it is a partial clone.
+/// drivers it defines, whether it is a partial clone (`promisor`, a
+/// `partialclonefilter` alone, or `extensions.partialClone`), and whether
+/// it names the upload-pack a fetch would run.
 const RepositoryFacts = struct {
     drivers: [max_filter_drivers][]const u8 = undefined,
     driver_count: usize = 0,
     partial_clone: bool = false,
+    local_upload_pack: bool = false,
+
+    /// Whether a Git that cannot switch lazy fetching off could run a
+    /// program for this repository while reading it.
+    fn fetchesLazily(self: *const RepositoryFacts) bool {
+        return self.partial_clone or self.local_upload_pack;
+    }
 };
 
 /// Reads the repository's own config (local and worktree scope, including
@@ -204,7 +213,7 @@ const RepositoryFacts = struct {
 /// there are too many drivers or a name `-c` cannot carry. Driver names are
 /// copied into `arena`.
 fn readRepositoryFacts(io: std.Io, request: GitRequest, environ_map: *const std.process.Environ.Map, arena: std.mem.Allocator, facts: *RepositoryFacts) ?void {
-    const pattern = "^(filter\\.|extensions\\.partialclone$|remote\\..*\\.promisor$)";
+    const pattern = "^(filter\\.|extensions\\.partialclone$|remote\\..*\\.(promisor|partialclonefilter|uploadpack)$)";
     const argv = [_][]const u8{"git"} ++ hardened_options ++ [_][]const u8{ "-C", request.path, "config", "--show-scope", "-z", "--get-regexp", pattern };
     const gpa = std.heap.page_allocator;
     const result = std.process.run(gpa, io, .{
@@ -256,6 +265,17 @@ fn parseFacts(listing: []const u8, facts: *RepositoryFacts) ?void {
 
         if (std.mem.startsWith(u8, key, "remote.") and std.mem.endsWith(u8, key, ".promisor")) {
             facts.partial_clone = facts.partial_clone or configTrue(value);
+            continue;
+        }
+
+        // A filter makes its remote a promisor even without `promisor`.
+        if (std.mem.startsWith(u8, key, "remote.") and std.mem.endsWith(u8, key, ".partialclonefilter")) {
+            facts.partial_clone = facts.partial_clone or std.mem.trim(u8, value, " \t").len != 0;
+            continue;
+        }
+
+        if (std.mem.startsWith(u8, key, "remote.") and std.mem.endsWith(u8, key, ".uploadpack")) {
+            facts.local_upload_pack = true;
             continue;
         }
 
@@ -377,6 +397,20 @@ test "the repository's own config names its drivers and whether it is a partial 
     var extension: RepositoryFacts = .{};
     parseFacts("local\x00extensions.partialclone\norigin\x00", &extension).?;
     try std.testing.expect(extension.partial_clone);
+
+    // A filter alone makes the remote a promisor Git fetches from lazily.
+    var filtered: RepositoryFacts = .{};
+    parseFacts("local\x00remote.origin.partialclonefilter\nblob:none\x00", &filtered).?;
+    try std.testing.expect(filtered.partial_clone);
+
+    var upload: RepositoryFacts = .{};
+    parseFacts("local\x00remote.origin.uploadpack\n/tmp/marker\x00", &upload).?;
+    try std.testing.expect(upload.local_upload_pack and !upload.partial_clone);
+    try std.testing.expect(upload.fetchesLazily());
+
+    var global_upload: RepositoryFacts = .{};
+    parseFacts("global\x00remote.origin.uploadpack\n/usr/bin/git-upload-pack\x00", &global_upload).?;
+    try std.testing.expect(!global_upload.fetchesLazily());
 
     var empty: RepositoryFacts = .{};
     parseFacts("", &empty).?;
