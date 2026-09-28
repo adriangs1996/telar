@@ -92,9 +92,11 @@ fn create(io: std.Io, path: []const u8) !std.Io.File {
     });
 }
 
-/// Removes, from the directory holding `endpoint`, the diagnostics logs of
-/// every endpoint whose writing process no longer runs. Best effort: a log
-/// that cannot be removed stays.
+/// Removes, from the directory holding `endpoint`, the diagnostics logs whose
+/// writing process no longer runs. Only logs of telar endpoints qualify: this
+/// endpoint's, or another whose name ends in `.sock`, so a socket placed in
+/// a directory of other files (`$HOME`) never removes a file telar did not
+/// write. Best effort: a log that cannot be removed stays.
 ///
 /// ```zig
 /// Sink.removeOrphans(io, endpoint);
@@ -105,6 +107,7 @@ pub fn removeOrphans(io: std.Io, endpoint: []const u8) void {
     }
 
     const directory_path = std.fs.path.dirname(endpoint) orelse return;
+    const own_name = std.fs.path.basename(endpoint);
     var directory = std.Io.Dir.openDirAbsolute(io, directory_path, .{ .iterate = true }) catch return;
     defer directory.close(io);
 
@@ -117,6 +120,11 @@ pub fn removeOrphans(io: std.Io, endpoint: []const u8) void {
         }
 
         const log = DiagnosticLogName.parse(entry.name) orelse continue;
+        const endpoint_name = entry.name[0..log.endpoint_len];
+        if (!std.mem.eql(u8, endpoint_name, own_name) and !std.mem.endsWith(u8, endpoint_name, ".sock")) {
+            continue;
+        }
+
         if (running(log.pid)) {
             continue;
         }
@@ -174,7 +182,9 @@ test "cleanup removes the logs of processes that ended and keeps the rest" {
     const gone_rotated = "runtime.sock.client-4194305.log.1";
     var own_buffer: [64]u8 = undefined;
     const own = try std.fmt.bufPrint(&own_buffer, "runtime.sock.client-{d}.log", .{std.c.getpid()});
-    for ([_][]const u8{ gone, gone_rotated, own, "notes.log" }) |name| {
+    // Named like a log, but of no telar endpoint.
+    const foreign = "notes.runtime-4194305.log";
+    for ([_][]const u8{ gone, gone_rotated, own, "notes.log", foreign }) |name| {
         try temp.dir.writeFile(io, .{ .sub_path = name, .data = "{}\n" });
     }
 
@@ -183,7 +193,7 @@ test "cleanup removes the logs of processes that ended and keeps the rest" {
     for ([_][]const u8{ gone, gone_rotated }) |name| {
         try std.testing.expectError(error.FileNotFound, temp.dir.statFile(io, name, .{}));
     }
-    for ([_][]const u8{ own, "notes.log" }) |name| {
+    for ([_][]const u8{ own, "notes.log", foreign }) |name| {
         _ = try temp.dir.statFile(io, name, .{});
     }
 }

@@ -74,9 +74,11 @@ pass `Sink.max_file_bytes` (4 MiB, about 17 minutes of runtime lines)
 becomes `<name>.log.1`, replacing the previous one, and writing restarts
 in an empty file, so a process keeps at most 8 MiB. A failed rotation
 retires the sink like any failed write. When a runtime or a client starts,
-`Sink.removeOrphans` removes, from the socket's directory, every
-`*.runtime-<pid>.log` and `*.client-<pid>.log` (and their `.1`) whose
-process no longer runs; release builds, which write no lines, clean up
+`Sink.removeOrphans` removes, from the socket's directory, the
+`<endpoint>.runtime-<pid>.log` and `<endpoint>.client-<pid>.log` (and their
+`.1`) whose process no longer runs, when the endpoint is this one or its
+name ends in `.sock`, so a socket in a directory of other files never
+removes a file telar did not write; release builds, which write no lines, clean up
 too. `telar diagnostics logs` reads the current files, not the `.1`.
 
 ## Validation
