@@ -225,11 +225,17 @@ export const TelarPlugin = async ({ directory }: { directory: string }) => {
       }
     },
     // OpenCode disposes every instance before it exits and waits for this
-    // promise, so the last one reports the exit before the process ends.
+    // promise, so the last one reports the exit before the process ends. A
+    // reload (SIGUSR2, a configuration change) disposes them too, rejecting
+    // open prompts without replies, and loads the plugin again from this
+    // module, whose `load` must then reach the runtime.
     dispose: async () => {
       instances--;
       if (instances > 0) return;
       stopRefresh();
+      busy = false;
+      pending.clear();
+      reported = "";
       send({ event: "dispose", session_id: root });
       await new Promise<void>((resolve) => {
         drained.push(resolve);

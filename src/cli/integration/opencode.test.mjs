@@ -46,6 +46,7 @@ async function fixture(env = { TELAR_PANE_ID: "1", TELAR_PANE_GENERATION: "1" })
   const load = children.splice(0).map((process) => { process.emit("close"); return process.payload; });
   return {
     load,
+    plugin: () => sandbox.TelarPlugin({ directory: "/work/proj" }),
     hooks, children, intervals, timeouts, flush,
     event: (type, properties) => hooks.event({ event: { type, properties } }),
     payloads: () => { flush(); return children.map((process) => process.payload); },
@@ -224,4 +225,23 @@ test("OpenCode keeps an open permission while another tool call of the turn star
   assert.equal(second.blocked, "permission");
   assert.equal(replied.blocked, undefined);
   assert.equal(replied.busy, true);
+});
+
+test("OpenCode reports the idle TUI again when it recreates its instances", async () => {
+  const f = await fixture();
+  await f.hooks["chat.message"]({ sessionID: root });
+  await f.event("permission.asked", { id: "per_1", sessionID: root, permission: "bash", metadata: { command: "ls" } });
+  // A reload (SIGUSR2, a config change) disposes every instance, which
+  // rejects open prompts without replies, then loads the plugin again from
+  // the same module.
+  const disposed = f.hooks.dispose();
+  f.flush();
+  await disposed;
+  await f.plugin();
+  const payloads = f.payloads();
+  assert.deepEqual(payloads.map((payload) => payload.event), ["chat.message", "permission.asked", "dispose", "load"]);
+  assert.equal(payloads[3].busy, false);
+  assert.equal(payloads[3].blocked, undefined);
+  assert.equal(payloads[3].session_id, root);
+  assert.equal(f.intervals.size, 0);
 });
