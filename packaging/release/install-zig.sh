@@ -48,3 +48,9 @@ fi
 mkdir -p "$dir"
 tar -xJf "$archive" -C "$dir" --strip-components=1
 "$dir/zig" version
+
+# Zig 0.16.0 stages a fetched .zip, such as SQLite's amalgamation, in the
+# global cache's tmp directory without creating it, so on a fresh machine
+# the first build fails with "failed to create temporary zip file".
+cache=${ZIG_GLOBAL_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/zig}
+mkdir -p "$cache/tmp"
