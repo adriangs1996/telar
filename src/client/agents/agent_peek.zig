@@ -158,8 +158,7 @@ pub fn showOpened(client: *Client, opened: core.PaneOpened) !void {
 fn openDiff(model: *data.ClientModel, key: data.AgentKey) !void {
     const agent = model.agent_snapshot.find(key) orelse return;
     const row = fleet_order.taskRow(&model.workspace_list_snapshot, agent) orelse return;
-    const base = if (row.baseSlice().len != 0) row.baseSlice() else "HEAD";
-    const arguments = [_][]const u8{ "sh", "-c", diff_script, "sh", base };
+    const arguments = diffArguments(row.branchSlice());
     try sendEncoded(model, .{ .peek_action = key.pane_id }, core.encodeLaunchWorktree, core.LaunchWorktree{
         .request_id = .none,
         .worktree = row.worktree,
@@ -172,8 +171,15 @@ fn openDiff(model: *data.ClientModel, key: data.AgentKey) !void {
     });
 }
 
-/// Diff against the merge base with the task's base branch, then a shell.
-const diff_script = "mb=$(git merge-base \"$1\" HEAD 2>/dev/null || echo HEAD); git --no-pager diff --stat \"$mb\"; echo; git diff \"$mb\"; exec \"${SHELL:-/bin/sh}\"";
+/// The coordinator's own `telar worktree diff`, summary then patch, then a
+/// shell. Every pane carries the runtime's executable and socket, so the
+/// command reaches the runtime that launched it. The branch travels as an
+/// argument, never inside the script.
+const diff_script = "\"$TELAR_BIN_PATH\" worktree diff \"$1\" --stat; echo; \"$TELAR_BIN_PATH\" worktree diff \"$1\"; exec \"${SHELL:-/bin/sh}\"";
+
+fn diffArguments(branch: []const u8) [5][]const u8 {
+    return .{ "sh", "-c", diff_script, "sh", branch };
+}
 const diff_size: core.TerminalSize = .{ .cols = 160, .rows = 48 };
 
 fn peeked(model: *const data.ClientModel) ?data.AgentKey {
@@ -191,6 +197,13 @@ fn sendEncoded(model: *data.ClientModel, continuation: data.RequestsContinuation
     var request = value;
     request.request_id = request_id;
     try model.to_runtime.pushEncoded(encode, request);
+}
+
+test "the peek's diff runs the coordinator's command with the branch as an argument" {
+    const arguments = diffArguments("fix-tabs; rm -rf ~");
+    try std.testing.expect(std.mem.indexOf(u8, arguments[2], "\"$TELAR_BIN_PATH\" worktree diff \"$1\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, arguments[2], "git ") == null);
+    try std.testing.expectEqualStrings("fix-tabs; rm -rf ~", arguments[4]);
 }
 
 test "the field's text selects what the peek does" {
