@@ -422,6 +422,11 @@ test "identifies Cursor Agent under the name its launcher gave the runtime" {
     try std.testing.expectEqual(core.AgentProvider.unknown, identifyCommand(&core.builtin_table, "agent", "agent\x00" ++ entry));
 }
 
+test "identifies OpenCode's executable and its npm launcher" {
+    try std.testing.expectEqual(core.AgentProvider.opencode, identifyCommand(&core.builtin_table, "opencode", "/opt/homebrew/Cellar/opencode/1.18.30_1/bin/opencode\x00-m\x00opencode/big-pickle\x00"));
+    try std.testing.expectEqual(core.AgentProvider.opencode, identifyCommand(&core.builtin_table, "node", "node\x00/usr/local/lib/node_modules/opencode-ai/bin/opencode\x00--session\x00ses_f212d4cc3ffeR3t3CA08EwN5Ap\x00"));
+}
+
 test "does not infer an agent from arbitrary runtime arguments" {
     try std.testing.expectEqual(core.AgentProvider.unknown, identifyCommand(
         &core.builtin_table,

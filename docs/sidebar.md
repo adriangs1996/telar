@@ -26,7 +26,7 @@ Three fields describe what the agent wants from the person:
 
 | Field | Bound | Source |
 | --- | --- | --- |
-| `blocked_reason` | `none`, `permission`, `question`, `plan`, `other`; `none` unless the status is `blocked` | The lifecycle report when its hook names one (Claude Code `permission_prompt`, elicitation notifications, `AskUserQuestion` and `ExitPlanMode` tool starts; Codex `PermissionRequest`; Pi dialogs). Cursor Agent has no hook for its approvals, so its approval and plan-review screens are `other`. Without a report, a blocked agent whose last proxy response closed on a tool request while no exchange is open is `permission`; any other blocked state is `other`. |
+| `blocked_reason` | `none`, `permission`, `question`, `plan`, `other`; `none` unless the status is `blocked` | The lifecycle report when its hook names one (Claude Code `permission_prompt`, elicitation notifications, `AskUserQuestion` and `ExitPlanMode` tool starts; Codex `PermissionRequest`; Pi dialogs; OpenCode `permission.asked` and `question.asked`). Cursor Agent has no hook for its approvals, so its approval and plan-review screens are `other`. Without a report, a blocked agent whose last proxy response closed on a tool request while no exchange is open is `permission`; any other blocked state is `other`. |
 | `last_event` | one control-free UTF-8 line of at most 96 bytes | The event line of the lifecycle report the projection follows: the prompt text while blocked, the last tool call (`» Edit src/client/bars/Output.zig`) while working, the first line of the final assistant message when done. Empty while any other evidence decides. |
 | `status_age_s` | `u32` seconds | The runtime clock at encode time minus the last projected status change. It is never part of the revision; the client adds the time since the snapshot arrived. |
 
@@ -161,8 +161,8 @@ symbol disappears only when its own box cannot fit.
 Only the working glyph pulses through six alpha steps between 1.0 and 0.35
 across 17 animation frames. The state word and duration remain steady.
 The focused pane's card has `surface0` fill and an inner 1px `surface1` ring.
-Built-in providers use the embedded symbol atlas at 60% opacity. OpenAI
-is a white mask tinted with `text`; Claude and Pi retain their source colors. Custom providers keep an unboxed glyph.
+Built-in providers use the embedded symbol atlas at 60% opacity.
+OpenAI, Cursor Agent and OpenCode are white masks tinted with `text`; Claude and Pi retain their source colors. Custom providers keep an unboxed glyph.
 The workspace favicon remains colored and is resolved by the existing worker.
 One clipped `focus_agent` hit target covers each visible card. The wheel
 over the agent viewport scrolls one card pitch; the band's last pixel column is its edge and a 6 px

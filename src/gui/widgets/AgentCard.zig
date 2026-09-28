@@ -209,8 +209,8 @@ fn markSide(_: AgentCard, canvas: *const Canvas) f32 {
     return @round(canvas.chrome.px(CardGeometry.mark_size));
 }
 
-// OpenAI and Cursor follow the theme; the other providers retain their
-// source colors.
+// OpenAI, Cursor and OpenCode follow the theme; the other providers retain
+// their source colors.
 // Custom providers keep their configured glyph without a background.
 fn drawMark(self: AgentCard, canvas: *Canvas, chip: Rect) !void {
     const palette = canvas.theme.palette;

@@ -185,8 +185,9 @@ A foreground Pi or Codex process establishes identity, not readiness. A model
 response may precede local tools or another model request. Without fresh agent
 completion evidence, expired work becomes `unknown`, never a completion sound.
 
-Pi is the only agent whose rename reaches its hooks: `/name` fires
-`session_info_changed`. Claude Code's `/rename` fires no hook and Codex has no
+Pi and OpenCode are the agents whose rename reaches Telar as an event: Pi's
+`/name` fires `session_info_changed` and OpenCode's `/rename` publishes
+`session.updated`. Claude Code's `/rename` fires no hook and Codex has no
 hook for its `/rename` either; their hooks report the file the session lives
 in and [agent rename](agent-rename.md) covers how the runtime reads it.
 
@@ -196,6 +197,73 @@ session reference is Pi's UUIDv7 session id, which `pi --session <id>`
 resolves for restore. Uninstall deletes the file only when it starts with
 the Telar marker line, so a user's own extension at that path is never
 touched.
+
+## OpenCode
+
+OpenCode has no hook files either; a plugin receives its events. `telar
+integration install opencode` writes `telar.ts` (bundled from
+`src/cli/integration/opencode.ts`) into `plugins/` of OpenCode's global
+configuration directory, `$XDG_CONFIG_HOME/opencode` or `~/.config/opencode`,
+which OpenCode scans for `{plugin,plugins}/*.{ts,js}`
+(`packages/opencode/src/config/plugin.ts`). A file plugin may export only
+functions; OpenCode calls each export once per project directory it serves,
+all inside the worker thread of the one `opencode` process, whose environment
+is a copy of the TUI's (`packages/opencode/src/cli/cmd/tui.ts`). The plugin
+therefore keeps the pane state at module scope and does nothing outside a
+Telar pane.
+
+```text
+OpenCode plugin hook or bus event
+        |
+the plugin tracks the root session, whether it is busy and its open prompts
+        |
+{ event, session_id, busy, blocked, title | tool data }  --stdin-->  telar hook opencode
+        |
+hook lifecycle, title and manifest command mappings
+        |
+schema.report_agent, schema.report_agent_title or schema.report_agent_command
+```
+
+| OpenCode event | Report |
+| --- | --- |
+| plugin load (first instance) | `ready`: OpenCode publishes nothing before the first prompt, not even for a resumed session |
+| `chat.message` hook | `working` + session reference |
+| `session.status` `busy` or `retry` | `working`, once per change: OpenCode repeats `busy` several times a turn |
+| `session.status` `idle` | `ready` (projects as `done` until seen), open prompts forgotten |
+| `permission.asked` | `blocked`, reason `permission`, event `» <permission> <argument>` |
+| `question.asked` | `blocked`, reason `question`, event: the first question |
+| `permission.replied`, `question.replied`, `question.rejected` | `blocked` while another prompt stays open, otherwise the busy state |
+| `tool.execute.before` hook | `working`, event `» <tool> <argument>`; a mapped `bash` call opens a running command row |
+| `tool.execute.after` hook | the matching command row is completed with `metadata.exit` |
+| `session.updated` of the root session | its title, once per change; OpenCode's default title clears it |
+| renewal | the current state every 30 seconds while busy or blocked |
+| `dispose` of the last instance | `exited` |
+
+Captured on OpenCode 1.18.32 with a plugin that logged every event and hook
+under an isolated configuration. A turn publishes `session.status` `busy`
+several times and ends with `idle` followed by the deprecated `session.idle`,
+which the plugin ignores. An interrupt (ESC twice) publishes `session.error`
+with `MessageAbortedError`, then `idle`, and never replies to the prompt it
+cancelled, so `idle` forgets every open prompt. `tool.execute.before` runs
+before the permission is asked, so a command row opens while the user
+decides; a rejected or aborted call never runs `tool.execute.after` or reports
+`exit: null`, and its row keeps no exit code. The `permission.ask` hook is
+declared in the plugin API but OpenCode never calls it, so `blocked` comes from
+the `permission.asked` event. Subagents of the task tool run in child
+sessions that carry a `parentID`: their status and tool calls are ignored,
+while their permissions and questions block the pane under the root session.
+`!` shell commands typed in the TUI bypass the tool hooks and carry no exit
+code, so they are not recorded.
+
+OpenCode's `dispose` hook runs for every instance before the process exits,
+and OpenCode waits for it; the last instance reports `exited` and waits up to
+2.5 seconds for the queue to drain. Delivery is serialized like Pi's: one
+child at a time with a two-second limit and 32 pending payloads of at most
+64 KiB, dropping the oldest. The session reference is OpenCode's
+`ses_`-prefixed id, which `opencode --session <id>` resumes; OpenCode prints
+that command when it exits. Uninstall deletes the file only when it starts
+with `// telar-integration: opencode`. Reinstall after updating Telar and
+restart OpenCode to load the new plugin.
 
 ## File change review
 
@@ -233,7 +301,8 @@ around the named tool, but another process might write the same file between
 the snapshots. Telar does not use the working tree's Git diff to attribute
 unrelated changes. Shell commands and unrecognized tools are not automatically
 captured. Pi's current asynchronous extension delivery cannot guarantee a
-before snapshot, so it does not advertise this capture capability.
+before snapshot, so it does not advertise this capture capability, and the
+OpenCode plugin does not capture file changes yet.
 
 Only explicitly submitted review feedback is sent to the agent, and only to
 Claude Code and Codex: Cursor's tool hooks document no context field for it. On the next
@@ -352,8 +421,8 @@ executable must use the matching schema; older peers are rejected at handshake.
 
 The command field is data, not harness-specific branching. Built-in manifests
 map Claude Code `Bash.command`, current Codex `Bash.command`, compatibility
-names `exec_command.cmd` and `shell.command`, Pi `bash.command` and Cursor
-Agent `Shell.command`. A custom
+names `exec_command.cmd` and `shell.command`, Pi `bash.command`, Cursor
+Agent `Shell.command` and OpenCode `bash.command`. A custom
 manifest can declare the same mapping with `command_tools`. Subagent tool calls
 are ignored. Native hook records use `origin = hook`; a later plugin record with
 the same session and tool call id cannot duplicate it.
@@ -366,7 +435,10 @@ reports `isError`; its extension maps that boolean to zero or one. Cursor
 Agent nests `{"output":…,"exitCode":N}` in the string `tool_output` of a
 `Shell` `postToolUse`; a `postToolUseFailure` closes the row without a code.
 Cursor leaves a command's `cwd` empty when it runs in the workspace, so the
-row records the first workspace root.
+row records the first workspace root. OpenCode's `bash` reports its status in
+`metadata.exit` of `tool.execute.after`, `null` when the command was aborted
+or timed out; the row records `workdir` when the call names one and the
+project directory otherwise.
 
 `telar integration` edits only the event arrays owned by the selected agent,
 adds an entry once per event, rewrites a telar entry whose command is stale
@@ -394,11 +466,14 @@ for `SessionEnd` and `Interrupt`.
   generated one, never clears a manual one, clears on an empty report and is
   durable.
 - `src/cli/hook.zig` proves the event mapping and subagent filtering for
-  Claude Code, Codex, Pi and Cursor Agent; installed payload shapes; manifest-based shell
+  Claude Code, Codex, Pi, Cursor Agent and OpenCode; installed payload shapes; manifest-based shell
   extraction; and the parsed arena lifetime that backs both requests.
 - `src/cli/integration_support.zig` proves idempotent install and selective removal
   for Claude Code and Cursor Agent's flat layout, and rendering, marker detection and atomic owner-only
-  installation for the Pi extension.
+  installation for the Pi extension and the OpenCode plugin.
+- `src/cli/integration/opencode.test.mjs` (run with `node --test`) proves the
+  plugin's ordered delivery, deduplicated busy reports, prompt tracking,
+  interrupt settlement, subagent filtering, title and exit reports.
 - `src/backend/history/persistence/history_sql.zig` proves that native start/finish
   updates one row and a later plugin observation with the same tool call id is
   deduplicated.

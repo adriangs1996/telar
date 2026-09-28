@@ -68,7 +68,7 @@ pub const AddError = error{ TooManyAgents, InvalidName, DuplicateName };
 /// ```
 pub fn isBuiltinProvider(provider: types.AgentProvider) bool {
     return switch (provider) {
-        .claude, .codex, .pi, .cursor => true,
+        .claude, .codex, .pi, .cursor, .opencode => true,
         else => false,
     };
 }
@@ -85,6 +85,9 @@ pub fn builtinProvider(name: []const u8) ?types.AgentProvider {
     }
     if (std.mem.eql(u8, name, "cursor")) {
         return .cursor;
+    }
+    if (std.mem.eql(u8, name, "opencode")) {
+        return .opencode;
     }
     return null;
 }
@@ -176,6 +179,16 @@ fn buildBuiltin() Table {
         "yes, build locally",
         "do you trust the contents of this directory?",
     }) |phrase| cursor.blocked.append(phrase) catch unreachable;
+
+    // OpenCode is one Bun executable named `opencode`; npm installs launch it
+    // from `node .../bin/opencode`, whose basename identifies it too. Its
+    // plugin reports every prompt, permission, question and turn end, so it
+    // carries no screen phrases, and no brand word: "opencode" names the
+    // project and its directories in any pane.
+    const opencode = table.add("opencode") catch unreachable;
+    opencode.setDisplayName("OpenCode") catch unreachable;
+    opencode.process_names.append("opencode") catch unreachable;
+    opencode.command_tools.append("bash", "command") catch unreachable;
 
     return table;
 }
@@ -298,6 +311,23 @@ test "built-in Cursor Agent is identified by its launcher, entry point and dialo
     try std.testing.expect(table.detect("  → Add a follow-up        ctrl+c to stop") == null);
     try std.testing.expect(table.detect("  → Add a follow-up") == null);
     try std.testing.expect(table.detect("move the cursor left") == null);
+}
+
+test "built-in OpenCode is identified by its executable and maps its shell tool" {
+    const table = &builtin_table;
+
+    try std.testing.expectEqual(types.AgentProvider.opencode, table.providerFromExecutable("opencode").?);
+    try std.testing.expectEqualStrings("opencode", table.providerName(.opencode));
+    try std.testing.expectEqualStrings("OpenCode", table.displayName(.opencode));
+    try std.testing.expect(isBuiltinProvider(.opencode));
+    try std.testing.expectEqual(types.AgentProvider.opencode, builtinProvider("opencode").?);
+    try std.testing.expectEqualStrings("command", table.commandField(.opencode, "bash").?);
+    try std.testing.expectEqual(types.AgentAttachmentMarkers.none, table.attachments(.opencode));
+
+    // Captured from OpenCode 1.18.32 under a pty: its prompts carry no phrase
+    // of the other agents.
+    try std.testing.expect(table.detect("  △ Permission required\n    # Shell command\n  $ ls -la\n   Allow once   Allow always   Reject") == null);
+    try std.testing.expect(table.detect("   ⬝⬝⬝⬝■■■■  esc interrupt                ctrl+p commands") == null);
 }
 
 test "custom agents receive stable provider indexes and extend built-ins by name" {

@@ -19,6 +19,7 @@ pub fn draw(canvas: *Canvas, icon: data.icons.Icon, bounds: Rect, dimmed: bool) 
         .provider_codex => .codex,
         .provider_pi => .pi,
         .provider_cursor => .cursor,
+        .provider_opencode => .opencode,
         else => .unknown,
     };
     if (canvas.providerMark(provider)) |mark| {

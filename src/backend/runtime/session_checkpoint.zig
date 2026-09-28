@@ -582,6 +582,10 @@ test "resume commands exist only for built-in providers and UUID references" {
     try std.testing.expectEqualStrings("codex resume " ++ session ++ "\r", resumeCommand(&buffer, .codex, session).?);
     try std.testing.expectEqualStrings("pi --session " ++ session ++ "\r", resumeCommand(&buffer, .pi, session).?);
     try std.testing.expectEqualStrings("cursor-agent --resume " ++ session ++ "\r", resumeCommand(&buffer, .cursor, session).?);
+    const opencode_session = "ses_f212d4cc3ffeR3t3CA08EwN5Ap";
+    try std.testing.expectEqualStrings("opencode --session " ++ opencode_session ++ "\r", resumeCommand(&buffer, .opencode, opencode_session).?);
+    try std.testing.expect(resumeCommand(&buffer, .opencode, session) == null);
+    try std.testing.expect(resumeCommand(&buffer, .claude, opencode_session) == null);
     try std.testing.expect(resumeCommand(&buffer, @enumFromInt(core.first_custom_agent_provider), session) == null);
     try std.testing.expect(resumeCommand(&buffer, .claude, "not-a-uuid") == null);
     try std.testing.expect(resumeCommand(&buffer, .claude, "0192aaaa-bbbb-cccc-dddd-eeeeffff000g") == null);

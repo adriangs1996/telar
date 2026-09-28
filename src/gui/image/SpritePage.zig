@@ -23,7 +23,7 @@ pub const min_cell: u32 = 8;
 pub const max_cell: u32 = 48;
 pub const max_favicons: u16 = 64;
 const provider_slot: u32 = 64;
-const providers = [_]core.AgentProvider{ .claude, .codex, .pi, .cursor };
+const providers = [_]core.AgentProvider{ .claude, .codex, .pi, .cursor, .opencode };
 /// Cells the provider marks take before the first favicon.
 pub const provider_mark_count: u16 = providers.len;
 
@@ -153,6 +153,7 @@ test "the page holds the provider marks then at most 64 favicons and premultipli
     try std.testing.expect(page.providerMark(.claude) != null);
     try std.testing.expect(page.providerMark(.pi).?.index == 2);
     try std.testing.expect(page.providerMark(.cursor).?.index == 3);
+    try std.testing.expect(page.providerMark(.opencode).?.index == 4);
     try std.testing.expect(page.providerMark(.unknown) == null);
     try std.testing.expect(page.providerMark(@enumFromInt(9)) == null);
 
@@ -183,7 +184,7 @@ test "cells follow the display scale inside the bounds" {
     try std.testing.expectError(error.InvalidSpriteCell, SpritePage.init(std.testing.allocator, 4));
 }
 
-test "provider symbols preserve alpha and OpenAI and Cursor are tintable white masks" {
+test "provider symbols preserve alpha and OpenAI, Cursor and OpenCode are tintable white masks" {
     var page = try SpritePage.init(std.testing.allocator, 32);
     defer page.deinit();
     for (providers) |provider| {
