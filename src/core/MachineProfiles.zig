@@ -14,9 +14,10 @@ const MachineProfiles = @This();
 pub const capacity = 16;
 /// The largest `machines.json` read or written, in bytes. Sixteen profiles
 /// with every field at its longest, a destination of quotes escaped to
-/// twice its length and every login take 16,381 bytes; the test below fails
-/// when a new field no longer fits.
-pub const max_file_bytes = 16 * 1024;
+/// twice its length and every login take 16,381 bytes; twice that leaves a
+/// new field room, and the test below fails when one no longer fits. A
+/// version 1 file, all an earlier build reads, stays far under its 16 KiB.
+pub const max_file_bytes = 32 * 1024;
 
 /// The file formats this build reads. Version 2 added `telar_path` and
 /// `logins`, which a telar that reads only version 1 refuses as unknown

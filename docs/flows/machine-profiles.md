@@ -14,7 +14,7 @@ telar machine add box dev@box --color red --check
 MachineOptions.parse                      src/cli/arguments/MachineOptions.zig
         |
 machine_profiles.run                      src/cli/machine_profiles.zig
-        |   profile_file.load: privatefile.read, owner-only regular file, 16 KiB,
+        |   profile_file.load: privatefile.read, owner-only regular file, 32 KiB,
         |   MachineProfiles.parse: version 1 or 2, no unknown fields
         |
 machine_profiles.newProfile              src/client/machines/machine_profiles.zig:
@@ -86,8 +86,9 @@ added, and 1 otherwise, so a file of a person who never ran `machine setup`
 stays readable by every earlier build. A build that reads only version 1
 refuses a version 2 file as one it cannot read; this build names a newer
 version as written by a newer telar. Sixteen profiles with every field at
-its longest take 16,381 bytes, inside the 16 KiB bound;
-`zig build test-machine-profiles` fails when a new field no longer fits.
+its longest take 16,381 bytes; the bound is 32 KiB so the next field has
+room, and `zig build test-machine-profiles` fails when one no longer fits.
+A version 1 file stays far under the 16 KiB earlier builds read.
 
 Hand edits are valid. A file that fails validation, is readable by anyone but
 its owner, or is a symlink, is refused and left untouched.
