@@ -37,7 +37,7 @@ membership survives and a fresh client can reconstruct its projection.
 
 Source: `src/client/connection/resync_required.zig` and
 `src/model/connection/RequestLifecycle.zig`.
-Tests: `src/frontend/client/tests/synchronization.zig` and `tab_lifecycle.zig`
+Tests: `src/client_tests/synchronization.zig` and `tab_lifecycle.zig`
 cover matching identity, coalescence, full-outbox retry, closed-bookmark retention
 on failure, predecessor handoff and exit. Runtime response-queue and schema
 tests cover bounded loss reporting and valid closure/predecessor payloads.

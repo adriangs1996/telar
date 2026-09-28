@@ -12,17 +12,19 @@ const actions = @import("../input/actions.zig");
 const notifications = @import("../notifications/notifications.zig");
 const Client = @import("../execution/Client.zig");
 
-/// Consumes one worker completion and applies its authorized action batch.
+/// Consumes one worker completion and applies its authorized action batch,
+/// which a successful worker left in `client.plugin_result`.
 /// Example: `_ = try plugin_actions.completePluginAction(app, completion);`
 pub fn completePluginAction(client: *Client, completion: data.PluginActionsCompletion) !bool {
-    const command: plugin_action.CompletionCommand = if (completion.result) |result|
+    const stored = &client.plugin_result;
+    const command: plugin_action.CompletionCommand = if (completion.result) |_|
         .{
             .succeeded = .{
                 .execution_id = completion.execution_id,
-                .package_index = result.package_index,
-                .plugin_id = result.plugin_id,
-                .digest = result.digest,
-                .batch = &result.batch,
+                .package_index = stored.package_index,
+                .plugin_id = stored.plugin_id,
+                .digest = stored.digest,
+                .batch = &stored.batch,
             },
         }
     else |err|
@@ -252,7 +254,7 @@ pub fn startPluginAction(client: *Client, requested: data.PluginAction, callback
             },
         ),
     };
-    const request = registry.workerRequest(invocation, callback_context) catch |err| switch (err) {
+    var request = registry.workerRequest(invocation, callback_context) catch |err| switch (err) {
         error.PluginNotConfigured, error.UnknownPluginAction => return reportPluginStart(
             client,
             .{
@@ -260,6 +262,7 @@ pub fn startPluginAction(client: *Client, requested: data.PluginAction, callback
             },
         ),
     };
+    request.executable = client.options.telar_executable;
     const execution = (try data.plugin_action.beginExecution(&client.model)) orelse
         return reportPluginStart(client, .busy);
     {
@@ -268,9 +271,10 @@ pub fn startPluginAction(client: *Client, requested: data.PluginAction, callback
             std.debug.assert(rolled_back != null);
         }
 
-        try client.to_workers.push(.{ .plugin = .{
+        try client.to_background.push(.{ .plugin = .{
             .execution_id = execution.id,
             .request = request,
+            .result = &client.plugin_result,
         } });
     }
 

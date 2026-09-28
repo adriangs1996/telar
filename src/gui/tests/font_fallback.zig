@@ -288,26 +288,21 @@ test "font set revision changes on discovery and stays stable through warm raste
     try std.testing.expectEqual(identity, atlas.fonts.identity);
 }
 
-test "font discovery retires cached missing glyphs in painting measurement and editor carets" {
+test "font discovery retires cached missing glyphs in painting and measurement" {
     const io = std.testing.io;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
     copies_dir_len = try temp.dir.realPath(io, &copies_dir);
     var name: [32]u8 = undefined;
     try temp.dir.writeFile(io, .{ .sub_path = try copyName(plex_only[1], &name), .data = assets.plex_sans });
-    const long_text = plex_only[0] ++ "a" ** 80;
     const key: ShapingKey = .{ .text = plex_only[0], .pixel_height = 16 };
-    const long_key: ShapingKey = .{ .text = long_text, .pixel_height = 16 };
-    inline for (.{ "paint", "measure", "caret" }) |entrypoint| {
+    inline for (.{ "paint", "measure" }) |entrypoint| {
         var atlas = try discoveringAtlas();
         defer atlas.deinit();
-        try atlas.prepareEditor();
         atlas.fonts.lookup = missingLookup;
         _ = try atlas.measure(cellRun(plex_only[0]));
-        _ = try atlas.measure(cellRun(long_text));
         try std.testing.expectEqual(font_id.Id.primary, atlas.shaping_cache.find(key).?.font);
         try std.testing.expectEqual(@as(u32, 0), atlas.shaping_cache.find(key).?.glyphs[0].codepoint);
-        try std.testing.expect(atlas.editor_shaping_cache.?.find(long_key) != null);
         atlas.fonts.lookup = copiedLookup;
         try std.testing.expect(atlas.fonts.discover(std.testing.allocator, plex_only[1]));
         try std.testing.expectEqual(font_id.Id.fallback_0, atlas.fonts.source(plex_only[0], .primary));
@@ -315,24 +310,18 @@ test "font discovery retires cached missing glyphs in painting measurement and e
         defer list.deinit();
         if (comptime std.mem.eql(u8, entrypoint, "paint")) {
             _ = try atlas.place(cellRun(plex_only[0]), &list);
-        } else if (comptime std.mem.eql(u8, entrypoint, "measure")) {
-            _ = try atlas.measureResident(cellRun(plex_only[0]));
         } else {
-            var carets: [plex_only[0].len + 1]u32 = undefined;
-            try atlas.caretPositions(cellRun(plex_only[0]), &carets);
+            _ = try atlas.measure(cellRun(plex_only[0]));
         }
 
         const resolved = atlas.shaping_cache.find(key).?;
         try std.testing.expectEqual(font_id.Id.fallback_0, resolved.font);
         try std.testing.expect(resolved.glyphs[0].codepoint != 0);
-        try std.testing.expect(atlas.editor_shaping_cache.?.find(long_key) == null);
         try std.testing.expectEqual(atlas.fonts.revision, atlas.shaping_revision);
         const lookups = atlas.fonts.lookups;
-        _ = try atlas.place(cellRun(long_text), &list);
+        _ = try atlas.place(cellRun(plex_only[0]), &list);
         const shapes = atlas.shape_calls;
-        _ = try atlas.measureResident(cellRun(long_text));
-        var carets: [long_text.len + 1]u32 = undefined;
-        try atlas.caretPositions(cellRun(long_text), &carets);
+        _ = try atlas.measure(cellRun(plex_only[0]));
         try std.testing.expectEqual(shapes, atlas.shape_calls);
         try std.testing.expectEqual(lookups, atlas.fonts.lookups);
     }

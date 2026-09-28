@@ -1,4 +1,5 @@
 //! A modal button using delivered pixel controls and owned prompt actions.
+const cellgrid = @import("cellgrid");
 const Canvas = @import("Canvas.zig");
 const Target = @import("interaction/Target.zig");
 const Label = @import("Label.zig");
@@ -16,6 +17,8 @@ primary: bool = false,
 quiet: bool = false,
 enabled: bool = true,
 layer: u8 = 1,
+/// Overrides the label ink of a secondary button, for destructive actions.
+label_color: ?cellgrid.Color = null,
 
 /// Buttons activate on release inside their delivered bounds. Keyboard
 /// equivalents remain with the form's editor, so clicking does not steal it.
@@ -40,7 +43,7 @@ pub fn draw(self: FormButton, canvas: *Canvas) !void {
         try canvas.fillRoundedAt(self.bounds, .{ .color = if (self.primary) palette.accent else if (hovered or pressed) palette.surface1 else palette.surface0, .radius = canvas.chrome.px(7) });
     }
 
-    var label: Label = .{ .text = self.text, .color = if (self.primary) canvas.covering(palette.surface_dim) else palette.text, .face = .sans, .size = .body, .bold = self.primary };
+    var label: Label = .{ .text = self.text, .color = if (self.primary) canvas.covering(palette.surface_dim) else self.label_color orelse palette.text, .face = .sans, .size = .body, .bold = self.primary };
     if (pressed and self.enabled) {
         label.alpha = 0.8;
     }

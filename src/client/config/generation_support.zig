@@ -249,7 +249,6 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expect(!generation.snapshot.sound.ready);
     try std.testing.expect(generation.snapshot.sound.needs_input);
     try std.testing.expectEqual(data.icons.Theme.nerd_font, generation.snapshot.icon_theme);
-    try std.testing.expectEqual(data.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     try std.testing.expectEqual(@as(u64, 40 * std.time.ns_per_ms), generation.snapshot.input_escape_timeout_ns);
     try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
     try std.testing.expectEqualDeep(
@@ -655,9 +654,9 @@ test "client bars compile styled static dynamic and command sources" {
     defer generation.deinit();
 
     const left = &generation.snapshot.bars.bottom[0].static;
-    try std.testing.expectEqual(@as(u8, 2), left.segment_count);
+    try std.testing.expectEqual(@as(u8, 2), left.node_count);
     try std.testing.expectEqual(data.icons.Icon.cpu, left.slice()[0].icon.?);
-    try std.testing.expectEqualStrings(" CPU", left.text(left.slice()[0]));
+    try std.testing.expectEqualStrings(" CPU", left.text(left.slice()[0].text));
     try std.testing.expectEqualDeep(data.bar_values.Color{ .palette = .teal }, left.slice()[0].style.foreground.?);
     try std.testing.expectEqualDeep(data.bar_values.Color{ .value = .rgb(.{ 1, 2, 3 }) }, left.slice()[0].style.background.?);
     try std.testing.expect(left.slice()[0].style.bold);
@@ -697,22 +696,24 @@ test "client bars compile styled static dynamic and command sources" {
         },
     };
     const top = generation.snapshot.bars.top_right.dynamic;
-    const clock = try generation.invokeBar(.{ .reference = top.callback, .context = context }, &diagnostic);
+    var clock: data.Content = .{};
+    try generation.invokeBar(.{ .reference = top.callback, .context = context }, &clock, &diagnostic);
     try std.testing.expectEqual(@as(u64, std.time.ns_per_s), top.interval_ns);
-    try std.testing.expectEqual(@as(u8, 1), clock.segment_count);
+    try std.testing.expectEqual(@as(u8, 1), clock.node_count);
     try std.testing.expectEqual(data.icons.Icon.battery_full, clock.slice()[0].icon.?);
-    try std.testing.expectEqualStrings(" 2026-09-01 13:05:09 61%", clock.text(clock.slice()[0]));
+    try std.testing.expectEqualStrings(" 2026-09-01 13:05:09 61%", clock.text(clock.slice()[0].text));
     try std.testing.expect(!clock.slice()[0].style.faint);
 
     var command_context = context;
     command_context.command_output = "74%";
-    const quota = try generation.invokeBar(.{
+    var quota: data.Content = .{};
+    try generation.invokeBar(.{
         .reference = command.render.?,
         .context = command_context,
-    }, &diagnostic);
-    try std.testing.expectEqual(@as(u8, 2), quota.segment_count);
-    try std.testing.expectEqualStrings("74%", quota.text(quota.slice()[0]));
-    try std.testing.expectEqualStrings(" 3", quota.text(quota.slice()[1]));
+    }, &quota, &diagnostic);
+    try std.testing.expectEqual(@as(u8, 2), quota.node_count);
+    try std.testing.expectEqualStrings("74%", quota.text(quota.slice()[0].text));
+    try std.testing.expectEqualStrings(" 3", quota.text(quota.slice()[1].text));
     try std.testing.expect(quota.slice()[1].style.underline);
 }
 
@@ -733,6 +734,7 @@ test "bar callback context tables are immutable" {
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 9 });
     defer generation.deinit();
     const callback = generation.snapshot.bars.bottom[0].dynamic.callback;
+    var content: data.Content = .{};
 
     try std.testing.expectError(error.LuaBarCallbackFailed, generation.invokeBar(.{
         .reference = callback,
@@ -741,7 +743,7 @@ test "bar callback context tables are immutable" {
             .time = .{ .unix_seconds = 1, .year = 2026, .month = 9, .day = 1, .hour = 12, .minute = 0, .second = 0, .weekday = 2 },
             .metrics = null,
         },
-    }, &diagnostic));
+    }, &content, &diagnostic));
     try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), "immutable") != null);
 }
 
@@ -750,7 +752,9 @@ test "client bars default the sidebar footer to metrics and accept a bounded slo
     const defaults = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@config.lua", .number = 1 });
     defer defaults.deinit();
     try std.testing.expectEqualDeep([3]data.bar_values.Source{ .metrics, .empty, .empty }, defaults.snapshot.bars.sidebar_footer);
-    try std.testing.expectEqualDeep([3]data.bar_values.Slot{ .metrics, .empty, .empty }, defaults.snapshot.bars.presentation().sidebar_footer);
+    const presented = defaults.snapshot.bars.presentation().sidebar_footer;
+    try std.testing.expect(presented[0].content.eql(&data.bar_values.metrics_content));
+    try std.testing.expect(presented[1] == .empty and presented[2] == .empty);
 
     const source =
         \\local t = require('telar')
@@ -763,7 +767,7 @@ test "client bars default the sidebar footer to metrics and accept a bounded slo
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 3 });
     defer generation.deinit();
     const footer = &generation.snapshot.bars.sidebar_footer;
-    try std.testing.expectEqualStrings("left", footer[0].static.text(footer[0].static.slice()[0]));
+    try std.testing.expectEqualStrings("left", footer[0].static.text(footer[0].static.slice()[0].text));
     try std.testing.expect(footer[1] == .metrics);
     try std.testing.expectEqual(@as(u64, 500 * std.time.ns_per_ms), footer[2].dynamic.interval_ns);
     const layout = generation.snapshot.bars.presentation();
@@ -775,6 +779,30 @@ test "client bars default the sidebar footer to metrics and accept a bounded slo
     const hidden = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { bars = { sidebar_footer = {} } } }", .source_name = "@config.lua", .number = 4 });
     defer hidden.deinit();
     try std.testing.expectEqualDeep([3]data.bar_values.Source{ .empty, .empty, .empty }, hidden.snapshot.bars.sidebar_footer);
+}
+
+test "client bars accept the machines component" {
+    var diagnostic: data.Diagnostic = .{};
+    const source = "local t = require('telar') return { api_version = 2, client = { bars = { bottom = { left = t.bar.machines(), right = t.bar.tabs() } } } }";
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
+    defer generation.deinit();
+
+    try std.testing.expect(generation.snapshot.bars.bottom[0] == .machines);
+    const presented = generation.snapshot.bars.presentation().bottom;
+    try std.testing.expect(presented[0].content.eql(&data.bar_values.machines_content));
+}
+
+test "machine actions bind from Lua" {
+    var diagnostic: data.Diagnostic = .{};
+    const source = "local t = require('telar') return { api_version = 2, client = { keybindings = { t.bind({ 'm' }, t.action.machine_picker()), t.bind({ ']' }, t.action.next_machine()), t.bind({ '[' }, t.action.previous_machine()) } } }";
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
+    defer generation.deinit();
+
+    const bindings = generation.snapshot.bindingSlice();
+    try std.testing.expectEqual(@as(usize, 3), bindings.len);
+    try std.testing.expectEqualDeep(data.Action.machine_picker, bindings[0].action);
+    try std.testing.expectEqualDeep(data.Action{ .select_machine_offset = 1 }, bindings[1].action);
+    try std.testing.expectEqualDeep(data.Action{ .select_machine_offset = -1 }, bindings[2].action);
 }
 
 test "client bars reject invalid positions timing and tab ownership" {
@@ -828,18 +856,13 @@ test "client bars reject invalid positions timing and tab ownership" {
     }
 }
 
-test "runtime proxy defaults to the Claude Code and Codex API hosts" {
+test "runtime proxy intercepts no host by default" {
     var diagnostic: data.Diagnostic = .{};
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
 
     var storage: [core.max_intercept_hosts][]const u8 = undefined;
-    const hosts = generation.snapshot.runtime.proxyInterceptHosts(&storage);
-
-    try std.testing.expectEqual(@as(usize, 3), hosts.len);
-    try std.testing.expectEqualStrings("api.anthropic.com", hosts[0]);
-    try std.testing.expectEqualStrings("api.openai.com", hosts[1]);
-    try std.testing.expectEqualStrings("chatgpt.com", hosts[2]);
+    try std.testing.expectEqual(@as(usize, 0), generation.snapshot.runtime.proxyInterceptHosts(&storage).len);
 }
 
 test "an explicit empty intercept host list disables interception" {
@@ -1096,7 +1119,6 @@ test "profile overlays base config before CLI locks are applied" {
     });
     defer generation.deinit();
     try std.testing.expect(!generation.snapshot.sidebar_visible);
-    try std.testing.expectEqual(data.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     try std.testing.expectEqual(@as(usize, 16 * 1024 * 1024), generation.snapshot.runtime.graphics_pane_bytes);
     try std.testing.expectEqual(@as(usize, 64 * 1024 * 1024), generation.snapshot.runtime.graphics_global_bytes);
     const binding = generation.snapshot.bindings[0];
@@ -1178,7 +1200,6 @@ test "local modules are contained and participate in reload fingerprints" {
     }, .{ .path = config_path, .number = 1 });
     defer generation.deinit();
     try std.testing.expectEqual(@as(u8, 1), generation.modules.dependency_count);
-    try std.testing.expectEqual(data.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     const before = generation.watchFingerprint(io, config_path);
     {
         var module = try temp.dir.createFile(io, "settings.lua", .{ .truncate = true });
@@ -1261,7 +1282,7 @@ test "runtime agents extend built-ins and add custom manifests" {
     defer generation.deinit();
     const table = &generation.snapshot.runtime.agent_manifests;
 
-    try std.testing.expectEqual(@as(u8, 4), table.count);
+    try std.testing.expectEqual(core.builtin_table.count + 1, table.count);
     const gemini = table.find(@enumFromInt(core.first_custom_agent_provider)).?;
     try std.testing.expectEqualStrings("gemini", gemini.nameSlice());
     try std.testing.expectEqual(gemini.provider, table.providerFromExecutable("gemini").?);

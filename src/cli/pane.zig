@@ -87,7 +87,14 @@ fn execute(session: *Session, options: PaneOptions, context: ExecutionContext) !
         .read => {
             const text = try session.readPane(pane, .{ .rows = options.lines, .source = options.source });
             if (options.json) {
-                try context.writer.print("{{\"pane_id\":{d},\"truncated\":{},\"text\":", .{ text.pane_id, text.truncated });
+                try context.writer.print("{{\"pane_id\":{d},\"truncated\":{},\"exit_code\":", .{ text.pane_id, text.truncated });
+                if (text.exit_code) |code| {
+                    try context.writer.print("{d}", .{code});
+                } else {
+                    try context.writer.writeAll("null");
+                }
+
+                try context.writer.writeAll(",\"text\":");
                 try control.writeJsonString(context.writer, text.text);
                 try context.writer.writeAll("}\n");
             } else {
@@ -97,6 +104,10 @@ fn execute(session: *Session, options: PaneOptions, context: ExecutionContext) !
                 }
                 if (text.truncated) {
                     std.debug.print("telar pane: older rows were omitted\n", .{});
+                }
+
+                if (text.exit_code) |code| {
+                    std.debug.print("telar pane: the command exited with {d}\n", .{code});
                 }
             }
         },
@@ -134,7 +145,7 @@ fn resolvePane(session: *Session, target: values.Target, environ: std.process.En
     const pane_id: u64 = switch (target) {
         .current => try control.currentPaneId(environ),
         .pane => |pane| pane,
-        .name => return error.InvalidPaneId,
+        .name, .worktree => return error.InvalidPaneId,
     };
 
     var snapshot: Snapshot = .{};
@@ -157,7 +168,7 @@ fn inspect(session: *Session, options: PaneOptions, context: ExecutionContext) !
         const wanted = switch (options.target) {
             .current => try control.currentPaneId(context.environ),
             .pane => |id| id,
-            .name => return error.InvalidPaneId,
+            .name, .worktree => return error.InvalidPaneId,
         };
         for (catalog.entries[0..catalog.count]) |*entry| {
             if (core.raw(entry.pane.pane_id) != wanted) {
@@ -178,7 +189,7 @@ fn inspect(session: *Session, options: PaneOptions, context: ExecutionContext) !
     if (options.json) {
         try context.writer.writeByte('[');
     } else {
-        try context.writer.writeAll("WORKSPACE\tTAB\tPANE\tGENERATION\tKIND\tLIFECYCLE\n");
+        try context.writer.writeAll("WORKSPACE\tTAB\tPANE\tGENERATION\tLIFECYCLE\n");
     }
 
     for (catalog.entries[0..catalog.count], 0..) |*entry, index| {

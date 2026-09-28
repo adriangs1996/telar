@@ -22,22 +22,12 @@ input: [4096]u8 = undefined,
 input_len: usize = 0,
 last_input_pane: ?core.PaneId = null,
 resize_count: usize = 0,
-agent_prompt_count: usize = 0,
-agent_resume_count: usize = 0,
-last_resume: ?core.AgentResume = null,
-agent_prompt: [4096]u8 = undefined,
-agent_prompt_len: usize = 0,
-agent_images: core.AgentImages = .{},
-agent_request_id: core.RequestId = @enumFromInt(1),
-agent_tab_count: usize = 0,
 tab_creation_count: usize = 0,
 pane_creation_count: usize = 0,
 editor_open_count: usize = 0,
 last_editor_open: ?core.OwnedEditorOpen = null,
 pane_creation_wire: [8192]u8 = undefined,
 pane_creation_len: usize = 0,
-approval_count: usize = 0,
-last_approval: ?core.AgentApproval = null,
 
 pub const pane_id: core.PaneId = @enumFromInt(10);
 pub const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
@@ -62,6 +52,7 @@ pub fn init() !*Session {
     session.gui.job_hook = .{
         .context = session,
         .start = startJob,
+        .start_background = startBackgroundJob,
     };
     return session;
 }
@@ -115,8 +106,8 @@ pub fn deinit(self: *Session) void {
     std.testing.allocator.destroy(self);
 }
 
-/// Captures runtime sends and link opens; every other job runs on the real inbox.
-/// Example: `session.gui.job_hook = .{ .context = session, .start = Session.startJob };`
+/// Captures runtime sends; every other interactive job runs on the real inbox.
+/// Example: `session.gui.job_hook = .{ .context = session, .start = Session.startJob, .start_background = Session.startBackgroundJob };`
 pub fn startJob(context: *anyopaque, job: client.Job) !void {
     const session: *Session = @ptrCast(@alignCast(context));
 
@@ -126,11 +117,22 @@ pub fn startJob(context: *anyopaque, job: client.Job) !void {
             std.debug.assert(session.pending == null);
             session.pending = send.bytes;
         },
+        else => try workers.start(session.gui, job),
+    }
+}
+
+/// Records opened links and starts every other background job as the
+/// window loop would.
+/// Example: `session.gui.job_hook = .{ .context = session, .start = Session.startJob, .start_background = Session.startBackgroundJob };`
+pub fn startBackgroundJob(context: *anyopaque, job: client.BackgroundJob) !void {
+    const session: *Session = @ptrCast(@alignCast(context));
+
+    switch (job) {
         .link => |target| {
             session.opened_link = target;
             session.link_open_count += 1;
         },
-        else => try workers.start(session.gui, job),
+        else => try workers.startBackground(session.gui, job),
     }
 }
 
@@ -145,11 +147,17 @@ pub fn sent(self: *Session) ![]const u8 {
 /// Starts the runtime write and every job a direct GUI call queued.
 /// Example: `try session.startJobs();`
 pub fn startJobs(self: *Session) !void {
-    const app = &self.gui.app;
+    const app = self.gui.app;
 
     try app.flush();
-    while (app.to_workers.pop()) |job| {
-        try startJob(self, job);
+    while (true) {
+        if (app.to_workers.pop()) |job| {
+            try startJob(self, job);
+        } else if (app.to_background.pop()) |job| {
+            try startBackgroundJob(self, job);
+        } else {
+            return;
+        }
     }
 }
 
@@ -188,17 +196,6 @@ pub fn settle(self: *Session) !void {
                 self.input_len += value.bytes.len;
             },
             .pane_resize => self.resize_count += 1,
-            .agent_resume => |value| {
-                self.agent_resume_count += 1;
-                self.last_resume = value;
-            },
-            .agent_prompt => |value| {
-                self.agent_prompt_count += 1;
-                @memcpy(self.agent_prompt[0..value.text.len], value.text);
-                self.agent_prompt_len = value.text.len;
-                self.agent_images = try core.AgentImages.copy(value.images);
-                self.agent_request_id = value.request_id;
-            },
             .open_editor => |request| {
                 self.editor_open_count += 1;
                 self.last_editor_open = try core.OwnedEditorOpen.init(request);
@@ -208,25 +205,18 @@ pub fn settle(self: *Session) !void {
                 @memcpy(self.pane_creation_wire[0..bytes.len], bytes);
                 self.pane_creation_len = bytes.len;
             },
-            .create_tab => |value| {
-                self.tab_creation_count += 1;
-                self.agent_tab_count += @intFromBool(value.kind == .agent);
-            },
-            .agent_approval => |value| {
-                self.approval_count += 1;
-                self.last_approval = value;
-            },
+            .create_tab => self.tab_creation_count += 1,
             else => {},
         }
 
         self.pending = null;
-        try client.runtime_io.completeRuntimeSend(&self.gui.app.model, {});
+        try client.runtime_io.completeRuntimeSend(self.gui.app, {});
         try self.startJobs();
     }
 }
 
 pub fn bootstrap(self: *Session) !void {
-    const app = &self.gui.app;
+    const app = self.gui.app;
     try app.model.request_lifecycle.tracker.add(
         client.initial_request_id,
         .{
@@ -261,7 +251,7 @@ pub fn receiveFrame(self: *Session, frame_id: u64) !void {
         .input_modes = .{ .bracketed_paste = true },
         .spans = &.{.{ .start = 0, .cells = if (frame_id == 1) cells[0..count] else cells[0..1] }},
     });
-    _ = try client.runtime_messages.handleServerMessage(&self.gui.app, try core.decodeServer(encoded));
+    _ = try client.runtime_messages.handleServerMessage(self.gui.app, try core.decodeServer(encoded));
     @memset(&wire, 0xff);
 }
 

@@ -15,7 +15,6 @@ const ObservationCompletion = @import("events/ObservationCompletion.zig");
 const MediaCompletion = @import("events/MediaCompletion.zig");
 const ExitCompletion = @import("events/ExitCompletion.zig");
 const Wake = @import("events/Wake.zig");
-const Observation = @import("../proxy/Observation.zig");
 const Half = owned.Half;
 const Result = @import("../plugins/Result.zig");
 const AgentResult = @import("../agent/Result.zig");
@@ -24,11 +23,12 @@ const Response = EngineRuntime.Service.Response;
 const hostmetrics = @import("hostmetrics");
 const SystemMetricsSample = hostmetrics.SystemMetricsSample;
 const Completion = @import("resources/Completion.zig");
+const WorktreeProbeCompletion = @import("resources/WorktreeProbeCompletion.zig");
 const AgentCompletion = @import("../agent/Completion.zig");
 const std = @import("std");
-const AgentThreadChanged = @import("events/AgentThreadChanged.zig");
 const Job = @import("../change_review/Job.zig");
-const AgentHistoryJob = @import("AgentHistoryJob.zig");
+const PathIndex = @import("../paths/PathIndex.zig");
+const PathQuery = @import("../paths/PathQuery.zig");
 
 pub const Event = union(enum) {
     accepted: anyerror!localsocket.SocketChannel,
@@ -47,21 +47,21 @@ pub const Event = union(enum) {
     pane_search: Wake,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
-    proxy_event: anyerror!Observation,
     proxy_capture: anyerror!*Half,
     plugin_effects: anyerror!*Result,
     agent_tick: anyerror!void,
     agent_description: AgentResult,
     engine_response: anyerror!Response,
-    agent_thread_changed: AgentThreadChanged,
     change_review_completed: *Job,
-    agent_history_completed: *AgentHistoryJob,
     metrics_tick: anyerror!void,
     metrics_sampled: SystemMetricsSample,
     checkpoint_written: anyerror!void,
     git_status: Completion,
+    worktree_git: WorktreeProbeCompletion,
     editor_opened: *EditorJob,
     session_name: AgentCompletion,
+    path_index_built: *PathIndex,
+    paths_found: *PathQuery,
     stopped: anyerror!void,
 };
 
@@ -88,8 +88,9 @@ pub fn discard(completed: Event, io: std.Io) void {
             const effects = result catch return;
             effects.deinit();
         },
+        .paths_found => |query| query.destroy(),
         // These pointers name slots still retained by RuntimeModel.
-        .change_review_completed, .agent_history_completed, .editor_opened => {},
+        .change_review_completed, .editor_opened, .path_index_built => {},
         // Other events contain values or borrows whose owners outlive the join.
         .handshaken,
         .client_message,
@@ -105,15 +106,14 @@ pub fn discard(completed: Event, io: std.Io) void {
         .pane_search,
         .telemetry_tick,
         .telemetry_written,
-        .proxy_event,
         .agent_tick,
         .agent_description,
         .engine_response,
-        .agent_thread_changed,
         .metrics_tick,
         .metrics_sampled,
         .checkpoint_written,
         .git_status,
+        .worktree_git,
         .session_name,
         .stopped,
         => {},
@@ -144,14 +144,11 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) core.Path {
         .pane_search,
         .pane_observed,
         .history_response,
-        .proxy_event,
         .proxy_capture,
         .plugin_effects,
         .agent_tick,
         .agent_description,
         .engine_response,
-        .agent_thread_changed,
-        .agent_history_completed,
         .change_review_completed,
         .metrics_tick,
         .metrics_sampled,
@@ -159,8 +156,11 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) core.Path {
         .telemetry_written,
         .checkpoint_written,
         .git_status,
+        .worktree_git,
         .editor_opened,
         .session_name,
+        .path_index_built,
+        .paths_found,
         => .observation,
         .accepted,
         .handshaken,
@@ -193,14 +193,11 @@ test "observation events use the observation budget" {
     const tags = [_]std.meta.Tag(Event){
         .pane_observed,
         .history_response,
-        .proxy_event,
         .proxy_capture,
         .plugin_effects,
         .agent_tick,
         .agent_description,
         .engine_response,
-        .agent_thread_changed,
-        .agent_history_completed,
         .change_review_completed,
         .metrics_tick,
         .metrics_sampled,

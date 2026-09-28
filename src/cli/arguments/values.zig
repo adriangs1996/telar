@@ -8,11 +8,18 @@ pub const Target = union(enum) {
     current,
     pane: u64,
     name: [*:0]const u8,
+    /// The agent in a tracked worktree, named by branch or title after
+    /// `worktree:`.
+    worktree: [*:0]const u8,
 
     pub fn parse(value: [*:0]const u8) Target {
         const text = std.mem.span(value);
         if (std.mem.eql(u8, text, "--current")) {
             return .current;
+        }
+
+        if (std.mem.startsWith(u8, text, worktree_prefix) and text.len > worktree_prefix.len) {
+            return .{ .worktree = value + worktree_prefix.len };
         }
 
         if (std.fmt.parseUnsigned(u64, text, 10)) |raw| {
@@ -23,11 +30,13 @@ pub const Target = union(enum) {
     }
 };
 
+pub const worktree_prefix = "worktree:";
+
 pub const max_wait_timeout_seconds = 3600;
 
 pub const default_wait_timeout_seconds = 30;
 
-pub const HookAgent = enum { claude, codex, pi };
+pub const HookAgent = enum { claude, codex, pi, cursor, opencode };
 
 pub fn parseHookAgent(text: []const u8) !HookAgent {
     if (std.mem.eql(u8, text, "claude")) {
@@ -39,8 +48,36 @@ pub fn parseHookAgent(text: []const u8) !HookAgent {
     if (std.mem.eql(u8, text, "pi")) {
         return .pi;
     }
+    if (std.mem.eql(u8, text, "cursor")) {
+        return .cursor;
+    }
+    if (std.mem.eql(u8, text, "opencode")) {
+        return .opencode;
+    }
 
     return error.UnknownHookAgent;
+}
+
+/// What `agent wait --until` waits for: one status, or `finished`, which is
+/// `done` or `ready`, whether or not a person saw the turn end.
+pub const WaitCondition = union(enum) {
+    status: core.AgentStatus,
+    finished,
+
+    pub fn matches(self: WaitCondition, status: core.AgentStatus) bool {
+        return switch (self) {
+            .status => |wanted| status == wanted,
+            .finished => status == .done or status == .ready,
+        };
+    }
+};
+
+pub fn parseWaitCondition(text: []const u8) !WaitCondition {
+    if (std.mem.eql(u8, text, "finished")) {
+        return .finished;
+    }
+
+    return .{ .status = try parseWaitStatus(text) };
 }
 
 pub fn parseWaitStatus(text: []const u8) !core.AgentStatus {

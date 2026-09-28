@@ -1,16 +1,17 @@
 # Sidebar integration contract
 
 The runtime publishes bounded, self-contained agent snapshots assembled from
-ProxyTLS activity, terminal-screen hints, and canonical workspace state.
+lifecycle hooks, the foreground process, terminal-screen hints, and canonical
+workspace state.
 Detection replaces the client snapshot; it does not own layout, focus,
-scrolling, hit targets, or physical KGP placements.
+scrolling, hit targets or drawing.
 
 ## Ownership
 
 The runtime owns agent truth and publishes stable `(pane_id, generation)` task
-identity. `ClientModel` keeps one disposable `agents.Snapshot` replica.
-`widgets.sidebar.State` keeps only visible interaction state such as scroll
-position. The runtime retains the selected tab, pane focus, split trees,
+identity. `ClientModel` keeps one disposable `agents.Snapshot` replica. The
+window's `SidebarState` keeps only visible interaction state: scroll
+positions and the attention order of the current snapshot. The runtime retains the selected tab, pane focus, split trees,
 sidebar geometry and workspace-list collapse for reconnecting clients; hover
 and sidebar scroll still die with the client. None of this alters a runtime
 task or agent.
@@ -25,7 +26,7 @@ Three fields describe what the agent wants from the person:
 
 | Field | Bound | Source |
 | --- | --- | --- |
-| `blocked_reason` | `none`, `permission`, `question`, `plan`, `other`; `none` unless the status is `blocked` | The lifecycle report when its hook names one (Claude Code `permission_prompt`, elicitation notifications, `AskUserQuestion` and `ExitPlanMode` tool starts; Codex `PermissionRequest`; Pi dialogs). Without a report, a blocked agent whose last proxy response closed on a tool request while no exchange is open is `permission`; any other blocked state is `other`. |
+| `blocked_reason` | `none`, `permission`, `question`, `plan`, `other`; `none` unless the status is `blocked` | The lifecycle report when its hook names one (Claude Code `permission_prompt`, elicitation notifications, `AskUserQuestion` and `ExitPlanMode` tool starts; Codex `PermissionRequest`; Pi dialogs; OpenCode `permission.asked` and `question.asked`). Cursor Agent has no hook for its approvals, so its approval and plan-review screens are `other`. Without a report, a blocked agent whose last proxy response closed on a tool request while no exchange is open is `permission`; any other blocked state is `other`. |
 | `last_event` | one control-free UTF-8 line of at most 96 bytes | The event line of the lifecycle report the projection follows: the prompt text while blocked, the last tool call (`» Edit src/client/bars/Output.zig`) while working, the first line of the final assistant message when done. Empty while any other evidence decides. |
 | `status_age_s` | `u32` seconds | The runtime clock at encode time minus the last projected status change. It is never part of the revision; the client adds the time since the snapshot arrived. |
 
@@ -42,12 +43,12 @@ ready-unseen (`done`), idle (`ready`), `unknown`. Inside a group the smallest
 `status_age_s` comes first; equal ages fall back to pane id and generation so
 the order is stable across revisions. It is pure and allocation-free.
 
-`agent_snapshots.apply` is the protocol adapter. It maps borrowed wire entries
-to `AgentInput` values and invokes `ApplyAgentSnapshotHandler`.
-`agent_snapshot.reconcile` owns the transaction, while
-`agents.Snapshot.replace` performs atomic bounded storage. The resulting commit
-is validated and delivered by `DeliverAgentSnapshotHandler`, which owns
-attachment, alert and animation ordering. Replacement:
+`agent_snapshot.applyAgentSnapshot` is the protocol adapter. It maps borrowed
+wire entries to `AgentInput` values. The model's `agent_snapshot.reconcile`
+owns the transaction, while `agents.Snapshot.replace` performs atomic bounded
+storage. After the commit, `applyAgentSnapshot` synchronizes pane attachments,
+publishes actionable alerts and synchronizes the sidebar animation, in that
+order. Replacement:
 
 - rejects revisions older than or equal to the current revision;
 - rejects duplicate `(id, generation)` task keys;
@@ -70,12 +71,7 @@ runs the configured argv command in parallel and outside the interactive path.
 The request is written to stdin and never appears in process arguments or
 history storage.
 
-Agent-mode panes use the same generator and title tracker. Their first accepted
-composer message supplies already-submitted text, preserving every line when
-normalizing it for the generator. They queue the job at admission because the
-provider can complete a turn before the runtime observes a `working` snapshot.
-Codex thread names and root rename notifications enter the existing reported-title
-path; routine output never reapplies an older name. The sidebar session title
+The sidebar session title
 remains separate from the tab label and survives GUI detach and reconnect.
 
 The queue admits eight pending jobs and one active child. Output is capped at
@@ -119,14 +115,12 @@ models.
 
 The runtime pane position remains immutable in `agents.Snapshot`. When the
 active client layout has a different local display order, the sidebar derives
-that pane index while rendering. Neither `View.render` nor a widget rewrites
-the runtime replica.
+that pane index while rendering. No widget rewrites the runtime replica.
 
 ## Rendering boundary
 
-Cells own every string, the editable search field, terminal cursor, hover,
-focus marker, tabs, section headers, status, footer, and hit target. The
-cell renderer is complete by itself.
+The window draws the sidebar in device pixels. The terminal client's cell
+sidebar and its Kitty graphics layer left with it.
 
 Each agent card stays three rows high:
 
@@ -141,10 +135,9 @@ non-repository workspaces and worktree-only locations without a workspace-list
 entry leave the row empty. A working agent with no event also leaves it empty.
 A workspace-list revision can update the branch without an agent revision.
 The card shows no location row (`workspace › tab › pane N`) and no cwd;
-the project rows above the agents show workspace paths instead. The TUI cell
-renderer retains its own layout.
+the project rows above the agents show workspace paths instead.
 
-The GUI draws cards in device pixels inside the sidebar band
+The window draws cards in device pixels inside the sidebar band
 (`src/gui/widgets/Sidebar.zig`, `AgentCard.zig`). Text uses the `small`, `title`,
 `small` line boxes. The title is body-sized without the pane header's height cap. Insets are 10 horizontal and 8 vertical logical pixels,
 with 4 logical pixels before the title and 2 before the detail. Card spacing
@@ -162,52 +155,33 @@ cards drop the duration, then the state word before clipping the icon;
 project, title and detail fit independently with an ellipsis. The provider
 symbol disappears only when its own box cannot fit.
 
-Only the working glyph pulses through six alpha steps between 1.0 and 0.35
-across 17 animation frames. The state word and duration remain steady.
+Only the working glyph pulses through six alpha steps between 1.0 and 0.65
+across 17 animation frames, one frame every 120 ms of the window's frame
+clock ([sidebar animation](flows/sidebar-animation.md)). The state word and duration remain steady.
 The focused pane's card has `surface0` fill and an inner 1px `surface1` ring.
-Built-in providers use the embedded symbol atlas at 60% opacity. OpenAI
-is a white mask tinted with `text`; Claude and Pi retain their source colors. Custom providers keep an unboxed glyph.
+Built-in providers use the embedded symbol atlas at 60% opacity.
+OpenAI, Cursor Agent and OpenCode are white masks tinted with `text`; Claude and Pi retain their source colors. Custom providers keep an unboxed glyph.
 The workspace favicon remains colored and is resolved by the existing worker.
 One clipped `focus_agent` hit target covers each visible card. The wheel
 over the agent viewport scrolls one card pitch; the band's last pixel column is its edge and a 6 px
 strip centered on it remains the resize handle.
 
-KGP owns two reusable assets: one three-row focused-agent card and the same
-T3 Code provider atlas as the GUI. The card is an antialiased rounded rectangle below the
-cell layer. Cells keep the same solid fill except at its four corner cells,
-where the KGP alpha edge remains visible. Themes whose focus color is not RGB
-retain the square cell-only fallback.
-
-Changing hover never changes KGP input. Moving the focused agent or a provider
-mark changes placements only. Pixel transmission happens after a theme or
-cell-size change, or when an asset first becomes necessary. The focused-card
-raster is capped at 64 KiB. Media failure leaves the cell actions intact.
-
 ## Geometry
 
-Visibility is shared: `sidebar_visible` lives in the client model, the
-runtime retains it for reconnecting clients and `toggle_sidebar` flips it
-in both clients. Width is not.
+Visibility lives in the client model as `sidebar_visible`, and the runtime
+retains it for reconnecting clients. The runtime also retains a column-width
+preference in the client layout replica; the terminal client drew a cell
+sidebar at that width, and the window does not read it.
 
-In the TUI the sidebar is a column of cells. It is visible only when the
-client can reserve 42 columns for it and 20 for the workbench. Its default
-preferred width is 42 columns. Keybindings move that preference by two
-columns, and dragging the rightmost sidebar column selects an exact width.
-Host geometry clamps only the visible width: shrinking the terminal does
-not overwrite the preference, so expanding it restores the chosen size.
-The runtime retains this column preference in the client layout replica;
-it is TUI-only. While visible, the sidebar owns the complete left column.
-The top bar, bottom bar and workbench use the remaining width. Hiding it
-expands all three regions to the full client width.
-
-In the GUI the sidebar is a band of device pixels (`widgets/SidebarBand.zig`)
+The window's sidebar is a band of device pixels (`widgets/SidebarBand.zig`)
 that the renderer takes off the window width before it counts columns, the
 way the top bar, tab strip and status bar come off the height. Its width is
 `gui.sidebar.width` logical pixels (default 284, bounds 220..480) scaled by
 the display and rounded, and an 8 logical px gap separates the edge line
 from the first cell column. The band is clamped so the workbench keeps at
 least 20 columns after the gap and the right window padding; a window that
-cannot hold the narrowest band beside that workbench hides it. The width is
+cannot hold the narrowest band beside that workbench collapses it to the
+workspace rail, and one that cannot hold even the rail hides the band. The width is
 a disposable host preference (`SidebarPreference`) seeded from the Lua
 value: `resize_sidebar` moves it by 16 logical px, dragging the edge sets
 the exact width under the pointer, both clamp to the same bounds, and a
@@ -240,19 +214,63 @@ repaints retain manual scrolling. Headers and the resize gutter do not scroll.
 The viewports belong to the delivered hit map, so pending or failed frames
 cannot change which list receives a pointer event.
 
-When the sidebar is hidden or too short for a project line, the top bar shows
-compact project indicators: their one-based position and the existing favicon,
-or a folder glyph when no favicon is available. Names and pill backgrounds are
-absent. The active project uses the accent color and a small dot underneath;
-agent attention gets a separate dot at the top right. Each indicator occupies
-40 logical px with a 4 px gap. All projects that fit within the navigation
-region remain visible in runtime order, without a three-project limit. Only
-physical overflow uses counters that select the nearest hidden project and
-retain its group's attention signal. An unlisted workspace
-or worktree retains its current-context label there. Tab layout and behavior
-are unchanged in either case. All navigation still uses the shared client
-intents; the GUI keeps only bounded disposable scroll state. Configured
+A collapsed sidebar keeps a workspace rail (`widgets/WorkspaceRail.zig`):
+a band of `SidebarBand.logical_rail` (52) logical px with the same 8 px gap,
+running from under navigation to the status bar. One 36 px control per
+project in runtime order, 10 px apart below a 12 px inset, holds the favicon
+or, without one, a 20 px tile tinted with a hue the project's name picks from
+the palette's accents and holding its bold initial (`WorkspaceMark`), so
+projects without favicons still differ; the rail shows no numbers. Idle
+controls have no surface; hover draws `surface0` and the selected project
+`surface1` with a 3 px accent pill whose rounded end shows at the rail's edge. Agent attention is a dot in
+the top-right corner inside a ring of the rail's background. When the rail is too short for every project, the window
+centred on the selection keeps its marks and `+N` counters above and below
+select the nearest hidden project and keep the attention of the ones they
+hide. Hovering a mark shows `RailTooltip` beside the rail, above the panes:
+the project's name and what it runs, `N waiting`, else `N agents`, else
+`N tabs`. The tooltip paints only; the mark owns the target.
+
+Navigation spans the window and shares its row with the window's own
+controls. On macOS, with `gui.window.titlebar = false`, the traffic lights
+stay visible over a transparent titlebar: `TelarWindow` centres them on the
+navigation row the frame reports (`telar_gui_frame.navigation`) at a 14 pt
+lead and 20 pt pitch, and reports the points they cover through
+`telar_gui_viewport.controls`, zero in fullscreen, with the native titlebar
+and on Linux. After that room comes the sidebar toggle, a glyph with a quiet
+hover surface. Above the rail the context name follows, the listed project's
+name or the unlisted workspace or worktree label, then a separator, then the
+tabs; with the sidebar expanded the tabs start where the workbench starts.
+Only a window too narrow for the rail, or an expanded sidebar too short for
+project rows, falls back to the compact top-bar indicators
+(`WorkspaceIndicators`). All navigation still uses the shared client intents;
+the GUI keeps only bounded disposable scroll and pointer state. Configured
 metrics and other widgets belong in the bottom status bar.
+
+The tab strip (`widgets/TabStrip.zig`) packs tabs from the left, each a
+30 px pill with a 10 px radius: a 20 px translucent chip holding the
+application mark (`tab_label.mark`, the focused application's even for a
+renamed tab), the caption and a trailing status. While the prefix waits for a
+digit the chips show the tabs' numbers instead, so widths never change. The
+caption is `tab_label.caption`: a manual label, else the focused pane's agent
+session title once it is no longer a placeholder, else the focused directory
+beside the foreground application (`replay-web · fish`). The status is the
+selected pane's progress report, else the tab's most urgent agent: a spinner
+stepping every 120 ms while it works, a dot in the attention colour when it
+waits, fails or is done. Only the selected tab is filled, with no outline or
+shadow; hover gives the others a quieter fill and brightens their mark.
+The selected tab keeps its whole caption up to 300 px or 55 % of the strip.
+The others share the rest at the richest fit that holds all of them: whole
+captions up to 220 px, then captions truncated to a common cap no shorter
+than 56 px of text. When not every caption fits, the tabs nearest the
+selection keep one and the farther ones shrink to their chip, so no usable
+room is left over. Truncated captions fade over their last 20 px instead of
+ending in an ellipsis. Past the chips, the tabs farthest from the selection
+hide behind a `+N` counter that selects the nearest hidden tab and keeps
+their attention dot, and `+` follows the last visible control. While the
+pointer rests on the strip, widths stay laid out around the tab they were
+built for, so a click changes the selection without moving tabs under the
+pointer; leaving the strip relayouts it, and a selection the frozen layout
+would hide rebuilds it at once.
 
 During the empty tab-model phase of a workspace handoff, the top bar retains
 the last delivered project identity while it remains in the workspace list.
@@ -264,25 +282,29 @@ it. This retains no pane data and does not change navigation authority.
 independent scrolling, selected-row visibility, deferred delivery and display
 scaling. The existing sidebar warm-repaint test includes project names and
 paths, and the favicon tests verify that rows and cards reuse the same sprite.
-`src/gui/tests/top_navigation.zig` covers compact indicators, shared favicons
-at both display scales, stable positions, overflow navigation and tab bounds.
+`src/gui/tests/top_navigation.zig` covers the rail's marks, numbers,
+favicons at both display scales, stable positions, overflow counters and tab
+placement in both sidebar states. `src/gui/tests/tab_strip.zig` covers the
+selected tab's lift, compression and the hidden-tab counter, frozen widths,
+faded captions, the rail tooltip and session-title captions.
 
 ## Detector wiring
 
-The frontend message handler:
+`runtime_messages.handleServerMessage` hands an agent snapshot to
+`agent_snapshot.applyAgentSnapshot`, which:
 
-1. validates the runtime message and its revision;
-2. maps runtime agent records to bounded `AgentInput` values;
-3. invokes `ApplyAgentSnapshotHandler`;
-4. commits the replica and `Version.agents` in `ClientModel`;
-5. synchronizes attachment resources and emits bounded actionable alerts;
-6. lets `Presenter` observe the version and pass the immutable snapshot to
-   `View.render` on the next paced frame.
+1. maps runtime agent records to bounded `AgentInput` values;
+2. commits the replica and `Version.agents` in `ClientModel` through
+   `agent_snapshot.reconcile`, which rejects stale revisions;
+3. synchronizes attachment resources;
+4. emits bounded actionable alerts;
+5. synchronizes the sidebar animation.
 
-The snapshot path never requests a draw for the replica itself. `Presenter`
-compares the model version with the last version it painted, resets transient
-sidebar scroll, invalidates chrome and renders the latest snapshot. Several
-runtime revisions inside one frame interval therefore fold into one projection.
+The snapshot path never requests a draw for the replica itself. The window
+observes the model version after the event, and its next frame projects the
+latest snapshot; `SidebarState.observe` sorts it again only when the snapshot
+identity changes. Several runtime revisions inside one frame interval
+therefore fold into one projection.
 
 Only status changes for identities present in the previous revision can emit
 an alert. Transitions to `blocked`, `done` and `failed` are actionable, and
@@ -293,18 +315,10 @@ when its exact pane generation exists in `ClientModel`.
 Detection remains on the observation path. Snapshot rendering and input
 routing perform no filesystem, process, JSON, network, or plugin work.
 
-Proxy request start and response activity mark an agent as working. A verified
-provider turn completion marks it ready once no other model exchange remains;
-successful transport completion alone leaves it working. Failures visible to
-the protocol observer mark it failed. This includes HTTP/1.1 and HPACK-decoded
-HTTP/2 response statuses of 400 or greater, plus HTTP/2 stream resets.
-HTTP/2 activity is keyed by connection and stream. Completing one multiplexed
-stream leaves the agent working while another stream is active; a
-connection-level failure settles every remaining stream for that connection.
-A visible permission prompt is stronger than network activity. Terminal
-working hints also override an early network completion. A ready prompt
-requires established Claude identity and three samples before it can recover a
-missing proxy completion. Codex's branded input prompt confirms `ready` once
-no working phrase remains visible above it. Every record carries its source,
-confidence, process and session identity, sequence, timestamps, and expiry.
-None of these presentation hints authorizes approval or input.
+A lifecycle report from the agent's own hooks decides the status while it is
+valid: working, blocked with its reason, ready. Without one, the screen
+decides: a visible permission prompt is blocked, a working phrase is working,
+and a confirmed input prompt is ready. Codex's branded input prompt confirms
+`ready` once no working phrase remains visible above it. Every record carries
+its source, confidence, process and session identity, sequence, timestamps,
+and expiry. None of these presentation hints authorizes approval or input.

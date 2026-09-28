@@ -20,8 +20,7 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     const group = std.mem.span(args[0]);
     const verb = std.mem.span(args[1]);
     var name_buffer: [64]u8 = undefined;
-    const nested = (std.mem.eql(u8, group, "client") and (std.mem.eql(u8, verb, "open") or std.mem.eql(u8, verb, "clipboard"))) or
-        (std.mem.eql(u8, group, "agent") and (std.mem.eql(u8, verb, "draft") or std.mem.eql(u8, verb, "view")));
+    const nested = std.mem.eql(u8, group, "client") and (std.mem.eql(u8, verb, "open") or std.mem.eql(u8, verb, "clipboard"));
     const consumed: usize = if (nested) 3 else 2;
     if (args.len < consumed) {
         return error.MissingClientAction;
@@ -67,37 +66,12 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
             self.text = std.mem.span(try cursor.require(error.MissingCopyRange));
             _ = try core.CopySelection.fromText(@enumFromInt(self.target_id), self.text);
         },
-        .agent_view_collapse => {
-            self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
-            self.text = std.mem.span(try cursor.require(error.MissingItemId));
-            _ = try positive(self.text);
-        },
-        .agent_view_expand => {
-            self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
-            self.text = std.mem.span(try cursor.require(error.MissingItemId));
-            _ = try positive(self.text);
-        },
-        .agent_draft_attach => {
-            self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
-            self.text = std.mem.span(try cursor.require(error.MissingText));
-            if (!std.fs.path.isAbsolute(self.text)) {
-                return error.ImagePathMustBeAbsolute;
-            }
-        },
-        .agent_draft_set => {
-            self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
-            self.text = std.mem.span(try cursor.require(error.MissingText));
-        },
-        .agent_draft_get => {
-            self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
-        },
         .client_clipboard_copy => self.text = std.mem.span(try cursor.require(error.MissingText)),
         .client_open_link => self.text = std.mem.span(try cursor.require(error.MissingText)),
         .notification_dismiss => self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget))),
         .client_copy_mode => {},
         .client_open_history => {},
         .client_open_goto => {},
-        .agent_create => {},
         .workspace_list_collapse => {},
         .workspace_list_expand => {},
         .sidebar_resize => self.value = std.math.cast(u16, try positive(std.mem.span(try cursor.require(error.MissingWidth)))) orelse return error.InvalidWidth,
@@ -136,10 +110,8 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
         const arg = std.mem.span(argument);
         if (std.mem.eql(u8, arg, "--client") and self.client_id == 0) {
             self.client_id = try positive(std.mem.span(try cursor.require(error.MissingClientId)));
-        } else if (std.mem.eql(u8, arg, "--label") and (self.action == .tab_create or self.action == .agent_create) and self.text.len == 0) {
+        } else if (std.mem.eql(u8, arg, "--label") and self.action == .tab_create and self.text.len == 0) {
             self.text = std.mem.span(try cursor.require(error.MissingLabel));
-        } else if (std.mem.eql(u8, arg, "--work") and std.mem.startsWith(u8, @tagName(self.action), "agent_view_") and self.value == 0) {
-            self.value = 1;
         } else if (std.mem.eql(u8, arg, "--section") and self.action == .config_show and self.text.len == 0) {
             self.text = std.mem.span(try cursor.require(error.MissingSection));
         } else if (std.mem.eql(u8, arg, "--index") and self.action == .config_show) {

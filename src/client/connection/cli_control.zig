@@ -77,7 +77,7 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
             const selection = try core.CopySelection.fromText(@enumFromInt(reply.target_id), reply.text());
             const tab = client.model.tabs.activeSlot() orelse return error.NoActiveTab;
             const pane = client.model.panes.findInConst(client.model.tabs.location[tab].tab_id, selection.pane_id) orelse return error.PaneNotFound;
-            if (!pane.attached or pane.kind != .terminal) {
+            if (!pane.attached) {
                 return error.TerminalPaneNotAttached;
             }
 
@@ -98,19 +98,15 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
                 return error.PaneViewportUnavailable;
             }
 
-            if (pane.kind == .agent) {
-                _ = data.agent_panes.scrollThread(&client.model, pane_id, @floatFromInt(delta));
-            } else {
-                _ = try pane_viewport.applyPaneViewport(
-                    client,
-                    .{
-                        .pane_id = pane_id,
-                        .target = .{
-                            .relative = delta,
-                        },
+            _ = try pane_viewport.applyPaneViewport(
+                client,
+                .{
+                    .pane_id = pane_id,
+                    .target = .{
+                        .relative = delta,
                     },
-                );
-            }
+                },
+            );
 
             reply.status = .applied;
         },
@@ -262,7 +258,9 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
         },
         .client_open_link => {
             const target = try data.LinkTarget.init(reply.text());
-            if (!try link_opening.openLink(client, target)) {
+            const tab = client.model.tabs.activeSlot();
+            const focused = if (tab) |slot| data.tab_layout.focusedPaneConst(&client.model, slot) else null;
+            if (!try link_opening.openLink(client, target, if (focused) |pane| pane.id else null)) {
                 return error.LinkOpeningUnavailable;
             }
 
@@ -337,100 +335,6 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
         },
         .sidebar_get => {
             try writeCommandSidebarState(&client.model, reply);
-        },
-        .agent_view_expand, .agent_view_collapse => {
-            _ = client.model.agentPane(@enumFromInt(reply.target_id)) orelse return error.AgentPaneNotAttached;
-            const item_id = std.fmt.parseUnsigned(
-                u64,
-                reply.text(),
-                10,
-            ) catch return error.InvalidItemId;
-            if (item_id == 0 or (reply.value != 0 and reply.value != 1)) {
-                return error.InvalidThreadControl;
-            }
-
-            try client.host_input_source.setThreadExpansion(
-                .{
-                    .pane_id = @enumFromInt(reply.target_id),
-                    .item_id = item_id,
-                    .expanded = reply.action == .agent_view_expand,
-                    .work = reply.value == 1,
-                },
-            );
-            reply.length = 0;
-            reply.status = .applied;
-        },
-        .agent_draft_attach => {
-            const pane_id: core.PaneId = @enumFromInt(reply.target_id);
-            const pane = client.model.agentPane(pane_id) orelse return error.AgentPaneNotAttached;
-
-            if (!try data.agent_panes.attachImage(&client.model, pane_id, reply.text())) {
-                return error.DraftAttachmentRejected;
-            }
-
-            reply.value = pane.composerImages().count;
-            reply.length = 0;
-            reply.status = .applied;
-        },
-        .agent_draft_set => {
-            const pane_id: core.PaneId = @enumFromInt(reply.target_id);
-            const pane = client.model.agentPane(pane_id) orelse return error.AgentPaneNotAttached;
-            if (std.mem.indexOfScalar(
-                u8,
-                reply.text(),
-                0,
-            ) != null) {
-                return error.InvalidDraftText;
-            }
-
-            if (!std.mem.eql(
-                u8,
-                pane.composerSlice(),
-                reply.text(),
-            )) {
-                if (!data.agent_panes.editComposer(&client.model, 
-                    pane_id,
-                    .{
-                        .replace_range = .{
-                            .range = .{
-                                0,
-                                @intCast(pane.composerSlice().len),
-                            },
-                            .text = reply.text(),
-                        },
-                    },
-                )) {
-                    return error.DraftEditRejected;
-                }
-            }
-
-            reply.length = 0;
-            reply.status = .applied;
-        },
-        .agent_draft_get => {
-            const pane_id: core.PaneId = @enumFromInt(reply.target_id);
-            const pane = client.model.agentPane(pane_id) orelse return error.AgentPaneNotAttached;
-            reply.value = pane.composerImages().count;
-            try reply.setText(pane.composerSlice());
-            reply.status = .applied;
-        },
-        .agent_create => {
-            if (!client.model.host.host_capabilities.agent_panes) {
-                return error.AgentPanesUnsupported;
-            }
-
-            if (!try tab_creation.requestTabCreation(
-                client,
-                .{
-                    .kind = .agent,
-                    .label = if (reply.length == 0) "Codex" else reply.text(),
-                },
-            )) {
-                return error.ClientBusy;
-            }
-
-            reply.length = 0;
-            reply.status = .admitted;
         },
     }
 }

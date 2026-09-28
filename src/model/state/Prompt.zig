@@ -1,9 +1,11 @@
 const core = @import("telar-core");
+const AgentKey = @import("../agents/AgentKey.zig");
 const copy_mode_module = @import("../input/copy_mode.zig");
 const History = @import("History.zig");
 const name_prompt = @import("name_prompt.zig");
 const WorkspaceForm = @import("WorkspaceForm.zig");
 const command_palette = @import("command_palette.zig");
+const MachinePrompt = @import("MachinePrompt.zig").MachinePrompt;
 const Prompt = @This();
 
 /// Stable for one opening, unlike the revision advanced by every edit.
@@ -18,6 +20,9 @@ mode: union(enum) {
     history: History,
     suggest,
     palette: struct { selection: u16 = 0 },
+    peek: AgentKey,
+    paths: struct { selection: u16 = 0 },
+    machine: MachinePrompt,
 },
 field: name_prompt.Field,
 /// Working directory of the new-context form; unused by other targets.
@@ -35,6 +40,9 @@ pub fn target(self: *const Prompt) name_prompt.Target {
         .history => .history,
         .suggest => .suggest,
         .palette => .palette,
+        .peek => |key| .{ .peek = key },
+        .paths => .paths,
+        .machine => |machine| .{ .machine = machine },
     };
 }
 
@@ -45,6 +53,7 @@ pub fn selection(self: *const Prompt) u16 {
         .history => |history| history.selection,
         .create_workspace => |form_state| form_state.selection,
         .palette => |palette| palette.selection,
+        .paths => |paths| paths.selection,
         else => 0,
     };
 }
@@ -89,6 +98,7 @@ pub fn setSelection(self: *Prompt, selected: u16) void {
         .history => |*history| history.selection = selected,
         .create_workspace => |*form_state| form_state.selection = selected,
         .palette => |*palette| palette.selection = selected,
+        .paths => |*paths| paths.selection = selected,
         else => {},
     }
 }

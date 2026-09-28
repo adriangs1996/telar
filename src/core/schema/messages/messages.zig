@@ -7,11 +7,12 @@
 //! after its message.
 
 const bytecodec = @import("bytecodec");
-const agent_thread = @import("agent_thread.zig");
-const agent_history = @import("agent_history.zig");
 const OpenEditor = @import("OpenEditor.zig");
 const EditorOpened = @import("EditorOpened.zig");
 const editor = @import("editor.zig");
+const FindPaths = @import("FindPaths.zig");
+const PathResultsView = @import("PathResultsView.zig");
+const paths = @import("paths.zig");
 const OpenPaneView = @import("OpenPaneView.zig");
 const PaneInput = @import("PaneInput.zig");
 const PaneResize = @import("PaneResize.zig");
@@ -96,6 +97,13 @@ const HistoryStatsView = @import("HistoryStatsView.zig");
 const PaneFocusCommand = @import("PaneFocusCommand.zig");
 const PaneFocusResult = @import("PaneFocusResult.zig");
 const PaneProgress = @import("PaneProgress.zig");
+const RegisterWorktree = @import("RegisterWorktree.zig");
+const WorktreeRegistered = @import("WorktreeRegistered.zig");
+const LaunchWorktreeView = @import("LaunchWorktreeView.zig");
+const ForgetWorktree = @import("ForgetWorktree.zig");
+const InterruptAgent = @import("InterruptAgent.zig");
+const ReportAgentProgress = @import("ReportAgentProgress.zig");
+const worktree = @import("worktree.zig");
 const Decoder = bytecodec.Decoder;
 const tags = @import("tags.zig");
 const pane = @import("pane.zig");
@@ -141,12 +149,6 @@ pub const ClientMessage = union(enum) {
     query_history: QueryHistory,
     request_workspace_snapshot: RequestWorkspaceSnapshot,
     create_tab: CreateTabView,
-    agent_prompt: AgentPrompt,
-    agent_interrupt: AgentInterrupt,
-    agent_resume: AgentResume,
-    agent_approval: AgentApproval,
-    query_agent_thread: QueryAgentThread,
-    query_agent_history: QueryAgentHistory,
     rename_tab: RenameTab,
     close_tab: CloseTab,
     move_tab: MoveTab,
@@ -178,7 +180,13 @@ pub const ClientMessage = union(enum) {
     update_client_layout: ClientLayoutUpdateView,
     request_pane_focus: RequestPaneFocus,
     open_editor: OpenEditor,
+    find_paths: FindPaths,
     complete_pane_focus: CompletePaneFocus,
+    register_worktree: RegisterWorktree,
+    launch_worktree: LaunchWorktreeView,
+    forget_worktree: ForgetWorktree,
+    interrupt_agent: InterruptAgent,
+    report_agent_progress: ReportAgentProgress,
 };
 
 const ChangeReviewChanged = @import("ChangeReviewChanged.zig");
@@ -186,14 +194,7 @@ const change_review = @import("change_review.zig");
 const QueryChangeReview = @import("QueryChangeReview.zig");
 const ChangeReviewCommand = @import("ChangeReviewCommand.zig");
 const ReportChangeReviewSample = @import("ReportChangeReviewSample.zig");
-const AgentPrompt = @import("AgentPrompt.zig");
-const AgentInterrupt = @import("AgentInterrupt.zig");
-const AgentResume = @import("AgentResume.zig");
-const AgentApproval = @import("AgentApproval.zig");
-const QueryAgentThread = @import("QueryAgentThread.zig");
-const QueryAgentHistory = @import("QueryAgentHistory.zig");
 const ChangeReviewSnapshotView = @import("ChangeReviewSnapshotView.zig");
-const AgentHistoryPageView = @import("AgentHistoryPageView.zig");
 
 pub const ServerMessage = union(enum) {
     client_list: ClientList,
@@ -203,8 +204,6 @@ pub const ServerMessage = union(enum) {
     change_review_changed: ChangeReviewChanged,
     change_review_snapshot: ChangeReviewSnapshotView,
     pane_opened: PaneOpened,
-    agent_thread_snapshot: agent_thread.SnapshotView,
-    agent_history_page: AgentHistoryPageView,
     pane_frame: FrameView,
     pane_exited: PaneExited,
     request_failed: RequestFailed,
@@ -246,7 +245,9 @@ pub const ServerMessage = union(enum) {
     pane_focus_command: PaneFocusCommand,
     pane_focus_result: PaneFocusResult,
     editor_opened: EditorOpened,
+    path_results: PathResultsView,
     pane_progress: PaneProgress,
+    worktree_registered: WorktreeRegistered,
 };
 
 pub fn decodeClient(payload: []const u8) !ClientMessage {
@@ -270,15 +271,9 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
             .request_workspace_snapshot = try GenericDerived(RequestWorkspaceSnapshot).decode(&decoder),
         },
         .create_tab => .{ .create_tab = try tab.decodeCreateTab(&decoder) },
-        .agent_prompt => .{ .agent_prompt = try agent_thread.decodeAgentPrompt(&decoder) },
-        .agent_interrupt => .{ .agent_interrupt = try agent_thread.decodeControl(AgentInterrupt, &decoder) },
-        .agent_resume => .{ .agent_resume = try agent_thread.decodeControl(AgentResume, &decoder) },
-        .agent_approval => .{ .agent_approval = try agent_thread.decodeControl(AgentApproval, &decoder) },
         .query_change_review => .{ .query_change_review = try change_review.decode(QueryChangeReview, &decoder) },
         .change_review_command => .{ .change_review_command = try change_review.decode(ChangeReviewCommand, &decoder) },
         .report_change_review_sample => .{ .report_change_review_sample = try change_review.decode(ReportChangeReviewSample, &decoder) },
-        .query_agent_thread => .{ .query_agent_thread = try agent_thread.decodeControl(QueryAgentThread, &decoder) },
-        .query_agent_history => .{ .query_agent_history = try agent_history.decodeQueryAgentHistory(&decoder) },
         .rename_tab => .{ .rename_tab = try tab.decodeRenameTab(&decoder) },
         .close_tab => .{ .close_tab = try GenericDerived(CloseTab).decode(&decoder) },
         .move_tab => .{ .move_tab = try GenericDerived(MoveTab).decode(&decoder) },
@@ -325,21 +320,36 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .read_history_output => .{ .read_history_output = try GenericDerived(ReadHistoryOutput).decode(&decoder) },
         .history_stats => .{ .history_stats = try history.decodeHistoryStatsQuery(&decoder) },
         .open_editor => .{ .open_editor = try editor.decodeOpenEditor(&decoder) },
+        .find_paths => .{ .find_paths = try paths.decodeFindPaths(&decoder) },
         .request_pane_focus => .{ .request_pane_focus = try focus.decodeRequestPaneFocus(&decoder) },
         .complete_pane_focus => .{ .complete_pane_focus = try focus.decodeCompletePaneFocus(&decoder) },
+        .register_worktree => .{ .register_worktree = try worktree.decodeRegisterWorktree(&decoder) },
+        .launch_worktree => .{ .launch_worktree = try worktree.decodeLaunchWorktree(&decoder) },
+        .forget_worktree => .{ .forget_worktree = try GenericDerived(ForgetWorktree).decode(&decoder) },
+        .interrupt_agent => .{ .interrupt_agent = try GenericDerived(InterruptAgent).decode(&decoder) },
+        .report_agent_progress => .{ .report_agent_progress = try agent.decodeReportAgentProgress(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
 }
 
 pub fn decodeServer(payload: []const u8) !ServerMessage {
+    var message: ServerMessage = undefined;
+    try decodeServerInto(&message, payload);
+    return message;
+}
+
+/// Decodes into `message` and writes only the variant the payload carries.
+/// The union is kilobytes while a pane frame is 168 bytes, so a receiver
+/// that keeps the message in place never copies the rest. On error the
+/// destination holds no valid message.
+/// Example: `try core.decodeServerInto(&transport.received.message, bytes);`
+pub fn decodeServerInto(message: *ServerMessage, payload: []const u8) !void {
     var decoder = Decoder.init(payload);
     const tag = try decodeTag(tags.ServerTag, try decoder.readByte());
-    const message: ServerMessage = switch (tag) {
+    message.* = switch (tag) {
         .change_review_changed => .{ .change_review_changed = try change_review.decode(ChangeReviewChanged, &decoder) },
         .change_review_snapshot => .{ .change_review_snapshot = try change_review.decode(ChangeReviewSnapshotView, &decoder) },
-        .agent_thread_snapshot => .{ .agent_thread_snapshot = try agent_thread.decodeAgentThreadSnapshot(&decoder) },
-        .agent_history_page => .{ .agent_history_page = try agent_history.decodeAgentHistoryPage(&decoder) },
         .pane_opened => .{ .pane_opened = try GenericDerived(PaneOpened).decode(&decoder) },
         .pane_frame => .{ .pane_frame = try frame.decodeBody(&decoder) },
         .pane_exited => .{ .pane_exited = try GenericDerived(PaneExited).decode(&decoder) },
@@ -392,11 +402,12 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .history_stats_result => .{ .history_stats_result = try history.decodeHistoryStats(&decoder) },
         .pane_focus_command => .{ .pane_focus_command = try focus.decodePaneFocusCommand(&decoder) },
         .editor_opened => .{ .editor_opened = try editor.decodeEditorOpened(&decoder) },
+        .path_results => .{ .path_results = try paths.decodePathResults(&decoder) },
         .pane_focus_result => .{ .pane_focus_result = try focus.decodePaneFocusResult(&decoder) },
         .pane_progress => .{ .pane_progress = try pane.decodePaneProgress(&decoder) },
+        .worktree_registered => .{ .worktree_registered = try GenericDerived(WorktreeRegistered).decode(&decoder) },
     };
     try decoder.ensureEnd();
-    return message;
 }
 
 fn decodeTag(comptime Tag: type, value: u8) error{UnknownMessage}!Tag {

@@ -74,7 +74,8 @@ files named after [`docs/flows`](flows/README.md).
 - A transition that must change several columns together happens inside one
   procedure, never split across callers.
 - Invariants that span tables are checked by `model_invariants.check(model)`,
-  which the TUI test harness runs after every settled step and the model's
+  which the client integration harness (`src/client_tests`) runs after every
+  settled step and the model's
   flow tests run after every scenario.
 
 ```zig
@@ -122,8 +123,8 @@ pub fn update(self: *Client, message: Message) !?u8 {
 }
 ```
 
-`Client` has no other behavior than `init`, `deinit`, `update`, `flush` and
-`failJob`. Client procedures live in flow files under `src/client`: one that
+`Client` has no other behavior than `init`, `deinit`, `update`, `flush`,
+`failJob` and `failBackgroundJob`. Client procedures live in flow files under `src/client`: one that
 touches only the model takes `model: *ClientModel`; one that also reaches the
 transport, Lua, the clock or the job queue takes `client: *Client`.
 
@@ -135,9 +136,9 @@ schedules presentation.
 
 ## The host boundary is data
 
-The TUI (`TerminalAdapter`), the native GUI (`GuiAdapter`) and the headless
-test adapter are presentation adapters. Each owns its host resources:
-terminal or window, renderer, output buffers, pacing. Each embeds one
+The native GUI (`GuiAdapter`), the headless client (`HeadlessClient`) and the
+headless test adapter are presentation adapters. Each owns its host
+resources: window, renderer, output buffers, pacing. Each embeds one
 `Client` and drains it after every event.
 
 - The adapter writes host facts into `model.host` before calling `update`.
@@ -148,12 +149,16 @@ terminal or window, renderer, output buffers, pacing. Each embeds one
 - Procedures push runtime messages into `model.to_runtime`; `flush` writes
   them once per event.
 - Procedures start workers by pushing a `client.Job` into
-  `client.to_workers`. The adapter starts each job off the event loop and
-  the job reports through its completion message. A job the adapter cannot
-  start finishes through `Client.failJob` as that same completion carrying
-  the error, so one handler releases what starting it reserved. The queue
-  lives in `Client`, not the model, because jobs carry transport and Lua
-  handles. A job names the row it completes by id and generation; the
+  `client.to_workers`, or a `client.BackgroundJob` into
+  `client.to_background`. A `Job` is interactive work of a few words (a
+  runtime read or write, a timer); a `BackgroundJob` carries its own copy of
+  a request, kilobytes, so it queues apart and a runtime read never copies
+  it. The adapter drains both queues until they are empty, starts each job
+  off the event loop and the job reports through its completion message. A
+  job the adapter cannot start finishes through `Client.failJob` (or
+  `failBackgroundJob`) as that same completion carrying the error, so one
+  handler releases what starting it reserved. The queues live in `Client`,
+  not the model, because jobs carry transport and Lua handles. A job names the row it completes by id and generation; the
   pointers it carries (the transport, a timer's scheduler, the loaded
   configuration) belong to the client, whose adapter cancels every job before
   freeing it.
@@ -183,11 +188,12 @@ is one index probe, not a walk through nested structs.
 | `telar-backend` | the runtime: children, PTYs, emulation, agents, history, proxy |
 | `model` | client state and its procedures, with no I/O, Lua or host access |
 | `telar-client` | `Client` and the client flows: runtime socket, Lua VM, job queue, inbox |
-| `telar-frontend` | the TUI adapter: host terminal, decoder, compositor, diff, pacing |
 | `telar-gui` | the native adapter: glyph atlas and quads drawn by Metal or Vulkan |
+| `telar-headless` | the headless client for tests and tools: stdin input, exit trace and dump |
 
 Backend and client packages never import each other; both import core. The
-TUI and GUI never import each other; what both embed lives in `assets`.
+GUI and the headless client never import each other; what adapters embed
+lives in `assets`.
 
 ### Libraries
 
@@ -217,11 +223,11 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `vtscan` | byte-at-a-time scanners for OSC strings, typed input and Kitty graphics framing |
 | `sqlite` | the one SQLite binding, statement helpers, additive migrations, FTS5 quoting |
 | `imaging` | PNG through Wuffs with limits checked first, ICO frames, box-filter and bilinear resampling |
-| `hostmetrics` | cpu, memory and battery of the host, without allocation |
-| `gitstatus` | a working tree's branch and whether it has changes |
+| `hostmetrics` | cpu, memory and battery of the host; nothing is kept between samples |
+| `gitstatus` | a working tree's branch and whether it has changes, the linked worktree a directory belongs to, and a worktree's diffstat and commits ahead of its base |
 | `localsocket` | same-user Unix sockets and length-prefixed framing |
 | `bytecodec` | bounds-checked little-endian encoding into caller buffers and decoding from borrowed bytes |
-| `urlscan` | classifying a URI by scheme and finding the URI under an offset in a line |
+| `urlscan` | classifying a URI by scheme, finding the URI or the local file path under an offset in a line, and the line and column a link points at |
 | `keyinput` | keys, characters, modifiers and mouse events as values, chord parsing, binding order, bounded bindings and physical-key leases |
 | `textraster` | text shaped and rasterized into RGBA with FreeType and HarfBuzz in a caller's font, and rounded fills |
 | `syntaxhl` | syntax roles, languages by file path, Tree-sitter captures as roles, and a bounded highlighting cache keyed by content |
@@ -231,16 +237,16 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `mdinline` | inline Markdown spans over borrowed text and bounded link destination decoding |
 | `cellcodec` | runs of cells with a packed header, styles written on change and colors sized by kind |
 | `agentfiles` | titles from Claude Code's JSONL transcript and Codex's thread database |
-| `editorremote` | reusing a terminal editor: identify it, reach its server, open a literal path |
+| `editorremote` | reusing a terminal editor: identify it, reach its server, open a literal path at a line; the argv that launches a new one there |
 | `vtgrid` | a ghostty-vt terminal as cells: render state onto a `cellgrid` buffer, damaged rows into cost-aware spans, incremental scrollback search |
 | `cmdcapture` | commands, directories, exit status and output tails read from a pane's terminal |
 | `jsonl` | bounded JSON-lines streams, in-place truncation of output fields, total value accessors |
-| `eventstream` | incremental, bounded Server-Sent Events decoding |
 | `h2frames` | HTTP/2 frames, SETTINGS, header blocks and stream states, without a connection |
 | `localca` | a local certificate authority, per-host leaves, system roots and intercepted TLS sessions |
-| `httprelay` | HTTP/1.1 and HTTP/2 relays that forward bytes unchanged, rewrite heads by data and report what they forwarded |
+| `httprelay` | HTTP/1.1 and HTTP/2 relays that forward bytes unchanged and report what they forwarded |
 | `dropqueue` | a bounded many-publisher queue that drops instead of waiting and counts depth, high water and loss |
 | `exchangecapture` | bounded capture of relayed exchanges: heads and de-framed bodies within a shared quota, halves paired by key, bodies decoded |
+| `touchtrace` | client requests that mark byte ranges and code windows for the touchrange Valgrind tool; no-ops natively |
 
 A rule that decides what telar means stays in a flow even when it is pure;
 [`plans/libraries.md`](plans/libraries.md) lists what is still to move.

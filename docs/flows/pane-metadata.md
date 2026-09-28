@@ -23,7 +23,7 @@ updates state without publishing a display revision.
 Foreground names use fixed storage. A changed attached-pane name advances both
 metadata and foreground revisions; the latter identifies changes affecting pane
 composition. No metadata operation requests a draw or reaches into host caches.
-The presenter observes revisions and composes current model state.
+The window observes revisions and draws current model state.
 
 Workspace snapshots carry bounded foreground names for inactive tabs without
 requiring attachments. The model retains the relevant focused pane identity
@@ -31,7 +31,7 @@ and fallback name until terminal models exist. Global runtime metadata cursors
 coalesce updates keyed by slot, identity, generation and revision. The model
 accepts an unattached foreground update only for a matching retained identity
 in the current workspace. Manual tab labels remain authoritative over automatic
-names. Both adapters use `tab_label.text` and `tab_label.icon`.
+names. The window uses `tab_label.text` and `tab_label.icon`.
 
 Each new runtime attachment also has its own metadata cursor. It receives
 bootstrap metadata even if a global update arrived before the local pane was
@@ -41,5 +41,5 @@ runtime facts through fresh cursors.
 Source: `src/client/connection/runtime_messages.zig`, `src/model/state/ClientModel.zig`,
 `src/model/panes/Pane.zig` and `src/model/workspace/tab_label.zig`.
 Tests: `src/model/state/tests/panes.zig`, `tabs.zig`,
-`src/frontend/client/tests/pane_updates.zig`, and runtime workspace-snapshot /
+`src/client_tests/pane_updates.zig`, and runtime workspace-snapshot /
 runtime-state tests.

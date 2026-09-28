@@ -1,8 +1,6 @@
 //! Tab lifecycle inside a workspace and the per-tab pane snapshot.
 
 const bytecodec = @import("bytecodec");
-const pane_kind = @import("../pane_kind.zig");
-const std = @import("std");
 const RequestTabSnapshot = @import("RequestTabSnapshot.zig");
 const codec = @import("../codec.zig");
 const tags = @import("tags.zig");
@@ -41,11 +39,7 @@ pub fn encodeCreateTab(buffer: []u8, message: CreateTab) ![]const u8 {
     try codec.encodeWorkspaceLocation(&encoder, message.workspace);
     try encoder.writeSized16(message.label);
     try codec.encodeSize(&encoder, message.size);
-    try encoder.writeByte(@intFromEnum(message.kind));
-    switch (message.kind) {
-        .terminal => try launch_mod.encodeLaunch(&encoder, message.launch),
-        .agent => try launch_mod.encodeAgentCwd(&encoder, message.launch),
-    }
+    try launch_mod.encodeLaunch(&encoder, message.launch);
     return encoder.finish();
 }
 
@@ -55,17 +49,12 @@ pub fn decodeCreateTab(decoder: *Decoder) !CreateTabView {
     const label = try decoder.readSized16();
     try codec.validateTabLabel(label, true);
     const size = try codec.decodeSize(decoder);
-    const kind = try decodePaneKind(try decoder.readByte());
     return .{
         .request_id = request_id,
         .workspace = location,
         .label = label,
         .size = size,
-        .kind = kind,
-        .launch = switch (kind) {
-            .terminal => try launch_mod.decodeLaunch(decoder),
-            .agent => try launch_mod.decodeAgentCwd(decoder),
-        },
+        .launch = try launch_mod.decodeLaunch(decoder),
     };
 }
 
@@ -116,7 +105,6 @@ pub fn encodeTabSnapshot(buffer: []u8, message: TabSnapshot) ![]const u8 {
         }
         try encoder.writeInt(u64, id.raw(pane.pane_id));
         try encoder.writeByte(@intFromEnum(pane.lifecycle));
-        try encoder.writeByte(@intFromEnum(pane.kind));
         try encoder.writeInt(u64, pane.pane_generation);
     }
     return encoder.finish();
@@ -137,7 +125,6 @@ pub fn decodeTabSnapshot(decoder: *Decoder) !TabSnapshotView {
     for (0..pane_count) |pane_index| {
         const pane_id = try id.pane(try decoder.readInt(u64));
         _ = try codec.decodePaneLifecycle(try decoder.readByte());
-        _ = try decodePaneKind(try decoder.readByte());
         _ = try decoder.readInt(u64);
         for (seen[0..pane_index]) |previous| {
             if (previous == pane_id) {
@@ -165,7 +152,6 @@ pub fn encodeTabCreated(buffer: []u8, message: TabCreated) ![]const u8 {
     try encoder.writeInt(u16, message.position);
     try encoder.writeSized16(message.label);
     try encoder.writeInt(u64, id.raw(message.root_pane_id));
-    try encoder.writeByte(@intFromEnum(message.kind));
     try encoder.writeInt(u64, message.pane_generation);
     return encoder.finish();
 }
@@ -182,7 +168,6 @@ pub fn decodeTabCreated(decoder: *Decoder) !TabCreated {
         .position = position,
         .label = label,
         .root_pane_id = try id.pane(try decoder.readInt(u64)),
-        .kind = try decodePaneKind(try decoder.readByte()),
         .pane_generation = try decoder.readInt(u64),
     };
 }
@@ -212,9 +197,4 @@ pub fn encodeTabClosed(buffer: []u8, message: TabClosed) ![]const u8 {
 
 pub fn encodeTabMoved(buffer: []u8, message: TabMoved) ![]const u8 {
     return codec.encodeDerived(@intFromEnum(tags.ServerTag.tab_moved), buffer, message);
-}
-
-/// Example: `const kind = try decodePaneKind(tag);`
-pub fn decodePaneKind(value: u8) !pane_kind.PaneKind {
-    return std.enums.fromInt(pane_kind.PaneKind, value) orelse error.InvalidPaneKind;
 }

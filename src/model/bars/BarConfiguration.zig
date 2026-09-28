@@ -1,3 +1,4 @@
+const PanelDefinition = @import("PanelDefinition.zig");
 const model = @import("model.zig");
 const Layout = @import("BarLayout.zig");
 const std = @import("std");
@@ -7,6 +8,9 @@ bottom: [3]model.Source = .{ .metrics, .empty, .tabs },
 top_right: model.Source = .empty,
 /// Left-to-right slots of the sidebar footer row; tabs are never accepted here.
 sidebar_footer: [3]model.Source = .{ .metrics, .empty, .empty },
+/// `client.panels`, in the order their names were sorted while loading.
+panels: [model.max_panels]PanelDefinition = @splat(.{}),
+panel_count: u8 = 0,
 
 pub fn source(self: *const Configuration, position: model.Position) *const model.Source {
     return switch (position) {
@@ -20,23 +24,52 @@ pub fn source(self: *const Configuration, position: model.Position) *const model
     };
 }
 
+pub fn panel(self: *const Configuration, index: u8) ?*const PanelDefinition {
+    if (index >= self.panel_count) {
+        return null;
+    }
+
+    return &self.panels[index];
+}
+
+/// Resolves a panel name while configuration and callback results are parsed.
+/// Example: `const index = configuration.panelIndex("claude") orelse return error.UnknownPanel;`
+pub fn panelIndex(self: *const Configuration, name: []const u8) ?u8 {
+    for (self.panels[0..self.panel_count], 0..) |*definition, index| {
+        if (std.mem.eql(u8, definition.heading.name(), name)) {
+            return @intCast(index);
+        }
+    }
+
+    return null;
+}
+
 pub fn presentation(self: *const Configuration) Layout {
     var result: Layout = .{};
     inline for (std.meta.fields(model.Position)) |field| {
         const position: model.Position = @enumFromInt(field.value);
         result.set(position, model.presentationSlot(self.source(position)));
-        switch (self.source(position).*) {
-            .dynamic => |value| {
-                result.generation = value.callback.generation;
-                result.live_mask |= position.bit();
-            },
-            .command => |value| {
-                result.generation = value.generation;
-                result.live_mask |= position.bit();
-            },
-            else => {},
+        if (sourceGeneration(self.source(position))) |generation| {
+            result.generation = generation;
+            result.live_mask |= position.bit();
         }
     }
 
+    for (self.panels[0..self.panel_count], 0..) |*definition, index| {
+        result.panels[index] = definition.heading;
+        if (sourceGeneration(&definition.source)) |generation| {
+            result.generation = generation;
+        }
+    }
+    result.panel_count = self.panel_count;
+
     return result;
+}
+
+fn sourceGeneration(value: *const model.Source) ?u64 {
+    return switch (value.*) {
+        .dynamic => |dynamic| dynamic.callback.generation,
+        .command => |command| command.generation,
+        else => null,
+    };
 }

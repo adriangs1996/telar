@@ -6,15 +6,11 @@ const core = @import("telar-core");
 const EventFixture = @import("EventFixture.zig");
 const RequestFixture = @import("RequestFixture.zig");
 const agent_description = @import("../agent_description.zig");
-const proxy_observation = @import("../proxy_observation.zig");
 const agent_identity = @import("../agent_identity.zig");
 const description = @import("../../agent/description.zig");
 const AgentResult = @import("../../agent/Result.zig");
 const Identity = @import("../../agent/Identity.zig");
 const Job = @import("../../agent/Job.zig");
-const middleware = @import("../../proxy/middleware.zig");
-const ProxyTestFiles = @import("../resources/ProxyTestFiles.zig");
-const ProxyRuntime = @import("../resources/ProxyRuntime.zig");
 
 fn seedDescription(model: *RuntimeModel, number: u64) !Identity {
     const identity: Identity = .{
@@ -24,13 +20,7 @@ fn seedDescription(model: *RuntimeModel, number: u64) !Identity {
     };
     _ = agent_status.observeProcess(model, .{ .identity = identity, .provider = .codex, .process_id = identity.process_id, .observed_at_ms = 100 });
     try std.testing.expect(agent_status.observeInput(model, identity.key, "refactor proxy\r"));
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .openai_responses,
-        .phase = .request_started,
-        .exchange = .{ .protocol = .h2, .connection_id = number, .stream_id = 1 },
-        .observed_at_ms = 200,
-    }));
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 200 }));
     return identity;
 }
 
@@ -127,62 +117,13 @@ test "runtime retired description completion releases the actor slot and cannot 
     try std.testing.expectEqualDeep(replacement.key, next.pane);
 }
 
-test "runtime proxy receive and rearm failures preserve agent authority" {
-    var fixture: EventFixture = undefined;
-    try fixture.init();
-    defer fixture.deinit();
-    _ = try fixture.request.runtime.update(.{ .proxy_event = error.ReceiveFailed });
-    try std.testing.expect(agent_status.projectedStatus(fixture.model, fixture.pane.key()) == null);
-    var files = try ProxyTestFiles.init(std.testing.io);
-    defer files.deinit();
-    var proxy = try ProxyRuntime.init(std.testing.io, std.testing.allocator, .{ .config = files.config(), .system_trusted = false });
-    defer proxy.deinit();
-    std.mem.swap(ProxyRuntime, &fixture.model.resources.proxy, &proxy);
-    defer std.mem.swap(ProxyRuntime, &fixture.model.resources.proxy, &proxy);
-    fixture.failScheduling();
-    try std.testing.expectError(error.ConcurrencyUnavailable, fixture.request.runtime.update(.{
-        .proxy_event = proxy_observation.eventFor(fixture.pane, .request_started, .h2),
-    }));
-    try std.testing.expect(agent_status.projectedStatus(fixture.model, fixture.pane.key()) == null);
-    try std.testing.expectEqual(@as(u64, 0), fixture.metrics.proxy_observations);
-}
-
-test "runtime proxy observations reject stale generations and auxiliary traffic" {
-    var fixture: EventFixture = undefined;
-    try fixture.init();
-    defer fixture.deinit();
-    var stale = proxy_observation.eventFor(fixture.pane, .request_started, .http11);
-    stale.pane.generation += 1;
-    _ = try fixture.request.runtime.update(.{ .proxy_event = stale });
-    try std.testing.expectEqual(@as(u64, 1), fixture.metrics.stale_pane_events);
-    _ = try fixture.request.runtime.update(.{ .proxy_event = proxy_observation.eventFor(fixture.pane, .auxiliary_request_started, .h2) });
-    try std.testing.expect(agent_status.projectedStatus(fixture.model, fixture.pane.key()) == null);
-}
-
-test "runtime provider turn completion updates Claude across HTTP protocols" {
-    for ([_]middleware.Protocol{ .http11, .h2 }) |protocol| {
-        var fixture: EventFixture = undefined;
-        try fixture.init();
-        defer fixture.deinit();
-        var observation = proxy_observation.eventFor(fixture.pane, .request_started, protocol);
-        observation.dialect = .anthropic_messages;
-        observation.stream_id = if (protocol == .http11) 0 else 23;
-        _ = try fixture.request.runtime.update(.{ .proxy_event = observation });
-        try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(fixture.model, fixture.pane.key()).?);
-        observation.phase = .provider_turn_completed;
-        observation.observed_at_ms += 1;
-        _ = try fixture.request.runtime.update(.{ .proxy_event = observation });
-        try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(fixture.model, fixture.pane.key()).?);
-    }
-}
-
 test "runtime maintenance failure preserves evidence and a successful tick expires it" {
     var fixture: EventFixture = undefined;
     try fixture.init();
     defer fixture.deinit();
     const identity = agent_identity.fromPane(fixture.pane);
-    _ = agent_status.observeProxy(fixture.model, .{ .identity = identity, .dialect = .openai_responses, .phase = .request_started, .exchange = .{ .protocol = .h2, .connection_id = 19, .stream_id = 23 }, .observed_at_ms = 1 });
-    _ = agent_status.observeProxy(fixture.model, .{ .identity = identity, .dialect = .openai_responses, .phase = .provider_turn_completed, .exchange = .{ .protocol = .h2, .connection_id = 19, .stream_id = 23 }, .observed_at_ms = 2 });
+    _ = agent_status.observeReport(fixture.model, .{ .identity = identity, .state = .working, .observed_at_ms = 1 });
+    _ = agent_status.observeReport(fixture.model, .{ .identity = identity, .state = .ready, .observed_at_ms = 2 });
     _ = try fixture.request.runtime.update(.{ .agent_tick = error.TimerFailed });
     try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(fixture.model, identity.key).?);
     fixture.failScheduling();

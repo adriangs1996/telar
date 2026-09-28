@@ -6,6 +6,7 @@ const WorkspaceRecord = @import("WorkspaceRecord.zig");
 const TabRecord = @import("TabRecord.zig");
 const PaneRecord = @import("PaneRecord.zig");
 const LayoutRecord = @import("LayoutRecord.zig");
+const WorktreeRecord = @import("WorktreeRecord.zig");
 /// Appends records to a fixed buffer. `finish` closes the stream.
 ///
 /// ```zig
@@ -50,7 +51,7 @@ pub fn tab(self: *Encoder, record: TabRecord) !void {
 
 pub fn pane(self: *Encoder, record: PaneRecord) !void {
     try checkpoint.validatePath(record.cwd);
-    if (record.argument_count > checkpoint.max_launch_arguments or record.arguments.len > checkpoint.max_launch_bytes or (record.kind == .terminal and record.argument_count == 0)) {
+    if (record.argument_count > checkpoint.max_launch_arguments or record.arguments.len > checkpoint.max_launch_bytes or record.argument_count == 0) {
         return error.InvalidLaunchRecord;
     }
     try self.inner.writeByte(@intFromEnum(checkpoint.Kind.pane));
@@ -70,8 +71,22 @@ pub fn pane(self: *Encoder, record: PaneRecord) !void {
     try checkpoint.validateTitle(record.agent_title, record.agent_title_source);
     try self.inner.writeSized16(record.agent_title);
     try self.inner.writeByte(record.agent_title_source);
-    try checkpoint.validatePaneKind(record);
-    try self.inner.writeByte(@intFromEnum(record.kind));
+}
+
+pub fn worktree(self: *Encoder, record: WorktreeRecord) !void {
+    try checkpoint.validateWorktree(record);
+    try self.inner.writeByte(@intFromEnum(checkpoint.Kind.worktree));
+    try self.inner.writeInt(u64, record.id);
+    try self.inner.writeInt(u64, record.source_workspace_id);
+    try self.inner.writeInt(u64, record.workspace_id);
+    try self.inner.writeInt(u64, record.created_by);
+    try self.inner.writeByte(record.origin);
+    try self.inner.writeSized16(record.path);
+    try self.inner.writeSized16(record.branch);
+    try self.inner.writeSized16(record.base);
+    try self.inner.writeSized16(record.title);
+    try self.inner.writeSized16(record.brief);
+    try self.inner.writeSized16(record.dispatched_from);
 }
 
 pub fn layout(self: *Encoder, record: LayoutRecord) !void {

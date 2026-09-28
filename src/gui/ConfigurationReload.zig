@@ -8,6 +8,7 @@ const client = @import("telar-client");
 const native = @import("native/native.zig");
 const Renderer = @import("render/TerminalRenderer.zig");
 const GuiAdapter = @import("GuiAdapter.zig");
+const window_machines = @import("window_machines.zig");
 const Request = @import("ConfigurationRequest.zig");
 const font_rendering = @import("text/font_rendering.zig");
 const Reload = @This();
@@ -78,6 +79,9 @@ pub fn apply(self: *Reload, gui: *GuiAdapter, renderer: *Renderer) !bool {
         return false;
     }
 
+    // The window's own client owns the configuration; the others follow it.
+    const own = window_machines.window(gui);
+
     var result = try self.result;
     if (result == .loaded and !font_rendering.same(result.loaded.generation.snapshot.gui.font, self.request.?.current.font) and
         !std.meta.eql(self.viewport, self.request.?.viewport))
@@ -92,16 +96,16 @@ pub fn apply(self: *Reload, gui: *GuiAdapter, renderer: *Renderer) !bool {
 
     if (self.failure) |diagnostic| {
         const mtime_ns = result.loaded.mtime_ns;
-        gui.app.reload.deinit(gui.app.gpa);
-        gui.app.reload.clearOrphans();
+        own.reload.deinit(own.gpa);
+        own.reload.clearOrphans();
         result = .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
         self.failure = null;
     }
 
     const config = if (result == .loaded) result.loaded.generation.snapshot.gui else null;
     const theme = if (result == .loaded) result.loaded.generation.snapshot.resolveTheme(
-        gui.app.model.host.host_capabilities.appearance,
-        if (gui.app.options.theme_locked) gui.app.options.theme else null,
+        own.model.host.host_capabilities.appearance,
+        if (own.options.theme_locked) own.options.theme else null,
     ).terminal else null;
     const generation = if (result == .loaded) result.loaded.generation.number else null;
     self.pending = false;
@@ -109,13 +113,14 @@ pub fn apply(self: *Reload, gui: *GuiAdapter, renderer: *Renderer) !bool {
     // Physical downstream effects can fail after the common model commits.
     // Keep native resources on that same generation even on this failure path.
     var delivery_error: ?anyerror = null;
-    const outcome = client.config_adoption.completeConfigReload(&gui.app, result) catch |err| blk: {
+    const outcome = client.config_adoption.completeConfigReload(own, result) catch |err| blk: {
         delivery_error = err;
         break :blk null;
     };
-    const adopted = generation != null and gui.app.lua_generation != null and
-        gui.app.lua_generation.?.number == generation.?;
+    const adopted = generation != null and own.lua_generation != null and
+        own.lua_generation.?.number == generation.?;
     if (adopted) {
+        try window_machines.shareConfiguration(gui);
         if (self.prepared) |replacement| {
             std.debug.assert(self.retired == null);
             self.retired = renderer.*;
@@ -138,7 +143,7 @@ pub fn apply(self: *Reload, gui: *GuiAdapter, renderer: *Renderer) !bool {
     }
 
     if (outcome != null and outcome.? == .rejected) {
-        std.log.scoped(.gui_config).warn("GUI configuration unchanged: {s}", .{data.client_diagnostic.shown(&gui.app.model) orelse "reload rejected"});
+        std.log.scoped(.gui_config).warn("GUI configuration unchanged: {s}", .{data.client_diagnostic.shown(&own.model) orelse "reload rejected"});
     }
 
     if (delivery_error) |err| {

@@ -4,9 +4,7 @@ const textfield = @import("textfield");
 const keyinput = @import("keyinput");
 const pacing = @import("pacing");
 const cellgrid = @import("cellgrid");
-const composer_menu = @import("composer_menu.zig");
 const tab_drag = @import("tab_drag.zig");
-const thread_scroll = @import("thread_scroll.zig");
 const Bands = @import("../Bands.zig");
 const native = @import("../../native/native.zig");
 const event_module = @import("../../input/event.zig");
@@ -14,22 +12,12 @@ const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
-
-const image_preview = @import("image_preview.zig");
-const completions = @import("completions.zig");
-const message_links = @import("message_links.zig");
-const thread_items = @import("thread_items.zig");
-const thread_selection = @import("thread_selection.zig");
-
 const GuiAdapter = @import("../../GuiAdapter.zig");
 const Key = @import("../../input/KeyInput.zig");
 const Id = @import("Id.zig");
 const Target = @import("Target.zig");
 const FieldView = @import("FieldView.zig");
-const MultilineLayout = @import("MultilineLayout.zig");
 const PasteBuffer = @import("PasteBuffer.zig");
-const AgentReview = @import("AgentReview.zig");
-const ScrollEvent = @import("../../input/ScrollEvent.zig");
 const AccessibilityAction = @import("../../input/AccessibilityAction.zig");
 const Owner = @import("../../host/Owner.zig");
 const ClipboardResult = @import("../../input/ClipboardResult.zig");
@@ -40,14 +28,6 @@ const GenericField = textfield.GenericField;
 pub fn reconcileFocus(gui: *GuiAdapter) void {
     const state = &gui.widgets;
     const focused_pane: ?core.PaneId = if (gui.app.model.tabs.activeSlot()) |tab| gui.app.model.tabs.layout[tab].focused() else null;
-
-    if (state.composer_menu.selector) |selector| {
-        if (focused_pane != selector.pane_id) {
-            state.composer_menu.selector = null;
-            state.dispatcher.revision +%= 1;
-        }
-    }
-
     const target = state.dispatcher.focusedTarget() orelse return;
     const pane_id = target.paneId() orelse return;
 
@@ -59,10 +39,6 @@ pub fn reconcileFocus(gui: *GuiAdapter) void {
     state.paste_owner = null;
     _ = state.dispatcher.focus(null);
     state.dispatcher.cancel();
-
-    if (gui.binding_target != null) {
-        gui.cancelBinding();
-    }
 }
 
 /// Runs after queue admission, before the existing terminal fallback.
@@ -70,22 +46,13 @@ pub fn reconcileFocus(gui: *GuiAdapter) void {
 /// Example: `if (try routing.apply(gui, event)) return;`
 pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
     reconcileFocus(gui);
-    completions.refresh(gui);
     const state = &gui.widgets;
 
-    if (image_preview.route(gui, event)) {
-        return true;
-    }
-
-    if (try routeAgentBinding(gui, event)) {
+    if (try continueFallback(gui, event)) {
         return true;
     }
 
     if (event.isScrollOrPointerBegin() and !gui.pointerGeometryMatches()) {
-        if (event.isScroll()) {
-            state.thread_scroll.clear();
-        }
-
         if (event.isPointerPress()) {
             state.dispatcher.discardPointer(event.pointer.button);
         }
@@ -94,14 +61,11 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
     }
 
     if (event.isFocusNotFocused()) {
-        state.thread_scroll.clear();
         state.cancelComposition();
     }
 
     if (event.isWriteClipboardContent()) {
         try finishCut(gui, event.clipboard);
-        thread_items.copied(gui, event.clipboard);
-        thread_selection.copied(gui, event.clipboard);
         return true;
     }
 
@@ -116,24 +80,8 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
     }
 
     const leased = event == .key or (event == .text and event.text.physical != null);
-    const ownership = if (leased) (if (event == .key and state.completions.open) state.dispatcher.editorKey(event.key) else state.dispatcher.route(event)) else null;
+    const ownership = if (leased) state.dispatcher.route(event) else null;
     const result = ownership orelse state.dispatcher.route(event);
-    if (try completions.route(gui, event, result)) {
-        return true;
-    }
-    if (try composer_menu.route(gui, event, result)) {
-        return true;
-    }
-
-    if (event == .pointer and event.pointer.kind == .press and event.pointer.button == .right) {
-        if (result.target) |target| {
-            if (target.layer == 0 and target.action == .message_link) {
-                state.dispatcher.discardPointer(.right);
-                try message_links.copy(gui, target.action.message_link);
-                return true;
-            }
-        }
-    }
 
     if (explicitTarget(event)) |id| {
         if (ownership) |decision| {
@@ -164,12 +112,6 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
         gui.pointer.hover.refresh(gui);
     }
     if (result.focus_changed) {
-        if (state.thread_selection.owner) |owner| {
-            const focused = state.dispatcher.focusedTarget();
-            if (focused == null or focused.?.action != .transcript or focused.?.action.transcript != owner.pane_id) {
-                thread_selection.cancel(gui);
-            }
-        }
         state.cancelComposition();
         if (state.dispatcher.focusedTarget()) |target| {
             try focus(gui, target);
@@ -186,23 +128,14 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
         return true;
     }
 
-    if (try thread_selection.route(gui, event, result)) {
-        return true;
-    }
-
     const target = result.target orelse return result.consumed;
     if (!eligible(gui, target)) {
         return true;
     }
 
     switch (target.action) {
-        .text_field, .composer => try editor(gui, target, event),
-        .transcript, .message_link, .composer_completion => {},
-        .change_review, .agent_control, .composer_selector, .composer_choice, .thread_item => {
-            if (target.action == .thread_item and try threadItemKey(gui, target, event)) {
-                return true;
-            }
-
+        .text_field => try editor(gui, target, event),
+        .change_review => {
             if (target.enabled and buttonActivated(event, target)) {
                 try activateControl(gui, target);
             }
@@ -211,7 +144,7 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
             if (activated(event)) {
                 var value = intent;
                 if (event == .pointer and event.pointer.button != .left) {
-                    value = if (event.pointer.button == .right and intent == .select_tab) .{ .rename_tab = intent.select_tab } else .none;
+                    value = if (event.pointer.button == .right) client.secondaryIntent(intent) else .none;
                 }
 
                 try dispatchIntent(gui, value);
@@ -246,16 +179,10 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
 pub fn beginPaste(gui: *GuiAdapter) !bool {
     reconcileFocus(gui);
     const state = &gui.widgets;
-    if (state.image_preview != null) {
-        state.paste_consumed = true;
-        state.paste_owner = null;
-        return true;
-    }
-
     const routed = state.dispatcher.route(.{ .paste = "" });
     state.paste_consumed = routed.consumed;
     state.paste_owner = if (routed.target) |target| if (field(gui, target) != null) target.id else null else null;
-    state.paste_buffer = .{ .multiline = if (routed.target) |target| target.action == .composer else false };
+    state.paste_buffer = .{};
     state.paste_revision = editingRevision(gui);
     if (routed.target) |target| {
         if (field(gui, target)) |value| {
@@ -284,7 +211,7 @@ pub fn endPaste(gui: *GuiAdapter) !void {
     defer gui.widgets.paste_consumed = false;
     const owner = gui.widgets.paste_owner orelse return;
     const target = gui.widgets.dispatcher.maps.presented().find(owner) orelse return;
-    if (field(gui, target) != null and FieldView.revision(&gui.app, target) == gui.widgets.paste_revision) {
+    if (field(gui, target) != null and FieldView.revision(gui.app) == gui.widgets.paste_revision) {
         if (gui.widgets.paste_buffer.text()) |bytes| {
             try focus(gui, target);
             try command(gui, .{ .replace_range = .{ .range = gui.widgets.paste_selection, .text = bytes } });
@@ -304,39 +231,20 @@ fn explicitTarget(event: event_module.Event) ?Id {
 }
 
 fn field(gui: *const GuiAdapter, target: Target) ?FieldView {
-    return FieldView.captureClient(&gui.app, target);
+    return FieldView.captureClient(gui.app, target);
 }
 
 fn editingRevision(gui: *const GuiAdapter) u64 {
-    if (gui.widgets.dispatcher.focusedTarget()) |target| {
-        if (target.action == .composer and !gui.app.model.name_prompt.active()) {
-            return FieldView.revision(&gui.app, target);
-        }
-    }
-
     return gui.app.model.name_prompt.version();
 }
 
 /// Completes held terminal input before a modal consumes newly pressed keys.
 /// Example: `if (try routing.continueFallback(gui, event)) return true;`
 pub fn continueFallback(gui: *GuiAdapter, event: event_module.Event) !bool {
-    switch (event) {
-        .key => |key| if (key.phase == .press) {
-            return false;
-        },
-        .text => |text| if (text.phase == .press) {
-            return false;
-        },
-        else => return false,
-    }
-    return routeAgentBinding(gui, event);
-}
-
-fn routeAgentBinding(gui: *GuiAdapter, event: event_module.Event) !bool {
     const key: keyinput.Key = switch (event) {
-        .key => |value| value.terminalKey(),
+        .key => |value| if (value.phase == .press) return false else value.terminalKey(),
         .text => |value| blk: {
-            if (value.physical == null or value.bytes.len == 0 or value.bytes.len > 4 or (value.phase == .press and gui.widgets.preedit.owner != null)) {
+            if (value.phase == .press or value.physical == null or value.bytes.len == 0 or value.bytes.len > 4) {
                 return false;
             }
 
@@ -355,166 +263,34 @@ fn routeAgentBinding(gui: *GuiAdapter, event: event_module.Event) !bool {
         },
         else => return false,
     };
-    const owner = if (key.physical) |physical| gui.widgets.dispatcher.keys.owner(physical) else null;
-    if (key.phase != .press) {
-        if (owner == null or owner.? != .fallback) {
-            return false;
-        }
-
-        if (key.phase == .release) {
-            _ = gui.widgets.dispatcher.keys.release(key.physical.?);
-        }
-
-        // A binding may replace its composer with a tab or modal before keyUp.
-        // Existing fallback leases still complete through their original router.
-        _ = try gui.routeKey(.{ .key = key, .raw = "", .now_ns = pacing.clock.monotonic(gui.app.io) });
-        return true;
-    }
-
-    if (!gui.widgets.dispatcher.window_focused or gui.widgets.dispatcher.maps.presented().modal_layer != 0 or gui.widgets.composer_menu.selector != null or gui.widgets.completions.open or data.key_routing.captures(client.key_routing.keyRoutingAuthority(&gui.app))) {
+    const physical = key.physical orelse return false;
+    const owner = gui.widgets.dispatcher.keys.owner(physical) orelse return false;
+    if (owner != .fallback) {
         return false;
     }
 
-    const target = gui.widgets.dispatcher.focusedTarget() orelse return false;
-    switch (target.action) {
-        .composer, .transcript, .composer_selector, .agent_control, .thread_item => {},
-        else => return false,
-    }
-    if (target.layer != 0 or !eligible(gui, target) or (event == .key and event.key.mods.super)) {
-        return false;
-    }
-    if (explicitTarget(event)) |id| {
-        if (!id.eql(target.id)) {
-            return false;
-        }
+    if (key.phase == .release) {
+        _ = gui.widgets.dispatcher.keys.release(physical);
     }
 
-    if (!gui.router.wantsBinding(key)) {
-        return false;
-    }
-    if (key.physical) |physical| {
-        if (!gui.widgets.dispatcher.keys.acquire(physical, .fallback)) {
-            return true;
-        }
-    }
-
-    if (gui.router.bindingDeadline() == null and !gui.router.prefixPending()) {
-        gui.binding_target = target.id;
-    }
-
-    gui.widgets.cancelComposition();
     _ = try gui.routeKey(.{ .key = key, .raw = "", .now_ns = pacing.clock.monotonic(gui.app.io) });
     return true;
-}
-
-/// Replays an unmatched or expired chord only to its original live composer.
-/// Held keys return to widget ownership before ordinary repeat/release routing.
-/// Example: `try routing.replayBindingKey(gui, owner, key);`
-pub fn replayBindingKey(gui: *GuiAdapter, owner: Id, key: keyinput.Key) !void {
-    const target = gui.widgets.dispatcher.focusedTarget();
-    const focused_pane: ?core.PaneId = if (gui.app.model.tabs.activeSlot()) |tab| gui.app.model.tabs.layout[tab].focused() else null;
-    const valid = gui.widgets.dispatcher.window_focused and gui.widgets.dispatcher.maps.presented().modal_layer == 0 and gui.widgets.composer_menu.selector == null and target != null and target.?.id.eql(owner) and target.?.action == .composer and focused_pane == target.?.action.composer and field(gui, target.?) != null;
-    if (key.physical) |physical| {
-        gui.router.relinquishKey(physical);
-        const lease = gui.widgets.dispatcher.keys.owner(physical);
-        if (lease != null and lease.? == .fallback) {
-            _ = gui.widgets.dispatcher.keys.acquire(physical, if (valid) .{ .widget = owner } else .discarded);
-        }
-    }
-
-    if (!valid) {
-        return;
-    }
-
-    const input: Key = .{ .code = key.code, .mods = .{ .shift = key.mods.shift, .alt = key.mods.alt, .ctrl = key.mods.ctrl }, .phase = key.phase, .physical = key.physical, .kitty = key.kitty };
-    if (!try shortcut(gui, target.?, input)) {
-        try composerKey(gui, target.?, input);
-    }
-}
-
-fn composerKey(gui: *GuiAdapter, target: Target, key: Key) !void {
-    const value: data.name_prompt.Command = switch (key.code) {
-        .enter => {
-            if (key.mods.shift) {
-                try command(gui, .{ .insert = "\n" });
-            } else {
-                gui.widgets.thread_anchor.cancel(target.action.composer);
-                try completions.submit(gui, target.action.composer);
-            }
-
-            return;
-        },
-        .backspace => .backspace,
-        .delete => .delete,
-        .left => .{ .move_left = key.mods.shift },
-        .right => .{ .move_right = key.mods.shift },
-        .home => .{ .home = key.mods.shift },
-        .end => .{ .end = key.mods.shift },
-        .up, .down => {
-            const current = field(gui, target) orelse return;
-            const geometry = gui.widgets.editors.presented().find(target.id) orelse return;
-            const layout: MultilineLayout = .{ .text = current.text, .head = current.head, .columns = geometry.columns, .rows = @intFromFloat(@max(1, @floor(geometry.bounds.height / geometry.line_height))), .font = geometry.font };
-            const caret = layout.position(current.head);
-            const row = if (key.code == .up) caret[1] -| 1 else caret[1] + 1;
-            var full = layout;
-            full.rows = std.math.maxInt(u32);
-            const offset = full.offset(.{ @floatFromInt(caret[0]), @floatFromInt(row) });
-            try command(gui, .{ .select_range = .{ if (key.mods.shift) current.anchor else offset, offset } });
-            return;
-        },
-        .page_up, .page_down => {
-            try thread_scroll.input(gui, threadScrollTarget(gui, target), .{ .delta_y = if (key.code == .page_up) -12 else 12 });
-            return;
-        },
-        .escape => .cancel,
-        .char => |character| {
-            if (key.mods.ctrl or key.mods.alt or key.mods.super) {
-                return;
-            }
-
-            try command(gui, .{ .insert = character.bytes[0..character.len] });
-            return;
-        },
-        else => return,
-    };
-
-    try command(gui, value);
 }
 
 /// Validates a delivered control against the current attachment and modal owner.
 /// Example: `if (!routing.eligible(gui, target)) return;`
 pub fn eligible(gui: *const GuiAdapter, target: Target) bool {
-    if (target.action == .agent_control and target.action.agent_control.kind == .close_image) {
-        const preview = gui.widgets.image_preview orelse return false;
-        return target.layer == 1 and target.id.generation == preview.generation and target.action.agent_control.pane_id == preview.control.pane_id;
-    }
-
-    if (target.action == .composer_completion) {
-        return completions.eligible(gui, target);
-    }
-
-    if (target.action == .thread_item) {
-        return thread_items.eligible(gui, target);
-    }
-
-    if (target.action == .composer_selector or target.action == .composer_choice) {
-        return composer_menu.eligible(gui, target);
-    }
-
     if (gui.app.model.name_prompt.currentConst()) |prompt| {
         return target.layer != 0 and target.id.generation == prompt.generation;
     }
 
     const pane_id = switch (target.action) {
-        .composer, .change_review => |id| id,
-        .transcript => |id| id,
-        .agent_control => |control| control.pane_id,
-        .message_link => |control| control.owner.pane_id,
+        .change_review => |id| id,
         else => return target.layer == 0,
     };
     const tab = gui.app.model.tabs.activeSlot() orelse return false;
     const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, pane_id) orelse return false;
-    return target.layer == 0 and pane.attached and (if (target.action == .change_review) pane.hasChangeReview() else pane.kind == .agent) and pane.attachment_generation == target.id.generation;
+    return target.layer == 0 and pane.attached and pane.hasChangeReview() and pane.attachment_generation == target.id.generation;
 }
 
 fn focus(gui: *GuiAdapter, target: Target) !void {
@@ -523,13 +299,10 @@ fn focus(gui: *GuiAdapter, target: Target) !void {
         if (!eligible(gui, target)) {
             return;
         }
-        if (target.action == .composer and field(gui, target) == null) {
-            return;
-        }
 
         _ = gui.widgets.dispatcher.focus(target.id);
         const tab = gui.app.model.tabs.activeSlot() orelse return;
-        _ = try client.view_interactions.apply(&gui.app, tab, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
+        _ = try client.view_interactions.apply(gui.app, tab, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
         return;
     }
 
@@ -540,21 +313,8 @@ fn focus(gui: *GuiAdapter, target: Target) !void {
 
 fn command(gui: *GuiAdapter, value: data.name_prompt.Command) !void {
     const revision = editingRevision(gui);
-    if (!gui.app.model.name_prompt.active()) {
-        if (gui.widgets.dispatcher.focusedTarget()) |target| {
-            if (target.action == .composer and field(gui, target) != null) {
-                _ = data.agent_panes.editComposer(&gui.app.model, target.action.composer, value);
-                if (revision != editingRevision(gui)) {
-                    gui.widgets.cancelComposition();
-                }
-
-                return;
-            }
-        }
-    }
-
     _ = try client.name_prompt.inputPrompt(
-        &gui.app,
+        gui.app,
         .{
             .command = value,
         },
@@ -602,16 +362,12 @@ fn editor(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
             }
 
             const revision = editingRevision(gui);
-            if (target.action == .composer) {
-                try composerKey(gui, target, key);
-            } else {
-                _ = try client.name_prompt.inputPrompt(
-                    &gui.app,
-                    .{
-                        .key = key.terminalKey(),
-                    },
-                );
-            }
+            _ = try client.name_prompt.inputPrompt(
+                gui.app,
+                .{
+                    .key = key.terminalKey(),
+                },
+            );
             if (revision != editingRevision(gui)) {
                 state.cancelComposition();
             }
@@ -627,7 +383,7 @@ fn editor(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
             state.dispatcher.revision +%= 1;
         },
         .paste => |bytes| {
-            var buffer: PasteBuffer = .{ .multiline = target.action == .composer };
+            var buffer: PasteBuffer = .{};
             buffer.append(bytes);
             if (buffer.text()) |text| {
                 try command(gui, .{ .replace_range = .{ .range = current.selection(), .text = text } });
@@ -648,15 +404,6 @@ fn editor(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
         .pointer => |pointer| {
             if (pointer.button == .left and (pointer.kind == .press or pointer.kind == .drag)) {
                 const geometry = state.editors.presented().find(target.id) orelse return;
-                if (geometry.multiline) {
-                    const layout: MultilineLayout = .{ .text = current.text, .head = current.head, .columns = geometry.columns, .rows = @intFromFloat(@max(1, @floor(geometry.bounds.height / geometry.line_height))), .font = geometry.font };
-                    const offset = layout.offset(.{ (pointer.x - geometry.bounds.x) / geometry.cell_width, (pointer.y - geometry.bounds.y) / geometry.line_height });
-                    const anchor = if (pointer.kind == .drag or pointer.mods & 1 != 0) current.anchor else offset;
-                    state.cancelComposition();
-                    try command(gui, .{ .select_range = .{ anchor, offset } });
-                    return;
-                }
-
                 var copy: GenericField(4096) = .init(current.text);
                 _ = copy.selectRange(.{ current.anchor, current.head });
                 const visible = copy.view(geometry.columns);
@@ -684,6 +431,14 @@ fn editor(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
 }
 
 fn shortcut(gui: *GuiAdapter, target: Target, key: Key) !bool {
+    // ⌘⌫ deletes the selected history command, as it removes a Finder item.
+    if (key.code == .backspace and key.mods.super and (historyPrompt(gui) or machineList(gui))) {
+        if (key.phase == .press) {
+            try command(gui, .remove_entry);
+        }
+
+        return true;
+    }
     if (key.code != .char or key.code.char.len != 1 or (!key.mods.ctrl and !key.mods.super)) {
         return false;
     }
@@ -696,7 +451,9 @@ fn shortcut(gui: *GuiAdapter, target: Target, key: Key) !bool {
 
     switch (std.ascii.toLower(key.code.char.bytes[0])) {
         'a' => try command(gui, .select_all),
-        'c' => gui.requestClipboardWrite(current.text[selected[0]..selected[1]]) catch return true,
+        // With nothing selected in the search field, copy takes the
+        // selected command instead of an empty string.
+        'c' => if (selected[0] == selected[1] and historyPrompt(gui)) try command(gui, .copy_entry) else gui.requestClipboardWrite(current.text[selected[0]..selected[1]]) catch return true,
         'x' => {
             try beginCut(gui, target, selected);
         },
@@ -705,6 +462,16 @@ fn shortcut(gui: *GuiAdapter, target: Target, key: Key) !bool {
     }
 
     return true;
+}
+
+fn machineList(gui: *const GuiAdapter) bool {
+    const prompt = gui.app.model.name_prompt.currentConst() orelse return false;
+    return prompt.paletteMode() == .machines;
+}
+
+fn historyPrompt(gui: *const GuiAdapter) bool {
+    const prompt = gui.app.model.name_prompt.currentConst() orelse return false;
+    return prompt.target() == .history;
 }
 
 fn activated(event: event_module.Event) bool {
@@ -721,45 +488,6 @@ fn buttonActivated(event: event_module.Event, target: Target) bool {
         .key => activated(event),
         else => false,
     };
-}
-
-fn threadItemKey(gui: *GuiAdapter, target: Target, event: event_module.Event) !bool {
-    if (event != .key or event.key.phase == .release) {
-        return false;
-    }
-
-    const key = event.key;
-    switch (key.code) {
-        .page_up, .page_down => {
-            try thread_scroll.input(gui, threadScrollTarget(gui, target), .{ .delta_y = if (key.code == .page_up) -12 else 12 });
-            return true;
-        },
-        .escape => {
-            const registry = gui.widgets.dispatcher.maps.presented();
-            for (registry.targets[0..registry.len]) |item| {
-                if (item.action == .composer and item.action.composer == target.action.thread_item.pane_id and item.id.generation == target.id.generation) {
-                    try focus(gui, item);
-                    break;
-                }
-            }
-
-            return true;
-        },
-        .char => |character| {
-            if ((key.mods.super or key.mods.ctrl) and character.len == 1 and std.ascii.toLower(character.bytes[0]) == 'c') {
-                if (key.phase == .press and target.action.thread_item.operation != .toggle_work) {
-                    var copy = target;
-                    copy.action.thread_item.operation = .copy;
-                    try thread_items.activate(gui, copy);
-                }
-
-                return true;
-            }
-        },
-        else => {},
-    }
-
-    return false;
 }
 
 fn scrollDirectory(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
@@ -794,53 +522,8 @@ fn activateControl(gui: *GuiAdapter, target: Target) !void {
     gui.widgets.cancelComposition();
     switch (target.action) {
         .change_review => |pane_id| try gui.openChangeReview(pane_id),
-        .composer_completion => try completions.activate(gui, target),
-        .composer_selector, .composer_choice => try composer_menu.activate(gui, target),
-        .thread_item => {
-            try focus(gui, target);
-            try thread_items.activate(gui, target);
-        },
-        .agent_control => |control| switch (control.kind) {
-            .preview_image => image_preview.open(gui, target),
-            .close_image => image_preview.close(gui),
-            .remove_image => _ = data.agent_panes.removeImage(&gui.app.model, 
-                control.pane_id,
-                .{
-                    .index = control.image_index,
-                    .revision = control.composer_revision,
-                },
-            ),
-            .submit => {
-                gui.widgets.thread_anchor.cancel(control.pane_id);
-                try completions.submit(gui, control.pane_id);
-            },
-            .interrupt => try client.agent_control.interruptAgent(&gui.app.model, control.pane_id),
-            .approve, .decline => try client.agent_control.approveAgent(
-                &gui.app.model,
-                .{
-                    .pane_id = control.pane_id,
-                    .approval_id = control.approval_id,
-                    .accept = control.kind == .approve,
-                },
-            ),
-            .review => {
-                const pane = gui.app.model.agentPane(control.pane_id) orelse return;
-                const thread = pane.agent_thread orelse return;
-                const request = thread.pending_approval orelse return;
-                if (request.id != control.approval_id) {
-                    return;
-                }
-
-                const value: AgentReview = .{ .pane_id = control.pane_id, .generation = target.id.generation, .approval_id = control.approval_id };
-                const closing = if (gui.widgets.approval_review) |review| std.meta.eql(review, value) else false;
-                gui.widgets.approval_review = if (closing) null else value;
-                gui.widgets.thread_anchor.cancel(control.pane_id);
-                gui.widgets.dispatcher.revision +%= 1;
-                _ = data.agent_panes.scrollThread(&gui.app.model, control.pane_id, if (closing) -65536 else 65536);
-            },
-        },
         .prompt => |action| try command(gui, if (action == .submit) .submit else .cancel),
-        .complete_path => |choice| try client.name_prompt.chooseDirectory(&gui.app, choice.index, choice.revision),
+        .complete_path => |choice| try client.name_prompt.chooseDirectory(gui.app, choice.index, choice.revision),
         .history => |action| {
             const prompt = gui.app.model.name_prompt.currentConst() orelse return;
             if (prompt.target() != .history) {
@@ -848,15 +531,22 @@ fn activateControl(gui: *GuiAdapter, target: Target) !void {
             }
 
             switch (action) {
-                .select => |choice| try client.history_palette.selectHistoryRow(&gui.app, choice.index, choice.revision),
-                .submit => |choice| {
+                .select => |choice| try client.history_palette.selectHistoryRow(gui.app, choice.index, choice.revision),
+                .submit, .submit_alternate => |choice| {
                     const history = &gui.app.model.history_palette;
                     if (history.phase == .ready and history.version() == choice.revision and prompt.selection() == choice.index) {
-                        try command(gui, .submit);
+                        try command(gui, if (action == .submit) .submit else .submit_alternate);
                     }
                 },
                 .cycle_scope => try command(gui, .tab),
+                .select_scope => |scope| try command(gui, .{ .select_scope = scope }),
+                .select_author => |author| try command(gui, .{ .select_author = author }),
+                .toggle_failed => try command(gui, .toggle_failed),
                 .toggle_inspection => try command(gui, .toggle_inspection),
+                .page_older => try command(gui, .page_up),
+                .copy => try command(gui, .copy_entry),
+                .remove => try command(gui, .remove_entry),
+                .visit_pane => try command(gui, .visit_pane),
             }
         },
         .intent => |intent| try dispatchIntent(gui, intent),
@@ -866,7 +556,7 @@ fn activateControl(gui: *GuiAdapter, target: Target) !void {
 
 fn dispatchIntent(gui: *GuiAdapter, intent: client.Intent) !void {
     const tab = gui.app.model.tabs.activeSlot() orelse return;
-    _ = try client.view_interactions.apply(&gui.app, tab, .{ .intent = intent, .consumed = true });
+    _ = try client.view_interactions.apply(gui.app, tab, .{ .intent = intent, .consumed = true });
     _ = gui.widgets.dispatcher.focus(null);
 }
 
@@ -879,25 +569,7 @@ fn scroll(gui: *GuiAdapter, event: event_module.Event) !bool {
         return if (prompt.target() == .history) try scrollHistory(gui, event) else false;
     }
 
-    if (event == .scroll and try thread_scroll.captured(gui, event.scroll)) {
-        return true;
-    }
-
     const pointer = if (event == .scroll) [2]f64{ event.scroll.x, event.scroll.y } else [2]f64{ event.pointer.x, event.pointer.y };
-    if (gui.widgets.dispatcher.maps.presented().at(pointer)) |hit| {
-        if (hit.action == .transcript or hit.action == .composer or hit.action == .thread_item or hit.action == .message_link) {
-            const target = threadScrollTarget(gui, hit);
-            if (!eligible(gui, target)) {
-                return true;
-            }
-
-            const input: ScrollEvent = if (event == .scroll) event.scroll else .{ .delta_y = if (event.pointer.kind == .scroll_up) -1 else 1 };
-            try thread_scroll.input(gui, target, input);
-
-            return true;
-        }
-    }
-
     if (!Bands.within(gui.chrome.presented().bands.sidebar, pointer[0], pointer[1])) {
         return false;
     }
@@ -913,43 +585,6 @@ fn scroll(gui: *GuiAdapter, event: event_module.Event) !bool {
     const delta = if (event == .scroll) std.math.clamp(event.scroll.delta_y, -65535, 65535) * (if (event.scroll.precise) @as(f64, 1) else @as(f64, @floatFromInt(sidebar.step))) else if (event.pointer.kind == .scroll_up) -@as(f64, @floatFromInt(sidebar.step)) else @as(f64, @floatFromInt(sidebar.step));
     if (sidebar.scrollBy(delta)) {
         gui.chrome.invalidate();
-    }
-
-    return true;
-}
-
-fn threadScrollTarget(gui: *const GuiAdapter, target: Target) Target {
-    const pane_id = switch (target.action) {
-        .thread_item => |control| control.pane_id,
-        .message_link => |control| control.owner.pane_id,
-        .composer => |id| id,
-        else => return target,
-    };
-    const registry = gui.widgets.dispatcher.maps.presented();
-    for (registry.targets[0..registry.len]) |item| {
-        if (item.action == .transcript and item.action.transcript == pane_id and item.id.generation == target.id.generation) {
-            return item;
-        }
-    }
-
-    return target;
-}
-
-/// Routes a pane scroll binding through the delivered transcript's wheel policy.
-/// Example: `_ = try routing.scrollFocusedThread(gui, .up);`
-pub fn scrollFocusedThread(gui: *GuiAdapter, direction: data.actions.ScrollDirection) !bool {
-    const tab = gui.app.model.tabs.activeSlot() orelse return false;
-    const pane = data.tab_layout.focusedPaneConst(&gui.app.model, tab) orelse return false;
-    if (pane.kind != .agent) {
-        return false;
-    }
-
-    const registry = gui.widgets.dispatcher.maps.presented();
-    for (registry.targets[0..registry.len]) |target| {
-        if (target.action == .transcript and target.action.transcript == pane.id and eligible(gui, target)) {
-            try thread_scroll.input(gui, target, .{ .delta_y = if (direction == .up) -3 else 3 });
-            break;
-        }
     }
 
     return true;
@@ -1020,7 +655,7 @@ fn scrollHistory(gui: *GuiAdapter, event: event_module.Event) !bool {
     }
 
     if (prompt.inspecting()) {
-        try client.history_palette.scrollHistoryInspection(&gui.app, lines);
+        try client.history_palette.scrollHistoryInspection(gui.app, lines);
     } else {
         for (0..@abs(lines)) |_| {
             if (history.phase != .ready) {
@@ -1036,15 +671,11 @@ fn scrollHistory(gui: *GuiAdapter, event: event_module.Event) !bool {
 
 fn accessibility(gui: *GuiAdapter, value: AccessibilityAction) !void {
     const target = gui.widgets.dispatcher.maps.presented().find(.{ .target_id = value.target_id, .generation = value.generation }) orelse return;
-    if (gui.widgets.composer_menu.selector != null and target.action != .composer_selector and target.action != .composer_choice) {
-        return;
-    }
-
     if (!target.enabled or target.layer < gui.widgets.dispatcher.maps.presented().modal_layer or !eligible(gui, target)) {
         return;
     }
 
-    if (value.revision != 0 and value.revision != FieldView.revision(&gui.app, target)) {
+    if (value.revision != 0 and value.revision != FieldView.revision(gui.app)) {
         return;
     }
 
@@ -1069,7 +700,7 @@ fn accessibility(gui: *GuiAdapter, value: AccessibilityAction) !void {
         .replace_range => {
             const current = field(gui, target) orelse return;
             const range: [2]u32 = .{ value.replacement_start, value.replacement_end };
-            if (value.revision != FieldView.revision(&gui.app, target) or range[0] > range[1] or !current.validRange(range)) {
+            if (value.revision != FieldView.revision(gui.app) or range[0] > range[1] or !current.validRange(range)) {
                 return;
             }
 
@@ -1107,7 +738,7 @@ fn beginCut(gui: *GuiAdapter, target: Target, range: [2]u32) !void {
         }
 
         const request_id = gui.requestClipboardWriteOwned(.{ .target_id = target.id.target_id, .generation = target.id.generation }, current.text[range[0]..range[1]]) catch return;
-        slot.* = .{ .request_id = request_id, .owner = target.id, .range = range, .revision = FieldView.revision(&gui.app, target) };
+        slot.* = .{ .request_id = request_id, .owner = target.id, .range = range, .revision = FieldView.revision(gui.app) };
         return;
     }
 }
@@ -1117,18 +748,14 @@ fn beginCut(gui: *GuiAdapter, target: Target, range: [2]u32) !void {
 pub fn beginClipboardRead(gui: *GuiAdapter, owner: Id) !void {
     const target = gui.widgets.dispatcher.maps.presented().find(owner) orelse return;
     const current = field(gui, target) orelse return;
-    if (target.action == .composer and gui.widgets.pastingImage(target.action.composer)) {
-        return;
-    }
-
     for (&gui.widgets.pending_pastes) |*slot| {
         if (slot.* != null) {
             continue;
         }
 
         const request_owner: Owner = .{ .target_id = owner.target_id, .generation = owner.generation };
-        const request_id = if (target.action == .composer) try gui.host.readImage(request_owner) else try gui.host.read(request_owner);
-        slot.* = .{ .request_id = request_id, .owner = owner, .range = current.selection(), .revision = FieldView.revision(&gui.app, target) };
+        const request_id = try gui.host.read(request_owner);
+        slot.* = .{ .request_id = request_id, .owner = owner, .range = current.selection(), .revision = FieldView.revision(gui.app) };
         gui.widgets.dispatcher.revision +%= 1;
         native.telar_gui_wake(gui.driver.fds[1]);
         return;
@@ -1147,20 +774,20 @@ fn finishPaste(gui: *GuiAdapter, result: ClipboardResult) !void {
 
         slot.* = null;
         gui.widgets.dispatcher.revision +%= 1;
-        if (!gui.widgets.dispatcher.window_focused or gui.widgets.composer_menu.selector != null or gui.widgets.image_preview != null) {
+        if (!gui.widgets.dispatcher.window_focused) {
             return;
         }
 
         const focused = gui.widgets.dispatcher.focused orelse return;
         const target = gui.widgets.dispatcher.maps.presented().find(owner) orelse return;
-        if (!focused.eql(owner) or !eligible(gui, target) or pending.revision != FieldView.revision(&gui.app, target)) {
+        if (!focused.eql(owner) or !eligible(gui, target) or pending.revision != FieldView.revision(gui.app)) {
             return;
         }
 
         if (result.status != .success) {
             if (result.status == .too_large or result.status == .cancelled) {
                 try client.notifications.publishNotificationNow(
-                    &gui.app,
+                    gui.app,
                     .{
                         .level = .warning,
                         .title = "Clipboard could not be pasted",
@@ -1172,20 +799,12 @@ fn finishPaste(gui: *GuiAdapter, result: ClipboardResult) !void {
             return;
         }
 
-        if (result.image) {
-            if (target.action == .composer) {
-                try client.agent_control.attachAgentImage(&gui.app, target.action.composer, result.text);
-            }
-
-            return;
-        }
-
         const current = field(gui, target) orelse return;
         if (!current.validRange(pending.range)) {
             return;
         }
 
-        var buffer: PasteBuffer = .{ .multiline = target.action == .composer };
+        var buffer: PasteBuffer = .{};
         buffer.append(result.text);
         if (buffer.text()) |text| {
             try command(gui, .{ .replace_range = .{ .range = pending.range, .text = text } });
@@ -1210,7 +829,7 @@ fn finishCut(gui: *GuiAdapter, result: ClipboardResult) !void {
         }
 
         const target = gui.widgets.dispatcher.maps.presented().find(id) orelse return;
-        if (result.status != .success or cut.revision != FieldView.revision(&gui.app, target)) {
+        if (result.status != .success or cut.revision != FieldView.revision(gui.app)) {
             return;
         }
         if (field(gui, target) == null or !eligible(gui, target)) {

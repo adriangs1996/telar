@@ -2,6 +2,7 @@
 
 const WorkspaceListInput = @import("WorkspaceListInput.zig");
 const EntryInput = @import("EntryInput.zig");
+const WorktreeInput = @import("WorktreeInput.zig");
 const workspace_list_rejection = @import("workspace_list_snapshot.zig");
 const core = @import("telar-core");
 const ClientModel = @import("../state/ClientModel.zig");
@@ -26,6 +27,7 @@ pub fn classifyRejection(err: anyerror) ?Rejection {
         error.WorkspacePathTooLong => .workspace_path_too_long,
         error.WorkspaceListTooLarge => .workspace_list_too_large,
         error.DuplicateWorkspace => .duplicate_workspace,
+        error.TooManyWorktrees => .too_many_workspaces,
         else => null,
     };
 }
@@ -48,10 +50,36 @@ pub fn apply(model: *ClientModel, list: core.WorkspaceListView) !workspace_list_
         count += 1;
     }
 
+    var worktrees: [core.max_worktree_entries]WorktreeInput = undefined;
+    var worktree_count: usize = 0;
+    var worktree_iterator = list.worktrees();
+    while (try worktree_iterator.next()) |entry| {
+        worktrees[worktree_count] = .{
+            .worktree = entry.worktree,
+            .source = entry.source,
+            .workspace = entry.workspace,
+            .created_by = entry.created_by,
+            .state = entry.state,
+            .path = entry.path,
+            .branch = entry.branch,
+            .base = entry.base,
+            .title = entry.title,
+            .diff_added = entry.diff_added,
+            .diff_removed = entry.diff_removed,
+            .diff_files = entry.diff_files,
+            .commits_ahead = entry.commits_ahead,
+            .command_label = entry.command_label,
+            .command_state = entry.command_state,
+            .command_exit = entry.command_exit,
+        };
+        worktree_count += 1;
+    }
+
     const commit = reconcile(model, 
         .{
             .revision = list.revision,
             .entries = entries[0..count],
+            .worktrees = worktrees[0..worktree_count],
         },
     ) catch |err| {
         const rejection = workspace_list_rejection.classifyRejection(err) orelse return err;

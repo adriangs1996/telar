@@ -5,8 +5,8 @@ const linux_gui = @import("linux_gui.zig");
 
 /// Attach the native adapter and its checks: `gui.add(b, app, diagram_helper)`.
 pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath) ?*std.Build.Module {
-    // GPU chrome over the same client behavior as the TUI. It never imports
-    // `telar-frontend`. Mermaid rasterization runs in an isolated Rust helper.
+    // GPU chrome over the shared client. Mermaid rasterization runs in an
+    // isolated Rust helper.
     var gui_module: ?*std.Build.Module = null;
     if (app.modules.native_client) {
         const gui = b.createModule(.{

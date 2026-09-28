@@ -3,8 +3,8 @@ const pacing = @import("pacing");
 const core = @import("telar-core");
 const std = @import("std");
 const ReviewJobs = @import("../change_review/Jobs.zig");
+const PathIndexes = @import("../paths/PathIndexes.zig");
 const ReviewService = @import("../change_review/Service.zig");
-const AdmittedReview = @import("../change_review/Admitted.zig");
 const EditorOpenState = @import("../editors/State.zig");
 const event = @import("event.zig");
 const Resources = @import("resources/Resources.zig");
@@ -16,9 +16,11 @@ const Store = @import("client/Store.zig");
 const GenericState = @import("client/GenericState.zig").Type;
 const LifecycleState = @import("lifecycle/State.zig");
 const Workspaces = @import("../workspace/Workspaces.zig");
+const Worktrees = @import("../workspace/Worktrees.zig");
 const PaneStore = @import("../pane/PaneStore.zig");
 const Attachments = @import("attachment/Attachments.zig");
 const Agents = @import("../agent/Agents.zig");
+const PromptBudget = @import("../agent/PromptBudget.zig");
 const RestoredAgents = @import("../agent/RestoredAgents.zig");
 const Watches = @import("../agent/Watches.zig");
 const agent_status = @import("agent_status.zig");
@@ -27,7 +29,6 @@ const hostmetrics = @import("hostmetrics");
 const Sampler = hostmetrics.Sampler;
 const RuntimeMetrics = @import("observability/RuntimeMetrics.zig");
 const CheckpointWriter = @import("CheckpointWriter.zig");
-const AgentHistoryJobs = @import("AgentHistoryJobs.zig");
 const AgentDisplayStorage = @import("delivery/AgentDisplayStorage.zig");
 /// The authoritative state of one running runtime: singletons as fields and
 /// repeating entities as tables. Physical resources stay in `Resources`.
@@ -56,9 +57,12 @@ clients: Store = .{},
 client_admission: GenericState(localsocket.SocketChannel) = .{},
 shutdown: LifecycleState = .{},
 workspaces: Workspaces = .{},
+worktrees: Worktrees = .{},
 panes: PaneStore,
 attachments: Attachments = .{},
 agents: Agents = .{},
+/// Prompts panes sent each other in the current window.
+prompt_budget: PromptBudget = .{},
 /// Titles and resumes restored from a checkpoint, waiting for their agent.
 restored_agents: RestoredAgents = .{},
 /// Session files watched for names an agent gives its session.
@@ -76,10 +80,8 @@ system_metrics_pending: bool = false,
 metrics: RuntimeMetrics,
 checkpoint: CheckpointWriter = .{},
 session_name_probe_in_flight: bool = false,
-agent_history_jobs: AgentHistoryJobs = .{},
 review_jobs: ReviewJobs = .{},
 review_service: ?*ReviewService = null,
-review_admitted: [PaneStore.capacity]?AdmittedReview = @splat(null),
 /// The agent snapshot's revision and the input revisions it last covered.
 agent_snapshot_revision: u64 = 1,
 agent_snapshot_inputs: [4]u64 = @splat(0),
@@ -97,6 +99,8 @@ review_owner_inputs: [4]u64 = @splat(0),
 /// Discovery skipped a pane because every job slot was busy; retry it.
 review_discovery_blocked: bool = false,
 editor_open: EditorOpenState = .{},
+/// The path picker index of each client that opened one.
+path_indexes: PathIndexes = .{},
 input_sequence: u64 = 0,
 cell_timer: pacing.DeadlineScheduler = .{},
 
@@ -145,8 +149,8 @@ pub fn init(model: *RuntimeModel, resources: *Resources, select: *std.Io.Select(
 pub fn deinit(model: *RuntimeModel) void {
     model.attachments.deinit(model.gpa);
     model.panes.deinit();
-    model.agent_history_jobs.deinitJoined();
     model.review_jobs.deinitJoined();
+    model.path_indexes.deinitJoined();
     if (model.review_service) |service| {
         service.deinit();
         model.review_service = null;
@@ -154,6 +158,7 @@ pub fn deinit(model: *RuntimeModel) void {
 
     model.client_layouts.deinit();
     model.workspaces.deinit(model.gpa);
+    model.worktrees.deinit(model.gpa);
 }
 
 const GraphicsLimits = @import("../media/GraphicsLimits.zig");

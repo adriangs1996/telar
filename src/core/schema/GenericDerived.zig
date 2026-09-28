@@ -1,5 +1,4 @@
 const bytecodec = @import("bytecodec");
-const pane_kind = @import("pane_kind.zig");
 const tab = @import("messages/tab.zig");
 const Encoder = bytecodec.Encoder;
 const Decoder = bytecodec.Decoder;
@@ -46,6 +45,10 @@ pub fn Type(comptime T: type) type {
                     try codec.validatePaneId(value);
                     try encoder.writeInt(u64, id.raw(value));
                 },
+                id.WorktreeId => {
+                    _ = try id.worktree(id.raw(value));
+                    try encoder.writeInt(u64, id.raw(value));
+                },
                 ?id.WorkspaceId => {
                     try encoder.writeByte(@intFromBool(value != null));
                     if (value) |workspace_id| {
@@ -71,7 +74,7 @@ pub fn Type(comptime T: type) type {
                 bool => try encoder.writeByte(@intFromBool(value)),
                 u8 => try encoder.writeByte(value),
                 u16, u32, u64, i32, i64 => try encoder.writeInt(F, value),
-                types.ExitKind, types.TabMoveDirection, types.PaneTextSource, types.PaneTextMode, types.ProxyScope, pane_kind.PaneKind => {
+                types.ExitKind, types.TabMoveDirection, types.PaneTextSource, types.PaneTextMode, types.ProxyScope => {
                     try encoder.writeByte(@intFromEnum(value));
                 },
                 else => @compileError("underivable field type " ++ @typeName(F)),
@@ -85,6 +88,7 @@ pub fn Type(comptime T: type) type {
                 else
                     try id.request(try decoder.readInt(u64)),
                 id.PaneId => try id.pane(try decoder.readInt(u64)),
+                id.WorktreeId => try id.worktree(try decoder.readInt(u64)),
                 ?id.WorkspaceId => if (try decoder.readBool())
                     try id.workspace(try decoder.readInt(u64))
                 else
@@ -99,7 +103,6 @@ pub fn Type(comptime T: type) type {
                 bool => try decoder.readBool(),
                 u8 => try decoder.readByte(),
                 u16, u32, u64, i32, i64 => try decoder.readInt(F),
-                pane_kind.PaneKind => try tab.decodePaneKind(try decoder.readByte()),
                 types.ExitKind => try codec.decodeExitKind(try decoder.readByte()),
                 types.TabMoveDirection => switch (try decoder.readByte()) {
                     0 => .previous,

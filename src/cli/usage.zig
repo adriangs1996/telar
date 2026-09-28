@@ -3,9 +3,15 @@
 const std = @import("std");
 
 pub const text =
-    \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--sidebar-renderer MODE] [--fresh] [command [args...]]
-    \\       telar gui [--login-shell] [--config PATH | --no-config] [--profile NAME] [--theme NAME] [command [args...]]
+    \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--remote DESTINATION | --machine LABEL] [--fresh] [command [args...]]
+    \\       telar gui [--login-shell] [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--remote DESTINATION | --machine LABEL] [command [args...]]
     \\       telar cli install|uninstall|status [--dir DIR]
+    \\       telar --machine LABEL COMMAND [args...]
+    \\       telar machine add LABEL DESTINATION [--color COLOR] [--disabled] [--check] [--json]
+    \\       telar machine remove|enable|disable LABEL
+    \\       telar machine rename LABEL NEW_LABEL
+    \\       telar machine list [--json]
+    \\       telar machine check LABEL [--json]
     \\       telar server [--fresh]
     \\       telar server stop
     \\       telar server endpoint
@@ -29,18 +35,12 @@ pub const text =
     \\         telar sidebar resize COLUMNS --client ID [--json] [--socket PATH]
     \\         telar workspace-list expand --client ID [--json] [--socket PATH]
     \\         telar workspace-list collapse --client ID [--json] [--socket PATH]
-    \\         telar agent create --client ID [--label TEXT] [--json] [--socket PATH]
     \\         telar client open goto --client ID [--json] [--socket PATH]
     \\         telar client open history --client ID [--json] [--socket PATH]
     \\         telar client copy-mode --client ID [--json] [--socket PATH]
     \\         telar notification dismiss ID --client ID [--json] [--socket PATH]
     \\         telar client open-link URI --client ID [--json] [--socket PATH]
     \\         telar client clipboard copy TEXT --client ID [--json] [--socket PATH]
-    \\         telar agent draft get ID --client ID [--json] [--socket PATH]
-    \\         telar agent draft set ID TEXT --client ID [--json] [--socket PATH]
-    \\         telar agent draft attach ID IMAGE_PATH --client ID [--json] [--socket PATH]
-    \\         telar agent view expand PANE_ID ITEM_ID --client ID [--work] [--json] [--socket PATH]
-    \\         telar agent view collapse PANE_ID ITEM_ID --client ID [--work] [--json] [--socket PATH]
     \\         telar pane copy ID X1,Y1:X2,Y2 --client ID [--json] [--socket PATH]
     \\         telar layout get --client ID [--json] [--socket PATH]
     \\         telar layout apply TOKEN --client ID [--json] [--socket PATH]
@@ -73,27 +73,23 @@ pub const text =
     \\       telar history stats [--period today|week|month|year|all]
     \\       telar notification show <title> [options]
     \\       telar agent list|get|wait|prompt|read [target] [options]
-    \\       telar agent interrupt <pane|title|--current> [--json] [--socket PATH]
     \\       telar agent acknowledge <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent clear <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent rename <pane|title|--current> TITLE [--json] [--socket PATH]
-    \\       telar agent resume <pane|title|--current> CONVERSATION_ID [--json] [--socket PATH]
     \\       telar agent report-title <pane|title|--current> TITLE [--json] [--socket PATH]
     \\       telar agent report-command <pane|title|--current> started|finished COMMAND --provider NAME [--tool-call ID] [--cwd PATH] [--session ID] [--exit-code N] [--json] [--socket PATH]
-    \\       telar agent report-state <pane|title|--current> working|blocked|ready|exited|settling [--blocked-reason REASON] [--event TEXT] [--session ID] [--session-file PATH] [--session-file-kind KIND] [--json] [--socket PATH]
-    \\       telar agent thread <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent watch <pane|title|--current> [--jsonl] [--count N] [--socket PATH]
-    \\       telar agent history <pane|title|--current> [--cursor TOKEN | --anchor ID --anchor-turn ID] [--direction older|newer] [--json] [--socket PATH]
-    \\       telar agent models <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent skills <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent conversations <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent approvals <pane|title|--current> [--json] [--socket PATH]
-    \\       telar agent approve <pane|title|--current> APPROVAL_ID [--json] [--socket PATH]
-    \\       telar agent reject <pane|title|--current> APPROVAL_ID [--json] [--socket PATH]
+    \\       telar agent report-state <pane|title|--current> working|blocked|ready|exited|settling|continuing|waiting|idle|released [--blocked-reason REASON] [--event TEXT] [--session ID] [--session-file PATH] [--session-file-kind KIND] [--json] [--socket PATH]
     \\       telar pane read|send-keys <pane|--current> [options]
     \\         telar pane list [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\         telar pane get <id|--current> [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\       telar pane focus --current --direction left|right|up|down [--json]
+    \\       telar worktree create BRANCH [--title TITLE] [--from BASE] [--directory DIR] [--label L] [--workspace ID] [--machine LABEL] [-- COMMAND...]
+    \\       telar worktree fetch BRANCH --machine LABEL [--json]
+    \\       telar worktree resolve --repository IDENTITY [--workspace PATH] [--json]
+    \\       telar worktree exec BRANCH [--label L] [--wait [--timeout S]] -- COMMAND...
+    \\       telar worktree list [--workspace ID] [--json]
+    \\       telar worktree open BRANCH [--client ID]
+    \\       telar worktree diff BRANCH [--stat] [--uncommitted]
+    \\       telar worktree remove BRANCH [--force] [--delete-branch]
+    \\       telar agent interrupt <pane|title|worktree:BRANCH> [--json] [--socket PATH]
     \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
     \\       telar workspace create --directory DIR [--name NAME] [--json] [--socket PATH]
     \\       telar workspace list [--json] [--socket PATH]
@@ -105,11 +101,11 @@ pub const text =
     \\       telar workspace get <id|--current> [--json] [--socket PATH]
     \\       telar workspace rename <id|--current> NAME [--json] [--socket PATH]
     \\       telar api schema [--json]
-    \\       telar integration install|uninstall|status claude|codex|pi [--settings PATH]
+    \\       telar integration install|uninstall|status claude|codex|pi|cursor|opencode [--settings PATH]
     \\       telar proxy trust install|uninstall|status [--ca-dir PATH] [--linux BACKEND]
-    \\       telar hook claude|codex|pi
+    \\       telar hook claude|codex|pi|cursor|opencode
     \\       telar review list|show|comment|delete|submit|reviewed [pane|--current] [options]
-    \\       telar review feedback|ack --provider claude|codex|pi --session ID [options]
+    \\       telar review feedback|ack --provider claude|codex|pi|cursor|opencode --session ID [options]
     \\       telar --skill
     \\
     \\Run an interactive shell inside telar's multiplexer UI.
@@ -119,6 +115,8 @@ pub const text =
     \\Commands:
     \\  gui              Open the native client window; --login-shell adopts the login shell's environment
     \\  cli              Link this executable as `telar` into DIR (default /usr/local/bin)
+    \\  --machine        Run one telar command on a saved machine over SSH; never falls back to this one
+    \\  machine          Save, rename, enable, disable, remove, list and check machines in machines.json
     \\  server           Run the local runtime in the foreground
     \\  server stop      Stop the local runtime
     \\  history list     Show recent command history
@@ -131,16 +129,25 @@ pub const text =
     \\  notification show  Show a toast in every connected UI client
     \\  agent list       List the agents the runtime knows about
     \\  agent get        Show one agent by pane id, title or --current
-    \\  agent wait       Block until an agent reaches a status (default: done)
-    \\  agent prompt     Send a prompt to an agent; refused while it is blocked
+    \\  agent wait       Block until an agent reaches a status (default: done; finished = done or ready)
+    \\  agent prompt     Send a prompt to an agent; refused while blocked or focused (--interrupt stops it first)
     \\  agent read       Print recent text from an agent's pane
     \\  agent report-session  Record an agent's own session id for restore
     \\  pane read        Print recent text from any pane
     \\  pane send-keys   Send raw text (and --enter) to any pane
     \\  pane focus       Move from Neovim into an adjacent Telar pane
-    \\  workspace create Add a git worktree and open a workspace on it
+    \\  worktree create Add a git worktree for a task; with a command (needs --title), run it there
+    \\  worktree exec   Run a command in a new tab of a worktree; --wait prints its output and exit code
+    \\  worktree list   List worktrees with their task, state, diffstat and last command
+    \\  worktree open   Show a worktree in the UI client used last
+    \\  worktree diff   Print the worktree's diff against its base
+    \\  worktree remove Close a worktree's tabs and remove its checkout; refused with changes
+    \\  worktree fetch  Bring a branch back from another machine into refs/remotes/LABEL/BRANCH
+    \\  worktree resolve Find the clone of a repository among this machine's workspaces
+    \\  agent interrupt Stop an agent's turn with its provider's interrupt key
+    \\  workspace create Alias of worktree create for a workspace on a new git worktree
     \\  api schema       Print the wire contract of this binary
-    \\  integration      Register telar's lifecycle reports with an agent (claude hooks, pi extension)
+    \\  integration      Register telar's lifecycle reports with an agent (claude, codex and cursor hooks, pi extension, opencode plugin)
     \\  hook             Entry point that agent hooks run (reads JSON on stdin)
     \\  review           Inspect captured editions and submit line-range feedback
     \\  proxy trust      Install, remove, or inspect Telar's short-lived system CA
@@ -175,10 +182,6 @@ pub const text =
     \\  --until STATUS   done, ready, blocked, working, failed (wait)
     \\  --timeout SECS   Give up after SECS seconds (wait, prompt --wait)
     \\  --wait           Wait for the agent to finish after prompting
-    \\    --image PATH     Attach an absolute PNG path to a managed prompt (repeatable, maximum 4)
-    \\    --model ID       Select an advertised model for a managed prompt
-    \\    --effort ID      Select a provider-advertised effort level
-    \\    --access MODE    read_only, workspace, full_access (managed prompt)
     \\  --lines N        Rows to read (default 40, maximum 200)
     \\  --source KIND    recent (scrollback + screen) or screen
     \\  --enter          Append Enter after the sent text
@@ -197,6 +200,8 @@ pub const text =
     \\Remote:
     \\  --remote DEST    Attach to the runtime on an SSH host (forwards its
     \\                   socket; needs telar on the remote PATH)
+    \\  --machine LABEL  (gui) Show a saved machine first; the window still
+    \\                   holds every enabled one
     \\
     \\Options:
     \\  --config PATH     Load a specific Lua configuration
@@ -206,7 +211,6 @@ pub const text =
     \\                    aside (session.ckpt.previous) instead of restoring
     \\                    it; refused while a runtime is already running
     \\  --theme NAME      UI theme: shade, vesper, catppuccin, tokyo-night, terminal
-    \\  --sidebar-renderer MODE  automatic, cells, kitty-hybrid, kitty-full
     \\Server options:
     \\  --graphics-pane-mib N    Decoded KGP memory per pane (default 64)
     \\  --graphics-global-mib N  Decoded KGP memory for the runtime (default 256)

@@ -7,6 +7,7 @@ const PendingTabCreated = @import("PendingTabCreated.zig");
 const PendingTabRenamed = @import("PendingTabRenamed.zig");
 const PendingNotification = @import("PendingNotification.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
+const PathQuery = @import("../../paths/PathQuery.zig");
 const PaneKey = @import("../../pane/PaneKey.zig");
 const Matches = @import("Matches.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
@@ -14,7 +15,6 @@ const StatsResult = @import("../../history/StatsResult.zig");
 const PendingSuggestion = @import("PendingSuggestion.zig");
 const ResponseQueue = @import("ResponseQueue.zig");
 const std = @import("std");
-const OwnedAgentHistoryPage = @import("OwnedAgentHistoryPage.zig");
 
 pub const capacity = core.max_panes_per_tab * 2;
 
@@ -24,6 +24,7 @@ pub const PendingResponse = union(enum) {
     client_list: core.ClientList,
     editor_opened: core.EditorOpened,
     pane_opened: core.PaneOpened,
+    worktree_registered: core.WorktreeRegistered,
     request_failed: PendingFailure,
     tab_snapshot: PendingTabSnapshot,
     workspace_snapshot: PendingWorkspaceSnapshot,
@@ -36,7 +37,6 @@ pub const PendingResponse = union(enum) {
     agent_sound: core.AgentSoundNotification,
     history_result: *QueryResult,
     change_review: *ReviewResult,
-    agent_history_page: *OwnedAgentHistoryPage,
     request_completed: core.RequestCompleted,
     pane_text: PendingPaneText,
     pane_matches: PendingPaneMatches,
@@ -46,6 +46,7 @@ pub const PendingResponse = union(enum) {
     pane_focus_command: core.PaneFocusCommand,
     pane_focus_result: core.PaneFocusResult,
     command_suggestion: PendingSuggestion,
+    path_results: *PathQuery,
 };
 
 test "management responses overtake observation work" {

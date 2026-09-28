@@ -31,8 +31,10 @@ recolours the window only; what runs inside a pane keeps Vesper.
 
 ## Brand
 
-`public/brand/` holds the icon: `telar-icon.svg` (app, 48 px and up),
-`telar-icon-small.svg` (favicon and sidebar, 32 px and below), the one-color
-`telar-mark*.svg`, and PNG renders at 1024 and 512. `app/icon.svg` and
-`app/apple-icon.png` are what Next.js serves as favicons. The working files
-for the design canvas live in `brand/icon/`.
+`public/brand/` holds the icon: `telar-icon.svg` (the weaver in her web,
+128 px and up), `telar-icon-small.svg` (the weaver alone, favicon and
+sidebar, 64 px and below), the one-color `telar-mark*.svg`, and PNG renders
+at 1024 and 512. `app/icon.svg` and `app/apple-icon.png` are what Next.js
+serves as favicons. They are copies: `tools/build_brand_icons.py` writes
+them from the sources in `src/assets/`. `brand/icon/` keeps the working
+files of the previous loom icon's design canvas.

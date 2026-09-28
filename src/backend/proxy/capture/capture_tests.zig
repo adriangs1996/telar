@@ -8,9 +8,6 @@ const queue = @import("queue.zig");
 const table = owned.Joiner;
 const Producer = @import("Producer.zig");
 const std = @import("std");
-const Credential = @import("../Credential.zig");
-const identity = @import("../identity.zig");
-const Registry = @import("../Registry.zig");
 
 test {
     _ = buffer;
@@ -20,23 +17,11 @@ test {
 }
 
 test "disabled capture does not allocate or reserve quota" {
-    const credential: Credential = .{
-        .pane_id = @enumFromInt(1),
-        .pane_generation = 1,
-        .token = .{0x5a} ** identity.token_bytes,
-    };
-    var registry: Registry = .{};
-    try registry.register(std.testing.io, &credential);
     var producer: Producer = undefined;
-    try producer.init(std.testing.allocator, .{
-        .config = .{},
-        .credentials = &registry,
-    });
+    try producer.init(std.testing.allocator, .{});
     defer producer.close(std.testing.io);
 
     try std.testing.expect(producer.start(.{
-        .owner = registry.identify(std.testing.io, &credential).?,
-        .dialect = .unknown,
         .protocol = .http11,
         .key = .{ .connection_id = 1, .stream_id = 0 },
         .side = .request,

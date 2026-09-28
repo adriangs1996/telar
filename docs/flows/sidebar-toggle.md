@@ -3,7 +3,8 @@
 Sidebar visibility and preferred width are semantic client-layout state. They
 change client chrome and the workbench rectangle, but do not change runtime
 pane membership or the split tree. The runtime retains their latest bounded
-snapshot for reconnecting terminals while the server is alive.
+snapshot for reconnecting clients while the server is alive. The window reads
+the visibility; its band width is its own pixel preference.
 
 The transition runs on the interactive path. It uses fixed-size state values
 and the bounded client outbox, allocates no queue and waits for no runtime
@@ -20,9 +21,15 @@ native, Lua, plugin or pointer sidebar action
        verify commit; queue placement invalidation; resize attached panes
 
 after the event
-  -> adapter drains model.to_host (placement invalidation)
-  -> presentation_lifecycle.observe -> view_chrome.refresh
-  -> Presenter compares model versions and schedules the paced frame
+  -> GuiAdapter.deliverHostEffects drains model.to_host
+  -> app.presentation.observe -> the window prepares a frame
+  -> GuiAdapter.draw -> resizeViewport -> measure with the sidebar band
+  -> host_resize.applyHostUpdate when the grid size changed
+
+window width step or band drag
+  -> GuiAdapter.executeAction(.resize_sidebar) / adoptSidebarWidth
+  -> SidebarPreference.step / drag -> chrome.invalidate
+  -> the next measurement resizes the grid
 ```
 
 `ClientModel` is the source of truth for requested visibility and preferred
@@ -49,16 +56,22 @@ workbench from the committed sidebar values, so geometry effects use the same
 workbench that the next frame will show.
 
 Neither the procedure nor the adapter requests a frame. After the input event,
-the TUI's `events.zig` drains `model.to_host` through `host_effects.deliver`,
-then calls `presentation_lifecycle.observe`. `view_chrome.refresh` copies the
-sidebar values into the view when the chrome revision changed, and `Presenter`
-detects the revision, invalidates the view and folds composition into the
-paced frame loop.
+`GuiAdapter.update` drains `model.to_host` and passes its observation to
+`app.presentation.observe`; the chrome revision makes the next frame due.
 
-Hiding the sidebar expands the workbench and both bars. Showing or resizing it
-gives the sidebar the complete left column, so the workbench, top bar and
-bottom bar share the remaining width. Host clamping changes only visible
-geometry; it never overwrites the preferred width.
+`workbench.region` derives the workbench from the sidebar values only when the
+host sets `model.host.grid_chrome`, as the terminal client did and the client
+test harness still does. The window leaves it false: its workbench is the
+whole grid, and the sidebar is a pixel band outside it. At the next draw
+`GuiAdapter.measure` asks the renderer for the grid with
+`SidebarPreference.request(model.sidebar_visible)`; a changed grid size goes
+through `host_resize.applyHostUpdate`, which resizes the attached panes. See
+[GUI multiplexer](gui-multiplexer.md) for the band's bounds.
+
+The window's keyboard width step and band drag change `SidebarPreference`, a
+disposable pixel width seeded from `gui.sidebar.width`, and never
+`model.sidebar_width`. Clamping to the window changes only visible geometry;
+it never overwrites the preferred width.
 
 ## Failure and recovery
 
@@ -79,5 +92,6 @@ roll back the client preference.
   invalidation and pane geometry in order.
 - `src/client/execution/client_tests.zig` rejects stale visibility, width and
   revision before touching any host effect.
-- `src/frontend/client/tests/pane_lifecycle.zig` checks expanded, contracted and
-  resized pane geometry and presenter-owned frame scheduling.
+- `src/client_tests/pane_lifecycle.zig` checks expanded, contracted and
+  resized pane geometry on a grid-chrome host and frame scheduling through
+  observation.

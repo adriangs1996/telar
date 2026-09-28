@@ -40,9 +40,6 @@ pub fn add(model: *ClientModel, created: CreatedTab, size: core.TerminalSize) !u
     var layout: WorkspaceLayout = .{};
     _ = layout.setPaneGaps(model.pane_gaps);
     try layout.addRoot(created.root_pane_id);
-    if (created.kind == .agent) {
-        _ = layout.setSurface(created.root_pane_id, .thread);
-    }
 
     const pane = try model.panes.add(
         model.gpa,
@@ -53,7 +50,7 @@ pub fn add(model: *ClientModel, created: CreatedTab, size: core.TerminalSize) !u
         },
         true,
     );
-    _ = pane.identify(created.kind, created.pane_generation);
+    _ = pane.identify(created.pane_generation);
 
     const slot = model.tabs.insert(created.position, created.location, model.pane_gaps);
     model.tabs.layout[slot] = layout;

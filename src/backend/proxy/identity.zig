@@ -1,50 +1,48 @@
-//! Per-pane proxy credentials carried in standard proxy URL userinfo.
+//! The proxy secret carried in standard proxy URL userinfo. One secret per
+//! proxy directory admits every child the runtime launches; it proves the
+//! caller inherited Telar's environment, nothing more.
 
-const core = @import("telar-core");
 const std = @import("std");
 
-pub const token_bytes = 16;
-pub const Credential = @import("Credential.zig");
+pub const secret_bytes = 32;
+pub const Secret = [secret_bytes]u8;
+/// Basic userinfo: `telar:` and the hex secret.
+pub const userinfo_bytes = "telar:".len + secret_bytes * 2;
 
-/// Generates one cryptographically random credential token.
+/// Generates one cryptographically random secret.
 ///
 /// ```zig
-/// var token = randomToken(io);
-/// defer std.crypto.secureZero(u8, &token);
+/// var secret = randomSecret(io);
+/// defer std.crypto.secureZero(u8, &secret);
 /// ```
-pub fn randomToken(io: std.Io) [token_bytes]u8 {
-    var token: [token_bytes]u8 = undefined;
+pub fn randomSecret(io: std.Io) Secret {
+    var secret: Secret = undefined;
     const source: std.Random.IoSource = .{ .io = io };
-    source.interface().bytes(&token);
-    return token;
+    source.interface().bytes(&secret);
+    return secret;
 }
 
-/// Formats the loopback proxy URL carrying one pane credential.
+/// Formats the loopback proxy URL carrying the secret.
 ///
 /// ```zig
-/// const url = try formatUrl(&buffer, 45100, &credential);
+/// const url = try formatUrl(&buffer, 45100, &secret);
 /// ```
-pub fn formatUrl(buffer: []u8, port: u16, credential: *const Credential) ![]const u8 {
-    return std.fmt.bufPrint(buffer, "http://telar:{d}.{d}.{x}@127.0.0.1:{d}", .{
-        core.raw(credential.pane_id),
-        credential.pane_generation,
-        credential.token,
-        port,
-    });
+pub fn formatUrl(buffer: []u8, port: u16, secret: *const Secret) ![]const u8 {
+    return std.fmt.bufPrint(buffer, "http://telar:{x}@127.0.0.1:{d}", .{ secret.*, port });
 }
 
-/// Parses exactly one Basic `Proxy-Authorization` credential. Missing,
+/// Parses exactly one Basic `Proxy-Authorization` secret. Missing,
 /// malformed, oversized, or duplicate fields return `null`.
 ///
 /// ```zig
-/// var credential = parseProxyAuthorization(head) orelse return error.Unauthorized;
-/// defer std.crypto.secureZero(u8, &credential.token);
+/// var secret = parseProxyAuthorization(head) orelse return error.Unauthorized;
+/// defer std.crypto.secureZero(u8, &secret);
 /// ```
-pub fn parseProxyAuthorization(head: []const u8) ?Credential {
-    var credential: ?Credential = null;
+pub fn parseProxyAuthorization(head: []const u8) ?Secret {
+    var secret: ?Secret = null;
     defer {
-        if (credential) |*value| {
-            std.crypto.secureZero(u8, &value.token);
+        if (secret) |*value| {
+            std.crypto.secureZero(u8, value);
         }
     }
 
@@ -57,7 +55,7 @@ pub fn parseProxyAuthorization(head: []const u8) ?Credential {
             continue;
         }
 
-        if (credential != null) {
+        if (secret != null) {
             return null;
         }
 
@@ -79,70 +77,68 @@ pub fn parseProxyAuthorization(head: []const u8) ?Credential {
 
         std.base64.standard.Decoder.decode(decoded[0..decoded_len], encoded) catch return null;
         defer std.crypto.secureZero(u8, decoded[0..decoded_len]);
-        credential = parseUserInfo(decoded[0..decoded_len]) orelse return null;
+        secret = parseUserInfo(decoded[0..decoded_len]) orelse return null;
     }
 
-    return credential;
+    return secret;
 }
 
-fn parseUserInfo(value: []const u8) ?Credential {
-    if (!std.mem.startsWith(u8, value, "telar:")) {
+/// Compares two secrets in constant time.
+///
+/// ```zig
+/// if (!sameSecret(&presented, &expected)) return rejectUnknownCredential();
+/// ```
+pub fn sameSecret(left: *const Secret, right: *const Secret) bool {
+    return std.crypto.timing_safe.eql(Secret, left.*, right.*);
+}
+
+fn parseUserInfo(value: []const u8) ?Secret {
+    if (value.len != userinfo_bytes or !std.mem.startsWith(u8, value, "telar:")) {
         return null;
     }
 
-    var parts = std.mem.splitScalar(u8, value["telar:".len..], '.');
-    const pane_raw = std.fmt.parseInt(u64, parts.next() orelse return null, 10) catch return null;
-    const generation = std.fmt.parseInt(u64, parts.next() orelse return null, 10) catch return null;
-    const token_text = parts.next() orelse return null;
-
-    if (parts.next() != null or generation == 0 or token_text.len != token_bytes * 2) {
-        return null;
-    }
-
-    var token: [token_bytes]u8 = undefined;
-    defer std.crypto.secureZero(u8, &token);
-    _ = std.fmt.hexToBytes(&token, token_text) catch return null;
-    return .{
-        .pane_id = core.pane(pane_raw) catch return null,
-        .pane_generation = generation,
-        .token = token,
-    };
+    var secret: Secret = undefined;
+    defer std.crypto.secureZero(u8, &secret);
+    _ = std.fmt.hexToBytes(&secret, value["telar:".len..]) catch return null;
+    return secret;
 }
 
-test "proxy basic authentication round trips pane identity" {
-    const raw = "telar:7.12.00112233445566778899aabbccddeeff";
+test "proxy basic authentication round trips the secret" {
+    const secret: Secret = .{0x5a} ** secret_bytes;
+    var url_buffer: [256]u8 = undefined;
+    const url = try formatUrl(&url_buffer, 45100, &secret);
+    try std.testing.expectEqualStrings("http://telar:" ++ "5a" ** secret_bytes ++ "@127.0.0.1:45100", url);
+    const raw = "telar:" ++ "5a" ** secret_bytes;
     var encoded: [std.base64.standard.Encoder.calcSize(raw.len)]u8 = undefined;
     const basic = std.base64.standard.Encoder.encode(&encoded, raw);
     var head_buf: [256]u8 = undefined;
     const head = try std.fmt.bufPrint(&head_buf, "CONNECT api.openai.com:443 HTTP/1.1\r\nProxy-Authorization: Basic {s}\r\n\r\n", .{basic});
     var parsed = parseProxyAuthorization(head).?;
-    defer std.crypto.secureZero(u8, &parsed.token);
-    try std.testing.expectEqual(@as(u64, 7), core.raw(parsed.pane_id));
-    try std.testing.expectEqual(@as(u64, 12), parsed.pane_generation);
-    try std.testing.expectEqualSlices(u8, &[_]u8{
-        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
-        0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
-    }, &parsed.token);
-
-    var url_buffer: [128]u8 = undefined;
-    try std.testing.expectEqualStrings(
-        "http://telar:7.12.00112233445566778899aabbccddeeff@127.0.0.1:45100",
-        try formatUrl(&url_buffer, 45100, &parsed),
-    );
+    defer std.crypto.secureZero(u8, &parsed);
+    try std.testing.expect(sameSecret(&parsed, &secret));
+    try std.testing.expect(!sameSecret(&parsed, &(.{0x5b} ** secret_bytes)));
 }
 
-test "duplicate proxy authorization headers are rejected" {
-    const raw = "telar:7.12.00112233445566778899aabbccddeeff";
-    var encoded: [std.base64.standard.Encoder.calcSize(raw.len)]u8 = undefined;
+fn expectRejectedUserInfo(raw: []const u8) !void {
+    var encoded: [256]u8 = undefined;
     const basic = std.base64.standard.Encoder.encode(&encoded, raw);
-    var head_buffer: [512]u8 = undefined;
-    const head = try std.fmt.bufPrint(
-        &head_buffer,
-        "CONNECT api.openai.com:443 HTTP/1.1\r\n" ++
-            "Proxy-Authorization: Basic {s}\r\n" ++
-            "Proxy-Authorization: Basic {s}\r\n\r\n",
-        .{ basic, basic },
-    );
-
+    var head_buf: [512]u8 = undefined;
+    const head = try std.fmt.bufPrint(&head_buf, "CONNECT a:1 HTTP/1.1\r\nProxy-Authorization: Basic {s}\r\n\r\n", .{basic});
     try std.testing.expect(parseProxyAuthorization(head) == null);
+}
+
+test "proxy basic authentication rejects malformed, duplicate and foreign userinfo" {
+    try expectRejectedUserInfo("telar:5a5a");
+    try expectRejectedUserInfo("user:" ++ "5a" ** secret_bytes);
+    try expectRejectedUserInfo("telar:" ++ "5a" ** secret_bytes ++ "a");
+    try expectRejectedUserInfo("telar:" ++ "zz" ** secret_bytes);
+    try std.testing.expect(parseProxyAuthorization("CONNECT a:1 HTTP/1.1\r\n\r\n") == null);
+    try std.testing.expect(parseProxyAuthorization("CONNECT a:1 HTTP/1.1\r\nProxy-Authorization: Bearer x\r\n\r\n") == null);
+
+    const valid_raw = "telar:" ++ "5a" ** secret_bytes;
+    var valid_storage: [std.base64.standard.Encoder.calcSize(valid_raw.len)]u8 = undefined;
+    const valid = std.base64.standard.Encoder.encode(&valid_storage, valid_raw);
+    var duplicate_buf: [512]u8 = undefined;
+    const duplicate = try std.fmt.bufPrint(&duplicate_buf, "CONNECT a:1 HTTP/1.1\r\nProxy-Authorization: Basic {s}\r\nProxy-Authorization: Basic {s}\r\n\r\n", .{ valid, valid });
+    try std.testing.expect(parseProxyAuthorization(duplicate) == null);
 }

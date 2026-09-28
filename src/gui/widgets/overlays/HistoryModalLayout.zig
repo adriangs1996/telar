@@ -1,21 +1,25 @@
 //! Stable pixel layout: replacing a result page never moves the search field.
+//! The panel sits at the bottom of the window above the status bar, the
+//! field at its foot where the shell prompt was, the chips above the field
+//! and the newest command right above the chips.
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const Metrics = @import("HistoryModalMetrics.zig");
 const Layout = @This();
 
+/// Rows the list is sized for; a smaller window shows fewer.
+pub const visible_rows: f32 = 14;
+
 viewport: Rect,
 bounds: Rect,
-header: Rect,
-search: Rect,
-scope: Rect,
-summary: Rect,
+/// The command list; zero width while a narrow inspector replaces it.
 results: Rect,
 inspection: Rect,
-detail: Rect,
+chips: Rect,
+search: Rect,
 footer: Rect,
 row_height: f32,
-rows: u16,
+group_height: f32,
 compact: bool,
 
 /// The same layout determines native painting and inspector wrapping.
@@ -24,66 +28,100 @@ pub fn measure(metrics: Metrics, inspecting: bool) Layout {
     const px = metrics.chrome;
     const viewport = metrics.viewport;
     const margin = @min(px.px(24), @min(viewport.width, viewport.height) / 12);
-    const width = @max(0, @min(px.px(if (inspecting) 1040 else 800), viewport.width - margin * 2));
+    const width = @max(0, @min(px.px(if (inspecting) 1120 else 760), viewport.width - margin * 2));
     const line_height = @max(px.rowHeight(.body), @as(f32, @floatFromInt(metrics.terminal.cell_height)));
-    const row_height = @max(px.px(48), line_height + px.rowHeight(.small) + px.px(12));
-    const height = @max(0, @min(px.px(198) + row_height * 8, viewport.height - margin * 2));
-    const bounds: Rect = .{ .x = @floor((viewport.width - width) / 2), .y = @floor((viewport.height - height) / 2), .width = width, .height = height };
-    const padding = @min(px.px(20), @min(width, height) / 10);
-    const compact = width < px.px(420) or height < px.px(300);
-    const gap = @min(px.px(12), height / 30);
-    var content: Rect = .{ .x = bounds.x + padding, .y = bounds.y + padding, .width = @max(0, width - padding * 2), .height = @max(0, height - padding * 2) };
-    const header = take(&content, @max(px.px(30), px.rowHeight(.title)), gap);
-    var search = take(&content, @max(px.px(38), px.rowHeight(.body) + px.px(16)), gap);
-    const scope_width = @min(px.px(136), search.width * 0.35);
-    const scope: Rect = .{ .x = search.x + search.width - scope_width, .y = search.y, .width = scope_width, .height = search.height };
-    search.width = @max(0, search.width - scope_width - gap);
-    const summary = take(&content, px.rowHeight(.small), gap / 2);
-    const footer_height = @min(@max(px.px(32), px.rowHeight(.body) + px.px(10)), content.height);
-    const detail_height = if (compact) 0 else @min(px.rowHeight(.small), @max(0, content.height - footer_height - gap * 2));
-    const results = take(&content, @max(0, content.height - footer_height - detail_height - gap * 2), gap);
-    const detail = take(&content, detail_height, gap);
-    const footer = take(&content, footer_height, 0);
-    var list = results;
-    var inspection: Rect = .{ .x = results.x, .y = results.y, .width = 0, .height = 0 };
+    const row_height = @max(px.px(34), line_height + px.px(8));
+    const group_height = @max(px.px(24), px.rowHeight(.small) + px.px(6));
+    const chips_height = @max(px.px(40), px.rowHeight(.small) + px.px(18));
+    const search_height = @max(px.px(48), line_height + px.px(18));
+    const footer_height = @max(px.px(36), px.rowHeight(.small) + px.px(14));
+    const status_bar: f32 = @floatFromInt(px.status_bar);
+    const wanted = row_height * visible_rows + px.px(8) + chips_height + search_height + footer_height;
+    const height = @max(0, @min(wanted, viewport.height - status_bar - margin * 2));
+    const bounds: Rect = .{
+        .x = @floor((viewport.width - width) / 2),
+        .y = @floor(@max(0, @min(viewport.height - height, viewport.height - status_bar - margin - height))),
+        .width = width,
+        .height = height,
+    };
+    const compact = width < px.px(420) or height < px.px(240);
+    var content = bounds;
+    const footer = takeBottom(&content, footer_height);
+    const search = takeBottom(&content, search_height);
+    const chips = takeBottom(&content, if (compact) 0 else chips_height);
+    var list = content;
+    var inspection: Rect = .{
+        .x = content.x,
+        .y = content.y,
+        .width = 0,
+        .height = 0,
+    };
     if (inspecting) {
-        inspection = results;
-        if (width >= px.px(760)) {
-            list.width = @floor((results.width - gap) * 0.43);
-            inspection.x = list.x + list.width + gap;
-            inspection.width = @max(0, results.width - list.width - gap);
+        inspection = content;
+        if (width >= px.px(1000)) {
+            list.width = @floor(content.width * 0.56);
+            inspection.x = list.x + list.width;
+            inspection.width = @max(0, content.width - list.width);
         } else {
             list.width = 0;
         }
     }
 
-    return .{ .viewport = viewport, .bounds = bounds, .header = header, .search = search, .scope = scope, .summary = summary, .results = list, .inspection = inspection, .detail = detail, .footer = footer, .row_height = row_height, .rows = @intFromFloat(@min(16, @floor(list.height / row_height))), .compact = compact };
+    return .{
+        .viewport = viewport,
+        .bounds = bounds,
+        .results = list,
+        .inspection = inspection,
+        .chips = chips,
+        .search = search,
+        .footer = footer,
+        .row_height = row_height,
+        .group_height = group_height,
+        .compact = compact,
+    };
 }
 
 /// Moves paint and registered input geometry together during the entrance.
 /// Example: `layout.offsetY(chrome.px(12) * (1 - reveal));`
 pub fn offsetY(self: *Layout, offset: f32) void {
-    inline for (.{ "bounds", "header", "search", "scope", "summary", "results", "inspection", "detail", "footer" }) |field| {
+    inline for (.{ "bounds", "results", "inspection", "chips", "search", "footer" }) |field| {
         @field(self, field).y += offset;
     }
 }
 
-/// Newest stays at the bottom, matching the existing history arrow navigation.
-/// Example: `const row = layout.row(offset);`
-pub fn row(self: Layout, offset: u16) Rect {
-    return .{ .x = self.results.x, .y = self.results.y + self.results.height - @as(f32, @floatFromInt(offset + 1)) * self.row_height, .width = self.results.width, .height = self.row_height };
-}
-
+/// The inspector's scrolling lines, above its action buttons.
 /// Example: `const text = layout.inspectionContent(metrics);`
 pub fn inspectionContent(self: Layout, metrics: Metrics) Rect {
-    const inset = @min(metrics.chrome.px(12), @min(self.inspection.width, self.inspection.height) / 8);
-    return .{ .x = self.inspection.x + inset, .y = self.inspection.y + inset, .width = @max(0, self.inspection.width - inset * 2), .height = @max(0, self.inspection.height - inset * 2) };
+    const inset = @min(metrics.chrome.px(14), @min(self.inspection.width, self.inspection.height) / 8);
+    const actions = self.inspectionActions(metrics);
+    return .{
+        .x = self.inspection.x + inset,
+        .y = self.inspection.y + inset,
+        .width = @max(0, self.inspection.width - inset * 2),
+        .height = @max(0, actions.y - self.inspection.y - inset * 2),
+    };
 }
 
-fn take(remaining: *Rect, height: f32, gap: f32) Rect {
-    const result: Rect = .{ .x = remaining.x, .y = remaining.y, .width = remaining.width, .height = @min(remaining.height, height) };
-    const advance = @min(remaining.height, result.height + gap);
-    remaining.y += advance;
-    remaining.height -= advance;
-    return result;
+/// The inspector's button row at its foot.
+/// Example: `const buttons = layout.inspectionActions(metrics);`
+pub fn inspectionActions(self: Layout, metrics: Metrics) Rect {
+    const inset = @min(metrics.chrome.px(14), @min(self.inspection.width, self.inspection.height) / 8);
+    const height = @min(@max(metrics.chrome.px(28), metrics.chrome.rowHeight(.body) + metrics.chrome.px(8)), @max(0, self.inspection.height - inset * 2));
+    return .{
+        .x = self.inspection.x + inset,
+        .y = self.inspection.y + self.inspection.height - inset - height,
+        .width = @max(0, self.inspection.width - inset * 2),
+        .height = height,
+    };
+}
+
+fn takeBottom(remaining: *Rect, height: f32) Rect {
+    const taken = @min(remaining.height, height);
+    remaining.height -= taken;
+    return .{
+        .x = remaining.x,
+        .y = remaining.y + remaining.height,
+        .width = remaining.width,
+        .height = taken,
+    };
 }

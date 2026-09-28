@@ -7,6 +7,9 @@ const ViewInteractionCommand = @import("ViewInteractionCommand.zig");
 const ViewInteractionOutcome = @import("ViewInteractionOutcome.zig");
 const IntentOutcome = @import("IntentOutcome.zig");
 const agent_attachments = @import("../attachments/agent_attachments.zig");
+const agent_peek = @import("../agents/agent_peek.zig");
+const bar_components = @import("bar_components.zig");
+const bar_updates = @import("../config/bar_updates.zig");
 const agent_navigation = @import("../agents/agent_navigation.zig");
 const name_prompt = @import("name_prompt.zig");
 const notifications = @import("../notifications/notifications.zig");
@@ -46,6 +49,11 @@ pub fn apply(client: *Client, tab: usize, interaction: ViewInteractionCommand) !
 
 fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome {
     var outcome: IntentOutcome = .{};
+    // Any other chrome interaction dismisses the bar panel, as a click
+    // outside a popover does.
+    if (client.model.bars.panel.isOpen() and !keepsPanel(intent)) {
+        try bar_updates.closePanel(client);
+    }
 
     switch (intent) {
         .none => {},
@@ -63,7 +71,10 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
         .toggle_workspace_list => {
             _ = data.workspace_list.toggle(&client.model);
         },
+        .machine_picker => _ = name_prompt.openNamePrompt(&client.model, .{ .palette = .machines }),
+        .select_machine => |slot| try client.model.to_host.push(.{ .machine = .{ .slot = slot } }),
         .focus_agent => |key| _ = try agent_navigation.navigateAgent(client, key),
+        .peek_agent => |key| _ = try agent_peek.open(client, key),
         .select_tab => |tab_id| {
             _ = try tab_selection.selectTab(
                 client,
@@ -102,6 +113,12 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
                 .{},
             );
         },
+        .toggle_pane_fullscreen => _ = try pane_resize.togglePaneFullscreen(
+            client,
+            .{
+                .area = client.geometry().area,
+            },
+        ),
         .select_workspace => |workspace| _ = try workspace_handoff.selectWorkspace(
             client,
             .{
@@ -112,7 +129,18 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
         .notification_dismiss => |id| _ = try notifications.dismissNotificationNow(client, id),
         .attachment_dismiss => |id| outcome.layout_changed = try agent_attachments.dismissAttachment(client, id),
         .prompt_row => |index| try name_prompt.choosePromptRow(client, index),
+        .bar_component => |component| try bar_components.activate(client, component),
+        .panel_component => |index| try bar_components.activatePanel(client, index),
+        .toggle_bar_overflow => try bar_updates.toggleOverflow(client),
+        .close_panel => try bar_updates.closePanel(client),
     }
 
     return outcome;
+}
+
+fn keepsPanel(intent: view_interaction.Intent) bool {
+    return switch (intent) {
+        .none, .bar_component, .panel_component, .toggle_bar_overflow, .close_panel => true,
+        else => false,
+    };
 }

@@ -1,5 +1,6 @@
 const localsocket = @import("localsocket");
 const Workspaces = @import("../../workspace/Workspaces.zig");
+const Worktrees = @import("../../workspace/Worktrees.zig");
 const core = @import("telar-core");
 const ReviewResult = @import("../../change_review/Result.zig");
 const ResponseQueue = @import("ResponseQueue.zig");
@@ -8,6 +9,7 @@ const std = @import("std");
 const response_queue = @import("response_queue.zig");
 const Sources = @import("Sources.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
+const PathQuery = @import("../../paths/PathQuery.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
 const runtime_encoder = @import("encoder.zig");
@@ -20,8 +22,6 @@ const ForegroundProjection = @import("ForegroundProjection.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const Attachments = @import("../attachment/Attachments.zig");
 const PaneKey = @import("../../pane/PaneKey.zig");
-const AgentThreadProjection = @import("AgentThreadProjection.zig");
-const OwnedAgentHistoryPage = @import("OwnedAgentHistoryPage.zig");
 const Delivery = @This();
 
 send_buffer: []u8,
@@ -37,8 +37,6 @@ client_layout_sent: bool = false,
 proxy_status_sent: bool = false,
 agent_revision_sent: u64 = 0,
 agent_snapshot_requested: bool = false,
-agent_threads_sent: [PaneStore.capacity]?AgentThreadProjection = @splat(null),
-requested_agent_thread: ?PaneKey = null,
 system_metrics_revision_sent: u64 = 0,
 workspace_list_revision_sent: u64 = 0,
 foregrounds_sent: [PaneStore.capacity]?ForegroundProjection = @splat(null),
@@ -68,15 +66,6 @@ pub fn enqueue(self: *Delivery, response: response_queue.PendingResponse) !void 
 pub fn requestWorkspaceResync(self: *Delivery, workspace: core.WorkspaceLocation, previous_workspace: ?core.WorkspaceId) void {
     self.responses.resync_workspace = workspace;
     self.responses.resync_previous_workspace = previous_workspace;
-}
-
-/// Forces a current thread snapshot after a generation-checked query.
-///
-/// ```zig
-/// delivery.requestAgentThread(pane.key());
-/// ```
-pub fn requestAgentThread(self: *Delivery, key: PaneKey) void {
-    self.requested_agent_thread = key;
 }
 
 /// Schedules one agent snapshot for a client that holds no runtime-state
@@ -172,8 +161,8 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         var history_result: ?*QueryResult = null;
         var history_output: ?*OutputResult = null;
         var history_stats: ?*StatsResult = null;
-        var agent_history: ?*OwnedAgentHistoryPage = null;
         var change_review: ?*ReviewResult = null;
+        var path_results: ?*PathQuery = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,
             .panes = sources.panes,
@@ -181,16 +170,16 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_result = &history_result,
             .history_output = &history_output,
             .history_stats = &history_stats,
-            .agent_history = &agent_history,
             .change_review = &change_review,
+            .path_results = &path_results,
         }, entry.response);
         return self.stage(payload, .{ .response = .{
             .offset = entry.offset,
             .history_result = history_result,
             .history_output = history_output,
             .history_stats = history_stats,
-            .agent_history = agent_history,
             .change_review = change_review,
+            .path_results = path_results,
         } });
     }
 
@@ -259,32 +248,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         );
     }
 
-    if (self.runtime_state_requested or self.requested_agent_thread != null) {
-        for (sources.panes.items, 0..) |entry, slot| {
-            const pane = entry orelse continue;
-            const snapshot = pane.agent_thread orelse continue;
-            if (pane.close_requested or pane.exit != null) {
-                continue;
-            }
-            const requested = if (self.requested_agent_thread) |key| std.meta.eql(key, pane.key()) else false;
-            if (!self.runtime_state_requested and !requested) {
-                continue;
-            }
-            if (!requested) {
-                if (self.agent_threads_sent[slot]) |previous| {
-                    if (std.meta.eql(previous.key, pane.key()) and previous.revision >= snapshot.revision) {
-                        continue;
-                    }
-                }
-            }
-            return self.stage(try core.encodeAgentThreadSnapshot(buffer, snapshot), .{ .agent_thread = .{
-                .key = pane.key(),
-                .revision = snapshot.revision,
-                .slot = @intCast(slot),
-            } });
-        }
-    }
-
     if (self.runtime_state_requested) {
         if (try self.prepareAttachment(preparation, .review, pending)) |prepared| {
             return prepared;
@@ -303,6 +266,8 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
                     .memory_used_decigib = values.memory_used_decigib,
                     .has_battery = values.battery_percent != null,
                     .battery_percent = values.battery_percent orelse 0,
+                    .cpu_count = values.cpu_count,
+                    .memory_total_decigib = values.memory_total_decigib,
                 }),
                 .{ .system_metrics_revision = revision },
             );
@@ -314,11 +279,13 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         self.workspace_list_revision_sent < workspaces.revision)
     {
         var entries: [Workspaces.capacity]core.WorkspaceListEntry = undefined;
+        var worktree_entries: [Worktrees.capacity]core.WorktreeListEntry = undefined;
         const revision = workspaces.revision;
         return self.stage(
             try core.encodeWorkspaceList(buffer, .{
                 .revision = revision,
                 .entries = workspaces.listEntries(&entries),
+                .worktrees = sources.worktrees.listEntries(&worktree_entries),
             }),
             .{ .workspace_list_revision = revision },
         );
@@ -358,8 +325,8 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         var history_result: ?*QueryResult = null;
         var history_output: ?*OutputResult = null;
         var history_stats: ?*StatsResult = null;
-        var agent_history: ?*OwnedAgentHistoryPage = null;
         var change_review: ?*ReviewResult = null;
+        var path_results: ?*PathQuery = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,
             .panes = sources.panes,
@@ -367,16 +334,16 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_result = &history_result,
             .history_output = &history_output,
             .history_stats = &history_stats,
-            .agent_history = &agent_history,
             .change_review = &change_review,
+            .path_results = &path_results,
         }, entry.response);
         return self.stage(payload, .{ .response = .{
             .offset = entry.offset,
             .history_result = history_result,
             .history_output = history_output,
             .history_stats = history_stats,
-            .agent_history = agent_history,
             .change_review = change_review,
+            .path_results = path_results,
         } });
     }
     return null;
@@ -413,11 +380,11 @@ pub fn commit(self: *Delivery, operation: Commit) void {
             if (response.history_stats) |result| {
                 result.deinit();
             }
-            if (response.agent_history) |result| {
-                result.deinit();
-            }
             if (response.change_review) |result| {
                 result.deinit();
+            }
+            if (response.path_results) |query| {
+                query.destroy();
             }
             self.responses.removeAt(response.offset);
         },
@@ -431,14 +398,6 @@ pub fn commit(self: *Delivery, operation: Commit) void {
         .clipboard => self.clipboard_pending = false,
         .client_layout => self.client_layout_sent = true,
         .proxy_status => self.proxy_status_sent = true,
-        .agent_thread => |projection| {
-            self.agent_threads_sent[projection.slot] = projection;
-            if (self.requested_agent_thread) |key| {
-                if (std.meta.eql(key, projection.key)) {
-                    self.requested_agent_thread = null;
-                }
-            }
-        },
         .agent_revision => |revision| {
             self.agent_revision_sent = revision;
             self.agent_snapshot_requested = false;

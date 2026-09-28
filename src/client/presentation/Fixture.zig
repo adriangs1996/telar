@@ -138,7 +138,7 @@ pub fn drain(self: *Fixture) !void {
         switch (message) {
             .server => |received| {
                 defer self.receive_pending = false;
-                _ = try runtime_messages.handleServerMessage(&self.app, received.message);
+                _ = try runtime_messages.receiveServerMessage(&self.app, &received.message);
             },
             .key => |value| try self.applyKey(value),
             .completed => |value| try self.deliver(value.token, value.outcome),
@@ -171,6 +171,10 @@ fn startJobs(self: *Fixture) !void {
             .runtime_read => return error.HeadlessReadUnsupported,
             else => return error.HeadlessJobUnsupported,
         }
+    }
+
+    if (self.app.to_background.count != 0) {
+        return error.HeadlessJobUnsupported;
     }
 }
 
@@ -229,6 +233,6 @@ pub fn expectAck(self: *Fixture, frame_id: u64) !void {
 pub fn sendOne(self: *Fixture) !void {
     try std.testing.expect(self.pending != null);
     self.pending = null;
-    try runtime_io.completeRuntimeSend(&self.app.model, {});
+    try runtime_io.completeRuntimeSend(&self.app, {});
     try self.startJobs();
 }

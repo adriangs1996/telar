@@ -1,4 +1,4 @@
-//! Native unified diffs share one measured flow with their visible text geometry.
+//! Native unified diffs measure and paint through one flow.
 const syntaxhl = @import("syntaxhl");
 const TextFit = @import("TextFit.zig");
 const core = @import("telar-core");
@@ -10,17 +10,13 @@ const Label = @import("Label.zig");
 const SyntaxPaint = @import("SyntaxPaint.zig");
 const DiffAnnotations = @import("DiffAnnotations.zig");
 const DiffRow = @import("DiffRow.zig");
-const MessageLayoutOwner = @import("MessageLayoutOwner.zig");
 const WrappedLines = @import("overlays/WrappedLines.zig");
-const ThreadTextPaint = @import("ThreadTextPaint.zig");
 const Paint = @This();
 
 canvas: *Canvas,
 bounds: Rect,
 viewport: Rect,
 text: []const u8,
-owner: ?MessageLayoutOwner = null,
-source_start: usize,
 paint: bool,
 y: f32 = 0,
 digits: usize = 3,
@@ -28,7 +24,7 @@ syntax_paint: SyntaxPaint = .{},
 roles: ?[]const syntaxhl.Role = null,
 annotations: ?DiffAnnotations = null,
 
-/// Measures all lines but paints and retains selectable geometry only in view.
+/// Measures all lines but paints only the rows in view.
 /// Example: `const height = try diff.layout();`
 pub fn layout(self: *Paint) !f32 {
     self.y = self.bounds.y;
@@ -185,20 +181,7 @@ fn code(self: *Paint, line: core.ChangeReviewDiffLine) !void {
 }
 
 fn literal(self: *Paint, area: Rect, text: []const u8) !void {
-    const canvas = self.canvas;
-    if (self.owner) |owner| {
-        if (canvas.widgets) |state| {
-            if (state.thread_text) |store| {
-                const geometry = store.maps.preparing();
-                const offset = owner.source_offset + @as(u32, @intCast(@intFromPtr(text.ptr) - self.source_start));
-                if (try geometry.append(canvas, .{ .owner = owner, .offset = offset, .text = text, .bounds = area, .viewport = self.viewport, .advance = 0, .face = .mono, .pixel_height = canvas.metrics.pixel_height })) |hit| {
-                    try (ThreadTextPaint{ .geometry = geometry, .fragment = hit }).draw(canvas);
-                }
-            }
-        }
-    }
-
-    try self.syntax_paint.draw(canvas, .{ .bounds = area, .text = text });
+    try self.syntax_paint.draw(self.canvas, .{ .bounds = area, .text = text });
 }
 
 fn fitted(self: *Paint, area: Rect, original: Label) !void {

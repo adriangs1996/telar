@@ -13,6 +13,7 @@ const Pane = @import("../pane/Pane.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const pane_namespace = @import("../pane/pane_namespace.zig");
 const client_request = @import("client_request.zig");
+const agent_control = @import("agent_control.zig");
 const InputCompletion = @import("events/InputCompletion.zig");
 const ResponseCompletion = @import("events/ResponseCompletion.zig");
 
@@ -32,7 +33,7 @@ pub fn send(model: *RuntimeModel, session: *Session, input: core.PaneInput) !voi
         return;
     };
     const pane = attachment.pane;
-    if (pane.kind == .agent or pane.exit != null) {
+    if (pane.exit != null) {
         model.metrics.stale_client_messages += 1;
         return;
     }
@@ -53,23 +54,37 @@ pub fn sendText(model: *RuntimeModel, session: *Session, request: core.SendPaneT
         return client_request.fail(session, request.request_id, .pane_not_found, "pane not found");
     };
 
-    if (pane.kind == .agent) {
-        return client_request.fail(session, request.request_id, .invalid_request, "agent panes require structured agent commands");
-    }
-
     if (pane.exit != null) {
         return client_request.fail(session, request.request_id, .pane_exited, "pane already exited");
     }
 
-    var storage: [core.max_pane_text_input_bytes + prompt_overhead]u8 = undefined;
+    if (agent_control.focusedByClient(model, pane.id)) {
+        return client_request.fail(session, request.request_id, .pane_focused, "a person is typing in this pane");
+    }
+
+    var storage: [core.max_pane_text_input_bytes + agent_control.max_sender_line_bytes + prompt_overhead]u8 = undefined;
     const bytes = switch (request.mode) {
         .raw => request.text,
         .prompt => prompt: {
-            if (agent_status.projectedStatus(model, key) == .blocked) {
+            if (agent_status.projectedStatus(model, pane.key()) == .blocked) {
                 return client_request.fail(session, request.request_id, .agent_blocked, "agent is waiting for a decision");
             }
 
-            break :prompt promptBytes(&storage, request.text, pane.terminal.modes.get(.bracketed_paste));
+            var sender_buffer: [agent_control.max_sender_line_bytes]u8 = undefined;
+            const known_sender = if (request.sender) |sender| if (model.panes.resolveControlConst(.{ .id = sender, .generation = 0 }) != null) sender else null else null;
+            const sender_line = if (known_sender) |sender| line: {
+                const now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
+                if (!model.prompt_budget.spend(sender, pane.id, now_ms)) {
+                    return client_request.fail(session, request.request_id, .prompt_rate_limited, "prompt budget for this pane is spent; wait for its answer");
+                }
+
+                break :line agent_control.senderLine(model, sender, &sender_buffer);
+            } else "";
+
+            break :prompt promptBytes(&storage, .{
+                .prefix = sender_line,
+                .text = request.text,
+            }, pane.terminal.modes.get(.bracketed_paste));
         },
     };
 
@@ -79,6 +94,16 @@ pub fn sendText(model: *RuntimeModel, session: *Session, request: core.SendPaneT
     }
 
     try client_request.complete(session, request.request_id);
+}
+
+/// Forwards control bytes such as an interrupt key through the same path as
+/// typed input, so history and agent observation see them.
+///
+/// ```zig
+/// try pane_input.forwardControl(model, pane, "\x1b");
+/// ```
+pub fn forwardControl(model: *RuntimeModel, pane: *Pane, bytes: []const u8) !void {
+    try forward(model, pane, bytes);
 }
 
 /// Queues bytes for a restored pane's child and starts the input write.
@@ -246,8 +271,15 @@ fn writeResponse(write: ResponseWrite) ResponseCompletion {
 }
 
 /// Frames one prompt the way a terminal paste followed by Enter would arrive.
-fn promptBytes(storage: *[core.max_pane_text_input_bytes + prompt_overhead]u8, text: []const u8, bracketed: bool) []const u8 {
-    std.debug.assert(text.len <= core.max_pane_text_input_bytes);
+const PromptText = struct {
+    /// Names the sending pane; written inside the paste, before the text.
+    prefix: []const u8 = "",
+    text: []const u8,
+};
+
+fn promptBytes(storage: *[core.max_pane_text_input_bytes + agent_control.max_sender_line_bytes + prompt_overhead]u8, prompt: PromptText, bracketed: bool) []const u8 {
+    std.debug.assert(prompt.text.len <= core.max_pane_text_input_bytes);
+    std.debug.assert(prompt.prefix.len <= agent_control.max_sender_line_bytes);
     var len: usize = 0;
 
     if (bracketed) {
@@ -255,8 +287,10 @@ fn promptBytes(storage: *[core.max_pane_text_input_bytes + prompt_overhead]u8, t
         len += paste_start.len;
     }
 
-    @memcpy(storage[len .. len + text.len], text);
-    len += text.len;
+    @memcpy(storage[len .. len + prompt.prefix.len], prompt.prefix);
+    len += prompt.prefix.len;
+    @memcpy(storage[len .. len + prompt.text.len], prompt.text);
+    len += prompt.text.len;
 
     if (bracketed) {
         @memcpy(storage[len .. len + paste_end.len], paste_end);
@@ -269,10 +303,11 @@ fn promptBytes(storage: *[core.max_pane_text_input_bytes + prompt_overhead]u8, t
 }
 
 test "promptBytes frames a paste only when the child asked for it" {
-    var storage: [core.max_pane_text_input_bytes + prompt_overhead]u8 = undefined;
+    var storage: [core.max_pane_text_input_bytes + agent_control.max_sender_line_bytes + prompt_overhead]u8 = undefined;
 
-    try std.testing.expectEqualStrings("hello\r", promptBytes(&storage, "hello", false));
-    try std.testing.expectEqualStrings("\x1b[200~hello\x1b[201~\r", promptBytes(&storage, "hello", true));
+    try std.testing.expectEqualStrings("hello\r", promptBytes(&storage, .{ .text = "hello" }, false));
+    try std.testing.expectEqualStrings("\x1b[200~hello\x1b[201~\r", promptBytes(&storage, .{ .text = "hello" }, true));
+    try std.testing.expectEqualStrings("\x1b[200~[telar: from fix, pane 3] hi\x1b[201~\r", promptBytes(&storage, .{ .prefix = "[telar: from fix, pane 3] ", .text = "hi" }, true));
 }
 
 const ResponseWrite = struct {

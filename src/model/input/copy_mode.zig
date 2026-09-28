@@ -1251,7 +1251,7 @@ pub fn beginPointerSelection(model: *ClientModel, press: PointerPress) bool {
 
     const slot = model.tabs.activeSlot() orelse return false;
     const pane = tab_layout.focusedPane(model, slot) orelse return false;
-    if (pane.id != press.pane_id or !pane.attached or pane.kind != .terminal or
+    if (pane.id != press.pane_id or !pane.attached or
         press.position.x >= pane.buffer.w or press.position.y >= pane.buffer.h)
     {
         return false;
@@ -1309,7 +1309,7 @@ pub fn enter(model: *ClientModel) bool {
 
     const slot = model.tabs.activeSlot() orelse return false;
     const pane = tab_layout.focusedPane(model, slot) orelse return false;
-    if (!pane.attached or pane.kind != .terminal) {
+    if (!pane.attached) {
         return false;
     }
 

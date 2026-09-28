@@ -27,11 +27,3 @@ pub fn apply(self: *ChangeReviewAvailability, notification: core.ChangeReviewCha
     self.session_len = notification.session.len;
     return true;
 }
-
-/// Retires availability when a managed pane switches provider conversations.
-/// Example: `availability.retainSession(thread.threadId());`
-pub fn retainSession(self: *ChangeReviewAvailability, session: []const u8) void {
-    if (!std.mem.eql(u8, self.session_bytes[0..self.session_len], session)) {
-        self.* = .{};
-    }
-}

@@ -1,9 +1,14 @@
 const Layout = @import("BarLayout.zig");
+const LocalTime = @import("../state/LocalTime.zig");
+const Panel = @import("Panel.zig");
 const model = @import("model.zig");
 const Update = @import("Update.zig");
 const State = @This();
 
 layout: Layout = .{},
+panel: Panel = .{},
+/// The local time clock components show; advanced by the client's bar tick.
+now: LocalTime = .epoch,
 
 pub fn init(layout: Layout) State {
     return .{ .layout = layout };
@@ -15,6 +20,8 @@ pub fn replace(self: *State, layout: Layout) model.Change {
     }
 
     self.layout = layout;
+    // Panel indices name the replaced configuration's panels.
+    self.panel = .{ .opening = self.panel.opening +% 1 };
     return .changed;
 }
 

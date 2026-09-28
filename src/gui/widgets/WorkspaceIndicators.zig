@@ -1,15 +1,15 @@
 //! Compact numbered project marks in runtime order, with no tab-like surfaces.
 //! Overflow is used only when the available pixels cannot hold every project.
 const cellgrid = @import("cellgrid");
-const data = @import("model");
-const AgentCard = @import("AgentCard.zig");
+const WorkspaceMark = @import("WorkspaceMark.zig");
 const std = @import("std");
-const client = @import("telar-client");
 const core = @import("telar-core");
+const data = @import("model");
 const Context = @import("Context.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const attention = @import("attention.zig");
+const workspace_identity = @import("workspace_identity.zig");
 const Label = @import("Label.zig");
 const Layout = gfx.Layout;
 const Item = gfx.Item;
@@ -26,11 +26,12 @@ area: Rect,
 pub fn preferredWidth(context: *const Context) f32 {
     const projection = context.projection;
     const current = context.workspaceId();
-    if (current == null or projection.workspaces.indexOf(current.?) == null) {
+    const index = if (current) |id| projection.workspaces.indexOf(id) else null;
+    if (index == null or index.? >= projection.workspaces.project_count) {
         return 320;
     }
 
-    const count: f32 = @floatFromInt(projection.workspaces.count);
+    const count: f32 = @floatFromInt(projection.workspaces.project_count);
     return count * (indicator_width + logical_gap) - logical_gap;
 }
 
@@ -44,16 +45,20 @@ pub fn draw(self: WorkspaceIndicators, canvas: *Canvas) !void {
 
     const snapshot = projection.workspaces;
     const current = (if (self.context.workspaceId()) |id| snapshot.indexOf(id) else null) orelse return self.activeWorkspace(canvas);
+    if (current >= snapshot.project_count) {
+        return self.activeWorkspace(canvas);
+    }
+
     const gap = canvas.chrome.px(logical_gap);
     const counter = canvas.chrome.px(counter_width);
     const width = canvas.chrome.px(indicator_width);
     var capacity: usize = @intFromFloat(@floor((self.area.width + gap) / (width + gap)));
-    const counters = capacity < snapshot.count and self.area.width >= width + 2 * (counter + gap);
+    const counters = capacity < snapshot.project_count and self.area.width >= width + 2 * (counter + gap);
     if (counters) {
         capacity = @intFromFloat(@floor((self.area.width - 2 * (counter + gap) + gap) / (width + gap)));
     }
 
-    const window = WorkspaceWindow.centered(snapshot.count, current, @max(1, capacity));
+    const window = WorkspaceWindow.centered(snapshot.project_count, current, @max(1, capacity));
     const offset: usize = if (counters) 1 else 0;
     const length = window.count + 2 * offset;
     var children: [core.max_workspace_list_entries + 2]Item = @splat(.{ .width = .{ .fixed = @min(width, self.area.width) } });
@@ -78,21 +83,46 @@ pub fn draw(self: WorkspaceIndicators, canvas: *Canvas) !void {
     if (counters) {
         if (window.next()) |index| {
             const counter_widget: WorkspaceIndicators = .{ .context = self.context, .area = children[length - 1].bounds };
-            try counter_widget.overflowCounter(canvas, .{ index, snapshot.count });
+            try counter_widget.overflowCounter(canvas, .{ index, snapshot.project_count });
         }
     }
 }
 
+/// The location of a workspace that is not a numbered project. A worktree's
+/// workspace reads `project › ⎇ branch`, the branch in the accent color, so a
+/// worktree tab is never mistaken for the main checkout. The crumb is not a
+/// control: the project's row in the sidebar and `leave-worktree` return,
+/// and a second target with the row's action would share its identity.
 fn activeWorkspace(self: WorkspaceIndicators, canvas: *Canvas) !void {
-    const model = self.context.projection.model;
-    var storage: [64]u8 = undefined;
-    const name_value = model.workspaceName();
-    const text = if (name_value.len != 0) name_value else if (model.workspace) |location| switch (location) {
-        .workspace => |id| std.fmt.bufPrint(&storage, "workspace {d}", .{@intFromEnum(id)}) catch unreachable,
-        .worktree => |id| std.fmt.bufPrint(&storage, "worktree {d}", .{@intFromEnum(id)}) catch unreachable,
-    } else "workspace";
+    const projection = self.context.projection;
+    if (self.context.workspaceId()) |id| {
+        if (projection.workspaces.worktreeOfWorkspace(id)) |row| {
+            return self.worktreeBreadcrumb(canvas, row);
+        }
+    }
+
+    var storage: [workspace_identity.label_bytes]u8 = undefined;
+    const text = workspace_identity.contextLabel(projection.model, &storage);
     const label: Label = .{ .text = text, .color = canvas.theme.palette.text, .bold = true, .face = .sans, .size = .body };
     _ = try canvas.textAt(self.area, label);
+}
+
+fn worktreeBreadcrumb(self: WorkspaceIndicators, canvas: *Canvas, row: *const data.WorktreeRow) !void {
+    const palette = canvas.theme.palette;
+    const snapshot = self.context.projection.workspaces;
+    const source_name = if (snapshot.indexOf(row.source)) |index| snapshot.nameAt(index) else "";
+    var storage: [core.max_workspace_list_entries + core.max_git_branch_bytes + 16]u8 = undefined;
+    const prefix = std.fmt.bufPrint(&storage, "{s} \u{203a} ", .{source_name[0..@min(source_name.len, core.max_workspace_list_entries)]}) catch "";
+    const project: Label = .{ .text = prefix, .color = palette.subtext0, .face = .sans, .size = .body };
+    const prefix_width = if (prefix.len == 0) 0 else try canvas.measure(project);
+    if (prefix.len != 0) {
+        _ = try canvas.textAt(self.area, project);
+    }
+
+    var branch_storage: [core.max_git_branch_bytes + 8]u8 = undefined;
+    const branch_text = std.fmt.bufPrint(&branch_storage, "\u{2387} {s}", .{row.handle()}) catch row.handle();
+    const branch: Label = .{ .text = branch_text, .color = palette.accent, .bold = true, .face = .sans, .size = .body };
+    _ = try canvas.textAt(.{ .x = self.area.x + prefix_width, .y = self.area.y, .width = @max(0, self.area.width - prefix_width), .height = self.area.height }, branch);
 }
 
 fn workspace(self: WorkspaceIndicators, canvas: *Canvas, index: usize) !void {
@@ -112,12 +142,15 @@ fn workspace(self: WorkspaceIndicators, canvas: *Canvas, index: usize) !void {
 
     const side = chrome.px(14);
     const icon: Rect = .{ .x = bounds.x + chrome.px(20), .y = bounds.y + (content_height - side) / 2, .width = side, .height = side };
-    const sprite = if (self.context.favicons) |favicons| favicons.sprite(.{ .workspace = id }) else null;
-    if (sprite) |value| {
-        try canvas.spriteTintedAt(icon, .{ .sprite = value, .alpha = if (selected or hovered) 1 else 0.6 });
-    } else {
-        try canvas.iconAt(icon, .{ .text = AgentCard.project_glyph, .color = ink, .face = .sans, .size = .small });
-    }
+    const mark: WorkspaceMark = .{
+        .context = self.context,
+        .workspace = id,
+        .bounds = icon,
+        .ink = ink,
+        .emphasized = selected or hovered,
+        .name = projection.workspaces.nameAt(index),
+    };
+    try mark.draw(canvas);
 
     if (selected) {
         const diameter = chrome.px(3);
@@ -153,7 +186,7 @@ fn overflowCounter(self: WorkspaceIndicators, canvas: *Canvas, range: [2]usize) 
     };
     try button.draw(canvas);
 
-    if (self.hiddenDot(canvas, range)) |color| {
+    if (attention.listRangeDot(self.context.projection, canvas.theme.palette, range)) |color| {
         try self.drawAttention(canvas, color);
     }
 }
@@ -164,30 +197,6 @@ fn drawAttention(self: WorkspaceIndicators, canvas: *Canvas, color: cellgrid.Col
     try canvas.fillRoundedAt(.{ .x = bounds.x + bounds.width - diameter, .y = bounds.y, .width = diameter, .height = diameter }, .{ .radius = diameter / 2, .color = color });
 }
 
-fn hiddenDot(self: WorkspaceIndicators, canvas: *const Canvas, range: [2]usize) ?cellgrid.Color {
-    const projection = self.context.projection;
-    var urgent: ?*const data.Agent = null;
-    for (projection.agents.slice()) |*agent| {
-        if (!attention.needsInput(agent.status)) {
-            continue;
-        }
-
-        const id = switch (agent.location.workspace) {
-            .workspace => |id| id,
-            .worktree => continue,
-        };
-        const index = projection.workspaces.indexOf(id) orelse continue;
-        if (index < range[0] or index >= range[1]) {
-            continue;
-        }
-
-        if (urgent == null or client.agent_attention.compare(agent, urgent.?) == .lt) {
-            urgent = agent;
-        }
-    }
-
-    return if (urgent) |agent| attention.statusColor(canvas.theme.palette, agent.status) else null;
-}
 
 const logical_gap: f32 = 4;
 const counter_width: f32 = 28;

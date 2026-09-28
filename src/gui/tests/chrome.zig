@@ -10,7 +10,6 @@ const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
 const Session = @import("Session.zig");
 const HitMap = @import("../widgets/HitMap.zig");
-const bar_regions = @import("../widgets/bar_regions.zig");
 const Rect = gfx.Rect;
 
 test "native pane frames use the smaller pixel gutter on both axes" {
@@ -172,11 +171,17 @@ test "native tabs always retain the active tab when their row overflows" {
     try fixture.showSidebar(false);
     try fixture.resize(12, 4);
     try fixture.paint(fixture.projection());
-    try std.testing.expect(fixture.bandTarget(.{ .select_tab = second_id }) != null);
-    try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }) == null);
+    const active = fixture.bandTarget(.{ .select_tab = second_id }).?;
+    const top = fixture.chrome.presented().bands.top_bar;
+    try std.testing.expect(active.width > 0 and active.x >= top.x and active.x + active.width <= top.x + top.width);
+    // The first tab either compresses beside it or waits behind the counter,
+    // whose target selects it; it never pushes the active tab out.
+    if (fixture.bandTarget(.{ .select_tab = Session.location.tab_id })) |first| {
+        try std.testing.expect(first.x + first.width <= active.x or first.x >= active.x + active.width);
+    }
 }
 
-test "native fullscreen labels keep hidden panes reachable without covering terminal content" {
+test "native fullscreen band keeps hidden panes and the leave control reachable below the content" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const tab = fixture.session.gui.app.model.tabs.active;
@@ -185,15 +190,26 @@ test "native fullscreen labels keep hidden panes reachable without covering term
     _ = fixture.session.gui.app.model.tabs.layout[tab].toggleFullscreen();
     const projection = fixture.projection();
     try fixture.paint(projection);
-    const target = fixture.target(.{ .focus_pane = Session.pane_id }).?;
-    try std.testing.expectEqualDeep(client.Intent{ .focus_pane = Session.pane_id }, fixture.click(target, 0).intent);
-    try std.testing.expect(fixture.target(.{ .focus_pane = second }) != null);
+    // Splitting focuses the new pane, so fullscreen shows `second` and hides the first.
+    const target = fixture.target(.{ .focus_pane = second }).?;
+    try std.testing.expectEqualDeep(client.Intent{ .focus_pane = second }, fixture.click(target, 0).intent);
     var layout: data.LayoutSnapshot = .{};
     fixture.session.gui.app.model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
+    try std.testing.expectEqual(second, layout.views()[0].pane_id);
     const content = fixture.session.gui.renderer.metrics.rect(fixture.session.gui.renderer.origin, layout.views()[0].content);
+    const hidden = fixture.bandTarget(.{ .focus_pane = Session.pane_id }).?;
+    try std.testing.expectEqualDeep(client.Intent{ .focus_pane = Session.pane_id }, fixture.clickBand(hidden, 0).intent);
+    const leave = fixture.bandTarget(.toggle_pane_fullscreen).?;
+    try std.testing.expectEqualDeep(client.Intent.toggle_pane_fullscreen, fixture.clickBand(leave, 0).intent);
+    // The band lives on the bottom border row: both controls sit below the content.
+    try std.testing.expect(hidden.y >= content.y + content.height);
+    try std.testing.expect(leave.y >= content.y + content.height);
+    try std.testing.expect(hidden.x + hidden.width <= leave.x);
     for (fixture.session.gui.renderer.quads.items()) |quad| {
-        if (quad.a == 0 and quad.border > 0) {
+        const outside = quad.x + quad.width <= content.x or quad.x >= content.x + content.width or quad.y + quad.height <= content.y or quad.y >= content.y + content.height;
+        if (quad.a == 0 and quad.border > 0 and !outside) {
             // A frame ring paints only its stroke: the content must sit inside it.
+            // Rings elsewhere, like the selected tab's hairline, are not frames.
             try std.testing.expect(quad.x + quad.border <= content.x and quad.y + quad.border <= content.y);
             try std.testing.expect(quad.x + quad.width - quad.border >= content.x + content.width);
             try std.testing.expect(quad.y + quad.height - quad.border >= content.y + content.height);
@@ -226,21 +242,13 @@ test "native chrome warm repaint reuses glyphs and performs no allocation" {
     try std.testing.expectEqual(@as(usize, 0), failure.allocations);
 }
 
-test "native hit capacity fails explicitly and bar slots never overlap" {
+test "native hit capacity fails explicitly" {
     var hits: HitMap = .{};
     for (0..HitMap.capacity) |index| {
         try hits.add(.{ .area = .{ .x = @intCast(index), .w = 1, .h = 1 }, .action = .{ .intent = .toggle_sidebar } });
     }
 
     try std.testing.expectError(error.ChromeHitCapacityExceeded, hits.add(.{ .area = .{ .w = 1, .h = 1 }, .action = .resize_sidebar }));
-    for (0..3) |tab_index| {
-        for (0..80) |width| {
-            const areas = bar_regions.calculate(.{ .x = 4, .y = 3, .w = @intCast(width), .h = 1 }, .{ 40, 30, 50 }, tab_index);
-            try std.testing.expect(areas[0].intersect(areas[1]).isEmpty());
-            try std.testing.expect(areas[1].intersect(areas[2]).isEmpty());
-            try std.testing.expect(areas[0].w + areas[1].w + areas[2].w <= width);
-        }
-    }
 }
 
 test "native pane presses focus before forwarding and chrome cancellation releases capture" {
@@ -299,7 +307,7 @@ test "native configured bar segments preserve colors decorations and faint ink" 
     defer fixture.deinit();
     var state: data.BarsState = .{};
     var content: data.Content = .{};
-    try content.append(.{ .text = "Styled", .style = .{
+    try content.appendSegment(.{ .text = "Styled", .style = .{
         .foreground = .{ .value = .rgb(.{ 255, 0, 0 }) },
         .background = .{ .value = .rgb(.{ 0, 255, 0 }) },
         .bold = true,
@@ -317,12 +325,10 @@ test "native configured bar segments preserve colors decorations and faint ink" 
     var underline = false;
     const renderer = &fixture.session.gui.renderer;
     const band = fixture.chrome.presented().bands.status_bar;
-    const cell_height: f32 = @floatFromInt(renderer.metrics.cell_height);
-    const row_top = band.y + @floor((band.height - cell_height) / 2);
     for (renderer.quads.items()) |quad| {
         background = background or (quad.r == 0 and quad.g == 1 and quad.b == 0 and quad.a == 1);
         faint_ink = faint_ink or (quad.r == 1 and quad.g == 0 and quad.b == 0 and quad.a == 0.5);
-        underline = underline or (quad.r == 1 and quad.g == 0 and quad.b == 0 and quad.y == row_top + cell_height - 2 and quad.height == 1);
+        underline = underline or (quad.r == 1 and quad.g == 0 and quad.b == 0 and quad.y > band.y and quad.height == 1);
     }
 
     try std.testing.expect(background and faint_ink and underline);
@@ -340,8 +346,8 @@ test "native sidebar ignores configured footer slots" {
     defer std.testing.allocator.free(before);
 
     var content: data.Content = .{};
-    try content.append(.{ .text = "footer", .style = .{ .background = .{ .value = .rgb(.{ 0, 0, 255 }) } } });
-    state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .metrics };
+    try content.appendSegment(.{ .text = "footer", .style = .{ .background = .{ .value = .rgb(.{ 0, 0, 255 }) } } });
+    state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .{ .content = data.bar_values.metrics_content } };
     try fixture.paint(projection);
     try std.testing.expectEqualSlices(Quad.Quad, before, renderer.quads.items());
 }

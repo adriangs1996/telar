@@ -5,16 +5,6 @@
 //! and the handshake fingerprint is derived from the same corpus, so a wire
 //! change cannot ship without a visible schema bump.
 
-const agent_thread = @import("schema/messages/agent_thread.zig");
-const AgentHistoryCursor = @import("AgentHistoryCursor.zig");
-const agent_thread_module = @import("agent_thread.zig");
-const AgentEffort = @import("AgentEffort.zig");
-const AgentSkills = @import("AgentSkills.zig");
-const agent_history_module = @import("agent_history.zig");
-const agent_history_messages = @import("schema/messages/agent_history.zig");
-const pane_kind = @import("schema/pane_kind.zig");
-const RecentConversation = @import("RecentConversation.zig");
-const RecentConversations = @import("RecentConversations.zig");
 const std = @import("std");
 const schema = @import("schema/schema.zig");
 const Entry = @import("Entry.zig");
@@ -26,6 +16,8 @@ const EntryMetadata = @import("EntryMetadata.zig");
 const golden = @import("golden.zig");
 const pane_module = @import("schema/messages/pane.zig");
 const workspace_module = @import("schema/messages/workspace.zig");
+const worktree_module = @import("schema/messages/worktree.zig");
+const WorktreeListEntry = @import("schema/messages/WorktreeListEntry.zig");
 const runtime = @import("schema/messages/runtime.zig");
 const tab_module = @import("schema/messages/tab.zig");
 const history = @import("schema/messages/history.zig");
@@ -60,14 +52,8 @@ const Frame = @import("schema/Frame.zig");
 const tags = @import("schema/messages/tags.zig");
 const TextMetadataBuilder = @import("text_metadata/Builder.zig");
 const text_metadata_limits = @import("text_metadata/limits.zig");
-const AgentThreadSnapshot = @import("AgentThreadSnapshot.zig");
-const AgentHistoryPage = @import("AgentHistoryPage.zig");
 const ChangeReviewSnapshotView = @import("schema/messages/ChangeReviewSnapshotView.zig");
 const MoveTab = @import("schema/messages/MoveTab.zig");
-const AgentPrompt = @import("schema/messages/AgentPrompt.zig");
-const QueryAgentHistory = @import("schema/messages/QueryAgentHistory.zig");
-const AgentOptions = @import("AgentOptions.zig");
-const CreateTab = @import("schema/messages/CreateTab.zig");
 
 test {
     std.testing.refAllDecls(schema);
@@ -76,8 +62,8 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 115;
-const corpus_storage_size = 8 * 1024;
+const corpus_len = 120;
+const corpus_storage_size = 12 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     var entries: [corpus_len]Entry = undefined;
@@ -97,7 +83,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     const client_layout_nodes = [_]types.ClientLayoutNode{
         .{ .split = .{ .axis = .horizontal, .ratio = 6000 } },
         .{ .pane = .{ .id = @enumFromInt(5) } },
-        .{ .pane = .{ .id = @enumFromInt(6), .surface = .thread } },
+        .{ .pane = .{ .id = @enumFromInt(6) } },
     };
     const client_layout_tabs = [_]ClientTabLayout{.{
         .location = location,
@@ -461,6 +447,38 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .pane_generation = 3,
             .state = .settling,
             .session = "abc",
+        }),
+    ));
+    helper.add(.{ .name = "report_agent_continuing", .direction = .client, .golden_hex = golden.report_agent_continuing }, helper.commit(
+        try agent_module.encodeReportAgent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .state = .continuing,
+        }),
+    ));
+    helper.add(.{ .name = "report_agent_waiting", .direction = .client, .golden_hex = golden.report_agent_waiting }, helper.commit(
+        try agent_module.encodeReportAgent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .state = .waiting,
+        }),
+    ));
+    helper.add(.{ .name = "report_agent_idle", .direction = .client, .golden_hex = golden.report_agent_idle }, helper.commit(
+        try agent_module.encodeReportAgent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .state = .idle,
+        }),
+    ));
+    helper.add(.{ .name = "report_agent_released", .direction = .client, .golden_hex = golden.report_agent_released }, helper.commit(
+        try agent_module.encodeReportAgent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .state = .released,
         }),
     ));
     helper.add(.{ .name = "report_agent_command", .direction = .client, .golden_hex = golden.report_agent_command }, helper.commit(
@@ -864,6 +882,11 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .sequence = 11,
         .observed_at_ms = 1000,
         .expires_at_ms = 2000,
+        .work_tree = @enumFromInt(4),
+        .final_message = "Done.\nTests pass.",
+        .plan_done = 2,
+        .plan_total = 5,
+        .plan_step = "Add the reorder test",
     }};
     helper.add(.{ .name = "agent_snapshot", .direction = .server, .golden_hex = golden.agent_snapshot }, helper.commit(
         try agent_module.encodeAgentSnapshot(helper.space(), .{
@@ -878,6 +901,8 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .memory_used_decigib = 92,
             .has_battery = true,
             .battery_percent = 84,
+            .cpu_count = 12,
+            .memory_total_decigib = 360,
         }),
     ));
     const workspace_list_entries = [_]WorkspaceListEntry{
@@ -896,10 +921,29 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .tab_count = 1,
         },
     };
+    const worktree_list_entries = [_]WorktreeListEntry{.{
+        .worktree = @enumFromInt(4),
+        .source = @enumFromInt(7),
+        .workspace = @enumFromInt(9),
+        .created_by = @enumFromInt(5),
+        .path = "/work/telar-worktrees/fix",
+        .branch = "fix",
+        .base = "main",
+        .title = "Fix tabs",
+        .brief = "Reorder\ntabs",
+        .dispatched_from = "laptop",
+        .diff_added = 12,
+        .diff_removed = 3,
+        .diff_files = 2,
+        .commits_ahead = 1,
+        .command_label = "claude",
+        .command_state = .running,
+    }};
     helper.add(.{ .name = "workspace_list", .direction = .server, .golden_hex = golden.workspace_list }, helper.commit(
         try workspace_module.encodeWorkspaceList(helper.space(), .{
             .revision = 3,
             .entries = &workspace_list_entries,
+            .worktrees = &worktree_list_entries,
         }),
     ));
     helper.add(.{ .name = "pane_cwd", .direction = .server, .golden_hex = golden.pane_cwd }, helper.commit(
@@ -1001,52 +1045,6 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
 
-    const agent_threads = @import("schema/messages/agent_thread.zig");
-    const agent_options = try fixtureAgentOptions();
-    helper.add(.{ .name = "agent_prompt", .direction = .client, .golden_hex = golden.agent_prompt }, helper.commit(
-        try agent_threads.encodeAgentPrompt(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .text = "hello", .options = agent_options }),
-    ));
-    helper.add(.{ .name = "agent_interrupt", .direction = .client, .golden_hex = golden.agent_interrupt }, helper.commit(
-        try agent_threads.encodeAgentInterrupt(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3 }),
-    ));
-    helper.add(.{ .name = "agent_resume", .direction = .client, .golden_hex = golden.agent_resume }, helper.commit(
-        try agent_thread.encodeAgentResume(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .expected_revision = 4, .conversation_index = 1 }),
-    ));
-    helper.add(.{ .name = "agent_approval", .direction = .client, .golden_hex = golden.agent_approval }, helper.commit(
-        try agent_threads.encodeAgentApproval(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .approval_id = 9, .accept = true }),
-    ));
-    helper.add(.{ .name = "query_agent_thread", .direction = .client, .golden_hex = golden.query_agent_thread }, helper.commit(
-        try agent_threads.encodeQueryAgentThread(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3 }),
-    ));
-    var thread_snapshot: AgentThreadSnapshot = .{ .pane_id = @enumFromInt(5), .pane_generation = 3, .revision = 1, .status = .ready, .item_count = 1, .text_len = 2, .metadata_len = 13, .thread_id_len = 1, .current_turn_id_len = 1 };
-    thread_snapshot.thread_id[0] = 't';
-    thread_snapshot.current_turn_id[0] = 'u';
-    @memcpy(thread_snapshot.text_storage[0..2], "ok");
-    @memcpy(thread_snapshot.metadata_storage[0..13], "TaskRunChildi");
-    thread_snapshot.item_storage[0] = .{ .identity = 7, .turn_identity = 8, .parent_identity = 6, .kind = .subagent, .role = .tool, .status = .running, .phase = .commentary, .text_len = 2, .title_len = 4, .detail_offset = 4, .detail_len = 3, .reference_offset = 7, .reference_len = 5, .source_offset = 12, .source_len = 1 };
-    helper.add(.{ .name = "agent_thread_snapshot", .direction = .server, .golden_hex = golden.agent_thread_snapshot }, helper.commit(
-        try agent_threads.encodeAgentThreadSnapshot(helper.space(), &thread_snapshot),
-    ));
-
-    const agent_history = @import("schema/messages/agent_history.zig");
-    helper.add(.{ .name = "query_agent_history", .direction = .client, .golden_hex = golden.query_agent_history }, helper.commit(
-        try agent_history.encodeQueryAgentHistory(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .view_generation = 7, .direction = .older, .cursor = "cursor" }),
-    ));
-    thread_snapshot.item_storage[0].fragment_offset = 1024;
-    thread_snapshot.item_storage[0].fragment_start = false;
-    const history_page: AgentHistoryPage = .{
-        .request_id = @enumFromInt(5),
-        .view_generation = 7,
-        .snapshot = thread_snapshot,
-        .before = try AgentHistoryCursor.init("before"),
-        .after = try AgentHistoryCursor.init("after"),
-        .has_before = true,
-        .has_after = true,
-    };
-    helper.add(.{ .name = "agent_history_page", .direction = .server, .golden_hex = golden.agent_history_page }, helper.commit(
-        try agent_history.encodeAgentHistoryPage(helper.space(), &history_page),
-    ));
-
     helper.add(.{ .name = "query_clients", .direction = .client, .golden_hex = golden.query_clients }, helper.commit(
         try schema.encodeQueryClients(helper.space(), .{ .request_id = @enumFromInt(5) }),
     ));
@@ -1093,13 +1091,118 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         try review.encodeChangeReviewChanged(helper.space(), .{ .pane_id = @enumFromInt(5), .pane_generation = 3, .session = "thread", .latest_edition_id = 2 }),
     ));
 
-    var editor_request: schema.OwnedEditorOpen = .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(6), .pane_generation = 7 };
+    var editor_request: schema.OwnedEditorOpen = .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(6), .pane_generation = 7, .line = 12, .column = 3 };
     try editor_request.setTarget("nvim", "/tmp/a");
     helper.add(.{ .name = "open_editor", .direction = .client, .golden_hex = golden.open_editor }, helper.commit(
         try schema.encodeOpenEditor(helper.space(), editor_request.view()),
     ));
     helper.add(.{ .name = "editor_opened", .direction = .server, .golden_hex = golden.editor_opened }, helper.commit(
         try schema.encodeEditorOpened(helper.space(), .{ .request_id = @enumFromInt(5), .outcome = .opened, .pane_id = @enumFromInt(8), .pane_generation = 9 }),
+    ));
+
+    helper.add(.{ .name = "register_worktree", .direction = .client, .golden_hex = golden.register_worktree }, helper.commit(
+        try worktree_module.encodeRegisterWorktree(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .source = @enumFromInt(7),
+            .created_by = @enumFromInt(5),
+            .path = "/work/telar-worktrees/fix",
+            .branch = "fix",
+            .base = "main",
+            .title = "Fix tabs",
+            .brief = "Reorder tabs",
+            .dispatched_from = "laptop",
+        }),
+    ));
+    helper.add(.{ .name = "worktree_registered", .direction = .server, .golden_hex = golden.worktree_registered }, helper.commit(
+        try worktree_module.encodeWorktreeRegistered(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .worktree = @enumFromInt(4),
+            .created = true,
+        }),
+    ));
+    helper.add(.{ .name = "launch_worktree", .direction = .client, .golden_hex = golden.launch_worktree }, helper.commit(
+        try worktree_module.encodeLaunchWorktree(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .worktree = @enumFromInt(4),
+            .label = "tests",
+            .size = .{ .cols = 80, .rows = 24 },
+            .launch = .{ .cwd = "/work/telar-worktrees/fix", .arguments = &arguments },
+        }),
+    ));
+    helper.add(.{ .name = "forget_worktree", .direction = .client, .golden_hex = golden.forget_worktree }, helper.commit(
+        try worktree_module.encodeForgetWorktree(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .worktree = @enumFromInt(4),
+        }),
+    ));
+    helper.add(.{ .name = "interrupt_agent", .direction = .client, .golden_hex = golden.interrupt_agent }, helper.commit(
+        try agent_module.encodeInterruptAgent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+        }),
+    ));
+    helper.add(.{ .name = "report_agent_progress", .direction = .client, .golden_hex = golden.report_agent_progress }, helper.commit(
+        try agent_module.encodeReportAgentProgress(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .cwd = "/work/telar-worktrees/fix/src",
+            .work_tree_path = "/work/telar-worktrees/fix",
+            .work_tree_branch = "fix",
+            .plan_op = .add,
+            .plan_text = "Add the reorder test",
+        }),
+    ));
+    helper.add(.{ .name = "send_pane_text_sender", .direction = .client, .golden_hex = golden.send_pane_text_sender }, helper.commit(
+        try pane_module.encodeSendPaneText(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .mode = .prompt,
+            .text = "ls",
+            .sender = @enumFromInt(9),
+        }),
+    ));
+    helper.add(.{
+        .name = "find_paths",
+        .direction = .client,
+        .golden_hex = golden.find_paths,
+    }, helper.commit(
+        try schema.encodeFindPaths(
+            helper.space(),
+            .{
+                .request_id = @enumFromInt(5),
+                .root = "/w",
+                .query = "ab",
+                .kind = .files,
+                .limit = 20,
+                .refresh = true,
+            },
+        ),
+    ));
+    helper.add(.{
+        .name = "path_results",
+        .direction = .server,
+        .golden_hex = golden.path_results,
+    }, helper.commit(
+        try schema.encodePathResults(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .root = "/w",
+            .scanned = 2,
+            .complete = false,
+            .matches = &.{
+                .{
+                    .path = "a/b",
+                    .kind = .file,
+                    .positions = &.{ 0, 2 },
+                },
+                .{
+                    .path = "a/",
+                    .kind = .directory,
+                },
+            },
+        }),
     ));
 
     std.debug.assert(index == corpus_len);
@@ -1969,7 +2072,7 @@ test "malformed application messages are rejected" {
         .cwd_label = "~/sandbox/telar",
         .provider = .codex,
         .status = .working,
-        .source = .proxy_tls,
+        .source = .lifecycle_report,
         .authority = .active,
         .confidence = 95,
         .sequence = 6,
@@ -2389,335 +2492,6 @@ test "anchored tab moves round trip and reject invalid anchor identities" {
     try std.testing.expectError(error.InvalidTabId, tab_module.encodeMoveTab(&buffer, invalid));
 }
 
-test "agent snapshot owns a bounded conversation and rejects corrupt ranges" {
-    const agent_threads = @import("schema/messages/agent_thread.zig");
-    const Snapshot = @import("AgentThreadSnapshot.zig");
-    var snapshot: Snapshot = .{ .pane_id = @enumFromInt(4), .pane_generation = 7, .revision = 2, .status = .blocked };
-    snapshot.item_count = 1;
-    snapshot.item_storage[0] = .{ .identity = 1, .role = .assistant, .status = .completed, .text_len = 5, .complete = true };
-    snapshot.text_len = 5;
-    @memcpy(snapshot.text_storage[0..5], "hello");
-    snapshot.pending_approval = .{ .id = 8, .kind = .command, .description_len = 3 };
-    @memcpy(snapshot.pending_approval.?.description[0..3], "run");
-    snapshot.options = try fixtureAgentOptions();
-    snapshot.options.access = .read_only;
-    snapshot.model_count = 1;
-    snapshot.model_storage[0] = .{
-        .id = "fake-model".* ++ [_]u8{0} ** 118,
-        .id_len = 10,
-        .label = "Fake model".* ++ [_]u8{0} ** 118,
-        .label_len = 10,
-        .effort_count = 1,
-        .default_effort = snapshot.options.effort,
-    };
-    snapshot.model_storage[0].effort_storage[0] = snapshot.options.effort;
-    var buffer: [64 * 1024]u8 = undefined;
-    const encoded = try agent_threads.encodeAgentThreadSnapshot(&buffer, &snapshot);
-    const view = (try root.decodeServer(encoded)).agent_thread_snapshot;
-    var copied: Snapshot = undefined;
-    try view.copyTo(&copied);
-    @memset(buffer[0..encoded.len], 0);
-    try std.testing.expectEqual(snapshot.pane_id, copied.pane_id);
-    try std.testing.expectEqual(@as(u64, 7), copied.pane_generation);
-    try std.testing.expectEqualStrings("hello", copied.items()[0].text(&copied));
-    try std.testing.expectEqualStrings("run", copied.pending_approval.?.text());
-    try std.testing.expectEqualStrings("Fake model", copied.models()[0].labelSlice());
-    try std.testing.expectEqualStrings("low", copied.models()[0].efforts()[0].idSlice());
-    try std.testing.expectEqual(agent_thread_module.Access.read_only, copied.options.access);
-    try std.testing.expect(copied.accepts(snapshot.options));
-    copied.model_storage[0].default_effort = try AgentEffort.init("unsupported");
-    try std.testing.expectError(error.InvalidAgentCatalog, agent_threads.encodeAgentThreadSnapshot(&buffer, &copied));
-    copied = snapshot;
-    copied.model_storage[0].effort_count = agent_thread_module.max_efforts + 1;
-    try std.testing.expectError(error.InvalidAgentCatalog, agent_threads.encodeAgentThreadSnapshot(&buffer, &copied));
-    copied = snapshot;
-    copied.model_count = agent_thread_module.max_models + 1;
-    try std.testing.expectError(error.InvalidAgentCatalog, agent_threads.encodeAgentThreadSnapshot(&buffer, &copied));
-    snapshot.item_storage[0].text_offset = 6;
-    try std.testing.expectError(error.InvalidAgentSnapshot, agent_threads.encodeAgentThreadSnapshot(&buffer, &snapshot));
-}
-
-test "agent controls reject unbound generations and oversized prompts" {
-    const agent_threads = @import("schema/messages/agent_thread.zig");
-    var buffer: [16 * 1024]u8 = undefined;
-    const request: AgentPrompt = .{ .request_id = @enumFromInt(1), .pane_id = @enumFromInt(2), .pane_generation = 0, .text = "hello" };
-    try std.testing.expectError(error.InvalidPaneGeneration, agent_threads.encodeAgentPrompt(&buffer, request));
-    var valid = request;
-    valid.pane_generation = 3;
-    try std.testing.expectError(error.InvalidAgentOptions, agent_threads.encodeAgentPrompt(&buffer, valid));
-    valid.options = try fixtureAgentOptions();
-    const encoded = try agent_threads.encodeAgentPrompt(&buffer, valid);
-    @memset(buffer[17..25], 0);
-    try std.testing.expectError(error.InvalidPaneGeneration, root.decodeClient(encoded));
-    valid.text = &(@as([8 * 1024 + 1]u8, @splat('x')));
-    try std.testing.expectError(error.InvalidPrompt, agent_threads.encodeAgentPrompt(&buffer, valid));
-}
-
-test "history queries correlate navigation and reject oversized ambiguous or malformed positions" {
-    const agent_history = @import("schema/messages/agent_history.zig");
-    const Cursor = @import("AgentHistoryCursor.zig");
-    var buffer: [4096]u8 = undefined;
-    var query: QueryAgentHistory = .{ .request_id = @enumFromInt(8), .pane_id = @enumFromInt(2), .pane_generation = 3, .view_generation = 4, .anchor = "item-1", .anchor_turn = "turn-1" };
-    var encoded = try agent_history.encodeQueryAgentHistory(&buffer, query);
-    try std.testing.expectEqualDeep(query, (try root.decodeClient(encoded)).query_agent_history);
-    buffer[33] = 255;
-    try std.testing.expectError(error.InvalidAgentHistoryDirection, root.decodeClient(encoded));
-    query.cursor = "older-position";
-    try std.testing.expectError(error.InvalidAgentHistoryQuery, agent_history.encodeQueryAgentHistory(&buffer, query));
-    query.anchor = "";
-    query.anchor_turn = "";
-    query.direction = .newer;
-    encoded = try agent_history.encodeQueryAgentHistory(&buffer, query);
-    try std.testing.expectEqualDeep(query, (try root.decodeClient(encoded)).query_agent_history);
-    @memset(buffer[25..33], 0);
-    try std.testing.expectError(error.InvalidAgentHistoryQuery, root.decodeClient(encoded));
-    query.view_generation = 0;
-    try std.testing.expectError(error.InvalidAgentHistoryQuery, agent_history.encodeQueryAgentHistory(&buffer, query));
-    query.view_generation = 4;
-    query.cursor = "";
-    query.anchor = "item-1";
-    try std.testing.expectError(error.InvalidAgentHistoryQuery, agent_history.encodeQueryAgentHistory(&buffer, query));
-    query.anchor_turn = "turn-1";
-    query.anchor = "";
-    try std.testing.expectError(error.InvalidAgentHistoryQuery, agent_history.encodeQueryAgentHistory(&buffer, query));
-    query.anchor = "item-1";
-    query.anchor_turn = "invalid\x00turn";
-    try std.testing.expectError(error.InvalidAgentHistoryQuery, agent_history.encodeQueryAgentHistory(&buffer, query));
-    query.anchor_turn = &(@as([129]u8, @splat('t')));
-    try std.testing.expectError(error.InvalidAgentHistoryQuery, agent_history.encodeQueryAgentHistory(&buffer, query));
-    query.anchor = "";
-    query.anchor_turn = "";
-    query.cursor = &(@as([2049]u8, @splat('x')));
-    try std.testing.expectError(error.InvalidAgentHistoryCursor, agent_history.encodeQueryAgentHistory(&buffer, query));
-    try std.testing.expectError(error.InvalidAgentHistoryCursor, Cursor.init("invalid\x00cursor"));
-    try std.testing.expectError(error.InvalidAgentHistoryCursor, Cursor.init("\xc3"));
-}
-
-test "history pages own cursors and provider fragment identities independently of live revisions" {
-    const agent_history = @import("schema/messages/agent_history.zig");
-    const Cursor = @import("AgentHistoryCursor.zig");
-    const Page = @import("AgentHistoryPage.zig");
-    var page: Page = .{
-        .request_id = @enumFromInt(8),
-        .view_generation = 9,
-        .snapshot = .{ .pane_id = @enumFromInt(2), .pane_generation = 3, .revision = 1, .item_count = 1, .text_len = 5, .metadata_len = 12 },
-        .before = try Cursor.init("older"),
-        .after = try Cursor.init("newer"),
-        .has_before = true,
-        .has_after = true,
-    };
-    @memcpy(page.snapshot.text_storage[0..5], "hello");
-    @memcpy(page.snapshot.metadata_storage[0..12], "item-1turn-1");
-    page.snapshot.item_storage[0] = .{ .role = .assistant, .identity = 12, .source_len = 6, .source_turn_offset = 6, .source_turn_len = 6, .text_len = 5, .fragment_offset = 48 * 1024, .fragment_start = false, .fragment_end = false };
-    var buffer: [4096]u8 = undefined;
-    const encoded = try agent_history.encodeAgentHistoryPage(&buffer, &page);
-    const view = (try root.decodeServer(encoded)).agent_history_page;
-    var copy: Page = undefined;
-    try view.copyTo(&copy);
-    @memset(&buffer, 0);
-    try std.testing.expectEqual(@as(u64, 9), copy.view_generation);
-    try std.testing.expectEqual(page.request_id, copy.request_id);
-    try std.testing.expectEqualStrings("older", copy.before.slice());
-    try std.testing.expectEqualStrings("newer", copy.after.slice());
-    try std.testing.expectEqualStrings("item-1", copy.snapshot.items()[0].sourceId(&copy.snapshot));
-    try std.testing.expectEqualStrings("turn-1", copy.snapshot.items()[0].sourceTurn(&copy.snapshot));
-    try std.testing.expectEqualStrings("hello", copy.snapshot.items()[0].text(&copy.snapshot));
-    try std.testing.expectEqualDeep(page.snapshot.items(), copy.snapshot.items());
-    page.before.len = 0;
-    try std.testing.expectError(error.InvalidAgentHistoryPage, agent_history.encodeAgentHistoryPage(&buffer, &page));
-    page.has_before = false;
-    page.snapshot.item_storage[0].fragment_start = true;
-    try std.testing.expectError(error.InvalidAgentSnapshot, agent_history.encodeAgentHistoryPage(&buffer, &page));
-    page.snapshot.item_storage[0].fragment_start = false;
-    page.snapshot.item_storage[0].source_turn_len = 7;
-    try std.testing.expectError(error.InvalidAgentSnapshot, agent_history.encodeAgentHistoryPage(&buffer, &page));
-}
-
-test "agent activity metadata owns identities context status and UTF8 ranges" {
-    const Snapshot = @import("AgentThreadSnapshot.zig");
-    const agent_threads = @import("schema/messages/agent_thread.zig");
-    var snapshot: Snapshot = .{ .pane_id = @enumFromInt(1), .pane_generation = 3, .revision = 4, .item_count = 2, .metadata_len = 20, .thread_id_len = 6, .current_turn_id_len = 4 };
-    @memcpy(snapshot.thread_id[0..6], "parent");
-    @memcpy(snapshot.current_turn_id[0..4], "turn");
-    @memcpy(snapshot.metadata_storage[0..20], "SearchInspectchildé");
-    snapshot.item_storage[0] = .{ .identity = 7, .turn_identity = 2, .kind = .dispatch, .role = .tool, .status = .completed, .complete = true, .title_len = 6 };
-    snapshot.item_storage[1] = .{ .identity = 8, .turn_identity = 2, .parent_identity = 7, .kind = .subagent, .role = .tool, .status = .running, .phase = .commentary, .title_offset = 6, .title_len = 7, .reference_offset = 13, .reference_len = 7 };
-    var buffer: [4096]u8 = undefined;
-    const encoded = try agent_threads.encodeAgentThreadSnapshot(&buffer, &snapshot);
-    const view = (try root.decodeServer(encoded)).agent_thread_snapshot;
-    var copied: Snapshot = undefined;
-    try view.copyTo(&copied);
-    try std.testing.expectEqualDeep(snapshot.items(), copied.items());
-    try std.testing.expectEqualStrings("parent", copied.threadId());
-    try std.testing.expectEqualStrings("turn", copied.currentTurnId());
-    try std.testing.expectEqualStrings("Inspect", copied.findItem(8).?.title(&copied));
-    try std.testing.expectEqualStrings("childé", copied.findItem(8).?.reference(&copied));
-    try std.testing.expect(copied.findItem(6) == null);
-
-    var invalid = snapshot;
-    invalid.item_storage[1].identity = 7;
-    try std.testing.expectError(error.InvalidAgentSnapshot, agent_threads.encodeAgentThreadSnapshot(&buffer, &invalid));
-    invalid = snapshot;
-    invalid.item_storage[0].identity = 0;
-    try std.testing.expectError(error.InvalidAgentSnapshot, agent_threads.encodeAgentThreadSnapshot(&buffer, &invalid));
-    invalid = snapshot;
-    invalid.item_storage[1].parent_identity = 8;
-    try std.testing.expectError(error.InvalidAgentSnapshot, agent_threads.encodeAgentThreadSnapshot(&buffer, &invalid));
-    invalid = snapshot;
-    invalid.item_storage[1].reference_len -= 1;
-    try std.testing.expectError(error.InvalidAgentSnapshot, agent_threads.encodeAgentThreadSnapshot(&buffer, &invalid));
-    invalid = snapshot;
-    invalid.item_storage[1].reference_offset = 20;
-    try std.testing.expectError(error.InvalidAgentSnapshot, agent_threads.encodeAgentThreadSnapshot(&buffer, &invalid));
-    invalid = snapshot;
-    invalid.metadata_storage[0] = 0;
-    try std.testing.expectError(error.InvalidAgentSnapshot, agent_threads.encodeAgentThreadSnapshot(&buffer, &invalid));
-
-    _ = try agent_threads.encodeAgentThreadSnapshot(&buffer, &snapshot);
-    const first_item = 1 + 8 * 3 + 2 + snapshot.thread_id_len + 2 + snapshot.current_turn_id_len + 3;
-    buffer[first_item + 1 + 8 * 3] = 255;
-    try std.testing.expectError(error.InvalidAgentTag, root.decodeServer(buffer[0..encoded.len]));
-    _ = try agent_threads.encodeAgentThreadSnapshot(&buffer, &snapshot);
-    @memset(buffer[first_item + 1 ..][0..8], 0);
-    try std.testing.expectError(error.InvalidAgentSnapshot, root.decodeServer(buffer[0..encoded.len]));
-    try std.testing.expectError(error.InvalidAgentSnapshot, view.copyTo(&copied));
-    try std.testing.expectEqual(@as(u64, 4), copied.revision);
-    try std.testing.expectEqual(@as(u64, 7), copied.items()[0].identity);
-    @memset(&buffer, 0);
-    try std.testing.expectEqualStrings("childé", copied.items()[1].reference(&copied));
-}
-
-test "agent snapshot maximum metadata text catalog and approval fit a bounded frame" {
-    const limits = @import("agent_thread.zig");
-    const Snapshot = @import("AgentThreadSnapshot.zig");
-    const Effort = @import("AgentEffort.zig");
-    const agent_threads = @import("schema/messages/agent_thread.zig");
-    var snapshot: Snapshot = .{ .pane_id = @enumFromInt(1), .pane_generation = 1, .item_count = limits.max_items, .text_len = limits.max_text_bytes, .metadata_len = limits.max_metadata_bytes, .model_count = limits.max_models };
-    @memset(&snapshot.text_storage, 'x');
-    @memset(&snapshot.metadata_storage, 'm');
-    for (&snapshot.item_storage, 0..) |*item, index| {
-        item.* = .{ .identity = index + 1, .role = .tool, .kind = .command, .status = .completed, .complete = true, .text_offset = @intCast(index * 768), .text_len = 768, .title_offset = @intCast(index * 160), .title_len = 160 };
-    }
-    for (&snapshot.model_storage, 0..) |*model, index| {
-        @memset(&model.id, 'i');
-        model.id[0] = @intCast('A' + index);
-        model.id_len = limits.max_model_bytes;
-        @memset(&model.label, 'l');
-        model.label_len = limits.max_model_label_bytes;
-        model.effort_count = limits.max_efforts;
-        for (&model.effort_storage, 0..) |*effort, effort_index| {
-            var name: [limits.max_effort_bytes]u8 = @splat('e');
-            name[0] = @intCast('A' + effort_index);
-            effort.* = try Effort.init(&name);
-        }
-        model.default_effort = model.effort_storage[0];
-    }
-    try snapshot.options.setModel(snapshot.models()[0].idSlice());
-    snapshot.options.effort = snapshot.models()[0].default_effort;
-    snapshot.pending_approval = .{ .id = 1, .kind = .command, .description_len = limits.max_approval_bytes };
-    @memset(&snapshot.pending_approval.?.description, 'a');
-    const description: [122]u8 = @splat('s');
-    for (0..AgentSkills.capacity) |index| {
-        var name: [3]u8 = undefined;
-        _ = try std.fmt.bufPrint(&name, "{d:0>3}", .{index});
-        try snapshot.skills.append(.{ .name = &name, .description = &description });
-    }
-    try std.testing.expectEqual(snapshot.skills.text.len, snapshot.skills.text_len);
-    var buffer: [128 * 1024]u8 = undefined;
-    const encoded = try agent_threads.encodeAgentThreadSnapshot(&buffer, &snapshot);
-    try std.testing.expect(encoded.len < buffer.len);
-    try std.testing.expect(@sizeOf(Snapshot) < 128 * 1024);
-    var copied: Snapshot = undefined;
-    try (try root.decodeServer(encoded)).agent_thread_snapshot.copyTo(&copied);
-    try std.testing.expectEqual(limits.max_items, copied.items().len);
-    try std.testing.expectEqual(limits.max_metadata_bytes, copied.metadata_len);
-    try std.testing.expectEqualDeep(snapshot.items(), copied.items());
-    try std.testing.expectEqualDeep(snapshot.skills, copied.skills);
-
-    const Page = @import("AgentHistoryPage.zig");
-    const Cursor = @import("AgentHistoryCursor.zig");
-    const maximum_cursor: [agent_history_module.max_cursor_bytes]u8 = @splat('c');
-    const page: Page = .{
-        .request_id = @enumFromInt(1),
-        .view_generation = 1,
-        .snapshot = snapshot,
-        .before = try Cursor.init(&maximum_cursor),
-        .after = try Cursor.init(&maximum_cursor),
-        .has_before = true,
-        .has_after = true,
-    };
-    const page_bytes = try agent_history_messages.encodeAgentHistoryPage(&buffer, &page);
-    try std.testing.expect(page_bytes.len < buffer.len);
-    try std.testing.expect(@sizeOf(Page) < 128 * 1024);
-    try (try root.decodeServer(page_bytes)).agent_history_page.snapshot.copyTo(&copied);
-    try std.testing.expectEqualDeep(snapshot.items(), copied.items());
-}
-
-fn fixtureAgentOptions() !AgentOptions {
-    var options: AgentOptions = .{ .effort = try AgentEffort.init("low") };
-    try options.setModel("fake-model");
-    return options;
-}
-
-test "agent tab launch carries only cwd and rejects executable overrides" {
-    var buffer: [512]u8 = undefined;
-    var request: CreateTab = .{
-        .request_id = @enumFromInt(1),
-        .workspace = .{ .workspace = @enumFromInt(2) },
-        .kind = .agent,
-        .size = .{ .cols = 80, .rows = 24 },
-        .launch = .{ .cwd = "/project", .cwd_source = @enumFromInt(3), .arguments = &.{} },
-    };
-    const decoded = (try root.decodeClient(try tab_module.encodeCreateTab(&buffer, request))).create_tab;
-    try std.testing.expectEqual(pane_kind.PaneKind.agent, decoded.kind);
-    try std.testing.expectEqualStrings("/project", decoded.launch.cwd);
-    try std.testing.expectEqual(@as(u16, 0), decoded.launch.argument_count);
-    try std.testing.expectEqual(@as(u64, 3), id_module.raw(decoded.launch.cwd_source.?));
-    request.launch.arguments = &.{"/bin/sh"};
-    try std.testing.expectError(error.InvalidAgentLaunch, tab_module.encodeCreateTab(&buffer, request));
-}
-
-test "resume request bounds and recent catalog survive owned snapshot decoding" {
-    const core = schema;
-    var snapshot: core.AgentThreadSnapshot = .{ .pane_id = @enumFromInt(5), .pane_generation = 3, .status = .ready, .recent = .{ .phase = .ready } };
-    try snapshot.recent.append(try RecentConversation.init("previous-thread", "Parser fixes"));
-    var storage: [96 * 1024]u8 = undefined;
-    var copied: core.AgentThreadSnapshot = undefined;
-    const bytes = try core.encodeAgentThreadSnapshot(&storage, &snapshot);
-    try (try core.decodeServer(bytes)).agent_thread_snapshot.copyTo(&copied);
-    @memset(&storage, 0);
-    try std.testing.expectEqualStrings("previous-thread", copied.recent.entries[0].idSlice());
-    try std.testing.expectEqualStrings("Parser fixes", copied.recent.entries[0].titleSlice());
-    try std.testing.expect(copied.canResume());
-    copied.resumed = true;
-    try std.testing.expect(!copied.canResume());
-    const request: core.AgentResume = .{ .request_id = @enumFromInt(7), .pane_id = snapshot.pane_id, .pane_generation = 3, .expected_revision = snapshot.revision, .conversation_index = 0 };
-    const encoded = try core.encodeAgentResume(&storage, request);
-    try std.testing.expectEqualDeep(request, (try core.decodeClient(encoded)).agent_resume);
-    storage[encoded.len - 1] = RecentConversations.capacity;
-    try std.testing.expectError(error.InvalidConversation, core.decodeClient(encoded));
-}
-
-test "agent images round trip without text and reject malformed counts and paths" {
-    const threads = @import("schema/messages/agent_thread.zig");
-    var storage: [16 * 1024]u8 = undefined;
-    var request: AgentPrompt = .{ .request_id = @enumFromInt(1), .pane_id = @enumFromInt(2), .pane_generation = 3, .text = "", .options = try fixtureAgentOptions() };
-    try std.testing.expectError(error.InvalidPrompt, threads.encodeAgentPrompt(&storage, request));
-    try request.images.append("/tmp/a.png");
-    try request.images.append("/tmp/b.png");
-    const encoded = try threads.encodeAgentPrompt(&storage, request);
-    const decoded = (try root.decodeClient(encoded)).agent_prompt;
-    try std.testing.expectEqualStrings("", decoded.text);
-    try std.testing.expectEqual(@as(u8, 2), decoded.images.count);
-    try std.testing.expectEqualStrings("/tmp/a.png", decoded.images.path(0));
-    try std.testing.expectEqualStrings("/tmp/b.png", decoded.images.path(1));
-    request.images.count = 5;
-    try std.testing.expectError(error.TooManyAgentImages, threads.encodeAgentPrompt(&storage, request));
-    request.images.count = 1;
-    request.images.storage[0] = "relative.png";
-    try std.testing.expectError(error.InvalidAgentImage, threads.encodeAgentPrompt(&storage, request));
-}
-
 test "editor requests own deferred paths and reject command controls and invalid identities" {
     var request: schema.OwnedEditorOpen = .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(6), .pane_generation = 7 };
     const path = "/tmp/a b'|quit!\"\\$().md";
@@ -2731,6 +2505,14 @@ test "editor requests own deferred paths and reject command controls and invalid
     try std.testing.expectEqualStrings("/usr/bin/nvim", retained.editor());
     try std.testing.expectError(error.InvalidEditorTarget, retained.setTarget("nvim", "/tmp/line\nbreak"));
     try std.testing.expectError(error.InvalidEditorTarget, retained.setTarget("nvim", "relative/file"));
+    retained.line = 0;
+    retained.column = 3;
+    try std.testing.expectError(error.InvalidEditorTarget, schema.encodeOpenEditor(&storage, retained.view()));
+    retained.line = 12;
+    const positioned = (try schema.decodeClient(try schema.encodeOpenEditor(&storage, retained.view()))).open_editor;
+    try std.testing.expectEqual(@as(u32, 12), positioned.line);
+    try std.testing.expectEqual(@as(u32, 3), positioned.column);
+    retained.column = 0;
     try std.testing.expectError(error.InvalidEditorTarget, retained.setTarget("-c", "/tmp/a"));
     try std.testing.expectError(error.InvalidByteString, retained.setTarget("nvim", "x" ** (schema.OpenEditor.max_bytes + 1)));
     retained.pane_generation = 0;

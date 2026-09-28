@@ -2,12 +2,10 @@ const sidebar = @import("../layout/sidebar.zig");
 const copy_mode = @import("../input/copy_mode.zig");
 const pacing = @import("pacing");
 const cellgrid = @import("cellgrid");
-const agent_options = @import("../panes/agent_options.zig");
 const core = @import("telar-core");
 const model_data = @import("../model.zig");
 const EntryInput = @import("../workspace/EntryInput.zig");
-const AgentPromptIntent = @import("../agents/AgentPromptIntent.zig");
-const AgentPane = @import("../panes/Pane.zig");
+const Pane = @import("../panes/Pane.zig");
 const model_namespace = @import("model_namespace.zig");
 const Tabs = @import("../workspace/Tabs.zig");
 const Config = @import("Config.zig");
@@ -31,11 +29,13 @@ const ClipboardCaptureState = @import("ClipboardCaptureState.zig");
 const PluginExecutionState = @import("PluginExecutionState.zig");
 const HostState = @import("HostState.zig");
 const HistoryPaletteState = @import("HistoryPaletteState.zig");
+const PathPickerState = @import("PathPickerState.zig");
 const SuggestionState = @import("SuggestionState.zig");
 const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
 const AgentSnapshot = @import("../agents/AgentSnapshot.zig");
 const SystemMetrics = @import("SystemMetrics.zig");
 const State = @import("../bars/State.zig");
+const CpuHistory = @import("CpuHistory.zig");
 const ReportedPaneFocus = @import("ReportedPaneFocus.zig");
 const std = @import("std");
 const InitialClientState = @import("InitialClientState.zig");
@@ -70,6 +70,7 @@ const RecoverPaneSplit = @import("RecoverPaneSplit.zig");
 const RenameTab = @import("RenameTab.zig");
 const NewTab = @import("NewTab.zig");
 const RemoveTab = @import("RemoveTab.zig");
+const PeekScreen = @import("PeekScreen.zig");
 const ClientModel = @This();
 
 pub const max_window_title_template_bytes = 128;
@@ -82,6 +83,10 @@ config: Config = .{},
 theme: model_data.ColorTheme = model_data.theme_support.default_theme,
 icon_theme: model_data.icons.Theme = .unicode,
 startup: model_data.StartupState = .{},
+/// Whether the runtime is reachable; the chrome shows it and pane input
+/// waits for it.
+runtime_link: model_data.RuntimeLink = .{},
+link_revision: u64 = 0,
 request_lifecycle: model_data.RequestLifecycle = .{},
 /// Retained tab layouts sent to the runtime for reconnect.
 client_layouts: model_data.ClientLayoutsState = .{},
@@ -117,9 +122,12 @@ host: HostState,
 to_host: model_data.HostEffects = .{},
 to_runtime: model_data.Outbox = .{},
 name_prompt: model_data.NamePromptState = .{},
+/// The pane text an open peek shows.
+peek_screen: PeekScreen = .{},
 history_palette: HistoryPaletteState = .{},
 suggestion: SuggestionState = .{},
 path_completion: model_data.PathCompletionState = .{},
+path_picker: PathPickerState = .{},
 workspace_revision: u64 = 0,
 configuration_generation: u64 = 0,
 window_title_template: [max_window_title_template_bytes]u8 = undefined,
@@ -142,6 +150,8 @@ proxy_system_trusted: bool = false,
 proxy_status_revision: u64 = 0,
 system_metrics: ?SystemMetrics = null,
 system_metrics_revision: u64 = 0,
+/// Recent CPU samples for the built-in sparkline; advances with the metrics.
+cpu_history: CpuHistory = .{},
 bars: State = .{},
 bars_revision: u64 = 0,
 notification_center: model_data.Center = .{},
@@ -242,13 +252,6 @@ pub fn deinit(model: *ClientModel) void {
     model.saved_layouts = .{};
 }
 
-/// Captures an attached agent pane without granting mutation authority.
-/// Example: `const pane = model.agentPane(pane_id) orelse return;`
-pub fn agentPane(model: *const ClientModel, pane_id: core.PaneId) ?*const AgentPane {
-    const pane = model.panes.findConst(pane_id) orelse return null;
-    return if (pane.attached and pane.kind == .agent) pane else null;
-}
-
 /// Installs runtime pane identity after a correlated attachment succeeds.
 /// Example: `_ = model.identifyPane(opened);`
 pub fn identifyPane(model: *ClientModel, opened: core.PaneOpened) bool {
@@ -257,11 +260,11 @@ pub fn identifyPane(model: *ClientModel, opened: core.PaneOpened) bool {
         return false;
     }
 
-    const slot = model.tabs.find(pane.location.tab_id) orelse return false;
-    const changed = pane.identify(opened.kind, opened.pane_generation);
-    const surface_changed = if (pane.kind == .agent) model.tabs.layout[slot].setSurface(pane.id, .thread) else false;
+    if (model.tabs.find(pane.location.tab_id) == null) {
+        return false;
+    }
 
-    if (changed or surface_changed) {
+    if (pane.identify(opened.pane_generation)) {
         model.panes_revision +%= 1;
     }
 
@@ -296,12 +299,15 @@ pub fn version(model: *const ClientModel) Version {
         .pane_progress = model.pane_progress_revision,
         .pane_graphics = model.pane_graphics_revision,
         .chrome = model.chrome_revision,
-        .prompt = model.name_prompt.version(),
+        // A peek draws inside its prompt, so its pane text is prompt state.
+        .prompt = model.name_prompt.version() +% model.peek_screen.revision,
         .history = model.history_palette.version(),
         .suggestion = model.suggestion.version(),
         .path_completion = model.path_completion.version(),
+        .path_picker = model.path_picker.version(),
         .copy = model.copy_revision,
         .viewport = model.viewport_revision,
+        .link = model.link_revision,
     };
 }
 
@@ -333,7 +339,7 @@ pub fn activeTabLocation(model: *const ClientModel) ?core.TabLocation {
 /// ```zig
 /// const pane = model.activePaneConst(pane_id) orelse return;
 /// ```
-pub fn activePaneConst(model: *const ClientModel, pane_id: core.PaneId) ?*const AgentPane {
+pub fn activePaneConst(model: *const ClientModel, pane_id: core.PaneId) ?*const Pane {
     const slot = model.tabs.activeSlot() orelse return null;
     return model.panes.findInConst(model.tabs.location[slot].tab_id, pane_id);
 }

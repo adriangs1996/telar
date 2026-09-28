@@ -5,6 +5,7 @@ const cellgrid = @import("cellgrid");
 const data = @import("model");
 const action_module = @import("action.zig");
 const std = @import("std");
+const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
 const gfx = @import("gfx");
@@ -106,7 +107,12 @@ fn drawProject(self: AgentCard, canvas: *Canvas, row: Rect) !void {
     const label_width = @max(0, project_width - slot - gap);
     var buffer: [TextFit.max_bytes]u8 = undefined;
     const fit: TextFit = .{ .canvas = canvas, .width = label_width };
-    const label: Label = .{ .text = self.agent.workspaceLabel(), .color = palette.subtext0, .face = .sans, .size = .small };
+    var label_buffer: [core.max_agent_workspace_label_bytes + 16]u8 = undefined;
+    const label_text = if (self.context.projection.workspaces.delegates(self.agent.key.pane_id))
+        std.fmt.bufPrint(&label_buffer, "{s} \u{00b7} coordinator", .{self.agent.workspaceLabel()}) catch self.agent.workspaceLabel()
+    else
+        self.agent.workspaceLabel();
+    const label: Label = .{ .text = label_text, .color = palette.subtext0, .face = .sans, .size = .small };
     var fitted = label;
     fitted.text = try fit.fit(label, &buffer);
     _ = try canvas.textAt(.{ .x = label_x, .y = row.y, .width = label_width, .height = row.height }, fitted);
@@ -114,7 +120,9 @@ fn drawProject(self: AgentCard, canvas: *Canvas, row: Rect) !void {
 
 // The top-right slot drops duration, then the word, before clipping its
 // glyph. Only the glyph pulses; the state and the clock remain readable.
-fn drawStatus(self: AgentCard, canvas: *Canvas, row: Rect) !f32 {
+/// Draws the status glyph, word and age at the right of `row`; returns the width used.
+/// Example: `const used = try card.drawStatus(canvas, row);`
+pub fn drawStatus(self: AgentCard, canvas: *Canvas, row: Rect) !f32 {
     const state = self.agent.status;
     const ink = status_glyph.color(canvas.theme.palette, state);
     const gap = self.geometry.px(6);
@@ -201,12 +209,13 @@ fn markSide(_: AgentCard, canvas: *const Canvas) f32 {
     return @round(canvas.chrome.px(CardGeometry.mark_size));
 }
 
-// OpenAI follows the theme; the other providers retain their source colors.
+// OpenAI, Cursor and OpenCode follow the theme; the other providers retain
+// their source colors.
 // Custom providers keep their configured glyph without a background.
 fn drawMark(self: AgentCard, canvas: *Canvas, chip: Rect) !void {
     const palette = canvas.theme.palette;
     if (canvas.providerMark(self.agent.provider)) |mark| {
-        const tint: cellgrid.Color = if (self.agent.provider == .codex)
+        const tint: cellgrid.Color = if (data.icons.providerMarkFollowsTheme(self.agent.provider))
             (if (palette.text.kind == .default) .rgb(canvas.theme.terminal.foreground) else palette.text)
         else
             .default;

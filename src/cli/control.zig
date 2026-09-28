@@ -30,12 +30,42 @@ pub fn currentPaneGeneration(environ: std.process.Environ) !u64 {
     return generation;
 }
 
+/// The pane this process runs in, when the command talks to the runtime that
+/// owns that pane: `TELAR_PANE_ID` names a pane of the runtime at
+/// `TELAR_SOCKET_PATH`, not of one reached through `--socket` or
+/// `TELAR_SOCKET`.
+///
+/// ```zig
+/// const sender = control.senderPane(environ, options.socket);
+/// ```
+pub fn senderPane(environ: std.process.Environ, socket: ?[*:0]const u8) ?u64 {
+    const pane_id = currentPaneId(environ) catch return null;
+    const own = std.process.Environ.getPosix(environ, "TELAR_SOCKET_PATH") orelse return null;
+    if (socket) |explicit| {
+        return if (std.mem.eql(u8, std.mem.span(explicit), own)) pane_id else null;
+    }
+
+    if (std.process.Environ.getPosix(environ, "TELAR_SOCKET")) |configured| {
+        if (configured.len != 0 and !std.mem.eql(u8, configured, own)) {
+            return null;
+        }
+    }
+
+    return pane_id;
+}
+
 pub const ControlError = error{
     PaneNotFound,
     PaneExited,
     AgentBlocked,
     InvalidRequest,
     RuntimeRefused,
+    WorktreeNotFound,
+    WorkspaceNotFound,
+    PaneFocused,
+    PromptRateLimited,
+    AgentNotWorking,
+    InterruptUnsupported,
 };
 
 pub fn failureError(failure: core.RequestFailed) ControlError {
@@ -44,6 +74,12 @@ pub fn failureError(failure: core.RequestFailed) ControlError {
         .pane_exited => error.PaneExited,
         .agent_blocked => error.AgentBlocked,
         .invalid_request => error.InvalidRequest,
+        .worktree_not_found => error.WorktreeNotFound,
+        .workspace_not_found => error.WorkspaceNotFound,
+        .pane_focused => error.PaneFocused,
+        .prompt_rate_limited => error.PromptRateLimited,
+        .agent_not_working => error.AgentNotWorking,
+        .interrupt_unsupported => error.InterruptUnsupported,
         else => error.RuntimeRefused,
     };
 }
@@ -65,6 +101,14 @@ pub fn describe(err: anyerror) []const u8 {
         error.NotInsideTelarPane => "TELAR_PANE_ID is not set; run inside a telar pane or name a pane",
         error.RuntimeUnavailable => "the local runtime is not reachable",
         error.UnexpectedRuntimeResponse => "unexpected reply from the runtime",
+        error.WorktreeNotFound => "no tracked worktree matches that branch or title",
+        error.WorkspaceNotFound => "workspace not found",
+        error.PaneFocused => "a person is typing in that pane; try again once they leave it",
+        error.PromptRateLimited => "prompt budget for that pane is spent; wait for its answer with `telar agent wait`",
+        error.AgentNotWorking => "the agent is not working; nothing to interrupt",
+        error.InterruptUnsupported => "that agent declares no interrupt key",
+        error.AmbiguousWorktree => "more than one worktree has that title; use its branch",
+        error.WorktreeHasNoAgent => "no agent runs in that worktree",
         else => @errorName(err),
     };
 }
@@ -125,6 +169,14 @@ pub fn writeAgentJson(writer: *std.Io.Writer, agent: *const ControlAgent) !void 
     try writeJsonString(writer, agent.titleSlice());
     try writer.writeAll(",\"cwd\":");
     try writeJsonString(writer, agent.cwdLabel());
+    try writer.writeAll(",\"blocked_reason\":");
+    try writeJsonString(writer, @tagName(agent.blocked_reason));
+    try writer.print(",\"status_age_s\":{d},\"worktree_id\":{d},\"last_event\":", .{ agent.status_age_s, agent.work_tree });
+    try writeJsonString(writer, agent.lastEvent());
+    try writer.print(",\"plan\":{{\"done\":{d},\"total\":{d},\"step\":", .{ agent.plan_done, agent.plan_total });
+    try writeJsonString(writer, agent.planStep());
+    try writer.writeAll("},\"final_message\":");
+    try writeJsonString(writer, agent.finalMessage());
     try writer.writeByte('}');
 }
 
@@ -172,7 +224,7 @@ test "snapshot resolution prefers exact pane ids and rejects ambiguous titles" {
         .session_title = "Investigate proxy",
         .provider = .claude,
         .status = .done,
-        .source = .proxy_tls,
+        .source = .lifecycle_report,
         .authority = .active,
         .confidence = 90,
         .sequence = 1,

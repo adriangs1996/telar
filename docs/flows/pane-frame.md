@@ -16,7 +16,7 @@ runtime_messages.handleServerMessage(.pane_frame)
      -> applied: graphics visibility, synchronizeActivePane
         -> telemetry and attachment-prompt reconciliation
   -> adapter observes presentation revisions
-  -> successful host completion retires exact captured damage
+  -> successful presentation completion retires exact captured damage
 ```
 
 `pane_frame.receive` finds the pane in `model.panes`, ignores detached frames
@@ -37,7 +37,7 @@ ACK failure preserves owned cells and pending presentation damage. Later
 resource failure preserves both that commit and any completed effects. These
 errors reach the client loop; reconnect repairs disposable resources. The
 runtime retains its per-pane bound of one unacknowledged patch, independently
-of host write or GPU completion. One blocked client cannot hold another client's
+of GPU completion. One blocked client cannot hold another client's
 presentation hostage.
 
 Presentation observes the model revision after the event and folds it into
@@ -55,9 +55,9 @@ cancelled host delivery clears no model damage and never claims presentation.
 Source: `src/client/panes/pane_frames.zig`, `src/model/panes/pane_frame.zig`,
 `src/model/panes/Pane.zig`, `src/model/panes/presentation_delivery.zig` and
 `src/client/connection/presentation_delivery.zig`.
-Tests: `src/frontend/client/tests/pane_updates.zig`,
+Tests: `src/client_tests/pane_updates.zig`,
 `src/client/presentation/headless_tests.zig`,
-`src/frontend/client/tests/presentation.zig`, `src/gui/tests/terminal.zig`,
+`src/client_tests/presentation.zig`, `src/gui/tests/terminal.zig`,
 and `src/model/panes/tests.zig` cover base recovery, ACK ordering, busy/failed
 consumers, owned buffers, allocation failures and attachment-generation ABA.
 

@@ -2,10 +2,14 @@
 
 const client = @import("telar-client");
 const core = @import("telar-core");
+const privatefile = @import("privatefile");
 const std = @import("std");
 const PluginOptions = @import("arguments/PluginOptions.zig");
 const PluginWorkerOptions = @import("arguments/PluginWorkerOptions.zig");
 const TestEnvironment = @import("TestEnvironment.zig");
+
+/// The largest trust store read or written, in bytes.
+const trust_store_limit = 64 * 1024;
 
 /// Inspects one package and performs the requested read-only, installation or
 /// trust operation without executing plugin code.
@@ -43,18 +47,7 @@ pub fn runWorker(init: std.process.Init, options: PluginWorkerOptions) !void {
 /// const path = try plugin.trustPath(environ, &path_buffer);
 /// ```
 pub fn trustPath(environ: std.process.Environ, buffer: []u8) ![]const u8 {
-    if (environ.getPosix("XDG_CONFIG_HOME")) |base| {
-        if (base.len != 0) {
-            return std.fmt.bufPrint(buffer, "{s}/telar/trust.json", .{base});
-        }
-    }
-
-    const home = environ.getPosix("HOME") orelse return error.HomeDirectoryUnavailable;
-    if (home.len == 0) {
-        return error.HomeDirectoryUnavailable;
-    }
-
-    return std.fmt.bufPrint(buffer, "{s}/.config/telar/trust.json", .{home});
+    return client.config_directory.path(environ, "trust.json", buffer);
 }
 
 /// Loads a bounded trust store after verifying that its path is a private,
@@ -157,51 +150,21 @@ fn grantedCapabilities(declared: core.CapabilitySet, options: *const PluginOptio
 }
 
 fn loadStore(io: std.Io, gpa: std.mem.Allocator, path: []const u8) !core.TrustStore {
-    const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
-        error.FileNotFound => return .{},
+    const source = privatefile.read(io, gpa, path, .limited(trust_store_limit)) catch |err| switch (err) {
+        error.InsecureFile => return error.InsecureTrustStore,
         else => |other| return other,
-    };
-    if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0) {
-        return error.InsecureTrustStore;
-    }
-
-    const source = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(64 * 1024));
+    } orelse return .{};
     defer gpa.free(source);
+
     return core.TrustStore.parse(gpa, source);
 }
 
 fn writeStore(io: std.Io, path: []const u8, store: *const core.TrustStore) !void {
-    const directory = std.fs.path.dirname(path) orelse return error.InvalidTrustStorePath;
-    _ = try std.Io.Dir.cwd().createDirPathStatus(io, directory, std.Io.File.Permissions.fromMode(0o700));
-    try std.Io.Dir.cwd().setFilePermissions(io, directory, std.Io.File.Permissions.fromMode(0o700), .{ .follow_symlinks = false });
+    var buffer: [trust_store_limit]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+    try store.writeJson(&writer);
 
-    var nonce: [16]u8 = undefined;
-    try io.randomSecure(&nonce);
-    const nonce_hex = std.fmt.bytesToHex(nonce, .lower);
-    var temp_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const temp = try std.fmt.bufPrint(&temp_buffer, "{s}.tmp-{s}", .{ path, &nonce_hex });
-    var committed = false;
-    defer if (!committed) {
-        std.Io.Dir.cwd().deleteFile(io, temp) catch {};
-    };
-
-    var file = try std.Io.Dir.cwd().createFile(io, temp, .{
-        .truncate = true,
-        .permissions = std.Io.File.Permissions.fromMode(0o600),
-    });
-    var file_open = true;
-    defer if (file_open) {
-        file.close(io);
-    };
-    var output_buffer: [4096]u8 = undefined;
-    var output = file.writer(io, &output_buffer);
-    try store.writeJson(&output.interface);
-    try output.interface.flush();
-    try file.sync(io);
-    file.close(io);
-    file_open = false;
-    try std.Io.Dir.cwd().rename(temp, std.Io.Dir.cwd(), path, io);
-    committed = true;
+    try privatefile.replace(io, path, writer.buffered());
 }
 
 fn temporaryPath(temp: *std.testing.TmpDir, name: []const u8, buffer: []u8) ![]const u8 {

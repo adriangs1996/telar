@@ -29,7 +29,7 @@ return telar.config({
   client = {
     prefix = "ctrl+s",
     icons = "nerd-font",
-    sidebar = { visible = true, renderer = "automatic" },
+    sidebar = { visible = true },
     sound = { enabled = true, ready = true, needs_input = true },
     input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },
     keybindings = {
@@ -53,11 +53,7 @@ return telar.config({
         max_total_bytes = 64 * 1024 * 1024,
         join_timeout_ms = 30000,
       },
-      intercept_hosts = {
-        "api.anthropic.com",
-        "api.openai.com",
-        "chatgpt.com",
-      },
+      intercept_hosts = { "api.example.com" },
     },
     agent_descriptions = {
       command = {
@@ -86,12 +82,15 @@ return telar.config({
   },
   profiles = {
     remote = {
-      client = { sidebar = { visible = false, renderer = "cells" } },
+      client = { sidebar = { visible = false } },
       runtime = { graphics = { pane_mib = 16, global_mib = 64 } },
     },
   },
 })
 ```
+
+`client.sidebar.renderer`, which chose how the retired terminal client drew
+its sidebar, is still accepted so older files load, and has no effect.
 
 `runtime.agent_descriptions` is an explicit privacy opt-in. When the first user
 request starts model work, Telar sends that request through standard input to
@@ -183,13 +182,11 @@ background, ANSI palette and cursor colors. Built-ins are `shade` (the default),
 palettes from Adrian's Neovim theme, including syntax and ANSI colors. Shade
 combines Vesper's neutral grays and terminal palette with green chrome accents.
 The old names `osaka-jade`, `osaka_jade`, and `osakajade` remain aliases for Shade.
-Shade's `panel_bg` is `default`:
-the chrome takes the terminal background, so the TUI keeps its host background
-and the GUI paints `#101010`. The TUI uses the chrome roles
-and keeps the host terminal's palette and defaults. The GUI uses the terminal
-colors too; child truecolor and OSC overrides still apply. The `terminal`
-preset uses host-relative chrome roles and a neutral explicit palette in the
-GUI, which has no exterior terminal to inherit from.
+Shade's `panel_bg` is `default`: the chrome takes the terminal background,
+which the window paints `#101010`. The window uses the preset's terminal
+colors; child truecolor and OSC overrides still apply. The `terminal` preset
+uses host-relative chrome roles and a neutral explicit palette, since the
+window has no exterior terminal to inherit from.
 
 To customize a preset, use the table form. Each section is optional:
 
@@ -240,7 +237,7 @@ profile can change only its background without copying a palette. `--theme`
 overrides the complete theme and remains locked across reloads; it does not
 lock fonts or cursor behavior.
 
-`client.theme` remains an alias for existing TUI configurations and selects the
+`client.theme` remains an alias for older configurations and selects the
 same complete theme. Set either `theme` or `client.theme` at a given root/profile
 level; declaring both is an error. The earlier `gui.theme` table has moved to
 `theme.terminal`. Likewise, `gui.cursor.color` and `gui.cursor.text_color` move
@@ -254,8 +251,7 @@ Telar retains its orange Vesper cursor with background-colored text.
 ## Graphical application
 
 `gui` configures the window, fonts and cursor behavior in `telar gui`. Colors come from the
-root `theme`. The TUI continues using its host terminal's font and default
-colors. Both clients can load the same Lua file.
+root `theme`.
 See [`examples/gui.lua`](../examples/gui.lua) for a complete runnable example:
 
 ```sh
@@ -289,7 +285,7 @@ gui = {
 
 | Setting | Default | Meaning and bounds |
 | --- | --- | --- |
-| `window.titlebar` | `false` on macOS, `true` on Linux | Show the native titlebar. On macOS it starts hidden so Telar's top bar sits at the window edge; set `true` to restore it. On Wayland it defaults to the compositor decoration and is a request which the compositor may override. Telar's workspace, tab and status bars remain available either way. |
+| `window.titlebar` | `false` on macOS, `true` on Linux | Show the native titlebar. On macOS it starts transparent: the traffic lights stay visible and share Telar's top bar, which sits at the window edge; set `true` to restore the native titlebar above it. On Wayland it defaults to the compositor decoration and is a request which the compositor may override. Telar's workspace, tab and status bars remain available either way. |
 | `window.background_opacity` | `1` | Background opacity, `0..1`. Below `1`, the sidebar, bars and pane headers share the window's terminal background, regardless of the theme's `panel_bg`. At `1`, panels use `panel_bg`. Text, cursor, controls, modals and cell backgrounds differing from the terminal default retain their own opacity. |
 | `window.background_blur` | `0` | Integer `0..255`: macOS blur radius, with `0` disabling blur. On Wayland any positive value requests compositor blur; its intensity remains compositor-controlled. Has no visible effect at opacity `1`. Legacy `true` means `20`, and `false` means `0`. |
 | `window.padding.x` | `0` | Logical pixels on each horizontal edge, `0..256`, decimals allowed. |
@@ -303,7 +299,7 @@ gui = {
 | `cursor.style` | `block` | `block`, `bar`, `underline`, or `hollow`. |
 | `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
 | `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
-| `sidebar.width` | `284` | Width of the native sidebar band in logical pixels; `220..480`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the narrowest band hides it. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. The TUI ignores it: its sidebar stays a column preference retained by the runtime in the shared layout, which the GUI no longer reads. |
+| `sidebar.width` | `284` | Width of the native sidebar band in logical pixels; `220..480`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the narrowest band hides it. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
 | `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title and body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top navigation 42, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 26 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
 
 Padding is applied once at the display scale, then rounded to physical pixels.
@@ -387,7 +383,7 @@ for the code path, resource lifetime and verification.
 `runtime.agents` is an array of agent manifests. A manifest is everything
 Telar knows about one coding agent without code: how to recognize it, how to
 show it, and which client capability it supports. Telar ships manifests for
-`claude`, `codex` and `pi`. Naming one of them extends or overrides the
+`claude`, `codex`, `pi`, `cursor` and `opencode`. Naming one of them extends or overrides the
 shipped manifest; any other name creates a new agent that the sidebar, the
 `telar agent` command, notifications and the image shelf treat exactly like a
 built-in one. At most 16 agents can be configured.
@@ -465,15 +461,11 @@ agents = {
 Three things stay in code and are not configurable, because each needs an
 agent-specific program rather than data:
 
-- **Session resume.** Only `claude`, `codex` and `pi` are resumed from a
+- **Session resume.** Only `claude`, `codex`, `pi`, `cursor` and `opencode` are resumed from a
   checkpoint (`src/backend/agent/providers/`). A configured agent restores as
   a plain shell.
 - **Lifecycle hooks.** `telar integration <agent>` and `telar hook <agent>`
-  know the hook formats of the three built-ins (`src/cli/`).
-- **Network observation.** The proxy recognizes API dialects
-  (`anthropic_messages`, `openai_responses`), not agents. Any agent that talks
-  to one of those APIs through the proxy gets network-side lifecycle for free;
-  an agent talking to another API relies on process detection and phrases.
+  know the hook formats of the five built-ins (`src/cli/`).
 
 Diagnostics name the entry and the field, for example
 `config.runtime.agents[2].icon must be exactly one cell wide`.
@@ -482,39 +474,46 @@ Diagnostics name the entry and the field, for example
 
 `client.bars` declares three bottom slots, a `top.right` slot and the sidebar
 footer row. The shared configuration requires exactly one `telar.bar.tabs()`
-source in `bottom`. The TUI renders tabs in that position and `top.right` beside
-workspace navigation. Its bars start at the workbench edge while the sidebar
-is visible and expand to the full width when it is hidden.
+source in `bottom`.
 
 The native app keeps workspace navigation and tabs together in its top bar.
-Its configurable widgets occupy the full-width bottom bar: `bottom.left`,
+Its configurable components occupy the full-width bottom bar: `bottom.left`,
 `bottom.center` and `bottom.right` retain their order and alignment, while
 `telar.bar.tabs()` leaves its slot empty because the tabs are already above.
-Existing `top.right` content follows those slots, immediately before the
-reserved TLS badge. This keeps existing configurations visible without a reload
-migration. When both groups have content, `top.right` takes at most half the
-available widget width. The remaining slots share the rest and clip on overflow.
-The TLS badge has priority over every widget and remains visible while
-interception is active or Telar's system trust is installed.
+Existing `top.right` content follows the right slot, immediately before the
+reserved TLS badge, so existing configurations stay visible. The TLS badge has
+priority over every component and remains visible while interception is active
+or Telar's system trust is installed.
+
+A bar is built from components that Telar draws itself: the configuration says
+what to show and Telar decides how it looks, so a bar follows the theme, the
+chrome's type sizes and spacing. [`docs/examples/bar`](examples/bar/config.lua) recreates a clock, host
+metrics and agent quotas with detail panels from any data source.
 
 ```lua
+local telar = require("telar")
+local ui = telar.ui
+
 bars = {
   bottom = {
-    left = telar.bar.metrics(),
-    center = telar.bar.tabs(),
-    right = telar.bar.dynamic({
-      every_ms = 1000,
-      render = function(ctx)
-        return {
-          { icon = "battery-full", text = string.format(" %d%%  ", ctx.metrics.battery_percent or 0), fg = "green" },
-          { text = string.format("%02d:%02d:%02d ", ctx.time.hour, ctx.time.minute, ctx.time.second), fg = "text", bold = true },
-        }
-      end,
+    left = telar.bar.static({
+      ui.clock("%H:%M"),
+      ui.metrics({ "battery", "cpu", "memory" }),
     }),
-  },
-  top = {
-    right = telar.bar.static({
-      { icon = "provider-codex", text = " telar ", fg = "accent", bold = true },
+    center = telar.bar.tabs(),
+    right = telar.bar.command({
+      command = { "my-quota", "--json" },
+      every_ms = 60000,
+      render = function(ctx)
+        local quota = telar.json.decode(ctx.output)
+        return ui.group({
+          mark = "claude",
+          on_click = telar.action.open_panel("claude"),
+          tooltip = { ui.meter_row({ label = "This week", value = quota.week / 100 }) },
+          ui.meter({ label = "5h", value = quota.session / 100 }),
+          ui.meter({ label = "7d", value = quota.week / 100, tone = quota.week >= 80 and "danger" or "neutral" }),
+        })
+      end,
     }),
   },
 }
@@ -526,18 +525,21 @@ tabs on the right and `top.right` is empty. If
 still has to contain the tabs.
 
 `sidebar_footer` remains accepted for compatibility, with at most three sources
-and no `telar.bar.tabs()`. Neither the GUI nor the TUI displays these slots.
-Place metrics and other visible widgets in `bottom` instead.
-Prefix and copy mode replace the native bottom widgets with the mode chip and
-key hints, preserving TLS and top navigation. The TUI also replaces its bottom
-row during prefix mode, copy mode and a rename prompt.
+and no `telar.bar.tabs()`. The window does not display these slots.
+Place metrics and other visible components in `bottom` instead.
+Prefix and copy mode replace the native bottom components with the mode chip and
+key hints, preserving TLS and top navigation.
 
 Each position accepts one source:
 
 - `telar.bar.tabs()` renders the built-in tabs and is valid only once in the
   bottom bar.
 - `telar.bar.metrics()` renders the latest runtime CPU, used-memory and
-  optional battery values.
+  optional battery values, the same as `telar.bar.static(telar.ui.metrics())`.
+- `telar.bar.machines()` renders a chip per machine the window holds, with
+  its link state, attention and latest CPU sample, and nothing while the
+  window holds only this machine.
+  `telar.bar.metrics()` reports the machine the window shows.
 - `telar.bar.static(content)` parses fixed content when the configuration is
   loaded.
 - `telar.bar.dynamic({ every_ms, render })` calls `render` on a client-owned
@@ -546,8 +548,60 @@ Each position accepts one source:
   array outside the client loop. `render` is optional; without it, trimmed
   stdout becomes plain content.
 
-Content may be `nil`, a string, one segment table, or an array of at most 16
-segments. A segment accepts these fields:
+### Components
+
+Content may be `nil`, a string, one component, a legacy segment table, or a
+list of any of them; nested lists are flattened. Every `telar.ui` constructor
+takes a table of fields; the ones marked below also take their main field
+alone, as in `ui.clock("%H:%M")`.
+
+| Component | Fields |
+| --- | --- |
+| `ui.label` | `text` (shorthand), `tone`, and the segment style fields below |
+| `ui.icon` | `name` (shorthand), a built-in icon, or `glyph`, one grapheme of at most 16 bytes; `tone` |
+| `ui.mark` | `name` (shorthand): `claude`, `codex`, `pi` or `telar`, drawn from Telar's own artwork |
+| `ui.meter` | `value` 0..1, `label`, `text` (shown instead of the percentage), `marker` 0..1, `tone` |
+| `ui.sparkline` | `values`, at most 32 non-negative numbers; `max` (their largest by default); `tone` |
+| `ui.badge` | `text` (shorthand), `tone` |
+| `ui.clock` | `format` (shorthand, default `%H:%M`), `tone` |
+| `ui.metric` | `name` (shorthand): `cpu`, `memory` or `battery` |
+| `ui.metrics(names)` | a group of metrics, `{ "cpu", "memory", "battery" }` by default |
+| `ui.group` | children in its list part, `mark` or `icon`, `tooltip`, `on_click`, `url` |
+
+Every component also accepts `priority`, 0 to 100. Components default to 50
+and a group's children inherit the group's priority.
+
+`tone` is one of `neutral`, `muted`, `accent`, `success`, `warning` and
+`danger`, and each adapter maps it to the theme's palette. Neutral components
+use plain text and quiet shapes; colour is kept for attention.
+
+`ui.clock` formats Telar's local time with `%H %M %S %I %p %d %e %m %y %Y %a
+%A %b %B %%`; other bytes are copied. It needs no `every_ms`: the client
+repaints on the next minute, or second when the format shows seconds, and only
+while a clock is configured. `ui.metric` reads the runtime's latest sample; the
+CPU metric draws the recent samples as a sparkline and turns `warning` at 90%
+and `danger` at 98%, the battery at 20% and 10%. A host without a battery
+omits it.
+
+A group draws its mark or icon and its children with even spacing, and Telar
+draws a hairline between a group and its neighbours. `tooltip` is a string or a
+list of components, which may also use the panel blocks `heading`, `text`,
+`meter_row`, `kv` and `divider`. The native app shows it above the group while
+the pointer rests on it. `on_click` is a `telar.action` value run when the
+group is clicked; `url`, an `http` or `https` address, is opened in the
+browser instead. Only groups take a tooltip or a click, so wrap a single
+component in `ui.group` to give it one.
+
+When the bottom bar is narrower than its components, Telar reduces the
+component with the lowest priority one step at a time, the later one on ties:
+a meter first drops its track, any other component disappears, and a group
+disappears once none of its children is visible. A `warning` tone adds 20 to a
+component's priority while the bar is fitted and `danger` adds 40, so a
+component asking for attention is the last to go. Top-level components that
+did not fit are counted in a `+N` chip; clicking it lists them in a panel.
+
+Legacy segment tables remain accepted as labels, and icons without text as
+icons:
 
 ```lua
 {
@@ -572,14 +626,77 @@ indexed terminal color from 0 through 255. Palette roles are `accent`,
 The icon names are `sidebar-collapse`, `sidebar-expand`, `workspace-menu`,
 `proxy-active`, `cpu`, `memory`, `battery-empty`, `battery-quarter`,
 `battery-half`, `battery-three-quarters`, `battery-full`, `provider-unknown`,
-`provider-claude`, `provider-codex`, `agent-unknown`, `agent-working-0` through
-`agent-working-3`, `agent-blocked`, `agent-ready`, `agent-failed`, and `close`.
-They follow the configured Unicode or graphical icon theme.
+`provider-claude`, `provider-codex`, `provider-pi`, `app-terminal`,
+`app-editor`, `app-git`, `agent-unknown`, `agent-working-0` through
+`agent-working-3`, `agent-blocked`, `agent-ready`, `agent-done`,
+`agent-failed`, `close`, `pane-fullscreen` and `telar-mark`. They follow the
+configured Unicode or graphical icon theme.
+
+A slot holds at most 32 components, 1024 bytes of text, 64 sparkline samples
+and 4 actions. Text is UTF-8 without control characters.
+
+### Panels
+
+`client.panels` names the panels a bar can open. A panel appears above the
+component that opened it, closes on Escape, on a click outside it or on a
+second click on its component, and renders its content only while it is open.
+
+```lua
+panels = {
+  claude = telar.panel({
+    title = "Claude usage",
+    mark = "claude",
+    width = 460,
+    command = { "my-quota", "--json" },
+    every_ms = 30000,
+    render = function(ctx)
+      local quota = telar.json.decode(ctx.output)
+      return {
+        ui.heading("On track"),
+        ui.meter_row({ label = "Current session", detail = "Resets at 13:20", value = quota.session / 100, marker = 0.7 }),
+        ui.actions({
+          ui.button({ text = "Open in browser", url = "https://example.com/usage" }),
+          ui.button({ text = "Refresh", action = telar.action.refresh_panel() }),
+        }),
+      }
+    end,
+  }),
+}
+```
+
+`telar.panel` accepts `title`, `mark` or `icon`, `width` in logical pixels
+(240 to 720, default 420), and either `command`, `timeout_ms` and `render`,
+like `telar.bar.command`, or `render` alone, like `telar.bar.dynamic`. Without
+`every_ms` a panel renders once each time it opens and on
+`telar.action.refresh_panel()`. Panel names are 1 to 32 letters, digits, `-`
+or `_`; a configuration holds at most 8 panels.
+
+A panel's content is any list of components plus these blocks:
+
+| Block | Fields |
+| --- | --- |
+| `ui.heading` | `text` (shorthand), wrapped to three lines |
+| `ui.text` | `text` (shorthand), `tone`, wrapped to three lines |
+| `ui.meter_row` | `label`, `detail`, `value` 0..1, `marker` 0..1, `tone` |
+| `ui.kv` | `key`, `value`, `tone` |
+| `ui.callout` | `icon`, `text`, `detail`, one `button` |
+| `ui.actions` | buttons in its list part, right aligned |
+| `ui.button` | `text`, `action` or `url`, `primary` |
+| `ui.divider` | none |
+
+A panel holds at most 64 components, 4096 bytes of text and 8 actions. Its
+header shows the title, the time of the last successful render and a close
+control. A failed render keeps the last content and says so.
+
+`telar.action.open_panel("name")` opens or closes a panel from a key binding
+too; it appears above the bar component that opens the same panel.
+`telar.action.close_panel()` and `telar.action.refresh_panel()` complete the
+set. These actions are for configuration; plugin effects cannot return them.
 
 ### Dynamic context
 
-A dynamic or command render callback receives one immutable table. Tab indices
-are one-based in Lua.
+A dynamic, command or panel render callback receives one immutable table. Tab
+indices are one-based in Lua.
 
 ```lua
 {
@@ -604,6 +721,10 @@ are one-based in Lua.
 }
 ```
 
+`telar.json.decode(text)` turns a JSON document of at most 1 MiB into Lua
+tables, with `null` as `nil`, and raises a Lua error for invalid JSON. It is
+pure: it reads no file and opens no connection.
+
 `every_ms` defaults to 1000 and must be between 100 and 3,600,000. Each source
 owns one deadline. If a client is delayed, expired ticks collapse into one
 evaluation instead of replaying every missed value. Lua evaluation keeps the
@@ -614,26 +735,13 @@ bounded client diagnostic.
 Commands contain 1 to 32 arguments and at most 4096 argument bytes. Telar
 executes the argv directly, without a shell, and inherits the client's process
 environment and working directory. `timeout_ms` defaults to 2000 and must be
-between 100 and 10000. Stdout is limited to one valid UTF-8 display line of at
-most 512 bytes; stderr is bounded to 4096 bytes. All bar commands share one
-worker, and another elapsed tick records only one pending rerun. Reloading the
-configuration discards a completion from the previous generation.
-
-For example, a subscription quota helper can be polled without giving Lua
-filesystem, process or network authority:
-
-```lua
-top = {
-  right = telar.bar.command({
-    command = { "telar-quota" },
-    every_ms = 60000,
-    timeout_ms = 2000,
-    render = function(ctx)
-      return { icon = "provider-codex", text = " " .. ctx.output .. " ", fg = "accent" }
-    end,
-  }),
-}
-```
+between 100 and 10000. Output passed to a `render` callback may hold several
+lines, up to 64 KiB of UTF-8 without control characters other than tab and
+newline, so a helper can print JSON. Without `render`, stdout must be one
+display line of at most 512 bytes. Stderr is bounded to 4096 bytes. Bar and
+panel commands share one worker, and another elapsed tick records only one
+pending rerun. Reloading the configuration discards a completion from the
+previous generation.
 
 The helper owns any credentials and network access it needs. Telar receives
 only its bounded stdout. See [Configurable bars](flows/configurable-bars.md)
@@ -680,6 +788,10 @@ rightmost column selects an exact width. Telar always reserves at least 42
 columns for the sidebar and 20 for the workbench; a narrower host temporarily
 hides or clamps the sidebar without discarding its preferred width.
 
+`telar.action.leave_worktree()` returns from a worktree's tab to the project
+workspace the worktree hangs from; outside a worktree it does nothing. The
+default binding is `prefix`, then `u`.
+
 `telar.action.scroll_pane({ direction = ... })` accepts `"up"` or `"down"` and
 applies one wheel step to the focused pane without entering copy mode. The
 default bindings are `prefix`, then `-` to scroll up, and `prefix`, then `=`
@@ -715,10 +827,6 @@ cursor chooses the position, so this does not target an application's focused
 internal split. Missing targets and unchanged viewport offsets have no effects.
 Normal typing or paste returns a scrolled viewport to live output.
 
-In GUI agent panes, native scroll bindings move the conversation by three
-lines through the same bounds and history navigation as the wheel. They leave
-the composer unchanged and support held-key repetition.
-
 Like other native actions, invoking `scroll_pane` from copy mode first exits
 copy mode and restores its entry viewport, then applies the wheel step. The
 action is available to client Lua bindings and callbacks, but plugin worker
@@ -735,6 +843,23 @@ bottom.
 `telar.action.history_palette()` opens command-history search. Its default
 binding is `prefix`, then `/`. Bind it with `telar.bind_global` when it should
 open without the prefix.
+
+`telar.action.next_machine()` and `telar.action.previous_machine()` switch
+the whole window to the next or previous enabled machine, wrapping around.
+`telar.action.machine_picker()` opens the command palette on the window's
+machines, which typing `:` in the palette also does; there Enter shows a
+machine, Shift+Enter enables or disables it, Ctrl+R renames it and Ctrl+D
+removes it. `telar.action.add_machine()` asks for a new machine's label and
+SSH destination. Each change is written to `machines.json`. They have no
+default binding, and plugins cannot run them. See
+[Machine presentation](flows/machine-presentation.md).
+
+`telar.action.path_picker()` opens a fuzzy finder over the files and
+directories under the focused pane's directory, anchored at its cursor. Enter
+pastes the chosen path relative to the pane's directory, Alt+Enter pastes it
+absolute, Tab browses the selected directory and Shift+Tab its parent. Up and
+Down, or Ctrl+K and Ctrl+J, move the selection; Ctrl+K and Ctrl+J move it in
+every list prompt. Its default binding is `prefix`, then `f`.
 
 Copy mode accepts `h`, `j`, `k`, `l` and the arrow keys, `w`, `b`, `e`, `{`,
 `}`, `0`, `^`, `$`, `g`, `G`, Page Up, Page Down, Ctrl-B, Ctrl-F, Ctrl-U, and Ctrl-D.
@@ -771,16 +896,9 @@ pane keeps fullscreen active and focuses the new pane; closing back down to
 one pane does not exit the mode. Toggle again to leave fullscreen and restore
 borderless content when only one pane remains.
 
-In the TUI, `telar.action.toggle_workspace_list()` collapses the top bar's list
-of open workspaces to the active one plus a `+N` counter, and expands it again.
-Clicking `+N` expands it too; clicking a workspace name switches to it.
-The telar mark at the left edge of the bar is the sidebar toggle, not a
-list control. The collapse state belongs to the client layout, and the
-runtime retains it for the same terminal while the server is alive. The default
-binding is `prefix`, then `w`.
-
-The native app ignores that collapse preference, including values restored
-from earlier sessions. It shows up to three consecutive workspaces whenever
+`telar.action.toggle_workspace_list()` records a collapse preference in the
+client layout (default binding `prefix`, then `w`) that the window does not
+use: it shows up to three consecutive workspaces whenever
 they fit, centered on the active one except at either end. Narrow windows
 show the active workspace. Overflow counters show how many remain hidden and
 select the nearest hidden workspace; global workspace numbers do not change.
@@ -849,7 +967,7 @@ The client watches the main file, loaded local modules, configured plugin
 trees, and the trust store. A change builds a complete replacement generation.
 Theme, sidebar, keymap, callbacks, plugin registry, and grants swap only after
 all validation succeeds. A failure leaves the previous generation active and
-shows the error in the TUI; the GUI currently reports it on stderr. Closure
+shows the error as a notice in the window and on stderr. Closure
 state is intentionally lost on reload.
 The client model records the accepted generation, sidebar and pane-gap state;
 the presenter observes that version and paints the new appearance on its paced
@@ -866,15 +984,16 @@ relative `ca_dir` is also resolved beside `config.lua`; Telar creates it
 owner-only and stores its private CA and derived trust bundle there with
 owner-only file permissions. `intercept_hosts` accepts at most 256 exact DNS
 hostnames, leading wildcard rules such as `*.example.com`, or the global `*`
-rule within a 64,768-byte budget. It defaults to `api.anthropic.com`,
-`api.openai.com`, and `chatgpt.com`; an explicitly configured array replaces
-the defaults, including with an empty array. Telar canonicalizes case, sorts
+rule within a 64,768-byte budget. It is empty by default, so an enabled proxy
+intercepts nothing until you name hosts. Telar canonicalizes case, sorts
 the set, and removes duplicates when the runtime starts. A leading wildcard
 matches proper subdomains but not the bare suffix; `*` matches every hostname.
 Partial labels such as `*example.com` and embedded wildcards are rejected.
-Every connection still requires a live pane credential. A connection outside
-the configured scope passes through the authenticated CONNECT listener, but
-its TCP payload is forwarded opaquely and is not observed.
+Every connection still requires the proxy secret, which Telar writes to
+`proxy-secret` in `ca_dir` on the first start and puts in each pane's
+`HTTPS_PROXY`; delete the file to rotate it. A connection outside the
+configured scope passes through the authenticated CONNECT listener, but its
+TCP payload is forwarded opaquely and is not captured.
 
 System trust is not a configuration side effect. Run `telar proxy trust
 install|uninstall|status` explicitly. If `ca_dir` is custom, pass the same
@@ -891,13 +1010,9 @@ are bounded independently, and a full queue or exhausted quota drops capture
 data without delaying or changing proxied traffic. Response decompression is
 performed on the runtime observation path and is capped by `max_part_bytes`.
 Until a trusted tap plugin is configured, completed captures are consumed only
-for metrics and are not persisted. The shipped
-[`examples/plugins/agent-commands`](../examples/plugins/agent-commands)
-package is an opt-in classifier: install it, grant its exact digest
-`proxy.tap`, `history.write`, and `notifications`, then add the immutable path
-printed by `telar plugin install` to `config.plugins`. Runtime tap workers are
-created only at server startup, so restart the runtime after changing that
-package or its grants.
+for metrics and are not persisted. Runtime tap workers are created only at
+server startup, so restart the runtime after changing a tap package or its
+grants.
 
 Explicit server CLI graphics limits still override the Lua values.
 Runtime-owned settings take effect when the long-lived runtime starts; restart

@@ -45,7 +45,6 @@ pub fn open(model: *RuntimeModel, session: *Session, request: core.OpenPaneView)
         .request_id = request.request_id,
         .pane_id = pane.id,
         .pane_generation = pane.generation,
-        .kind = pane.kind,
         .location = pane.location,
         .created = created,
     } });

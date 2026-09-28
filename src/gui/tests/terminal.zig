@@ -13,7 +13,7 @@ const client = @import("telar-client");
 test "native startup sends the ordered bootstrap without graphics credits or a server reply" {
     const session = try Session.init();
     defer session.deinit();
-    const app = &session.gui.app;
+    const app = session.gui.app;
     const colors: core.TerminalColors = .{
         .foreground = .{
             210,
@@ -64,28 +64,27 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
     try std.testing.expect(app.model.startup.phase == .opening);
     try std.testing.expect(app.runtime_transport.receive_pending);
     try std.testing.expectEqualDeep(colors, app.model.host.host_capabilities.terminal_colors);
-    try std.testing.expect(app.model.host.host_capabilities.agent_panes);
     try std.testing.expectEqual(data.environment.Support.supported, app.model.host.host_capabilities.pointer_pixels);
     const graphics = try core.decodeClient(session.pending.?);
     try std.testing.expect(graphics == .configure_graphics);
     try std.testing.expect(!graphics.configure_graphics.shared);
 
     session.pending = null;
-    try client.runtime_io.completeRuntimeSend(&app.model, {});
+    try client.runtime_io.completeRuntimeSend(app, {});
     try session.startJobs();
     const configured = try core.decodeClient(session.pending.?);
     try std.testing.expect(configured == .configure_terminal_colors);
     try std.testing.expectEqualDeep(colors, configured.configure_terminal_colors);
 
     session.pending = null;
-    try client.runtime_io.completeRuntimeSend(&app.model, {});
+    try client.runtime_io.completeRuntimeSend(app, {});
     try session.startJobs();
     const request = try core.decodeClient(session.pending.?);
     try std.testing.expect(request == .request_runtime_state);
     try std.testing.expectEqual(app.client_identity, request.request_runtime_state.client_identity);
 
     session.pending = null;
-    try client.runtime_io.completeRuntimeSend(&app.model, {});
+    try client.runtime_io.completeRuntimeSend(app, {});
     try session.startJobs();
     try std.testing.expect(session.pending == null);
     try std.testing.expectEqual(@as(usize, 0), app.model.to_runtime.len);
@@ -116,7 +115,9 @@ test "GUI font metrics apply size spacing and display scale once" {
         try std.testing.expectEqual(@as(u16, @intFromFloat(20 * scale)), atlas.pixel_height);
         try std.testing.expectEqual(try atlas.cellWidth(atlas.pixel_height) + @as(u16, @intFromFloat(2 * scale)), size.cell_width_px);
         try std.testing.expectEqual(@as(u16, @intFromFloat(@round(@as(f32, @floatFromInt(try atlas.lineHeight(atlas.pixel_height))) * 1.5))), size.cell_height_px);
-        try std.testing.expectEqual(800 / size.cell_width_px, size.cols);
+        // A collapsed sidebar keeps the workspace rail, which comes off the width.
+        try std.testing.expect(renderer.sidebar.rail);
+        try std.testing.expectEqual((800 - renderer.sidebar.reserved()) / size.cell_width_px, size.cols);
         try std.testing.expectEqual((600 - renderer.chrome.vertical()) / size.cell_height_px, size.rows);
     }
 }
@@ -131,8 +132,10 @@ test "native padding scales once and leaves a complete grid when the window shri
         const x: u32 = @intFromFloat(@round(8.5 * scale));
         const y: u32 = @intFromFloat(@round(12 * scale));
         const chrome = renderer.chrome;
-        try std.testing.expectEqual([2]u32{ x, chrome.top_bar + y }, renderer.origin);
-        try std.testing.expectEqual((800 - 2 * x) / size.cell_width_px, size.cols);
+        const left = renderer.sidebar.reserved();
+        try std.testing.expect(renderer.sidebar.rail);
+        try std.testing.expectEqual([2]u32{ left, chrome.top_bar + y }, renderer.origin);
+        try std.testing.expectEqual((800 - left - x) / size.cell_width_px, size.cols);
         try std.testing.expectEqual((600 - chrome.vertical() - 2 * y) / size.cell_height_px, size.rows);
         try std.testing.expectEqual(chrome.vertical() + 2 * y + @as(u32, size.rows) * size.cell_height_px <= 600, true);
     }
@@ -162,7 +165,9 @@ test "background opacity preserves cell ink cursor and explicit backgrounds" {
         try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
         var red_background = false;
         for (session.gui.renderer.quads.items()) |quad| {
-            try std.testing.expectEqual(@as(f32, 1), quad.a);
+            // Cells and glyphs stay opaque; only rounded chrome such as the
+            // selected tab's shadow and hairline is translucent by design.
+            try std.testing.expect(quad.a == 1 or quad.radius > 0);
             red_background = red_background or (quad.r == 1 and quad.g == 0 and quad.b == 0);
         }
         try std.testing.expect(red_background);
@@ -443,7 +448,7 @@ test "native driver joins a blocked socket read before freeing the shared client
     const session = try Session.init();
     defer session.deinit();
     session.gui.job_hook = null;
-    try client.runtime_io.startRuntimeRead(&session.gui.app);
+    try client.runtime_io.startRuntimeRead(session.gui.app);
     _ = try session.gui.update();
     try std.testing.expect(session.gui.app.runtime_transport.receive_pending);
 }

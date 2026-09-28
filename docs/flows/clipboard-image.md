@@ -1,180 +1,103 @@
 # Clipboard image preview
 
-For Cmd+V in a native agent composer, see
-[Agent clipboard images](agent-clipboard-images.md). This page describes the
-terminal-child preview path.
+The preview shelf that showed a clipboard image below an agent's pane existed
+only in the terminal client and left with it. The window never bound a shelf,
+and neither does the headless client. An unmodified `Ctrl+V` still reaches the
+focused child, and the agent reads the image from the clipboard itself; Telar
+shows no preview.
 
-This flow starts when the focused child receives an unmodified `Ctrl+V`. Telar
-then tries to mirror a local clipboard image for an attachment-capable agent.
-The preview is disposable client media paired by prompt order with the
-`[Image #N]` marker owned by Codex or Claude. The child remains responsible for
-accepting or rejecting the paste.
+What remains is the shared capture lifecycle and the marker logic behind the
+`AttachmentShelf` port. Both run only when an adapter binds a shelf in
+`Client.attachments`, which today only the client integration tests do.
 
-## End-to-end path
+## Path today
 
 ```text
-Ctrl+V
+Ctrl+V (window key event or headless `key` line)
   |
-host_inputs.key
-  |
-key_routing.routeKeyInput -> key_routing.routeCurrentKey
+router.routeEvent -> key_routing.routeKeyInput -> key_routing.routeCurrentKey
   |
 key_routing.routePaneKey -> pane_input.sendPaneInput -> model.to_runtime
   |
 key_routing.requestsClipboardPreview -> clipboard_capture.startClipboardCapture
   |
-model.clipboard.reserve { id, target } -> model.to_host .capture
-  |
-host_effects.deliver -> ClientEvent.clipboard_image media worker
-  |
-clipboard_capture.completeClipboardCapture
-  |
-finish exact id -> validate returned target -> validate current target
-  |
-AttachmentShelf.adopt -> attachments.Store -> Store.ingressVersion
-  |
-optional pane resize
-  |
-clipboard_capture.reportClipboardCapture
-  |
-quiet result or bounded failure notification
-  |
-presentation_lifecycle.observe -> Presenter -> paced cell and media passes
+model.host.clipboard_capture is false -> .unsupported
 ```
 
-`host_inputs.key` delegates the semantic key without recognizing `Ctrl+V`.
 `key_routing.routeCurrentKey` sends the pane input through
 `key_routing.routePaneKey` first. Only when that input was delivered and
 `key_routing.requestsClipboardPreview` matches does it call
-`clipboard_capture.startClipboardCapture`. The runtime send worker drains
-`model.to_runtime` to the PTY independently. A missing target, unsupported platform, busy worker or
-scheduling failure can drop the preview, but none can retract or delay an
-already accepted pane input transaction. See [Key routing](key-routing.md).
+`clipboard_capture.startClipboardCapture`. That function reads platform
+support from `model.host.clipboard_capture`, which defaults to `false` and
+which neither adapter sets. It therefore returns `unsupported` before it
+reserves a capture or queues a host request, and publishes nothing. The
+runtime send worker drains `model.to_runtime` to the PTY independently; the
+capture outcome can never retract or delay an accepted pane input
+transaction. See [Key routing](key-routing.md).
+
+If a `.capture` host request does reach an adapter, both `GuiAdapter` and
+`HeadlessClient` answer it at once through
+`clipboard_capture.completeClipboardCapture` with
+`error.NativeServiceUnavailable`. That finishes the exact capture identity
+and publishes the bounded "Image preview failed" notice. No worker reads the
+clipboard.
+
+## Shared capture lifecycle
+
+`ClientModel` owns one optional `ClipboardCapture` in `model.clipboard`
+(`ClipboardCaptureState`). It contains a monotonically increasing identity and
+the exact pane generation selected at start. This is lifecycle state, not
+render state, so reserving or finishing it does not advance
+`ClientModel.Version`.
+
+With support enabled, `startClipboardCapture` resolves the focused attachment
+target, commits the model reservation and queues a `.capture` request on
+`model.to_host` in the same function. It returns `unsupported`, `no_target`,
+`busy` or the started reservation directly. A failed push removes only the
+matching reservation. A second `Ctrl+V` still reaches the child, but no
+second capture starts while the first remains active.
+
+`clipboard_capture.completeClipboardCapture` first finishes only the exact
+identity it was given; an unrelated completion cannot clear newer work. A
+successful result must repeat the same identity and target, and the model then
+resolves the focused attachment target again. A removed agent, changed pane
+generation, focus change or workspace change makes the image stale, and the
+owned capture is freed. A current result is adopted by the bound shelf
+through `AttachmentShelf.adopt`; with no shelf, adoption fails with
+`AttachmentsUnsupported`. When adoption changes pane geometry, the operation
+calls `pane_resize.resizeAttachedPanes` before reporting.
+
+Applied, stale, ignored and clipboard-empty results stay quiet. Oversized,
+worker and adoption failures map to bounded notifications. `model.clipboard`
+keeps only the orphan result slot needed to close the cancellation race.
 
 ## Prompt coupling
 
-The attachment store scopes previews to one exact pane generation and applies
-the marker scheme the agent's manifest declares (`attachments` in
+The marker policy comes from the agent's manifest (`attachments` in
 `config.runtime.agents`, carried on the snapshot entry and mapped by
-`attachment_prompt.markerPolicy`; `none` hides the shelf):
+`attachment_prompt.markerPolicy`):
 
 - Codex (`ordered`) treats each `[Image #N]` marker as one atomic editor
-  element and renumbers the remaining markers after deletion, so its previews
-  follow prompt order.
+  element and renumbers the remaining markers after deletion.
 - Claude (`stable_number`) keeps increasing marker numbers after deletion, so
-  Telar learns and retains the actual number rendered for each preview.
-- Both editors word-wrap the placeholder at its inner space when it lands on
-  a row boundary, leaving `[Image` at the end of one row and `#N]` after the
-  indentation of the next. Marker scanning accepts that shape, so a wrapped
-  marker still counts as present, can be paired and can be dismissed when the
-  cursor shares a row with its end or start.
+  a shelf learns and retains the actual number rendered for each preview.
 - Pi (`pasted_path`) has no placeholder. Its `Ctrl+V` writes the image to
   `<tmpdir>/pi-clipboard-<uuid>.<ext>` and inserts that path as plain text.
-  Telar learns the UUID from committed frames and treats the whole path as
-  the marker. `attachments/path_marker.zig` reads Pi's editor conventions: a
-  word longer than the row is broken at grapheme granularity into rows of
-  `width - 1` cells, the path starts at the first `/` of its word so a word
-  soft-wrapped before it is never included, and the hidden hardware cursor is
-  replaced by Pi's isolated inverse-video cell.
+  `src/model/attachments/path_marker.zig` reads Pi's editor conventions to
+  find that path on screen.
 
-Closing a preview produces a bounded synthetic key sequence for its pane. The
-sequence moves to the corresponding marker, deletes it and restores the prior
-cursor position. An atomic placeholder costs one deletion key; a Pi path costs
-one per grapheme, and the cursor must share a row with the path's end or
-start. The whole sequence is bounded by `attachment_types.max_removal_keys`, which
-the pane-input boundary can encode as one transaction.
-`pane_input.sendPaneKeys` encodes the sequence against the pane's current
-keyboard modes and enqueues it as one input transaction. Telar retires the
-local image only after that transaction is accepted.
+The key-routing hooks in `agent_attachments` (`observeAttachmentInput`,
+`expectMarkerDeletion`, `reconcileAttachmentFrame`, `dismissAttachment`)
+return at once without a bound shelf. With a shelf, closing a preview sends a
+bounded synthetic key sequence (at most `attachment_types.max_removal_keys`
+keys) that deletes the marker through `pane_input.sendPaneKeys`; `Backspace`,
+`Delete` and a watch over the next `deletion_watch_frames` committed frames
+retire previews whose marker is gone; and a plain `Enter` that submits the
+prompt retires its previews and cancels an exact capture still in flight.
 
-For input in the other direction, a plain `Backspace` or `Delete` next to a
-known marker retires its preview. Providers that learn marker identities also
-arm a bounded deletion watch: after a key that may remove a marker (Backspace
-and Delete for every learning policy; Pi's word and line deletion bindings as
-well), the next `deletion_watch_frames` committed frames retire previews whose
-learned marker is no longer on screen. This covers deletion paths that happen
-inside Claude's attachment navigation context and Pi's `Ctrl+W`, `Ctrl+U`,
-`Ctrl+K`, `Alt+D` and `Alt+Backspace`. A plain `Enter` delivered to the owning
-pane retires every preview for that prompt. It also cancels an exact clipboard
-capture still in flight, so a late worker completion cannot recreate previews
-for a prompt that was already sent. Claude and Pi turn an `Enter` typed after
-a trailing backslash into a newline instead of a submission;
-`attachment_prompt.backslashContinuesPrompt` names those policies and
-`markers.promptContinuesAtCursor` reads the backslash before the editor
-cursor from the committed frame, so that `Enter` leaves previews and the
-capture alone. Codex submits regardless, so the rule never applies to it.
-Retiring image buffers remains deferred to the media path.
-
-## State and worker ownership
-
-`ClientModel` owns one optional `ClipboardCapture` in `model.clipboard`
-(`ClipboardCaptureState`). It contains a monotonically
-increasing identity and the exact pane generation selected at start. This is
-lifecycle state, not render state, so reserving or finishing it does not
-advance `ClientModel.Version`.
-
-`clipboard_capture.startClipboardCapture` reads platform support from
-`model.host.clipboard_capture`, which the adapter sets at startup, resolves the
-focused target, commits the model reservation and queues a `.capture` request
-on `model.to_host` in the same function. It returns `unsupported`, `no_target`,
-`busy` or the started reservation directly. A failed push removes only the
-matching reservation. The TUI's `host_effects.deliver` starts the media worker
-after the event; if that start fails it completes the capture with the error,
-which finishes only that exact identity. A second `Ctrl+V`
-still reaches the child, but its preview is skipped while the first capture
-remains active.
-
-The platform worker receives copied IDs and values. It owns clipboard access,
-PNG allocation and format checks. `model.clipboard.orphan` retains only the
-result pointer needed to close the cancellation race. Client shutdown cancels
-inbox tasks before it frees that pointer. No worker retains `ClientModel` or `View`.
-Its only borrowed client memory is the heap-stable orphan result slot.
-
-## Completion policy
-
-`ClientEvent.clipboard_image` carries the capture identity even when clipboard
-access failed. `clipboard_capture.completeClipboardCapture` first finishes only that exact
-identity. An unrelated completion cannot clear newer work.
-
-A successful worker result must repeat the same identity and target. The model
-then resolves the focused attachment target again. A removed agent, changed
-pane generation, focus change or workspace change makes the image stale. The
-adapter securely frees its PNG without changing the shelf.
-
-For a current result, the operation orders resource adoption before
-geometry effects. `attachments.Store` validates the image again, owns the PNG
-and reports whether the shelf changed pane geometry. The operation resolves
-the active tab and calls `pane_resize.resizeAttachedPanes` to offer new pane
-sizes to the runtime only for that layout transition. The same operation then handles the classified outcome.
-
-`clipboard_capture.completeClipboardCapture` keeps applied, stale, ignored and
-clipboard-empty results quiet. It maps oversized, worker and adoption failures
-to bounded notifications published by that operation. An adoption
-failure consumes the capture and frees its buffer. A resize delivery failure
-happens before outcome delivery, after adoption, and remains an explicit client
-error matching other committed geometry effects.
-
-## Presentation and bounds
-
-The PNG does not enter `ClientModel`. `attachments.Store` owns the physical
-preview bytes and advances `ingressVersion` after each accepted image.
-`presentation_lifecycle.observe` publishes that revision beside model and pane-graphics
-revisions. The presenter compares it with the revision last painted and
-schedules the paced frame. Clipboard completion never calls
-`Presenter.requestDraw`.
-
-The media path has fixed limits:
-
-- one capture worker per client;
-- 32 MiB of source clipboard data;
-- 16 MiB per encoded PNG;
-- 16 million decoded pixels;
-- four retained previews;
-- 32 MiB of retained preview bytes.
-
-Captured buffers are zeroed before release. Eviction keeps the newest bounded
-items. Dismissal defers large buffer cleanup to the media path so an input
-event does not wipe megabytes synchronously.
+The capture limits in `src/model/attachments/types.zig` still bound any
+shelf: 32 MiB of source clipboard data, 16 MiB per encoded PNG, 16 million
+decoded pixels, four retained previews and 32 MiB of retained preview bytes.
 
 ## Validation
 
@@ -184,18 +107,18 @@ event does not wipe megabytes synchronously.
   exhaustion and orphan cleanup.
 - `src/client/input/clipboard_image.zig` holds the start and completion
   outcome types and failure classification.
-- `src/frontend/client/tests/input_operations.zig` proves quiet
-  outcomes, notification mapping and publication failure propagation.
 - `src/client/input/attachment_prompt.zig` proves marker policies per
   provider and which keys arm a deletion watch per policy.
-- `src/frontend/client/tests/input.zig` proves child marker deletion precedes
-  local retirement and prompt submission retires paired previews.
-- `src/frontend/attachments/attachments.zig` proves cancellation ownership, image
-  bounds, retained-byte limits, target scoping, marker planning across a
-  wrapped placeholder, backslash continuation, the bounded deletion watch and
-  ingress revision.
 - `src/model/attachments/path_marker.zig` proves Pi path parsing across
   forced wraps, extent limits, screen-order collection and cursor resolution.
-- `src/frontend/client/tests/` proves pane delivery without a target,
-  successful resource observation, stale target cleanup, quiet clipboard-empty
-  behavior and notification failures without direct presentation.
+- `src/client/attachments/catalog_tests.zig` proves sensitive-byte ownership,
+  the four-item eviction bound and initialization failures.
+- `control-v reaches the pane when no clipboard preview target exists` and the
+  clipboard image completion tests in `src/client_tests/configuration.zig`,
+  run against a test shelf, prove pane delivery without a target, resource
+  observation, stale target cleanup and failures without direct presentation.
+- `obsolete clipboard completion frees its image without consuming a newer
+  capture` in `src/client_tests/input_operations.zig` proves exact completion.
+- The marker tests in `src/client_tests/input.zig` prove that child marker
+  deletion precedes local retirement and that prompt submission retires
+  paired previews.

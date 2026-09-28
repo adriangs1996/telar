@@ -30,26 +30,9 @@ pub fn render(self: *Composition, projection: *const client.Projection) !frame_w
         self.commit.location = if (model.panes.countIn(tab_id) == 0) null else model.tabs.location[tab];
         const layout = projection.layout.?;
         for (layout.views()) |view| {
-            if (view.surface != .terminal) {
-                continue;
-            }
-
             const pane = model.panes.findInConst(tab_id, view.pane_id) orelse continue;
             try widgets.append(.{ .terminal_pane = .{ .paint = .{ .pane = pane, .view = view, .copy = copy_selection.forPane(projection.copy, pane.id), .hide_cursor = projection.prompt != null } } });
             self.commit.append(pane);
-        }
-
-        for (layout.views()) |view| {
-            if (view.surface == .terminal) {
-                continue;
-            }
-
-            if (projection.threadView(view.pane_id)) |thread| {
-                try widgets.append(.{ .thread = .{ .area = view.content, .thread = thread } });
-                if (model.panes.findInConst(tab_id, view.pane_id)) |pane| {
-                    self.commit.append(pane);
-                }
-            }
         }
 
         if (self.link) |hit| {

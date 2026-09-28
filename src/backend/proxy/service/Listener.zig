@@ -5,27 +5,40 @@ const Listener = @This();
 server: std.Io.net.Server,
 bound_port: u16,
 
-/// Binds the first available loopback port in Telar's bounded proxy range.
-/// Ports already owned by another process are skipped; exhaustion is
-/// reported as `error.ProxyPortUnavailable`.
+/// Binds the preferred loopback port when one is given and free, else the
+/// first available port in Telar's bounded proxy range. Ports already owned
+/// by another process are skipped; exhaustion is reported as
+/// `error.ProxyPortUnavailable`.
 ///
 /// ```zig
-/// var listener = try Listener.bind(io);
+/// var listener = try Listener.bind(io, preferred_port);
 /// defer listener.deinit(io);
 /// ```
-pub fn bind(io: std.Io) !Listener {
+pub fn bind(io: std.Io, preferred: ?u16) !Listener {
+    if (preferred) |port_value| {
+        if (try bindPort(io, port_value)) |bound| {
+            return bound;
+        }
+    }
+
     var candidate_port = listener_support.first_port;
     while (candidate_port < listener_support.first_port + listener_support.port_attempts) : (candidate_port += 1) {
-        const address = std.Io.net.IpAddress.parse("127.0.0.1", candidate_port) catch unreachable;
-        const server = address.listen(io, .{}) catch |err| switch (err) {
-            error.AddressInUse => continue,
-            else => |other| return other,
-        };
-
-        return .{ .server = server, .bound_port = candidate_port };
+        if (try bindPort(io, candidate_port)) |bound| {
+            return bound;
+        }
     }
 
     return error.ProxyPortUnavailable;
+}
+
+fn bindPort(io: std.Io, port_value: u16) !?Listener {
+    const address = std.Io.net.IpAddress.parse("127.0.0.1", port_value) catch unreachable;
+    const server = address.listen(io, .{}) catch |err| switch (err) {
+        error.AddressInUse => return null,
+        else => |other| return other,
+    };
+
+    return .{ .server = server, .bound_port = port_value };
 }
 
 /// Closes the owned listening socket.

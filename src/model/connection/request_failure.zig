@@ -21,10 +21,6 @@ fn failureTitle(continuation: client_requests.Continuation) []const u8 {
     return switch (continuation) {
         .change_review_query => "Could not load change review",
         .change_review_command => "Could not update change review",
-        .agent_prompt => "Could not send prompt",
-        .agent_control => "Could not update agent",
-        .agent_query => "Could not load conversation",
-        .agent_history => "Could not load earlier messages",
         .editor_open => "Could not open file",
         .split => "Could not split pane",
         .close_pane => "Could not close pane",
@@ -38,18 +34,17 @@ fn failureTitle(continuation: client_requests.Continuation) []const u8 {
         .notification => "Could not show notification",
         .initial_open, .workspace_snapshot, .tab_snapshot => "Runtime request failed",
         .ignored => "Request ignored",
+        .peek_screen => "Could not read the agent's pane",
+        .peek_action => "The agent did not take it",
     };
 }
 
 fn notificationTarget(continuation: client_requests.Continuation) notifications.Target {
     return switch (continuation) {
-        .agent_history => |operation| .{
-            .focus_pane = operation.owner.pane_id,
-        },
         .change_review_query, .change_review_command => |operation| .{
             .focus_pane = operation.pane_id,
         },
-        .editor_open, .agent_prompt, .agent_control, .agent_query => |operation| .{
+        .editor_open => |operation| .{
             .focus_pane = operation.pane_id,
         },
         .split => |split| .{
@@ -63,6 +58,9 @@ fn notificationTarget(continuation: client_requests.Continuation) notifications.
         },
         .rename_workspace, .workspace_snapshot => |location| workspaceNotificationTarget(location),
         .create_tab => |creation| workspaceNotificationTarget(creation.workspace),
+        .peek_screen, .peek_action => |pane_id| .{
+            .focus_pane = pane_id,
+        },
         .initial_open, .create_workspace, .notification, .ignored => .none,
     };
 }

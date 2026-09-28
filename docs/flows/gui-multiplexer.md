@@ -2,8 +2,9 @@
 
 The GUI renders the shared client's semantic projection. Workspace and tab
 requests, pane splits, focus, resize, fullscreen, copy mode, history and prompt
-editing use the same concrete operations as the TUI. Native code owns window input and GPU
-delivery; it does not reproduce those state transitions.
+editing use the shared client's concrete operations, the same ones the headless
+client drives. Native code owns window input and GPU delivery; it does not
+reproduce those state transitions.
 
 ## Composition
 
@@ -12,7 +13,7 @@ rectangle. `render/Scene.zig` borrows that projection for one preparation:
 
 1. `TerminalRenderer.begin()` resets the quad list and prepares retained resources.
 2. `widgets/Composition.render()` builds one bounded `frame_widget.List` from
-   the projection without drawing. It selects terminal and thread panes, the
+   the projection without drawing. It selects terminal panes, the
    hovered link, navigation, status bar, sidebar, pane decorations, focus,
    notifications and the active modal. `Chrome.compose` and `Overlays.compose`
    append their widgets to this list.
@@ -45,8 +46,8 @@ row is a complete terminal row and every column a complete terminal column.
 A window too short for one row gives the height bands back: navigation
 first, then the status bar. The shared `workbench.region(model)` gives the
 whole grid to the workbench because the GUI leaves `model.host.grid_chrome`
-false; the column preference the runtime retains in the shared layout is
-TUI-only and the GUI no longer reads it.
+false. The GUI does not read the sidebar column width the runtime retains in
+the shared layout; its width is the pixel preference in `SidebarPreference`.
 `widgets/Bands.zig` places the pixel bands from the same origin, the sidebar
 band running from under navigation to the status bar, so a band never
 overlaps a cell. Both horizontal bars span the full window independently
@@ -91,7 +92,7 @@ Attention colours and aggregation come from `widgets/attention.zig` over the
 shared `telar-client.agent_attention` comparator.
 
 The native adapters consume the existing quad frame through Metal on macOS and
-Vulkan on Wayland. No TUI compositor or Kitty delivery code is imported by the GUI.
+Vulkan on Wayland.
 
 ## Input and invalidation
 
@@ -105,7 +106,7 @@ router. Some useful default suffixes are:
 | Arrow, Shift-arrow | Focus pane, resize pane |
 | `z` | Toggle pane fullscreen |
 | `s`, Alt-left/right | Toggle sidebar, resize sidebar |
-| `w` | Toggle the TUI workspace-list preference; native visibility follows available width |
+| `w` | Toggle the workspace-list preference; native visibility follows available width |
 | `N`, `W` | Create or rename workspace |
 | `c`, `T` | Create or rename tab |
 | `n`, `p`, `1`–`9` | Select tab |
@@ -114,7 +115,6 @@ router. Some useful default suffixes are:
 | `g`, `?` | Command palette prefixed `@` (agents and panes) or `?` (suggest a command); `>` lists actions |
 | `/` | History palette |
 | `[` | Enter copy mode |
-| `a` | Toggle agent thread surface |
 | `d` | Detach client |
 
 Chrome hit maps retain stable pane, tab, workspace and agent identities. Cell
@@ -186,9 +186,10 @@ retention still determines which closed sessions remain available to restore.
 bindings, custom prefixes, gesture ownership, prompts, selection, layer ordering,
 hot reload and ACK progress during GPU delivery. `zig build test-gui-window`
 uses the native window implementation and its GPU backend.
-`tests/top_navigation.zig` covers the centered workspace window, stable
-identities, right-aligned tabs with the sidebar shown and hidden, narrow
-windows and conditional child progress. `tests/status_bar.zig` covers widget
+`tests/top_navigation.zig` covers the workspace rail, stable identities,
+left-packed tabs with the sidebar expanded and collapsed, narrow windows and
+conditional child progress. `tests/tab_strip.zig` covers tab compression, the
+hidden-tab counter, frozen widths under the pointer and the rail tooltip. `tests/status_bar.zig` covers widget
 placement, compatibility with existing top slots and TLS priority.
 
 `tools/gui_multiplexer.py BINARY /tmp/NEW-DIRECTORY` drives AppKit against an

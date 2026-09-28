@@ -18,6 +18,8 @@ const PluginOptions = @import("arguments/PluginOptions.zig");
 const AgentOptions = @import("arguments/AgentOptions.zig");
 const PaneOptions = @import("arguments/PaneOptions.zig");
 const WorkspaceOptions = @import("arguments/WorkspaceOptions.zig");
+const WorktreeOptions = @import("arguments/WorktreeOptions.zig");
+const skill_module = @import("skill.zig");
 const ApiOptions = @import("arguments/ApiOptions.zig");
 const HookOptions = @import("arguments/HookOptions.zig");
 const ReviewOptions = @import("arguments/ReviewOptions.zig");
@@ -26,6 +28,8 @@ const ProxyOptions = @import("arguments/ProxyOptions.zig");
 const RunOptions = @import("arguments/RunOptions.zig");
 const GuiOptions = @import("arguments/GuiOptions.zig");
 const CliOptions = @import("arguments/CliOptions.zig");
+const MachineOptions = @import("arguments/MachineOptions.zig");
+const MachineDispatchOptions = @import("arguments/MachineDispatchOptions.zig");
 const std = @import("std");
 const server_module = @import("arguments/server.zig");
 const plugin_module = @import("arguments/plugin.zig");
@@ -58,12 +62,18 @@ pub const Cli = union(enum) {
     api: ApiOptions,
     hook: HookOptions,
     review: ReviewOptions,
+    worktree: WorktreeOptions,
     integration: IntegrationOptions,
     proxy: ProxyOptions,
-    skill,
+    skill: skill_module.Skill,
     run: RunOptions,
     gui: GuiOptions,
     cli: CliOptions,
+    machine: MachineOptions,
+    /// `telar --machine LABEL COMMAND…`.
+    machine_dispatch: MachineDispatchOptions,
+    /// The encoded words `--machine` sends to the other machine.
+    dispatch_argv: []const [*:0]const u8,
 
     /// Parses one complete argv into a validated command without performing
     /// filesystem, transport or process work.
@@ -78,6 +88,10 @@ pub const Cli = union(enum) {
         }
         if (args.len == 1) {
             return .{ .run = try RunOptions.parse(&.{}, environ) };
+        }
+
+        if (try MachineDispatchOptions.parse(args)) |options| {
+            return .{ .machine_dispatch = options };
         }
 
         if (try RoutedOptions.parse(args[1..])) |options| {
@@ -111,7 +125,12 @@ pub const Cli = union(enum) {
             return .version;
         }
         if (std.mem.eql(u8, first, "--skill")) {
-            return .skill;
+            if (args.len > 2) {
+                const which = std.meta.stringToEnum(skill_module.Skill, std.mem.span(args[2])) orelse return error.UnknownSkill;
+                return .{ .skill = which };
+            }
+
+            return .{ .skill = .telar };
         }
         if (std.mem.eql(u8, first, "agent")) {
             return .{ .agent = try AgentOptions.parse(args[2..]) };
@@ -121,6 +140,9 @@ pub const Cli = union(enum) {
         }
         if (std.mem.eql(u8, first, "workspace")) {
             return .{ .workspace = try WorkspaceOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "worktree")) {
+            return .{ .worktree = try WorktreeOptions.parse(args[2..]) };
         }
         if (std.mem.eql(u8, first, "api")) {
             return .{ .api = try ApiOptions.parse(args[2..]) };
@@ -169,6 +191,12 @@ pub const Cli = union(enum) {
         }
         if (std.mem.eql(u8, first, "cli")) {
             return .{ .cli = try CliOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "machine")) {
+            return .{ .machine = try MachineOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "dispatch-argv")) {
+            return .{ .dispatch_argv = args[2..] };
         }
         return .{ .run = try RunOptions.parse(args[1..], environ) };
     }
@@ -224,15 +252,6 @@ test "CLI rejects unknown and duplicate themes" {
     try std.testing.expectError(error.DuplicateThemeOption, Cli.parse(&duplicate, .empty));
 }
 
-test "CLI selects and validates the sidebar renderer" {
-    const args = [_][*:0]const u8{ "telar", "--sidebar-renderer=kitty-hybrid", "/bin/sh" };
-    const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(data.SidebarRendering.kitty_hybrid, cli.run.sidebar_rendering);
-
-    const invalid = [_][*:0]const u8{ "telar", "--sidebar-renderer", "sixel" };
-    try std.testing.expectError(error.UnknownSidebarRenderer, Cli.parse(&invalid, .empty));
-}
-
 test "CLI rejects an empty command after the delimiter" {
     const args = [_][*:0]const u8{ "telar", "--" };
     try std.testing.expectError(error.MissingCommand, Cli.parse(&args, .empty));
@@ -250,6 +269,22 @@ test "CLI parses config profiles and rejects profile without config" {
     const parsed_check = try Cli.parse(&check, .empty);
     try std.testing.expectEqualStrings("config.lua", std.mem.span(parsed_check.config_check.path.?));
     try std.testing.expectEqualStrings("remote", std.mem.span(parsed_check.config_check.profile.?));
+}
+
+test "gui --machine names a saved machine and excludes --remote" {
+    const machine = [_][*:0]const u8{ "telar", "gui", "--machine", "box", "htop" };
+    const parsed = try Cli.parse(&machine, .empty);
+    try std.testing.expectEqualStrings("box", std.mem.span(parsed.gui.run.machine.?));
+    try std.testing.expect(parsed.gui.run.command_set);
+
+    const inline_form = [_][*:0]const u8{ "telar", "gui", "--machine=box" };
+    try std.testing.expectEqualStrings("box", std.mem.span((try Cli.parse(&inline_form, .empty)).gui.run.machine.?));
+
+    const both = [_][*:0]const u8{ "telar", "gui", "--machine", "box", "--remote", "dev@box" };
+    try std.testing.expectError(error.MachineWithRemote, Cli.parse(&both, .empty));
+
+    const missing = [_][*:0]const u8{ "telar", "gui", "--machine" };
+    try std.testing.expectError(error.MissingMachineLabel, Cli.parse(&missing, .empty));
 }
 
 test "CLI parses --fresh for the client and the server and rejects it elsewhere" {
@@ -458,7 +493,7 @@ test "CLI parses agent commands with their targets and options" {
     const wait_cli = try Cli.parse(&wait, .empty);
     try std.testing.expectEqual(agent_module.AgentAction.wait, wait_cli.agent.action);
     try std.testing.expectEqual(@as(u64, 7), wait_cli.agent.target.?.pane);
-    try std.testing.expectEqual(core.AgentStatus.blocked, wait_cli.agent.until);
+    try std.testing.expectEqual(values_module.WaitCondition{ .status = .blocked }, wait_cli.agent.until);
     try std.testing.expectEqual(@as(u32, 90), wait_cli.agent.timeout_seconds);
 
     const prompt = [_][*:0]const u8{ "telar", "agent", "prompt", "--current", "run the tests", "--wait" };
@@ -566,6 +601,16 @@ test "CLI parses hook and integration commands" {
     try std.testing.expectEqualStrings("/tmp/s.sock", std.mem.span(pi_cli.hook.socket.?));
     const pi_status = [_][*:0]const u8{ "telar", "integration", "status", "pi" };
     try std.testing.expectEqual(values_module.HookAgent.pi, (try Cli.parse(&pi_status, .empty)).integration.agent);
+
+    const cursor_hook = [_][*:0]const u8{ "telar", "hook", "cursor" };
+    try std.testing.expectEqual(values_module.HookAgent.cursor, (try Cli.parse(&cursor_hook, .empty)).hook.agent);
+    const cursor_install = [_][*:0]const u8{ "telar", "integration", "install", "cursor" };
+    try std.testing.expectEqual(values_module.HookAgent.cursor, (try Cli.parse(&cursor_install, .empty)).integration.agent);
+
+    const opencode_hook = [_][*:0]const u8{ "telar", "hook", "opencode" };
+    try std.testing.expectEqual(values_module.HookAgent.opencode, (try Cli.parse(&opencode_hook, .empty)).hook.agent);
+    const opencode_install = [_][*:0]const u8{ "telar", "integration", "install", "opencode" };
+    try std.testing.expectEqual(values_module.HookAgent.opencode, (try Cli.parse(&opencode_install, .empty)).integration.agent);
 
     const unknown = [_][*:0]const u8{ "telar", "integration", "install", "gemini" };
     try std.testing.expectError(error.UnknownHookAgent, Cli.parse(&unknown, .empty));

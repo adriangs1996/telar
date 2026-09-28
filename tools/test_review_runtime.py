@@ -10,13 +10,11 @@ import argparse
 import json
 import os
 from pathlib import Path
-import select
 import subprocess
 import sys
-import threading
 import time
 
-import flood
+import headless_client
 import perf_e2e
 
 SESSION = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000"
@@ -81,10 +79,8 @@ class Runtime:
         self.config.write_text("return { api_version = 2, runtime = { agents = {{ name = "
                                + json.dumps(provider) + ", process_names = { " + json.dumps(process_name)
                                + " }, process_paths = { \"test_review_runtime.py\" } }} }, "
-                               "client = { sidebar = { visible = false, renderer = 'cells' } } }\n")
-        self.process = None
-        self.master = None
-        self.reader = None
+                               "client = { sidebar = { visible = false } } }\n")
+        self.client = None
         self.sequence = 0
         self.launch = 0
         self.identity = {}
@@ -92,17 +88,13 @@ class Runtime:
     def start(self):
         self.launch += 1
         (self.directory / "identity.json").unlink(missing_ok=True)
-        master, slave = flood.pty.openpty()
-        flood.set_winsize(slave, 35, 111)
-        self.master = master
-        command = [str(self.binary), "--config", str(self.config), "--fresh", sys.executable,
-                   str(Path(__file__).resolve()), "--fixture", str(self.directory), str(self.binary)]
-        self.process = subprocess.Popen(command, stdin=slave, stdout=slave, stderr=slave,
-                                        cwd=self.workspace, env=self.env,
-                                        preexec_fn=flood.become_session_leader, close_fds=True)
-        os.close(slave)
-        self.reader = threading.Thread(target=self.drain, args=(master, self.launch), daemon=True)
-        self.reader.start()
+        self.client = headless_client.HeadlessClient(
+            ["--config", self.config, "--fresh", sys.executable, Path(__file__).resolve(),
+             "--fixture", self.directory, self.binary],
+            env=self.env, cwd=self.workspace, size=(111, 35),
+            log=self.directory / f"client-{self.launch}.log",
+            binary=self.binary.with_name("telar-headless"),
+        )
         self.identity = wait_for(self.directory / "identity.json")
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
@@ -113,35 +105,16 @@ class Runtime:
             time.sleep(.25)
         raise AssertionError(f"Fixture identity never became reviewable: {probe.stderr}")
 
-    def drain(self, master, launch):
-        with (self.directory / f"host-{launch}.bin").open("wb") as log:
-            while self.master == master:
-                try:
-                    if select.select([master], [], [], .1)[0]:
-                        data = os.read(master, 65536)
-                        if not data:
-                            return
-                        log.write(data)
-                        log.flush()
-                except (OSError, ValueError):
-                    return
-
     def stop(self):
-        if self.process is None:
+        if self.client is None:
             return
         try:
             shutdown = perf_e2e.stop_runtime(str(self.binary), self.env)
             atomic_json(self.directory / f"shutdown-{self.launch}.json", shutdown)
             assert shutdown["cleanup_complete"] and shutdown["children_exited"], shutdown
         finally:
-            if self.process.poll() is None:
-                flood.terminate(self.process)
-            self.process = None
-            master, self.master = self.master, None
-            if self.reader:
-                self.reader.join(timeout=1)
-            if master is not None:
-                os.close(master)
+            self.client.terminate()
+            self.client = None
 
     def hook(self, event, tool="", tool_input=None, tool_id="", environment=None):
         self.sequence += 1
@@ -283,8 +256,6 @@ def main():
     directory = args.directory.resolve()
     if directory.exists():
         parser.error("the artifact directory must be new")
-    if len(str(directory / "runtime.sock").encode()) >= 100:
-        parser.error("choose a shorter artifact directory for the Unix socket")
     runtime = Runtime(binary, directory, args.provider)
     try:
         exercise(runtime)

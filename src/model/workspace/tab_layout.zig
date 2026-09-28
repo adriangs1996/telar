@@ -202,9 +202,8 @@ pub fn applyPaneLayout(model: *ClientModel, request: model_data.PaneLayoutReques
 
     const previous = model.tabs.layout[slot].focused() orelse return error.NoFocusedPane;
     for (request.panes.ids) |pane_id| {
-        const pane = model.panes.findInConst(location.tab_id, pane_id) orelse return error.LayoutPaneMismatch;
-        if (pane.kind == .agent and request.layout.surface(pane_id) != .thread) {
-            return error.InvalidAgentSurface;
+        if (model.panes.findInConst(location.tab_id, pane_id) == null) {
+            return error.LayoutPaneMismatch;
         }
     }
 

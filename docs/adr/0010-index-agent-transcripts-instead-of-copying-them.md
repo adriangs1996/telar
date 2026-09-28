@@ -1,8 +1,12 @@
 ---
-status: accepted
+status: superseded
 ---
 
 # Index agent transcripts instead of copying them
+
+Superseded: the conversation view this index served went away with agent
+panes, before the index was built. Session readers still read agent files for
+titles.
 
 [ADR 0015](0015-own-agent-panes-in-the-runtime.md) adds official app-server
 events as the live source for managed agent panes, with a bounded memory cache.
@@ -28,8 +32,8 @@ with a 64 KiB cap. Full-text search covers user-authored previews only.
   Messages API with request deduplication, but Codex sends incremental
   turns over a WebSocket with `store=false`, compaction erases earlier
   history from the traffic, subagents share the pane credential, and side
-  calls (title generation, suggestions) pollute the stream. The proxy stays
-  what it is: lifecycle and command evidence.
+  calls (title generation, suggestions) pollute the stream. The proxy has
+  since stopped observing agents altogether ([0018](0018-decouple-the-proxy-from-agents.md)).
 - Screen scraping: alternate-screen agents leave nothing in scrollback, and
   the screen has no structure. It stays a lifecycle fallback.
 - Copying transcript text into telar's database: measured session

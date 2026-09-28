@@ -46,7 +46,8 @@ pub fn capture(session: *Session, pane: PaneRef, report: ReviewHookReport) void 
 /// Example: `try hook_review.feedback(session, pane, report);`
 pub fn feedback(session: *Session, pane: PaneRef, report: ReviewHookReport) !void {
     const input = report.input;
-    if (report.provider == .pi or input.session.len == 0 or (input.agent_id != null and input.agent_id.?.len != 0)) {
+    // Cursor's tool hooks document no context field that reaches the model.
+    if (report.provider == .pi or report.provider == .cursor or input.session.len == 0 or (input.agent_id != null and input.agent_id.?.len != 0)) {
         return;
     }
 

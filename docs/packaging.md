@@ -5,8 +5,9 @@ helper. Building the GUI also requires Cargo and Rust 1.93.1 or newer; packaged
 applications do not need that toolchain. See the [helper build and protocol](../tools/diagram-renderer/README.md).
 Packaging adds what a desktop expects around
 it: something to double-click, an icon, and a way for shells and agents to
-find `telar` afterwards. Nothing in the client changes; `telar` typed in a
-terminal is still the terminal client.
+find `telar` afterwards. `telar` typed in a terminal opens the same window as
+the launchers; without a display (an SSH login, or Linux without
+`WAYLAND_DISPLAY`) it says so and names the CLI commands to use instead.
 
 ## macOS
 
@@ -42,12 +43,14 @@ CLI's argument grammar untouched. The executable lives under `Resources`
 because macOS file systems fold case: `Telar` and `telar` cannot share
 `Contents/MacOS`.
 
-The icon is rendered from `src/assets/telar-mark.svg`:
+The icon comes from two sources drawn for different sizes:
+`src/assets/telar-mark.svg` for 16 to 64 px and `src/assets/telar-icon.svg`
+for 128 to 1024 px. One script renders the iconset, runs `iconutil` and
+also writes `packaging/linux/telar.png`, the top bar mark and the site's
+brand files:
 
 ```sh
-rsvg-convert -w 1024 -h 1024 src/assets/telar-mark.svg -o icon_1024.png
-# then sips into a telar.iconset at 16..512 @1x and @2x, and
-iconutil -c icns telar.iconset -o packaging/macos/telar.icns
+uv run --no-project --with pillow==12.2.0 python tools/build_brand_icons.py
 ```
 
 `zig build` signs nothing beyond the linker's ad hoc signature, which is
@@ -62,10 +65,11 @@ and notarizes for other Macs.
 tars `bin` and `share` into `zig-out/telar-<arch>-linux.tar.gz`; unpack it
 over a prefix such as `/usr/local` or `~/.local`.
 
-`zig build -Dgui=false` leaves the native client out. The result has the
-runtime and the terminal client, links no Wayland, Vulkan, ATK or GLib
-library, and builds without Cargo. `telar gui` then exits with an error.
-This is the build for servers, which is where remote mode runs the runtime.
+`zig build -Dgui=false` leaves the window out. The result has the runtime
+and every command line control, links no Wayland, Vulkan, ATK or GLib
+library, and builds without Cargo. `telar` and `telar gui` then exit with an
+error. This is the build for servers, which is where remote mode runs the
+runtime.
 
 The desktop entry runs `telar gui --login-shell`, so the menu launch is the
 same path as the macOS bundle.

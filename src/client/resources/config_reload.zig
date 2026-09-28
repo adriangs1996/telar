@@ -16,8 +16,14 @@ const RejectContext = @import("RejectContext.zig");
 const Generation = @import("../config/Generation.zig");
 const Orphans = @import("Orphans.zig");
 const Registry = @import("../plugins/Registry.zig");
+const privatefile = @import("privatefile");
 const std = @import("std");
-const Job = @import("../execution/Job.zig").Job;
+const BackgroundJob = @import("../execution/BackgroundJob.zig").BackgroundJob;
+
+/// Seeds the trust store's watch fingerprint apart from the other watched files.
+const trust_fingerprint_seed = 0x74656c61722d7472;
+/// The largest trust store the watch loads, in bytes.
+const trust_store_limit = 64 * 1024;
 
 pub const ConfigReload = union(enum) {
     unchanged: i128,
@@ -32,9 +38,9 @@ pub const ConfigReload = union(enum) {
 /// consumes a forced reload; the caller queues the job.
 ///
 /// ```zig
-/// try client.to_workers.push(schedule(&state, args));
+/// try client.to_background.push(schedule(&state, args));
 /// ```
-pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) Job {
+pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) BackgroundJob {
     defer state.force_next = false;
 
     return .{
@@ -82,14 +88,6 @@ pub fn resolve(state: *ConfigReloadState, args: ResolveArgs) Outcome {
         .loaded => |loaded| {
             const rejection: RejectContext = .{ .state = state, .gpa = args.gpa, .loaded = loaded };
             const snapshot = &loaded.generation.snapshot;
-            const requested_sidebar = if (args.checks.sidebar_renderer_locked)
-                args.checks.current_sidebar
-            else
-                snapshot.sidebar_rendering;
-            _ = requested_sidebar.resolve(args.checks.kitty_support) catch |err| return rejection.reject(
-                "reloaded sidebar renderer is unavailable: {s}",
-                .{@errorName(err)},
-            );
             default_bindings.validate(snapshot.prefix, snapshot.bindingSlice()) catch |err| return rejection.reject(
                 "reloaded keymap is invalid: {s}",
                 .{@errorName(err)},
@@ -107,7 +105,6 @@ pub fn resolve(state: *ConfigReloadState, args: ResolveArgs) Outcome {
                     .escape_timeout_ns = snapshot.input_escape_timeout_ns,
                     .sequence_timeout_ns = snapshot.input_sequence_timeout_ns,
                 },
-                .sidebar_rendering = requested_sidebar,
             } };
         },
     }
@@ -181,33 +178,22 @@ pub fn wait(args: WaitArgs) anyerror!ConfigReload {
 }
 
 pub fn trustWatchFingerprint(io: std.Io, path: []const u8) u64 {
-    var hasher = std.hash.Wyhash.init(0x74656c61722d7472);
-    hasher.update(path);
-    const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch {
-        hasher.update("\x00missing");
-        return hasher.final();
-    };
-    hasher.update(std.mem.asBytes(&stat.kind));
-    hasher.update(std.mem.asBytes(&stat.size));
-    hasher.update(std.mem.asBytes(&stat.mtime.nanoseconds));
-    return hasher.final();
+    return privatefile.fingerprint(io, path, trust_fingerprint_seed);
 }
 
 fn loadReloadTrustStore(gpa: std.mem.Allocator, io: std.Io, path: []const u8) !*core.TrustStore {
     const store = try gpa.create(core.TrustStore);
     errdefer gpa.destroy(store);
-    const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
-        error.FileNotFound => {
-            store.* = .{};
-            return store;
-        },
-        else => return err,
+
+    const source = privatefile.read(io, gpa, path, .limited(trust_store_limit)) catch |err| switch (err) {
+        error.InsecureFile => return error.InsecureTrustStore,
+        else => |other| return other,
+    } orelse {
+        store.* = .{};
+        return store;
     };
-    if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0) {
-        return error.InsecureTrustStore;
-    }
-    const source = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(64 * 1024));
     defer gpa.free(source);
+
     store.* = try core.TrustStore.parse(gpa, source);
     return store;
 }

@@ -14,3 +14,21 @@ pub const vm_info_words = 38;
 pub const vm_active_word = 1;
 pub const vm_wire_word = 3;
 pub const vm_compressor_word = 32;
+
+// IOKit power sources and the CoreFoundation calls that read them. Every
+// `Copy` result is owned by the caller and released with `CFRelease`.
+pub const CFTypeRef = ?*const anyopaque;
+pub extern "c" fn IOPSCopyPowerSourcesInfo() CFTypeRef;
+pub extern "c" fn IOPSCopyPowerSourcesList(blob: CFTypeRef) CFTypeRef;
+pub extern "c" fn IOPSGetPowerSourceDescription(blob: CFTypeRef, source: CFTypeRef) CFTypeRef;
+pub extern "c" fn CFArrayGetCount(array: CFTypeRef) isize;
+pub extern "c" fn CFArrayGetValueAtIndex(array: CFTypeRef, index: isize) CFTypeRef;
+pub extern "c" fn CFDictionaryGetValue(dictionary: CFTypeRef, key: CFTypeRef) CFTypeRef;
+pub extern "c" fn CFNumberGetValue(number: CFTypeRef, number_type: isize, value: *anyopaque) u8;
+/// The function behind `CFSTR`: a constant string that is never released.
+pub extern "c" fn __CFStringMakeConstantString(c_string: [*:0]const u8) CFTypeRef;
+pub extern "c" fn CFRelease(value: CFTypeRef) void;
+
+pub const kCFNumberIntType: isize = 9;
+pub const kIOPSCurrentCapacityKey = "Current Capacity";
+pub const kIOPSMaxCapacityKey = "Max Capacity";

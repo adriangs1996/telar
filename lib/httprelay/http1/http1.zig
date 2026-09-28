@@ -1,8 +1,8 @@
 //! Public HTTP/1.1 relay for intercepted TLS streams.
 //!
 //! `connection.zig` owns exchange ordering and connection policy. `head.zig`
-//! reads and analyzes heads, `transform.zig` chooses whether to rewrite them,
-//! and `body.zig` relays bodies without changing their wire representation.
+//! reads and analyzes heads, and `body.zig` relays bodies without changing
+//! their wire representation.
 
 const head = @import("head_support.zig");
 pub const body = @import("body.zig");
@@ -10,12 +10,10 @@ const types = @import("types.zig");
 const connection = @import("connection.zig");
 pub const GenericExchange = @import("GenericExchange.zig").Type;
 pub const GenericConnection = @import("GenericConnection.zig").Type;
-const transform = @import("transform.zig");
 const std = @import("std");
 /// A scripted session for tests of code built on the relay.
 pub const FakeSession = @import("FakeSession.zig");
 const IgnoreTestObserver = @import("IgnoreTestObserver.zig");
-const Rewrite = @import("../Rewrite.zig");
 const ConnectionIntegration = @import("ConnectionIntegration.zig");
 
 pub const max_chunk_line_bytes = body.max_chunk_line_bytes;
@@ -35,8 +33,6 @@ pub const ResponseHead = @import("ResponseHead.zig");
 pub const ExchangeOutcome = connection.ExchangeOutcome;
 
 pub const MessageRoute = @import("MessageRoute.zig");
-
-pub const HeadTransform = @import("HeadTransform.zig");
 
 /// Relays one complete HTTP/1.1 message and returns its metadata. The
 /// observer sees the head bytes as read and every forwarded body fragment.
@@ -83,54 +79,6 @@ pub fn relayHead(session: anytype, route: MessageRoute, observer: anytype) ?Head
     });
 }
 
-/// Relays one HTTP head after applying the matching rewrites.
-///
-/// Invalid, oversized, or framing-changing results preserve the original head.
-/// The rewrites never receive the session, and this function performs the one
-/// network write selected by its decision. The observer's `head` receives the
-/// original head bytes, before any rewrite.
-///
-/// ```zig
-/// const head = relayHeadTransformed(session, transformation, &observer);
-/// ```
-pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform, observer: anytype) ?Head {
-    if (transformation.rewrites.len == 0) {
-        return relayHead(session, transformation.route, observer);
-    }
-
-    var original: [head.max_bytes]u8 = undefined;
-    const original_len = head.read(session, transformation.route.from, &original) orelse return null;
-    observer.head(original[0..original_len]);
-    const original_head = head.analyze(original[0..original_len], .{
-        .is_response = transformation.route.is_response,
-        .response_to_head = transformation.route.response_to_head,
-        .watched_routes = transformation.route.watched_routes,
-    }) orelse return null;
-
-    var encoded: [head.max_bytes]u8 = undefined;
-    var selected_head = original_head;
-    const selected_bytes = switch (transform.decide(.{
-        .original = original[0..original_len],
-        .original_head = original_head,
-        .is_response = transformation.route.is_response,
-        .response_to_head = transformation.route.response_to_head,
-        .rewrites = transformation.rewrites,
-        .output = &encoded,
-    })) {
-        .preserve => original[0..original_len],
-        .replace => |replacement| select: {
-            selected_head = replacement.head;
-            break :select encoded[0..replacement.len];
-        },
-    };
-
-    if (!session.writeAll(transformation.route.to, selected_bytes)) {
-        return null;
-    }
-
-    return selected_head;
-}
-
 /// Relays one HTTP body and exposes only successfully forwarded fragments.
 ///
 /// ```zig
@@ -169,50 +117,6 @@ test "request head is forwarded before its body is consumed" {
         .{ .from = .child, .to = .origin, .framing = parsed.framing },
         IgnoreTestObserver{},
     ));
-    try std.testing.expectEqualStrings(request, fake.originOutput());
-}
-
-test "transformed head selection is the only head written" {
-    const head_rewrites = [_]Rewrite{.{
-        .effects = &.{
-            .{ .set = .{ .name = "x-telar", .value = "enabled", .sensitive = false } },
-        },
-    }};
-    const request = "POST /upload HTTP/1.1\r\nHost: example.test\r\nContent-Length: 4\r\n\r\ndata";
-    var fake: FakeSession = .{ .child_input = request };
-
-    const parsed = relayHeadTransformed(&fake, .{
-        .route = .{
-            .from = .child,
-            .to = .origin,
-            .is_response = false,
-            .response_to_head = false,
-        },
-        .rewrites = &head_rewrites,
-    }, IgnoreTestObserver{}).?;
-
-    try std.testing.expectEqualDeep(types.BodyPlan{ .content_length = 4 }, parsed.framing);
-    try std.testing.expect(std.mem.indexOf(u8, fake.originOutput(), "x-telar: enabled\r\n") != null);
-    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, fake.originOutput(), "POST /upload"));
-}
-
-test "a preserved transformation forwards the original head exactly" {
-    const head_rewrites = [_]Rewrite{.{
-        .effects = &.{},
-    }};
-    const request = "GET / HTTP/1.1\r\nhOsT:\texample.test\r\nX-Duplicate: one\r\nX-Duplicate: two\r\n\r\n";
-    var fake: FakeSession = .{ .child_input = request };
-
-    _ = relayHeadTransformed(&fake, .{
-        .route = .{
-            .from = .child,
-            .to = .origin,
-            .is_response = false,
-            .response_to_head = false,
-        },
-        .rewrites = &head_rewrites,
-    }, IgnoreTestObserver{}).?;
-
     try std.testing.expectEqualStrings(request, fake.originOutput());
 }
 
@@ -265,7 +169,6 @@ test "HTTP connection composition relays keep-alive exchanges and publishes fina
 test {
     std.testing.refAllDecls(connection);
     std.testing.refAllDecls(head);
-    std.testing.refAllDecls(transform);
     std.testing.refAllDecls(body);
     std.testing.refAllDecls(types);
 }

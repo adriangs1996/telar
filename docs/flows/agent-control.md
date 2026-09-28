@@ -111,3 +111,67 @@ addressable (`PaneStore.resolveControl`). Text injected through
 Enter) marks the pane's next completed history capture as agent-authored;
 `telar history --author agent|human|all` and the history palette filter on
 it.
+
+## Worktree targets
+
+Every `telar agent` target also accepts `worktree:BRANCH`. The CLI fetches
+the worktree catalog and the agent snapshot and resolves the agent whose work
+tree is that worktree (`Snapshot.resolveWorktree`); more than one is an
+ambiguity error that lists their panes.
+
+## Focus rule
+
+`send_pane_text` and `interrupt_agent` fail with `pane_focused` when the pane
+is the focused pane of the active tab of any attached UI client
+(`agent_control.focusedByClient`, over the `ClientLayouts` each client
+reports). A person is presumably typing there; the coordinator asks them
+instead. `pane send-keys` is not exempt.
+
+## Sender line and budget
+
+A prompt sent from inside a telar pane carries that pane as `sender`. The CLI
+sets it only when `TELAR_SOCKET_PATH` names the socket it talks to
+(`control.senderPane`), so a CLI in another runtime's pane sends none. The
+runtime ignores a sender pane it does not know, and prefixes a known one's
+prompt with `[telar: from <branch or workspace>, pane N] ` so the worker
+knows who asked. Prompts from one pane to another spend a `PromptBudget` of 8
+per 60 s; the ninth fails with `prompt_rate_limited`. `agent wait` spends
+nothing, so answers travel through waits rather than prompts back.
+
+## Interrupt
+
+```text
+telar agent interrupt worktree:fix-tabs
+        |
+schema.interrupt_agent -> agent_control.interrupt
+        |  focus rule; working agents only (agent_not_working)
+        |  manifest InterruptKey (escape for Claude Code and Codex)
+        |  pane_input.forwardControl
+        |  ready report "Interrupted by telar"
+        |
+schema.request_completed
+```
+
+Claude Code runs no `Stop` hook for an interrupted turn, so the runtime
+records the ready report itself; the agent's next hook overrides it.
+`agent prompt --interrupt` interrupts, waits up to 15 s for the agent to
+leave `working`, then sends the prompt.
+
+## Progress reports and final answers
+
+`telar hook` maps `PostToolUse` of `TaskCreate`/`TaskUpdate` (Claude Code),
+`TodoWrite` and `update_plan` (Codex) to plan changes, and `Stop`'s
+`last_assistant_message` to the final message (`hook_progress.map`). It
+sends `report_agent_progress` before the lifecycle report, so a waiter that
+sees `done` also sees the answer. `agent_hooks.receiveProgress` resolves the
+hook's `cwd` to a worktree, registering an external one it did not know, and
+`agent_status.observeProgress` stores plan and message on the agent.
+`agent prompt --wait --json` and `agent get --json` return
+`final_message`, `plan_done`, `plan_total`, `plan_step` and `work_tree`.
+
+## Reading finished commands
+
+A pane's last 16 KiB of text and its exit code survive its exit in the
+`ExitedPanes` ring (16 panes). `read_pane` on an exited pane is served from
+there with `exit_code` set, which is how `telar worktree exec --wait` prints
+a finished command's output and exits with its code.

@@ -4,10 +4,10 @@ const keyinput = @import("keyinput");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const agent_control = @import("../agents/agent_control.zig");
 const cli_control = @import("../connection/cli_control.zig");
 const copy_mode = @import("copy_mode.zig");
 const history_palette = @import("history_palette.zig");
+const path_picker = @import("path_picker.zig");
 const key_routing = @import("key_routing.zig");
 const lua_action = @import("lua_action.zig");
 const name_prompt = @import("name_prompt.zig");
@@ -28,6 +28,7 @@ const tab_selection = @import("../workspace/tab_selection.zig");
 const workspace_creation = @import("../workspace/workspace_creation.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 const Client = @import("../execution/Client.zig");
+const bar_updates = @import("../config/bar_updates.zig");
 
 const ctrl_h = keyinput.chord.parseKey("ctrl+h") catch unreachable;
 
@@ -73,9 +74,6 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
     }
 
     switch (value) {
-        .toggle_thread_view => {
-            _ = data.agent_panes.toggleSurface(&client.model);
-        },
         .scroll_pane => |direction| try pane_viewport.scrollPane(client, direction),
         .split_pane => |direction| _ = try pane_split.requestPaneSplit(
             client,
@@ -131,6 +129,9 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
             },
         ),
         .toggle_workspace_list => _ = data.workspace_list.toggle(&client.model),
+        .open_panel => |index| try bar_updates.togglePanel(client, .{ .index = index }),
+        .close_panel => try bar_updates.closePanel(client),
+        .refresh_panel => try bar_updates.refreshPanel(client),
         .new_workspace => _ = workspace_creation.beginWorkspacePrompt(client),
         .rename_workspace => _ = name_prompt.openNamePrompt(&client.model, .rename_workspace),
         .select_workspace => |position| _ = try workspace_handoff.selectWorkspace(
@@ -139,12 +140,12 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
                 .position = position,
             },
         ),
+        .leave_worktree => try leaveWorktree(client),
         .close_pane => _ = try pane_closure.requestPaneClose(&client.model),
         .new_tab => _ = try tab_creation.requestTabCreation(
             client,
             .{},
         ),
-        .new_agent_tab => try agent_control.createAgentTab(client),
         .select_tab_offset => |offset| _ = try tab_selection.selectTab(
             client,
             .{
@@ -182,7 +183,13 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
         .command_tab => |*command| try cli_control.createCommandTab(client, command),
         .goto_picker => _ = name_prompt.openNamePrompt(&client.model, .goto_picker),
         .history_palette => _ = try history_palette.beginHistoryPalette(&client.model),
+        .path_picker => _ = try path_picker.enter(&client.model),
         .suggest_command => _ = try suggest_command.beginSuggestion(&client.model),
+        .select_machine_offset => |offset| try client.model.to_host.push(.{ .machine = .{ .offset = offset } }),
+        .machine_picker => _ = name_prompt.openNamePrompt(&client.model, .{ .palette = .machines }),
+        .add_machine => if (client.machines != null) {
+            _ = name_prompt.openNamePrompt(&client.model, .add_machine);
+        },
         .notification => |*notification| _ = try notifications.requestNotificationDelivery(&client.model, notification),
         .lua_callback, .lua_expr, .plugin => unreachable,
     }
@@ -211,4 +218,16 @@ pub fn navigationKey(direction: data.InputDirection) keyinput.Key {
         .up => ctrl_k,
         .down => ctrl_j,
     };
+}
+
+/// Selects the project a worktree hangs from while its tabs are shown; does
+/// nothing elsewhere.
+fn leaveWorktree(client: *Client) !void {
+    const current = client.model.workspace orelse return;
+    const workspace = switch (current) {
+        .workspace => |id| id,
+        .worktree => return,
+    };
+    const row = client.model.workspace_list_snapshot.worktreeOfWorkspace(workspace) orelse return;
+    _ = try workspace_handoff.selectWorkspace(client, .{ .workspace = row.source });
 }

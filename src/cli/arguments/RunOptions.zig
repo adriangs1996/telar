@@ -8,13 +8,13 @@ command: pty.Command,
 command_set: bool = false,
 theme: data.ColorTheme = data.theme_support.default_theme,
 theme_set: bool = false,
-sidebar_rendering: data.SidebarRendering = .automatic,
-sidebar_renderer_set: bool = false,
 config: ?[*:0]const u8 = null,
 no_config: bool = false,
 profile: ?[*:0]const u8 = null,
 /// SSH destination whose runtime this client attaches to.
 remote: ?[*:0]const u8 = null,
+/// Label of a saved machine the window shows first.
+machine: ?[*:0]const u8 = null,
 /// Start a runtime that sets the previous session aside instead of
 /// restoring it. Refused when a runtime is already running.
 fresh: bool = false,
@@ -22,7 +22,6 @@ fresh: bool = false,
 pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOptions {
     var options: RunOptions = .{ .command = undefined };
     var theme_set = false;
-    var sidebar_renderer_set = false;
     var delimiter_seen = false;
     var command_start: usize = 0;
     while (command_start < args.len) {
@@ -59,35 +58,6 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
             command_start += 1;
             continue;
         }
-        if (std.mem.eql(u8, arg, "--sidebar-renderer")) {
-            if (sidebar_renderer_set) {
-                return error.DuplicateSidebarRendererOption;
-            }
-            if (command_start + 1 >= args.len) {
-                return error.MissingSidebarRenderer;
-            }
-
-            options.sidebar_rendering = try data.SidebarRendering.parse(
-                std.mem.span(args[command_start + 1]),
-            );
-            sidebar_renderer_set = true;
-            options.sidebar_renderer_set = true;
-            command_start += 2;
-            continue;
-        }
-        if (std.mem.startsWith(u8, arg, "--sidebar-renderer=")) {
-            if (sidebar_renderer_set) {
-                return error.DuplicateSidebarRendererOption;
-            }
-
-            options.sidebar_rendering = try data.SidebarRendering.parse(
-                arg["--sidebar-renderer=".len..],
-            );
-            sidebar_renderer_set = true;
-            options.sidebar_renderer_set = true;
-            command_start += 1;
-            continue;
-        }
         if (std.mem.eql(u8, arg, "--remote")) {
             if (options.remote != null) {
                 return error.DuplicateRemoteOption;
@@ -109,6 +79,30 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
             }
 
             options.remote = args[command_start] + "--remote=".len;
+            command_start += 1;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--machine")) {
+            if (options.machine != null) {
+                return error.DuplicateMachineOption;
+            }
+            if (command_start + 1 >= args.len) {
+                return error.MissingMachineLabel;
+            }
+
+            options.machine = args[command_start + 1];
+            command_start += 2;
+            continue;
+        }
+        if (std.mem.startsWith(u8, arg, "--machine=")) {
+            if (options.machine != null) {
+                return error.DuplicateMachineOption;
+            }
+            if (arg["--machine=".len..].len == 0) {
+                return error.MissingMachineLabel;
+            }
+
+            options.machine = args[command_start] + "--machine=".len;
             command_start += 1;
             continue;
         }
@@ -196,6 +190,9 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
     }
     if (options.fresh and options.remote != null) {
         return error.FreshWithRemote;
+    }
+    if (options.machine != null and options.remote != null) {
+        return error.MachineWithRemote;
     }
 
     return options;

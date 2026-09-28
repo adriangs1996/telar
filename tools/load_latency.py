@@ -6,9 +6,11 @@ single-byte echo latency in one idle pane exactly like echo_latency.py. The
 question it answers is whether the per-operation scheduling cost of the
 runtime shows up when several ptys are busy at once.
 
-telar panes are opened by typing the default prefix bindings into the client;
-tmux panes are opened from outside with `split-window -d`, which keeps focus
-on the measured pane.
+telar is measured through its headless client: panes are opened by sending
+the default prefix bindings as input lines, and each echo is timed from the
+client taking the token to its first frame of the measured pane, read from
+the client's exit trace. tmux panes are opened from outside with
+`split-window -d`, which keeps focus on the measured pane.
 """
 
 import argparse
@@ -23,11 +25,14 @@ import struct
 import subprocess
 import sys
 import termios
+import tempfile
 import time
+from pathlib import Path
+
+import headless_client
 
 TOKENS = [b"z", b"j", b"k", b"x"]
 FLOOD_COMMAND = b"while :; do seq 1 100000; done\n"
-TELAR_PREFIX = b"\x02"
 ESCAPES = re.compile(
     rb"\x1b\[[0-?]*[ -/]*[@-~]"
     rb"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"
@@ -109,19 +114,6 @@ def terminate(proc):
             continue
 
 
-def open_telar_floods(master, floods, consume=drain):
-    # Each split focuses the new pane; the flood command goes there, and the
-    # final split leaves an idle pane focused for the measurement.
-    for index in range(floods):
-        os.write(master, TELAR_PREFIX + (b"%" if index % 2 == 0 else b'"'))
-        consume(master, 0.8)
-        os.write(master, FLOOD_COMMAND)
-        consume(master, 0.5)
-    if floods:
-        os.write(master, TELAR_PREFIX + (b"%" if floods % 2 == 0 else b'"'))
-        consume(master, 1.0)
-
-
 def open_tmux_floods(socket_name, floods):
     for _ in range(floods):
         subprocess.run(
@@ -137,7 +129,57 @@ def open_tmux_floods(socket_name, floods):
         time.sleep(0.5)
 
 
+def open_headless_floods(client, floods):
+    # Each split focuses the new pane; the flood command goes there, and the
+    # final split leaves an idle pane focused for the measurement.
+    for index in range(floods):
+        client.key("ctrl+b")
+        client.text("%" if index % 2 == 0 else '"')
+        time.sleep(0.8)
+        client.text(FLOOD_COMMAND.decode().strip())
+        client.key("enter")
+        time.sleep(0.5)
+    if floods:
+        client.key("ctrl+b")
+        client.text("%" if floods % 2 == 0 else '"')
+        time.sleep(1.0)
+
+
+def measure_headless(args, env):
+    work = Path(getattr(args, "work", None) or tempfile.mkdtemp(prefix="telar-load-"))
+    client = headless_client.HeadlessClient(
+        ["--no-config"], env=env, cwd=work, size=(args.cols, args.rows),
+        trace=work / "headless-trace.json", dump=work / "headless-dump.json",
+        log=work / "headless.log", binary=args.cmd[0],
+    )
+    try:
+        client.wait_ready()
+        time.sleep(args.warmup)
+        if not client.running():
+            raise SystemExit(f"{args.cmd[0]} exited early: {(work / 'headless.log').read_text()}")
+        open_headless_floods(client, args.floods)
+        time.sleep(2.0)
+        client.mark("measure")
+        for i in range(args.samples):
+            client.text(TOKENS[i % len(TOKENS)].decode())
+            time.sleep(args.gap)
+            client.key("backspace")
+            time.sleep(args.gap)
+        client.quit()
+    finally:
+        client.terminate()
+    # The first pane, one per flood and the measured one.
+    expected = args.floods + 2 if args.floods else 1
+    panes = len(client.dump()["panes"])
+    if panes != expected:
+        raise SystemExit(f"expected {expected} panes after setup, found {panes}")
+    return headless_client.echo_latencies(client.trace(), since="measure")
+
+
 def measure(args, env):
+    if args.mux == "telar":
+        return measure_headless(args, env)
+
     master, slave = pty.openpty()
     set_winsize(slave, args.rows, args.cols)
     proc = subprocess.Popen(
@@ -149,10 +191,7 @@ def measure(args, env):
     if proc.poll() is not None:
         raise SystemExit(f"{args.cmd[0]} exited early with {proc.returncode}")
 
-    if args.mux == "telar":
-        open_telar_floods(master, args.floods)
-    else:
-        open_tmux_floods(args.tmux_socket, args.floods)
+    open_tmux_floods(args.tmux_socket, args.floods)
     settled = drain_bytes(master, 2.0)
     if args.dump_screen:
         sys.stderr.write(render_visible(settled, args.cols) + "\n")
@@ -208,7 +247,8 @@ def main():
     parser.add_argument("--cols", type=int, default=240)
     parser.add_argument("--warmup", type=float, default=3.0)
     parser.add_argument("--env", action="append", default=[], help="KEY=VALUE set after cleanup")
-    parser.add_argument("--dump-screen", action="store_true", help="print the screen after setup")
+    parser.add_argument("--dump-screen", action="store_true", help="print the screen after setup (tmux)")
+    parser.add_argument("--work", help="directory for the headless client's trace and log")
     args = parser.parse_args()
 
     env = dict(os.environ)

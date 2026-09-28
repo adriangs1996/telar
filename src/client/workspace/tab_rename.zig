@@ -3,7 +3,6 @@ const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
 const client_tests = @import("../execution/client_tests.zig");
-const agent_control = @import("../agents/agent_control.zig");
 const tab_creation = @import("tab_creation.zig");
 
 /// Example: `_ = try tab_rename.requestTabRename(app, command);`
@@ -62,6 +61,5 @@ test "owned request deliveries roll back only their own correlation when the out
     try client_tests.rollBackFullOutbox(
         sendTabRenameRequest,
         tab_creation.sendCreateTabRequest,
-        agent_control.sendAgentPromptRequest,
     );
 }

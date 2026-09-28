@@ -59,14 +59,27 @@ fn linkPointer(context: *anyopaque, event: keyinput.Mouse) bool {
 
     routing.hover.dirty = true;
     routing.hover.refresh(gui);
-    const hit = routing.hover.link orelse return false;
+    const hit = routing.hover.link orelse {
+        routing.link_gesture.cancel();
+        return false;
+    };
+    const mods: u32 = if (routing.hover.event) |hover_event| hover_event.mods else 0;
+    const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[gui.app.model.tabs.active].tab_id, hit.pane_id).?;
+    if (pane.mouse.tracking != .none and mods & 1 == 0) {
+        // The child owns the plain button; Shift hands the press to telar.
+        routing.link_gesture.cancel();
+        return false;
+    }
+
     if (routing.hover.openable()) {
         routing.link_gesture.begin(hit, gui.app.model.version());
     } else {
         routing.link_gesture.cancel();
     }
 
-    return true;
+    // The platform modifier claims the whole gesture, as Ghostty does. A plain
+    // press stays with the pane, so a drag still selects and only a click opens.
+    return mods & hover_target.link_modifier != 0;
 }
 
 fn inspectionScrollLimit(context: *anyopaque) ?u32 {

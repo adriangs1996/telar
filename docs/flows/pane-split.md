@@ -108,13 +108,13 @@ when the host is resized during launch.
 - [`gui/tests/navigation.zig`](../../src/gui/tests/navigation.zig): the real
   `acceptInput`/`update` path creates the request; a correlated server event
   enters `update` and produces the horizontal layout.
-- [`frontend/client/tests/pane_splits.zig`](../../src/frontend/client/tests/pane_splits.zig):
+- [`client_tests/pane_splits.zig`](../../src/client_tests/pane_splits.zig):
   pending-request gating, local restoration, invalid replies, committed state
   after effect failure, late identity protection and recovery delivery failure.
-- [`frontend/client/tests/pane_lifecycle.zig`](../../src/frontend/client/tests/pane_lifecycle.zig):
+- [`client_tests/pane_lifecycle.zig`](../../src/client_tests/pane_lifecycle.zig):
   active/inactive/retired tabs, vanished targets, presentation observation and
   stale failure suppression.
-- [`frontend/client/tests/synchronization.zig`](../../src/frontend/client/tests/synchronization.zig):
+- [`client_tests/synchronization.zig`](../../src/client_tests/synchronization.zig):
   correlation is consumed once; unrelated replies are rejected; cwd inheritance.
 - Model, request tracker and backend create-pane tests retain their ownership,
   transaction and lifecycle coverage.

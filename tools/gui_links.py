@@ -3,7 +3,9 @@
 
 Uses synthetic AppKit pointer events and records both desiredPointerShape and
 NSCursor. A uniquely colored terminal cell provides exact rendered geometry.
-Only file:// is opened, through an isolated EDITOR stub; HTTP stays a hover test.
+Only file:// is opened, through an isolated EDITOR stub that records its argv and
+exits, so each open is a split beside the source pane that closes again; HTTP stays
+a hover test.
 The window must remain focused; external focus changes abort the probe.
 Usage: python3 tools/gui_links.py /path/to/telar /tmp/telar-links-probe
 """
@@ -65,12 +67,10 @@ while True:
 ''')
     editor = directory / 'editor'
     editor.write_text(f'''#!{sys.executable}
-import json, os, signal, sys
+import json, os, sys
 from pathlib import Path
 destination = 'osc8-editor.json' if Path(sys.argv[1]).name == 'osc8 destination.txt' else 'editor.json'
 (Path({str(directory)!r}) / destination).write_text(json.dumps(dict(pid=os.getpid(), argv=sys.argv)))
-while True:
-    signal.pause()
 ''')
     editor.chmod(0o700)
     config = directory / 'config.lua'
@@ -115,18 +115,16 @@ def actions_for(directory):
     pointer('press', [4, 3], cmd=True)
     pointer('release', [4, 3], cmd=True)
     actions.items.append(dict(wait=str(directory / 'editor.json')))
-    actions.capture('editor-tab')
-    actions.prefix('p', 35)
+    actions.items.extend([{}] * 30)
     actions.items.append(dict(wait_marker=True))
     pointer('move', [4, 2])
-    observe('original-tab', 8, 'text')
+    observe('after-editor', 8, 'text')
     pointer('move', [4, 6], cmd=True)
     observe('osc8-hover', 3, 'pointer')
     pointer('press', [4, 6], cmd=True)
     pointer('release', [4, 6], cmd=True)
     actions.items.append(dict(wait=str(directory / 'osc8-editor.json')))
-    actions.capture('osc8-editor-tab')
-    actions.prefix('1', 18)
+    actions.items.extend([{}] * 30)
     actions.items.append(dict(wait_marker=True))
     actions.text('w')
     actions.items.append(dict(wait=str(directory / 'wrapped.json')))
@@ -189,7 +187,7 @@ def main():
                                     TELAR_GUI_MARKER='23,57,91'), cwd=directory, stdout=log, stderr=log,
                            timeout=90, check=True)
         names = ['plain', 'hover', 'released-modifier', 'osc-crosshair', 'osc-text', 'file-hover',
-                 'original-tab', 'osc8-hover', 'softwrap-hover', 'sidebar-resize', 'restored-hover', 'leave']
+                 'after-editor', 'osc8-hover', 'softwrap-hover', 'sidebar-resize', 'restored-hover', 'leave']
         records = {name: json.loads((directory / f'{name}.json').read_text()) for name in names}
         assert all(record['app_active'] and record['window_key'] for record in records.values()), records
         opened = json.loads((directory / 'editor.json').read_text())
@@ -211,11 +209,10 @@ def main():
         marker = records['plain']['marker']
         assert marker[2] == terminal['xpixel'] / terminal['cols'], (marker, terminal)
         assert marker[3] == terminal['ypixel'] / terminal['rows'], (marker, terminal)
-        for pid in (terminal['pid'], opened['pid'], osc_opened['pid']):
-            os.kill(pid, 0)
+        os.kill(terminal['pid'], 0)
         result = dict(records=records, editor=opened, osc8_editor=osc_opened, terminal=terminal, wrapped=wrapped,
                       file_opened=True, osc8_destination_opened=True, softwrap_underlined=True,
-                      children_survived_window_close=True, external_http_opened=False)
+                      child_survived_window_close=True, external_http_opened=False)
         (directory / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         print(json.dumps(result, indent=2))
     finally:

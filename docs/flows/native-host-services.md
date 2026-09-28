@@ -24,23 +24,20 @@ stopped before this final pass. Storage and Wayland resources are released last.
 No transfer waits on the window thread or on a frame completion.
 
 Clicking an HTTP(S) link enters `link_opening.openLink`. The bounded
-`model.link_opening` queue starts one `.link` job with `client.workers.start`;
+`model.link_opening` queue starts one `.link` job on `client.to_background`;
 its `.link_opened` message reaches `link_opening.completeLinkOpening` through
 `GuiAdapter.update` and `Client.update`. `telar-client.openHostLink`
 (`src/client/links/host.zig`) runs on the client worker: `/usr/bin/open` on
 macOS and `xdg-open` on Linux, with a five-second timeout and 4 KiB limits for
-each output stream. The TUI starts the same job; commands and failure behavior
-are the same on both. File links continue to use the
-configured editor in a shared command tab; agent message files open beside their
-source pane.
+each output stream. File links continue to use the configured editor in a
+shared command tab.
 
 Right-clicking a terminal link copies its URI without keyboard modifiers. The
 native chrome port resolves the target only from delivered pane content and
-queues the existing bounded clipboard write. `GuiAdapter.dispatchPointer` consumes drag and
-release without forwarding them to the child. Agent message links use their
-snapshot-validated destination and the same clipboard service. The TUI dispatches
-right-button link gestures through `link_opening.inputLinkPointer`, which
-queues the URI in `model.to_host` for `host/host_effects.deliver`.
+queues the existing bounded clipboard write. `GuiAdapter.dispatchPointer`
+consumes drag and release without forwarding them to the child. An adapter
+without the chrome link callback falls back to `link_opening.inputLinkPointer`,
+which queues the URI in `model.to_host` as a clipboard write.
 `link_regressions.zig` verifies copying without opening or child mouse reports.
 
 Link copy requests retain only the latest host request ID in `CopyFeedback`.
@@ -53,15 +50,12 @@ requests cannot display a confirmation.
 
 Hovering a terminal URI shows the hand cursor even without modifiers. Opening
 still uses the existing platform modifier and child mouse-reporting policy.
-Agent message links resolve the delivered widget and current snapshot before
-showing the same hand; stale links, modals and pointer departure remove it.
 
 `zig build test-gui-clipboard` on Linux verifies snapshot ownership, saturation,
 closed consumers, polling failure, late publication and cancellation of a stalled
 transfer without a compositor.
 The native clipboard tests also run under address and undefined-behavior
-sanitizers. Client tests verify unsupported URI schemes cannot spawn a process;
-the existing frontend suite covers the unchanged shared link routing.
+sanitizers. Client tests verify unsupported URI schemes cannot spawn a process.
 
 `python3 tools/vm/gui-clipboard-test.py /tmp/telar-gui-clipboard --skip-build`
 uses the prepared Wayland VM binary to check the complete copy path. It reuses

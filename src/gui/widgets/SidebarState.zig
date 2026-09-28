@@ -15,24 +15,46 @@ project_height: f32 = 0,
 project_pitch: f32 = 0,
 order: [core.max_agent_snapshot_entries]u8 = undefined,
 order_len: u8 = 0,
+fleet: [core.max_agent_snapshot_entries]client.FleetEntry = undefined,
 ordered: SnapshotMark = .{},
+ordered_workspaces: u64 = 0,
+ordered_focus: ?core.PaneId = null,
 
-/// Sorts only when the snapshot identity changes, retaining indices rather
-/// than borrowed agents. Example: `state.observe(projection.agents);`
-pub fn observe(self: *SidebarState, snapshot: *const data.AgentSnapshot) void {
+/// Orders the fleet only when the agents, the workspace list or the focused
+/// pane changed, retaining indices rather than borrowed agents.
+/// Example: `state.observe(projection);`
+pub fn observe(self: *SidebarState, projection: *const client.Projection) void {
+    const snapshot = projection.agents;
     const mark = SnapshotMark.of(snapshot);
-    if (self.ordered.eql(mark)) {
+    const focused = focusedPane(projection);
+    if (self.ordered.eql(mark) and self.ordered_workspaces == projection.workspaces.revision and self.ordered_focus == focused) {
         return;
     }
 
-    const agents = snapshot.slice();
-    self.order_len = @intCast(@min(agents.len, self.order.len));
-    for (self.order[0..self.order_len], 0..) |*slot, index| {
-        slot.* = @intCast(index);
+    const fleet = client.fleet_order.order(.{
+        .agents = snapshot.slice(),
+        .workspaces = projection.workspaces,
+        .focused = focused,
+    }, &self.fleet);
+    self.order_len = @intCast(fleet.len);
+    for (fleet, 0..) |entry, position| {
+        self.order[position] = entry.index;
     }
 
-    std.sort.pdq(u8, self.order[0..self.order_len], agents, indexLessThan);
     self.ordered = mark;
+    self.ordered_workspaces = projection.workspaces.revision;
+    self.ordered_focus = focused;
+}
+
+/// The fleet entries of the last observed snapshot, in drawing order.
+/// Example: `for (state.entries()) |entry| { ... }`
+pub fn entries(self: *const SidebarState) []const client.FleetEntry {
+    return self.fleet[0..self.order_len];
+}
+
+fn focusedPane(projection: *const client.Projection) ?core.PaneId {
+    const tab = projection.tab orelse return null;
+    return projection.model.tabs.layout[tab].focused();
 }
 
 /// Disables both viewports until another frame lays them out.
@@ -48,7 +70,7 @@ pub fn hide(self: *SidebarState) void {
 pub fn revealWorkspace(self: *SidebarState, projection: *const client.Projection, height: f32) void {
     const location = projection.model.workspace;
     const position = if (location) |value| switch (value) {
-        .workspace => |id| projection.workspaces.indexOf(id),
+        .workspace => |id| projection.workspaces.indexOf(projection.workspaces.projectOf(id)),
         .worktree => null,
     } else null;
     const pitch: f32 = @floatFromInt(self.projects.step);
@@ -73,6 +95,3 @@ pub fn ordering(self: *const SidebarState) []const u8 {
     return self.order[0..self.order_len];
 }
 
-fn indexLessThan(agents: []const data.Agent, left: u8, right: u8) bool {
-    return client.agent_attention.lessThan({}, &agents[left], &agents[right]);
-}

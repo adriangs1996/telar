@@ -3,6 +3,7 @@
 //! image placements. The adapter drains it after every event with an
 //! exhaustive switch; a host without a feature writes an empty arm.
 const core = @import("telar-core");
+const MachineRequest = @import("MachineRequest.zig").MachineRequest;
 const std = @import("std");
 const NotificationPayload = @import("../notifications/NotificationPayload.zig");
 const CaptureRequest = @import("../attachments/CaptureRequest.zig");
@@ -16,6 +17,8 @@ pub const Effect = union(enum) {
     clipboard,
     terminal_notification: NotificationPayload,
     capture: CaptureRequest,
+    /// Switch the machine the window presents.
+    machine: MachineRequest,
 };
 
 pending: [capacity]Effect = undefined,

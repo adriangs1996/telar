@@ -15,8 +15,6 @@ pub fn add(b: *std.Build, module: *std.Build.Module, disable_coverage: bool) voi
             "src/gui/macos/TelarTextInputView.m",
             "src/gui/macos/text_ranges.m",
             "src/gui/macos/TelarHostServices.m",
-            "src/gui/macos/TelarClipboardImage.m",
-            "src/gui/macos/attachment_preview.m",
             "src/gui/macos/TelarAccessibility.m",
             "src/gui/macos/TelarPointerInputView.m",
             "src/gui/macos/TelarPointerCursor.m",
@@ -27,7 +25,6 @@ pub fn add(b: *std.Build, module: *std.Build.Module, disable_coverage: bool) voi
     });
     macos_sdk.addPaths(b, module);
     module.linkFramework("AppKit", .{});
-    module.linkFramework("ImageIO", .{});
     module.linkFramework("CoreText", .{});
     module.linkFramework("CoreGraphics", .{});
     module.linkFramework("Metal", .{});

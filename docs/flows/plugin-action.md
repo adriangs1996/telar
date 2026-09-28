@@ -10,7 +10,7 @@ configuration is still current.
 ```text
 configured plugin action
         |
-host_inputs.applyDecision / GuiAdapter.applyInputDecision
+GuiAdapter.applyInputDecision / HeadlessClient.decide
         |
 actions.executeAction
         |
@@ -20,7 +20,7 @@ Registry.resolve + Registry.workerRequest
         |
 plugin_action.beginExecution { id, configuration_generation }
         |
-client.workers.start(.plugin) -> job_runner -> isolated one-shot worker
+client.to_background (.plugin job) -> job_runner -> isolated one-shot worker
         |
 client Message .plugin_result { execution_id, result }
         |
@@ -36,7 +36,7 @@ plugin_actions.reportPluginCompletion
         |
 loop directive or publishPluginFailure (diagnostic + notification)
         |
-presentation_lifecycle.observe -> Presenter
+GuiAdapter.update -> app.presentation.observe -> next frame
 ```
 
 ## Start ownership and order
@@ -52,7 +52,7 @@ IDs and owns this order:
 2. resolve the action and build its worker request;
 3. reserve a monotonically increasing execution identity in `ClientModel`;
 4. capture the current configuration generation in that reservation;
-5. start the `.plugin` job through `client.workers.start` with the same
+5. queue the `.plugin` job on `Client.to_background` with the same
    identity.
 
 Resolution happens before the reservation, so an unavailable registry or an
@@ -100,8 +100,9 @@ after the execution was consumed.
 the shared dispatcher for native semantic actions regardless of whether they
 came from host input, Lua or a plugin. It delegates to the existing focused
 procedures. Those procedures commit `ClientModel` or push bounded messages into
-`model.to_runtime`; they do not ask the presenter to draw. After the event returns, `presentation_lifecycle.observe` lets the
-presenter compare versions and schedule at most the required paced frame.
+`model.to_runtime`; they do not ask for a draw. After the event returns, the
+window's `update` passes its observation to `app.presentation.observe`, which
+compares versions, and the window prepares at most one frame.
 
 ## Bounds and failure semantics
 
@@ -115,7 +116,7 @@ presenter compare versions and schedule at most the required paced frame.
   application is sequential, not transactional: a later `model.to_runtime` error
   is returned after any earlier committed effect.
 - A worker error, denial or rejected action reports through notification model
-  state and `Version.diagnostic`. It does not mutate presenter-owned state
+  state and `Version.diagnostic`. It does not mutate window-owned state
   directly.
 - Client shutdown cancels outstanding inbox jobs and then destroys the
   disposable model, so no plugin execution must survive the client.
@@ -130,8 +131,8 @@ presenter compare versions and schedule at most the required paced frame.
   outcome types and the failure-publication mapping.
 - `src/client/config/client_diagnostic.zig` proves the shared diagnostic
   replacement and clear policy used by plugin outcomes.
-- `src/frontend/client/tests/configuration.zig` proves authorized application
-  through presenter observation, stale-result suppression, capability denial,
+- `src/client_tests/configuration.zig` proves authorized application
+  through presentation observation, stale-result suppression, capability denial,
   worker failure, unmatched identities, and busy and rejected start behavior on
   a real client.
 - `src/client/plugins/plugins.zig` proves digest-bound capability checks and

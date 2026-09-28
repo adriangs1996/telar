@@ -5,7 +5,6 @@ const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
 const client_module = @import("telar-client");
-const frontend = @import("telar-frontend");
 const std = @import("std");
 const HandshakeWorker = @import("HandshakeWorker.zig");
 const RuntimeTestChannel = @import("RuntimeTestChannel.zig");
@@ -42,7 +41,7 @@ fn waitForFile(io: std.Io, path: []const u8, attempts: usize) !bool {
     return false;
 }
 
-test "frontend and backend exchange framed messages over a local socket" {
+test "client and runtime exchange framed messages over a local socket" {
     const io = std.testing.io;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
@@ -107,7 +106,7 @@ test "a second backend cannot replace a live endpoint" {
     client.deinit(io);
 }
 
-test "frontend and backend accept the same schema" {
+test "client and runtime accept the same schema" {
     const io = std.testing.io;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
@@ -2307,7 +2306,7 @@ fn expectGraphicsRoundtrip(comptime transmission: []const u8) !void {
 
     const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer gpa.free(receive_buffer);
-    var store = frontend.Store.init(gpa);
+    var store = client_module.retained_graphics.Store.init(gpa);
     defer store.deinit();
     var cells: [40 * 8]cellgrid.Cell = @splat(.{});
     var pane_id: schema.PaneId = .invalid;
@@ -2904,8 +2903,4 @@ fn applyFrameCells(cells: []cellgrid.Cell, frame: core.FrameView) !void {
         var index: usize = span.start;
         while (try source.next()) |cell| : (index += 1) cells[index] = cell;
     }
-}
-
-test {
-    _ = @import("agent_pane_integration_test.zig");
 }

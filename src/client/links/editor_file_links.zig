@@ -1,9 +1,10 @@
-//! Editor file links: opens a file link in the editor pane of its tab,
-//! splitting one when none is reachable.
+//! Editor file links: opens a file link in the editor pane of its tab, at
+//! the line it names, splitting one when none is reachable.
 const editorremote = @import("editorremote");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
+const path_expansion = @import("../completion/path_expansion.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
 const link_opening = @import("link_opening.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
@@ -20,9 +21,12 @@ pub fn editorExecutable(client: *const Client) []const u8 {
     return client.options.editor;
 }
 
-/// Reuses a reachable editor in the source tab, otherwise creates a sibling pane.
-/// Example: `_ = try editor_file_links.openMessageFile(app, pane_id, path);`
-pub fn openMessageFile(client: *Client, pane_id: core.PaneId, path: data.FilePath) !bool {
+/// Opens a file linked from `pane_id`: the runtime checks the file exists and
+/// reuses a reachable editor in the same tab, otherwise the client creates a
+/// sibling pane. A relative path resolves against the pane's directory and
+/// `~` against HOME.
+/// Example: `_ = try editor_file_links.openFile(app, pane_id, path);`
+pub fn openFile(client: *Client, pane_id: core.PaneId, path: data.FilePath) !bool {
     openEditorPane(client, pane_id, path) catch |err| {
         try link_opening.reportLinkFailure(client, err);
         return false;
@@ -43,19 +47,14 @@ fn openEditorPane(client: *Client, pane_id: core.PaneId, path: data.FilePath) !v
         .request_id = .none,
         .pane_id = pane_id,
         .pane_generation = source.pane_generation,
+        .line = path.line,
+        .column = path.column,
     };
 
-    try request.setTarget(editor, path.slice());
-    const kind = editorremote.editor.identify(editor);
-    var reusable = false;
-    if (kind != .unsupported and source.pane_generation != 0) {
-        var panes = client.model.panes.iterateConst(client.model.tabs.location[model].tab_id);
-        while (panes.next()) |pane| {
-            reusable = reusable or editorremote.editor.identify(pane.foregroundName()) == kind;
-        }
-    }
-
-    if (!reusable) {
+    var anchored: [path_expansion.max_path_bytes]u8 = undefined;
+    try request.setTarget(editor, try anchor(client, path.slice(), source.cwdSlice(), &anchored));
+    // Without a runtime identity nothing can check the file; open it directly.
+    if (source.pane_generation == 0) {
         return splitEditorPane(client, request);
     }
 
@@ -101,6 +100,7 @@ pub fn completeEditorOpen(client: *Client, reply: core.EditorOpened) !void {
     switch (reply.outcome) {
         .unavailable => splitEditorPane(client, request) catch |err| try link_opening.reportLinkFailure(client, err),
         .failed => try link_opening.reportLinkFailure(client, error.EditorOpenFailed),
+        .missing => try link_opening.reportLinkFailure(client, error.FileNotFound),
         .opened => {
             const pane = client.model.panes.findInConst(client.model.tabs.location[model].tab_id, reply.pane_id) orelse return;
             if (pane.pane_generation != reply.pane_generation) {
@@ -120,17 +120,32 @@ pub fn completeEditorOpen(client: *Client, reply: core.EditorOpened) !void {
     }
 }
 
+/// Absolute paths are literal; `~` and relative paths from prose resolve
+/// lexically, against HOME and the source pane's directory.
+fn anchor(client: *const Client, path: []const u8, cwd: []const u8, buffer: *[path_expansion.max_path_bytes]u8) ![]const u8 {
+    if (path[0] == '/') {
+        return path;
+    }
+
+    return path_expansion.expand(
+        .{
+            .text = path,
+            .environ = client.options.environ,
+            .base = cwd,
+        },
+        buffer,
+    );
+}
+
 fn splitEditorPane(client: *Client, request: core.OwnedEditorOpen) !void {
+    var launch: editorremote.Launch = .{};
     const plan = try pane_split.requestPaneSplit(
         client,
         .{
             .axis = .horizontal,
             .area = client.geometry().area,
             .target_pane = request.pane_id,
-            .arguments = &.{
-                request.editor(),
-                request.path(),
-            },
+            .arguments = try launch.argv(request.editor(), request.path(), request.line, request.column),
         },
     );
     if (plan == null) {

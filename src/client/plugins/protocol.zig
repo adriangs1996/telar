@@ -20,7 +20,7 @@ pub fn encode(buffer: []u8, batch: *const data.EffectBatch) ![]const u8 {
             try writer.writeByte(2);
             try writer.writeByte(@intFromEnum(value));
         },
-        .navigate_pane, .scroll_pane => return error.InvalidWorkerEffect,
+        .navigate_pane, .scroll_pane, .open_panel, .close_panel, .refresh_panel => return error.InvalidWorkerEffect,
         .resize_pane => |value| {
             try writer.writeByte(12);
             try writer.writeByte(@intFromEnum(value));
@@ -55,7 +55,8 @@ pub fn encode(buffer: []u8, batch: *const data.EffectBatch) ![]const u8 {
             try writer.writeByte(17);
             try writer.writeByte(value);
         },
-        .enter_copy_mode, .command_tab, .goto_picker, .history_palette, .suggest_command => return error.InvalidWorkerEffect,
+        .leave_worktree => try writer.writeByte(20),
+        .enter_copy_mode, .command_tab, .goto_picker, .history_palette, .path_picker, .suggest_command, .select_machine_offset, .machine_picker, .add_machine => return error.InvalidWorkerEffect,
         .notification => |*value| {
             try writer.writeByte(18);
             try writer.writeByte(@intFromEnum(value.level));
@@ -78,7 +79,7 @@ pub fn encode(buffer: []u8, batch: *const data.EffectBatch) ![]const u8 {
             try writeSized8(&writer, value.title());
             try writeSized8(&writer, value.message());
         },
-        .lua_callback, .lua_expr, .plugin, .toggle_thread_view, .new_agent_tab => return error.InvalidWorkerEffect,
+        .lua_callback, .lua_expr, .plugin => return error.InvalidWorkerEffect,
     };
     return writer.buffered();
 }
@@ -159,6 +160,7 @@ pub fn decode(bytes: []const u8) !data.EffectBatch {
                 data.ActionSidebarDirection,
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
+            20 => .leave_worktree,
             else => return error.UnknownWorkerEffect,
         };
     }
@@ -259,9 +261,14 @@ test "plugin result protocol rejects invalid enum discriminants" {
     try std.testing.expectError(error.InvalidWorkerEffect, decode(&.{ 1, 1, 255 }));
 }
 
-test "plugin result protocol rejects agent mode toggles" {
+test "plugin result protocol rejects Lua callbacks" {
     var batch: data.EffectBatch = .{};
-    batch.items[0] = .toggle_thread_view;
+    batch.items[0] = .{
+        .lua_callback = .{
+            .generation = 1,
+            .id = 1,
+        },
+    };
     batch.len = 1;
     var buffer: [max_bytes]u8 = undefined;
 

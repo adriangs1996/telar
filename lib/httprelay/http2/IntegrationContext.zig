@@ -2,8 +2,6 @@ const localca = @import("localca");
 const Session = localca.Session;
 const std = @import("std");
 const RouteMatch = @import("../RouteMatch.zig");
-const h2frames = @import("h2frames");
-const Settings = h2frames.Settings;
 const Stats = @import("Stats.zig");
 const h2 = @import("http2.zig");
 const relay_module = @import("relay.zig");
@@ -19,15 +17,15 @@ request_stage: ?Lifecycle = null,
 decode_failures: u8 = 0,
 settlements: u8 = 0,
 
-pub fn relayRequest(self: *IntegrationContext, settings: *Settings) Stats {
-    const stats = h2.relay(&self.session, h2.relayOptions(.request, settings, .{ .watched_routes = &watched_routes }), self);
+pub fn relayRequest(self: *IntegrationContext) Stats {
+    const stats = h2.relay(&self.session, h2.relayOptions(.request, .{ .watched_routes = &watched_routes }), self);
     self.request_done.putOneUncancelable(std.testing.io, 0) catch unreachable;
     return stats;
 }
 
-pub fn relayResponse(self: *IntegrationContext, settings: *Settings) Stats {
+pub fn relayResponse(self: *IntegrationContext) Stats {
     _ = self.request_done.getOne(std.testing.io) catch return .{ .decode_failed = true };
-    return h2.relay(&self.session, h2.relayOptions(.response, settings, .{ .watched_routes = &watched_routes }), self);
+    return h2.relay(&self.session, h2.relayOptions(.response, .{ .watched_routes = &watched_routes }), self);
 }
 
 pub fn recordDecodeFailure(self: *IntegrationContext, _: relay_module.Direction) void {

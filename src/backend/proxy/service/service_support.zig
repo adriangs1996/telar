@@ -7,8 +7,6 @@ pub const max_connections: u32 = 64;
 
 pub const Paths = @import("Paths.zig");
 
-pub const Pane = @import("Pane.zig");
-
 pub const ClientConfiguration = @import("ClientConfiguration.zig");
 
 pub const Worker = std.Io.Future(anyerror!void);
@@ -52,8 +50,7 @@ fn serveConnection(service: *Service, stream: std.Io.net.Stream) std.Io.Cancelab
     var tunnel = Tunnel.init(.{
         .dependencies = .{
             .tls = service.interception.tunnelResources(&service.telemetry),
-            .credentials = &service.credentials,
-            .observations = &service.observations,
+            .secret = &service.secret,
             .connection_ids = &service.next_connection_id,
             .captures = &service.captures,
         },

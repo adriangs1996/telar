@@ -11,11 +11,9 @@ return telar.config({
     proxy = {
       enabled = false,
       ca_dir = "state/proxy",
-      intercept_hosts = {
-        "api.anthropic.com",
-        "api.openai.com",
-        "chatgpt.com",
-      },
+      -- Hosts whose TLS the proxy terminates and captures; everything else
+      -- passes through as an opaque tunnel. Empty intercepts nothing.
+      intercept_hosts = {},
     },
     -- Explicit opt-in: the first user request is sent through stdin to this
     -- command so it never appears in the process arguments.
@@ -72,7 +70,7 @@ return telar.config({
     editor = "nvim", -- Executable name or path; takes precedence over $EDITOR.
     prefix = "ctrl+s",
     icons = "nerd-font",
-    sidebar = { visible = true, renderer = "automatic" },
+    sidebar = { visible = true },
     sound = { enabled = true, ready = true, needs_input = true },
     input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },
     bars = {
@@ -130,7 +128,7 @@ return telar.config({
   profiles = {
     remote = {
       client = {
-        sidebar = { visible = false, renderer = "cells" },
+        sidebar = { visible = false },
       },
       runtime = {
         graphics = { pane_mib = 16, global_mib = 64 },

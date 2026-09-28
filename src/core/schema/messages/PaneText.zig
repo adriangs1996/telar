@@ -7,3 +7,5 @@ request_id: id.RequestId,
 pane_id: id.PaneId,
 truncated: bool,
 text: []const u8,
+/// Set when the pane had exited and the text is its final output.
+exit_code: ?i32 = null,

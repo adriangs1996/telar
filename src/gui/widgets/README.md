@@ -7,7 +7,7 @@ a native drawing callback or a GPU command type.
 
 `Scene.prepare` starts the frame resources, then calls `Composition.render` with
 the borrowed projection. That method returns the complete `frame_widget.List`:
-terminal leaves, thread views, a hovered link, top bar, status bar, sidebar,
+terminal leaves, a hovered link, top bar, status bar, sidebar,
 pane decorations, chrome focus, notifications and the selected modal. It emits
 no quads. `Scene` draws the list once through `draw(canvas)` and seals the frame
 and its control registries only after drawing and registration succeed.
@@ -24,10 +24,10 @@ try widgets.draw(&canvas);
 
 `Composition` owns the context borrowed by chrome widgets. Keep it and the
 projection at stable addresses until drawing returns; returning the list does
-not extend either lifetime. The list holds at most 73 widgets, derived from the
-64-pane limit, one link, four chrome sections, one focus indicator, two notices
-and one modal. A frame can contain both terminal and thread leaves. Its commit
-captures the generations and damage of the panes actually composed.
+not extend either lifetime. The list holds at most 75 widgets, derived from the
+64-pane limit, one link, six chrome sections, one focus indicator, two notices
+and one modal. Its commit captures the generations and damage of the panes
+actually composed.
 
 `frame_widget.zig` declares the frame's tagged union. Add a variant and select it
 in `Composition.render` to introduce a new frame section. Containers may build
@@ -47,8 +47,11 @@ sidebar. Tests use the same compose, draw and seal steps as the scene.
 resolves both viewports once per preparation, and the delivered hit map owns
 scroll targeting. `SidebarState` retains separate `PixelScroll` values;
 `WorkspaceList` clips project rows and reveals the active runtime identity.
-`TopBar` preserves `TabStrip` geometry and shows workspace controls only when
-the project list cannot be shown. Unlisted contexts keep their label there.
+A collapsed sidebar draws `WorkspaceRail` in its band and `RailTooltip` above
+the panes. `TopBar` names the current context beside the rail, or keeps the
+toggle beside the expanded sidebar, and falls back to `WorkspaceIndicators`
+only when neither can show the projects. `TabStrip` packs tabs from the left
+and compresses them around the selection.
 Tabs are not a separate frame section. `StatusBar` owns configured bottom
 widgets and mode hints, with space reserved for TLS in every mode.
 
@@ -146,9 +149,7 @@ label, role and focus policy. `Dispatcher` retains the last successfully deliver
 registry. It chooses focus, hover and per-button capture from that registry;
 physical key leases prevent repeats and releases from changing owner. A modal
 restricts new input to its layer. Tab traversal applies while a widget owns focus
-or a modal is active, unless the target disables `traverse_tab`. `TextField`
-disables it so shared handlers retain completion and form navigation. Terminal
-Tab retains its existing behavior.
+or a modal is active. Terminal Tab retains its existing behavior.
 
 For targets without an explicit ID, the dispatcher reuses identity across
 delivered frames by matching namespace, action and generation. Give controls with
@@ -197,27 +198,64 @@ host validation commands.
 
 ## Command history
 
-`HistoryModal` uses a pixel layout, `DialogSurface`, a native search field and
-rounded result rows. Commands and captured output retain their terminal font;
-headings, scope and secondary metadata use the chrome typography. The layout
-stays fixed while queries replace a page and adapts to the viewport and font
-metrics. A wide inspector shares the dialog with the list; a narrow one uses
-the available result area.
+`HistoryModal` is a panel above the status bar: the search field at its foot
+where the shell prompt was, the filter chips above the field, the newest
+command right above the chips and older ones growing upward under day
+headings (`history_labels.dayLabel`), an inspector beside the list and the
+host's key hints in the footer (`key_label.host_style` prints `⌃O` on macOS
+and `Ctrl+O` elsewhere). Commands and captured output keep the terminal face;
+headings, chips and facts use the chrome face. The layout is fixed for
+fourteen rows so replacing a page never moves the field; a viewport under
+1000 logical pixels lets the inspector replace the list. `DialogSurface`
+dims the window at 0.25 and draws a 12 px radius with a hairline edge.
 
-A row click selects without submitting. Rows and the primary action carry the
-delivered history revision, so a replaced or pending page cannot run an unseen
-command. Scope, inspection and submission use the shared history controllers.
-The search field retains keyboard and IME focus. The TUI keeps its own layout.
+Rows are one line: a status glyph in the meaning's color (failure red,
+running teal, interrupted yellow, success quiet), the command with the match
+highlighted, and facts right-aligned that drop from the right when the row is
+narrow: time, then duration, then directory; an agent's provider mark
+survives last. Directory and pane scopes hide the directory column. Under a
+day heading the time column is the local clock; while searching it is the
+date. The page's `utc_offset_min`, read by the client when the reply lands,
+turns timestamps into local days.
 
-The inspector's wrapped line count uses the same native layout as painting.
-Its metrics travel with `HitState`, so failed presentations preserve the
-visible geometry's scroll bound.
+The chips are the scope segmented control (`select_scope`), the author
+control (`select_author`) and the failed toggle (`toggle_failed`); a leading
+`!` in the field is the failed filter too. Footer hints with an action are
+clickable controls, so the pointer reaches paste, run, details, copy, delete
+and close without buttons; the inspector adds a button row (paste, run, copy,
+delete, go to pane). The row above the oldest command asks for the previous
+page. A row click selects without submitting. Rows and every submit control
+carry the delivered history revision, so a replaced or pending page cannot
+run an unseen command. The search field retains keyboard and IME focus. The
+TUI keeps its own layout.
+
+The inspector walks `HistoryDetails.lines`: the wrapped command, its facts
+(local time and age, duration, exit, directory, pane with its tab or
+`closed`, author with provider and origin) and the captured output, stripped
+of escape sequences when the reply landed (`core.plainText`). Painting and
+the scroll bound count the same lines. Its metrics travel with `HitState`,
+so failed presentations preserve the visible geometry's scroll bound.
+
+## Path picker
+
+`PathPicker` is a popover at the focused pane's cursor, not a dialog: it
+does not dim the window, so the prompt it types into stays readable. It sits
+under the cursor, or above it when the rows below do not fit
+(`path_picker_placement`), and the search field is always the row next to
+the cursor. Rows show a folder or file glyph from the embedded symbols face,
+then the path laid out by `PathLabel`: directory in `subtext0`, file name in
+`text`, matched characters in the accent, and the middle of a long directory
+replaced by `…`. Directories use `blue`, never a status color. The footer
+shows how many paths the index holds, or `indexing` while it grows, and the
+host's key hints. Rows register in `PaletteHits`, so a press chooses one
+exactly as the command palette's rows do.
 
 ## Animation and invalidation
 
 Child progress uses `PaneProgress` capsules in pane headers and a compact ring
-in the active tab for a single pane. Fullscreen keeps the indicator beside the
-pane selector. Percentages ease between reports over 240 ms; unknown progress
+in the active tab for a single pane. Fullscreen keeps the indicator in the
+bottom band, beside the change-review button and the leave control
+(`FullscreenStrip`). Percentages ease between reports over 240 ms; unknown progress
 uses a rotating arc sampled from the presentation clock at 60 Hz. Pause and
 error have distinct marks and stop animation. Removing progress clears the
 indicator immediately, since removal can also mean interruption.
@@ -234,6 +272,13 @@ logical pixels. `Overlays` retains one `ModalMotion` keyed by prompt generation;
 edits, query results and toggling details do not restart it. Painting and input
 registration use the same shifted rectangles. Closing or finishing the entrance
 leaves no animation deadline.
+
+While a replacement page is pending, the previous rows stay as they were.
+`Overlays` retains one `LoadingCue`: only a wait longer than 150 ms dims the
+rows and runs the loading line, so a reply that lands within a few frames
+never flashes the panel on each keystroke. A new query while one is pending
+continues the same wait, and a reply ends it. Rows and submit controls stay
+disabled for the whole wait, visible or not.
 
 During scene preparation, `Canvas.animation` exposes a `FrameClock` with one
 monotonic timestamp and one earliest requested deadline. A sprite can choose
@@ -289,186 +334,10 @@ run `test-gui-ime`, `test-gui-clipboard-reader`, `test-gui-keyboard` and
 `test-gui-pointer`. These check protocol batching, UTF-8 ranges, backpressure,
 physical ownership and fractional scroll independently of a running compositor.
 
-## Agent panes
+## Diagrams
 
-A pane whose runtime kind is `agent` uses `ThreadPane` with a native header,
-structured conversation and an `AgentComposer` card. The GUI
-advertises `HostCapabilities.agent_panes`; the shared `new-agent-tab` action
-creates a Codex tab through the same controller for bindings, the command
-palette and Lua actions. The default binding is prefix + a.
-
-`ThreadConversation` folds consecutive commentary, reasoning and tool activity
-into an `Agent work` disclosure, closed by default. Prompts, final responses and
-system notices remain visible. Messages without a provider phase remain visible
-rather than being inferred as commentary. `ThreadWork` paints a single live or
-settled header; opening it restores the original rows and their individual tool
-disclosures. Hidden rows are neither measured nor registered as selectable text.
-The projection holds at most 256 rows, including headers, for the existing
-128-item window. It retains no transcript copies or provider state.
-
-Work disclosures reuse the attachment-scoped interaction and scroll anchor
-contracts. Their operation is distinct from an individual item's disclosure;
-provider thread and turn IDs preserve expansion through streaming and history
-page eviction. Each new turn starts folded. Approvals retain their independent
-controls outside the transcript. `tests/thread_work.zig` covers folding, page
-seams, turn isolation and hidden selection geometry.
-
-The conversation background uses the window's clear color, like a terminal
-pane. It does not add a pane-wide fill over the configured theme background,
-opacity or blur. Message cards and controls retain their themed surfaces.
-
-The composer uses the pane's client-owned `ComposerField` and revision. Enter
-submits the complete draft, Shift+Enter inserts a newline, and clipboard paste
-preserves line breaks. The runtime acknowledgement clears only the submitted
-revision, so later typing survives. `MultilineLayout` shares grapheme wrapping
-between painting, pointer selection and native caret geometry. Native input,
-IME, clipboard and accessibility carry the delivered attachment generation;
-a replaced attachment cannot inherit an edit or approval. The card embeds a
-sans `TextField` without a second background or border. `ComposerLayout`
-wraps the model, effort and permissions toolbar in narrow panes; the circular
-turn control sends a message or interrupts the running turn. The inset context
-surface shows only observed checkout and branch data.
-
-`EditorFont` uses the atlas's complete shaped spans. Painting, selection and
-native caret queries share grapheme positions, including stops within ligatures.
-Font discovery happens during frame preparation. Native input uses resident
-fonts and bounded scratch tables for at most 8 KiB of displayed text, including
-preedit. Each iterator uses about 65 KiB of stack storage. Preparing the first
-composer reserves one fixed 660 KiB shaping cache in the renderer, with 128
-entries and 16 KiB of text. Atlas destruction releases it. Warm cursor queries
-and painting reuse this cache without allocation or font discovery.
-
-`ComposerOptions` borrows the provider's bounded model and effort catalog.
-`ComposerMenu` publishes owned indices with attachment, catalog, draft-options
-and menu generations. Its interaction controller validates all four before
-applying a choice through `agent_threads`. Streaming transcript revisions do
-not retire unchanged menus. Keyboard navigation, pointer capture and native
-accessibility use the same delivered targets; outside presses dismiss the
-menu and consume their release. Held keys retain their original owner, and
-closing a menu restores its own pane's composer. Model and effort names are
-never invented.
-
-`ThreadTranscript` follows the live snapshot until the user scrolls into history.
-Historical reading owns two bounded pages and freezes the initial live seam;
-streaming continues to update the composer, approvals and agent status. Scrolling
-to either edge records navigation intent without allocating. After successful
-frame delivery, the client admits at most one history request per connection.
-At most 16 reading windows are retained, each below 192 KiB; admission evicts an
-inactive reader when the quota is full. Failed requests preserve the current page
-and retry only after another scroll gesture.
-
-Delivered row anchors preserve the reading position across page replacement and
-resizing. Provider turn, item ID and fragment offset identify seam duplicates and
-disclosure state across live and historical numbering. Copy and link controls
-resolve against the owned page and become stale after eviction. Partial messages
-render as literal text with a continuation notice and a `Copy segment` action.
-`ThreadMessage` separates user bubbles from assistant prose. `MessageText` shares Markdown block and measured-word layout between
-measurement and painting; code uses the terminal font. `ThreadActivity` renders
-typed tools, dispatch and child-agent cards. Child status never derives from the
-parent's status. Only visible messages and activity paint.
-
-Pipe tables use `MessageTable` and `MessageTableCells` to borrow header/body
-cells from the snapshot. A matching delimiter row admits at most 32 columns;
-malformed or larger tables remain ordinary text. Optional outer pipes, escaped
-pipes, CRLF, empty cells and shorter body rows are supported. Surplus body cells
-are omitted from both drawing and selected-text copy.
-`MessageTablePaint` measures preferred column widths, distributes the available
-width and wraps each cell with `MessageTextFlow`. Row height follows the tallest
-cell. Headers use a tinted background and bold text; visible rows draw subtle
-borders. `MessageTextAlignment` retains at most 256 visible line widths per cell
-for left, center or right alignment; lines beyond that quota fall back to left
-alignment. This scratch storage is local to synchronous row layout.
-Inline styles, Unicode, links and selection retain their source coordinates.
-Selected table text copies as tab-separated cells, without the delimiter row;
-copying the response still returns the original Markdown. See
-[`Markdown tables`](../../../docs/flows/markdown-tables.md) for validation.
-
-`MessageSpans` yields inline link labels with borrowed destination ranges.
-`MessageTextFlow` uses the same fragment path for fresh layout and cached replay;
-`MessageLinkButton` paints the label and registers only its clipped ink bounds.
-These targets retain source offsets and snapshot identity, preserve
-editor focus and forward wheel input to their owning transcript. Link registration
-is capped at 64 fragments per frame, with 64 registry slots reserved for ordinary
-controls.
-
-`interaction/message_links` resolves hover from delivered targets against the
-current snapshot and copies at most 4 KiB into `MessageLinkPreview`. The scene
-draws that tooltip after conversation clipping, only when the prepared frame
-still has the same fragment under the pointer. The tooltip fits the window,
-has no input target and requests no animation. Stale generations, replaced
-snapshots, menus, modals and pointer departure clear it. Original Markdown stays
-in the runtime snapshot and remains the source for copying.
-
-A plain left click on an absolute path or a local `file://` destination opens
-the configured editor, reusing an accessible instance in the source tab. When
-none is available, it launches `$EDITOR` with that path as a separate argv entry
-in a new terminal pane beside the source agent.
-[Editor file links](../../../docs/flows/editor-file-links.md) describes discovery
-and failure handling. The transcript selection gesture retains the link identity
-until release; dragging cancels activation. Release validates the current
-snapshot and delivered hit before dispatching through `message_links.open`,
-`link_openings.openMessageFile` and the existing pane-split handler. `create_pane`
-carries the source tab and cwd source; `pane_opened` commits the correlated split.
-The outbox copies up to 8 KiB of argv into its existing slot storage before returning.
-Missing editors, invalid destinations and unavailable splits report a warning.
-`widget_interaction` tests the click through pane confirmation and selection
-cancellation; `tools/gui_agent_links.py` checks the actual editor process.
-
-
-Closed `mermaid` fences use `MermaidBlock` to display a retained diagram image.
-Open fences, pending work and render failures keep the original code visible.
-Measurement only consults the diagram store; painting visible blocks registers
-bounded requests or pins an existing image. The GUI starts work after scene
-preparation. Images keep their natural aspect ratio and shrink to the message
-width; viewport clipping adjusts texture coordinates without changing layout.
-Source identity, exact content, theme and scale guard reuse across updates.
-Copying a response always copies its original Markdown.
-
-Long spans use a lazy `MessageLayoutCache` owned by GUI interaction state. It
-holds 64 measurements and four visible fragment plans, each capped at 2,048
-fragments, in one allocation below 180 KiB per GUI. Entries contain source offsets
-and geometry, without borrowing snapshot text. Keys include immutable snapshot
-provenance, source span, font
-identity and revision, style, width and viewport geometry. Short spans bypass
-the cache; a plan that exceeds its quota falls back to the measured layout.
-Replacing fonts or discovering a fallback also invalidates the atlas's shaping
-entries. Animation can reuse unchanged layout and visible fragments.
-
-Scroll position uses logical 24-point units; the delivered transcript target
-carries its actual pixel step and limit. At zero the view follows new output.
-`ThreadScrollMotions` owns fixed-capacity, attachment-scoped physical-pixel
-trajectories. `thread_scroll.advance` updates the semantic offset before scene
-preparation; all geometry therefore follows the animated position. Discrete
-wheel/key impulses use `Spring` without restarting velocity. Precise gestures
-remain direct: macOS momentum is consumed unchanged, while Wayland finger axis
-stop launches client inertia using native sample times. Delivery rebases page
-coordinates and adopts limits; provisional page edges park time and request no
-animation deadline until content arrives. Focus loss, selection and disclosures
-stop autonomous movement. The existing scene clock owns all wakeups.
-
-`ThreadItemControl` identifies pane, attachment and stable runtime item, with no
-borrowed text or row index. Expansion and copy resolve that identity again before
-acting, so eviction and replacement cannot redirect stale input. The GUI retains
-at most 128 open disclosures. A bounded reading anchor preserves the selected
-row through streaming and reflow when expanding or collapsing. The next
-preparation resolves its position;
-successful delivery commits the scroll only if its attachment, sequence and
-manual-scroll baseline still match. Failed delivery leaves the anchor available
-for retry. Explicit navigation supersedes it.
-
-`ActivityText` requests the scene clock only for visible active labels. It changes
-opacity over already-shaped glyph quads, preserving layout and the atlas cache.
-There are no per-item timers. Completed and hidden messages leave no deadlines.
-
-Pending approvals expose Approve, Decline and Review full request. The review
-control shows the complete bounded request in the scrollable body, independently
-of whether the conversation retains a matching tool item.
-
-All controls publish owned pane IDs, attachment generations and approval IDs.
-Widgets call shared agent controllers and never send composer text as terminal
-input. The existing terminal thread projection retains its passive rendering.
-GUI tests exercise multiline IME, prefix routing from the composer, complete
-prompt submission, paste overflow, stale accessibility edits, approval
-replacement, review scrolling, selector navigation, stale menu decisions and
-allocation-free warm card/popover rendering, stable disclosures, original-text
-copying, Markdown layout and visible-only animation deadlines.
+A widget that shows a Mermaid diagram asks `diagrams.Store` for it while
+measuring, with an owner key it chooses, and draws the ready image through
+`Canvas.diagramAt`. Rendering runs in `lib/mermaid` on an inbox worker; the
+store keeps eight texture slots and pins visible ones until delivery. No widget
+does this yet. See [Mermaid diagrams](../../../docs/flows/mermaid-diagrams.md).

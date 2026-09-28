@@ -42,7 +42,7 @@ pub fn executeWorker(io: std.Io, gpa: std.mem.Allocator, request: WorkerRequest)
         .{ snapshot_package, request.package.manifest.entry() },
     );
     var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const executable = executable_buffer[0..try std.process.executablePath(io, &executable_buffer)];
+    const executable = request.executable orelse executable_buffer[0..try std.process.executablePath(io, &executable_buffer)];
     var sidebar_buffer: [2]u8 = undefined;
     const sidebar = try std.fmt.bufPrint(&sidebar_buffer, "{d}", .{@intFromBool(request.context.sidebar_visible)});
     var tabs_buffer: [8]u8 = undefined;
@@ -428,15 +428,6 @@ test "privileged plugin effects require a digest-bound capability grant" {
             .batch = &batch,
         }));
     }
-
-    batch.items[0] = .toggle_thread_view;
-
-    try std.testing.expectError(error.InvalidPluginEffect, registry.authorizeBatch(.{
-        .package_index = 0,
-        .plugin_id = core.stableId(manifest.id()),
-        .digest = digest,
-        .batch = &batch,
-    }));
 
     const stale_digest: core.Digest = @splat(8);
     try std.testing.expectError(

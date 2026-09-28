@@ -6,7 +6,7 @@ const native_libraries = @import("native_libraries.zig");
 
 /// Register portability checks: `cross.add(b)`.
 pub fn add(b: *std.Build) *std.Build.Step {
-    // Type-checks platform-dependent frontend code for targets this machine is
+    // Type-checks platform-dependent client code for targets this machine is
     // not. A Windows implementation that silently stopped compiling would
     // otherwise be
     // invisible until somebody on Windows tried to build - which, for a project

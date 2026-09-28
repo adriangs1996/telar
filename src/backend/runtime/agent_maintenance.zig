@@ -10,6 +10,7 @@ const agent_rename = @import("agent_rename.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
 const suggest_command = @import("suggest_command.zig");
 const workspace_git = @import("workspace_git.zig");
+const worktree_git = @import("worktree_git.zig");
 
 /// Rearms the tick and runs one maintenance pass.
 ///
@@ -25,6 +26,7 @@ pub fn tick(model: *RuntimeModel, result: anyerror!void) !void {
 
     try session_checkpoint.start(model);
     workspace_git.start(model);
+    worktree_git.start(model);
     agent_rename.start(model);
     suggest_command.stopIdleEngine(model);
     model.resources.proxy.expireCaptures(std.Io.Timestamp.now(model.io, .real).toMilliseconds(), model.resources.pluginService());

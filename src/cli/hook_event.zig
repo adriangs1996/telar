@@ -10,8 +10,9 @@ pub const Buffer = [core.max_agent_last_event_bytes]u8;
 
 /// The tool input keys worth showing next to the tool name, in the order
 /// they are tried. Shell commands and paths come first because they name
-/// what the person will be asked about.
-const argument_keys = [_][]const u8{ "command", "cmd", "file_path", "path", "pattern", "url", "query", "prompt", "description" };
+/// what the person will be asked about. OpenCode's file tools name their
+/// path `filePath`.
+const argument_keys = [_][]const u8{ "command", "cmd", "file_path", "filePath", "path", "pattern", "url", "query", "prompt", "description" };
 
 /// Copies the first control-free line of `text` into `buffer`, cut to the
 /// wire bound on a UTF-8 boundary.
@@ -61,6 +62,16 @@ pub fn toolCall(buffer: *Buffer, tool_name: []const u8, tool_input: std.json.Val
     }
 
     return line(buffer, scratch[0..len]);
+}
+
+/// Names the background agents a finished turn is still waiting for.
+///
+/// ```zig
+/// const event = backgroundAgents(&buffer, input.runningSubagents());
+/// ```
+pub fn backgroundAgents(buffer: *Buffer, count: usize) []const u8 {
+    const noun = if (count == 1) "agent" else "agents";
+    return std.fmt.bufPrint(buffer, "waiting for {d} background {s}", .{ count, noun }) catch buffer[0..0];
 }
 
 fn append(scratch: []u8, len: *usize, text: []const u8) void {

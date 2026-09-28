@@ -1,9 +1,23 @@
-const data = @import("model");
+//! A finished command's standard output, owned by its completion. The
+//! consumer releases it with `deinit` whatever it decides to do with it.
+const std = @import("std");
 const Output = @This();
 
-bytes: [data.bar_values.max_text_bytes]u8 = @splat(0),
-len: u16 = 0,
+pub const allocator = std.heap.page_allocator;
+
+/// The whole buffer the worker received, freed as one allocation.
+buffer: []u8 = &.{},
+start: usize = 0,
+len: usize = 0,
 
 pub fn slice(self: *const Output) []const u8 {
-    return self.bytes[0..self.len];
+    return self.buffer[self.start..][0..self.len];
+}
+
+pub fn deinit(self: *Output) void {
+    if (self.buffer.len != 0) {
+        allocator.free(self.buffer);
+    }
+
+    self.* = .{};
 }

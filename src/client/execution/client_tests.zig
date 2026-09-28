@@ -1,6 +1,7 @@
 //! Test bodies for Client. Private implementations are supplied by the
 //! owner's test declarations as concrete compile-time functions.
 const data = @import("model");
+const localsocket = @import("localsocket");
 const std = @import("std");
 const core = @import("telar-core");
 const Client = @import("Client.zig");
@@ -10,6 +11,7 @@ const Credit = @import("../graphics/Credit.zig");
 const actions = @import("../input/actions.zig");
 const change_review = @import("../change_review/change_review.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
+const runtime_messages = @import("../connection/runtime_messages.zig");
 const workspace_rename = @import("../workspace/workspace_rename.zig");
 
 /// Layout export decodes to the same active pane and split tree.
@@ -149,16 +151,25 @@ const Driver = struct {
     }
 };
 
+/// Stands in for a connected socket the capturing driver never touches.
+var unused_channel: localsocket.SocketChannel = undefined;
+
 /// A client with only the transport and outbox a transport test touches.
 fn transportClient(send_buffer: []u8) !*Client {
     const app = try std.testing.allocator.create(Client);
     errdefer std.testing.allocator.destroy(app);
     app.io = std.testing.io;
     app.to_workers = .{};
+    app.to_background = .{};
     app.graphics = no_graphics;
     app.model.to_runtime = try .init(std.testing.allocator);
+    app.model.runtime_link = .{ .phase = .connected };
+    // Handed a connected socket, so a failure ends it as before.
+    app.options.machine = null;
+    app.forward = null;
+    app.channel_owned = false;
     app.runtime_transport = .{
-        .connection = undefined,
+        .connection = &unused_channel,
         .send_buffer = send_buffer,
         .receive_buffer = &.{},
         .read_buffer = &.{},
@@ -352,7 +363,7 @@ pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*data.ClientMod
         },
     );
     const pane = model.panes.find(pane_id).?;
-    _ = pane.identify(.terminal, 3);
+    _ = pane.identify(3);
     try open_session(&app.model, pane_id);
     try std.testing.expect(change_review.isChangeReviewAttached(&app.model));
     const pending_owner = try operation(&app.model, 0);
@@ -407,7 +418,7 @@ pub fn retainReviewAvailability(comptime open_session: fn (*data.ClientModel, co
         },
     );
     const pane = model.panes.find(pane_id).?;
-    _ = pane.identify(.terminal, 3);
+    _ = pane.identify(3);
     var notification: core.ChangeReviewChanged = .{
         .pane_id = pane_id,
         .pane_generation = 3,
@@ -441,8 +452,8 @@ pub fn retainReviewAvailability(comptime open_session: fn (*data.ClientModel, co
 }
 
 /// Owned request deliveries roll back only their own correlation when the outbox is full.
-/// Example: `try client_tests.rollBackFullOutbox(sendTabRenameRequest, sendCreateTabRequest, sendAgentPromptRequest);`
-pub fn rollBackFullOutbox(comptime rename_tab: fn (*data.ClientModel, core.RenameTab, data.RequestsContinuation) anyerror!void, comptime create_tab: fn (*data.ClientModel, core.CreateTab) anyerror!void, comptime prompt: fn (*data.ClientModel, core.AgentPrompt, data.AgentOperation) anyerror!void) !void {
+/// Example: `try client_tests.rollBackFullOutbox(sendTabRenameRequest, sendCreateTabRequest);`
+pub fn rollBackFullOutbox(comptime rename_tab: fn (*data.ClientModel, core.RenameTab, data.RequestsContinuation) anyerror!void, comptime create_tab: fn (*data.ClientModel, core.CreateTab) anyerror!void) !void {
     const app = try std.testing.allocator.create(Client);
     defer std.testing.allocator.destroy(app);
     app.model = data.ClientModel.init(std.testing.allocator, true);
@@ -477,13 +488,7 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*data.ClientModel, core.Renam
 
     const queued = app.model.to_runtime.len;
 
-    var options: core.AgentOptions = .{
-        .effort = try core.AgentEffort.init("test-effort"),
-    };
-
-    try options.setModel("test-model");
-
-    const Delivery = enum { tab_rename, workspace_rename, tab_create, agent_prompt, notification };
+    const Delivery = enum { tab_rename, workspace_rename, tab_create, notification };
     for (std.enums.values(Delivery)) |delivery| {
         const request_id = try app.model.request_lifecycle.nextId();
         const location = tab_location;
@@ -520,22 +525,6 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*data.ClientModel, core.Renam
                         .cwd = "/",
                         .arguments = &.{},
                     },
-                },
-            ),
-            .agent_prompt => prompt(
-                &app.model,
-                .{
-                    .request_id = request_id,
-                    .pane_id = pane_id,
-                    .pane_generation = 1,
-                    .text = "review the changes",
-                    .options = options,
-                },
-                .{
-                    .pane_id = pane_id,
-                    .pane_generation = 1,
-                    .attachment_generation = 1,
-                    .location = location,
                 },
             ),
             .notification => block: {
@@ -621,3 +610,216 @@ const NoGraphics = struct {
 
     fn consumeCredit(_: *anyopaque, _: Credit) void {}
 };
+
+const SocketPair = struct {
+    channel: localsocket.SocketChannel,
+    peer: localsocket.SocketChannel,
+};
+
+fn socketPair() !SocketPair {
+    var fds: [2]std.c.fd_t = undefined;
+    if (std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &fds) != 0) {
+        return error.SocketPairFailed;
+    }
+
+    return .{
+        .channel = .init(.{ .socket = .{ .handle = fds[0], .address = .{ .ip4 = .loopback(0) } } }),
+        .peer = .init(.{ .socket = .{ .handle = fds[1], .address = .{ .ip4 = .loopback(0) } } }),
+    };
+}
+
+/// A lost socket leaves the client running and closes once no job uses it;
+/// the backoff then connects again and the new session starts fresh.
+/// Example: `try client_tests.reconnectAfterLoss(runtime_link.start);`
+pub fn reconnectAfterLoss(comptime start: fn (*Client) anyerror!void) !void {
+    const gpa = std.testing.allocator;
+    const app = try gpa.create(Client);
+    defer gpa.destroy(app);
+
+    try app.init(.{
+        .gpa = gpa,
+        .io = std.testing.io,
+        .host_size = .{
+            .cols = 40,
+            .rows = 10,
+            .cell_width_px = 0,
+            .cell_height_px = 0,
+        },
+        .options = .{
+            .arguments = &.{"/bin/sh"},
+            .cwd = "/",
+            .endpoint = "",
+            .machine = .{ .local = .{} },
+        },
+    });
+    defer app.deinit();
+    app.graphics = no_graphics;
+    app.bootstrap = .{
+        .graphics_shared = false,
+        .client_identity = @enumFromInt(7),
+    };
+
+    try start(app);
+    try std.testing.expect(app.model.runtime_link.phase == .connecting);
+    try std.testing.expect(app.to_background.pop().? == .runtime_connect);
+
+    var first = try socketPair();
+    defer first.peer.deinit(std.testing.io);
+    app.connect_result = .{ .channel = first.channel };
+    try std.testing.expectEqual(@as(?u8, null), try app.update(.{ .runtime_connected = {} }));
+    try std.testing.expect(app.model.runtime_link.phase == .connected);
+    try std.testing.expect(app.runtime_transport.receive_pending);
+    try std.testing.expect(app.model.to_runtime.inFlight());
+    while (app.to_workers.pop()) |_| {}
+
+    try data.workspace_handoff.bootstrap(
+        &app.model,
+        .{
+            .pane_id = @enumFromInt(3),
+            .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(2) },
+            .size = .{
+                .cols = 40,
+                .rows = 10,
+            },
+        },
+    );
+
+    try std.testing.expectEqual(@as(?u8, null), try app.update(.{ .server = error.EndOfStream }));
+    try std.testing.expect(app.model.runtime_link.phase == .lost);
+    try std.testing.expectEqualStrings("EndOfStream", app.model.runtime_link.failure().?);
+    try std.testing.expect(app.channel_owned);
+
+    try std.testing.expectEqual(@as(?u8, null), try app.update(.{ .sent = error.BrokenPipe }));
+    try std.testing.expect(!app.channel_owned);
+    try std.testing.expect(app.runtime_transport.connection == null);
+    const retry = app.to_workers.pop().?;
+    try std.testing.expect(retry == .timer and retry.timer.kind == .runtime_retry);
+
+    try std.testing.expectEqual(@as(?u8, null), try app.update(.{ .runtime_retry_tick = {} }));
+    try std.testing.expect(app.model.runtime_link.phase == .connecting);
+    try std.testing.expectEqual(@as(u16, 1), app.model.runtime_link.attempt);
+    try std.testing.expect(app.to_background.pop().? == .runtime_connect);
+
+    var second = try socketPair();
+    defer second.peer.deinit(std.testing.io);
+    app.connect_result = .{ .channel = second.channel };
+    try std.testing.expectEqual(@as(?u8, null), try app.update(.{ .runtime_connected = {} }));
+    try std.testing.expect(app.model.runtime_link.phase == .connected);
+    try std.testing.expectEqual(@as(u32, 2), app.model.runtime_link.sessions);
+    try std.testing.expectEqual(@as(usize, 0), app.model.tabs.count);
+    try std.testing.expect(app.model.startup.phase == .opening);
+    while (app.to_workers.pop()) |_| {}
+}
+
+/// A failed attempt keeps the client, shows the report and waits to retry;
+/// retrying now connects before the wait ends.
+/// Example: `try client_tests.failedAttemptWaits(runtime_link.start, runtime_link.retryNow);`
+pub fn failedAttemptWaits(comptime start: fn (*Client) anyerror!void, comptime retry_now: fn (*Client) anyerror!void) !void {
+    const gpa = std.testing.allocator;
+    const app = try gpa.create(Client);
+    defer gpa.destroy(app);
+
+    try app.init(.{
+        .gpa = gpa,
+        .io = std.testing.io,
+        .host_size = .{
+            .cols = 40,
+            .rows = 10,
+            .cell_width_px = 0,
+            .cell_height_px = 0,
+        },
+        .options = .{
+            .arguments = &.{},
+            .cwd = "",
+            .endpoint = "",
+            .machine = .{ .remote = .{ .destination = "dev@box" } },
+        },
+    });
+    defer app.deinit();
+    app.graphics = no_graphics;
+
+    try start(app);
+    try std.testing.expectEqualStrings("dev@box", app.model.runtime_link.target());
+    _ = app.to_background.pop().?;
+
+    const report = "ssh: Could not resolve hostname box";
+    @memcpy(app.connect_report.bytes[0..report.len], report);
+    app.connect_report.len = report.len;
+    try std.testing.expectEqual(@as(?u8, null), try app.update(.{ .runtime_connected = error.RemoteEndpointUnavailable }));
+    try std.testing.expect(app.model.runtime_link.phase == .lost);
+    try std.testing.expectEqualStrings(report, app.model.runtime_link.failure().?);
+    const retry = app.to_workers.pop().?;
+    try std.testing.expect(retry == .timer and retry.timer.kind == .runtime_retry);
+
+    try retry_now(app);
+    try std.testing.expect(app.model.runtime_link.phase == .connecting);
+    try std.testing.expect(app.to_background.pop().? == .runtime_connect);
+}
+
+/// A hidden machine defers its first pane, opens it when shown, and leaves
+/// its workspace when hidden again, reopening it on the next show.
+/// Example: `try client_tests.hiddenMachineDefersAndLeaves(machine_presentation.show, machine_presentation.hide);`
+pub fn hiddenMachineDefersAndLeaves(comptime show: fn (*Client) anyerror!void, comptime hide: fn (*Client) anyerror!void) !void {
+    const gpa = std.testing.allocator;
+    var pair = try socketPair();
+    defer pair.channel.deinit(std.testing.io);
+    defer pair.peer.deinit(std.testing.io);
+
+    const app = try gpa.create(Client);
+    defer gpa.destroy(app);
+
+    try app.init(.{
+        .gpa = gpa,
+        .io = std.testing.io,
+        .connection = &pair.channel,
+        .host_size = .{
+            .cols = 40,
+            .rows = 10,
+            .cell_width_px = 0,
+            .cell_height_px = 0,
+        },
+        .options = .{
+            .arguments = &.{"/bin/sh"},
+            .cwd = "/",
+            .endpoint = "",
+        },
+    });
+    defer app.deinit();
+    app.graphics = no_graphics;
+    app.presented = false;
+
+    var buffer: [256]u8 = undefined;
+    const snapshot = try core.encodeClientLayoutSnapshot(&buffer, .{ .restored = false });
+    _ = try runtime_messages.handleServerMessage(app, try core.decodeServer(snapshot));
+    try std.testing.expect(app.open_deferred);
+    try std.testing.expectEqual(@as(u8, 0), app.model.to_runtime.len);
+
+    try show(app);
+    try std.testing.expect(!app.open_deferred);
+    try std.testing.expect(app.model.to_runtime.peek().?.* == .open_pane);
+    app.model.to_runtime.discardQueued();
+    app.model.request_lifecycle = .{};
+
+    try data.workspace_handoff.bootstrap(
+        &app.model,
+        .{
+            .pane_id = @enumFromInt(3),
+            .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(2) },
+            .size = .{
+                .cols = 40,
+                .rows = 10,
+            },
+        },
+    );
+
+    try hide(app);
+    try std.testing.expect(app.model.workspace == null);
+    try std.testing.expectEqual(@as(?core.WorkspaceId, @enumFromInt(1)), app.left_workspace);
+    try std.testing.expect(app.model.to_runtime.peek().?.* == .detach_pane);
+    app.model.to_runtime.discardQueued();
+
+    try show(app);
+    try std.testing.expect(app.left_workspace == null);
+    try std.testing.expect(app.model.to_runtime.peek().?.* == .open_pane);
+    app.model.to_runtime.discardQueued();
+}

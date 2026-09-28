@@ -4,12 +4,12 @@ const core = @import("telar-core");
 const ReviewResult = @import("../../change_review/Result.zig");
 const response_queue = @import("response_queue.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
+const PathQuery = @import("../../paths/PathQuery.zig");
 const std = @import("std");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
 const Workspaces = @import("../../workspace/Workspaces.zig");
-const OwnedAgentHistoryPage = @import("OwnedAgentHistoryPage.zig");
 
 /// Encodes one queued response against the *current* stores. A response can
 /// outlive what it describes - the workspace of a queued snapshot may close
@@ -39,6 +39,7 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
             .message = failure.message,
         }),
         .pane_opened => |opened| try core.encodePaneOpened(buffer, opened),
+        .worktree_registered => |registered| try core.encodeWorktreeRegistered(buffer, registered),
         .tab_snapshot => |snapshot| try core.encodeTabSnapshot(buffer, .{
             .request_id = snapshot.request_id,
             .location = snapshot.location,
@@ -87,7 +88,6 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
             .position = created.position,
             .label = created.labelSlice(),
             .root_pane_id = created.root_pane_id,
-            .kind = created.kind,
             .pane_generation = created.pane_generation,
         }),
         .tab_renamed => |*renamed| try core.encodeTabRenamed(buffer, .{
@@ -113,21 +113,13 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
             @memcpy(buffer[0..result.len], result.bytes[0..result.len]);
             break :payload buffer[0..result.len];
         },
-        .agent_history_page => |result| payload: {
-            if (context.agent_history) |owned| {
-                owned.* = result;
+        .path_results => |query| payload: {
+            if (context.path_results) |owned| {
+                owned.* = query;
             }
 
-            const page = result.value;
-            if (panes.resolveControlConst(.{ .id = page.snapshot.pane_id, .generation = page.snapshot.pane_generation }) == null) {
-                break :payload try core.encodeRequestFailed(buffer, .{
-                    .request_id = page.request_id,
-                    .code = .pane_not_found,
-                    .message = "agent pane closed before its history was sent",
-                });
-            }
-
-            break :payload try core.encodeAgentHistoryPage(buffer, page);
+            var match_storage: [core.max_path_results]core.PathMatch = undefined;
+            break :payload try core.encodePathResults(buffer, query.results(&match_storage));
         },
         .history_result => |result| payload: {
             history_result.* = result;
@@ -165,18 +157,28 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
             .matches = found.matches.slice(),
         }),
         .pane_text => |*read| payload: {
-            const target = panes.resolveControlConst(read.pane) orelse
-                break :payload try core.encodeRequestFailed(buffer, .{
+            const target = panes.resolveControlConst(read.pane) orelse {
+                const exited = panes.exited.find(read.pane) orelse
+                    break :payload try core.encodeRequestFailed(buffer, .{
+                        .request_id = read.request_id,
+                        .code = .pane_not_found,
+                        .message = "pane closed before its text was read",
+                    });
+                break :payload try core.encodePaneText(buffer, .{
                     .request_id = read.request_id,
-                    .code = .pane_not_found,
-                    .message = "pane closed before its text was read",
+                    .pane_id = read.pane.id,
+                    .truncated = false,
+                    .text = panes.exited.tail(exited, read.rows),
+                    .exit_code = panes.exited.exit_code[exited],
                 });
+            };
             const dump = target.dumpText(.{ .rows = read.rows, .source = read.source }, &text_storage);
             break :payload try core.encodePaneText(buffer, .{
                 .request_id = read.request_id,
                 .pane_id = read.pane.id,
                 .truncated = dump.truncated,
                 .text = text_storage[0..dump.len],
+                .exit_code = if (target.exit) |exit| exit.code() else null,
             });
         },
         .client_command => |command| try core.encodeClientCommand(buffer, command),
@@ -287,7 +289,6 @@ const EncodeContext = struct {
     history_result: *?*QueryResult,
     history_output: *?*OutputResult,
     history_stats: *?*StatsResult,
-    agent_history: ?*?*OwnedAgentHistoryPage = null,
-
     change_review: ?*?*ReviewResult = null,
+    path_results: ?*?*PathQuery = null,
 };

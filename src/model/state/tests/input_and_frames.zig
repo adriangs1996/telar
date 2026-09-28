@@ -2,7 +2,6 @@ const pane_input = @import("../../panes/pane_input.zig");
 const pane_focus = @import("../../workspace/pane_focus.zig");
 const pane_viewport = @import("../../panes/pane_viewport.zig");
 const pane_metadata = @import("../../panes/pane_metadata.zig");
-const agent_panes = @import("../../panes/agent_panes.zig");
 const tab_selection = @import("../../workspace/tab_selection.zig");
 const pane_graphics = @import("../../panes/pane_graphics.zig");
 const copy_mode = @import("../../input/copy_mode.zig");
@@ -36,15 +35,6 @@ fn testingPaneFrame(buffer: []u8, input: TestingPaneFrame) !core.FrameView {
     });
 
     return (try core.decodeServer(encoded)).pane_frame;
-}
-
-test "pane surface toggling needs a focused pane and advances the pane version" {
-    var model = ClientModel.init(std.testing.allocator, true);
-    defer model.deinit();
-
-    const version = model.version();
-    try std.testing.expect(agent_panes.toggleSurface(&model) == null);
-    try std.testing.expectEqualDeep(version, model.version());
 }
 
 test "pane input planning resolves one attached active target without mutation" {

@@ -8,7 +8,6 @@ code and stay with the built-ins.
 | --- | --- | --- |
 | Data | `core.agent_manifest.Table` (`config.runtime.agents`) | Which process and phrases are this agent; how it is named, titled and drawn; how its prompt marks pasted images |
 | Runtime capabilities | `backend/agent/providers/` (one file per built-in) | How a session is resumed; which lifecycle quirks the aggregate tolerates |
-| API dialect | `backend/proxy/provider/dialect.zig` | Which wire protocol an exchange speaks (`anthropic_messages`, `openai_responses`) |
 
 The sidebar, the `telar agent` command, notifications and the image shelf read
 the data axis from the snapshot entry the runtime publishes. None of them
@@ -61,6 +60,12 @@ identity change. All native inspection stays in the observation worker.
 
 `process/process.zig` tests direct Claude Code, Codex and Pi roots, bounded
 acquisition and an interpreter becoming an agent in the same process group.
+A runtime a launcher renamed with `exec -a` still counts as an interpreter
+when the kernel names its image `node`, `bun` or `deno`: Cursor Agent runs as
+`node` with argv[0] set to `agent` or `cursor-agent`, and its versioned entry
+point (`/cursor-agent/versions/`) identifies it. OpenCode is one Bun
+executable whose kernel name is `opencode`; its npm package launches it from
+`node .../bin/opencode`, whose basename identifies it the same way.
 `runtime/tests/observation_events_test.zig` verifies that root-agent
 evidence retains its typed resume session and allows screen status updates.
 
@@ -92,8 +97,8 @@ before manifests existed, plus each built-in's display name and attachment
 scheme.
 
 Provider identity on the wire is `schema.AgentProvider`, non-exhaustive.
-`claude`, `codex` and `pi` keep their values; configured agents take indexes
-from `schema.first_custom_agent_provider` in configuration order. The snapshot
+`claude`, `codex`, `pi`, `cursor` and `opencode` keep their values; configured agents
+take indexes from `schema.first_custom_agent_provider` in configuration order. The snapshot
 entry carries `provider_name`, `display_name`, `icon` and `attachments`, so a
 client never needs the table.
 
@@ -101,26 +106,20 @@ client never needs the table.
 
 `src/backend/agent/providers/providers.zig` resolves `Capabilities` for a provider:
 `resume_prefix` (the shell words `session_checkpoint.resumeCommand` types in
-front of a UUID) and `ready_prompt_settles_report` (Codex reports `working`
-from its `Stop` hook, so only its newer input prompt ends that report). Each
-built-in has one file; every other provider resolves to `default`, which
+front of a session reference), `session_format` (the shape that reference
+must have: a UUID, or OpenCode's `ses_` id of 12 hexadecimal and 14 base62
+characters) and `ready_prompt_settles_report` (Codex reports `working`
+from its `Stop` hook, so only its newer input prompt ends that report),
+`completion_requires_agent_signal` and `screen_reports_blocked` (Cursor Agent
+fires no hook for its command approvals or plan reviews, so a blocked screen
+observed after its latest report decides the projection until newer evidence
+replaces it). Each built-in has one file; every other provider resolves to `default`, which
 claims nothing. Only this table can ever produce a resume command.
 
 Lifecycle hooks are the CLI's own per-agent table: `telar integration`
 installs them from `cli/integration.zig` and `telar hook` parses them in
-`cli/hook.zig`. Pi uses an extension instead of hook settings.
-
-## API dialect
-
-The proxy never names an agent. `provider/dialect.zig` identifies the dialect
-of a CONNECT host and `request_support.inferenceRoutes` names the inference
-routes per dialect; the relay only reports whether a request matched them.
-Observations carry the dialect to the runtime, where
-`ProxyObservation.impliedProvider` maps it to the native built-in agent
-(`anthropic_messages` to Claude Code, `openai_responses` to Codex). That
-implied identity is used only while no process has claimed the pane; once a
-process is known, its exchanges count whatever the host says, so Pi talking to
-Anthropic stays Pi and a Codex pointed at a compatible gateway stays Codex.
+`cli/hook.zig`. Pi uses an extension and OpenCode a plugin instead of hook
+settings.
 
 ## Ownership and budgets
 
@@ -138,8 +137,6 @@ table.
 - `src/core/agent_manifest.zig` proves the built-in heuristics, custom index
   assignment, extension by name, list bounds and presentation defaults.
 - `src/backend/agent/providers/providers.zig` proves capability resolution.
-- `src/backend/proxy/provider/dialect.zig` proves host identification and the
-  implied agent per dialect.
 - `src/backend/history/agent_detection.zig` and `src/backend/process/process.zig`
   prove screen and process detection against the built-in table.
 - `src/client/config/generation_support.zig` proves manifest parsing and its

@@ -1,11 +1,9 @@
 //! Runtime-facing proxy capability.
 //!
-//! Credentials are generated, registered, validated, and erased inside this
-//! package. Runtime and pane state only see pane keys and observations.
+//! The proxy secret is read, created and compared inside this package. The
+//! runtime only asks for a child environment and receives captured halves.
 
 const core = @import("telar-core");
-const middleware = @import("middleware.zig");
-const types = @import("../agent/types.zig");
 const Service = @import("service/Service.zig");
 const service_support = @import("service/service_support.zig");
 const pty = @import("pty");
@@ -13,22 +11,17 @@ const Override = pty.Override;
 const std = @import("std");
 const connect_authentication = @import("connect_authentication.zig");
 const identity = @import("identity.zig");
-const observation_queue = @import("observation_queue.zig");
-const provider_provider = @import("provider/provider.zig");
 const service_mod = @import("service/service_namespace.zig");
-const eventstream = @import("eventstream");
-const sse = eventstream.sse;
 const localca = @import("localca");
 const tls = localca.tls;
 
 const ca = localca.ca;
 
 pub const PaneKey = @import("../pane/PaneKey.zig");
-pub const ApiDialect = types.ApiDialect;
 
 pub const Config = @import("Config.zig");
 
-pub const Observation = @import("Observation.zig");
+pub const Protocol = @import("Protocol.zig").Protocol;
 
 pub const PaneEnvironment = @import("PaneEnvironment.zig");
 
@@ -84,7 +77,7 @@ test "proxy environment covers Git and Google Cloud trust stores" {
     try std.testing.expectEqualStrings("/state/ca-bundle.pem", overrides[9].value);
 }
 
-test "pane registration owns and disposes its ephemeral environment" {
+test "every pane environment carries the same secret proxy URL and disposes itself" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     var files = try ProxyTestFiles.init(io);
@@ -97,19 +90,23 @@ test "pane registration owns and disposes its ephemeral environment" {
     try inherited_map.put("PATH", "/bin:/usr/bin");
     const inherited_block = try inherited_map.createPosixBlock(gpa, .{});
     defer inherited_block.deinit(gpa);
-    const key: PaneKey = .{ .id = try core.pane(7), .generation = 2 };
-    var environment = try proxy.registerPane(key, .{
+    var first = try proxy.environment(.{
         .inherited = .{ .block = inherited_block },
         .overrides = &.{.{ .name = "TELAR_PANE_ID", .value = "7" }},
     });
-    const child: std.process.Environ = .{ .block = environment.environment().block };
-    try std.testing.expect(std.mem.startsWith(
-        u8,
-        std.process.Environ.getPosix(child, "HTTPS_PROXY").?,
-        "http://telar:7.2.",
-    ));
-    environment.deinit();
-    proxy.revokePane(key);
+    defer first.deinit();
+    var second = try proxy.environment(.{
+        .inherited = .{ .block = inherited_block },
+        .overrides = &.{.{ .name = "TELAR_PANE_ID", .value = "8" }},
+    });
+    defer second.deinit();
+    const first_child: std.process.Environ = .{ .block = first.environment().block };
+    const second_child: std.process.Environ = .{ .block = second.environment().block };
+    const first_url = std.process.Environ.getPosix(first_child, "HTTPS_PROXY").?;
+    try std.testing.expect(std.mem.startsWith(u8, first_url, "http://telar:"));
+    try std.testing.expectEqual(@as(usize, "http://telar:".len + identity.secret_bytes * 2 + "@127.0.0.1:".len), std.mem.lastIndexOfScalar(u8, first_url, ':').? + 1);
+    try std.testing.expectEqualStrings(first_url, std.process.Environ.getPosix(second_child, "HTTPS_PROXY").?);
+    try std.testing.expectEqualStrings("8", std.process.Environ.getPosix(second_child, "TELAR_PANE_ID").?);
 }
 
 test "proxy lifecycle accepts traffic and cancels an active tunnel during destruction" {
@@ -192,14 +189,18 @@ test "proxy connection admission enforces the real worker limit" {
 test {
     std.testing.refAllDecls(ca);
     _ = @import("Slots.zig");
+    _ = @import("capture/capture_tests.zig");
+    _ = @import("tunnel/tunnel_namespace.zig");
+    _ = @import("tunnel/EventObserver.zig");
+    _ = @import("tunnel/RelayContext.zig");
+    _ = @import("tunnel/Http1Connection.zig");
+    _ = @import("tunnel/Establisher.zig");
+    _ = @import("metrics.zig");
     std.testing.refAllDecls(connect_authentication);
     std.testing.refAllDecls(identity);
-    std.testing.refAllDecls(middleware);
-    std.testing.refAllDecls(observation_queue);
-    std.testing.refAllDecls(provider_provider);
     std.testing.refAllDecls(service_mod);
-    std.testing.refAllDecls(sse);
     std.testing.refAllDecls(tls);
+    _ = core;
 }
 
 const ProxyTestFiles = struct {
@@ -210,6 +211,10 @@ const ProxyTestFiles = struct {
     certificate_len: usize = 0,
     bundle: [std.fs.max_path_bytes]u8 = undefined,
     bundle_len: usize = 0,
+    secret: [std.fs.max_path_bytes]u8 = undefined,
+    secret_len: usize = 0,
+    port: [std.fs.max_path_bytes]u8 = undefined,
+    port_len: usize = 0,
 
     pub fn init(io: std.Io) !ProxyTestFiles {
         var files: ProxyTestFiles = .{ .temp = std.testing.tmpDir(.{}) };
@@ -221,6 +226,8 @@ const ProxyTestFiles = struct {
         files.key_len = (try std.fmt.bufPrint(&files.key, "{s}/ca-key.pem", .{directory})).len;
         files.certificate_len = (try std.fmt.bufPrint(&files.certificate, "{s}/ca-cert.pem", .{directory})).len;
         files.bundle_len = (try std.fmt.bufPrint(&files.bundle, "{s}/ca-bundle.pem", .{directory})).len;
+        files.secret_len = (try std.fmt.bufPrint(&files.secret, "{s}/proxy-secret", .{directory})).len;
+        files.port_len = (try std.fmt.bufPrint(&files.port, "{s}/proxy-port", .{directory})).len;
 
         return files;
     }
@@ -234,6 +241,8 @@ const ProxyTestFiles = struct {
             .key_path = self.key[0..self.key_len],
             .certificate_path = self.certificate[0..self.certificate_len],
             .bundle_path = self.bundle[0..self.bundle_len],
+            .secret_path = self.secret[0..self.secret_len],
+            .port_path = self.port[0..self.port_len],
         };
     }
 };

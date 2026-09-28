@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const std = @import("std");
 const ServerOptions = @import("arguments/ServerOptions.zig");
-const RuntimeConnector = @import("RuntimeConnector.zig");
+const RuntimeConnector = client.RuntimeConnector;
 const ServerLaunch = @import("ServerLaunch.zig");
 const ProxyAuthorityNames = @import("ProxyAuthorityNames.zig");
 const HistoryPath = @import("HistoryPath.zig");
@@ -23,7 +23,7 @@ const native = @cImport({
 /// try server.run(process_init, options);
 /// ```
 pub fn run(init: std.process.Init, options: ServerOptions) !void {
-    const connector = try RuntimeConnector.init(init, options.socket);
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, options.socket);
     if (options.action == .stop) {
         return stop(init, &connector);
     }

@@ -10,13 +10,10 @@ const std = @import("std");
 const Agent = @import("../../agent/Agent.zig");
 const Result = @import("../../agent/Result.zig");
 const description = @import("../../agent/description.zig");
-const ProxyExchange = @import("../../agent/ProxyExchange.zig");
 const SessionReference = @import("../../agent/SessionReference.zig");
 const SessionTitle = @import("../../agent/SessionTitle.zig");
 const SessionFile = @import("../../agent/SessionFile.zig");
 const Completion = @import("../../agent/Completion.zig");
-const Transcript = @import("../../agent_panes/Transcript.zig");
-
 fn testIdentity() !Identity {
     return .{
         .key = .{ .id = try core.pane(7), .generation = 3 },
@@ -33,26 +30,16 @@ fn testIdentityAt(id: u32, generation: u64) !Identity {
     };
 }
 
-fn testProxy(dialect: types.ApiDialect, phase: types.ProxyPhase, observed_at_ms: i64) TestProxyObservation {
-    return .{ .dialect = dialect, .phase = phase, .observed_at_ms = observed_at_ms };
+fn observeTestWork(model: *RuntimeModel, identity: Identity, observed_at_ms: i64) bool {
+    return agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = observed_at_ms });
+}
+
+fn observeTestSettled(model: *RuntimeModel, identity: Identity, observed_at_ms: i64) bool {
+    return agent_status.observeReport(model, .{ .identity = identity, .state = .ready, .observed_at_ms = observed_at_ms });
 }
 
 fn testReadyPrompt(provider: core.AgentProvider, observed_at_ms: i64) TestReadyPrompt {
     return .{ .provider = provider, .observed_at_ms = observed_at_ms };
-}
-
-fn observeTestProxy(model: *RuntimeModel, identity: Identity, observation: TestProxyObservation) bool {
-    return agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = observation.dialect,
-        .phase = observation.phase,
-        .observed_at_ms = observation.observed_at_ms,
-        .exchange = .{
-            .protocol = .h2,
-            .connection_id = 1,
-            .stream_id = 1,
-        },
-    });
 }
 
 fn observeTestReadyPrompt(model: *RuntimeModel, identity: Identity, prompt: TestReadyPrompt) bool {
@@ -125,61 +112,10 @@ test "tracker rejects every observation that would exceed repository capacity" {
         },
         .observed_at_ms = 200,
     }));
-    try std.testing.expect(!observeTestProxy(model, overflow, testProxy(.anthropic_messages, .request_started, 200)));
+    try std.testing.expect(!observeTestWork(model, overflow, 200));
 
     var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
     try std.testing.expectEqual(core.max_agent_snapshot_entries, agent_status.snapshot(&model.agents, &entries, 0).len);
-}
-
-test "only a confirmed prompt settles model work" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(model, identity, testProxy(.anthropic_messages, .request_started, 100)));
-    try std.testing.expect(observeTestProxy(model, identity, testProxy(.anthropic_messages, .response_finished, 200)));
-    try std.testing.expect(!agent_status.observeScreen(model, .{
-        .identity = identity,
-        .signal = .{
-            .provider = .claude,
-            .status = .ready,
-            .confidence = 90,
-            .identity_confirmed = true,
-        },
-        .observed_at_ms = 300,
-    }));
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    var snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(@as(usize, 1), snapshot.len);
-    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
-    try std.testing.expectEqual(core.AgentSource.proxy_tls, snapshot[0].source);
-
-    try std.testing.expect(observeTestReadyPrompt(model, identity, testReadyPrompt(.claude, 400)));
-    snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.done, snapshot[0].status);
-    try std.testing.expectEqual(core.AgentSource.screen, snapshot[0].source);
-}
-
-test "explicit Codex prompt settles working without repetition" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(model, identity, testProxy(.openai_responses, .request_started, 100)));
-    try std.testing.expect(agent_status.observeScreen(model, .{
-        .identity = identity,
-        .signal = .{
-            .provider = .codex,
-            .status = .ready,
-            .confidence = 94,
-            .identity_confirmed = true,
-            .ready_confirmed = true,
-        },
-        .observed_at_ms = 200,
-    }));
-
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    const snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.done, snapshot[0].status);
-    try std.testing.expectEqual(core.AgentSource.screen, snapshot[0].source);
 }
 
 test "Codex Stop stays working until a newer input prompt confirms completion" {
@@ -272,7 +208,7 @@ test "Codex evidence expiration cannot turn an old prompt into a completion" {
     _ = agent_status.observeScreen(model, .{ .identity = identity, .signal = ready, .observed_at_ms = 101 });
     _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 200 });
     _ = agent_status.observeScreen(model, .{ .identity = identity, .signal = ready, .observed_at_ms = 150 });
-    _ = agent_status.expire(model, 200 + types.working_expiry_ms);
+    _ = agent_status.expire(model, 200 + types.report_working_expiry_ms);
     try std.testing.expectEqual(core.AgentStatus.unknown, agent_status.projectedStatus(model, identity.key).?);
 }
 
@@ -288,20 +224,6 @@ test "new Codex activity supersedes an older SessionStart or Interrupt ready rep
         .observed_at_ms = 201,
     });
     try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, identity.key).?);
-}
-
-test "a Codex model response never completes the agent turn without a new composer" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    _ = agent_status.observeProcess(model, .{ .identity = identity, .provider = .codex, .process_id = 42, .observed_at_ms = 100 });
-    const ready: core.Signal = .{ .provider = .codex, .status = .ready, .confidence = 94, .ready_confirmed = true };
-    _ = agent_status.observeScreen(model, .{ .identity = identity, .signal = ready, .observed_at_ms = 101 });
-    _ = observeTestProxy(model, identity, testProxy(.openai_responses, .request_started, 200));
-    _ = observeTestProxy(model, identity, testProxy(.openai_responses, .provider_turn_completed, 300));
-    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, identity.key).?);
-    _ = agent_status.observeScreen(model, .{ .identity = identity, .signal = ready, .observed_at_ms = 301 });
-    try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
 }
 
 test "Codex settlement orders events within one millisecond by the monotonic clock" {
@@ -345,28 +267,6 @@ test "an older Codex prompt cannot overrule current lifecycle work" {
         .observed_at_ms = 200,
     }));
     try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, identity.key).?);
-}
-
-test "agent branding alone does not settle working" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(model, identity, testProxy(.anthropic_messages, .request_started, 100)));
-    try std.testing.expect(!agent_status.observeScreen(model, .{
-        .identity = identity,
-        .signal = .{
-            .provider = .claude,
-            .status = .ready,
-            .confidence = 90,
-            .identity_confirmed = true,
-        },
-        .observed_at_ms = 200,
-    }));
-
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    const snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
-    try std.testing.expectEqual(core.AgentSource.proxy_tls, snapshot[0].source);
 }
 
 test "screen text cannot register an agent without independent evidence" {
@@ -439,7 +339,7 @@ test "first working turn starts one generated session title" {
     snapshot = agent_status.snapshot(&model.agents, &entries, 0);
     try std.testing.expectEqual(core.AgentTitleState.placeholder, snapshot[0].title_state);
 
-    try std.testing.expect(observeTestProxy(model, identity, testProxy(.openai_responses, .request_started, 200)));
+    try std.testing.expect(observeTestWork(model, identity, 200));
     snapshot = agent_status.snapshot(&model.agents, &entries, 0);
     try std.testing.expectEqual(core.AgentTitleState.pending, snapshot[0].title_state);
 
@@ -467,77 +367,6 @@ test "first working turn starts one generated session title" {
     try std.testing.expect(agent_status.nextDescriptionJob(model) == null);
 }
 
-test "submitted managed prompt queues once even when working is coalesced into ready" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    try std.testing.expect(agent_status.observeManaged(model, identity, .{ .status = .ready, .observed_at_ms = 100 }));
-    const before = model.agent_revision;
-    try std.testing.expect(agent_status.observeSubmittedPrompt(model, identity, "Fix the sidebar\nKeep UTF-8 界 intact"));
-    try std.testing.expect(model.agent_revision > before);
-    const admitted = model.agent_revision;
-    try std.testing.expect(!agent_status.observeSubmittedPrompt(model, identity, "A later turn must not replace the first"));
-    try std.testing.expectEqual(admitted, model.agent_revision);
-
-    _ = agent_status.observeManaged(model, identity, .{ .status = .ready, .observed_at_ms = 200 });
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    try std.testing.expectEqual(core.AgentTitleState.pending, agent_status.snapshot(&model.agents, &entries, 200)[0].title_state);
-    var job = agent_status.nextDescriptionJob(model).?;
-    defer std.crypto.secureZero(u8, &job.query);
-    try std.testing.expectEqualStrings("Fix the sidebar Keep UTF-8 界 intact", job.querySlice());
-    try std.testing.expect(agent_status.nextDescriptionJob(model) == null);
-    var result: Result = .{ .pane = job.pane, .session_id = job.session_id, .status = .success, .title_len = "Fix sidebar".len };
-    @memcpy(result.title[0..result.title_len], "Fix sidebar");
-    _ = agent_status.finishDescription(model, &result).?;
-    try std.testing.expectEqualStrings("Fix sidebar", agent_status.snapshot(&model.agents, &entries, 200)[0].session_title);
-    try std.testing.expect(!agent_status.observeSubmittedPrompt(model, identity, "Another request"));
-    try std.testing.expect(agent_status.nextDescriptionJob(model) == null);
-}
-
-test "submitted managed prompt preserves ready manual and reported titles" {
-    for ([_]bool{ false, true }) |manual| {
-        const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-        const identity = try testIdentity();
-        _ = agent_status.observeManaged(model, identity, .{ .status = .ready, .observed_at_ms = 100 });
-        if (manual) {
-            _ = try agent_status.setManualTitle(model, identity.key, "Existing title");
-        } else {
-            _ = try agent_status.reportTitle(model, identity, "Existing title");
-        }
-
-        const before = model.agent_revision;
-        try std.testing.expect(!agent_status.observeSubmittedPrompt(model, identity, "Do not generate over this title"));
-        try std.testing.expectEqual(before, model.agent_revision);
-        try std.testing.expect(agent_status.nextDescriptionJob(model) == null);
-    }
-}
-
-test "submitted managed prompt shares the bounded description queue" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    for (0..description.max_pending_jobs + 1) |index| {
-        const identity = try testIdentityAt(@intCast(index + 1), 1);
-        _ = agent_status.observeManaged(model, identity, .{ .status = .ready, .observed_at_ms = 100 });
-        try std.testing.expect(agent_status.observeSubmittedPrompt(model, identity, "First accepted prompt"));
-        try std.testing.expect(!agent_status.observeSubmittedPrompt(model, identity, "Never retry title generation"));
-    }
-
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    var pending: usize = 0;
-    var failed: usize = 0;
-    for (agent_status.snapshot(&model.agents, &entries, 100)) |entry| {
-        switch (entry.title_state) {
-            .pending => pending += 1,
-            .failed => failed += 1,
-            else => return error.UnexpectedTitleState,
-        }
-    }
-
-    try std.testing.expectEqual(description.max_pending_jobs, pending);
-    try std.testing.expectEqual(@as(usize, 1), failed);
-}
-
 test "manual title wins over a late generated result" {
     const model = try testModel();
     defer std.testing.allocator.destroy(model);
@@ -549,7 +378,7 @@ test "manual title wins over a late generated result" {
         .observed_at_ms = 100,
     }));
     try std.testing.expect(agent_status.observeInput(model, identity.key, "fix tests\r"));
-    try std.testing.expect(observeTestProxy(model, identity, testProxy(.anthropic_messages, .request_started, 200)));
+    try std.testing.expect(observeTestWork(model, identity, 200));
     var job = agent_status.nextDescriptionJob(model).?;
     defer std.crypto.secureZero(u8, &job.query);
     try std.testing.expect(try agent_status.setManualTitle(model, identity.key, "Release audit"));
@@ -585,7 +414,7 @@ test "description backpressure fails the ninth queued request without retry" {
             .observed_at_ms = 100,
         }));
         try std.testing.expect(agent_status.observeInput(model, identity.key, "do work\r"));
-        try std.testing.expect(observeTestProxy(model, identity, testProxy(.openai_responses, .request_started, 200)));
+        try std.testing.expect(observeTestWork(model, identity, 200));
     }
     var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
     const snapshot = agent_status.snapshot(&model.agents, &entries, 0);
@@ -708,260 +537,12 @@ test "confirmed Claude prompt refreshes branded identity" {
     try std.testing.expectEqual(@as(i64, 200), snapshot[0].observed_at_ms);
 }
 
-test "network work resumes a visibly blocked agent" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    try std.testing.expect(agent_status.observeProcess(model, .{
-        .identity = identity,
-        .provider = .claude,
-        .process_id = 84,
-        .observed_at_ms = 50,
-    }));
-    try std.testing.expect(agent_status.observeScreen(model, .{
-        .identity = identity,
-        .signal = .{ .provider = .claude, .status = .blocked, .confidence = 88 },
-        .observed_at_ms = 100,
-    }));
-    try std.testing.expect(observeTestProxy(model, identity, testProxy(.anthropic_messages, .request_started, 200)));
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    const snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
-    try std.testing.expectEqual(core.AgentAuthority.resumed, snapshot[0].authority);
-}
-
-test "new network work supersedes an older ready prompt" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(model, identity, testProxy(.anthropic_messages, .request_started, 50)));
-    try std.testing.expect(observeTestProxy(model, identity, testProxy(.anthropic_messages, .response_finished, 100)));
-    try std.testing.expect(observeTestReadyPrompt(model, identity, testReadyPrompt(.claude, 200)));
-    try std.testing.expect(observeTestProxy(model, identity, testProxy(.anthropic_messages, .request_started, 300)));
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    const snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
-    try std.testing.expectEqual(core.AgentSource.proxy_tls, snapshot[0].source);
-}
-
-test "unmatched proxy responses cannot create agent state" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
-    try std.testing.expect(!agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .response_activity,
-        .exchange = exchange,
-        .observed_at_ms = 100,
-    }));
-    try std.testing.expect(!agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .provider_turn_completed,
-        .exchange = exchange,
-        .observed_at_ms = 200,
-    }));
-    try std.testing.expect(!agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_failed,
-        .exchange = exchange,
-        .observed_at_ms = 300,
-    }));
-
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    try std.testing.expectEqual(@as(usize, 0), agent_status.snapshot(&model.agents, &entries, 0).len);
-}
-
-test "a contradictory provider cannot complete another agent's exchange" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
-
-    _ = agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = exchange,
-        .observed_at_ms = 100,
-    });
-    try std.testing.expect(!agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .openai_responses,
-        .phase = .provider_turn_completed,
-        .exchange = exchange,
-        .observed_at_ms = 200,
-    }));
-
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    var snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentProvider.claude, snapshot[0].provider);
-    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
-
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .provider_turn_completed,
-        .exchange = exchange,
-        .observed_at_ms = 300,
-    }));
-    snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentProvider.claude, snapshot[0].provider);
-    try std.testing.expectEqual(core.AgentStatus.done, snapshot[0].status);
-}
-
-test "transport completion without provider turn completion remains working" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
-
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = exchange,
-        .observed_at_ms = 100,
-    }));
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .response_finished,
-        .exchange = exchange,
-        .observed_at_ms = 200,
-    }));
-
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    const snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(@as(usize, 1), snapshot.len);
-    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
-    try std.testing.expectEqual(core.AgentSource.proxy_tls, snapshot[0].source);
-    try std.testing.expectEqual(@as(i64, 200), snapshot[0].observed_at_ms);
-}
-
-test "provider turn completion projects ready and ignores later transport completion" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
-
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = exchange,
-        .observed_at_ms = 100,
-    }));
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .provider_turn_completed,
-        .exchange = exchange,
-        .observed_at_ms = 200,
-    }));
-
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    var snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.done, snapshot[0].status);
-    try std.testing.expectEqual(core.AgentSource.proxy_tls, snapshot[0].source);
-    try std.testing.expectEqual(@as(u8, 99), snapshot[0].confidence);
-    try std.testing.expectEqual(@as(i64, 200), snapshot[0].observed_at_ms);
-
-    try std.testing.expect(!agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .response_finished,
-        .exchange = exchange,
-        .observed_at_ms = 300,
-    }));
-    snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.done, snapshot[0].status);
-    try std.testing.expectEqual(@as(i64, 200), snapshot[0].observed_at_ms);
-}
-
-test "all concurrent model exchanges must complete before ready" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
-    const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
-
-    for ([_]ProxyExchange{ first, second }, 0..) |exchange, index| {
-        try std.testing.expect(agent_status.observeProxy(model, .{
-            .identity = identity,
-            .dialect = .anthropic_messages,
-            .phase = .request_started,
-            .exchange = exchange,
-            .observed_at_ms = @intCast(100 + index),
-        }));
-    }
-
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .provider_turn_completed,
-        .exchange = first,
-        .observed_at_ms = 200,
-    }));
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    var snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
-
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .provider_turn_completed,
-        .exchange = second,
-        .observed_at_ms = 300,
-    }));
-    snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.done, snapshot[0].status);
-}
-
-test "new model work supersedes a completed response" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    const completed: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
-    const next: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
-
-    _ = agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = completed,
-        .observed_at_ms = 100,
-    });
-    _ = agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .provider_turn_completed,
-        .exchange = completed,
-        .observed_at_ms = 200,
-    });
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = next,
-        .observed_at_ms = 300,
-    }));
-
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    const snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
-    try std.testing.expectEqual(@as(i64, 300), snapshot[0].observed_at_ms);
-}
-
 test "expired agent evidence is removed" {
     const model = try testModel();
     defer std.testing.allocator.destroy(model);
     const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(model, identity, testProxy(.openai_responses, .request_started, 50)));
-    try std.testing.expect(observeTestProxy(model, identity, testProxy(.openai_responses, .response_finished, 100)));
+    try std.testing.expect(observeTestWork(model, identity, 50));
+    try std.testing.expect(observeTestSettled(model, identity, 100));
     try std.testing.expect(agent_status.expire(model, 100 + types.settled_expiry_ms));
     var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
     try std.testing.expectEqual(@as(usize, 0), agent_status.snapshot(&model.agents, &entries, 0).len);
@@ -973,10 +554,10 @@ test "expiration removes every adjacent stale aggregate" {
     const first = try testIdentityAt(1, 1);
     const second = try testIdentityAt(2, 1);
 
-    try std.testing.expect(observeTestProxy(model, first, testProxy(.openai_responses, .request_started, 50)));
-    try std.testing.expect(observeTestProxy(model, first, testProxy(.openai_responses, .response_finished, 100)));
-    try std.testing.expect(observeTestProxy(model, second, testProxy(.openai_responses, .request_started, 50)));
-    try std.testing.expect(observeTestProxy(model, second, testProxy(.openai_responses, .response_finished, 100)));
+    try std.testing.expect(observeTestWork(model, first, 50));
+    try std.testing.expect(observeTestSettled(model, first, 100));
+    try std.testing.expect(observeTestWork(model, second, 50));
+    try std.testing.expect(observeTestSettled(model, second, 100));
     try std.testing.expect(agent_status.expire(model, 100 + types.settled_expiry_ms));
 
     var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
@@ -994,137 +575,6 @@ test "a bare shell prompt is not Claude identity" {
     }));
     var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
     try std.testing.expectEqual(@as(usize, 0), agent_status.snapshot(&model.agents, &entries, 0).len);
-}
-
-test "completed HTTP2 streams do not settle the agent turn" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
-    const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .openai_responses,
-        .phase = .request_started,
-        .exchange = first,
-        .observed_at_ms = 100,
-    }));
-    _ = agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .openai_responses,
-        .phase = .request_started,
-        .exchange = second,
-        .observed_at_ms = 101,
-    });
-    _ = agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .openai_responses,
-        .phase = .response_finished,
-        .exchange = first,
-        .observed_at_ms = 200,
-    });
-
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    var snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
-    _ = agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .openai_responses,
-        .phase = .response_finished,
-        .exchange = second,
-        .observed_at_ms = 300,
-    });
-    snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
-
-    try std.testing.expect(observeTestReadyPrompt(model, identity, testReadyPrompt(.codex, 400)));
-    snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.done, snapshot[0].status);
-}
-
-test "sequential model requests stay working until a confirmed prompt" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
-    const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = first,
-        .observed_at_ms = 100,
-    }));
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .response_finished,
-        .exchange = first,
-        .observed_at_ms = 200,
-    }));
-
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    var snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
-
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = second,
-        .observed_at_ms = 300,
-    }));
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .response_finished,
-        .exchange = second,
-        .observed_at_ms = 400,
-    }));
-    snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
-
-    try std.testing.expect(observeTestReadyPrompt(model, identity, testReadyPrompt(.claude, 500)));
-    snapshot = agent_status.snapshot(&model.agents, &entries, 0);
-    try std.testing.expectEqual(core.AgentStatus.done, snapshot[0].status);
-    try std.testing.expectEqual(core.AgentSource.screen, snapshot[0].source);
-}
-
-test "HTTP2 connection failure settles all of its active streams" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 11, .stream_id = 1 };
-    const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 11, .stream_id = 3 };
-    const connection: ProxyExchange = .{ .protocol = .h2, .connection_id = 11, .stream_id = 0 };
-    _ = agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = first,
-        .observed_at_ms = 100,
-    });
-    _ = agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = second,
-        .observed_at_ms = 101,
-    });
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_failed,
-        .exchange = connection,
-        .observed_at_ms = 200,
-    }));
-    try std.testing.expect(!agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_failed,
-        .exchange = connection,
-        .observed_at_ms = 201,
-    }));
 }
 
 test "session references attach to the exact generation and replace only on change" {
@@ -1228,23 +678,6 @@ test "a pending resume is discarded for another provider or a different reported
     try std.testing.expectEqualStrings(replacement.slice(), agent_status.resumeSession(other_session, identity.key).?.reference.slice());
 }
 
-test "a proxy provider guess cannot authorize resume for a reported session" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    const reference = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 100);
-    try std.testing.expect(agent_status.observeSessionReference(model, identity, reference));
-    try std.testing.expect(agent_status.observeProxy(model, .{
-        .identity = identity,
-        .dialect = .anthropic_messages,
-        .phase = .request_started,
-        .exchange = .{ .protocol = .http11, .connection_id = 1, .stream_id = 0 },
-        .observed_at_ms = 100,
-    }));
-    try std.testing.expectEqual(core.AgentProvider.claude, agent_status.projectedProvider(model, identity.key));
-    try std.testing.expect(agent_status.resumeSession(model, identity.key) == null);
-}
-
 test "an agent title outranks generated titles, never clears a manual one and is durable" {
     const model = try testModel();
     defer std.testing.allocator.destroy(model);
@@ -1335,7 +768,7 @@ test "a restored title is dropped with its pane and never reaches another genera
     try std.testing.expectEqualStrings("Release audit", agent_status.durableTitle(model, identity.key).?.slice());
 }
 
-test "lifecycle reports outrank screen and proxy evidence until they expire" {
+test "lifecycle reports outrank screen evidence until they expire" {
     const model = try testModel();
     defer std.testing.allocator.destroy(model);
     const identity: Identity = .{
@@ -1367,9 +800,79 @@ test "lifecycle reports outrank screen and proxy evidence until they expire" {
     try std.testing.expectEqual(core.AgentSource.screen, snapshot[0].source);
 
     try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 600 }));
-    _ = agent_status.expire(model, 600 + types.working_expiry_ms + 1);
+    _ = agent_status.expire(model, 600 + types.report_working_expiry_ms + 1);
     snapshot = agent_status.snapshot(&model.agents, &entries, 0);
     try std.testing.expectEqual(core.AgentSource.screen, snapshot[0].source);
+}
+
+test "a Cursor approval on screen outranks the earlier hook report until newer evidence replaces it" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    try std.testing.expect(agent_status.observeProcess(model, .{ .identity = identity, .provider = .cursor, .process_id = 42, .observed_at_ms = 100 }));
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .working, .event = "» Shell touch created.txt", .observed_at_ms = 200 }));
+
+    // The approval dialog fires no hook: its screen decides.
+    try std.testing.expect(agent_status.observeScreen(model, .{
+        .identity = identity,
+        .signal = .{ .provider = .unknown, .status = .blocked, .confidence = 88 },
+        .observed_at_ms = 300,
+    }));
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+    var snapshot = agent_status.snapshot(&model.agents, &entries, 300);
+    try std.testing.expectEqual(core.AgentStatus.blocked, snapshot[0].status);
+    try std.testing.expectEqual(core.AgentSource.screen, snapshot[0].source);
+    try std.testing.expectEqual(core.AgentBlockedReason.other, snapshot[0].blocked_reason);
+
+    // Approved: the working composer replaces the dialog and the report decides again.
+    try std.testing.expect(agent_status.observeScreen(model, .{
+        .identity = identity,
+        .signal = .{ .provider = .unknown, .status = .working, .confidence = 78 },
+        .observed_at_ms = 400,
+    }));
+    snapshot = agent_status.snapshot(&model.agents, &entries, 400);
+    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
+    try std.testing.expectEqual(core.AgentSource.lifecycle_report, snapshot[0].source);
+
+    // The plan review is drawn before the turn's stop hook reports ready;
+    // it stays blocked until the next prompt submission reports work.
+    _ = agent_status.observeScreen(model, .{
+        .identity = identity,
+        .signal = .{ .provider = .unknown, .status = .blocked, .confidence = 88 },
+        .observed_at_ms = 500,
+    });
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .ready, .observed_at_ms = 600 }));
+    try std.testing.expectEqual(core.AgentStatus.blocked, agent_status.projectedStatus(model, identity.key).?);
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 700 }));
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, identity.key).?);
+
+    // A dialog left behind by answered work cannot hold a later turn end.
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .ready, .observed_at_ms = 800 }));
+    try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
+}
+
+test "a blocked screen older than the report, or of an agent with a permission hook, does not outrank it" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const cursor = try testIdentityAt(8, 1);
+    try std.testing.expect(agent_status.observeProcess(model, .{ .identity = cursor, .provider = .cursor, .process_id = 8, .observed_at_ms = 100 }));
+    _ = agent_status.observeScreen(model, .{
+        .identity = cursor,
+        .signal = .{ .provider = .unknown, .status = .blocked, .confidence = 88 },
+        .observed_at_ms = 200,
+    });
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = cursor, .state = .working, .observed_at_ms = 300 }));
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, cursor.key).?);
+
+    const claude = try testIdentityAt(9, 1);
+    try std.testing.expect(agent_status.observeProcess(model, .{ .identity = claude, .provider = .claude, .process_id = 9, .observed_at_ms = 100 }));
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = claude, .state = .working, .observed_at_ms = 200 }));
+    _ = agent_status.observeScreen(model, .{
+        .identity = claude,
+        .signal = .{ .provider = .claude, .status = .blocked, .confidence = 88, .identity_confirmed = true },
+        .observed_at_ms = 300,
+    });
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, claude.key).?);
 }
 
 test "Pi report renewal keeps a long tool working and loss cannot announce completion" {
@@ -1387,27 +890,14 @@ test "Pi report renewal keeps a long tool working and loss cannot announce compl
         try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, identity.key).?);
     }
 
-    _ = agent_status.expire(model, 300_200 + types.working_expiry_ms);
+    _ = agent_status.expire(model, 300_200 + types.report_working_expiry_ms);
     try std.testing.expectEqual(core.AgentStatus.unknown, agent_status.projectedStatus(model, identity.key).?);
     _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 500_000 });
     _ = agent_status.observeReport(model, .{ .identity = identity, .state = .ready, .observed_at_ms = 500_001 });
     try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
 }
 
-test "Pi model completion followed by local tools is not an agent completion" {
-    const model = try testModel();
-    defer std.testing.allocator.destroy(model);
-    const identity = try testIdentity();
-    _ = agent_status.observeProcess(model, .{ .identity = identity, .provider = .pi, .process_id = 42, .observed_at_ms = 100 });
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 1, .stream_id = 1 };
-    _ = agent_status.observeProxy(model, .{ .identity = identity, .dialect = .openai_responses, .phase = .request_started, .exchange = exchange, .observed_at_ms = 200 });
-    _ = agent_status.observeProxy(model, .{ .identity = identity, .dialect = .openai_responses, .phase = .provider_turn_completed, .exchange = exchange, .observed_at_ms = 300 });
-    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, identity.key).?);
-    _ = agent_status.expire(model, 300 + types.working_expiry_ms);
-    try std.testing.expectEqual(core.AgentStatus.unknown, agent_status.projectedStatus(model, identity.key).?);
-}
-
-test "a blocked report names its reason and event and the proxy names permission without one" {
+test "a blocked report names its reason and event and a blocked screen alone names none" {
     const model = try testModel();
     defer std.testing.allocator.destroy(model);
     const identity = try testIdentity();
@@ -1432,32 +922,17 @@ test "a blocked report names its reason and event and the proxy names permission
     try std.testing.expectEqual(core.AgentBlockedReason.none, snapshot[0].blocked_reason);
     try std.testing.expectEqualStrings("» Edit src/proxy.zig", snapshot[0].last_event);
 
-    // Without a report, a response that closed on a tool request and a
-    // visible prompt is a permission prompt.
+    // Without a report, a blocked screen has no named reason and no line.
     try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .exited, .observed_at_ms = 400 }));
-    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 1, .stream_id = 1 };
-    _ = agent_status.observeProxy(model, .{ .identity = identity, .dialect = .anthropic_messages, .phase = .request_started, .exchange = exchange, .observed_at_ms = 500 });
-    _ = agent_status.observeProxy(model, .{ .identity = identity, .dialect = .anthropic_messages, .phase = .response_finished, .exchange = exchange, .observed_at_ms = 600 });
     try std.testing.expect(agent_status.observeScreen(model, .{
         .identity = identity,
         .signal = .{ .provider = .claude, .status = .blocked, .confidence = 88, .identity_confirmed = true },
-        .observed_at_ms = 700,
+        .observed_at_ms = 500,
     }));
-    snapshot = agent_status.snapshot(&model.agents, &entries, 700);
-    try std.testing.expectEqual(core.AgentStatus.blocked, snapshot[0].status);
-    try std.testing.expectEqual(core.AgentBlockedReason.permission, snapshot[0].blocked_reason);
-    try std.testing.expectEqualStrings("", snapshot[0].last_event);
-
-    // A blocked screen with no proxy story has no named reason.
-    _ = agent_status.expire(model, 600 + types.working_expiry_ms + 1);
-    try std.testing.expect(agent_status.observeScreen(model, .{
-        .identity = identity,
-        .signal = .{ .provider = .claude, .status = .blocked, .confidence = 88, .identity_confirmed = true },
-        .observed_at_ms = 600 + types.working_expiry_ms + 2,
-    }));
-    snapshot = agent_status.snapshot(&model.agents, &entries, 600 + types.working_expiry_ms + 2);
+    snapshot = agent_status.snapshot(&model.agents, &entries, 500);
     try std.testing.expectEqual(core.AgentStatus.blocked, snapshot[0].status);
     try std.testing.expectEqual(core.AgentBlockedReason.other, snapshot[0].blocked_reason);
+    try std.testing.expectEqualStrings("", snapshot[0].last_event);
 }
 
 test "the status age follows the last status change and never advances the revision" {
@@ -1499,78 +974,109 @@ test "a changed event line advances the revision like a label and clears with it
     try std.testing.expect(model.agent_revision > revision);
     try std.testing.expectEqualStrings("» Edit b.zig", agent_status.snapshot(&model.agents, &entries, 400)[0].last_event);
 
-    _ = agent_status.expire(model, 400 + types.working_expiry_ms + 1);
-    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 400 + types.working_expiry_ms + 1)[0].last_event);
+    _ = agent_status.expire(model, 400 + types.report_working_expiry_ms + 1);
+    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 400 + types.report_working_expiry_ms + 1)[0].last_event);
 }
 
-test "managed conversation activity republishes sidebar events without restarting the status age" {
-    const ManagedState = @import("../../agent/ManagedState.zig");
+test "a continuing helper renews reported work past its expiry once per margin" {
     const model = try testModel();
     defer std.testing.allocator.destroy(model);
     const identity = try testIdentity();
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    var transcript: Transcript = .{ .value = .{ .pane_id = identity.key.id, .pane_generation = identity.key.generation, .status = .working } };
-    try transcript.setTurn("turn-1");
-    transcript.update(.{ .id = "message", .role = .assistant, .text = "Checking the parser" });
-
-    try std.testing.expect(agent_status.observeManaged(model, identity, ManagedState.fromSnapshot(&transcript.value, 100)));
-    try std.testing.expectEqualStrings("Checking the parser", agent_status.snapshot(&model.agents, &entries, 100)[0].last_event);
+    _ = agent_status.observeProcess(model, .{ .identity = identity, .provider = .claude, .process_id = 42, .observed_at_ms = 100 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 200 });
     const revision = model.agent_revision;
-    transcript.update(.{ .id = "command", .role = .tool, .kind = .command, .title = "Command", .detail = "zig build test\n/tmp", .text = "Output must not become the activity" });
-    try std.testing.expect(agent_status.observeManaged(model, identity, ManagedState.fromSnapshot(&transcript.value, 100)));
-    try std.testing.expect(model.agent_revision > revision);
-    try std.testing.expectEqualStrings("zig build test", agent_status.snapshot(&model.agents, &entries, 5_100)[0].last_event);
-    try std.testing.expectEqual(@as(u32, 5), entries[0].status_age_s);
-    try std.testing.expect(!agent_status.observeManaged(model, identity, ManagedState.fromSnapshot(&transcript.value, 100)));
 
-    transcript.update(.{ .id = "tool", .role = .tool, .kind = .mcp, .title = "docs · lookup" });
-    try std.testing.expect(agent_status.observeManaged(model, identity, ManagedState.fromSnapshot(&transcript.value, 100)));
-    try std.testing.expectEqualStrings("docs · lookup", agent_status.snapshot(&model.agents, &entries, 100)[0].last_event);
-    transcript.update(.{ .id = "tool", .role = .tool, .kind = .mcp, .detail = "Reading documentation", .retain_text = true });
-    try std.testing.expect(agent_status.observeManaged(model, identity, ManagedState.fromSnapshot(&transcript.value, 100)));
-    try std.testing.expectEqualStrings("Reading documentation", agent_status.snapshot(&model.agents, &entries, 100)[0].last_event);
+    try std.testing.expect(!agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = 300 }));
+    try std.testing.expectEqual(revision, model.agent_revision);
 
-    transcript.value.status = .ready;
-    try std.testing.expect(agent_status.observeManaged(model, identity, ManagedState.fromSnapshot(&transcript.value, 6_000)));
-    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 6_000)[0].last_event);
-    try std.testing.expectEqual(core.AgentStatus.done, entries[0].status);
+    const renewed_at: i64 = 200 + types.report_working_expiry_ms - 1;
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = renewed_at }));
+    try std.testing.expect(!agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = renewed_at + 1 }));
+
+    _ = agent_status.expire(model, 200 + types.report_working_expiry_ms + 1);
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+    var snapshot = agent_status.snapshot(&model.agents, &entries, 0);
+    try std.testing.expectEqual(core.AgentStatus.working, snapshot[0].status);
+    try std.testing.expectEqual(core.AgentSource.lifecycle_report, snapshot[0].source);
+
+    _ = agent_status.expire(model, renewed_at + types.report_working_expiry_ms);
+    snapshot = agent_status.snapshot(&model.agents, &entries, 0);
+    try std.testing.expectEqual(core.AgentSource.foreground_process, snapshot[0].source);
 }
 
-test "managed sidebar activity excludes old turns and child output and owns bounded UTF8" {
-    const ManagedState = @import("../../agent/ManagedState.zig");
-    var transcript: Transcript = .{ .value = .{ .pane_id = try core.pane(7), .pane_generation = 3 } };
-    try std.testing.expectEqualStrings("Connecting", ManagedState.fromSnapshot(&transcript.value, 100).event.slice());
-    transcript.value.status = .working;
-    try transcript.setTurn("old-turn");
-    transcript.update(.{ .id = "old", .role = .assistant, .text = "Old activity" });
-    try transcript.setTurn("new-turn");
-    transcript.update(.{ .id = "prompt", .role = .user, .text = "User prompt" });
-    try std.testing.expectEqualStrings("Working", ManagedState.fromSnapshot(&transcript.value, 100).event.slice());
+test "a continuing helper cannot hide a prompt, revive finished work or register an agent" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    try std.testing.expect(!agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = 100 }));
+    try std.testing.expect(agent_status.projectedStatus(model, identity.key) == null);
 
-    transcript.update(.{ .id = "message", .role = .assistant, .text = "\n  " ++ "界" ** 40 ++ "\nAnother line" });
-    const state = ManagedState.fromSnapshot(&transcript.value, 100);
-    try std.testing.expectEqualStrings("界" ** 32, state.event.slice());
-    transcript.update(.{ .id = "message", .role = .assistant, .text = "Current root activity" });
-    transcript.update(.{ .id = "child", .role = .tool, .kind = .subagent, .text = "Child output" });
-    transcript.update(.{ .id = "nested", .role = .assistant, .parent_identity = 1, .text = "Nested output" });
-    try std.testing.expectEqualStrings("Current root activity", ManagedState.fromSnapshot(&transcript.value, 100).event.slice());
-    try std.testing.expectEqualStrings("界" ** 32, state.event.slice());
+    _ = agent_status.observeProcess(model, .{ .identity = identity, .provider = .claude, .process_id = 42, .observed_at_ms = 100 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .blocked, .blocked_reason = .permission, .observed_at_ms = 200 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = 300 });
+    try std.testing.expectEqual(core.AgentStatus.blocked, agent_status.projectedStatus(model, identity.key).?);
 
-    transcript.value.current_turn_id_len = 0;
-    try std.testing.expectEqualStrings("Working", ManagedState.fromSnapshot(&transcript.value, 100).event.slice());
-    inline for (.{ .ready, .blocked, .failed }) |status| {
-        transcript.value.status = status;
-        try std.testing.expectEqualStrings("", ManagedState.fromSnapshot(&transcript.value, 100).event.slice());
-    }
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 400 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .ready, .observed_at_ms = 500 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = 600 });
+    try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
+
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 700 });
+    const expired_at: i64 = 700 + types.report_working_expiry_ms;
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = expired_at });
+    _ = agent_status.expire(model, expired_at);
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+    const snapshot = agent_status.snapshot(&model.agents, &entries, 0);
+    try std.testing.expectEqual(core.AgentSource.foreground_process, snapshot[0].source);
+}
+
+test "a turn waiting on helpers stays working through the idle prompt" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    _ = agent_status.observeProcess(model, .{ .identity = identity, .provider = .claude, .process_id = 42, .observed_at_ms = 100 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 200 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .waiting, .event = "waiting for 1 background agent", .observed_at_ms = 300 });
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, identity.key).?);
+
+    const revision = model.agent_revision;
+    try std.testing.expect(!agent_status.observeReport(model, .{ .identity = identity, .state = .idle, .observed_at_ms = 60_300 }));
+    try std.testing.expectEqual(revision, model.agent_revision);
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, identity.key).?);
+
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+    try std.testing.expectEqualStrings("waiting for 1 background agent", agent_status.snapshot(&model.agents, &entries, 60_300)[0].last_event);
+
+    // The helper's own tool calls keep the wait alive past its first expiry.
+    const renewed_at: i64 = 300 + types.report_working_expiry_ms - 1;
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .continuing, .observed_at_ms = renewed_at }));
+    try std.testing.expect(!agent_status.observeReport(model, .{ .identity = identity, .state = .idle, .observed_at_ms = renewed_at + 1 }));
+
+    // The helper's result starts a new turn, and its Stop settles the agent.
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = renewed_at + 2 });
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .ready, .observed_at_ms = renewed_at + 3 });
+    try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
+}
+
+test "the idle prompt settles work no wait holds and an expired wait" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    _ = agent_status.observeProcess(model, .{ .identity = identity, .provider = .claude, .process_id = 42, .observed_at_ms = 100 });
+
+    // Without a wait, the idle prompt settles like ready.
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = 200 });
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .idle, .observed_at_ms = 60_200 }));
+    try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
+
+    // A wait no helper renewed stops vetoing the idle prompt once it expires.
+    _ = agent_status.observeReport(model, .{ .identity = identity, .state = .waiting, .observed_at_ms = 70_000 });
+    try std.testing.expectEqual(core.AgentStatus.working, agent_status.projectedStatus(model, identity.key).?);
+    try std.testing.expect(agent_status.observeReport(model, .{ .identity = identity, .state = .idle, .observed_at_ms = 70_000 + types.report_working_expiry_ms }));
+    try std.testing.expectEqual(core.AgentStatus.done, agent_status.projectedStatus(model, identity.key).?);
 }
 
 const TestReadyPrompt = struct {
     provider: core.AgentProvider,
-    observed_at_ms: i64,
-};
-
-const TestProxyObservation = struct {
-    dialect: types.ApiDialect,
-    phase: types.ProxyPhase,
     observed_at_ms: i64,
 };

@@ -1,4 +1,4 @@
-//! Review admission, worker completion and cooperative provider handoff.
+//! Review admission and worker completion.
 const agent_status = @import("agent_status.zig");
 const client_connection = @import("client_connection.zig");
 const std = @import("std");
@@ -21,8 +21,7 @@ pub fn start(model: *RuntimeModel, session: *Session, request: anytype) !void {
     };
 }
 
-/// Takes one review worker's result, hands submitted feedback to the agent
-/// and replies to the client that asked.
+/// Takes one review worker's result and replies to the client that asked.
 ///
 /// ```zig
 /// change_review.finish(model, job);
@@ -36,67 +35,9 @@ pub fn finish(model: *RuntimeModel, job: *Job) void {
         };
         if (current.provider != job.context.provider or !std.mem.eql(u8, current.sessionSlice(), job.context.sessionSlice())) {
             job.failure = error.InvalidReviewOwner;
-        } else if (job.client != null) {
-            const message = core.decodeClient(job.wire[0..job.wire_len]) catch unreachable;
-            if (message == .change_review_command and message.change_review_command.action == .submit) {
-                if (handoff(model, job)) |queued| {
-                    if (queued) {
-                        return;
-                    }
-                } else |err| {
-                    job.failure = err;
-                }
-            }
         }
     }
     retire(model, job);
-}
-
-fn handoff(model: *RuntimeModel, job: *Job) !bool {
-    const pane = model.panes.resolve(job.context.pane) orelse return error.PaneNotFound;
-    if (pane.kind != .agent) {
-        return false;
-    }
-    const snapshot = try job.result.?.snapshot();
-    if (snapshot.delivery != .pending or snapshot.feedback.len == 0) {
-        return false;
-    }
-    var admitted = false;
-    var available: ?usize = null;
-    for (model.review_admitted, 0..) |entry, index| {
-        if (entry) |value| {
-            if (value.context.provider == job.context.provider and std.mem.eql(u8, value.context.sessionSlice(), job.context.sessionSlice())) {
-                available = index;
-                admitted = value.editions.isSet(@intCast(snapshot.edition_id - 1));
-                break;
-            }
-            const previous = model.panes.resolve(value.context.pane);
-            const retired = if (previous) |owner_pane| owner_pane.kind != .agent or owner_pane.exit != null or owner_pane.agent_thread == null or !std.mem.eql(u8, owner_pane.agent_thread.?.threadId(), value.context.sessionSlice()) else true;
-            if (retired and available == null) {
-                available = index;
-                model.review_admitted[index] = null;
-            }
-        } else if (available == null) {
-            available = index;
-        }
-    }
-    if (!admitted) {
-        const slot = available orelse return error.ReviewCapacity;
-        const thread = pane.agent_thread orelse return error.AgentNotReady;
-        if (!pane.session.agent.session.submit(model.io, .{ .text = snapshot.feedback, .options = thread.options })) {
-            return error.AgentBusy;
-        }
-        if (model.review_admitted[slot] == null) {
-            model.review_admitted[slot] = .{ .context = job.context };
-        }
-        model.review_admitted[slot].?.editions.set(@intCast(snapshot.edition_id - 1));
-    }
-    const acknowledgment: core.ChangeReviewCommand = .{ .request_id = job.request_id, .pane_id = job.context.pane.id, .pane_generation = job.context.pane.generation, .edition_id = snapshot.edition_id, .action = .ack_feedback, .feedback_id = snapshot.feedback_id, .provider = job.context.provider, .session = job.context.sessionSlice() };
-    job.wire_len = @intCast((try core.encodeChangeReviewCommand(&job.wire, acknowledgment)).len);
-    job.result.?.deinit();
-    job.result = null;
-    try model.select.concurrent(.change_review_completed, Job.run, .{ job, model.io });
-    return true;
 }
 
 fn retire(model: *RuntimeModel, job: *Job) void {
@@ -204,8 +145,8 @@ fn ownerInputs(model: *const RuntimeModel) [4]u64 {
 }
 
 /// Summarizes everything a pane's review owner depends on, in one pass
-/// without agent lookups; safe builds check `ownerInputs` against it: pane identity and lifecycle, the managed
-/// conversation, the agent projection and session references, and each
+/// without agent lookups; safe builds check `ownerInputs` against it: pane identity and lifecycle,
+/// the agent projection and session references, and each
 /// pane's current review binding.
 fn ownerStamp(model: *const RuntimeModel) u64 {
     var hasher = std.hash.Wyhash.init(model.agent_revision);
@@ -217,9 +158,6 @@ fn ownerStamp(model: *const RuntimeModel) u64 {
         std.hash.autoHash(&hasher, pane.close_requested);
         std.hash.autoHash(&hasher, pane.exit != null);
         std.hash.autoHash(&hasher, pane.review_availability.revision);
-        if (pane.agent_thread) |snapshot| {
-            hasher.update(snapshot.threadId());
-        }
     }
 
     return hasher.final();
@@ -255,7 +193,6 @@ fn failure(request_id: core.RequestId, err: anyerror) PendingFailure {
     return .{ .request_id = request_id, .code = switch (err) {
         error.PaneNotFound => .pane_not_found,
         error.PaneExited => .pane_exited,
-        error.AgentBusy => .agent_blocked,
         error.ReviewBusy, error.ReviewCapacity, error.OutOfMemory, error.WriteFailed => .resource_limit,
         else => .invalid_request,
     }, .message = switch (err) {
@@ -265,7 +202,6 @@ fn failure(request_id: core.RequestId, err: anyerror) PendingFailure {
         error.StaleReview => "review changed in another client; refresh before saving",
         error.ReviewAlreadySubmitted => "submitted review comments are immutable",
         error.ReviewBusy => "another review operation is pending; retry shortly",
-        error.AgentBusy => "review retained; agent is busy, retry Send review when ready",
         error.EditionNotFound => "review edition is unavailable",
         error.EmptyComment => "write a comment before saving it",
         error.NoSavedComments => "save at least one comment before sending the review",
@@ -283,10 +219,6 @@ fn owner(model: *RuntimeModel, key: PaneKey) !Context {
     const pane = model.panes.resolve(key) orelse return error.PaneNotFound;
     if (pane.close_requested or pane.exit != null) {
         return error.PaneExited;
-    }
-    if (pane.kind == .agent) {
-        const snapshot = pane.agent_thread orelse return error.AgentNotReady;
-        return Context.init(key, .codex, snapshot.threadId());
     }
     const provider = agent_status.projectedProvider(model, key);
     const reference = agent_status.sessionReference(model, key) orelse return error.AgentNotReady;

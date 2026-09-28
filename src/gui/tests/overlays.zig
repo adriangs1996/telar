@@ -10,8 +10,8 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("OverlayFixture.zig");
 const Modal = @import("../widgets/overlays/Modal.zig");
+const LoadingCue = @import("../widgets/overlays/LoadingCue.zig");
 const WrappedLines = @import("../widgets/overlays/WrappedLines.zig");
-const ThreadPane = @import("../widgets/ThreadPane.zig");
 const PointerEvent = @import("../input/PointerEvent.zig");
 
 test "native history keeps the visible page while a replacement query is pending" {
@@ -43,6 +43,47 @@ test "native history keeps the visible page while a replacement query is pending
     try std.testing.expect(history.beginPageRequest(3, .global));
     try fixture.paint();
     try expectHistoryRows(fixture, empty);
+}
+
+test "native history keystrokes keep the panel steady until the reply is late" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    const history = &fixture.model.history_palette;
+    try history.prepare(std.testing.allocator);
+    const entries = [_]core.HistoryEntry{.{ .id = 9, .pane_id = @enumFromInt(2), .started_at_ms = 1000, .duration_ns = 1000000, .exit_code = 0, .status = .completed, .command = "zig build", .cwd = "/work", .workspace_path = "/work" }};
+    try std.testing.expect(history.beginPageRequest(1, .global));
+    try std.testing.expect(history.acceptPageResult(.{ .request_id = 1, .entries = &entries, .snapshot_id = 9, .has_more = false, .now_ms = 1000 }));
+    fixture.model.name_prompt.begin(.history_palette);
+    fixture.animation = .{};
+    fixture.animation.?.begin(0);
+    try fixture.paint();
+
+    const opened = std.time.ns_per_s;
+    fixture.animation.?.begin(opened);
+    try fixture.paint();
+    const steady = try std.testing.allocator.dupe(Quad.Quad, fixture.renderer.quads.items());
+    defer std.testing.allocator.free(steady);
+
+    const typed = opened + std.time.ns_per_ms;
+    try std.testing.expect(history.beginPageRequest(2, .global));
+    fixture.animation.?.begin(typed);
+    try fixture.paint();
+    try std.testing.expectEqualDeep(steady, fixture.renderer.quads.items());
+
+    fixture.animation.?.begin(typed + LoadingCue.delay_ns / 2);
+    try fixture.paint();
+    try std.testing.expectEqualDeep(steady, fixture.renderer.quads.items());
+
+    // Typing on while the runtime is slow keeps the original wait.
+    try std.testing.expect(history.beginPageRequest(3, .global));
+    fixture.animation.?.begin(typed + LoadingCue.delay_ns);
+    try fixture.paint();
+    try std.testing.expect(!std.mem.eql(u8, std.mem.sliceAsBytes(steady), std.mem.sliceAsBytes(fixture.renderer.quads.items())));
+
+    try std.testing.expect(history.acceptPageResult(.{ .request_id = 3, .entries = &entries, .snapshot_id = 9, .has_more = false, .now_ms = 1000 }));
+    fixture.animation.?.begin(typed + LoadingCue.delay_ns * 2);
+    try fixture.paint();
+    try std.testing.expectEqualDeep(steady, fixture.renderer.quads.items());
 }
 
 test "native prompt renders selections and owns its gesture until release" {
@@ -347,7 +388,7 @@ test "native new-context form paints both fields, the completion list and the co
     try std.testing.expect(fixture.model.name_prompt.currentConst().?.form().?.confirm_create);
 }
 
-test "native suggestion states and thread surface stay within their assigned rectangles" {
+test "native suggestion states stay within their assigned rectangles" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     fixture.model.name_prompt.begin(.suggest_palette);
@@ -356,17 +397,6 @@ test "native suggestion states and thread surface stay within their assigned rec
     try fixture.paint();
     try std.testing.expect(fixture.model.suggestion.apply(.{ .request_id = @enumFromInt(12), .status = .ready, .text = "ls -la" }));
     try fixture.paint();
-
-    fixture.renderer.quads.clear();
-    var canvas = fixture.canvas();
-    const area: cellgrid.Rect = .{ .x = 3, .y = 2, .w = 30, .h = 8 };
-    try (ThreadPane{ .area = area, .thread = .{ .pane_id = @enumFromInt(1), .agent = null, .composer = "a draft\x1b[2J" } }).draw(&canvas);
-    const bounds = canvas.rect(area);
-    for (fixture.renderer.quads.items()) |quad| {
-        try std.testing.expect(quad.x >= bounds.x and quad.y >= bounds.y);
-        try std.testing.expect(quad.x + quad.width <= bounds.x + bounds.width);
-        try std.testing.expect(quad.y + quad.height <= bounds.y + bounds.height);
-    }
 }
 
 test "native context layout ignores terminal cell geometry and reuses its warm draw" {
@@ -401,6 +431,8 @@ test "native context layout ignores terminal cell geometry and reuses its warm d
     try std.testing.expectEqual(@as(usize, 0), failing.allocated_bytes);
 }
 
+// A pending page dims the visible rows; their geometry and colors stay, so
+// the comparison ignores the alpha the dimming changes.
 fn historyRows(fixture: *Fixture) ![]Quad.Quad {
     const canvas = fixture.canvas();
     const layout = HistoryModalLayout.measure(HistoryModalMetrics.fromCanvas(&canvas), false);
@@ -408,7 +440,9 @@ fn historyRows(fixture: *Fixture) ![]Quad.Quad {
     errdefer result.deinit(std.testing.allocator);
     for (fixture.renderer.quads.items()) |quad| {
         if (quad.y >= layout.results.y and quad.y + quad.height <= layout.results.y + layout.results.height) {
-            try result.append(std.testing.allocator, quad);
+            var row = quad;
+            row.a = 1;
+            try result.append(std.testing.allocator, row);
         }
     }
 

@@ -31,7 +31,7 @@ _Avoid_: AppState, Client runtime, UI state
 **Client application**:
 The use cases and operational policy of one disposable client, independent of
 how its host supplies input or presents its model.
-_Avoid_: TUI logic, Second client, Shared client instance
+_Avoid_: Window logic, Second client, Shared client instance
 
 **Prepared presentation**:
 One client projection consumed by its presentation adapter but not yet confirmed
@@ -45,8 +45,8 @@ _Avoid_: Frame receipt, Composition, Client delivery
 
 **Presentation adapter**:
 The implementation that shows one client's projection on a host and turns host
-events into host input. The TUI, the native GUI and the headless test adapter
-are presentation adapters; each owns its chrome, hit testing and metrics.
+events into host input. The native GUI, the headless client and the headless
+test adapter are presentation adapters; each owns its chrome, hit testing and metrics.
 _Avoid_: Renderer, frontend, view layer
 
 **Client chrome**:
@@ -55,9 +55,20 @@ sidebar, bars, modals, pickers and Telar views. Its look belongs to the
 adapter; the state it shows belongs to the client model.
 _Avoid_: UI, widgets, decorations
 
+**Bar component**:
+One item a configuration places in a bar, a tooltip or a bar panel, from a
+closed vocabulary Telar draws itself: a label, a meter, a group and the like.
+The configuration says what it shows; the adapter decides how it looks.
+_Avoid_: Widget, segment, module
+
+**Bar panel**:
+The panel a bar component opens above the bottom bar, filled from its own
+configured source while it is open. Disposable client state.
+_Avoid_: Popup, modal, dropdown
+
 **Telar view**:
 Content Telar composes from client and runtime projections instead of from a
-PTY, such as a thread view, a composer or a history browser. The layout may
+PTY, such as a history browser or a change review. The layout may
 place it beside terminal panes; its state never lives in the adapter.
 _Avoid_: GUI pane, virtual pane, widget pane
 
@@ -82,7 +93,7 @@ left with no tabs.
 _Avoid_: Tab close (for the committed fact), Pane close
 
 **Pane launch**:
-The act of starting a new runtime-owned terminal or agent pane. It ends when
+The act of starting a new runtime-owned pane. It ends when
 the runtime owns a usable pane, independently of any client's attachment.
 _Avoid_: Pane creation, pane spawn
 
@@ -125,11 +136,11 @@ The lifecycle of a pane whose launch has not settled. A pane is `starting`,
 A history record for a child process that was spawned but whose pane launch did
 not complete. It is distinct from a normal pane session.
 
-**Proxy credential**:
-A pane-generation-scoped capability that authorizes one child to use Telar's
-observation proxy. It expires when pane launch aborts or that pane generation
-retires.
-_Avoid_: Proxy token, proxy authentication
+**Proxy secret**:
+The one capability that authorizes a child of the runtime to use Telar's
+proxy. It lives in the proxy directory, survives runtime restarts and rotates
+only when its file is deleted.
+_Avoid_: Proxy credential, proxy token, proxy authentication
 
 **Host input**:
 User input received from a client's host before Telar classifies its intent.
@@ -155,6 +166,12 @@ _Avoid_: Scrollback mode, selection mode
 The input mode where host input edits a name — a tab rename, a workspace
 rename, or a new workspace — until submitted or cancelled.
 _Avoid_: Rename dialog, modal input
+
+**Path picker**:
+The prompt that fuzzy-finds a path under the focused pane's working directory
+and pastes it at the pane's cursor. The runtime indexes and ranks; the client
+keeps the browsed root, the page and the selection.
+_Avoid_: File finder, path completion (the new-workspace directory list)
 
 **Telar action**:
 A semantic instruction handled by Telar rather than forwarded as input to a
@@ -194,29 +211,14 @@ _Avoid_: Selected agent, active agent
 
 **Agent**:
 The runtime-owned identity and lifecycle of one coding-agent session associated
-with an exact pane generation. Process, proxy, and screen observations describe
-the same agent; none of those observations is an agent by itself.
+with an exact pane generation. Process, screen and lifecycle observations
+describe the same agent; none of those observations is an agent by itself.
 _Avoid_: Agent record, detector result
 
-**Model exchange**:
-One inference request and its provider response. Several model exchanges may
-belong to the same agent session and may overlap in time.
-_Avoid_: Agent turn, HTTP connection
-
-**Transport completion**:
-The end of an HTTP response stream. It says that no more response bytes remain,
-but does not say why the model stopped or whether the agent is ready.
-_Avoid_: Provider turn completion, agent completion
-
-**Provider turn completion**:
-An explicit provider-protocol outcome saying that one model exchange ended
-without requesting tool execution or continuation. It is evidence that the
-agent can become ready once no other model exchange remains.
-_Avoid_: Transport completion, agent ready
-
 **Agent tracker**:
-The runtime authority that reconciles process, proxy, and screen observations
-with the corresponding agents and publishes their client-facing state.
+The runtime authority that reconciles process, screen and lifecycle
+observations with the corresponding agents and publishes their client-facing
+state.
 _Avoid_: Agent registry, Agent observer, Agent repository
 
 **Open agent**:
@@ -233,7 +235,7 @@ _Avoid_: Running agent, busy process
 An open agent waiting for user input with no current work in progress.
 _Avoid_: Idle process
 
-## Threads
+## Agents
 
 **Project**:
 A git repository identified by its common directory, so every worktree of
@@ -241,51 +243,10 @@ that repository belongs to the same project. A directory that is not a
 repository is its own project, keyed by path.
 _Avoid_: Repo, workspace path
 
-**Thread**:
-The durable record of one agent conversation: provider, the agent's own
-session reference, project, titles, status history and where its transcript
-lives. It outlives its pane and has zero or one open agent.
-_Avoid_: Session, conversation, hilo (prose only)
-
-**Thread item**:
-One normalized entry of a thread's transcript, such as a user prompt, an
-assistant message, a tool call, its result or a compaction boundary. telar
-indexes it with a preview; the text stays in the agent's file.
-_Avoid_: Message, turn record
-
-**Thread registry**:
-The runtime-owned collection of threads, live and closed, that both client
-modes read.
-_Avoid_: Session list, history of agents
-
 **Blocked reason**:
 What a blocked agent is asking for, as an official hook reported it. Screen
 evidence never provides one.
 _Avoid_: Permission text, prompt text
-
-**Pane surface**:
-How a layout leaf shows its pane: the terminal cells, or the thread surface of
-the agent running in it. Presentation does not change the pane's kind.
-_Avoid_: View mode, agent view
-
-**Pane kind**:
-The kind of work a pane owns, either a terminal process or a managed agent.
-It belongs to the pane's lifetime and survives clients disconnecting.
-_Avoid_: Pane surface, agent mode
-
-**Agent pane**:
-A pane that owns a managed agent conversation and accepts prompts and approval
-decisions through that agent's structured interface.
-_Avoid_: Chat window, terminal agent
-
-**Thread surface**:
-The Telar view of a pane's agent, containing its header, transcript and composer.
-_Avoid_: Chat pane, conversation panel, GUI pane
-
-**Composer**:
-The client widget inside a thread surface where the user writes a prompt for
-the agent in that pane and, later, chooses the provider options of a new thread.
-_Avoid_: Prompt box, chat input, editor
 
 **Provider option**:
 A configurable value a provider's manifest declares, such as model, effort or
@@ -299,12 +260,92 @@ changes a provider option on a running agent. Its effect is confirmed only by
 the transcript.
 _Avoid_: Slash command, remote setting
 
+**Worktree**:
+A Git linked worktree the runtime tracks as a place where work happens. It
+belongs to one project and hangs from one source workspace; its tabs live in
+a child workspace bound to it.
+_Avoid_: Checkout, Worktree workspace
+
+**Source workspace**:
+The project workspace a worktree hangs from in the UI and returns to with
+`leave-worktree`.
+_Avoid_: Parent workspace
+
+**Worktree handle**:
+The branch name shown for a worktree, without the `worktree-` prefix Claude
+Code adds. Paths are never shown in its place.
+_Avoid_: Worktree path, Worktree name
+
+**Worktree origin**:
+`telar` for a worktree created through `telar worktree` or its hooks,
+`external` for one found by observing an agent's directory.
+
+**Coordinator**:
+An agent in a project's own checkout that delegates tasks to agents in
+worktrees and follows them through `telar agent` and `telar worktree`.
+_Avoid_: Orchestrator, Manager agent
+
+**Task**:
+The work delegated to one worktree, named by its required title. It is what
+the user and the coordinator refer to.
+_Avoid_: Job, Ticket
+
+**Task card**:
+The sidebar card of an agent that works in a worktree: task title, what it is
+doing now, its branch handle and diffstat.
+_Avoid_: Worktree card
+
+**Peek**:
+A modal that shows one agent's state and last pane rows, and sends it a
+message, interrupt, diff or open, without changing tab or focus.
+_Avoid_: Preview, Popover
+
+## Machines
+
+**Machine**:
+One computer whose runtime a client or the CLI can reach, through the local
+socket or an SSH connection. A machine runs one runtime per account; runtimes
+never know about each other.
+_Avoid_: Host, server, remote, node
+
+**Local machine**:
+The machine the client or CLI process runs on. It needs no profile; it answers
+to the label `machines.json` gives it, or its host name.
+_Avoid_: Localhost, home machine
+
+**Machine profile**:
+The saved record of how to reach a machine: a stable id, a label, an SSH
+destination, an optional color and whether windows connect to it. It never
+holds credentials.
+_Avoid_: Remote config, connection, host entry
+
+**Machine label**:
+The name a command line and the chrome use for a machine. It can change; the
+profile's id never does.
+_Avoid_: Alias, hostname
+
+**Active machine**:
+The machine whose runtime a window presents and sends input to. A window has
+exactly one.
+_Avoid_: Current host, selected server
+
+**Dispatch**:
+Starting work on another machine: one CLI command, a worktree or an agent. The
+machine that dispatches sends what the work needs, such as commits, and a
+failure there never falls back to the local machine.
+_Avoid_: Remote exec, offload
+
+**Repository identity**:
+The normalized URL of a repository's `origin` remote. It finds the clone of
+one project on another machine; it never decides where work runs.
+_Avoid_: Repo id, project key
+
 ## Change review
 
 **Directed session**:
-A synchronous collaboration in an agent pane where the user directs project
-changes through natural language, contextual code review and optional direct
-editing, taking exclusive collaboration turns with one managed agent. The
+A synchronous collaboration in a pane where the user directs project changes
+through natural language, contextual code review and optional direct editing,
+taking exclusive collaboration turns with one agent. The
 agent works without subagents in a working tree that other agents do not share.
 _Avoid_: Permission mode
 

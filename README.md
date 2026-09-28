@@ -46,25 +46,6 @@ x86_64 and aarch64, without running those foreign binaries.
 Use `zig build -Dnghttp2=/path/to/prefix` when libnghttp2 is installed under a
 different prefix.
 
-## Agent panes in the GUI
-
-Run `./zig-out/bin/telar gui`, then press your prefix followed by `a` to create
-a Codex tab in the current workspace. Codex must be installed and signed in on
-the runtime host. Enter sends a prompt, Shift+Enter adds a line, and Stop
-interrupts the active turn. The conversation and agent survive closing the GUI.
-
-The native composer includes model and reasoning-effort selectors populated by
-Codex, plus Read only, Workspace and Full access permissions for the next turn.
-Messages render Markdown with proportional text and code blocks. Closed Mermaid
-blocks render as themed diagrams; incomplete or invalid diagrams retain their
-source. Tool rows
-expand to show output and diffs; dispatch groups show subagents with independent
-states. Active labels animate while visible. Responses can be copied as Markdown,
-and command/file-change approvals stay in the conversation. Ensure `codex --version` works in the runtime's environment; an
-inactive version-manager shim on PATH cannot launch the provider.
-See [agent panes](docs/flows/agent-panes.md) for
-ownership, limits and current recovery behavior.
-
 ## Remote runtime
 
 Run the client on your machine and keep the runtime and child processes on an
@@ -76,10 +57,23 @@ ssh dev@box 'command -v telar; telar --version'
 ./zig-out/bin/telar --no-config --remote dev@box
 ```
 
-The client discovers the remote home and shell and forwards the runtime's Unix
-socket over SSH. Ctrl-b followed by `d` detaches without stopping the remote
-processes; the same command reconnects. No Telar TCP listener is exposed.
-See [remote attach](docs/flows/remote-attach.md) for requirements and ownership.
+The window discovers the remote home and shell and forwards the runtime's Unix
+socket over SSH, and reconnects by itself when the link drops. Closing the
+window leaves the remote processes running; the same command reattaches. No
+Telar TCP listener is exposed. See [remote attach](docs/flows/remote-attach.md)
+for requirements and ownership.
+
+Machines you use often can be saved and kept in every window:
+
+```sh
+telar machine add box dev@box --check
+telar --machine box pane list          # run a telar command on box
+telar gui --machine box                # a window that shows box first
+```
+
+See [machine profiles](docs/flows/machine-profiles.md),
+[machine dispatch](docs/flows/machine-dispatch.md) and
+[machine presentation](docs/flows/machine-presentation.md).
 
 ## Configuration and plugins
 
@@ -92,8 +86,8 @@ See [docs/configuration.md](docs/configuration.md) and
 [docs/plugins.md](docs/plugins.md). Application bundles, the Linux desktop
 entry and the `telar cli` PATH link are described in
 [docs/packaging.md](docs/packaging.md). The opt-in TLS interception proxy, its
-agent-state contract, and its bounded semantic transformation boundary are
-documented in [docs/proxy-tls.md](docs/proxy-tls.md). A complete configuration
+shared secret and its exchange capture are documented in
+[docs/proxy-tls.md](docs/proxy-tls.md). A complete configuration
 and plugin package live under [`examples/`](examples/): `config.lua` and
 `plugins/`.
 
@@ -119,7 +113,7 @@ zig build run -- --theme terminal
 
 Themes color Telar's bars, sidebar, selections, and pane borders. The GUI also
 uses the preset's terminal foreground, background, ANSI palette and cursor
-colors. The TUI retains its host terminal's palette. Customize either part with
+colors. Customize either part with
 `theme.colors` and `theme.terminal`; [Lua configuration](docs/configuration.md#theme)
 documents overrides, profiles and hot reload.
 
@@ -234,18 +228,16 @@ zig build bench
 ```
 
 The benchmark target uses `ReleaseFast` when the main build mode is `Debug`.
-It measures damage collection, frame encoding and decoding, client application
-plus terminal output, native keybinding routing, bounded Lua callbacks, cursor-only output, direct KGP
-encoding, the no-damage KGP path, and a 1920×1080 RGBA upload through APC,
-base64, zlib, and Ghostty. Cell workloads use a fixed 154×37 screen: a one-cell
+It measures damage collection, frame encoding and decoding, keybinding routing,
+bounded Lua callbacks, client events, KGP ingest and shared frames, text
+rasterization and blitting. Cell workloads use a fixed 154×37 screen: a one-cell
 patch, a representative fragmented patch with 56 spans of 24 cells, and a full
-screen. Client chrome workloads render the real tab model with 1, 8, and 64
-tabs. Fixture construction is outside the timed section. Use `--filter`,
+screen. Fixture construction is outside the timed section. Use `--filter`,
 `--samples`, or `--sample-ms` after `--` to narrow or lengthen a run:
 
 ```sh
-zig build bench -- --filter frontend --samples 20 --sample-ms 100
-zig build bench -- --filter frontend.client_ui.chrome --samples 20 --sample-ms 100
+zig build bench -- --filter frontend.client --samples 20 --sample-ms 100
+zig build bench -- --filter client.keybind --samples 20 --sample-ms 100
 zig build bench -- --list
 ```
 
@@ -394,7 +386,7 @@ Run-to-run noise on a quiet laptop is about 0.1 ms at p50 and 0.3 ms at p99;
 treat smaller differences as no verdict, as `docs/performance-gates.md`
 already requires for the microbenchmarks.
 
-The runtime observation proxy has its own gate:
+The runtime proxy has its own gate:
 
 ```sh
 zig build test-backend-proxy

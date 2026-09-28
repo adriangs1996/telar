@@ -112,6 +112,5 @@ test "authentication rejection records total and exact reason" {
 fn snapshot(telemetry: *const Counters) Snapshot {
     return telemetry.snapshot(.{
         .connections = .{ .active = 0, .limit_drops = 0 },
-        .observations = .{ .queued = 0, .high_water = 0, .dropped = 0 },
     });
 }

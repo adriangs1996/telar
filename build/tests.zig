@@ -44,8 +44,13 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     client_boundaries.step.dependOn(&model_boundaries.step);
     run_client_tests.step.dependOn(&client_boundaries.step);
     b.step("check-client-boundaries", "Check shared-client module boundaries").dependOn(&client_boundaries.step);
-    b.step("test-client", "Run renderer-independent client tests").dependOn(&run_client_tests.step);
+    const client_integration_step = b.step("test-client", "Run renderer-independent client tests");
+    client_integration_step.dependOn(&run_client_tests.step);
     test_step.dependOn(&run_client_tests.step);
+    const headless_tests = b.addTest(.{ .root_module = app.modules.headless.? });
+    const run_headless_tests = b.addRunArtifact(headless_tests);
+    b.step("test-headless", "Run the headless client's tests").dependOn(&run_headless_tests.step);
+    test_step.dependOn(&run_headless_tests.step);
     // ZLS uses "check" on save. Test artifacts are analyzed without codegen;
     // source validators run separately and never execute application tests.
     const check_step = b.step("check", "Analyze test suites and validate source organization");
@@ -83,15 +88,11 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     std.debug.assert(app.modules.data.import_table.count() == 1 + model_build.libraries.len and app.modules.data.import_table.get("telar-core").? == app.modules.core);
 
     for (app.modules.core.import_table.values()) |dependency| {
-        std.debug.assert(dependency != app.modules.client and dependency != app.modules.frontend and dependency != app.modules.backend);
+        std.debug.assert(dependency != app.modules.client and dependency != app.modules.backend);
     }
 
     for (app.modules.backend.import_table.values()) |dependency| {
-        std.debug.assert(dependency != app.modules.client and dependency != app.modules.frontend);
-    }
-
-    for (app.modules.frontend.import_table.values()) |dependency| {
-        std.debug.assert(dependency != app.modules.backend);
+        std.debug.assert(dependency != app.modules.client);
     }
 
     const codestyle_exe = b.addExecutable(.{
@@ -133,7 +134,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     const schema_test_prerequisites = testBarrier(b, "run schema test prerequisites");
     const backend_proxy_test_step = b.step(
         "test-backend-proxy",
-        "Run the runtime observation proxy tests",
+        "Run the runtime proxy tests",
     );
     const editor_tests = b.addTest(.{ .root_module = app.modules.backend, .filters = &.{"editor"} });
     const editor_wire_tests = b.addTest(.{ .root_module = app.modules.core, .filters = &.{ "editor", "corpus", "every truncated prefix" } });
@@ -154,19 +155,17 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     const isolation_run = b.addRunArtifact(isolation_tests);
     isolation_run.has_side_effects = true;
     isolation_step.dependOn(&isolation_run.step);
-    const compression_tests = b.addTest(.{ .root_module = app.modules.frontend, .filters = &.{"performance probe"} });
-    const compression_run = b.addRunArtifact(compression_tests);
-    compression_run.has_side_effects = true;
-    const compression_step = b.step("test-compression-isolation", "Measure compression work outside presentation turns");
-    compression_step.dependOn(&compression_run.step);
-
+    const cache_trace_step = b.step("build-cache-trace", "Build the client hot-path windows traced by the touchrange Valgrind tool");
+    if (app.modules.gui) |gui| {
+        const gui_cache_trace_tests = b.addTest(.{ .name = "telar-cache-trace-gui", .root_module = gui, .filters = &.{"cache trace"} });
+        cache_trace_step.dependOn(&b.addInstallArtifact(gui_cache_trace_tests, .{}).step);
+    }
     const transport_test_step = b.step("test-transport", "Run the local transport tests");
     transport_test_step.dependOn(app.modules.libraries.addTestRun(b, "localsocket"));
     const schema_test_step = b.step("test-schema", "Run the shared protocol schema tests");
     const wire_test_step = b.step("test-wire", "Run wire contracts without PTY integration tests");
     wire_test_step.dependOn(app.modules.libraries.addTestRun(b, "bytecodec"));
     wire_test_step.dependOn(app.modules.libraries.addTestRun(b, "cellcodec"));
-    const frontend_test_step = b.step("test-frontend", "Run the frontend package tests");
     const release_step = b.step(
         "verify-release",
         "Run correctness, portability, and p99 performance gates",
@@ -186,10 +185,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         .{ .path = "src/core/schema/handshake.zig", .schema = true },
         .{ .path = "src/core/schema_contract_test.zig", .schema = true },
         .{ .path = "src/core/plugin.zig" },
-        .{ .path = "src/frontend/ui/ui_tests.zig" },
-        // Capability roots can import sibling capabilities, so the package
-        // root collects their tests without narrowing Zig's module path.
-        .{ .path = "src/frontend/frontend.zig", .libc = true, .frontend = true },
+        .{ .path = "src/client_tests/tests.zig", .libc = true, .client_integration = true },
         .{ .path = "src/backend/proxy_test.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/history/history_tests.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/backend.zig", .vt = true, .libc = true },
@@ -247,8 +243,9 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         if (suite.schema) {
             schema_test_prerequisites.dependOn(&run_tests.step);
         }
-        if (suite.frontend) {
-            frontend_test_step.dependOn(&run_tests.step);
+        if (suite.client_integration) {
+            b.step("test-client-integration", "Run the shared client over a real socket without a window").dependOn(&run_tests.step);
+            client_integration_step.dependOn(&run_tests.step);
         }
     }
 

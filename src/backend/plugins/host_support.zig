@@ -10,11 +10,9 @@ const Exchange = @import("Exchange.zig");
 const LuaTable = @import("LuaTable.zig");
 const Half = @import("Half.zig");
 const Batch = @import("Batch.zig");
-const types = @import("../agent/types.zig");
 
 const max_frame_bytes = 128 * 1024 * 1024;
 pub const max_entry_bytes = 1024 * 1024;
-const max_json_bytes = 1024 * 1024;
 
 /// Runs one long-lived worker until its framed stdin closes.
 ///
@@ -63,14 +61,11 @@ pub fn run(init_process: std.process.Init, entry_path: []const u8) !void {
 }
 
 pub fn pushExchange(state: *lua_api.c.lua_State, exchange: Exchange) void {
-    lua_api.c.lua_createtable(state, 0, 14);
+    lua_api.c.lua_createtable(state, 0, 11);
     const destination = LuaTable.init(state, -1);
     destination.setInteger("id", exchange.id);
-    destination.setInteger("pane", core.raw(exchange.pane));
-    destination.setInteger("pane_generation", exchange.pane_generation);
     destination.setString("host", exchange.host);
     destination.setString("protocol", @tagName(exchange.protocol));
-    destination.setString("dialect", @tagName(exchange.dialect));
     destination.setInteger("connection_id", exchange.connection_id);
     destination.setInteger("stream_id", exchange.stream_id);
     destination.setString("method", exchange.method);
@@ -153,58 +148,18 @@ pub fn parseEffects(state: *lua_api.c.lua_State, index: c_int) !Batch {
         const effect_table = lua_api.c.lua_absindex(state, -1);
         const effect = LuaTable.init(state, effect_table);
         const kind = try effect.string("__telar_kind", true);
-        batch.items[effect_index] = if (std.mem.eql(u8, kind, "record_command"))
-            .{ .record_command = .{
-                .command = try effect.string("command", true),
-                .cwd = try effect.string("cwd", false),
-                .provider = try effect.string("provider", false),
-                .tool_call_id = try effect.string("tool_call_id", false),
-                .session = try effect.optionalString("session"),
-                .exit_code = @intCast(try effect.integer("exit_code", 0)),
-                .started_at_ms = try effect.integer("started_at_ms", 0),
-                .duration_ms = @intCast(try effect.integer("duration_ms", 0)),
-                .redact = try effect.boolean("redact", true),
-            } }
-        else if (std.mem.eql(u8, kind, "agent_evidence"))
-            .{ .agent_evidence = .{
-                .pane = core.pane(@intCast(try effect.integer("pane", 0))) catch return error.InvalidEffect,
-                .state = try agentState(try effect.string("state", true)),
-                .confidence = try confidence(try effect.string("confidence", true)),
-            } }
-        else if (std.mem.eql(u8, kind, "notification"))
-            .{ .notification = .{
-                .level = try notificationLevel(try effect.string("level", false)),
-                .duration_ms = @intCast(try effect.integer("duration_ms", core.default_notification_duration_ms)),
-                .title = try effect.string("title", true),
-                .message = try effect.string("message", false),
-            } }
-        else
+        if (!std.mem.eql(u8, kind, "notification")) {
             return error.InvalidEffect;
+        }
+
+        batch.items[effect_index] = .{ .notification = .{
+            .level = try notificationLevel(try effect.string("level", false)),
+            .duration_ms = @intCast(try effect.integer("duration_ms", core.default_notification_duration_ms)),
+            .title = try effect.string("title", true),
+            .message = try effect.string("message", false),
+        } };
     }
     return batch;
-}
-
-fn agentState(value: []const u8) !core.AgentReportState {
-    if (std.mem.eql(u8, value, "working")) {
-        return .working;
-    }
-    if (std.mem.eql(u8, value, "ready")) {
-        return .ready;
-    }
-    if (std.mem.eql(u8, value, "blocked")) {
-        return .blocked;
-    }
-    return error.InvalidEffect;
-}
-
-fn confidence(value: []const u8) !effects.Confidence {
-    if (std.mem.eql(u8, value, "low")) {
-        return .low;
-    }
-    if (std.mem.eql(u8, value, "medium")) {
-        return .medium;
-    }
-    return error.InvalidEffect;
 }
 
 fn notificationLevel(value: []const u8) !core.NotificationLevel {
@@ -293,51 +248,6 @@ pub fn redactSecrets(state_optional: ?*lua_api.c.lua_State) callconv(.c) c_int {
     return 1;
 }
 
-pub fn decodeJson(state_optional: ?*lua_api.c.lua_State) callconv(.c) c_int {
-    const state = state_optional.?;
-    const input = luaString(state, 1) orelse return raise(state, "json.decode expects a string");
-    if (input.len > max_json_bytes) {
-        return raise(state, "JSON input is too large");
-    }
-    const parsed = std.json.parseFromSlice(std.json.Value, std.heap.c_allocator, input, .{ .max_value_len = max_json_bytes }) catch return raise(state, "invalid JSON");
-    defer parsed.deinit();
-    pushJson(state, parsed.value, 0) catch return raise(state, "JSON exceeds depth limit");
-    return 1;
-}
-
-fn pushJson(state: *lua_api.c.lua_State, value: std.json.Value, depth: u8) !void {
-    if (depth == 64) {
-        return error.JsonDepth;
-    }
-    switch (value) {
-        .null => lua_api.c.lua_pushnil(state),
-        .bool => |boolean| lua_api.c.lua_pushboolean(state, @intFromBool(boolean)),
-        .integer => |integer| lua_api.c.lua_pushinteger(state, integer),
-        .float => |float| lua_api.c.lua_pushnumber(state, float),
-        .number_string => |number| {
-            const parsed = std.fmt.parseFloat(f64, number) catch return error.InvalidJson;
-            lua_api.c.lua_pushnumber(state, parsed);
-        },
-        .string => |string| _ = lua_api.c.lua_pushlstring(state, string.ptr, string.len),
-        .array => |array| {
-            lua_api.c.lua_createtable(state, @intCast(array.items.len), 0);
-            for (array.items, 1..) |item, index| {
-                try pushJson(state, item, depth + 1);
-                lua_api.c.lua_seti(state, -2, @intCast(index));
-            }
-        },
-        .object => |object| {
-            lua_api.c.lua_createtable(state, 0, @intCast(object.count()));
-            var iterator = object.iterator();
-            while (iterator.next()) |entry| {
-                _ = lua_api.c.lua_pushlstring(state, entry.key_ptr.ptr, entry.key_ptr.len);
-                try pushJson(state, entry.value_ptr.*, depth + 1);
-                lua_api.c.lua_settable(state, -3);
-            }
-        },
-    }
-}
-
 fn freezeTable(state: *lua_api.c.lua_State) void {
     lua_api.c.lua_createtable(state, 0, 0);
     lua_api.c.lua_createtable(state, 0, 3);
@@ -401,88 +311,3 @@ fn pathInside(root: []const u8, candidate: []const u8) bool {
         (candidate.len == root.len or (candidate.len > root.len and candidate[root.len] == std.fs.path.sep));
 }
 
-test "shipped agent command tap accumulates Anthropic and OpenAI arguments" {
-    var host = try Host.initWithResources(std.testing.io, std.testing.allocator, "examples/plugins/agent-commands/plugin.lua");
-    defer host.deinit();
-
-    const anthropic_body =
-        "event: content_block_start\n" ++
-        "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"Bash\",\"input\":{}}}\n\n" ++
-        "event: content_block_delta\n" ++
-        "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\":\\\"zig \"}}\n\n" ++
-        "event: content_block_delta\n" ++
-        "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"build test\\\"}\"}}\n\n" ++
-        "event: content_block_stop\n" ++
-        "data: {\"type\":\"content_block_stop\",\"index\":1}\n\n";
-    const anthropic = try host.invoke(testExchange(.anthropic_messages, anthropic_body));
-    try std.testing.expectEqual(@as(u8, 2), anthropic.len);
-    try std.testing.expectEqualStrings("zig build test", anthropic.items[0].record_command.command);
-    try std.testing.expectEqualStrings("toolu_1", anthropic.items[0].record_command.tool_call_id);
-    try std.testing.expectEqualStrings("claude", anthropic.items[0].record_command.provider);
-
-    const openai_body =
-        "event: response.output_item.added\n" ++
-        "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"fc_1\",\"call_id\":\"call_1\",\"type\":\"function_call\",\"name\":\"exec_command\",\"arguments\":\"\"}}\n\n" ++
-        "event: response.function_call_arguments.delta\n" ++
-        "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"fc_1\",\"delta\":\"{\\\"cmd\\\":\\\"rg \"}\n\n" ++
-        "event: response.function_call_arguments.delta\n" ++
-        "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"fc_1\",\"delta\":\"TODO\\\"}\"}\n\n" ++
-        "event: response.function_call_arguments.done\n" ++
-        "data: {\"type\":\"response.function_call_arguments.done\",\"item_id\":\"fc_1\",\"name\":\"exec_command\"}\n\n";
-    const openai = try host.invoke(testExchange(.openai_responses, openai_body));
-    try std.testing.expectEqual(@as(u8, 2), openai.len);
-    try std.testing.expectEqualStrings("rg TODO", openai.items[0].record_command.command);
-    try std.testing.expectEqualStrings("call_1", openai.items[0].record_command.tool_call_id);
-    try std.testing.expectEqualStrings("codex", openai.items[0].record_command.provider);
-}
-
-test "shipped agent command tap maps non-stream shell commands and rejects unusable bodies" {
-    var host = try Host.initWithResources(std.testing.io, std.testing.allocator, "examples/plugins/agent-commands/plugin.lua");
-    defer host.deinit();
-
-    const body =
-        "{\"output\":[{\"id\":\"fc_2\",\"call_id\":\"call_2\",\"type\":\"function_call\"," ++
-        "\"name\":\"shell\",\"arguments\":\"{\\\"command\\\":\\\"git status\\\"}\"}]}";
-    const complete = try host.invoke(testExchange(.openai_responses, body));
-    try std.testing.expectEqual(@as(u8, 2), complete.len);
-    try std.testing.expectEqualStrings("git status", complete.items[0].record_command.command);
-
-    var truncated_exchange = testExchange(.openai_responses, body);
-    truncated_exchange.response.?.body_truncated = true;
-    const truncated = try host.invoke(truncated_exchange);
-    try std.testing.expectEqual(@as(u8, 0), truncated.len);
-
-    var undecoded_exchange = testExchange(.openai_responses, body);
-    undecoded_exchange.response.?.decoded = false;
-    const undecoded = try host.invoke(undecoded_exchange);
-    try std.testing.expectEqual(@as(u8, 0), undecoded.len);
-}
-
-fn testExchange(dialect: types.ApiDialect, body: []const u8) Exchange {
-    return .{
-        .id = 1,
-        .generation = 1,
-        .pane = @enumFromInt(1),
-        .pane_generation = 1,
-        .host = "api.example.com",
-        .protocol = .h2,
-        .dialect = dialect,
-        .connection_id = 1,
-        .stream_id = 1,
-        .method = "POST",
-        .target = "/v1/responses",
-        .started_at_ms = 100,
-        .request = null,
-        .response = .{
-            .head = ":status: 200\r\n",
-            .body = body,
-            .encoding = "identity",
-            .decoded = true,
-            .head_truncated = false,
-            .body_truncated = false,
-            .status_code = 200,
-            .outcome = .finished,
-            .finished_at_ms = 120,
-        },
-    };
-}

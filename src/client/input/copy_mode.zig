@@ -1,25 +1,21 @@
 //! Copy mode: enters and leaves copy mode and applies its commands and search
 //! matches.
 const data = @import("model");
-const copy_mode_tests = @import("../copy_mode_tests.zig");
 const core = @import("telar-core");
 const name_prompt = @import("name_prompt.zig");
 const link_opening = @import("../links/link_opening.zig");
 const pane_viewport = @import("../panes/pane_viewport.zig");
 const Client = @import("../execution/Client.zig");
 
-/// Semantic actions include native conversation readers in copy-mode policy.
 /// Example: `_ = copy_mode.copyModeActive(client);`
 pub fn copyModeActive(client: *const Client) bool {
-    return data.copy_mode.isActive(&client.model) or client.host_input_source.threadCopyModeActive();
+    return data.copy_mode.isActive(&client.model);
 }
 
 /// Leaves copy mode without copying the current selection.
 /// Example: `_ = try copy_mode.leaveCopyMode(client);`
 pub fn leaveCopyMode(client: *Client) !CopyModeOutcome {
-    const outcome = try applyCopyMode(client, .leave);
-    const native = client.host_input_source.leaveThreadCopyMode();
-    return if (outcome == .unchanged and native) .exited else outcome;
+    return applyCopyMode(client, .leave);
 }
 
 /// Example: `_ = try copy_mode.applyCopyMode(client, command);`
@@ -32,7 +28,7 @@ pub fn applyCopyMode(client: *Client, command: data.CopyModeCommand) !CopyModeOu
 
     const plan = data.copy_mode.planCommand(&client.model, command) orelse return .unchanged;
     if (plan.open_link) |target| {
-        _ = try link_opening.openLink(client, target);
+        _ = try link_opening.openLink(client, target, plan.previous.pane_id);
 
         return .unchanged;
     }
@@ -64,16 +60,6 @@ pub fn applyCopyMode(client: *Client, command: data.CopyModeCommand) !CopyModeOu
 
 /// Enters copy mode on the attached focused pane.
 pub fn enterCopyMode(client: *Client) bool {
-    const tab = client.model.tabs.activeSlot() orelse return false;
-    const pane = data.tab_layout.focusedPaneConst(&client.model, tab) orelse return false;
-    if (pane.kind == .agent) {
-        if (!pane.attached or data.copy_mode.isActive(&client.model) or client.model.name_prompt.active() or client.model.pane_paste != null) {
-            return false;
-        }
-
-        return client.host_input_source.enterThreadCopyMode(pane.id);
-    }
-
     return data.copy_mode.enter(&client.model);
 }
 
@@ -99,10 +85,6 @@ pub fn applyPaneMatches(client: *Client, view: core.PaneMatchesView) !CopyModeOu
             },
         },
     );
-}
-
-test "copy mode delegates agent readers after admission and preserves terminal behavior" {
-    try copy_mode_tests.agentReaders(enterCopyMode);
 }
 
 const CopyModeOutcome = enum {

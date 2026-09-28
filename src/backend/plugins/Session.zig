@@ -125,8 +125,6 @@ pub fn exchange(self: *Session, spec: SessionSpec, request: Request) !*Result {
         .digest = spec.digest,
         .generation = spec.generation,
         .event_id = decoded.event_id,
-        .pane = request.pane,
-        .pane_generation = request.pane_generation,
         .storage = storage,
         .batch = decoded.batch,
     };
@@ -164,6 +162,4 @@ const SessionSpec = struct {
 const Request = struct {
     event_id: u64,
     bytes: []u8,
-    pane: core.PaneId,
-    pane_generation: u64,
 };

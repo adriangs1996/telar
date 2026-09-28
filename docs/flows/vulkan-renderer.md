@@ -5,7 +5,8 @@ The Linux GUI uses Wayland and Vulkan 1.3 with `dynamicRendering`,
 requires `VK_KHR_get_surface_capabilities2` and `VK_EXT_surface_maintenance1`.
 Device selection checks the API version and features and requires one queue
 that supports both graphics and presentation. Unsupported systems fail during
-initialization. These requirements apply to the GUI, not the TUI or runtime.
+initialization. These requirements apply to the window, not the runtime or the
+headless client.
 
 ## Ownership
 

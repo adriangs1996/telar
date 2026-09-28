@@ -9,7 +9,6 @@ const Fixture = @import("OverlayFixture.zig");
 const Session = @import("Session.zig");
 const CommandPalette = @import("../widgets/overlays/CommandPalette.zig");
 const PaletteHits = @import("../widgets/overlays/PaletteHits.zig");
-const routing = @import("../input/router.zig");
 const PaletteRow = @import("../widgets/overlays/PaletteRow.zig");
 const WrappedLines = @import("../widgets/overlays/WrappedLines.zig");
 
@@ -125,7 +124,7 @@ test "native palette prints the bound chord from the native keymap" {
     try fixture.paint();
     const without = fixture.renderer.quads.items().len;
 
-    var router = try routing.build(
+    var router = try client.key_router.build(
         .{
             .prefix = data.keybind.default_prefix,
             .bindings = &.{},
@@ -143,7 +142,7 @@ test "native palette repaints warm without shaping rasterizing or allocating" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     try populate(fixture);
-    var router = try routing.build(
+    var router = try client.key_router.build(
         .{
             .prefix = data.keybind.default_prefix,
             .bindings = &.{},

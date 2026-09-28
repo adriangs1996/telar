@@ -42,19 +42,21 @@ live aggregates and from wire projections (`docs/invariants.md`, Ownership). A c
 header (`TELARCKP`, version, id counters) followed by a stream of tagged
 records: workspace (id, path, explicit name, first tab), tab (extra tabs in
 display order), pane (id, location, cwd, size, NUL-separated launch
-arguments, then the agent's provider, session reference and session title,
-plus its pane kind) and layout (client identity, LRU stamp and the exact bytes
-of one `update_client_layout` request). The file version is 4, which adds pane
-kinds and permits agent panes with no launch arguments. Version 3 introduced
-empty automatic tab labels. Versions 1 through 3 remain readable and treat
-panes as terminal panes; version 1 files, which predate the pane title, read
-with an empty title. Layouts reuse the wire encoding on purpose: restore
+arguments, then the agent's provider, session reference and session title) and
+layout (client identity, LRU stamp and the exact bytes of one
+`update_client_layout` request). The file version is 7: version 6 added
+worktree records and version 7 the machine that dispatched each worktree,
+which older files read as none. Version 4 ended each
+pane record with a kind byte for the removed agent panes; the reader skips
+version 4 agent panes and restores the rest. Its layout records also encode a
+surface byte per pane leaf, which the current wire rejects, so restore drops
+them and clients fall back to their default layout. Version 3 introduced empty
+automatic tab labels. Version 1 files, which predate the pane title, read with
+an empty title. Layouts reuse the wire encoding on purpose: restore
 replays them through the same validation that live updates get.
 
 Terminal panes are recorded only when their launch inherited the runtime
-environment and their arguments fit `LaunchRecord`. Managed agent panes store
-Codex as their provider and an optional conversation reference, with no argv.
-Their durable transcript remains owned by Codex.
+environment and their arguments fit `LaunchRecord`.
 
 ## Commit policy
 
@@ -116,8 +118,7 @@ quarantined as `.corrupt` on its own.
 An agent reports its own session identifier with `telar agent report-session`
 (`report_agent_session` on the wire). The tracker stores it on the exact pane
 generation as a typed, bounded token; the checkpoint records it next to the
-pane's observed process provider. Screen and proxy guesses cannot authorize
-resume. Every changed reference marks the checkpoint dirty, including a new
+pane's observed process provider. Screen guesses cannot authorize resume. Every changed reference marks the checkpoint dirty, including a new
 session reported by an already-running agent. Process detection that makes
 an earlier reference resumable, and process exit that retires it, also mark
 the checkpoint dirty.
@@ -201,36 +202,3 @@ the session volatile.
   is handled, then proves shutdown releases the borrowed buffer and restores
   the latest shape on restart. An injected startup failure also proves that
   restored children are joined and the original checkpoint remains intact.
-
-## Managed agent panes
-
-Agent panes restore through `pane_launch.launch(kind = .agent)` and the
-existing observation worker. `Session` owns a copied conversation reference
-before scheduling its worker. Initialization sends `thread/resume` directly
-when a saved reference exists, or `thread/start` for an empty pane. Resume
-validates the returned identifier, exact working directory and explicit
-workspace permissions with user approvals. It rejects an active conversation
-and never sends a prompt
-or replays an approval. The returned model and effort are validated against
-the current provider catalog. Attached clients recover history through the
-existing paginated reader when the resumed snapshot arrives.
-
-Pane identity, tab membership, dimensions and durable title survive; the pane
-receives a new generation. The existing client layout replica is applied after
-both terminal and agent panes have been rebuilt. Duplicate conversations are
-claimed once per startup. The same 16-process bound applies to restored agents.
-With `resume_agents = false`, agent panes reopen with new conversations.
-
-A failed provider startup or rejected resume leaves a failed agent pane with
-its saved reference, available for a later restart. Checkpoints read the
-session's owned publication, including pending startup identity, so shutdown
-cannot lose a reference whose notification the runtime has not processed yet.
-A contended publication defers the write; it never drops that pane. Identity
-changes mark the checkpoint dirty; streaming text does not. Transcript bodies,
-pending turns, approvals and child processes are not serialized.
-
-`checkpoint_shutdown_test.zig` exercises mixed terminal and agent panes across
-consecutive runtime lifetimes with a fake provider, including shutdown before
-startup events are processed and disabled resume. Provider tests cover direct
-resume, response ordering, rejection and wrong-directory responses. Encoding
-tests cover empty panes, legacy records, invalid kinds, providers and references.

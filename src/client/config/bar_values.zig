@@ -126,6 +126,15 @@ pub fn parseBarSegment(state: *lua_api.c.lua_State, index: c_int, diagnostic: *d
     };
     lua_value.pop(state, 1);
 
+    const style = try parseStyle(state, absolute, diagnostic);
+
+    return .{ .text = text_value, .icon = icon_value, .style = style };
+}
+
+/// Reads the legacy `fg`, `bg` and emphasis fields of a segment or label.
+/// Example: `const style = try bar_values.parseStyle(state, index, diagnostic);`
+pub fn parseStyle(state: *lua_api.c.lua_State, index: c_int, diagnostic: *data.Diagnostic) !data.Style {
+    const absolute = lua_api.c.lua_absindex(state, index);
     var style: data.Style = .{};
     inline for (.{ .{ "fg", "foreground" }, .{ "bg", "background" } }) |field| {
         _ = lua_api.c.lua_getfield(state, absolute, field[0]);
@@ -147,7 +156,7 @@ pub fn parseBarSegment(state: *lua_api.c.lua_State, index: c_int, diagnostic: *d
         lua_value.pop(state, 1);
     }
 
-    return .{ .text = text_value, .icon = icon_value, .style = style };
+    return style;
 }
 
 pub fn parseBarColor(state: *lua_api.c.lua_State, index: c_int, diagnostic: *data.Diagnostic) !data.bar_values.Color {
@@ -164,24 +173,13 @@ pub fn parseBarColor(state: *lua_api.c.lua_State, index: c_int, diagnostic: *dat
         diagnostic.set("bar color must be a palette name, #RRGGBB, default, or an index", .{});
         return error.InvalidBarContent;
     };
-    if (std.ascii.eqlIgnoreCase(name, "default")) {
-        return .{ .value = .default };
+    if (data.color_name.parse(name)) |color| {
+        return color;
     }
-    inline for (std.meta.fields(data.bar_values.PaletteColor)) |field| {
-        if (normalizedNameEql(name, field.name)) {
-            return .{ .palette = @enumFromInt(field.value) };
-        }
-    }
+
     if (name.len == 7 and name[0] == '#') {
-        const value = std.fmt.parseInt(u24, name[1..], 16) catch {
-            diagnostic.set("bar color '{s}' is not #RRGGBB", .{name});
-            return error.InvalidBarContent;
-        };
-        return .{ .value = .rgb(.{
-            @intCast((value >> 16) & 0xff),
-            @intCast((value >> 8) & 0xff),
-            @intCast(value & 0xff),
-        }) };
+        diagnostic.set("bar color '{s}' is not #RRGGBB", .{name});
+        return error.InvalidBarContent;
     }
 
     diagnostic.set("unknown bar color '{s}'", .{name});
@@ -199,18 +197,7 @@ pub fn parseBarIcon(name: []const u8) ?data.icons.Icon {
 }
 
 pub fn normalizedNameEql(left: []const u8, right: []const u8) bool {
-    if (left.len != right.len) {
-        return false;
-    }
-    for (left, right) |left_byte, right_byte| {
-        const normalized_left = if (left_byte == '-') '_' else std.ascii.toLower(left_byte);
-        const normalized_right = if (right_byte == '-') '_' else std.ascii.toLower(right_byte);
-        if (normalized_left != normalized_right) {
-            return false;
-        }
-    }
-
-    return true;
+    return data.color_name.roleNameEql(left, right);
 }
 
 const ParsedBarSegment = struct {

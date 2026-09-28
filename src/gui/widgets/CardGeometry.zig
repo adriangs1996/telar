@@ -5,6 +5,8 @@ const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const Metrics = @import("../TerminalMetrics.zig");
 const ChromeMetrics = @import("ChromeMetrics.zig");
+const client = @import("telar-client");
+const FleetCard = client.FleetCard;
 const CardGeometry = @This();
 
 pub const padding_x: f32 = 10;
@@ -13,6 +15,11 @@ pub const spacing: f32 = 3;
 pub const radius: f32 = 8;
 pub const gap: f32 = 6;
 pub const mark_size: f32 = 14;
+pub const compact_padding_y: f32 = 4;
+/// Indent of a task under its project's own agents.
+pub const task_indent: f32 = 12;
+/// Extra space before each project group after the first.
+pub const group_gap: f32 = 8;
 
 /// The context and event rows, at the `small` role.
 small_row: f32,
@@ -36,6 +43,21 @@ pub fn px(self: CardGeometry, logical: f32) f32 {
 /// Example: `const height = geometry.height();`
 pub fn height(self: CardGeometry) f32 {
     return 2 * self.small_row + self.title_row + self.px(6) + 2 * self.px(padding_y);
+}
+
+/// Height of a one-line task: a body row inside a slimmer padding.
+/// Example: `const height = geometry.compactHeight();`
+pub fn compactHeight(self: CardGeometry) f32 {
+    return self.title_row + 2 * self.px(compact_padding_y);
+}
+
+/// Height of one fleet entry as the sidebar draws it.
+/// Example: `const height = geometry.entryHeight(.task_compact);`
+pub fn entryHeight(self: CardGeometry, card: FleetCard) f32 {
+    return switch (card) {
+        .agent, .task_full => self.height(),
+        .task_compact => self.compactHeight(),
+    };
 }
 
 /// Distance between the tops of two consecutive cards.

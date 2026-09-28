@@ -139,9 +139,8 @@ grant to the exact package digest, copies the package into a private owner-only
 snapshot, and rehashes it before starting the worker.
 
 The callback receives one immutable table only after the whole exchange has
-finished. It may return at most 16 typed effects. `agent_evidence` requires
-`proxy.tap`; notifications additionally require `notifications`; command
-persistence additionally requires `history.write`. Each worker has bounded
+finished. It may return at most 16 typed effects, all notifications, which
+additionally require the `notifications` capability. Each worker has bounded
 memory, execution time, frame size, stderr, queue depth, and restart rate.
 When a queue is full, the oldest observation is dropped. Proxy relay never
 waits for a listener.
@@ -149,46 +148,5 @@ waits for a listener.
 Tap packages are loaded when the runtime starts. Client configuration reload
 does not replace runtime tap workers because runtime reload does not yet exist.
 Restart the runtime after changing the enabled package set or trust grants.
-
-### Shipped agent-command classifier
-
-[`examples/plugins/agent-commands`](../examples/plugins/agent-commands) is the
-reference implementation of the user-classifies model. It recognizes
-Anthropic `tool_use` blocks and OpenAI Responses `function_call` items, joins
-streamed `input_json_delta` and `response.function_call_arguments.delta`
-fragments, and decodes the completed arguments with `telar.json.decode`. The
-exact command mappings are `Bash.command`, `shell.command`, and
-`exec_command.cmd`; other tools, malformed JSON, and truncated response bodies
-are ignored. Bodies whose content coding could not be decoded are also ignored.
-
-Inspect, install, and grant the three declared capabilities explicitly:
-
-```sh
-telar plugin inspect ./examples/plugins/agent-commands
-telar plugin install ./examples/plugins/agent-commands
-telar plugin trust ./examples/plugins/agent-commands \
-  --capability proxy.tap \
-  --capability history.write \
-  --capability notifications
-```
-
-The install command prints the immutable package path. Add that path to
-`config.plugins`, enable `runtime.proxy.capture`, and restart the runtime:
-
-```lua
-plugins = {
-  telar.plugin({
-    path = "/absolute/path/printed/by/telar/plugin/install",
-    enabled = true,
-  }),
-}
-```
-
-The plugin labels Anthropic traffic as provider `claude` and OpenAI Responses
-traffic as provider `codex`. A record describes the command requested by the
-model response; native harness hooks remain the authoritative execution source
-and update the same `tool_call_id` when available. Persistence applies Telar's
-secret filters because the plugin sets `redact = true`. The informational
-notification is emitted only when at least one command effect was produced.
 
 See [Proxy tap](flows/proxy-tap.md) for ownership and scheduling details.

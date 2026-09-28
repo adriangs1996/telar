@@ -4,7 +4,7 @@ The foundation is recorded in commit `7b22fb59`. The subsequent integration
 moves the full GUI frame through `Composition.render(&projection)` and one
 `widgets.draw(&canvas)` call in `Scene.prepare`.
 
-Composition selects terminal leaves, thread views, link decoration, five chrome
+Composition selects terminal leaves, link decoration, five chrome
 sections, focus, notification cards and one concrete modal. It emits no quads.
 The bounded list has 74 slots, including the maximum 64 panes and every optional
 layer. Terminal drawing retains its cell meshes, shaping cache and cursor order.

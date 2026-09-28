@@ -9,7 +9,7 @@ semantic input. It never returns terminal bytes or mutates client objects.
 ```text
 configured binding
       |
-Router.routeEvent -> applyInputDecision / applyDecision
+Router.routeEvent -> GuiAdapter.applyInputDecision / HeadlessClient.decide
       |
 actions.executeAction -> lua_action.executeLuaAction
       |
@@ -32,7 +32,7 @@ client-owned Generation.invokeCallback / invokeExpression
                                |
                   ClientModel.diagnostic_revision
                                |
-                    presentation_lifecycle.observe -> Presenter
+                    Client.presentation.observe after the turn
 ```
 
 The host consumes the router decision through `actions.executeAction`.
@@ -46,7 +46,7 @@ the separate asynchronous [`plugin_action`](plugin-action.md) slice.
 The client owns one live `config.Generation`. It contains the bounded Lua VM
 and closures for the active configuration generation. `config_adoption.completeConfigReload` builds
 a complete replacement before swapping that pointer, registry and input router
-together. The VM never enters `ClientModel` or the presenter.
+together. The VM never enters `ClientModel` or the window's renderer.
 
 `plugin_action.callbackContext` constructs the value passed to Lua from committed
 client state. It contains sidebar visibility, tab count, active tab position,
@@ -101,8 +101,8 @@ returned paste before pane delivery.
 A missing live generation leaves state unchanged. A stale reference, Lua
 error, instruction exhaustion, deadline or malformed result consumes the
 matched binding and commits the bounded diagnostic produced by the VM. A
-validation failure follows the same model path. Neither branch calls
-`Presenter.requestDraw`; `events.update` observes `Version.diagnostic`.
+validation failure follows the same model path. Neither branch requests a
+draw; the adapter observes `Version.diagnostic` after the turn.
 Invalid diagnostic bytes are replaced by the operation with an explicit
 error-name-only fallback.
 
@@ -131,6 +131,6 @@ authority.
   copy-mode paste suppression (`executeLuaAction`).
 - `src/client/config/` proves immutable context, callback quotas,
   bounded result parsing and semantic input construction.
-- `src/frontend/client/tests/` proves real VM evaluation, complete
+- `src/client_tests/configuration.zig` proves real VM evaluation, complete
   plugin prevalidation, semantic key and bracketed-paste delivery, copy-mode
-  suppression and presenter observation of callback failures.
+  suppression and presentation observation of callback failures.

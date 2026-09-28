@@ -14,8 +14,11 @@
 
 const core = @import("telar-core");
 const Capabilities = @import("Capabilities.zig");
+const SessionFormat = @import("SessionFormat.zig").SessionFormat;
 const claude = @import("claude.zig");
 const codex = @import("codex.zig");
+const cursor = @import("cursor.zig");
+const opencode = @import("opencode.zig");
 const pi = @import("pi.zig");
 const std = @import("std");
 
@@ -32,6 +35,8 @@ pub fn of(provider: core.AgentProvider) *const Capabilities {
         .claude => &claude.capabilities,
         .codex => &codex.capabilities,
         .pi => &pi.capabilities,
+        .cursor => &cursor.capabilities,
+        .opencode => &opencode.capabilities,
         else => &default,
     };
 }
@@ -40,16 +45,24 @@ test "built-in agents own their capabilities and configured agents get the defau
     try std.testing.expectEqualStrings("claude --resume ", of(.claude).resume_prefix.?);
     try std.testing.expectEqualStrings("codex resume ", of(.codex).resume_prefix.?);
     try std.testing.expectEqualStrings("pi --session ", of(.pi).resume_prefix.?);
+    try std.testing.expectEqualStrings("cursor-agent --resume ", of(.cursor).resume_prefix.?);
+    try std.testing.expectEqualStrings("opencode --session ", of(.opencode).resume_prefix.?);
+    try std.testing.expectEqual(SessionFormat.opencode, of(.opencode).session_format);
+    try std.testing.expectEqual(SessionFormat.uuid, of(.claude).session_format);
     try std.testing.expect(of(.unknown).resume_prefix == null);
     try std.testing.expect(of(@enumFromInt(core.first_custom_agent_provider)).resume_prefix == null);
 
     try std.testing.expect(of(.codex).ready_prompt_settles_report);
     try std.testing.expect(!of(.claude).ready_prompt_settles_report);
     try std.testing.expect(!of(.pi).ready_prompt_settles_report);
+    try std.testing.expect(of(.cursor).screen_reports_blocked);
+    try std.testing.expect(!of(.claude).screen_reports_blocked);
 }
 
 test {
     std.testing.refAllDecls(claude);
     std.testing.refAllDecls(codex);
+    std.testing.refAllDecls(cursor);
+    std.testing.refAllDecls(opencode);
     std.testing.refAllDecls(pi);
 }

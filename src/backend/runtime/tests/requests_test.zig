@@ -234,29 +234,6 @@ test "runtime dispatch rejects exited pane input without assigning recent-input 
     try std.testing.expectEqual(core.PaneId.invalid, fixture.session.last_input_pane);
 }
 
-test "runtime dispatch rejects agent controls on terminals and retired pane generations" {
-    var fixture: RequestFixture = undefined;
-    try fixture.init();
-    defer fixture.deinit();
-    const pane = try fixture.openPane();
-    for ([_]u64{ pane.generation, pane.generation + 1 }) |generation| {
-        const controls = [_]core.ClientMessage{
-            .{ .agent_prompt = .{ .request_id = @enumFromInt(41), .pane_id = pane.id, .pane_generation = generation, .text = "private prompt" } },
-            .{ .agent_interrupt = .{ .request_id = @enumFromInt(41), .pane_id = pane.id, .pane_generation = generation } },
-            .{ .agent_approval = .{ .request_id = @enumFromInt(41), .pane_id = pane.id, .pane_generation = generation, .approval_id = 1, .accept = true } },
-            .{ .agent_resume = .{ .request_id = @enumFromInt(41), .pane_id = pane.id, .pane_generation = generation, .expected_revision = 1, .conversation_index = 0 } },
-            .{ .query_agent_thread = .{ .request_id = @enumFromInt(41), .pane_id = pane.id, .pane_generation = generation } },
-        };
-        for (controls) |control| {
-            try fixture.send(control);
-            try expectFailure(&fixture, if (generation == pane.generation) .invalid_request else .pane_not_found);
-        }
-    }
-    try std.testing.expect(pane.agent_thread == null);
-    try std.testing.expect(pane.input_queue.nextChunk() == null);
-    try std.testing.expect(!pane.close_requested);
-}
-
 test "runtime dispatch owns routed command text and keeps its exact pending correlation" {
     var fixture: RequestFixture = undefined;
     try fixture.init();
@@ -267,8 +244,7 @@ test "runtime dispatch owns routed command text and keeps its exact pending corr
     var command: core.ClientCommand = .{
         .request_id = @enumFromInt(41),
         .route = .{ .id = target.key.id, .generation = target.key.generation + 1 },
-        .action = .agent_draft_set,
-        .target_id = 12,
+        .action = .client_clipboard_copy,
     };
     try command.setText("original draft");
     try fixture.send(.{ .request_client_command = command });

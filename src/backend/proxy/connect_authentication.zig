@@ -2,9 +2,7 @@
 
 const core = @import("telar-core");
 const identity = @import("identity.zig");
-const Registry = @import("Registry.zig");
 const std = @import("std");
-const Credential = @import("Credential.zig");
 const ExpectedRejection = @import("ExpectedRejection.zig");
 
 const authentication_required_response =
@@ -18,8 +16,6 @@ const bad_request_response =
     "Content-Length: 0\r\n\r\n";
 
 pub const Target = @import("Target.zig");
-
-pub const Authenticated = @import("Authenticated.zig");
 
 pub const RejectionMetric = enum {
     invalid_authorization,
@@ -35,29 +31,28 @@ pub const RejectionReason = enum {
 pub const Rejection = @import("Rejection.zig");
 
 pub const Decision = union(enum) {
-    authenticated: Authenticated,
+    authenticated: Target,
     rejected: Rejection,
 };
 
 /// Authenticates before revealing target validity. Only an exact
 /// `CONNECT authority HTTP/1.1` line with a bounded hostname and a nonzero
-/// decimal port is accepted. A successful value names the credential by its
-/// non-secret identity, so the token never outlives this call; its validated
-/// hostname borrows from `head`.
+/// decimal port is accepted. The presented secret never outlives this
+/// call; the validated hostname borrows from `head`.
 ///
 /// ```zig
-/// const decision = connect_authentication.authenticate(io, &registry, head);
+/// const decision = connect_authentication.authenticate(&secret, head);
 /// ```
-pub fn authenticate(io: std.Io, credentials: *Registry, head: []const u8) Decision {
-    var credential = identity.parseProxyAuthorization(head) orelse return rejectInvalidAuthorization();
-    defer std.crypto.secureZero(u8, &credential.token);
+pub fn authenticate(secret: *const identity.Secret, head: []const u8) Decision {
+    var presented = identity.parseProxyAuthorization(head) orelse return rejectInvalidAuthorization();
+    defer std.crypto.secureZero(u8, &presented);
 
-    const owner = credentials.identify(io, &credential) orelse return rejectUnknownCredential();
+    if (!identity.sameSecret(&presented, secret)) {
+        return rejectUnknownCredential();
+    }
+
     const target = parseTarget(head) orelse return rejectInvalidTarget();
-    return .{ .authenticated = .{
-        .owner = owner,
-        .target = target,
-    } };
+    return .{ .authenticated = target };
 }
 
 pub fn parseTarget(head: []const u8) ?Target {
@@ -126,33 +121,10 @@ pub fn rejectInvalidTarget() Decision {
     } };
 }
 
-/// A registry holding `testCredential` when `live`.
-fn testRegistry(live: bool) !Registry {
-    var registry: Registry = .{};
-    if (live) {
-        try registry.register(std.testing.io, &testCredential());
-    }
-
-    return registry;
-}
-
-fn execute(registry: *Registry, head: []const u8) Decision {
-    return authenticate(std.testing.io, registry, head);
-}
-
-fn testCredential() Credential {
-    return .{
-        .pane_id = @enumFromInt(7),
-        .pane_generation = 12,
-        .token = .{
-            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
-            0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
-        },
-    };
-}
+const test_secret: identity.Secret = .{0x5a} ** identity.secret_bytes;
 
 fn requestHead(start_line: []const u8, output: []u8) ![]const u8 {
-    const raw = "telar:7.12.00112233445566778899aabbccddeeff";
+    const raw = "telar:" ++ "5a" ** identity.secret_bytes;
     var encoded: [std.base64.standard.Encoder.calcSize(raw.len)]u8 = undefined;
     const basic = std.base64.standard.Encoder.encode(&encoded, raw);
     return std.fmt.bufPrint(output, "{s}\r\nProxy-Authorization: Basic {s}\r\n\r\n", .{ start_line, basic });
@@ -168,11 +140,9 @@ fn expectRejected(decision: Decision, expected: ExpectedRejection) !void {
     try std.testing.expectEqual(expected.metric, rejection.metric);
 }
 
-test "missing authorization is rejected before credential or target lookup" {
-    var registry = try testRegistry(true);
-
+test "missing authorization is rejected before secret or target lookup" {
     try expectRejected(
-        execute(&registry, "GET / HTTP/1.1\r\n\r\n"),
+        authenticate(&test_secret, "GET / HTTP/1.1\r\n\r\n"),
         .{
             .reason = .invalid_authorization,
             .response = authentication_required_response,
@@ -182,10 +152,8 @@ test "missing authorization is rejected before credential or target lookup" {
 }
 
 test "a malformed Basic value is an invalid authorization" {
-    var registry = try testRegistry(true);
-
     try expectRejected(
-        execute(&registry, "CONNECT api.openai.com:443 HTTP/1.1\r\nProxy-Authorization: Basic !!!\r\n\r\n"),
+        authenticate(&test_secret, "CONNECT api.openai.com:443 HTTP/1.1\r\nProxy-Authorization: Basic !!!\r\n\r\n"),
         .{
             .reason = .invalid_authorization,
             .response = authentication_required_response,
@@ -194,13 +162,13 @@ test "a malformed Basic value is an invalid authorization" {
     );
 }
 
-test "a parsed credential must still be live" {
+test "a well-formed secret must match the proxy secret" {
     var head_buffer: [256]u8 = undefined;
     const head = try requestHead("CONNECT api.openai.com:443 HTTP/1.1", &head_buffer);
-    var registry = try testRegistry(false);
+    const other: identity.Secret = .{0x5b} ** identity.secret_bytes;
 
     try expectRejected(
-        execute(&registry, head),
+        authenticate(&other, head),
         .{
             .reason = .unknown_credential,
             .response = authentication_required_response,
@@ -209,13 +177,13 @@ test "a parsed credential must still be live" {
     );
 }
 
-test "target validity is hidden until credential authentication succeeds" {
+test "target validity is hidden until authentication succeeds" {
     var head_buffer: [256]u8 = undefined;
     const head = try requestHead("GET / HTTP/1.1", &head_buffer);
-    var registry = try testRegistry(false);
+    const other: identity.Secret = .{0x5b} ** identity.secret_bytes;
 
     try expectRejected(
-        execute(&registry, head),
+        authenticate(&other, head),
         .{
             .reason = .unknown_credential,
             .response = authentication_required_response,
@@ -241,10 +209,9 @@ test "authenticated malformed targets map to a bad request without an auth metri
     for (invalid_start_lines) |start_line| {
         var head_buffer: [512]u8 = undefined;
         const head = try requestHead(start_line, &head_buffer);
-        var registry = try testRegistry(true);
 
         try expectRejected(
-            execute(&registry, head),
+            authenticate(&test_secret, head),
             .{
                 .reason = .invalid_target,
                 .response = bad_request_response,
@@ -254,17 +221,15 @@ test "authenticated malformed targets map to a bad request without an auth metri
     }
 }
 
-test "a live credential and valid CONNECT target produce authenticated input" {
+test "the proxy secret and a valid CONNECT target produce an authenticated target" {
     var head_buffer: [256]u8 = undefined;
     const head = try requestHead("CONNECT api.openai.com:443 HTTP/1.1", &head_buffer);
-    var registry = try testRegistry(true);
 
-    const authenticated = switch (execute(&registry, head)) {
+    const target = switch (authenticate(&test_secret, head)) {
         .authenticated => |value| value,
         .rejected => return error.ExpectedAuthenticatedConnect,
     };
 
-    try std.testing.expectEqualDeep(registry.identify(std.testing.io, &testCredential()).?, authenticated.owner);
-    try std.testing.expectEqualStrings("api.openai.com", authenticated.target.host.bytes);
-    try std.testing.expectEqual(@as(u16, 443), authenticated.target.port);
+    try std.testing.expectEqualStrings("api.openai.com", target.host.bytes);
+    try std.testing.expectEqual(@as(u16, 443), target.port);
 }

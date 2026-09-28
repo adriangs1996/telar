@@ -9,7 +9,10 @@ const LinkMatch = @import("LinkMatch.zig");
 const std = @import("std");
 const LinkGrid = @import("LinkGrid.zig");
 
-const row_window_bytes = urlscan.max_uri_bytes * 2 + cellgrid.Cell.max_bytes * 2;
+/// The longest link the window must hold on either side of the cursor: a
+/// Markdown label, its destination and the four delimiters around them.
+const link_span_bytes = urlscan.max_uri_bytes + urlscan.max_label_bytes + 4;
+const row_window_bytes = link_span_bytes * 2 + cellgrid.Cell.max_bytes * 2;
 const max_walk_cells = row_window_bytes * 2;
 
 /// Extracts the textual URI under one absolute pane position without allocating.
@@ -57,7 +60,7 @@ fn matchGrid(grid: LinkGrid, position: Position) ?LinkMatch {
     var start = cursor;
     var bytes_before: usize = 0;
     var visited: usize = 0;
-    while (bytes_before <= urlscan.max_uri_bytes) {
+    while (bytes_before <= link_span_bytes) {
         if (visited == max_walk_cells) {
             return null;
         }
@@ -90,7 +93,7 @@ fn matchGrid(grid: LinkGrid, position: Position) ?LinkMatch {
         @memcpy(storage[len..][0..text.len], text);
         len += text.len;
         if (cursor_offset) |offset| {
-            if (len - offset >= urlscan.max_uri_bytes + cellgrid.Cell.max_bytes) {
+            if (len - offset >= link_span_bytes + cellgrid.Cell.max_bytes) {
                 break;
             }
         }
@@ -99,14 +102,24 @@ fn matchGrid(grid: LinkGrid, position: Position) ?LinkMatch {
     }
 
     const offset = cursor_offset orelse return null;
-    const found = urlscan.extractAt(storage[0..len], offset) orelse return null;
-    const range = positions(grid, start, .{ found.start, found.end }) orelse return null;
+    const window = storage[0..len];
+    // A Markdown link claims its label and markup too; bare URI text comes
+    // next, and a local path such as `src/main.zig:12` is the last resort.
+    const span, const destination, const scheme: ?urlscan.Scheme = if (urlscan.markdownLinkAt(window, offset)) |link|
+        .{ [2]usize{ link.start, link.end }, link.destinationText(window), null }
+    else if (urlscan.extractAt(window, offset)) |found|
+        .{ [2]usize{ found.start, found.end }, found.text(window), found.scheme }
+    else if (urlscan.pathAt(window, offset)) |found|
+        .{ [2]usize{ found.start, found.end }, found.text(window), found.scheme }
+    else
+        return null;
+    const range = positions(grid, start, span) orelse return null;
     if (!completeRange(grid, range)) {
         return null;
     }
 
     return .{
-        .target = data.LinkTarget.init(found.text(storage[0..len])) catch return null,
+        .target = (if (scheme == .path) data.LinkTarget.initPath(destination) else data.LinkTarget.init(destination)) catch return null,
         .start = range[0],
         .end = range[1],
     };
@@ -196,6 +209,22 @@ test "link intervals exclude prose punctuation and keep absolute pane rows" {
     try std.testing.expectEqualStrings("https://two.example", second.target.uri());
 }
 
+test "markdown links resolve their whole span to the classified destination" {
+    var buffer = try testBuffer(&.{"see [docs](https://example.com/a) and [x](javascript:alert(1)) now"});
+    defer buffer.deinit();
+    const scroll: core_module.Scroll = .{ .total_rows = 1, .offset = 0 };
+    for (4..33) |x| {
+        const found = match(&buffer, scroll, .{ .x = @intCast(x), .y = 0 }).?;
+        try std.testing.expectEqualStrings("https://example.com/a", found.target.uri());
+        try std.testing.expectEqualDeep(Position{ .x = 4, .y = 0 }, found.start);
+        try std.testing.expectEqualDeep(Position{ .x = 33, .y = 0 }, found.end);
+    }
+
+    try std.testing.expect(match(&buffer, scroll, .{ .x = 3, .y = 0 }) == null);
+    try std.testing.expect(match(&buffer, scroll, .{ .x = 33, .y = 0 }) == null);
+    try std.testing.expect(match(&buffer, scroll, .{ .x = 39, .y = 0 }) == null);
+}
+
 test "Unicode link intervals use columns rather than bytes or codepoints" {
     var buffer = try testBuffer(&.{"界e\u{301} https://e/路e\u{301}."});
     defer buffer.deinit();
@@ -262,14 +291,34 @@ test "maximum URI length remains bounded inside a larger row window" {
 }
 
 test "matching retains supported schemes and does not join physical rows" {
-    var buffer = try testBuffer(&.{ "https://example", ".com/path", "javascript:alert(1)", "data:text/plain,hi", "./src/main.zig" });
+    var buffer = try testBuffer(&.{ "https://example", ".com/path", "javascript:alert(1)", "data:text/plain,hi" });
     defer buffer.deinit();
-    const scroll: core_module.Scroll = .{ .total_rows = 5, .offset = 0 };
+    const scroll: core_module.Scroll = .{ .total_rows = 4, .offset = 0 };
     const found = match(&buffer, scroll, .{ .x = 8, .y = 0 }).?;
     try std.testing.expectEqualStrings("https://example", found.target.uri());
-    for (1..5) |y| {
+    for (1..4) |y| {
         try std.testing.expect(match(&buffer, scroll, .{ .x = 3, .y = @intCast(y) }) == null);
     }
+}
+
+test "local paths are the last resort and keep their position suffix" {
+    var buffer = try testBuffer(&.{ "at src/gui/routing.zig:435.", "open https://e/a.zig now", "en ~/.claude/settings.json." });
+    defer buffer.deinit();
+    const scroll: core_module.Scroll = .{ .total_rows = 3, .offset = 0 };
+    const expected = "src/gui/routing.zig:435";
+    for (3..3 + expected.len) |x| {
+        const found = match(&buffer, scroll, .{ .x = @intCast(x), .y = 0 }).?;
+        try std.testing.expectEqual(urlscan.Scheme.path, found.target.scheme);
+        try std.testing.expectEqualStrings(expected, found.target.uri());
+        try std.testing.expectEqualDeep(Position{ .x = 3, .y = 0 }, found.start);
+        try std.testing.expectEqualDeep(Position{ .x = 3 + expected.len, .y = 0 }, found.end);
+    }
+
+    try std.testing.expect(match(&buffer, scroll, .{ .x = 3 + expected.len, .y = 0 }) == null);
+    const web = match(&buffer, scroll, .{ .x = 12, .y = 1 }).?;
+    try std.testing.expectEqual(urlscan.Scheme.https, web.target.scheme);
+    const home = match(&buffer, scroll, .{ .x = 8, .y = 2 }).?;
+    try std.testing.expectEqualStrings("~/.claude/settings.json", home.target.uri());
 }
 
 fn testPane(size: [2]u16) !Pane {

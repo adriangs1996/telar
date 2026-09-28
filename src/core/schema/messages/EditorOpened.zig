@@ -2,7 +2,9 @@ const id = @import("../id.zig");
 const codec = @import("../codec.zig");
 const EditorOpened = @This();
 
-pub const Outcome = enum(u8) { unavailable, opened, failed };
+/// `missing`: the path is not a regular file the runtime can read, so no
+/// editor was asked to open it.
+pub const Outcome = enum(u8) { unavailable, opened, failed, missing };
 
 request_id: id.RequestId,
 outcome: Outcome,

@@ -9,6 +9,7 @@ const OwnedWorkspaceRename = @import("OwnedWorkspaceRename.zig");
 const OwnedCreateWorkspace = @import("OwnedCreateWorkspace.zig");
 const OwnedCreateTab = @import("OwnedCreateTab.zig");
 const OwnedNotification = @import("OwnedNotification.zig");
+const RuntimeBootstrap = @import("RuntimeBootstrap.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Outbox = @This();
@@ -103,12 +104,37 @@ pub fn pushBootstrap(self: *Outbox, request: RuntimeBootstrap) !void {
     try self.push(.{ .request_runtime_state = .{ .client_identity = request.client_identity } });
 }
 
+/// Queues one control request encoded by `encode`, the core encoder of
+/// `value`'s message.
+///
+/// ```zig
+/// try outbox.pushEncoded(core.encodeInterruptAgent, request);
+/// ```
+pub fn pushEncoded(self: *Outbox, comptime encode: anytype, value: anytype) !void {
+    var scratch: [data.input_limits.max_encoded_bytes]u8 = undefined;
+    const encoded = try encode(&scratch, value);
+    const index = try self.reserve();
+    self.item_launch_cwd[index] = null;
+    self.items[index] = .{ .encoded = @intCast(encoded.len) };
+    @memcpy(self.payloadAt(index)[0..encoded.len], encoded);
+}
+
 pub fn pushClientCompletion(self: *Outbox, reply: core.ClientCommand) !void {
     try reply.validateWire();
     const index = try self.reserve();
     const encoded = core.encodeCompleteClientCommand(self.payloadAt(index), reply) catch unreachable;
     self.item_launch_cwd[index] = null;
     self.items[index] = .{ .complete_client_command = @intCast(encoded.len) };
+}
+
+/// Encodes a path query into its slot's payload, since its root may be a
+/// whole working directory. Example: `try outbox.pushFindPaths(request);`
+pub fn pushFindPaths(self: *Outbox, request: core.FindPaths) !void {
+    try request.validateWire();
+    const index = try self.reserve();
+    const encoded = core.encodeFindPaths(self.payloadAt(index), request) catch unreachable;
+    self.item_launch_cwd[index] = null;
+    self.items[index] = .{ .find_paths = @intCast(encoded.len) };
 }
 
 pub fn push(self: *Outbox, message: outbox_support.Message) !void {
@@ -130,7 +156,7 @@ pub fn push(self: *Outbox, message: outbox_support.Message) !void {
                 }
             }
         },
-        .pane_input, .agent_prompt, .query_agent_history, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout, .query_change_review, .change_review_command, .complete_client_command => unreachable,
+        .pane_input, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout, .query_change_review, .change_review_command, .complete_client_command, .encoded, .find_paths => unreachable,
         else => {},
     }
     try self.append(message);
@@ -162,62 +188,6 @@ pub fn pushInput(self: *Outbox, pane_id: core.PaneId, bytes: []const u8) !void {
         .len = @intCast(bytes.len),
     } };
     @memcpy(self.payloadAt(index)[0..bytes.len], bytes);
-}
-
-/// Owns one prompt in the existing slot byte storage without coalescing turns.
-/// Example: `try outbox.pushAgentPrompt(prompt);`
-pub fn pushAgentPrompt(self: *Outbox, prompt: core.AgentPrompt) !void {
-    try prompt.images.validate();
-    if ((prompt.text.len == 0 and prompt.images.count == 0) or prompt.text.len > core.agent_thread.max_prompt_bytes or prompt.text.len > data.input_limits.max_encoded_bytes or !std.unicode.utf8ValidateSlice(prompt.text) or std.mem.indexOfScalar(u8, prompt.text, 0) != null) {
-        return error.InvalidAgentPrompt;
-    }
-    if (!prompt.options.valid()) {
-        return error.InvalidAgentOptions;
-    }
-
-    var total = prompt.text.len;
-    for (prompt.images.storage[0..prompt.images.count]) |path| {
-        total += path.len;
-    }
-
-    if (total > data.input_limits.max_encoded_bytes) {
-        return error.InvalidAgentPrompt;
-    }
-
-    const index = try self.reserve();
-    self.item_launch_cwd[index] = null;
-    self.items[index] = .{ .agent_prompt = .{
-        .request_id = prompt.request_id,
-        .pane_id = prompt.pane_id,
-        .pane_generation = prompt.pane_generation,
-        .len = @intCast(prompt.text.len),
-        .options = prompt.options,
-        .image_count = prompt.images.count,
-    } };
-    @memcpy(self.payloadAt(index)[0..prompt.text.len], prompt.text);
-    var offset = prompt.text.len;
-    for (prompt.images.storage[0..prompt.images.count], 0..) |path, image_index| {
-        self.items[index].agent_prompt.image_lengths[image_index] = @intCast(path.len);
-        @memcpy(self.payloadAt(index)[offset..][0..path.len], path);
-        offset += path.len;
-    }
-}
-
-/// Owns cursors in the existing outbound byte slot without per-input allocation.
-/// Example: `try outbox.pushAgentHistory(query);`
-pub fn pushAgentHistory(self: *Outbox, query: core.QueryAgentHistory) !void {
-    _ = try core.AgentHistoryCursor.init(query.cursor);
-    _ = try core.AgentHistoryCursor.init(query.anchor);
-    _ = try core.AgentHistoryCursor.init(query.anchor_turn);
-    if (query.cursor.len + query.anchor.len + query.anchor_turn.len > data.input_limits.max_encoded_bytes) {
-        return error.InvalidAgentHistoryCursor;
-    }
-    const index = try self.reserve();
-    self.item_launch_cwd[index] = null;
-    self.items[index] = .{ .query_agent_history = .{ .request_id = query.request_id, .pane_id = query.pane_id, .pane_generation = query.pane_generation, .view_generation = query.view_generation, .cursor_len = @intCast(query.cursor.len), .anchor_len = @intCast(query.anchor.len), .anchor_turn_len = @intCast(query.anchor_turn.len), .direction = query.direction } };
-    @memcpy(self.payloadAt(index)[0..query.cursor.len], query.cursor);
-    @memcpy(self.payloadAt(index)[query.cursor.len..][0..query.anchor.len], query.anchor);
-    @memcpy(self.payloadAt(index)[query.cursor.len + query.anchor.len ..][0..query.anchor_turn.len], query.anchor_turn);
 }
 
 /// Owns the complete encoded command in an existing byte slot before input returns.
@@ -311,7 +281,6 @@ pub fn pushCreateTab(self: *Outbox, request: core.CreateTab) !void {
     }
 
     var owned: OwnedCreateTab = .{
-        .kind = request.kind,
         .request_id = request.request_id,
         .workspace = request.workspace,
         .label_len = @intCast(request.label.len),
@@ -413,6 +382,25 @@ pub fn finishSend(self: *Outbox, result: anyerror!void) !void {
     self.popSent();
 }
 
+/// Drops every queued message that is not being written, with the payloads
+/// it owns. A lost runtime never receives them: its successor starts a new
+/// session, and replaying mutations into it could repeat them.
+///
+/// ```zig
+/// model.to_runtime.discardQueued();
+/// ```
+pub fn discardQueued(self: *Outbox) void {
+    const kept: u8 = @intFromBool(self.send_pending);
+    var offset: usize = kept;
+    while (offset < self.len) : (offset += 1) {
+        const index = (@as(usize, self.head) + offset) % outbox_support.capacity;
+        self.releaseLaunchCwd(index);
+        self.releaseClientLayout(index);
+    }
+
+    self.len = kept;
+}
+
 /// True while a claimed send has neither completed nor failed.
 pub fn inFlight(self: *const Outbox) bool {
     return self.send_pending;
@@ -492,7 +480,7 @@ fn encodeNext(self: *const Outbox, buffer: []u8) ![]const u8 {
         .delete_history => |value| core.encodeDeleteHistory(buffer, value),
         .read_history_output => |value| core.encodeReadHistoryOutput(buffer, value),
         .suggest_command => |*value| core.encodeSuggestCommand(buffer, value.view()),
-        .complete_client_command => |length| self.payloadAt(self.head)[0..length],
+        .complete_client_command, .find_paths => |length| self.payloadAt(self.head)[0..length],
         .open_editor => |value| encode: {
             var request = value;
             const bytes = self.payloadAt(self.head);
@@ -501,13 +489,7 @@ fn encodeNext(self: *const Outbox, buffer: []u8) ![]const u8 {
             break :encode core.encodeOpenEditor(buffer, request);
         },
         .complete_pane_focus => |value| core.encodeCompletePaneFocus(buffer, value),
-        .agent_prompt => |*value| core.encodeAgentPrompt(buffer, value.view(self.payloadAt(self.head))),
-        .agent_interrupt => |value| core.encodeAgentInterrupt(buffer, value),
-        .agent_resume => |value| core.encodeAgentResume(buffer, value),
-        .agent_approval => |value| core.encodeAgentApproval(buffer, value),
-        .query_change_review, .change_review_command => |len| self.payloadAt(self.head)[0..len],
-        .query_agent_thread => |value| core.encodeQueryAgentThread(buffer, value),
-        .query_agent_history => |*value| core.encodeQueryAgentHistory(buffer, value.view(self.payloadAt(self.head))),
+        .query_change_review, .change_review_command, .encoded => |len| self.payloadAt(self.head)[0..len],
     };
 }
 
@@ -696,10 +678,3 @@ test "runtime bootstrap queues colors before subscribing to the initial layout" 
     try std.testing.expect(runtime_state == .request_runtime_state);
     try std.testing.expectEqual(@as(core.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
 }
-
-/// What a client tells the runtime right after host negotiation.
-const RuntimeBootstrap = struct {
-    graphics_shared: bool,
-    client_identity: core.ClientIdentity,
-    terminal_colors: core.TerminalColors = .{},
-};

@@ -1,7 +1,7 @@
 # Pane input
 
-Pane input begins after the host parser and key router have decided that an
-event belongs to a child. The client validates one disposable target, applies
+Pane input begins after the key router has decided that a semantic event
+belongs to a child. The client validates one disposable target, applies
 source-specific viewport policy and sends bounded bytes to the runtime. The
 runtime remains responsible for attachment authorization, queueing and the PTY
 write.
@@ -14,7 +14,7 @@ queue.
 ## Client boundary
 
 ```text
-host adapter drains semantic input
+GuiAdapter.drainInput / HeadlessClient input line
   -> key_routing.routeKeyInput / paste_routing / pointer_routing
   -> pane_input.sendPaneInput / startPanePaste / inputPaneMouse
        capture the target and its current input modes
@@ -24,7 +24,7 @@ host adapter drains semantic input
   -> runtime_io.sendRuntimeInput -> model.to_runtime -> pane_input
 ```
 
-The host adapter dispatches semantic keys and replayed bytes to
+The adapter dispatches semantic keys, including keys the router replays, to
 `key_routing.routeKeyInput`. Paste and pointer routing retain their current
 entrypoints and call the corresponding owner operations. Child input policy,
 leases, viewport restoration, telemetry and transport delivery are visible in
@@ -53,8 +53,10 @@ carries only `pane_id` and a slice borrowed for the synchronous call.
 
 ## Paste ownership
 
-The input router identifies bracketed-paste boundaries and owns only its parser
-flag. For every phase, the `paste_routing` adapter snapshots attachment-modal,
+The window delivers a paste as start, chunk and finish events.
+`GuiAdapter.drainInput` interrupts a pending chord at the start, hands the
+paste to an open change review or a widget that takes it, and otherwise calls `paste_routing.start`,
+`content` and `finish`. For every phase, the `paste_routing` adapter snapshots attachment-modal,
 prompt, copy-mode and pane-session authority. `paste_routing` assigns the
 phase to at most one owner. An attachment modal blocks start. An active prompt
 owns start, copy mode blocks it, and every other accepted start reaches the
@@ -133,8 +135,8 @@ just lost focus.
 Successful input at the live bottom changes no rendered client state and
 requests no draw. Starting or finishing a pane paste changes model state but no
 presentation revision. Restoring scrollback advances only
-`ClientModel.Version.viewport`; the presenter detects that revision and
-schedules the paced recomposition. Later `pane_frame` messages reconcile
+`ClientModel.Version.viewport`; the adapter observes that revision and
+prepares the next frame. Later `pane_frame` messages reconcile
 whatever the child emitted.
 
 Across the socket, `schema.pane_input` enters the runtime attachment boundary.
@@ -147,20 +149,18 @@ different pane or the runtime event loop.
 - `src/model/state/tests/input_and_frames.zig` proves active-target
   resolution, paste identity and framing capture, exact release, attachment
   checks and exclusive modes.
-- `src/frontend/client/tests/input_operations.zig` proves opening-marker
+- `src/client_tests/input_operations.zig` proves opening-marker
   rollback, closing-marker cleanup, retired paste targets and exact key-lease
   targets under saturation and delivery failure.
-- `src/client/input/encoding_tests.zig` proves child-mode encoding, legacy and
+- `lib/keyinput/encoding_tests.zig` proves child-mode encoding, legacy and
   Kitty releases and paste framing.
 - `lib/keyinput/routing_tests.zig` proves paste replay and pointer
   admission.
-- `src/frontend/client/tests/` (`input.zig`, `pane_lifecycle.zig`,
+- `src/client_tests/` (`input.zig`, `pane_lifecycle.zig`,
   `tab_lifecycle.zig`) proves captured target and framing, prompt and
   copy-mode routing, viewport and protocol order, owner exclusion,
   close-before-detach, pane-retirement cleanup, mouse scrollback preservation,
   telemetry separation and outbox backpressure.
-- `src/frontend/input/host_tests.zig` proves terminal-mode-specific key and paste
-  encoding.
 - `src/backend/runtime/tests/requests_test.zig` and
   `src/transport_integration_test.zig` prove runtime queueing, PTY delivery and
   per-pane isolation.

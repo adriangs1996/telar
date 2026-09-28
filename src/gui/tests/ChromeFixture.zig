@@ -76,7 +76,7 @@ pub fn paint(self: *Fixture, projection_value: client.Projection) !void {
 pub fn prepare(self: *Fixture, projection_value: client.Projection) !void {
     const renderer = &self.session.gui.renderer;
     renderer.quads.clear();
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = self.session.gui.app.model.theme, .background_opacity = renderer.config.window.background_opacity, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .sprites = if (renderer.sprites) |*page| page else null };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = self.session.gui.app.model.theme, .background_opacity = renderer.config.window.background_opacity, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .controls = renderer.controls, .sprites = if (renderer.sprites) |*page| page else null };
     self.chrome.animation.begin(self.chrome.now_ns);
     canvas.animation = &self.chrome.animation;
     var context = try self.chrome.begin(&canvas, &projection_value);

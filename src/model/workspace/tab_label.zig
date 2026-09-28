@@ -1,10 +1,47 @@
 //! What a tab shows as its name: the canonical label, or the focused
-//! foreground application when the label is empty.
+//! foreground application when the label is empty. The GUI strip shows a
+//! richer caption for the same tab: the agent's session title, or the focused
+//! directory beside the application.
 const core = @import("telar-core");
 const std = @import("std");
 const ClientModel = @import("../state/ClientModel.zig");
 const icons = @import("../layout/icons.zig");
 const tab_layout = @import("tab_layout.zig");
+const pane_support = @import("../panes/pane_support.zig");
+
+/// Bytes a caption can need: a directory name, the separator and an
+/// application name. Session titles are borrowed, never copied.
+pub const caption_bytes = core.max_tab_label_bytes;
+
+const caption_separator = " \u{00b7} ";
+
+comptime {
+    std.debug.assert(pane_support.max_cwd_name_bytes + caption_separator.len + core.max_foreground_name_bytes <= caption_bytes);
+}
+
+/// What the GUI tab strip calls a tab. A manual label wins. An automatic tab
+/// names the agent in its focused pane by session title once that title is no
+/// longer a placeholder; otherwise it names the focused directory beside the
+/// foreground application, so two shells in different projects differ.
+/// Example: `var storage: [tab_label.caption_bytes]u8 = undefined; const shown = tab_label.caption(model, slot, &storage);`
+pub fn caption(model: *const ClientModel, slot: usize, storage: *[caption_bytes]u8) []const u8 {
+    if (!automatic(model, slot)) {
+        return model.tabs.canonicalLabel(slot);
+    }
+
+    const application = applicationName(model, slot);
+    const pane = tab_layout.focusedPaneConst(model, slot) orelse return application;
+    if (sessionTitle(model, slot, pane.id)) |title| {
+        return title;
+    }
+
+    const directory = pane.cwdName();
+    if (directory.len == 0) {
+        return application;
+    }
+
+    return std.fmt.bufPrint(storage, "{s}{s}{s}", .{ directory, caption_separator, application }) catch application;
+}
 
 /// Example: `const title = tab_label.text(model, slot);`
 pub fn text(model: *const ClientModel, slot: usize) []const u8 {
@@ -13,6 +50,13 @@ pub fn text(model: *const ClientModel, slot: usize) []const u8 {
     }
 
     return applicationName(model, slot);
+}
+
+/// Artwork for the focused application of any tab, renamed or not, so every
+/// tab in the GUI strip carries a mark.
+/// Example: `const mark = tab_label.mark(model, slot);`
+pub fn mark(model: *const ClientModel, slot: usize) icons.Icon {
+    return icons.Icon.forApplication(applicationName(model, slot));
 }
 
 /// Artwork for a tab that follows its foreground application.
@@ -66,6 +110,23 @@ pub fn applyForegroundReport(model: *ClientModel, slot: usize, report: core.Pane
 
     model.tabs.setForegroundName(slot, report.name);
     return automatic(model, slot);
+}
+
+fn sessionTitle(model: *const ClientModel, slot: usize, pane_id: core.PaneId) ?[]const u8 {
+    const location = model.tabs.location[slot];
+    for (model.agent_snapshot.slice()) |*agent| {
+        if (agent.key.pane_id != pane_id or !std.meta.eql(agent.location, location)) {
+            continue;
+        }
+
+        if (agent.title_state == .placeholder or agent.sessionTitle().len == 0) {
+            return null;
+        }
+
+        return agent.sessionTitle();
+    }
+
+    return null;
 }
 
 fn applicationName(model: *const ClientModel, slot: usize) []const u8 {

@@ -217,20 +217,20 @@ fn exerciseAdd(gpa: std.mem.Allocator) !void {
     };
     const size: core.TerminalSize = .{ .cols = 1, .rows = 1 };
     const first = try panes.add(gpa, .{ .pane_id = @enumFromInt(1), .location = location, .size = size }, true);
-    try first.setComposer("keep draft");
+    _ = try first.setTitle("keep title");
 
     _ = panes.add(gpa, .{ .pane_id = @enumFromInt(2), .location = location, .size = size }, false) catch |err| {
         try std.testing.expectEqual(@as(usize, 1), panes.count);
         try std.testing.expect(panes.find(@enumFromInt(2)) == null);
         try std.testing.expectEqual(first, panes.find(@enumFromInt(1)).?);
-        try std.testing.expectEqualStrings("keep draft", first.composerSlice());
+        try std.testing.expectEqualStrings("keep title", first.titleSlice());
         return err;
     };
 
     try std.testing.expect(panes.remove(@enumFromInt(2)));
     try std.testing.expect(!panes.remove(@enumFromInt(2)));
     try std.testing.expect(!panes.remove(.invalid));
-    try std.testing.expectEqualStrings("keep draft", first.composerSlice());
+    try std.testing.expectEqualStrings("keep title", first.titleSlice());
 }
 
 test "pane slots bound membership and reuse holes without moving live records" {

@@ -18,7 +18,7 @@ const initial: Initial = .{
 test "change review availability owns session identity and survives the initial attachment frame" {
     var pane = try Pane.init(std.testing.allocator, initial);
     defer pane.deinit();
-    _ = pane.identify(.terminal, 7);
+    _ = pane.identify(7);
     try std.testing.expect(!pane.hasChangeReview());
     var session = "session-A".*;
     var notification: core.ChangeReviewChanged = .{ .pane_id = pane.id, .pane_generation = 7, .session = &session, .latest_edition_id = 1 };
@@ -53,7 +53,7 @@ test "change review availability rejects foreign panes and retires generations a
     defer pane.deinit();
     var notification: core.ChangeReviewChanged = .{ .pane_id = pane.id, .pane_generation = 7, .session = "session-A", .latest_edition_id = 1 };
     try std.testing.expect(!pane.applyChangeReview(notification));
-    _ = pane.identify(.terminal, 7);
+    _ = pane.identify(7);
     pane.attach(11);
     notification.pane_id = @enumFromInt(2);
     try std.testing.expect(!pane.applyChangeReview(notification));
@@ -68,32 +68,12 @@ test "change review availability rejects foreign panes and retires generations a
     pane.attachment_generation += 1;
     try std.testing.expect(!pane.hasChangeReview());
     try std.testing.expect(pane.applyChangeReview(notification));
-    _ = pane.identify(.terminal, 8);
+    _ = pane.identify(8);
     try std.testing.expect(!pane.hasChangeReview());
     try std.testing.expect(!pane.applyChangeReview(notification));
     notification.pane_generation = 8;
     try std.testing.expect(pane.applyChangeReview(notification));
     try std.testing.expect(pane.hasChangeReview());
-}
-
-test "change review availability follows managed conversation identity without waiting for an edition" {
-    var pane = try Pane.init(std.testing.allocator, initial);
-    defer pane.deinit();
-    _ = pane.identify(.agent, 7);
-    pane.attach(11);
-    const notification: core.ChangeReviewChanged = .{ .pane_id = pane.id, .pane_generation = 7, .session = "thread-A", .latest_edition_id = 1 };
-    try std.testing.expect(pane.applyChangeReview(notification));
-    var snapshot: core.AgentThreadSnapshot = .{ .pane_id = pane.id, .pane_generation = 7, .revision = 1, .thread_id_len = 8 };
-    @memcpy(snapshot.thread_id[0..8], "thread-A");
-    var bytes: [4096]u8 = undefined;
-    const first = try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &snapshot));
-    try std.testing.expect(try pane.applyAgentThread(first.agent_thread_snapshot));
-    try std.testing.expect(pane.hasChangeReview());
-    snapshot.revision += 1;
-    @memcpy(snapshot.thread_id[0..8], "thread-B");
-    const second = try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &snapshot));
-    try std.testing.expect(try pane.applyAgentThread(second.agent_thread_snapshot));
-    try std.testing.expect(!pane.hasChangeReview());
 }
 
 fn frame(storage: []u8, input: FrameInput) !core.FrameView {
@@ -202,18 +182,6 @@ fn exerciseAllocationFailures(gpa: std.mem.Allocator) !void {
 
 test "pane initialization resize and metadata roll back allocation failures" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, exerciseAllocationFailures, .{});
-}
-
-test "composer draft is owned, bounded and replaced whole" {
-    var pane = try Pane.init(std.testing.allocator, initial);
-    defer pane.deinit();
-
-    try std.testing.expectEqualStrings("", pane.composerSlice());
-    try pane.setComposer("fix the tests");
-    try std.testing.expectEqualStrings("fix the tests", pane.composerSlice());
-    try pane.setComposer("");
-    try std.testing.expectEqualStrings("", pane.composerSlice());
-    try std.testing.expectError(error.ComposerTooLong, pane.setComposer(&[_]u8{'x'} ** (Pane.max_composer_bytes + 1)));
 }
 
 test "pane metadata is owned admitted with its base and replaced without allocations" {

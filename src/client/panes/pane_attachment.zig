@@ -4,12 +4,12 @@ const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const agent_control = @import("../agents/agent_control.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
 const pane_resize = @import("pane_resize.zig");
 const pane_split = @import("pane_split.zig");
 const tab_snapshot = @import("../workspace/tab_snapshot.zig");
 const workspace_creation = @import("../workspace/workspace_creation.zig");
+const agent_peek = @import("../agents/agent_peek.zig");
 const Client = @import("../execution/Client.zig");
 
 const PaneOpenOutcome = enum { workspace_arrived, workspace_created, pane_split, pane_attached, ignored };
@@ -140,11 +140,15 @@ pub fn completePaneOpen(client: *Client, opened: core.PaneOpened) !PaneOpenOutco
             break :result .pane_attached;
         },
         .ignored => .ignored,
+        .peek_action => result: {
+            try agent_peek.showOpened(client, opened);
+            break :result .ignored;
+        },
         else => return error.UnexpectedRequest,
     };
 
     if (outcome != .ignored) {
-        try identifyOpenedPane(&client.model, opened);
+        _ = client.model.identifyPane(opened);
     }
 
     return outcome;
@@ -172,9 +176,3 @@ fn confirmPaneAttachment(model: *data.ClientModel, confirmation: data.PaneAttach
     _ = try data.pane_attachment.confirm(model, confirmed);
 }
 
-/// Sets runtime pane identity after the existing attachment flow commits.
-fn identifyOpenedPane(model: *data.ClientModel, opened_pane: core.PaneOpened) !void {
-    if (model.identifyPane(opened_pane) and opened_pane.kind == .agent) {
-        try agent_control.queryAgentThread(model, opened_pane.pane_id);
-    }
-}

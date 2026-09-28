@@ -20,7 +20,7 @@ pub fn collect(provider: core.AgentProvider, input: ToolHookInput) !ReviewHookFi
         return self;
     }
 
-    if (provider == .claude and (std.mem.eql(u8, input.tool_name, "Write") or std.mem.eql(u8, input.tool_name, "Edit"))) {
+    if (declaresFilePath(provider, input.tool_name)) {
         const path = input.tool_input.object.get("file_path") orelse return self;
         if (path == .string) {
             try self.append(path.string);
@@ -70,6 +70,17 @@ pub fn collect(provider: core.AgentProvider, input: ToolHookInput) !ReviewHookFi
     }
 
     return self;
+}
+
+// Claude Code edits with `Write` and `Edit`. Cursor Agent reports every
+// edit, a search-and-replace included, as a `Write` of the whole file and a
+// removal as `Delete`, each naming `file_path`.
+fn declaresFilePath(provider: core.AgentProvider, tool_name: []const u8) bool {
+    return switch (provider) {
+        .claude => std.mem.eql(u8, tool_name, "Write") or std.mem.eql(u8, tool_name, "Edit"),
+        .cursor => std.mem.eql(u8, tool_name, "Write") or std.mem.eql(u8, tool_name, "Delete"),
+        else => false,
+    };
 }
 
 fn append(self: *ReviewHookFiles, path: []const u8) !void {
@@ -148,5 +159,26 @@ test "review hook paths accept Claude file tools and reject unrelated or malform
     try std.testing.expectEqual(@as(usize, 0), (try ReviewHookFiles.collect(.claude, input)).count);
     input.tool_input = .null;
     input.tool_name = "Edit";
+    try std.testing.expectEqual(@as(usize, 0), (try ReviewHookFiles.collect(.claude, input)).count);
+}
+
+test "review hook paths accept Cursor's whole-file writes and deletions" {
+    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, "{\"file_path\":\"/work/edit.txt\",\"content\":\"alpha\\nBETA\\n\"}", .{});
+    defer parsed.deinit();
+    var input: ToolHookInput = .{
+        .event = "PreToolUse",
+        .tool_name = "Write",
+        .tool_call_id = "call-1",
+        .tool_input = parsed.value,
+        .cwd = "/work",
+        .session = "session",
+        .exit_code = null,
+    };
+    try std.testing.expectEqualStrings("/work/edit.txt", (try ReviewHookFiles.collect(.cursor, input)).paths[0]);
+    input.tool_name = "Delete";
+    try std.testing.expectEqual(@as(usize, 1), (try ReviewHookFiles.collect(.cursor, input)).count);
+    input.tool_name = "Edit";
+    try std.testing.expectEqual(@as(usize, 0), (try ReviewHookFiles.collect(.cursor, input)).count);
+    input.tool_name = "Delete";
     try std.testing.expectEqual(@as(usize, 0), (try ReviewHookFiles.collect(.claude, input)).count);
 }

@@ -8,12 +8,18 @@ const agent_navigation = @import("../agents/agent_navigation.zig");
 const prompt_paths = @import("../completion/prompt_paths.zig");
 const actions = @import("actions.zig");
 const history_palette = @import("history_palette.zig");
+const machine_picker = @import("../machines/machine_picker.zig");
+const machine_profiles = @import("../machines/machine_profiles.zig");
+const MachineResults = @import("../machines/MachineResults.zig");
+const Machines = @import("../machines/Machines.zig");
+const path_picker = @import("path_picker.zig");
 const suggest_command = @import("suggest_command.zig");
 const tab_rename = @import("../workspace/tab_rename.zig");
 const tab_selection = @import("../workspace/tab_selection.zig");
 const workspace_creation = @import("../workspace/workspace_creation.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 const workspace_rename = @import("../workspace/workspace_rename.zig");
+const agent_peek = @import("../agents/agent_peek.zig");
 const Client = @import("../execution/Client.zig");
 
 /// Opens the command palette with `prefix` already typed. A `?` palette
@@ -41,7 +47,7 @@ pub fn beginCommandPalette(model: *data.ClientModel, prefix: data.CommandPalette
 /// Example: `try name_prompt.choosePromptRow(app, index);`
 pub fn choosePromptRow(client: *Client, index: u16) !void {
     client.model.name_prompt.select(index);
-    constrainPickerSelection(&client.model);
+    constrainPickerSelection(&client.model, client.machines);
     _ = try inputPrompt(
         client,
         .{
@@ -87,18 +93,29 @@ pub fn chooseDirectory(client: *Client, index: u16, revision: u64) !void {
 pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
     const before = promptListSnapshot(&client.model.name_prompt);
     const directory_before = promptDirectoryVersion(&client.model.name_prompt);
-    const command = name_prompts.commandFor(input);
+    const paths_request = client.model.path_picker.pending_request;
+    const command = path_picker.orient(&client.model, name_prompts.commandFor(&input));
     const outcome = if (command) |value| try applyPromptCommand(client, value) else .unchanged;
     try refreshPromptHistory(&client.model, before);
+    try refreshPromptPaths(
+        &client.model,
+        before,
+        paths_request,
+    );
+    if (outcome == .cancelled and before.kind == .paths) {
+        path_picker.close(&client.model);
+    }
+
     try history_palette.navigateHistoryPage(&client.model);
     if (outcome == .completion_requested) {
         try prompt_paths.acceptPathCompletion(client);
     } else if (outcome == .cancelled or outcome == .finished) {
         prompt_paths.closePathCompletion(&client.model);
+        agent_peek.settle(&client.model);
     } else if (directory_before != null and !std.meta.eql(directory_before, promptDirectoryVersion(&client.model.name_prompt))) {
         try prompt_paths.refreshPathCompletion(client);
     }
-    constrainPickerSelection(&client.model);
+    constrainPickerSelection(&client.model, client.machines);
     try history_palette.refreshHistoryInspection(client);
     suggest_command.discardEditedSuggestion(&client.model, before);
     if (outcome == .finished) {
@@ -109,6 +126,18 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
     }
     if (outcome == .removed and before.kind == .history) {
         try history_palette.deleteHistorySelection(&client.model, before.selection);
+    }
+    if (outcome == .removed and before.kind == .machines) {
+        try machine_picker.remove(client, machineRow(client, before));
+    }
+    if (outcome == .rename_requested and before.kind == .machines) {
+        machine_picker.rename(client, machineRow(client, before));
+    }
+    if (outcome == .copied and before.kind == .history) {
+        try history_palette.copyHistorySelection(client, before.selection);
+    }
+    if (outcome == .pane_requested and before.kind == .history) {
+        try history_palette.visitHistoryPane(client, before.selection);
     }
     return outcome;
 }
@@ -166,8 +195,23 @@ pub fn openNamePrompt(model: *data.ClientModel, intent: name_prompt_opening.Inte
         .goto_picker => .goto_picker,
         .history_palette => .history_palette,
         .suggest_palette => .suggest_palette,
+        .path_picker => .path_picker,
         .palette => |prefix| .{
             .palette = prefix,
+        },
+        .rename_machine => |rename| .{
+            .rename_machine = .{
+                .slot = rename.slot,
+                .label = rename.label,
+            },
+        },
+        .add_machine => .add_machine,
+        .peek => |key| peek: {
+            if (model.agent_snapshot.find(key) == null) {
+                return false;
+            }
+
+            break :peek .{ .peek = key };
         },
         .copy_search => unreachable,
     };
@@ -199,6 +243,9 @@ pub fn promptListSnapshot(prompt_state: *const data.NamePromptState) data.Prompt
         .history => .{
             .kind = .history,
         },
+        .paths => .{
+            .kind = .paths,
+        },
         .suggest => .{
             .kind = .suggest,
         },
@@ -212,12 +259,19 @@ pub fn promptListSnapshot(prompt_state: *const data.NamePromptState) data.Prompt
             .actions => .{
                 .kind = .actions,
             },
+            .machines => .{
+                .kind = .machines,
+            },
         },
         else => return .{},
     };
 
     snapshot.selection = prompt.selection();
     snapshot.scope = prompt.scope();
+    if (prompt.mode == .history) {
+        snapshot.author = prompt.mode.history.author;
+        snapshot.failed_only = prompt.mode.history.failed_only;
+    }
     const text = prompt.paletteQuery();
     snapshot.len = @intCast(text.len);
     @memcpy(snapshot.text[0..text.len], text);
@@ -238,6 +292,11 @@ fn finishPromptList(client: *Client, before: data.PromptListSnapshot) !void {
             },
         ),
         .suggest => try suggest_command.pasteSuggestion(client),
+        .paths => try path_picker.insert(
+            client,
+            before.selection,
+            before.alternate,
+        ),
         .goto => {
             var results: data.Results = .{};
             data.goto_picker.collect(
@@ -262,6 +321,13 @@ fn finishPromptList(client: *Client, before: data.PromptListSnapshot) !void {
             const index = @min(before.selection, @as(u16, results.len) - 1);
             _ = try actions.executeAction(client, data.command_palette.entries[results.slice()[index].index].action, .effect);
         },
+        .machines => {
+            if (client.machines == null) {
+                return;
+            }
+
+            try machine_picker.choose(client, machineRow(client, before), before.alternate);
+        },
     }
 }
 
@@ -274,7 +340,8 @@ fn refreshPromptHistory(model: *data.ClientModel, before: data.PromptListSnapsho
     }
 
     const text = prompt.field.text();
-    if (before.kind == .history and before.scope == prompt.scope() and
+    const history = prompt.mode.history;
+    if (before.kind == .history and before.scope == history.scope and before.author == history.author and before.failed_only == history.failed_only and
         std.mem.eql(
             u8,
             before.textSlice(),
@@ -287,9 +354,29 @@ fn refreshPromptHistory(model: *data.ClientModel, before: data.PromptListSnapsho
     try history_palette.queryHistory(model, text);
 }
 
+/// Asks for new matches only when the path query text changed; moving the
+/// root clears the field and requests on its own.
+fn refreshPromptPaths(model: *data.ClientModel, before: data.PromptListSnapshot, request_before: u64) !void {
+    const prompt = model.name_prompt.currentConst() orelse return;
+    if (prompt.target() != .paths or before.kind != .paths or model.path_picker.pending_request != request_before) {
+        return;
+    }
+
+    const text = prompt.field.text();
+    if (std.mem.eql(
+        u8,
+        before.textSlice(),
+        text,
+    )) {
+        return;
+    }
+
+    try path_picker.request(model, text);
+}
+
 /// Keeps the picker selection inside the deterministic result set the
 /// renderer and the submit path both derive from the current query.
-fn constrainPickerSelection(model: *data.ClientModel) void {
+fn constrainPickerSelection(model: *data.ClientModel, machines_for_selection: ?*const Machines) void {
     const prompt = model.name_prompt.currentConst() orelse return;
     if (prompt.selection() == 0) {
         return;
@@ -298,6 +385,7 @@ fn constrainPickerSelection(model: *data.ClientModel) void {
     const count: u16 = switch (prompt.target()) {
         .goto => pickerCount(model, prompt.field.text()),
         .history => model.history_palette.len,
+        .paths => model.path_picker.len,
         .suggest => 1,
         .create_workspace => @intCast(model.path_completion.entries().len),
         .palette => switch (prompt.paletteMode()) {
@@ -308,10 +396,25 @@ fn constrainPickerSelection(model: *data.ClientModel) void {
                 data.command_palette.collect(prompt.paletteQuery(), &results);
                 break :blk results.len;
             },
+            .machines => blk: {
+                const machines = machines_for_selection orelse break :blk 0;
+                var results: MachineResults = .{};
+                machine_picker.collect(machines, prompt.paletteQuery(), &results);
+                break :blk results.rows();
+            },
         },
         else => return,
     };
     model.name_prompt.constrainSelection(count);
+}
+
+// The row of the machine list the snapshot's selection names, as the
+// palette drew it.
+fn machineRow(client: *Client, before: data.PromptListSnapshot) ?u8 {
+    const machines = client.machines orelse return null;
+    var results: MachineResults = .{};
+    machine_picker.collect(machines, before.textSlice(), &results);
+    return results.slotAt(@min(before.selection, results.rows() - 1));
 }
 
 fn pickerCount(model: *data.ClientModel, query: []const u8) u16 {
@@ -390,7 +493,17 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
             client.list_submission_alternate = submission.alternate;
             break :blk true;
         },
+        .paths => blk: {
+            const prompt = client.model.name_prompt.currentConst() orelse break :blk false;
+            if (!path_picker.canInsert(&client.model, prompt.selection())) {
+                break :blk false;
+            }
+
+            client.list_submission_alternate = submission.alternate;
+            break :blk true;
+        },
         .suggest => suggest_command.submitSuggestion(&client.model, submission.name),
+        .peek => |key| try agent_peek.submit(client, key, submission.name),
         // The palette closes like the list its prefix selects; `>` closes
         // only when a catalogue entry matches, so Enter on no match is inert.
         .palette => blk: {
@@ -406,7 +519,29 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
                     data.command_palette.collect(prompt.paletteQuery(), &results);
                     break :blk results.len != 0;
                 },
+                .machines => {
+                    client.list_submission_alternate = submission.alternate;
+                    break :blk client.machines != null;
+                },
             }
+        },
+        .machine => |machine| blk: {
+            const machines = client.machines orelse break :blk true;
+            switch (machine) {
+                .rename => |slot| try machine_profiles.start(client, .{
+                    .kind = .rename,
+                    .label = machines.label(slot),
+                    .value = submission.name,
+                }),
+                .add_label => {},
+                .add_destination => |label| try machine_profiles.start(client, .{
+                    .kind = .add,
+                    .label = label.text(),
+                    .value = submission.name,
+                }),
+            }
+
+            break :blk true;
         },
         .copy_search => blk: {
             const pane_id = data.copy_mode.targetPane(&client.model) orelse break :blk true;
@@ -434,7 +569,18 @@ fn applyPromptCommand(client: *Client, command: data.PromptCommand) !PromptOutco
         .changed => .changed,
         .cancelled => .cancelled,
         .removed => .removed,
+        .rename_requested => .rename_requested,
+        .copied => .copied,
+        .pane_requested => .pane_requested,
         .completion_requested => .completion_requested,
+        .descend_requested => |selection| blk: {
+            try path_picker.descend(&client.model, selection);
+            break :blk .changed;
+        },
+        .ascend_requested => blk: {
+            try path_picker.ascend(&client.model);
+            break :blk .changed;
+        },
         .submitted => |submission| if (!try submitPrompt(client, submission))
             .blocked
         else blk: {
@@ -452,6 +598,12 @@ const PromptOutcome = enum {
     /// The palette asked to delete its selected entry; the controller owns
     /// the wire effect.
     removed,
+    /// The machine list asked to rename its selected machine.
+    rename_requested,
+    /// The palette asked to copy its selected command to the clipboard.
+    copied,
+    /// The palette asked to leave for the pane its selected command ran in.
+    pane_requested,
     /// The directory field asked for its selected completion; the
     /// controller owns the completion list.
     completion_requested,

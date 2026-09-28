@@ -1,0 +1,15 @@
+//! Owner-only files and directories: a bounded read that refuses anything
+//! but a private regular file, an atomic replacement, a stat fingerprint for
+//! pollers, and an owner-checked directory.
+
+const private_file = @import("private_file.zig");
+
+pub const Mode = private_file.Mode;
+pub const read = private_file.read;
+pub const replace = private_file.replace;
+pub const fingerprint = private_file.fingerprint;
+pub const prepareDirectory = private_file.prepareDirectory;
+
+test {
+    _ = @import("private_file.zig");
+}

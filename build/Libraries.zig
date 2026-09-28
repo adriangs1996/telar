@@ -24,6 +24,8 @@ const Spec = struct {
     /// else the system's. A system copy links only for a target that runs on
     /// the host; other targets still analyze packages that import it.
     system_libraries: []const []const u8 = &.{},
+    /// Frameworks linked when the target is macOS.
+    macos_frameworks: []const []const u8 = &.{},
     /// Portability checks skip it.
     host_only: bool = false,
 };
@@ -84,9 +86,6 @@ const specs = [_]Spec{
         .posix = true,
     },
     .{
-        .name = "eventstream",
-    },
-    .{
         .name = "h2frames",
     },
     .{
@@ -123,6 +122,9 @@ const specs = [_]Spec{
         .name = "urlscan",
     },
     .{
+        .name = "fuzzymatch",
+    },
+    .{
         .name = "syntaxhl",
     },
     .{
@@ -156,6 +158,7 @@ const specs = [_]Spec{
     .{
         .name = "hostmetrics",
         .libc = true,
+        .macos_frameworks = &.{ "IOKit", "CoreFoundation" },
     },
     .{
         .name = "vtgrid",
@@ -173,6 +176,19 @@ const specs = [_]Spec{
     .{
         .name = "imaging",
         .imports = &.{"wuffs"},
+    },
+    .{
+        .name = "mermaid",
+        .libc = true,
+        .posix = true,
+    },
+    .{
+        .name = "touchtrace",
+    },
+    .{
+        .name = "privatefile",
+        .libc = true,
+        .posix = true,
     },
 };
 
@@ -221,6 +237,13 @@ fn build(b: *std.Build, spec: Spec, target: std.Build.ResolvedTarget, optimize: 
     });
     for (spec.imports, dependencies) |name, dependency| {
         module.addImport(name, dependency);
+    }
+
+    if (target.result.os.tag == .macos and spec.macos_frameworks.len > 0) {
+        macos_sdk.addPaths(b, module);
+        for (spec.macos_frameworks) |name| {
+            module.linkFramework(name, .{});
+        }
     }
 
     return module;

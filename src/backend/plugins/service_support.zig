@@ -37,7 +37,7 @@ pub fn capturedBytes(captured: *const Exchange) usize {
 test "effect authorization checks exact identity, declaration and grant" {
     var declared = core.CapabilitySet.initEmpty();
     declared.insert(.proxy_tap);
-    declared.insert(.history_write);
+    declared.insert(.notifications);
     var granted = core.CapabilitySet.initEmpty();
     granted.insert(.proxy_tap);
     const digest = [_]u8{0x5a} ** 32;
@@ -59,28 +59,17 @@ test "effect authorization checks exact identity, declaration and grant" {
         .digest = digest,
         .generation = 7,
         .event_id = 1,
-        .pane = @enumFromInt(3),
-        .pane_generation = 4,
         .storage = &storage,
         .batch = .{ .len = 1 },
     };
-    result.batch.items[0] = .{ .record_command = .{
-        .command = "pwd",
-        .cwd = "/tmp",
-        .provider = "test",
-        .tool_call_id = "",
-        .session = null,
-        .exit_code = 0,
-        .started_at_ms = 1,
-        .duration_ms = 2,
-        .redact = true,
-    } };
+    result.batch.items[0] = .{ .notification = .{ .level = .info, .duration_ms = 1000, .title = "tap", .message = "done" } };
 
     try std.testing.expectError(error.CapabilityNotGranted, service.authorize(&result));
-    service.workers[0].spec.granted.insert(.history_write);
+    service.workers[0].spec.granted.insert(.notifications);
     try service.authorize(&result);
-    result.batch.items[0] = .{ .notification = .{ .level = .info, .duration_ms = 1000, .title = "tap", .message = "done" } };
+    service.workers[0].spec.declared.remove(.notifications);
     try std.testing.expectError(error.CapabilityNotDeclared, service.authorize(&result));
+    service.workers[0].spec.declared.insert(.notifications);
     result.digest[0] ^= 0xff;
     try std.testing.expectError(error.StaleTapWorker, service.authorize(&result));
 }
@@ -98,8 +87,6 @@ test "worker queue drops the oldest frame when full" {
         frame.* = .{
             .gpa = std.testing.allocator,
             .event_id = index,
-            .pane = @enumFromInt(1),
-            .pane_generation = 1,
             .storage = try std.testing.allocator.alloc(u8, 1),
             .len = 1,
         };

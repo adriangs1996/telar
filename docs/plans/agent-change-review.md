@@ -1,7 +1,8 @@
 # Directed development and change review
 
-Status: consolidated functional design for review. No implementation has been
-started. Product decisions below come from the design interview; the proposed
+Status: on hold. This design builds on managed agent panes, which telar
+removed; the source links below point at deleted files. It needs a new base
+before any implementation. No implementation has been started. Product decisions below come from the design interview; the proposed
 runtime contracts still require the technical proofs listed below.
 
 Terms are defined in [CONTEXT.md](../../CONTEXT.md#change-review). Implementation

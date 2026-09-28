@@ -9,41 +9,39 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
         .resize_sidebar => "Resize sidebar",
         .custom => "Agents",
         .text_field => |field| if (field == .name) "Name or query" else "Working directory",
-        .composer => "Message to agent",
         .change_review => "Review changes",
-        .transcript => "Conversation",
-        .message_link => "Link",
-        .thread_item => |control| if (control.operation == .copy) "Copy message" else "Show activity details",
-        .composer_selector => |selector| switch (selector.kind) {
-            .model => "Choose model",
-            .effort => "Choose reasoning effort",
-            .access => "Choose permissions",
-            .recent => "Resume conversation",
-        },
-        .composer_choice => "Choose option",
-        .composer_completion => "Complete command or skill",
-        .agent_control => |control| switch (control.kind) {
-            .submit => "Send message",
-            .interrupt => "Stop agent",
-            .approve => "Approve",
-            .decline => "Decline",
-            .review => "Review full request",
-            .remove_image => "Remove image",
-            .preview_image => "Preview image",
-            .close_image => "Close image preview",
-        },
         .prompt => |prompt_action| if (prompt_action == .submit) "Create context" else "Cancel",
         .complete_path => "Choose folder",
         .history => |action_value| switch (action_value) {
             .select => "Select command",
             .submit => "Use selected command",
+            .submit_alternate => "Use selected command the other way",
             .cycle_scope => "Change history scope",
+            .select_scope => |scope| switch (scope) {
+                .global => "Search all history",
+                .workspace => "Search this workspace",
+                .cwd => "Search this directory",
+                .pane => "Search this pane",
+            },
+            .select_author => |author| switch (author) {
+                .human => "Show your commands",
+                .agent => "Show agent commands",
+                .all => "Show everyone's commands",
+            },
+            .toggle_failed => "Show only failed commands",
             .toggle_inspection => "Inspect command",
+            .page_older => "Older commands",
+            .copy => "Copy command",
+            .remove => "Delete command",
+            .visit_pane => "Go to the command's pane",
         },
         .intent => |intent| switch (intent) {
             .toggle_sidebar => "Toggle sidebar",
+            .machine_picker => "Switch machine",
+            .select_machine => |slot| if (projection.machines) |machines| machines.label(slot) else "Machine",
             .toggle_workspace_list => "Toggle workspace list",
             .create_tab => "Create tab",
+            .toggle_pane_fullscreen => "Leave fullscreen",
             .move_tab => "Move tab",
             .select_tab, .rename_tab => |id| blk: {
                 if (projection.model.tabs.find(id)) |tab| {
@@ -59,11 +57,19 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
 
                 break :blk "Workspace";
             },
+            .peek_agent => "Peek at agent",
             .focus_agent => |key| blk: {
                 for (projection.agents.slice()) |*agent| {
-                    if (std.meta.eql(agent.key, key)) {
-                        break :blk agent.displayName();
+                    if (!std.meta.eql(agent.key, key)) {
+                        continue;
                     }
+
+                    // A task card is known by its task, like the card shows it.
+                    if (client.fleet_order.taskRow(projection.workspaces, agent)) |task| {
+                        break :blk task.displayName();
+                    }
+
+                    break :blk agent.displayName();
                 }
 
                 break :blk "Agent";
@@ -74,9 +80,43 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
             .notification_dismiss => "Dismiss notification",
             .attachment_dismiss => "Dismiss attachment",
             .prompt_row => "Choose result",
+            .bar_component => |component| blk: {
+                const content = projection.bar_state.layout.content(component.position) orelse break :blk "Bar item";
+                break :blk componentName(content, component.node) orelse "Bar item";
+            },
+            .panel_component => |index| componentName(&projection.bar_state.panel.content, index) orelse "Panel button",
+            .toggle_bar_overflow => "More bar items",
+            .close_panel => "Close panel",
             .none => "",
         },
     };
+}
+
+/// The words a screen reader says for a bar or panel component: its own
+/// text, else its mark, else its first child's text.
+fn componentName(content: anytype, index: u8) ?[]const u8 {
+    if (index >= content.node_count) {
+        return null;
+    }
+
+    const node = content.slice()[index];
+    if (node.text.len != 0) {
+        return content.text(node.text);
+    }
+    if (node.mark) |mark| {
+        return @tagName(mark);
+    }
+
+    for (content.slice()) |child| {
+        if (child.parent != index or child.in_tooltip or child.text.len == 0) {
+            continue;
+        }
+
+        // A clock's text is its format, not what it says.
+        return if (child.kind == .clock) "Clock" else content.text(child.text);
+    }
+
+    return null;
 }
 
 const std = @import("std");

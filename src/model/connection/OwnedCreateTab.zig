@@ -3,7 +3,6 @@ const OwnedArguments = @import("OwnedArguments.zig");
 const OwnedCreateTab = @This();
 
 request_id: core.RequestId,
-kind: core.PaneKind = .terminal,
 workspace: core.WorkspaceLocation,
 label: [core.max_tab_label_bytes]u8 = undefined,
 label_len: u8,
@@ -25,7 +24,6 @@ pub fn view(self: *const OwnedCreateTab, bytes: []const u8, scratch: *[core.max_
     launch.arguments = self.arguments.view(bytes, scratch);
 
     return .{
-        .kind = self.kind,
         .request_id = self.request_id,
         .workspace = self.workspace,
         .label = self.label[0..self.label_len],

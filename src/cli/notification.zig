@@ -1,10 +1,11 @@
 //! The `telar notification show` command.
 
+const client = @import("telar-client");
 const localsocket = @import("localsocket");
 const core = @import("telar-core");
 const std = @import("std");
 const NotificationOptions = @import("arguments/NotificationOptions.zig");
-const RuntimeConnector = @import("RuntimeConnector.zig");
+const RuntimeConnector = client.RuntimeConnector;
 
 const request_id: core.RequestId = @enumFromInt(1);
 const request_buffer_size = 1 + 8 + 1 + 4 + 1 + 8 + 2 + core.max_notification_title_bytes + 2 + core.max_notification_message_bytes;
@@ -16,7 +17,7 @@ const request_buffer_size = 1 + 8 + 1 + 4 + 1 + 8 + 2 + core.max_notification_ti
 /// try notification.run(process_init, options);
 /// ```
 pub fn run(init: std.process.Init, options: NotificationOptions) !void {
-    const connector = try RuntimeConnector.init(init, options.socket);
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, options.socket);
     var connection = connector.connect() catch |err| switch (err) {
         error.FileNotFound, error.ConnectionRefused => {
             std.debug.print("telar notification: runtime is not running\n", .{});

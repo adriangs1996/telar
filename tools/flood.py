@@ -4,6 +4,10 @@
 Runs the multiplexer in a pty whose shell is /bin/sh, types a command that
 prints N lines followed by a marker, and measures the time from typing the
 command until the marker is visible on the multiplexer's output.
+
+telar is measured through its headless client (`--headless`): the command
+also touches a file when it ends, and the time runs from the client taking
+Enter to the last frame it presented for that pane, read from its trace.
 """
 
 import argparse
@@ -17,7 +21,11 @@ import struct
 import subprocess
 import sys
 import termios
+import tempfile
 import time
+from pathlib import Path
+
+import headless_client
 
 MARKER = b"ZQENDMARKER%dQZ"
 ESCAPES = re.compile(
@@ -115,6 +123,40 @@ def run(cmd, env, lines, rows, cols, warmup, repeats, dump):
     return results
 
 
+def run_headless(binary, env, lines, rows, cols, warmup, repeats, work):
+    work = Path(work)
+    client = headless_client.HeadlessClient(
+        ["--no-config"], env=env, cwd=work, size=(cols, rows),
+        trace=work / "headless-trace.json", log=work / "headless.log", binary=binary,
+    )
+    finished = []
+    try:
+        client.wait_ready()
+        time.sleep(warmup)
+        if not client.running():
+            raise SystemExit(f"{binary} exited early: {(work / 'headless.log').read_text()}")
+        for repeat in range(repeats):
+            done = work / f"flood-done-{repeat}"
+            client.text(f"seq 1 {lines}; echo ZQEND\"\"MARKER{repeat}QZ; : > {done}")
+            client.key("enter")
+            deadline = time.perf_counter() + 60
+            while not done.exists() and time.perf_counter() < deadline:
+                time.sleep(0.05)
+            finished.append(done.exists())
+            # The client still presents the tail after the command ends.
+            time.sleep(1.0)
+        client.quit()
+    finally:
+        client.terminate()
+
+    trace = client.trace()
+    results = []
+    for repeat, ended in enumerate(finished):
+        elapsed = headless_client.last_frame_after(trace, 2 * repeat + 1) if ended else None
+        results.append(None if elapsed is None else (elapsed / 1e9, None))
+    return results
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("name")
@@ -126,6 +168,9 @@ def main():
     parser.add_argument("--warmup", type=float, default=3.0)
     parser.add_argument("--env", action="append", default=[])
     parser.add_argument("--dump", help="write every host byte to this file")
+    parser.add_argument("--headless", action="store_true",
+                        help="cmd[0] is telar-headless; measure through its trace")
+    parser.add_argument("--work", help="directory for the headless client's trace and log")
     args = parser.parse_args()
 
     env = dict(os.environ)
@@ -139,16 +184,21 @@ def main():
         key, _, value = pair.partition("=")
         env[key] = value
 
-    dump = open(args.dump, "wb") if args.dump else None
-    results = run(args.cmd, env, args.lines, args.rows, args.cols, args.warmup, args.repeats, dump)
-    if dump is not None:
-        dump.close()
+    if args.headless:
+        work = args.work or tempfile.mkdtemp(prefix="telar-flood-")
+        results = run_headless(args.cmd[0], env, args.lines, args.rows, args.cols, args.warmup, args.repeats, work)
+    else:
+        dump = open(args.dump, "wb") if args.dump else None
+        results = run(args.cmd, env, args.lines, args.rows, args.cols, args.warmup, args.repeats, dump)
+        if dump is not None:
+            dump.close()
     for result in results:
         if result is None:
             print(f"{args.name:8s} timeout")
         else:
             seconds, out_bytes = result
-            print(f"{args.name:8s} {seconds*1000:9.1f} ms  host_bytes={out_bytes}")
+            host = "" if out_bytes is None else f"  host_bytes={out_bytes}"
+            print(f"{args.name:8s} {seconds*1000:9.1f} ms{host}")
 
 
 if __name__ == "__main__":

@@ -17,7 +17,6 @@ pub const TabMove = @import("ActionTabMove.zig").ActionTabMove;
 pub const ScrollDirection = @import("ScrollDirection.zig").ScrollDirection;
 
 pub const Action = union(enum) {
-    toggle_thread_view,
     split_pane: SplitDirection,
     focus_pane: Direction,
     navigate_pane: Direction,
@@ -29,9 +28,10 @@ pub const Action = union(enum) {
     new_workspace,
     rename_workspace,
     select_workspace: u8,
+    /// Leaves a worktree's tabs for the project it hangs from.
+    leave_worktree,
     close_pane,
     new_tab,
-    new_agent_tab,
     select_tab_offset: i8,
     select_tab: u8,
     rename_tab,
@@ -40,6 +40,7 @@ pub const Action = union(enum) {
     detach,
     goto_picker,
     history_palette,
+    path_picker,
     suggest_command,
     enter_copy_mode,
     command_tab: CommandTab,
@@ -48,9 +49,41 @@ pub const Action = union(enum) {
     lua_expr: CallbackRef,
     plugin: PluginAction,
     scroll_pane: ScrollDirection,
+    /// Opens the configured panel with this index, or closes it when it is
+    /// already open. Configuration resolves the panel's name to the index.
+    open_panel: u8,
+    close_panel,
+    /// Runs the open panel's source now instead of at its next interval.
+    refresh_panel,
+    /// Presents the next (1) or previous (-1) machine the window holds.
+    select_machine_offset: i8,
+    /// Opens the command palette on the window's machines.
+    machine_picker,
+    /// Asks for a new machine's label and destination and saves it.
+    add_machine,
 
     /// Parses stable built-in action names used by configuration and tests.
     pub fn parse(name: []const u8) !Action {
+        if (std.mem.eql(u8, name, "next-machine")) {
+            return .{
+                .select_machine_offset = 1,
+            };
+        }
+
+        if (std.mem.eql(u8, name, "previous-machine")) {
+            return .{
+                .select_machine_offset = -1,
+            };
+        }
+
+        if (std.mem.eql(u8, name, "machine-picker")) {
+            return .machine_picker;
+        }
+
+        if (std.mem.eql(u8, name, "add-machine")) {
+            return .add_machine;
+        }
+
         if (std.mem.eql(
             u8,
             name,
@@ -239,6 +272,13 @@ pub const Action = union(enum) {
         if (std.mem.eql(
             u8,
             name,
+            "leave-worktree",
+        )) {
+            return .leave_worktree;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
             "new-workspace",
         )) {
             return .new_workspace;
@@ -263,13 +303,6 @@ pub const Action = union(enum) {
             "new-tab",
         )) {
             return .new_tab;
-        }
-        if (std.mem.eql(
-            u8,
-            name,
-            "new-agent-tab",
-        )) {
-            return .new_agent_tab;
         }
         if (std.mem.eql(
             u8,
@@ -352,9 +385,22 @@ pub const Action = union(enum) {
         if (std.mem.eql(
             u8,
             name,
+            "path-picker",
+        )) {
+            return .path_picker;
+        }
+        if (std.mem.eql(
+            u8,
+            name,
             "suggest-command",
         )) {
             return .suggest_command;
+        }
+        if (std.mem.eql(u8, name, "close-panel")) {
+            return .close_panel;
+        }
+        if (std.mem.eql(u8, name, "refresh-panel")) {
+            return .refresh_panel;
         }
 
         const prefix = "select-tab-";

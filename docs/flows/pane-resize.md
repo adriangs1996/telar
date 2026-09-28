@@ -44,6 +44,6 @@ resources. No operation requests a draw; presentation observes the pane revision
 
 Source: `src/client/panes/pane_resize.zig` and
 `src/model/state/ClientModel.zig`.
-Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
-`src/frontend/client/tests/host_resources.zig`,
+Tests: `src/client_tests/pane_lifecycle.zig`,
+`src/client_tests/host_resources.zig`,
 `src/model/state/tests/panes.zig`, and runtime pane-resize/cell-projection tests.

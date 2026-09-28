@@ -60,6 +60,23 @@ pub fn mergeSignals(table: *const core.Table, phrases: ?core.Signal, prompt: ?co
     return result;
 }
 
+/// Cursor Agent's dialogs draw their options with the composer's arrow, so a
+/// blocked phrase decides before the composer scan; any other phrase is
+/// left to the scan, which reads the live composer instead of the text.
+///
+/// ```zig
+/// const signal = mergeCursorSignals(phrase_signal, cursor_screen.scan(terminal));
+/// ```
+pub fn mergeCursorSignals(phrases: ?core.Signal, composer: ?core.Signal) ?core.Signal {
+    if (phrases) |signal| {
+        if (signal.status == .blocked) {
+            return signal;
+        }
+    }
+
+    return composer;
+}
+
 pub fn vtResize(size: core.TerminalSize) vt.Terminal.Resize {
     return .{
         .cols = size.cols,
@@ -218,13 +235,44 @@ test "Codex transcript quotes do not keep the idle composer working or blocked" 
 const codex_test_size: core.TerminalSize = .{ .cols = 100, .rows = 16, .cell_width_px = 0, .cell_height_px = 0 };
 
 fn codexTestBatch(observer: *Observer, bytes: []const u8, now_ms: i64) !Stats {
+    return agentTestBatch(observer, .codex, bytes, now_ms);
+}
+
+fn agentTestBatch(observer: *Observer, provider: core.AgentProvider, bytes: []const u8, now_ms: i64) !Stats {
     observer.queueOutput(.{ .bytes = bytes, .shell_foreground = false, .clock = .{ .real_ms = now_ms, .awake_ns = @intCast(now_ms * 1_000_000) } });
     try std.testing.expect(observer.seal());
     var stats: Stats = .{};
     var sink: CodexTestSink = .{};
-    observer.processSealed(.{ .cwd = null, .current_size = codex_test_size, .stats = &stats, .provider = .codex }, &sink);
+    observer.processSealed(.{ .cwd = null, .current_size = codex_test_size, .stats = &stats, .provider = provider }, &sink);
     observer.finishSealed();
     return stats;
+}
+
+test "a Cursor turn reads working from its spinner, blocked from its dialog and ready from the idle composer" {
+    var observer: Observer = undefined;
+    try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = codex_test_size });
+    defer observer.deinit();
+
+    const clear = "\x1b[2J\x1b[H";
+    const working = try agentTestBatch(&observer, .cursor, clear ++ " \xe2\xa0\x80\xe2\xa0\x9e Working\r\n\r\n  \xe2\x86\x92 Add a follow-up\r\n  Auto", 100);
+    try std.testing.expectEqual(core.Status.working, working.agent_observation.?.signal.status);
+
+    const dialog = clear ++ " Run this command?\r\n Not in allowlist: echo, touch\r\n  \xe2\x86\x92 Run (once) (y)\r\n    Skip & tell the agent what to do instead (esc or n)";
+    const blocked = try agentTestBatch(&observer, .cursor, dialog, 200);
+    try std.testing.expectEqual(core.Status.blocked, blocked.agent_observation.?.signal.status);
+
+    const idle = try agentTestBatch(&observer, .cursor, clear ++ "  finished\r\n\r\n  \xe2\x86\x92 Add a follow-up\r\n  Auto", 300);
+    try std.testing.expectEqual(core.Status.ready, idle.agent_observation.?.signal.status);
+    try std.testing.expect(idle.agent_observation.?.signal.ready_confirmed);
+}
+
+test "Cursor's blocked phrases outrank its composer and its other phrases do not" {
+    try std.testing.expect(mergeCursorSignals(null, null) == null);
+    const blocked: core.Signal = .{ .provider = .unknown, .status = .blocked, .confidence = 88 };
+    const composer: core.Signal = .{ .provider = .cursor, .status = .ready, .confidence = 94, .ready_confirmed = true };
+    try std.testing.expectEqual(core.Status.blocked, mergeCursorSignals(blocked, composer).?.status);
+    const working_phrase: core.Signal = .{ .provider = .unknown, .status = .working, .confidence = 78 };
+    try std.testing.expectEqual(core.Status.ready, mergeCursorSignals(working_phrase, composer).?.status);
 }
 
 test "Codex synchronized repaint never publishes its intermediate idle prompt" {

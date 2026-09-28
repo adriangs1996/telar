@@ -43,7 +43,7 @@ pub fn resolve(gui: *GuiAdapter, mouse: keyinput.Mouse, mods: u32) Target {
             const tab = gui.app.model.tabs.activeSlot() orelse return .{};
             const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, id) orelse return .{};
             const view = data.tab_layout.view(&gui.app.model, tab, id, data.workbench.region(&gui.app.model).area) orelse return .{};
-            if (view.surface != .terminal or !view.content.contains(mouse.x, mouse.y)) {
+            if (!view.content.contains(mouse.x, mouse.y)) {
                 return .{};
             }
 
@@ -52,7 +52,6 @@ pub fn resolve(gui: *GuiAdapter, mouse: keyinput.Mouse, mods: u32) Target {
                 return base;
             }
 
-            const reporting = pane.mouse.tracking != .none;
             const row = pane.scroll.offset + (mouse.y - view.content.y);
             const found = data.cells.resolve(pane, .{ .x = mouse.x - view.content.x, .y = row }) orelse return base;
             const start_x = if (row == found.start.y) found.start.x else 0;
@@ -61,8 +60,16 @@ pub fn resolve(gui: *GuiAdapter, mouse: keyinput.Mouse, mods: u32) Target {
                 return base;
             }
 
-            if (mods & link_modifier == 0 or mods & 2 != 0 or (reporting and mods & 1 == 0)) {
+            // Alt keeps the text plain for selection. Every other hover shows
+            // the link; the press policy in `ports/chrome.zig` decides who opens it.
+            if (mods & 2 != 0) {
                 return .{ .shape = .pointer };
+            }
+
+            // A path in prose is a guess, so it is a link only while the
+            // platform modifier asks for one; plain clicks stay with the text.
+            if (found.target.scheme == .path and mods & link_modifier == 0) {
+                return base;
             }
 
             return .{ .shape = .pointer, .link = .{

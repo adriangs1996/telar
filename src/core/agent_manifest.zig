@@ -23,6 +23,23 @@ pub const generic_placeholder = "New agent session";
 
 pub const Status = enum { working, blocked, ready };
 
+/// The key that stops an agent's current turn without ending its session.
+pub const InterruptKey = enum {
+    none,
+    escape,
+    ctrl_c,
+
+    /// The bytes a terminal sends for the key; empty for `none`.
+    /// Example: `try forward(pane, key.bytes());`.
+    pub fn bytes(self: InterruptKey) []const u8 {
+        return switch (self) {
+            .none => "",
+            .escape => "\x1b",
+            .ctrl_c => "\x03",
+        };
+    }
+};
+
 pub const ListError = error{ TooManyEntries, EntryTooLong, EmptyEntry };
 
 pub const PhraseList = GenericBoundedList(max_phrases, max_phrase_bytes);
@@ -51,7 +68,7 @@ pub const AddError = error{ TooManyAgents, InvalidName, DuplicateName };
 /// ```
 pub fn isBuiltinProvider(provider: types.AgentProvider) bool {
     return switch (provider) {
-        .claude, .codex, .pi => true,
+        .claude, .codex, .pi, .cursor, .opencode => true,
         else => false,
     };
 }
@@ -65,6 +82,12 @@ pub fn builtinProvider(name: []const u8) ?types.AgentProvider {
     }
     if (std.mem.eql(u8, name, "pi")) {
         return .pi;
+    }
+    if (std.mem.eql(u8, name, "cursor")) {
+        return .cursor;
+    }
+    if (std.mem.eql(u8, name, "opencode")) {
+        return .opencode;
     }
     return null;
 }
@@ -102,6 +125,7 @@ fn buildBuiltin() Table {
     claude.brand.append("claude") catch unreachable;
     claude.identity.append("claude code") catch unreachable;
     claude.command_tools.append("Bash", "command") catch unreachable;
+    claude.interrupt = .escape;
     for (shared_blocked) |phrase| claude.blocked.append(phrase) catch unreachable;
     for (shared_working) |phrase| claude.working.append(phrase) catch unreachable;
 
@@ -115,6 +139,7 @@ fn buildBuiltin() Table {
     codex.command_tools.append("Bash", "command") catch unreachable;
     codex.command_tools.append("exec_command", "cmd") catch unreachable;
     codex.command_tools.append("shell", "command") catch unreachable;
+    codex.interrupt = .escape;
 
     // Pi launches as `node .../pi-coding-agent/dist/bundle/cli.js`, so its
     // entry-point path is the reliable identity; the package moved from the
@@ -133,6 +158,37 @@ fn buildBuiltin() Table {
         "/@mariozechner/pi-coding-agent/",
         "\\@mariozechner\\pi-coding-agent\\",
     }) |path| pi.process_paths.append(path) catch unreachable;
+
+    // Cursor Agent's launcher runs `exec -a "$0" <version>/node <version>/index.js`,
+    // so the process is `node`, argv[0] is whatever the user typed (`agent`
+    // or `cursor-agent`) and the versioned entry point is the reliable
+    // identity. It has no hook for its approval, plan and workspace trust
+    // dialogs, so their screen phrases carry that state; they are specific
+    // to Cursor's dialogs because blocked phrases are matched in every pane.
+    // Working and ready come from `history.cursor_screen`, which reads the
+    // live composer. No brand word: "cursor" names a terminal cursor in any
+    // pane.
+    const cursor = table.add("cursor") catch unreachable;
+    cursor.setDisplayName("Cursor Agent") catch unreachable;
+    cursor.process_names.append("cursor-agent") catch unreachable;
+    cursor.process_paths.append("/cursor-agent/versions/") catch unreachable;
+    cursor.command_tools.append("Shell", "command") catch unreachable;
+    for ([_][]const u8{
+        "not in allowlist:",
+        "skip & tell the agent what to do instead",
+        "yes, build locally",
+        "do you trust the contents of this directory?",
+    }) |phrase| cursor.blocked.append(phrase) catch unreachable;
+
+    // OpenCode is one Bun executable named `opencode`; npm installs launch it
+    // from `node .../bin/opencode`, whose basename identifies it too. Its
+    // plugin reports every prompt, permission, question and turn end, so it
+    // carries no screen phrases, and no brand word: "opencode" names the
+    // project and its directories in any pane.
+    const opencode = table.add("opencode") catch unreachable;
+    opencode.setDisplayName("OpenCode") catch unreachable;
+    opencode.process_names.append("opencode") catch unreachable;
+    opencode.command_tools.append("bash", "command") catch unreachable;
 
     return table;
 }
@@ -232,6 +288,46 @@ test "built-in Pi is identified by its process and entry point only" {
     try std.testing.expectEqual(types.AgentProvider.pi, same.provider);
     try same.working.append("thinking");
     try std.testing.expectEqual(types.first_custom_agent_provider, @intFromEnum((try extended.add("gemini")).provider));
+}
+
+test "built-in Cursor Agent is identified by its launcher, entry point and dialogs" {
+    const table = &builtin_table;
+
+    try std.testing.expectEqual(types.AgentProvider.cursor, table.providerFromExecutable("cursor-agent").?);
+    try std.testing.expect(table.providerFromExecutable("agent") == null);
+    try std.testing.expectEqual(types.AgentProvider.cursor, table.providerFromPath("/Users/me/.local/share/cursor-agent/versions/2026.09.26-dd393fe/index.js").?);
+    try std.testing.expectEqualStrings("cursor", table.providerName(.cursor));
+    try std.testing.expectEqualStrings("Cursor Agent", table.displayName(.cursor));
+    try std.testing.expect(isBuiltinProvider(.cursor));
+    try std.testing.expectEqual(types.AgentProvider.cursor, builtinProvider("cursor").?);
+    try std.testing.expectEqualStrings("command", table.commandField(.cursor, "Shell").?);
+
+    // Captured from Cursor Agent 2026.08.11 and 2026.09.26 under a pty.
+    const approval = table.detect(" Run this command?\n Not in allowlist: echo, touch\n  → Run (once) (y)\n    Skip & tell the agent what to do instead (esc or n)").?;
+    try std.testing.expectEqual(Status.blocked, approval.status);
+    try std.testing.expectEqual(types.AgentProvider.unknown, approval.provider);
+    try std.testing.expectEqual(Status.blocked, table.detect(" Ready to build?\n  → 1. Yes, build locally (b)").?.status);
+    try std.testing.expectEqual(Status.blocked, table.detect("  Do you trust the contents of this directory?").?.status);
+    try std.testing.expect(table.detect("  → Add a follow-up        ctrl+c to stop") == null);
+    try std.testing.expect(table.detect("  → Add a follow-up") == null);
+    try std.testing.expect(table.detect("move the cursor left") == null);
+}
+
+test "built-in OpenCode is identified by its executable and maps its shell tool" {
+    const table = &builtin_table;
+
+    try std.testing.expectEqual(types.AgentProvider.opencode, table.providerFromExecutable("opencode").?);
+    try std.testing.expectEqualStrings("opencode", table.providerName(.opencode));
+    try std.testing.expectEqualStrings("OpenCode", table.displayName(.opencode));
+    try std.testing.expect(isBuiltinProvider(.opencode));
+    try std.testing.expectEqual(types.AgentProvider.opencode, builtinProvider("opencode").?);
+    try std.testing.expectEqualStrings("command", table.commandField(.opencode, "bash").?);
+    try std.testing.expectEqual(types.AgentAttachmentMarkers.none, table.attachments(.opencode));
+
+    // Captured from OpenCode 1.18.32 under a pty: its prompts carry no phrase
+    // of the other agents.
+    try std.testing.expect(table.detect("  △ Permission required\n    # Shell command\n  $ ls -la\n   Allow once   Allow always   Reject") == null);
+    try std.testing.expect(table.detect("   ⬝⬝⬝⬝■■■■  esc interrupt                ctrl+p commands") == null);
 }
 
 test "custom agents receive stable provider indexes and extend built-ins by name" {

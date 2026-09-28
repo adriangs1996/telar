@@ -17,25 +17,10 @@ keeping a CI worker asleep. The release workflow repeats the 200-sample suite
 with one-second sample targets and runs the backend proxy and historical proxy
 example separately.
 
-The terminal-browser check is the exterior behavioral gate. It must report no
-PTY response drops, delivery response drops, media queue drops, client resyncs,
-or history isolation failures. Steady-state interactive allocation counters
-must remain zero unless an engineering invariant explicitly permits growth.
-
-The graphics throughput gate runs the same verifier with a deterministic
-source instead of the browser:
-
-```sh
-python3 tools/verify_terminal_browser.py --measure 15 \
-  --source synthetic:3840x2160@120 --floor 58
-```
-
-It builds Telar as `-Doptimize=ReleaseFast -Ddiagnostics=true`, drives one
-full-pane 4K RGBA stream at 120 frames/s through Telar into Ghostty, and fails
-unless the client presented at least 58 frames per second in steady state (the
-pacer caps presentation at 60) with zero media resets, drops or resyncs. Run it
-once per transport (`--transport shm` and `--transport file`). The browser run
-(`--source browser --measure 20`) reports the same `frames` block but carries
-no floor: Chromium's paint rate depends on the host's memory and GPU state,
-which the gate must not measure. A run on a host under memory pressure is
-`no verdict`, like any other unquiet host.
+The terminal-browser check and the graphics throughput gate measured the
+terminal client inside Ghostty and retired with it. No window-side
+replacement exists yet: the window's frame rate under a 4K KGP stream and the
+exterior behavioural checks (no PTY response, delivery or media drops, no
+resyncs, isolated history) need a new verifier that drives `telar gui`.
+Until it exists, those properties are covered only by the runtime's own
+tests and `zig build test-isolation`.

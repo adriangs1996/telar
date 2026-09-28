@@ -35,10 +35,10 @@ pub fn pushOrDrop(self: *ResponseQueue, response: response_queue.PendingResponse
     self.push(response) catch {
         switch (response) {
             .history_result => |result| result.deinit(),
-            .agent_history_page => |result| result.deinit(),
             .change_review => |result| result.deinit(),
             .history_output => |result| result.deinit(),
             .history_stats => |result| result.deinit(),
+            .path_results => |query| query.destroy(),
             .tab_closed => |closed| {
                 self.resync_workspace = closed.location.workspace;
                 self.resync_previous_workspace = closed.previous_workspace;
@@ -85,12 +85,6 @@ pub fn reserveNotificationShown(self: *ResponseQueue, request_id: core.RequestId
 
     const index = (@as(usize, self.head) + self.len - 1) % self.items.len;
     return &self.items[index].notification_shown;
-}
-
-/// Includes prepared responses until their send transaction commits.
-/// Example: `if (queue.hasAgentHistory()) return error.AgentHistoryBusy;`.
-pub fn hasAgentHistory(self: *const ResponseQueue) bool {
-    return self.contains(.agent_history_page);
 }
 
 /// Keeps one owned review result reserved through socket send admission.
@@ -165,10 +159,10 @@ pub fn clear(self: *ResponseQueue) void {
     while (self.peek()) |response| {
         switch (response.*) {
             .history_result => |result| result.deinit(),
-            .agent_history_page => |result| result.deinit(),
             .change_review => |result| result.deinit(),
             .history_output => |result| result.deinit(),
             .history_stats => |result| result.deinit(),
+            .path_results => |query| query.destroy(),
             else => {},
         }
         self.pop();

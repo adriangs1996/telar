@@ -36,45 +36,28 @@ is invented for `pane_resize`.
 ## Fullscreen presentation
 
 The fullscreen pane keeps its border, including when it is the only pane.
-Exiting fullscreen with one pane restores borderless content. Its top edge
-lists pane indices and foreground names in the same order used by navigation. The active label uses
-the theme's accent background; other labels use subdued text. The strip
-truncates names at grapheme boundaries before hiding labels, and always keeps
-the active label visible when space permits. It uses fixed storage bounded by
-`core.max_panes_per_tab`, does O(panes + label bytes) work only when the border
-is drawn and adds no content row or persistent state. The focused pane's
-progress indicator uses the remaining border space.
+Exiting fullscreen with one pane restores borderless content.
 
-With KGP and RGB label colors, all pane labels use embedded JetBrains Mono
-Regular. The selected pill is 75 percent of the cell height, vertically centered
-on the border. Font size is at most half the cell height and four-thirds of the
-cell width, so narrow terminal cells also get smaller text. The pill hugs the
-measured text rather than filling its entire cell rectangle. Workspace labels
-and pane contents are unchanged. The cell fallback uses regular-weight text.
+The window keeps the top border row plain and draws `FullscreenStrip` on the
+bottom border row instead, inside the same `ChromeMetrics.pane_header` band
+the pane header uses. The focused pane keeps its header entry: application
+mark, index in bold, name in `subtext0` and the `StatusChip` of its agent.
+The hidden panes follow in display order with the tab strip's label
+composition (mark, index, name) and no tab surface, in `overlay1` with the
+mark at 0.6 alpha, the way an unfocused pane is dimmed; hovering one lifts it
+to `text`. A hidden agent that is blocked or failed keeps its `AttentionDot`.
+The right end holds the progress capsule, the change-review button and a
+`pane_fullscreen` control that sends the `toggle_pane_fullscreen` intent,
+the same toggle as `prefix z`. Nothing in the band uses `accent`; the frame
+ring alone marks focus. When the entries do not fit, hidden names give way to
+mark-plus-index first, then the row scrolls around the focused entry with
+`TabStrip.firstVisible`, so the focused pane stays visible at any width.
+Hidden entries and the leave control are pixel band targets; the focused pane
+stays reachable through its frame bands.
 
-`Compositor.fullscreenLabels` copies the already truncated label text into a
-fixed-size `Plan` (`src/frontend/presentation/Plan.zig`). Each of at most 64
-labels owns up to 80 UTF-8 bytes; media work never borrows pane names or cell
-storage. The TUI view's `State.prepareGraphics` has its `PillRenderer` rasterize
-that snapshot into one RGBA image of at most 1 MiB on the media path. It reuses
-the sidebar's rounded fill and the existing text rasterizer. A position-only
-change reuses the image; focus, text, theme or cell-size changes replace it.
-There is one pending snapshot, not a replay queue.
-
-Image data is chunked within the media pass's 256 KiB encoded budget. An open
-continuation owns the graphics stream until completion or explicit abort;
-replaced or hidden snapshots cancel it. Stale placement deletions may accompany
-the next cell frame only when that stream is available. The view removes the cell
-labels only after the exact snapshot, colors and placement have reached the
-host. Gaps retain their border glyphs. Overlapping modals or toasts retire the
-label image. Unsupported geometry, terminal-derived colors, missing font
-glyphs and allocation failure preserve all cell labels and rectangular
-selection. A failed host write exits through the existing presentation error
-path. Client teardown frees the pixels and font face; reconnect rebuilds them.
-
-The tab bar still draws the `pane_fullscreen` icon after the label of every tab
-whose layout is fullscreen, so fullscreen in another tab stays visible from
-the bar.
+`TabStrip` appends a fullscreen mark (`⛶`) to the caption of every tab whose
+layout is fullscreen, so fullscreen in another tab stays visible from the
+strip.
 
 ## Failure and verification
 
@@ -85,6 +68,6 @@ runtime authority; otherwise canonical display order supplies the layout.
 Graphics are rebuilt. No operation directly schedules a draw.
 
 Source: `src/client/panes/pane_resize.zig` and `src/model/state/ClientModel.zig`.
-Tests: `src/frontend/client/tests/pane_lifecycle.zig` (including its
-`FullscreenReattachment` scenario), `src/frontend/client/tests/synchronization.zig`,
-`src/frontend/client/tests/pane_splits.zig`, and shared model/layout tests.
+Tests: `src/client_tests/pane_lifecycle.zig` (including its fullscreen tab
+round trip), `src/client_tests/synchronization.zig`, and shared model/layout
+tests.

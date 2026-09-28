@@ -7,11 +7,15 @@ const SidebarState = @import("SidebarState.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const AgentCard = @import("AgentCard.zig");
+const client = @import("telar-client");
+const TaskCard = @import("TaskCard.zig");
 const CardGeometry = @import("CardGeometry.zig");
 const SidebarList = @import("SidebarList.zig");
 const Label = @import("Label.zig");
 const WorkspaceList = @import("WorkspaceList.zig");
 const SidebarRegions = @import("SidebarRegions.zig");
+const MachineSwitcher = @import("MachineSwitcher.zig");
+const MachineSegment = @import("MachineSegment.zig");
 const Sidebar = @This();
 
 pub const margin = SidebarRegions.margin;
@@ -37,9 +41,10 @@ pub fn draw(self: Sidebar, canvas: *Canvas) !void {
     // background and opacity like the workbench.
     try canvas.panelAt(.{ .x = area.x, .y = area.y, .width = area.width - 1, .height = area.height });
     try canvas.fillAt(.{ .x = area.x + area.width - 1, .y = area.y, .width = 1, .height = area.height }, palette.surface1);
-    self.state.observe(context.projection.agents);
-    const regions = if (context.sidebar_regions) |prepared| prepared.* else try SidebarRegions.resolve(canvas, area, context.projection.workspaces.count);
+    self.state.observe(context.projection);
+    const regions = if (context.sidebar_regions) |prepared| prepared.* else try SidebarRegions.resolve(canvas, area, context.projection.workspaces.project_count, MachineSegment.shown(context));
 
+    try (MachineSwitcher{ .context = context, .area = regions.machines }).draw(canvas);
     try drawHeader(canvas, regions.projects_header, "projects");
     try (WorkspaceList{ .state = self.state, .context = context, .bounds = regions.projects }).draw(canvas);
     try drawHeader(canvas, regions.agents_header, "agents");
@@ -74,8 +79,7 @@ fn drawList(self: Sidebar, canvas: *Canvas, list: SidebarList) !void {
     const palette = canvas.theme.palette;
     const agents = context.projection.agents.slice();
     const geometry = CardGeometry.derive(canvas.chrome, canvas.metrics);
-    const count: f32 = @floatFromInt(state.order_len);
-    const total = if (state.order_len == 0) 0 else count * geometry.pitch() - geometry.px(CardGeometry.spacing);
+    const total = fleetHeight(state.entries(), geometry);
     const scroll = &state.agents;
     scroll.setBounds(geometry.pitch(), total - list.bounds.height);
     if (state.order_len == 0) {
@@ -99,9 +103,16 @@ fn drawList(self: Sidebar, canvas: *Canvas, list: SidebarList) !void {
     const list_bottom = list.bounds.y + list.bounds.height;
     const scrollbar = canvas.chrome.px(scrollbar_width);
     const card_width = @max(0, list.bounds.width - scrollbar - geometry.px(CardGeometry.spacing));
-    for (state.ordering(), 0..) |index, position| {
-        const top = list.bounds.y + @as(f32, @floatFromInt(position)) * geometry.pitch() - @as(f32, @floatFromInt(scroll.scroll));
-        if (top + geometry.height() <= list.bounds.y) {
+    var offset: f32 = 0;
+    for (state.entries(), 0..) |entry, position| {
+        if (entry.first_in_project and position != 0) {
+            offset += geometry.px(CardGeometry.group_gap);
+        }
+
+        const height = geometry.entryHeight(entry.card);
+        const top = list.bounds.y + offset - @as(f32, @floatFromInt(scroll.scroll));
+        offset += height + geometry.px(CardGeometry.spacing);
+        if (top + height <= list.bounds.y) {
             continue;
         }
 
@@ -109,17 +120,36 @@ fn drawList(self: Sidebar, canvas: *Canvas, list: SidebarList) !void {
             break;
         }
 
-        const agent = &agents[index];
+        const agent = &agents[entry.index];
+        const first = canvas.quads.items().len;
+        const task = if (entry.card == .agent) null else client.fleet_order.taskRow(context.projection.workspaces, agent);
+        if (task) |row| {
+            const indent = geometry.px(CardGeometry.task_indent);
+            const bounds: Rect = .{ .x = list.bounds.x + indent, .y = top, .width = @max(0, card_width - indent), .height = height };
+            const card: TaskCard = .{
+                .context = context,
+                .bounds = bounds,
+                .agent = agent,
+                .task = row,
+                .card = entry.card,
+                .geometry = geometry,
+                .age_s = context.statusAgeAt(entry.index),
+            };
+            try card.draw(canvas);
+            canvas.quads.clipFrom(first, list.bounds);
+            try context.bands.add(.{ .area = list.hitArea(bounds), .action = card.action() });
+            continue;
+        }
+
         const bounds: Rect = .{ .x = list.bounds.x, .y = top, .width = card_width, .height = geometry.height() };
         const card: AgentCard = .{
             .context = context,
             .bounds = bounds,
             .agent = agent,
             .geometry = geometry,
-            .age_s = context.statusAgeAt(index),
+            .age_s = context.statusAgeAt(entry.index),
             .project_icon = if (context.favicons) |favicons| favicons.sprite(agent.location.workspace) else null,
         };
-        const first = canvas.quads.items().len;
         try card.draw(canvas);
         canvas.quads.clipFrom(first, list.bounds);
         try context.bands.add(.{ .area = list.hitArea(bounds), .action = card.action() });
@@ -127,7 +157,26 @@ fn drawList(self: Sidebar, canvas: *Canvas, list: SidebarList) !void {
 
     if (scroll.maximum_scroll != 0) {
         const thumb = @min(list.bounds.height, @max(geometry.small_row, list.bounds.height * list.bounds.height / total));
-        const offset = @as(f32, @floatFromInt(scroll.scroll)) * (list.bounds.height - thumb) / @as(f32, @floatFromInt(scroll.maximum_scroll));
-        try canvas.fillAt(.{ .x = list.bounds.x + list.bounds.width - scrollbar, .y = list.bounds.y + offset, .width = scrollbar, .height = thumb }, palette.overlay0);
+        const thumb_offset = @as(f32, @floatFromInt(scroll.scroll)) * (list.bounds.height - thumb) / @as(f32, @floatFromInt(scroll.maximum_scroll));
+        try canvas.fillAt(.{ .x = list.bounds.x + list.bounds.width - scrollbar, .y = list.bounds.y + thumb_offset, .width = scrollbar, .height = thumb }, palette.overlay0);
     }
+}
+
+/// Height of the whole fleet list: every entry, the spacing between them and
+/// the gap before each project group after the first.
+fn fleetHeight(entries: []const client.FleetEntry, geometry: CardGeometry) f32 {
+    if (entries.len == 0) {
+        return 0;
+    }
+
+    var total: f32 = 0;
+    for (entries, 0..) |entry, position| {
+        if (entry.first_in_project and position != 0) {
+            total += geometry.px(CardGeometry.group_gap);
+        }
+
+        total += geometry.entryHeight(entry.card) + geometry.px(CardGeometry.spacing);
+    }
+
+    return total - geometry.px(CardGeometry.spacing);
 }

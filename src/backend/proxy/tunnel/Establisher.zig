@@ -1,5 +1,4 @@
 const Resources = @import("Resources.zig");
-const Exchange = @import("Exchange.zig");
 const std = @import("std");
 const localca = @import("localca");
 const metrics = @import("../metrics.zig");
@@ -8,12 +7,11 @@ const tls = localca.tls;
 const Establisher = @This();
 
 resources: Resources,
-exchange: *Exchange,
 
 /// Passes every host through unless the interception allowlist names it. A
 /// successful interception transfers session ownership through an explicit
-/// HTTP/1.1 or HTTP/2 route. Every TLS failure records its exact stage,
-/// publishes one failed exchange, and returns null.
+/// HTTP/1.1 or HTTP/2 route. Every TLS failure records its exact stage and
+/// returns null.
 ///
 /// ```zig
 /// const route = establisher.establish(.{
@@ -38,7 +36,6 @@ pub fn establish(self: *Establisher, attempt: Attempt) ?Route {
         .origin = attempt.origin,
     }) catch |failure| {
         self.resources.telemetry.record(failureCounter(failure));
-        self.exchange.publish(.request_failed, 0);
         return null;
     };
 

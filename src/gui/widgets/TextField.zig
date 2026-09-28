@@ -1,6 +1,5 @@
 //! A bounded editable surface drawn in Zig. Its owner supplies committed text
 //! and selection; provisional IME text belongs to the interaction state.
-const label_face = @import("label_face.zig");
 const shared_model = @import("model");
 const Canvas = @import("Canvas.zig");
 const Target = @import("interaction/Target.zig");
@@ -8,7 +7,6 @@ const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const TextField = @This();
 const EditorDisplay = @import("interaction/EditorDisplay.zig");
-const EditorFont = @import("interaction/EditorFont.zig");
 const Preedit = @import("interaction/Preedit.zig");
 const MultilinePaint = @import("MultilinePaint.zig");
 const MultilineLayout = @import("interaction/MultilineLayout.zig");
@@ -23,12 +21,11 @@ focused: bool = true,
 label: []const u8 = "Text",
 /// Form controls use chrome-sized text, padding and a thin insertion caret.
 form_control: bool = false,
+/// A bare form control paints no box of its own; its owner draws the band.
+bare: bool = false,
 placeholder: []const u8 = "",
 layer: u8 = 1,
 multiline: bool = false,
-appearance: enum { standard, embedded } = .standard,
-face: label_face.Face = .mono,
-font_pixels: ?u16 = null,
 
 /// Borrows one canonical prompt field only for synchronous drawing.
 /// Example: `try TextField.fromPrompt(&prompt, bounds, .name).draw(canvas);`
@@ -58,19 +55,7 @@ pub fn draw(self: TextField, canvas: *Canvas) !void {
     const palette = canvas.theme.palette;
     const first_quad = canvas.quads.items().len;
     defer canvas.quads.clipFrom(first_quad, self.bounds);
-    var font: ?EditorFont = null;
-    if (self.multiline and self.face == .sans) {
-        const height = self.font_pixels orelse @max(1, canvas.chrome.body);
-        const box = try canvas.atlas.lineBox(.sans, height);
-        _ = try canvas.atlas.cellWidth(height);
-        painter.chrome.body = height;
-        painter.metrics = .{ .cell_width = 1, .cell_height = @intFromFloat(@min(65535, @ceil(box.height + canvas.chrome.px(3)))), .baseline = box.ascender, .pixel_height = height };
-        font = .{ .atlas = canvas.atlas, .pixel_height = height };
-    }
-
-    if (self.appearance == .embedded) {
-        // The surrounding composer owns padding, focus and its single border.
-    } else if (self.form_control) {
+    if (self.form_control) {
         const height = @max(1, canvas.chrome.body);
         painter.metrics = .{ .cell_width = try canvas.atlas.cellWidth(height), .cell_height = @intCast(@min(65535, try canvas.atlas.lineHeight(height))), .baseline = @floatFromInt(try canvas.atlas.ascender(height)), .pixel_height = height };
         const inset = @min(canvas.chrome.px(12), content.width / 4);
@@ -78,8 +63,10 @@ pub fn draw(self: TextField, canvas: *Canvas) !void {
         content.width = @max(0, content.width - 2 * inset);
         content.height = if (self.multiline) content.height - @min(canvas.chrome.px(20), content.height / 3) else @min(@as(f32, @floatFromInt(painter.metrics.cell_height)), content.height - @min(canvas.chrome.px(8), content.height / 3));
         content.y += @floor((self.bounds.height - content.height) / 2);
-        try canvas.fillRoundedAt(self.bounds, .{ .color = palette.surface0, .radius = canvas.chrome.px(7) });
-        try canvas.ringAt(self.bounds, .{ .color = if (self.focused) palette.accent else palette.overlay0, .radius = canvas.chrome.px(7), .width = canvas.chrome.px(if (self.focused) 1.5 else 1), .alpha = if (self.focused) 0.9 else 0.45 });
+        if (!self.bare) {
+            try canvas.fillRoundedAt(self.bounds, .{ .color = palette.surface0, .radius = canvas.chrome.px(7) });
+            try canvas.ringAt(self.bounds, .{ .color = if (self.focused) palette.accent else palette.overlay0, .radius = canvas.chrome.px(7), .width = canvas.chrome.px(if (self.focused) 1.5 else 1), .alpha = if (self.focused) 0.9 else 0.45 });
+        }
     } else {
         try canvas.fillAt(self.bounds, if (self.focused) palette.surface0 else palette.surface_dim);
     }
@@ -92,9 +79,9 @@ pub fn draw(self: TextField, canvas: *Canvas) !void {
     const columns: u16 = @intFromFloat(@min(65535, @max(1, @floor(content.width / cell))));
     var preedit: ?*const Preedit = null;
     if (canvas.widgets) |state| {
-        const target = (Target{ .id = .{ .generation = self.generation }, .bounds = self.bounds, .action = self.action, .layer = self.layer, .traverse_tab = self.action == .composer, .role = 3 }).labelled(self.label);
+        const target = (Target{ .id = .{ .generation = self.generation }, .bounds = self.bounds, .action = self.action, .layer = self.layer, .role = 3 }).labelled(self.label);
         const id = try state.dispatcher.add(target);
-        try state.editors.preparing().add(.{ .id = id, .bounds = content, .columns = columns, .cell_width = cell, .preferred = self.focused, .multiline = self.multiline, .line_height = @floatFromInt(painter.metrics.cell_height), .font = font });
+        try state.editors.preparing().add(.{ .id = id, .bounds = content, .columns = columns, .cell_width = cell, .preferred = self.focused, .multiline = self.multiline, .line_height = @floatFromInt(painter.metrics.cell_height) });
         if (state.preedit.owner) |owner| {
             if (owner.eql(id)) {
                 preedit = &state.preedit;
@@ -103,12 +90,9 @@ pub fn draw(self: TextField, canvas: *Canvas) !void {
     }
 
     var display = EditorDisplay.capture(.{ .text = self.text, .anchor = self.selection[0], .head = self.selection[1] }, preedit);
-    if (font) |proportional| {
-        try proportional.prepare(display.field.text());
-    }
 
     if (self.multiline) {
-        try self.drawMultiline(&painter, .{ .display = &display, .content = content, .columns = columns, .font = font });
+        try self.drawMultiline(&painter, .{ .display = &display, .content = content, .columns = columns });
         return;
     }
 
@@ -143,10 +127,10 @@ fn drawMultiline(self: TextField, canvas: *Canvas, input: MultilinePaint) !void 
     const line_height: f32 = @floatFromInt(canvas.metrics.cell_height);
     const cell_width: f32 = @floatFromInt(canvas.metrics.cell_width);
     const rows: u32 = @intFromFloat(@max(1, @floor(content.height / line_height)));
-    const layout: MultilineLayout = .{ .text = field.text(), .head = @intCast(field.head), .columns = input.columns, .rows = rows, .font = input.font };
+    const layout: MultilineLayout = .{ .text = field.text(), .head = @intCast(field.head), .columns = input.columns, .rows = rows };
     const first = layout.firstRow();
     const selection = [2]usize{ @min(field.head, field.anchor), @max(field.head, field.anchor) };
-    var lines: EditorLines = .{ .text = field.text(), .width = input.columns, .font = input.font };
+    var lines: EditorLines = .{ .text = field.text(), .width = input.columns };
     var row: u32 = 0;
     while (lines.next()) |line| : (row += 1) {
         if (row < first) {
@@ -168,11 +152,7 @@ fn drawMultiline(self: TextField, canvas: *Canvas, input: MultilinePaint) !void 
             try canvas.fillAt(.{ .x = area.x + x * cell_width, .y = area.y, .width = @min(width * cell_width, area.width - x * cell_width), .height = area.height }, palette.surface1);
         }
 
-        if (input.font != null) {
-            _ = try canvas.textAt(area, .{ .text = if (field.len == 0) self.placeholder else line, .face = .sans, .size = .body, .color = if (field.len == 0) palette.subtext0 else palette.text, .alpha = if (field.len == 0) 0.72 else 1, .underline = display.provisional });
-        } else {
-            _ = try canvas.textAt(area, .{ .text = if (field.len == 0) self.placeholder else line, .color = if (field.len == 0) palette.subtext0 else palette.text, .underline = display.provisional });
-        }
+        _ = try canvas.textAt(area, .{ .text = if (field.len == 0) self.placeholder else line, .color = if (field.len == 0) palette.subtext0 else palette.text, .underline = display.provisional });
     }
 
     if (self.focused) {

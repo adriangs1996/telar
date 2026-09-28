@@ -7,7 +7,6 @@ const std = @import("std");
 const core = @import("telar-core");
 const GuiAdapter = @import("../GuiAdapter.zig");
 const Event = @import("PointerEvent.zig");
-const message_links = @import("../widgets/interaction/message_links.zig");
 const Hit = @import("LinkHit.zig");
 const Hover = @This();
 
@@ -70,16 +69,6 @@ pub fn refresh(self: *Hover, gui: *GuiAdapter) void {
         }
     }
 
-    if (!gui.app.model.name_prompt.active() and gui.overlays.presented().modal == null and gui.widgets.composer_menu.selector == null and !gui.widgets.thread_selection.dragging) {
-        if (gui.widgets.dispatcher.maps.presented().at(.{ event.x, event.y })) |target| {
-            if (target.enabled and target.action == .message_link and gui.pointerGeometryMatches() and message_links.destination(gui, target.action.message_link) != null) {
-                self.assign(null, .pointer);
-                self.cached = null;
-                return;
-            }
-        }
-    }
-
     var moved = event;
     moved.kind = .move;
     const mouse = gui.pointer.geometry.resolve(moved) orelse {
@@ -113,11 +102,12 @@ pub fn openable(self: *const Hover) bool {
     return current.eql(&shown);
 }
 
-/// Seals the overlay bounds with the frame, independently of later pointer motion.
-/// Example: `hover.prepare();`
-pub fn prepare(self: *Hover) void {
+/// Seals the tooltip's covered cells with the frame, independently of later
+/// pointer motion.
+/// Example: `hover.prepare(LinkTooltip.cover(area, metrics, origin));`
+pub fn prepare(self: *Hover, cover: ?cellgrid.Rect) void {
     self.prepared_link = self.link;
-    self.prepared_preview = if (self.link) |*hit| hit.previewArea() else null;
+    self.prepared_preview = if (self.link != null) cover else null;
 }
 
 /// Visible previews cover terminal cells until a replacement is delivered.

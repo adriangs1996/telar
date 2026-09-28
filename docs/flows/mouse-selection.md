@@ -4,19 +4,18 @@ Left-drag selects text within a pane. Double click selects a whitespace-delimite
 word, including punctuation; triple click selects a physical row. Dragging after
 a double or triple click extends by that same unit. Releasing the left button
 copies through the existing `copy_selection` / `pane_clipboard` exchange and
-OSC 52 host clipboard writer. A bare click does not copy.
+the window's native clipboard. A bare click does not copy.
 
 A child with mouse tracking retains ordinary presses. Shift-left press forces
-Telar selection, including over textual links, if the host terminal delivers
-the modifier. Some terminals intercept Shift-drag for their own selection;
-Telar cannot handle events the host does not send. Plain link clicks retain
-the existing opening behavior.
+Telar selection, including over textual links. A plain press on a link still
+begins this selection; only a release without a drag opens the link. See
+[Link opening](link-opening.md).
 
 ## Entry and ownership
 
 ```text
-host_inputs.mouse (TUI) or GuiAdapter.dispatchPointer (GUI)
-    -> pointer_routing.apply: normalize host pixels to cells
+GuiAdapter.drainInput -> GuiAdapter.dispatchPointer: resolve window pixels to cells
+    -> pointer_routing.apply
     -> copy_mode_pointer.apply: captured gesture first
     -> view_interactions.apply: focus the clicked pane
     -> chrome.linkPointer / link_opening.inputLinkPointer: ordinary links retain priority
@@ -29,11 +28,11 @@ captured drag / release
     -> copy_mode.planCommand
     -> copy_selection into model.to_runtime before commit, on release only
     -> copy_mode.commitPlan
-    -> copy_revision -> Presenter -> Compositor
+    -> copy_revision -> Client.presentation.observe -> paced window frame
 
 runtime copy_selection
     -> existing runtime selection extraction from the VT
-    -> pane_clipboard -> model.to_host -> host OSC 52 writer
+    -> pane_clipboard -> model.to_host -> GuiAdapter.requestClipboardWrite
 ```
 
 The client owns the range, click tracker and physical gesture. Mouse selection
@@ -58,10 +57,10 @@ coordinates from another pane. No borrowed pane pointer survives an event.
 
 This is interactive client state. Begin, drag, release and projection allocate
 nothing and add no queue. Character movement is constant-time; word expansion
-scans at most one bounded pane row. Click counts saturate at three. Rendering
-uses the existing paced compositor and copy damage ranges. Clipboard requests
-contain coordinates; runtime extraction and host delivery retain their existing
-64 KiB payload limit.
+scans at most one bounded pane row. Click counts saturate at three. The window
+draws the highlight from the copy projection on its paced frame. Clipboard
+requests contain coordinates; runtime extraction retains its existing 64 KiB
+payload limit.
 
 The range uses absolute retained-history rows. Frame reconciliation adjusts the
 range and captured word boundaries when retained history is pruned. A changed
@@ -75,7 +74,7 @@ not treat a wide glyph's continuation cell as whitespace.
 
 This implementation clips at the viewport edge. It does not auto-scroll during
 a drag, offer rectangular mouse selection, or expand a triple click across
-soft-wrapped rows. Clipboard delivery still depends on host OSC 52 permission.
+soft-wrapped rows.
 
 ## Validation
 
@@ -85,8 +84,9 @@ soft-wrapped rows. Clipboard delivery still depends on host OSC 52 permission.
   endpoints, bare clicks and retained-history reconciliation.
 - `src/client/input/copy_mode_pointer.zig` (through the tests below):
   matching-button ownership and cancellation when geometry disappears.
-- `src/frontend/client/tests/mouse_selection.zig`: real input, focus-before-press,
-  cross-border capture, mid-gesture child mode changes, Shift over links,
-  retired-pane capture, outbox coordinates, paced highlighting and typing.
-- Existing backend selection tests and host clipboard tests cover VT extraction
-  and OSC 52 delivery without adding a second copy implementation.
+- `src/client_tests/mouse_selection.zig`: real input, focus-before-press,
+  cross-border capture, Shift over links, retired-pane capture, outbox
+  coordinates, highlighting and typing.
+- Existing backend selection tests and the pane clipboard tests in
+  `src/client_tests/graphics_and_clipboard.zig` cover VT extraction and host
+  delivery without adding a second copy implementation.

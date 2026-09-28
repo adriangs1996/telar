@@ -1,6 +1,6 @@
-//! A pane closes when a client asks or its child exits. The authoritative
-//! exit revokes the pane's proxy credential; collection destroys the pane
-//! once no actor or attachment borrows it and removes a tab left empty.
+//! A pane closes when a client asks or its child exits. Collection destroys
+//! the pane once no actor or attachment borrows it and removes a tab left
+//! empty.
 const agent_status = @import("agent_status.zig");
 
 const core = @import("telar-core");
@@ -8,6 +8,8 @@ const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const Pane = @import("../pane/Pane.zig");
+const PaneStore = @import("../pane/PaneStore.zig");
+const ExitedPanes = @import("../pane/ExitedPanes.zig");
 const ExitCompletion = @import("events/ExitCompletion.zig");
 const pty = @import("pty");
 const exit_module = pty.exit;
@@ -17,6 +19,7 @@ const pane_attachment = @import("pane_attachment.zig");
 const pane_observation = @import("pane_observation.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
 const tab_removal = @import("tab_removal.zig");
+const worktree_lifecycle = @import("worktree_lifecycle.zig");
 
 /// Requests PTY shutdown exactly once and marks review owners for
 /// rediscovery. Pane retirement stays with the later exit event.
@@ -59,7 +62,7 @@ pub fn finishExit(model: *RuntimeModel, completion: ExitCompletion) !void {
     };
 
     _ = agent_status.remove(model, transition.pane.key());
-    revokeCredential(model, transition.pane);
+    worktree_lifecycle.finishCommand(model, transition.pane.id, transition.exit.code());
 
     if (transition.launch_aborting) {
         return;
@@ -92,27 +95,22 @@ pub fn collect(model: *RuntimeModel) void {
         }
 
         const location = pane.location;
+        keepExitText(store, pane);
         _ = store.removeExitedAt(index);
         _ = agent_status.remove(model, pane.key());
 
-        revokeCredential(model, pane);
         pane.destroy();
         session_checkpoint.noteChange(model);
 
         if (!store.hasAt(location) and model.workspaces.contains(location)) {
             const removed = model.workspaces.removeTab(model.gpa, location).?;
             tab_removal.announce(model, removed);
+            if (removed.workspace_removed) {
+                worktree_lifecycle.releaseWorkspace(model, removed.location.workspace);
+            }
         }
 
         leaveEmptyWorkspace(model, location.workspace);
-    }
-}
-
-/// Revokes the pane generation's proxy credential, when the proxy runs.
-/// Example: `pane_closure.revokeCredential(model, pane);`.
-pub fn revokeCredential(model: *RuntimeModel, pane: *Pane) void {
-    if (model.resources.proxy.capability()) |proxy| {
-        proxy.revokePane(pane.key());
     }
 }
 
@@ -134,6 +132,15 @@ fn leaveEmptyWorkspace(model: *RuntimeModel, workspace: core.WorkspaceLocation) 
             geometry_lease.release(model, session.key, workspace);
         }
     }
+}
+
+/// Keeps a collected pane's final rows and exit status, so its output stays
+/// readable after the pane is gone.
+fn keepExitText(store: *PaneStore, pane: *const Pane) void {
+    const exit = pane.exit orelse return;
+    var storage: [ExitedPanes.max_text_bytes]u8 = undefined;
+    const dump = pane.dumpText(.{ .rows = ExitedPanes.kept_rows, .source = .recent }, &storage);
+    store.exited.record(pane.key(), exit.code(), storage[0..dump.len]);
 }
 
 fn exitOrSynthetic(result: anyerror!exit_module.Exit) exit_module.Exit {

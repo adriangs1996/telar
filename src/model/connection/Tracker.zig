@@ -68,8 +68,14 @@ pub fn isEmpty(self: *const Tracker) bool {
 /// }
 /// ```
 pub fn has(self: *const Tracker, group: requests.Group) bool {
-    for (self.entries) |slot| {
-        const entry = slot orelse continue;
+    var remaining = self.count;
+    for (&self.entries) |*slot| {
+        if (remaining == 0) {
+            return false;
+        }
+
+        const entry = if (slot.*) |*value| value else continue;
+        remaining -= 1;
         if (entry.continuation.group() == group) {
             return true;
         }
@@ -86,8 +92,14 @@ pub fn has(self: *const Tracker, group: requests.Group) bool {
 /// }
 /// ```
 pub fn hasPane(self: *const Tracker, group: requests.Group, pane_id: core.PaneId) bool {
-    for (self.entries) |slot| {
-        const entry = slot orelse continue;
+    var remaining = self.count;
+    for (&self.entries) |*slot| {
+        if (remaining == 0) {
+            return false;
+        }
+
+        const entry = if (slot.*) |*value| value else continue;
+        remaining -= 1;
         if (entry.continuation.group() == group and entry.continuation.paneId() == pane_id) {
             return true;
         }

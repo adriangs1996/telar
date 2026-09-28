@@ -46,7 +46,8 @@ def sized16(text):
 def workspace_list():
     entry = struct.pack("<Q", 42) + sized16('CLI "workspace"') + sized16("/tmp/project")
     entry += struct.pack("<H", 2) + sized16("feature/cli") + bytes([1])
-    return bytes([0x98]) + struct.pack("<QH", 3, 1) + entry
+    # An empty worktree section closes the list.
+    return bytes([0x98]) + struct.pack("<QH", 3, 1) + entry + struct.pack("<H", 0)
 
 
 def workspace_snapshot(request_id, name="Renamed", tabs=b"", count=0):
@@ -58,30 +59,9 @@ def agent_snapshot(status=1):
     entry += sized16("") * 3 + bytes([0, 0]) + sized16("/tmp") + bytes([2])
     entry += sized16("codex") + sized16("Codex") + sized16("")
     entry += bytes([0, status, 0]) + sized16("") + struct.pack("<IBBBQqq", 0, 3, 1, 100, 1, 1, 10)
+    # No worktree, final message or plan.
+    entry += struct.pack("<Q", 0) + sized16("") + struct.pack("<HH", 0, 0) + sized16("")
     return bytes([0x96]) + struct.pack("<QH", 1, 1) + entry
-
-
-def thread_snapshot(skills=None, recent=None, approval=None):
-    text = 'Response "quoted" 🧶'.encode()
-    payload = bytes([0xAB]) + struct.pack("<QQQ", 7, 9, 3)
-    payload += sized16("thread-1") + sized16("turn-1") + bytes([1, 1, 1])
-    item = bytes([1]) + struct.pack("<QQQBBBIBB", 1, 1, 0, 0, 2, 2, 0, 1, 1)
-    item += bytes(20) + struct.pack("<IIB", 0, len(text), 1)
-    payload += item + struct.pack("<I", len(text)) + text + sized16("")
-    payload += bytes([0]) if approval is None else bytes([1]) + approval
-    payload += skills if skills is not None else struct.pack("<QBBB", 1, 1, 0, 0)
-    payload += (recent if recent is not None else bytes([1, 0, 0])) + bytes([0])
-    payload += sized16("model-1") + sized16("low") + bytes([1, 1])
-    payload += sized16("model-1") + sized16("Test model") + bytes([1]) + sized16("low") + sized16("low")
-    return payload
-
-
-def query_thread(connection):
-    request = receive_frame(connection)
-    if request[0] != 0x30:
-        raise AssertionError("Expected a typed conversation query")
-    send_frame(connection, bytes([0xA1]) + request[1:9])
-    send_frame(connection, thread_snapshot())
 
 
 class ControlTests(unittest.TestCase):
@@ -152,7 +132,7 @@ class ControlTests(unittest.TestCase):
         def exchange(connection):
             self.assertEqual(receive_frame(connection)[0], 0x14)
             send_frame(connection, bytes([0x95, 0, 0, 0]))
-            send_frame(connection, bytes([0x98]) + struct.pack("<QH", 2, 0))
+            send_frame(connection, bytes([0x98]) + struct.pack("<QHH", 2, 0, 0))
 
         result = self.run_control(["runtime", "watch", "--jsonl", "--count", "2"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -173,13 +153,14 @@ class ControlTests(unittest.TestCase):
         def exchange(connection):
             receive_frame(connection)
             send_frame(connection, bytes([0x95, 0, 0, 0]))
-            send_frame(connection, bytes([0x97]) + struct.pack("<QB HBB", 7, 42, 123, 0, 0))
+            send_frame(connection, bytes([0x97]) + struct.pack("<QB HBB HH", 7, 42, 123, 0, 0, 8, 160))
 
         result = self.run_control(["runtime", "metrics", "--json"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {
             "revision": 7, "cpu_percent": 42,
-            "memory_used_decigib": 123, "battery_percent": None,
+            "memory_used_decigib": 123, "memory_total_decigib": 160,
+            "cpu_count": 8, "battery_percent": None,
         })
 
     def test_workspace_list_exposes_git_metadata_and_escapes_names(self):
@@ -215,7 +196,7 @@ class ControlTests(unittest.TestCase):
                 self.assertIn(sized16(str(Path(directory).resolve())), request)
                 self.assertIn(sized16("Existing directory"), request)
                 request_id, = struct.unpack_from("<Q", request, 1)
-                opened = bytes([0x81]) + struct.pack("<QQBQQBBQ", request_id, 8, 0, 42, 3, 1, 0, 1)
+                opened = bytes([0x81]) + struct.pack("<QQBQQBQ", request_id, 8, 0, 42, 3, 1, 1)
                 send_frame(connection, opened)
 
             result = self.run_control([
@@ -266,7 +247,7 @@ class ControlTests(unittest.TestCase):
             request_id, kind, workspace, tab = struct.unpack_from("<QBQQ", request, 1)
             self.assertEqual((kind, workspace, tab), (0, 42, 8))
             reply = bytes([0x86]) + request[1:] + struct.pack("<H", 1)
-            reply += struct.pack("<QBBQ", 5, 0, 1, 9)
+            reply += struct.pack("<QBQ", 5, 0, 9)
             send_frame(connection, reply)
 
         result = self.run_control(["tab", "get", "8", "--workspace", "42", "--json"], exchange)
@@ -274,7 +255,6 @@ class ControlTests(unittest.TestCase):
         tab = json.loads(result.stdout)
         self.assertEqual(tab["tab_id"], 8)
         self.assertEqual(tab["panes"][0]["pane_generation"], 9)
-        self.assertEqual(tab["panes"][0]["kind"], "agent")
 
     def test_tab_rename_uses_the_runtime_confirmed_label(self):
         def exchange(connection):
@@ -310,143 +290,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["position"], 4)
 
-    def test_agent_interrupt_uses_the_observed_generation_and_waits_for_acceptance(self):
-        def exchange(connection):
-            self.assertEqual(receive_frame(connection)[0], 0x1C)
-            send_frame(connection, agent_snapshot())
-            request = receive_frame(connection)
-            self.assertEqual(request[0], 0x2E)
-            request_id, pane, generation = struct.unpack_from("<QQQ", request, 1)
-            self.assertEqual((pane, generation), (7, 9))
-            send_frame(connection, bytes([0xA1]) + struct.pack("<Q", request_id))
-
-        result = self.run_control(["agent", "interrupt", "7", "--json"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), {"pane_id": 7, "pane_generation": 9, "accepted": True})
-
-    def test_agent_thread_returns_structured_text_and_truncation(self):
-        def exchange(connection):
-            self.assertEqual(receive_frame(connection)[0], 0x1C)
-            send_frame(connection, agent_snapshot())
-            query_thread(connection)
-
-        result = self.run_control(["agent", "thread", "7", "--json"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        thread = json.loads(result.stdout)
-        self.assertEqual(thread["thread_id"], "thread-1")
-        self.assertTrue(thread["truncated"])
-        self.assertEqual(thread["items"][0]["text"], 'Response "quoted" 🧶')
-        self.assertEqual(thread["items"][0]["phase"], "final_answer")
-
-    def test_agent_models_preserves_provider_efforts_and_selection(self):
-        def exchange(connection):
-            self.assertEqual(receive_frame(connection)[0], 0x1C)
-            send_frame(connection, agent_snapshot())
-            query_thread(connection)
-
-        result = self.run_control(["agent", "models", "7", "--json"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        catalog = json.loads(result.stdout)
-        self.assertEqual(catalog["selected"], {"model": "model-1", "effort": "low", "access": "workspace"})
-        self.assertEqual(catalog["models"], [{"id": "model-1", "label": "Test model", "default_effort": "low", "efforts": ["low"]}])
-
-    def test_agent_skills_preserves_catalog_metadata(self):
-        def exchange(connection):
-            receive_frame(connection)
-            send_frame(connection, agent_snapshot())
-            request = receive_frame(connection)
-            self.assertEqual(request[0], 0x30)
-            send_frame(connection, bytes([0xA1]) + request[1:9])
-            skills = struct.pack("<QBBB", 4, 1, 1, 1)
-            skills += sized16("review") + sized16("Code Review") + sized16('Review "changes"') + bytes([1])
-            send_frame(connection, thread_snapshot(skills=skills))
-
-        result = self.run_control(["agent", "skills", "7", "--json"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        catalog = json.loads(result.stdout)
-        self.assertEqual((catalog["phase"], catalog["revision"], catalog["truncated"]), ("ready", 4, True))
-        self.assertEqual(catalog["skills"], [{"name": "review", "label": "Code Review", "description": 'Review "changes"', "scope": "repo"}])
-
-    def test_agent_conversations_exposes_stable_ids_and_resume_eligibility(self):
-        def exchange(connection):
-            receive_frame(connection)
-            send_frame(connection, agent_snapshot())
-            request = receive_frame(connection)
-            send_frame(connection, bytes([0xA1]) + request[1:9])
-            recent = bytes([1, 1, 1]) + sized16("previous-thread") + sized16('Previous "work"')
-            send_frame(connection, thread_snapshot(recent=recent))
-
-        result = self.run_control(["agent", "conversations", "7", "--json"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        catalog = json.loads(result.stdout)
-        self.assertEqual(catalog, {"phase": "ready", "has_more": True, "can_resume": False, "conversations": [{"id": "previous-thread", "title": 'Previous "work"'}]})
-
-    def test_agent_approvals_exposes_exact_pending_identity(self):
-        def exchange(connection):
-            receive_frame(connection)
-            send_frame(connection, agent_snapshot())
-            request = receive_frame(connection)
-            send_frame(connection, bytes([0xA1]) + request[1:9])
-            approval = struct.pack("<QB", 99, 0) + sized16('Run "build"?')
-            send_frame(connection, thread_snapshot(approval=approval))
-
-        result = self.run_control(["agent", "approvals", "7", "--json"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), [{"id": 99, "kind": "command", "description": 'Run "build"?'}])
-
-    def test_agent_approve_requires_and_sends_exact_approval_identity(self):
-        def exchange(connection):
-            receive_frame(connection)
-            send_frame(connection, agent_snapshot())
-            request = receive_frame(connection)
-            self.assertEqual(request[0], 0x2F)
-            self.assertEqual(struct.unpack_from("<QQQB", request, 9), (7, 9, 99, 1))
-            send_frame(connection, bytes([0xA1]) + request[1:9])
-
-        result = self.run_control(["agent", "approve", "7", "99", "--json"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(json.loads(result.stdout)["accepted"])
-        result = subprocess.run([str(BINARY), "agent", "approve", "7"], capture_output=True, text=True)
-        self.assertNotEqual(result.returncode, 0)
-
-    def test_agent_reject_sends_negative_decision_without_changing_identity(self):
-        def exchange(connection):
-            receive_frame(connection)
-            send_frame(connection, agent_snapshot())
-            request = receive_frame(connection)
-            self.assertEqual(request[0], 0x2F)
-            self.assertEqual(struct.unpack_from("<QQQB", request, 9), (7, 9, 99, 0))
-            send_frame(connection, bytes([0xA1]) + request[1:9])
-
-        result = self.run_control(["agent", "reject", "7", "99", "--json"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(json.loads(result.stdout)["accepted"])
-
-    def test_agent_prompt_uses_native_protocol_for_managed_panes(self):
-        def exchange(connection):
-            for _ in range(2):
-                self.assertEqual(receive_frame(connection)[0], 0x1C)
-                send_frame(connection, agent_snapshot())
-            request = receive_frame(connection)
-            self.assertEqual(request[0], 0x08)
-            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 7, 0, 1, 9))
-            query_thread(connection)
-            request = receive_frame(connection)
-            self.assertEqual(request[0], 0x2D)
-            self.assertEqual(struct.unpack_from("<QQ", request, 9), (7, 9))
-            self.assertEqual(request[25:], sized16("Run tests") + sized16("model-1") + sized16("low") + bytes([1, 0]))
-            send_frame(connection, bytes([0xA1]) + request[1:9])
-
-        result = self.run_control(["agent", "prompt", "7", "Run tests"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-
     def test_agent_prompt_preserves_terminal_delivery(self):
         def exchange(connection):
             for _ in range(2):
                 receive_frame(connection)
                 send_frame(connection, agent_snapshot())
-            request = receive_frame(connection)
-            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 7, 0, 0, 9))
             request = receive_frame(connection)
             self.assertEqual(request[0], 0x1E)
             self.assertEqual(struct.unpack_from("<QQ", request, 9), (7, 9))
@@ -454,118 +302,6 @@ class ControlTests(unittest.TestCase):
 
         result = self.run_control(["agent", "prompt", "7", "Run tests"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
-
-    def test_agent_prompt_transmits_image_paths_without_terminal_paste(self):
-        def exchange(connection):
-            for _ in range(2):
-                receive_frame(connection)
-                send_frame(connection, agent_snapshot())
-            request = receive_frame(connection)
-            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 7, 0, 1, 9))
-            query_thread(connection)
-            request = receive_frame(connection)
-            self.assertEqual(request[0], 0x2D)
-            self.assertEqual(request[25:], sized16("") + sized16("model-1") + sized16("low") + bytes([1, 2]) + sized16("/tmp/first.png") + sized16("/tmp/second.png"))
-            send_frame(connection, bytes([0xA1]) + request[1:9])
-
-        result = self.run_control(["agent", "prompt", "7", "", "--image", "/tmp/first.png", "--image", "/tmp/second.png"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-
-    def test_agent_prompt_validates_and_transmits_provider_options(self):
-        def exchange(connection):
-            for _ in range(2):
-                receive_frame(connection)
-                send_frame(connection, agent_snapshot())
-            request = receive_frame(connection)
-            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 7, 0, 1, 9))
-            query_thread(connection)
-            request = receive_frame(connection)
-            self.assertEqual(request[25:], sized16("Review") + sized16("model-1") + sized16("low") + bytes([0, 0]))
-            send_frame(connection, bytes([0xA1]) + request[1:9])
-
-        result = self.run_control(["agent", "prompt", "7", "Review", "--model", "model-1", "--effort", "low", "--access", "read_only"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-
-    def test_agent_prompt_rejects_unknown_models_before_submission(self):
-        def exchange(connection):
-            for _ in range(2):
-                receive_frame(connection)
-                send_frame(connection, agent_snapshot())
-            request = receive_frame(connection)
-            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 7, 0, 1, 9))
-            query_thread(connection)
-            self.assertEqual(connection.recv(1), b"")
-
-        result = self.run_control(["agent", "prompt", "7", "Review", "--model", "unknown"], exchange)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("UnsupportedAgentModel", result.stderr)
-
-    def test_agent_clear_uses_existing_conversation_command(self):
-        def exchange(connection):
-            receive_frame(connection)
-            send_frame(connection, agent_snapshot())
-            query_thread(connection)
-            request = receive_frame(connection)
-            self.assertEqual(request[0], 0x2D)
-            self.assertEqual(request[25:], sized16("/clear") + sized16("model-1") + sized16("low") + bytes([1, 0]))
-            send_frame(connection, bytes([0xA1]) + request[1:9])
-
-        result = self.run_control(["agent", "clear", "7", "--json"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(json.loads(result.stdout)["accepted"])
-
-    def test_agent_rename_preserves_title_in_native_command(self):
-        def exchange(connection):
-            receive_frame(connection)
-            send_frame(connection, agent_snapshot())
-            query_thread(connection)
-            request = receive_frame(connection)
-            self.assertEqual(request[0], 0x2D)
-            self.assertEqual(request[25:], sized16('/rename Fix "parser"') + sized16("model-1") + sized16("low") + bytes([1, 0]))
-            send_frame(connection, bytes([0xA1]) + request[1:9])
-
-        result = self.run_control(["agent", "rename", "7", 'Fix "parser"', "--json"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-
-    def test_agent_history_preserves_pagination_and_conversation_data(self):
-        def exchange(connection):
-            receive_frame(connection)
-            send_frame(connection, agent_snapshot())
-            request = receive_frame(connection)
-            self.assertEqual(request[0], 0x31)
-            self.assertEqual(struct.unpack_from("<QQQB", request, 9), (7, 9, 1, 1))
-            self.assertEqual(request[34:], sized16("opaque-cursor") + sized16("") + sized16(""))
-            page = bytes([0xAC]) + request[1:9] + struct.pack("<QBB", 1, 1, 0)
-            page += sized16("older-token") + sized16("newer-token") + thread_snapshot()[1:]
-            send_frame(connection, page)
-
-        result = self.run_control(["agent", "history", "7", "--cursor", "opaque-cursor", "--direction", "newer", "--json"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        page = json.loads(result.stdout)
-        self.assertEqual(page["pagination"], {"before": "older-token", "after": "newer-token", "has_before": True, "has_after": False})
-        self.assertEqual(page["thread"]["items"][0]["text"], 'Response "quoted" 🧶')
-
-    def test_agent_watch_filters_other_panes_generations_and_duplicate_revisions(self):
-        def exchange(connection):
-            receive_frame(connection)
-            send_frame(connection, agent_snapshot())
-            query_thread(connection)
-            self.assertEqual(receive_frame(connection)[0], 0x14)
-            send_frame(connection, thread_snapshot())
-            other = bytearray(thread_snapshot())
-            struct.pack_into("<Q", other, 1, 8)
-            send_frame(connection, other)
-            other = bytearray(thread_snapshot())
-            struct.pack_into("<Q", other, 9, 10)
-            send_frame(connection, other)
-            updated = bytearray(thread_snapshot())
-            struct.pack_into("<Q", updated, 17, 4)
-            send_frame(connection, updated)
-
-        result = self.run_control(["agent", "watch", "7", "--count", "2", "--jsonl"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        events = [json.loads(line) for line in result.stdout.splitlines()]
-        self.assertEqual([event["revision"] for event in events], [3, 4])
 
     def test_agent_report_title_can_clear_an_existing_title(self):
         def exchange(connection):
@@ -631,29 +367,7 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "ready")
 
-    def test_agent_resume_resolves_a_stable_id_and_pins_snapshot_revision(self):
-        def exchange(connection):
-            receive_frame(connection)
-            send_frame(connection, agent_snapshot())
-            request = receive_frame(connection)
-            send_frame(connection, bytes([0xA1]) + request[1:9])
-            snapshot = bytes([0xAB]) + struct.pack("<QQQ", 7, 9, 12)
-            snapshot += sized16("unused-thread") + sized16("") + bytes([1, 0, 0])
-            snapshot += struct.pack("<I", 0) + sized16("") + bytes([0])
-            snapshot += struct.pack("<QBBB", 1, 1, 0, 0)
-            snapshot += bytes([1, 0, 2]) + sized16("first") + sized16("First") + sized16("wanted") + sized16("Wanted") + bytes([0])
-            snapshot += sized16("model-1") + sized16("low") + bytes([1, 1])
-            snapshot += sized16("model-1") + sized16("Test model") + bytes([1]) + sized16("low") + sized16("low")
-            send_frame(connection, snapshot)
-            request = receive_frame(connection)
-            self.assertEqual(request[0], 0x32)
-            self.assertEqual(struct.unpack_from("<QQQB", request, 9), (7, 9, 12, 1))
-            send_frame(connection, bytes([0xA1]) + request[1:9])
-
-        result = self.run_control(["agent", "resume", "7", "wanted", "--json"], exchange)
-        self.assertEqual(result.returncode, 0, result.stderr)
-
-    def test_pane_list_includes_terminals_and_agents_without_attachments(self):
+    def test_pane_list_includes_every_pane_without_attachments(self):
         def exchange(connection):
             self.assertEqual(receive_frame(connection)[0], 0x14)
             send_frame(connection, workspace_list())
@@ -665,13 +379,12 @@ class ControlTests(unittest.TestCase):
             request = receive_frame(connection)
             self.assertEqual(request[0], 0x08)
             reply = bytes([0x86]) + request[1:] + struct.pack("<H", 2)
-            reply += struct.pack("<QBBQ", 5, 0, 0, 9) + struct.pack("<QBBQ", 7, 0, 1, 10)
+            reply += struct.pack("<QBQ", 5, 0, 9) + struct.pack("<QBQ", 7, 0, 10)
             send_frame(connection, reply)
 
         result = self.run_control(["pane", "list", "--json"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
         panes = json.loads(result.stdout)
-        self.assertEqual([pane["kind"] for pane in panes], ["terminal", "agent"])
         self.assertEqual([pane["position"] for pane in panes], [0, 1])
         self.assertEqual(panes[1]["pane_generation"], 10)
         self.assertEqual(panes[1]["workspace_id"], 42)
@@ -680,13 +393,13 @@ class ControlTests(unittest.TestCase):
         def exchange(connection):
             request = receive_frame(connection)
             self.assertEqual(request[0], 0x08)
-            reply = bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 5, 0, 0, 9)
+            reply = bytes([0x86]) + request[1:] + struct.pack("<HQBQ", 1, 5, 0, 9)
             send_frame(connection, reply)
 
         args = ["pane", "get", "5", "--workspace", "42", "--tab", "8", "--json"]
         result = self.run_control(args, exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), {"workspace_id": 42, "tab_id": 8, "position": 0, "pane_id": 5, "pane_generation": 9, "kind": "terminal", "lifecycle": "running"})
+        self.assertEqual(json.loads(result.stdout), {"workspace_id": 42, "tab_id": 8, "position": 0, "pane_id": 5, "pane_generation": 9, "lifecycle": "running"})
 
     def test_pane_get_missing_target_produces_no_partial_json(self):
         def exchange(connection):
@@ -878,78 +591,48 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "workspace_list_collapse")
 
-    def test_agent_create_uses_explicit_client_control(self):
-        result = self.run_control(["agent", "create", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=18, target=0, input_text="", input_value=0))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["action"], "agent_create")
-
     def test_client_open_goto_uses_explicit_client_control(self):
-        result = self.run_control(["client", "open", "goto", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=19, target=0, input_text="", input_value=0))
+        result = self.run_control(["client", "open", "goto", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=18, target=0, input_text="", input_value=0))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "client_open_goto")
 
     def test_client_open_history_uses_explicit_client_control(self):
-        result = self.run_control(["client", "open", "history", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=20, target=0, input_text="", input_value=0))
+        result = self.run_control(["client", "open", "history", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=19, target=0, input_text="", input_value=0))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "client_open_history")
 
     def test_client_copy_mode_uses_explicit_client_control(self):
-        result = self.run_control(["client", "copy-mode", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=21, target=0, input_text="", input_value=0))
+        result = self.run_control(["client", "copy-mode", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=20, target=0, input_text="", input_value=0))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "client_copy_mode")
 
     def test_notification_dismiss_uses_explicit_client_control(self):
-        result = self.run_control(["notification", "dismiss", "5", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=22, target=5, input_text="", input_value=0))
+        result = self.run_control(["notification", "dismiss", "5", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=21, target=5, input_text="", input_value=0))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "notification_dismiss")
 
     def test_client_open_link_uses_explicit_client_control(self):
-        result = self.run_control(["client", "open-link", "https://example.com", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=23, target=0, input_text="https://example.com", input_value=0))
+        result = self.run_control(["client", "open-link", "https://example.com", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=22, target=0, input_text="https://example.com", input_value=0))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "client_open_link")
 
     def test_client_clipboard_copy_uses_explicit_client_control(self):
-        result = self.run_control(["client", "clipboard", "copy", "copied \u00fc", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=24, target=0, input_text="copied \u00fc", input_value=0))
+        result = self.run_control(["client", "clipboard", "copy", "copied \u00fc", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=23, target=0, input_text="copied \u00fc", input_value=0))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "client_clipboard_copy")
 
-    def test_agent_draft_get_targets_client_owned_composer(self):
-        result = self.run_control(["agent", "draft", "get", "5", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=25, target=5, status=1, input_text="", text="retained draft ü", return_value=2))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), {"pane_id": 5, "text": "retained draft ü", "image_count": 2})
-
-    def test_agent_draft_set_targets_client_owned_composer(self):
-        result = self.run_control(["agent", "draft", "set", "5", "hello \u00fc", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=26, target=5, status=1, input_text="hello \u00fc"))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["status"], "applied")
-
-    def test_agent_draft_attach_targets_client_owned_composer(self):
-        result = self.run_control(["agent", "draft", "attach", "5", "/tmp/picture.png", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=27, target=5, status=1, input_text="/tmp/picture.png"))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["status"], "applied")
-
-    def test_agent_view_expand_preserves_item_identity_and_work_scope(self):
-        result = self.run_control(["agent", "view", "expand", "5", "42", "--work", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=28, target=5, status=1, input_text="42", input_value=1))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["status"], "applied")
-
-    def test_agent_view_collapse_preserves_item_identity_and_work_scope(self):
-        result = self.run_control(["agent", "view", "collapse", "5", "42", "--work", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=29, target=5, status=1, input_text="42", input_value=1))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["status"], "applied")
-
     def test_pane_copy_preserves_absolute_history_coordinates(self):
-        result = self.run_control(["pane", "copy", "5", "0,1000:79,1002", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=30, target=5, input_text="0,1000:79,1002"))
+        result = self.run_control(["pane", "copy", "5", "0,1000:79,1002", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=24, target=5, input_text="0,1000:79,1002"))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "admitted")
 
     def test_layout_get_emits_a_reusable_layout_token(self):
-        result = self.run_control(["layout", "get", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=31, target=0, status=1, text="0102aabb"))
+        result = self.run_control(["layout", "get", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=25, target=0, status=1, text="0102aabb"))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {"encoding": "telar-layout-hex", "data": "0102aabb"})
 
     def test_layout_apply_preserves_the_exact_export_token(self):
-        result = self.run_control(["layout", "apply", "0102aabb", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=32, target=0, status=1, input_text="0102aabb"))
+        result = self.run_control(["layout", "apply", "0102aabb", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=26, target=0, status=1, input_text="0102aabb"))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "applied")
 
@@ -972,13 +655,13 @@ class ControlTests(unittest.TestCase):
         def exchange(connection):
             request = receive_frame(connection)
             self.assertEqual(request[0], 0x08)
-            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 5, 0, 0, 9))
+            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<HQBQ", 1, 5, 0, 9))
             for text in ["first", "first", "second"]:
                 request = receive_frame(connection)
                 self.assertEqual(request[0], 0x1D)
                 self.assertEqual(struct.unpack_from("<QQ", request, 9), (5, 9))
                 data = text.encode()
-                send_frame(connection, bytes([0xA0]) + request[1:9] + struct.pack("<QBI", 5, 0, len(data)) + data)
+                send_frame(connection, bytes([0xA0]) + request[1:9] + struct.pack("<QBI", 5, 0, len(data)) + data + bytes([0]))  # no exit code
 
         result = self.run_control(["pane", "watch", "5", "--workspace", "42", "--tab", "8", "--interval-ms", "10", "--count", "2"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -998,30 +681,30 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)["type"], "proxy_status")
 
     def test_config_reload_reports_async_admission(self):
-        result = self.run_control(["config", "reload", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=33, target=0))
+        result = self.run_control(["config", "reload", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=27, target=0))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "admitted")
 
     def test_config_show_decodes_the_adopted_configuration_section(self):
-        result = self.run_control(["config", "show", "--client", "7", "--section", "input", "--json"], lambda c: self.routed_exchange(c, action=34, target=0, status=1, text='{"binding_count":12}', input_text="input"))
+        result = self.run_control(["config", "show", "--client", "7", "--section", "input", "--json"], lambda c: self.routed_exchange(c, action=28, target=0, status=1, text='{"binding_count":12}', input_text="input"))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {"binding_count": 12})
 
     def test_plugin_list_includes_disabled_configured_packages(self):
         page = {"generation": 4, "entries": [{"path": "plugins/paused", "id": None, "enabled": False}]}
-        result = self.run_control(["plugin", "list", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=35, target=0, status=1, text=json.dumps(page), return_value=-1))
+        result = self.run_control(["plugin", "list", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=29, target=0, status=1, text=json.dumps(page), return_value=-1))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(json.loads(result.stdout)[0]["enabled"])
 
     def test_plugin_get_collects_actions_under_the_same_configuration(self):
         metadata = {"generation": 4, "entries": [{"path": "plugins/demo", "id": "demo", "enabled": True}]}
         def exchange(connection):
-            self.routed_exchange(connection, action=36, target=0, status=1, text=json.dumps(metadata), input_text="demo", return_value=1)
+            self.routed_exchange(connection, action=30, target=0, status=1, text=json.dumps(metadata), input_text="demo", return_value=1)
             request = receive_frame(connection)
             self.assertEqual(struct.unpack_from("<Qq", request, 27), (4, 1))
             self.assertEqual(request[43:], sized16("demo"))
             text = json.dumps({"generation": 4, "entries": ["open"]})
-            send_frame(connection, bytes([0xAF]) + request[1:9] + struct.pack("<QQBBQq", 7, 9, 36, 1, 4, -1) + sized16(text))
+            send_frame(connection, bytes([0xAF]) + request[1:9] + struct.pack("<QQBBQq", 7, 9, 30, 1, 4, -1) + sized16(text))
 
         result = self.run_control(["plugin", "get", "demo", "--client", "7", "--json"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -1029,21 +712,21 @@ class ControlTests(unittest.TestCase):
 
     def test_plugin_pages_reject_a_reload_before_printing_partial_json(self):
         def exchange(connection):
-            self.routed_exchange(connection, action=35, status=1, target=0, text='{"generation":4,"entries":[]}', return_value=1)
+            self.routed_exchange(connection, action=29, status=1, target=0, text='{"generation":4,"entries":[]}', return_value=1)
             request = receive_frame(connection)
-            send_frame(connection, bytes([0xAF]) + request[1:9] + struct.pack("<QQBBQq", 7, 9, 35, 1, 4, -1) + sized16('{"generation":5,"entries":[]}'))
+            send_frame(connection, bytes([0xAF]) + request[1:9] + struct.pack("<QQBBQq", 7, 9, 29, 1, 4, -1) + sized16('{"generation":5,"entries":[]}'))
 
         result = self.run_control(["plugin", "list", "--client", "7", "--json"], exchange)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(result.stdout, "")
 
     def test_plugin_enable_accepts_a_disabled_configured_path(self):
-        result = self.run_control(["plugin", "enable", "plugins/paused", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=37, target=0, input_text="plugins/paused"))
+        result = self.run_control(["plugin", "enable", "plugins/paused", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=31, target=0, input_text="plugins/paused"))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "admitted")
 
     def test_plugin_disable_uses_explicit_client_admission(self):
-        result = self.run_control(["plugin", "disable", "demo", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=38, target=0, input_text="demo"))
+        result = self.run_control(["plugin", "disable", "demo", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=32, target=0, input_text="demo"))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "admitted")
 
@@ -1055,7 +738,7 @@ class ControlTests(unittest.TestCase):
             send_frame(connection, bytes([0xAD]) + request[1:9] + struct.pack("<B", 1) + entry)
             request = receive_frame(connection)
             self.assertEqual(request[0], 0x35)
-            self.assertEqual(request[25], 39)
+            self.assertEqual(request[25], 33)
             self.assertNotEqual(struct.unpack_from("<Q", request, 27)[0], 0)
             self.assertEqual(request[43:], sized16("demo"))
             reply = bytearray(request)
@@ -1090,10 +773,10 @@ class ControlTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertEqual(result.stdout, "")
 
-    def test_new_agent_commands_do_not_resurrect_a_missing_runtime(self):
+    def test_agent_reports_do_not_resurrect_a_missing_runtime(self):
         with tempfile.TemporaryDirectory(prefix="telar-observer-", dir="/tmp") as directory:
             endpoint = Path(directory) / "missing.sock"
-            for command in [["agent", "thread", "7"], ["agent", "interrupt", "7"], ["agent", "report-title", "7", "title"], ["agent", "watch", "7", "--count", "1"]]:
+            for command in [["agent", "acknowledge", "7"], ["agent", "report-title", "7", "title"]]:
                 result = subprocess.run([str(BINARY), *command, "--socket", str(endpoint)], capture_output=True, text=True, timeout=5)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(endpoint.exists())

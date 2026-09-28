@@ -1,113 +1,114 @@
-//! A client drives a managed agent pane through its structured interface:
-//! prompts, interrupts, approvals, resumed conversations and queries.
-const agent_status = @import("agent_status.zig");
+//! Automation drives agents in other panes: it interrupts their turn, and
+//! every text it sends passes the rules that keep a person in charge. Text
+//! never reaches the pane a person has focused, a sending pane is named on
+//! the prompt it sends, and prompts between two panes are budgeted. See
+//! `docs/flows/agent-control.md`.
 
+const std = @import("std");
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
-const agent_identity = @import("agent_identity.zig");
+const agent_status = @import("agent_status.zig");
 const client_request = @import("client_request.zig");
+const pane_input = @import("pane_input.zig");
+const agent_identity = @import("agent_identity.zig");
 
-const Action = union(enum) {
-    prompt: core.AgentSubmission,
-    interrupt,
-    resume_conversation: struct { index: u8, revision: u64 },
-    approval: core.AgentApprovalDecision,
-    query,
-};
+/// The event line an interrupted agent shows until its next hook.
+pub const interrupted_event = "Interrupted by telar";
 
-/// Sends one structured command to an agent pane and replies once.
+/// Bound for the line that names a sending pane on its prompt.
+pub const max_sender_line_bytes = 192;
+
+/// Stops a working agent's current turn with the key its manifest declares.
 ///
 /// ```zig
-/// try agent_control.send(model, session, request);
+/// try agent_control.interrupt(model, session, request);
 /// ```
-pub fn send(model: *RuntimeModel, session: *Session, request: anytype) !void {
-    const T = @TypeOf(request);
-    const action: Action = if (T == core.AgentPrompt)
-        .{ .prompt = .{ .text = request.text, .options = request.options, .images = request.images } }
-    else if (T == core.AgentInterrupt)
-        .interrupt
-    else if (T == core.AgentResume)
-        .{ .resume_conversation = .{ .index = request.conversation_index, .revision = request.expected_revision } }
-    else if (T == core.AgentApproval)
-        .{ .approval = .{ .id = request.approval_id, .accepted = request.accept } }
-    else if (T == core.QueryAgentThread)
-        .query
-    else
-        @compileError("unsupported agent control");
-
-    const key = command(model, .{ .id = request.pane_id, .generation = request.pane_generation }, action) catch |err| {
-        return switch (err) {
-            error.PaneNotFound => client_request.fail(session, request.request_id, .pane_not_found, "agent pane no longer exists"),
-            error.NotAnAgentPane => client_request.fail(session, request.request_id, .invalid_request, "pane is a terminal"),
-            error.PaneExited => client_request.fail(session, request.request_id, .pane_exited, "agent pane is closing"),
-            error.AgentBusy => client_request.fail(session, request.request_id, .agent_blocked, "agent is busy or waiting for a decision"),
-            error.ConversationAlreadyOpen => client_request.fail(session, request.request_id, .agent_blocked, "conversation is already open in another pane"),
-            error.InvalidConversation => client_request.fail(session, request.request_id, .invalid_request, "choose a recent conversation from an unused agent pane"),
-            error.InvalidAgentOptions => client_request.fail(session, request.request_id, .invalid_request, "model or reasoning effort is not available for this agent"),
-        };
+pub fn interrupt(model: *RuntimeModel, session: *Session, request: core.InterruptAgent) !void {
+    const key: PaneKey = .{ .id = request.pane_id, .generation = request.pane_generation };
+    const pane = model.panes.resolveControl(key) orelse {
+        return client_request.fail(session, request.request_id, .pane_not_found, "pane not found");
     };
 
-    if (action == .query) {
-        session.delivery.requestAgentThread(key);
+    if (pane.exit != null) {
+        return client_request.fail(session, request.request_id, .pane_exited, "pane already exited");
     }
 
+    if (focusedByClient(model, pane.id)) {
+        return client_request.fail(session, request.request_id, .pane_focused, "a person is typing in this pane");
+    }
+
+    const exact = pane.key();
+    if (agent_status.projectedStatus(model, exact) != .working) {
+        return client_request.fail(session, request.request_id, .agent_not_working, "agent is not working");
+    }
+
+    const interrupt_key = model.resources.agent_manifests.interrupt(agent_status.projectedProvider(model, exact));
+    if (interrupt_key == .none) {
+        return client_request.fail(session, request.request_id, .interrupt_unsupported, "agent declares no interrupt key");
+    }
+
+    try pane_input.forwardControl(model, pane, interrupt_key.bytes());
+    // Claude Code runs no stop hook for an interrupted turn, so the working
+    // report would outlive the turn. The runtime pressed the key itself; the
+    // agent's next hook corrects this if the turn somehow went on.
+    _ = agent_status.observeReport(model, .{
+        .identity = agent_identity.fromPane(pane),
+        .state = .ready,
+        .event = interrupted_event,
+        .observed_at_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
+        .observed_at_ns = @intCast(std.Io.Timestamp.now(model.io, .awake).toNanoseconds()),
+    });
     try client_request.complete(session, request.request_id);
 }
 
-fn command(model: *RuntimeModel, key: PaneKey, action: Action) !PaneKey {
-    const pane = model.panes.resolve(key) orelse return error.PaneNotFound;
-    if (pane.kind != .agent) {
-        return error.NotAnAgentPane;
-    }
+/// Whether `pane_id` is the focused pane of the active tab of any attached
+/// interactive client, where a person is presumably typing.
+///
+/// ```zig
+/// if (agent_control.focusedByClient(model, pane.id)) return refuse();
+/// ```
+pub fn focusedByClient(model: *const RuntimeModel, pane_id: core.PaneId) bool {
+    for (&model.clients.items) |*slot| {
+        const session = slot.* orelse continue;
+        if (session.role != .ui or !session.active()) {
+            continue;
+        }
 
-    if (pane.close_requested or pane.exit != null) {
-        return error.PaneExited;
-    }
-
-    if (action == .prompt) {
-        const snapshot = pane.agent_thread orelse return error.InvalidAgentOptions;
-        if (!snapshot.accepts(action.prompt.options)) {
-            return error.InvalidAgentOptions;
+        const focused = model.client_layouts.focusedPane(session.delivery.client_identity) orelse continue;
+        if (focused == pane_id) {
+            return true;
         }
     }
 
-    const session = pane.session.agent.session;
-    const accepted = switch (action) {
-        .prompt => |submission| session.submit(model.io, submission),
-        .interrupt => session.interrupt(model.io),
-        .approval => |decision| session.approve(model.io, decision),
-        .query => true,
-        .resume_conversation => |selection| accepted: {
-            const snapshot = pane.agent_thread orelse return error.InvalidConversation;
-            if (snapshot.revision != selection.revision or !snapshot.canResume() or snapshot.recent.phase != .ready or selection.index >= snapshot.recent.count) {
-                return error.InvalidConversation;
-            }
+    return false;
+}
 
-            const entry = snapshot.recent.entries[selection.index];
-            for (model.panes.items) |slot| {
-                const other = slot orelse continue;
-                if (other == pane or other.kind != .agent or other.exit != null) {
-                    continue;
-                }
+/// Writes the line that names the pane a prompt comes from, so the agent
+/// receiving it knows a person did not type it.
+///
+/// ```zig
+/// const line = agent_control.senderLine(model, sender, &buffer);
+/// ```
+pub fn senderLine(model: *const RuntimeModel, sender: core.PaneId, buffer: *[max_sender_line_bytes]u8) []const u8 {
+    const name = senderName(model, sender);
+    return std.fmt.bufPrint(buffer, "[telar: from {s}, pane {d}] ", .{ name, core.raw(sender) }) catch
+        std.fmt.bufPrint(buffer, "[telar: from pane {d}] ", .{core.raw(sender)}) catch unreachable;
+}
 
-                if (try other.session.agent.session.claims(model.io, entry.idSlice())) {
-                    return error.ConversationAlreadyOpen;
-                }
-            }
-
-            break :accepted session.resumeConversation(model.io, entry);
-        },
+/// The worktree branch the sending pane works in, else its workspace name.
+fn senderName(model: *const RuntimeModel, sender: core.PaneId) []const u8 {
+    const pane = model.panes.resolveControlConst(.{ .id = sender, .generation = 0 }) orelse return "a telar pane";
+    const workspace_id = switch (pane.location.workspace) {
+        .workspace => |id| id,
+        .worktree => return "a worktree",
     };
 
-    if (!accepted) {
-        return error.AgentBusy;
+    if (model.worktrees.slotOfWorkspace(workspace_id)) |slot| {
+        return model.worktrees.branchAt(slot)[0..@min(model.worktrees.branch_len[slot], 64)];
     }
 
-    if (action == .prompt and core.AgentCommand.parse(action.prompt.text) == null and model.agent_description_options != null) {
-        _ = agent_status.observeSubmittedPrompt(model, agent_identity.fromPane(pane), action.prompt.text);
-    }
-
-    return pane.key();
+    const name = model.workspaces.workspaceName(pane.location.workspace) orelse return "a telar pane";
+    return name[0..@min(name.len, 64)];
 }

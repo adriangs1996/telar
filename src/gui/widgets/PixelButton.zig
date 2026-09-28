@@ -30,6 +30,8 @@ size: label_size.Size = .body,
 inset: f32 = 0,
 /// An attention dot painted at the trailing edge in this color, if any.
 dot: ?cellgrid.Color = null,
+/// Without a background, a hovered control still gets a quiet surface.
+hover_fill: bool = false,
 
 /// Paints and registers a pixel control. Plain controls retain a clear
 /// background on hover; centered labels reserve equal space around their dot.
@@ -46,6 +48,8 @@ pub fn draw(self: PixelButton, canvas: *Canvas) !void {
     if (self.background) {
         const fill: cellgrid.Color = if (self.active) palette.accent else if (hovered) palette.surface1 else palette.surface0;
         try canvas.fillRoundedAt(self.area, .{ .radius = self.radius, .color = fill });
+    } else if (self.hover_fill and hovered) {
+        try canvas.fillRoundedAt(self.area, .{ .radius = self.radius, .color = palette.surface0 });
     }
 
     const dot_space: f32 = if (self.dot != null) canvas.chrome.px(AttentionDot.diameter + AttentionDot.gap) else 0;

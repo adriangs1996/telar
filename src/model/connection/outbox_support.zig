@@ -16,8 +16,6 @@ const OwnedNotification = @import("OwnedNotification.zig");
 const Outbox = @import("Outbox.zig");
 const core = @import("telar-core");
 const std = @import("std");
-const OwnedAgentPrompt = @import("OwnedAgentPrompt.zig");
-const OwnedAgentHistoryQuery = @import("OwnedAgentHistoryQuery.zig");
 
 pub const capacity = core.max_panes_per_tab + 16;
 
@@ -29,12 +27,6 @@ pub const Message = union(enum) {
     query_change_review: u16,
     change_review_command: u16,
     open_editor: core.OpenEditor,
-    agent_prompt: OwnedAgentPrompt,
-    agent_interrupt: core.AgentInterrupt,
-    agent_resume: core.AgentResume,
-    agent_approval: core.AgentApproval,
-    query_agent_thread: core.QueryAgentThread,
-    query_agent_history: OwnedAgentHistoryQuery,
     open_pane: core.OpenPane,
     pane_input: OwnedInput,
     pane_resize: core.PaneResize,
@@ -67,7 +59,12 @@ pub const Message = union(enum) {
     read_history_output: core.ReadHistoryOutput,
     suggest_command: data.OwnedSuggestion,
     complete_client_command: u16,
+    /// Encoded `find_paths` length in the slot's payload.
+    find_paths: u16,
     complete_pane_focus: core.CompletePaneFocus,
+    /// A control request the client encoded itself into the item's payload:
+    /// peek reads, prompts, interrupts and worktree launches.
+    encoded: u16,
 };
 
 pub fn messageLaunchCwd(message: Message) ?[]const u8 {
@@ -525,27 +522,6 @@ test "queued tab creation owns argument bytes until encoding" {
     try std.testing.expectEqualStrings("-p", (try iterator.next()).?);
 }
 
-test "agent prompt outbox owns borrowed image paths and refuses aggregate overflow atomically" {
-    var outbox: Outbox = try .init(std.testing.allocator);
-    defer outbox.deinit(std.testing.allocator);
-    var image = "/tmp/borrowed.png".*;
-    var request: core.AgentPrompt = .{ .request_id = @enumFromInt(1), .pane_id = @enumFromInt(2), .pane_generation = 3, .text = "inspect" };
-    try request.options.setModel("test-model");
-    request.options.effort = try core.AgentEffort.init("low");
-    try request.images.append(&image);
-    try outbox.pushAgentPrompt(request);
-    @memset(&image, 'x');
-    const stored = outbox.items[0].agent_prompt.view(&outbox.input_bytes.?[0]);
-    try std.testing.expectEqualStrings("/tmp/borrowed.png", stored.images.path(0));
-    try std.testing.expectEqualStrings("inspect", stored.text);
-    var long: [core.agent_thread.max_prompt_bytes]u8 = @splat('a');
-    request.text = &long;
-    request.images.storage[0] = "/tmp/image.png";
-    const depth = outbox.len;
-    try std.testing.expectError(error.InvalidAgentPrompt, outbox.pushAgentPrompt(request));
-    try std.testing.expectEqual(depth, outbox.len);
-}
-
 test "routed completions retain their text through send and recycle bounded slots" {
     var outbox: Outbox = try .init(std.testing.allocator);
     defer outbox.deinit(std.testing.allocator);
@@ -674,4 +650,23 @@ test "queued editor requests own paths without enlarging queue metadata" {
     try std.testing.expectEqualStrings("/tmp/original file", request.path);
     try std.testing.expect(@sizeOf(Message) < 512);
     try std.testing.expect(@sizeOf(Outbox) < 720 * 1024);
+}
+
+test "discarding keeps only the message being written" {
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
+    try outbox.pushInput(@enumFromInt(1), "sent");
+    var buffer: [64]u8 = undefined;
+    _ = (try outbox.beginSend(&buffer)).?;
+    try outbox.pushInput(@enumFromInt(2), "queued");
+    try outbox.pushInput(@enumFromInt(3), "also queued");
+
+    outbox.discardQueued();
+    try std.testing.expectEqual(@as(u8, 1), outbox.len);
+    try outbox.finishSend({});
+    try std.testing.expectEqual(@as(u8, 0), outbox.len);
+
+    try outbox.pushInput(@enumFromInt(4), "idle");
+    outbox.discardQueued();
+    try std.testing.expectEqual(@as(u8, 0), outbox.len);
 }

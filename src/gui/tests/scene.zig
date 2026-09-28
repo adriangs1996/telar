@@ -51,14 +51,13 @@ test "native theme backgrounds share window opacity across bands and pane header
     try std.testing.expectEqual(@as(f32, 1), (try backgroundColor(renderer, .{ modal.x + modal.width / 2, modal.y + 10 }))[3]);
 }
 
-test "agent and terminal panes share the configured theme background opacity and blur" {
+test "split terminal panes share the configured theme background opacity and blur" {
     var fixture = try ChromeFixture.init();
     defer fixture.deinit();
     const renderer = &fixture.session.gui.renderer;
     const model = &fixture.session.gui.app.model;
     const tab = model.tabs.active;
     try model_data.pane_split.split(model, tab, .{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(20), .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
-    try std.testing.expect(model.identifyPane(.{ .request_id = @enumFromInt(1), .pane_id = Session.pane_id, .location = Session.location, .created = false, .kind = .agent, .pane_generation = 77 }));
     var overlays: Overlays = .{};
     var scene: Scene = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = model_data.theme_support.builtin(.vesper) };
     renderer.config.window.background_blur = 40;
@@ -117,31 +116,6 @@ fn backgroundColor(renderer: *const TerminalRenderer, point: [2]f32) ![4]f32 {
     }
 
     return color;
-}
-
-test "native scene captures terminal and thread damage in the same presentation" {
-    const session = try Session.init();
-    defer session.deinit();
-    try session.bootstrap();
-    try session.receiveFrame(1);
-    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
-    _ = try session.gui.update();
-    try std.testing.expectEqual(pane.id, session.gui.cursor_clock.target.pane_id);
-    const layout = &session.gui.app.model.tabs.layout[session.gui.app.model.tabs.active];
-    try std.testing.expect(layout.setSurface(pane.id, .thread));
-    const token = try session.draw();
-    const commit = session.gui.app.presentation.active.?.delivery.commit;
-    try std.testing.expectEqual(@as(u8, 1), commit.len);
-    try std.testing.expectEqual(pane.id, commit.panes[0].pane_id);
-    try std.testing.expect(session.gui.renderer.quads.items().len > 0);
-    try std.testing.expectEqual(session.gui.renderer.atlas.?.version, session.gui.renderer.last_page_version);
-    try input_support.presented(
-        session.gui,
-        token,
-        true,
-    );
-    try session.settle();
-    try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
 }
 
 test "native copy selection recolors only projected cells and restores retained ink" {

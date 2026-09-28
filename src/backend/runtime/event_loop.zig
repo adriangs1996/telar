@@ -4,7 +4,7 @@ const client_store = @import("client/store_support.zig");
 const PaneStore = @import("../pane/PaneStore.zig");
 const event = @import("event.zig");
 const ReviewJobs = @import("../change_review/Jobs.zig");
-const AgentHistoryJobs = @import("AgentHistoryJobs.zig");
+const PathIndexes = @import("../paths/PathIndexes.zig");
 const std = @import("std");
 
 const Tag = std.meta.Tag(event.Event);
@@ -30,10 +30,9 @@ fn producerSlots(tag: Tag) usize {
         .pane_observed,
         .pane_media,
         .pane_exit,
-        .agent_thread_changed,
         => PaneStore.capacity,
         .change_review_completed => @as(ReviewJobs, .{}).items.len,
-        .agent_history_completed => @as(AgentHistoryJobs, .{}).items.len,
+        .path_index_built, .paths_found => PathIndexes.capacity,
         // Each source retains one global pending flag, admission slot or waiter.
         // Git uses workspace State.git_probe, which survives workspace removal.
         .accepted,
@@ -42,7 +41,6 @@ fn producerSlots(tag: Tag) usize {
         .history_response,
         .telemetry_tick,
         .telemetry_written,
-        .proxy_event,
         .proxy_capture,
         .plugin_effects,
         .agent_tick,
@@ -52,6 +50,7 @@ fn producerSlots(tag: Tag) usize {
         .metrics_sampled,
         .checkpoint_written,
         .git_status,
+        .worktree_git,
         .editor_opened,
         .session_name,
         .stopped,

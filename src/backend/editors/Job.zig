@@ -27,11 +27,25 @@ pub fn addCandidate(self: *Job, pane: PaneKey, process_group: u32) void {
     self.candidate_count += 1;
 }
 
-/// Executes discovery and remote opening under one deadline. Example: `const completed = Job.run(job, io);`
+/// Checks that the path names a regular file, then runs discovery and remote
+/// opening under one deadline. A missing file asks no editor to create it.
+/// Example: `const completed = Job.run(job, io);`
 pub fn run(self: *Job, io: std.Io) *Job {
+    const stat = std.Io.Dir.cwd().statFile(io, self.request.path(), .{}) catch {
+        self.result.outcome = .missing;
+        return self;
+    };
+
+    if (stat.kind != .file) {
+        self.result.outcome = .missing;
+        return self;
+    }
+
     var search: editorremote.Search = .{
         .editor = self.request.editor(),
         .path = self.request.path(),
+        .line = self.request.line,
+        .column = self.request.column,
         .candidates = self.candidates[0..self.candidate_count],
         .environment = self.environment,
     };
@@ -52,4 +66,48 @@ pub fn run(self: *Job, io: std.Io) *Job {
     }
 
     return self;
+}
+
+test "editor opens ask no editor for a path that is not a regular file" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    try temp.dir.writeFile(
+        io,
+        .{
+            .sub_path = "present.zig",
+            .data = "one\n",
+        },
+    );
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const cases = [_]struct { name: []const u8, outcome: core.EditorOpened.Outcome }{
+        .{ .name = "absent.zig", .outcome = .missing },
+        .{ .name = "", .outcome = .missing },
+        .{ .name = "present.zig", .outcome = .unavailable },
+    };
+
+    for (cases) |case| {
+        const path = try std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ directory, case.name });
+        var job: Job = .{
+            .client = .{
+                .id = 1,
+                .generation = 1,
+            },
+            .request = .{
+                .request_id = @enumFromInt(5),
+                .pane_id = @enumFromInt(6),
+                .pane_generation = 7,
+                .line = 3,
+            },
+            .environment = std.testing.environ,
+            .result = .{
+                .request_id = @enumFromInt(5),
+                .outcome = .unavailable,
+            },
+        };
+        try job.request.setTarget("nvim", path);
+        try std.testing.expectEqual(case.outcome, job.run(io).result.outcome);
+    }
 }

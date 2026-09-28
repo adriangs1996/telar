@@ -33,8 +33,25 @@ pub const max_foreground_name_bytes = 48;
 pub const max_pane_title_bytes = 256;
 pub const max_workspace_list_entries = 64;
 pub const max_git_branch_bytes = 64;
+/// Worktrees the runtime tracks at once, one per possible workspace.
+pub const max_worktree_entries = max_workspace_list_entries;
+/// Bound for a task title, the name the user and a coordinator use.
+pub const max_worktree_title_bytes = 96;
+/// Bound for the initial prompt kept to match a task by its content.
+pub const max_worktree_brief_bytes = 512;
+/// Bound for the program name of the last command run in a worktree.
+pub const max_worktree_command_label_bytes = 48;
+/// Bound for an agent's final answer as its stop hook reports it.
+pub const max_agent_final_message_bytes = 2048;
+/// Bound for one plan step or task subject an agent reports.
+pub const max_agent_plan_step_bytes = 96;
 pub const max_search_needle_bytes = 128;
 pub const max_search_matches = 64;
+/// A path picker query: fuzzy alignment cost grows with its length.
+pub const max_path_query_bytes = 64;
+pub const max_path_results = 50;
+/// One path relative to the picker's root.
+pub const max_path_match_bytes = 1024;
 pub const max_pane_text_rows = 200;
 pub const max_pane_text_bytes = 64 * 1024;
 pub const max_pane_text_input_bytes = 16 * 1024;
@@ -104,13 +121,6 @@ pub const ClientLayoutAxis = enum(u8) {
     vertical = 1,
 };
 
-/// How one layout leaf shows its pane: the terminal cells, or the Telar view
-/// of the agent running in it.
-pub const PaneSurface = enum(u8) {
-    terminal = 0,
-    thread = 1,
-};
-
 /// One node in a pre-order binary pane-layout tree. Split children immediately
 /// follow their parent, so the wire never carries disposable client indices.
 pub const ClientLayoutNode = union(enum) {
@@ -134,6 +144,58 @@ pub const FailureCode = enum(u16) {
     tab_not_found = 8,
     agent_blocked = 9,
     pane_exited = 10,
+    worktree_not_found = 11,
+    /// Text aimed at the pane a person is typing in; refused so automation
+    /// never interleaves with their input.
+    pane_focused = 12,
+    /// The sender exceeded its prompt budget for this target.
+    prompt_rate_limited = 13,
+    /// An interrupt reached an agent that is not working.
+    agent_not_working = 14,
+    /// The agent's manifest declares no interrupt keys.
+    interrupt_unsupported = 15,
+};
+
+/// Who asked the runtime to track a worktree: `telar` for worktrees made
+/// through `telar worktree` or an agent hook routed to it, `external` for
+/// linked worktrees found through an agent's reported working directory.
+pub const WorktreeOrigin = enum(u8) {
+    telar = 0,
+    external = 1,
+};
+
+/// What remains to do with a worktree, from its last Git probe.
+pub const WorktreeState = enum(u8) {
+    active = 0,
+    /// Nothing differs from its base: no commits ahead, no local changes.
+    integrated = 1,
+    /// The checkout directory no longer exists.
+    gone = 2,
+};
+
+/// Lifecycle of the last command launched in a worktree.
+pub const CommandState = enum(u8) {
+    none = 0,
+    running = 1,
+    exited = 2,
+};
+
+/// How an agent's progress report changes its plan.
+pub const AgentPlanOp = enum(u8) {
+    none = 0,
+    /// Appends one task; its position is its identity.
+    add = 1,
+    /// Changes the status of the task at `plan_index` (zero-based).
+    mark = 2,
+    /// Replaces the whole plan with counts and the current step.
+    set = 3,
+};
+
+pub const AgentPlanStatus = enum(u8) {
+    pending = 0,
+    in_progress = 1,
+    completed = 2,
+    deleted = 3,
 };
 
 /// Outcome of asking the runtime's engine for a command suggestion. Failures
@@ -177,6 +239,17 @@ pub const HistoryScope = enum(u8) {
     cwd = 1,
     workspace = 2,
     pane = 3,
+};
+
+pub const PathKind = enum(u8) {
+    file = 0,
+    directory = 1,
+};
+
+pub const PathKindFilter = enum(u8) {
+    any = 0,
+    files = 1,
+    directories = 2,
 };
 
 pub const HistoryStatus = enum(u8) {
@@ -231,11 +304,13 @@ pub const AgentProvider = enum(u8) {
     claude = 1,
     codex = 2,
     pi = 3,
+    cursor = 4,
+    opencode = 5,
     _,
 };
 
 pub const max_agent_manifests = 16;
-pub const first_custom_agent_provider: u8 = 4;
+pub const first_custom_agent_provider: u8 = 6;
 pub const max_agent_provider_index: u8 = first_custom_agent_provider + max_agent_manifests - 1;
 pub const max_agent_provider_name_bytes = 32;
 /// Bound for a manifest display name such as "Claude Code".
@@ -295,7 +370,6 @@ pub const AgentSound = enum(u8) {
 };
 
 pub const AgentSource = enum(u8) {
-    proxy_tls = 0,
     screen = 1,
     foreground_process = 2,
     /// An official lifecycle report from hooks or a runtime-owned provider.
@@ -311,6 +385,21 @@ pub const AgentReportState = enum(u8) {
     /// A Stop hook ran, but the agent may still continue. A newer idle
     /// composer must confirm completion before the runtime announces it.
     settling = 4,
+    /// A helper the agent started, such as a Claude Code subagent, is still
+    /// at work. It extends an unexpired `working` report and never changes
+    /// what the agent reports.
+    continuing = 5,
+    /// The turn ended while helpers the agent started, such as Claude Code
+    /// background subagents, are still at work. It projects as `working`,
+    /// `continuing` renews it, and `idle` cannot settle it.
+    waiting = 6,
+    /// The agent's prompt has sat idle. It settles the agent like `ready`,
+    /// except while an unexpired `waiting` report says helpers still work.
+    idle = 7,
+    /// The last helper a `waiting` report was waiting for has finished, and
+    /// the agent resumes no turn for it, as with Codex subagents. It settles
+    /// an unexpired `waiting` report like `ready` and changes nothing else.
+    released = 8,
 };
 
 pub const AgentAuthority = enum(u8) {
@@ -342,6 +431,9 @@ pub const AgentSessionFileKind = enum(u8) {
     claude_transcript = 0,
     /// Codex's state database; `/rename` updates `threads.name`.
     codex_state = 1,
+    /// Cursor Agent's chat metadata; `/rename` and its generated names
+    /// rewrite `title`.
+    cursor_meta = 2,
 };
 
 pub const AgentTitleState = enum(u8) {

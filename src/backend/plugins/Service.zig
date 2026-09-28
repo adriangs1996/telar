@@ -102,9 +102,7 @@ pub fn authorize(self: *const Service, result: *const Result) !void {
     try service_support.requireCapability(spec, .proxy_tap);
     for (result.batch.slice()) |effect| {
         const capability: core.Capability = switch (effect) {
-            .record_command => .history_write,
             .notification => .notifications,
-            .agent_evidence => .proxy_tap,
         };
         try service_support.requireCapability(spec, capability);
     }
@@ -115,13 +113,10 @@ fn encodeFrame(self: *Service, captured: *const Exchange, identity: ExchangeIden
     const bytes = try self.gpa.alloc(u8, size);
     errdefer self.gpa.free(bytes);
     const payload = try protocol.encodeExchange(bytes, identity, captured);
-    const representative = captured.request orelse captured.response orelse return error.EmptyCapture;
     const frame = try self.gpa.create(Frame);
     frame.* = .{
         .gpa = self.gpa,
         .event_id = identity.id,
-        .pane = representative.meta.pane.id,
-        .pane_generation = representative.meta.pane.generation,
         .storage = bytes,
         .len = payload.len,
     };

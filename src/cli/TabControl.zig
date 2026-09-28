@@ -83,7 +83,7 @@ fn writeSnapshot(self: *TabControl, snapshot: core.TabSnapshotView) !void {
     if (json) {
         try writer.print("{{\"workspace_id\":{d},\"tab_id\":{d},\"panes\":[", .{ core.raw(snapshot.location.workspace.workspace), core.raw(snapshot.location.tab_id) });
     } else {
-        try writer.writeAll("PANE\tGENERATION\tKIND\tLIFECYCLE\n");
+        try writer.writeAll("PANE\tGENERATION\tLIFECYCLE\n");
     }
 
     var panes = snapshot.panes();

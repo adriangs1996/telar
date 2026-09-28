@@ -1,7 +1,7 @@
 # Agent rename
 
 A user names a session inside the agent (`/name` in Pi, `/rename` in Claude
-Code and Codex) and the sidebar row takes that name. The title has source
+Code, Codex, Cursor Agent and OpenCode) and the sidebar row takes that name. The title has source
 `agent`: it outranks a generated title, is checkpointed like a manual one, and
 clearing the name inside the agent returns the row to its placeholder unless a
 manual title was set afterwards. Every route ends in the same aggregate call,
@@ -22,6 +22,32 @@ agent snapshot revision bump; checkpoint dirty
 ```
 
 A cleared name arrives as `name: undefined` and is sent as an empty title.
+
+## OpenCode
+
+```text
+/rename <text> or ctrl+r inside OpenCode
+        |
+OpenCode updates the session and publishes session.updated { info: { id, title } }
+        |
+telar.ts plugin: the root session's title, once per change
+        |
+telar hook opencode -> mapOpenCodeTitle -> schema.report_agent_title   (same path as Pi)
+```
+
+The TUI's "Rename session" command (`/rename`, `ctrl+r`) calls
+`session.update`, which publishes `session.updated` with the whole session
+(`packages/tui/src/routes/session/index.tsx`,
+`packages/opencode/src/session/session.ts` in v1.18.30); measured on 1.18.32
+under a pty, the event reached the plugin as soon as the dialog closed.
+OpenCode also names a session itself after the first prompt with its title
+agent, and that name arrives the same way. Until either happens the title is
+`New session - <ISO time>` (`Child session - …` for subagents), which the
+hook reports as an empty title, so the row keeps its placeholder. Titles of
+child sessions and of sessions the pane does not show are ignored. A resumed
+session publishes nothing before its first prompt, so a rename then is the
+first event naming it and the plugin adopts that session as the pane's; the
+next prompt corrects it if the user renamed another session from the list.
 
 ## Claude Code
 
@@ -114,6 +140,36 @@ database simply reports nothing. The schema number in the file name and the
 `threads.name` column are Codex internals; a future Codex can move them and
 the probe then degrades to reporting nothing.
 
+## Cursor Agent
+
+`/rename` fires no hook. Measured on Cursor Agent 2026.08.11, it rewrites the
+`title` of the chat's `meta.json` at once and sets the terminal title to the
+same name; the names Cursor generates for a new chat ("Shell Command")
+arrive the same way, so they become agent titles too.
+
+```text
+/rename <text> inside Cursor Agent
+        |
+Cursor rewrites title in <config>/chats/<md5 of launch dir>/<chat>/meta.json
+        |
+sessionStart or beforeSubmitPrompt: telar hook cursor locates meta.json
+(workspace root first, then at most 4096 launch directories) and sends it
+as session_file, kind cursor_meta
+        -> agent_hooks.receive -> agent_status.observeReport -> Watches.put
+        |
+agent_maintenance.tick -> agent_rename.start -> session_readers.probe   [observation path]
+        |
+probe reads at most 16 KiB of JSON from a meta.json inside the chat's own
+directory and reports title; an absent title reports an empty one
+        |
+event session_name -> agent_rename.finish -> Watch.remember drops an unchanged name
+        -> Agent.reportTitle; checkpoint dirty
+```
+
+A file mid-write fails to parse and reports nothing until the next probe.
+`meta.json` and its location are Cursor internals, like Codex's database; a
+future Cursor can move them and the probe then degrades to reporting nothing.
+
 ## Ownership and bounds
 
 - Owner: runtime. The client only renders the title source it receives.
@@ -126,7 +182,8 @@ the probe then degrades to reporting nothing.
   probe, one row per database probe.
 - Recovery: a restart resumes the agent and its `SessionStart` hook reports
   the current name and transcript again; the checkpoint carries the last
-  ready title.
+  ready title. A resumed OpenCode reports its title again with its first
+  prompt or rename.
 
 ## Validation
 
@@ -142,7 +199,7 @@ the probe then degrades to reporting nothing.
   against real files: transcript seeding at the end, reading only appended
   lines, idling, rewritten and missing files; database names, NULL names,
   unknown threads and missing databases.
-- `src/cli/hook.zig` proves the Pi and Claude title mappings, that the
+- `src/cli/hook.zig` proves the Pi, Claude and OpenCode title mappings, that the
   transcript path rides on every Claude report within its bound, and that the
   Codex hook resolves the newest `state_<n>.sqlite`.
 - `src/core/schema_contract_test.zig` pins `report_agent_title` and the

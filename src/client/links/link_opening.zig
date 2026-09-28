@@ -2,21 +2,30 @@
 //! host, one at a time.
 const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
+const editorremote = @import("editorremote");
 const data = @import("model");
+const core = @import("telar-core");
 const editor_file_links = @import("editor_file_links.zig");
 const notifications = @import("../notifications/notifications.zig");
 const tab_creation = @import("../workspace/tab_creation.zig");
 const Client = @import("../execution/Client.zig");
 
 /// Dispatches one owned target without letting opener failures leave input.
-/// Example: `_ = try link_opening.openLink(app, target);`
-pub fn openLink(client: *Client, target: data.LinkTarget) !bool {
+/// A file link or a path from `source` opens in that pane's editor flow,
+/// anchored at its directory and at the line the link names; without a
+/// source pane an absolute file opens in a new tab.
+/// Example: `_ = try link_opening.openLink(app, target, pane_id);`
+pub fn openLink(client: *Client, target: data.LinkTarget, source: ?core.PaneId) !bool {
     const result = switch (target.scheme) {
-        .file => open: {
+        .file, .path => open: {
             const path = data.FilePath.init(&target) catch |err| {
                 try reportLinkFailure(client, err);
                 return false;
             };
+
+            if (source) |pane_id| {
+                return editor_file_links.openFile(client, pane_id, path);
+            }
 
             break :open openLinkFile(client, path);
         },
@@ -45,8 +54,8 @@ pub fn inputLinkPointer(client: *Client, tab: usize, event: keyinput.Mouse) !boo
         .right_button = event.button & 0b11 == 2,
     };
 
-    const target = if (command.kind == .press and (command.left_button or command.right_button) and event.button & 4 == 0)
-        linkTargetAt(
+    const found = if (command.kind == .press and (command.left_button or command.right_button) and event.button & 4 == 0)
+        linkAt(
             &client.model,
             tab,
             event,
@@ -54,9 +63,9 @@ pub fn inputLinkPointer(client: *Client, tab: usize, event: keyinput.Mouse) !boo
         )
     else
         null;
-    const outcome = client.model.link_pointer.handle(command, target);
+    const outcome = client.model.link_pointer.handle(command, if (found) |link| link.target else null);
     if (outcome.open) |selected| {
-        _ = try openLink(client, selected);
+        _ = try openLink(client, selected, if (found) |link| link.pane_id else null);
     }
 
     if (outcome.copy) |selected| {
@@ -74,24 +83,34 @@ pub fn completeLinkOpening(client: *Client, result: anyerror!void) !void {
     }
 
     const next = client.model.link_opening.complete() orelse return;
-    client.to_workers.push(.{ .link = next }) catch |err| {
+    client.to_background.push(.{ .link = next }) catch |err| {
         client.model.link_opening.schedulingFailed();
         try reportLinkFailure(client, err);
     };
 }
 
-fn linkTargetAt(model: *data.ClientModel, tab: usize, event: keyinput.Mouse, area: cellgrid.Rect) ?data.LinkTarget {
+/// A link under the pointer and the pane it was printed in.
+const PaneLink = struct {
+    target: data.LinkTarget,
+    pane_id: core.PaneId,
+};
+
+fn linkAt(model: *data.ClientModel, tab: usize, event: keyinput.Mouse, area: cellgrid.Rect) ?PaneLink {
     const plan = data.tab_layout.planPaneMouse(model, tab, event, area) orelse return null;
     const pane = model.panes.findInConst(model.tabs.location[tab].tab_id, plan.pane_id) orelse return null;
-
-    return data.cells.extract(
+    const target = data.cells.extract(
         &pane.buffer,
         pane.scroll,
         .{
             .x = event.x - plan.content.x,
             .y = pane.scroll.offset + event.y - plan.content.y,
         },
-    );
+    ) orelse return null;
+
+    return .{
+        .target = target,
+        .pane_id = plan.pane_id,
+    };
 }
 
 fn openLinkFile(client: *Client, path: data.FilePath) !void {
@@ -100,13 +119,16 @@ fn openLinkFile(client: *Client, path: data.FilePath) !void {
         return error.EditorUnavailable;
     }
 
+    // Without a pane there is no directory to anchor a relative path to.
+    if (path.slice()[0] != '/') {
+        return error.RelativeFileLink;
+    }
+
+    var launch: editorremote.Launch = .{};
     _ = try tab_creation.requestTabCreation(
         client,
         .{
-            .arguments = &.{
-                editor,
-                path.slice(),
-            },
+            .arguments = try launch.argv(editor, path.slice(), path.line, path.column),
         },
     );
 }
@@ -114,7 +136,7 @@ fn openLinkFile(client: *Client, path: data.FilePath) !void {
 fn openExternalLink(client: *Client, target: data.LinkTarget) !void {
     switch (client.model.link_opening.request(target)) {
         .queued => {},
-        .start => |selected| client.to_workers.push(.{ .link = selected }) catch |err| {
+        .start => |selected| client.to_background.push(.{ .link = selected }) catch |err| {
             client.model.link_opening.schedulingFailed();
 
             return err;

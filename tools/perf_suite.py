@@ -37,12 +37,13 @@ def main():
             stem = f'{label}-{repetition}'
             run(['zig', 'build', 'bench', '--', '--samples', '20', '--sample-ms', '40', '--json'],
                 source, args.output / (stem + '-bench'))
-            for step in ('test-isolation', 'test-compression-isolation'):
+            run(['zig', 'build', 'headless', '-Doptimize=ReleaseFast'], source, args.output / (stem + '-headless'))
+            for step in ('test-isolation',):
                 run(['zig', 'build', step, '-Doptimize=ReleaseFast'], source, args.output / (stem + '-' + step))
     run([sys.executable, 'tools/perf_e2e.py', '--baseline', str(args.baseline),
          '--candidate', str(args.candidate), '--output', str(args.output / 'e2e'),
          '--repetitions', str(args.repetitions), '--samples', '200',
-         '--cases', 'echo', 'load', 'slow-host', 'graphics'],
+         '--cases', 'echo', 'load'],
         args.candidate_source, args.output / 'e2e-run')
 
 

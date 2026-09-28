@@ -66,7 +66,7 @@ fn admit(model: *RuntimeModel, session: *Session, request: core.OpenEditor) !voi
     if (kind != .unsupported) {
         for (model.panes.items) |slot| {
             const pane = slot orelse continue;
-            if (pane.kind != .terminal or pane.close_requested or pane.exit != null or !std.meta.eql(pane.location, source.location)) {
+            if (pane.close_requested or pane.exit != null or !std.meta.eql(pane.location, source.location)) {
                 continue;
             }
 

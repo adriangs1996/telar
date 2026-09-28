@@ -3,8 +3,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const pane_graphics = @import("../panes/pane_graphics.zig");
-const agent_control = @import("../agents/agent_control.zig");
-const agent_history = @import("../agents/agent_history.zig");
+const agent_peek = @import("../agents/agent_peek.zig");
 const agent_snapshot = @import("../agents/agent_snapshot.zig");
 const agent_sound = @import("../agents/agent_sound.zig");
 const proxy_status = @import("../agents/proxy_status.zig");
@@ -14,6 +13,7 @@ const request_failure = @import("request_failure.zig");
 const resync_required = @import("resync_required.zig");
 const copy_mode = @import("../input/copy_mode.zig");
 const history_palette = @import("../input/history_palette.zig");
+const path_picker = @import("../input/path_picker.zig");
 const editor_file_links = @import("../links/editor_file_links.zig");
 const notifications = @import("../notifications/notifications.zig");
 const pane_attachment = @import("../panes/pane_attachment.zig");
@@ -30,9 +30,17 @@ const workspace_list_snapshot = @import("../workspace/workspace_list_snapshot.zi
 const Client = @import("../execution/Client.zig");
 
 /// Applies one decoded reply while its borrowed payload remains valid.
-/// Example: `_ = try runtime_messages.handleServerMessage(client, message);`
+/// Example: `_ = try runtime_messages.handleServerMessage(client, try core.decodeServer(bytes));`
 pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
-    switch (message) {
+    return receiveServerMessage(client, &message);
+}
+
+/// Applies the message the transport owns in place. The union is kilobytes
+/// for its largest reply while a pane frame is 168 bytes, so the runtime
+/// read never copies it whole.
+/// Example: `_ = try runtime_messages.receiveServerMessage(client, &received.message);`
+pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage) !?u8 {
+    switch (message.*) {
         .change_review_changed => |notification| {
             _ = change_review.changeReviewChanged(&client.model, notification);
         },
@@ -42,16 +50,15 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
         .editor_opened => |reply| {
             try editor_file_links.completeEditorOpen(client, reply);
         },
-        .agent_history_page => |page| {
-            _ = try agent_history.applyAgentHistory(client, page);
-        },
-        .agent_thread_snapshot => |snapshot| {
-            _ = try data.agent_panes.applyThread(&client.model, snapshot);
-        },
         .request_completed => |reply| {
-            try agent_control.completeAgentRequest(&client.model, reply);
+            const continuation = client.model.request_lifecycle.tracker.take(reply.request_id) orelse return error.UnexpectedControlReply;
+            if (continuation != .ignored and continuation != .peek_action) {
+                return error.UnexpectedControlReply;
+            }
         },
         .pane_opened => |opened| _ = try pane_attachment.completePaneOpen(client, opened),
+        // Worktree registration is a CLI request; a UI never asks for it.
+        .worktree_registered => return error.UnexpectedControlReply,
         .tab_snapshot => |snapshot| _ = try tab_snapshot.applyTabSnapshot(client, snapshot),
         .workspace_snapshot => |snapshot| try workspace_list_snapshot.applyWorkspaceSnapshot(client, snapshot),
         .tab_created => |created| _ = try tab_creation.completeTabCreation(client, created),
@@ -98,7 +105,7 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
         },
         .pane_exited => |exited| _ = try pane_closure.applyPaneExit(client, exited),
         .request_failed => |failure| {
-            if (!client.model.history_palette.fail(failure)) {
+            if (!client.model.history_palette.fail(failure) and !client.model.path_picker.fail(failure)) {
                 _ = try request_failure.failRuntimeRequest(client, failure);
             }
         },
@@ -116,15 +123,22 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
         .history_pruned => |confirmation| _ = try history_palette.completeHistoryPrune(&client.model, confirmation),
         .history_output => |output| _ = client.model.history_palette.applyOutput(output),
         .command_suggestion => |suggested| _ = client.model.suggestion.apply(suggested),
-        .client_command_result, .client_list, .pane_text, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
+        .pane_text => |text| try agent_peek.receiveScreen(&client.model, text),
+        .path_results => |results| try path_picker.receive(client, results),
+        .client_command_result, .client_list, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
         .proxy_status => |status| _ = try proxy_status.applyProxyStatus(client, status),
-        .agent_snapshot => |snapshot| _ = try agent_snapshot.applyAgentSnapshot(client, snapshot),
+        .agent_snapshot => |snapshot| {
+            _ = try agent_snapshot.applyAgentSnapshot(client, snapshot);
+            try agent_peek.requestScreen(&client.model);
+        },
         .system_metrics => |metrics| _ = try data.system_metrics.reconcile(&client.model, 
             .{
                 .runtime_revision = metrics.revision,
                 .cpu_percent = metrics.cpu_percent,
                 .memory_used_decigib = metrics.memory_used_decigib,
                 .battery_percent = if (metrics.has_battery) metrics.battery_percent else null,
+                .cpu_count = metrics.cpu_count,
+                .memory_total_decigib = metrics.memory_total_decigib,
             },
         ),
         .workspace_list => |list| _ = try data.workspace_list_snapshot.apply(&client.model, list),

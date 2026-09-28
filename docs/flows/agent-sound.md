@@ -20,7 +20,7 @@ agent_sound.applyAgentSound
         |
 model.agent_snapshot.find (exact key)
         |
-SoundPlayback.request -> workers.start(.{ .sound = kind })
+SoundPlayback.request -> client.to_background (.sound job)
         |
 client.Message.sound_played <- job_runner: sound_playback.play
         |
@@ -36,16 +36,16 @@ replica contains the exact key. A delayed message for an earlier process
 cannot make noise after the numeric pane ID has been reused.
 
 The operation mutates only `model.sound_playback`. Accepted, stale and
-configuration-filtered sounds leave every model version unchanged. The
-dispatcher still calls `presentation_lifecycle.observe` after dispatch. The
-presenter sees no revision and schedules no frame.
+configuration-filtered sounds leave every model version unchanged. The adapter
+still calls `Client.presentation.observe` after the turn; it sees no new
+revision and asks for no frame.
 
 ## Playback ownership and bounds
 
 `SoundPlayback` (`model.sound_playback`) owns the effective `SoundPolicy`, one
 active worker token and one optional queued `AgentSound`. `Client`
-knows none of its queue transitions. It starts the worker with
-`workers.start`; the adapter runs it through its inbox and returns the
+knows none of its queue transitions. It queues a `.sound` job on
+`Client.to_background`; the adapter runs it through its inbox and returns the
 completion as `client.Message.sound_played`, which `Client.update`
 hands to `agent_sound.completeAgentSound`.
 
@@ -88,7 +88,8 @@ continues independently and later exact sound events may start a new queue.
   gating, stale suppression and effect-error propagation.
 - `src/client/agents/agent_sound.zig` owns protocol translation, worker
   scheduling and the completion entrypoint.
-- `src/frontend/client/tests/` proves wire identity, bounded queuing,
-  unchanged model and presentation versions, and configuration adoption.
+- `src/client_tests/notifications_and_agents.zig` proves wire identity,
+  bounded queuing, worker failure recovery, unchanged model and presentation
+  versions, and configuration adoption.
 - `src/backend/runtime/tests/observation_events_test.zig` proves the exact
   transition policy and the pane generation used by the client gate.

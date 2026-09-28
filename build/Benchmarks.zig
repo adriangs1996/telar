@@ -75,21 +75,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
             .libraries = bench_libraries,
         },
     );
-    const bench_frontend = b.createModule(.{
-        .root_source_file = b.path("src/frontend/frontend.zig"),
-        .target = app.modules.target,
-        .optimize = bench_optimize,
-        .link_libc = true,
-    });
-    bench_frontend.addImport("telar-core", bench_core);
-    bench_frontend.addImport("telar-client", bench_client);
-    bench_frontend.addImport("model", bench_data);
-    bench_frontend.addImport("lua-api", bench_lua_api);
-    bench_frontend.addImport("telar-lua", bench_lua);
-    bench_frontend.addImport("freetype", bench_freetype);
-    bench_libraries.addImports(bench_frontend);
     const bench_assets = assets_build.add(b, app.modules.target, bench_optimize);
-    bench_frontend.addImport("assets", bench_assets);
 
     const benchmarks = b.addExecutable(.{
         .name = "telar-benchmarks",
@@ -102,7 +88,6 @@ pub fn init(b: *std.Build, app: Application) @This() {
     });
     benchmarks.root_module.addImport("telar-core", bench_core);
     benchmarks.root_module.addImport("telar-backend", bench_backend);
-    benchmarks.root_module.addImport("telar-frontend", bench_frontend);
     benchmarks.root_module.addImport("telar-client", bench_client);
     benchmarks.root_module.addImport("model", bench_data);
     benchmarks.root_module.addImport("assets", bench_assets);
@@ -118,7 +103,6 @@ pub fn init(b: *std.Build, app: Application) @This() {
             .imports = &.{
                 .{ .name = "ghostty-vt", .module = app.modules.ghostty_vt },
                 .{ .name = "telar-backend", .module = bench_backend },
-                .{ .name = "telar-frontend", .module = bench_frontend },
                 .{ .name = "telar-core", .module = bench_core },
                 .{ .name = "telar-client", .module = bench_client },
                 .{
@@ -138,16 +122,6 @@ pub fn init(b: *std.Build, app: Application) @This() {
         run_benchmarks.addArgs(args);
     }
     b.step("bench", "Run the interactive path benchmarks").dependOn(&run_benchmarks.step);
-
-    const verify_terminal_browser = b.addSystemCommand(&.{"python3"});
-    verify_terminal_browser.addFileArg(b.path("tools/verify_terminal_browser.py"));
-    if (b.args) |args| {
-        verify_terminal_browser.addArgs(args);
-    }
-    b.step(
-        "verify-terminal-browser",
-        "Build and exercise pinned terminal-browser inside Telar on Ghostty",
-    ).dependOn(&verify_terminal_browser.step);
 
     return .{ .benchmarks = benchmarks, .echo_probe = echo_probe };
 }

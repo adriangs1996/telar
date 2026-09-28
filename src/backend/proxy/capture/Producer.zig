@@ -4,10 +4,8 @@ const std = @import("std");
 const Config = exchangecapture.Config;
 const Quota = exchangecapture.Quota;
 const Channel = @import("Channel.zig");
-const Registry = @import("../Registry.zig");
 const StartOptions = @import("StartOptions.zig");
 const Half = owned.Half;
-const CredentialId = @import("../CredentialId.zig");
 const decode_mod = exchangecapture.decode;
 const buffer = exchangecapture.buffer_support;
 const CaptureMetrics = @import("CaptureMetrics.zig");
@@ -22,19 +20,19 @@ truncated: std.atomic.Value(u64) = .init(0),
 skipped_quota: std.atomic.Value(u64) = .init(0),
 decode_failed: std.atomic.Value(u64) = .init(0),
 
-/// Initializes bounded capture storage and its credential-gated queue.
+/// Initializes bounded capture storage and its delivery queue.
 ///
 /// ```zig
-/// try producer.init(gpa, .{ .config = config, .credentials = &registry });
+/// try producer.init(gpa, config);
 /// ```
-pub fn init(self: *Producer, gpa: std.mem.Allocator, options: InitOptions) !void {
-    try options.config.validate();
+pub fn init(self: *Producer, gpa: std.mem.Allocator, config: Config) !void {
+    try config.validate();
     self.* = .{
         .gpa = gpa,
-        .config = options.config,
-        .quota = .init(options.config.max_total_bytes),
+        .config = config,
+        .quota = .init(config.max_total_bytes),
     };
-    self.channel.init(options.credentials);
+    self.channel.init();
 }
 
 /// Reserves one direction of an exchange without blocking the relay.
@@ -47,14 +45,7 @@ pub fn start(self: *Producer, options: StartOptions) ?*Half {
         .gpa = self.gpa,
         .quota = &self.quota,
         .config = self.config,
-        .meta = .{
-            .pane = .{
-                .id = options.owner.pane_id,
-                .generation = options.owner.pane_generation,
-            },
-            .dialect = options.dialect,
-            .protocol = options.protocol,
-        },
+        .meta = .{ .protocol = options.protocol },
         .key = options.key,
         .side = options.side,
         .host = options.host,
@@ -77,20 +68,17 @@ pub fn start(self: *Producer, options: StartOptions) ?*Half {
 /// Transfers a finished half to the runtime or frees it when delivery fails.
 ///
 /// ```zig
-/// producer.publish(io, .{ .owner = exchange.owner, .half = half });
+/// producer.publish(io, half);
 /// ```
-pub fn publish(self: *Producer, io: std.Io, publication: CapturePublication) void {
-    if (publication.half.head.truncated or publication.half.body.truncated) {
+pub fn publish(self: *Producer, io: std.Io, half: *Half) void {
+    if (half.head.truncated or half.body.truncated) {
         _ = self.truncated.fetchAdd(1, .monotonic);
     }
 
-    _ = self.channel.publish(io, .{
-        .owner = publication.owner,
-        .half = publication.half,
-    });
+    _ = self.channel.publish(io, half);
 }
 
-/// Waits for one half whose pane credential is still live.
+/// Waits for one captured half.
 ///
 /// ```zig
 /// const half = try producer.receive(io);
@@ -178,13 +166,3 @@ pub fn metrics(self: *const Producer) CaptureMetrics {
         .queue_high_water = queue_metrics.high_water,
     };
 }
-
-const InitOptions = struct {
-    config: Config,
-    credentials: *Registry,
-};
-
-const CapturePublication = struct {
-    owner: CredentialId,
-    half: *Half,
-};

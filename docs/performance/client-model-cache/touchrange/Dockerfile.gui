@@ -1,0 +1,11 @@
+# Adds what the native Linux GUI builds against: Wayland, Vulkan,
+# Fontconfig, glslc and a Rust toolchain for the syntax highlighter and
+# diagram helper. Build telar-touchrange first.
+FROM telar-touchrange
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libwayland-dev wayland-protocols libvulkan-dev glslc \
+    libxkbcommon-dev libfontconfig-dev fonts-dejavu-core \
+    libatk1.0-dev libatk-bridge2.0-dev libglib2.0-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"

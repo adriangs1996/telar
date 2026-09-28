@@ -1,11 +1,12 @@
 const gui_event = @import("../gui_event.zig");
 const Job = @import("Job.zig");
-const protocol = @import("protocol.zig");
+const mermaid = @import("mermaid");
+const protocol = mermaid.protocol;
+const Image = mermaid.Image;
 const std = @import("std");
 const Store = @import("Store.zig");
 const Service = @import("Service.zig");
 const Request = @import("Request.zig");
-const Image = @import("Image.zig");
 const source = "flowchart TD\nA --> B";
 
 test "diagram admission cannot replace any texture measured and pinned for the current frame" {
@@ -65,11 +66,10 @@ test "active diagram jobs own source bytes and stale completions cannot clear an
     var store = Store.init(std.testing.allocator);
     defer store.deinit();
     var mutable = source.*;
-    var current = request(1, &mutable);
+    const current = request(1, &mutable);
     _ = store.request(current);
     const first = store.nextJob() orelse return error.MissingDiagramJob;
     mutable[mutable.len - 1] = 'C';
-    current.owner.snapshot_revision += 1;
     _ = store.request(current);
     try std.testing.expect(store.nextJob() == null);
     try std.testing.expectEqualStrings(source, first.text());
@@ -88,27 +88,20 @@ test "active diagram jobs own source bytes and stale completions cannot clear an
     try std.testing.expectEqual(.unsupported, store.lookup(current).?.failed);
 }
 
-test "diagram identity includes every owner boundary and exact source but ignores snapshot pool movement" {
+test "diagram identity includes the owner and exact source theme and scale" {
     var store = Store.init(std.testing.allocator);
     defer store.deinit();
     const initial = request(1, source);
     try load(&store, initial, 1);
-    var revised = initial;
-    revised.owner.snapshot_revision += 1;
-    revised.owner.source_offset += 100;
-    try std.testing.expect(store.lookup(revised).? == .ready);
-    for (0..9) |change| {
+    var copied = source.*;
+    try std.testing.expect(store.lookup(request(1, &copied)).? == .ready);
+    for (0..4) |change| {
         var changed = initial;
         switch (change) {
-            0 => changed.owner.pane_id = @enumFromInt(2),
-            1 => changed.owner.attachment_generation += 1,
-            2 => changed.owner.pane_generation += 1,
-            3 => changed.owner.item_identity += 1,
-            4 => changed.owner.section = .metadata,
-            5 => changed.block_offset += 1,
-            6 => changed.theme.bg[0] +%= 1,
-            7 => changed.scale = 2,
-            8 => changed.text = "flowchart TD\nA --> C",
+            0 => changed.owner += 1,
+            1 => changed.theme.bg[0] +%= 1,
+            2 => changed.scale = 2,
+            3 => changed.text = "flowchart TD\nA --> C",
             else => unreachable,
         }
         try std.testing.expect(store.lookup(changed) == null);
@@ -274,8 +267,8 @@ test "invalid diagram sources geometry and malformed result buffers never enter 
     try std.testing.expectEqual(@as(usize, 0), store.retained_pixels);
 }
 
-fn request(identity: u64, text: []const u8) Request {
-    return .{ .owner = .{ .pane_id = @enumFromInt(1), .attachment_generation = 1, .pane_generation = 1, .snapshot_revision = 1, .item_identity = identity, .section = .body, .source_offset = 0 }, .block_offset = 0, .text = text, .theme = .{ .bg = .{ 20, 20, 20 }, .fg = .{ 240, 240, 240 }, .accent = .{ 90, 150, 230 } }, .scale = 1 };
+fn request(owner: u64, text: []const u8) Request {
+    return .{ .owner = owner, .text = text, .theme = .{ .bg = .{ 20, 20, 20 }, .fg = .{ 240, 240, 240 }, .accent = .{ 90, 150, 230 } }, .scale = 1 };
 }
 
 fn makeImage(allocator: std.mem.Allocator, side: u32) !Image {

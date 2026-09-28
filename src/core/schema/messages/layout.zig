@@ -157,7 +157,6 @@ fn encodeClientLayoutNode(encoder: *Encoder, node: types.ClientLayoutNode) !void
             try codec.validatePaneId(pane.id);
             try encoder.writeByte(0);
             try encoder.writeInt(u64, id.raw(pane.id));
-            try encoder.writeByte(@intFromEnum(pane.surface));
         },
         .split => |split| {
             if (split.ratio < types.min_client_layout_ratio or split.ratio > types.max_client_layout_ratio) {
@@ -175,10 +174,7 @@ pub fn decodeClientLayoutNode(decoder: *Decoder) !types.ClientLayoutNode {
     return switch (try decoder.readByte()) {
         0 => pane: {
             const pane_id = try id.pane(try decoder.readInt(u64));
-            const surface = std.enums.fromInt(types.PaneSurface, try decoder.readByte()) orelse
-                return error.InvalidPaneSurface;
-
-            break :pane .{ .pane = .{ .id = pane_id, .surface = surface } };
+            break :pane .{ .pane = .{ .id = pane_id } };
         },
         1 => split: {
             const axis = std.enums.fromInt(types.ClientLayoutAxis, try decoder.readByte()) orelse

@@ -77,11 +77,30 @@ pub fn restoreClientLayout(client: *Client, snapshot: core.ClientLayoutSnapshotV
         client.model.navigation_history = history;
     }
 
+    // A hidden machine's first pane waits until the window shows it, so its
+    // runtime streams nothing meanwhile.
+    if (!client.presented) {
+        client.open_deferred = true;
+        client.deferred_layout = restored;
+        try client.model.client_layouts.markSnapshotReceived();
+        return;
+    }
+
+    try openInitialPane(client, restored);
+    try client.model.client_layouts.markSnapshotReceived();
+}
+
+/// Sends the initial attach-or-create request for the restored layout, or
+/// for a new pane when there is none.
+///
+/// ```zig
+/// try client_layout.openInitialPane(client, restored);
+/// ```
+pub fn openInitialPane(client: *Client, restored: ?data.SavedLayout) !void {
     const size = data.multiplexer.rectSize(client.geometry().area) orelse
         return error.TerminalTooSmall;
     const request = client_startup.initialPaneRequest(client, restored, size);
     try runtime_io.sendRuntimeRequest(&client.model, request);
-    try client.model.client_layouts.markSnapshotReceived();
 }
 
 fn parseClientLayoutSnapshot(snapshot: core.ClientLayoutSnapshotView, layouts: *data.SavedLayouts, history: *data.NavigationHistory) !?data.SavedLayout {

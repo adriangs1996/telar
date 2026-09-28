@@ -1,5 +1,5 @@
-//! How evidence becomes an agent's status: process, proxy, screen and
-//! lifecycle observations resolve to one pane generation's aggregate, which
+//! How evidence becomes an agent's status: process, screen and lifecycle
+//! observations resolve to one pane generation's aggregate, which
 //! decides the status; titles, session references and pending resumes
 //! follow it; and every change advances the agents revision the snapshot
 //! reads.
@@ -15,7 +15,6 @@ const SessionReference = @import("../agent/SessionReference.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const SessionTitle = @import("../agent/SessionTitle.zig");
 const ProcessObservation = @import("../agent/ProcessObservation.zig");
-const ProxyObservation = @import("../agent/ProxyObservation.zig");
 const ScreenObservation = @import("../agent/ScreenObservation.zig");
 const std = @import("std");
 const Job = @import("../agent/Job.zig");
@@ -25,8 +24,7 @@ const Watch = @import("../agent/Watch.zig");
 const Completion = @import("../agent/Completion.zig");
 const Agent = @import("../agent/Agent.zig");
 const description = @import("../agent/description.zig");
-const ManagedState = @import("../agent/ManagedState.zig");
-
+const ProgressObservation = @import("../agent/ProgressObservation.zig");
 
 pub const AcknowledgeResult = enum {
     unknown_agent,
@@ -41,6 +39,17 @@ pub const AcknowledgeResult = enum {
 /// _ = agent_status.observeReport(model, .{ .identity = identity, .state = .working, .observed_at_ms = now_ms });
 /// ```
 pub fn observeReport(model: *RuntimeModel, observation: ReportObservation) bool {
+    // A helper's activity is not identity evidence: it renews an agent the
+    // runtime already tracks and never registers one.
+    if (observation.state == .continuing) {
+        const agent = model.agents.find(observation.identity.key) orelse return false;
+        if (!agent.applyReport(observation)) {
+            return false;
+        }
+
+        return reproject(model, agent, observation.observed_at_ms);
+    }
+
     if (observation.session) |session| {
         supersedeRestoredSession(model, observation.identity.key, session);
     }
@@ -68,6 +77,32 @@ pub fn observeReport(model: *RuntimeModel, observation: ReportObservation) bool 
     }
 
     return reproject(model, agent, observation.observed_at_ms) or changed;
+}
+
+/// Applies an agent's reported working tree, plan change and final answer.
+/// The aggregate is created when the report precedes other evidence.
+///
+/// ```zig
+/// _ = agent_status.observeProgress(model, .{ .identity = identity, .work_tree = worktree });
+/// ```
+pub fn observeProgress(model: *RuntimeModel, observation: ProgressObservation) bool {
+    const agent = ensure(model, observation.identity) orelse return false;
+    var changed = false;
+    if (observation.work_tree) |work_tree| {
+        changed = agent.work_tree != work_tree;
+        agent.work_tree = work_tree;
+    }
+
+    changed = agent.progress.applyPlan(observation.plan) or changed;
+    if (observation.final_message.len != 0) {
+        changed = agent.progress.setFinalMessage(observation.final_message) or changed;
+    }
+
+    if (changed) {
+        bumpRevision(model);
+    }
+
+    return changed;
 }
 
 /// Records the session reference an agent reported for itself. The
@@ -258,7 +293,7 @@ pub fn observeProcess(model: *RuntimeModel, observation: ProcessObservation) boo
 }
 
 /// A foreground process-group change is authoritative session exit. Old
-/// proxy and screen evidence belongs to that process and must not keep its
+/// screen evidence belongs to that process and must not keep its
 /// sidebar row alive after the shell regains control.
 ///
 /// ```zig
@@ -274,66 +309,8 @@ pub fn clearProcess(model: *RuntimeModel, key: PaneKey) bool {
     return removeStored(model, key);
 }
 
-/// Applies one proxy lifecycle observation to the agent identified by
-/// `observation.identity`.
-///
-/// `request_started` opens a bounded tracked exchange and may create the
-/// agent. Activity, provider turn completion, transport completion, and failure
-/// observations require a matching exchange; unmatched observations cannot
-/// create or settle agent state. Callers must filter auxiliary requests
-/// before calling this method.
-///
-/// An accepted observation refreshes proxy evidence and recomputes the
-/// public agent projection. A successful HTTP response remains `working`
-/// because transport completion does not prove that the agent turn ended.
-/// The return value is `true` only when the projected snapshot or title
-/// state changed. This method does not parse HTTP bodies or provider events.
-///
-/// ```zig
-/// fn observeHttp11Exchange(model: *RuntimeModel, identity: Identity) void {
-///     const exchange: ProxyExchange = .{
-///         .protocol = .http11,
-///         .connection_id = 17,
-///         .stream_id = 0,
-///     };
-///     _ = agent_status.observeProxy(model, .{
-///         .identity = identity,
-///         .provider = .claude,
-///         .phase = .request_started,
-///         .exchange = exchange,
-///         .observed_at_ms = 1_000,
-///     });
-///     _ = agent_status.observeProxy(model, .{
-///         .identity = identity,
-///         .provider = .claude,
-///         .phase = .response_activity,
-///         .exchange = exchange,
-///         .observed_at_ms = 1_100,
-///     });
-///     _ = agent_status.observeProxy(model, .{
-///         .identity = identity,
-///         .provider = .claude,
-///         .phase = .response_finished,
-///         .exchange = exchange,
-///         .observed_at_ms = 1_200,
-///     });
-/// }
-/// ```
-pub fn observeProxy(model: *RuntimeModel, observation: ProxyObservation) bool {
-    if (observation.dialect == .unknown) {
-        return false;
-    }
-
-    const agent = resolveProxyAgent(model, &observation) orelse return false;
-    if (!agent.applyProxy(observation)) {
-        return false;
-    }
-
-    return reproject(model, agent, observation.observed_at_ms);
-}
-
 /// Applies one screen observation to an aggregate already established by
-/// process, proxy, or lifecycle evidence. Screen text may refine state,
+/// process or lifecycle evidence. Screen text may refine state,
 /// but never creates an agent identity on its own.
 ///
 /// ```zig
@@ -428,18 +405,6 @@ pub fn projectedStatus(model: *const RuntimeModel, key: PaneKey) ?core.AgentStat
 pub fn observeInput(model: *RuntimeModel, key: PaneKey, bytes: []const u8) bool {
     const agent = model.agents.find(key) orelse return false;
     return agent.observeInput(bytes);
-}
-
-/// Captures the first accepted managed prompt when the caller opted into title generation.
-/// Example: `_ = agent_status.observeSubmittedPrompt(model, identity, "Fix tests\nKeep behavior");`.
-pub fn observeSubmittedPrompt(model: *RuntimeModel, identity: Identity, text: []const u8) bool {
-    const agent = ensure(model, identity) orelse return false;
-    if (!agent.observeSubmittedPrompt(text, pendingDescriptionCount(model) < description.max_pending_jobs)) {
-        return false;
-    }
-
-    bumpRevision(model);
-    return true;
 }
 
 /// Starts one bounded job at a time. Invalid captured input deterministically
@@ -563,13 +528,6 @@ pub fn finishSessionFileProbe(model: *RuntimeModel, completion: Completion, now_
     return changed;
 }
 
-fn resolveProxyAgent(model: *RuntimeModel, observation: *const ProxyObservation) ?*Agent {
-    return switch (observation.phase) {
-        .request_started => ensure(model, observation.identity),
-        .response_activity, .provider_turn_completed, .response_finished, .request_failed => model.agents.find(observation.identity.key),
-    };
-}
-
 fn ensure(model: *RuntimeModel, identity: Identity) ?*Agent {
     if (model.agents.find(identity.key)) |agent| {
         return agent;
@@ -653,12 +611,4 @@ fn nextSequence(model: *RuntimeModel) u64 {
 
 fn bumpRevision(model: *RuntimeModel) void {
     revisions.advance(&model.agent_revision);
-}
-
-/// Updates the lifecycle projection for one runtime-owned provider session.
-/// Example: `_ = agent_status.observeManaged(model, identity, state);`.
-pub fn observeManaged(model: *RuntimeModel, identity: Identity, state: ManagedState) bool {
-    const agent = ensure(model, identity) orelse return false;
-    agent.applyManaged(state);
-    return reproject(model, agent, state.observed_at_ms);
 }

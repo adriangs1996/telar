@@ -1,12 +1,14 @@
+const client = @import("telar-client");
 const localsocket = @import("localsocket");
 const std = @import("std");
-const RuntimeConnector = @import("RuntimeConnector.zig");
+const RuntimeConnector = client.RuntimeConnector;
 const Snapshot = @import("Snapshot.zig");
 const control = @import("control.zig");
 const ControlAgent = @import("ControlAgent.zig");
 const AgentCommandReport = @import("AgentCommandReport.zig");
 const core = @import("telar-core");
 const ReviewSelection = @import("ReviewSelection.zig");
+const WorktreeCatalog = @import("WorktreeCatalog.zig");
 /// One connected control session with its owned receive buffer.
 const Session = @This();
 
@@ -25,7 +27,7 @@ review_failure: ?[]const u8 = null,
 /// defer session.close();
 /// ```
 pub fn open(init: std.process.Init, socket: ?[*:0]const u8) !Session {
-    const connector = try RuntimeConnector.init(init, socket);
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, socket);
     return adopt(init, try connector.connectOrStart(.{}));
 }
 
@@ -39,7 +41,7 @@ pub fn open(init: std.process.Init, socket: ?[*:0]const u8) !Session {
 /// defer session.close();
 /// ```
 pub fn attach(init: std.process.Init, socket: ?[*:0]const u8) !Session {
-    const connector = try RuntimeConnector.init(init, socket);
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, socket);
     return adopt(init, try connector.connect());
 }
 
@@ -251,18 +253,15 @@ pub const TextInput = @import("TextInput.zig");
 /// const text = try session.readPane(pane, .{ .rows = 40, .source = .recent });
 /// ```
 pub fn readPane(self: *Session, pane: PaneRef, options: ReadOptions) !Text {
-    var send_buffer: [64]u8 = undefined;
-    try self.connection.send(self.io, try core.encodeReadPane(&send_buffer, .{
-        .request_id = self.requestId(),
+    const response = try self.exchange(core.encodeReadPane, core.ReadPane{
+        .request_id = .none,
         .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .rows = options.rows,
         .source = options.source,
-    }));
-
-    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    });
     return switch (response) {
-        .pane_text => |text| .{ .pane_id = pane.pane_id, .truncated = text.truncated, .text = text.text },
+        .pane_text => |text| .{ .pane_id = pane.pane_id, .truncated = text.truncated, .text = text.text, .exit_code = text.exit_code },
         .request_failed => |failure| control.failureError(failure),
         else => error.UnexpectedRuntimeResponse,
     };
@@ -281,6 +280,7 @@ pub fn sendText(self: *Session, pane: PaneRef, input: TextInput) !void {
         .pane_generation = pane.pane_generation,
         .mode = input.mode,
         .text = input.text,
+        .sender = if (input.sender) |sender| try core.pane(sender) else null,
     }));
 
     const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
@@ -438,6 +438,102 @@ pub fn createWorkspace(self: *Session, request: WorkspaceCreation) !u64 {
         .request_failed => |failure| return control.failureError(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
+}
+
+/// Copies the runtime's workspaces and worktrees into `catalog`. It
+/// subscribes this session to runtime state, so the caller dedicates the
+/// session to it and closes it afterwards.
+///
+/// ```zig
+/// var catalog_session = try Session.open(init, socket);
+/// defer catalog_session.close();
+/// try catalog_session.fetchCatalog(&catalog);
+/// ```
+pub fn fetchCatalog(self: *Session, catalog: *WorktreeCatalog) !void {
+    try self.subscribeRuntime();
+    while (true) {
+        const response = try self.receive();
+        if (response == .workspace_list) {
+            return catalog.copy(response.workspace_list);
+        }
+    }
+}
+
+/// Registers a worktree the CLI checked out and returns its identity.
+///
+/// ```zig
+/// const registered = try session.registerWorktree(.{ .request_id = .none, .source = source, .path = dir, .branch = "fix" });
+/// ```
+pub fn registerWorktree(self: *Session, request: core.RegisterWorktree) !core.WorktreeRegistered {
+    const response = try self.exchange(core.encodeRegisterWorktree, request);
+    return switch (response) {
+        .worktree_registered => |registered| registered,
+        .request_failed => |failure| control.failureError(failure),
+        else => error.UnexpectedRuntimeResponse,
+    };
+}
+
+/// Starts a command in a tracked worktree and returns the pane running it.
+///
+/// ```zig
+/// const opened = try session.launchWorktree(.{ .request_id = .none, .worktree = id, .size = size, .launch = launch });
+/// ```
+pub fn launchWorktree(self: *Session, request: core.LaunchWorktree) !core.PaneOpened {
+    const response = try self.exchange(core.encodeLaunchWorktree, request);
+    return switch (response) {
+        .pane_opened => |opened| opened,
+        .request_failed => |failure| control.failureError(failure),
+        else => error.UnexpectedRuntimeResponse,
+    };
+}
+
+/// Closes a worktree's tabs and stops tracking it.
+///
+/// ```zig
+/// try session.forgetWorktree(worktree_id);
+/// ```
+pub fn forgetWorktree(self: *Session, worktree: core.WorktreeId) !void {
+    const response = try self.exchange(core.encodeForgetWorktree, core.ForgetWorktree{
+        .request_id = .none,
+        .worktree = worktree,
+    });
+    return switch (response) {
+        .request_completed => {},
+        .request_failed => |failure| control.failureError(failure),
+        else => error.UnexpectedRuntimeResponse,
+    };
+}
+
+/// Interrupts a working agent's current turn.
+///
+/// ```zig
+/// try session.interruptAgent(pane);
+/// ```
+pub fn interruptAgent(self: *Session, pane: PaneRef) !void {
+    const response = try self.exchange(core.encodeInterruptAgent, core.InterruptAgent{
+        .request_id = .none,
+        .pane_id = try core.pane(pane.pane_id),
+        .pane_generation = pane.pane_generation,
+    });
+    return switch (response) {
+        .request_completed => {},
+        .request_failed => |failure| control.failureError(failure),
+        else => error.UnexpectedRuntimeResponse,
+    };
+}
+
+/// Reports what an agent works on and how far it got.
+///
+/// ```zig
+/// try session.reportProgress(.{ .request_id = .none, .pane_id = pane, .pane_generation = 3, .cwd = cwd });
+/// ```
+pub fn reportProgress(self: *Session, report: core.ReportAgentProgress) !void {
+    const response = try self.exchange(core.encodeReportAgentProgress, report);
+    return switch (response) {
+        .request_completed => {},
+        .request_failed => |failure| control.failureError(failure),
+        else => error.UnexpectedRuntimeResponse,
+    };
 }
 
 pub fn nowMs(self: *const Session) i64 {

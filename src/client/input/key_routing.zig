@@ -11,6 +11,7 @@ const name_prompt = @import("name_prompt.zig");
 const pane_input = @import("../panes/pane_input.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
 const Client = @import("../execution/Client.zig");
+const bar_updates = @import("../config/bar_updates.zig");
 
 /// Snapshot the current exclusive keyboard owners without exposing client state.
 /// Example: `const captures_keys = key_policy.captures(key_routing.keyRoutingAuthority(client));`
@@ -194,6 +195,17 @@ fn routeCurrentKey(client: *Client, command: data.KeyRoutingCommand, authority: 
                         .owner = .attachment_modal,
                     },
                     .lease_owner = .attachment_modal,
+                };
+            }
+
+            // Escape dismisses the bar panel before a prompt or pane sees it.
+            if (!authority.prompt_active and key.code == .escape and @as(u3, @bitCast(key.mods)) == 0 and client.model.bars.panel.isOpen()) {
+                try bar_updates.closePanel(client);
+                return .{
+                    .outcome = .{
+                        .owner = .ignored,
+                    },
+                    .lease_owner = .ignored,
                 };
             }
         },

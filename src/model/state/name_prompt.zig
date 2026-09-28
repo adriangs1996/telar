@@ -24,7 +24,21 @@ pub const Command = @import("PromptCommand.zig").PromptCommand;
 /// The suggestion palette lists one row, so Enter on an empty field can
 /// still paste it.
 pub fn selects(target: Target) bool {
-    return target == .goto or target == .history or target == .suggest or target == .palette;
+    return target == .goto or target == .history or target == .suggest or target == .palette or target == .paths;
+}
+
+/// Targets that act on Enter with an empty field: list prompts pick their
+/// row, and a peek opens its agent's tab.
+pub fn acceptsEmpty(target: Target) bool {
+    return selects(target) or target == .peek;
+}
+
+test "a peek submits an empty field so Enter opens its agent" {
+    var state: NamePromptState = .{};
+    state.begin(.{ .peek = .{ .pane_id = @enumFromInt(7), .pane_generation = 1 } });
+    const outcome = state.apply(.submit);
+    try std.testing.expect(outcome == .submitted);
+    try std.testing.expectEqualStrings("", outcome.submitted.name);
 }
 
 test "selection clamping and combined history updates publish exactly one revision" {
@@ -295,4 +309,39 @@ test "the new-context form submits either field and carries the directory confir
     try std.testing.expect(state.apply(.backspace) == .changed);
     try std.testing.expect(!state.currentConst().?.form().?.confirm_create);
     try std.testing.expect(!state.apply(.submit).submitted.create_directory);
+}
+
+test "adding a machine asks for its label, then its destination, in one prompt" {
+    var state: NamePromptState = .{};
+    state.begin(.add_machine);
+    try std.testing.expect(state.apply(.submit) == .unchanged);
+
+    try std.testing.expect(state.apply(.{ .insert = "box" }) == .changed);
+    try std.testing.expect(state.apply(.submit) == .changed);
+    const prompt = state.currentConst().?;
+    try std.testing.expectEqualStrings("", prompt.field.text());
+    try std.testing.expectEqualStrings("box", prompt.mode.machine.add_destination.text());
+
+    try std.testing.expect(state.apply(.{ .insert = "dev@box" }) == .changed);
+    const submitted = state.apply(.submit).submitted;
+    try std.testing.expectEqualStrings("dev@box", submitted.name);
+    try std.testing.expectEqualStrings("box", submitted.target.machine.add_destination.text());
+    try std.testing.expect(state.finish(submitted.target));
+}
+
+test "the machine list removes and renames its selected row; other lists ignore rename" {
+    var state: NamePromptState = .{};
+    state.begin(.{ .palette = .machines });
+    state.select(2);
+
+    try std.testing.expectEqual(@as(u16, 2), state.apply(.remove_entry).removed);
+    try std.testing.expectEqual(@as(u16, 2), state.apply(.rename_entry).rename_requested);
+
+    state.begin(.{ .palette = .actions });
+    try std.testing.expect(state.apply(.rename_entry) == .unchanged);
+    try std.testing.expect(state.apply(.remove_entry) == .unchanged);
+
+    state.begin(.{ .rename_machine = .{ .slot = 3, .label = "box" } });
+    try std.testing.expectEqualStrings("box", state.currentConst().?.field.text());
+    try std.testing.expectEqualDeep(Target{ .machine = .{ .rename = 3 } }, state.currentConst().?.target());
 }

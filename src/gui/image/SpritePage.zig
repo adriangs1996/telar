@@ -1,5 +1,5 @@
 //! One RGBA8 page of equal square cells the GPU samples beside the alpha
-//! glyph atlas. The three provider marks from the embedded sheet fill the
+//! glyph atlas. The provider marks from the embedded sheet fill the
 //! first cells at construction; favicons take the rest as they land, at
 //! most `max_favicons`. Texels are premultiplied so linear sampling never
 //! fringes. `version` advances with every cell written, so the backend
@@ -9,6 +9,7 @@ const core = @import("telar-core");
 const assets = @import("assets");
 const Sprite = @import("Sprite.zig");
 const imaging = @import("imaging");
+const data = @import("model");
 const ImageView = imaging.ImageView;
 const box_filter = imaging.box_filter;
 const SpritePage = @This();
@@ -22,7 +23,9 @@ pub const min_cell: u32 = 8;
 pub const max_cell: u32 = 48;
 pub const max_favicons: u16 = 64;
 const provider_slot: u32 = 64;
-const providers = [_]core.AgentProvider{ .claude, .codex, .pi };
+const providers = [_]core.AgentProvider{ .claude, .codex, .pi, .cursor, .opencode };
+/// Cells the provider marks take before the first favicon.
+pub const provider_mark_count: u16 = providers.len;
 
 comptime {
     std.debug.assert(assets.provider_symbols_rgba.len == providers.len * provider_slot * provider_slot * 4);
@@ -144,11 +147,13 @@ fn add(self: *SpritePage, image: ImageView) !Sprite {
 test "the page holds the provider marks then at most 64 favicons and premultiplies" {
     var page = try SpritePage.init(std.testing.allocator, 16);
     defer page.deinit();
-    try std.testing.expectEqual(@as(u16, 3), page.count);
+    try std.testing.expectEqual(provider_mark_count, page.count);
     try std.testing.expectEqual(@as(u16, 1024), page.capacity());
     try std.testing.expectEqual(max_favicons, page.faviconRoom());
     try std.testing.expect(page.providerMark(.claude) != null);
     try std.testing.expect(page.providerMark(.pi).?.index == 2);
+    try std.testing.expect(page.providerMark(.cursor).?.index == 3);
+    try std.testing.expect(page.providerMark(.opencode).?.index == 4);
     try std.testing.expect(page.providerMark(.unknown) == null);
     try std.testing.expect(page.providerMark(@enumFromInt(9)) == null);
 
@@ -156,7 +161,7 @@ test "the page holds the provider marks then at most 64 favicons and premultipli
     const image: ImageView = .{ .pixels = &half, .stride = 64, .width = 16, .height = 16 };
     const version = page.version;
     const first = try page.addFavicon(image);
-    try std.testing.expectEqual(@as(u16, 3), first.index);
+    try std.testing.expectEqual(provider_mark_count, first.index);
     try std.testing.expectEqual(version + 1, page.version);
     const cell = page.uv(first);
     const texel = page.pixels[(@as(usize, @intFromFloat(cell[1] * side)) * side + @as(usize, @intFromFloat(cell[0] * side))) * 4 ..][0..4];
@@ -179,7 +184,7 @@ test "cells follow the display scale inside the bounds" {
     try std.testing.expectError(error.InvalidSpriteCell, SpritePage.init(std.testing.allocator, 4));
 }
 
-test "provider symbols preserve alpha and OpenAI is a tintable white mask" {
+test "provider symbols preserve alpha and OpenAI, Cursor and OpenCode are tintable white masks" {
     var page = try SpritePage.init(std.testing.allocator, 32);
     defer page.deinit();
     for (providers) |provider| {
@@ -190,7 +195,7 @@ test "provider symbols preserve alpha and OpenAI is a tintable white mask" {
         for (0..page.cell) |y| {
             for (0..page.cell) |x| {
                 const rgba = page.pixels[(y * side + left + x) * 4 ..][0..4];
-                if (provider == .codex) {
+                if (data.icons.providerMarkFollowsTheme(provider)) {
                     try std.testing.expectEqual(rgba[3], rgba[0]);
                     try std.testing.expectEqual(rgba[3], rgba[1]);
                     try std.testing.expectEqual(rgba[3], rgba[2]);

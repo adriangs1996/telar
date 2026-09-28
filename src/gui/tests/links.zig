@@ -1,10 +1,11 @@
 const input_support = @import("input_support.zig");
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const Fixture = @import("LinkFixture.zig");
 const Session = @import("Session.zig");
 
-test "native links highlight with the platform modifier and open only on release" {
+test "native links highlight without a modifier and the platform modifier claims the gesture" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
@@ -12,6 +13,9 @@ test "native links highlight with the platform modifier and open only on release
     move.mods = 0;
     try fixture.send(move);
     try std.testing.expectEqual(.pointer, gui.pointer.hover.shape);
+    try std.testing.expectEqualStrings("https://a.b", gui.pointer.hover.link.?.match.target.uri());
+    move.mods = 2;
+    try fixture.send(move);
     try std.testing.expect(gui.pointer.hover.link == null);
     try fixture.send(fixture.event(6));
     try std.testing.expectEqual(.pointer, gui.pointer.hover.shape);
@@ -30,6 +34,32 @@ test "native links highlight with the platform modifier and open only on release
     try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
     try fixture.send(fixture.event(2));
     try std.testing.expectEqual(@as(usize, 1), fixture.session.link_open_count);
+}
+
+test "native plain clicks open a link on release while a drag selects instead" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    const gui = fixture.session.gui;
+    var press = fixture.event(1);
+    press.mods = 0;
+    try fixture.send(press);
+    try std.testing.expect(gui.pointer.owners[0] == .shared);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
+    var release = fixture.event(2);
+    release.mods = 0;
+    try fixture.send(release);
+    try std.testing.expectEqual(@as(usize, 1), fixture.session.link_open_count);
+    try std.testing.expectEqualStrings("https://a.b", fixture.session.opened_link.?.uri());
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
+
+    try fixture.send(press);
+    var drag = fixture.event(3);
+    drag.mods = 0;
+    try fixture.send(drag);
+    try fixture.send(release);
+    try std.testing.expectEqual(@as(usize, 1), fixture.session.link_open_count);
+    try std.testing.expect(data.copy_mode.pointerSelection(&gui.app.model) != null);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
 }
 
 test "native link drags changed targets pointer leave and focus loss cancel opening" {

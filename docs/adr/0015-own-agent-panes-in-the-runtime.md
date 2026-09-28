@@ -1,8 +1,11 @@
 ---
-status: accepted
+status: superseded
 ---
 
 # Own agent panes in the runtime
+
+Superseded: telar removed agent panes. Agents run in terminal panes, and telar
+follows them through official hooks, process and screen evidence.
 
 An agent pane owns a structured conversation, separate from a terminal pane's
 PTY. The runtime starts Codex app-server with pipes, retains its latest bounded
@@ -17,8 +20,7 @@ convert a terminal process into a managed agent.
 The initial product exposes agent creation and interaction only in the GUI.
 `prefix + a` creates a new tab in the current workspace with one agent pane.
 The shared client still owns the commands and conversation projection, and the
-runtime reports the agent through the existing sidebar registry. The TUI has
-no equivalent controls yet.
+runtime reports the agent through the existing sidebar registry.
 
 ## Conversation source
 

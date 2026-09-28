@@ -26,7 +26,6 @@ test "response completion cancels the unfinished request relay before settlement
     TestConnection.run(std.testing.io, &capture);
 
     try std.testing.expect(capture.response_saw_request);
-    try std.testing.expect(capture.response_saw_shared_settings);
     try std.testing.expect(capture.request_canceled.load(.acquire));
     try std.testing.expectEqualSlices(Step, &.{.settle}, capture.steps[0..capture.step_len]);
 }

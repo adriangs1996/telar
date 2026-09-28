@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Compare Ghostty, Telar GUI and Telar TUI at verified GPU completion.
+"""Compare Ghostty and the Telar GUI at verified GPU completion.
+
+The name is historical: the Telar TUI mode left with the TUI, and published
+performance records still name this file.
 
 Resigns a private copy of Ghostty; never modifies the installed application.
 The probe reads back one marker pixel within the rendering command buffer.
@@ -107,10 +110,7 @@ def measure(mode, directory, setup):
     if mode != 'ghostty':
         subprocess.run([str(binary), 'server', '--background', '--no-config'],
                        env=env, cwd=directory, check=True)
-    args = [str(binary)] + (['gui'] if mode == 'gui' else [])
-    args += ['--config', str(config)] + fixture
-    if mode == 'ghostty':
-        args = fixture
+    args = [str(binary), 'gui', '--config', str(config)] + fixture if mode == 'gui' else fixture
     probe_env = dict(DYLD_INSERT_LIBRARIES=str(library),
                      TELAR_DISPLAY_RESULT=str(directory / 'result.json'),
                      TELAR_DISPLAY_SAMPLES=str(options.samples + WARMUP),
@@ -215,7 +215,7 @@ def main():
     parser.add_argument('--samples', type=int, default=100)
     parser.add_argument('--rounds', type=int, default=3)
     parser.add_argument('--vsync', choices=['true', 'false'], default='true')
-    parser.add_argument('--mode', choices=['both', 'all', 'native', 'gui', 'tui', 'ghostty'], default='both')
+    parser.add_argument('--mode', choices=['native', 'gui', 'ghostty'], default='native')
     parser.add_argument('--cases', nargs='+', choices=['single', 'splits', 'tabs', 'splits-load', 'tabs-load'],
                         default=['single'])
     parser.add_argument('--panes', type=int, choices=[2, 4], default=4)
@@ -295,7 +295,7 @@ def main():
     results = []
     rejected = []
     setup = binary, app, library, config, options
-    modes = dict(both=['gui', 'tui'], all=['ghostty', 'gui', 'tui'], native=['ghostty', 'gui']).get(options.mode, [options.mode])
+    modes = dict(native=['ghostty', 'gui']).get(options.mode, [options.mode])
     for round_index in range(options.rounds):
         # Reversed cyclic permutations balance three variants over six rounds.
         offset = (round_index // 2) % len(modes)

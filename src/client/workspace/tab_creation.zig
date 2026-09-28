@@ -2,7 +2,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const agent_control = @import("../agents/agent_control.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
 const tab_removal = @import("tab_removal.zig");
 const Client = @import("../execution/Client.zig");
@@ -19,7 +18,6 @@ pub fn requestTabCreation(client: *Client, command: data.RequestTabCreation) !bo
     try sendCreateTabRequest(
         &client.model,
         .{
-            .kind = command.kind,
             .request_id = request_id,
             .workspace = plan.workspace,
             .label = command.label,
@@ -27,7 +25,7 @@ pub fn requestTabCreation(client: *Client, command: data.RequestTabCreation) !bo
             .launch = .{
                 .cwd = client.options.cwd,
                 .cwd_source = plan.cwd_source,
-                .arguments = if (command.kind == .agent) &.{} else if (command.arguments.len != 0) command.arguments else client.options.arguments,
+                .arguments = if (command.arguments.len != 0) command.arguments else client.options.arguments,
             },
         },
     );
@@ -70,7 +68,6 @@ pub fn completeTabCreation(client: *Client, created: core.TabCreated) !data.TabC
                 .position = created.position,
                 .label = created.label,
                 .root_pane_id = created.root_pane_id,
-                .kind = created.kind,
                 .pane_generation = created.pane_generation,
             },
             .size = requested.size,
@@ -78,10 +75,6 @@ pub fn completeTabCreation(client: *Client, created: core.TabCreated) !data.TabC
     );
     try tab_removal.detachTab(client, creation.previous);
     try pane_focus.synchronizeActivePane(client);
-
-    if (created.kind == .agent) {
-        try agent_control.queryAgentThread(&client.model, created.root_pane_id);
-    }
 
     return creation;
 }

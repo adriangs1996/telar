@@ -4,7 +4,8 @@ const core = @import("telar-core");
 const std = @import("std");
 const State = @This();
 
-connection: *localsocket.SocketChannel,
+/// The connected socket; null while the client has none.
+connection: ?*localsocket.SocketChannel,
 send_buffer: []u8,
 receive_buffer: []u8,
 read_buffer: []u8,
@@ -41,30 +42,59 @@ pub fn completeRead(self: *State, result: anyerror!*const data.RuntimeMessage) !
 /// Inbox messages borrow this value; they do not duplicate it in every slot.
 /// Example: `return state.read(io);`.
 pub fn read(self: *State, io: std.Io) !*const data.RuntimeMessage {
-    const bytes = try self.connection.receive(io, self.receive_buffer);
+    const connection = self.connection orelse return error.NotConnected;
+    const bytes = try connection.receive(io, self.receive_buffer);
     core.mark(io, .client_read);
-    self.received = try data.RuntimeMessage.decode(io, bytes);
+    try self.received.decodeInto(io, bytes);
     return &self.received;
 }
 
 /// Sends the reserved frame without knowing the client event protocol.
 /// Example: `try state.send(io, bytes);`.
 pub fn send(self: *State, io: std.Io, bytes: []const u8) !void {
-    try self.connection.send(io, bytes);
+    const connection = self.connection orelse return error.NotConnected;
+    try connection.send(io, bytes);
 }
 
-/// Allocates the bounded frame buffers around one connected channel.
+/// Starts using a connected channel; its reads go through this state's
+/// buffer. No read or write may be in flight.
+///
+/// ```zig
+/// state.bind(&client.channel);
+/// ```
+pub fn bind(self: *State, connection: *localsocket.SocketChannel) void {
+    std.debug.assert(!self.receive_pending);
+    connection.bindReadBuffer(self.read_buffer);
+    self.connection = connection;
+}
+
+/// Stops using the channel, which the caller then closes. No read or write
+/// may be in flight.
+///
+/// ```zig
+/// state.unbind();
+/// ```
+pub fn unbind(self: *State) void {
+    const connection = self.connection orelse return;
+    connection.bindReadBuffer(&.{});
+    self.connection = null;
+}
+
+/// Allocates the bounded frame buffers, around a connected channel when
+/// there is one.
 ///
 /// ```zig
 /// var state = try State.init(gpa, connection);
 /// ```
-pub fn init(gpa: std.mem.Allocator, connection: *localsocket.SocketChannel) !State {
+pub fn init(gpa: std.mem.Allocator, connection: ?*localsocket.SocketChannel) !State {
     const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
     errdefer gpa.free(receive_buffer);
     const read_buffer = try gpa.alloc(u8, localsocket.transport.read_buffer_size);
     errdefer gpa.free(read_buffer);
     const send_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
-    connection.bindReadBuffer(read_buffer);
+    if (connection) |channel| {
+        channel.bindReadBuffer(read_buffer);
+    }
 
     return .{
         .connection = connection,
@@ -81,7 +111,7 @@ pub fn init(gpa: std.mem.Allocator, connection: *localsocket.SocketChannel) !Sta
 /// state.deinit(gpa);
 /// ```
 pub fn deinit(self: *State, gpa: std.mem.Allocator) void {
-    self.connection.bindReadBuffer(&.{});
+    self.unbind();
     gpa.free(self.send_buffer);
     gpa.free(self.receive_buffer);
     gpa.free(self.read_buffer);

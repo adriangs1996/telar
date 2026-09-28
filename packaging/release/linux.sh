@@ -2,7 +2,7 @@
 # Builds both Linux releases for the host architecture and archives them:
 #
 #   telar-linux-ARCH.tar.gz            native client, needs a desktop
-#   telar-linux-ARCH-headless.tar.gz   runtime and TUI, for servers
+#   telar-linux-ARCH-headless.tar.gz   runtime without the window, for servers
 #
 #   packaging/release/linux.sh OUT_DIR
 #

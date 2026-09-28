@@ -4,9 +4,7 @@
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
-const agent_control = @import("agent_control.zig");
 const agent_done = @import("agent_done.zig");
-const agent_history = @import("agent_history.zig");
 const agent_hooks = @import("agent_hooks.zig");
 const change_review = @import("change_review.zig");
 const client_control = @import("client_control.zig");
@@ -15,6 +13,7 @@ const client_layout_persistence = @import("client_layout_persistence.zig");
 const command_history = @import("command_history.zig");
 const copy_mode = @import("copy_mode.zig");
 const link_opening = @import("link_opening.zig");
+const path_picker = @import("path_picker.zig");
 const notifications = @import("notifications.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const pane_closure = @import("pane_closure.zig");
@@ -35,6 +34,8 @@ const terminal_colors = @import("terminal_colors.zig");
 const workspace_creation = @import("workspace_creation.zig");
 const workspace_reconciliation = @import("workspace_reconciliation.zig");
 const workspace_rename = @import("workspace_rename.zig");
+const worktree_lifecycle = @import("worktree_lifecycle.zig");
+const agent_control = @import("agent_control.zig");
 
 /// Calls the procedure that owns `message`. An error drops the sender.
 ///
@@ -44,6 +45,11 @@ const workspace_rename = @import("workspace_rename.zig");
 pub fn receive(model: *RuntimeModel, session: *Session, message: core.ClientMessage) !void {
     return switch (message) {
         .open_editor => |request| link_opening.start(model, session, request),
+        .find_paths => |request| path_picker.request(
+            model,
+            session,
+            request,
+        ),
         .open_pane => |request| pane_attachment.open(model, session, request),
         .detach_pane => |request| pane_attachment.detach(model, session, request),
         .create_pane => |request| pane_split.split(model, session, request),
@@ -84,12 +90,6 @@ pub fn receive(model: *RuntimeModel, session: *Session, message: core.ClientMess
         .query_change_review => |request| change_review.start(model, session, request),
         .change_review_command => |request| change_review.start(model, session, request),
         .report_change_review_sample => |request| change_review.start(model, session, request),
-        .agent_prompt => |request| agent_control.send(model, session, request),
-        .agent_interrupt => |request| agent_control.send(model, session, request),
-        .agent_resume => |request| agent_control.send(model, session, request),
-        .agent_approval => |request| agent_control.send(model, session, request),
-        .query_agent_thread => |request| agent_control.send(model, session, request),
-        .query_agent_history => |request| agent_history.start(model, session, request),
         .query_agents => session.delivery.requestAgentSnapshot(),
         .acknowledge_agent => |request| agent_done.acknowledge(model, request),
         .report_agent_session => |request| agent_hooks.receiveSession(model, session, request),
@@ -106,6 +106,11 @@ pub fn receive(model: *RuntimeModel, session: *Session, message: core.ClientMess
         .query_clients => |request| client_control.list(model, session, request),
         .request_pane_focus => |request| client_control.requestFocus(model, session, request),
         .complete_pane_focus => |request| client_control.finishFocus(model, session, request),
+        .register_worktree => |request| worktree_lifecycle.register(model, session, request),
+        .launch_worktree => |request| worktree_lifecycle.launch(model, session, request),
+        .forget_worktree => |request| worktree_lifecycle.forget(model, session, request),
+        .interrupt_agent => |request| agent_control.interrupt(model, session, request),
+        .report_agent_progress => |request| agent_hooks.receiveProgress(model, session, request),
     };
 }
 

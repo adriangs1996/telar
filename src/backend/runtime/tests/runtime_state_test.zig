@@ -97,6 +97,8 @@ const RuntimeStateFixture = struct {
             .latest = .{
                 .cpu_percent = 23,
                 .memory_used_decigib = 41,
+                .memory_total_decigib = 160,
+                .cpu_count = 8,
                 .battery_percent = 88,
             },
         };
