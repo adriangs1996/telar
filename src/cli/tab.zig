@@ -12,23 +12,27 @@ const background_size: core.TerminalSize = .{ .cols = 160, .rows = 48 };
 
 /// Queries the tabs of an explicit or inherited workspace. Example: `const status = tab.run(init, options);`
 pub fn run(init: std.process.Init, options: TabOptions) u8 {
-    execute(init, options) catch |err| {
-        std.debug.print("telar tab: {s}\n", .{control.describe(err)});
-        return if (err == error.RuntimeTimeout) 3 else 1;
-    };
+    const workspace = options.workspace.resolve(init.minimal.environ, "TELAR_WORKSPACE_ID") catch |err| return fail(err, null);
+    var session = Session.attach(init, options.socket) catch |err| return fail(err, null);
+    defer session.close();
 
+    // The runtime's reason borrows the session, so it is printed before the
+    // session closes.
+    execute(init, &session, options, workspace) catch |err| return fail(err, session.failure_reason);
     return 0;
 }
 
-fn execute(init: std.process.Init, options: TabOptions) !void {
-    const workspace = try options.workspace.resolve(init.minimal.environ, "TELAR_WORKSPACE_ID");
-    var session = try Session.attach(init, options.socket);
-    defer session.close();
+fn fail(err: anyerror, reason: ?[]const u8) u8 {
+    std.debug.print("telar tab: {s}\n", .{reason orelse control.describe(err)});
+    return if (err == error.RuntimeTimeout) 3 else 1;
+}
+
+fn execute(init: std.process.Init, session: *Session, options: TabOptions, workspace: u64) !void {
     var buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &buffer);
     const writer = &output.interface;
     if (options.action == .create) {
-        try openInBackground(init, &session, options, workspace, writer);
+        try openInBackground(init, session, options, workspace, writer);
         try writer.flush();
         return;
     }
@@ -36,7 +40,7 @@ fn execute(init: std.process.Init, options: TabOptions) !void {
     if (options.target) |target| {
         const tab_id = try target.resolve(init.minimal.environ, "TELAR_TAB_ID");
         var command: TabControl = .{
-            .session = &session,
+            .session = session,
             .writer = writer,
             .location = .{ .workspace = .{ .workspace = @enumFromInt(workspace) }, .tab_id = @enumFromInt(tab_id) },
             .options = options,

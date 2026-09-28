@@ -18,7 +18,9 @@ connection: localsocket.SocketChannel,
 receive_buffer: []u8,
 next_request: u64 = 1,
 /// The runtime's reason for the last refused request. It borrows the
-/// receive buffer and clears when the next message arrives.
+/// receive buffer and clears when the next request starts or the next
+/// message arrives, so an error that did not come from the runtime is never
+/// printed with an older refusal.
 failure_reason: ?[]const u8 = null,
 
 /// Connects to the runtime named by the CLI socket option or the process
@@ -66,6 +68,7 @@ pub fn close(self: *Session) void {
 }
 
 fn requestId(self: *Session) core.RequestId {
+    self.failure_reason = null;
     const request_id: core.RequestId = @enumFromInt(self.next_request);
     self.next_request += 1;
     return request_id;
