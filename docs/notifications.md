@@ -51,7 +51,30 @@ telar notification show "Build complete" \
 The title is required. `--body` is optional; `--level` accepts `info`,
 `success`, `warning`, or `failure`; `--duration` accepts 500 through 60000
 milliseconds. `--pane ID`, `--tab ID`, and `--workspace ID` are mutually
-exclusive click targets. `--socket PATH` selects an explicit runtime; otherwise
+exclusive click targets. `--link URL` makes a click open an https URL of at
+most 1024 bytes in the browser, through the same policy as a link clicked in
+a pane; `telar machine setup` uses it to bring an agent's login page from
+another machine to this window. The body holds 192 bytes, too few for an
+OAuth URL, so the link travels in its own field. Only the CLI sends one: a
+client's own notification requests never carry a link, which keeps the
+client's outbox slots small.
+
+Any process that can reach a runtime can send a link, so the link is held
+to what a card can show honestly (`core.notification_link`): its authority
+is a plain host of letters, digits, dots and hyphens, with no user info
+(`https://claude.ai@evil.example/` opens evil.example), no port, no
+percent-encoding and no backslash. The card names that host on its action
+line, "Open auth.openai.com ↗", before anyone clicks; a host too long for
+the card keeps its end, where the domain that owns it is. A window takes
+links only from this machine's runtime: a notification from a remote
+machine's runtime arrives without its link, so a process on another machine
+cannot put a page of its choosing one click away in this machine's browser.
+Setup announces a login through the local runtime for that reason.
+"Remote" means a connection the client made over SSH itself (`--remote`, a
+saved machine). A connection it believes local, or one with no machine,
+keeps its links even when its socket is forwarded from another machine by
+hand (`ssh -L` to a local path, then `--socket`): the client cannot tell,
+so whoever forwards a runtime also trusts the links its processes send. `--socket PATH` selects an explicit runtime; otherwise
 the normal `TELAR_SOCKET` and managed-runtime resolution applies.
 
 The command exits successfully only when at least one UI client accepted the

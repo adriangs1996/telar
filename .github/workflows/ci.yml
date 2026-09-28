@@ -58,6 +58,11 @@ jobs:
       - name: Test
         run: zig build test
 
+      # `telar machine setup` end to end against a machine simulated on the
+      # runner by a fake ssh: no network, no privileges, all under /tmp.
+      - name: Machine setup end to end
+        run: python3 tools/test_machine_setup.py
+
       # The server build is static musl: it must link nothing, and code that
       # imports a libc struct musl's headers cannot express fails here.
       - name: Headless build is static

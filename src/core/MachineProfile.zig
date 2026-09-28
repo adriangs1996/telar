@@ -5,6 +5,8 @@ const std = @import("std");
 const MachineId = @import("MachineId.zig").MachineId;
 const ssh_destination = @import("ssh_destination.zig");
 const MachineProfileFields = @import("MachineProfileFields.zig");
+const remote_telar = @import("remote_telar.zig");
+const AgentLogin = @import("AgentLogin.zig").AgentLogin;
 const MachineProfile = @This();
 
 /// The longest label, in bytes.
@@ -20,6 +22,14 @@ destination_len: u8,
 color_bytes: [max_color_bytes]u8 = undefined,
 color_len: u8 = 0,
 enabled: bool,
+telar_path_bytes: [remote_telar.max_path_bytes]u8 = undefined,
+telar_path_len: u8 = 0,
+/// Each built-in agent's login there, as setup last saw it.
+logins: std.EnumArray(LoginAgent, ?AgentLogin) = .initFill(null),
+
+/// The agents whose logins a profile records, named as `telar integration`
+/// names them.
+pub const LoginAgent = enum { claude, codex, pi, cursor, opencode };
 
 /// Validates every field and copies it into a profile.
 ///
@@ -49,6 +59,10 @@ pub fn init(id: MachineId, fields: MachineProfileFields) !MachineProfile {
         @memcpy(profile.color_bytes[0..color_text.len], color_text);
     }
 
+    if (fields.telar_path) |path| {
+        try profile.placeTelar(path);
+    }
+
     return profile;
 }
 
@@ -66,6 +80,27 @@ pub fn color(self: *const MachineProfile) ?[]const u8 {
     }
 
     return self.color_bytes[0..self.color_len];
+}
+
+/// Where telar was installed there, or null when commands run `telar`
+/// from the PATH.
+pub fn telarPath(self: *const MachineProfile) ?[]const u8 {
+    if (self.telar_path_len == 0) {
+        return null;
+    }
+
+    return self.telar_path_bytes[0..self.telar_path_len];
+}
+
+/// Records where telar lives there after validating the path.
+///
+/// ```zig
+/// try profile.placeTelar("/home/dev/.local/share/telar/0.3.0/telar");
+/// ```
+pub fn placeTelar(self: *MachineProfile, path: []const u8) !void {
+    try remote_telar.validate(path);
+    self.telar_path_len = @intCast(path.len);
+    @memcpy(self.telar_path_bytes[0..path.len], path);
 }
 
 /// Replaces the label after validating it; uniqueness is the store's.
@@ -154,6 +189,24 @@ test "a profile keeps what it was given" {
     try std.testing.expectEqualStrings("dev@box", profile.destination());
     try std.testing.expectEqualStrings("#e06c75", profile.color().?);
     try std.testing.expect(profile.enabled);
+    try std.testing.expectEqual(@as(?[]const u8, null), profile.telarPath());
+}
+
+test "a profile keeps a valid telar path and refuses another" {
+    var profile = try MachineProfile.init(@enumFromInt(7), .{
+        .label = "box",
+        .destination = "dev@box",
+        .telar_path = "/home/dev/.local/share/telar/0.3.0/telar",
+    });
+
+    try std.testing.expectEqualStrings("/home/dev/.local/share/telar/0.3.0/telar", profile.telarPath().?);
+    try std.testing.expectError(error.InvalidRemoteTelarPath, profile.placeTelar("telar"));
+    try std.testing.expectEqualStrings("/home/dev/.local/share/telar/0.3.0/telar", profile.telarPath().?);
+    try std.testing.expectError(error.InvalidRemoteTelarPath, MachineProfile.init(@enumFromInt(8), .{
+        .label = "gpu",
+        .destination = "dev@gpu",
+        .telar_path = "/home/dev/$(id)",
+    }));
 }
 
 test "labels, destinations and colors are validated" {

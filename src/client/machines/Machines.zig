@@ -19,6 +19,7 @@ pub const local_slot: u8 = 0;
 pub const max_label_bytes = core.MachineProfile.max_label_bytes;
 pub const max_destination_bytes = core.ssh_destination.max_bytes;
 pub const max_color_bytes = core.MachineProfile.max_color_bytes;
+pub const max_telar_path_bytes = core.remote_telar.max_path_bytes;
 
 used: [capacity]bool = @splat(false),
 /// The profile's id; `.invalid` for this machine and a temporary row.
@@ -29,6 +30,9 @@ destination_bytes: [capacity][max_destination_bytes]u8 = undefined,
 destination_len: [capacity]u8 = @splat(0),
 color_bytes: [capacity][max_color_bytes]u8 = undefined,
 color_len: [capacity]u8 = @splat(0),
+/// Where telar lives on the machine; empty runs `telar` from its PATH.
+telar_path_bytes: [capacity][max_telar_path_bytes]u8 = undefined,
+telar_path_len: [capacity]u8 = @splat(0),
 /// Whether the window keeps a connection to the machine.
 enabled: [capacity]bool = @splat(false),
 /// A row `--remote` or `--machine` opened without a profile that enables
@@ -38,6 +42,8 @@ pinned: [capacity]bool = @splat(false),
 /// Whether the slot's client is initialized.
 live: [capacity]bool = @splat(false),
 phase: [capacity]data.RuntimeLink.Phase = @splat(.connecting),
+/// A failed machine that `telar machine setup` repairs.
+needs_setup: [capacity]bool = @splat(false),
 attention: [capacity]bool = @splat(false),
 cpu_percent: [capacity]?u8 = @splat(null),
 /// What placement needs from the last sample: the CPU count, memory in
@@ -68,6 +74,7 @@ pub fn add(self: *Machines, row: MachineRow, wanted: ?u8) !u8 {
     self.write(slot, row);
     self.pinned[slot] = false;
     self.phase[slot] = .connecting;
+    self.needs_setup[slot] = false;
     self.attention[slot] = false;
     self.cpu_percent[slot] = null;
     self.cpu_count[slot] = 0;
@@ -108,6 +115,14 @@ pub fn label(self: *const Machines, slot: u8) []const u8 {
 
 pub fn destination(self: *const Machines, slot: u8) []const u8 {
     return self.destination_bytes[slot][0..self.destination_len[slot]];
+}
+
+pub fn telarPath(self: *const Machines, slot: u8) ?[]const u8 {
+    if (self.telar_path_len[slot] == 0) {
+        return null;
+    }
+
+    return self.telar_path_bytes[slot][0..self.telar_path_len[slot]];
 }
 
 pub fn color(self: *const Machines, slot: u8) ?[]const u8 {
@@ -166,9 +181,10 @@ pub fn shown(self: *const Machines, slot: u8) bool {
 /// ```
 pub fn summarize(self: *Machines, slot: u8, model: *const data.ClientModel, io: std.Io) bool {
     const phase = model.runtime_link.phase;
+    const needs_setup = phase == .failed and model.runtime_link.setup_repairs;
     const metrics_changed = model.system_metrics_revision != self.metrics_revision[slot];
     const agents_changed = model.agent_revision != self.agent_revision[slot];
-    if (self.phase[slot] == phase and !metrics_changed and !agents_changed) {
+    if (self.phase[slot] == phase and self.needs_setup[slot] == needs_setup and !metrics_changed and !agents_changed) {
         return false;
     }
 
@@ -189,11 +205,12 @@ pub fn summarize(self: *Machines, slot: u8, model: *const data.ClientModel, io: 
     }
 
     const cpu: ?u8 = if (model.system_metrics) |metrics| metrics.cpu_percent else null;
-    if (self.phase[slot] == phase and self.attention[slot] == attention_now and std.meta.eql(self.cpu_percent[slot], cpu)) {
+    if (self.phase[slot] == phase and self.needs_setup[slot] == needs_setup and self.attention[slot] == attention_now and std.meta.eql(self.cpu_percent[slot], cpu)) {
         return false;
     }
 
     self.phase[slot] = phase;
+    self.needs_setup[slot] = needs_setup;
     self.attention[slot] = attention_now;
     self.cpu_percent[slot] = cpu;
     self.revision +%= 1;
@@ -244,6 +261,14 @@ fn write(self: *Machines, slot: u8, row: MachineRow) void {
     const kept_color = if (row.color) |text| text[0..@min(text.len, max_color_bytes)] else "";
     @memcpy(self.color_bytes[slot][0..kept_color.len], kept_color);
     self.color_len[slot] = @intCast(kept_color.len);
+    // A path too long for the column was never valid; a profile refuses it.
+    const kept_path = row.telar_path orelse "";
+    const path_fits = kept_path.len <= max_telar_path_bytes;
+    self.telar_path_len[slot] = if (path_fits) @intCast(kept_path.len) else 0;
+    if (path_fits) {
+        @memcpy(self.telar_path_bytes[slot][0..kept_path.len], kept_path);
+    }
+
     self.enabled[slot] = row.enabled;
 }
 
@@ -258,6 +283,9 @@ test "rows fill free slots and keep the local slot for this machine" {
     try std.testing.expectEqual(@as(?u8, 1), machines.findLabel("box"));
     try std.testing.expectEqualStrings("dev@box", machines.destination(box));
     try std.testing.expectEqualStrings("red", machines.color(box).?);
+    try std.testing.expectEqual(@as(?[]const u8, null), machines.telarPath(box));
+    machines.update(box, .{ .id = @enumFromInt(9), .label = "box", .destination = "dev@box", .telar_path = "/home/dev/telar" });
+    try std.testing.expectEqualStrings("/home/dev/telar", machines.telarPath(box).?);
     try std.testing.expectEqual(@as(usize, 2), machines.count());
 
     machines.remove(box);

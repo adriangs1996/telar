@@ -10,6 +10,7 @@ const Decoder = bytecodec.Decoder;
 const Notification = @import("Notification.zig");
 const std = @import("std");
 const types = @import("../types.zig");
+const notification_link = @import("../notification_link.zig");
 const NotificationShown = @import("NotificationShown.zig");
 
 pub fn encodeShowNotification(buffer: []u8, message: ShowNotification) ![]const u8 {
@@ -52,6 +53,7 @@ pub fn decodeNotification(decoder: *Decoder) !Notification {
         .target = target,
         .title = try decoder.readSized16(),
         .message = try decoder.readSized16(),
+        .link = try decoder.readSized16(),
     };
     try validateNotification(notification);
     return notification;
@@ -93,6 +95,7 @@ fn encodeNotificationBody(encoder: *Encoder, notification: Notification) !void {
     }
     try encoder.writeSized16(notification.title);
     try encoder.writeSized16(notification.message);
+    try encoder.writeSized16(notification.link);
 }
 
 fn validateNotification(notification: Notification) !void {
@@ -103,6 +106,40 @@ fn validateNotification(notification: Notification) !void {
     }
     try validateNotificationText(notification.title, types.max_notification_title_bytes, false);
     try validateNotificationText(notification.message, types.max_notification_message_bytes, true);
+    try validateNotificationLink(notification.link);
+}
+
+/// A link is empty, or an https URL whose host a card can show as it is,
+/// so the only thing a click can open is the web page the card names.
+fn validateNotificationLink(link: []const u8) !void {
+    try notification_link.validate(link);
+}
+
+test "a notification carries an https link and refuses any other" {
+    var buffer: [2048]u8 = undefined;
+    const encoded = try encodeNotification(&buffer, .{
+        .title = "Log in to Codex on box",
+        .link = "https://auth.openai.com/codex/device",
+    });
+
+    var decoder = Decoder.init(encoded[1..]);
+    const decoded = try decodeNotification(&decoder);
+    try std.testing.expectEqualStrings("https://auth.openai.com/codex/device", decoded.link);
+
+    for ([_][]const u8{
+        "http://example.com",
+        "file:///etc/passwd",
+        "javascript:alert(1)",
+        "https://",
+        "https://example.com/a b",
+        "https://example.com/\x1b",
+        "https://" ++ "a" ** types.max_notification_link_bytes,
+    }) |link| {
+        try std.testing.expectError(error.InvalidNotificationLink, encodeNotification(&buffer, .{
+            .title = "t",
+            .link = link,
+        }));
+    }
 }
 
 fn validateNotificationText(bytes: []const u8, maximum: usize, empty_allowed: bool) !void {

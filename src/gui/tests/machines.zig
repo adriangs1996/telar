@@ -470,6 +470,87 @@ fn pick(app: *client.Client, row: u16) void {
     app.model.name_prompt.select(row);
 }
 
+// Asks the window to set up the failed machine in `slot` as Enter on its
+// row does, checks the tab's title, and returns the words the tab runs.
+fn setupTab(session: *Session, slot: u8, words: *[6][]const u8, title: []const u8) ![]const []const u8 {
+    const gui = session.gui;
+    const own = window_machines.window(gui);
+    const remote = &gui.clients[slot];
+    remote.model.runtime_link.phase = .failed;
+    remote.model.runtime_link.setup_repairs = true;
+    try std.testing.expect(gui.machines.summarize(slot, &remote.model, std.testing.io));
+    try std.testing.expect(gui.machines.needs_setup[slot]);
+
+    while (own.model.to_host.pop()) |_| {}
+    try client.machine_picker.choose(own, slot, false);
+    const effect = own.model.to_host.pop() orelse return error.TestExpectedSetupRequest;
+    try std.testing.expectEqual(data.MachineRequest{ .setup = slot }, effect.machine);
+
+    try window_machines.choose(gui, effect.machine);
+    try std.testing.expect(gui.app == own);
+    for (0..64) |_| {
+        const bytes = try session.sent();
+        const message = try core.decodeClient(bytes);
+        try client.runtime_io.completeRuntimeSend(own, {});
+        session.pending = null;
+        if (message != .create_tab) {
+            continue;
+        }
+
+        try std.testing.expectEqualStrings(title, message.create_tab.label);
+        var arguments = message.create_tab.launch.arguments();
+        var count: usize = 0;
+        while (try arguments.next()) |word| : (count += 1) {
+            words[count] = word;
+        }
+
+        return words[0..count];
+    }
+
+    return error.TestExpectedSetupTab;
+}
+
+test "setup from the window asks first, and names a row --remote opened by its destination" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+
+    var box = try socketPair();
+    defer box.channel.deinit(std.testing.io);
+    defer box.peer.deinit(std.testing.io);
+    const slot = try openMachine(session, &box.channel);
+    const long = "developer@a-host-name-longer-than-a-label.example.lan";
+    session.gui.machines.update(slot, .{ .label = "a-host-name-longer-than-a-label.", .destination = long });
+
+    var words: [6][]const u8 = undefined;
+    const sent = try setupTab(session, slot, &words, "Set up a-host-name-longer-than-a-label.");
+    try std.testing.expectEqual(@as(usize, 5), sent.len);
+    try std.testing.expectEqualStrings(long, sent[3]);
+    try std.testing.expectEqualStrings("--confirm", sent[4]);
+}
+
+test "a machine that lacks this telar build is set up in a tab of this machine" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+
+    var box = try socketPair();
+    defer box.channel.deinit(std.testing.io);
+    defer box.peer.deinit(std.testing.io);
+    const slot = try openMachine(session, &box.channel);
+    session.gui.machines.id[slot] = @enumFromInt(0x3f9c2a00b001);
+
+    // Enter on its row shows this machine and runs setup in a new tab there.
+    var words: [6][]const u8 = undefined;
+    const sent = try setupTab(session, slot, &words, "Set up box");
+    try std.testing.expectEqual(@as(usize, 5), sent.len);
+    try std.testing.expect(std.fs.path.isAbsolute(sent[0]));
+    try std.testing.expectEqualStrings("machine", sent[1]);
+    try std.testing.expectEqualStrings("setup", sent[2]);
+    try std.testing.expectEqualStrings("box", sent[3]);
+    try std.testing.expectEqualStrings("--confirm", sent[4]);
+}
+
 test "the machine list adds, disables, renames and removes machines through machines.json" {
     const session = try Session.init();
     defer session.deinit();

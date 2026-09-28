@@ -93,7 +93,11 @@ characters typed under 8 ms apart inserts a newline
 (`PASTE_ENTER_SUPPRESS_WINDOW` in `codex-rs/tui/src/bottom_pane/paste_burst.rs`).
 So `pane send-keys "text" --enter` sends the text as `raw`, waits 150 ms and
 sends `raw_enter` with no text, as a person presses Enter after typing, and
-`agent prompt` keeps the paste and its Enter in one write.
+`agent prompt` keeps the paste and its Enter in one write. `pane send-keys ID
+--stdin` reads the text from standard input instead, without its final line
+break and within the same bound, so text that must not show in a process
+list (a login code `telar machine setup` types over SSH) never enters an
+argv.
 
 Text reads are late-bound: the response queue stores the pane key, rows and
 source, and the encoder dumps the text into a fixed 64 KiB buffer when the send

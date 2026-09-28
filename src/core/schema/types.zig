@@ -59,6 +59,10 @@ pub const max_pane_text_bytes = 64 * 1024;
 pub const max_pane_text_input_bytes = 16 * 1024;
 pub const max_notification_title_bytes = 48;
 pub const max_notification_message_bytes = 192;
+/// A notification's link: an https URL, such as an agent's login page.
+/// OAuth authorization URLs measured for the agents telar sets up stay
+/// under 700 bytes.
+pub const max_notification_link_bytes = 1024;
 pub const max_history_provider_bytes = 64;
 pub const max_history_tool_call_id_bytes = 256;
 pub const max_client_layout_clients = 8;

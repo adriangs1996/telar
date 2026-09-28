@@ -202,6 +202,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         .{ .path = "src/core/Sink.zig", .libc = true },
         .{ .path = "src/core/DiagnosticLogName.zig" },
         .{ .path = "src/core/ProfileStore.zig", .libc = true },
+        .{ .path = "src/core/MachineProfiles.zig" },
         .{ .path = "src/core/schema/handshake.zig", .schema = true },
         .{ .path = "src/core/schema_contract_test.zig", .schema = true },
         .{ .path = "src/core/plugin.zig" },
@@ -251,6 +252,9 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         }
         if (std.mem.eql(u8, suite.path, "src/main.zig")) {
             b.step("test-cli", "Run command-line parser and control tests").dependOn(&run_tests.step);
+        }
+        if (std.mem.eql(u8, suite.path, "src/core/MachineProfiles.zig")) {
+            b.step("test-machine-profiles", "Run the saved machines' file format tests").dependOn(&run_tests.step);
         }
 
         parallel_test_prerequisites.dependOn(&run_tests.step);

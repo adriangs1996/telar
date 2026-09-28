@@ -54,6 +54,7 @@ pub fn open(gui: *GuiAdapter) !void {
             .destination = profile.destination(),
             .color = profile.color(),
             .enabled = profile.enabled,
+            .telar_path = profile.telarPath(),
         }, null);
     }
 
@@ -146,6 +147,7 @@ pub fn reconcile(gui: *GuiAdapter) !void {
             .destination = profile.destination(),
             .color = profile.color(),
             .enabled = profile.enabled,
+            .telar_path = profile.telarPath(),
         };
 
         const slot = machines.find(profile.id) orelse temporaryFor(machines, profile.destination()) orelse {
@@ -165,7 +167,10 @@ pub fn reconcile(gui: *GuiAdapter) !void {
 
         row.enabled = profile.enabled or machines.pinned[slot];
         const was_enabled = machines.enabled[slot];
-        const moved = !std.mem.eql(u8, machines.destination(slot), profile.destination());
+        // A new telar path is a move too: setup installed another build
+        // there, and the next connection has to run it.
+        const moved = !std.mem.eql(u8, machines.destination(slot), profile.destination()) or
+            !std.mem.eql(u8, machines.telarPath(slot) orelse "", profile.telarPath() orelse "");
         machines.update(slot, row);
         if (!row.enabled) {
             if (was_enabled) {
@@ -244,7 +249,38 @@ pub fn choose(gui: *GuiAdapter, request: data.MachineRequest) !void {
             }
         },
         .unpin => |slot| machines.pinned[slot] = false,
+        .setup => |slot| try setUp(gui, slot),
     }
+}
+
+/// Runs `telar machine setup --confirm` for a machine in a new tab of this
+/// machine, where the person first agrees to it, then sees each step and
+/// answers OpenSSH or a login if asked. The window follows `machines.json`
+/// as setup saves the machine. A row `--remote` opened has no profile, and
+/// its label is cut from its destination, so setup is given the
+/// destination.
+///
+/// ```zig
+/// try window_machines.setUp(gui, slot);
+/// ```
+pub fn setUp(gui: *GuiAdapter, slot: u8) !void {
+    const machines = &gui.machines;
+    if (slot == Machines.local_slot or !machines.used[slot]) {
+        return;
+    }
+
+    const own = window(gui);
+    var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const executable = executable_buffer[0..try std.process.executablePath(own.io, &executable_buffer)];
+    var title_buffer: [core.max_tab_label_bytes]u8 = undefined;
+    const title = std.fmt.bufPrint(&title_buffer, "Set up {s}", .{machines.label(slot)}) catch "Set up telar";
+
+    const name = if (machines.id[slot] == .invalid) machines.destination(slot) else machines.label(slot);
+    try select(gui, Machines.local_slot);
+    _ = try client.tab_creation.requestTabCreation(own, .{
+        .label = title,
+        .arguments = &.{ executable, "machine", "setup", name, "--confirm" },
+    });
 }
 
 /// Delivers one event to the client in `slot`, refreshes its row, finishes
@@ -364,6 +400,7 @@ fn openClient(gui: *GuiAdapter, slot: u8, arguments: []const []const u8) !void {
     var options = own.options;
     options.machine = .{ .remote = .{
         .destination = destination,
+        .telar_path = machines.telarPath(slot),
         .arguments = arguments,
     } };
     options.open_machine = null;
@@ -424,6 +461,7 @@ fn admit(gui: *GuiAdapter, slot: u8) !void {
     const identity = machineIdentity(window(gui).client_identity, destination);
     app.options.machine = .{ .remote = .{
         .destination = destination,
+        .telar_path = gui.machines.telarPath(slot),
         .arguments = &.{},
     } };
     app.client_identity = identity;

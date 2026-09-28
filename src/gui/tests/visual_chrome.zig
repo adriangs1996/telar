@@ -280,6 +280,34 @@ test "toasts cap at two and skip a pane already on screen" {
     try std.testing.expect(!Notifications.targetVisible(fixture.projection(), .{ .select_tab = Session.location.tab_id }));
 }
 
+test "a toast with a link names the host a click opens" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    const model = &fixture.session.gui.app.model;
+    _ = data.notifications.publish(model, 0, .{
+        .title = "Log in to Codex",
+        .message = "on box: open the page",
+        .link = "https://auth.openai.com/codex/device",
+    });
+    _ = data.notifications.advance(model, data.notifications.transition_duration_ns);
+
+    var overlays: Overlays = .{};
+    const renderer = &fixture.session.gui.renderer;
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
+    renderer.quads.clear();
+    var projection = fixture.projection();
+    var widgets: frame_widget.List = .{};
+    try overlays.compose(.{ .canvas = &canvas, .projection = &projection }, &widgets);
+    try widgets.draw(&canvas);
+    overlays.seal();
+
+    const hits = overlays.prepared().notifications;
+    try std.testing.expectEqual(@as(usize, 2), hits.count);
+    const card = hits.hits[0];
+    try std.testing.expect(std.mem.indexOf(u8, card.label[0..card.label_len], "opens auth.openai.com") != null);
+    try std.testing.expect(model.notification_center.itemAt(0).?.clickable());
+}
+
 test "warm chrome with rings chips dots and toasts allocates and shapes nothing" {
     var fixture = try Fixture.init();
     defer fixture.deinit();

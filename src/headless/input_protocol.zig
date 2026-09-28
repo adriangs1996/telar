@@ -5,6 +5,7 @@
 //! text echo hello    characters typed in order, UTF-8
 //! resize 120x40      the host grid in cells
 //! mark sent-3        a labelled timestamp in the exit trace
+//! notification activate  click the newest notification
 //! quit               leave; the end of stdin does the same
 //! ```
 //!
@@ -65,6 +66,10 @@ pub fn parse(line: []const u8) !InputLine {
         return .quit;
     }
 
+    if (std.mem.eql(u8, word, "notification") and std.mem.eql(u8, rest, "activate")) {
+        return .notification_activate;
+    }
+
     return error.UnknownHeadlessCommand;
 }
 
@@ -101,10 +106,12 @@ test "lines name keys, text, sizes and marks" {
 
     try std.testing.expectEqualStrings("sent-3", (try parse("mark sent-3")).mark.slice());
     try std.testing.expect(try parse("quit") == .quit);
+    try std.testing.expect(try parse("notification activate") == .notification_activate);
 }
 
 test "malformed lines are refused" {
     try std.testing.expectError(error.UnknownHeadlessCommand, parse("type x"));
+    try std.testing.expectError(error.UnknownHeadlessCommand, parse("notification dismiss"));
     try std.testing.expectError(error.InvalidHeadlessSize, parse("resize 0x10"));
     try std.testing.expectError(error.InvalidHeadlessSize, parse("resize 10"));
     try std.testing.expectError(error.InvalidHeadlessLabel, parse("mark "));

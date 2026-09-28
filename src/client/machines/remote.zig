@@ -26,12 +26,17 @@ const endpoint_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(30) },
 };
 
-/// What the machine runs to discover itself. `/bin/sh` reads it the same
-/// way whatever the login shell is.
-const discovery_command = "/bin/sh -c 'printf \"%s\\n\" \"$HOME\" \"${SHELL:-/bin/sh}\"; exec telar server endpoint'";
+/// What the machine runs to discover itself, around the program that names
+/// its telar. `/bin/sh` reads it the same way whatever the login shell is.
+const discovery_prefix = "/bin/sh -c 'printf \"%s\\n\" \"$HOME\" \"${SHELL:-/bin/sh}\"; exec ";
+const discovery_suffix = " server endpoint'";
 
 /// What the machine runs to carry one connection; every shell reads it.
-const bridge_command = "exec telar server bridge";
+const bridge_prefix = "exec ";
+const bridge_suffix = " server bridge";
+
+/// The longest remote command this file builds, in bytes.
+const max_command_bytes = discovery_prefix.len + core.remote_telar.max_path_bytes + discovery_suffix.len;
 
 /// Failures of an `ssh` call, told apart by whether retrying can fix them
 /// (`machine_connection.permanent`).
@@ -90,7 +95,7 @@ const runtime_mismatch_text = "telar protocol mismatch";
 /// ```
 pub fn connect(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ, machine: RemoteMachine, report: *std.Io.Writer) !RuntimeConnection {
     try core.ssh_destination.validate(machine.destination);
-    const discovery = try discover(io, gpa, environ, machine.destination, report);
+    const discovery = try discover(io, gpa, environ, machine, report);
     if (!discovery.compatible()) {
         report.print("that machine's telar speaks wire schema {s}; this one speaks {s}. Install the same telar build on both machines", .{ &discovery.schema, &core.schema_id }) catch {};
         return error.RemoteTelarIncompatible;
@@ -98,6 +103,8 @@ pub fn connect(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ,
 
     const options = try SshOptions.prepare(io, environ, machine.destination);
     const managed = options.arguments();
+    var command_buffer: [max_command_bytes]u8 = undefined;
+    const bridge_command = try remoteCommand(&command_buffer, machine.telar_path, bridge_prefix, bridge_suffix);
     return openSession(io, &(.{ "ssh", "-T" } ++ managed ++ .{ "--", machine.destination, bridge_command }), discovery, report);
 }
 
@@ -155,11 +162,14 @@ fn openSession(io: std.Io, argv: []const []const u8, discovery: Discovery, repor
 /// whether retrying can fix it.
 ///
 /// ```zig
-/// const found = try remote.discover(io, gpa, environ, "dev@box", null);
+/// const found = try remote.discover(io, gpa, environ, .{ .destination = "dev@box" }, null);
 /// ```
-pub fn discover(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ, destination: []const u8, report: ?*std.Io.Writer) !Discovery {
+pub fn discover(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ, machine: RemoteMachine, report: ?*std.Io.Writer) !Discovery {
+    const destination = machine.destination;
     const options = try SshOptions.prepare(io, environ, destination);
     const managed = options.arguments();
+    var command_buffer: [max_command_bytes]u8 = undefined;
+    const discovery_command = try remoteCommand(&command_buffer, machine.telar_path, discovery_prefix, discovery_suffix);
     const result = std.process.run(gpa, io, .{
         .argv = &(.{ "ssh", "-T" } ++ managed ++ .{ "--", destination, discovery_command }),
         .stdout_limit = .limited(Discovery.max_output_bytes),
@@ -190,6 +200,21 @@ pub fn discover(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ
 
         return err;
     };
+}
+
+/// A remote command line that runs the machine's telar: its saved path,
+/// validated so no shell reads a byte of it specially, or `telar` from the
+/// PATH.
+///
+/// ```zig
+/// const command = try remote.remoteCommand(&buffer, machine.telar_path, "exec ", " server bridge");
+/// ```
+pub fn remoteCommand(buffer: []u8, telar_path: ?[]const u8, prefix: []const u8, suffix: []const u8) ![]const u8 {
+    if (telar_path) |path| {
+        try core.remote_telar.validate(path);
+    }
+
+    return std.fmt.bufPrint(buffer, "{s}{s}{s}", .{ prefix, core.remote_telar.program(telar_path), suffix }) catch error.RemoteCommandTooLong;
 }
 
 /// Why an `ssh` call that did not succeed failed, from its exit status and
@@ -291,6 +316,16 @@ test "ssh failures that retrying cannot fix are told apart from passing ones" {
     for (cases) |case| {
         try std.testing.expectEqual(case[2], sshFailure(case[0], case[1]));
     }
+}
+
+test "remote commands name the saved telar or the one on the PATH" {
+    var buffer: [max_command_bytes]u8 = undefined;
+    try std.testing.expectEqualStrings("exec telar server bridge", try remoteCommand(&buffer, null, bridge_prefix, bridge_suffix));
+    try std.testing.expectEqualStrings(
+        "/bin/sh -c 'printf \"%s\\n\" \"$HOME\" \"${SHELL:-/bin/sh}\"; exec /home/dev/.local/share/telar/0.3.0/telar server endpoint'",
+        try remoteCommand(&buffer, "/home/dev/.local/share/telar/0.3.0/telar", discovery_prefix, discovery_suffix),
+    );
+    try std.testing.expectError(error.InvalidRemoteTelarPath, remoteCommand(&buffer, "/home/dev/it's", bridge_prefix, bridge_suffix));
 }
 
 test "a bridge that dies before the handshake fails the attempt with its error output" {

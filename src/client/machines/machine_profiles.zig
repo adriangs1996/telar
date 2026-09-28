@@ -41,6 +41,8 @@ pub fn change(io: std.Io, profiles: *core.MachineProfiles, edit: MachineEdit) !v
         },
         .enable => try profiles.enable(edit.label, true),
         .disable => try profiles.enable(edit.label, false),
+        .place_telar => try profiles.placeTelar(edit.label, edit.value),
+        .record_login => try profiles.recordLogin(edit.label, edit.login_agent, edit.login),
     }
 }
 
@@ -52,11 +54,24 @@ pub fn change(io: std.Io, profiles: *core.MachineProfiles, edit: MachineEdit) !v
 /// try machine_profiles.store(io, gpa, path, .{ .kind = .remove, .label = "box" });
 /// ```
 pub fn store(io: std.Io, gpa: std.mem.Allocator, path: []const u8, edit: MachineEdit) !void {
+    return storeAll(io, gpa, path, &.{edit});
+}
+
+/// Makes several changes as one: all of them reach the file, or none does
+/// when one is refused.
+///
+/// ```zig
+/// try machine_profiles.storeAll(io, gpa, path, &.{ add, place, enable });
+/// ```
+pub fn storeAll(io: std.Io, gpa: std.mem.Allocator, path: []const u8, edits: []const MachineEdit) !void {
     const held = try privatefile.lock(io, path);
     defer held.close(io);
 
     var profiles = try profile_file.load(io, gpa, path);
-    try change(io, &profiles, edit);
+    for (edits) |edit| {
+        try change(io, &profiles, edit);
+    }
+
     try profile_file.save(io, path, &profiles);
 }
 
@@ -129,7 +144,9 @@ pub fn describe(err: anyerror) []const u8 {
         error.InvalidMachineLabel => "labels are 1 to 32 letters, digits, '.', '_' or '-', starting with a letter or a digit",
         error.InvalidMachineColor => "colors are #RRGGBB or a theme role such as red or accent",
         error.InvalidRemoteDestination => "destinations are an ssh host alias or user@host, without spaces or a leading '-'",
-        error.InvalidMachineProfiles, error.IncompatibleMachineProfiles => "machines.json is not a file this telar can read",
+        error.InvalidRemoteTelarPath => "telar paths are absolute and hold only letters, digits, '/', '.', '_', '+' or '-'",
+        error.InvalidMachineProfiles => "machines.json is not a file this telar can read",
+        error.IncompatibleMachineProfiles => "machines.json was written by a newer telar; update this one to read it",
         else => @errorName(err),
     };
 }
@@ -161,6 +178,10 @@ test "changes add, rename, disable and remove a machine but never take this mach
     try change(std.testing.io, &profiles, .{ .kind = .rename, .label = "box", .value = "gpu" });
     try change(std.testing.io, &profiles, .{ .kind = .disable, .label = "gpu" });
     try std.testing.expect(!profiles.slice()[0].enabled);
+
+    try change(std.testing.io, &profiles, .{ .kind = .place_telar, .label = "gpu", .value = "/home/dev/.local/share/telar/0.3.0/telar" });
+    try std.testing.expectEqualStrings("/home/dev/.local/share/telar/0.3.0/telar", profiles.slice()[0].telarPath().?);
+    try std.testing.expectError(error.InvalidRemoteTelarPath, change(std.testing.io, &profiles, .{ .kind = .place_telar, .label = "gpu", .value = "telar" }));
 
     try change(std.testing.io, &profiles, .{ .kind = .remove, .label = "gpu" });
     try std.testing.expectEqual(@as(usize, 0), profiles.slice().len);

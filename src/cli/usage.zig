@@ -7,7 +7,8 @@ pub const text =
     \\       telar gui [--login-shell] [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--remote DESTINATION | --machine LABEL] [command [args...]]
     \\       telar cli install|uninstall|status [--dir DIR]
     \\       telar --machine LABEL COMMAND [args...]
-    \\       telar machine add LABEL DESTINATION [--color COLOR] [--disabled] [--check] [--json]
+    \\       telar machine add LABEL DESTINATION [--color COLOR] [--disabled] [--check] [--setup [--binary PATH] [--skip agents,config,login]] [--json]
+    \\       telar machine setup LABEL|DESTINATION [--label LABEL] [--binary PATH] [--skip agents,config,login] [--confirm] [--json]
     \\       telar machine remove|enable|disable LABEL
     \\       telar machine rename LABEL NEW_LABEL
     \\       telar machine list [--json]
@@ -92,7 +93,7 @@ pub const text =
     \\       telar worktree remove BRANCH|TITLE [--force] [--delete-branch]
     \\       telar agent interrupt <pane|title|worktree:BRANCH|TITLE> [--json] [--socket PATH]
     \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
-    \\       telar workspace create --directory DIR [--name NAME] [--json] [--socket PATH]
+    \\       telar workspace create --directory DIR [--name NAME] [--columns N] [--json] [--socket PATH] [-- COMMAND...]
     \\       telar workspace list [--json] [--socket PATH]
     \\       telar tab close <id|--current> [--workspace ID] [--json] [--socket PATH]
     \\       telar tab move <id|--current> previous|next [--relative-to ID] [--workspace ID] [--json] [--socket PATH]
@@ -117,7 +118,7 @@ pub const text =
     \\  gui              Open the native client window; --login-shell adopts the login shell's environment
     \\  cli              Link this executable as `telar` into DIR (default /usr/local/bin)
     \\  --machine        Run one telar command on a saved machine over SSH; never falls back to this one
-    \\  machine          Save, rename, enable, disable, remove, list and check machines in machines.json
+    \\  machine          Save, rename, enable, disable, remove, list, check and set up machines in machines.json
     \\  server           Run the local runtime in the foreground
     \\  server stop      Stop the local runtime
     \\  history list     Show recent command history
@@ -135,7 +136,7 @@ pub const text =
     \\  agent read       Print recent text from an agent's pane
     \\  agent report-session  Record an agent's own session id for restore
     \\  pane read        Print recent text from any pane
-    \\  pane send-keys   Send raw text (and --enter) to a pane no UI has focused
+    \\  pane send-keys   Send raw text, or --stdin, (and --enter) to a pane no UI has focused
     \\  pane focus       Move from Neovim into an adjacent Telar pane
     \\  worktree create Add a git worktree for a task; with a command (needs --title), run it there
     \\  worktree exec   Run a command in a new tab of a worktree; --wait prints its output and exit code
@@ -196,6 +197,7 @@ pub const text =
     \\  --pane ID        Make it focus a pane when clicked
     \\  --tab ID         Make it select a tab when clicked
     \\  --workspace ID   Make it select a workspace when clicked
+    \\  --link URL       Make it open an https URL in the browser when clicked
     \\  --socket PATH    Notify clients of a specific local runtime
     \\
     \\Remote:

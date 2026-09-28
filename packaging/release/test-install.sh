@@ -224,6 +224,64 @@ else
     flunk "a checksum mismatch keeps the previous install"
 fi
 
+release starts starts
+previous
+pinned=$(sha256 "$work/releases/download/v$version/telar-linux-x86_64-headless.tar.gz")
+if install --headless --sha256 "$pinned" && [ "$(installed)" = "telar $version (headless)" ]; then
+    pass "--sha256 installs the archive that has that hash"
+else
+    flunk "--sha256 installs the archive that has that hash"
+fi
+
+release starts starts
+previous
+if ! install --headless --sha256 "$(printf '0%.0s' $(seq 64))" && [ "$(installed)" = "telar $version (previous)" ] && grep -q -- '--sha256 expected' "$work/log" && clean; then
+    pass "an archive that matches SHA256SUMS but not --sha256 keeps the previous install"
+else
+    flunk "an archive that matches SHA256SUMS but not --sha256 keeps the previous install"
+fi
+
+stubs linux-desktop
+release starts starts
+previous
+if ! install --sha256 "$pinned" && [ "$(installed)" = "telar $version (previous)" ]; then
+    pass "--sha256 without a variant is refused where two archives could be tried"
+else
+    flunk "--sha256 without a variant is refused where two archives could be tried"
+fi
+
+stubs linux-server
+rm -rf "${work:?}/releases"
+write_telar "$work/built-telar" starts binary
+previous
+if install --binary "$work/built-telar" --sha256 "$(sha256 "$work/built-telar")" && [ "$(installed)" = "telar $version (binary)" ] && clean; then
+    pass "--binary installs a build that has no release"
+else
+    flunk "--binary installs a build that has no release"
+fi
+
+previous
+if ! install --binary "$work/built-telar" --sha256 "$(printf '0%.0s' $(seq 64))" && [ "$(installed)" = "telar $version (previous)" ] && clean; then
+    pass "--binary with another hash keeps the previous install"
+else
+    flunk "--binary with another hash keeps the previous install"
+fi
+
+write_telar "$work/built-telar" fails binary
+previous
+if ! install --binary "$work/built-telar" --sha256 "$(sha256 "$work/built-telar")" && [ "$(installed)" = "telar $version (previous)" ] && clean; then
+    pass "--binary that does not start keeps the previous install"
+else
+    flunk "--binary that does not start keeps the previous install"
+fi
+
+previous
+if ! install --binary "$work/built-telar" && [ "$(installed)" = "telar $version (previous)" ]; then
+    pass "--binary without --sha256 is refused"
+else
+    flunk "--binary without --sha256 is refused"
+fi
+
 # An http server that would serve the release, so only --proto refuses it.
 if command -v python3 >/dev/null 2>&1; then
     release starts starts

@@ -540,6 +540,11 @@ test "CLI parses pane commands and refuses names as pane ids" {
     try std.testing.expectEqualStrings("y", std.mem.span(send_cli.pane.text.?));
     try std.testing.expect(send_cli.pane.enter);
 
+    const piped = [_][*:0]const u8{ "telar", "pane", "send-keys", "4", "--stdin", "--enter" };
+    const piped_cli = try Cli.parse(&piped, .empty);
+    try std.testing.expect(piped_cli.pane.stdin and piped_cli.pane.enter);
+    try std.testing.expectEqual(@as(?[*:0]const u8, null), piped_cli.pane.text);
+
     const focus = [_][*:0]const u8{ "telar", "pane", "focus", "--current", "--direction", "left", "--json" };
     const focus_cli = try Cli.parse(&focus, .empty);
     try std.testing.expectEqual(pane_module.PaneAction.focus, focus_cli.pane.action);

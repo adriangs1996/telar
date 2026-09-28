@@ -31,13 +31,40 @@ pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
     const writer = &output.interface;
     defer writer.flush() catch {};
 
-    return execute(&session, options, .{ .writer = writer, .environ = init.minimal.environ }) catch |err| {
+    var text_buffer: [core.max_pane_text_input_bytes + 1:0]u8 = undefined;
+    var effective = options;
+    if (options.stdin) {
+        effective.text = readText(init, &text_buffer) catch |err| {
+            std.debug.print("telar pane: {s}\n", .{control.describe(err)});
+            return agent.exit_failure;
+        };
+    }
+
+    return execute(&session, effective, .{ .writer = writer, .environ = init.minimal.environ }) catch |err| {
         std.debug.print("telar pane: {s}\n", .{control.describe(err)});
         return switch (err) {
             error.PaneNotFound, error.PaneExited => agent.exit_not_found,
             else => agent.exit_failure,
         };
     };
+}
+
+// The text `send-keys --stdin` sends: standard input without its final
+// line break, bounded like text on the command line.
+fn readText(init: std.process.Init, buffer: *[core.max_pane_text_input_bytes + 1:0]u8) ![*:0]const u8 {
+    var reader = std.Io.File.stdin().readerStreaming(init.io, &.{});
+    const read = try reader.interface.readSliceShort(buffer);
+    if (read > core.max_pane_text_input_bytes) {
+        return error.InvalidSendText;
+    }
+
+    const text = std.mem.trimEnd(u8, buffer[0..read], "\r\n");
+    if (text.len == 0) {
+        return error.InvalidSendText;
+    }
+
+    buffer[text.len] = 0;
+    return buffer[0..text.len :0];
 }
 
 fn execute(session: *Session, options: PaneOptions, context: ExecutionContext) !u8 {

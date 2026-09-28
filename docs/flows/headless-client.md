@@ -46,6 +46,7 @@ One command per line on stdin:
 | `text UTF-8` | each character pressed in order |
 | `resize COLSxROWS` | the host grid changes |
 | `mark LABEL` | a labelled timestamp in the trace |
+| `notification activate` | the newest notification is clicked, as its card in a window would be |
 | `quit` | leave with status 0; the end of stdin does the same |
 
 It is not a terminal escape parser. Keys are delivered as presses only, as
@@ -76,7 +77,12 @@ host terminal shows it.
 
 - **No window, no host.** Clipboard, notifications, links and machine
   requests are recorded in the trace and not performed; a clipboard capture
-  fails as unavailable. Graphics commands are accepted and dropped.
+  fails as unavailable. Opening a link, playing a sound and posting a desktop
+  notice are background jobs the client queues like a window's; the headless
+  client records each as an `effect` entry named `link`, `sound` or
+  `system_notification` and completes it without running anything
+  (`HeadlessClient.recordedInstead`), so no `open`, `xdg-open` or sound
+  player ever starts. Graphics commands are accepted and dropped.
 - **Nothing on the measured path.** The trace and dump are written after the
   loop ends. The echo trace marks (`host_read`, `client_input`,
   `compose_start`, `host_flush_*`) follow a window's, so

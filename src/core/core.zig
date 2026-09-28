@@ -122,6 +122,7 @@ pub const Launch = @import("schema/Launch.zig");
 pub const LaunchView = @import("schema/messages/LaunchView.zig");
 pub const MachineId = @import("MachineId.zig").MachineId;
 pub const MachineProfile = @import("MachineProfile.zig");
+pub const AgentLogin = @import("AgentLogin.zig").AgentLogin;
 pub const MachineProfileFields = @import("MachineProfileFields.zig");
 pub const MachineProfiles = @import("MachineProfiles.zig");
 pub const Mouse = @import("schema/Mouse.zig");
@@ -166,6 +167,8 @@ pub const ReadPane = @import("schema/messages/ReadPane.zig");
 pub const Recorder = @import("Recorder.zig");
 pub const profiling = @import("profiling.zig");
 pub const ssh_destination = @import("ssh_destination.zig");
+pub const remote_telar = @import("remote_telar.zig");
+pub const notification_link = @import("schema/notification_link.zig");
 pub const ProfileStore = @import("ProfileStore.zig");
 pub const ProfileCounters = @import("ProfileCounters.zig");
 pub const ProfileHistogram = @import("ProfileHistogram.zig");
@@ -411,6 +414,7 @@ pub const max_manifest_bytes = plugin.max_manifest_bytes;
 pub const max_message_size = handshake.max_message_size;
 pub const max_notification_duration_ms = types.max_notification_duration_ms;
 pub const max_notification_message_bytes = types.max_notification_message_bytes;
+pub const max_notification_link_bytes = types.max_notification_link_bytes;
 pub const max_notification_title_bytes = types.max_notification_title_bytes;
 pub const max_pane_text_bytes = types.max_pane_text_bytes;
 pub const max_pane_text_input_bytes = types.max_pane_text_input_bytes;
@@ -468,6 +472,7 @@ test {
     _ = @import("history_filter.zig");
     _ = @import("MachineId.zig");
     _ = @import("MachineProfile.zig");
+    _ = @import("AgentLogin.zig");
     _ = @import("MachineProfiles.zig");
     _ = @import("plain_text.zig");
     _ = @import("plugin.zig");
@@ -479,6 +484,8 @@ test {
     _ = @import("schema/messages/paths.zig");
     _ = @import("schema_contract_test.zig");
     _ = @import("ssh_destination.zig");
+    _ = @import("remote_telar.zig");
+    _ = @import("schema/notification_link.zig");
 }
 
 pub const TextMetadata = @import("text_metadata/Storage.zig");

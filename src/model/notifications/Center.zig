@@ -26,6 +26,11 @@ pub fn push(self: *Center, now_ns: u64, input: Input) notifications.Id {
     };
     item.title_len = @intCast(notifications.copyValidUtf8(&item.title_buffer, input.title));
     item.message_len = @intCast(notifications.copyValidUtf8(&item.message_buffer, input.message));
+    // A link longer than the buffer is dropped whole, never cut into another URL.
+    if (input.link.len <= item.link_buffer.len) {
+        @memcpy(item.link_buffer[0..input.link.len], input.link);
+        item.link_len = @intCast(input.link.len);
+    }
 
     for (self.items[0..self.count]) |*slot| {
         const existing = if (slot.*) |*value| value else continue;

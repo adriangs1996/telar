@@ -60,7 +60,11 @@ machine disabled or moved (machine-presentation.md)
   build, `--fresh` beside a running runtime and an unsafe runtime directory
   (`machine_connection.permanent`) leave the link failed: no retry is
   scheduled, and the chrome shows why until the person picks the machine
-  in the machine list, which calls `retryNow`. A lost connection is never
+  in the machine list, which calls `retryNow`. When the failure is one
+  `telar machine setup` repairs (no telar there, or a telar or runtime of
+  another build, `machine_connection.setupRepairs`), the link says so and
+  picking the machine sets telar up there instead
+  ([machine setup](machine-setup.md)). A lost connection is never
   permanent: once connected, every failure is retried.
 - **Backoff.** The first retry waits half a second, then the wait doubles up
   to thirty seconds. A link that stayed up for a minute earns fast retries

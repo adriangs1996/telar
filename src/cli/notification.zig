@@ -8,7 +8,7 @@ const NotificationOptions = @import("arguments/NotificationOptions.zig");
 const RuntimeConnector = client.RuntimeConnector;
 
 const request_id: core.RequestId = @enumFromInt(1);
-const request_buffer_size = 1 + 8 + 1 + 4 + 1 + 8 + 2 + core.max_notification_title_bytes + 2 + core.max_notification_message_bytes;
+const request_buffer_size = 1 + 8 + 1 + 4 + 1 + 8 + 2 + core.max_notification_title_bytes + 2 + core.max_notification_message_bytes + 2 + core.max_notification_link_bytes;
 
 /// Sends one bounded notification request to the running local runtime and
 /// fails when no UI client accepted it.
@@ -17,30 +17,44 @@ const request_buffer_size = 1 + 8 + 1 + 4 + 1 + 8 + 2 + core.max_notification_ti
 /// try notification.run(process_init, options);
 /// ```
 pub fn run(init: std.process.Init, options: NotificationOptions) !void {
-    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, options.socket);
+    const message = request(options);
+    send(init, message.notification, options.socket) catch |err| {
+        switch (err) {
+            error.RuntimeNotRunning => std.debug.print("telar notification: runtime is not running\n", .{}),
+            error.NoNotificationClients => std.debug.print("telar notification: no UI client is connected\n", .{}),
+            else => {},
+        }
+
+        return err;
+    };
+}
+
+/// Shows one notification in every UI client of the local runtime, or
+/// fails with `error.NoNotificationClients` when none took it. It never
+/// starts a runtime.
+///
+/// ```zig
+/// try notification.send(process_init, .{ .title = "Log in to Codex on box", .link = url }, null);
+/// ```
+pub fn send(init: std.process.Init, notification: core.Notification, socket: ?[*:0]const u8) !void {
+    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, socket);
     var connection = connector.connect() catch |err| switch (err) {
-        error.FileNotFound, error.ConnectionRefused => {
-            std.debug.print("telar notification: runtime is not running\n", .{});
-            return error.RuntimeNotRunning;
-        },
+        error.FileNotFound, error.ConnectionRefused => return error.RuntimeNotRunning,
         else => |other| return other,
     };
     defer connection.deinit(init.io);
 
     var send_buffer: [request_buffer_size]u8 = undefined;
-    try connection.send(init.io, try core.encodeShowNotification(&send_buffer, request(options)));
+    try connection.send(init.io, try core.encodeShowNotification(&send_buffer, .{
+        .request_id = request_id,
+        .notification = notification,
+    }));
 
     const receive_buffer = try init.gpa.alloc(u8, localsocket.transport.max_frame_size);
     defer init.gpa.free(receive_buffer);
     const response = try core.decodeServer(try connection.receive(init.io, receive_buffer));
     switch (response) {
-        .notification_shown => |shown| validateAcknowledgement(shown) catch |err| {
-            if (err == error.NoNotificationClients) {
-                std.debug.print("telar notification: no UI client is connected\n", .{});
-            }
-
-            return err;
-        },
+        .notification_shown => |shown| try validateAcknowledgement(shown),
         .request_failed => |failure| {
             std.debug.print("telar notification: {s}\n", .{failure.message});
             return error.NotificationFailed;
@@ -58,6 +72,7 @@ fn request(options: NotificationOptions) core.ShowNotification {
             .target = options.target,
             .title = std.mem.span(options.title),
             .message = if (options.body) |body| std.mem.span(body) else "",
+            .link = if (options.link) |link| std.mem.span(link) else "",
         },
     };
 }
