@@ -364,6 +364,7 @@ typedef struct MatchState {
   lua_State *L;
   int matchdepth;  /* control for recursive depth (to avoid C stack overflow) */
   int level;  /* total number of captures (finished or unfinished) */
+  size_t steps;  /* telar: steps not yet charged to the count hook */
   struct {
     const char *init;
     ptrdiff_t len;  /* length or special value (CAP_*) */
@@ -373,6 +374,16 @@ typedef struct MatchState {
 
 /* recursive function */
 static const char *match (MatchState *ms, const char *s, const char *p);
+
+
+/*
+** Telar: a step is one attempt of the matcher or 'L_STEPBYTES' bytes scanned
+** or compared, charged to the count hook through 'luaL_chargesteps' so a
+** backtracking pattern or a long plain search cannot run without bound.
+*/
+#if !defined(L_STEPBYTES)
+#define L_STEPBYTES	64
+#endif
 
 
 /* maximum recursion depth for 'match' */
@@ -491,15 +502,20 @@ static const char *matchbalance (MatchState *ms, const char *s,
     luaL_error(ms->L, "malformed pattern (missing arguments to '%%b')");
   if (*s != *p) return NULL;
   else {
+    const char *start = s;
     int b = *p;
     int e = *(p+1);
     int cont = 1;
     while (++s < ms->src_end) {
       if (*s == e) {
-        if (--cont == 0) return s+1;
+        if (--cont == 0) {
+          luaL_chargesteps(ms->L, &ms->steps, ct_diff2sz(s - start) / L_STEPBYTES);
+          return s+1;
+        }
       }
       else if (*s == b) cont++;
     }
+    luaL_chargesteps(ms->L, &ms->steps, ct_diff2sz(s - start) / L_STEPBYTES);
   }
   return NULL;  /* string ends out of balance */
 }
@@ -510,6 +526,7 @@ static const char *max_expand (MatchState *ms, const char *s,
   ptrdiff_t i = 0;  /* counts maximum expand for item */
   while (singlematch(ms, s + i, p, ep))
     i++;
+  luaL_chargesteps(ms->L, &ms->steps, cast_sizet(i) / L_STEPBYTES);
   /* keeps trying to match with the maximum repetitions */
   while (i>=0) {
     const char *res = match(ms, (s+i), ep+1);
@@ -562,6 +579,7 @@ static const char *match_capture (MatchState *ms, const char *s, int l) {
   size_t len;
   l = check_capture(ms, l);
   len = cast_sizet(ms->capture[l].len);
+  luaL_chargesteps(ms->L, &ms->steps, len / L_STEPBYTES);
   if ((size_t)(ms->src_end-s) >= len &&
       memcmp(ms->capture[l].init, s, len) == 0)
     return s+len;
@@ -573,6 +591,7 @@ static const char *match (MatchState *ms, const char *s, const char *p) {
   if (l_unlikely(ms->matchdepth-- == 0))
     luaL_error(ms->L, "pattern too complex");
   init: /* using goto to optimize tail recursion */
+  luaL_chargesteps(ms->L, &ms->steps, 1);
   if (p != ms->p_end) {  /* end of pattern? */
     switch (*p) {
       case '(': {  /* start capture */
@@ -672,16 +691,18 @@ static const char *match (MatchState *ms, const char *s, const char *p) {
 
 
 
-static const char *lmemfind (const char *s1, size_t l1,
+static const char *lmemfind (lua_State *L, const char *s1, size_t l1,
                                const char *s2, size_t l2) {
   if (l2 == 0) return s1;  /* empty strings are everywhere */
   else if (l2 > l1) return NULL;  /* avoids a negative 'l1' */
   else {
     const char *init;  /* to search for a '*s2' inside 's1' */
+    size_t steps = 0;  /* telar: see 'chargesteps' */
     l2--;  /* 1st char will be checked by 'memchr' */
     l1 = l1-l2;  /* 's2' cannot be found after that */
     while (l1 > 0 && (init = (const char *)memchr(s1, *s2, l1)) != NULL) {
       init++;   /* 1st char is already checked */
+      luaL_chargesteps(L, &steps, 1 + l2 / L_STEPBYTES);
       if (memcmp(init, s2+1, l2) == 0)
         return init-1;
       else {  /* correct 'l1' and 's1' to try again */
@@ -763,6 +784,7 @@ static int nospecials (const char *p, size_t l) {
 static void prepstate (MatchState *ms, lua_State *L,
                        const char *s, size_t ls, const char *p, size_t lp) {
   ms->L = L;
+  ms->steps = 0;
   ms->src_init = s;
   ms->src_end = s + ls;
   ms->p_end = p + lp;
@@ -791,7 +813,7 @@ static int str_find_aux (lua_State *L, int find) {
   /* explicit request or no special characters? */
   if (find && (lua_toboolean(L, 4) || nospecials(p, lp))) {
     /* do a plain search */
-    const char *s2 = lmemfind(s + init, ls - init, p, lp);
+    const char *s2 = lmemfind(L, s + init, ls - init, p, lp);
     if (s2) {
       lua_pushinteger(L, ct_diff2S(s2 - s) + 1);
       lua_pushinteger(L, cast_st2S(ct_diff2sz(s2 - s) + lp));

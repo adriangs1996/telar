@@ -82,11 +82,12 @@ Only commits travel; uncommitted files stay here. `telar worktree fetch
 3. `agent wait` polls the runtime; it never guesses. Exit codes: 0 reached,
    2 the agent or pane is gone, 3 timed out.
 4. `agent read` and `pane read` return a plain-text snapshot of the most
-   recent rows (`--source recent`, default) or the visible screen. Text is
-   bounded; `truncated` in JSON output means older rows were dropped. A
-   finished command (`exec --wait`, or a read after its pane exited) keeps
-   its last 200 rows within 16 KiB; `truncated` there also means it printed
-   more than that.
+   recent rows (`--source recent`, default) or the visible screen.
+   `--lines N` counts up from the last row that shows text, so the blank
+   rows below a short output never hide it. Text is bounded; `truncated`
+   in JSON output means older rows were dropped. A finished command
+   (`exec --wait`, or a read after its pane exited) keeps its last 200 rows
+   within 16 KiB; `truncated` there also means it printed more than that.
 5. Nothing here changes layout or focus; those belong to the user's client.
 6. `agent report-session` stores your own session id with your pane. After a
    runtime restart, telar relaunches the pane's shell and types the resume

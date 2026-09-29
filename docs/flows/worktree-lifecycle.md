@@ -60,10 +60,15 @@ telar worktree remove fix-tabs [--force] [--delete-branch]
 worktree_git.hasChanges (git status --porcelain) -> refuse while the
         |  checkout has uncommitted or untracked files, unless --force;
         |  commits ahead are not checked: the branch keeps them
-        |  (--force and --delete-branch ask on a TTY)
+        |  (--force asks on a TTY)
+worktree_git.branchMerged -> with --delete-branch, whether git branch -d
+        |  would delete it: every commit in its upstream, or in HEAD without
+        |  one, asked of Git run as gitstatus.untrusted_git. Merged, nobody
+        |  is asked; otherwise --delete-branch asks on a TTY too
 schema.forget_worktree -> worktree_lifecycle.forget
         |  closes the child workspace's panes, drops the row
-worktree_git.remove, worktree_git.deleteBranch (git branch -d, or -D with --force)
+worktree_git.remove, worktree_git.deleteBranch (git branch -d for a merged
+        |  branch; -D for one a person agreed to delete)
 ```
 
 ## The command's environment

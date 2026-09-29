@@ -7,6 +7,7 @@ const build_options = @import("build_options");
 const slabheap = @import("slabheap");
 const sqlite = @import("sqlite");
 const parser = @import("cli/parser.zig");
+const control = @import("cli/control.zig");
 const usage_module = @import("cli/usage.zig");
 const server_module = @import("cli/server.zig");
 const diagnostics_module = @import("cli/diagnostics.zig");
@@ -157,7 +158,7 @@ fn runMain(init: std.process.Init) !void {
 // with the command they carry, so a command runs the same way wherever it
 // arrives from.
 fn dispatch(init: std.process.Init, args: []const [*:0]const u8) anyerror!void {
-    switch (try parser.Cli.parse(args, init.minimal.environ)) {
+    switch (parseCommand(init, args)) {
         .help => try std.Io.File.stdout().writeStreamingAll(init.io, usage_module.text),
         .version => try std.Io.File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
         .server => |options| try server_module.run(init, options),
@@ -222,8 +223,17 @@ fn openWindowOn(init: std.process.Init, label: [:0]const u8, run: RunOptions) an
     std.process.exit(status);
 }
 
+// A command line telar cannot read ends the process with one line naming
+// what is wrong, not with the parser's error return trace.
+fn parseCommand(init: std.process.Init, args: []const [*:0]const u8) parser.Cli {
+    return parser.Cli.parse(args, init.minimal.environ) catch |err| {
+        std.debug.print("telar: {s}; see `telar --help`\n", .{control.describe(err)});
+        std.process.exit(agent_module.exit_failure);
+    };
+}
+
 fn dispatchToMachine(init: std.process.Init, options: MachineDispatchOptions) anyerror!void {
-    switch (try parser.Cli.parse(options.argv, init.minimal.environ)) {
+    switch (parseCommand(init, options.argv)) {
         // Window options, or none: a window that shows the machine first.
         .run => |run| return openWindowOn(init, options.label, run),
         .gui => |gui| return openWindowOn(init, options.label, gui.run),

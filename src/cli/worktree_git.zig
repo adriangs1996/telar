@@ -1,11 +1,14 @@
 //! Git as the CLI runs it for worktrees: the main checkout of a repository,
 //! the branch it stands on, adding and removing linked worktrees and deleting
 //! branches. Git runs in the CLI process with the user's environment and
-//! credentials; the runtime never runs Git on a client's behalf. Branch names
-//! are validated before they reach an argv and always sit after `--` or in a
-//! position Git never parses as an option.
+//! credentials; the runtime never runs Git on a client's behalf. The one
+//! check that lets a deletion go ahead without a person, `branchMerged`, runs
+//! Git as `gitstatus.untrusted_git` does. Branch names are validated before
+//! they reach an argv and always sit after `--` or in a position Git never
+//! parses as an option.
 
 const std = @import("std");
+const gitstatus = @import("gitstatus");
 const workspace = @import("arguments/workspace.zig");
 const WorktreeCheckout = @import("WorktreeCheckout.zig");
 const DiffRequest = @import("DiffRequest.zig");
@@ -26,6 +29,10 @@ const max_git_output_bytes = 64 * 1024;
 
 /// Longest commit hash Git prints: SHA-256 in hex.
 pub const max_commit_bytes = 64;
+/// Longest `refs/heads/<branch>` of a valid worktree branch.
+const max_branch_ref_bytes = "refs/heads/".len + workspace.max_worktree_branch_bytes;
+/// Longest `<branch>@{upstream}` of a valid worktree branch.
+const max_upstream_spec_bytes = workspace.max_worktree_branch_bytes + "@{upstream}".len;
 /// Longest `origin` URL read to derive a repository identity.
 const max_origin_url_bytes = 2048;
 
@@ -128,6 +135,31 @@ pub fn deleteBranch(init: std.process.Init, root: []const u8, branch: []const u8
     try workspace.validateWorktreeBranch(branch);
     const flag = if (force) "-D" else "-d";
     return run(init, &.{ "git", "-C", root, "branch", flag, "--", branch }, error.BranchDeleteFailed);
+}
+
+/// Whether `git branch -d` would delete `branch` from the repository at
+/// `root`: every commit of it is in its upstream, or in `HEAD` when it has
+/// none. Nobody confirms a deletion this allows, so Git runs as
+/// `gitstatus.untrusted_git` runs it and the repository's config cannot run
+/// a program on the way. False when Git fails, so a doubt asks a person.
+///
+/// ```zig
+/// const unattended = worktree_git.branchMerged(init.io, init.minimal.environ, root, "fix");
+/// ```
+pub fn branchMerged(io: std.Io, environ: std.process.Environ, root: []const u8, branch: []const u8) bool {
+    workspace.validateWorktreeBranch(branch) catch return false;
+    var upstream_buffer: [max_upstream_spec_bytes]u8 = undefined;
+    const upstream = std.fmt.bufPrint(&upstream_buffer, "{s}@{{upstream}}", .{branch}) catch return false;
+    var ref_buffer: [max_branch_ref_bytes]u8 = undefined;
+    const ref = std.fmt.bufPrint(&ref_buffer, "refs/heads/{s}", .{branch}) catch return false;
+
+    const repository: gitstatus.Checkout = .{
+        .environ = environ,
+        .path = root,
+    };
+    var commit_buffer: [max_commit_bytes]u8 = undefined;
+    const reference = hardenedLine(io, repository, &.{ "rev-parse", "--verify", "--quiet", "--end-of-options", upstream }, &commit_buffer) orelse "HEAD";
+    return hardenedLine(io, repository, &.{ "merge-base", "--is-ancestor", ref, reference }, &commit_buffer) != null;
 }
 
 /// Whether the checkout has uncommitted changes or untracked files.
@@ -308,6 +340,27 @@ fn transferRun(init: std.process.Init, argv: []const []const u8, environ_map: *c
     }
 }
 
+// One read-only Git command run as `gitstatus.untrusted_git` runs it: what
+// it printed, or null when it failed or printed more than `buffer` holds.
+fn hardenedLine(io: std.Io, repository: gitstatus.Checkout, arguments: []const []const u8, buffer: []u8) ?[]const u8 {
+    const output = gitstatus.untrusted_git.run(io, .{
+        .environ = repository.environ,
+        .path = repository.path,
+        .arguments = arguments,
+        .timeout = git_timeout,
+        .stdout_limit = max_git_output_bytes,
+    }) orelse return null;
+    defer output.deinit();
+
+    const line = output.line();
+    if (line.len > buffer.len) {
+        return null;
+    }
+
+    @memcpy(buffer[0..line.len], line);
+    return buffer[0..line.len];
+}
+
 fn gitLine(init: std.process.Init, argv: []const []const u8, buffer: []u8) ![]const u8 {
     const result = std.process.run(init.gpa, init.io, .{
         .argv = argv,
@@ -351,4 +404,73 @@ test "porcelain listing skips the main checkout and detached worktrees" {
     try std.testing.expectEqualStrings("/src/telar-worktrees/fix", first.path);
     try std.testing.expectEqualStrings("fix", first.branch);
     try std.testing.expect(worktrees.next() == null);
+}
+
+fn testGit(argv: []const []const u8) !void {
+    const result = try std.process.run(std.testing.allocator, std.testing.io, .{ .argv = argv });
+    defer std.testing.allocator.free(result.stdout);
+    defer std.testing.allocator.free(result.stderr);
+    if (result.term != .exited or result.term.exited != 0) {
+        return error.GitFailed;
+    }
+}
+
+fn testCommit(root: []const u8, message: []const u8) !void {
+    try testGit(&.{ "git", "-C", root, "-c", "user.name=telar", "-c", "user.email=telar@localhost", "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", message });
+}
+
+test "a branch counts as merged exactly when git branch -d deletes it" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
+    testGit(&.{ "git", "init", "-q", "-b", "main", root }) catch return error.SkipZigTest;
+    try testCommit(root, "one");
+    try testGit(&.{ "git", "-C", root, "branch", "old" });
+    try testCommit(root, "two");
+
+    // In HEAD and without an upstream.
+    try testGit(&.{ "git", "-C", root, "branch", "landed" });
+    // In HEAD, but not in the upstream Git compares it with.
+    try testGit(&.{ "git", "-C", root, "branch", "behind" });
+    try testGit(&.{ "git", "-C", root, "branch", "--set-upstream-to=old", "behind" });
+    // One commit past HEAD.
+    try testGit(&.{ "git", "-C", root, "checkout", "-q", "-b", "ahead" });
+    try testCommit(root, "three");
+    // Past HEAD, but in its upstream.
+    try testGit(&.{ "git", "-C", root, "branch", "--track", "released", "ahead" });
+    try testGit(&.{ "git", "-C", root, "checkout", "-q", "main" });
+
+    const cases = [_]struct { branch: []const u8, merged: bool }{
+        .{
+            .branch = "landed",
+            .merged = true,
+        },
+        .{
+            .branch = "behind",
+            .merged = false,
+        },
+        .{
+            .branch = "ahead",
+            .merged = false,
+        },
+        .{
+            .branch = "released",
+            .merged = true,
+        },
+        .{
+            .branch = "missing",
+            .merged = false,
+        },
+    };
+    for (cases) |case| {
+        try std.testing.expectEqual(case.merged, branchMerged(io, std.testing.environ, root, case.branch));
+    }
+
+    for (cases) |case| {
+        const deleted = if (testGit(&.{ "git", "-C", root, "branch", "-d", "--", case.branch })) true else |_| false;
+        try std.testing.expectEqual(case.merged, deleted);
+    }
 }

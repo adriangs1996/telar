@@ -5,6 +5,8 @@ const pane_launch = @import("../pane_launch.zig");
 const SessionTitle = @import("../../agent/SessionTitle.zig");
 const core_module = @import("telar-core");
 const std = @import("std");
+const localsocket = @import("localsocket");
+const SocketDirectory = localsocket.SocketDirectory;
 const Runtime = @import("../Runtime.zig");
 const Initialization = @import("../Initialization.zig");
 const PersistenceEncoder = @import("../../persistence/Encoder.zig");
@@ -12,11 +14,10 @@ const Pane = @import("../../pane/Pane.zig");
 
 test "shutdown replaces a pending checkpoint with the latest session and releases its buffer" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    const directory = temp.path();
     var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/shutdown.sock", .{directory});
     var checkpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -96,11 +97,10 @@ fn sleepLaunch(buffer: []u8) !core_module.LaunchView {
 
 test "failed startup joins restored children and preserves the original checkpoint" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    const directory = temp.path();
     var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/failed-start.sock", .{directory});
     var checkpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;

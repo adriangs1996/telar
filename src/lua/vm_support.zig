@@ -5,10 +5,26 @@ const Vm = @import("Vm.zig");
 const lua_api = @import("lua-api");
 
 pub const default_memory_limit: usize = 16 * 1024 * 1024;
+
+// The instruction limit is the budget: it bounds Lua's own work the same way
+// on every host, whatever else the machine is running. Pattern matching,
+// plain `string.find` and `table.sort` charge their steps to the same count
+// (`luaL_chargesteps` in the vendored lauxlib.c), so one backtracking search
+// or large sort cannot run unbounded. The count hook is the only place
+// either limit is checked, between instructions and between those steps; no
+// limit interrupts any other single C call. The memory limit bounds those:
+// the costliest, `string.rep` of 15 MiB, takes about 25 ms in a release
+// build. The wall-clock deadline is a safety net for instructions
+// that are each that costly, so it sits far above what a whole instruction
+// budget costs: a million allocating instructions take about 20 ms in a
+// release build and 170 ms in a debug one. A deadline near that cost
+// rejects valid configuration whenever the scheduler delays the thread.
 pub const default_load_instruction_limit: u64 = 1_000_000;
-pub const default_load_deadline_ns: u64 = 100 * std.time.ns_per_ms;
+pub const default_load_deadline_ns: u64 = 2 * std.time.ns_per_s;
 pub const default_callback_instruction_limit: u64 = 100_000;
-pub const default_callback_deadline_ns: u64 = 10 * std.time.ns_per_ms;
+// Callbacks run on the interactive path, so their net is the longest stall a
+// runaway callback may cause: 100 ms, against about 2 ms for its budget.
+pub const default_callback_deadline_ns: u64 = 100 * std.time.ns_per_ms;
 pub const hook_instruction_interval: u32 = 1_000;
 
 pub fn monotonic(io: std.Io) u64 {

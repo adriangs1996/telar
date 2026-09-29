@@ -30,7 +30,59 @@ test "recent rows dump scrollback and screen as plain text, newest last" {
     const dump = fixture.pane.dumpText(.{ .rows = 3, .source = .recent }, &storage);
 
     try std.testing.expect(!dump.truncated);
-    try std.testing.expectEqualStrings("six\nseven", storage[0..dump.len]);
+    try std.testing.expectEqualStrings("five\nsix\nseven", storage[0..dump.len]);
+}
+
+test "rows count up from the last row with text, not from blank rows below it" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    _ = try fixture.pane.ingest(std.testing.io, "one\r\ntwo\r\n   \r\n");
+    try fixture.pane.render(false);
+    var storage: [core.max_pane_text_bytes]u8 = undefined;
+
+    for ([_]core.PaneTextSource{ .screen, .recent }) |source| {
+        const last = fixture.pane.dumpText(.{ .rows = 1, .source = source }, &storage);
+        try std.testing.expectEqualStrings("two", storage[0..last.len]);
+
+        const both = fixture.pane.dumpText(.{ .rows = 2, .source = source }, &storage);
+        try std.testing.expectEqualStrings("one\ntwo", storage[0..both.len]);
+    }
+}
+
+test "blank rows are looked through only as far as a screen and the rows asked for" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    _ = try fixture.pane.ingest(std.testing.io, "far above\r\n");
+    for (0..40) |_| {
+        _ = try fixture.pane.ingest(std.testing.io, "\r\n");
+    }
+    try fixture.pane.render(false);
+    const total = fixture.pane.textRows(.recent);
+    const rows = PaneFixture.initial_size.rows;
+
+    try std.testing.expectEqual(total - 20, fixture.pane.writtenRows(.recent, 20));
+    try std.testing.expectEqual(@as(usize, 1), fixture.pane.writtenRows(.recent, total));
+    try std.testing.expectEqual(@as(usize, 0), fixture.pane.writtenRows(.screen, rows));
+
+    var storage: [core.max_pane_text_bytes]u8 = undefined;
+    const near = fixture.pane.dumpText(.{ .rows = 2, .source = .recent }, &storage);
+    try std.testing.expectEqualStrings("", storage[0..near.len]);
+    const far = fixture.pane.dumpText(.{ .rows = 40, .source = .recent }, &storage);
+    try std.testing.expect(std.mem.startsWith(u8, storage[0..far.len], "far above"));
+}
+
+test "a pane without text reads as empty" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    var storage: [core.max_pane_text_bytes]u8 = undefined;
+
+    const dump = fixture.pane.dumpText(.{ .rows = core.max_pane_text_rows, .source = .recent }, &storage);
+
+    try std.testing.expectEqual(@as(usize, 0), dump.len);
+    try std.testing.expect(!dump.truncated);
 }
 
 test "screen rows never reach into scrollback" {

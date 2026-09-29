@@ -410,6 +410,16 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
 
+    def test_unreadable_arguments_print_one_line_without_a_trace(self):
+        for arguments, message in (
+            (["pane", "send-keys", "5", ""], "telar: send-keys needs text of 1 to 16384 bytes, or --stdin; see `telar --help`"),
+            (["pane", "read"], "telar: MissingPaneTarget; see `telar --help`"),
+        ):
+            result = subprocess.run([str(BINARY), *arguments], capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(result.stderr, message + "\n")
+
     def test_command_suggest_returns_a_proposal_without_executing_it(self):
         def exchange(connection):
             request = receive_frame(connection)

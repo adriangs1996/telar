@@ -2,6 +2,7 @@
 
 const SocketChannel = @import("SocketChannel.zig");
 const std = @import("std");
+const SocketDirectory = @import("SocketDirectory.zig");
 
 pub fn connect(io: std.Io, path: []const u8) !SocketChannel {
     _ = io;
@@ -54,16 +55,14 @@ pub fn connect(io: std.Io, path: []const u8) !SocketChannel {
 
 test "a missing local runtime has a stable error" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(
         &path_buffer,
         "{s}/runtime.sock",
-        .{directory_buffer[0..directory_len]},
+        .{temp.path()},
     );
     try std.testing.expectError(
         error.FileNotFound,

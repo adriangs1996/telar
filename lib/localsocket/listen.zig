@@ -1,6 +1,7 @@
 //! Backend ownership of the filesystem-backed Unix listener.
 
 const std = @import("std");
+const SocketDirectory = @import("SocketDirectory.zig");
 const builtin = @import("builtin");
 const LocalListener = @import("LocalListener.zig");
 const privatefile = @import("privatefile");
@@ -199,16 +200,14 @@ test "peer authentication rejects a different account" {
 
 test "a listener refuses a directory another account could rewrite" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
     var shared_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const shared = try std.fmt.bufPrintZ(
         &shared_buffer,
         "{s}/shared",
-        .{directory_buffer[0..directory_len]},
+        .{temp.path()},
     );
     try std.Io.Dir.createDirAbsolute(io, shared, std.Io.File.Permissions.fromMode(0o777));
     try std.testing.expectEqual(@as(c_int, 0), std.c.chmod(shared, 0o777));
@@ -223,31 +222,27 @@ test "a listener refuses a directory another account could rewrite" {
 
 test "a listener refuses a symlink as its endpoint directory" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
     try temp.dir.createDir(io, "real", std.Io.File.Permissions.fromMode(0o700));
     try temp.dir.symLink(io, "real", "alias", .{ .is_directory = true });
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}/alias/runtime.sock", .{directory_buffer[0..directory_len]});
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/alias/runtime.sock", .{temp.path()});
 
     try std.testing.expectError(error.InvalidEndpoint, LocalListener.listen(io, path));
 }
 
 test "a listener reclaims a socket left behind by a crashed process" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(
         &path_buffer,
         "{s}/stale.sock",
-        .{directory_buffer[0..directory_len]},
+        .{temp.path()},
     );
 
     const address = try localAddress(path);

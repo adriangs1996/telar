@@ -340,11 +340,15 @@ static IdxT choosePivot (IdxT lo, IdxT up, unsigned int rnd) {
 
 /*
 ** Quicksort algorithm (recursive function)
+** Telar: each partition charges one step per element to the count hook
+** through 'luaL_chargesteps', so one sort of a large table is bounded.
 */
-static void auxsort (lua_State *L, IdxT lo, IdxT up, unsigned rnd) {
+static void auxsort (lua_State *L, IdxT lo, IdxT up, unsigned rnd,
+                     size_t *steps) {
   while (lo < up) {  /* loop for tail recursion */
     IdxT p;  /* Pivot index */
     IdxT n;  /* to be used later */
+    luaL_chargesteps(L, steps, (size_t)(up - lo) + 1);
     /* sort elements 'lo', 'p', and 'up' */
     geti(L, 1, lo);
     geti(L, 1, up);
@@ -379,12 +383,12 @@ static void auxsort (lua_State *L, IdxT lo, IdxT up, unsigned rnd) {
     p = partition(L, lo, up);
     /* a[lo .. p - 1] <= a[p] == P <= a[p + 1 .. up] */
     if (p - lo < up - p) {  /* lower interval is smaller? */
-      auxsort(L, lo, p - 1, rnd);  /* call recursively for lower interval */
+      auxsort(L, lo, p - 1, rnd, steps);  /* call recursively for lower interval */
       n = p - lo;  /* size of smaller interval */
       lo = p + 1;  /* tail call for [p + 1 .. up] (upper interval) */
     }
     else {
-      auxsort(L, p + 1, up, rnd);  /* call recursively for upper interval */
+      auxsort(L, p + 1, up, rnd, steps);  /* call recursively for upper interval */
       n = up - p;  /* size of smaller interval */
       up = p - 1;  /* tail call for [lo .. p - 1]  (lower interval) */
     }
@@ -395,13 +399,14 @@ static void auxsort (lua_State *L, IdxT lo, IdxT up, unsigned rnd) {
 
 
 static int sort (lua_State *L) {
+  size_t steps = 0;  /* telar: see 'auxsort' */
   lua_Integer n = aux_getn(L, 1, TAB_RW);
   if (n > 1) {  /* non-trivial interval? */
     luaL_argcheck(L, n < INT_MAX, 1, "array too big");
     if (!lua_isnoneornil(L, 2))  /* is there a 2nd argument? */
       luaL_checktype(L, 2, LUA_TFUNCTION);  /* must be a function */
     lua_settop(L, 2);  /* make sure there are two arguments */
-    auxsort(L, 1, (IdxT)n, 0);
+    auxsort(L, 1, (IdxT)n, 0, &steps);
   }
   return 0;
 }

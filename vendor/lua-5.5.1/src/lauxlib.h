@@ -244,6 +244,11 @@ typedef struct luaL_Stream {
 /* }====================================================== */
 
 
+/* telar: see 'luaL_chargesteps' in lauxlib.c */
+LUALIB_API void (luaL_chargesteps) (lua_State *L, size_t *steps,
+                                    size_t amount);
+
+
 /*
 ** {============================================================
 ** Compatibility with deprecated conversions

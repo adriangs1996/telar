@@ -6,6 +6,7 @@ const core = @import("telar-core");
 const backend = @import("telar-backend");
 const client_module = @import("telar-client");
 const std = @import("std");
+const SocketDirectory = localsocket.SocketDirectory;
 const HandshakeWorker = @import("HandshakeWorker.zig");
 const RuntimeTestChannel = @import("RuntimeTestChannel.zig");
 
@@ -43,12 +44,10 @@ fn waitForFile(io: std.Io, path: []const u8, attempts: usize) !bool {
 
 test "client and runtime exchange framed messages over a local socket" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
 
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/transport.sock", .{directory});
@@ -84,12 +83,10 @@ test "client and runtime exchange framed messages over a local socket" {
 
 test "a second backend cannot replace a live endpoint" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
 
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/transport.sock", .{directory});
@@ -108,12 +105,10 @@ test "a second backend cannot replace a live endpoint" {
 
 test "client and runtime accept the same schema" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/handshake.sock", .{directory});
 
@@ -146,12 +141,10 @@ test "client and runtime accept the same schema" {
 
 test "backend explains an incompatible schema" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/handshake.sock", .{directory});
 
@@ -192,16 +185,14 @@ test "runtime stops with a live pane and removes its endpoint" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(
         &path_buffer,
         "{s}/stoppable.sock",
-        .{directory_buffer[0..directory_len]},
+        .{temp.path()},
     );
 
     var stop_storage: [1]u8 = undefined;
@@ -224,7 +215,7 @@ test "runtime stops with a live pane and removes its endpoint" {
     try primary.send(io, try schema.encodeOpenPane(&send_buffer, .{
         .request_id = @enumFromInt(1),
         .size = .{ .cols = 40, .rows = 8 },
-        .launch = .{ .cwd = directory_buffer[0..directory_len], .arguments = &arguments },
+        .launch = .{ .cwd = temp.path(), .arguments = &arguments },
     }));
 
     var receive_buffer: [4096]u8 = undefined;
@@ -273,12 +264,10 @@ test "invalid launch cwd fails before workspace commit" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var socket_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const socket_path = try std.fmt.bufPrint(&socket_buffer, "{s}/invalid-cwd.sock", .{directory});
     var missing_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -349,12 +338,10 @@ fn expectPartialLaunchRecovery(phase: backend.LaunchPhase) !void {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/launch-fault.sock", .{directory});
 
@@ -446,12 +433,10 @@ test "runtime destroys a pane after its shell exits" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/runtime.sock", .{directory});
 
@@ -581,12 +566,10 @@ test "the last pane closes only its tab when the workspace has another tab" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/tab-exit.sock", .{directory});
 
@@ -682,12 +665,10 @@ test "an exited detached pane removes its tab and workspace" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/detached-exit.sock", .{directory});
 
@@ -743,12 +724,10 @@ test "one client drives two attached panes and closes either one" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/multi-pane.sock", .{directory});
 
@@ -902,12 +881,10 @@ test "pane keeps running while its client is disconnected" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/persistent.sock", .{directory});
     var release_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -1034,12 +1011,10 @@ test "runtime keeps independent panes for different workspaces" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/workspaces.sock", .{directory});
 
@@ -1117,12 +1092,10 @@ test "explicit workspace creation and selection use identity instead of path" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/workspace-identity.sock", .{directory});
 
@@ -1278,12 +1251,10 @@ test "tab launch inherits cwd from a runtime-owned pane" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var nested_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const nested = try std.fmt.bufPrint(&nested_buffer, "{s}/nested", .{directory});
     try std.Io.Dir.cwd().createDir(io, nested, std.Io.File.Permissions.fromMode(0o700));
@@ -1397,12 +1368,10 @@ test "runtime owns the complete tab lifecycle" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/tabs.sock", .{directory});
 
@@ -1542,12 +1511,10 @@ test "runtime retains a terminal layout across client reconnection" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/client-layout.sock", .{directory});
 
@@ -1670,12 +1637,10 @@ test "a reconnect restores tab order labels and pane membership" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/tab-reconnect.sock", .{directory});
 
@@ -1817,12 +1782,10 @@ test "an identical pane resize does not emit another snapshot" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/same-resize.sock", .{directory});
 
@@ -1902,12 +1865,10 @@ test "runtime persists terminal-edited commands without shell integration" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var socket_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const socket_path = try std.fmt.bufPrint(
         &socket_buffer,
@@ -2032,12 +1993,10 @@ test "modified Enter follows the compatibility profile and child keyboard negoti
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var socket_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const socket_path = try std.fmt.bufPrint(&socket_buffer, "{s}/keyboard.sock", .{directory});
     var stop_storage: [1]u8 = undefined;
@@ -2136,12 +2095,10 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var socket_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const socket_path = try std.fmt.bufPrint(&socket_buffer, "{s}/ingest.sock", .{directory});
     var sentinel_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -2257,12 +2214,10 @@ fn expectGraphicsRoundtrip(comptime transmission: []const u8) !void {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var socket_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const socket_path = try std.fmt.bufPrint(&socket_buffer, "{s}/graphics.sock", .{directory});
 
@@ -2386,12 +2341,10 @@ test "a silent connection cannot starve later clients" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/starve.sock", .{directory});
 
@@ -2440,12 +2393,10 @@ test "input to one pane flows while another pane's PTY is wedged" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/wedged.sock", .{directory});
     var sentinel_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -2554,12 +2505,10 @@ test "two clients observe one pane with independent frame acknowledgement" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/multi-client.sock", .{directory});
 
@@ -2743,12 +2692,10 @@ test "a stale attachment command does not disconnect the client" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
+    const directory = temp.path();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/stale-command.sock", .{directory});
 
@@ -2796,16 +2743,14 @@ test "runtime broadcasts a bounded notification and acknowledges delivery" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.root;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(
         &path_buffer,
         "{s}/notification.sock",
-        .{directory_buffer[0..directory_len]},
+        .{temp.path()},
     );
 
     var stop_storage: [1]u8 = undefined;

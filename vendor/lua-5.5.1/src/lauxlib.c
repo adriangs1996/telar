@@ -29,6 +29,34 @@
 
 
 /*
+** Telar: charges work done inside one library call to the count hook. Lua
+** runs that hook only between VM instructions, so a single call that
+** backtracks, compares long strings or sorts a large table would run
+** without any bound. '*steps' holds the steps not yet charged; every
+** 'hookcount' steps call the hook once more, as that many instructions
+** would, and the host's hook may raise an error there. The hook receives
+** only 'event'; it must not ask 'lua_getinfo' about the call.
+*/
+LUALIB_API void luaL_chargesteps (lua_State *L, size_t *steps, size_t amount) {
+  lua_Hook hook = lua_gethook(L);
+  size_t count;
+  if (hook == NULL || !(lua_gethookmask(L) & LUA_MASKCOUNT))
+    return;
+  count = (size_t)lua_gethookcount(L);
+  if (count == 0)
+    return;
+  *steps += amount;
+  while (*steps >= count) {
+    lua_Debug ar;
+    memset(&ar, 0, sizeof(ar));
+    ar.event = LUA_HOOKCOUNT;
+    *steps -= count;
+    hook(L, &ar);
+  }
+}
+
+
+/*
 ** {======================================================
 ** Traceback
 ** =======================================================

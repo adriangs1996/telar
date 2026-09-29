@@ -6,6 +6,16 @@ const Exchange = @import("Exchange.zig");
 const Batch = @import("Batch.zig");
 const Host = @This();
 
+// A listener's budget per event. As in configuration, instructions bound the
+// work and the deadline is only a safety net: five million allocating
+// instructions take about 110 ms in a release build, so a deadline near that
+// would drop valid events whenever the machine is busy.
+const limits: lua.Limits = .{
+    .memory = 64 * 1024 * 1024,
+    .instructions = 5_000_000,
+    .deadline_after_ns = 2 * std.time.ns_per_s,
+};
+
 io: std.Io,
 gpa: std.mem.Allocator,
 vm: *lua.Vm,
@@ -22,11 +32,7 @@ pub fn initWithResources(io: std.Io, gpa: std.mem.Allocator, entry_path: []const
     var host: Host = .{
         .io = io,
         .gpa = gpa,
-        .vm = try lua.Vm.init(io, gpa, .{
-            .memory = 64 * 1024 * 1024,
-            .instructions = 5_000_000,
-            .deadline_after_ns = 200 * std.time.ns_per_ms,
-        }),
+        .vm = try lua.Vm.init(io, gpa, limits),
         .package_root = try gpa.dupe(u8, root),
     };
     errdefer host.deinit();
@@ -75,7 +81,7 @@ fn installRequire(self: *Host) void {
 fn loadPlugin(self: *Host, entry_path: []const u8) !void {
     const source = try std.Io.Dir.cwd().readFileAlloc(self.io, entry_path, self.gpa, .limited(host_support.max_entry_bytes));
     defer self.gpa.free(source);
-    self.vm.resetBudget(5_000_000, 200 * std.time.ns_per_ms);
+    self.vm.resetBudget(limits.instructions, limits.deadline_after_ns);
     try self.vm.evaluate(source, "@tap-plugin.lua");
     const state = self.vm.state;
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TTABLE) {
@@ -93,7 +99,7 @@ pub fn invoke(self: *Host, exchange: Exchange) !Batch {
     const state = self.vm.state;
     lua_api.c.lua_settop(state, 0);
     defer lua_api.c.lua_settop(state, 0);
-    self.vm.resetBudget(5_000_000, 200 * std.time.ns_per_ms);
+    self.vm.resetBudget(limits.instructions, limits.deadline_after_ns);
     _ = lua_api.c.lua_rawgeti(state, lua_api.c.LUA_REGISTRYINDEX, self.callback_ref);
     host_support.pushExchange(state, exchange);
     if (lua_api.c.lua_pcallk(state, 1, 1, 0, 0, null) != lua_api.c.LUA_OK) {

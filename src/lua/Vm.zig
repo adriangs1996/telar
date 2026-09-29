@@ -118,6 +118,9 @@ fn allocate(userdata: ?*anyopaque, pointer: ?*anyopaque, old_size: usize, new_si
     return result;
 }
 
+// Lua calls this every `hook_instruction_interval` instructions, and the
+// vendored `luaL_chargesteps` every as many steps of pattern matching or
+// sorting, with only the event set; it reads nothing else from the record.
 fn instructionHook(state: ?*lua_api.c.lua_State, _: ?*lua_api.c.lua_Debug) callconv(.c) void {
     const vm = of(state.?);
     vm.instruction_count +|= vm_support.hook_instruction_interval;

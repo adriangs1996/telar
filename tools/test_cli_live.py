@@ -7,6 +7,7 @@ All sockets, configuration, plugins and persistent data live in temporary paths.
 
 import json
 import os
+import pty
 from pathlib import Path
 import shutil
 import subprocess
@@ -119,6 +120,62 @@ class LiveCliTest(unittest.TestCase):
         self.assertTrue(self.call("diagnostics", "logs", "--component", "runtime", "--lines", 2))
         self.call("tab", "close", tab, "--workspace", workspace)
         self.assertEqual(self.call("workspace", "list"), [])
+
+    def git(self, *arguments, cwd):
+        identity = ["-c", "user.name=telar", "-c", "user.email=telar@localhost", "-c", "commit.gpgsign=false"]
+        subprocess.run(["git", *identity, *arguments], cwd=cwd, check=True, capture_output=True, timeout=12)
+
+    def branches(self, repository):
+        result = subprocess.run(
+            ["git", "branch", "--format=%(refname:short)"], cwd=repository,
+            check=True, capture_output=True, text=True, timeout=12,
+        )
+        return result.stdout.split()
+
+    def remove_worktree(self, branch, answer=None):
+        """`worktree remove --delete-branch`, on a terminal that types `answer` when given."""
+        command = [str(BINARY), "worktree", "remove", branch, "--delete-branch", "--socket", str(self.endpoint)]
+        if answer is None:
+            return subprocess.run(
+                command, cwd=self.root, env=self.environment, stdin=subprocess.DEVNULL,
+                capture_output=True, text=True, timeout=12,
+            )
+        controller, terminal = pty.openpty()
+        try:
+            os.write(controller, answer.encode())
+            return subprocess.run(
+                command, cwd=self.root, env=self.environment, stdin=terminal,
+                capture_output=True, text=True, timeout=12,
+            )
+        finally:
+            os.close(terminal)
+            os.close(controller)
+
+    def test_worktree_remove_deletes_a_merged_branch_alone_and_an_unmerged_one_on_a_yes(self):
+        repository = self.root / "repo"
+        repository.mkdir()
+        self.git("init", "-q", "-b", "main", cwd=repository)
+        self.git("commit", "-q", "--allow-empty", "-m", "one", cwd=repository)
+        self.call("workspace", "create", "--directory", repository, "--name", "repo")
+        for branch in ("landed", "kept", "confirmed"):
+            self.call("worktree", "create", branch, "--title", branch, "--workspace", repository)
+            self.git("commit", "-q", "--allow-empty", "-m", branch, cwd=self.root / "repo-worktrees" / branch)
+        self.git("merge", "-q", "--ff-only", "landed", cwd=repository)
+
+        merged = self.remove_worktree("landed")
+        self.assertEqual(merged.returncode, 0, merged.stderr)
+        self.assertNotIn("landed", self.branches(repository))
+
+        unattended = self.remove_worktree("kept")
+        self.assertNotEqual(unattended.returncode, 0)
+        self.assertIn("confirm it at a terminal", unattended.stderr)
+        self.assertIn("kept", self.branches(repository))
+        self.assertTrue((self.root / "repo-worktrees" / "kept").exists())
+
+        confirmed = self.remove_worktree("confirmed", answer="y\n")
+        self.assertEqual(confirmed.returncode, 0, confirmed.stderr)
+        self.assertNotIn("confirmed", self.branches(repository))
+        self.assertFalse((self.root / "repo-worktrees" / "confirmed").exists())
 
     def start_client(self):
         shutil.copytree(ROOT / "examples/plugins/sample", self.root / "plugin")

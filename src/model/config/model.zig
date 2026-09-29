@@ -7,8 +7,6 @@ const GenericBinding = keyinput.GenericBinding;
 const ProxyInterceptHosts = @import("ProxyInterceptHosts.zig");
 const std = @import("std");
 
-pub const default_memory_limit: usize = 16 * 1024 * 1024;
-pub const default_load_instruction_limit: u64 = 1_000_000;
 pub const max_bindings = 256;
 pub const max_binding_keys = 5;
 
