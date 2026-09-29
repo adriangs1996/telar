@@ -10,6 +10,7 @@ const Context = @import("Context.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const Label = @import("Label.zig");
+const SpriteSize = @import("../image/SpriteSize.zig").SpriteSize;
 const TextFit = @import("TextFit.zig");
 const attention = @import("attention.zig");
 const workspace_identity = @import("workspace_identity.zig");
@@ -41,9 +42,9 @@ pub fn draw(self: WorkspaceRow, canvas: *Canvas) !void {
     }
 
     const inset = canvas.chrome.px(12);
-    const icon_side = canvas.chrome.px(18);
-    const icon: Rect = .{ .x = bounds.x + inset, .y = bounds.y + (bounds.height - icon_side) / 2, .width = icon_side, .height = icon_side };
-    const sprite = if (self.context.favicons) |favicons| favicons.sprite(.{ .workspace = workspace }) else null;
+    const side = @round(canvas.chrome.px(SpriteSize.medium.logical()));
+    const icon: Rect = .{ .x = bounds.x + inset, .y = bounds.y + (bounds.height - side) / 2, .width = side, .height = side };
+    const sprite = if (self.context.favicons) |favicons| favicons.sprite(.{ .workspace = workspace }, .medium) else null;
     if (sprite) |value| {
         try canvas.spriteTintedAt(icon, .{ .sprite = value, .alpha = if (selected) 1 else 0.5 });
     } else {

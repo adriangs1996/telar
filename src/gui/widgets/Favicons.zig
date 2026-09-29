@@ -1,15 +1,16 @@
 //! Disposable GUI registry of workspace favicons: which workspace has a
 //! sprite, which still needs a lookup and the one landed image waiting to
 //! be placed into the renderer's page. Bounded to the workspace list size;
-//! a page rebuilt at another scale forgets every placement so the lookups
-//! run again against the new cell size. Nothing here allocates on a warm
-//! frame: placement copies one cell and a lookup starts at most once per
+//! a page rebuilt at another ratio forgets every placement so the lookups
+//! run again against the new cell sizes. Nothing here allocates on a warm
+//! frame: placement copies one slot and a lookup starts at most once per
 //! workspace per page.
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const SpritePage = @import("../image/SpritePage.zig");
 const Sprite = @import("../image/Sprite.zig");
+const SpriteSize = @import("../image/SpriteSize.zig").SpriteSize;
 const Entry = @import("FaviconEntry.zig");
 const Landing = @import("FaviconLanding.zig");
 const Want = @import("FaviconWant.zig");
@@ -53,13 +54,18 @@ pub fn refresh(self: *Favicons, gpa: std.mem.Allocator, page: *SpritePage) void 
         entry.state = .missing;
         return;
     };
-    const side: u32 = image.side;
-    if (side != page.cell) {
-        entry.state = .wanted;
-        return;
+    var images: SpritePage.Images = undefined;
+    for (SpriteSize.all, &images, 0..) |size, *view, index| {
+        const side: u32 = image.sides[index];
+        if (side != page.cell(size)) {
+            entry.state = .wanted;
+            return;
+        }
+
+        view.* = .{ .pixels = image.slice(index), .stride = side * 4, .width = side, .height = side };
     }
 
-    entry.sprite = page.addFavicon(.{ .pixels = image.slice(), .stride = side * 4, .width = side, .height = side }) catch |err| {
+    entry.slot = page.addFavicon(images) catch |err| {
         entry.state = if (err == error.SheetFull) .full else .missing;
         return;
     };
@@ -89,17 +95,24 @@ pub fn started(self: *Favicons, workspace: core.WorkspaceId) void {
     }
 }
 
-/// The placed favicon of a location; worktrees and unresolved workspaces
-/// draw the generic glyph.
-/// Example: `card.project_icon = favicons.sprite(agent.location.workspace);`
-pub fn sprite(self: *const Favicons, location: core.WorkspaceLocation) ?Sprite {
+/// The placed favicon of a location at one size; worktrees and unresolved
+/// workspaces draw the generic glyph.
+/// Example: `card.project_icon = favicons.sprite(agent.location.workspace, .small);`
+pub fn sprite(self: *const Favicons, location: core.WorkspaceLocation, size: SpriteSize) ?Sprite {
     const workspace = switch (location) {
         .workspace => |id| id,
         .worktree => return null,
     };
     for (self.entries[0..self.count]) |entry| {
         if (entry.workspace == workspace) {
-            return if (entry.state == .resolved) entry.sprite else null;
+            if (entry.state != .resolved) {
+                return null;
+            }
+
+            return .{
+                .index = entry.slot,
+                .size = size,
+            };
         }
     }
 

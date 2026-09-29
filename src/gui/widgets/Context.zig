@@ -5,6 +5,7 @@ const action_module = @import("action.zig");
 const std = @import("std");
 const HitMap = @import("HitMap.zig");
 const BandHitMap = @import("BandHitMap.zig");
+const BandPlacement = @import("BandPlacement.zig").BandPlacement;
 const client = @import("telar-client");
 const AgentAges = @import("AgentAges.zig");
 const SidebarRegions = @import("SidebarRegions.zig");
@@ -18,6 +19,8 @@ hits: *HitMap,
 bands: *BandHitMap,
 projection: *const client.Projection,
 hovered: ?action_module.Action,
+/// Which of the controls sharing `hovered` the pointer rests on.
+hovered_placement: BandPlacement = .primary,
 /// Last delivered project identity, used only during the empty handoff frame.
 presented_workspace: ?core.WorkspaceId = null,
 sidebar_regions: ?*const SidebarRegions = null,
@@ -57,5 +60,12 @@ pub fn statusAgeAt(self: *const Context, index: usize) u32 {
 /// Compares the delivered hover identity with a semantic control action.
 /// Example: `const hovered = context.isHovered(.{ .intent = .toggle_sidebar });`
 pub fn isHovered(self: *const Context, action: action_module.Action) bool {
-    return if (self.hovered) |value| std.meta.eql(value, action) else false;
+    return self.isHoveredAt(action, .primary);
+}
+
+/// Tells apart the controls that share an action by their placement.
+/// Example: `const hovered = context.isHoveredAt(.{ .intent = .machine_picker }, .machine_fold);`
+pub fn isHoveredAt(self: *const Context, action: action_module.Action, placement: BandPlacement) bool {
+    const hovered = self.hovered orelse return false;
+    return self.hovered_placement == placement and std.meta.eql(hovered, action);
 }

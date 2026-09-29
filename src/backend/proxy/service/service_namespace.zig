@@ -14,6 +14,6 @@ test {
     std.testing.refAllDecls(implementation);
     _ = service_test;
     _ = @import("listener_support.zig");
-    _ = @import("port_memory.zig");
+    _ = @import("PortMemory.zig");
     _ = @import("secret.zig");
 }

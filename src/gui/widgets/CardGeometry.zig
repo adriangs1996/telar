@@ -5,6 +5,7 @@ const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const Metrics = @import("../TerminalMetrics.zig");
 const ChromeMetrics = @import("ChromeMetrics.zig");
+const SpriteSize = @import("../image/SpriteSize.zig").SpriteSize;
 const client = @import("telar-client");
 const FleetCard = client.FleetCard;
 const CardGeometry = @This();
@@ -14,7 +15,8 @@ pub const padding_y: f32 = 8;
 pub const spacing: f32 = 3;
 pub const radius: f32 = 8;
 pub const gap: f32 = 6;
-pub const mark_size: f32 = 14;
+/// The provider mark and the project favicon: the favicon's `small` cell.
+pub const mark_size: f32 = SpriteSize.small.logical();
 pub const compact_padding_y: f32 = 4;
 /// Indent of a task under its project's own agents.
 pub const task_indent: f32 = 12;

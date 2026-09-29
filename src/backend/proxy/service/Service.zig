@@ -13,7 +13,7 @@ const Half = owned.Half;
 const Snapshot = @import("../Snapshot.zig");
 const identity = @import("../identity.zig");
 const secret_store = @import("secret.zig");
-const port_memory = @import("port_memory.zig");
+const PortMemory = @import("PortMemory.zig");
 const Service = @This();
 
 io: std.Io,
@@ -22,6 +22,9 @@ listener: Listener,
 interception: Interception,
 /// The one secret every child of this runtime authenticates with.
 secret: identity.Secret,
+/// The port this runtime tried first; null when it remembered none. A
+/// bound port that differs means another process held this one.
+preferred_port: ?u16,
 captures: Producer = undefined,
 connection_slots: Slots = .init(service_support.max_connections),
 telemetry: Counters = .{},
@@ -31,7 +34,8 @@ worker: ?service_support.Worker = null,
 
 /// Builds the loopback listener and every bounded dependency without
 /// starting concurrent traffic: the secret is read or created, and the
-/// listener prefers the port remembered from the last start. Ownership
+/// listener prefers the port this runtime remembered from its last start
+/// and avoids the ports other runtimes remember. Ownership
 /// transfers to the returned service on success.
 ///
 /// ```zig
@@ -45,9 +49,10 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
     var secret = try secret_store.ensure(io, paths.secret);
     defer std.crypto.secureZero(u8, &secret);
 
-    var listener = try Listener.bind(io, port_memory.recall(io, paths.port));
+    const memory = PortMemory.load(io, paths);
+    var listener = try Listener.bind(io, memory.preferred(), &memory.reserved);
     errdefer listener.deinit(io);
-    port_memory.remember(io, paths.port, listener.port());
+    memory.remember(io, paths, listener.port());
 
     const service = try gpa.create(Service);
     errdefer gpa.destroy(service);
@@ -57,6 +62,7 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
         .listener = listener,
         .interception = interception,
         .secret = secret,
+        .preferred_port = memory.preferred(),
     };
     try service.captures.init(gpa, paths.capture);
 

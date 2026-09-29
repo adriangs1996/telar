@@ -89,6 +89,7 @@ pub fn draw(self: MachineSwitcher, canvas: *Canvas) !void {
         .context = self.context,
         .area = .{ .x = left, .y = self.area.y, .width = @max(0, @min(more_reserve, right - left)), .height = self.area.height },
         .intent = .machine_picker,
+        .placement = .machine_fold,
         .text = more,
         .background = false,
         .hover_fill = true,

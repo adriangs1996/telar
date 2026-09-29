@@ -18,6 +18,7 @@ pub const Initialization = @import("runtime/Initialization.zig");
 pub const LaunchPhase = model.LaunchPhase;
 pub const LaunchTestFault = @import("runtime/LaunchTestFault.zig");
 pub const Pipeline = @import("media/Pipeline.zig");
+pub const ProxyPortMemory = @import("proxy/service/PortMemory.zig");
 pub const Runtime = @import("runtime/Runtime.zig");
 pub const ServiceSpec = @import("plugins/ServiceSpec.zig");
 pub const SharedFrameView = @import("media/SharedFrameView.zig");

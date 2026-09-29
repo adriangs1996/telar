@@ -150,7 +150,7 @@ fn drawList(self: Sidebar, canvas: *Canvas, list: SidebarList) !void {
             .agent = agent,
             .geometry = geometry,
             .age_s = context.statusAgeAt(entry.index),
-            .project_icon = if (context.favicons) |favicons| favicons.sprite(agent.location.workspace) else null,
+            .project_icon = if (context.favicons) |favicons| favicons.sprite(agent.location.workspace, .small) else null,
         };
         try card.draw(canvas);
         canvas.quads.clipFrom(first, list.bounds);

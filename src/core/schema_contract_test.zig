@@ -871,7 +871,13 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "proxy_status", .direction = .server, .golden_hex = golden.proxy_status }, helper.commit(
-        try runtime.encodeProxyStatus(helper.space(), .{ .active = true, .scope = .wildcard, .system_trusted = true }),
+        try runtime.encodeProxyStatus(helper.space(), .{
+            .active = true,
+            .scope = .wildcard,
+            .system_trusted = true,
+            .port = 45105,
+            .preferred_port = 45104,
+        }),
     ));
     const agent_entries = [_]AgentSnapshotEntry{.{
         .pane_id = @enumFromInt(5),
@@ -1304,6 +1310,35 @@ test "pane frames preserve cursor appearance and reject unknown shapes and malfo
     buffer[shape_offset] = 0;
     buffer[blink_offset] = 2;
     try std.testing.expectError(error.InvalidBoolean, root.decodeServer(payload));
+}
+
+test "proxy status ports round trip and a preferred port needs a bound one" {
+    var buffer: [32]u8 = undefined;
+    const bound = try runtime.encodeProxyStatus(&buffer, .{
+        .active = true,
+        .scope = .exact,
+        .system_trusted = false,
+        .port = 45105,
+        .preferred_port = 45104,
+    });
+    const decoded = (try root.decodeServer(bound)).proxy_status;
+    try std.testing.expectEqual(@as(?u16, 45105), decoded.port);
+    try std.testing.expectEqual(@as(?u16, 45104), decoded.preferred_port);
+
+    var disabled_buffer: [32]u8 = undefined;
+    const disabled = try runtime.encodeProxyStatus(&disabled_buffer, .{
+        .active = false,
+        .scope = .exact,
+        .system_trusted = false,
+    });
+    try std.testing.expect((try root.decodeServer(disabled)).proxy_status.port == null);
+
+    var forged: [32]u8 = undefined;
+    @memcpy(forged[0..disabled.len], disabled);
+    forged[disabled.len - 1] = 1;
+    forged[disabled.len] = 0x30;
+    forged[disabled.len + 1] = 0xb0;
+    try std.testing.expectError(error.InvalidProxyStatus, root.decodeServer(forged[0 .. disabled.len + 2]));
 }
 
 test "golden corpus bytes are stable" {

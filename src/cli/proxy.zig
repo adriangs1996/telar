@@ -9,6 +9,7 @@ const Inspection = @import("Inspection.zig");
 const InstallOptions = @import("InstallOptions.zig");
 const PreparedAuthority = @import("PreparedAuthority.zig");
 const proxy_module = @import("arguments/proxy.zig");
+const server = @import("server.zig");
 const builtin = @import("builtin");
 const AuthorityTarget = @import("AuthorityTarget.zig");
 const Record = @import("Record.zig");
@@ -48,7 +49,7 @@ pub fn run(init: std.process.Init, options: ProxyOptions) !u8 {
     const directory = if (options.ca_dir) |value|
         std.mem.span(value)
     else
-        try defaultDirectory(init.minimal.environ, &directory_buffer);
+        try server.resolveProxyDirectory(init.minimal.environ, &directory_buffer);
     if (!std.fs.path.isAbsolute(directory)) {
         std.debug.print("telar proxy trust: --ca-dir must be absolute\n", .{});
         return 1;
@@ -501,20 +502,6 @@ fn validateDirectoryOwner(io: std.Io, directory: []const u8) !void {
     }
 }
 
-fn defaultDirectory(environ: std.process.Environ, buffer: []u8) ![]const u8 {
-    if (environ.getPosix("XDG_DATA_HOME")) |base| {
-        if (base.len != 0) {
-            return std.fmt.bufPrint(buffer, "{s}/telar/proxy", .{base});
-        }
-    }
-
-    const home = environ.getPosix("HOME") orelse return error.HomeUnavailable;
-    if (home.len == 0) {
-        return error.HomeUnavailable;
-    }
-    return std.fmt.bufPrint(buffer, "{s}/.local/share/telar/proxy", .{home});
-}
-
 fn printFirefoxNotice(writer: *std.Io.Writer, certificate: []const u8) !void {
     try writer.print("Firefox may use its own certificate store; import {s} there if it does not honor OS trust.\n", .{certificate});
 }
@@ -537,17 +524,6 @@ test "trust records round trip with owner-only permissions" {
     try std.testing.expectEqualStrings(record.storePath(), loaded.storePath());
     const stat = try std.Io.Dir.cwd().statFile(io, paths.recordPath(), .{ .follow_symlinks = false });
     try std.testing.expectEqual(@as(u32, 0o600), stat.permissions.toMode() & 0o777);
-}
-
-test "default proxy trust directory follows XDG then HOME" {
-    var environment = std.process.Environ.Map.init(std.testing.allocator);
-    defer environment.deinit();
-    try environment.put("HOME", "/home/test");
-    try environment.put("XDG_DATA_HOME", "/data");
-    const block = try environment.createPosixBlock(std.testing.allocator, .{});
-    defer block.deinit(std.testing.allocator);
-    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-    try std.testing.expectEqualStrings("/data/telar/proxy", try defaultDirectory(.{ .block = block }, &buffer));
 }
 
 test "inspection accepts only the recorded short-lived authority" {

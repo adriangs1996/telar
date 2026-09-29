@@ -19,8 +19,9 @@ runtime proxy configuration → runtime delivery → proxy_status
 
 The proxy configuration does not change during one runtime process. After a
 client requests runtime state, `Delivery.prepare` sends the active bit, scope
-enum, and system-trust bit once and records delivery only after the send
-commits. The message needs no
+enum, system-trust bit, and the bound and preferred ports once and records
+delivery only after the send commits. The window ignores the ports; `telar
+runtime status` prints them (see [Proxy port](proxy-port.md)). The message needs no
 runtime revision because a connected runtime cannot publish a second source
 state.
 

@@ -14,6 +14,7 @@ const Context = @import("Context.zig");
 const PixelButton = @import("PixelButton.zig");
 const WorkspaceMark = @import("WorkspaceMark.zig");
 const WorkspaceWindow = @import("WorkspaceWindow.zig");
+const SpriteSize = @import("../image/SpriteSize.zig").SpriteSize;
 const WorkspaceRail = @This();
 
 /// Logical side of one workspace mark's control.
@@ -22,7 +23,6 @@ pub const button: f32 = 36;
 pub const button_gap: f32 = 10;
 const inset: f32 = 12;
 const radius: f32 = 10;
-const mark_side: f32 = 20;
 const accent_width: f32 = 3;
 const accent_height: f32 = 20;
 const dot_side: f32 = 7;
@@ -119,13 +119,14 @@ fn drawMark(self: WorkspaceRail, canvas: *Canvas, bounds: Rect, index: usize) !v
         canvas.quads.clipFrom(first, self.area);
     }
 
-    const side = @min(chrome.px(mark_side), bounds.width);
+    const side = @min(@round(chrome.px(SpriteSize.large.logical())), bounds.width);
     const mark: WorkspaceMark = .{
         .context = context,
         .workspace = id,
         .bounds = .{ .x = bounds.x + (bounds.width - side) / 2, .y = bounds.y + (bounds.height - side) / 2, .width = side, .height = side },
         .ink = if (selected or hovered) palette.text else palette.subtext0,
         .emphasized = selected or hovered,
+        .sprite_size = .large,
         .size = .body,
         .name = projection.workspaces.nameAt(index),
     };

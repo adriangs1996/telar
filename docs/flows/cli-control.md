@@ -18,7 +18,9 @@ and malformed messages fail the command rather than returning partial success.
 `RuntimeConnector`, sends `request_runtime_state`, and prints the returned
 `proxy_status` together with the negotiated schema version. A successful
 handshake establishes that the runtime is running. Status does not claim that
-a disabled proxy is active or that an uninstalled CA is trusted.
+a disabled proxy is active or that an uninstalled CA is trusted. An active
+proxy adds its port, with a warning when the port the runtime remembered was
+held by another process (see [Proxy port](proxy-port.md)).
 
 Parser and JSON tests run under `zig build test-cli`. The socket contract and
 absence of auto-start are exercised by `python3 tools/test_cli_control.py`

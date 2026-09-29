@@ -25,6 +25,17 @@ pub fn resolveEndpoint(environ: std.process.Environ, override: ?[*:0]const u8) !
         }
     }
 
+    return defaultEndpoint(environ);
+}
+
+/// The endpoint of the runtime nothing names explicitly: the socket in
+/// Telar's managed directory, which the user's own runtime always listens on.
+/// A runtime compares its socket against it to know it is that one.
+///
+/// ```zig
+/// const own = try runtime_connection.defaultEndpoint(environ);
+/// ```
+pub fn defaultEndpoint(environ: std.process.Environ) !localsocket.Local {
     if (std.process.Environ.getPosix(environ, "XDG_RUNTIME_DIR")) |base| {
         if (base.len != 0) {
             return localsocket.Local.managed(base, "telar");
@@ -40,6 +51,22 @@ pub fn resolveEndpoint(environ: std.process.Environ, override: ?[*:0]const u8) !
     }
 
     return localsocket.Local.managed("/tmp", directory_name);
+}
+
+test "the default endpoint ignores the sockets a pane or a user names" {
+    var environment = std.process.Environ.Map.init(std.testing.allocator);
+    defer environment.deinit();
+    try environment.put("TELAR_SOCKET", "/telar.sock");
+    try environment.put("TELAR_SOCKET_PATH", "/pane.sock");
+    try environment.put("XDG_RUNTIME_DIR", "/run/user/42");
+    const block = try environment.createPosixBlock(std.testing.allocator, .{});
+    defer block.deinit(std.testing.allocator);
+
+    const named = try resolveEndpoint(.{ .block = block }, null);
+    const default = try defaultEndpoint(.{ .block = block });
+
+    try std.testing.expectEqualStrings("/telar.sock", named.path());
+    try std.testing.expectEqualStrings("/run/user/42/telar/runtime.sock", default.path());
 }
 
 test "an explicit runtime endpoint overrides the environment" {

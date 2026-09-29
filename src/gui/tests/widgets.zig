@@ -68,7 +68,7 @@ test "warm widget drawing uses the supplied canvas without allocations" {
 test "sprite widgets keep page selection tint and placement inside a composed list" {
     var fixture = try CanvasFixture.init();
     defer fixture.deinit();
-    var page = try SpritePage.init(std.testing.allocator, 16);
+    var page = try SpritePage.init(std.testing.allocator, 1);
     defer page.deinit();
     var canvas = fixture.canvas();
     canvas.sprites = &page;

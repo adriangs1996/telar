@@ -9,6 +9,7 @@ const client = @import("telar-client");
 const CanvasFixture = @import("CanvasFixture.zig");
 const Session = @import("Session.zig");
 const SpritePage = @import("../image/SpritePage.zig");
+const Sprite = @import("../image/Sprite.zig");
 const gfx = @import("gfx");
 const Quad = gfx.Quad.Quad;
 const quad = gfx.Quad;
@@ -32,10 +33,10 @@ test "the renderer builds the page with the atlas and versions it per change" {
     defer session.deinit();
     const renderer = &session.gui.renderer;
     const page = &renderer.sprites.?;
-    try std.testing.expectEqual(SpritePage.cellFor(1), page.cell);
+    try std.testing.expectEqualSlices(u16, &SpritePage.cellsFor(renderer.chrome.ratio), &page.cells);
     try std.testing.expectEqual(SpritePage.provider_mark_count, page.count);
     var frame = renderer.frame(1);
-    try std.testing.expectEqual(SpritePage.side, frame.sprites_side);
+    try std.testing.expectEqual(page.side, frame.sprites_side);
     try std.testing.expect(frame.sprites != null);
     renderer.seal();
     const version = renderer.sprites_version;
@@ -43,27 +44,26 @@ test "the renderer builds the page with the atlas and versions it per change" {
     renderer.seal();
     try std.testing.expectEqual(version, renderer.sprites_version);
 
-    const cell = page.cell;
-    const pixels = try std.testing.allocator.alloc(u8, cell * cell * 4);
-    defer std.testing.allocator.free(pixels);
-    @memset(pixels, 200);
-    _ = try page.addFavicon(.{ .pixels = pixels, .stride = cell * 4, .width = cell, .height = cell });
+    _ = try placeFavicon(page, 200);
     renderer.seal();
     try std.testing.expectEqual(version + 1, renderer.sprites_version);
     frame = renderer.frame(2);
     try std.testing.expectEqual(version + 1, frame.sprites_version);
 
     // A new scale rebuilds the page at its cell with the provider marks only.
+    const ratio = renderer.chrome.ratio;
     _ = try renderer.measure(.{ .width = 360, .height = 480, .scale = 2 });
-    try std.testing.expectEqual(SpritePage.cellFor(2), renderer.sprites.?.cell);
+    try std.testing.expectEqual(2 * ratio, renderer.chrome.ratio);
+    try std.testing.expectEqualSlices(u16, &SpritePage.cellsFor(renderer.chrome.ratio), &renderer.sprites.?.cells);
     try std.testing.expectEqual(SpritePage.provider_mark_count, renderer.sprites.?.count);
+    try std.testing.expectEqual(renderer.sprites.?.side, renderer.frame(3).sprites_side);
     try std.testing.expectEqual(@as(u32, 0), renderer.last_sprites_version);
 }
 
 test "sprite quads carry the texture selector and plain quads stay on the atlas" {
     var fixture = try CanvasFixture.init();
     defer fixture.deinit();
-    var page = try SpritePage.init(std.testing.allocator, 16);
+    var page = try SpritePage.init(std.testing.allocator, 1);
     defer page.deinit();
     var canvas = fixture.canvas();
     canvas.sprites = &page;
@@ -145,16 +145,17 @@ test "the card draws the sheet mark for the three providers and an unboxed glyph
         }
     }
 
-    // A resolved favicon replaces the generic glyph with one sprite in row 1.
+    // A resolved favicon replaces the generic glyph with one sprite in row 1,
+    // drawn at its `small` cell one texel per pixel.
     renderer.quads.clear();
-    const cell = page.cell;
-    const pixels = try std.testing.allocator.alloc(u8, cell * cell * 4);
-    defer std.testing.allocator.free(pixels);
-    @memset(pixels, 255);
-    const icon = try page.addFavicon(.{ .pixels = pixels, .stride = cell * 4, .width = cell, .height = cell });
+    const icon: Sprite = .{
+        .index = try placeFavicon(page, 255),
+        .size = .small,
+    };
     const card: AgentCard = .{ .context = &context, .bounds = .{ .x = 100, .y = 100, .width = 300, .height = geometry.height() }, .agent = &agents.slice()[0], .geometry = geometry, .age_s = 1, .project_icon = icon };
     try card.draw(&canvas);
     try std.testing.expectEqual(@as(usize, 2), spriteCount(renderer.quads.items()));
+    try std.testing.expectEqual(@as(usize, 1), oneTexelPerPixel(renderer.quads.items(), page, icon));
 }
 
 test "a warm repaint with sprites shapes rasterizes and allocates nothing" {
@@ -212,16 +213,48 @@ const imaging = @import("imaging");
 const png = imaging.png;
 const favicon_worker = @import("../image/favicon_worker.zig");
 
-fn cellImage(side: u16, value: u8) !*client.FaviconImage {
+fn cellImage(sides: client.FaviconImage.Sides, value: u8) !*client.FaviconImage {
     const image = try std.testing.allocator.create(client.FaviconImage);
-    image.* = .{ .side = side };
-    @memset(image.mutableSlice(), value);
+    image.* = .{ .sides = sides };
+    for (0..sides.len) |index| {
+        @memset(image.mutableSlice(index), value);
+    }
+
     return image;
+}
+
+/// Places one flat favicon at every size of `page` and returns its slot.
+pub fn placeFavicon(page: *SpritePage, value: u8) !u16 {
+    const image = try cellImage(page.cells, value);
+    defer std.testing.allocator.destroy(image);
+    var images: SpritePage.Images = undefined;
+    for (&images, image.sides, 0..) |*view, side, index| {
+        view.* = .{ .pixels = image.slice(index), .stride = @as(u32, side) * 4, .width = side, .height = side };
+    }
+
+    return page.addFavicon(images);
+}
+
+/// Sprite quads that draw `sprite` at its cell's own side, snapped to whole
+/// pixels, so the GPU samples one texel per pixel.
+pub fn oneTexelPerPixel(quads: []const Quad, page: *const SpritePage, sprite: Sprite) usize {
+    const expected = page.uv(sprite);
+    const side: f32 = @floatFromInt(page.cell(sprite.size));
+    var count: usize = 0;
+    for (quads) |item| {
+        if (item.texture != quad.sprite_texture or !std.mem.eql(f32, &expected, &.{ item.u0, item.v0, item.u1, item.v1 })) {
+            continue;
+        }
+
+        count += @intFromBool(item.width == side and item.height == side and item.x == @floor(item.x) and item.y == @floor(item.y));
+    }
+
+    return count;
 }
 
 test "the registry places one landed image per workspace and forgets a rebuilt page" {
     const gpa = std.testing.allocator;
-    var page = try SpritePage.init(gpa, 16);
+    var page = try SpritePage.init(gpa, 1);
     defer page.deinit();
     var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
@@ -240,22 +273,23 @@ test "the registry places one landed image per workspace and forgets a rebuilt p
     favicons.started(@enumFromInt(2));
     try std.testing.expect(favicons.next(&workspaces) == null);
 
-    favicons.land(gpa, .{ .workspace = @enumFromInt(1), .image = try cellImage(16, 200) });
-    try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(1) }) == null);
+    favicons.land(gpa, .{ .workspace = @enumFromInt(1), .image = try cellImage(page.cells, 200) });
+    try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(1) }, .small) == null);
     favicons.refresh(gpa, &page);
-    const placed = favicons.sprite(.{ .workspace = @enumFromInt(1) }).?;
+    const placed = favicons.sprite(.{ .workspace = @enumFromInt(1) }, .medium).?;
+    try std.testing.expect(placed.size == .medium);
     try std.testing.expectEqual(SpritePage.provider_mark_count, placed.index);
     try std.testing.expectEqual(SpritePage.provider_mark_count + 1, page.count);
-    try std.testing.expect(favicons.sprite(.{ .worktree = @enumFromInt(1) }) == null);
+    try std.testing.expect(favicons.sprite(.{ .worktree = @enumFromInt(1) }, .small) == null);
 
     favicons.land(gpa, .{ .workspace = @enumFromInt(2), .image = null });
     favicons.refresh(gpa, &page);
     try std.testing.expectEqual(Favicons.capacity, @as(usize, core.max_workspace_list_entries));
     try std.testing.expect(favicons.stateOf(@enumFromInt(2)) == .missing);
-    try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(2) }) == null);
+    try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(2) }, .small) == null);
 
     // A landing for a workspace the registry never saw is released unread.
-    favicons.land(gpa, .{ .workspace = @enumFromInt(9), .image = try cellImage(16, 1) });
+    favicons.land(gpa, .{ .workspace = @enumFromInt(9), .image = try cellImage(page.cells, 1) });
     favicons.refresh(gpa, &page);
     try std.testing.expectEqual(SpritePage.provider_mark_count + 1, page.count);
 
@@ -265,28 +299,26 @@ test "the registry places one landed image per workspace and forgets a rebuilt p
         .{ .workspace = @enumFromInt(3), .name = "c", .path = "/c", .tab_count = 1 },
     } });
     favicons.started(favicons.next(&workspaces).?.workspace);
-    favicons.land(gpa, .{ .workspace = @enumFromInt(3), .image = try cellImage(8, 1) });
+    favicons.land(gpa, .{ .workspace = @enumFromInt(3), .image = try cellImage(.{ 14, 18, 8 }, 1) });
     favicons.refresh(gpa, &page);
     try std.testing.expect(favicons.stateOf(@enumFromInt(3)) == .wanted);
 
     // A full sheet keeps the glyph.
     while (page.faviconRoom() != 0) {
-        const filler = try cellImage(16, 7);
-        defer gpa.destroy(filler);
-        _ = try page.addFavicon(.{ .pixels = filler.slice(), .stride = 64, .width = 16, .height = 16 });
+        _ = try placeFavicon(&page, 7);
     }
 
     favicons.started(@enumFromInt(3));
-    favicons.land(gpa, .{ .workspace = @enumFromInt(3), .image = try cellImage(16, 1) });
+    favicons.land(gpa, .{ .workspace = @enumFromInt(3), .image = try cellImage(page.cells, 1) });
     favicons.refresh(gpa, &page);
     try std.testing.expect(favicons.stateOf(@enumFromInt(3)) == .full);
     try std.testing.expect(favicons.next(&workspaces) == null);
 
     // Another page forgets every placement, so the lookups run again.
-    var rebuilt = try SpritePage.init(gpa, 32);
+    var rebuilt = try SpritePage.init(gpa, 2);
     defer rebuilt.deinit();
     favicons.refresh(gpa, &rebuilt);
-    try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(1) }) == null);
+    try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(1) }, .large) == null);
     try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(1)), favicons.next(&workspaces).?.workspace);
 }
 
@@ -297,25 +329,56 @@ test "the favicon worker decodes a workspace favicon.png into the sprite cell" {
     defer temp.cleanup();
     var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
-    const missing = favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(1), .workspace = @enumFromInt(1), .cell = 16 }, root));
+    const missing = favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(1), .workspace = @enumFromInt(1), .cells = @splat(16) }, root));
     try std.testing.expectError(error.FaviconNotFound, missing.result);
 
     const samples = [_]u8{ 0, 0, 255, 255 } ** 64;
     const bytes = try png.encodeForTest(gpa, .{ .header = .{ .width = 8, .height = 8, .color = .rgba }, .filter = 2 }, &samples);
     defer gpa.free(bytes);
     try temp.dir.writeFile(io, .{ .sub_path = "favicon.png", .data = bytes });
-    const landed = favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(2), .workspace = @enumFromInt(1), .cell = 16 }, root));
+    const landed = favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(2), .workspace = @enumFromInt(1), .cells = @splat(16) }, root));
     const image = try landed.result;
     defer gpa.destroy(image);
     try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(1)), landed.workspace);
-    try std.testing.expectEqual(@as(u16, 16), image.side);
-    for (0..256) |index| {
-        try std.testing.expectEqualSlices(u8, &.{ 0, 0, 255, 255 }, image.slice()[index * 4 ..][0..4]);
+    for (0..image.sides.len) |size| {
+        try std.testing.expectEqual(@as(u16, 16), image.sides[size]);
+        for (0..256) |index| {
+            try std.testing.expectEqualSlices(u8, &.{ 0, 0, 255, 255 }, image.slice(size)[index * 4 ..][0..4]);
+        }
+    }
+
+    // A source smaller than the cell is blended, never repeated in blocks.
+    const checker = [_]u8{ 0, 0, 0, 255, 255, 255, 255, 255 } ** 4 ++ [_]u8{ 255, 255, 255, 255, 0, 0, 0, 255 } ** 4;
+    const small = try png.encodeForTest(gpa, .{ .header = .{ .width = 8, .height = 8, .color = .rgba } }, &(checker ** 4));
+    defer gpa.free(small);
+    try temp.dir.writeFile(io, .{ .sub_path = "favicon.png", .data = small });
+    const retina_cells = SpritePage.cellsFor(2 * 23.0 / 15.0);
+    const job: client.FaviconJob = .init(
+        .{
+            .execution_id = @enumFromInt(5),
+            .workspace = @enumFromInt(1),
+            .cells = retina_cells,
+        },
+        root,
+    );
+    const enlarged = try favicon_worker.execute(io, gpa, job).result;
+    defer gpa.destroy(enlarged);
+    try std.testing.expectEqualSlices(u16, &retina_cells, &enlarged.sides);
+
+    for (0..enlarged.sides.len) |size| {
+        const pixels = enlarged.slice(size);
+        var greys: usize = 0;
+        for (0..pixels.len / 4) |index| {
+            const value = pixels[index * 4];
+            greys += @intFromBool(value != 0 and value != 255);
+        }
+
+        try std.testing.expect(greys > pixels.len / 8);
     }
 
     try temp.dir.writeFile(io, .{ .sub_path = "favicon.png", .data = "GIF89a not a png but long enough to be read" });
-    try std.testing.expectError(error.NotPng, favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(3), .workspace = @enumFromInt(1), .cell = 16 }, root)).result);
-    try std.testing.expectError(error.InvalidSpriteCell, favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(4), .workspace = @enumFromInt(1), .cell = 0 }, root)).result);
+    try std.testing.expectError(error.NotPng, favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(3), .workspace = @enumFromInt(1), .cells = @splat(16) }, root)).result);
+    try std.testing.expectError(error.InvalidSpriteCell, favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(4), .workspace = @enumFromInt(1), .cells = .{ 16, 16, 0 } }, root)).result);
 }
 
 test "a workspace favicon reaches the card one frame after the worker completes" {
@@ -389,7 +452,7 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
     }
 
     try std.testing.expect(!gui.app.model.favicons.busy());
-    const placed = gui.chrome.favicons.sprite(Session.location.workspace).?;
+    const placed = gui.chrome.favicons.sprite(Session.location.workspace, .small).?;
     try std.testing.expectEqual(SpritePage.provider_mark_count, placed.index);
     try std.testing.expectEqual(SpritePage.provider_mark_count + 1, renderer.sprites.?.count);
     renderer.seal();

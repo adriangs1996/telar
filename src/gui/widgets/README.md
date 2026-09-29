@@ -156,6 +156,12 @@ delivered frames by matching namespace, action and generation. Give controls wit
 the same action distinct namespaces. A changed generation or disappearance
 retires the previous identity.
 
+A band hit's `BandPlacement` becomes its target's namespace, and the chrome's
+hover compares it too, so two band controls with one intent in the same frame,
+such as the top bar's machine segment and the sidebar's `+N`, keep separate
+identity, hover and focus. A new band control that repeats an intent drawn
+elsewhere in the frame needs its own placement.
+
 The permanent chrome registers its existing semantic actions. `TextField` paints
 the prompt's committed selection and the client's provisional IME composition.
 Editing becomes commands to the shared prompt handlers. Widget lists remain

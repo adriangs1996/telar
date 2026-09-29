@@ -130,9 +130,17 @@ pub fn resolveConfigPath(gpa: std.mem.Allocator, config_directory: []const u8, c
     return std.fs.path.resolve(gpa, &.{ config_directory, configured_path });
 }
 
+/// The proxy directory when configuration names none, shared by the server
+/// and `telar proxy trust`: `$XDG_DATA_HOME/telar/proxy`, else
+/// `$HOME/.local/share/telar/proxy`. A relative `XDG_DATA_HOME` is ignored, as
+/// the XDG base directory specification requires.
+///
+/// ```zig
+/// const directory = try server.resolveProxyDirectory(environ, &buffer);
+/// ```
 pub fn resolveProxyDirectory(environ: std.process.Environ, buffer: []u8) ![]const u8 {
     if (environ.getPosix("XDG_DATA_HOME")) |base| {
-        if (base.len != 0) {
+        if (std.fs.path.isAbsolute(base)) {
             return std.fmt.bufPrint(buffer, "{s}/telar/proxy", .{base});
         }
     }
@@ -257,6 +265,18 @@ test "history and proxy storage prefer XDG data home" {
     try std.testing.expectEqualStrings("/data/telar", history.managed_directory.?);
     try std.testing.expectEqualStrings("/data/telar/history.db", history.path);
     try std.testing.expectEqualStrings("/data/telar/proxy", try resolveProxyDirectory(environ, &proxy_buffer));
+}
+
+test "a relative XDG data home is ignored for the proxy directory" {
+    var environment = try TestEnvironment.init(&.{
+        .{ .name = "XDG_DATA_HOME", .value = "data" },
+        .{ .name = "HOME", .value = "/home/adrian" },
+    });
+    defer environment.deinit();
+    const environ: std.process.Environ = .{ .block = environment.block };
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+
+    try std.testing.expectEqualStrings("/home/adrian/.local/share/telar/proxy", try resolveProxyDirectory(environ, &buffer));
 }
 
 test "runtime selects the installed system authority without reusing the private CA" {

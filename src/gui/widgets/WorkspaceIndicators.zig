@@ -16,6 +16,7 @@ const Item = gfx.Item;
 const WorkspaceWindow = @import("WorkspaceWindow.zig");
 const Canvas = @import("Canvas.zig");
 const PixelButton = @import("PixelButton.zig");
+const SpriteSize = @import("../image/SpriteSize.zig").SpriteSize;
 const WorkspaceIndicators = @This();
 
 context: *const Context,
@@ -140,7 +141,7 @@ fn workspace(self: WorkspaceIndicators, canvas: *Canvas, index: usize) !void {
     const label: Label = .{ .text = std.fmt.bufPrint(&storage, "{d}", .{index + 1}) catch unreachable, .color = ink, .bold = selected, .face = .sans, .size = .small };
     _ = try canvas.textAt(.{ .x = bounds.x + chrome.px(3), .y = bounds.y, .width = chrome.px(14), .height = content_height }, label);
 
-    const side = chrome.px(14);
+    const side = @round(chrome.px(SpriteSize.small.logical()));
     const icon: Rect = .{ .x = bounds.x + chrome.px(20), .y = bounds.y + (content_height - side) / 2, .width = side, .height = side };
     const mark: WorkspaceMark = .{
         .context = self.context,
@@ -148,6 +149,7 @@ fn workspace(self: WorkspaceIndicators, canvas: *Canvas, index: usize) !void {
         .bounds = icon,
         .ink = ink,
         .emphasized = selected or hovered,
+        .sprite_size = .small,
         .name = projection.workspaces.nameAt(index),
     };
     try mark.draw(canvas);

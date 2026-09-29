@@ -102,6 +102,8 @@ pub fn deliverySources(model: *RuntimeModel) Sources {
         .proxy_active = model.resources.proxy.active(),
         .proxy_scope = model.resources.proxy.interceptionScope(),
         .proxy_system_trusted = model.resources.proxy.systemTrusted(),
+        .proxy_port = model.resources.proxy.port(),
+        .proxy_preferred_port = model.resources.proxy.preferredPort(),
         .home = model.home,
         .client_layouts = &model.client_layouts,
         .now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
