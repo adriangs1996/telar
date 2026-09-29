@@ -44,7 +44,8 @@ schema.read_pane -> client_request.receive queues PendingPaneText
         |
 encoder.encodeResponse resolves the pane at send time
         |
-Pane.dumpText: last N rows of scrollback+screen (or of the screen), plain text
+Pane.dumpText: last N rows of scrollback+screen (or of the screen), plain text,
+        |  counted up from the last row that shows text
         |
 schema.pane_text{truncated}
 ```

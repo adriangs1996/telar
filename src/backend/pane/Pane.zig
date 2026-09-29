@@ -7,6 +7,7 @@ const Session = pty.Session;
 const core = @import("telar-core");
 const pane_namespace = @import("pane_namespace.zig");
 const vt = @import("ghostty-vt");
+const cmdcapture = @import("cmdcapture");
 const Pipeline = @import("../media/Pipeline.zig");
 const PtyResponseQueue = @import("PtyResponseQueue.zig");
 const GraphicsLimits = @import("../media/GraphicsLimits.zig");
@@ -308,10 +309,12 @@ pub fn mouseState(self: *const Pane) core.Mouse {
     };
 }
 
-/// Copies visible or recent rows as plain text, newest rows last. Output
-/// is bounded by `storage`; when the rows do not fit the dump keeps the
-/// newest whole lines and reports truncation, so a command's last lines
-/// survive a verbose run. No styling or escape bytes are emitted.
+/// Copies visible or recent rows as plain text, newest rows last. The rows
+/// end at the last one that shows text, so blank rows below a short output
+/// never take the place of its lines. Output is bounded by `storage`; when
+/// the rows do not fit the dump keeps the newest whole lines and reports
+/// truncation, so a command's last lines survive a verbose run. No styling
+/// or escape bytes are emitted.
 ///
 /// ```zig
 /// var storage: [schema.max_pane_text_bytes]u8 = undefined;
@@ -321,20 +324,21 @@ pub fn mouseState(self: *const Pane) core.Mouse {
 pub fn dumpText(self: *const Pane, request: TextRequest, storage: []u8) TextDump {
     const screen: *const vt.Screen = self.terminal.screens.active;
     const pages = &screen.pages;
-    const total = self.textRows(request.source);
-    const wanted = @min(@as(usize, request.rows), total);
+    const written = self.writtenRows(request.source);
+    const wanted = @min(@as(usize, request.rows), written);
     if (wanted == 0) {
         return .{ .len = 0, .truncated = false };
     }
 
-    const start_y: u32 = @intCast(total - wanted);
+    const start_y: u32 = @intCast(written - wanted);
+    const end_y: u32 = @intCast(written - 1);
     const top_left = pages.pin(switch (request.source) {
         .screen => .{ .active = .{ .x = 0, .y = start_y } },
         .recent => .{ .screen = .{ .x = 0, .y = start_y } },
     }) orelse return .{ .len = 0, .truncated = false };
-    const bottom_right = pages.getBottomRight(switch (request.source) {
-        .screen => .active,
-        .recent => .screen,
+    const bottom_right = pages.pin(switch (request.source) {
+        .screen => .{ .active = .{ .x = pages.cols - 1, .y = end_y } },
+        .recent => .{ .screen = .{ .x = pages.cols - 1, .y = end_y } },
     }) orelse return .{ .len = 0, .truncated = false };
 
     var tail: TailWriter = .init(storage);
@@ -344,6 +348,31 @@ pub fn dumpText(self: *const Pane, request: TextRequest, storage: []u8) TextDump
     };
 
     return tail.finish();
+}
+
+/// The rows of `source` up to and including the last one that shows text;
+/// zero when every row is blank. Walks up from the bottom, so it reads only
+/// the blank rows below the text.
+///
+/// ```zig
+/// const readable = pane.writtenRows(.screen);
+/// ```
+pub fn writtenRows(self: *const Pane, source: core.PaneTextSource) usize {
+    const pages = &self.terminal.screens.active.pages;
+    var rows = pages.rowIterator(.left_up, switch (source) {
+        .screen => .{ .active = .{} },
+        .recent => .{ .screen = .{} },
+    }, null);
+    var remaining = self.textRows(source);
+    while (rows.next()) |row| {
+        if (!cmdcapture.rowIsBlank(row)) {
+            return remaining;
+        }
+
+        remaining -= 1;
+    }
+
+    return 0;
 }
 
 /// The rows `dumpText` can read from `source`: the screen, or the retained

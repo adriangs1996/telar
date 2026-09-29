@@ -184,7 +184,7 @@ pub const text =
     \\  --until STATUS   done, ready, blocked, working, failed (wait)
     \\  --timeout SECS   Give up after SECS seconds (wait, prompt --wait)
     \\  --wait           Wait for the agent to finish after prompting
-    \\  --lines N        Rows to read (default 40, maximum 200)
+    \\  --lines N        Rows to read up to the last row with text (default 40, maximum 200)
     \\  --source KIND    recent (scrollback + screen) or screen
     \\  --enter          Append Enter after the sent text
     \\  --json           Print JSON instead of rows
