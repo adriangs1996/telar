@@ -19,6 +19,11 @@ const HitMap = @import("widgets/HitMap.zig");
 const BandHitMap = @import("widgets/BandHitMap.zig");
 const ShapingEntry = @import("text/ShapingEntry.zig");
 const ShapingCache = @import("text/ShapingCache.zig");
+const kitty_protocol = @import("kitty_protocol");
+const ImagePlacement = @import("image/ImagePlacement.zig");
+const PaneImages = @import("image/PaneImages.zig");
+const ImageView = @import("image/ImageView.zig");
+const pane_images = @import("image/pane_images.zig");
 
 pub const telar_profile_counts = options.profile_counts;
 pub const telar_profile_timing = options.profile_timing;
@@ -55,7 +60,10 @@ pub fn main(init: std.process.Init) !void {
 const Probe = struct {
     const iterations = 1000;
     const warmup = 200;
-    const Mode = enum { retained, sparse, full, theme, resize, selection, font, two_one_active, two_all_active, cursor, focus, reattach };
+    const Mode = enum { retained, sparse, full, theme, resize, selection, font, two_one_active, two_all_active, cursor, focus, reattach, images };
+    /// Kitty graphics placements the `images` workloads draw and resolve.
+    const image_placements = 256;
+    const image_count = 64;
 
     io: std.Io,
     gpa: std.mem.Allocator,
@@ -97,6 +105,10 @@ const Probe = struct {
                 }
             }
         }
+        if (self.terminal_mode == null or std.mem.eql(u8, self.terminal_mode.?, "images")) {
+            try self.resolveImages();
+        }
+
         if (self.terminal_only) {
             return;
         }
@@ -136,6 +148,30 @@ const Probe = struct {
             cell.bytes[0] = 'b';
         }
         const area: cellgrid.Rect = .{ .w = size.cols, .h = size.rows };
+        // Retained cells plus 256 ready placements in all three layers: the
+        // per-frame cost images add to a warm pane.
+        var placements: [image_placements]ImagePlacement = undefined;
+        if (mode == .images) {
+            for (&placements, 0..) |*placement, index| {
+                placement.* = .{
+                    .pane_id = pane.id,
+                    .layer = @enumFromInt(index % 3),
+                    .z_index = 0,
+                    .image_id = @intCast(index % image_count + 1),
+                    .generation = 1,
+                    .virtual_id = index + 1,
+                    .handle = @intCast(index % image_count + 1),
+                    .column = @intCast(index % size.cols),
+                    .row = @intCast(index % size.rows),
+                    .box = .{ .offset_x = 0, .offset_y = 0, .width = 40, .height = 40 },
+                    .uv = .{ 0, 0, 1, 1 },
+                };
+            }
+
+            std.mem.sort(ImagePlacement, &placements, {}, ImagePlacement.lessThan);
+            renderer.images = &placements;
+        }
+
         var before: core.ProfileCounters = .{};
         var started: i96 = 0;
         var checksum: usize = 0;
@@ -160,6 +196,7 @@ const Probe = struct {
                 .cursor => pane.cursor.x = @intCast(stimulus % size.cols),
                 .focus => renderer.focused = stimulus % 2 == 0,
                 .reattach => pane.attachment_generation += 1,
+                .images => {},
                 .two_one_active, .two_all_active => {
                     const first = &pane.buffer.cells[stimulus % size.cols];
                     first.bytes[0] = if (first.bytes[0] == 'a') 'b' else 'a';
@@ -221,6 +258,63 @@ const Probe = struct {
         }
         try self.writer.print("{{\"type\":\"workload\",\"name\":\"terminal/{s}/{d}x{d}\",\"iterations\":{d},\"warmup\":{d},\"elapsed_ns\":{d},\"checksum\":{d},\"live_requested_bytes\":{d},\"retained_length\":{d},\"retained_capacity\":{d},\"last_frame_quads\":{d},\"measured_allocations\":{d},", .{ @tagName(mode), size.cols, size.rows, samples, preheat, elapsed, checksum, accounting.allocated_bytes - accounting.freed_bytes, renderer.retained.entries.items.len, renderer.retained.entries.capacity, renderer.quads.items().len, accounting.allocations - allocated });
         try self.counts(before);
+    }
+
+    /// Rebuilds the resolved placements of 64 images and 256 placements every
+    /// sample, as a pane streaming a new generation each frame forces.
+    fn resolveImages(self: *Probe) !void {
+        const samples = self.sample_count orelse iterations;
+        const preheat = self.warmup_count orelse warmup;
+        var accounting = std.testing.FailingAllocator.init(self.gpa, .{});
+        var stores = [_]client.retained_graphics.Store{.init(accounting.allocator())};
+        defer stores[0].deinit();
+        const pane_id: core.PaneId = @enumFromInt(1);
+        const pixel = [_]u8{ 1, 2, 3, 4 };
+        for (1..image_count + 1) |id| {
+            const key: core.ImageKey = .{ .image_id = @intCast(id), .generation = 1 };
+            try stores[0].applyImage(.{ .pane_id = pane_id, .revision = 1, .image = .{ .key = key, .format = .rgba, .width = 1, .height = 1, .byte_len = pixel.len } });
+            try stores[0].applyChunk(.{ .pane_id = pane_id, .revision = 1, .key = key, .offset = 0, .bytes = &pixel });
+        }
+
+        for (0..image_placements) |index| {
+            try stores[0].applyPlacement(.{
+                .pane_id = pane_id,
+                .revision = 1,
+                .placement = .{
+                    .key = .{ .image_id = @intCast(index % image_count + 1), .generation = 1 },
+                    .virtual_id = index + 1,
+                    .placement_id = 0,
+                    .x = @intCast(index % 80),
+                    .y = @intCast(index % 40),
+                    .columns = 4,
+                    .rows = 2,
+                    .z_index = @as(i32, @intCast(index % 3)) - 1,
+                },
+            });
+        }
+
+        const images = try self.gpa.create(PaneImages);
+        defer self.gpa.destroy(images);
+        images.* = .{};
+        const view: ImageView = .{ .machine = 0, .cell_width = 16, .cell_height = 32 };
+        var allocated: usize = 0;
+        var started: i96 = 0;
+        for (0..preheat + samples) |index| {
+            if (index == preheat) {
+                allocated = accounting.allocations;
+                started = std.Io.Clock.awake.now(self.io).nanoseconds;
+            }
+
+            stores[0].damage = true;
+            pane_images.place(images, &stores, view);
+        }
+
+        const elapsed = std.Io.Clock.awake.now(self.io).nanoseconds - started;
+        if (images.placement_count != image_placements) {
+            return error.InvalidImageWorkload;
+        }
+
+        try self.writer.print("{{\"type\":\"workload\",\"name\":\"images/resolve/{d}\",\"iterations\":{d},\"warmup\":{d},\"elapsed_ns\":{d},\"measured_allocations\":{d}}}\n", .{ image_placements, samples, preheat, elapsed, accounting.allocations - allocated });
     }
 
     fn chrome(self: *Probe, count: usize, title_bytes: usize, width: u32) !void {
