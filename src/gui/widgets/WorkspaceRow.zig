@@ -15,6 +15,8 @@ const attention = @import("attention.zig");
 const workspace_identity = @import("workspace_identity.zig");
 const WorkspaceRow = @This();
 const inactive_ink: cellgrid.Color = .rgb(.{ 115, 115, 115 });
+/// The favicon side in logical chrome pixels, whole device pixels once scaled.
+pub const icon_side: f32 = 18;
 
 context: *const Context,
 bounds: Rect,
@@ -41,8 +43,8 @@ pub fn draw(self: WorkspaceRow, canvas: *Canvas) !void {
     }
 
     const inset = canvas.chrome.px(12);
-    const icon_side = canvas.chrome.px(18);
-    const icon: Rect = .{ .x = bounds.x + inset, .y = bounds.y + (bounds.height - icon_side) / 2, .width = icon_side, .height = icon_side };
+    const side = @round(canvas.chrome.px(icon_side));
+    const icon: Rect = .{ .x = bounds.x + inset, .y = bounds.y + (bounds.height - side) / 2, .width = side, .height = side };
     const sprite = if (self.context.favicons) |favicons| favicons.sprite(.{ .workspace = workspace }) else null;
     if (sprite) |value| {
         try canvas.spriteTintedAt(icon, .{ .sprite = value, .alpha = if (selected) 1 else 0.5 });

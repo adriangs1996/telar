@@ -22,7 +22,8 @@ pub const button: f32 = 36;
 pub const button_gap: f32 = 10;
 const inset: f32 = 12;
 const radius: f32 = 10;
-const mark_side: f32 = 20;
+/// The favicon side, the largest sprite draw `SpritePage.cell_logical` sizes cells for.
+pub const mark_side: f32 = 20;
 const accent_width: f32 = 3;
 const accent_height: f32 = 20;
 const dot_side: f32 = 7;
@@ -119,7 +120,7 @@ fn drawMark(self: WorkspaceRail, canvas: *Canvas, bounds: Rect, index: usize) !v
         canvas.quads.clipFrom(first, self.area);
     }
 
-    const side = @min(chrome.px(mark_side), bounds.width);
+    const side = @min(@round(chrome.px(mark_side)), bounds.width);
     const mark: WorkspaceMark = .{
         .context = context,
         .workspace = id,

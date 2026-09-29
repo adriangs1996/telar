@@ -18,6 +18,9 @@ const Canvas = @import("Canvas.zig");
 const PixelButton = @import("PixelButton.zig");
 const WorkspaceIndicators = @This();
 
+/// The favicon side in logical chrome pixels, whole device pixels once scaled.
+pub const mark_side: f32 = 14;
+
 context: *const Context,
 area: Rect,
 
@@ -140,7 +143,7 @@ fn workspace(self: WorkspaceIndicators, canvas: *Canvas, index: usize) !void {
     const label: Label = .{ .text = std.fmt.bufPrint(&storage, "{d}", .{index + 1}) catch unreachable, .color = ink, .bold = selected, .face = .sans, .size = .small };
     _ = try canvas.textAt(.{ .x = bounds.x + chrome.px(3), .y = bounds.y, .width = chrome.px(14), .height = content_height }, label);
 
-    const side = chrome.px(14);
+    const side = @round(chrome.px(mark_side));
     const icon: Rect = .{ .x = bounds.x + chrome.px(20), .y = bounds.y + (content_height - side) / 2, .width = side, .height = side };
     const mark: WorkspaceMark = .{
         .context = self.context,
