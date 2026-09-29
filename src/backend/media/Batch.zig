@@ -7,11 +7,14 @@ len: usize = 0,
 events: [media.batch_events]media.Event = undefined,
 event_count: usize = 0,
 reset_before: bool = false,
+/// Some of the output belongs to a Kitty graphics command.
+kitty: bool = false,
 
 pub fn reset(self: *Batch) void {
     self.len = 0;
     self.event_count = 0;
     self.reset_before = false;
+    self.kitty = false;
 }
 
 pub fn pushOutput(self: *Batch, bytes: []const u8) bool {

@@ -2337,6 +2337,115 @@ fn expectGraphicsRoundtrip(comptime transmission: []const u8) !void {
     return error.GraphicsIntegrationTimedOut;
 }
 
+test "a direct transmission larger than the media queue arrives whole" {
+    // 512x512 RGBA is 1 MiB and about 1.4 MB of base64, twenty times the
+    // media actor's two 64 KiB batches, written by the child in one burst.
+    const side = 512;
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.root;
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
+
+    const pixels = try gpa.alloc(u8, side * side * 4);
+    defer gpa.free(pixels);
+    for (pixels, 0..) |*byte, index| {
+        byte.* = @truncate(index *% 7);
+    }
+
+    const encoded = try gpa.alloc(u8, std.base64.standard.Encoder.calcSize(pixels.len));
+    defer gpa.free(encoded);
+    _ = std.base64.standard.Encoder.encode(encoded, pixels);
+    var transmission: std.ArrayList(u8) = .empty;
+    defer transmission.deinit(gpa);
+    const chunk_bytes = 4096;
+    var offset: usize = 0;
+    while (offset < encoded.len) : (offset += chunk_bytes) {
+        const end = @min(offset + chunk_bytes, encoded.len);
+        const more: u8 = if (end < encoded.len) '1' else '0';
+        if (offset == 0) {
+            try transmission.print(gpa, "\x1b_Ga=T,f=32,s={d},v={d},i=9,q=2,C=1,m={c};", .{ side, side, more });
+        } else {
+            try transmission.print(gpa, "\x1b_Gm={c};", .{more});
+        }
+        try transmission.appendSlice(gpa, encoded[offset..end]);
+        try transmission.appendSlice(gpa, "\x1b\\");
+    }
+
+    var file = try temp.dir.createFile(io, "burst.kgp", .{});
+    try file.writeStreamingAll(io, transmission.items);
+    file.close(io);
+
+    const directory = temp.path();
+    var socket_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const socket_path = try std.fmt.bufPrint(&socket_buffer, "{s}/graphics.sock", .{directory});
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.serve, .{ io, gpa, .{
+        .endpoint = socket_path,
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var connection = try connectRuntimeForTest(io, socket_path);
+    defer connection.deinit(io);
+    const arguments = [_][]const u8{ "/bin/sh", "-c", "stty raw -echo; cat burst.kgp; printf 'KGP_BURST_SENT'; sleep 5" };
+    var send_buffer: [2048]u8 = undefined;
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{
+            .cols = 40,
+            .rows = 8,
+            .cell_width_px = 10,
+            .cell_height_px = 20,
+        },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+
+    const receive_buffer = try gpa.alloc(u8, localsocket.transport.max_frame_size);
+    defer gpa.free(receive_buffer);
+    var store = client_module.retained_graphics.Store.init(gpa);
+    defer store.deinit();
+    var cells: [40 * 8]cellgrid.Cell = @splat(.{});
+    for (0..1024) |_| {
+        const payload = try connection.receive(io, receive_buffer);
+        switch (try schema.decodeServer(payload)) {
+            .pane_frame => |frame| {
+                try applyFrameCells(&cells, frame);
+                try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
+                    .pane_id = frame.pane_id,
+                    .frame_id = frame.frame_id,
+                }));
+            },
+            .graphics_snapshot => |snapshot| try store.applySnapshot(snapshot),
+            .graphics_image => |image| try store.applyImage(image),
+            .graphics_image_chunk => |chunk| try store.applyChunk(chunk),
+            .graphics_placement => |placement| try store.applyPlacement(placement),
+            .graphics_delete_image => |deleted| try store.deleteImage(deleted),
+            .graphics_delete_placement => |deleted| try store.deletePlacement(deleted),
+            .pane_exited => return error.PaneExitedBeforeImage,
+            .request_failed => return error.RuntimeRequestFailed,
+            else => {},
+        }
+
+        var images = store.images.iterator();
+        const entry = images.next() orelse continue;
+        const image = entry.value_ptr;
+        if (image.received != image.pixels.len or store.placements.count() != 1) {
+            continue;
+        }
+
+        try std.testing.expectEqualSlices(u8, pixels, image.pixels);
+        return;
+    }
+
+    return error.GraphicsBurstLost;
+}
+
 test "a silent connection cannot starve later clients" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;

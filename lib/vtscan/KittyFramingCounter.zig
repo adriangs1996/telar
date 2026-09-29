@@ -1,3 +1,4 @@
+const std = @import("std");
 const escape_ops = @import("escape.zig");
 /// Counts complete Kitty APC commands across arbitrary PTY read boundaries
 /// without retaining their payload. Ghostty performs the actual parsing; this
@@ -13,6 +14,38 @@ const KittyFramingCounter = @This();
 state: State = .normal,
 
 const State = enum { normal, escape, apc_identify, kitty, kitty_escape, other, other_escape };
+
+/// Whether the last byte observed left the scanner inside a Kitty APC.
+/// Example: `if (counter.inKitty()) pause();`.
+pub fn inKitty(self: *const KittyFramingCounter) bool {
+    return self.state == .kitty or self.state == .kitty_escape;
+}
+
+/// Advances over `bytes` like `observe` and reports whether any of them
+/// belongs to a Kitty APC, introducer and terminator included. Runs of
+/// bytes that cannot change the state are skipped with a vector search for
+/// ESC, so plain output costs one scan.
+/// Example: `const graphics = counter.touchesKitty(read);`.
+pub fn touchesKitty(self: *KittyFramingCounter, bytes: []const u8) bool {
+    var touched = self.inKitty();
+    var rest = bytes;
+    while (rest.len != 0) {
+        switch (self.state) {
+            .normal, .kitty, .other => {
+                const at = std.mem.indexOfScalar(u8, rest, escape_ops.esc) orelse return touched;
+                rest = rest[at..];
+            },
+            else => {},
+        }
+
+        const before = self.state;
+        _ = self.observe(rest[0..1]);
+        touched = touched or self.inKitty() or before == .kitty_escape;
+        rest = rest[1..];
+    }
+
+    return touched;
+}
 
 pub fn observe(self: *KittyFramingCounter, bytes: []const u8) usize {
     var complete: usize = 0;
@@ -52,4 +85,17 @@ pub fn observe(self: *KittyFramingCounter, bytes: []const u8) usize {
             .other,
     };
     return complete;
+}
+
+test "kitty APC bytes are recognized across reads while plain output is not" {
+    var counter: KittyFramingCounter = .{};
+    try std.testing.expect(!counter.touchesKitty("plain text \x1b[1m bold"));
+    try std.testing.expect(!counter.touchesKitty("\x1b_Xother\x1b\\"));
+    try std.testing.expect(counter.touchesKitty("text \x1b_Ga=T,f=100;AAAA"));
+    try std.testing.expect(counter.inKitty());
+    try std.testing.expect(counter.touchesKitty("BBBB"));
+    try std.testing.expect(counter.touchesKitty("CC\x1b"));
+    try std.testing.expect(counter.touchesKitty("\\ after"));
+    try std.testing.expect(!counter.inKitty());
+    try std.testing.expect(!counter.touchesKitty("after"));
 }

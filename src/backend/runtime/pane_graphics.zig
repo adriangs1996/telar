@@ -11,6 +11,7 @@ const MediaCompletion = @import("events/MediaCompletion.zig");
 const MediaStats = @import("../media/Stats.zig");
 const attachment_namespace = @import("attachment/attachment_namespace.zig");
 const pane_input = @import("pane_input.zig");
+const pane_output = @import("pane_output.zig");
 const std = @import("std");
 
 /// Replaces the client's graphics baseline for one pane.
@@ -107,6 +108,13 @@ pub fn finishMedia(model: *RuntimeModel, completion: MediaCompletion) !void {
     }
 
     try pane_input.startResponseWrite(model, pane);
+
+    // A read held for a graphics command resumes once the full batch is on
+    // its way to the actor.
+    if (pane.output_held) {
+        try startMedia(model, pane);
+        try pane_output.resumeRead(model, pane);
+    }
 }
 
 /// Invalidates reset projections first, then freezes at most one transfer per

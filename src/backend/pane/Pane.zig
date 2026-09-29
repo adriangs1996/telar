@@ -94,6 +94,8 @@ output_pending: bool = false,
 ingest_pending: bool = false,
 actor_count: u8 = 0,
 output_done: bool = false,
+/// The next PTY read waits for the media actor (`Pipeline.holdsRead`).
+output_held: bool = false,
 wait_pending: bool = false,
 close_requested: bool = false,
 exit: ?exit_module.Exit = null,

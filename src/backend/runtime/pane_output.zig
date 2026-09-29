@@ -116,6 +116,27 @@ pub fn finishIngest(model: *RuntimeModel, completion: IngestCompletion) !void {
     refreshAttachments(model, pane);
     try pane_input.startResponseWrite(model, pane);
 
+    if (pane.media.holdsRead(pane.output_buffer.len)) {
+        pane.output_held = true;
+        pane.media.held_reads +|= 1;
+        return;
+    }
+
+    try startRead(model, pane);
+}
+
+/// Starts the read `finishIngest` held back once the media actor made room.
+/// Example: `try pane_output.resumeRead(model, pane);`.
+pub fn resumeRead(model: *RuntimeModel, pane: *Pane) !void {
+    if (!pane.output_held or pane.media.holdsRead(pane.output_buffer.len)) {
+        return;
+    }
+
+    pane.output_held = false;
+    try startRead(model, pane);
+}
+
+fn startRead(model: *RuntimeModel, pane: *Pane) !void {
     const read_started = pane.beginPtyOutputRead();
     std.debug.assert(read_started);
     model.select.concurrent(.pane_output, pane_launch.readPane, .{ model.io, pane }) catch |err| {

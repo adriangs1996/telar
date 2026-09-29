@@ -7,6 +7,7 @@ const png = @import("png.zig");
 const Stats = @import("Stats.zig");
 const FrameResource = @import("FrameResource.zig");
 const shared_transfer = @import("shared_transfer.zig");
+const vtscan = @import("vtscan");
 const Pipeline = @This();
 
 terminal: vt.Terminal,
@@ -27,6 +28,10 @@ queue_event_high_water: usize = 0,
 queue_byte_high_water: usize = 0,
 resets: u64 = 0,
 failures: u64 = 0,
+/// Kitty APC framing of the output queued so far, on the runtime thread.
+framing: vtscan.KittyFramingCounter = .{},
+/// PTY reads the pane held back so a graphics command was not dropped.
+held_reads: u64 = 0,
 
 /// Initializes the bounded graphics-only terminal for one pane.
 ///
@@ -67,6 +72,8 @@ pub fn init(self: *Pipeline, initialization: Initialization) !void {
     self.queue_byte_high_water = 0;
     self.resets = 0;
     self.failures = 0;
+    self.framing = .{};
+    self.held_reads = 0;
 }
 
 pub fn deinit(self: *Pipeline) void {
@@ -81,6 +88,7 @@ pub fn deinit(self: *Pipeline) void {
 }
 
 pub fn queueOutput(self: *Pipeline, bytes: []const u8) void {
+    const kitty = self.framing.touchesKitty(bytes);
     if (bytes.len > media.batch_bytes) {
         self.dropActive(bytes.len, 1);
         return;
@@ -91,7 +99,28 @@ pub fn queueOutput(self: *Pipeline, bytes: []const u8) void {
         batch = &self.batches[self.active];
         _ = batch.pushOutput(bytes);
     }
+    batch.kitty = batch.kitty or kitty;
     self.observeQueueDepth();
+}
+
+/// Whether the pane should wait for the media actor before reading another
+/// `read_len` bytes: the actor is busy, the next read would not fit the open
+/// batch, and a Kitty graphics command is queued or in progress. Dropping it
+/// would lose the image; holding the read only makes the child that is
+/// sending graphics wait, as it would in Kitty or Ghostty. Plain output keeps
+/// the drop-and-reset policy, so text never waits on media.
+///
+/// ```zig
+/// if (pane.media.holdsRead(pane.output_buffer.len)) return;
+/// ```
+pub fn holdsRead(self: *const Pipeline, read_len: usize) bool {
+    const worker = self.worker orelse return false;
+    const batch = &self.batches[self.active];
+    if (batch.len + read_len <= media.batch_bytes and batch.event_count < media.batch_events) {
+        return false;
+    }
+
+    return batch.kitty or self.batches[worker].kitty or self.framing.inKitty();
 }
 
 pub fn queueResize(self: *Pipeline, size: core.TerminalSize) void {
