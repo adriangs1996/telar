@@ -14,6 +14,7 @@ const AgentCard = @import("AgentCard.zig");
 const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
 const Label = @import("Label.zig");
+const SpriteSize = @import("../image/SpriteSize.zig").SpriteSize;
 const WorkspaceMark = @This();
 
 /// Opacity of a favicon whose workspace is neither selected nor hovered.
@@ -29,13 +30,15 @@ workspace: core.WorkspaceId,
 bounds: Rect,
 ink: cellgrid.Color,
 emphasized: bool,
+/// The favicon cell whose side `bounds` has, so it draws one texel per pixel.
+sprite_size: SpriteSize,
 size: label_size.Size = .small,
 /// The workspace's name; without a favicon its initial stands in.
 name: []const u8 = "",
 
-/// Example: `try (WorkspaceMark{ .context = context, .workspace = id, .bounds = icon, .ink = ink, .emphasized = selected }).draw(canvas);`
+/// Example: `try (WorkspaceMark{ .context = context, .workspace = id, .bounds = icon, .ink = ink, .emphasized = selected, .sprite_size = .large }).draw(canvas);`
 pub fn draw(self: WorkspaceMark, canvas: *Canvas) !void {
-    const sprite = if (self.context.favicons) |favicons| favicons.sprite(.{ .workspace = self.workspace }) else null;
+    const sprite = if (self.context.favicons) |favicons| favicons.sprite(.{ .workspace = self.workspace }, self.sprite_size) else null;
     if (sprite) |value| {
         try canvas.spriteTintedAt(self.bounds, .{
             .sprite = value,

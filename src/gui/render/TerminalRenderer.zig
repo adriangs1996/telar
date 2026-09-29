@@ -130,7 +130,7 @@ pub fn measure(self: *Renderer, viewport: native.Viewport) !core.TerminalSize {
         // The chrome ratio follows the scale and the font size; either one
         // changing builds a new renderer or reaches here, so the page and
         // its favicons are rebuilt at the size they are drawn.
-        var sprites = try SpritePage.init(self.allocator, SpritePage.cellFor(ChromeMetrics.resolve(self.config, viewport.scale).ratio));
+        var sprites = try SpritePage.init(self.allocator, ChromeMetrics.resolve(self.config, viewport.scale).ratio);
         errdefer sprites.deinit();
         const natural_height: f32 = @floatFromInt(try replacement.lineHeight(pixel_height));
         const height = @round(natural_height * self.config.font.line_height);
