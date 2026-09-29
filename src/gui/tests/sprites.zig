@@ -32,10 +32,10 @@ test "the renderer builds the page with the atlas and versions it per change" {
     defer session.deinit();
     const renderer = &session.gui.renderer;
     const page = &renderer.sprites.?;
-    try std.testing.expectEqual(SpritePage.cellFor(1), page.cell);
+    try std.testing.expectEqual(SpritePage.cellFor(renderer.chrome.ratio), page.cell);
     try std.testing.expectEqual(SpritePage.provider_mark_count, page.count);
     var frame = renderer.frame(1);
-    try std.testing.expectEqual(SpritePage.side, frame.sprites_side);
+    try std.testing.expectEqual(page.side, frame.sprites_side);
     try std.testing.expect(frame.sprites != null);
     renderer.seal();
     const version = renderer.sprites_version;
@@ -54,10 +54,21 @@ test "the renderer builds the page with the atlas and versions it per change" {
     try std.testing.expectEqual(version + 1, frame.sprites_version);
 
     // A new scale rebuilds the page at its cell with the provider marks only.
+    const ratio = renderer.chrome.ratio;
     _ = try renderer.measure(.{ .width = 360, .height = 480, .scale = 2 });
-    try std.testing.expectEqual(SpritePage.cellFor(2), renderer.sprites.?.cell);
+    try std.testing.expectEqual(2 * ratio, renderer.chrome.ratio);
+    try std.testing.expectEqual(SpritePage.cellFor(renderer.chrome.ratio), renderer.sprites.?.cell);
     try std.testing.expectEqual(SpritePage.provider_mark_count, renderer.sprites.?.count);
+    try std.testing.expectEqual(renderer.sprites.?.side, renderer.frame(3).sprites_side);
     try std.testing.expectEqual(@as(u32, 0), renderer.last_sprites_version);
+}
+
+test "no sprite draws larger than the cell the page is built for" {
+    for ([_]f32{ CardGeometry.mark_size, WorkspaceRow.icon_side, WorkspaceIndicators.mark_side }) |side| {
+        try std.testing.expect(side <= SpritePage.cell_logical);
+    }
+
+    try std.testing.expectEqual(SpritePage.cell_logical, WorkspaceRail.mark_side);
 }
 
 test "sprite quads carry the texture selector and plain quads stay on the atlas" {
@@ -96,6 +107,9 @@ const HitMap = @import("../widgets/HitMap.zig");
 const BandHitMap = @import("../widgets/BandHitMap.zig");
 const AgentCard = @import("../widgets/AgentCard.zig");
 const CardGeometry = @import("../widgets/CardGeometry.zig");
+const WorkspaceIndicators = @import("../widgets/WorkspaceIndicators.zig");
+const WorkspaceRail = @import("../widgets/WorkspaceRail.zig");
+const WorkspaceRow = @import("../widgets/WorkspaceRow.zig");
 
 fn agent(provider: core.AgentProvider, pane: u32) data.AgentInput {
     return .{ .key = .{ .pane_id = @enumFromInt(pane), .pane_generation = 1 }, .location = Session.location, .pane_index = 1, .provider = provider, .status = .ready, .status_age_s = 1, .workspace_label = "telar", .session_title = "title", .last_event = "event" };
@@ -312,6 +326,32 @@ test "the favicon worker decodes a workspace favicon.png into the sprite cell" {
     for (0..256) |index| {
         try std.testing.expectEqualSlices(u8, &.{ 0, 0, 255, 255 }, image.slice()[index * 4 ..][0..4]);
     }
+
+    // A source smaller than the cell is blended, never repeated in blocks.
+    const checker = [_]u8{ 0, 0, 0, 255, 255, 255, 255, 255 } ** 4 ++ [_]u8{ 255, 255, 255, 255, 0, 0, 0, 255 } ** 4;
+    const small = try png.encodeForTest(gpa, .{ .header = .{ .width = 8, .height = 8, .color = .rgba } }, &(checker ** 4));
+    defer gpa.free(small);
+    try temp.dir.writeFile(io, .{ .sub_path = "favicon.png", .data = small });
+    const retina_cell: u16 = @intCast(SpritePage.cellFor(2 * 23.0 / 15.0));
+    const job: client.FaviconJob = .init(
+        .{
+            .execution_id = @enumFromInt(5),
+            .workspace = @enumFromInt(1),
+            .cell = retina_cell,
+        },
+        root,
+    );
+    const enlarged = try favicon_worker.execute(io, gpa, job).result;
+    defer gpa.destroy(enlarged);
+    try std.testing.expectEqual(retina_cell, enlarged.side);
+
+    var greys: usize = 0;
+    for (0..enlarged.slice().len / 4) |index| {
+        const value = enlarged.slice()[index * 4];
+        greys += @intFromBool(value != 0 and value != 255);
+    }
+
+    try std.testing.expect(greys > enlarged.slice().len / 8);
 
     try temp.dir.writeFile(io, .{ .sub_path = "favicon.png", .data = "GIF89a not a png but long enough to be read" });
     try std.testing.expectError(error.NotPng, favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(3), .workspace = @enumFromInt(1), .cell = 16 }, root)).result);

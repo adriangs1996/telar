@@ -127,7 +127,10 @@ pub fn measure(self: *Renderer, viewport: native.Viewport) !core.TerminalSize {
         );
         errdefer replacement.deinit();
         try replacement.prepareFallbacks();
-        var sprites = try SpritePage.init(self.allocator, SpritePage.cellFor(viewport.scale));
+        // The chrome ratio follows the scale and the font size; either one
+        // changing builds a new renderer or reaches here, so the page and
+        // its favicons are rebuilt at the size they are drawn.
+        var sprites = try SpritePage.init(self.allocator, SpritePage.cellFor(ChromeMetrics.resolve(self.config, viewport.scale).ratio));
         errdefer sprites.deinit();
         const natural_height: f32 = @floatFromInt(try replacement.lineHeight(pixel_height));
         const height = @round(natural_height * self.config.font.line_height);
@@ -468,7 +471,7 @@ pub fn frame(self: *const Renderer, token: u64) native.Frame {
         .atlas_side = GlyphAtlas.side,
         .atlas_version = self.atlas_version,
         .sprites = if (self.sprites) |page| page.pixels.ptr else null,
-        .sprites_side = if (self.sprites != null) SpritePage.side else 0,
+        .sprites_side = if (self.sprites) |page| page.side else 0,
         .sprites_version = self.sprites_version,
         .diagrams = self.diagrams,
         .background = .{ self.background.r, self.background.g, self.background.b, self.config.window.background_opacity },
