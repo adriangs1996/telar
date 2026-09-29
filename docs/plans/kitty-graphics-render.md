@@ -8,6 +8,15 @@ Vulkan, without making a keystroke or a cell frame wait.
 Base: `main` at `ace4fe2f`. Out of scope: sidebar project icons (another
 session owns them).
 
+Status (2026-09-29): phases 1-7 done on macOS and Linux. Found on the way
+and fixed with Adrian's approval: the runtime dropped any direct image larger
+than the media queue (now the pane holds its PTY read while a Kitty command
+is queued), and the interactive terminal did not move its cursor past a
+placement (now `KittyCursor` does). The gate compares the image stream with a
+text-redraw control, not idle (Adrian, 2026-09-29). Open: the window turns a
+4K 120 Hz stream into 35 textures a second, under the 58 floor; drawing a
+window-sized image is the measured cost ([performance gates](../performance-gates.md)).
+
 ## What exists (verified 2026-09-29)
 
 Runtime side, already complete for classic placements:

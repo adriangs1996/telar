@@ -47,12 +47,18 @@ revision; stale deltas and rejected operations do not. The window observes this
 revision independently of the model, including when a change causes no
 fallback change.
 
-The window binds `graphics_delivery.Store` (`src/gui/graphics_delivery.zig`)
-as its retained store; `GuiAdapter.applyGraphics` applies each command to it.
-The store has no GPU image consumer yet, and the window reports images as
-unsupported to the shared client, so a pane that holds graphics carries the
-fallback flag. The window bootstraps with shared graphics off. The headless
-client accepts graphics commands and drops them.
+The window binds one `retained_graphics.Store` per machine slot
+(`GuiAdapter.graphics_stores`, `host_ports.graphicsRetention`) and draws what
+the presented slot's store holds ([pane images](pane-images.md)); leases keep
+pixels mapped while an upload reads them. The window reports images as
+supported, so no pane carries the fallback flag. Its own client declares
+shared graphics, so a local generation arrives as a mapped object rather than
+1 MiB chunks copied on the window thread; other machines' clients keep
+chunks. The headless client accepts graphics commands and drops them.
+
+A pane's graphics are visible while its tab is active, including while it is
+scrolled back: the window draws a placement lower by the rows the pane went
+back.
 
 Only `pane_graphics.setFallback` commits cell fallback. A changed value
 advances the pane-graphics revision; unknown panes and repeats do nothing.
