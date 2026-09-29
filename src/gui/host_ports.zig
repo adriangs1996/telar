@@ -4,10 +4,9 @@ const data = @import("model");
 const core = @import("telar-core");
 const chrome_module = @import("ports/chrome.zig");
 const host_input = @import("ports/host_input.zig");
-const graphics_delivery = @import("graphics_delivery.zig");
 const GuiAdapter = @import("GuiAdapter.zig");
 
-const Store = graphics_delivery.Store;
+const Store = client_module.retained_graphics.Store;
 
 /// The graphics port of the client in `slot`: it keeps that client's images
 /// in the slot's own store, so two machines' panes with one id never touch
