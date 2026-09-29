@@ -204,7 +204,7 @@ fn projectSlot(self: AgentCard, canvas: *const Canvas) f32 {
 }
 
 // The mark and the favicon are `CardGeometry.mark_size` logical pixels in
-// whole device pixels; the sprite page's cell is larger, so they only shrink.
+// whole device pixels: the favicon's `small` cell, one texel per pixel.
 fn markSide(_: AgentCard, canvas: *const Canvas) f32 {
     return @round(canvas.chrome.px(CardGeometry.mark_size));
 }

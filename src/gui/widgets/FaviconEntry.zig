@@ -1,7 +1,6 @@
 //! One workspace's favicon in the GUI registry: what the lookup found and,
-//! once placed, where it sits in the sprite page.
+//! once placed, which sprite page slot holds it at every size.
 const core = @import("telar-core");
-const Sprite = @import("../image/Sprite.zig");
 
 pub const State = enum {
     /// Needs a lookup; the controller has not accepted one yet.
@@ -18,4 +17,4 @@ pub const State = enum {
 
 workspace: core.WorkspaceId,
 state: State = .wanted,
-sprite: Sprite = .{ .index = 0 },
+slot: u16 = 0,

@@ -7,6 +7,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
+const sprites = @import("sprites.zig");
 const Session = @import("Session.zig");
 const Quad = gfx.Quad.Quad;
 const Rect = gfx.Rect;
@@ -109,13 +110,19 @@ test "the rail stacks five projects in one column and reuses landed favicons at 
         const want = favicons.next(&model.workspace_list_snapshot).?;
         favicons.started(want.workspace);
         const image = try std.testing.allocator.create(client.FaviconImage);
-        image.* = .{ .side = @intCast(renderer.sprites.?.cell) };
-        @memset(image.mutableSlice(), 255);
+        image.* = .{ .sides = renderer.sprites.?.cells };
+        for (0..image.sides.len) |index| {
+            @memset(image.mutableSlice(index), 255);
+        }
+
         favicons.land(std.testing.allocator, .{ .workspace = want.workspace, .image = image });
         favicons.refresh(std.testing.allocator, &renderer.sprites.?);
         fixture.chrome.hovered = .{ .intent = .{ .select_workspace = @enumFromInt(9) } };
         try fixture.paint(fixture.projection());
         const rail = fixture.band();
+        // The rail draws the landed favicon at its `large` cell, one texel per pixel.
+        const large = favicons.sprite(.{ .workspace = want.workspace }, .large).?;
+        try std.testing.expectEqual(@as(usize, 1), sprites.oneTexelPerPixel(renderer.quads.items(), &renderer.sprites.?, large));
         try std.testing.expect(fixture.chrome.presented().bands.rail);
         var last: f32 = 0;
         var column: ?f32 = null;
@@ -138,6 +145,13 @@ test "the rail stacks five projects in one column and reuses landed favicons at 
             try std.testing.expectEqualDeep(client.Intent{ .select_workspace = id }, fixture.clickBand(bounds, 0).intent);
             last = bounds.y + bounds.height;
         }
+
+        // The expanded sidebar's project row draws its `medium` cell the same way.
+        try fixture.showSidebar(true);
+        try fixture.paint(fixture.projection());
+        const medium = favicons.sprite(.{ .workspace = want.workspace }, .medium).?;
+        try std.testing.expectEqual(@as(usize, 1), sprites.oneTexelPerPixel(renderer.quads.items(), &renderer.sprites.?, medium));
+        try fixture.showSidebar(false);
     }
 }
 

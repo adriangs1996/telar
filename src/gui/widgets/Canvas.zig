@@ -178,9 +178,9 @@ pub fn ringAt(self: *Canvas, bounds: Rect, stroke: Ring) !void {
     });
 }
 
-/// Draws one sprite cell scaled into `bounds` with linear sampling: the page
-/// cell is sized for the largest draw at the chrome ratio, so that box
-/// samples one texel per pixel and a smaller one is a bilinear average of
+/// Draws one sprite cell scaled into `bounds` with linear sampling: a cell
+/// is its size's logical side at the chrome ratio, so a box rounded the same
+/// way samples one texel per pixel and any other is a bilinear average of
 /// premultiplied texels. One quad, no shape. The top-left corner is snapped to a whole
 /// pixel so linear sampling never blurs an exact-size mark.
 /// Example: `try canvas.spriteAt(mark_box, sprite);`

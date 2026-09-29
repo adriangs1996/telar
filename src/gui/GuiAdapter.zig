@@ -1904,7 +1904,7 @@ fn resolveFavicons(self: *GuiAdapter, renderer: *Renderer) !void {
         .{
             .workspace = want.workspace,
             .cwd = want.cwd,
-            .cell = @intCast(page.cell),
+            .cells = page.cells,
         },
     ) orelse return;
     self.driver.inbox.start(.favicon, .{ favicon_worker.execute, .{ self.app.io, self.app.gpa, job } }) catch |err| {
