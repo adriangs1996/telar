@@ -377,35 +377,13 @@ static const char *match (MatchState *ms, const char *s, const char *p);
 
 
 /*
-** Telar: charges long searches to the count hook. Lua runs that hook only
-** between VM instructions, so a single 'find' with a backtracking pattern,
-** or a plain search of a long string, would run without any bound. A step
-** is one attempt of the matcher or 'L_STEPBYTES' bytes scanned or compared;
-** every 'hookcount' steps call the hook once more, as that many instructions
-** would, and the host's hook may raise an error there. The hook receives only
-** 'event'; it must not ask 'lua_getinfo' about the call.
+** Telar: a step is one attempt of the matcher or 'L_STEPBYTES' bytes scanned
+** or compared, charged to the count hook through 'luaL_chargesteps' so a
+** backtracking pattern or a long plain search cannot run without bound.
 */
 #if !defined(L_STEPBYTES)
 #define L_STEPBYTES	64
 #endif
-
-static void chargesteps (lua_State *L, size_t *steps, size_t amount) {
-  lua_Hook hook = lua_gethook(L);
-  size_t count;
-  if (hook == NULL || !(lua_gethookmask(L) & LUA_MASKCOUNT))
-    return;
-  count = cast_sizet(lua_gethookcount(L));
-  if (count == 0)
-    return;
-  *steps += amount;
-  while (*steps >= count) {
-    lua_Debug ar;
-    memset(&ar, 0, sizeof(ar));
-    ar.event = LUA_HOOKCOUNT;
-    *steps -= count;
-    hook(L, &ar);
-  }
-}
 
 
 /* maximum recursion depth for 'match' */
@@ -531,13 +509,13 @@ static const char *matchbalance (MatchState *ms, const char *s,
     while (++s < ms->src_end) {
       if (*s == e) {
         if (--cont == 0) {
-          chargesteps(ms->L, &ms->steps, ct_diff2sz(s - start) / L_STEPBYTES);
+          luaL_chargesteps(ms->L, &ms->steps, ct_diff2sz(s - start) / L_STEPBYTES);
           return s+1;
         }
       }
       else if (*s == b) cont++;
     }
-    chargesteps(ms->L, &ms->steps, ct_diff2sz(s - start) / L_STEPBYTES);
+    luaL_chargesteps(ms->L, &ms->steps, ct_diff2sz(s - start) / L_STEPBYTES);
   }
   return NULL;  /* string ends out of balance */
 }
@@ -548,7 +526,7 @@ static const char *max_expand (MatchState *ms, const char *s,
   ptrdiff_t i = 0;  /* counts maximum expand for item */
   while (singlematch(ms, s + i, p, ep))
     i++;
-  chargesteps(ms->L, &ms->steps, cast_sizet(i) / L_STEPBYTES);
+  luaL_chargesteps(ms->L, &ms->steps, cast_sizet(i) / L_STEPBYTES);
   /* keeps trying to match with the maximum repetitions */
   while (i>=0) {
     const char *res = match(ms, (s+i), ep+1);
@@ -601,6 +579,7 @@ static const char *match_capture (MatchState *ms, const char *s, int l) {
   size_t len;
   l = check_capture(ms, l);
   len = cast_sizet(ms->capture[l].len);
+  luaL_chargesteps(ms->L, &ms->steps, len / L_STEPBYTES);
   if ((size_t)(ms->src_end-s) >= len &&
       memcmp(ms->capture[l].init, s, len) == 0)
     return s+len;
@@ -612,7 +591,7 @@ static const char *match (MatchState *ms, const char *s, const char *p) {
   if (l_unlikely(ms->matchdepth-- == 0))
     luaL_error(ms->L, "pattern too complex");
   init: /* using goto to optimize tail recursion */
-  chargesteps(ms->L, &ms->steps, 1);
+  luaL_chargesteps(ms->L, &ms->steps, 1);
   if (p != ms->p_end) {  /* end of pattern? */
     switch (*p) {
       case '(': {  /* start capture */
@@ -723,7 +702,7 @@ static const char *lmemfind (lua_State *L, const char *s1, size_t l1,
     l1 = l1-l2;  /* 's2' cannot be found after that */
     while (l1 > 0 && (init = (const char *)memchr(s1, *s2, l1)) != NULL) {
       init++;   /* 1st char is already checked */
-      chargesteps(L, &steps, 1 + l2 / L_STEPBYTES);
+      luaL_chargesteps(L, &steps, 1 + l2 / L_STEPBYTES);
       if (memcmp(init, s2+1, l2) == 0)
         return init-1;
       else {  /* correct 'l1' and 's1' to try again */

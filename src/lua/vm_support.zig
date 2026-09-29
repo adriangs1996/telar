@@ -7,13 +7,14 @@ const lua_api = @import("lua-api");
 pub const default_memory_limit: usize = 16 * 1024 * 1024;
 
 // The instruction limit is the budget: it bounds Lua's own work the same way
-// on every host, whatever else the machine is running. Pattern matching and
-// plain `string.find` charge their steps to the same count (`chargesteps` in
-// the vendored lstrlib.c), so one backtracking search cannot run unbounded.
-// The count hook is the only place either limit is checked, between
-// instructions and between those steps; no limit interrupts any other single
-// C call, which the memory limit keeps to a few milliseconds (`string.rep`
-// over megabytes). The wall-clock deadline is a safety net for instructions
+// on every host, whatever else the machine is running. Pattern matching,
+// plain `string.find` and `table.sort` charge their steps to the same count
+// (`luaL_chargesteps` in the vendored lauxlib.c), so one backtracking search
+// or large sort cannot run unbounded. The count hook is the only place
+// either limit is checked, between instructions and between those steps; no
+// limit interrupts any other single C call. The memory limit bounds those:
+// the costliest, `string.rep` of 15 MiB, takes about 25 ms in a release
+// build. The wall-clock deadline is a safety net for instructions
 // that are each that costly, so it sits far above what a whole instruction
 // budget costs: a million allocating instructions take about 20 ms in a
 // release build and 170 ms in a debug one. A deadline near that cost

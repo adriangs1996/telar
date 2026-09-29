@@ -11,7 +11,14 @@ OS, debug, package/native-loader libraries from the linked configuration VM.
 
 ## Local changes
 
-- `src/lstrlib.c`: `chargesteps` charges pattern matching, `%b` scans and
-  plain `string.find` to the count hook, one call per `hookcount` steps, so
-  a host's instruction and time limits bound a single backtracking or
-  quadratic search. Marked `telar:` in the source.
+- `src/lauxlib.c`, `src/lauxlib.h`: `luaL_chargesteps` charges work done
+  inside one library call to the count hook, calling it once per
+  `hookcount` steps as that many instructions would, so a host's
+  instruction and time limits bound the call.
+- `src/lstrlib.c`: pattern matching attempts, `*` and `%b` scans,
+  back-reference comparisons and plain `string.find` comparisons charge
+  their steps (one per 64 bytes scanned or compared).
+- `src/ltablib.c`: each `table.sort` partition charges one step per
+  element.
+
+Each change is marked `telar:` or `Telar:` in the source.

@@ -88,6 +88,32 @@ test "one long plain search stops at the instruction budget" {
     try std.testing.expect(std.mem.indexOf(u8, vm.errorMessage(), "budget exceeded") != null);
 }
 
+test "one back-reference comparison charges the bytes it compares" {
+    var vm = try Vm.init(std.testing.io, std.testing.allocator, .{
+        .instructions = 1_000_000,
+        .deadline_after_ns = 3600 * std.time.ns_per_s,
+    });
+    defer vm.deinit();
+
+    try open(vm.state);
+    const source = "return string.rep('a', 4 << 20):find('^(a-)%1b')";
+    try std.testing.expectError(error.LuaRuntimeFailed, vm.evaluate(source, "@capture.lua"));
+    try std.testing.expect(std.mem.indexOf(u8, vm.errorMessage(), "budget exceeded") != null);
+}
+
+test "one sort of a large table stops at the instruction budget" {
+    var vm = try Vm.init(std.testing.io, std.testing.allocator, .{
+        .instructions = 5_000_000,
+        .deadline_after_ns = 3600 * std.time.ns_per_s,
+    });
+    defer vm.deinit();
+
+    try open(vm.state);
+    const source = "local t = {} for i = 1, 600000 do t[i] = i * 7919 % 600000 end table.sort(t)";
+    try std.testing.expectError(error.LuaRuntimeFailed, vm.evaluate(source, "@sort.lua"));
+    try std.testing.expect(std.mem.indexOf(u8, vm.errorMessage(), "budget exceeded") != null);
+}
+
 test "pattern searches within the budget still answer" {
     var vm = try Vm.init(std.testing.io, std.testing.allocator, .{});
     defer vm.deinit();
@@ -97,3 +123,11 @@ test "pattern searches within the budget still answer" {
     try std.testing.expectEqual(@as(lua_api.c.lua_Integer, 4000), lua_api.c.lua_tointegerx(vm.state, -1, null));
 }
 
+test "a sort within the budget still sorts" {
+    var vm = try Vm.init(std.testing.io, std.testing.allocator, .{});
+    defer vm.deinit();
+
+    try open(vm.state);
+    try vm.evaluate("local t = {} for i = 1, 5000 do t[i] = i * 7919 % 5000 end table.sort(t) return t[1] + t[5000]", "@sorted.lua");
+    try std.testing.expectEqual(@as(lua_api.c.lua_Integer, 4999), lua_api.c.lua_tointegerx(vm.state, -1, null));
+}
