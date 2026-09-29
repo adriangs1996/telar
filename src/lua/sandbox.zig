@@ -48,3 +48,16 @@ test "sandbox does not expose filesystem or process libraries" {
         lua_api.c.lua_settop(vm.state, -2);
     }
 }
+
+test "the wall-clock safety net interrupts instructions the count does not see" {
+    var vm = try Vm.init(std.testing.io, std.testing.allocator, .{
+        .memory = 32 * 1024 * 1024,
+        .instructions = std.math.maxInt(u64),
+        .deadline_after_ns = 50 * std.time.ns_per_ms,
+    });
+    defer vm.deinit();
+
+    try open(vm.state);
+    try std.testing.expectError(error.LuaRuntimeFailed, vm.evaluate("while true do local s = string.rep('x', 1 << 18) end", "@slow.lua"));
+    try std.testing.expect(std.mem.indexOf(u8, vm.errorMessage(), "budget exceeded") != null);
+}

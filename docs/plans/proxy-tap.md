@@ -391,7 +391,7 @@ bounded effect batch.
     effects with the strict trailing check of `plugins/protocol.zig`.
     Frame cap = `max_exchange_bytes` + 64 KiB.
   - Limits enforced outside the VM: memory (default 64 MiB, `Vm` meter),
-    instructions and deadline per event (defaults 5 M and 200 ms,
+    instructions and deadline per event (defaults 5 M and 2 s,
     `resetBudget` per event), per-worker queue depth (64 exchanges, drop
     oldest with a counter), restart budget (5 restarts per 10 minutes, then
     disabled until config reload, with a notification), kill with

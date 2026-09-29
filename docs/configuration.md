@@ -737,7 +737,7 @@ pure: it reads no file and opens no connection.
 `every_ms` defaults to 1000 and must be between 100 and 3,600,000. Each source
 owns one deadline. If a client is delayed, expired ticks collapse into one
 evaluation instead of replaying every missed value. Lua evaluation keeps the
-same instruction, memory and 10 ms wall-time containment as other client
+same instruction, memory and wall-time containment as other client
 callbacks. A failure leaves the last valid content in place and publishes a
 bounded client diagnostic.
 
@@ -971,6 +971,13 @@ The configuration VM exposes base, coroutine, math, string, table, and UTF-8
 libraries. It does not expose `io`, `os`, `debug`, native modules, dynamic code
 loading, or mutable metatables. `require("telar")` returns the API and local
 module names resolve only beneath the directory containing `config.lua`.
+
+Evaluating the configuration may use 16 MiB of Lua memory and one million Lua
+instructions; a callback may use 100,000 instructions. The instruction count
+is the budget, so whether a file loads does not depend on how busy the machine
+is. A wall-clock deadline of 2 s for the file and 100 ms for a callback only
+stops instructions whose cost the count does not see, such as `string.rep`
+over megabytes.
 
 The client watches the main file, loaded local modules, configured plugin
 trees, and the trust store. A change builds a complete replacement generation.

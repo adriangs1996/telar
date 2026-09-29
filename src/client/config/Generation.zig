@@ -55,11 +55,7 @@ pub fn loadSource(context: LoadContext, spec: SourceInput) !*Generation {
     generation.* = .{
         .gpa = context.gpa,
         .number = spec.number,
-        .vm = try lua.Vm.init(context.io, context.gpa, .{
-            .memory = data.config_values.default_memory_limit,
-            .instructions = data.config_values.default_load_instruction_limit,
-            .deadline_after_ns = (Limits{}).deadline_after_ns,
-        }),
+        .vm = try lua.Vm.init(context.io, context.gpa, .{}),
         .modules = undefined,
     };
     errdefer generation.vm.deinit();
@@ -73,7 +69,7 @@ pub fn loadSource(context: LoadContext, spec: SourceInput) !*Generation {
         context.diagnostic.set("failed to initialize Lua: {s}", .{@errorName(err)});
         return err;
     };
-    generation.vm.resetBudget(data.config_values.default_load_instruction_limit, 100 * std.time.ns_per_ms);
+    generation.vm.resetBudget(lua.default_load_instruction_limit, lua.default_load_deadline_ns);
     generation.vm.execute(.{ .source = generation_support.bootstrap, .name = "@telar/bootstrap.lua", .results = 0 }) catch |err| {
         context.diagnostic.set("failed to initialize telar Lua API: {s}", .{generation.vm.errorMessage()});
         return err;
@@ -1652,10 +1648,4 @@ const FileInput = struct {
     path: []const u8,
     number: u64,
     profile: ?[]const u8 = null,
-};
-
-const Limits = struct {
-    memory: usize = data.config_values.default_memory_limit,
-    instructions: u64 = data.config_values.default_load_instruction_limit,
-    deadline_after_ns: u64 = 100 * std.time.ns_per_ms,
 };
