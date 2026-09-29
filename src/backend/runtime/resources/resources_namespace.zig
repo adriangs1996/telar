@@ -35,7 +35,6 @@ test "every resource acquisition checkpoint rolls back" {
     var temp = try SocketDirectory.create(io);
     defer temp.cleanup(io);
 
-
     inline for (std.enums.values(AcquisitionPhase), 0..) |phase, index| {
         var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/resource-{d}.sock", .{ temp.path(), index });

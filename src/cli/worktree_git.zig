@@ -29,6 +29,10 @@ const max_git_output_bytes = 64 * 1024;
 
 /// Longest commit hash Git prints: SHA-256 in hex.
 pub const max_commit_bytes = 64;
+/// Longest `refs/heads/<branch>` of a valid worktree branch.
+const max_branch_ref_bytes = "refs/heads/".len + workspace.max_worktree_branch_bytes;
+/// Longest `<branch>@{upstream}` of a valid worktree branch.
+const max_upstream_spec_bytes = workspace.max_worktree_branch_bytes + "@{upstream}".len;
 /// Longest `origin` URL read to derive a repository identity.
 const max_origin_url_bytes = 2048;
 
@@ -144,9 +148,9 @@ pub fn deleteBranch(init: std.process.Init, root: []const u8, branch: []const u8
 /// ```
 pub fn branchMerged(io: std.Io, environ: std.process.Environ, root: []const u8, branch: []const u8) bool {
     workspace.validateWorktreeBranch(branch) catch return false;
-    var upstream_buffer: [workspace.max_worktree_branch_bytes + 16]u8 = undefined;
+    var upstream_buffer: [max_upstream_spec_bytes]u8 = undefined;
     const upstream = std.fmt.bufPrint(&upstream_buffer, "{s}@{{upstream}}", .{branch}) catch return false;
-    var ref_buffer: [workspace.max_worktree_branch_bytes + 16]u8 = undefined;
+    var ref_buffer: [max_branch_ref_bytes]u8 = undefined;
     const ref = std.fmt.bufPrint(&ref_buffer, "refs/heads/{s}", .{branch}) catch return false;
 
     const repository: gitstatus.Checkout = .{
@@ -440,11 +444,26 @@ test "a branch counts as merged exactly when git branch -d deletes it" {
     try testGit(&.{ "git", "-C", root, "checkout", "-q", "main" });
 
     const cases = [_]struct { branch: []const u8, merged: bool }{
-        .{ .branch = "landed", .merged = true },
-        .{ .branch = "behind", .merged = false },
-        .{ .branch = "ahead", .merged = false },
-        .{ .branch = "released", .merged = true },
-        .{ .branch = "missing", .merged = false },
+        .{
+            .branch = "landed",
+            .merged = true,
+        },
+        .{
+            .branch = "behind",
+            .merged = false,
+        },
+        .{
+            .branch = "ahead",
+            .merged = false,
+        },
+        .{
+            .branch = "released",
+            .merged = true,
+        },
+        .{
+            .branch = "missing",
+            .merged = false,
+        },
     };
     for (cases) |case| {
         try std.testing.expectEqual(case.merged, branchMerged(io, std.testing.environ, root, case.branch));

@@ -50,6 +50,11 @@ pub fn create(io: std.Io) !SocketDirectory {
     return self;
 }
 
+/// The directory's real path.
+///
+/// ```zig
+/// try std.testing.expect(std.mem.startsWith(u8, sockets.path(), "/"));
+/// ```
 pub fn path(self: *const SocketDirectory) []const u8 {
     return self.path_buffer[0..self.path_len];
 }
@@ -63,6 +68,11 @@ pub fn endpoint(self: *const SocketDirectory, buffer: []u8, name: []const u8) ![
     return std.fmt.bufPrint(buffer, "{s}/{s}", .{ self.path(), name });
 }
 
+/// Closes the directory and removes it with everything inside.
+///
+/// ```zig
+/// defer sockets.cleanup(io);
+/// ```
 pub fn cleanup(self: *SocketDirectory, io: std.Io) void {
     self.dir.close(io);
     self.parent.deleteTree(io, &self.name) catch {};
