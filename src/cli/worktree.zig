@@ -473,7 +473,10 @@ fn remove(init: std.process.Init, command: Command) !u8 {
         return error.RemovalCancelled;
     }
 
-    if (options.delete_branch and !try confirm(init, "Also delete its branch")) {
+    // A branch already in its base loses nothing when deleted, so a script
+    // may clean it up; deleting any other needs a person.
+    const merged = options.delete_branch and root != null and worktree_git.branchMerged(init.io, init.minimal.environ, root.?, worktree.branch);
+    if (options.delete_branch and !merged and !try confirm(init, "Also delete its branch")) {
         return error.RemovalCancelled;
     }
 
@@ -481,7 +484,8 @@ fn remove(init: std.process.Init, command: Command) !u8 {
     if (root) |main_root| {
         try worktree_git.remove(init, main_root, worktree.path, options.force);
         if (options.delete_branch) {
-            try worktree_git.deleteBranch(init, main_root, worktree.branch, options.force);
+            // `-d` for a merged branch, so Git checks again what was checked.
+            try worktree_git.deleteBranch(init, main_root, worktree.branch, options.force and !merged);
         }
     }
 

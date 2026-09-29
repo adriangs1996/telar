@@ -77,5 +77,7 @@ theirs.
   may be typing there. Retry after telling them. A tab you open yourself with
   `telar tab create --background` does not take their focus.
 - Prompts to one agent are budgeted; wait for its answer before sending more.
-- Removing a worktree with local changes or deleting its branch needs the user
-  at a terminal: suggest `telar worktree remove <branch>` and let them run it.
+- Removing a worktree with local changes, or deleting a branch with commits
+  its base lacks, needs the user at a terminal: suggest
+  `telar worktree remove <branch>` and let them run it. Once the branch is
+  merged, `telar worktree remove <branch> --delete-branch` runs without them.
