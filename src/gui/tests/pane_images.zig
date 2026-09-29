@@ -71,7 +71,7 @@ fn placement(image_id: u32, generation: u64, virtual_id: u64, z_index: i32) core
 // Resolves, uploads and reports every pending upload as done.
 fn settle(images: *PaneImages, stores: []Store) void {
     pane_images.place(images, stores, view);
-    pane_images.start(images, stores, view.machine);
+    pane_images.start(images, stores, view.machine, 0);
     var frame: native.Frame = .{
         .quads = null,
         .quad_count = 0,
@@ -82,7 +82,7 @@ fn settle(images: *PaneImages, stores: []Store) void {
     };
     pane_images.handOff(images, &frame);
     for (frame.image_uploads.?[0..frame.image_upload_count]) |upload| {
-        pane_images.finish(images, stores, upload.handle, true);
+        _ = pane_images.finish(images, stores, upload.handle, true, 0);
     }
 
     pane_images.place(images, stores, view);
@@ -100,7 +100,7 @@ test "a placement uploads once and then draws its texture at natural size" {
     try std.testing.expectEqual(@as(u32, 0), images.placements[0].handle);
     try std.testing.expectEqual(kitty_protocol.Layer.below_text, images.placements[0].layer);
 
-    pane_images.start(&images, &stores, view.machine);
+    pane_images.start(&images, &stores, view.machine, 0);
     try std.testing.expectEqual(@as(u32, 1), images.upload_count);
     const upload = images.uploads[0];
     try std.testing.expectEqual(@as(u32, 3), upload.bytes_per_pixel);
@@ -120,10 +120,10 @@ test "a placement uploads once and then draws its texture at natural size" {
     try std.testing.expectEqual(@as(u32, 1), frame.image_upload_count);
     try std.testing.expectEqual(@as(u32, 0), images.upload_count);
     pane_images.place(&images, &stores, view);
-    pane_images.start(&images, &stores, view.machine);
+    pane_images.start(&images, &stores, view.machine, 0);
     try std.testing.expectEqual(@as(u32, 0), images.upload_count);
 
-    pane_images.finish(&images, &stores, upload.handle, true);
+    _ = pane_images.finish(&images, &stores, upload.handle, true, 0);
     pane_images.place(&images, &stores, view);
     try std.testing.expectEqual(upload.handle, images.placements[0].handle);
     try std.testing.expectEqual([4]f32{ 0, 0, 1, 1 }, images.placements[0].uv);
@@ -147,11 +147,11 @@ test "a new generation keeps drawing the previous texture until its own is ready
     try std.testing.expectEqual(first, images.placements[0].handle);
     try std.testing.expectEqual(@as(u32, 0), images.release_count);
 
-    pane_images.start(&images, &stores, view.machine);
+    pane_images.start(&images, &stores, view.machine, 0);
     try std.testing.expectEqual(@as(u32, 1), images.upload_count);
     const second = images.uploads[0].handle;
     try std.testing.expect(second != first);
-    pane_images.finish(&images, &stores, second, true);
+    _ = pane_images.finish(&images, &stores, second, true, 0);
     pane_images.place(&images, &stores, view);
     try std.testing.expectEqual(second, images.placements[0].handle);
     try std.testing.expectEqual(@as(u32, 1), images.release_count);
@@ -169,7 +169,7 @@ test "uploads stay within the in-flight bound" {
     }
 
     pane_images.place(&images, &stores, view);
-    pane_images.start(&images, &stores, view.machine);
+    pane_images.start(&images, &stores, view.machine, 0);
     try std.testing.expectEqual(@as(u32, ImageUpload.uploads_in_flight), images.upload_count);
     pane_images.abandon(&images, &stores);
 }
@@ -206,12 +206,12 @@ test "a pixel lease survives a pane clear until its upload reports" {
     try receiveImage(&stores[0], 7, 1);
     try receivePlacement(&stores[0], placement(7, 1, 1, 0));
     pane_images.place(&images, &stores, view);
-    pane_images.start(&images, &stores, view.machine);
+    pane_images.start(&images, &stores, view.machine, 0);
     const handle = images.uploads[0].handle;
 
     stores[0].clearPane(pane_id);
     try std.testing.expectEqual(@as(usize, 12), stores[0].total_bytes);
-    pane_images.finish(&images, &stores, handle, true);
+    _ = pane_images.finish(&images, &stores, handle, true, 0);
     try std.testing.expectEqual(@as(usize, 0), stores[0].total_bytes);
     pane_images.place(&images, &stores, view);
     try std.testing.expectEqual(@as(u32, 1), images.release_count);
@@ -224,12 +224,12 @@ test "a failed upload draws nothing and is not retried for the same image" {
     try receiveImage(&stores[0], 7, 1);
     try receivePlacement(&stores[0], placement(7, 1, 1, 0));
     pane_images.place(&images, &stores, view);
-    pane_images.start(&images, &stores, view.machine);
-    pane_images.finish(&images, &stores, images.uploads[0].handle, false);
+    pane_images.start(&images, &stores, view.machine, 0);
+    _ = pane_images.finish(&images, &stores, images.uploads[0].handle, false, 0);
     images.upload_count = 0;
 
     pane_images.place(&images, &stores, view);
-    pane_images.start(&images, &stores, view.machine);
+    pane_images.start(&images, &stores, view.machine, 0);
     try std.testing.expectEqual(@as(u32, 0), images.upload_count);
     try std.testing.expectEqual(@as(u32, 0), images.placements[0].handle);
     try std.testing.expectEqual(@as(usize, 0), images.gpu.resident_bytes);
@@ -265,8 +265,8 @@ test "the three layers paint around cell backgrounds and text, clipped and scrol
         .cell_height = renderer.metrics.cell_height,
     };
     pane_images.place(&images, &stores, cell_view);
-    pane_images.start(&images, &stores, 0);
-    pane_images.finish(&images, &stores, images.uploads[0].handle, true);
+    pane_images.start(&images, &stores, 0, 0);
+    _ = pane_images.finish(&images, &stores, images.uploads[0].handle, true, 0);
     pane_images.place(&images, &stores, cell_view);
 
     var pane = try data.Pane.init(std.testing.allocator, .{
@@ -347,4 +347,28 @@ test "the three layers paint around cell backgrounds and text, clipped and scrol
         .hide_cursor = true,
     });
     try std.testing.expectEqual(@as(usize, 0), renderer.imageDraws().len);
+}
+
+test "a stream uploads its next generation while the previous one finishes, never a third" {
+    var stores = [_]Store{.init(std.testing.allocator)};
+    defer stores[0].deinit();
+    var images: PaneImages = .{};
+    try receiveImage(&stores[0], 7, 1);
+    try receivePlacement(&stores[0], placement(7, 1, 1, 0));
+    pane_images.place(&images, &stores, view);
+    pane_images.start(&images, &stores, view.machine, 0);
+    try std.testing.expectEqual(@as(u32, 1), images.upload_count);
+
+    try receiveImage(&stores[0], 7, 2);
+    try receivePlacement(&stores[0], placement(7, 2, 1, 0));
+    pane_images.place(&images, &stores, view);
+    pane_images.start(&images, &stores, view.machine, 0);
+    try std.testing.expectEqual(@as(u32, 2), images.upload_count);
+
+    try receiveImage(&stores[0], 7, 3);
+    try receivePlacement(&stores[0], placement(7, 3, 1, 0));
+    pane_images.place(&images, &stores, view);
+    pane_images.start(&images, &stores, view.machine, 0);
+    try std.testing.expectEqual(@as(u32, 2), images.upload_count);
+    pane_images.abandon(&images, &stores);
 }

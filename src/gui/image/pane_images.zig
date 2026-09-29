@@ -20,6 +20,10 @@ const ImageUpload = @import("../native/ImageUpload.zig");
 const retained = client.retained_graphics;
 const Store = retained.Store;
 const rgba_bytes = 4;
+/// Generations of one image uploading at once: the next can start while the
+/// previous finishes, so a stream turns one generation per frame into a
+/// texture instead of one every few frames. Older generations never queue.
+const uploads_per_image = 2;
 
 /// Resolves the presented machine's placements when its images, its
 /// textures or the cell size changed, then releases textures nothing needs.
@@ -51,14 +55,14 @@ pub fn place(images: *PaneImages, stores: []Store, view: ImageView) void {
 }
 
 /// Starts uploads for the resolved placements whose image has no texture
-/// yet, oldest request first, within the in-flight bound and the GPU budget.
-/// The newest generation of an image waits while an older one uploads, so a
-/// stream never queues more than one upload per image.
+/// yet, within the in-flight bound and the GPU budget. Only the generation
+/// the store holds now is ever requested, so a stream never queues a replay:
+/// at most `uploads_per_image` of its newest generations are in flight.
 ///
 /// ```zig
-/// pane_images.start(&gui.images, &gui.graphics_stores, slot);
+/// pane_images.start(&gui.images, &gui.graphics_stores, slot, now_ns);
 /// ```
-pub fn start(images: *PaneImages, stores: []Store, machine: u8) void {
+pub fn start(images: *PaneImages, stores: []Store, machine: u8, now_ns: u64) void {
     const store = &stores[machine];
     for (images.resolved()) |placement| {
         if (images.gpu.uploading >= ImageUpload.uploads_in_flight or images.upload_count >= images.uploads.len) {
@@ -66,7 +70,7 @@ pub fn start(images: *PaneImages, stores: []Store, machine: u8) void {
         }
 
         const identity = identityOf(placement);
-        if (images.gpu.find(machine, identity) != null or images.gpu.uploadingImage(machine, identity)) {
+        if (images.gpu.find(machine, identity) != null or images.gpu.uploadsOf(machine, identity) == uploads_per_image) {
             continue;
         }
 
@@ -99,6 +103,7 @@ pub fn start(images: *PaneImages, stores: []Store, machine: u8) void {
 
         images.gpu.residency[row] = .uploading;
         images.gpu.lease[row] = lease;
+        images.gpu.started_ns[row] = now_ns;
         images.gpu.bytes[row] = bytes;
         images.gpu.resident_bytes += bytes;
         images.gpu.uploading += 1;
@@ -114,15 +119,16 @@ pub fn start(images: *PaneImages, stores: []Store, machine: u8) void {
 }
 
 /// Takes the backend's report for one upload: the pixels go back to their
-/// store, which may now free them and return the runtime's credit.
+/// store, which may now free them and return the runtime's credit. Returns
+/// how long a successful upload took since `start` requested it.
 ///
 /// ```zig
-/// pane_images.finish(&gui.images, &gui.graphics_stores, handle, true);
+/// const elapsed = pane_images.finish(&gui.images, &gui.graphics_stores, handle, true, now_ns);
 /// ```
-pub fn finish(images: *PaneImages, stores: []Store, handle: u32, success: bool) void {
-    const row = GpuImages.rowOf(handle) orelse return;
+pub fn finish(images: *PaneImages, stores: []Store, handle: u32, success: bool, now_ns: u64) ?u64 {
+    const row = GpuImages.rowOf(handle) orelse return null;
     if (images.gpu.residency[row] != .uploading) {
-        return;
+        return null;
     }
 
     retained.release(&stores[images.gpu.machine[row]], images.gpu.lease[row]);
@@ -130,12 +136,13 @@ pub fn finish(images: *PaneImages, stores: []Store, handle: u32, success: bool) 
     images.revision +%= 1;
     if (success) {
         images.gpu.residency[row] = .ready;
-        return;
+        return now_ns -| images.gpu.started_ns[row];
     }
 
     images.gpu.residency[row] = .failed;
     images.gpu.resident_bytes -= images.gpu.bytes[row];
     images.gpu.bytes[row] = 0;
+    return null;
 }
 
 /// Records which textures the prepared frame draws, so eviction spares them.

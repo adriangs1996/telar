@@ -12,6 +12,11 @@ static const size_t image_scratch_bytes = 1024 * 1024;
 static const uint32_t rgb_bytes = 3;
 static const uint32_t rgba_bytes = 4;
 static const NSUInteger image_texture_index = 2 + TELAR_GUI_DIAGRAM_SLOTS;
+// Released image textures kept for reuse by an upload of the same size: a
+// stream replaces one generation per frame, and allocating and making
+// resident a fresh 4K texture each time costs the GPU driver more than the
+// copy itself.
+enum { image_spares = 4 };
 
 @implementation TelarMetalRenderer {
   id<MTLDevice> device;
@@ -45,6 +50,8 @@ static const NSUInteger image_texture_index = 2 + TELAR_GUI_DIAGRAM_SLOTS;
   dispatch_queue_t upload_queue;
   dispatch_group_t upload_work;
   uint8_t *image_scratch;
+  id<MTLTexture> spares[image_spares];
+  id<MTLResidencySet> image_residency;
 }
 
 - (instancetype)initWithCompletion:(TelarMetalCompletion)handler
@@ -95,7 +102,7 @@ static const NSUInteger image_texture_index = 2 + TELAR_GUI_DIAGRAM_SLOTS;
   NSError *error = nil;
   arguments = [device newArgumentTableWithDescriptor:bindings error:&error];
   MTLResidencySetDescriptor *resident = [MTLResidencySetDescriptor new];
-  resident.initialCapacity = 5 + TELAR_GUI_DIAGRAM_SLOTS + TELAR_GUI_IMAGE_DRAWS;
+  resident.initialCapacity = 5 + TELAR_GUI_DIAGRAM_SLOTS;
   residency = [device newResidencySetWithDescriptor:resident error:&error];
   viewport_buffer = [device newBufferWithLength:sizeof(float) * 2
                                         options:MTLResourceStorageModeShared];
@@ -107,6 +114,17 @@ static const NSUInteger image_texture_index = 2 + TELAR_GUI_DIAGRAM_SLOTS;
   }
 
   [queue addResidencySet:residency];
+  // Image textures stay resident from install to release instead of being
+  // re-added to the frame's set every frame.
+  MTLResidencySetDescriptor *resident_images = [MTLResidencySetDescriptor new];
+  resident_images.initialCapacity = TELAR_GUI_IMAGE_CAPACITY + image_spares;
+  image_residency = [device newResidencySetWithDescriptor:resident_images error:&error];
+  if (image_residency == nil) {
+    NSLog(@"telar-gui: Metal 4 image residency failed: %@", error);
+    return NO;
+  }
+
+  [queue addResidencySet:image_residency];
   gpu_work = dispatch_group_create();
   commit_options = [MTL4CommitOptions new];
   render_pass = [MTL4RenderPassDescriptor new];
@@ -307,15 +325,18 @@ static const NSUInteger image_texture_index = 2 + TELAR_GUI_DIAGRAM_SLOTS;
 // Runs on the upload queue: one shared-storage texture written in row
 // bands. Unified memory makes the texture's storage the only copy.
 static id<MTLTexture> build_image(id<MTLDevice> device, telar_gui_image_upload upload,
-                                  uint8_t *scratch) {
-  MTLTextureDescriptor *descriptor =
-      [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
-                                                         width:upload.width
-                                                        height:upload.height
-                                                     mipmapped:NO];
-  descriptor.usage = MTLTextureUsageShaderRead;
-  descriptor.storageMode = MTLStorageModeShared;
-  id<MTLTexture> texture = [device newTextureWithDescriptor:descriptor];
+                                  uint8_t *scratch, id<MTLTexture> spare) {
+  id<MTLTexture> texture = spare;
+  if (texture == nil) {
+    MTLTextureDescriptor *descriptor =
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+                                                           width:upload.width
+                                                          height:upload.height
+                                                       mipmapped:NO];
+    descriptor.usage = MTLTextureUsageShaderRead;
+    descriptor.storageMode = MTLStorageModeShared;
+    texture = [device newTextureWithDescriptor:descriptor];
+  }
   if (texture == nil) {
     return nil;
   }
@@ -368,6 +389,7 @@ static BOOL image_upload_valid(telar_gui_image_upload upload) {
     for (uint32_t i = 0; i < frame->image_release_count; i++) {
       uint32_t handle = frame->image_releases[i];
       if (handle >= 1 && handle <= TELAR_GUI_IMAGE_CAPACITY && !image_pending[handle - 1]) {
+        [self keepSpare:images[handle - 1]];
         images[handle - 1] = nil;
       }
     }
@@ -393,8 +415,9 @@ static BOOL image_upload_valid(telar_gui_image_upload upload) {
     __weak TelarMetalRenderer *weak = self;
     id<MTLDevice> gpu = device;
     uint8_t *scratch = image_scratch;
+    id<MTLTexture> spare = [self takeSpareWidth:upload.width height:upload.height];
     dispatch_group_async(upload_work, upload_queue, ^{
-      id<MTLTexture> texture = build_image(gpu, upload, scratch);
+      id<MTLTexture> texture = build_image(gpu, upload, scratch, spare);
       dispatch_async(dispatch_get_main_queue(), ^{
         TelarMetalRenderer *renderer = weak;
         if (renderer == nil || renderer->stopped) {
@@ -403,10 +426,54 @@ static BOOL image_upload_valid(telar_gui_image_upload upload) {
 
         renderer->image_pending[upload.handle - 1] = NO;
         renderer->images[upload.handle - 1] = texture;
+        if (texture != nil) {
+          [renderer->image_residency addAllocation:texture];
+          [renderer->image_residency commit];
+        } else if (spare != nil) {
+          [renderer->image_residency removeAllocation:spare];
+          [renderer->image_residency commit];
+        }
+
         renderer->image_ready(upload.handle, texture != nil);
       });
     });
   }
+}
+
+// Main thread, no frame in flight: nothing reads a released texture again.
+// A spare stays resident for its next upload; one dropped from the pool
+// leaves the residency set.
+- (void)keepSpare:(id<MTLTexture>)texture {
+  if (texture == nil) {
+    return;
+  }
+
+  for (unsigned i = 0; i < image_spares; i++) {
+    if (spares[i] == nil) {
+      spares[i] = texture;
+      return;
+    }
+  }
+
+  // Full: the oldest spare goes, the newest size is the likeliest reused.
+  [image_residency removeAllocation:spares[0]];
+  [image_residency commit];
+  for (unsigned i = 1; i < image_spares; i++) {
+    spares[i - 1] = spares[i];
+  }
+  spares[image_spares - 1] = texture;
+}
+
+- (id<MTLTexture>)takeSpareWidth:(uint32_t)width height:(uint32_t)height {
+  for (unsigned i = 0; i < image_spares; i++) {
+    id<MTLTexture> spare = spares[i];
+    if (spare != nil && spare.width == width && spare.height == height) {
+      spares[i] = nil;
+      return spare;
+    }
+  }
+
+  return nil;
 }
 
 // Draws instances [first, last) with whatever textures are bound.
@@ -551,18 +618,8 @@ static void draw_quads(id<MTL4RenderCommandEncoder> encoder, uint32_t first, uin
     }
   }
 
-  // Strong ivars keep every image alive until a later frame releases it;
-  // releases only arrive while no frame is in flight.
-  if (frame->image_draws != NULL) {
-    uint32_t draws = MIN(frame->image_draw_count, (uint32_t)TELAR_GUI_IMAGE_DRAWS);
-    for (uint32_t i = 0; i < draws; i++) {
-      uint32_t handle = frame->image_draws[i].handle;
-      if (handle >= 1 && handle <= TELAR_GUI_IMAGE_CAPACITY && images[handle - 1] != nil) {
-        [residency addAllocation:images[handle - 1]];
-      }
-    }
-  }
-
+  // Images live in `image_residency` from install to release; strong ivars
+  // keep them alive, and releases only arrive while no frame is in flight.
   [residency commit];
   in_flight = YES;
   active_token = frame->token;
@@ -592,6 +649,11 @@ static void draw_quads(id<MTL4RenderCommandEncoder> encoder, uint32_t first, uin
   for (unsigned i = 0; i < TELAR_GUI_IMAGE_CAPACITY; i++) {
     images[i] = nil;
   }
+  for (unsigned i = 0; i < image_spares; i++) {
+    spares[i] = nil;
+  }
+  [image_residency removeAllAllocations];
+  [image_residency commit];
 }
 
 - (void)dealloc {

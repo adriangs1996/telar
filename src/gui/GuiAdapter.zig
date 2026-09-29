@@ -1749,7 +1749,11 @@ pub fn resize(self: *GuiAdapter, size: core.TerminalSize, theme: shared_model.Te
 /// pixels; a ready texture changes what the next frame draws.
 /// Example: `gui.imageReady(handle, true);`
 pub fn imageReady(self: *GuiAdapter, handle: u32, success: bool) void {
-    pane_images.finish(&self.images, &self.graphics_stores, handle, success);
+    const elapsed = pane_images.finish(&self.images, &self.graphics_stores, handle, success, self.now()) orelse return;
+    if (comptime core.enabled) {
+        self.app.telemetry.metrics.graphics_textures += 1;
+        self.app.telemetry.metrics.graphics_upload.observe(elapsed);
+    }
 }
 
 /// Retires captured damage after GPU delivery, preserving newer received state.
@@ -1813,7 +1817,7 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
             .cell_height = renderer.metrics.cell_height,
         },
     );
-    pane_images.start(&self.images, &self.graphics_stores, self.machines.active);
+    pane_images.start(&self.images, &self.graphics_stores, self.machines.active, self.now());
     renderer.images = self.images.resolved();
     var scene: Scene = .{
         .terminal = renderer,

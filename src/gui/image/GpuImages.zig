@@ -29,6 +29,8 @@ width: [capacity]u32 = @splat(0),
 height: [capacity]u32 = @splat(0),
 bytes: [capacity]usize = @splat(0),
 lease: [capacity]client.retained_graphics.Lease = undefined,
+/// When the upload was requested, on the window's monotonic clock.
+started_ns: [capacity]u64 = @splat(0),
 /// The frame that last drew the row, or that last needed it as a stand-in.
 used_frame: [capacity]u64 = @splat(0),
 count: usize = 0,
@@ -105,23 +107,24 @@ pub fn findStandIn(self: *const GpuImages, machine: u8, identity: client.ImageId
     return best;
 }
 
-/// Whether an upload of the same logical image is already running.
-/// Example: `if (images.uploadingImage(slot, identity)) continue;`.
-pub fn uploadingImage(self: *const GpuImages, machine: u8, identity: client.ImageIdentity) bool {
+/// How many uploads of the same logical image are running.
+/// Example: `if (images.uploadsOf(slot, identity) == limit) continue;`.
+pub fn uploadsOf(self: *const GpuImages, machine: u8, identity: client.ImageIdentity) usize {
     if (self.uploading == 0) {
-        return false;
+        return 0;
     }
 
+    var count: usize = 0;
     for (self.residency, 0..) |residency, row| {
         const other = self.identity[row];
         if (residency == .uploading and self.machine[row] == machine and other.pane_id == identity.pane_id and
             other.image_id == identity.image_id)
         {
-            return true;
+            count += 1;
         }
     }
 
-    return false;
+    return count;
 }
 
 /// Example: `const handle = GpuImages.handleOf(row);`.
