@@ -3,6 +3,7 @@
 
 const std = @import("std");
 const DisplayBox = @import("DisplayBox.zig");
+const DisplayCells = @import("DisplayCells.zig");
 const DisplayRequest = @import("DisplayRequest.zig");
 const Layer = @import("Layer.zig").Layer;
 
@@ -50,6 +51,35 @@ pub fn box(request: DisplayRequest) DisplayBox {
         .offset_y = offset_y,
         .width = width,
         .height = height,
+    };
+}
+
+/// The cells the placement covers: the requested ones when both are
+/// given, else its drawn box plus offset rounded up to whole cells, as
+/// Ghostty's `gridSize` does.
+///
+/// ```zig
+/// const covered = display.cells(.{ .source_width = 640, .source_height = 480, .cell_width = 16, .cell_height = 32 });
+/// ```
+pub fn cells(request: DisplayRequest) DisplayCells {
+    if (request.columns != 0 and request.rows != 0) {
+        return .{
+            .columns = request.columns,
+            .rows = request.rows,
+        };
+    }
+
+    if (request.cell_width == 0 or request.cell_height == 0) {
+        return .{
+            .columns = 0,
+            .rows = 0,
+        };
+    }
+
+    const drawn = box(request);
+    return .{
+        .columns = std.math.divCeil(u32, drawn.width +| drawn.offset_x, request.cell_width) catch unreachable,
+        .rows = std.math.divCeil(u32, drawn.height +| drawn.offset_y, request.cell_height) catch unreachable,
     };
 }
 
@@ -154,6 +184,36 @@ test "huge cell requests saturate instead of overflowing" {
     });
     try std.testing.expectEqual(std.math.maxInt(u32), resolved.width);
     try std.testing.expectEqual(std.math.maxInt(u32), resolved.height);
+}
+
+test "covered cells round the drawn box and its offset up to whole cells" {
+    try std.testing.expectEqual(DisplayCells{ .columns = 40, .rows = 15 }, cells(.{
+        .source_width = 640,
+        .source_height = 480,
+        .cell_width = 16,
+        .cell_height = 32,
+    }));
+    try std.testing.expectEqual(DisplayCells{ .columns = 2, .rows = 1 }, cells(.{
+        .source_width = 16,
+        .source_height = 8,
+        .offset_x = 1,
+        .cell_width = 16,
+        .cell_height = 32,
+    }));
+    try std.testing.expectEqual(DisplayCells{ .columns = 7, .rows = 3 }, cells(.{
+        .source_width = 1,
+        .source_height = 1,
+        .columns = 7,
+        .rows = 3,
+        .cell_width = 16,
+        .cell_height = 32,
+    }));
+    try std.testing.expectEqual(DisplayCells{ .columns = 0, .rows = 0 }, cells(.{
+        .source_width = 8,
+        .source_height = 8,
+        .cell_width = 0,
+        .cell_height = 0,
+    }));
 }
 
 test "z-index picks the layer with strict boundaries" {
