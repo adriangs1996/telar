@@ -1,22 +1,22 @@
 //! Public namespace for one long-lived Telar runtime.
 
 const std_module = @import("std");
+const localsocket = @import("localsocket");
+const SocketDirectory = localsocket.SocketDirectory;
 const Runtime = @import("Runtime.zig");
 const cell_publication_test = @import("tests/cell_publication_test.zig");
 
 test "Runtime owns its endpoint until the injected stop dependency fires" {
     const std = std_module;
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
     var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const endpoint = try std.fmt.bufPrint(
         &endpoint_buffer,
         "{s}/runtime-contract.sock",
-        .{directory_buffer[0..directory_len]},
+        .{temp.path()},
     );
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);

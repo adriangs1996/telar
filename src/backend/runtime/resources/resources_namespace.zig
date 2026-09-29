@@ -1,6 +1,8 @@
 //! Physical resources acquired and owned for one runtime lifetime.
 
 const std = @import("std");
+const localsocket = @import("localsocket");
+const SocketDirectory = localsocket.SocketDirectory;
 const core = @import("telar-core");
 const State = @import("../observability/State.zig");
 const Resources = @import("Resources.zig");
@@ -30,15 +32,13 @@ pub fn initTelemetry(io: std.Io, endpoint: []const u8) State {
 
 test "every resource acquisition checkpoint rolls back" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
 
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
 
     inline for (std.enums.values(AcquisitionPhase), 0..) |phase, index| {
         var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/resource-{d}.sock", .{ directory_buffer[0..directory_len], index });
+        const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/resource-{d}.sock", .{ temp.path(), index });
         var resources: Resources = undefined;
 
         try std.testing.expectError(error.InjectedStartupFailure, resources.acquire(.{

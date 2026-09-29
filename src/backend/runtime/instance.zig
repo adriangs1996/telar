@@ -7,6 +7,8 @@ const pane_launch = @import("pane_launch.zig");
 const worktree_lifecycle = @import("worktree_lifecycle.zig");
 const core = @import("telar-core");
 const std = @import("std");
+const localsocket = @import("localsocket");
+const SocketDirectory = localsocket.SocketDirectory;
 const Options = @import("Options.zig");
 const Runtime = @import("Runtime.zig");
 const Initialization = @import("Initialization.zig");
@@ -43,12 +45,10 @@ fn expectRuntimeEndpointRemoved(io: std.Io, endpoint: []const u8) !void {
 
 test "invalid graphics limits fail before runtime resources are created" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
     var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/invalid.sock", .{directory_buffer[0..directory_len]});
+    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/invalid.sock", .{temp.path()});
     var runtime: Runtime = undefined;
 
     try std.testing.expectError(error.InvalidGraphicsLimits, runtime.init(.{
@@ -64,12 +64,10 @@ test "invalid graphics limits fail before runtime resources are created" {
 
 test "a failure after actor scheduling rolls back the composed runtime" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
     var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/actor-startup.sock", .{directory_buffer[0..directory_len]});
+    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/actor-startup.sock", .{temp.path()});
     var runtime: Runtime = undefined;
 
     try std.testing.expectError(error.InjectedStartupFailure, runtime.start(.{
@@ -81,12 +79,10 @@ test "a failure after actor scheduling rolls back the composed runtime" {
 
 test "runtime composition keeps every borrowed capability at a stable address" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
     var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/composed.sock", .{directory_buffer[0..directory_len]});
+    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/composed.sock", .{temp.path()});
     var runtime: Runtime = undefined;
     try runtime.init(.{
         .dependencies = .{ .io = io, .allocator = std.testing.allocator },
@@ -123,10 +119,9 @@ fn sleepLaunchIn(buffer: []u8, cwd: []const u8) !core.LaunchView {
 
 test "a restart drops tabs and workspaces whose panes did not come back" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
+    const directory = temp.path();
     var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/drop.sock", .{directory});
     var session_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -195,10 +190,9 @@ test "a restart drops tabs and workspaces whose panes did not come back" {
 
 test "a restart restores worktrees and unbinds the ones whose workspace did not come back" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
+    const directory = temp.path();
     var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/worktrees.sock", .{directory});
     var session_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -302,10 +296,9 @@ test "a restart restores worktrees and unbinds the ones whose workspace did not 
 
 test "a restart restores workspaces, tabs and panes from the session checkpoint" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
+    const directory = temp.path();
     var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/restart.sock", .{directory});
     var session_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -394,10 +387,9 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
 
 test "a restart restores every workspace and tab from unordered pane records" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
+    const directory = temp.path();
     var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/unordered.sock", .{directory});
     var session_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -480,10 +472,9 @@ test "a restart restores every workspace and tab from unordered pane records" {
 
 test "repeated restarts preserve pending agent resumes and reject duplicate sessions" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
+    const directory = temp.path();
     var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/pending.sock", .{directory});
     var session_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -533,10 +524,9 @@ test "repeated restarts preserve pending agent resumes and reject duplicate sess
 
 test "direct agent restore launches resume argv and preserves the original command for disabled resume" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
+    const directory = temp.path();
     var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/direct.sock", .{directory});
     var session_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -603,10 +593,9 @@ fn awaitArguments(directory: std.Io.Dir) ![]u8 {
 test "process observation checkpoints a session reported before provider detection and its later exit" {
     const pane_namespace = @import("../pane/pane_namespace.zig");
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
+    const directory = temp.path();
     var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/observed.sock", .{directory});
     var session_buffer: [std.fs.max_path_bytes]u8 = undefined;

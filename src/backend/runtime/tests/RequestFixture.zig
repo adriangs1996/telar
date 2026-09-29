@@ -9,7 +9,8 @@ const client_request = @import("../client_request.zig");
 const Pane = @import("../../pane/Pane.zig");
 const RequestFixture = @This();
 
-temporary: std.testing.TmpDir,
+/// Holds the runtime's socket, so its path stays within `sun_path`.
+temporary: localsocket.SocketDirectory,
 endpoint_buffer: [std.fs.max_path_bytes]u8,
 runtime: *Runtime,
 session: *Session,
@@ -19,11 +20,9 @@ peer_count: usize,
 /// Keeps runtime state stable and its client writer busy so replies remain inspectable.
 /// Example: `var fixture: RequestFixture = undefined; try fixture.init();`.
 pub fn init(self: *RequestFixture) !void {
-    self.temporary = std.testing.tmpDir(.{});
-    errdefer self.temporary.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try self.temporary.dir.realPath(std.testing.io, &directory_buffer)];
-    const endpoint = try std.fmt.bufPrint(&self.endpoint_buffer, "{s}/requests.sock", .{directory});
+    self.temporary = try localsocket.SocketDirectory.create(std.testing.io);
+    errdefer self.temporary.cleanup(std.testing.io);
+    const endpoint = try self.temporary.endpoint(&self.endpoint_buffer, "requests.sock");
     self.runtime = try std.testing.allocator.create(Runtime);
     errdefer std.testing.allocator.destroy(self.runtime);
     try self.runtime.init(.{
@@ -67,7 +66,7 @@ pub fn deinit(self: *RequestFixture) void {
     for (self.peers[0..self.peer_count]) |*slot| {
         slot.*.?.deinit(std.testing.io);
     }
-    self.temporary.cleanup();
+    self.temporary.cleanup(std.testing.io);
 }
 
 /// Sends a protocol message through the production dispatch. Example: `try fixture.send(.runtime_stop);`.

@@ -143,16 +143,16 @@ const RequestFixture = @import("tests/RequestFixture.zig");
 
 /// A linked worktree `fix` of a main checkout `main`, laid out in files the
 /// way Git writes them.
-fn writeLinkedWorktree(temp: *std.testing.TmpDir, base: []const u8) !void {
+fn writeLinkedWorktree(dir: std.Io.Dir, base: []const u8) !void {
     const io = std.testing.io;
-    try temp.dir.createDirPath(io, "main/.git/worktrees/fix");
-    try temp.dir.createDirPath(io, "fix/src");
-    try temp.dir.writeFile(io, .{ .sub_path = "main/.git/HEAD", .data = "ref: refs/heads/trunk\n" });
-    try temp.dir.writeFile(io, .{ .sub_path = "main/.git/worktrees/fix/HEAD", .data = "ref: refs/heads/by-hand\n" });
-    try temp.dir.writeFile(io, .{ .sub_path = "main/.git/worktrees/fix/commondir", .data = "../..\n" });
+    try dir.createDirPath(io, "main/.git/worktrees/fix");
+    try dir.createDirPath(io, "fix/src");
+    try dir.writeFile(io, .{ .sub_path = "main/.git/HEAD", .data = "ref: refs/heads/trunk\n" });
+    try dir.writeFile(io, .{ .sub_path = "main/.git/worktrees/fix/HEAD", .data = "ref: refs/heads/by-hand\n" });
+    try dir.writeFile(io, .{ .sub_path = "main/.git/worktrees/fix/commondir", .data = "../..\n" });
     var gitfile_buffer: [std.fs.max_path_bytes + 32]u8 = undefined;
     const gitfile = try std.fmt.bufPrint(&gitfile_buffer, "gitdir: {s}/main/.git/worktrees/fix\n", .{base});
-    try temp.dir.writeFile(io, .{ .sub_path = "fix/.git", .data = gitfile });
+    try dir.writeFile(io, .{ .sub_path = "fix/.git", .data = gitfile });
 }
 
 test "a shell that moves into a linked worktree gets it tracked as external" {
@@ -162,7 +162,7 @@ test "a shell that moves into a linked worktree gets it tracked as external" {
     const model = &fixture.runtime.model;
     var base_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const base = base_buffer[0..try fixture.temporary.dir.realPath(std.testing.io, &base_buffer)];
-    try writeLinkedWorktree(&fixture.temporary, base);
+    try writeLinkedWorktree(fixture.temporary.dir, base);
     var nested_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const nested = try std.fmt.bufPrint(&nested_buffer, "{s}/fix/src", .{base});
     var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -198,7 +198,7 @@ test "a pane that moved while its directory was read is not tracked from the old
     const model = &fixture.runtime.model;
     var base_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const base = base_buffer[0..try fixture.temporary.dir.realPath(std.testing.io, &base_buffer)];
-    try writeLinkedWorktree(&fixture.temporary, base);
+    try writeLinkedWorktree(fixture.temporary.dir, base);
     var nested_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const nested = try std.fmt.bufPrint(&nested_buffer, "{s}/fix/src", .{base});
 
@@ -218,7 +218,7 @@ test "a main checkout is no worktree" {
     defer temp.cleanup();
     var base_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const base = base_buffer[0..try temp.dir.realPath(std.testing.io, &base_buffer)];
-    try writeLinkedWorktree(&temp, base);
+    try writeLinkedWorktree(temp.dir, base);
 
     var job: WorktreeDetectionJob = .{
         .io = std.testing.io,
