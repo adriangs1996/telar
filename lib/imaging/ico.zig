@@ -45,7 +45,9 @@ pub fn decode(gpa: std.mem.Allocator, bytes: []const u8, cell: u32) !DecodedImag
 
 test "decodes the reported multi-resolution favicon at the requested display scale" {
     const bytes = @embedFile("testdata/telar.ico");
-    for ([_]u32{ 16, 24, 32, 48, 64, 128 }, [_]u32{ 16, 32, 32, 48, 64, 64 }) |cell, expected| {
+    // Cells of the 20 logical pixel rail at 1x, 1.53x (a 23 pt font), 2x and
+    // 3.07x pick the frame closest above; past the largest, the largest.
+    for ([_]u32{ 16, 20, 24, 31, 32, 40, 48, 61, 64, 96, 128 }, [_]u32{ 16, 32, 32, 32, 32, 48, 48, 64, 64, 64, 64 }) |cell, expected| {
         var image = try decode(std.testing.allocator, bytes, cell);
         defer image.deinit(std.testing.allocator);
         try std.testing.expectEqual(expected, image.width);

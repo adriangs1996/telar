@@ -3,7 +3,8 @@
 //! consumes the completion.
 const FaviconImage = @This();
 
-pub const max_side: u16 = 48;
+/// The largest sprite cell the GUI asks for: 36 KiB of pixels.
+pub const max_side: u16 = 96;
 
 side: u16,
 pixels: [@as(usize, max_side) * max_side * 4]u8 = undefined,
