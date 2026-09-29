@@ -153,7 +153,10 @@ enumerate and sweep them, so that bounded leak is accepted and cleared on
 reboot. The client returns the exact byte credit to the runtime when it
 retires an image.
 
-Debug telemetry exposes `input_write_*` and `ingest_*` timings. The benchmark
+Debug telemetry exposes `input_write_*` and `ingest_*` timings. The Kitty
+framing and command scans each PTY read now passes through are measured by
+`backend.kitty.command_scan`: both walk a 16 KiB read of colored output in
+about 0.5 µs, jumping between `ESC _` introducers. The benchmark
 `backend.kitty.ingest_zlib_rgba_1920x1080` covers the actual APC → base64 →
 zlib → Ghostty path; the transport integration suite holds the ingest actor at
 a deterministic gate and proves input reaches the child before it is released.
