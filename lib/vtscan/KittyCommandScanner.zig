@@ -33,7 +33,17 @@ pub fn next(self: *KittyCommandScanner, bytes: []const u8) ?KittyCommand {
     var index: usize = 0;
     while (index < bytes.len) {
         switch (self.state) {
-            .normal, .other, .payload => {
+            .normal, .escape => {
+                // Only an APC can start a command: jump to the next `ESC _`.
+                const start = escape_ops.findApc(bytes, index, self.state == .escape and index == 0) orelse {
+                    self.state = if (bytes[bytes.len - 1] == escape_ops.esc) .escape else .normal;
+                    return null;
+                };
+                self.state = .apc_identify;
+                index = start;
+                continue;
+            },
+            .other, .payload => {
                 const at = std.mem.indexOfScalarPos(u8, bytes, index, escape_ops.esc) orelse bytes.len;
                 if (self.state == .payload) {
                     self.capturePayload(bytes[index..at]);

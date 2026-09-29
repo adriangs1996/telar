@@ -31,7 +31,16 @@ pub fn touchesKitty(self: *KittyFramingCounter, bytes: []const u8) bool {
     var rest = bytes;
     while (rest.len != 0) {
         switch (self.state) {
-            .normal, .kitty, .other => {
+            .normal, .escape => {
+                const start = escape_ops.findApc(rest, 0, self.state == .escape) orelse {
+                    self.state = if (rest[rest.len - 1] == escape_ops.esc) .escape else .normal;
+                    return touched;
+                };
+                self.state = .apc_identify;
+                rest = rest[start..];
+                continue;
+            },
+            .kitty, .other => {
                 const at = std.mem.indexOfScalar(u8, rest, escape_ops.esc) orelse return touched;
                 rest = rest[at..];
             },
@@ -98,4 +107,12 @@ test "kitty APC bytes are recognized across reads while plain output is not" {
     try std.testing.expect(counter.touchesKitty("\\ after"));
     try std.testing.expect(!counter.inKitty());
     try std.testing.expect(!counter.touchesKitty("after"));
+}
+
+test "an APC introducer split after its ESC is still recognized" {
+    var counter: KittyFramingCounter = .{};
+    try std.testing.expect(!counter.touchesKitty("colored \x1b[32mtext\x1b[0m \x1b"));
+    try std.testing.expect(counter.touchesKitty("_Ga=T,f=100;AAAA\x1b\\"));
+    try std.testing.expect(!counter.inKitty());
+    try std.testing.expect(!counter.touchesKitty("snake_case names_and \x1b_Xnot kitty\x1b\\ more_text"));
 }
