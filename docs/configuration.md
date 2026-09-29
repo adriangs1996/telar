@@ -1010,7 +1010,9 @@ matches proper subdomains but not the bare suffix; `*` matches every hostname.
 Partial labels such as `*example.com` and embedded wildcards are rejected.
 Every connection still requires the proxy secret, which Telar writes to
 `proxy-secret` in `ca_dir` on the first start and puts in each pane's
-`HTTPS_PROXY`; delete the file to rotate it. A connection outside the
+`HTTPS_PROXY`; delete the file to rotate it. Each runtime also remembers its
+listener port there, in its own `proxy-port-<key>` file, so runtimes that
+share `ca_dir` keep separate ports. A connection outside the
 configured scope passes through the authenticated CONNECT listener, but its
 TCP payload is forwarded opaquely and is not captured.
 

@@ -280,6 +280,8 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
     try output.print(
         "\"agent_process_inspections\":{d},\"agent_process_misses\":{d}," ++
             "\"proxy_active\":{d}," ++
+            "\"proxy_port\":{?d}," ++
+            "\"proxy_preferred_port\":{?d}," ++
             "\"proxy_active_connections\":{d}," ++
             "\"proxy_rejected_connections\":{d}," ++
             "\"proxy_invalid_authorization_rejections\":{d}," ++
@@ -303,6 +305,8 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
             metrics.agent_process_inspections,
             metrics.agent_process_misses,
             @intFromBool(proxy.active),
+            proxy.port,
+            proxy.preferred_port,
             proxy.active_connections,
             proxy.rejected_connections,
             proxy.invalid_authorization_rejections,
@@ -471,6 +475,8 @@ test "runtime telemetry reports retained memory domains" {
             .history_service = &service,
             .proxy = .{
                 .active = true,
+                .port = 45105,
+                .preferred_port = 45104,
                 .active_connections = 17,
                 .rejected_connections = 31,
                 .invalid_authorization_rejections = 37,
@@ -525,6 +531,8 @@ test "runtime telemetry reports retained memory domains" {
             "\"response_queue_high_water\":5",
             "\"response_queue_dropped\":7",
             "\"proxy_active\":1",
+            "\"proxy_port\":45105",
+            "\"proxy_preferred_port\":45104",
             "\"proxy_active_connections\":17",
             "\"proxy_rejected_connections\":31",
             "\"proxy_invalid_authorization_rejections\":37",
@@ -565,6 +573,8 @@ const TelemetrySample = struct {
 
     const ProxySample = struct {
         active: bool = false,
+        port: ?u16 = null,
+        preferred_port: ?u16 = null,
         active_connections: u32 = 0,
         rejected_connections: u64 = 0,
         invalid_authorization_rejections: u64 = 0,

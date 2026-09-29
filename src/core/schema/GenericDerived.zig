@@ -74,6 +74,12 @@ pub fn Type(comptime T: type) type {
                 bool => try encoder.writeByte(@intFromBool(value)),
                 u8 => try encoder.writeByte(value),
                 u16, u32, u64, i32, i64 => try encoder.writeInt(F, value),
+                ?u16 => {
+                    try encoder.writeByte(@intFromBool(value != null));
+                    if (value) |number| {
+                        try encoder.writeInt(u16, number);
+                    }
+                },
                 types.ExitKind, types.TabMoveDirection, types.PaneTextSource, types.PaneTextMode, types.ProxyScope => {
                     try encoder.writeByte(@intFromEnum(value));
                 },
@@ -103,6 +109,7 @@ pub fn Type(comptime T: type) type {
                 bool => try decoder.readBool(),
                 u8 => try decoder.readByte(),
                 u16, u32, u64, i32, i64 => try decoder.readInt(F),
+                ?u16 => if (try decoder.readBool()) try decoder.readInt(u16) else null,
                 types.ExitKind => try codec.decodeExitKind(try decoder.readByte()),
                 types.TabMoveDirection => switch (try decoder.readByte()) {
                     0 => .previous,

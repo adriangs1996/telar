@@ -84,6 +84,8 @@ fn format(model: *RuntimeModel, buffer: []u8) ![]const u8 {
         .history_service = model.resources.history.service(),
         .proxy = .{
             .active = model.resources.proxy.active(),
+            .port = model.resources.proxy.port(),
+            .preferred_port = model.resources.proxy.preferredPort(),
             .active_connections = proxy_metrics.active_connections,
             .rejected_connections = proxy_metrics.rejected_connections,
             .invalid_authorization_rejections = proxy_metrics.invalid_authorization_rejections,

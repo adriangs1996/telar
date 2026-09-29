@@ -28,9 +28,49 @@ proxy is active, including while a pane is fullscreen.
 ## Traffic path and trust
 
 The runtime binds one loopback listener in ports 45100 through 45227. It
-prefers the port it bound last time, recorded in `proxy-port` inside the proxy
-directory, so a process that inherited `HTTPS_PROXY` keeps its destination
-across runtime restarts. Only when that port is taken does it scan the range.
+prefers the port it bound last time, so a process that inherited
+`HTTPS_PROXY` keeps its destination across runtime restarts. Each runtime
+remembers its own port in `proxy-port-<key>` inside the proxy directory, where
+the key is a digest of its socket path; the file holds the port and that path.
+Several runtimes of one account (the one you use, a development build, a test)
+can share `ca_dir` without taking each other's ports, and a runtime that always
+uses the same socket, as the default one does, always finds its own file. When
+its port is taken, a runtime scans the range and skips the ports other runtimes
+remember; it takes one of those only when nothing else is free, and then
+removes the file of the runtime that lost it, so the directory holds at most
+one file per port. A start also removes the file of any runtime whose socket
+directory no longer exists, such as a deleted worktree's development runtime.
+
+Earlier versions kept a single `proxy-port` for every runtime. Only the runtime
+on the default socket, the one Telar starts when nothing names another, reads
+it: it prefers that port and deletes the shared file once it binds the port and
+records its own. A runtime that finds the port taken, or cannot write its own
+file, leaves the shared file for its next start. Development runtimes ignore
+it, so they neither take its port nor warn about it.
+
+Stopping the runtime closes the connections its children held open, and
+those leave the port in TIME_WAIT for up to a minute. A plain bind refuses the
+port meanwhile, which used to move a quickly restarted runtime to another
+port. On Linux every proxy listener sets `SO_REUSEADDR`: there a TIME_WAIT
+connection yields only to a bind by a socket with the option, as long as the
+listener that accepted it had it too, and the option never binds over a socket
+listening on the port, wildcard included. BSD and macOS bind plainly first,
+because there the option would let a loopback socket shadow a process listening
+on every address. When the remembered port is refused, they probe it with a
+50 ms connection and bind again with `SO_REUSEADDR` only if the connection is
+refused; a port that answers or stays silent counts as taken. Ports of the scan
+are never probed. No listener sets `SO_REUSEPORT`. After an upgrade, the first
+Linux restart can still find TIME_WAIT connections accepted by the old
+listener, which did not set the option.
+
+When the remembered port is held by another process, the runtime binds a
+different one and says so. `telar runtime status` prints
+`Proxy port: <port> (warning: remembered port <preferred> was held by another process; ...)`,
+its JSON carries `proxy.port` and `proxy.preferred_port`, and in builds with
+diagnostics every runtime telemetry line records `proxy_port` and
+`proxy_preferred_port`. Processes that inherited the old port reach whatever
+listens there, or nothing, until they are restarted from a pane. The new port
+becomes the remembered one.
 
 One secret authorizes every CONNECT. It lives in `proxy-secret` in the same
 owner-only directory, created with mode 0600 on the first start and read on
@@ -41,6 +81,15 @@ Telar's environment: it does not name a pane, and a daemon that outlives the
 pane that started it keeps working until the secret rotates. A request without
 it, or with a different one, gets `407`; a well-formed one with a malformed
 target gets `400`. Counters distinguish the two rejections.
+
+Runtimes that share `ca_dir` share the secret too, so a child that reaches
+another runtime's port is accepted there rather than refused: its traffic goes
+through that runtime's proxy, under that runtime's interception scope, and
+what it captures reaches that runtime's tap plugins and whatever they record,
+such as its command history. Per-runtime ports make that rare; they do not
+forbid it. A per-runtime secret would turn it into a `407`, but it would not
+isolate runtimes, since every process of the account can read the owner-only
+directory, and it would break the processes that inherited the current secret.
 
 Telar injects both forms of `HTTPS_PROXY` and process-local CA variables into
 new panes. The generic variables cover OpenSSL, curl, Requests, Node.js, and

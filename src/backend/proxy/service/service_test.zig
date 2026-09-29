@@ -323,6 +323,7 @@ const TestServiceFixture = struct {
     bundle: [std.fs.max_path_bytes]u8 = undefined,
     secret: [std.fs.max_path_bytes]u8 = undefined,
     port: [std.fs.max_path_bytes]u8 = undefined,
+    legacy_port: [std.fs.max_path_bytes]u8 = undefined,
     directory_len: usize = 0,
     service: ?*Service = null,
 
@@ -336,7 +337,8 @@ const TestServiceFixture = struct {
         _ = try std.fmt.bufPrint(&self.certificate, "{s}/ca-cert.pem", .{directory});
         _ = try std.fmt.bufPrint(&self.bundle, "{s}/ca-bundle.pem", .{directory});
         _ = try std.fmt.bufPrint(&self.secret, "{s}/proxy-secret", .{directory});
-        _ = try std.fmt.bufPrint(&self.port, "{s}/proxy-port", .{directory});
+        _ = try std.fmt.bufPrint(&self.port, "{s}/proxy-port-test", .{directory});
+        _ = try std.fmt.bufPrint(&self.legacy_port, "{s}/proxy-port", .{directory});
         self.service = try Service.create(io, gpa, self.paths(intercept_hosts));
     }
 
@@ -349,7 +351,9 @@ const TestServiceFixture = struct {
             .certificate = self.certificate[0 .. directory_len + "/ca-cert.pem".len],
             .bundle = self.bundle[0 .. directory_len + "/ca-bundle.pem".len],
             .secret = self.secret[0 .. directory_len + "/proxy-secret".len],
-            .port = self.port[0 .. directory_len + "/proxy-port".len],
+            .port = self.port[0 .. directory_len + "/proxy-port-test".len],
+            .legacy_port = self.legacy_port[0 .. directory_len + "/proxy-port".len],
+            .endpoint = "/test/runtime.sock",
             .intercept_hosts = intercept_hosts,
         };
     }

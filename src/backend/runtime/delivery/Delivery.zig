@@ -222,6 +222,8 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
                 .active = sources.proxy_active,
                 .scope = sources.proxy_scope,
                 .system_trusted = sources.proxy_system_trusted,
+                .port = sources.proxy_port,
+                .preferred_port = sources.proxy_preferred_port,
             }),
             .proxy_status,
         );
