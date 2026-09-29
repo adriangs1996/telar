@@ -10,9 +10,11 @@ secret: []const u8,
 /// This runtime's remembered listener port, keyed by its endpoint
 /// (`PortMemory.path`); rewritten on every start.
 port: []const u8,
-/// The listener port earlier versions shared between every runtime; read
-/// until this runtime migrates off it.
-legacy_port: []const u8,
+/// The listener port earlier versions shared between every runtime; set
+/// only for the runtime on the default socket, which inherits it.
+legacy_port: ?[]const u8,
+/// This runtime's socket path, recorded beside its port.
+endpoint: []const u8,
 system_authority: bool = false,
 intercept_hosts: []const []const u8 = &.{},
 capture: Config = .{},

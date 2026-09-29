@@ -32,6 +32,7 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
         .secret = config.secret_path,
         .port = config.port_path,
         .legacy_port = config.legacy_port_path,
+        .endpoint = config.endpoint,
         .system_authority = config.system_authority,
         .intercept_hosts = config.intercept_hosts,
         .capture = config.capture,

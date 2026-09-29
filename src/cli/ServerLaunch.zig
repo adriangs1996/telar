@@ -166,6 +166,13 @@ fn prepareRuntimeStorage(self: *Launch) !void {
         self.default_proxy_directory = try self.process.gpa.dupe(u8, resolved);
         break :block self.default_proxy_directory.?;
     };
+    // Only the runtime on the default socket held the shared port of earlier
+    // versions for the user; a development runtime must not inherit it.
+    const endpoint = self.connector.endpointPath();
+    const inherits_shared_port = if (client.runtime_connection.defaultEndpoint(self.process.minimal.environ)) |default_endpoint|
+        std.mem.eql(u8, endpoint, default_endpoint.path())
+    else |_|
+        false;
     _ = try proxy_cli.rotateIfNeeded(self.process, proxy_directory);
     self.proxy_system_trusted = proxy_cli.trusted(self.process, proxy_directory);
     if (proxy_enabled) {
@@ -176,8 +183,12 @@ fn prepareRuntimeStorage(self: *Launch) !void {
             .certificate_path = try std.fmt.bufPrint(&self.proxy_cert_buffer, "{s}/{s}", .{ proxy_directory, authority_names.certificate }),
             .bundle_path = try std.fmt.bufPrint(&self.proxy_bundle_buffer, "{s}/ca-bundle.pem", .{proxy_directory}),
             .secret_path = try std.fmt.bufPrint(&self.proxy_secret_buffer, "{s}/proxy-secret", .{proxy_directory}),
-            .port_path = try backend.ProxyPortMemory.path(&self.proxy_port_buffer, proxy_directory, self.connector.endpointPath()),
-            .legacy_port_path = try std.fmt.bufPrint(&self.proxy_legacy_port_buffer, "{s}/proxy-port", .{proxy_directory}),
+            .port_path = try backend.ProxyPortMemory.path(&self.proxy_port_buffer, proxy_directory, endpoint),
+            .legacy_port_path = if (inherits_shared_port)
+                try std.fmt.bufPrint(&self.proxy_legacy_port_buffer, "{s}/proxy-port", .{proxy_directory})
+            else
+                null,
+            .endpoint = endpoint,
             .system_authority = self.proxy_system_trusted,
             .intercept_hosts = self.proxy_intercept_hosts,
             .capture = self.proxy_capture,

@@ -247,6 +247,7 @@ const ProxyTestFiles = struct {
             .secret_path = self.secret[0..self.secret_len],
             .port_path = self.port[0..self.port_len],
             .legacy_port_path = self.legacy_port[0..self.legacy_port_len],
+            .endpoint = "/test/runtime.sock",
         };
     }
 };

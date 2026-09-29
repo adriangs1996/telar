@@ -353,6 +353,7 @@ const TestServiceFixture = struct {
             .secret = self.secret[0 .. directory_len + "/proxy-secret".len],
             .port = self.port[0 .. directory_len + "/proxy-port-test".len],
             .legacy_port = self.legacy_port[0 .. directory_len + "/proxy-port".len],
+            .endpoint = "/test/runtime.sock",
             .intercept_hosts = intercept_hosts,
         };
     }
