@@ -32,6 +32,14 @@ prefers the port it bound last time, recorded in `proxy-port` inside the proxy
 directory, so a process that inherited `HTTPS_PROXY` keeps its destination
 across runtime restarts. Only when that port is taken does it scan the range.
 
+Stopping the runtime closes the connections its children held open, and
+those leave the port in TIME_WAIT for up to a minute. A plain bind refuses the
+port meanwhile, which used to move a quickly restarted runtime to another
+port. When a plain bind fails and nothing answers a connection on the port,
+the runtime binds again with `SO_REUSEADDR`. It never sets `SO_REUSEPORT`, and
+the probe keeps it from shadowing a process that listens on every address,
+which BSD allows under `SO_REUSEADDR`.
+
 One secret authorizes every CONNECT. It lives in `proxy-secret` in the same
 owner-only directory, created with mode 0600 on the first start and read on
 every later one; deleting the file rotates it. A child presents it as the
