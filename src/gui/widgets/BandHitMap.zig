@@ -39,11 +39,18 @@ pub fn add(self: *BandHitMap, hit: BandHit) !void {
 /// Later targets take precedence, as later quads do.
 /// Example: `const action = hits.at(.{ event.x, event.y });`
 pub fn at(self: *const BandHitMap, point: [2]f64) ?action.Action {
+    const hit = self.hitAt(point) orelse return null;
+    return hit.action;
+}
+
+/// The target under a point with its placement, for hover.
+/// Example: `const hit = hits.hitAt(.{ event.x, event.y }) orelse return;`
+pub fn hitAt(self: *const BandHitMap, point: [2]f64) ?BandHit {
     var index = self.len;
     while (index > 0) {
         index -= 1;
         if (Bands.within(self.items[index].area, point[0], point[1])) {
-            return self.items[index].action;
+            return self.items[index];
         }
     }
 

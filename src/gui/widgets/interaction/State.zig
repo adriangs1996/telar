@@ -77,7 +77,12 @@ pub fn chrome(self: *State, canvas: *Canvas, input: ChromeRegistration) !void {
             .resize_sidebar => .resize_sidebar,
             .pane_content => continue,
         };
-        const target: Target = .{ .bounds = hit.area, .action = action, .focusable = action != .resize_sidebar };
+        const target: Target = .{
+            .bounds = hit.area,
+            .action = action,
+            .namespace = @intFromEnum(hit.placement),
+            .focusable = action != .resize_sidebar,
+        };
         _ = try self.dispatcher.add(target.labelled(labels.forAction(input.projection, action)));
     }
 

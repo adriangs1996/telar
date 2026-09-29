@@ -104,7 +104,9 @@ machines.json replaced
   window holds more than one machine. A click opens the machine picker.
 - **Sidebar.** With the sidebar expanded and two or more machines,
   `MachineSwitcher` draws one tab per machine above the projects list and
-  folds what does not fit into a picker control.
+  folds what does not fit into a picker control. It opens the same picker
+  as the top bar's segment, so it is placed as `.machine_fold`
+  (`BandPlacement`): each keeps its own identity, hover and focus.
 - **Bottom bar.** `telar.bar.machines()` draws a chip per enabled machine
   with its link state, attention and CPU, while the window holds more than
   one machine.
@@ -191,8 +193,9 @@ limits.
 - `src/gui/tests/machines.zig` tests switching both ways, a switch during a
   frame, reopening a worktree, separate graphics per client, sixteen
   machines' reads in the window's inbox, the top bar segment, the sidebar
-  tabs and their fold, a pinned machine across `machines.json` changes and
-  the machine list, and a `machines.json` sequence of add, disable, move
+  tabs and their fold, a folded sidebar drawn frame after frame with both
+  picker controls opening the picker, a pinned machine across
+  `machines.json` changes and the machine list, and a `machines.json` sequence of add, disable, move
   during a running attempt, and removal of the shown machine.
 - `frontend.client.machine_frame_event` in `telar-benchmarks` times a
   one-cell frame through a machine's client with a full agent snapshot,
