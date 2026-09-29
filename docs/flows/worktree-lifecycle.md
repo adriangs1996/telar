@@ -67,8 +67,8 @@ worktree_git.branchMerged -> with --delete-branch, whether git branch -d
         |  is asked; otherwise --delete-branch asks on a TTY too
 schema.forget_worktree -> worktree_lifecycle.forget
         |  closes the child workspace's panes, drops the row
-worktree_git.remove, worktree_git.deleteBranch (git branch -d; -D with --force
-        |  for a branch that is not merged)
+worktree_git.remove, worktree_git.deleteBranch (git branch -d for a merged
+        |  branch; -D for one a person agreed to delete)
 ```
 
 ## The command's environment
