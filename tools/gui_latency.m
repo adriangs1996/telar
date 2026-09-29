@@ -53,6 +53,11 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
         const telar_gui_quad *q = &frame->quads[i];
         if (q->u0 != q->u1 && q->v0 != q->v1) glyph_count++;
     }
+    if (getenv("GUI_PROBE_TRACE")) {
+        size_t images = 0;
+        for (size_t i = 0; i < frame->quad_count; i++) images += frame->quads[i].texture > 9.5f;
+        fprintf(stderr, "probe frame t=%.4f token=%llu quads=%u glyphs=%zu images=%zu draws=%u pending=%d count=%d\n", CACurrentMediaTime(), (unsigned long long)frame->token, frame->quad_count, glyph_count, images, frame->image_draw_count, pending, count);
+    }
     if (pending && glyph_count == baseline + ((count & 1) ? 0 : 1)) matching_token = frame->token;
 }
 
