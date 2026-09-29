@@ -7,7 +7,6 @@ const favicon_worker = @import("image/favicon_worker.zig");
 const event_module = @import("input/event.zig");
 const shared_model = @import("model");
 const std = @import("std");
-const builtin = @import("builtin");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const host_ports = @import("host_ports.zig");
@@ -68,9 +67,9 @@ const GuiAdapter = @This();
 
 /// Clients one window can hold: the local machine and every saved one.
 pub const machine_slots = core.MachineProfiles.capacity + 1;
-/// Metal uploads and draws Kitty graphics images; the Vulkan backend does
-/// not yet, so its panes keep the cell fallback.
-const image_support: data.environment.Support = if (builtin.os.tag == .macos) .supported else .unsupported;
+/// Both backends upload and draw Kitty graphics images, so no pane keeps
+/// the cell fallback for them.
+const image_support: data.environment.Support = .supported;
 
 const JobHook = struct {
     context: *anyopaque,

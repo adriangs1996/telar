@@ -11,6 +11,8 @@ layout(set = 0, binding = 7) uniform sampler2D diagram4;
 layout(set = 0, binding = 8) uniform sampler2D diagram5;
 layout(set = 0, binding = 9) uniform sampler2D diagram6;
 layout(set = 0, binding = 10) uniform sampler2D diagram7;
+// The Kitty graphics image the current draw binds; straight alpha.
+layout(set = 1, binding = 0) uniform sampler2D image;
 
 
 layout(location = 0) in vec2 in_uv;
@@ -32,6 +34,12 @@ float rounded_distance(vec2 local, vec2 size, float radius) {
 }
 
 void main() {
+    if (in_texture > 9.5) {
+        vec4 texel = texture(image, in_uv);
+        out_color = vec4(texel.rgb * in_color.rgb, texel.a * in_color.a);
+        return;
+    }
+
     if (in_texture > 0.5) {
         // The blend state expects straight alpha, so the premultiplied texel
         // is divided back before the tint applies.

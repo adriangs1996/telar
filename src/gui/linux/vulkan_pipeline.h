@@ -14,5 +14,7 @@ typedef struct {
     VkFormat format;
 } telar_vulkan_pipeline;
 
-bool telar_vulkan_pipeline_init(telar_vulkan_pipeline *self, VkDevice device, VkFormat format);
+// `images` is the set 1 layout image quads bind (`vulkan_images.h`).
+bool telar_vulkan_pipeline_init(telar_vulkan_pipeline *self, VkDevice device, VkFormat format,
+                                VkDescriptorSetLayout images);
 void telar_vulkan_pipeline_deinit(telar_vulkan_pipeline *self);
