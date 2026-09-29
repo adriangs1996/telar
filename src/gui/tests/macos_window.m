@@ -14,6 +14,7 @@
 
 int telar_test_host_input(NSView *host);
 int telar_test_diagrams(void);
+int telar_test_images(void);
 
 static int paints, delivered, discarded, inputs, failed;
 static BOOL injecting, close_in_flight, closed_in_flight;
@@ -336,6 +337,7 @@ static int input(void *context, telar_gui_input event) {
 int main(void) {
     @autoreleasepool {
         failed += telar_test_diagrams();
+        failed += telar_test_images();
         // Simulate a user's global accent preference without changing disk state.
         [NSUserDefaults.standardUserDefaults setVolatileDomain:@{@"ApplePressAndHoldEnabled": @YES}
                                                        forName:NSGlobalDomain];
