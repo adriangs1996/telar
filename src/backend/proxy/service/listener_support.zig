@@ -85,3 +85,36 @@ test "a listener never shadows another process listening on every address" {
     defer listener.deinit(io);
     try std.testing.expect(listener.port() != port);
 }
+
+test "a preferred port bound by a socket that never listens costs no more than the probe" {
+    const io = std.testing.io;
+    const none: PortSet = .initEmpty();
+    const silent = std.c.socket(std.c.AF.INET, std.c.SOCK.STREAM, 0);
+    try std.testing.expect(silent >= 0);
+    defer _ = std.c.close(silent);
+
+    // The highest port a plain bind takes: earlier tests leave the lowest
+    // ones in TIME_WAIT.
+    var port: u16 = first_port + port_attempts;
+    while (port > first_port) {
+        port -= 1;
+        const address = try std.Io.net.IpAddress.parse("127.0.0.1", port);
+        const loopback: std.c.sockaddr.in = .{
+            .port = std.mem.nativeToBig(u16, port),
+            .addr = @bitCast(address.ip4.bytes),
+        };
+        if (std.c.bind(silent, @ptrCast(&loopback), @sizeOf(std.c.sockaddr.in)) == 0) {
+            break;
+        }
+    } else {
+        return error.SkipZigTest;
+    }
+
+    const started = std.Io.Timestamp.now(io, .awake);
+    var listener = try Listener.bind(io, port, &none);
+    defer listener.deinit(io);
+    const elapsed = started.durationTo(std.Io.Timestamp.now(io, .awake));
+
+    try std.testing.expect(listener.port() != port);
+    try std.testing.expect(elapsed.toMilliseconds() < std.time.ms_per_s);
+}
