@@ -42,7 +42,9 @@ detach, reconnect, destroy), its recovery and the test that proves it.
 - An explicit user binding may call a client-owned Lua callback with hard
   memory, instruction, wall-time and result limits. It receives an immutable
   snapshot and returns validated semantic effects. Runtime and plugin Lua
-  never run here.
+  never run here. The 100,000-instruction limit is the budget, about 2 ms of
+  work; the wall-time limit is a 100 ms safety net, so a runaway callback
+  can stall input for up to 100 ms before it fails.
 - Steady state allocates nothing. Fixed buffers and bounded rings absorb
   bursts.
 - Obsolete frames are folded, never queued as a replay.

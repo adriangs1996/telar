@@ -61,3 +61,39 @@ test "the wall-clock safety net interrupts instructions the count does not see" 
     try std.testing.expectError(error.LuaRuntimeFailed, vm.evaluate("while true do local s = string.rep('x', 1 << 18) end", "@slow.lua"));
     try std.testing.expect(std.mem.indexOf(u8, vm.errorMessage(), "budget exceeded") != null);
 }
+
+test "one backtracking pattern search stops at the instruction budget" {
+    var vm = try Vm.init(std.testing.io, std.testing.allocator, .{
+        .instructions = 1_000_000,
+        .deadline_after_ns = 3600 * std.time.ns_per_s,
+    });
+    defer vm.deinit();
+
+    try open(vm.state);
+    const source = "local n = 18 return string.find(string.rep('a', n), string.rep('a*', n) .. 'b')";
+    try std.testing.expectError(error.LuaRuntimeFailed, vm.evaluate(source, "@backtrack.lua"));
+    try std.testing.expect(std.mem.indexOf(u8, vm.errorMessage(), "budget exceeded") != null);
+}
+
+test "one long plain search stops at the instruction budget" {
+    var vm = try Vm.init(std.testing.io, std.testing.allocator, .{
+        .instructions = 1_000_000,
+        .deadline_after_ns = 3600 * std.time.ns_per_s,
+    });
+    defer vm.deinit();
+
+    try open(vm.state);
+    const source = "local s = string.rep('a', 1 << 22) return s:find(string.rep('a', 1 << 21) .. 'b', 1, true)";
+    try std.testing.expectError(error.LuaRuntimeFailed, vm.evaluate(source, "@plain.lua"));
+    try std.testing.expect(std.mem.indexOf(u8, vm.errorMessage(), "budget exceeded") != null);
+}
+
+test "pattern searches within the budget still answer" {
+    var vm = try Vm.init(std.testing.io, std.testing.allocator, .{});
+    defer vm.deinit();
+
+    try open(vm.state);
+    try vm.evaluate("local s = string.rep('word ', 4000) local _, n = s:gsub('%s+', ' ') return n", "@gsub.lua");
+    try std.testing.expectEqual(@as(lua_api.c.lua_Integer, 4000), lua_api.c.lua_tointegerx(vm.state, -1, null));
+}
+

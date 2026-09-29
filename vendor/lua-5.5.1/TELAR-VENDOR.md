@@ -8,3 +8,10 @@
 Telar compiles the Lua core plus base, coroutine, math, string, table, and UTF-8
 libraries. It deliberately excludes the standalone interpreter and the I/O,
 OS, debug, package/native-loader libraries from the linked configuration VM.
+
+## Local changes
+
+- `src/lstrlib.c`: `chargesteps` charges pattern matching, `%b` scans and
+  plain `string.find` to the count hook, one call per `hookcount` steps, so
+  a host's instruction and time limits bound a single backtracking or
+  quadratic search. Marked `telar:` in the source.
