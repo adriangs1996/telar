@@ -109,6 +109,7 @@ pub fn describe(err: anyerror) []const u8 {
         error.InterruptUnsupported => "that agent declares no interrupt key",
         error.AmbiguousWorktree => "more than one worktree has that branch or title; name it by the other",
         error.WorktreeHasNoAgent => "no agent runs in that worktree",
+        error.InvalidSendText => std.fmt.comptimePrint("send-keys needs text of 1 to {d} bytes, or --stdin", .{core.max_pane_text_input_bytes}),
         else => @errorName(err),
     };
 }
