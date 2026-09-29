@@ -516,9 +516,13 @@ fn start(self: *GuiAdapter, colors: core.TerminalColors) !void {
         },
     );
 
+    // The window's own client shares the runtime's machine, so image
+    // generations arrive as mapped shared objects instead of 1 MiB chunks
+    // copied on the thread that routes keys. A failed mapping downgrades
+    // to chunks (`pane_graphics.applyPaneGraphics`).
     self.app.model.startup.phase = .opening;
     self.app.bootstrap = .{
-        .graphics_shared = false,
+        .graphics_shared = client.supportsSharedMemory(),
         .client_identity = self.app.client_identity,
         .terminal_colors = colors,
     };
