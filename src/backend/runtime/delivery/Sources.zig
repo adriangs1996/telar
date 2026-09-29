@@ -19,6 +19,10 @@ system_metrics: *const Sampler,
 proxy_active: bool,
 proxy_scope: core.ProxyScope = .exact,
 proxy_system_trusted: bool = false,
+/// The port the active proxy listens on; null while it is disabled.
+proxy_port: ?u16 = null,
+/// The port the active proxy tried first; null when it remembered none.
+proxy_preferred_port: ?u16 = null,
 home: ?[]const u8,
 client_layouts: ?*ClientLayouts = null,
 /// Wall clock at preparation time; dates agent status ages.

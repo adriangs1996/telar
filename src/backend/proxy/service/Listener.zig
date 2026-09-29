@@ -3,6 +3,7 @@ const std = @import("std");
 const listener_support = @import("listener_support.zig");
 const Listener = @This();
 
+const PortSet = listener_support.PortSet;
 /// Whether `socket` takes `SOCK_CLOEXEC`; Darwin sets it with `fcntl`.
 const atomic_cloexec = !builtin.os.tag.isDarwin();
 
@@ -18,29 +19,43 @@ server: std.Io.net.Server,
 bound_port: u16,
 
 /// Binds the preferred loopback port when one is given and free, else the
-/// first available port in Telar's bounded proxy range. Ports already owned
-/// by another process are skipped; exhaustion is reported as
+/// first available port in Telar's bounded proxy range that no other runtime
+/// remembers, else the first available one at all. Ports already owned by
+/// another process are skipped; exhaustion is reported as
 /// `error.ProxyPortUnavailable`.
 ///
 /// ```zig
-/// var listener = try Listener.bind(io, preferred_port);
+/// var listener = try Listener.bind(io, preferred_port, &reserved_ports);
 /// defer listener.deinit(io);
 /// ```
-pub fn bind(io: std.Io, preferred: ?u16) !Listener {
+pub fn bind(io: std.Io, preferred: ?u16, reserved: *const PortSet) !Listener {
     if (preferred) |port_value| {
         if (try bindPort(io, port_value)) |bound| {
             return bound;
         }
     }
 
-    var candidate_port = listener_support.first_port;
-    while (candidate_port < listener_support.first_port + listener_support.port_attempts) : (candidate_port += 1) {
-        if (try bindPort(io, candidate_port)) |bound| {
+    const unreserved = reserved.complement();
+    if (try bindFirst(io, &unreserved)) |bound| {
+        return bound;
+    }
+
+    if (try bindFirst(io, reserved)) |bound| {
+        return bound;
+    }
+
+    return error.ProxyPortUnavailable;
+}
+
+fn bindFirst(io: std.Io, candidates: *const PortSet) !?Listener {
+    var offsets = candidates.iterator(.{});
+    while (offsets.next()) |offset| {
+        if (try bindPort(io, listener_support.first_port + @as(u16, @intCast(offset)))) |bound| {
             return bound;
         }
     }
 
-    return error.ProxyPortUnavailable;
+    return null;
 }
 
 /// Listens on the loopback `port_value`, or returns null when another socket

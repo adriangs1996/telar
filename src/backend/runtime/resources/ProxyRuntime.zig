@@ -79,6 +79,27 @@ pub fn systemTrusted(self: *const ProxyRuntime) bool {
     return self.system_trusted;
 }
 
+/// Returns the port the active proxy listens on, or null while disabled.
+///
+/// ```zig
+/// const port = proxy_runtime.port() orelse return;
+/// ```
+pub fn port(self: *const ProxyRuntime) ?u16 {
+    const proxy = self.proxy orelse return null;
+    return proxy.port();
+}
+
+/// Returns the port the active proxy tried first, or null while disabled or
+/// when it remembered none.
+///
+/// ```zig
+/// const preferred = proxy_runtime.preferredPort();
+/// ```
+pub fn preferredPort(self: *const ProxyRuntime) ?u16 {
+    const proxy = self.proxy orelse return null;
+    return proxy.preferredPort();
+}
+
 /// Joins one captured half and submits every completed or expired exchange
 /// to the plugin tap.
 ///
@@ -169,6 +190,8 @@ test "a disabled proxy runtime exposes zero state and tears down twice" {
     try std.testing.expect(!runtime.active());
     try std.testing.expect(runtime.systemTrusted());
     try std.testing.expect(runtime.capability() == null);
+    try std.testing.expect(runtime.port() == null);
+    try std.testing.expect(runtime.preferredPort() == null);
     try std.testing.expectEqualDeep(Snapshot{}, runtime.metrics());
 
     runtime.deinit();
@@ -182,6 +205,8 @@ test "a configured proxy runtime owns its proxy and destroys it exactly once" {
     var runtime = try ProxyRuntime.init(io, std.testing.allocator, .{ .config = files.config(), .system_trusted = false });
 
     try std.testing.expect(runtime.active());
+    try std.testing.expectEqual(runtime.capability().?.port(), runtime.port().?);
+    try std.testing.expect(runtime.preferredPort() == null);
     try std.testing.expectEqualDeep(runtime.capability().?.metrics(), runtime.metrics());
 
     runtime.deinit();

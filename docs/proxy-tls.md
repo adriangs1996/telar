@@ -28,9 +28,22 @@ proxy is active, including while a pane is fullscreen.
 ## Traffic path and trust
 
 The runtime binds one loopback listener in ports 45100 through 45227. It
-prefers the port it bound last time, recorded in `proxy-port` inside the proxy
-directory, so a process that inherited `HTTPS_PROXY` keeps its destination
-across runtime restarts. Only when that port is taken does it scan the range.
+prefers the port it bound last time, so a process that inherited
+`HTTPS_PROXY` keeps its destination across runtime restarts. Each runtime
+remembers its own port in `proxy-port-<key>` inside the proxy directory, where
+the key is a digest of its socket path. Several runtimes of one account (the
+one you use, a development build, a test) can share `ca_dir` without taking
+each other's ports, and a runtime that always uses the same socket, as the
+default one does, always finds its own file. When its port is taken, a runtime scans the range and skips the ports
+other runtimes remember; it takes one of those only when nothing else is free,
+and then removes the file of the runtime that lost it, so the directory holds
+at most one file per port.
+
+Earlier versions kept a single `proxy-port` for every runtime. A runtime with
+no file of its own prefers that port and deletes the shared file once it binds
+it; a runtime that finds it taken leaves the file alone. The runtime that
+holds the shared port when you upgrade gets it back on its next start, unless
+another runtime starts while it is down.
 
 Stopping the runtime closes the connections its children held open, and
 those leave the port in TIME_WAIT for up to a minute. A plain bind refuses the
@@ -40,13 +53,27 @@ the runtime binds again with `SO_REUSEADDR`. It never sets `SO_REUSEPORT`, and
 the probe keeps it from shadowing a process that listens on every address,
 which BSD allows under `SO_REUSEADDR`.
 
+When the remembered port is held by another process, the runtime binds a
+different one and says so. `telar runtime status` prints
+`Proxy port: <port> (warning: remembered port <preferred> was held by another process; ...)`,
+its JSON carries `proxy.port` and `proxy.preferred_port`, and in builds with
+diagnostics every runtime telemetry line records `proxy_port` and
+`proxy_preferred_port`. Processes that
+inherited the old port reach whatever listens there, or nothing, until they are
+restarted from a pane. The new port becomes the remembered one.
+
 One secret authorizes every CONNECT. It lives in `proxy-secret` in the same
 owner-only directory, created with mode 0600 on the first start and read on
 every later one; deleting the file rotates it. A child presents it as the
 Basic userinfo of the proxy URL, `http://telar:<secret>@127.0.0.1:<port>`,
 which Telar puts in `HTTPS_PROXY`. The secret proves that the caller inherited
 Telar's environment: it does not name a pane, and a daemon that outlives the
-pane that started it keeps working until the secret rotates. A request without
+pane that started it keeps working until the secret rotates. Runtimes that
+share `ca_dir` share the secret too. A per-runtime secret would not separate
+them: every process of the account can read the owner-only directory, and a
+process that reached another runtime's port would only trade traffic through
+the wrong proxy for a `407`. Keeping one secret also keeps working every
+process that inherited it before ports became per runtime. A request without
 it, or with a different one, gets `407`; a well-formed one with a malformed
 target gets `400`. Counters distinguish the two rejections.
 

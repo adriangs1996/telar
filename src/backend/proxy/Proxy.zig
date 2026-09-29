@@ -31,6 +31,7 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
         .bundle = config.bundle_path,
         .secret = config.secret_path,
         .port = config.port_path,
+        .legacy_port = config.legacy_port_path,
         .system_authority = config.system_authority,
         .intercept_hosts = config.intercept_hosts,
         .capture = config.capture,
@@ -120,4 +121,24 @@ pub fn address(self: *const Proxy) std.Io.net.IpAddress {
     const client = self.service.clientConfiguration();
 
     return std.Io.net.IpAddress.parse("127.0.0.1", client.port) catch unreachable;
+}
+
+/// Returns the loopback port children of this runtime reach the proxy on.
+///
+/// ```zig
+/// const bound = proxy.port();
+/// ```
+pub fn port(self: *const Proxy) u16 {
+    return self.service.clientConfiguration().port;
+}
+
+/// Returns the port this runtime tried first at start, or null when it
+/// remembered none. When it differs from `port`, another process held it
+/// and children that inherited it no longer reach this proxy.
+///
+/// ```zig
+/// const displaced = proxy.preferredPort() != null and proxy.preferredPort().? != proxy.port();
+/// ```
+pub fn preferredPort(self: *const Proxy) ?u16 {
+    return self.service.preferred_port;
 }

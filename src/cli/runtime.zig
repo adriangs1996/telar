@@ -92,8 +92,73 @@ fn writeStatus(writer: *std.Io.Writer, status: core.ProxyStatus, json: bool) !vo
         try std.json.Stringify.value(.{ .running = true, .schema_version = core.schema_version, .proxy = status }, .{}, writer);
         try writer.writeByte('\n');
     } else {
-        try writer.print("Runtime: running\nSchema: {s}\nProxy: {s}\nProxy scope: {s}\nSystem trust: {s}\n", .{ core.schema_version, if (status.active) "active" else "disabled", @tagName(status.scope), if (status.system_trusted) "installed" else "absent" });
+        try writer.print("Runtime: running\nSchema: {s}\nProxy: {s}\n", .{ core.schema_version, if (status.active) "active" else "disabled" });
+        try writeProxyPort(writer, status);
+        try writer.print("Proxy scope: {s}\nSystem trust: {s}\n", .{ @tagName(status.scope), if (status.system_trusted) "installed" else "absent" });
     }
+}
+
+fn writeProxyPort(writer: *std.Io.Writer, status: core.ProxyStatus) !void {
+    const port = status.port orelse return;
+    const preferred = status.preferred_port orelse {
+        try writer.print("Proxy port: {d} (none remembered for this runtime)\n", .{port});
+        return;
+    };
+
+    if (preferred == port) {
+        try writer.print("Proxy port: {d}\n", .{port});
+        return;
+    }
+
+    try writer.print(
+        "Proxy port: {d} (warning: remembered port {d} was held by another process; processes that inherited it do not reach this runtime)\n",
+        .{ port, preferred },
+    );
+}
+
+test "runtime status names the proxy port and warns when the remembered one was taken" {
+    var buffer: [1024]u8 = undefined;
+    var kept = std.Io.Writer.fixed(&buffer);
+    try writeStatus(
+        &kept,
+        .{
+            .active = true,
+            .scope = .exact,
+            .system_trusted = false,
+            .port = 45104,
+            .preferred_port = 45104,
+        },
+        false,
+    );
+    try std.testing.expect(std.mem.indexOf(u8, kept.buffered(), "Proxy port: 45104\n") != null);
+
+    var displaced_buffer: [1024]u8 = undefined;
+    var displaced = std.Io.Writer.fixed(&displaced_buffer);
+    try writeStatus(
+        &displaced,
+        .{
+            .active = true,
+            .scope = .exact,
+            .system_trusted = false,
+            .port = 45105,
+            .preferred_port = 45104,
+        },
+        false,
+    );
+    try std.testing.expect(std.mem.indexOf(u8, displaced.buffered(), "Proxy port: 45105 (warning: remembered port 45104 was held by another process") != null);
+
+    var disabled_buffer: [1024]u8 = undefined;
+    var disabled = std.Io.Writer.fixed(&disabled_buffer);
+    try writeStatus(
+        &disabled,
+        .{
+            .active = false,
+            .scope = .exact,
+            .system_trusted = false,
+        },
+        false,
+    );
+    try std.testing.expect(std.mem.indexOf(u8, disabled.buffered(), "Proxy port") == null);
 }
 
 test "runtime status JSON reports disabled proxy without claiming installed trust" {
