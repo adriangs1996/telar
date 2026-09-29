@@ -16,6 +16,8 @@ const RingFades = @import("RingFades.zig");
 const Favicons = @import("Favicons.zig");
 const PointerEvent = @import("../input/PointerEvent.zig");
 const BandCommand = @import("BandCommand.zig");
+const BandHit = @import("BandHit.zig");
+const BandPlacement = @import("BandPlacement.zig").BandPlacement;
 const GenericPresentedState = @import("../render/GenericPresentedState.zig").Type;
 const ProgressMotions = @import("ProgressMotions.zig");
 const animate = @import("animate");
@@ -30,6 +32,8 @@ rings: RingFades = .{},
 progress: ProgressMotions = .{},
 favicons: Favicons = .{},
 hovered: ?action_module.Action = null,
+/// Which of the band controls sharing `hovered` the pointer rests on.
+hovered_placement: BandPlacement = .primary,
 gesture_button: ?u8 = null,
 band_gesture: ?u8 = null,
 sidebar_resize_active: bool = false,
@@ -55,7 +59,7 @@ pub fn begin(self: *Chrome, canvas: *Canvas, projection: *const client.Projectio
     pending.tab_strip = .{ .x = 0, .y = 0, .width = 0, .height = 0 };
     self.ages.observe(projection.agents, self.now_ns);
     self.progress.begin();
-    const context: Context = .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = self.hovered, .presented_workspace = self.presented().workspace, .ages = &self.ages, .favicons = &self.favicons, .progress = &self.progress, .sidebar_regions = &pending.sidebar_regions, .tab_strip = &pending.tab_strip, .pointer_in_tabs = self.pointer_in_tabs, .tab_anchor = &self.tab_anchor, .bar_panel = &pending.bar_panel, .bar_overflow = &pending.bar_overflow };
+    const context: Context = .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = self.hovered, .hovered_placement = self.hovered_placement, .presented_workspace = self.presented().workspace, .ages = &self.ages, .favicons = &self.favicons, .progress = &self.progress, .sidebar_regions = &pending.sidebar_regions, .tab_strip = &pending.tab_strip, .pointer_in_tabs = self.pointer_in_tabs, .tab_anchor = &self.tab_anchor, .bar_panel = &pending.bar_panel, .bar_overflow = &pending.bar_overflow };
     pending.workspace = context.workspaceId();
     return context;
 }
@@ -115,7 +119,7 @@ pub fn widgetPointer(self: *Chrome, event: PointerEvent, resizing: bool) void {
     if (event.kind == .leave) {
         self.leavePointer();
     } else {
-        self.hover(self.presented().band_hits.at(.{ event.x, event.y }));
+        self.hoverBand(self.presented().band_hits.hitAt(.{ event.x, event.y }));
     }
 }
 
@@ -125,7 +129,7 @@ pub fn widgetPointer(self: *Chrome, event: PointerEvent, resizing: bool) void {
 pub fn pointer(self: *Chrome, event: keyinput.Mouse) client.ViewInteractionCommand {
     const visible = self.presented();
     const action = visible.hits.at(.{ event.x, event.y });
-    self.hover(action);
+    self.hover(action, .primary);
     if (self.gesture_button) |button| {
         if (event.kind == .drag or event.kind == .release) {
             if (event.button & 3 != button and event.button & 3 != 3) {
@@ -163,7 +167,8 @@ pub fn pointer(self: *Chrome, event: keyinput.Mouse) client.ViewInteractionComma
 pub fn bandPointer(self: *Chrome, event: PointerEvent) ?BandCommand {
     const visible = self.presented();
     self.trackTabs(Bands.within(visible.tab_strip, event.x, event.y));
-    const action = visible.band_hits.at(.{ event.x, event.y });
+    const hit = visible.band_hits.hitAt(.{ event.x, event.y });
+    const action = if (hit) |value| value.action else null;
     const panel_open = visible.bar_panel.width > 0;
     const in_panel = panel_open and Bands.within(visible.bar_panel, event.x, event.y);
     const inside = action != null or in_panel or visible.bands.contains(event.x, event.y);
@@ -185,14 +190,14 @@ pub fn bandPointer(self: *Chrome, event: PointerEvent) ?BandCommand {
     if (!inside) {
         // A press on the panes while a bar panel is open only dismisses it.
         if (panel_open and event.kind == .press) {
-            self.hover(null);
+            self.hover(null, .primary);
             return .{ .interaction = .{ .intent = .close_panel, .consumed = true } };
         }
 
         return null;
     }
 
-    self.hover(action);
+    self.hoverBand(hit);
     if (event.kind == .scroll_up or event.kind == .scroll_down) {
         if (self.sidebarScrollAt(.{ event.x, event.y })) |scroll| {
             if (scroll.wheel(if (event.kind == .scroll_up) .scroll_up else .scroll_down)) {
@@ -269,11 +274,17 @@ fn trackTabs(self: *Chrome, inside: bool) void {
     }
 }
 
-fn hover(self: *Chrome, action: ?action_module.Action) void {
-    if (!std.meta.eql(action, self.hovered)) {
+fn hover(self: *Chrome, action: ?action_module.Action, placement: BandPlacement) void {
+    if (!std.meta.eql(action, self.hovered) or placement != self.hovered_placement) {
         self.hovered = action;
+        self.hovered_placement = placement;
         self.invalidate();
     }
+}
+
+fn hoverBand(self: *Chrome, hit: ?BandHit) void {
+    const value = hit orelse return self.hover(null, .primary);
+    self.hover(value.action, value.placement);
 }
 
 fn registerPanes(hits: *HitMap, projection: client.Projection) !void {
@@ -295,6 +306,7 @@ pub fn cancelPointer(self: *Chrome) void {
     self.band_gesture = null;
     self.sidebar_resize_active = false;
     self.hovered = null;
+    self.hovered_placement = .primary;
     self.invalidate();
 }
 
@@ -302,10 +314,7 @@ pub fn cancelPointer(self: *Chrome) void {
 /// Example: `chrome.leavePointer();`
 pub fn leavePointer(self: *Chrome) void {
     self.trackTabs(false);
-    if (self.hovered != null) {
-        self.hovered = null;
-        self.invalidate();
-    }
+    self.hover(null, .primary);
 }
 
 fn machinesShown(projection: *const client.Projection) bool {
