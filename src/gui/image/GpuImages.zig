@@ -82,10 +82,10 @@ pub fn find(self: *const GpuImages, machine: u8, identity: client.ImageIdentity)
     return null;
 }
 
-/// A ready row of the same logical image in another generation, the one
-/// that keeps drawing while its replacement uploads.
-/// Example: `const stand_in = images.findStandIn(slot, identity);`.
-pub fn findStandIn(self: *const GpuImages, machine: u8, identity: client.ImageIdentity) ?usize {
+/// The ready row of the newest generation of the same logical image, in any
+/// generation: the texture a placement draws while newer ones upload.
+/// Example: `const row = images.findNewestReady(slot, identity);`.
+pub fn findNewestReady(self: *const GpuImages, machine: u8, identity: client.ImageIdentity) ?usize {
     if (self.count == 0) {
         return null;
     }
@@ -94,7 +94,7 @@ pub fn findStandIn(self: *const GpuImages, machine: u8, identity: client.ImageId
     for (self.residency, 0..) |residency, row| {
         const other = self.identity[row];
         if (residency != .ready or self.machine[row] != machine or other.pane_id != identity.pane_id or
-            other.image_id != identity.image_id or other.generation == identity.generation)
+            other.image_id != identity.image_id)
         {
             continue;
         }

@@ -53,8 +53,11 @@ upload thread: texture, row bands through fixed scratch (RGB -> RGBA)
   mapped and charged until `image_ready`. The window closes the renderer,
   which joins its upload thread, before `pane_images.abandon` returns every
   outstanding lease and the stores are freed.
-- A generation replaced by a newer one keeps drawing until the newer
-  texture is ready, so a streaming pane never flashes empty.
+- A placement draws the newest ready generation of its image and uploads
+  the newest complete one the store holds, which a stream delivers before the
+  placement that names it; a replaced generation keeps drawing until a newer
+  texture is ready, so a streaming pane never flashes empty. At most two
+  generations of one image upload at once.
 
 ## Budget
 
@@ -86,7 +89,9 @@ through a descriptor set at set 1. The shader samples straight alpha
 linearly, clamp to edge, as Ghostty does.
 
 - Metal: shared-storage `RGBA8Unorm` textures written with `replaceRegion`
-  on a serial dispatch queue; `shutdown` waits for it.
+  on a serial dispatch queue; `shutdown` waits for it. Released textures are
+  kept (four at most) for the next upload of the same size, and images live
+  in their own residency set from install to release.
 - Vulkan: device-local images written from a 4 MiB staging buffer by the
   upload thread's own command pool and fence; `queue_lock` serializes queue
   submission with the frame worker.

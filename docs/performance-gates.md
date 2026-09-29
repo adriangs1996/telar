@@ -35,16 +35,18 @@ Result on an M3 MacBook (2026-09-29, medians of three runs):
 
 | Pane | p50 | p95 | p99 |
 | --- | --- | --- | --- |
-| idle | 2.9 ms | 10.4 ms | 15.2 ms |
-| text control, 120 Hz | 9.6 ms | 20.4 ms | 29.8 ms |
-| 4K image stream, 120 Hz | 5.7 ms | 10.0 ms | 12.8 ms |
+| idle | 2.9 ms | 11.9 ms | 17.7 ms |
+| text control, 120 Hz | 9.2 ms | 21.6 ms | 30.0 ms |
+| 4K image stream, 120 Hz | 5.1 ms | 9.7 ms | 12.5 ms |
 
 The runtime forwarded all 120 generations a second with no reset or drop,
-and uploads took 5.6 ms on average, but the window made 35.4 of them a second
-into textures: the gate fails its throughput floor. Drawing one static
-full-window 4K texture already lowers the window from 57 to 45 frames a
-second, while uploading without drawing leaves it at 57, so the open cost is
-in drawing a window-sized image, not in the upload path. The CPU cost of
+uploads took 5.1 ms on average, and the window turned 58.2 generations a
+second into textures (runs: 59.8, 57.0, 58.2): the gate passes, with little
+margin on throughput. Three changes got it there from 26: textures are
+recycled by size and stay in their own residency set (re-adding a 4K texture
+to the frame's set every frame cost the driver more than drawing it), and a
+placement shows the newest complete generation of its image, which a stream
+delivers before the placement that names it. The CPU cost of
 drawing images is measured by `telar-dod-probe` (`DOD_MODE=images`): 256
 placements add 2-4 µs to a pane frame and resolving them takes 10.5 µs, with
 no allocation.

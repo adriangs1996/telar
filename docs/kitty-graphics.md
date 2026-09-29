@@ -200,6 +200,6 @@ replaces them.
 - The window's own client declares shared graphics; other machines' clients
   and the headless client receive decoded pixels in 1 MiB chunks, copied on
   the thread that routes keys.
-- A 4K stream reaches the window's textures at about 35 generations a second
-  on an M3, under the gate's 58 floor ([performance gates](performance-gates.md)).
+- A 4K stream reaches the window's textures at about 58 generations a second
+  on an M3, just at the gate's floor ([performance gates](performance-gates.md)).
 - Only the local socket transport has been exercised with graphical load.

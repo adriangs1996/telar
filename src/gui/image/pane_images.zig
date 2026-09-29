@@ -55,9 +55,10 @@ pub fn place(images: *PaneImages, stores: []Store, view: ImageView) void {
 }
 
 /// Starts uploads for the resolved placements whose image has no texture
-/// yet, within the in-flight bound and the GPU budget. Only the generation
-/// the store holds now is ever requested, so a stream never queues a replay:
-/// at most `uploads_per_image` of its newest generations are in flight.
+/// yet, within the in-flight bound and the GPU budget. Only the newest
+/// complete generation the store holds is ever requested, so a stream never
+/// queues a replay: at most `uploads_per_image` of its newest generations
+/// are in flight.
 ///
 /// ```zig
 /// pane_images.start(&gui.images, &gui.graphics_stores, slot, now_ns);
@@ -69,17 +70,15 @@ pub fn start(images: *PaneImages, stores: []Store, machine: u8, now_ns: u64) voi
             return;
         }
 
-        const identity = identityOf(placement);
+        // Latest wins: with a stream, a newer generation usually arrived
+        // before the placement that will point at it, so the newest complete
+        // generation of the image is what this placement shows next.
+        const identity = newestComplete(store, identityOf(placement)) orelse continue;
         if (images.gpu.find(machine, identity) != null or images.gpu.uploadsOf(machine, identity) == uploads_per_image) {
             continue;
         }
 
-        const entry = store.images.getPtr(identity) orelse continue;
-        if (entry.received != entry.pixels.len or entry.retire_pending) {
-            continue;
-        }
-
-        const metadata = entry.metadata;
+        const metadata = store.images.getPtr(identity).?.metadata;
         const row = images.gpu.add(machine, identity) orelse
             (if (evictOne(images)) images.gpu.add(machine, identity) else null) orelse
             return;
@@ -239,16 +238,33 @@ fn resolve(images: *PaneImages, store: *Store, view: ImageView) void {
     markStandIns(images);
 }
 
-// The image's own texture once ready, else the newest ready generation of
-// the same image, so a replaced frame keeps showing until the next arrives.
+// The newest ready generation of the placement's image: its own once ready,
+// a newer one a stream already delivered, or the previous one while the next
+// uploads, so a replaced frame keeps showing until a newer is ready.
 fn textureFor(images: *const PaneImages, machine: u8, identity: client.ImageIdentity) ?usize {
-    if (images.gpu.find(machine, identity)) |row| {
-        if (images.gpu.residency[row] == .ready) {
-            return row;
+    return images.gpu.findNewestReady(machine, identity);
+}
+
+// The newest generation of the placement's image the store holds whole and
+// has not superseded.
+fn newestComplete(store: *Store, identity: client.ImageIdentity) ?client.ImageIdentity {
+    var newest: ?client.ImageIdentity = null;
+    var entries = store.images.iterator();
+    while (entries.next()) |entry| {
+        const key = entry.key_ptr.*;
+        const image = entry.value_ptr;
+        if (key.pane_id != identity.pane_id or key.image_id != identity.image_id or
+            image.received != image.pixels.len or image.retire_pending)
+        {
+            continue;
+        }
+
+        if (newest == null or newest.?.generation < key.generation) {
+            newest = key;
         }
     }
 
-    return images.gpu.findStandIn(machine, identity);
+    return newest;
 }
 
 // A stand-in of another size shows whole: the new placement's source

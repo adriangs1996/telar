@@ -372,3 +372,22 @@ test "a stream uploads its next generation while the previous one finishes, neve
     try std.testing.expectEqual(@as(u32, 2), images.upload_count);
     pane_images.abandon(&images, &stores);
 }
+
+test "a placement shows the newest complete generation that arrived before its own update" {
+    var stores = [_]Store{.init(std.testing.allocator)};
+    defer stores[0].deinit();
+    var images: PaneImages = .{};
+    try receiveImage(&stores[0], 7, 1);
+    try receivePlacement(&stores[0], placement(7, 1, 1, 0));
+    // Generation 2 arrives; the placement still names generation 1.
+    try receiveImage(&stores[0], 7, 2);
+
+    pane_images.place(&images, &stores, view);
+    pane_images.start(&images, &stores, view.machine, 0);
+    try std.testing.expectEqual(@as(u32, 1), images.upload_count);
+    const upload = images.uploads[0];
+    _ = pane_images.finish(&images, &stores, upload.handle, true, 0);
+    pane_images.place(&images, &stores, view);
+    try std.testing.expectEqual(upload.handle, images.placements[0].handle);
+    try std.testing.expectEqual(@as(u64, 2), images.gpu.identity[upload.handle - 1].generation);
+}
