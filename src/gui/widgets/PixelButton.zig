@@ -10,6 +10,7 @@ const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
 const Label = @import("Label.zig");
 const AttentionDot = @import("AttentionDot.zig");
+const BandPlacement = @import("BandPlacement.zig").BandPlacement;
 const Layout = gfx.Layout;
 const Item = gfx.Item;
 const Rect = gfx.Rect;
@@ -32,6 +33,8 @@ inset: f32 = 0,
 dot: ?cellgrid.Color = null,
 /// Without a background, a hovered control still gets a quiet surface.
 hover_fill: bool = false,
+/// Tells this control apart from another with the same intent in the frame.
+placement: BandPlacement = .primary,
 
 /// Paints and registers a pixel control. Plain controls retain a clear
 /// background on hover; centered labels reserve equal space around their dot.
@@ -43,7 +46,7 @@ pub fn draw(self: PixelButton, canvas: *Canvas) !void {
 
     const palette = canvas.theme.palette;
     const action: action_module.Action = .{ .intent = self.intent };
-    const hovered = self.context.isHovered(action);
+    const hovered = self.context.isHoveredAt(action, self.placement);
 
     if (self.background) {
         const fill: cellgrid.Color = if (self.active) palette.accent else if (hovered) palette.surface1 else palette.surface0;
@@ -95,5 +98,6 @@ pub fn draw(self: PixelButton, canvas: *Canvas) !void {
     try self.context.bands.add(.{
         .area = self.area,
         .action = action,
+        .placement = self.placement,
     });
 }

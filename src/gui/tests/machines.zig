@@ -6,6 +6,11 @@ const data = @import("model");
 const Session = @import("Session.zig");
 const Fixture = @import("ChromeFixture.zig");
 const gui_event = @import("../gui_event.zig");
+const input_support = @import("input_support.zig");
+const GuiAdapter = @import("../GuiAdapter.zig");
+const Target = @import("../widgets/interaction/Target.zig");
+const BandPlacement = @import("../widgets/BandPlacement.zig").BandPlacement;
+const PointerEvent = @import("../input/PointerEvent.zig");
 const host_ports = @import("../host_ports.zig");
 const window_machines = @import("../window_machines.zig");
 
@@ -262,6 +267,68 @@ test "the expanded sidebar switches between machines and folds the rest" {
     projection.machines = &gui.machines;
     try fixture.paint(projection);
     try std.testing.expect(fixture.bandTarget(.{ .select_machine = @intCast(gui.machines.count() - 1) }) == null);
+}
+
+test "a window whose sidebar folds its machines keeps drawing, and both picker controls open it" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.measure(.{ .width = 1100, .height = 700, .scale = 1 });
+    try fixture.showSidebar(true);
+    const gui = fixture.session.gui;
+
+    _ = try gui.machines.add(.{ .label = "laptop" }, Machines.local_slot);
+    for ([_][]const u8{ "build-server-frankfurt", "gpu-cluster-oregon", "staging" }) |label| {
+        _ = try gui.machines.add(.{ .label = label, .destination = label }, null);
+    }
+
+    // The second frame is the one that reuses the first frame's identities.
+    try input_support.presented(gui, try fixture.session.draw(), true);
+    try input_support.presented(gui, try fixture.session.draw(), true);
+
+    const segment = try pickerTarget(gui, .primary);
+    const fold = try pickerTarget(gui, .machine_fold);
+    try std.testing.expect(!segment.id.eql(fold.id));
+    try std.testing.expect(segment.focusable and fold.focusable);
+
+    for ([_]Target{ segment, fold }) |target| {
+        try pointAt(gui, .move, target);
+        try std.testing.expect(gui.chrome.hovered.?.intent == .machine_picker);
+        try std.testing.expectEqual(placementOf(gui, target), gui.chrome.hovered_placement);
+
+        try pointAt(gui, .press, target);
+        try pointAt(gui, .release, target);
+        const prompt = gui.app.model.name_prompt.currentConst().?;
+        try std.testing.expectEqual(data.command_palette.Prefix.machines, prompt.paletteMode());
+        _ = gui.app.model.name_prompt.apply(.cancel);
+        try input_support.presented(gui, try fixture.session.draw(), true);
+
+        try std.testing.expect(gui.widgets.dispatcher.focus(target.id));
+        try std.testing.expect(std.meta.eql(target.bounds, gui.widgets.dispatcher.focusedTarget().?.bounds));
+    }
+}
+
+// The delivered machine picker control the chrome placed at `placement`.
+fn pickerTarget(gui: *GuiAdapter, placement: BandPlacement) !Target {
+    const registry = gui.widgets.dispatcher.maps.presented();
+    var found: ?Target = null;
+    for (registry.targets[0..registry.len]) |target| {
+        if (target.action == .intent and target.action.intent == .machine_picker and target.namespace == @intFromEnum(placement)) {
+            try std.testing.expect(found == null);
+            found = target;
+        }
+    }
+
+    return found orelse error.MissingMachinePicker;
+}
+
+fn placementOf(gui: *GuiAdapter, target: Target) BandPlacement {
+    const hit = gui.chrome.presented().band_hits.hitAt(.{ target.bounds.x + 1, target.bounds.y + 1 }).?;
+    return hit.placement;
+}
+
+fn pointAt(gui: *GuiAdapter, kind: PointerEvent.Kind, target: Target) !void {
+    try input_support.accept(gui, .{ .pointer = .{ .kind = kind, .x = target.bounds.x + 1, .y = target.bounds.y + 1 } });
+    try input_support.pump(gui);
 }
 
 // Points the window at a `machines.json` in `temp` and writes `profiles`
