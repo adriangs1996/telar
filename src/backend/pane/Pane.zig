@@ -324,7 +324,9 @@ pub fn mouseState(self: *const Pane) core.Mouse {
 pub fn dumpText(self: *const Pane, request: TextRequest, storage: []u8) TextDump {
     const screen: *const vt.Screen = self.terminal.screens.active;
     const pages = &screen.pages;
-    const written = self.writtenRows(request.source);
+    // Blank rows are looked through for a screen and the rows asked for, so
+    // blank scrollback of any length costs no more than that.
+    const written = self.writtenRows(request.source, pages.rows + @as(usize, request.rows));
     const wanted = @min(@as(usize, request.rows), written);
     if (wanted == 0) {
         return .{ .len = 0, .truncated = false };
@@ -350,21 +352,24 @@ pub fn dumpText(self: *const Pane, request: TextRequest, storage: []u8) TextDump
     return tail.finish();
 }
 
-/// The rows of `source` up to and including the last one that shows text;
-/// zero when every row is blank. Walks up from the bottom, so it reads only
-/// the blank rows below the text.
+/// The rows of `source` up to and including the last one that shows text,
+/// looking at no more than the bottom `limit` rows: when those are all
+/// blank, the rows above them, and zero when no row is left. Walks up from
+/// the bottom, so it reads only the blank rows below the text.
 ///
 /// ```zig
-/// const readable = pane.writtenRows(.screen);
+/// const readable = pane.writtenRows(.screen, rows);
 /// ```
-pub fn writtenRows(self: *const Pane, source: core.PaneTextSource) usize {
+pub fn writtenRows(self: *const Pane, source: core.PaneTextSource, limit: usize) usize {
     const pages = &self.terminal.screens.active.pages;
     var rows = pages.rowIterator(.left_up, switch (source) {
         .screen => .{ .active = .{} },
         .recent => .{ .screen = .{} },
     }, null);
     var remaining = self.textRows(source);
-    while (rows.next()) |row| {
+    var looked: usize = 0;
+    while (looked < limit) : (looked += 1) {
+        const row = rows.next() orelse return 0;
         if (!cmdcapture.rowIsBlank(row)) {
             return remaining;
         }
@@ -372,7 +377,7 @@ pub fn writtenRows(self: *const Pane, source: core.PaneTextSource) usize {
         remaining -= 1;
     }
 
-    return 0;
+    return remaining;
 }
 
 /// The rows `dumpText` can read from `source`: the screen, or the retained

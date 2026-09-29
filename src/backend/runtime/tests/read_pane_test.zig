@@ -50,6 +50,29 @@ test "rows count up from the last row with text, not from blank rows below it" {
     }
 }
 
+test "blank rows are looked through only as far as a screen and the rows asked for" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    _ = try fixture.pane.ingest(std.testing.io, "far above\r\n");
+    for (0..40) |_| {
+        _ = try fixture.pane.ingest(std.testing.io, "\r\n");
+    }
+    try fixture.pane.render(false);
+    const total = fixture.pane.textRows(.recent);
+    const rows = PaneFixture.initial_size.rows;
+
+    try std.testing.expectEqual(total - 20, fixture.pane.writtenRows(.recent, 20));
+    try std.testing.expectEqual(@as(usize, 1), fixture.pane.writtenRows(.recent, total));
+    try std.testing.expectEqual(@as(usize, 0), fixture.pane.writtenRows(.screen, rows));
+
+    var storage: [core.max_pane_text_bytes]u8 = undefined;
+    const near = fixture.pane.dumpText(.{ .rows = 2, .source = .recent }, &storage);
+    try std.testing.expectEqualStrings("", storage[0..near.len]);
+    const far = fixture.pane.dumpText(.{ .rows = 40, .source = .recent }, &storage);
+    try std.testing.expect(std.mem.startsWith(u8, storage[0..far.len], "far above"));
+}
+
 test "a pane without text reads as empty" {
     var fixture: PaneFixture = .{};
     try fixture.init();
