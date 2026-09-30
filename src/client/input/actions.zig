@@ -135,7 +135,10 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
         .refresh_panel => try bar_updates.refreshPanel(client),
         .pick => |index| try pick_list.open(client, index),
         .new_workspace => _ = workspace_creation.beginWorkspacePrompt(client),
-        .rename_workspace => _ = name_prompt.openNamePrompt(&client.model, .rename_workspace),
+        .rename_workspace => {
+            _ = name_prompt.openNamePrompt(&client.model, .rename_workspace);
+            name_prompt.reportClipped(client);
+        },
         .select_workspace => |position| _ = try workspace_handoff.selectWorkspace(
             client,
             .{

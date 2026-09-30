@@ -7,10 +7,12 @@
 const core = @import("telar-core");
 const std = @import("std");
 const PathPickerMatch = @import("PathPickerMatch.zig");
+const bar_text = @import("../bars/bar_text.zig");
 const PathPickerState = @This();
 
-/// Bytes the page keeps for all its paths; a longer page ends early.
-pub const max_page_bytes = 16 * 1024;
+/// Bytes the page keeps for all its paths: the longest page the runtime
+/// may send, so no match of a reply is left out.
+pub const max_page_bytes = core.max_path_results * core.max_path_match_bytes;
 pub const max_error_bytes = 128;
 const tracked_requests = 32;
 
@@ -202,11 +204,13 @@ pub fn fail(self: *PathPickerState, failure: core.RequestFailed) bool {
     return true;
 }
 
-/// Shows a local failure, such as a full request queue.
+/// Shows a local failure, such as a full request queue, cut at a
+/// character to the bytes it keeps.
+/// Example: `model.path_picker.setError("the request queue is full");`
 pub fn setError(self: *PathPickerState, message: []const u8) void {
-    const len = @min(message.len, self.error_text.len);
-    @memcpy(self.error_text[0..len], message[0..len]);
-    self.error_len = @intCast(len);
+    const kept = bar_text.prefix(message, self.error_text.len);
+    @memcpy(self.error_text[0..kept.len], kept);
+    self.error_len = @intCast(kept.len);
     self.phase = .failed;
     self.revision +%= 1;
 }
@@ -237,6 +241,43 @@ test "only the newest reply for the current root replaces the page" {
     try std.testing.expectEqualStrings("src/main.zig", state.path(&state.slice()[0]));
     try std.testing.expectEqual(Phase.ready, state.phase);
     try std.testing.expect(!try state.receive(message.path_results));
+}
+
+test "the longest reply the runtime may send is kept whole" {
+    var state: PathPickerState = .{};
+    state.begin(@enumFromInt(3), "/work");
+    state.expect(7);
+
+    const longest = "p" ** core.max_path_match_bytes;
+    var matches: [core.max_path_results]core.PathMatch = undefined;
+    for (&matches) |*match| {
+        match.* = .{
+            .path = longest,
+            .kind = .file,
+            .positions = &.{0},
+        };
+    }
+
+    const buffer = try std.testing.allocator.alloc(u8, 2 * max_page_bytes);
+    defer std.testing.allocator.free(buffer);
+    const encoded = try core.encodePathResults(buffer, .{
+        .request_id = @enumFromInt(7),
+        .root = "/work",
+        .scanned = core.max_path_results,
+        .matches = &matches,
+    });
+    const message = try core.decodeServer(encoded);
+    try std.testing.expect(try state.receive(message.path_results));
+    try std.testing.expectEqual(@as(usize, core.max_path_results), state.slice().len);
+    try std.testing.expectEqualStrings(longest, state.path(&state.slice()[core.max_path_results - 1]));
+}
+
+test "a long error is cut at a character" {
+    var state: PathPickerState = .{};
+    state.setError("x" ++ "é" ** max_error_bytes);
+
+    try std.testing.expectEqual(@as(usize, max_error_bytes - 1), state.errorSlice().len);
+    try std.testing.expect(std.unicode.utf8ValidateSlice(state.errorSlice()));
 }
 
 test "late failures of older requests are recognised without replacing the page" {

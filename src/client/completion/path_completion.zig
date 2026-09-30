@@ -49,9 +49,8 @@ pub fn list(io: std.Io, query: []const u8, result: *data.PathCompletionResult) !
             continue;
         }
 
-        result.append(entry.name) catch |err| switch (err) {
-            error.TooManyEntries => break,
-            error.PathEntryTooLong => continue,
+        result.keep(entry.name) catch |err| switch (err) {
+            error.TooManyEntries, error.PathEntryTooLong => continue,
         };
     }
 
@@ -127,6 +126,10 @@ test "listing stops at the entry bound and a missing base lists nothing" {
     var result: data.PathCompletionResult = .{};
     try list(io, try std.fmt.bufPrint(&query_buffer, "{s}/d", .{root}), &result);
     try std.testing.expectEqual(@as(usize, data.PathCompletionResult.max_entries), result.slice().len);
+    // The first names in order stay, whatever order the directory lists.
+    try std.testing.expect(result.cut());
+    try std.testing.expectEqualStrings("d0", result.slice()[0].slice());
+    try std.testing.expectEqualStrings("d66", result.slice()[data.PathCompletionResult.max_entries - 1].slice());
 
     result = .{};
     try list(io, try std.fmt.bufPrint(&query_buffer, "{s}/missing/x", .{root}), &result);

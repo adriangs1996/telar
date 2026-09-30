@@ -238,7 +238,6 @@ pub const OutboxSnapshot = @import("connection/OutboxSnapshot.zig");
 pub const Overrides = @import("appearance/Overrides.zig");
 pub const OwnedHistoryQuery = @import("connection/OwnedHistoryQuery.zig");
 pub const OwnedSearch = @import("connection/OwnedSearch.zig");
-pub const OwnedSuggestion = @import("connection/OwnedSuggestion.zig");
 pub const PageResult = @import("state/PageResult.zig");
 pub const Palette = @import("appearance/Palette.zig");
 pub const Pane = @import("panes/Pane.zig");
