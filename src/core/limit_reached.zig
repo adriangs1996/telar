@@ -22,7 +22,6 @@ pub const report_interval_ms: i64 = std.time.ms_per_s;
 /// `NoSpaceLeft` or `WriteFailed`, the same errors a full disk returns, so
 /// a flow that can overflow one maps that to a named limit error.
 pub const LimitError = error{
-    AckCapacityExceeded,
     AgentCapacityExceeded,
     AgentLabelTooLong,
     AgentTitleTooLong,
@@ -76,8 +75,8 @@ pub const LimitError = error{
     HostRequestsFull,
     ImageQuotaExceeded,
     InboxFull,
-    InputCapacityExceeded,
     InputTooLarge,
+    JsonDepth,
     LengthOverflow,
     LimitExceeded,
     LockNameTooLong,
@@ -103,6 +102,7 @@ pub const LimitError = error{
     PngTooLarge,
     PresentationIdExhausted,
     ProfileCounterOverflow,
+    ProviderFrameTooDeep,
     ProviderFrameTooLarge,
     ProxyInterceptHostsTooLarge,
     ProxyPathTooLong,
@@ -153,9 +153,7 @@ pub const LimitError = error{
     TooManyEnvironmentEntries,
     TooManyFilterPatterns,
     TooManyFontSizes,
-    TooManyHiddenPanes,
     TooManyHistoryResults,
-    TooManyImagePanes,
     TooManyLimits,
     TooManyMachines,
     TooManyPanes,
@@ -211,9 +209,21 @@ pub const SystemError = error{
 /// here to say why it is not a limit.
 pub const NotLimitError = error{
     /// A test fixture's own bound, not telar's.
+    AckCapacityExceeded,
+    /// One command in flight per client by design; the caller answers busy.
+    ClientBusy,
+    /// A test driver with one operation in flight.
+    DriverBusy,
+    /// One editor open in flight by design; the caller answers busy.
+    EditorOpenBusy,
+    /// A test fixture's own bound, not telar's.
     FixtureClientLimit,
     /// Arithmetic on dimensions a child sent: a malformed image.
     ImageSizeOverflow,
+    /// A test fixture's own bound, not telar's.
+    InputCapacityExceeded,
+    /// A configured capture quota out of range: invalid configuration.
+    InvalidCaptureQuota,
     /// A configured decode bound out of range: invalid configuration.
     InvalidDecodeLimit,
     /// A profiling workload that does not exist: invalid arguments.
@@ -252,16 +262,34 @@ pub const NotLimitError = error{
     Overflow,
     /// A command for a fullscreen state the pane cannot take.
     PaneFullscreenUnavailable,
+    /// A pane too small to split: a geometry answer, not a capacity.
+    PaneTooSmall,
+    /// One path index build in flight by design; the caller answers busy.
+    PathPickerBusy,
     /// A performance gate a benchmark measures, not a bound telar enforces.
     PerformanceBudgetExceeded,
+    /// One plugin action in flight by design; the caller answers busy.
+    PluginWorkerBusy,
+    /// One presentation in flight by design; the next frame waits for it.
+    PresentationBusy,
     /// A rate policy answered to the sender, which keeps working.
     PromptRateLimited,
     /// A deadline a test measures, not a bound telar enforces.
     PtyInputForwardingDeadlineExceeded,
+    /// A test fixture with one receive in flight.
+    ReceiveBusy,
+    /// One review job per pane in flight by design; the caller answers busy.
+    ReviewBusy,
+    /// A window too small to lay out: a geometry answer, not a capacity.
+    TerminalTooSmall,
     /// A deadline a test measures, not a bound telar enforces.
     TestReceiveDeadlineExceeded,
     /// A test fixture's own bound, not telar's.
     TestScreenTooLarge,
+    /// A test fixture's own bound, not telar's.
+    TooManyHiddenPanes,
+    /// A test fixture's own bound, not telar's.
+    TooManyImagePanes,
 };
 
 /// Whether an error is one of telar's own limits (`LimitError`).

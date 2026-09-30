@@ -49,7 +49,9 @@ pub fn run(init: std.process.Init, config: ConfigType, writer: *std.Io.Writer) !
         try processor.process(path);
     }
 
-    if (sets_file) |*file| {
+    // Only a run over the whole tree knows whether nothing raises a member.
+    if (sets_file != null and coversTree(config.paths)) {
+        const file = &sets_file.?;
         const unraised = try limit_errors.unraised(init.gpa, file.source, &names);
         defer init.gpa.free(unraised);
         try reporter.report(file.path, unraised);
@@ -57,6 +59,17 @@ pub fn run(init: std.process.Init, config: ConfigType, writer: *std.Io.Writer) !
 
     try reporter.finish();
     return reporter.exitCode();
+}
+
+fn coversTree(roots: []const []const u8) bool {
+    var src = false;
+    var lib = false;
+    for (roots) |root| {
+        src = src or std.mem.eql(u8, root, "src");
+        lib = lib or std.mem.eql(u8, root, "lib");
+    }
+
+    return src and lib;
 }
 
 const Processor = struct {
@@ -94,7 +107,7 @@ const Processor = struct {
         try self.reporter.report(path, violations);
 
         const names = self.limit_names orelse return;
-        const limit_violations = try limit_errors.lint(self.allocator, source, names);
+        const limit_violations = try limit_errors.lint(self.allocator, path, source, names);
         defer self.allocator.free(limit_violations);
 
         try self.reporter.report(path, limit_violations);

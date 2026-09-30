@@ -55,7 +55,7 @@ pub fn absorbFrame(gui: *GuiAdapter, viewport: native.Viewport, err: anyerror) b
     gui.limited = LimitedFrame.init(gui.observation(), viewport, name);
 
     // A pump refreshes the title, which names the limit.
-    native.telar_gui_wake(gui.driver.fds[1]);
+    gui.wake();
     return true;
 }
 

@@ -3,6 +3,7 @@
 const data = @import("model");
 const localsocket = @import("localsocket");
 const std = @import("std");
+const pacing = @import("pacing");
 const core = @import("telar-core");
 const Client = @import("Client.zig");
 const Job = @import("Job.zig").Job;
@@ -11,6 +12,7 @@ const Credit = @import("../graphics/Credit.zig");
 const actions = @import("../input/actions.zig");
 const change_review = @import("../change_review/change_review.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
+const runtime_link = @import("../connection/runtime_link.zig");
 const runtime_messages = @import("../connection/runtime_messages.zig");
 const workspace_rename = @import("../workspace/workspace_rename.zig");
 
@@ -715,6 +717,74 @@ pub fn reconnectAfterLoss(comptime start: fn (*Client) anyerror!void) !void {
     try std.testing.expectEqual(@as(u32, 2), app.model.runtime_link.sessions);
     try std.testing.expectEqual(@as(usize, 0), app.model.tabs.count);
     try std.testing.expect(app.model.startup.phase == .opening);
+    while (app.to_workers.pop()) |_| {}
+}
+
+/// A runtime message that stops at a limit: a graphics one is only
+/// reported, another restarts the session, and one past the resync budget
+/// gives the link up naming the limit, with no retry.
+/// Example: `try client_tests.recoverLimitedMessages(limit_reached.recover);`
+pub fn recoverLimitedMessages(comptime recover: fn (*Client, *const core.ServerMessage, anyerror) anyerror!void) !void {
+    const gpa = std.testing.allocator;
+    const app = try gpa.create(Client);
+    defer gpa.destroy(app);
+
+    try app.init(.{
+        .gpa = gpa,
+        .io = std.testing.io,
+        .host_size = .{
+            .cols = 40,
+            .rows = 10,
+            .cell_width_px = 0,
+            .cell_height_px = 0,
+        },
+        .options = .{
+            .arguments = &.{"/bin/sh"},
+            .cwd = "/",
+            .endpoint = "",
+            .machine = .{ .local = .{} },
+        },
+    });
+    defer app.deinit();
+    app.graphics = no_graphics;
+    app.bootstrap = .{
+        .graphics_shared = false,
+        .client_identity = @enumFromInt(7),
+    };
+
+    try runtime_link.start(app);
+    _ = app.to_background.pop().?;
+    var pair = try socketPair();
+    defer pair.peer.deinit(std.testing.io);
+    app.connect_result = .{ .channel = pair.channel };
+    _ = try app.update(.{ .runtime_connected = {} });
+    while (app.to_workers.pop()) |_| {}
+
+    const image: core.ServerMessage = .{ .graphics_delete_image = .{
+        .pane_id = @enumFromInt(3),
+        .revision = 1,
+        .key = .{
+            .image_id = 1,
+            .generation = 1,
+        },
+    } };
+    try recover(app, &image, error.GraphicsQuotaExceeded);
+    try std.testing.expect(app.model.runtime_link.phase == .connected);
+    try std.testing.expectEqual(@as(u8, 0), app.model.runtime_link.limit_resyncs);
+    try std.testing.expect(app.model.limit_reaches.find("GraphicsQuotaExceeded") != null);
+
+    // Past the budget the link gives up and names the limit.
+    app.model.runtime_link.limit_resyncs = 3;
+    app.model.runtime_link.limit_resyncs_since_ns = pacing.clock.monotonic(app.io);
+    const completed: core.ServerMessage = .{ .request_completed = .{ .request_id = @enumFromInt(1) } };
+    try recover(app, &completed, error.ClientOutboxFull);
+    try std.testing.expect(app.model.runtime_link.phase == .failed);
+    try std.testing.expectEqualStrings("ClientOutboxFull: limit reached", app.model.runtime_link.failure().?);
+    while (app.to_workers.pop()) |job| {
+        try std.testing.expect(!(job == .timer and job.timer.kind == .runtime_retry));
+    }
+
+    _ = try app.update(.{ .sent = error.BrokenPipe });
     while (app.to_workers.pop()) |_| {}
 }
 

@@ -14,7 +14,10 @@ pub const sets_path_suffix = "src/core/limit_reached.zig";
 const set_names = [_][]const u8{ "LimitError", "SystemError", "NotLimitError" };
 const exemption_set = "NotLimitError";
 const limit_set = "LimitError";
-const limit_words = [_][]const u8{ "TooMany", "TooLarge", "TooLong", "Full", "Exceeded", "Exhausted", "Limit", "Capacity", "Overflow" };
+const limit_words = [_][]const u8{ "TooMany", "TooLarge", "TooLong", "TooDeep", "TooSmall", "Depth", "Full", "Exceeded", "Exhausted", "Limit", "Capacity", "Overflow", "Busy", "Quota" };
+/// Files whose errors belong to tests: what they raise does not keep a
+/// `LimitError` member alive.
+const test_path_parts = [_][]const u8{ "/tests/", "client_tests/", "_test.zig", "/test.zig" };
 
 /// Reads the sets from their file's source, which must outlive `Names`,
 /// and returns the members of `NotLimitError` that give no reason.
@@ -52,6 +55,7 @@ pub fn collect(allocator: std.mem.Allocator, source: [:0]const u8, names: *Limit
                 .start = starts[member],
                 .limit = std.mem.eql(u8, set, limit_set),
             });
+
             if (std.mem.eql(u8, set, exemption_set) and tags[member - 1] != .doc_comment) {
                 try violations.append(allocator, at(source, starts[member], .limit_error_reason));
             }
@@ -61,13 +65,14 @@ pub fn collect(allocator: std.mem.Allocator, source: [:0]const u8, names: *Limit
     return violations.toOwnedSlice(allocator);
 }
 
-/// Returns every `error.X` of one file named like a limit and in no set,
-/// and notes which set members the file raises.
+/// Returns every error of one file named like a limit and in no set, both
+/// `error.X` and the members of an `error{...}` it declares, and notes
+/// which `LimitError` members the file raises outside tests.
 ///
 /// ```zig
-/// const violations = try limit_errors.lint(gpa, source, &names);
+/// const violations = try limit_errors.lint(gpa, path, source, &names);
 /// ```
-pub fn lint(allocator: std.mem.Allocator, source: [:0]const u8, names: *LimitErrorNames) ![]Violation {
+pub fn lint(allocator: std.mem.Allocator, path: []const u8, source: [:0]const u8, names: *LimitErrorNames) ![]Violation {
     var violations: std.ArrayList(Violation) = .empty;
     errdefer violations.deinit(allocator);
 
@@ -76,22 +81,80 @@ pub fn lint(allocator: std.mem.Allocator, source: [:0]const u8, names: *LimitErr
 
     const tags = tokens.items(.tag);
     const starts = tokens.items(.start);
-    for (0..tokens.len) |index| {
-        if (tags[index] != .keyword_error or index + 2 >= tokens.len or tags[index + 1] != .period or tags[index + 2] != .identifier) {
+    const test_file = isTestPath(path);
+    const sets_file = std.mem.endsWith(u8, path, sets_path_suffix);
+    var test_depth: usize = 0;
+    var depth: usize = 0;
+    var index: usize = 0;
+    while (index < tokens.len) : (index += 1) {
+        switch (tags[index]) {
+            .l_brace => depth += 1,
+            .r_brace => {
+                depth -|= 1;
+                if (test_depth != 0 and depth < test_depth) {
+                    test_depth = 0;
+                }
+            },
+            .keyword_test => if (test_depth == 0) {
+                test_depth = depth + 1;
+            },
+            else => {},
+        }
+
+        if (tags[index] != .keyword_error or index + 1 >= tokens.len) {
             continue;
         }
 
-        const name = text(source, starts[index + 2]);
-        if (names.members.getPtr(name)) |member| {
-            member.raised = true;
+        const in_test = test_file or test_depth != 0;
+        if (tags[index + 1] == .period and index + 2 < tokens.len and tags[index + 2] == .identifier) {
+            try check(allocator, .{ .source = source, .start = starts[index + 2], .raises = !in_test }, names, &violations);
+            continue;
         }
 
-        if (looksLikeLimit(name) and !names.contains(name)) {
-            try violations.append(allocator, at(source, starts[index + 2], .limit_error_set));
+        // The sets themselves declare every name; checking them is `collect`'s.
+        if (tags[index + 1] != .l_brace or sets_file) {
+            continue;
+        }
+
+        var member = index + 2;
+        while (member < tokens.len and tags[member] != .r_brace) : (member += 1) {
+            if (tags[member] == .identifier) {
+                try check(allocator, .{ .source = source, .start = starts[member], .raises = !in_test }, names, &violations);
+            }
         }
     }
 
     return violations.toOwnedSlice(allocator);
+}
+
+/// One error name where a file raises or declares it.
+const Occurrence = struct {
+    source: [:0]const u8,
+    start: usize,
+    /// Whether it keeps a `LimitError` member alive: not in a test.
+    raises: bool,
+};
+
+fn check(allocator: std.mem.Allocator, occurrence: Occurrence, names: *LimitErrorNames, violations: *std.ArrayList(Violation)) !void {
+    const name = text(occurrence.source, occurrence.start);
+    if (names.members.getPtr(name)) |member| {
+        member.raised = member.raised or occurrence.raises;
+        return;
+    }
+
+    if (looksLikeLimit(name)) {
+        try violations.append(allocator, at(occurrence.source, occurrence.start, .limit_error_set));
+    }
+}
+
+fn isTestPath(path: []const u8) bool {
+    for (test_path_parts) |part| {
+        if (std.mem.indexOf(u8, path, part) != null) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /// Returns every `LimitError` member no checked file raises, at its
@@ -224,7 +287,7 @@ test "an error named like a limit must be in a set, and an exemption says why" {
         \\    return error.InvalidPath;
         \\}
     ;
-    const violations = try lint(std.testing.allocator, source, &names);
+    const violations = try lint(std.testing.allocator, "src/a.zig", source, &names);
     defer std.testing.allocator.free(violations);
     try std.testing.expectEqual(@as(usize, 1), violations.len);
     try std.testing.expectEqual(@as(usize, 5), violations[0].line);
@@ -247,11 +310,36 @@ test "a limit error nothing raises is reported where it is declared" {
     const missing = try collect(std.testing.allocator, sets, &names);
     defer std.testing.allocator.free(missing);
 
-    const violations = try lint(std.testing.allocator, "const a = error.TooManyTabs;", &names);
+    const test_only = try lint(std.testing.allocator, "src/tests/a.zig", "const a = error.TooManyTabs;", &names);
+    defer std.testing.allocator.free(test_only);
+    const in_test_block = try lint(std.testing.allocator, "src/b.zig", "test \"t\" { _ = error.TooManyTabs; }", &names);
+    defer std.testing.allocator.free(in_test_block);
+    const still_unraised = try unraised(std.testing.allocator, sets, &names);
+    defer std.testing.allocator.free(still_unraised);
+    try std.testing.expectEqual(@as(usize, 2), still_unraised.len);
+
+    const violations = try lint(std.testing.allocator, "src/c.zig", "const Set = error{TooManyTabs}; const b = Set.TooManyTabs;", &names);
     defer std.testing.allocator.free(violations);
 
     const unused = try unraised(std.testing.allocator, sets, &names);
     defer std.testing.allocator.free(unused);
     try std.testing.expectEqual(@as(usize, 1), unused.len);
     try std.testing.expectEqual(@as(usize, 3), unused[0].line);
+}
+
+test "an error set's members named like limits are checked too" {
+    const sets =
+        \\pub const LimitError = error{
+        \\    TooManyTabs,
+        \\};
+    ;
+    var names: LimitErrorNames = .{};
+    defer names.deinit(std.testing.allocator);
+    const missing = try collect(std.testing.allocator, sets, &names);
+    defer std.testing.allocator.free(missing);
+
+    const violations = try lint(std.testing.allocator, "src/a.zig", "const Set = error{ TooManyTabs, TooDeepNesting, Invalid };", &names);
+    defer std.testing.allocator.free(violations);
+    try std.testing.expectEqual(@as(usize, 1), violations.len);
+    try std.testing.expectEqual(@as(usize, 33), violations[0].column);
 }

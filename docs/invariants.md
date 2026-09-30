@@ -32,6 +32,12 @@ detach, reconnect, destroy), its recovery and the test that proves it.
   errors (`SystemError`: memory from a real allocator, a full disk,
   descriptor quotas) are logged as errors and keep their path, like any
   other error, so a net hides no bug.
+- A fixed buffer or writer that can overflow in a handler maps that to a
+  named limit error where it writes. `NoSpaceLeft` and `WriteFailed` are
+  also what a full disk returns, so no net catches them.
+- A runtime message that stops at a limit resyncs as little as the protocol
+  allows, and a link that keeps resyncing for limits gives up naming the
+  limit instead of reconnecting forever.
 - A handler re-arms its source, clears its in-flight flag and releases its
   slot before any step that can fail, or keeps that step's error for the
   end, so a net that skips the rest of it never leaves the source dead.

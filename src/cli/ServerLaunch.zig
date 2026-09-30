@@ -13,6 +13,8 @@ const config = @import("config.zig");
 const server = @import("server.zig");
 const proxy_cli = @import("proxy.zig");
 const plugin_cli = @import("plugin.zig");
+const privatefile = @import("privatefile");
+const Inode = privatefile.Inode;
 const Launch = @This();
 
 process: std.process.Init,
@@ -346,17 +348,42 @@ pub fn launchDaemon(self: *const Launch) !void {
     _ = daemon;
 }
 
-/// Opens `<endpoint>.runtime.start.log` for this launch, replacing the last
-/// launch's: owner-only, never rotated, since only what happens before the
-/// listener lands in it.
+/// Opens `<endpoint>.runtime.start.log` for this launch and empties it:
+/// never through a symlink, only a regular file the user owns, owner-only,
+/// and in append mode so two launches writing at once leave no gaps. A
+/// socket in a shared directory cannot hand the runtime someone else's file.
 fn openStartLog(io: std.Io, endpoint: []const u8) !std.Io.File {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}{s}", .{ endpoint, core.DiagnosticLogName.runtime_start_log_suffix });
+    const path = try std.fmt.bufPrintZ(&path_buffer, "{s}{s}", .{ endpoint, core.DiagnosticLogName.runtime_start_log_suffix });
 
-    return std.Io.Dir.createFileAbsolute(io, path, .{
-        .truncate = true,
-        .permissions = std.Io.File.Permissions.fromMode(0o600),
-    });
+    const flags: std.c.O = .{
+        .ACCMODE = .WRONLY,
+        .CREAT = true,
+        .APPEND = true,
+        .NOFOLLOW = true,
+        .CLOEXEC = true,
+    };
+    const fd = std.c.open(path.ptr, flags, @as(std.c.mode_t, 0o600));
+    if (fd < 0) {
+        return error.StartLogUnavailable;
+    }
+
+    const file: std.Io.File = .{
+        .handle = fd,
+        .flags = .{ .nonblocking = false },
+    };
+    errdefer file.close(io);
+
+    const inode = Inode.fromDescriptor(fd) catch return error.StartLogUnavailable;
+    if (inode.kind() != .regular or inode.owner != std.c.getuid()) {
+        return error.StartLogUnavailable;
+    }
+
+    if (std.c.fchmod(fd, 0o600) != 0 or std.c.ftruncate(fd, 0) != 0) {
+        return error.StartLogUnavailable;
+    }
+
+    return file;
 }
 
 pub fn deinit(self: *Launch) void {

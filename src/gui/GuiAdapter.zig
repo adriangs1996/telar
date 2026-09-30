@@ -404,7 +404,7 @@ pub fn draw(self: *GuiAdapter, viewport: native.Viewport) !u64 {
     if (self.limited != null) {
         self.limited = null;
         // A pump refreshes the title, which no longer names the limit.
-        native.telar_gui_wake(self.driver.fds[1]);
+        self.wake();
     }
 
     if (token != 0) {
@@ -452,6 +452,12 @@ pub fn fail(self: *GuiAdapter, err: anyerror) void {
     }
 
     native.telar_gui_wake(self.driver.fds[1]);
+}
+
+/// Wakes the native loop for one more pump.
+/// Example: `gui.wake();`
+pub fn wake(self: *GuiAdapter) void {
+    native.telar_gui_wake(self.driver.fds[@intFromEnum(PipeEnd.write)]);
 }
 
 fn now(self: *const GuiAdapter) u64 {
@@ -623,7 +629,6 @@ pub fn update(self: *GuiAdapter) !?u8 {
 
             const exit_status = self.dispatch(event) catch |err| skipped: {
                 try self.absorbUpdate(err);
-                try self.resynchronize(event, err);
                 break :skipped null;
             };
             self.deliverHostEffects() catch |err| try self.absorbUpdate(err);
@@ -675,24 +680,6 @@ fn absorbUpdate(self: *GuiAdapter, err: anyerror) !void {
     if (!limit_reached.absorb(self, .window_update, err)) {
         return err;
     }
-}
-
-/// A runtime message that stopped at a limit may have applied in part, so
-/// its machine's link restarts: the next session rebuilds that client's
-/// replica from snapshots, as a fresh client's would, instead of applying
-/// later messages to a replica that no longer matches the runtime.
-fn resynchronize(self: *GuiAdapter, event: gui_event.Message, err: anyerror) !void {
-    const slot: u8, const message = switch (event) {
-        .client => |message| .{ client.Machines.local_slot, message },
-        .machine => |machine_event| .{ machine_event.slot, machine_event.message },
-        else => return,
-    };
-
-    if (message != .server) {
-        return;
-    }
-
-    try client.runtime_link.lose(&self.clients[slot], err);
 }
 
 fn dispatch(self: *GuiAdapter, event: gui_event.Message) !?u8 {

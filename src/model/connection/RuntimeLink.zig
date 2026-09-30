@@ -33,6 +33,10 @@ failure_len: u16 = 0,
 setup_repairs: bool = false,
 target_bytes: [max_target_bytes]u8 = undefined,
 target_len: u8 = 0,
+/// Resyncs a runtime message that stopped at a limit asked for, counted
+/// from `limit_resyncs_since_ns`, so one that keeps recurring gives up.
+limit_resyncs: u8 = 0,
+limit_resyncs_since_ns: u64 = 0,
 
 /// What the last attempt or the lost socket reported, if anything.
 pub fn failure(self: *const RuntimeLink) ?[]const u8 {

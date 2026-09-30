@@ -154,12 +154,13 @@ The launcher points a new background runtime's standard error at
 `<socket>.runtime.start.log`, owner-only and replaced by each launch, so a
 runtime that fails before it holds the listener (a configuration, graphics,
 history or proxy directory error) leaves its reason there. Once it holds the
-listener it writes to `<socket>.runtime.log` in every build. The runtime opens that file itself once it holds the
-listener (`RuntimeLog.open` in `Resources.acquire`), so only the runtime that
-owns the socket rotates it: a second launch that loses the race, or a
-retrying connect, never moves a live runtime's log aside. The previous file
-stays as `.runtime.log.1`, and the maintenance tick rotates a log that passes
-1 MiB. `telar diagnostics logs` reads both with the telemetry logs.
+listener it writes to `<socket>.runtime.log` in every build. The runtime opens
+that file itself once it holds the listener (`RuntimeLog.open` in
+`Resources.acquire`), so only the runtime that owns the socket rotates it: a
+second launch that loses the race, or a retrying connect, never moves a live
+runtime's log aside. The previous file stays as `.runtime.log.1`, and the
+maintenance tick rotates a log that passes 1 MiB. `telar diagnostics logs`
+reads both with the telemetry logs.
 
 The runtime logs its own limits and each safety-net catch, with its route,
 once per interval. It only counts what clients report, so a client cannot
@@ -185,6 +186,19 @@ apart, neither is a limit error, and a flow that can overflow a fixed buffer
 maps that to a named limit error. Any other error keeps its old path too, so
 a net hides no host failure and no bug.
 
+A fixed buffer or writer that overflows inside a runtime or window
+handler is therefore not caught by any net: `bufPrint` returns
+`NoSpaceLeft`, a fixed `std.Io.Writer` returns `WriteFailed`, and either
+still ends `Runtime.run`. A flow that writes into one maps the overflow to a
+named limit error where it writes, and reports that limit:
+
+```zig
+const text = std.fmt.bufPrint(&buffer, "{s}: {s}", .{ label, value }) catch {
+    limit_reached.report(model, .{ .limit = label_limit });
+    return error.LabelTooLong; // in LimitError
+};
+```
+
 A net reports the limit under the error's name
 (`ChromeHitCapacityExceeded: limit reached`) with the route that caught it.
 Once a flow reports its limit by name, the net no longer sees that error.
@@ -199,10 +213,18 @@ Once a flow reports its limit by name, the net no longer sees that error.
   when the reply an event owes does not fit (`dropUnanswered`).
 - `GuiAdapter.update` absorbs a limit error per event and per step of the
   turn, so the rest of the batch, `reconcileFocus` and the presentation
-  still run. A runtime message that stopped at a limit may have applied in
-  part, so its machine's link restarts (`runtime_link.lose`) and the next
-  session rebuilds that client's replica from snapshots. `pump` keeps a
-  second net: the same error twice asks for no draw.
+  still run. `pump` keeps a second net: the same error twice asks for no
+  draw.
+- A runtime message that stops at a limit while the client applies it
+  (`runtime_io.receiveRuntime`) goes to `limit_reached.recover`, which
+  reports it and asks for the smallest resync the protocol has: none for a
+  graphics message, whose store checks its bounds before storing anything;
+  a snapshot of the pane for a pane frame; a new session for anything else,
+  which rebuilds the replica. The link keeps reading otherwise. More than
+  three resyncs within a minute give the link up (`runtime_link.abandon`)
+  with the limit's name and no retry, since each would stop at the same
+  limit; the person can retry. An error after the message was applied, in
+  the adapter, never resyncs.
 - The window's `render` callback passes draw errors to the GUI's
   `limit_reached.absorbFrame`. Draw returns token 0, and both native
   backends keep the last presented frame. `GuiAdapter.limited` holds the
@@ -265,6 +287,10 @@ with notice levels and the client's `limits`.
   the runtime and restores cleanly.
 - `src/backend/runtime/resources/RuntimeLog.zig`: rotation at start and past
   the size bound.
+- `client_tests.recoverLimitedMessages`, run from
+  `src/client/notifications/limit_reached.zig`: a graphics message at a
+  limit keeps the link, and one past the resync budget gives it up naming
+  the limit, with no retry.
 - `src/client_tests/limit_reached.zig` and `configuration.zig`: the client
   notice, folded reports, the adapter net, a real bar of five click actions
   and a failing panel, and the diagnostics their next render clears.
