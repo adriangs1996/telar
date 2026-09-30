@@ -32,9 +32,6 @@ pane_input.sendText: PaneStore.resolveControl(exact generation)
         |            bracketed paste framing if the child enabled mode 2004,
         |            then Enter for the child's keyboard mode (pane_input.enterBytes)
         |
-text that does not fit the pane's input queue (128 KiB the child has not
-read) -> request_failed resource_limit, pane_input.queue_bytes reported
-        |
 pane_input.forward  (history observer first, then the PTY queue)
         |
 schema.request_completed
