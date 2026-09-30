@@ -729,3 +729,56 @@ test "an action names only a configured panel" {
     , &diagnostic));
     try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), "missing") != null);
 }
+
+test "a panel render past its components keeps what fits and a long sparkline keeps its last values" {
+    const source =
+        \\local telar = require("telar")
+        \\local ui = telar.ui
+        \\return { api_version = 2, client = { panels = {
+        \\  usage = telar.panel({ render = function(ctx)
+        \\    local count = tonumber(ctx.pane_title)
+        \\    local blocks = {}
+        \\    local values = {}
+        \\    for index = 1, 150 do values[index] = index end
+        \\    blocks[1] = ui.sparkline({ values = values, max = 150 })
+        \\    for index = 2, count do blocks[index] = ui.text("row " .. index) end
+        \\    return blocks
+        \\  end }),
+        \\} } }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try testLoad(source, &diagnostic);
+    defer generation.deinit();
+
+    const reference = generation.snapshot.bars.panels[0].source.dynamic.callback;
+    var content: data.PanelContent = .{};
+    var context = testContext(null);
+    context.pane_title = "128";
+    try generation.invokeBar(.{
+        .reference = reference,
+        .context = context,
+        .surface = .panel,
+    }, &content, &diagnostic);
+
+    try std.testing.expectEqual(@as(u8, data.bar_values.max_panel_nodes), content.node_count);
+    const samples = content.samples(content.slice()[0]);
+    try std.testing.expectEqual(@as(usize, data.Node.max_samples), samples.len);
+    try std.testing.expectEqual(@as(u8, 100), samples[samples.len - 1]);
+    try std.testing.expectEqual(@as(u8, 1), generation.unreported.count);
+    try std.testing.expectEqualStrings("bars.max_node_samples", generation.unreported.slice()[0].limit.name);
+    try std.testing.expectEqual(@as(?u64, 150), generation.unreported.slice()[0].requested);
+
+    generation.unreported.clear();
+    context.pane_title = "129";
+    try generation.invokeBar(.{
+        .reference = reference,
+        .context = context,
+        .surface = .panel,
+    }, &content, &diagnostic);
+
+    try std.testing.expectEqual(@as(u8, data.bar_values.max_panel_nodes), content.node_count);
+    // Equal priorities keep document order, so the last row is left out.
+    try std.testing.expectEqualStrings("row 128", content.text(content.slice()[127].text));
+    try std.testing.expectEqualStrings("panels.max_panel_nodes", generation.unreported.slice()[1].limit.name);
+    try std.testing.expectEqual(@as(?u64, 129), generation.unreported.slice()[1].requested);
+}

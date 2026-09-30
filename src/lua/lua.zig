@@ -9,6 +9,7 @@ pub const default_load_instruction_limit = vm_support.default_load_instruction_l
 pub const default_callback_deadline_ns = vm_support.default_callback_deadline_ns;
 pub const default_callback_instruction_limit = vm_support.default_callback_instruction_limit;
 pub const default_render_instruction_limit = vm_support.default_render_instruction_limit;
+pub const default_render_deadline_ns = vm_support.default_render_deadline_ns;
 pub const open = sandbox.open;
 pub const json = @import("json.zig");
 

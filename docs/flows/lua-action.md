@@ -117,7 +117,8 @@ The synchronous callback path keeps its existing hard limits:
 - 4 KiB of expression paste.
 
 Bar, panel and pick renders are not key presses: they run on the loop
-between events, under 1,000,000 instructions and the same 100 ms deadline.
+between events, under 1,000,000 instructions and a 100 ms deadline (1 s in a
+debug build, which runs Lua about ten times slower).
 A pick `items` function that turns a full list of 4096 options into tables
 takes about 61,000 instructions.
 

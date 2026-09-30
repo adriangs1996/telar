@@ -221,7 +221,7 @@ pub fn invokeBar(self: *Generation, invocation: BarInvocation, content: anytype,
     const state = self.vm.state;
     lua_api.c.lua_settop(state, 0);
     defer lua_api.c.lua_settop(state, 0);
-    self.vm.resetBudget(lua.default_render_instruction_limit, lua.default_callback_deadline_ns);
+    self.vm.resetBudget(lua.default_render_instruction_limit, lua.default_render_deadline_ns);
     _ = lua_api.c.lua_rawgeti(state, lua_api.c.LUA_REGISTRYINDEX, self.bar_callbacks[reference.id].registry_ref);
     generation_support.pushReadonlyBarContext(state, invocation.context);
     if (lua_api.c.lua_pcallk(state, 1, 1, 0, 0, null) != lua_api.c.LUA_OK) {
@@ -249,7 +249,7 @@ pub fn invokePick(self: *Generation, invocation: BarInvocation, items: *data.Pic
     const state = self.vm.state;
     lua_api.c.lua_settop(state, 0);
     defer lua_api.c.lua_settop(state, 0);
-    self.vm.resetBudget(lua.default_render_instruction_limit, lua.default_callback_deadline_ns);
+    self.vm.resetBudget(lua.default_render_instruction_limit, lua.default_render_deadline_ns);
     _ = lua_api.c.lua_rawgeti(state, lua_api.c.LUA_REGISTRYINDEX, self.bar_callbacks[reference.id].registry_ref);
     if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TFUNCTION) {
         generation_support.pushReadonlyBarContext(state, invocation.context);
