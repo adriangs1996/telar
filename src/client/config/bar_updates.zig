@@ -521,7 +521,7 @@ fn advanceClock(client: *Client) void {
     state.scheduleClock(pacing.clock.monotonic(client.io) + data.bar_clock.untilNext(period, now));
 }
 
-fn openPanelSource(client: *const Client, configuration: *const data.BarConfiguration) ?*const data.bar_values.Source {
+fn openPanelSource(client: *const Client, configuration: *const data.BarConfiguration) ?*const data.PanelSource {
     const run = client.model.bar_updates.panel_run orelse return null;
     const definition = configuration.panel(run.index) orelse return null;
     return &definition.source;

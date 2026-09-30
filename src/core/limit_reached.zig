@@ -141,6 +141,7 @@ pub const LimitError = error{
     TooManyBarComponents,
     TooManyBarSamples,
     TooManyBindings,
+    TooManyCommandTabs,
     TooManyBlocks,
     TooManyClientLayoutNodes,
     TooManyClientLayoutTabs,

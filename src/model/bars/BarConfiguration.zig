@@ -94,7 +94,8 @@ pub fn presentation(self: *const Configuration) Layout {
     return result;
 }
 
-fn sourceGeneration(value: *const model.Source) ?u64 {
+/// The generation of a slot's or a panel's live source.
+fn sourceGeneration(value: anytype) ?u64 {
     return switch (value.*) {
         .dynamic => |dynamic| dynamic.callback.generation,
         .command => |command| command.generation,

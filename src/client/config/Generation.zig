@@ -29,6 +29,7 @@ const ThemeParser = @import("ThemeParser.zig");
 const notifications_config = @import("notifications.zig");
 const GuiConfigParser = @import("GuiConfigParser.zig");
 const UnreportedReaches = @import("UnreportedReaches.zig");
+const CommandTabs = @import("CommandTabs.zig");
 const default_bindings = @import("default_bindings.zig");
 const Generation = @This();
 
@@ -812,15 +813,19 @@ fn parsePanel(self: *Generation, input: PanelInput, diagnostic: *data.Diagnostic
     definition.heading.width = @intCast(width);
 
     _ = lua_api.c.lua_getfield(state, absolute, "source");
-    definition.source = self.parseBarSource(-1, diagnostic) catch |err| {
+    const source = self.parseBarSource(-1, diagnostic) catch |err| {
         lua_value.pop(state, 1);
         return err;
     };
     lua_value.pop(state, 1);
-    if (definition.source != .dynamic and definition.source != .command) {
-        diagnostic.set("panel '{s}' needs a render function or a command", .{input.name});
-        return error.InvalidConfig;
-    }
+    definition.source = switch (source) {
+        .dynamic => |value| .{ .dynamic = value },
+        .command => |value| .{ .command = value },
+        else => {
+            diagnostic.set("panel '{s}' needs a render function or a command", .{input.name});
+            return error.InvalidConfig;
+        },
+    };
 
     _ = lua_api.c.lua_getfield(state, absolute, "refresh");
     const refresh = lua_api.c.lua_toboolean(state, -1) != 0;
@@ -1448,18 +1453,23 @@ fn parseBindings(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) 
         });
     }
 
-    self.snapshot.binding_count = 0;
+    // A binding whose action stopped at a limit is left out; the limit is
+    // already kept for the client to report.
+    var kept: u16 = 0;
     for (0..count) |binding_index| {
         _ = lua_api.c.lua_geti(state, absolute, @intCast(binding_index + 1));
-        const parsed = self.parseBinding(.{ .index = -1, .position = binding_index }, diagnostic) catch |err| {
-            lua_value.pop(state, 1);
-            return err;
+        defer lua_value.pop(state, 1);
+        const parsed = self.parseBinding(.{ .index = -1, .position = binding_index }, diagnostic) catch |err| switch (err) {
+            error.TooManyArguments, error.ArgumentsTooLarge, error.TooManyCommandTabs => continue,
+            else => return err,
         };
-        self.snapshot.bindings[binding_index] = parsed.binding;
-        self.snapshot.bindings_prefixed[binding_index] = parsed.prefixed;
-        lua_value.pop(state, 1);
+
+        self.snapshot.bindings[kept] = parsed.binding;
+        self.snapshot.bindings_prefixed[kept] = parsed.prefixed;
+        kept += 1;
     }
-    self.snapshot.binding_count = @intCast(count);
+
+    self.snapshot.binding_count = kept;
 }
 
 fn parseBinding(self: *Generation, binding_input: BindingInput, diagnostic: *data.Diagnostic) !ParsedBinding {
@@ -1748,12 +1758,23 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
         }
         const command_table = lua_api.c.lua_absindex(state, -1);
         const count = lua_api.c.lua_rawlen(state, command_table);
-        if (count == 0 or count > data.CommandTab.max_arguments) {
+        if (count == 0) {
             diagnostic.set("command-tab command must contain 1..{d} arguments", .{data.CommandTab.max_arguments});
             return error.InvalidConfig;
         }
+
+        if (count > data.CommandTab.max_arguments) {
+            diagnostic.set("command-tab command has {d} arguments; at most {d} fit", .{ count, data.CommandTab.max_arguments });
+            self.unreported.add(.{
+                .limit = data.CommandTab.arguments_limit,
+                .requested = count,
+            });
+            return error.TooManyArguments;
+        }
+
         try lua_value.ensureArrayOnly(state, .{ .index = command_table, .count = count, .path = "command-tab command" }, diagnostic);
         var argument_storage: [data.CommandTab.max_arguments][]const u8 = undefined;
+        var argv_bytes: usize = 0;
         for (1..count + 1) |item| {
             _ = lua_api.c.lua_rawgeti(state, command_table, @intCast(item));
             defer lua_value.pop(state, 1);
@@ -1769,7 +1790,9 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
                 return error.InvalidConfig;
             }
             argument_storage[item - 1] = text;
+            argv_bytes += text.len;
         }
+
         var label: []const u8 = "";
         _ = lua_api.c.lua_getfield(state, absolute, "label");
         if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TSTRING) {
@@ -1779,9 +1802,30 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
             }
         }
         defer lua_value.pop(state, 1);
-        return .{ .command_tab = data.CommandTab.init(argument_storage[0..count], label) catch {
-            diagnostic.set("command-tab command or label is invalid or too long", .{});
-            return error.InvalidConfig;
+        const command = data.CommandTab.init(argument_storage[0..count], label) catch |err| switch (err) {
+            error.ArgumentsTooLarge => {
+                diagnostic.set("command-tab command has {d} bytes; at most {d} fit", .{ argv_bytes, data.CommandTab.max_command_bytes });
+                self.unreported.add(.{
+                    .limit = data.CommandTab.command_bytes_limit,
+                    .requested = argv_bytes,
+                });
+                return err;
+            },
+            else => {
+                diagnostic.set("command-tab command or label is invalid or too long", .{});
+                return error.InvalidConfig;
+            },
+        };
+        const id = self.snapshot.command_tabs.add(&command) catch |err| {
+            diagnostic.set("configuration opens more than {d} different command tabs", .{CommandTabs.capacity});
+            self.unreported.add(.{
+                .limit = CommandTabs.limit,
+            });
+            return err;
+        };
+        return .{ .command_tab = .{
+            .generation = self.number,
+            .id = id,
         } };
     }
     if (std.mem.eql(u8, kind, "notification")) {

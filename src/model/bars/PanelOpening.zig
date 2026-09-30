@@ -2,11 +2,11 @@
 //! source it runs while open.
 const BarComponent = @import("BarComponent.zig");
 const PanelTarget = @import("PanelTarget.zig").PanelTarget;
-const bar_values = @import("model.zig");
+const PanelSource = @import("PanelSource.zig").PanelSource;
 const PanelOpening = @This();
 
 target: PanelTarget,
 anchor: ?BarComponent = null,
 /// The configured panel's source; null for the overflow list.
-source: ?*const bar_values.Source = null,
+source: ?*const PanelSource = null,
 now_ns: u64,

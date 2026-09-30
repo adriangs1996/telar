@@ -10,6 +10,7 @@ const BarCallbackContext = @import("BarCallbackContext.zig");
 const Callback = @import("Callback.zig");
 const lua_value = @import("lua_value.zig");
 const Generation = @import("Generation.zig");
+const CommandTabs = @import("CommandTabs.zig");
 const default_bindings = @import("default_bindings.zig");
 
 pub const api_version: u16 = 2;
@@ -1399,7 +1400,9 @@ test "command-tab actions parse a bounded argv and reject empty commands" {
     var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { keybindings = { telar.bind({ \"ctrl+g\" }, telar.action.command_tab({ command = { \"lazygit\", \"-p\" }, label = \"git\" })) } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
 
-    const parsed = generation.snapshot.bindings[0].action.command_tab;
+    const reference = generation.snapshot.bindings[0].action.command_tab;
+    const parsed = generation.snapshot.command_tabs.find(generation.number, reference).?;
+    try std.testing.expect(generation.snapshot.command_tabs.find(generation.number + 1, reference) == null);
     try std.testing.expectEqualStrings("lazygit", parsed.argument(0));
     try std.testing.expectEqualStrings("-p", parsed.argument(1));
     try std.testing.expectEqualStrings("git", parsed.label());
@@ -1558,4 +1561,50 @@ test "an action naming a panel no configuration has still fails when nothing was
         .source_name = "@config.lua",
         .number = 1,
     }));
+}
+
+test "command tabs hold a bar command's argv, share equal commands and leave out bindings past their limits" {
+    const source =
+        \\local telar = require("telar")
+        \\local most, many = {}, {}
+        \\for index = 1, 32 do most[index] = "a" .. index end
+        \\for index = 1, 33 do many[index] = "a" .. index end
+        \\local keys = {
+        \\  telar.bind({ "a" }, telar.action.command_tab({ command = most })),
+        \\  telar.bind({ "b" }, telar.action.command_tab({ command = { "sh", "-c", string.rep("x", 4090) } })),
+        \\  telar.bind({ "c" }, telar.action.command_tab({ command = many })),
+        \\  telar.bind({ "d" }, telar.action.command_tab({ command = { "sh", "-c", string.rep("x", 4094) } })),
+        \\  telar.bind({ "e" }, telar.action.command_tab({ command = most })),
+        \\}
+        \\for index = 1, 40 do
+        \\  keys[#keys + 1] = telar.bind({ "f" }, telar.action.command_tab({ command = { "echo", tostring(index) } }))
+        \\end
+        \\return { api_version = 2, client = { keybindings = keys } }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    const generation = Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 }) catch |err| {
+        std.debug.print("{s}\n", .{diagnostic.message()});
+        return err;
+    };
+    defer generation.deinit();
+
+    const tabs = &generation.snapshot.command_tabs;
+    const bindings = generation.snapshot.bindingSlice();
+    const most = tabs.find(1, bindings[0].action.command_tab).?;
+    try std.testing.expectEqual(@as(u8, data.CommandTab.max_arguments), most.argument_count);
+    try std.testing.expectEqual(@as(usize, 4090), tabs.find(1, bindings[1].action.command_tab).?.argument(2).len);
+    // The 33-argument and 4096-byte commands are left out, and the repeated
+    // command shares the first one's row.
+    try std.testing.expectEqual(bindings[0].action.command_tab.id, bindings[2].action.command_tab.id);
+    try std.testing.expectEqual(@as(u8, CommandTabs.capacity), tabs.count);
+    try std.testing.expectEqual(@as(usize, 3 + CommandTabs.capacity - 2), bindings.len);
+
+    for ([_][]const u8{ "command_tab.max_arguments", "command_tab.max_command_bytes", "config.command_tabs" }) |name| {
+        var found = false;
+        for (generation.unreported.slice()) |reach| {
+            found = found or std.mem.eql(u8, reach.limit.name, name);
+        }
+
+        try std.testing.expect(found);
+    }
 }
