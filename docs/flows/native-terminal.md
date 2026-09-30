@@ -77,8 +77,10 @@ drivers.
 
 ## Bounds and recovery
 
-- At most 65,536 visible grid cells, with capacity for 24 quads per cell, one
-  active 1,024-square alpha atlas and one native GPU submission. A font reload
+- At most `core.max_cell_count` (130,359) visible grid cells, with capacity
+  for 24 quads per cell, one active alpha atlas of 1,024 or 2,048 texels a
+  side and one native GPU submission. A larger viewport keeps its columns and
+  the rows that fit. A font reload
   can additionally hold one staged or retired renderer. Steady drawing reuses
   quad storage; font changes replace the atlas after the prior consumer ends.
   Retained cell meshes additionally reserve at most 24 quads plus their visual
@@ -86,9 +88,12 @@ drivers.
   by the same cell limit. Shrinking a window retains its previous capacity.
 - The atlas caches face-specific bold and italic variants. Missing graphemes
   try embedded text and Nerd Symbols faces before the primary replacement glyph.
-  A full page uses replacement glyphs reserved at setup.
+  A glyph that finds the page full draws the replacement glyph reserved at
+  setup for that frame; the page is emptied before the next one, and a page
+  a single frame fills reopens at 2,048 texels.
 - Native input holds at most 1,024 items. Clipboard transfers are limited to
-  64 KiB and a whole paste is admitted or rejected before its first marker.
+  1 MiB and a whole paste is admitted or rejected before its first marker; a
+  refused paste reports `gui.clipboard.max_text_bytes`.
   `model.to_runtime` capacity gates input consumption; send completion resumes it.
 - Linux bounds clipboard offers to 16 and keymaps to 4 MiB. Clipboard reads are
   nonblocking. Repeat uses native-loop deadlines; drawing uses Wayland frame

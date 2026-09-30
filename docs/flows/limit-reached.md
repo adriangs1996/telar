@@ -238,17 +238,31 @@ Once a flow reports its limit by name, the net no longer sees that error.
   (`runtime_link.abandon`) with the limit's name and no retry, since each
   would stop at the same limit. Retrying by hand counts anew. An error after
   the message was applied, in the adapter, never resyncs.
-- The window's `render` callback passes draw errors to the GUI's
+- The window's tables keep what fits instead of failing the frame. The
+  widget target registry (`gui.widgets.registry_capacity`, 1024), the band
+  and cell hit maps, the frame widget list, the editors, the published
+  accessibility tree (256 nodes), the frame's and each cell's quads and the
+  image placements (2048, the ones painted highest kept) each count what
+  they left out; `limit_reached.reportFrame` reports every table that
+  filled once the frame is prepared, and the frame draws without the
+  excess. A glyph page that fills is emptied between frames; one a single
+  frame fills reopens at 2048 texels, and at 2048 it waits 60 frames before
+  emptying again and reports `text.glyph_atlas_side`. A viewport holding
+  more than `core.max_cell_count` cells keeps its columns and the rows that
+  fit and reports `protocol.max_cell_count`; a display scale past 8 draws
+  at 8.
+- The window's `render` callback passes the draw errors left to the GUI's
   `limit_reached.absorbFrame`. Draw returns token 0, and both native
   backends keep the last presented frame. `GuiAdapter.limited` holds the
   observation and viewport that stopped, and the window neither measures nor
   prepares that frame again until one of them changes. Because a frame that
   keeps failing cannot show its own notice, the window title ends with
   " — limit reached: <name>" until a frame draws, and the frame that draws
-  wakes the loop so the title drops it. Errors the window raises
-  itself are named (`render.retained_max_cells`, `protocol.max_cell_count`,
-  `render.frame_quad_budget`, `gui.widgets.registry_capacity`,
-  `text.glyph_atlas_side`).
+  wakes the loop so the title drops it.
+- The `input` callback refuses an event that reaches a limit alone. A focus
+  change or a presentation's completion that finds the inbox full waits in
+  `GuiAdapter.unposted` and the next pump posts it first, so the frame in
+  flight always completes.
 - A session larger than `session_checkpoint.snapshot_bytes` writes the
   prefix of records that fits. Records point back to earlier records, tabs to
   their workspace and panes to their tab, so the prefix restores cleanly.
@@ -311,10 +325,17 @@ with notice levels and the client's `limits`.
 - `src/client_tests/limit_reached.zig` and `configuration.zig`: the client
   notice, folded reports, the adapter net, a real bar of five click actions
   and a failing panel, and the diagnostics their next render clears.
-- `src/gui/tests/limit_reached.zig`: a frame stopped at the cell budget
-  through the native callbacks keeps the window open, names the limit in the
-  title and draws again; an update event at a limit is skipped while the
-  rest of the turn runs.
+- `src/gui/tests/limit_reached.zig`: a frame stopped at a limit through the
+  native callbacks keeps the window open, names the limit in the title and
+  draws again; a viewport past the protocol's cells draws the rows that fit;
+  a full inbox keeps a focus change and a completion for the next pump; a
+  clipboard past its capacity is refused whole; a scale past 8 draws at 8;
+  every table a frame filled is reported; an update event at a limit is
+  skipped while the rest of the turn runs.
+- `src/gui/text/GlyphAtlas.zig`: a page filled over frames is emptied, one a
+  frame fills alone grows, and a full 2048 page backs off.
+- `src/gui/tests/pane_images.zig`: a full frame keeps the placements painted
+  highest.
 - `src/cli/integration/limits.test.mjs`: against a built telar, a client
   reports a limit over the socket, `telar diagnostics limits` lists it and
   the background runtime writes its own log.

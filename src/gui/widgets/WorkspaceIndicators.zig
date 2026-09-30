@@ -112,8 +112,9 @@ fn worktreeBreadcrumb(self: WorkspaceIndicators, canvas: *Canvas, row: *const da
     const palette = canvas.theme.palette;
     const snapshot = self.context.projection.workspaces;
     const source_name = if (snapshot.indexOf(row.source)) |index| snapshot.nameAt(index) else "";
-    var storage: [core.max_workspace_list_entries + core.max_git_branch_bytes + 16]u8 = undefined;
-    const prefix = std.fmt.bufPrint(&storage, "{s} \u{203a} ", .{source_name[0..@min(source_name.len, core.max_workspace_list_entries)]}) catch "";
+    // Room for the longest workspace name, so the prefix always formats.
+    var storage: [core.max_workspace_name_bytes + " \u{203a} ".len]u8 = undefined;
+    const prefix = std.fmt.bufPrint(&storage, "{s} \u{203a} ", .{source_name}) catch "";
     const project: Label = .{ .text = prefix, .color = palette.subtext0, .face = .sans, .size = .body };
     const prefix_width = if (prefix.len == 0) 0 else try canvas.measure(project);
     if (prefix.len != 0) {

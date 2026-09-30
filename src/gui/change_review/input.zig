@@ -2,6 +2,7 @@ const cellgrid = @import("cellgrid");
 const data = @import("model");
 const event_module = @import("../input/event.zig");
 const std = @import("std");
+const core = @import("telar-core");
 const Widget = @import("Widget.zig");
 const Editor = @import("editor.zig");
 const Route = @import("../widgets/interaction/Route.zig");
@@ -344,14 +345,17 @@ fn sourceOffset(w: *Widget, target: Target, x: f64) usize {
     return at;
 }
 
-// The clipboard takes at most `max_text_bytes`, whatever the patch limit is.
+/// A selection copies rows of one patch, and the clipboard takes at most
+/// `max_text_bytes`: the stack holds the smaller of the two.
+const copy_bytes = @min(event_module.max_text_bytes, core.change_review.max_patch_bytes);
+
 // A longer selection copies the whole rows that fit and returns the
 // clipboard's limit error, which the window's net reports.
 fn copy(w: *Widget) !void {
     const selection = w.copy_range orelse return;
     const first = @min(selection[0], selection[1]);
     const last = @max(selection[0], selection[1]);
-    var buffer: [event_module.max_text_bytes]u8 = undefined;
+    var buffer: [copy_bytes]u8 = undefined;
     var length: usize = 0;
     var started = false;
     var truncated = false;

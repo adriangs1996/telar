@@ -124,7 +124,7 @@ highlighted. A job that reaches one of these keeps the roles it wrote, leaves
 the rest in the plain syntax color and returns the limit with its edition; the
 window's loop adopts the edition as usual and reports the limit. A job that
 fails (a grammar, a malformed native result, memory) shows the whole edition
-plain and logs why. Copying review code takes at most the clipboard's 64 KiB; a
+plain and logs why. Copying review code takes at most one patch and the clipboard's 1 MiB; a
 longer selection copies the lines that fit and reports `ClipboardTooLarge`.
 
 The service admits four observation jobs, at most one per client connection.

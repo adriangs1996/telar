@@ -49,7 +49,7 @@ pixels.
 
 ## Bounds and failure
 
-There are eight cache slots, eight replaceable wanted requests and one active
+There are six cache slots, six replaceable wanted requests and one active
 helper per GUI. Each source is at most 48 KiB. Cached pixels total at most 8 Mpx
 or 32 MiB; each image is at most 4 Mpx with sides no larger than 4096 pixels.
 One active or notified result can retain another 16 MiB before adoption. GPU
