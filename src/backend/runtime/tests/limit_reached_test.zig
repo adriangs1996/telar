@@ -8,6 +8,10 @@ const Session = @import("../client/Session.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
+const observer_support = @import("../../history/observer_support.zig");
+const pane_observation = @import("../pane_observation.zig");
+const cmdcapture = @import("cmdcapture");
+const Clock = cmdcapture.Clock;
 
 const checkpoint_limit: core.LimitReach = .{
     .limit = core.Limit.declare("session_checkpoint.snapshot_bytes", "bytes", 1024),
@@ -151,6 +155,50 @@ test "a command-line report shows its notice once per interval and keeps the run
 
     const slot = model.client_limit_reaches.find("hooks.max_input_bytes").?;
     try std.testing.expectEqual(@as(u64, 2), model.client_limit_reaches.hits[slot]);
+}
+
+test "a history batch drop and a refused command report their limits and keep the pane observed" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+
+    const model = &fixture.runtime.model;
+    const pane = try fixture.openPane();
+    const burst = try std.testing.allocator.alloc(u8, observer_support.batch_bytes + 1);
+    defer std.testing.allocator.free(burst);
+    @memset(burst, 'x');
+
+    const clock: Clock = .{
+        .real_ms = 1,
+        .awake_ns = 1,
+    };
+    pane.queueHistoryOutput(.{
+        .bytes = burst,
+        .shell_foreground = true,
+        .clock = clock,
+    });
+    pane.queueHistoryOutput(.{
+        .bytes = "kept",
+        .shell_foreground = true,
+        .clock = clock,
+    });
+    const borrow = pane.beginHistoryObservation().?;
+
+    try pane_observation.finish(model, .{
+        .pane = pane.key(),
+        .stats = .{
+            .refused = 1,
+        },
+        .process_probe = .{
+            .cache = borrow.process_cache,
+        },
+    });
+
+    const batch = model.limit_reaches.find("history.observer_batch_bytes").?;
+    try std.testing.expectEqual(@as(?u64, observer_support.batch_bytes + 1), model.limit_reaches.requested[batch]);
+    try std.testing.expect(model.limit_reaches.find("history.request_queue") != null);
+    try std.testing.expect(model.panes.find(pane.id) != null);
+    try std.testing.expect(pane.history_observer.takeDrop() == null);
 }
 
 test "a connection sending too many reports a second is refused and counted" {

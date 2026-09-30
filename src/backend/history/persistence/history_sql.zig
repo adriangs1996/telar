@@ -12,6 +12,7 @@ const LaunchAttempt = @import("../LaunchAttempt.zig");
 const SessionStarted = @import("../SessionStarted.zig");
 const StoredSessionTitle = @import("../StoredSessionTitle.zig");
 const Query = @import("../Query.zig");
+const FuzzyPage = @import("../FuzzyPage.zig");
 const QueryOrigin = @import("../QueryOrigin.zig");
 const Prune = @import("../Prune.zig");
 
@@ -933,6 +934,75 @@ test "fuzzy matching ranks subsequences and collapses duplicates" {
     defer exact.deinit();
     try std.testing.expectEqual(@as(usize, 1), exact.entries.len);
     try std.testing.expectEqual(second.entries[0].id, exact.entries[0].id);
+}
+
+test "a fuzzy page that ends inside the candidate window names the window" {
+    var store = try Store.open(":memory:");
+    defer store.close();
+    const location: core.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const session: SessionStarted = .{
+        .id = @splat(9),
+        .pane_id = @enumFromInt(1),
+        .location = location,
+        .started_at_ms = 1,
+        .workspace_path = @constCast("/work"),
+        .shell = @constCast("/bin/zsh"),
+    };
+    try store.startSession(&session);
+
+    var value: CommandFinished = .{
+        .session_id = session.id,
+        .pane_id = session.pane_id,
+        .location = location,
+        .sequence = 1,
+        .started_at_ms = 1,
+        .duration_ns = 1,
+        .exit_code = 0,
+        .status = .completed,
+        .author = .human,
+        .cols = 80,
+        .rows = 24,
+        .command = @constCast("needle"),
+        .cwd = @constCast("/work"),
+        .workspace_path = @constCast("/work"),
+        .command_truncated = false,
+        .output = @constCast(""),
+        .output_truncated = false,
+        .output_observed = 0,
+    };
+    _ = try store.insertCommand(&value);
+    value.command = @constCast("ls");
+    for (1..FuzzyPage.max_candidates) |index| {
+        value.sequence = index + 1;
+        value.started_at_ms = @intCast(index + 1);
+        _ = try store.insertCommand(&value);
+    }
+
+    const origin: QueryOrigin = .{
+        .client = .{ .id = 1, .generation = 1 },
+        .close_after_reply = false,
+    };
+    const query_value = try Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = origin,
+        .text = "ndl",
+        .match = .fuzzy,
+    });
+    const inside = try store.query(std.testing.allocator, &query_value);
+    defer inside.deinit();
+    try std.testing.expectEqual(@as(usize, 1), inside.entries.len);
+    try std.testing.expect(inside.limit == null);
+
+    value.sequence = FuzzyPage.max_candidates + 1;
+    value.started_at_ms = FuzzyPage.max_candidates + 1;
+    _ = try store.insertCommand(&value);
+    const past = try store.query(std.testing.allocator, &query_value);
+    defer past.deinit();
+    try std.testing.expectEqual(@as(usize, 0), past.entries.len);
+    try std.testing.expectEqualStrings("history.fuzzy_max_candidates", past.limit.?.limit.name);
 }
 
 pub fn appendQueryFilters(sql: *std.Io.Writer, request: *const Query) !void {

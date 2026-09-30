@@ -334,6 +334,40 @@ test "history replaces only unsent first-page queries" {
     try std.testing.expectEqual(@as(u8, 4), outbox.len);
 }
 
+test "a history scope as long as a working directory travels in the payload slot" {
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
+
+    var path: [data.OwnedHistoryQuery.max_scope_bytes + 1]u8 = @splat('d');
+    path[0] = '/';
+    var query: data.OwnedHistoryQuery = .{
+        .request_id = @enumFromInt(1),
+        .scope = .cwd,
+        .scope_value = path[0..data.OwnedHistoryQuery.max_scope_bytes],
+        .limit = 20,
+    };
+    try outbox.push(.{ .query_history = query });
+    query.request_id = @enumFromInt(2);
+    try outbox.push(.{ .query_history = query });
+    path[1] = 'x';
+
+    var buffer: [2 * data.OwnedHistoryQuery.max_scope_bytes]u8 = undefined;
+    const sent = (try core.decodeClient((try outbox.beginSend(&buffer)).?)).query_history;
+    try std.testing.expectEqual(query.request_id, sent.request_id);
+    try std.testing.expectEqual(@as(usize, data.OwnedHistoryQuery.max_scope_bytes), sent.scope_value.len);
+    try std.testing.expectEqual(@as(u8, 'd'), sent.scope_value[1]);
+
+    query.scope_value = &path;
+    query.offset = 20;
+    try std.testing.expectError(error.ScopeTooLong, outbox.push(.{ .query_history = query }));
+    try std.testing.expectEqual(@as(u8, 1), outbox.len);
+    try std.testing.expect(@sizeOf(Message) <= max_message_bytes);
+}
+
+/// What one queued message cost before the history scope moved into the
+/// payload slot; a larger message multiplies across every slot.
+const max_message_bytes = 440;
+
 test "input never coalesces into a message already in flight" {
     var outbox: Outbox = try .init(std.testing.allocator);
     defer outbox.deinit(std.testing.allocator);

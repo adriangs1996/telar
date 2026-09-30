@@ -14,8 +14,19 @@ pending_time_ms: i64 = 0,
 /// while the next command starts on the same fed line.
 command_storage: [2][core.max_import_command_bytes]u8 = undefined,
 active: u1 = 0,
+/// Bytes of the active command kept in its buffer.
 command_len: usize = 0,
+/// Bytes of the active command as the file has it; past the buffer the
+/// command is skipped whole, never cut.
+command_bytes: usize = 0,
+/// The command's last byte, which decides a zsh continuation even when the
+/// buffer no longer holds it.
+last_byte: u8 = 0,
 command_active: bool = false,
+/// Commands skipped because they passed `core.max_import_command_bytes`.
+skipped: usize = 0,
+/// Bytes of the longest skipped command.
+largest_skipped: usize = 0,
 
 pub fn feed(self: *ImportParser, raw_line: []const u8) ?ImportedEntry {
     const line = std.mem.trimEnd(u8, raw_line, "\r");
@@ -27,19 +38,31 @@ pub fn feed(self: *ImportParser, raw_line: []const u8) ?ImportedEntry {
     };
 }
 
+/// Ends the active command. One longer than the import limit is counted
+/// in `skipped` instead of returned.
+///
+/// ```zig
+/// if (parser.flush()) |entry| try sender.push(entry);
+/// ```
 pub fn flush(self: *ImportParser) ?ImportedEntry {
-    if (!self.command_active or self.command_len == 0) {
+    if (!self.command_active or self.command_bytes == 0) {
         return null;
     }
 
     self.command_active = false;
+    if (self.command_bytes > self.command_len) {
+        self.skipped += 1;
+        self.largest_skipped = @max(self.largest_skipped, self.command_bytes);
+        return null;
+    }
+
     return .{ .started_at_ms = self.pending_time_ms, .command = self.command_storage[self.active][0..self.command_len] };
 }
 
 fn feedZsh(self: *ImportParser, line: []const u8) ?ImportedEntry {
     if (self.command_active) {
-        if (self.command_len != 0 and self.command_storage[self.active][self.command_len - 1] == '\\') {
-            self.command_len -= 1;
+        if (self.continues()) {
+            self.dropLastByte();
             self.append("\n");
             self.append(line);
             if (line.len != 0 and line[line.len - 1] == '\\') {
@@ -66,7 +89,7 @@ fn feedZsh(self: *ImportParser, line: []const u8) ?ImportedEntry {
         return finished;
     }
 
-    if (self.command_len != 0 and self.command_storage[self.active][self.command_len - 1] == '\\') {
+    if (self.continues()) {
         return finished;
     }
     if (finished) |value| {
@@ -128,14 +151,40 @@ fn begin(self: *ImportParser, time_ms: i64, command: []const u8) void {
     self.active ^= 1;
     self.pending_time_ms = time_ms;
     self.command_len = 0;
+    self.command_bytes = 0;
+    self.last_byte = 0;
     self.command_active = true;
     self.append(command);
 }
 
+/// Adds bytes to the active command. What does not fit is only counted, so
+/// `flush` skips the whole command.
 fn append(self: *ImportParser, bytes: []const u8) void {
-    const buffer = &self.command_storage[self.active];
-    const room = buffer.len - self.command_len;
-    const take = @min(room, bytes.len);
-    @memcpy(buffer[self.command_len .. self.command_len + take], bytes[0..take]);
-    self.command_len += take;
+    if (bytes.len == 0) {
+        return;
+    }
+
+    self.command_bytes += bytes.len;
+    self.last_byte = bytes[bytes.len - 1];
+    if (self.command_bytes > self.command_storage[self.active].len) {
+        return;
+    }
+
+    @memcpy(self.command_storage[self.active][self.command_len..][0..bytes.len], bytes);
+    self.command_len += bytes.len;
+}
+
+/// Whether the active zsh command ends in a backslash that joins the next line.
+fn continues(self: *const ImportParser) bool {
+    return self.command_bytes != 0 and self.last_byte == '\\';
+}
+
+/// Removes the continuation backslash before the joined line is added.
+fn dropLastByte(self: *ImportParser) void {
+    self.command_bytes -= 1;
+    if (self.command_bytes < self.command_len) {
+        self.command_len = self.command_bytes;
+    }
+
+    self.last_byte = 0;
 }

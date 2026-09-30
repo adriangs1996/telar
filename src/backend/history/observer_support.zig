@@ -15,8 +15,14 @@ const vt = @import("ghostty-vt");
 const std = @import("std");
 const Command = cmdcapture.Command;
 
-pub const batch_bytes = 4 * 16 * 1024;
+/// Terminal bytes one observation batch holds; two alternate per pane. A
+/// burst past it between two observation passes drops the batch and resets
+/// the history emulator, so commands in flight are not recorded.
+pub const batch_bytes = 128 * 1024;
+pub const batch_bytes_limit = core.Limit.declare("history.observer_batch_bytes", "bytes", batch_bytes);
+/// Events one batch holds, with the same drop.
 pub const batch_events = 512;
+pub const batch_events_limit = core.Limit.declare("history.observer_batch_events", "events", batch_events);
 
 /// An unchanged screen signal is handed over again after this long, so the
 /// runtime refreshes its screen evidence well before that evidence expires.
@@ -139,9 +145,17 @@ test "overflow marks the observer for a counted reset" {
     defer observer.deinit();
     const bytes: [batch_bytes]u8 = @splat('x');
     observer.queueOutput(.{ .bytes = &bytes, .shell_foreground = true, .clock = .{ .real_ms = 1, .awake_ns = 1 } });
+    try std.testing.expectEqual(@as(u64, 0), observer.dropped_events);
+    try std.testing.expect(observer.takeDrop() == null);
+
     observer.queueOutput(.{ .bytes = "overflow", .shell_foreground = true, .clock = .{ .real_ms = 2, .awake_ns = 2 } });
     try std.testing.expect(observer.seal());
     try std.testing.expect(observer.dropped_events != 0);
+
+    const reach = observer.takeDrop().?;
+    try std.testing.expectEqualStrings("history.observer_batch_bytes", reach.limit.name);
+    try std.testing.expectEqual(@as(?u64, batch_bytes + "overflow".len), reach.requested);
+    try std.testing.expect(observer.takeDrop() == null);
     observer.finishSealed();
 }
 

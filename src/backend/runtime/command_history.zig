@@ -9,6 +9,8 @@ const Query = @import("../history/Query.zig");
 const Prune = @import("../history/Prune.zig");
 const StatsQuery = @import("../history/StatsQuery.zig");
 const client_request = @import("client_request.zig");
+const limit_reached = @import("limit_reached.zig");
+const channel_support = @import("../history/channel_support.zig");
 const Sources = @import("Sources.zig");
 const history_model = @import("../history/model.zig");
 const QueryResult = @import("../history/QueryResult.zig");
@@ -45,7 +47,7 @@ pub fn query(model: *RuntimeModel, session: *Session, request: core.QueryHistory
             model.metrics.history_query_failures += 1;
         }
 
-        return client_request.fail(session, request.request_id, .resource_limit, "history queue is full");
+        return refuse(model, session, request.request_id);
     }
 
     if (comptime core.enabled) {
@@ -60,6 +62,9 @@ pub fn query(model: *RuntimeModel, session: *Session, request: core.QueryHistory
 /// ```
 pub fn importBatch(model: *RuntimeModel, session: *Session, batch: core.ImportHistoryView) !void {
     if (!model.resources.history.service().importBatch(model.io, batch)) {
+        limit_reached.report(model, .{
+            .limit = channel_support.requests_limit,
+        });
         return client_request.fail(session, batch.request_id, .resource_limit, "history import was not accepted");
     }
 
@@ -77,7 +82,7 @@ pub fn remove(model: *RuntimeModel, session: *Session, request: core.DeleteHisto
         .origin = origin(session),
         .id = request.id,
     })) {
-        return refuse(session, request.request_id);
+        return refuse(model, session, request.request_id);
     }
 }
 
@@ -101,7 +106,7 @@ pub fn prune(model: *RuntimeModel, session: *Session, request: core.PruneHistory
     };
 
     if (!model.resources.history.service().pruneHistory(model.io, scoped)) {
-        return refuse(session, request.request_id);
+        return refuse(model, session, request.request_id);
     }
 }
 
@@ -116,7 +121,7 @@ pub fn readOutput(model: *RuntimeModel, session: *Session, request: core.ReadHis
         .origin = origin(session),
         .id = request.id,
     })) {
-        return refuse(session, request.request_id);
+        return refuse(model, session, request.request_id);
     }
 }
 
@@ -138,7 +143,7 @@ pub fn stats(model: *RuntimeModel, session: *Session, request: core.HistoryStats
     };
 
     if (!model.resources.history.service().statsHistory(model.io, scoped)) {
-        return refuse(session, request.request_id);
+        return refuse(model, session, request.request_id);
     }
 }
 
@@ -177,6 +182,10 @@ pub fn receive(model: *RuntimeModel, result: anyerror!history_model.Response) !v
 
     switch (response) {
         .query_result => |value| {
+            if (value.limit) |reach| {
+                limit_reached.report(model, reach);
+            }
+
             const session = model.clients.resolve(value.origin.client) orelse return;
             session.delivery.setCloseAfterReply(value.origin.close_after_reply);
             owned_query = null;
@@ -214,6 +223,10 @@ fn origin(session: *const Session) QueryOrigin {
     return .{ .client = session.key, .close_after_reply = session.role == .control };
 }
 
-fn refuse(session: *Session, request_id: core.RequestId) !void {
+/// Answers a request the full history queue refused, and reports the queue.
+fn refuse(model: *RuntimeModel, session: *Session, request_id: core.RequestId) !void {
+    limit_reached.report(model, .{
+        .limit = channel_support.requests_limit,
+    });
     try client_request.fail(session, request_id, .resource_limit, "history queue is full");
 }
