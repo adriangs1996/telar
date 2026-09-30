@@ -583,8 +583,8 @@ fn announce(init: std.process.Init, arena: std.mem.Allocator, login: Login, foun
     notification.send(init, .{
         .level = .info,
         .duration_ms = notification_ms,
-        .title = notification.fit(login.plan.title, core.max_notification_title_bytes),
-        .message = notification.fit(body, core.max_notification_message_bytes),
+        .title = core.utf8Prefix(login.plan.title, core.max_notification_title_bytes),
+        .message = core.utf8Prefix(body, core.max_notification_message_bytes),
         .link = found.url,
     }, null, null) catch return false;
     return true;

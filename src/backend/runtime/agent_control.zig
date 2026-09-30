@@ -168,12 +168,7 @@ fn senderName(model: *const RuntimeModel, sender: core.PaneId) []const u8 {
 
 /// The start of a sender name, cut on a UTF-8 boundary.
 fn prefix(name: []const u8) []const u8 {
-    var len = @min(name.len, max_sender_name_bytes);
-    while (len > 0 and len < name.len and (name[len] & 0xc0) == 0x80) {
-        len -= 1;
-    }
-
-    return name[0..len];
+    return core.utf8Prefix(name, max_sender_name_bytes);
 }
 
 test "a sender name is cut on a UTF-8 boundary" {

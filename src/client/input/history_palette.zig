@@ -248,7 +248,7 @@ fn requestHistoryPage(model: *data.ClientModel, text: []const u8) !void {
     const filters = historyFilters(model.name_prompt.currentConst(), text);
     const query = filters.query;
 
-    const kept = utf8Prefix(query, data.OwnedHistoryQuery.max_query_bytes);
+    const kept = core.utf8Prefix(query, data.OwnedHistoryQuery.max_query_bytes);
     var owned: data.OwnedHistoryQuery = .{
         .request_id = request_id,
         .query_len = @intCast(kept.len),
@@ -282,20 +282,6 @@ fn requestHistoryPage(model: *data.ClientModel, text: []const u8) !void {
         }
     };
 }
-
-/// Cuts `text` to at most `limit` bytes without splitting a character.
-fn utf8Prefix(text: []const u8, limit: usize) []const u8 {
-    if (text.len <= limit) {
-        return text;
-    }
-
-    var end = limit;
-    while (end > 0 and (text[end] & utf8_continuation_mask) == utf8_continuation) : (end -= 1) {}
-    return text[0..end];
-}
-
-const utf8_continuation_mask = 0xc0;
-const utf8_continuation = 0x80;
 
 /// Narrows the query to the prompt's scope. The workspace path and the
 /// working directory fit `OwnedHistoryQuery.max_scope_bytes`, their own

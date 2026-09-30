@@ -87,12 +87,7 @@ test "review response remains reserved across a prepared send until commit or cl
 
 /// Cuts `text` to at most `limit` bytes on a UTF-8 boundary.
 pub fn truncateUtf8(text: []const u8, limit: usize) []const u8 {
-    if (text.len <= limit) {
-        return text;
-    }
-    var end = limit;
-    while (end > 0 and (text[end] & 0xc0) == 0x80) : (end -= 1) {}
-    return text[0..end];
+    return core_module.utf8Prefix(text, limit);
 }
 
 pub fn copyDisplayPrefix(output: []u8, source: []const u8) []const u8 {

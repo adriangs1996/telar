@@ -38,24 +38,6 @@ pub fn run(init: std.process.Init, options: NotificationOptions) !void {
     }
 }
 
-/// The start of `text` that fits `limit` bytes, cut on a UTF-8 boundary.
-///
-/// ```zig
-/// const title = notification.fit(long_title, core.max_notification_title_bytes);
-/// ```
-pub fn fit(text: []const u8, limit: usize) []const u8 {
-    if (text.len <= limit) {
-        return text;
-    }
-
-    var end = limit;
-    while (end > 0 and (text[end] & 0xc0) == 0x80) {
-        end -= 1;
-    }
-
-    return text[0..end];
-}
-
 /// Cuts a title and body past their limits and returns the reach of the
 /// body when it was cut, else of the title; null when both fit.
 fn fitText(notification: *core.Notification) ?core.LimitReach {
@@ -65,7 +47,7 @@ fn fitText(notification: *core.Notification) ?core.LimitReach {
             .limit = core.notification_title_limit,
             .requested = notification.title.len,
         };
-        notification.title = fit(notification.title, core.max_notification_title_bytes);
+        notification.title = core.utf8Prefix(notification.title, core.max_notification_title_bytes);
     }
 
     if (notification.message.len > core.max_notification_message_bytes) {
@@ -73,7 +55,7 @@ fn fitText(notification: *core.Notification) ?core.LimitReach {
             .limit = core.notification_message_limit,
             .requested = notification.message.len,
         };
-        notification.message = fit(notification.message, core.max_notification_message_bytes);
+        notification.message = core.utf8Prefix(notification.message, core.max_notification_message_bytes);
     }
 
     return reach;
