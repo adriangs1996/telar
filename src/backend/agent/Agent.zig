@@ -658,6 +658,16 @@ pub fn hasRunningDescription(self: *const Agent) bool {
     return self.title.phase == .running;
 }
 
+/// Queues the description of an agent whose work began while the queue
+/// was full; returns whether it queued.
+///
+/// ```zig
+/// if (agent.queueWaitingDescription()) pending += 1;
+/// ```
+pub fn queueWaitingDescription(self: *Agent) bool {
+    return self.advanceTitle(self.projected.status, true);
+}
+
 /// Reports whether this aggregate consumes one bounded description slot.
 ///
 /// ```zig
@@ -1075,15 +1085,14 @@ fn advanceTitle(self: *Agent, status: core.AgentStatus, can_queue: bool) bool {
         return false;
     }
 
+    // A full queue leaves the title waiting for work; the next job that
+    // frees a slot queues it (`queueWaitingDescription`).
     if (!can_queue) {
-        self.title.phase = .failed;
-        self.title.state = .failed;
-        self.title.clearSensitive();
-    } else {
-        self.title.phase = .queued;
-        self.title.state = .pending;
+        return false;
     }
 
+    self.title.phase = .queued;
+    self.title.state = .pending;
     return true;
 }
 

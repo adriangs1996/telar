@@ -12,7 +12,6 @@ const OwnedCreateTab = @import("OwnedCreateTab.zig");
 const OwnedRename = @import("OwnedRename.zig");
 const OwnedCreateWorkspace = @import("OwnedCreateWorkspace.zig");
 const OwnedWorkspaceRename = @import("OwnedWorkspaceRename.zig");
-const OwnedNotification = @import("OwnedNotification.zig");
 const Outbox = @import("Outbox.zig");
 const core = @import("telar-core");
 const std = @import("std");
@@ -50,7 +49,8 @@ pub const Message = union(enum) {
     rename_workspace: OwnedWorkspaceRename,
     set_pane_viewport: core.SetPaneViewport,
     copy_selection: core.CopySelection,
-    show_notification: OwnedNotification,
+    /// Encoded `show_notification` length in the slot's payload.
+    show_notification: u16,
     client_layout: u8,
     acknowledge_agent: core.AcknowledgeAgent,
     search_pane: data.OwnedSearch,

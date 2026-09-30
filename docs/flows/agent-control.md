@@ -268,7 +268,10 @@ interrupt, whose text may be theirs. That press shows "Press Ctrl-C again to exi
 sends `report_agent_progress` before the lifecycle report, so a waiter that
 sees `done` also sees the answer. `agent_hooks.receiveProgress` resolves the
 hook's `cwd` to a worktree, registering an external one it did not know, and
-`agent_status.observeProgress` stores plan and message on the agent.
+`agent_status.observeProgress` stores plan and message on the agent. A plan
+holds 128 tasks; one more keeps the plan's counts and step, is dropped and
+reports `agents.max_tasks`. The final answer keeps 2048 bytes, cut on a
+UTF-8 boundary, in the runtime, on the wire and in every client.
 `agent prompt --wait --json` and `agent get --json` return
 `final_message`, `plan_done`, `plan_total`, `plan_step` and `work_tree`.
 

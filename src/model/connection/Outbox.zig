@@ -8,7 +8,6 @@ const OwnedRename = @import("OwnedRename.zig");
 const OwnedWorkspaceRename = @import("OwnedWorkspaceRename.zig");
 const OwnedCreateWorkspace = @import("OwnedCreateWorkspace.zig");
 const OwnedCreateTab = @import("OwnedCreateTab.zig");
-const OwnedNotification = @import("OwnedNotification.zig");
 const RuntimeBootstrap = @import("RuntimeBootstrap.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -298,22 +297,19 @@ pub fn pushNotification(self: *Outbox, request: core.ShowNotification) !void {
         return error.NotificationTooLarge;
     }
 
-    // Only `telar notification show` sends a link, straight from the CLI;
-    // the queue keeps its slots small by not holding one.
+    // Only `telar notification show` sends a link, straight from the CLI.
     if (request.notification.link.len != 0) {
         return error.NotificationLinkNotQueued;
     }
-    var owned: OwnedNotification = .{
-        .request_id = request.request_id,
-        .level = request.notification.level,
-        .duration_ms = request.notification.duration_ms,
-        .target = request.notification.target,
-        .title_len = @intCast(request.notification.title.len),
-        .message_len = @intCast(request.notification.message.len),
-    };
-    @memcpy(owned.title[0..request.notification.title.len], request.notification.title);
-    @memcpy(owned.message[0..request.notification.message.len], request.notification.message);
-    try self.append(.{ .show_notification = owned });
+
+    // The text goes to the slot's payload, so a notification does not
+    // widen every slot of the queue.
+    var scratch: [data.input_limits.max_encoded_bytes]u8 = undefined;
+    const encoded = try core.encodeShowNotification(&scratch, request);
+    const index = try self.reserve();
+    self.item_launch_cwd[index] = null;
+    self.items[index] = .{ .show_notification = @intCast(encoded.len) };
+    @memcpy(self.payloadAt(index)[0..encoded.len], encoded);
 }
 
 /// Encodes and coalesces the latest complete client layout without
@@ -478,7 +474,6 @@ fn encodeNext(self: *const Outbox, buffer: []u8) ![]const u8 {
         }),
         .set_pane_viewport => |value| core.encodeSetPaneViewport(buffer, value),
         .copy_selection => |value| core.encodeCopySelection(buffer, value),
-        .show_notification => |*value| core.encodeShowNotification(buffer, value.view()),
         .client_layout => |slot| self.client_layouts[slot].slice(),
         .acknowledge_agent => |value| core.encodeAcknowledgeAgent(buffer, value),
         .search_pane => |*value| core.encodeSearchPane(buffer, value.view()),
@@ -486,7 +481,7 @@ fn encodeNext(self: *const Outbox, buffer: []u8) ![]const u8 {
         .delete_history => |value| core.encodeDeleteHistory(buffer, value),
         .read_history_output => |value| core.encodeReadHistoryOutput(buffer, value),
         .suggest_command => |*value| core.encodeSuggestCommand(buffer, value.view()),
-        .complete_client_command, .find_paths => |length| self.payloadAt(self.head)[0..length],
+        .complete_client_command, .find_paths, .show_notification => |length| self.payloadAt(self.head)[0..length],
         .open_editor => |value| encode: {
             var request = value;
             const bytes = self.payloadAt(self.head);

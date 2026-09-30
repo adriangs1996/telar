@@ -4,6 +4,7 @@
 //! they are built from, so the codec layer can reference it without cycles.
 
 const id = @import("id.zig");
+const Limit = @import("../Limit.zig");
 const ClientLayoutSplit = @import("ClientLayoutSplit.zig");
 const ClientLayoutPane = @import("ClientLayoutPane.zig");
 
@@ -57,8 +58,13 @@ pub const max_path_match_bytes = 1024;
 pub const max_pane_text_rows = 200;
 pub const max_pane_text_bytes = 64 * 1024;
 pub const max_pane_text_input_bytes = 16 * 1024;
-pub const max_notification_title_bytes = 48;
-pub const max_notification_message_bytes = 192;
+/// A notification's title: a short sentence.
+pub const max_notification_title_bytes = 96;
+/// A notification's body: a few sentences, such as an agent's login
+/// instructions with their code.
+pub const max_notification_message_bytes = 512;
+pub const notification_title_limit = Limit.declare("notifications.max_title_bytes", "bytes", max_notification_title_bytes);
+pub const notification_message_limit = Limit.declare("notifications.max_message_bytes", "bytes", max_notification_message_bytes);
 /// A notification's link: an https URL, such as an agent's login page.
 /// OAuth authorization URLs measured for the agents telar sets up stay
 /// under 700 bytes.
@@ -320,7 +326,8 @@ pub const AgentProvider = enum(u8) {
     _,
 };
 
-pub const max_agent_manifests = 16;
+/// Agent manifests one configuration holds, the five built-in ones included.
+pub const max_agent_manifests = 32;
 pub const first_custom_agent_provider: u8 = 6;
 pub const max_agent_provider_index: u8 = first_custom_agent_provider + max_agent_manifests - 1;
 pub const max_agent_provider_name_bytes = 32;

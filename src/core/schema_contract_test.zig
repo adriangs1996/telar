@@ -1676,7 +1676,21 @@ test "default pane open round trips launch data without allocation" {
 }
 
 test "notifications enforce text and duration bounds before crossing IPC" {
-    var buffer: [512]u8 = undefined;
+    var buffer: [1024]u8 = undefined;
+    const title: [types.max_notification_title_bytes]u8 = @splat('x');
+    const message: [types.max_notification_message_bytes]u8 = @splat('m');
+    _ = try notification_support.encodeNotification(&buffer, .{
+        .title = &title,
+        .message = &message,
+    });
+    const long_message: [types.max_notification_message_bytes + 1]u8 = @splat('m');
+    try std.testing.expectError(
+        error.InvalidByteString,
+        notification_support.encodeNotification(&buffer, .{
+            .title = &title,
+            .message = &long_message,
+        }),
+    );
     const long_title: [types.max_notification_title_bytes + 1]u8 = @splat('x');
     try std.testing.expectError(
         error.InvalidByteString,

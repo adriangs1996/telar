@@ -395,7 +395,8 @@ show it, and which client capability it supports. Telar ships manifests for
 `claude`, `codex`, `pi`, `cursor` and `opencode`. Naming one of them extends or overrides the
 shipped manifest; any other name creates a new agent that the sidebar, the
 `telar agent` command, notifications and the image shelf treat exactly like a
-built-in one. At most 16 agents can be configured.
+built-in one. The table holds 32 agents, the five shipped ones included, so
+a configuration can add 27 new agents.
 
 ```lua
 runtime = {

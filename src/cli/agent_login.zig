@@ -567,18 +567,26 @@ fn allowedHost(host: []const u8, hosts: []const []const u8) bool {
 // Shows the login in this machine's window, where one click opens the
 // link; false when no window took it.
 fn announce(init: std.process.Init, arena: std.mem.Allocator, login: Login, found: FoundLink) !bool {
-    const body = if (found.code) |code|
+    var body = if (found.code) |code|
         try std.fmt.allocPrint(arena, "on {s}: {s}. Code: {s}", .{ login.profile.label(), login.plan.instructions, code })
     else
         try std.fmt.allocPrint(arena, "on {s}: {s}", .{ login.profile.label(), login.plan.instructions });
 
+    // A body the notification cannot hold keeps its start, so the code the
+    // login needs moves to the front.
+    if (body.len > core.max_notification_message_bytes) {
+        if (found.code) |code| {
+            body = try std.fmt.allocPrint(arena, "Code: {s}, on {s}: {s}", .{ code, login.profile.label(), login.plan.instructions });
+        }
+    }
+
     notification.send(init, .{
         .level = .info,
         .duration_ms = notification_ms,
-        .title = login.plan.title,
-        .message = body[0..@min(body.len, core.max_notification_message_bytes)],
+        .title = notification.fit(login.plan.title, core.max_notification_title_bytes),
+        .message = notification.fit(body, core.max_notification_message_bytes),
         .link = found.url,
-    }, null) catch return false;
+    }, null, null) catch return false;
     return true;
 }
 

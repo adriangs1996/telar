@@ -1287,6 +1287,10 @@ test "runtime agents reject bad names and oversized phrases" {
     var long_phrase: data.Diagnostic = .{};
     try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &long_phrase }, .{ .source = "return { api_version = 2, runtime = { agents = { { name = \"x\", working = { string.rep(\"a\", 49) } } } } }", .source_name = "@config.lua", .number = 1 }));
     try std.testing.expectEqualStrings("config.runtime.agents[1].working[1] is too long", long_phrase.message());
+
+    var too_many: data.Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &too_many }, .{ .source = "local agents = {} for i = 1, 28 do agents[i] = { name = \"agent-\" .. i } end return { api_version = 2, runtime = { agents = agents } }", .source_name = "@config.lua", .number = 1 }));
+    try std.testing.expectEqualStrings("config.runtime.agents[28].name: config.max_agent_manifests: 33 agents; limit 32, the built-in ones included", too_many.message());
 }
 
 test "runtime agents carry presentation and the attachment scheme" {

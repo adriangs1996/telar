@@ -45,10 +45,20 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic:
         const name = value.string(state, -1) orelse "";
         const manifest = runtime.agent_manifests.add(name) catch |err| {
             value.pop(state, 1);
+            if (err == error.TooManyAgents) {
+                const reach: core.LimitReach = .{
+                    .limit = core.Table.capacity_limit,
+                    .requested = runtime.agent_manifests.count + 1,
+                };
+                var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
+                diagnostic.set("config.runtime.agents[{d}].name: {s}, the built-in ones included", .{ position, reach.describe(&buffer, 1) });
+                return error.InvalidConfig;
+            }
+
             diagnostic.set("config.runtime.agents[{d}].name {s}", .{ position, switch (err) {
                 error.InvalidName => "must be lowercase letters, digits, '-', '_' or '.' (1..32 bytes)",
                 error.DuplicateName => "is already defined",
-                error.TooManyAgents => "exceeds the agent limit",
+                error.TooManyAgents => unreachable,
             } });
             return error.InvalidConfig;
         };

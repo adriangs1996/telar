@@ -22,6 +22,8 @@ pub const interrupted_event = "Interrupted by telar";
 
 /// Bound for the line that names a sending pane on its prompt.
 pub const max_sender_line_bytes = 192;
+/// Bytes of the branch or workspace name the sender line keeps.
+const max_sender_name_bytes = 64;
 
 /// Stops a working agent's current turn with the key its manifest declares.
 ///
@@ -157,9 +159,25 @@ fn senderName(model: *const RuntimeModel, sender: core.PaneId) []const u8 {
     };
 
     if (model.worktrees.slotOfWorkspace(workspace_id)) |slot| {
-        return model.worktrees.branchAt(slot)[0..@min(model.worktrees.branch_len[slot], 64)];
+        return prefix(model.worktrees.branchAt(slot));
     }
 
     const name = model.workspaces.workspaceName(pane.location.workspace) orelse return "a telar pane";
-    return name[0..@min(name.len, 64)];
+    return prefix(name);
+}
+
+/// The start of a sender name, cut on a UTF-8 boundary.
+fn prefix(name: []const u8) []const u8 {
+    var len = @min(name.len, max_sender_name_bytes);
+    while (len > 0 and len < name.len and (name[len] & 0xc0) == 0x80) {
+        len -= 1;
+    }
+
+    return name[0..len];
+}
+
+test "a sender name is cut on a UTF-8 boundary" {
+    const name = "a" ** (max_sender_name_bytes - 1) ++ "é";
+    try std.testing.expectEqualStrings("a" ** (max_sender_name_bytes - 1), prefix(name));
+    try std.testing.expectEqualStrings("short", prefix("short"));
 }

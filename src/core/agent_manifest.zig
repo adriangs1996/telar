@@ -372,6 +372,21 @@ test "custom agents receive stable provider indexes and extend built-ins by name
     try std.testing.expectEqual(gemini.provider, table.providerFromExecutable("gemini").?);
 }
 
+test "the table fills with custom agents up to its limit and refuses the next" {
+    var table = builtin_table;
+    var name_buffer: [16]u8 = undefined;
+    const custom = types.max_agent_manifests - builtin_table.count;
+    for (0..custom) |index| {
+        const name = try std.fmt.bufPrint(&name_buffer, "agent-{d}", .{index});
+        const manifest = try table.add(name);
+        try std.testing.expect(@intFromEnum(manifest.provider) <= types.max_agent_provider_index);
+    }
+
+    try std.testing.expectEqual(@as(u8, types.max_agent_manifests), table.count);
+    try std.testing.expectError(error.TooManyAgents, table.add("one-more"));
+    _ = try table.add("claude");
+}
+
 test "phrase lists reject empty, oversized and excess entries" {
     var list: PhraseList = .{};
     try std.testing.expectError(error.EmptyEntry, list.append(""));

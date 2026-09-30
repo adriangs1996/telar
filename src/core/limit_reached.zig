@@ -87,6 +87,7 @@ pub const LimitError = error{
     NativeInputFull,
     NativeQuadBudgetExceeded,
     NodeLimitReached,
+    NotificationTextTooLong,
     NotificationTooLarge,
     OriginTooLong,
     OutputFull,

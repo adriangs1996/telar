@@ -6,7 +6,11 @@ const session_file = @import("session_file.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const Watches = @This();
 
-slots: [core.max_agent_snapshot_entries]?Watch = @splat(null),
+/// Session files watched at once: one per agent the snapshot carries.
+pub const capacity = core.max_agent_snapshot_entries;
+pub const capacity_limit = core.Limit.declare("agents.session_watches", "session files", capacity);
+
+slots: [capacity]?Watch = @splat(null),
 
 /// Registers or refreshes the session file of one pane generation. A
 /// changed path, kind or session restarts the watch; the same ones keep
@@ -43,6 +47,21 @@ pub fn put(self: *Watches, registration: Registration) bool {
     }
 
     return false;
+}
+
+/// Whether every slot holds a watch, so a new session file finds none.
+///
+/// ```zig
+/// if (!watches.put(registration) and watches.full()) report();
+/// ```
+pub fn full(self: *const Watches) bool {
+    for (self.slots) |slot| {
+        if (slot == null) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 pub fn find(self: *Watches, key: PaneKey) ?*Watch {
