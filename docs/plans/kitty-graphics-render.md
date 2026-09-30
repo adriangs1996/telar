@@ -13,9 +13,23 @@ and fixed with Adrian's approval: the runtime dropped any direct image larger
 than the media queue (now the pane holds its PTY read while a Kitty command
 is queued), and the interactive terminal did not move its cursor past a
 placement (now `KittyCursor` does). The gate compares the image stream with a
-text-redraw control, not idle (Adrian, 2026-09-29), and passes: 58.2
-textures a second from a 4K 120 Hz stream, with little margin
+text-redraw control, not idle (Adrian, 2026-09-29), and passes: 56.8
+presented generations a second from a 4K 120 Hz stream
 ([performance gates](../performance-gates.md)).
+
+Audit (2026-09-30), all thirteen items addressed: APC framing matches
+Ghostty's terminators and introducers; a held read resumes on every error
+path; a resize can no longer take the last event after the hold check;
+adopted shared images are unlinked at mapping and checked for ownership;
+`KittyCursor` follows Ghostty's continuation, `a=p` and delete semantics;
+textures share the client's 512 MiB quota with retained pixels, spares are
+charged and idle textures trimmed; `place` and `start` do work only on
+change; both backends reuse same-size textures in place, Metal reports a
+refusal asynchronously and Vulkan bounds its completions and destroys
+images off the window thread. The gate counts presented generations, has an absolute p99
+ceiling and fails stalled runs. Found on the way: the runtime never folded
+frames wrapped in DECSC/DECRC and never unlinked a folded frame's object,
+and the gate's producer stranded unread frames when a run stopped.
 
 ## What exists (verified 2026-09-29)
 

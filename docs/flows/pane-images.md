@@ -16,9 +16,11 @@ runtime graphics messages -> pane_graphics.applyPaneGraphics
 GuiAdapter.prepare
   -> pane_images.place     resolve the presented machine's placements when the
                            store, textures or cell size changed: box, layer,
-                           sort; release textures nothing uses
-  -> pane_images.start     at most 4 uploads in flight: lease the pixels,
-                           reserve GPU bytes, name a handle
+                           sort, one texture lookup per shown image; retire
+                           textures nothing uses to spares, trim idle ones
+  -> pane_images.start     when the store or textures changed, at most 4
+                           uploads in flight: lease the pixels, take a spare
+                           of the same size or reserve bytes, name a handle
   -> Scene -> TerminalRenderer.drawPane
                            below-background layer, cell backgrounds,
                            below-text layer, block cursor, glyphs, above-text
@@ -45,8 +47,14 @@ upload thread: texture, row bands through fixed scratch (RGB -> RGBA)
 - `PaneImages` is window state: the `GpuImages` table (512 rows, one per
   native handle), the resolved placements (at most 512), and the handoff
   arrays. It allocates nothing after `GuiAdapter.init`.
-- GPU bytes are charged against `core.max_image_bytes_global`. A new upload
-  that does not fit evicts the least recently drawn texture the last frame
+- Textures and the pixels the stores retain share one quota,
+  `core.max_image_bytes_global`: an upload fits only if the stores' bytes
+  plus the textures' fit. A texture nothing uses becomes a spare (four at
+  most, two seconds), still charged, that the next upload of its size
+  rewrites in place on the same handle. A texture no frame drew for five
+  seconds, a hidden pane's included, is released; `wakeupAfter` schedules
+  that trim, so an idle window does not poll. An upload that does not fit
+  evicts spares first, then the least recently drawn texture the last frame
   did not draw; if none can go, the upload waits and the placement draws
   nothing. Text is never affected.
 - An upload holds a `retained_graphics` lease: the store keeps the pixels
@@ -64,7 +72,12 @@ upload thread: texture, row bands through fixed scratch (RGB -> RGBA)
 `place` and `start` run on the window thread inside `prepare`, which is the
 interactive path. Both read metadata only: `place` rebuilds only when the
 presented store's ingress revision, the texture revision, the machine or the
-cell size changed; `start` leases and hands off pointers. The pixel copy,
+cell size changed, and looks each distinct shown image up once through a
+fixed open-addressed index, so 256 placements of one image cost one lookup;
+`start` runs only when the store, the textures or the machine changed, then
+leases and hands off pointers. The probe measures a 256-placement stream
+frame at about 16 µs and a frame with nothing new at 0.15 µs, with no
+allocation. The pixel copy,
 RGB expansion and texture creation happen on the backend's upload thread,
 which the frame never waits for. `GuiAdapter.observation` folds the store's
 ingress and the texture revision into the presentation, so a ready texture or
@@ -89,21 +102,29 @@ through a descriptor set at set 1. The shader samples straight alpha
 linearly, clamp to edge, as Ghostty does.
 
 - Metal: shared-storage `RGBA8Unorm` textures written with `replaceRegion`
-  on a serial dispatch queue; `shutdown` waits for it. Released textures are
-  kept (four at most) for the next upload of the same size, and images live
-  in their own residency set from install to release.
+  on a serial dispatch queue; `shutdown` waits for it. An upload to a handle
+  that holds a texture of the same size rewrites it in place; another size
+  is refused. Images live in their own residency set from install to
+  release. A refusal reports `image_ready` asynchronously, never inside the
+  call that queued it, and a draw naming an invalid handle is skipped
+  without shifting the quads after it.
 - Vulkan: device-local images written from a 4 MiB staging buffer by the
   upload thread's own command pool and fence; `queue_lock` serializes queue
-  submission with the frame worker.
+  submission with the frame worker. A same-size upload to a ready handle
+  reuses its image; released images are destroyed on the upload thread,
+  never on the window thread. The completion ring admits an upload only
+  while queued, running and finished work fit it.
 
 ## Verification
 
 `src/gui/tests/pane_images.zig` covers resolution, uploads, the in-flight
 bound, stand-in generations, deletion, leases across a pane clear, failed
-uploads, hidden panes, and the three layers with scroll and clipping.
+uploads, hidden panes, spares, idle trimming on a real clock, the shared
+quota, and the three layers with scroll and clipping.
 `src/gui/tests/macos_images.m` (`zig build test-gui-window`) uploads RGB and
 RGBA images, renders one frame offscreen and reads its pixels back: two
 images in one frame, quad order across them, straight alpha, and release
-and reuse of a handle. `lib/kitty_protocol/display.zig` covers every sizing
+and reuse of a handle, in-place reuse of a same-size texture and refusal of
+another size. `lib/kitty_protocol/display.zig` covers every sizing
 rule. `tools/gui_capture.m` captures the real window's presented pixels
 without the screen recording permission, for checks with `chafa -f kitty`.

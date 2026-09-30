@@ -102,8 +102,14 @@ generation the actor did not freeze. Moving a placement never retransmits pixels
 an explicit byte credit. The runtime cannot freeze another image until the
 client has retired enough image storage and returned that credit.
 
-The window charges its textures against the global limit and releases the
-least recently drawn ones first when a new upload would exceed it.
+The window's textures and the pixels its stores retain share one quota, the
+client's 512 MiB global image limit, not a second block beside it. A texture
+is charged from its upload until the backend drops it. A released texture
+of a size that may come back stays as a spare (at most four, for two
+seconds), still charged, and the next upload of that size rewrites it in
+place. Textures no frame drew for five seconds, a hidden pane's included, are
+released. When an upload would exceed the quota the window evicts spares
+first, then the least recently drawn textures the last frame did not use.
 
 The default decoded-memory limits are:
 
@@ -136,7 +142,19 @@ counts held reads. A placement whose row leaves the media terminal's history
 batches; mapping, copying, and decoding still happen on the media actor under
 the same pane and global quotas. When several complete terminal-browser frames
 arrive in one batch, the actor keeps the newest available shared-memory frame
-for each placement. It does not parse or rewrite other child output.
+for each placement, whether the envelopes are adjacent or each wrapped in
+DECSC and DECRC (a wrapped frame folded away leaves its DECSC, so the saved
+cursor is the same). Every shared object the actor does not read, folded or
+refused, is unlinked as Ghostty unlinks every object it opens; the protocol
+leaves that to the terminal. It does not parse or rewrite other child output.
+
+Commands are framed exactly as the pinned Ghostty frames them: `ESC _`,
+`ESC X`, `ESC ^` and their C1 forms open the string, `G` makes it a Kitty
+command, and ESC, ST, CAN, SUB or any other C1 control ends it, so an upload
+interrupted by the shell prompt ends at the prompt's first escape. The
+interactive cursor advances past a placement from its parsed header
+(`KittyCursor`) with Ghostty's semantics for chunked continuations, deleted
+images and unknown ids.
 
 A client that shares the runtime's machine declares it with an explicit
 `configure_graphics` message before opening panes; nothing is assumed. For such
@@ -146,12 +164,20 @@ instead of pixel chunks; the pixels never cross the socket. The client maps the
 object read-only, without copying, and unlinks any name it does not adopt.
 Names are unguessable, unique for the life of the process, at most 31 bytes
 (Darwin's PSHMNAMLEN), and objects are created `0600` with `O_EXCL`. The window
-and the headless client bootstrap with shared graphics off, so today every
-client receives bounded pixel chunks. A shared client that crashes can strand
-at most the in-flight objects its credit allowed; macOS offers no way to
-enumerate and sweep them, so that bounded leak is accepted and cleared on
-reboot. The client returns the exact byte credit to the runtime when it
-retires an image.
+declares shared graphics for the client of the machine it runs on when the
+platform supports it; its clients for other machines and the headless client
+declare it off and receive bounded pixel chunks. The client checks that it
+owns an object, maps it and unlinks the name at once, so a client that
+crashes strands only the objects sent but not yet mapped, which its credit
+bounds (at most the 512 MiB global limit). A runtime that crashes strands its
+parked objects (four per pane) and the transfers in flight. macOS offers no
+way to enumerate and sweep them, so that bounded leak is accepted and cleared
+on reboot. Another process of the same user could still open the name
+before the client unlinks it and shrink the object; touching the lost pages
+then raises SIGBUS. Peer checks do not isolate same-user processes, so that
+is accepted.
+The client returns the exact byte credit to the runtime when it retires an
+image.
 
 Debug telemetry exposes `input_write_*` and `ingest_*` timings. The Kitty
 framing and command scans each PTY read now passes through are measured by
@@ -203,6 +229,10 @@ replaces them.
 - The window's own client declares shared graphics; other machines' clients
   and the headless client receive decoded pixels in 1 MiB chunks, copied on
   the thread that routes keys.
-- A 4K stream reaches the window's textures at about 58 generations a second
-  on an M3, just at the gate's floor ([performance gates](performance-gates.md)).
+- A 4K stream is presented at about 57 generations a second on an M3, over
+  the gate's floor of 50 ([performance gates](performance-gates.md)).
+- Only synchronized `a=T,t=s,C=1,q=2` envelopes, bare or wrapped in
+  DECSC/DECRC, fold. A shared-memory producer with another framing has each
+  queued frame copied; the 64 KiB batch bounds a turn to a few hundred
+  frames, which under memory pressure can take seconds.
 - Only the local socket transport has been exercised with graphical load.
