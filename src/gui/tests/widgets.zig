@@ -30,7 +30,14 @@ test "widget lists own concrete values preserve painter order and drop overflow"
     var list: WidgetList = .{};
     var background: Surface = .{ .bounds = .{ .x = 20, .y = 30, .width = 100, .height = 24 }, .fill = .{ .color = canvas.theme.palette.surface0, .radius = 4 } };
     list.append(.{ .surface = background });
-    list.append(.{ .text = .{ .bounds = background.bounds, .label = .{ .text = "Widgets", .face = .sans, .size = .body } } });
+    list.append(.{ .text = .{
+        .bounds = background.bounds,
+        .label = .{
+            .text = "Widgets",
+            .face = .sans,
+            .size = .body,
+        },
+    } });
     background.bounds.x = 500;
     list.append(.{ .surface = background });
     try std.testing.expectEqual(@as(usize, 2), list.len);
@@ -52,8 +59,21 @@ test "warm widget drawing uses the supplied canvas without allocations" {
     const WidgetList = GenericWidgetList(Widget, 2);
     var list: WidgetList = .{};
     const bounds: Rect = .{ .x = 0, .y = 0, .width = 100, .height = 24 };
-    list.append(.{ .surface = .{ .bounds = bounds, .fill = .{ .color = canvas.theme.palette.surface0, .radius = 4 } } });
-    list.append(.{ .text = .{ .bounds = bounds, .label = .{ .text = "Warm", .face = .sans, .size = .body } } });
+    list.append(.{ .surface = .{
+        .bounds = bounds,
+        .fill = .{
+            .color = canvas.theme.palette.surface0,
+            .radius = 4,
+        },
+    } });
+    list.append(.{ .text = .{
+        .bounds = bounds,
+        .label = .{
+            .text = "Warm",
+            .face = .sans,
+            .size = .body,
+        },
+    } });
     try list.draw(&canvas);
     const shape_calls = fixture.atlas.shape_calls;
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
@@ -77,8 +97,30 @@ test "sprite widgets keep page selection tint and placement inside a composed li
     const mark = canvas.providerMark(.codex).?;
     const WidgetList = GenericWidgetList(Widget, 2);
     var list: WidgetList = .{};
-    list.append(.{ .surface = .{ .bounds = .{ .x = 10, .y = 20, .width = 50, .height = 50 }, .fill = .{ .color = canvas.theme.palette.surface0, .radius = 4 } } });
-    list.append(.{ .sprite = .{ .bounds = .{ .x = 12.5, .y = 24.75, .width = 16, .height = 16 }, .paint = .{ .sprite = mark, .alpha = 0.5 } } });
+    list.append(.{ .surface = .{
+        .bounds = .{
+            .x = 10,
+            .y = 20,
+            .width = 50,
+            .height = 50,
+        },
+        .fill = .{
+            .color = canvas.theme.palette.surface0,
+            .radius = 4,
+        },
+    } });
+    list.append(.{ .sprite = .{
+        .bounds = .{
+            .x = 12.5,
+            .y = 24.75,
+            .width = 16,
+            .height = 16,
+        },
+        .paint = .{
+            .sprite = mark,
+            .alpha = 0.5,
+        },
+    } });
     try list.draw(&canvas);
     const quads = fixture.quads.items();
     try std.testing.expectEqual(@as(usize, 2), quads.len);

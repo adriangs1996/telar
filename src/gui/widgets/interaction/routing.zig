@@ -392,7 +392,10 @@ fn editor(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
             var buffer: PasteBuffer = .{};
             buffer.append(bytes);
             const text = fitPaste(gui, current, current.selection(), &buffer);
-            try command(gui, .{ .replace_range = .{ .range = current.selection(), .text = text } });
+            try command(gui, .{ .replace_range = .{
+                .range = current.selection(),
+                .text = text,
+            } });
         },
         .composition => |value| {
             state.preedit.update(target.id, .{ .composition = value, .current = current }) catch return;
@@ -823,7 +826,10 @@ fn finishPaste(gui: *GuiAdapter, result: ClipboardResult) !void {
         var buffer: PasteBuffer = .{};
         buffer.append(result.text);
         const text = fitPaste(gui, current, pending.range, &buffer);
-        try command(gui, .{ .replace_range = .{ .range = pending.range, .text = text } });
+        try command(gui, .{ .replace_range = .{
+            .range = pending.range,
+            .text = text,
+        } });
 
         return;
     }
@@ -852,7 +858,10 @@ fn finishCut(gui: *GuiAdapter, result: ClipboardResult) !void {
         }
 
         try focus(gui, target);
-        try command(gui, .{ .replace_range = .{ .range = cut.range, .text = "" } });
+        try command(gui, .{ .replace_range = .{
+            .range = cut.range,
+            .text = "",
+        } });
         return;
     }
 }

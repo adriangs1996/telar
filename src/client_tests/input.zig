@@ -292,7 +292,10 @@ test "closing a preview whose marker is too many steps from the cursor keeps it 
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();
-    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator), .reserves_rows = false };
+    var shelf: PreviewShelf = .{
+        .catalog = .init(std.testing.allocator),
+        .reserves_rows = false,
+    };
     defer shelf.catalog.deinit();
     harness.client.attachments = shelf.port();
     try harness.bootstrap();
@@ -300,7 +303,10 @@ test "closing a preview whose marker is too many steps from the cursor keeps it 
     const target = try fixtures.installTestingAttachmentTarget(client, 1);
     const capture = try client.gpa.create(data.Capture);
     capture.* = .{
-        .request = .{ .target = target, .sequence = 1 },
+        .request = .{
+            .target = target,
+            .sequence = 1,
+        },
         .png = try client.gpa.dupe(u8, "png"),
         .width = 2,
         .height = 2,
@@ -331,7 +337,10 @@ test "closing a Pi preview whose path needs more keys than one transaction keeps
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();
-    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator), .reserves_rows = false };
+    var shelf: PreviewShelf = .{
+        .catalog = .init(std.testing.allocator),
+        .reserves_rows = false,
+    };
     defer shelf.catalog.deinit();
     harness.client.attachments = shelf.port();
     try harness.bootstrap();
@@ -364,7 +373,10 @@ test "closing a Pi preview whose path is longer than the scan bound keeps it and
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();
-    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator), .reserves_rows = false };
+    var shelf: PreviewShelf = .{
+        .catalog = .init(std.testing.allocator),
+        .reserves_rows = false,
+    };
     defer shelf.catalog.deinit();
     harness.client.attachments = shelf.port();
     try harness.bootstrap();
@@ -392,7 +404,10 @@ test "a Pi preview whose path is a long custom TMPDIR still deletes it whole" {
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();
-    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator), .reserves_rows = false };
+    var shelf: PreviewShelf = .{
+        .catalog = .init(std.testing.allocator),
+        .reserves_rows = false,
+    };
     defer shelf.catalog.deinit();
     harness.client.attachments = shelf.port();
     try harness.bootstrap();
@@ -1248,9 +1263,19 @@ fn commitPiFrame(client: *client_module.Client, input: PiFrame) !void {
         .base_frame_id = 0,
         .cols = pane_buffer.w,
         .rows = pane_buffer.h,
-        .cursor = .{ .visible = false, .x = 0, .y = 0 },
-        .scroll = .{ .total_rows = pane_buffer.h, .offset = 0 },
-        .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
+        .cursor = .{
+            .visible = false,
+            .x = 0,
+            .y = 0,
+        },
+        .scroll = .{
+            .total_rows = pane_buffer.h,
+            .offset = 0,
+        },
+        .spans = &.{.{
+            .start = 0,
+            .cells = pane_buffer.cells,
+        }},
     });
 
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(frame));
@@ -1292,7 +1317,14 @@ fn commitWideFrame(client: *client_module.Client, input: WideFrame) !void {
         .y = @intCast(input.prompt.len / width),
     };
     if (!input.visible_cursor) {
-        pane_buffer.setCell(.{ .x = cursor.x, .y = cursor.y }, .{ .text = " ", .width = 1, .style = .{ .flags = .{ .inverse = true } } });
+        pane_buffer.setCell(.{
+            .x = cursor.x,
+            .y = cursor.y,
+        }, .{
+            .text = " ",
+            .width = 1,
+            .style = .{ .flags = .{ .inverse = true } },
+        });
     }
 
     var payload: [64 * 1024]u8 = undefined;
@@ -1302,9 +1334,19 @@ fn commitWideFrame(client: *client_module.Client, input: WideFrame) !void {
         .base_frame_id = 0,
         .cols = pane_buffer.w,
         .rows = pane_buffer.h,
-        .cursor = if (input.visible_cursor) cursor else .{ .visible = false, .x = 0, .y = 0 },
-        .scroll = .{ .total_rows = pane_buffer.h, .offset = 0 },
-        .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
+        .cursor = if (input.visible_cursor) cursor else .{
+            .visible = false,
+            .x = 0,
+            .y = 0,
+        },
+        .scroll = .{
+            .total_rows = pane_buffer.h,
+            .offset = 0,
+        },
+        .spans = &.{.{
+            .start = 0,
+            .cells = pane_buffer.cells,
+        }},
     });
 
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(frame));
@@ -1400,4 +1442,3 @@ fn routeKey(client: *client_module.Client, router: *KeyRouter, key: keyinput.Key
 
     return .continue_routing;
 }
-

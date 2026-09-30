@@ -73,7 +73,11 @@ fn prepare(session: *Session, context: struct { allocator: std.mem.Allocator, jo
     slot.edition = state.snapshot.edition_id;
     slot.len = state.snapshot.patch.len;
     @memcpy(slot.source[0..slot.len], state.snapshot.patch);
-    slot.build(.{ .allocator = context.allocator, .io = std.testing.io, .job_ms = context.job_ms });
+    slot.build(.{
+        .allocator = context.allocator,
+        .io = std.testing.io,
+        .job_ms = context.job_ms,
+    });
     try std.testing.expect(slot.failure == null);
 
     panel.job = index;

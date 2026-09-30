@@ -66,28 +66,58 @@ pub fn measure(self: Metrics, viewport: native.Viewport) !MeasuredGrid {
 
 test "grid pixels reconstruct the measured cell with remainder outside the grid" {
     const metrics: Metrics = .{ .cell_width = 9, .cell_height = 19, .baseline = 14, .pixel_height = 16 };
-    const size = (try metrics.measure(.{ .width = 803, .height = 481, .scale = 1 })).size;
+    const size = (try metrics.measure(.{
+        .width = 803,
+        .height = 481,
+        .scale = 1,
+    })).size;
     try std.testing.expectEqual(@as(u16, 89), size.cols);
     try std.testing.expectEqual(@as(u16, 25), size.rows);
     try std.testing.expectEqual(@as(u32, 801), @as(u32, size.cols) * size.cell_width_px);
-    try std.testing.expectError(error.InvalidTerminalSize, metrics.measure(.{ .width = 0, .height = 0, .scale = 1 }));
+    try std.testing.expectError(error.InvalidTerminalSize, metrics.measure(.{
+        .width = 0,
+        .height = 0,
+        .scale = 1,
+    }));
 }
 
 test "a viewport past the protocol's cell count keeps its columns and the rows that fit" {
-    const metrics: Metrics = .{ .cell_width = 8, .cell_height = 17, .baseline = 13, .pixel_height = 15 };
-    const eight_k = try metrics.measure(.{ .width = 7680, .height = 2160, .scale = 1 });
+    const metrics: Metrics = .{
+        .cell_width = 8,
+        .cell_height = 17,
+        .baseline = 13,
+        .pixel_height = 15,
+    };
+    const eight_k = try metrics.measure(.{
+        .width = 7680,
+        .height = 2160,
+        .scale = 1,
+    });
     try std.testing.expectEqual(@as(u16, 960), eight_k.size.cols);
     try std.testing.expectEqual(@as(u16, 127), eight_k.size.rows);
     try std.testing.expectEqual(@as(?u64, null), eight_k.cut_from);
 
-    const tiny: Metrics = .{ .cell_width = 1, .cell_height = 1, .baseline = 1, .pixel_height = 1 };
-    const cut = try tiny.measure(.{ .width = 1000, .height = 1000, .scale = 1 });
+    const tiny: Metrics = .{
+        .cell_width = 1,
+        .cell_height = 1,
+        .baseline = 1,
+        .pixel_height = 1,
+    };
+    const cut = try tiny.measure(.{
+        .width = 1000,
+        .height = 1000,
+        .scale = 1,
+    });
     try std.testing.expectEqual(@as(u16, 1000), cut.size.cols);
     try std.testing.expectEqual(@as(u16, @intCast(core.max_cell_count / 1000)), cut.size.rows);
     try std.testing.expect(@as(u64, cut.size.cols) * cut.size.rows <= core.max_cell_count);
     try std.testing.expectEqual(@as(?u64, 1_000_000), cut.cut_from);
 
-    const wide = try tiny.measure(.{ .width = 70000, .height = 3, .scale = 1 });
+    const wide = try tiny.measure(.{
+        .width = 70000,
+        .height = 3,
+        .scale = 1,
+    });
     try std.testing.expectEqual(@as(u16, std.math.maxInt(u16)), wide.size.cols);
     try std.testing.expectEqual(@as(u16, 1), wide.size.rows);
     try std.testing.expectEqual(@as(?u64, 210_000), wide.cut_from);

@@ -83,7 +83,14 @@ pub fn next(self: *Services, out: *native.HostRequest) bool {
 
     const request = oldest orelse return false;
     request.state = .active;
-    out.* = .{ .kind = @intFromEnum(request.kind), .request_id = request.id, .target_id = request.owner.target_id, .generation = request.owner.generation, .text = if (request.payload) |payload| if (request.len == 0) null else self.payloadBytes(payload).ptr else null, .len = request.len };
+    out.* = .{
+        .kind = @intFromEnum(request.kind),
+        .request_id = request.id,
+        .target_id = request.owner.target_id,
+        .generation = request.owner.generation,
+        .text = if (request.payload) |payload| if (request.len == 0) null else self.payloadBytes(payload).ptr else null,
+        .len = request.len,
+    };
     return true;
 }
 
@@ -159,12 +166,27 @@ test "host request owns writes and matches reads by request and original owner" 
     var request: native.HostRequest = .{};
     try std.testing.expect(services.next(&request));
     try std.testing.expectEqual(read_id, request.request_id);
-    try std.testing.expect(services.complete(.{ .request_id = read_id, .target_id = 3, .generation = 8, .status = .success }) == null);
+    try std.testing.expect(services.complete(.{
+        .request_id = read_id,
+        .target_id = 3,
+        .generation = 8,
+        .status = .success,
+    }) == null);
     try std.testing.expect(services.next(&request));
     try std.testing.expectEqual(write_id, request.request_id);
     try std.testing.expectEqualStrings("ok", request.text.?[0..request.len]);
-    try std.testing.expectEqual(Request.Kind.read, services.complete(.{ .request_id = read_id, .target_id = 3, .generation = 7, .status = .cancelled }).?);
-    try std.testing.expect(services.complete(.{ .request_id = read_id, .target_id = 3, .generation = 7, .status = .success }) == null);
+    try std.testing.expectEqual(Request.Kind.read, services.complete(.{
+        .request_id = read_id,
+        .target_id = 3,
+        .generation = 7,
+        .status = .cancelled,
+    }).?);
+    try std.testing.expect(services.complete(.{
+        .request_id = read_id,
+        .target_id = 3,
+        .generation = 7,
+        .status = .success,
+    }) == null);
 }
 
 test "writes share two payloads and a third waits for one to complete" {
@@ -178,7 +200,12 @@ test "writes share two payloads and a third waits for one to complete" {
     var request: native.HostRequest = .{};
     try std.testing.expect(services.next(&request));
     try std.testing.expectEqual(first, request.request_id);
-    try std.testing.expect(services.complete(.{ .request_id = first, .target_id = 0, .generation = 0, .status = .success }) != null);
+    try std.testing.expect(services.complete(.{
+        .request_id = first,
+        .target_id = 0,
+        .generation = 0,
+        .status = .success,
+    }) != null);
     const third = try services.write("three");
     try std.testing.expect(services.next(&request));
     try std.testing.expect(services.next(&request));

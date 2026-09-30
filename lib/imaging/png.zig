@@ -287,7 +287,11 @@ test "decodes every filter type and a palette with transparency" {
 
 test "a flat image of any width decodes and a declared size is read from its header" {
     const allocator = std.testing.allocator;
-    const bytes = try encodeFlatForTest(allocator, .{ .header = .{ .width = 70, .height = 3, .color = .rgba } }, &.{ 9, 8, 7, 255 });
+    const bytes = try encodeFlatForTest(allocator, .{ .header = .{
+        .width = 70,
+        .height = 3,
+        .color = .rgba,
+    } }, &.{ 9, 8, 7, 255 });
     defer allocator.free(bytes);
     try std.testing.expectEqual(.{ @as(u32, 70), @as(u32, 3) }, try dimensions(bytes));
     var image = try decode(allocator, bytes, .{});

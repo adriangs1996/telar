@@ -355,7 +355,10 @@ fn landEveryLookup(favicons: *Favicons, page: *SpritePage, workspaces: *const da
     var reach: ?core.LimitReach = null;
     while (favicons.next(page, workspaces)) |want| {
         favicons.started(want.workspace);
-        favicons.land(std.testing.allocator, .{ .workspace = want.workspace, .image = try cellImage(page.cells, 9) });
+        favicons.land(std.testing.allocator, .{
+            .workspace = want.workspace,
+            .image = try cellImage(page.cells, 9),
+        });
         reach = favicons.refresh(std.testing.allocator, page, workspaces) orelse reach;
     }
 
@@ -491,7 +494,11 @@ test "the favicon worker decodes a workspace favicon.png into the sprite cell" {
 
     try temp.dir.writeFile(io, .{ .sub_path = "favicon.png", .data = "GIF89a not a png but long enough to be read" });
     try std.testing.expectError(error.NotPng, favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(3), .workspace = @enumFromInt(1), .cells = @splat(16) }, root)).result);
-    try std.testing.expectError(error.InvalidSpriteCell, favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(4), .workspace = @enumFromInt(1), .cells = .{ 16, 16, 0 } }, root)).result);
+    try std.testing.expectError(error.InvalidSpriteCell, favicon_worker.execute(io, gpa, .init(.{
+        .execution_id = @enumFromInt(4),
+        .workspace = @enumFromInt(1),
+        .cells = .{ 16, 16, 0 },
+    }, root)).result);
 }
 
 /// Runs the favicon worker over one `favicon.png` in a fresh directory.
@@ -501,7 +508,10 @@ fn lookUpFavicon(bytes: []const u8) !client.FaviconCompletion {
     defer temp.cleanup();
     var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
-    try temp.dir.writeFile(io, .{ .sub_path = "favicon.png", .data = bytes });
+    try temp.dir.writeFile(io, .{
+        .sub_path = "favicon.png",
+        .data = bytes,
+    });
     const job: client.FaviconJob = .init(
         .{
             .execution_id = @enumFromInt(1),
@@ -514,7 +524,11 @@ fn lookUpFavicon(bytes: []const u8) !client.FaviconCompletion {
 }
 
 fn flatFavicon(width: u32, height: u32) ![]u8 {
-    return png.encodeFlatForTest(std.testing.allocator, .{ .header = .{ .width = width, .height = height, .color = .rgba } }, &.{ 30, 60, 90, 255 });
+    return png.encodeFlatForTest(std.testing.allocator, .{ .header = .{
+        .width = width,
+        .height = height,
+        .color = .rgba,
+    } }, &.{ 30, 60, 90, 255 });
 }
 
 test "the favicon worker decodes a PNG up to its side bound and returns the reach past it" {
@@ -566,7 +580,15 @@ test "a favicon past its PNG limit keeps the glyph and the window reports the li
     const oversized = try png.declareForTest(gpa, widest, 2 * favicon_worker.max_png_side, 16);
     defer gpa.free(oversized);
     const workspace = Session.location.workspace.workspace;
-    _ = try gui.app.model.workspace_list_snapshot.replace(.{ .revision = 1, .entries = &.{.{ .workspace = workspace, .name = "telar", .path = "/telar", .tab_count = 1 }} });
+    _ = try gui.app.model.workspace_list_snapshot.replace(.{
+        .revision = 1,
+        .entries = &.{.{
+            .workspace = workspace,
+            .name = "telar",
+            .path = "/telar",
+            .tab_count = 1,
+        }},
+    });
     const page = &gui.renderer.sprites.?;
     try std.testing.expect(gui.chrome.favicons.next(page, &gui.app.model.workspace_list_snapshot) != null);
     const job = client.favicons.request(

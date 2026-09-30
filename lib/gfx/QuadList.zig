@@ -370,9 +370,24 @@ test "a list at its limit keeps the quads it holds and counts the rest" {
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
     try list.reserve(2);
-    try list.pushRect(.{ .x = 0, .y = 0, .width = 1, .height = 1 }, Color.white);
-    try list.pushRect(.{ .x = 1, .y = 0, .width = 1, .height = 1 }, Color.white);
-    try list.pushRect(.{ .x = 2, .y = 0, .width = 1, .height = 1 }, Color.white);
+    try list.pushRect(.{
+        .x = 0,
+        .y = 0,
+        .width = 1,
+        .height = 1,
+    }, Color.white);
+    try list.pushRect(.{
+        .x = 1,
+        .y = 0,
+        .width = 1,
+        .height = 1,
+    }, Color.white);
+    try list.pushRect(.{
+        .x = 2,
+        .y = 0,
+        .width = 1,
+        .height = 1,
+    }, Color.white);
     try std.testing.expectEqual(@as(usize, 2), list.items().len);
     try std.testing.expectEqual(@as(usize, 1), list.dropped);
     try std.testing.expectEqual(@as(f32, 1), list.items()[1].x);

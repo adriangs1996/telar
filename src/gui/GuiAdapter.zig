@@ -908,7 +908,10 @@ fn drainInput(self: *GuiAdapter) !void {
             .text_block => |*held| {
                 const bytes = pending_input.large_events.view(held.slot).text.bytes;
                 const len = std.unicode.utf8ByteSequenceLength(bytes[held.offset]) catch 1;
-                var scalar: TextCommit = .{ .bytes = @splat(0), .len = len };
+                var scalar: TextCommit = .{
+                    .bytes = @splat(0),
+                    .len = len,
+                };
                 @memcpy(scalar.bytes[0..len], bytes[held.offset..][0..len]);
                 held.offset += len;
                 try self.dispatchText(&scalar);

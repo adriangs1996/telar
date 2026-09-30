@@ -29,7 +29,10 @@ annotations: ?DiffAnnotations = null,
 pub fn layout(self: *Paint) !f32 {
     self.y = self.bounds.y;
     self.digits = 3;
-    self.syntax_paint = .{ .source = self.text, .roles = self.roles };
+    self.syntax_paint = .{
+        .source = self.text,
+        .roles = self.roles,
+    };
     var scan: core.ChangeReviewDiffLines = .{ .text = self.text };
     var maximum: u32 = 0;
     while (scan.next()) |line| {

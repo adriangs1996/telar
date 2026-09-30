@@ -48,7 +48,10 @@ pub fn draw(self: WorkspaceList, canvas: *Canvas) !void {
         const first = canvas.quads.items().len;
         try row.draw(canvas);
         canvas.quads.clipFrom(first, self.bounds);
-        self.context.bands.add(.{ .area = clip.hitArea(row.bounds), .action = .{ .intent = .{ .select_workspace = snapshot.workspaceAt(index) } } });
+        self.context.bands.add(.{
+            .area = clip.hitArea(row.bounds),
+            .action = .{ .intent = .{ .select_workspace = snapshot.workspaceAt(index) } },
+        });
     }
 
     if (scroll.maximum_scroll != 0) {

@@ -410,7 +410,12 @@ fn rasterBox(self: *GlyphAtlas, grid: BoxGrid, curve_index: u3) !GlyphSlot {
     const height: u16 = @intFromFloat(@ceil(grid.height));
     const origin = try self.pack(.{ width, height });
     const curve = BoxCurve.init(grid, curve_index);
-    curve.rasterize(.{ .pixels = self.pixels[origin[1] * self.side + origin[0] ..], .stride = self.side, .width = width, .height = height });
+    curve.rasterize(.{
+        .pixels = self.pixels[origin[1] * self.side + origin[0] ..],
+        .stride = self.side,
+        .width = width,
+        .height = height,
+    });
     const scale: f32 = 1.0 / @as(f32, @floatFromInt(self.side));
     return .{
         .u0 = @as(f32, @floatFromInt(origin[0])) * scale,
@@ -844,7 +849,10 @@ test "alternating heights keep both shaping results and every sized face residen
 }
 
 test "a page that cannot hold another glyph fails instead of wrapping" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
     defer atlas.deinit();
 
     atlas.shelf_y = atlas.side - 4;
@@ -858,7 +866,13 @@ test "full glyphs are remembered without rejecting smaller glyphs or changing re
     try atlas.prepareFallbacks();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
-    const existing: TextRun = .{ .text = "A", .x = 0, .y = 16, .color = .white, .pixel_height = 16 };
+    const existing: TextRun = .{
+        .text = "A",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    };
     _ = try atlas.place(existing, &list);
     const retained = list.items()[0];
     const version = atlas.version;
@@ -895,7 +909,10 @@ test "full glyphs are remembered without rejecting smaller glyphs or changing re
     _ = try atlas.place(existing, &list);
     try std.testing.expectEqualDeep(retained, list.items()[0]);
 
-    var replacement = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
+    var replacement = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
     defer replacement.deinit();
     try replacement.prepareFallbacks();
     list.clear();
@@ -1003,23 +1020,44 @@ fn clearPage(pixels: []u8, side: u32) void {
 /// Example: `try atlas.prepareFallbacks();`
 pub fn prepareFallbacks(self: *GlyphAtlas) !void {
     for (0..4) |style| {
-        _ = try self.slot(.{}, .{ .text = "", .x = 0, .y = 0, .color = .white, .pixel_height = self.pixel_height, .bold = style & 1 != 0, .italic = style & 2 != 0 });
+        _ = try self.slot(.{}, .{
+            .text = "",
+            .x = 0,
+            .y = 0,
+            .color = .white,
+            .pixel_height = self.pixel_height,
+            .bold = style & 1 != 0,
+            .italic = style & 2 != 0,
+        });
     }
 }
 
 test "a full terminal atlas uses its prepared replacement instead of losing the frame" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
     defer atlas.deinit();
     try atlas.prepareFallbacks();
     atlas.shelf_y = atlas.side;
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
-    _ = try atlas.place(.{ .text = "new", .x = 0, .y = 16, .color = .white, .pixel_height = 16, .bold = true }, &list);
+    _ = try atlas.place(.{
+        .text = "new",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+        .bold = true,
+    }, &list);
     try std.testing.expect(list.items().len > 0);
 }
 
 test "a page that fills over many frames is emptied and draws the glyph that did not fit" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
     defer atlas.deinit();
     try atlas.prepareFallbacks();
     var list = QuadList.init(std.testing.allocator);
@@ -1027,7 +1065,13 @@ test "a page that fills over many frames is emptied and draws the glyph that did
     try std.testing.expectEqual(Settled.kept, try atlas.settle());
     atlas.frames_drawn = refill_frames + 1;
     atlas.shelf_y = atlas.side;
-    _ = try atlas.place(.{ .text = "Q", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    _ = try atlas.place(.{
+        .text = "Q",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
     const replacement = list.items()[0];
     try std.testing.expect(atlas.full);
     const version = atlas.version;
@@ -1039,43 +1083,81 @@ test "a page that fills over many frames is emptied and draws the glyph that did
     try std.testing.expectEqual(@as(u32, 0), atlas.frames_drawn);
     try std.testing.expectEqual(@as(u8, 255), atlas.pixels[0]);
     list.clear();
-    _ = try atlas.place(.{ .text = "Q", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    _ = try atlas.place(.{
+        .text = "Q",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
     try std.testing.expect(!std.meta.eql(replacement, list.items()[0]));
     try std.testing.expect(!atlas.full);
 }
 
 test "the first frame that fills a new page asks for the larger page" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
     defer atlas.deinit();
     try atlas.prepareFallbacks();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
     try std.testing.expectEqual(Settled.kept, try atlas.settle());
     atlas.shelf_y = atlas.side;
-    _ = try atlas.place(.{ .text = "Q", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    _ = try atlas.place(.{
+        .text = "Q",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
     atlas.frameDrawn();
     try std.testing.expectEqual(Settled.outgrown, try atlas.settle());
 
-    var larger = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16, .side = max_side });
+    var larger = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+        .side = max_side,
+    });
     defer larger.deinit();
     try larger.prepareFallbacks();
     try std.testing.expectEqual(max_side, larger.side);
     try std.testing.expectEqual(@as(u8, 255), larger.pixels[max_side + 1]);
     list.clear();
-    _ = try larger.place(.{ .text = "Q", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    _ = try larger.place(.{
+        .text = "Q",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
     try std.testing.expect(!larger.full);
-    try std.testing.expectError(error.InvalidAtlasSide, GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16, .side = 4096 }));
+    try std.testing.expectError(error.InvalidAtlasSide, GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+        .side = 4096,
+    }));
 }
 
 test "a page emptied and filled again within a few frames asks for the larger page" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
     defer atlas.deinit();
     try atlas.prepareFallbacks();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
     atlas.frames_drawn = refill_frames + 1;
     atlas.shelf_y = atlas.side;
-    _ = try atlas.place(.{ .text = "Q", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    _ = try atlas.place(.{
+        .text = "Q",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
     try std.testing.expectEqual(Settled.emptied, try atlas.settle());
 
     // Scrolling a large working set refills the page three frames later.
@@ -1084,18 +1166,34 @@ test "a page emptied and filled again within a few frames asks for the larger pa
     }
 
     atlas.shelf_y = atlas.side;
-    _ = try atlas.place(.{ .text = "R", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    _ = try atlas.place(.{
+        .text = "R",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
     try std.testing.expectEqual(Settled.outgrown, try atlas.settle());
 }
 
 test "a largest page that thrashes waits before emptying and one that fills slowly shrinks" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16, .side = max_side });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+        .side = max_side,
+    });
     defer atlas.deinit();
     try atlas.prepareFallbacks();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
     atlas.shelf_y = atlas.side;
-    _ = try atlas.place(.{ .text = "Q", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    _ = try atlas.place(.{
+        .text = "Q",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
     atlas.frameDrawn();
     try std.testing.expectEqual(Settled.exhausted, try atlas.settle());
     try std.testing.expect(atlas.held);
@@ -1111,19 +1209,34 @@ test "a largest page that thrashes waits before emptying and one that fills slow
 
     atlas.frames_drawn = refill_frames + 1;
     atlas.shelf_y = atlas.side;
-    _ = try atlas.place(.{ .text = "R", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    _ = try atlas.place(.{
+        .text = "R",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
     try std.testing.expectEqual(Settled.shrunk, try atlas.settle());
 }
 
 test "the page reports only the rows written since the backend last took them" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
     defer atlas.deinit();
     try std.testing.expectEqual([2]u32{ 0, atlas.side }, atlas.takeDirty());
     try std.testing.expectEqual([2]u32{ 0, 0 }, atlas.takeDirty());
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
     atlas.shelf_y = 100;
-    _ = try atlas.place(.{ .text = "Q", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    _ = try atlas.place(.{
+        .text = "Q",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
     const rows = atlas.takeDirty();
     try std.testing.expect(rows[0] >= 100 and rows[1] > rows[0] and rows[1] <= 100 + 32);
     try std.testing.expectEqual([2]u32{ 0, 0 }, atlas.takeDirty());

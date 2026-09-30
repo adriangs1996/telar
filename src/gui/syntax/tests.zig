@@ -45,7 +45,13 @@ test "syntax worker highlights every fragment up to its limit and keeps them pas
     const full = try std.testing.allocator.alloc(syntaxhl.Role, at_limit.len);
     defer std.testing.allocator.free(full);
 
-    var worker: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = at_limit, .roles = full, .job_ms = std.math.maxInt(i64) };
+    var worker: DiffHighlighter = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .text = at_limit,
+        .roles = full,
+        .job_ms = std.math.maxInt(i64),
+    };
     try std.testing.expect((try worker.run()) == null);
     try std.testing.expectEqual(syntaxhl.Role.keyword, full[std.mem.lastIndexOf(u8, at_limit, "const").?]);
 
@@ -55,7 +61,13 @@ test "syntax worker highlights every fragment up to its limit and keeps them pas
     const partial = try std.testing.allocator.alloc(syntaxhl.Role, past_limit.len);
     defer std.testing.allocator.free(partial);
 
-    worker = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = past_limit, .roles = partial, .job_ms = std.math.maxInt(i64) };
+    worker = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .text = past_limit,
+        .roles = partial,
+        .job_ms = std.math.maxInt(i64),
+    };
     const reach = (try worker.run()).?;
     try std.testing.expectEqualStrings("syntax.job_fragments", reach.limit.name);
     try std.testing.expectEqual(@as(u64, limits.fragments), reach.limit.value);
@@ -73,7 +85,13 @@ test "syntax worker past its time budget keeps the fragments it highlighted" {
     const roles = try std.testing.allocator.alloc(syntaxhl.Role, text.len);
     defer std.testing.allocator.free(roles);
 
-    var worker: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text, .roles = roles, .job_ms = 0 };
+    var worker: DiffHighlighter = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .text = text,
+        .roles = roles,
+        .job_ms = 0,
+    };
     const reach = (try worker.run()).?;
     try std.testing.expectEqualStrings("syntax.job_ms", reach.limit.name);
     try std.testing.expectEqual(@as(u64, limits.job_ms), reach.limit.value);
@@ -93,11 +111,21 @@ test "syntax worker leaves a source past its byte limit plain and names the limi
     const roles = try std.testing.allocator.alloc(syntaxhl.Role, text.len);
     defer std.testing.allocator.free(roles);
 
-    var worker: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text[0..syntaxhl.limits.source_bytes], .roles = roles[0..syntaxhl.limits.source_bytes] };
+    var worker: DiffHighlighter = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .text = text[0..syntaxhl.limits.source_bytes],
+        .roles = roles[0..syntaxhl.limits.source_bytes],
+    };
     try std.testing.expect((try worker.run()) == null);
 
     @memset(roles, .keyword);
-    worker = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text, .roles = roles };
+    worker = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .text = text,
+        .roles = roles,
+    };
     const reach = (try worker.run()).?;
     try std.testing.expectEqualStrings("syntax.source_bytes", reach.limit.name);
     try std.testing.expectEqual(@as(?u64, text.len), reach.requested);

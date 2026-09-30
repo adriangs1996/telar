@@ -24,10 +24,20 @@ pub fn capture(prompt: *const shared_model.Prompt, target: Target) ?FieldView {
             return null;
         }
 
-        return .{ .text = prompt.directory.text(), .head = @intCast(prompt.directory.head), .anchor = @intCast(prompt.directory.anchor), .capacity = prompt.directory.bytes.len };
+        return .{
+            .text = prompt.directory.text(),
+            .head = @intCast(prompt.directory.head),
+            .anchor = @intCast(prompt.directory.anchor),
+            .capacity = prompt.directory.bytes.len,
+        };
     }
 
-    return .{ .text = prompt.field.text(), .head = @intCast(prompt.field.head), .anchor = @intCast(prompt.field.anchor), .capacity = prompt.field.bytes.len };
+    return .{
+        .text = prompt.field.text(),
+        .head = @intCast(prompt.field.head),
+        .anchor = @intCast(prompt.field.anchor),
+        .capacity = prompt.field.bytes.len,
+    };
 }
 
 /// Resolves a delivered editor against its current prompt or pane attachment.
@@ -73,7 +83,12 @@ fn boundary(self: FieldView, at: u32) bool {
 }
 
 test "a paste keeps the prefix that fits the field at a UTF-8 boundary" {
-    const field: FieldView = .{ .text = "tab", .head = 3, .anchor = 3, .capacity = 8 };
+    const field: FieldView = .{
+        .text = "tab",
+        .head = 3,
+        .anchor = 3,
+        .capacity = 8,
+    };
     try std.testing.expectEqualStrings("12345", field.fitting(.{ 3, 3 }, "123456789"));
     try std.testing.expectEqualStrings("1234", field.fitting(.{ 3, 3 }, "1234\u{e9}"));
     try std.testing.expectEqualStrings("12345678", field.fitting(.{ 0, 3 }, "123456789"));

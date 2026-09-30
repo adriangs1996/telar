@@ -30,7 +30,10 @@ fn sizedCapture(gpa: std.mem.Allocator, sequence: u64, size: [2]u32, bytes: usiz
     const png = try gpa.alloc(u8, bytes);
     @memset(png, 7);
     result.* = .{
-        .request = .{ .target = target, .sequence = sequence },
+        .request = .{
+            .target = target,
+            .sequence = sequence,
+        },
         .png = png,
         .width = size[0],
         .height = size[1],

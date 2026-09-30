@@ -390,7 +390,10 @@ fn drawButton(canvas: *Canvas, view: data.NodeView, button: Button) !f32 {
 
     _ = try canvas.textAt(.{ .x = bounds.x + chrome.px(button_padding), .y = bounds.y, .width = width - chrome.px(button_padding), .height = bounds.height }, label);
     if (button.stack.scope.interactive) {
-        button.stack.context.bands.add(.{ .area = bounds, .action = .{ .intent = intent } });
+        button.stack.context.bands.add(.{
+            .area = bounds,
+            .action = .{ .intent = intent },
+        });
     }
 
     return bounds.x;
@@ -430,4 +433,3 @@ pub fn drawInline(canvas: *Canvas, content: anytype, row: InlineRow) !void {
         x += width + chrome.px(inline_nodes.child_gap);
     }
 }
-

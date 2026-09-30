@@ -165,7 +165,10 @@ fn workspace(self: WorkspaceIndicators, canvas: *Canvas, index: usize) !void {
     }
 
     canvas.quads.clipFrom(first, bounds);
-    self.context.bands.add(.{ .area = bounds, .action = .{ .intent = .{ .select_workspace = id } } });
+    self.context.bands.add(.{
+        .area = bounds,
+        .action = .{ .intent = .{ .select_workspace = id } },
+    });
 }
 
 fn overflowCounter(self: WorkspaceIndicators, canvas: *Canvas, range: [2]usize) !void {
@@ -199,7 +202,6 @@ fn drawAttention(self: WorkspaceIndicators, canvas: *Canvas, color: cellgrid.Col
     const diameter = @min(canvas.chrome.px(4), @min(bounds.width, bounds.height));
     try canvas.fillRoundedAt(.{ .x = bounds.x + bounds.width - diameter, .y = bounds.y, .width = diameter, .height = diameter }, .{ .radius = diameter / 2, .color = color });
 }
-
 
 const logical_gap: f32 = 4;
 const counter_width: f32 = 28;

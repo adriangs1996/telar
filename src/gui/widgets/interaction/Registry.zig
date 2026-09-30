@@ -112,10 +112,28 @@ test "a full registry keeps its targets and counts the dropped one" {
     defer std.testing.allocator.destroy(registry);
     registry.* = .{};
     for (0..capacity) |index| {
-        try registry.add(.{ .id = .{ .target_id = index + 1 }, .bounds = .{ .x = @floatFromInt(index), .y = 0, .width = 1, .height = 1 }, .action = .{ .custom = index } });
+        try registry.add(.{
+            .id = .{ .target_id = index + 1 },
+            .bounds = .{
+                .x = @floatFromInt(index),
+                .y = 0,
+                .width = 1,
+                .height = 1,
+            },
+            .action = .{ .custom = index },
+        });
     }
 
-    try registry.add(.{ .id = .{ .target_id = capacity + 1 }, .bounds = .{ .x = 0, .y = 0, .width = 1, .height = 1 }, .action = .{ .custom = 0 } });
+    try registry.add(.{
+        .id = .{ .target_id = capacity + 1 },
+        .bounds = .{
+            .x = 0,
+            .y = 0,
+            .width = 1,
+            .height = 1,
+        },
+        .action = .{ .custom = 0 },
+    });
     try std.testing.expectEqual(@as(usize, capacity), registry.len);
     try std.testing.expectEqual(@as(usize, 1), registry.dropped);
     try std.testing.expect(registry.find(.{ .target_id = capacity + 1 }) == null);
@@ -124,14 +142,71 @@ test "a full registry keeps its targets and counts the dropped one" {
 
 test "a duplicate identity is refused and a reset registry takes it again" {
     var registry: Registry = .{};
-    try registry.add(.{ .id = .{ .target_id = 7, .generation = 2 }, .bounds = .{ .x = 0, .y = 0, .width = 1, .height = 1 }, .action = .{ .custom = 1 } });
-    try std.testing.expectError(error.DuplicateWidgetIdentity, registry.add(.{ .id = .{ .target_id = 7, .generation = 2 }, .bounds = .{ .x = 1, .y = 0, .width = 1, .height = 1 }, .action = .{ .custom = 2 } }));
-    try registry.add(.{ .id = .{ .target_id = 7, .generation = 3 }, .bounds = .{ .x = 1, .y = 0, .width = 1, .height = 1 }, .action = .{ .custom = 2 } });
-    try std.testing.expectEqual(@as(u64, 2), registry.find(.{ .target_id = 7, .generation = 3 }).?.action.custom);
+    try registry.add(.{
+        .id = .{
+            .target_id = 7,
+            .generation = 2,
+        },
+        .bounds = .{
+            .x = 0,
+            .y = 0,
+            .width = 1,
+            .height = 1,
+        },
+        .action = .{ .custom = 1 },
+    });
+    try std.testing.expectError(error.DuplicateWidgetIdentity, registry.add(.{
+        .id = .{
+            .target_id = 7,
+            .generation = 2,
+        },
+        .bounds = .{
+            .x = 1,
+            .y = 0,
+            .width = 1,
+            .height = 1,
+        },
+        .action = .{ .custom = 2 },
+    }));
+    try registry.add(.{
+        .id = .{
+            .target_id = 7,
+            .generation = 3,
+        },
+        .bounds = .{
+            .x = 1,
+            .y = 0,
+            .width = 1,
+            .height = 1,
+        },
+        .action = .{ .custom = 2 },
+    });
+    try std.testing.expectEqual(@as(u64, 2), registry.find(.{
+        .target_id = 7,
+        .generation = 3,
+    }).?.action.custom);
 
     registry.reset();
     try std.testing.expectEqual(@as(usize, 0), registry.len);
-    try std.testing.expect(registry.find(.{ .target_id = 7, .generation = 2 }) == null);
-    try registry.add(.{ .id = .{ .target_id = 7, .generation = 2 }, .bounds = .{ .x = 0, .y = 0, .width = 1, .height = 1 }, .action = .{ .custom = 3 } });
-    try std.testing.expectEqual(@as(u64, 3), registry.find(.{ .target_id = 7, .generation = 2 }).?.action.custom);
+    try std.testing.expect(registry.find(.{
+        .target_id = 7,
+        .generation = 2,
+    }) == null);
+    try registry.add(.{
+        .id = .{
+            .target_id = 7,
+            .generation = 2,
+        },
+        .bounds = .{
+            .x = 0,
+            .y = 0,
+            .width = 1,
+            .height = 1,
+        },
+        .action = .{ .custom = 3 },
+    });
+    try std.testing.expectEqual(@as(u64, 3), registry.find(.{
+        .target_id = 7,
+        .generation = 2,
+    }).?.action.custom);
 }

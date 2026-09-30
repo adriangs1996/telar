@@ -34,32 +34,52 @@ pub fn render(self: *Composition, projection: *const client.Projection) !frame_w
         const layout = projection.layout.?;
         for (layout.views()) |view| {
             const pane = model.panes.findInConst(tab_id, view.pane_id) orelse continue;
-            widgets.append(.{ .terminal_pane = .{ .paint = .{ .pane = pane, .view = view, .copy = copy_selection.forPane(projection.copy, pane.id), .hide_cursor = projection.prompt != null } } });
+            widgets.append(.{ .terminal_pane = .{ .paint = .{
+                .pane = pane,
+                .view = view,
+                .copy = copy_selection.forPane(projection.copy, pane.id),
+                .hide_cursor = projection.prompt != null,
+            } } });
             self.commit.append(pane);
         }
 
         if (self.link) |hit| {
             if (model.panes.findInConst(tab_id, hit.pane_id)) |pane| {
                 if (pane.attachment_generation == hit.generation) {
-                    widgets.append(.{ .link = .{ .hit = hit, .pane = pane } });
+                    widgets.append(.{ .link = .{
+                        .hit = hit,
+                        .pane = pane,
+                    } });
                 }
             }
         }
 
         if (self.previews) |previews| {
             if (!layout.reserved.isEmpty() and previews.catalog.hasVisibleItems()) {
-                widgets.append(.{ .image_shelf = .{ .area = layout.reserved, .previews = previews } });
+                widgets.append(.{ .image_shelf = .{
+                    .area = layout.reserved,
+                    .previews = previews,
+                } });
             }
         }
     }
 
     self.context = try self.chrome.begin(self.canvas, projection);
     try self.chrome.compose(&self.context, &widgets);
-    widgets.append(.{ .chrome_focus = .{ .chrome = self.chrome, .projection = projection } });
+    widgets.append(.{ .chrome_focus = .{
+        .chrome = self.chrome,
+        .projection = projection,
+    } });
     try self.overlays.compose(.{ .canvas = self.canvas, .projection = projection }, &widgets);
     if (self.previews) |previews| {
         if (previews.catalog.hasModal()) {
-            widgets.append(.{ .image_modal = .{ .area = .{ .w = projection.host_size.cols, .h = projection.host_size.rows }, .previews = previews } });
+            widgets.append(.{ .image_modal = .{
+                .area = .{
+                    .w = projection.host_size.cols,
+                    .h = projection.host_size.rows,
+                },
+                .previews = previews,
+            } });
         }
     }
 

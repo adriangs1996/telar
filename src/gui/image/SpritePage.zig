@@ -328,7 +328,12 @@ test "a released favicon slot is cleared, re-uploaded and reused before the page
     const opaque_texels = [_]u8{ 255, 255, 255, 255 } ** (20 * 20);
     var images: Images = undefined;
     for (SpriteSize.all, &images) |size, *image| {
-        image.* = .{ .pixels = &opaque_texels, .stride = page.cell(size) * 4, .width = page.cell(size), .height = page.cell(size) };
+        image.* = .{
+            .pixels = &opaque_texels,
+            .stride = page.cell(size) * 4,
+            .width = page.cell(size),
+            .height = page.cell(size),
+        };
     }
 
     var slots: [max_favicons]u16 = undefined;
@@ -352,7 +357,10 @@ test "a released favicon slot is cleared, re-uploaded and reused before the page
     try std.testing.expectEqual(@as(u16, 1), page.faviconRoom());
     const extent: f32 = @floatFromInt(page.side);
     for (SpriteSize.all) |size| {
-        const cell_uv = page.uv(.{ .index = freed, .size = size });
+        const cell_uv = page.uv(.{
+            .index = freed,
+            .size = size,
+        });
         const left: usize = @intFromFloat(cell_uv[0] * extent);
         const top: usize = @intFromFloat(cell_uv[1] * extent);
         for (0..page.cell(size)) |row| {

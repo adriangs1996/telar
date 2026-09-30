@@ -1,6 +1,6 @@
 const cellgrid = @import("cellgrid");
 const builtin = @import("builtin");
-    const gfx = @import("gfx");
+const gfx = @import("gfx");
 const Quad_module = gfx.Quad;
 const CellMesh = @import("../render/CellMesh.zig");
 const data = @import("model");
@@ -664,7 +664,11 @@ test "a committed text longer than the input ring reaches the pane whole and in 
     try session.bootstrap();
     try session.receiveFrame(1);
     const text = "\u{3042}" ** 1200;
-    try input_support.acceptNative(session.gui, .{ .kind = 1, .text = text.ptr, .len = text.len });
+    try input_support.acceptNative(session.gui, .{
+        .kind = 1,
+        .text = text.ptr,
+        .len = text.len,
+    });
     var turns: usize = 0;
     while (session.gui.input_queue.len != 0 and turns < 64) : (turns += 1) {
         try input_support.pump(session.gui);

@@ -39,7 +39,13 @@ pub const Widget = union(enum) {
 pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) !void {
     const prompt = if (input.projection.prompt) |*value| value else return;
     if (prompt.target() == .palette or prompt.target() == .pick) {
-        widgets.append(.{ .modal = .{ .palette = .{ .projection = input.projection, .hits = &pending.palette, .modal = &pending.modal, .router = input.router, .scale = input.scale } } });
+        widgets.append(.{ .modal = .{ .palette = .{
+            .projection = input.projection,
+            .hits = &pending.palette,
+            .modal = &pending.modal,
+            .router = input.router,
+            .scale = input.scale,
+        } } });
         return;
     }
 
@@ -58,7 +64,10 @@ pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) 
         const layout = try WorkspaceFormLayout.measure(input.canvas, input.projection);
         pending.modal = host;
         pending.native_modal = layout.bounds;
-        widgets.append(.{ .modal = .{ .workspace_form = .{ .layout = layout, .projection = input.projection } } });
+        widgets.append(.{ .modal = .{ .workspace_form = .{
+            .layout = layout,
+            .projection = input.projection,
+        } } });
         return;
     }
 
@@ -94,7 +103,11 @@ pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) 
         .suggest => .{ .suggestion = .{ .area = area, .projection = input.projection } },
         .peek => .{ .peek = .{ .area = area, .projection = input.projection } },
         .rename_tab => .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = "Rename tab" } },
-        .rename_workspace => .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = "Rename workspace" } },
+        .rename_workspace => .{ .name_prompt = .{
+            .area = area,
+            .prompt = prompt,
+            .title = "Rename workspace",
+        } },
         .machine => |machine| .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = switch (machine) {
             .rename => "Rename machine",
             .add_label => "New machine label",

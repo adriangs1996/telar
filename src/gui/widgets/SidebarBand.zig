@@ -119,7 +119,10 @@ test "the band scales the preference and clamps it to the bounds and the workben
     try std.testing.expectEqual(@as(u32, 568), resolve(.{ .visible = true }, .{ .width = 4000, .cell_width = 20, .scale = 2 }).width);
     try std.testing.expectEqual(@as(u32, 16), resolve(.{ .visible = true }, .{ .width = 4000, .cell_width = 20, .scale = 2 }).gap);
     try std.testing.expectEqual(@as(u32, 220), resolve(.{ .visible = true, .logical_width = 100 }, wide).width);
-    try std.testing.expectEqual(@as(u32, 800), resolve(.{ .visible = true, .logical_width = 900 }, wide).width);
+    try std.testing.expectEqual(@as(u32, 800), resolve(.{
+        .visible = true,
+        .logical_width = 900,
+    }, wide).width);
     try std.testing.expectEqual(@as(u32, 52), resolve(.{ .visible = false }, wide).width);
     try std.testing.expectEqual(@as(u32, 60), resolve(.{ .visible = false }, wide).reserved());
     try std.testing.expect(resolve(.{ .visible = false }, wide).rail);
@@ -141,8 +144,15 @@ test "the band scales the preference and clamps it to the bounds and the workben
     try std.testing.expectEqual(@as(u32, 0), hidden.width);
     try std.testing.expectEqual(@as(u32, 0), hidden.reserved());
     try std.testing.expectEqual(@as(u32, 52), resolve(.{ .visible = false }, .{ .width = 260, .cell_width = 10 }).width);
-    try std.testing.expectEqual(@as(u32, 104), resolve(.{ .visible = false }, .{ .width = 4000, .cell_width = 20, .scale = 2 }).width);
-    try std.testing.expectEqual(@as(u32, 220), resolve(.{ .visible = true }, .{ .width = 428, .cell_width = 10 }).width);
+    try std.testing.expectEqual(@as(u32, 104), resolve(.{ .visible = false }, .{
+        .width = 4000,
+        .cell_width = 20,
+        .scale = 2,
+    }).width);
+    try std.testing.expectEqual(@as(u32, 220), resolve(.{ .visible = true }, .{
+        .width = 428,
+        .cell_width = 10,
+    }).width);
     try std.testing.expectEqual(@as(f32, 300), resolve(.{ .visible = true }, wide).clampLogical(300));
     try std.testing.expectEqual(@as(f32, 500), resolve(.{ .visible = true }, wide).clampLogical(500));
     try std.testing.expectEqual(@as(f32, 800), resolve(.{ .visible = true }, wide).clampLogical(900));

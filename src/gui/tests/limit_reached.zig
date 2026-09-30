@@ -162,7 +162,10 @@ test "a full inbox keeps a focus change and a presentation's completion for the 
 
     try std.testing.expect(posted > 0);
     try std.testing.expect(try gui.acceptInput(.{ .focus = false }));
-    gui.completePresentation(.{ .token = token, .delivered = true });
+    gui.completePresentation(.{
+        .token = token,
+        .delivered = true,
+    });
     try std.testing.expect(gui.failure == null);
     try std.testing.expectEqual(@as(?bool, false), gui.unposted.focus);
     try std.testing.expect(gui.unposted.presented != null);
@@ -196,7 +199,12 @@ test "a clipboard write or read past the capacity is refused whole and reported"
 
     // A read the host refused as too large reports the same limit.
     _ = try gui.update();
-    try std.testing.expect(try gui.acceptInput(.{ .clipboard = .{ .request_id = 999, .target_id = 0, .generation = 0, .status = .too_large } }));
+    try std.testing.expect(try gui.acceptInput(.{ .clipboard = .{
+        .request_id = 999,
+        .target_id = 0,
+        .generation = 0,
+        .status = .too_large,
+    } }));
     _ = try gui.update();
     try std.testing.expectEqual(@as(u64, 2), reaches.hits[slot]);
 }
@@ -206,11 +214,19 @@ test "a display scale past the renderer's bound draws at the bound and reports i
     defer session.deinit();
     try session.bootstrap();
     const gui = session.gui;
-    const bounded = limit_reached.boundViewport(gui, .{ .width = 800, .height = 600, .scale = 12 });
+    const bounded = limit_reached.boundViewport(gui, .{
+        .width = 800,
+        .height = 600,
+        .scale = 12,
+    });
     try std.testing.expectEqual(TerminalRenderer.max_display_scale, bounded.scale);
     try std.testing.expect(gui.app.model.limit_reaches.find("render.display_scale_max") != null);
 
-    const same = limit_reached.boundViewport(gui, .{ .width = 800, .height = 600, .scale = 2 });
+    const same = limit_reached.boundViewport(gui, .{
+        .width = 800,
+        .height = 600,
+        .scale = 2,
+    });
     try std.testing.expectEqual(@as(f32, 2), same.scale);
 }
 
