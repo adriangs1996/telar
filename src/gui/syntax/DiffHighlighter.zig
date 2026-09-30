@@ -9,6 +9,10 @@ const limits = @import("limits.zig");
 const Self = @This();
 
 const Status = enum(u32) { ok, invalid, unsupported, limit, cancelled, internal };
+
+/// Largest text one job highlights: a whole review edition or a cached
+/// source, whichever is larger.
+const max_text_bytes = @max(core.change_review.max_patch_bytes, syntaxhl.limits.source_bytes);
 extern fn telar_syntax_highlight(request: *NativeRequest) u32;
 extern fn telar_syntax_prepare(language: [*:0]const u8) u32;
 
@@ -20,19 +24,24 @@ spans: []CapturedSpan = &.{},
 language: syntaxhl.language.Language = .plain,
 started: std.Io.Timestamp = .{ .nanoseconds = 0 },
 fragments: usize = 0,
+/// Whether a job past its fragment or time budget keeps the colors it has
+/// and leaves the rest plain, instead of failing as `SyntaxLimit`.
+partial: bool = false,
+/// The budget a partial job stopped at, when it stopped at one.
+limited: ?core.Limit = null,
 
 /// Highlights each before/after hunk with bundled upstream grammars and queries.
 /// Missing lines are never invented; full-file review snapshots can use the
 /// same FFI directly instead. Example: `try worker.run();`
 pub fn run(self: *Self) !void {
-    if (self.text.len > syntaxhl.limits.source_bytes or self.roles.len != self.text.len) {
+    if (self.text.len > max_text_bytes or self.roles.len != self.text.len) {
         return error.SyntaxLimit;
     }
 
     @memset(self.roles, .plain);
     try self.prepareLanguages();
     self.started = std.Io.Clock.awake.now(self.io);
-    self.spans = try self.allocator.alloc(CapturedSpan, syntaxhl.limits.source_bytes);
+    self.spans = try self.allocator.alloc(CapturedSpan, self.text.len);
     defer self.allocator.free(self.spans);
     var before: SourceSide = .{ .allocator = self.allocator, .origin = @intFromPtr(self.text.ptr), .old = true };
     defer before.deinit();
@@ -86,14 +95,20 @@ fn prepareLanguages(self: *Self) !void {
 }
 
 fn highlight(self: *Self, side: *const SourceSide) !void {
-    if (self.language == .plain or side.source.items.len == 0) {
+    if (self.language == .plain or side.source.items.len == 0 or self.limited != null) {
         return;
     }
 
     self.fragments += 1;
     const elapsed = self.started.durationTo(std.Io.Clock.awake.now(self.io)).toMilliseconds();
-    if (self.fragments > limits.fragments or elapsed > limits.job_ms) {
-        return error.SyntaxLimit;
+    const exhausted: ?core.Limit = if (self.fragments > limits.fragments) limits.fragments_limit else if (elapsed > limits.job_ms) limits.job_limit else null;
+    if (exhausted) |limit| {
+        if (!self.partial) {
+            return error.SyntaxLimit;
+        }
+
+        self.limited = limit;
+        return;
     }
 
     var request: NativeRequest = .{ .language = @tagName(self.language), .source = side.source.items.ptr, .source_len = side.source.items.len, .spans = self.spans.ptr, .capacity = self.spans.len };

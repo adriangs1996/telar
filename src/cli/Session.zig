@@ -191,8 +191,9 @@ pub fn commandReview(self: *Session, command: core.ChangeReviewCommand) !core.Ch
 pub fn reportReviewSample(self: *Session, sample: core.ReportChangeReviewSample) !void {
     var request = sample;
     request.request_id = self.requestId();
-    var buffer: [32 * 1024]u8 = undefined;
-    try self.connection.send(self.io, try core.encodeReportChangeReviewSample(&buffer, request));
+    const buffer = try self.gpa.alloc(u8, core.change_review.max_sample_message_bytes);
+    defer self.gpa.free(buffer);
+    try self.connection.send(self.io, try core.encodeReportChangeReviewSample(buffer, request));
     const response = try self.decodeNext();
     switch (response) {
         .request_completed => |completed| if (completed.request_id != request.request_id) {
