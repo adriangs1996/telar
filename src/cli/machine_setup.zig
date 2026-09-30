@@ -189,7 +189,7 @@ fn probeAgain(init: std.process.Init, target: *const SetupTarget, directory: []c
         return null;
     }
 
-    return MachinePlatform.parse(probe.stdout) catch null;
+    return MachinePlatform.parse(probe.wholeStdout() catch return null) catch null;
 }
 
 fn finish(report: *SetupReport, target: *const SetupTarget) !u8 {
@@ -341,7 +341,11 @@ fn reach(init: std.process.Init, report: *SetupReport, target: *const SetupTarge
     }
 
     try report.end(.ssh, if (confirmed) .changed else .ok, "batch-mode SSH to {s} works", .{target.destination()});
-    const platform = MachinePlatform.parse(probe.stdout) catch |err| {
+    const stdout = probe.wholeStdout() catch |err| {
+        try report.end(.platform, .failed, "{s}", .{@errorName(err)});
+        return null;
+    };
+    const platform = MachinePlatform.parse(stdout) catch |err| {
         try report.end(.platform, .failed, "{s}: {s}", .{ @errorName(err), firstLine(probe.stdout) });
         return null;
     };
@@ -554,7 +558,7 @@ fn linkCommand(init: std.process.Init, report: *SetupReport, target: *const Setu
     defer result.deinit(init.gpa);
     if (!result.succeeded()) {
         try report.note(.runtime, "~/.local/bin/telar left as it was: {s}", .{result.errorLine()});
-    } else if (std.mem.indexOf(u8, result.stdout, "linked") != null) {
+    } else if (std.mem.indexOf(u8, result.wholeStdout() catch "", "linked") != null) {
         try report.note(.runtime, "~/.local/bin/telar now links to {s}", .{telar_path});
     }
 }

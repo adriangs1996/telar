@@ -339,7 +339,10 @@ its standard error in every build, and the `{socket}.runtime-{pid}.log` and
 runtime. Telemetry exists only in Debug or diagnostics-enabled builds, which
 is why a release install used to find nothing; missing logs return exit 2
 with that explanation. Output is the last 100 lines per file by default,
-bounded to 64 KiB per file and 64 files, sorted by filename. JSON preserves
+bounded to the last 1 MiB per file (the runtime rotates its log past 1 MiB)
+and 64 files, sorted by filename; past 64 files or 65,536 directory entries
+the rest is skipped and the limit notice names `cli.diagnostic_logs` or
+`cli.diagnostic_directory_entries`. JSON preserves
 path, component, PID, truncation and text. Symlinks and nonregular directory
 entries are skipped; opened files are checked again for type and ownership.
 The runtime log holds what the runtime wrote to standard error, reached

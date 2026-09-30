@@ -9,6 +9,7 @@
 //! disabled because the runtime lives on another machine.
 
 const core = @import("telar-core");
+const childoutput = @import("childoutput");
 const localsocket = @import("localsocket");
 const std = @import("std");
 const Forward = @import("Forward.zig");
@@ -18,9 +19,13 @@ const Discovery = @import("Discovery.zig");
 const remote_discovery = @import("remote_discovery.zig");
 const SshOptions = @import("SshOptions.zig");
 const RemoteMachine = @import("RemoteMachine.zig");
+const ChildOutput = childoutput.ChildOutput;
 
-/// The most SSH error output kept, in bytes.
+/// Newest bytes of SSH's error output kept; a long login banner before the
+/// error never hides it.
 const ssh_error_limit = 16 * 1024;
+/// What `telar server endpoint` may print: its few lines, and no more.
+const discovery_output_limit = core.Limit.declare("machines.discovery_output_bytes", "bytes", Discovery.max_output_bytes);
 
 const endpoint_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(30) },
@@ -170,36 +175,72 @@ pub fn discover(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ
     const managed = options.arguments();
     var command_buffer: [max_command_bytes]u8 = undefined;
     const discovery_command = try remoteCommand(&command_buffer, machine.telar_path, discovery_prefix, discovery_suffix);
-    const result = std.process.run(gpa, io, .{
+    var child = std.process.spawn(io, .{
         .argv = &(.{ "ssh", "-T" } ++ managed ++ .{ "--", destination, discovery_command }),
-        .stdout_limit = .limited(Discovery.max_output_bytes),
-        .stderr_limit = .limited(ssh_error_limit),
-        .timeout = endpoint_timeout,
+        .stdin = .ignore,
+        .stdout = .pipe,
+        .stderr = .pipe,
     }) catch return error.RemoteEndpointUnavailable;
-    defer gpa.free(result.stdout);
-    defer gpa.free(result.stderr);
+    defer child.kill(io);
 
-    if (result.term != .exited or result.term.exited != 0) {
-        const failure = sshFailure(result.term, result.stderr);
+    // More than an endpoint's few lines is a startup file that prints, which
+    // no retry cures.
+    const result = ChildOutput.collect(gpa, io, &child, .{
+        .stdout = .{
+            .fail_past = Discovery.max_output_bytes,
+        },
+        .stderr = .{
+            .keep_tail = ssh_error_limit,
+        },
+        .timeout = endpoint_timeout,
+    }) catch |err| switch (err) {
+        error.StreamTooLong => {
+            nameLimit(report, discovery_output_limit);
+            return unreadable(report);
+        },
+        else => return error.RemoteEndpointUnavailable,
+    };
+    defer result.deinit(gpa);
+
+    if (!result.succeeded()) {
+        const failure = sshFailure(result.term, result.stderr.bytes);
         if (report) |writer| {
-            writeFailure(writer, failure, result.stderr);
+            writeFailure(writer, failure, result.stderr.bytes);
         } else {
-            std.debug.print("telar: `ssh {s} telar server endpoint` failed:\n{s}", .{ destination, result.stderr });
+            std.debug.print("telar: `ssh {s} telar server endpoint` failed:\n{s}", .{ destination, result.stderr.bytes });
         }
 
         return failure;
     }
 
-    return Discovery.parse(result.stdout) catch |err| {
-        const unreadable = "`telar server endpoint` there printed something this telar cannot read; install the same telar build on both machines and keep shell startup files quiet";
-        if (report) |writer| {
-            writer.writeAll(unreadable) catch {};
-        } else {
-            std.debug.print("telar: {s}\n", .{unreadable});
-        }
+    return Discovery.parse(result.stdout.bytes) catch unreadable(report);
+}
 
-        return err;
+// Names the limit a discovery stopped at, where its failure is reported;
+// no client model exists yet to count it.
+fn nameLimit(report: ?*std.Io.Writer, limit: core.Limit) void {
+    var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
+    const reach: core.LimitReach = .{
+        .limit = limit,
     };
+    const text = reach.describe(&buffer, 1);
+    if (report) |writer| {
+        writer.print("{s}: {s}; ", .{ core.limit_reached.notice_title, text }) catch {};
+    } else {
+        std.debug.print("telar: {s}: {s}\n", .{ core.limit_reached.notice_title, text });
+    }
+}
+
+// Says the endpoint's answer could not be read, and why that happens.
+fn unreadable(report: ?*std.Io.Writer) error{RemoteDiscoveryUnreadable} {
+    const text = "`telar server endpoint` there printed something this telar cannot read; install the same telar build on both machines and keep shell startup files quiet";
+    if (report) |writer| {
+        writer.writeAll(text) catch {};
+    } else {
+        std.debug.print("telar: {s}\n", .{text});
+    }
+
+    return error.RemoteDiscoveryUnreadable;
 }
 
 /// A remote command line that runs the machine's telar: its saved path,

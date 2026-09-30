@@ -176,6 +176,9 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     const limits_tests = b.addSystemCommand(&.{ "node", b.pathFromRoot("src/cli/integration/limits.test.mjs") });
     limits_tests.addArtifactArg(app.exe);
     integrations_step.dependOn(&limits_tests.step);
+    const cli_limits_tests = b.addSystemCommand(&.{ "node", b.pathFromRoot("src/cli/integration/cli_limits.test.mjs") });
+    cli_limits_tests.addArtifactArg(app.exe);
+    integrations_step.dependOn(&cli_limits_tests.step);
     test_step.dependOn(integrations_step);
 
     const media_tests = b.addTest(.{ .root_module = app.modules.backend, .filters = &.{"PNG"} });

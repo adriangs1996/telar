@@ -79,12 +79,14 @@ Only commits travel; uncommitted files stay here. `telar worktree fetch
    new prompt, and fails if the turn does not stop. Interrupting again 2 s
    or more after the last press presses the key again. When Claude Code
    puts the unanswered prompt back in its composer, telar clears it first.
-3. `agent wait` polls the runtime; it never guesses. Exit codes: 0 reached,
-   2 the agent or pane is gone, 3 timed out.
+3. `agent wait` polls the runtime; it never guesses. `--timeout` takes up
+   to a day (86400s), so one wait covers a long build. Exit codes: 0
+   reached, 2 the agent or pane is gone, 3 timed out.
 4. `agent read` and `pane read` return a plain-text snapshot of the most
    recent rows (`--source recent`, default) or the visible screen.
    `--lines N` counts up from the last row that shows text, so the blank
-   rows below a short output never hide it. Text is bounded; `truncated`
+   rows below a short output never hide it. `--lines` takes up to 2000 and a
+   read carries up to 256 KiB, keeping the newest lines; `truncated`
    in JSON output means older rows were dropped. A finished command
    (`exec --wait`, or a read after its pane exited) keeps its last 200 rows
    within 16 KiB; `truncated` there also means it printed more than that.

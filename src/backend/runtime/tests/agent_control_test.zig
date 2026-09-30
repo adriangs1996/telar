@@ -191,6 +191,25 @@ test "Enter follows the kitty keyboard protocol once the child enables it" {
     try std.testing.expectEqualStrings("\x1b[200~run the tests\x1b[201~\x1b[13u", queued(fixture.pane));
 }
 
+test "text of the whole wire bound queues whole" {
+    var fixture: EventFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    holdWrites(fixture.pane);
+    defer releaseWrites(fixture.pane);
+
+    const text = try std.testing.allocator.alloc(u8, core.max_pane_text_input_bytes);
+    defer std.testing.allocator.free(text);
+    @memset(text, 'x');
+
+    try sendText(&fixture, .prompt, text);
+    try expectCompleted(&fixture);
+    try std.testing.expect(fixture.pane.input_queue.len >= text.len);
+
+    // History saw it whole: the observer dropped nothing for its size.
+    try std.testing.expectEqual(@as(u64, 0), fixture.pane.history_observer.dropped_bytes);
+}
+
 test "text never reaches the pane a person has focused" {
     var fixture: EventFixture = undefined;
     try fixture.init();

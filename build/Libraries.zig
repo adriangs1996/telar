@@ -169,7 +169,11 @@ const specs = [_]Spec{
         .system_libraries = &.{"nghttp2"},
     },
     .{
+        .name = "childoutput",
+    },
+    .{
         .name = "gitstatus",
+        .imports = &.{"childoutput"},
     },
     .{
         .name = "proclineage",
