@@ -35,9 +35,14 @@ skipping hidden entries and `node_modules`, `zig-out`, `target` and
 UTF-8, carry control bytes or exceed 1024 bytes are skipped, so every path
 the wire carries can be pasted.
 
-Storage is reserved once when the client first opens the picker: 128 Ki
-entries and 8 MiB of path bytes, plus a 512 KiB alignment matrix. An index
-that reaches either bound reports `truncated`. The builder appends into that
+Storage is reserved once when the client first opens the picker: 512 Ki
+entries and 32 MiB of path bytes, plus a 512 KiB alignment matrix; only the
+pages a build writes become resident. An index that reaches either bound
+reports `truncated`, keeps what it listed and `finishBuild` names the bound
+(`paths.max_entries` or `paths.max_bytes`). Four indexes live at once; a
+fifth client takes the slot of the idle index used longest ago, whose owner
+rebuilds on its next request, and only when workers hold all four is the
+request refused with `resource_limit`, naming `paths.indexes_capacity`. The builder appends into that
 storage and publishes the entry count with release ordering every 1024
 entries; a query reads the published prefix at the same time, so the first
 keystrokes get answers while a large tree is still being walked. Replies
