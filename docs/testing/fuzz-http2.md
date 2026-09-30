@@ -11,20 +11,7 @@ synthetic frames in memory, with no sockets, TLS, servers or captured traffic.
 `test-fuzz-http2` runs the `h2frames` and `httprelay` library tests and both
 roots. The registration lives in `build/fuzz_http2.zig`.
 
-## Pending wiring
-
-`build/tests.zig` does not call `fuzz_http2.add` yet, so none of these steps
-exist on a plain checkout. Two lines connect them:
-
-```zig
-const fuzz_http2 = @import("fuzz_http2.zig");
-// ... inside `add`, next to the handshake step:
-fuzz_http2.add(b, app);
-```
-
-The patch that was used to test the steps is kept outside the repository at
-`/tmp/dispatch-claude/robustness-fuzz-http2-integration.patch`. It will be
-merged together with the other fuzz sessions' wiring.
+`build/tests.zig` registers the steps through `fuzz_http2.add`.
 
 ## How each root is built
 

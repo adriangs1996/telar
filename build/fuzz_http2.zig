@@ -3,7 +3,7 @@
 //! Each target is its own test root, importing its library as a module the
 //! way `handshake_fuzz_test.zig` imports the handshake, so no ordinary suite
 //! and no `-ffuzz` coverage build compiles a `std.testing.fuzz` call.
-//! `build/tests.zig` does not call `add` yet; see docs/testing/fuzz-http2.md.
+//! `build/tests.zig` registers the steps; see docs/testing/fuzz-http2.md.
 const std = @import("std");
 const Application = @import("Application.zig");
 
