@@ -24,6 +24,13 @@ pending_panel_callback: bool = false,
 pending_panel_command: bool = false,
 /// The next wall-clock minute (or second) a clock component shows.
 clock_deadline: u64 = bar_updates.no_deadline,
+/// The bar slot whose failure the client diagnostic shows, with the
+/// diagnostic revision it left; that slot's next render clears it.
+failed_position: ?model.Position = null,
+failed_revision: u64 = 0,
+/// The diagnostic revision a failed panel render left; the panel's next
+/// render clears it unless something else replaced it since.
+panel_failed_revision: ?u64 = null,
 
 pub fn synchronize(self: *BarUpdatesState, input: Synchronization) void {
     self.generation = input.generation;

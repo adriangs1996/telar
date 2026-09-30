@@ -5,6 +5,7 @@ const GuiAdapter = @import("../GuiAdapter.zig");
 const native = @import("native.zig");
 const decode_input = @import("decode_input.zig");
 const pane_images = @import("../image/pane_images.zig");
+const limit_reached = @import("../limit_reached.zig");
 
 /// Binds native callbacks to the stable GUI owner. Example: `const table = bind(gui);`
 pub fn bind(gui: *GuiAdapter) native.Callbacks {
@@ -39,8 +40,9 @@ fn render(context: ?*anyopaque, viewport: native.Viewport, out: *native.Frame) c
     const gui = from(context);
     core.mark(gui.app.io, .compose_start);
     defer core.mark(gui.app.io, .host_flush_start);
+    // Token 0 keeps the previous frame on screen.
     const token = gui.draw(viewport) catch |err| blk: {
-        if (err != error.PresentationBusy) {
+        if (err != error.PresentationBusy and !limit_reached.absorb(gui, .window_draw, err)) {
             gui.fail(err);
         }
 
@@ -61,6 +63,11 @@ fn pump(context: ?*anyopaque) callconv(.c) c_int {
     }
 
     if (gui.update() catch |err| {
+        if (limit_reached.absorb(gui, .window_update, err)) {
+            // The rest of the batch stays queued; a draw shows the notice.
+            return 1;
+        }
+
         gui.fail(err);
         return -1;
     }) |_| {

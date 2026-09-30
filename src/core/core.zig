@@ -431,6 +431,7 @@ pub const max_search_matches = types.max_search_matches;
 pub const max_search_needle_bytes = types.max_search_needle_bytes;
 pub const max_shm_name_bytes = graphics.max_shm_name_bytes;
 pub const max_span_count = frame_support.max_span_count;
+pub const max_cell_count = frame_support.max_cell_count;
 pub const max_suggestion_bytes = types.max_suggestion_bytes;
 pub const max_suggestion_request_bytes = types.max_suggestion_request_bytes;
 pub const max_tab_label_bytes = types.max_tab_label_bytes;

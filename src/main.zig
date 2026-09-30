@@ -300,6 +300,7 @@ test {
     _ = @import("cli/runtime.zig");
     _ = @import("cli/DiagnosticLog.zig");
     _ = @import("cli/arguments/DiagnosticsOptions.zig");
+    _ = @import("cli/diagnostics.zig");
     _ = @import("cli/arguments/RuntimeOptions.zig");
     _ = @import("cli/agent.zig");
     _ = @import("cli/api.zig");

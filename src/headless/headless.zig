@@ -9,4 +9,5 @@ test {
     _ = @import("Trace.zig");
     _ = @import("HeadlessOptions.zig");
     _ = @import("HeadlessClient.zig");
+    _ = @import("dump.zig");
 }

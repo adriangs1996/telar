@@ -14,6 +14,7 @@ const inline_nodes = @import("inline_nodes.zig");
 const panel_blocks = @import("panel_blocks.zig");
 const BlockScope = @import("BlockScope.zig");
 const popover_surface = @import("popover_surface.zig");
+const TextFit = @import("TextFit.zig");
 const BarOverlay = @This();
 
 const gap: f32 = 6;
@@ -32,6 +33,8 @@ const overflow_row: f32 = 26;
 const time_format = "%H:%M";
 /// The header's mark or icon takes this share of the header's height.
 const mark_share: f32 = 0.6;
+/// Room for a failed panel's status line: its lead and the whole reason.
+const status_bytes = 64 + @sizeOf(@FieldType(data.Diagnostic, "buffer"));
 
 context: *const Context,
 /// The status band; tooltips and panels rise from its top edge.
@@ -89,7 +92,8 @@ fn drawConfigured(self: BarOverlay, canvas: *Canvas, configured: Configured) !vo
     const chrome = canvas.chrome;
     const width = chrome.px(@floatFromInt(heading.width));
     const inner = width - 2 * chrome.px(padding);
-    const status = statusText(panel);
+    var status_buffer: [status_bytes]u8 = undefined;
+    const status = statusText(panel, &status_buffer);
     var body = try panel_blocks.height(canvas, &panel.content, .{ .scope = .{}, .width = inner, .facts = configured.facts });
     if (status.len != 0) {
         body += chrome.px(status_height) + if (panel.content.isEmpty()) 0 else chrome.px(panel_blocks.block_gap);
@@ -110,12 +114,15 @@ fn drawConfigured(self: BarOverlay, canvas: *Canvas, configured: Configured) !vo
     });
 
     if (status.len != 0) {
-        _ = try canvas.textAt(.{ .x = content_area.x, .y = content_area.y, .width = content_area.width, .height = chrome.px(status_height) }, .{
+        var label: Label = .{
             .text = status,
             .color = if (panel.status == .failed) canvas.theme.palette.red else canvas.theme.palette.subtext0,
             .face = .sans,
             .size = .small,
-        });
+        };
+        var fit_buffer: [TextFit.max_bytes]u8 = undefined;
+        label.text = try (TextFit{ .canvas = canvas, .width = content_area.width }).fit(label, &fit_buffer);
+        _ = try canvas.textAt(.{ .x = content_area.x, .y = content_area.y, .width = content_area.width, .height = chrome.px(status_height) }, label);
         const used = chrome.px(status_height) + chrome.px(panel_blocks.block_gap);
         content_area.y += used;
         content_area.height = @max(0, content_area.height - used);
@@ -272,12 +279,23 @@ fn rightEnd(self: BarOverlay) Rect {
     return .{ .x = self.area.x + self.area.width, .y = self.area.y, .width = 0, .height = self.area.height };
 }
 
-fn statusText(panel: *const data.Panel) []const u8 {
+fn statusText(panel: *const data.Panel, buffer: *[status_bytes]u8) []const u8 {
     return switch (panel.status) {
         .loading => if (panel.content.isEmpty()) "Loading…" else "",
         .ready => "",
-        .failed => if (panel.content.isEmpty()) "Could not update." else "Could not update; showing the last result.",
+        .failed => failedText(panel, buffer),
     };
+}
+
+/// "Could not update: <reason>", keeping the last result when there is one.
+fn failedText(panel: *const data.Panel, buffer: *[status_bytes]u8) []const u8 {
+    const lead = if (panel.content.isEmpty()) "Could not update" else "Could not update; showing the last result";
+    const reason = panel.reason.message();
+    if (reason.len == 0) {
+        return lead;
+    }
+
+    return std.fmt.bufPrint(buffer, "{s}: {s}", .{ lead, reason }) catch lead;
 }
 
 fn inset(bounds: Rect, by: f32) Rect {

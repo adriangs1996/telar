@@ -57,6 +57,7 @@ const CursorClock = @import("CursorClock.zig");
 const animate = @import("animate");
 const FrameClock = animate.FrameClock;
 const native_callbacks = @import("native/window_callbacks.zig");
+const limit_reached = @import("limit_reached.zig");
 const window_machines = @import("window_machines.zig");
 const clipboard_image = @import("clipboard_image.zig");
 const ImagePreviews = @import("ImagePreviews.zig");
@@ -109,6 +110,8 @@ profiles_seen: u64 = 0,
 driver: NativeLoop,
 renderer: Renderer,
 failure: ?anyerror = null,
+/// The observation whose frame stopped at a limit; it is not drawn again.
+limited: ?client.Observation = null,
 exit_status: ?u8 = null,
 started: bool = false,
 needs_draw: bool = false,
@@ -386,7 +389,12 @@ pub fn draw(self: *GuiAdapter, viewport: native.Viewport) !u64 {
     self.cursor_clock.observe(self.cursorTarget(), now_ns);
     self.renderer.cursor_on = self.cursor_clock.shown(now_ns);
     self.renderer.focused = self.cursor_clock.focused;
+    if (limit_reached.holds(self)) {
+        return 0;
+    }
+
     const token = try self.prepare(&self.renderer);
+    self.limited = null;
 
     if (token != 0) {
         self.driver.frame_pacer.record(self.app.presentation.active.?.delivery.commit.slice(), now_ns);
@@ -632,7 +640,7 @@ pub fn update(self: *GuiAdapter) !?u8 {
 
     if (self.app.presentation.active == null) {
         const animation_due = self.chrome.animation.requestPreparation(now_ns);
-        self.needs_draw = self.app.presentation.needsPreparation() or animation_due or
+        self.needs_draw = (self.app.presentation.needsPreparation() and !limit_reached.holds(self)) or animation_due or
             self.driver.configuration.pending or
             self.renderer.cursor_on != self.cursor_clock.shown(now_ns) or
             self.renderer.focused != self.cursor_clock.focused or
