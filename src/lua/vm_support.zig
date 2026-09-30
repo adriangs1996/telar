@@ -23,15 +23,16 @@ pub const default_memory_limit: usize = 16 * 1024 * 1024;
 pub const default_load_instruction_limit: u64 = 1_000_000;
 pub const default_load_deadline_ns: u64 = 2 * std.time.ns_per_s;
 pub const default_callback_instruction_limit: u64 = 100_000;
-// Bar, panel and pick renders run on the client's loop between events, not
-// inside a key press, and a pick's `items` may turn a whole list command's
-// output into thousands of options; they get ten times a key callback's
-// budget, about 20 ms of work, under the same wall-time net.
-pub const default_render_instruction_limit: u64 = 1_000_000;
+// A pick's `items` function runs once, when a person opens the pick, and
+// may turn a whole list command's output into thousands of options, so it
+// gets ten times a key callback's budget, about 20 ms of work. Bar and
+// panel renders run on the loop that routes keys, on every tick, and keep
+// a key callback's budget.
+pub const default_pick_items_instruction_limit: u64 = 1_000_000;
 // A render's net sits above what its budget costs, as the load deadline
-// does: 100 ms against about 20 ms in a release build. A debug build runs
-// the same budget in about 170 ms, so its net scales with it instead of
-// failing renders that are within their budget.
+// does: 100 ms against at most about 20 ms in a release build. A debug
+// build runs Lua about ten times slower, so its net scales with it instead
+// of failing renders that are within their budget.
 pub const default_render_deadline_ns: u64 = if (builtin.mode == .Debug) debug_slowdown * release_render_deadline_ns else release_render_deadline_ns;
 const release_render_deadline_ns: u64 = 100 * std.time.ns_per_ms;
 const debug_slowdown = 10;

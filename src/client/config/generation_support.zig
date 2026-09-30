@@ -12,7 +12,6 @@ const lua_value = @import("lua_value.zig");
 const Generation = @import("Generation.zig");
 const lua = @import("telar-lua");
 const pick_values = @import("pick_values.zig");
-const CommandTabs = @import("CommandTabs.zig");
 const default_bindings = @import("default_bindings.zig");
 
 pub const api_version: u16 = 2;
@@ -1468,8 +1467,10 @@ test "command-tab actions parse a bounded argv and reject empty commands" {
     defer generation.deinit();
 
     const reference = generation.snapshot.bindings[0].action.command_tab;
-    const parsed = generation.snapshot.command_tabs.find(generation.number, reference).?;
-    try std.testing.expect(generation.snapshot.command_tabs.find(generation.number + 1, reference) == null);
+    var loaded: data.CommandTab = undefined;
+    try std.testing.expect(!generation.snapshot.command_tabs.find(generation.number + 1, reference, &loaded));
+    try std.testing.expect(generation.snapshot.command_tabs.find(generation.number, reference, &loaded));
+    const parsed = &loaded;
     try std.testing.expectEqualStrings("lazygit", parsed.argument(0));
     try std.testing.expectEqualStrings("-p", parsed.argument(1));
     try std.testing.expectEqualStrings("git", parsed.label());
@@ -1621,6 +1622,22 @@ test "a configuration past its panel, pick and binding limits keeps the first en
     }
 }
 
+test "an action naming a panel no configuration declares still fails when others were left out" {
+    const source =
+        \\local telar = require("telar")
+        \\local panels = {}
+        \\for index = 1, 18 do
+        \\  panels[string.format("p%02d", index)] = telar.panel({ render = function() return {} end })
+        \\end
+        \\return { api_version = 2, client = { panels = panels, keybindings = {
+        \\  telar.bind({ "u" }, telar.action.open_panel("p19")),
+        \\} } }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 }));
+    try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), "p19") != null);
+}
+
 test "an action naming a panel no configuration has still fails when nothing was left out" {
     var diagnostic: data.Diagnostic = .{};
     try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{
@@ -1657,22 +1674,86 @@ test "command tabs hold a bar command's argv, share equal commands and leave out
 
     const tabs = &generation.snapshot.command_tabs;
     const bindings = generation.snapshot.bindingSlice();
-    const most = tabs.find(1, bindings[0].action.command_tab).?;
-    try std.testing.expectEqual(@as(u8, data.CommandTab.max_arguments), most.argument_count);
-    try std.testing.expectEqual(@as(usize, 4090), tabs.find(1, bindings[1].action.command_tab).?.argument(2).len);
-    // The 33-argument and 4096-byte commands are left out, and the repeated
-    // command shares the first one's row.
+    var command: data.CommandTab = undefined;
+    try std.testing.expect(tabs.find(1, bindings[0].action.command_tab, &command));
+    try std.testing.expectEqual(@as(u8, data.CommandTab.max_arguments), command.argument_count);
+    try std.testing.expect(tabs.find(1, bindings[1].action.command_tab, &command));
+    try std.testing.expectEqual(@as(usize, 4090), command.argument(2).len);
+    // The 33-argument and 4098-byte commands are left out, the repeated
+    // command shares the first one's row and the forty others all fit.
     try std.testing.expectEqual(bindings[0].action.command_tab.id, bindings[2].action.command_tab.id);
-    try std.testing.expectEqual(@as(u8, CommandTabs.capacity), tabs.count);
-    try std.testing.expectEqual(@as(usize, 3 + CommandTabs.capacity - 2), bindings.len);
+    try std.testing.expectEqual(@as(usize, 3 + 40), bindings.len);
 
-    for ([_][]const u8{ "command_tab.max_arguments", "command_tab.max_command_bytes", "config.command_tabs" }) |name| {
+    for ([_][]const u8{ "command_tab.max_arguments", "command_tab.max_command_bytes" }) |name| {
         var found = false;
         for (generation.unreported.slice()) |reach| {
             found = found or std.mem.eql(u8, reach.limit.name, name);
         }
 
         try std.testing.expect(found);
+    }
+}
+
+test "renders that return new command tabs on every tick never run out of rows" {
+    const source =
+        \\local telar = require("telar")
+        \\local ui = telar.ui
+        \\local tick = 0
+        \\return { api_version = 2, client = { panels = {
+        \\  prs = telar.panel({ render = function()
+        \\    tick = tick + 1
+        \\    local buttons = {}
+        \\    for index = 1, 100 do
+        \\      local number = tostring(tick * 1000 + index)
+        \\      buttons[index] = ui.button({ text = number, action = telar.action.command_tab({ command = { "gh", "pr", "checkout", number } }) })
+        \\    end
+        \\    return ui.actions(buttons)
+        \\  end }),
+        \\} } }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
+    defer generation.deinit();
+
+    const content = try std.testing.allocator.create(data.PanelContent);
+    defer std.testing.allocator.destroy(content);
+    const context: BarCallbackContext = .{
+        .client = .{
+            .sidebar_visible = true,
+            .tab_count = 1,
+            .active_tab_index = 0,
+            .pane_count = 1,
+            .focused_pane_id = 1,
+        },
+        .time = .{
+            .unix_seconds = 1,
+            .year = 2026,
+            .month = 10,
+            .day = 1,
+            .hour = 12,
+            .minute = 0,
+            .second = 0,
+            .weekday = 4,
+        },
+        .metrics = null,
+    };
+    for (0..30) |_| {
+        content.* = .{};
+        try generation.invokeBar(.{
+            .reference = generation.snapshot.bars.panels[0].source.dynamic.callback,
+            .context = context,
+            .surface = .panel,
+        }, content, &diagnostic);
+        try std.testing.expectEqual(@as(u8, data.bar_values.max_panel_actions), content.action_count);
+    }
+
+    // The last render's buttons still name their commands.
+    var command: data.CommandTab = undefined;
+    const last = content.action(content.slice()[1]).?.command_tab;
+    try std.testing.expect(generation.snapshot.command_tabs.find(generation.number, last, &command));
+    try std.testing.expectEqualStrings("30001", command.argument(3));
+    for (generation.unreported.slice()) |reach| {
+        try std.testing.expectEqualStrings("panels.max_panel_actions", reach.limit.name);
     }
 }
 
@@ -1711,8 +1792,7 @@ test "a pick's items function lists a full command output within the render budg
     const state = vm.state;
     _ = lua_api.c.lua_pushlstring(state, output.ptr, output.len);
     lua_api.c.lua_setglobal(state, "output");
-    vm.resetBudget(lua.default_render_instruction_limit, 10 * std.time.ns_per_s);
-    const started = std.Io.Timestamp.now(std.testing.io, .awake);
+    vm.resetBudget(lua.default_pick_items_instruction_limit, 10 * std.time.ns_per_s);
     try vm.evaluate(
         \\local list = {}
         \\for line in output:gmatch("[^\n]+") do
@@ -1721,7 +1801,6 @@ test "a pick's items function lists a full command output within the render budg
         \\end
         \\return list
     , "@items.lua");
-    const elapsed = started.durationTo(std.Io.Timestamp.now(std.testing.io, .awake));
 
     const items = try std.testing.allocator.create(data.PickItems);
     defer std.testing.allocator.destroy(items);
@@ -1729,9 +1808,8 @@ test "a pick's items function lists a full command output within the render budg
     var diagnostic: data.Diagnostic = .{};
     try pick_values.parse(state, -1, items, &diagnostic);
 
-    std.debug.print("items render: {d} instructions, {d} us\n", .{ vm.instruction_count, elapsed.toMicroseconds() });
     try std.testing.expectEqual(@as(u16, data.PickItems.max_items), items.count);
-    try std.testing.expect(vm.instruction_count < lua.default_render_instruction_limit / 4);
+    try std.testing.expect(vm.instruction_count < lua.default_pick_items_instruction_limit / 4);
 }
 
 test "a configuration past its plugin limit loads the first plugins and a callback past its effects runs the first ones" {
@@ -1770,4 +1848,46 @@ test "a configuration past its plugin limit loads the first plugins and a callba
     }, &diagnostic);
     try std.testing.expectEqual(@as(u8, data.effects.max_callback_effects), batch.len);
     try std.testing.expectEqualStrings("config.max_callback_effects", generation.unreported.slice()[1].limit.name);
+}
+
+test "only the base and the selected profile count against the bar callbacks and report limits" {
+    const source =
+        \\local telar = require("telar")
+        \\local function panels(count)
+        \\  local list = {}
+        \\  for index = 1, count do
+        \\    list[string.format("p%02d", index)] = telar.panel({ render = function() return {} end })
+        \\  end
+        \\  return list
+        \\end
+        \\local function bars()
+        \\  local render = function() return "x" end
+        \\  return { bottom = {
+        \\    left = telar.bar.dynamic({ render = render }),
+        \\    center = telar.bar.dynamic({ render = render }),
+        \\    right = telar.bar.tabs(),
+        \\  } }
+        \\end
+        \\return { api_version = 2, client = { panels = panels(16), bars = bars() }, profiles = {
+        \\  wide = { client = { panels = panels(20), bars = bars() } },
+        \\  work = { client = { panels = panels(16), bars = bars() } },
+        \\  home = { client = { panels = panels(16), bars = bars() } },
+        \\} }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    const generation = Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{
+        .source = source,
+        .source_name = "@config.lua",
+        .number = 1,
+        .profile = "work",
+    }) catch |err| {
+        std.debug.print("{s}\n", .{diagnostic.message()});
+        return err;
+    };
+    defer generation.deinit();
+
+    try std.testing.expectEqual(@as(u8, 2 * (16 + 2)), generation.bar_callback_count);
+    try std.testing.expectEqual(@as(u8, 16), generation.snapshot.bars.panel_count);
+    // The unselected profile with 20 panels was checked but reports nothing.
+    try std.testing.expectEqual(@as(u8, 0), generation.unreported.count);
 }

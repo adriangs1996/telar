@@ -37,7 +37,7 @@ gpa: std.mem.Allocator,
 number: u64,
 vm: *lua.Vm,
 snapshot: Snapshot = .{},
-callbacks: [data.config_values.max_bindings]Callback = undefined,
+callbacks: [data.config_values.max_key_callbacks]Callback = undefined,
 callback_count: u16 = 0,
 bar_callbacks: [data.config_values.max_bar_callbacks]BarCallback = undefined,
 bar_callback_count: u8 = 0,
@@ -49,9 +49,10 @@ profile_len: u8 = 0,
 staged_content: *data.StagedContent,
 /// Limits this generation reached that its client has not reported yet.
 unreported: UnreportedReaches = .{},
-/// Whether `client.panels` or `client.picks` held more entries than fit,
-/// so an action may name one that was left out.
-dropped: std.EnumSet(DroppedEntries) = .initEmpty(),
+/// The `client.panels` or `client.picks` table, kept in the Lua registry,
+/// when it held more entries than fit, so an action that names one left out
+/// is told apart from one that names no entry at all.
+dropped: std.EnumArray(DroppedEntries, ?c_int) = .initFill(null),
 
 /// Compiles configuration source within the supplied loading environment.
 /// For example: `Generation.loadSource(context, .{ .source = bytes, .source_name = "@config.lua", .number = 1 })`.
@@ -97,6 +98,7 @@ pub fn loadSource(context: LoadContext, spec: SourceInput) !*Generation {
         return err;
     };
     generation.parseSnapshot(context.diagnostic) catch |err| return err;
+    generation.snapshot.command_tabs.seal();
     generation.checkKeymapRoom();
     generation.syncCallbackTriggers();
     lua_api.c.lua_settop(generation.vm.state, 0);
@@ -221,7 +223,7 @@ pub fn invokeBar(self: *Generation, invocation: BarInvocation, content: anytype,
     const state = self.vm.state;
     lua_api.c.lua_settop(state, 0);
     defer lua_api.c.lua_settop(state, 0);
-    self.vm.resetBudget(lua.default_render_instruction_limit, lua.default_render_deadline_ns);
+    self.vm.resetBudget(lua.default_callback_instruction_limit, lua.default_render_deadline_ns);
     _ = lua_api.c.lua_rawgeti(state, lua_api.c.LUA_REGISTRYINDEX, self.bar_callbacks[reference.id].registry_ref);
     generation_support.pushReadonlyBarContext(state, invocation.context);
     if (lua_api.c.lua_pcallk(state, 1, 1, 0, 0, null) != lua_api.c.LUA_OK) {
@@ -249,7 +251,7 @@ pub fn invokePick(self: *Generation, invocation: BarInvocation, items: *data.Pic
     const state = self.vm.state;
     lua_api.c.lua_settop(state, 0);
     defer lua_api.c.lua_settop(state, 0);
-    self.vm.resetBudget(lua.default_render_instruction_limit, lua.default_render_deadline_ns);
+    self.vm.resetBudget(lua.default_pick_items_instruction_limit, lua.default_render_deadline_ns);
     _ = lua_api.c.lua_rawgeti(state, lua_api.c.LUA_REGISTRYINDEX, self.bar_callbacks[reference.id].registry_ref);
     if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TFUNCTION) {
         generation_support.pushReadonlyBarContext(state, invocation.context);
@@ -296,7 +298,10 @@ fn parseEffectBatch(self: *Generation, index: c_int, diagnostic: *data.Diagnosti
     const single = lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL;
     lua_value.pop(state, 1);
     if (single) {
-        batch.items[0] = try self.parseReturnedAction(absolute, diagnostic);
+        batch.items[0] = self.parseReturnedAction(absolute, diagnostic) catch |err| switch (err) {
+            error.TooManyArguments, error.ArgumentsTooLarge, error.TooManyCommandTabs => return batch,
+            else => return err,
+        };
         batch.len = 1;
         return batch;
     }
@@ -313,13 +318,14 @@ fn parseEffectBatch(self: *Generation, index: c_int, diagnostic: *data.Diagnosti
 
     for (0..count) |effect_index| {
         _ = lua_api.c.lua_geti(state, absolute, @intCast(effect_index + 1));
-        batch.items[effect_index] = self.parseReturnedAction(-1, diagnostic) catch |err| {
-            lua_value.pop(state, 1);
-            return err;
+        defer lua_value.pop(state, 1);
+        batch.items[batch.len] = self.parseReturnedAction(-1, diagnostic) catch |err| switch (err) {
+            error.TooManyArguments, error.ArgumentsTooLarge, error.TooManyCommandTabs => continue,
+            else => return err,
         };
-        lua_value.pop(state, 1);
+        batch.len += 1;
     }
-    batch.len = @intCast(count);
+
     return batch;
 }
 
@@ -335,8 +341,12 @@ fn parseReturnedAction(self: *Generation, index: c_int, diagnostic: *data.Diagno
         diagnostic.set("a callback cannot return another callback", .{});
         return error.InvalidCallbackResult;
     }
-    const action = self.parseAction(.{ .index = index, .expression = false }, diagnostic) catch
-        return error.InvalidCallbackResult;
+    const action = self.parseAction(.{ .index = index, .expression = false }, diagnostic) catch |err| switch (err) {
+        // An action past a limit is left out by the caller, which keeps
+        // the rest; the limit is already kept for the client to report.
+        error.TooManyArguments, error.ArgumentsTooLarge, error.TooManyCommandTabs => return err,
+        else => return error.InvalidCallbackResult,
+    };
     return switch (action) {
         .lua_callback, .lua_expr => error.InvalidCallbackResult,
         else => action,
@@ -445,46 +455,112 @@ fn parseProfile(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !
     lua_value.pop(state, 1);
 }
 
+/// Checks every profile deeply and applies only the selected one over the
+/// base configuration, in place. An unselected profile compiles against a
+/// checkpoint of the base, kept on the heap, and everything it registered
+/// (callbacks, command tabs, reached limits) is undone, so only the base and
+/// the selected profile count against the limits.
 fn parseProfiles(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const state = self.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
-    const base_snapshot = self.snapshot;
-    var selected_snapshot: ?Snapshot = null;
     const selected_name = self.profile_bytes[0..self.profile_len];
+    const base = try self.gpa.create(Snapshot);
+    defer self.gpa.destroy(base);
+
     lua_api.c.lua_pushnil(state);
     while (lua_api.c.lua_next(state, absolute) != 0) {
+        defer lua_value.pop(state, 1);
         const name = lua_value.string(state, -2) orelse {
-            lua_value.pop(state, 2);
+            lua_value.pop(state, 1);
             diagnostic.set("config.profiles contains a non-string name", .{});
             return error.InvalidConfig;
         };
+
         if (!generation_support.validProfileName(name)) {
             diagnostic.set("invalid profile name '{s}'", .{name});
-            lua_value.pop(state, 2);
+            lua_value.pop(state, 1);
             return error.InvalidConfig;
         }
+
         if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TTABLE) {
             diagnostic.set("profile '{s}' must be a table", .{name});
-            lua_value.pop(state, 2);
+            lua_value.pop(state, 1);
             return error.InvalidConfig;
         }
-        self.snapshot = base_snapshot;
-        self.parseProfile(-1, diagnostic) catch |err| {
-            lua_value.pop(state, 2);
+
+        if (self.profile_len != 0 and std.mem.eql(u8, name, selected_name)) {
+            continue;
+        }
+
+        const saved = self.checkpoint(base);
+        const checked = self.parseProfile(-1, diagnostic);
+        self.restore(saved);
+        checked catch |err| {
+            lua_value.pop(state, 1);
             return err;
         };
-        if (self.profile_len != 0 and std.mem.eql(u8, name, selected_name)) {
-            selected_snapshot = self.snapshot;
-        }
-        lua_value.pop(state, 1);
     }
-    self.snapshot = if (self.profile_len == 0)
-        base_snapshot
-    else
-        selected_snapshot orelse {
-            diagnostic.set("profile '{s}' is not defined", .{selected_name});
-            return error.UnknownProfile;
-        };
+
+    if (self.profile_len == 0) {
+        return;
+    }
+
+    _ = lua_api.c.lua_pushlstring(state, selected_name.ptr, selected_name.len);
+    _ = lua_api.c.lua_rawget(state, absolute);
+    defer lua_value.pop(state, 1);
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TTABLE) {
+        diagnostic.set("profile '{s}' is not defined", .{selected_name});
+        return error.UnknownProfile;
+    }
+
+    try self.parseProfile(-1, diagnostic);
+}
+
+/// What an unselected profile may change, saved before it compiles; the
+/// snapshot itself is copied into `base`.
+const ProfileCheckpoint = struct {
+    base: *Snapshot,
+    callback_count: u16,
+    bar_callback_count: u8,
+    unreported: UnreportedReaches,
+    dropped: std.EnumArray(DroppedEntries, ?c_int),
+};
+
+fn checkpoint(self: *const Generation, base: *Snapshot) ProfileCheckpoint {
+    base.* = self.snapshot;
+    return .{
+        .base = base,
+        .callback_count = self.callback_count,
+        .bar_callback_count = self.bar_callback_count,
+        .unreported = self.unreported,
+        .dropped = self.dropped,
+    };
+}
+
+/// Undoes what a profile compiled since `saved`, releasing the Lua values
+/// it kept.
+fn restore(self: *Generation, saved: ProfileCheckpoint) void {
+    const state = self.vm.state;
+    for (self.callbacks[saved.callback_count..self.callback_count]) |callback| {
+        lua_api.c.luaL_unref(state, lua_api.c.LUA_REGISTRYINDEX, callback.registry_ref);
+    }
+
+    for (self.bar_callbacks[saved.bar_callback_count..self.bar_callback_count]) |callback| {
+        lua_api.c.luaL_unref(state, lua_api.c.LUA_REGISTRYINDEX, callback.registry_ref);
+    }
+
+    for (std.enums.values(DroppedEntries)) |entries| {
+        const current = self.dropped.get(entries) orelse continue;
+        if (saved.dropped.get(entries) != current) {
+            lua_api.c.luaL_unref(state, lua_api.c.LUA_REGISTRYINDEX, current);
+        }
+    }
+
+    self.snapshot = saved.base.*;
+    self.callback_count = saved.callback_count;
+    self.bar_callback_count = saved.bar_callback_count;
+    self.unreported = saved.unreported;
+    self.dropped = saved.dropped;
 }
 
 fn parseRuntime(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
@@ -748,7 +824,7 @@ fn parsePanels(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !v
     var names: [data.bar_values.max_panels][]const u8 = undefined;
     const listed = try firstNames(state, absolute, &names, "config.client.panels keys must be panel names", diagnostic);
     if (listed.total > listed.kept) {
-        self.dropped.insert(.panels);
+        self.keepDropped(.panels, absolute);
         self.unreported.add(.{
             .limit = data.bar_values.panels_limit,
             .requested = listed.total,
@@ -861,7 +937,7 @@ fn parsePicks(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !vo
     var names: [data.bar_values.max_picks][]const u8 = undefined;
     const listed = try firstNames(state, absolute, &names, "config.client.picks keys must be pick names", diagnostic);
     if (listed.total > listed.kept) {
-        self.dropped.insert(.picks);
+        self.keepDropped(.picks, absolute);
         self.unreported.add(.{
             .limit = data.bar_values.picks_limit,
             .requested = listed.total,
@@ -1075,16 +1151,32 @@ fn fitted(self: *Generation, text: []const u8, limit: core.Limit) []const u8 {
     return data.bar_text.prefix(text, @intCast(limit.value));
 }
 
-/// The index an action gets when it names a panel or pick that may have
-/// been left out at its limit: no configuration entry has it, so running
-/// the action does nothing. Null when nothing was left out, so the name is
-/// simply unknown.
-fn droppedIndex(self: *const Generation, entries: DroppedEntries) ?u8 {
-    if (!self.dropped.contains(entries)) {
+/// The index an action gets when it names a panel or pick the table
+/// declared but that was left out at its limit: no configuration entry has
+/// it, so running the action does nothing. Null for a name the table never
+/// declared, which stays a configuration error.
+fn droppedIndex(self: *const Generation, entries: DroppedEntries, name: []const u8) ?u8 {
+    const reference = self.dropped.get(entries) orelse return null;
+    const state = self.vm.state;
+    _ = lua_api.c.lua_rawgeti(state, lua_api.c.LUA_REGISTRYINDEX, reference);
+    _ = lua_api.c.lua_pushlstring(state, name.ptr, name.len);
+    _ = lua_api.c.lua_rawget(state, -2);
+    defer lua_value.pop(state, 2);
+    if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {
         return null;
     }
 
     return data.BarConfiguration.dropped_index;
+}
+
+/// Keeps the table at `absolute`, which held more entries than fit, for
+/// `droppedIndex`; a profile that lists its own replaces it.
+fn keepDropped(self: *Generation, entries: DroppedEntries, absolute: c_int) void {
+    // A replaced table stays referenced until the generation ends: a
+    // profile checkpoint may still restore it.
+    const state = self.vm.state;
+    lua_api.c.lua_pushvalue(state, absolute);
+    self.dropped.set(entries, lua_api.c.luaL_ref(state, lua_api.c.LUA_REGISTRYINDEX));
 }
 
 const DroppedEntries = enum {
@@ -1607,8 +1699,8 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
     const state = self.vm.state;
     const absolute = lua_api.c.lua_absindex(state, action_input.index);
     if (lua_api.c.lua_type(state, absolute) == lua_api.c.LUA_TFUNCTION) {
-        if (self.callback_count == data.config_values.max_bindings) {
-            diagnostic.set("configuration exceeds {d} Lua callbacks", .{data.config_values.max_bindings});
+        if (self.callback_count == data.config_values.max_key_callbacks) {
+            diagnostic.set("configuration exceeds {d} Lua callbacks", .{data.config_values.max_key_callbacks});
             return error.InvalidConfig;
         }
         lua_api.c.lua_pushvalue(state, absolute);
@@ -1836,17 +1928,14 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
                 return error.InvalidConfig;
             },
         };
-        const id = self.snapshot.command_tabs.add(&command) catch |err| {
-            diagnostic.set("configuration opens more than {d} different command tabs", .{CommandTabs.capacity});
+        const reference = self.snapshot.command_tabs.add(self.number, &command) catch |err| {
+            diagnostic.set("the configuration's command tabs pass {d} bytes", .{CommandTabs.limit.value});
             self.unreported.add(.{
                 .limit = CommandTabs.limit,
             });
             return err;
         };
-        return .{ .command_tab = .{
-            .generation = self.number,
-            .id = id,
-        } };
+        return .{ .command_tab = reference };
     }
     if (std.mem.eql(u8, kind, "notification")) {
         try lua_value.ensureOnlyFields(state, .{
@@ -1941,7 +2030,7 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
             .path = "action",
         }, diagnostic);
         const name = try lua_value.requiredStringField(state, .{ .index = absolute, .name = "panel" }, diagnostic);
-        const index = self.snapshot.bars.panelIndex(name) orelse self.droppedIndex(.panels) orelse {
+        const index = self.snapshot.bars.panelIndex(name) orelse self.droppedIndex(.panels, name) orelse {
             diagnostic.set("open_panel names an unknown panel '{s}'", .{name});
             return error.InvalidConfig;
         };
@@ -1961,7 +2050,7 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
             },
             diagnostic,
         );
-        const index = self.snapshot.bars.pickIndex(name) orelse self.droppedIndex(.picks) orelse {
+        const index = self.snapshot.bars.pickIndex(name) orelse self.droppedIndex(.picks, name) orelse {
             diagnostic.set("pick names an unknown pick '{s}'", .{name});
             return error.InvalidConfig;
         };

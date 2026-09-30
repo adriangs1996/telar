@@ -1228,12 +1228,15 @@ loading, or mutable metatables. `require("telar")` returns the API and local
 module names resolve only beneath the directory containing `config.lua`.
 
 Evaluating the configuration may use 16 MiB of Lua memory and one million Lua
-instructions; a callback may use 100,000 instructions. Pattern matching,
+instructions; a key callback and a bar or panel render may use 100,000
+instructions, and a pick's `items` function, which runs once when the pick
+opens, one million. Pattern matching,
 `string.find` and `table.sort` count their steps as instructions, so one
 backtracking search or large sort spends the same budget. The instruction
 count is the budget, so whether a file loads does not depend on how busy the
 machine is. A wall-clock deadline of 2 s for the file and 100 ms for a
-callback is checked between instructions and those steps; it stops a run of
+callback or render (1 s for a render in a debug build) is checked between
+instructions and those steps; it stops a run of
 costly instructions, such as repeated `string.rep` over megabytes, but not a
 single other call, which the memory limit bounds to about 25 ms.
 

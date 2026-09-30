@@ -116,11 +116,11 @@ The synchronous callback path keeps its existing hard limits:
 - 16 semantic keys per expression;
 - 4 KiB of expression paste.
 
-Bar, panel and pick renders are not key presses: they run on the loop
-between events, under 1,000,000 instructions and a 100 ms deadline (1 s in a
-debug build, which runs Lua about ten times slower).
-A pick `items` function that turns a full list of 4096 options into tables
-takes about 61,000 instructions.
+Bar and panel renders run on the same loop on every tick, so they keep the
+100,000-instruction budget. A pick's `items` function runs once, when a
+person opens the pick, and gets 1,000,000 instructions: turning a full list
+of 4096 options into tables takes about 61,000. Both have a 100 ms deadline
+(1 s in a debug build, which runs Lua about ten times slower).
 
 Only an explicit Lua binding enters this path. Native bindings do not enter
 Lua. The VM has no ambient filesystem, process, network, debug or native-module

@@ -43,7 +43,12 @@ fn writeAction(snapshot: *const Snapshot, action: data.Action, writer: *std.Io.W
     try writer.writeAll(",\"value\":");
     switch (action) {
         .command_tab => |reference| {
-            const command = snapshot.command_tabs.at(reference.id) orelse return error.BindingNotFound;
+            var loaded: data.CommandTab = undefined;
+            if (!snapshot.command_tabs.load(reference, &loaded)) {
+                return error.BindingNotFound;
+            }
+
+            const command = &loaded;
             var args: [data.CommandTab.max_arguments][]const u8 = undefined;
             for (0..command.argument_count) |index| {
                 args[index] = command.argument(index);
@@ -68,11 +73,8 @@ test "configuration queries serialize occupied bindings and reject missing indic
     var snapshot: Snapshot = .{};
     snapshot.binding_count = 1;
     const command = try data.CommandTab.init(&.{ "echo", "ready" }, "test");
-    const id = try snapshot.command_tabs.add(&command);
-    snapshot.bindings[0] = try data.config_values.ConfiguredBinding.init(&.{snapshot.prefix}, .{ .command_tab = .{
-        .generation = 0,
-        .id = id,
-    } });
+    const reference = try snapshot.command_tabs.add(0, &command);
+    snapshot.bindings[0] = try data.config_values.ConfiguredBinding.init(&.{snapshot.prefix}, .{ .command_tab = reference });
     snapshot.bindings_prefixed[0] = true;
     var buffer: [4096]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);

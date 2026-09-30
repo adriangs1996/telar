@@ -21,9 +21,16 @@ pub const max_proxy_path_bytes = 1024;
 
 pub const max_agent_description_command_args = 32;
 pub const max_agent_description_command_bytes = 4096;
-/// One render per bar position, one per panel and one list per pick, so a
-/// configuration within the other bar limits never runs out.
-pub const max_bar_callbacks = std.enums.values(data.bar_values.Position).len + data.bar_values.max_panels + data.bar_values.max_picks;
+/// One render per bar position, one per panel and one list per pick, for
+/// the base configuration and for the selected profile, the only two that
+/// are compiled; a configuration within the other bar limits never runs
+/// out.
+pub const max_bar_callbacks = compiled_client_sections * (std.enums.values(data.bar_values.Position).len + data.bar_values.max_panels + data.bar_values.max_picks);
+/// Lua key callbacks: a full keymap in the base configuration and another
+/// in the selected profile.
+pub const max_key_callbacks = compiled_client_sections * max_bindings;
+/// The base `client` section and the selected profile's.
+const compiled_client_sections = 2;
 pub const default_agent_description_timeout_ms: u32 = 15_000;
 pub const default_engine_idle_timeout_ms: u32 = 300_000;
 pub const min_engine_idle_timeout_ms: u32 = 10_000;

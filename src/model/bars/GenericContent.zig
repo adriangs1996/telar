@@ -203,6 +203,8 @@ pub fn Type(comptime bounds: ContentBounds) type {
                 budget = next;
             }
 
+            dropEmptyContainers(source, &kept);
+
             var copied: [max_node_capacity]u8 = undefined;
             for (0..count) |index| {
                 if (!kept[index]) {
@@ -223,6 +225,38 @@ pub fn Type(comptime bounds: ContentBounds) type {
                     kept[index] = false;
                     continue;
                 };
+            }
+        }
+
+        /// Leaves out a kept container none of whose children were kept,
+        /// deepest first, so a group never shows empty. A container that had
+        /// no children stays.
+        fn dropEmptyContainers(source: anytype, kept: *[max_node_capacity]bool) void {
+            var had_children: [max_node_capacity]bool = @splat(false);
+            var kept_children: [max_node_capacity]u8 = @splat(0);
+            for (source.slice(), 0..) |node, index| {
+                if (node.isRoot()) {
+                    continue;
+                }
+
+                had_children[node.parent] = true;
+                if (kept[index]) {
+                    kept_children[node.parent] += 1;
+                }
+            }
+
+            var index: usize = source.node_count;
+            while (index > 0) {
+                index -= 1;
+                if (!kept[index] or !had_children[index] or kept_children[index] != 0) {
+                    continue;
+                }
+
+                kept[index] = false;
+                const node = source.nodes[index];
+                if (!node.isRoot()) {
+                    kept_children[node.parent] -= 1;
+                }
             }
         }
 
@@ -529,4 +563,39 @@ test "a list that fits is copied whole and a dropped container drops its childre
         try std.testing.expect(node.isRoot());
         try std.testing.expectEqualStrings("top", content.text(node.text));
     }
+}
+
+test "a group none of whose children fit is left out instead of shown empty" {
+    var source: Type(.{
+        .nodes = 8,
+        .text = 256,
+        .actions = 2,
+        .samples = 64,
+    }) = .{};
+    const group = try source.append(.{
+        .kind = .group,
+        .priority = 90,
+    });
+    _ = try source.append(.{
+        .kind = .label,
+        .parent = group,
+        .text = "x" ** 40,
+        .priority = 90,
+    });
+    _ = try source.append(.{
+        .kind = .label,
+        .text = "kept",
+        .priority = 10,
+    });
+
+    var content: Type(.{
+        .nodes = 4,
+        .text = 32,
+        .actions = 1,
+        .samples = 64,
+    }) = .{};
+    content.keepFitting(&source);
+
+    try std.testing.expectEqual(@as(u8, 1), content.node_count);
+    try std.testing.expectEqualStrings("kept", content.text(content.slice()[0].text));
 }

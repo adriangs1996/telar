@@ -130,6 +130,7 @@ pub const PanelContent = bar_values.PanelContent;
 pub const StagedContent = bar_values.StagedContent;
 pub const ContentDemand = @import("bars/ContentDemand.zig");
 pub const ContentLimits = @import("bars/ContentLimits.zig");
+pub const ContentBounds = @import("bars/ContentBounds.zig");
 pub const Node = @import("bars/Node.zig");
 pub const NodeInput = @import("bars/NodeInput.zig");
 pub const NodeKind = @import("bars/NodeKind.zig").NodeKind;
