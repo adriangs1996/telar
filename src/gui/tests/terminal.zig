@@ -67,7 +67,7 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
     try std.testing.expectEqual(data.environment.Support.supported, app.model.host.host_capabilities.pointer_pixels);
     const graphics = try core.decodeClient(session.pending.?);
     try std.testing.expect(graphics == .configure_graphics);
-    try std.testing.expect(!graphics.configure_graphics.shared);
+    try std.testing.expectEqual(client.supportsSharedMemory(), graphics.configure_graphics.shared);
 
     session.pending = null;
     try client.runtime_io.completeRuntimeSend(app, {});

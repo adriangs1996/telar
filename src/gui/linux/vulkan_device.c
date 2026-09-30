@@ -112,7 +112,11 @@ static bool create_device(telar_vulkan_device *self) {
     };
     VK_TRY(vkCreateDevice(self->physical, &info, NULL, &self->device));
     vkGetDeviceQueue(self->device, self->queue_family, 0, &self->queue);
+    if (pthread_mutex_init(&self->queue_lock, NULL) != 0) {
+        return false;
+    }
 
+    self->queue_lock_ready = true;
     return true;
 }
 
@@ -130,6 +134,9 @@ uint32_t telar_vulkan_memory_type(const telar_vulkan_device *self, uint32_t bits
 }
 
 void telar_vulkan_device_deinit(telar_vulkan_device *self) {
+    if (self->queue_lock_ready) {
+        pthread_mutex_destroy(&self->queue_lock);
+    }
     if (self->device) {
         vkDestroyDevice(self->device, NULL);
     }

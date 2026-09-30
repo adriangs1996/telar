@@ -26,6 +26,9 @@ const CursorPaint = @import("CursorPaint.zig");
 const copy_selection = @import("copy_selection.zig");
 const InkTarget = @import("InkTarget.zig");
 const Quad = gfx.Quad.Quad;
+const kitty_protocol = @import("kitty_protocol");
+const ImagePlacement = @import("../image/ImagePlacement.zig");
+const ImageDraw = @import("../native/ImageDraw.zig");
 
 allocator: std.mem.Allocator,
 /// Reads discovered fallback font files; `configured` sets it, and a
@@ -40,6 +43,12 @@ atlas: ?GlyphAtlas = null,
 sprites: ?SpritePage = null,
 /// Supplied by the GUI image store before prepare; borrowed through frame completion.
 diagrams: [8]native.DiagramTexture = @splat(.{}),
+/// The presented machine's resolved Kitty graphics placements, sorted by
+/// pane; borrowed from the GUI for one prepare.
+images: []const ImagePlacement = &.{},
+/// The image quads of this frame in quad order, each naming its texture.
+image_draws: [ImageDraw.capacity]native.ImageDraw = undefined,
+image_draw_count: u32 = 0,
 quads: QuadList,
 cell_quads: QuadList,
 retained: RetainedCells,
@@ -190,7 +199,7 @@ pub fn measure(self: *Renderer, viewport: native.Viewport) !core.TerminalSize {
         return error.NativeCellBudgetExceeded;
     }
 
-    try self.quads.reserve(frame_budget.quads(cells));
+    try self.quads.reserve(frame_budget.quads(cells) + ImageDraw.capacity);
     try self.cell_quads.reserve(CellMesh.capacity);
     try self.retained.resize(.{
         size.cols,
@@ -204,6 +213,7 @@ pub fn measure(self: *Renderer, viewport: native.Viewport) !core.TerminalSize {
 /// Example: `renderer.begin();`
 pub fn begin(self: *Renderer) void {
     self.quads.clear();
+    self.image_draw_count = 0;
     self.repainted_cells = 0;
     const background = rgb(self.theme.background);
     const foreground = rgb(self.theme.foreground);
@@ -288,6 +298,8 @@ pub fn drawPane(self: *Renderer, paint: PanePaint) !void {
     const area = paint.view.content;
     const rows: u16 = @min(area.h, pane.buffer.h);
     const cols: u16 = @min(area.w, pane.buffer.w);
+    const images = self.paneImages(pane.id);
+    try self.pushImages(paint, images, .below_background);
     for (0..rows) |row| {
         const y = area.y + @as(u16, @intCast(row));
         const source = pane.buffer.cells[row * pane.buffer.w ..][0..cols];
@@ -335,6 +347,7 @@ pub fn drawPane(self: *Renderer, paint: PanePaint) !void {
         }
     }
 
+    try self.pushImages(paint, images, .below_text);
     const cursor = self.paneCursor(paint);
     if (cursor) |visible| {
         if (visible.style == .block) {
@@ -364,10 +377,79 @@ pub fn drawPane(self: *Renderer, paint: PanePaint) !void {
         }
     }
 
+    try self.pushImages(paint, images, .above_text);
     if (cursor) |visible| {
         if (visible.style != .block) {
             try visible.paint(&self.quads);
         }
+    }
+}
+
+/// The frame's image draws in quad order. Example: `pane_images.noteDrawn(images, renderer.imageDraws());`.
+pub fn imageDraws(self: *const Renderer) []const native.ImageDraw {
+    return self.image_draws[0..self.image_draw_count];
+}
+
+// The pane's run of the resolved placements, which are sorted by pane.
+fn paneImages(self: *const Renderer, pane_id: core.PaneId) []const ImagePlacement {
+    const first = std.sort.lowerBound(ImagePlacement, self.images, pane_id, orderPane);
+    const last = std.sort.upperBound(ImagePlacement, self.images, pane_id, orderPane);
+    return self.images[first..last];
+}
+
+fn orderPane(pane_id: core.PaneId, placement: ImagePlacement) std.math.Order {
+    return std.math.order(@intFromEnum(pane_id), @intFromEnum(placement.pane_id));
+}
+
+/// Appends one layer of the pane's images, clipped to the pane, at the rows
+/// its scroll shows: a placement's row counts from the top of the active
+/// screen, so a pane scrolled back shows it lower by the rows it went back.
+fn pushImages(self: *Renderer, paint: PanePaint, images: []const ImagePlacement, layer: kitty_protocol.Layer) !void {
+    const pane = paint.pane;
+    const bounds = self.cellRect(paint.view.content);
+    const back: i64 = @as(i64, pane.scroll.maxOffset(pane.buffer.h)) - pane.scroll.offset;
+    const cell_width: f32 = @floatFromInt(self.metrics.cell_width);
+    const cell_height: f32 = @floatFromInt(self.metrics.cell_height);
+    for (images) |placement| {
+        if (placement.layer != layer or placement.handle == 0) {
+            continue;
+        }
+
+        if (self.image_draw_count == self.image_draws.len) {
+            return;
+        }
+
+        const column: f32 = @floatFromInt(placement.column);
+        const row: f32 = @floatFromInt(placement.row + back);
+        const before = self.quads.items().len;
+        try self.quads.pushClipped(
+            .{
+                .x = bounds.x + column * cell_width + @as(f32, @floatFromInt(placement.box.offset_x)),
+                .y = bounds.y + row * cell_height + @as(f32, @floatFromInt(placement.box.offset_y)),
+                .width = @floatFromInt(placement.box.width),
+                .height = @floatFromInt(placement.box.height),
+                .u0 = placement.uv[0],
+                .v0 = placement.uv[1],
+                .u1 = placement.uv[2],
+                .v1 = placement.uv[3],
+                .r = 1,
+                .g = 1,
+                .b = 1,
+                .a = 1,
+                .texture = gfx.Quad.image_texture,
+            },
+            bounds,
+        );
+
+        if (self.quads.items().len == before) {
+            continue;
+        }
+
+        self.image_draws[self.image_draw_count] = .{
+            .quad = @intCast(before),
+            .handle = placement.handle,
+        };
+        self.image_draw_count += 1;
     }
 }
 
@@ -478,6 +560,8 @@ pub fn frame(self: *const Renderer, token: u64) native.Frame {
         .background_blur = self.config.window.background_blur,
         .titlebar = @intFromBool(self.config.window.titlebar),
         .navigation = self.chrome.top_bar,
+        .image_draws = &self.image_draws,
+        .image_draw_count = self.image_draw_count,
     };
 }
 

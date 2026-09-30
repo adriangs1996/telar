@@ -4,6 +4,7 @@ const core = @import("telar-core");
 const GuiAdapter = @import("../GuiAdapter.zig");
 const native = @import("native.zig");
 const decode_input = @import("decode_input.zig");
+const pane_images = @import("../image/pane_images.zig");
 
 /// Binds native callbacks to the stable GUI owner. Example: `const table = bind(gui);`
 pub fn bind(gui: *GuiAdapter) native.Callbacks {
@@ -21,6 +22,7 @@ pub fn bind(gui: *GuiAdapter) native.Callbacks {
         .frame_delay_ns = frameDelayNs,
         .window_title = windowTitle,
         .ready = ready,
+        .image_ready = imageReady,
     };
 }
 
@@ -45,6 +47,11 @@ fn render(context: ?*anyopaque, viewport: native.Viewport, out: *native.Frame) c
         break :blk 0;
     };
     out.* = gui.renderer.frame(token);
+    pane_images.handOff(&gui.images, out);
+}
+
+fn imageReady(context: ?*anyopaque, handle: u32, success: c_int) callconv(.c) void {
+    from(context).imageReady(handle, success != 0);
 }
 
 fn pump(context: ?*anyopaque) callconv(.c) c_int {

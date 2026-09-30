@@ -685,7 +685,7 @@ test "focused scroll bindings target focus rather than hover and normal input re
     try std.testing.expectEqual(@as(u32, 10), other.scroll.offset);
     try std.testing.expectEqual(focused, client.model.tabs.layout[model].focused().?);
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
-    try std.testing.expect(!client.graphics.paneVisible(focused));
+    try std.testing.expect(client.graphics.paneVisible(focused));
     try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
     try std.testing.expectEqual(@as(usize, 1), client.model.to_runtime.len);
     try harness.settle();

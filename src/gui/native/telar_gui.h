@@ -15,6 +15,17 @@
 // The diagrams' 8 Mi pixels and the image previews' sheet and modal copy.
 #define TELAR_GUI_DIAGRAM_FRAME_PIXELS (8u * 1024u * 1024u + 256u * 1024u + 2u * 1024u * 1024u)
 
+// Kitty graphics images: textures the backend owns by handle, uploaded off
+// the window thread. Handles run from 1 to TELAR_GUI_IMAGE_CAPACITY.
+#define TELAR_GUI_IMAGE_CAPACITY 512
+#define TELAR_GUI_IMAGE_MAX_SIDE 16384
+// Uploads started per frame; the client keeps at most this many in flight.
+#define TELAR_GUI_IMAGE_UPLOADS 4
+// Image quads one frame may draw.
+#define TELAR_GUI_IMAGE_DRAWS 512
+// The quad texture selector that samples the image named by an image draw.
+#define TELAR_GUI_IMAGE_TEXTURE 10
+
 #define TELAR_GUI_RANGE_NONE UINT32_MAX
 #define TELAR_GUI_TEXT_CAPACITY 4096
 #define TELAR_GUI_ACCESSIBILITY_CAPACITY 256
@@ -98,6 +109,22 @@ typedef struct {
   uint64_t version;
 } telar_gui_diagram_texture;
 
+// Pixels stay borrowed and unchanged until image_ready reports this handle.
+// bytes_per_pixel is 3 (RGB) or 4 (RGBA, straight alpha); rows are packed.
+typedef struct {
+  const uint8_t *pixels;
+  uint32_t handle;
+  uint32_t width, height;
+  uint32_t bytes_per_pixel;
+} telar_gui_image_upload;
+
+// The quad at `quad` (texture TELAR_GUI_IMAGE_TEXTURE) samples image
+// `handle`. Draws are ordered by strictly increasing quad index.
+typedef struct {
+  uint32_t quad;
+  uint32_t handle;
+} telar_gui_image_draw;
+
 typedef struct {
   // Zero defers submission. The host waits for another wake or viewport change.
   uint64_t token;
@@ -118,6 +145,17 @@ typedef struct {
   // Device pixels of Telar's navigation row, so native window controls can
   // center on it.
   uint32_t navigation;
+  // The host takes uploads and releases when render returns, whether or not
+  // it submits the frame, and never while a frame that draws images is on
+  // the GPU. A released handle is free for a new upload at once. Draws apply
+  // only to a submitted frame; a draw of a handle without a ready image
+  // draws nothing.
+  const telar_gui_image_upload *image_uploads;
+  uint32_t image_upload_count;
+  const uint32_t *image_releases;
+  uint32_t image_release_count;
+  const telar_gui_image_draw *image_draws;
+  uint32_t image_draw_count;
 } telar_gui_frame;
 
 // Input kinds: 1 committed UTF-8 text, 2 clipboard paste, 3 semantic key,
@@ -189,6 +227,10 @@ typedef struct {
   int (*window_title)(void *, telar_gui_window_title *);
   // Window-thread notification after a surface acquires usable geometry.
   void (*ready)(void *, telar_gui_viewport);
+  // Window-thread report that one accepted upload finished reading its
+  // pixels: success 1 means the handle now draws, 0 that it holds nothing.
+  // Exactly once per accepted upload, unless the window closes first.
+  void (*image_ready)(void *, uint32_t handle, int success);
 } telar_gui_callbacks;
 
 int telar_gui_run(const char *title, void *context,

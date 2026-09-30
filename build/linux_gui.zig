@@ -30,6 +30,7 @@ pub fn add(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
             "src/gui/linux/vulkan_swapchain.c",
             "src/gui/linux/vulkan_pipeline.c",
             "src/gui/linux/vulkan_resources.c",
+            "src/gui/linux/vulkan_images.c",
             "src/gui/linux/shaders.c",
         },
         .flags = flags,

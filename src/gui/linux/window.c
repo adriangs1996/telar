@@ -117,6 +117,9 @@ static void draw(window *self) {
   telar_gui_frame frame;
   memset(&frame, 0, sizeof frame);
   self->callbacks.render(self->context, viewport, &frame);
+  if (self->renderer != NULL) {
+    telar_renderer_accept_images(self->renderer, &frame);
+  }
   self->dirty = false;
   if (frame.token == 0) {
     self->dirty = true;
@@ -393,6 +396,7 @@ int telar_gui_run(const char *title, void *context,
         {self.worker != NULL ? telar_frame_worker_fd(self.worker) : -1, POLLIN,
          0},
         {telar_accessibility_fd(self.accessibility), POLLIN, 0},
+        {self.renderer != NULL ? telar_renderer_images_fd(self.renderer) : -1, POLLIN, 0},
     };
 
     int ready = poll(fds, sizeof fds / sizeof *fds, timeout);
@@ -430,6 +434,10 @@ int telar_gui_run(const char *title, void *context,
 
     if (fds[1].revents & POLLIN) {
       telar_gui_drain(callbacks->wake_fd);
+    }
+
+    if (self.renderer != NULL && (fds[5].revents & POLLIN)) {
+      telar_renderer_take_images(self.renderer, callbacks->image_ready, context);
     }
 
     if (self.worker != NULL && (fds[3].revents & POLLIN)) {

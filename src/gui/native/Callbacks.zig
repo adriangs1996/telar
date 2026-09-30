@@ -14,4 +14,5 @@ pub const Callbacks = extern struct {
     frame_delay_ns: ?*const fn (?*anyopaque) callconv(.c) u64 = null,
     window_title: ?*const fn (?*anyopaque, *native.WindowTitle) callconv(.c) c_int = null,
     ready: ?*const fn (?*anyopaque, native.Viewport) callconv(.c) void = null,
+    image_ready: ?*const fn (?*anyopaque, u32, c_int) callconv(.c) void = null,
 };

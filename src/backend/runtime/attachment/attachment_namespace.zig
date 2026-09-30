@@ -211,7 +211,7 @@ pub fn encodeNextGraphics(attachment: *Attachment, preparation: GraphicsPreparat
 
     for (&attachment.graphics.known_placements) |*slot| {
         const known = slot.* orelse continue;
-        if (findPlacement(storage, known.placement.virtual_id) != null) {
+        if (placementProjects(pane, storage, known.placement.virtual_id)) {
             continue;
         }
         slot.* = null;
@@ -449,14 +449,25 @@ pub fn placementVirtualId(key: vt.kitty.graphics.ImageStorage.PlacementKey) u64 
     return media_mod.placementVirtualId(key);
 }
 
-pub fn findPlacement(storage: *vt.kitty.graphics.ImageStorage, virtual_id: u64) ?vt.kitty.graphics.ImageStorage.Placement {
+// Whether a placement the client knows still has a position to send: a pin
+// whose history the media terminal pruned no longer does, and the client
+// must drop it rather than keep drawing it where it last was.
+fn placementProjects(pane: *Pane, storage: *vt.kitty.graphics.ImageStorage, virtual_id: u64) bool {
     var iterator = storage.placements.iterator();
     while (iterator.next()) |entry| {
-        if (placementVirtualId(entry.key_ptr.*) == virtual_id) {
-            return entry.value_ptr.*;
+        if (placementVirtualId(entry.key_ptr.*) != virtual_id) {
+            continue;
         }
+
+        const image = storage.imageById(entry.key_ptr.image_id) orelse return false;
+        return placementValue(pane, .{
+            .key = entry.key_ptr.*,
+            .placement = entry.value_ptr.*,
+            .image = image,
+        }) != null;
     }
-    return null;
+
+    return false;
 }
 
 fn placementValue(pane: *Pane, source: PlacementSource) ?core.Placement {

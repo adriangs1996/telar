@@ -20,6 +20,13 @@ enum telar_render_result { TELAR_RENDER_FAILED, TELAR_RENDER_DELIVERED, TELAR_RE
 enum telar_render_result telar_renderer_draw(telar_renderer *renderer, telar_gui_viewport viewport,
                                              const telar_gui_frame *frame);
 
+// Window thread, no frame in flight: takes the frame's image releases and
+// uploads whether or not the frame is submitted.
+void telar_renderer_accept_images(telar_renderer *renderer, const telar_gui_frame *frame);
+// Readable when image uploads finished; take reports each exactly once.
+int telar_renderer_images_fd(telar_renderer *renderer);
+void telar_renderer_take_images(telar_renderer *renderer, void (*ready)(void *, uint32_t, int), void *context);
+
 void telar_renderer_destroy(telar_renderer *renderer);
 
 #endif

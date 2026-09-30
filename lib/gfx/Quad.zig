@@ -13,7 +13,8 @@ pub const solid_uv: [4]f32 = .{ 0.5 / 1024.0, 0.5 / 1024.0, 0.5 / 1024.0, 0.5 / 
 /// pixels wide inside the outline takes the border color; the rest of the
 /// shape takes the fill color. `texture` selects the sampled page: zero is
 /// the alpha glyph atlas read as coverage, one the premultiplied RGBA sprite
-/// page whose texel is the color. Values 2 through 9 select diagram slots. One reserved float keeps the std430 stride
+/// page whose texel is the color. Values 2 through 9 select diagram slots;
+/// 10 the straight-alpha Kitty graphics image its frame's image draw names. One reserved float keeps the std430 stride
 /// of five `vec4`s; it is always zero.
 pub const Quad = extern struct {
     x: f32,
@@ -45,6 +46,7 @@ pub const stride: usize = 80;
 pub const atlas_texture: f32 = 0;
 pub const sprite_texture: f32 = 1;
 pub const diagram_texture: f32 = 2;
+pub const image_texture: f32 = 10;
 
 /// Diagram slots follow `diagram_texture`: textures 2 through 9.
 pub const diagram_slot_count = 8;

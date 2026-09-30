@@ -101,3 +101,33 @@ fn allocationFailure(gpa: std.mem.Allocator) !void {
     next.key.generation += 1;
     try receive(&store, next);
 }
+
+test "an adopted shared object loses its name at once and keeps its pixels mapped" {
+    if (!store_module.supportsSharedMemory()) {
+        return error.SkipZigTest;
+    }
+
+    var source = retained.Store.initSharedMemory(std.testing.allocator);
+    defer source.deinit();
+    try receive(&source, image);
+    const shared = source.images.get(store_module.identity(pane_id, image.key)).?.shared orelse return error.SharedMemoryUnavailable;
+    const name = try core.ShmName.init(shared.slice());
+
+    var store = retained.Store.init(std.testing.allocator);
+    defer store.deinit();
+    try store.applySharedImage(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .image = image,
+        .name = name,
+    });
+
+    const fd = std.c.shm_open(name.sliceZ(), @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
+    if (fd >= 0) {
+        _ = std.c.close(fd);
+        return error.SharedNameStillLinked;
+    }
+
+    const adopted = store.images.get(store_module.identity(pane_id, image.key)).?;
+    try std.testing.expectEqualStrings("rgb", adopted.pixels);
+}

@@ -24,9 +24,11 @@ const SharedFrameView = @import("SharedFrameView.zig");
 const FileQueryView = @import("FileQueryView.zig");
 const Stats = @import("Stats.zig");
 const Batch = @import("Batch.zig");
+const shared_transfer = @import("shared_transfer.zig");
 
 test {
     _ = png_test;
+    _ = Batch;
 }
 
 pub const batch_bytes = 4 * 16 * 1024;
@@ -47,6 +49,12 @@ pub const Medium = enum { shared, file };
 
 const atomic_shared_prefix = "\x1b[?2026h\x1b[H\x1b_G";
 const atomic_shared_suffix = "\x1b\\\x1b[?2026l";
+/// DECSC and DECRC around an envelope, for a producer that keeps its own
+/// cursor while it streams. A wrapped frame leaves the cursor where it found
+/// it, so folding it away changes nothing but the saved cursor, which its
+/// DECSC alone restores.
+const cursor_save = "\x1b7";
+const cursor_restore = "\x1b8";
 
 pub const Event = union(enum) {
     output: struct { offset: u32, len: u32 },
@@ -176,12 +184,7 @@ pub fn filterAtomicSharedFrames(input: FilterInput, sink: anytype, availability:
                     recent -= 1;
                     const frame = sharedFrameAt(bytes, entry.recent_starts[recent]) orelse
                         unreachable;
-                    if (!availability.available(.{
-                        .encoded_name = bytes[frame.payload_start..frame.payload_end],
-                        .byte_len = frame.byte_len,
-                        .limit = storage_limit,
-                        .medium = frame.medium,
-                    })) {
+                    if (!availability.available(frameResource(bytes, frame, storage_limit))) {
                         continue;
                     }
                     entry.start = frame.start;
@@ -222,12 +225,23 @@ pub fn filterAtomicSharedFrames(input: FilterInput, sink: anytype, availability:
                         sink.observe(bytes[frame.start..frame.end]);
                         filtered.forwarded +|= 1;
                     }
-                } else if (chosen == null) {
-                    // No frame of this placement survived the availability
-                    // probe; the pane keeps its stale image this batch.
-                    filtered.unavailable +|= 1;
                 } else {
-                    filtered.discarded +|= 1;
+                    // Ghostty unlinks every shared object it opens, and the
+                    // child leaves that to the terminal: a frame nobody reads
+                    // is released the same way, or its object outlives it.
+                    availability.release(frameResource(bytes, frame, storage_limit));
+                    if (frame.wrapped) {
+                        sink.observe(cursor_save);
+                    }
+
+                    // With no chosen frame, none of this placement survived
+                    // the availability probe; the pane keeps its stale image
+                    // this batch.
+                    if (chosen == null) {
+                        filtered.unavailable +|= 1;
+                    } else {
+                        filtered.discarded +|= 1;
+                    }
                 }
                 frame_start = frame.end;
             }
@@ -238,6 +252,15 @@ pub fn filterAtomicSharedFrames(input: FilterInput, sink: anytype, availability:
 
     observeNonEmpty(sink, bytes[emitted_until..]);
     return filtered;
+}
+
+fn frameResource(bytes: []const u8, frame: SharedFrame, limit: usize) FrameResource {
+    return .{
+        .encoded_name = bytes[frame.payload_start..frame.payload_end],
+        .byte_len = frame.byte_len,
+        .limit = limit,
+        .medium = frame.medium,
+    };
 }
 
 fn observeNonEmpty(sink: anytype, bytes: []const u8) void {
@@ -288,18 +311,8 @@ pub fn sharedFrameAvailable(resource: FrameResource) bool {
         return false;
     }
 
-    const Decoder = std.base64.standard.Decoder;
-    const name_len = Decoder.calcSizeForSlice(resource.encoded_name) catch return false;
-    if (name_len == 0 or name_len > std.fs.max_path_bytes) {
-        return false;
-    }
-    var name_buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
-    Decoder.decode(name_buffer[0..name_len], resource.encoded_name) catch return false;
-    if (std.mem.indexOfScalar(u8, name_buffer[0..name_len], 0) != null) {
-        return false;
-    }
-    name_buffer[name_len] = 0;
-    const name: [:0]const u8 = name_buffer[0..name_len :0];
+    var buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
+    const name = shared_transfer.decodeChildName(resource.encoded_name, &buffer) orelse return false;
     const fd = std.c.shm_open(
         name,
         @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
@@ -315,6 +328,13 @@ pub fn sharedFrameAvailable(resource: FrameResource) bool {
 fn findSharedFrame(bytes: []const u8, from: usize) ?SharedFrame {
     var search_from = from;
     while (std.mem.indexOfPos(u8, bytes, search_from, atomic_shared_prefix)) |start| {
+        const saved = start -| cursor_save.len;
+        if (saved >= from and std.mem.startsWith(u8, bytes[saved..], cursor_save)) {
+            if (sharedFrameAt(bytes, saved)) |frame| {
+                return frame;
+            }
+        }
+
         if (sharedFrameAt(bytes, start)) |frame| {
             return frame;
         }
@@ -323,15 +343,24 @@ fn findSharedFrame(bytes: []const u8, from: usize) ?SharedFrame {
     return null;
 }
 
+// The frame at `start`: an envelope, or one wrapped in DECSC and DECRC.
 fn sharedFrameAt(bytes: []const u8, start: usize) ?SharedFrame {
-    if (start > bytes.len or
-        !std.mem.startsWith(u8, bytes[start..], atomic_shared_prefix))
-    {
+    if (start > bytes.len) {
         return null;
     }
-    const command_start = start + atomic_shared_prefix.len;
+
+    const wrapped = std.mem.startsWith(u8, bytes[start..], cursor_save);
+    const envelope = if (wrapped) start + cursor_save.len else start;
+    if (!std.mem.startsWith(u8, bytes[envelope..], atomic_shared_prefix)) {
+        return null;
+    }
+    const command_start = envelope + atomic_shared_prefix.len;
     const terminator = std.mem.indexOfPos(u8, bytes, command_start, "\x1b\\") orelse return null;
     if (!std.mem.startsWith(u8, bytes[terminator..], atomic_shared_suffix)) {
+        return null;
+    }
+    const envelope_end = terminator + atomic_shared_suffix.len;
+    if (wrapped and !std.mem.startsWith(u8, bytes[envelope_end..], cursor_restore)) {
         return null;
     }
     const command = bytes[command_start..terminator];
@@ -342,7 +371,8 @@ fn sharedFrameAt(bytes: []const u8, start: usize) ?SharedFrame {
     }
     return .{
         .start = start,
-        .end = terminator + atomic_shared_suffix.len,
+        .end = if (wrapped) envelope_end + cursor_restore.len else envelope_end,
+        .wrapped = wrapped,
         .apc_start = command_start - "\x1b_G".len,
         .apc_end = terminator + "\x1b\\".len,
         .payload_start = command_start + separator + 1,
@@ -581,7 +611,54 @@ const TestAvailability = enum {
             .none => false,
         };
     }
+
+    pub fn release(_: TestAvailability, _: FrameResource) void {}
 };
+
+/// Records which frames the filter released instead of forwarding.
+const ReleaseRecorder = struct {
+    released: [8][]const u8 = undefined,
+    count: usize = 0,
+
+    pub fn available(_: *ReleaseRecorder, resource: FrameResource) bool {
+        return resource.byte_len <= resource.limit;
+    }
+
+    pub fn release(self: *ReleaseRecorder, resource: FrameResource) void {
+        self.released[self.count] = resource.encoded_name;
+        self.count += 1;
+    }
+};
+
+test "frames wrapped in DECSC and DECRC fold like bare envelopes and keep the saved cursor" {
+    const first = "\x1b7\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=7,p=1,C=1,q=2;L3B4LTE=\x1b\\\x1b[?2026l\x1b8";
+    const second = "\x1b7\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=7,p=1,C=1,q=2;L3B4LTI=\x1b\\\x1b[?2026l\x1b8";
+    const latest = "\x1b7\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=7,p=1,C=1,q=2;L3B4LTM=\x1b\\\x1b[?2026l\x1b8";
+    var output: TestOutput = .{};
+    var recorder: ReleaseRecorder = .{};
+
+    try std.testing.expectEqual(
+        FilterStats{ .discarded = 2, .unavailable = 0, .forwarded = 1 },
+        filterAtomicSharedFrames(.{ .bytes = "head" ++ first ++ second ++ latest ++ "tail", .storage_limit = 4 }, &output, &recorder),
+    );
+    try std.testing.expectEqualStrings("head\x1b7\x1b7" ++ latest ++ "tail", output.slice());
+    try std.testing.expectEqual(@as(usize, 2), recorder.count);
+    try std.testing.expectEqualStrings("L3B4LTE=", recorder.released[0]);
+    try std.testing.expectEqualStrings("L3B4LTI=", recorder.released[1]);
+}
+
+test "a DECSC without its DECRC leaves the envelope bare" {
+    const bare = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=7,p=1,C=1,q=2;L3B4LTE=\x1b\\\x1b[?2026l";
+    const latest = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=7,p=1,C=1,q=2;L3B4LTM=\x1b\\\x1b[?2026l";
+    var output: TestOutput = .{};
+    var recorder: ReleaseRecorder = .{};
+
+    try std.testing.expectEqual(
+        FilterStats{ .discarded = 1, .unavailable = 0, .forwarded = 1 },
+        filterAtomicSharedFrames(.{ .bytes = "\x1b7" ++ bare ++ latest ++ "\x1b7", .storage_limit = 4 }, &output, &recorder),
+    );
+    try std.testing.expectEqualStrings("\x1b7" ++ latest ++ "\x1b7", output.slice());
+}
 
 test "atomic shared-memory frames are latest-wins per placement" {
     const first = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=7,p=1,C=1,q=2;L3B4LTE=\x1b\\\x1b[?2026l";

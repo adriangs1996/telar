@@ -5,7 +5,6 @@ const gui_event = @import("gui_event.zig");
 const mailbox = @import("mailbox");
 const favicon_worker = @import("image/favicon_worker.zig");
 const event_module = @import("input/event.zig");
-const graphics_delivery = @import("graphics_delivery.zig");
 const shared_model = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
@@ -52,6 +51,8 @@ const Scene = @import("render/Scene.zig");
 const host_context = @import("widgets/interaction/host_context.zig");
 
 const FramePacer = @import("FramePacer.zig");
+const PaneImages = @import("image/PaneImages.zig");
+const pane_images = @import("image/pane_images.zig");
 const CursorClock = @import("CursorClock.zig");
 const animate = @import("animate");
 const FrameClock = animate.FrameClock;
@@ -66,6 +67,9 @@ const GuiAdapter = @This();
 
 /// Clients one window can hold: the local machine and every saved one.
 pub const machine_slots = core.MachineProfiles.capacity + 1;
+/// Both backends upload and draw Kitty graphics images, so no pane keeps
+/// the cell fallback for them.
+const image_support: data.environment.Support = .supported;
 
 const JobHook = struct {
     context: *anyopaque,
@@ -139,7 +143,9 @@ sidebar: SidebarPreference = .{},
 overlays: Overlays = .{},
 /// The images each machine's runtime sent, one store per client slot:
 /// every runtime numbers its panes from the same start.
-graphics_stores: [machine_slots]graphics_delivery.Store,
+graphics_stores: [machine_slots]client.retained_graphics.Store,
+/// The textures and resolved placements of the presented machine's images.
+images: PaneImages,
 diagrams: DiagramService,
 /// The window client's clipboard image previews, bound as its attachment shelf.
 previews: ImagePreviews,
@@ -220,6 +226,8 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
         store.* = .init(params.gpa);
     }
 
+    gui.images = .{};
+
     gui.diagrams = .init(params.gpa);
 
     gui.syntax = .{
@@ -253,6 +261,9 @@ pub fn deinit(self: *GuiAdapter) void {
         _ = self.app.presentation.complete(flight.token, .cancelled);
     }
 
+    // The backend stopped reading pixels before this runs; leases go back
+    // before their stores free them.
+    pane_images.abandon(&self.images, &self.graphics_stores);
     for (&self.graphics_stores) |*store| {
         store.deinit();
     }
@@ -433,7 +444,8 @@ fn now(self: *const GuiAdapter) u64 {
 pub fn wakeupAfter(self: *const GuiAdapter) u32 {
     const now_ns = self.now();
     const widgets = if (self.app.presentation.active == null) self.chrome.animation.wakeupAfter(now_ns) else 0;
-    return FrameClock.earliest(self.cursor_clock.wakeupAfter(now_ns), widgets);
+    const images = pane_images.wakeupAfter(&self.images, now_ns);
+    return FrameClock.earliest(FrameClock.earliest(self.cursor_clock.wakeupAfter(now_ns), widgets), images);
 }
 
 /// Reports native frame admission delay from visible terminal frame identities.
@@ -505,7 +517,7 @@ fn start(self: *GuiAdapter, colors: core.TerminalColors) !void {
     var capabilities = self.app.model.host.host_capabilities;
 
     capabilities.terminal_colors = colors;
-    capabilities.images = .unsupported;
+    capabilities.images = image_support;
     capabilities.pointer_pixels = .supported;
 
     _ = try client.host_resize.applyHostUpdate(
@@ -516,9 +528,13 @@ fn start(self: *GuiAdapter, colors: core.TerminalColors) !void {
         },
     );
 
+    // The window's own client shares the runtime's machine, so image
+    // generations arrive as mapped shared objects instead of 1 MiB chunks
+    // copied on the thread that routes keys. A failed mapping downgrades
+    // to chunks (`pane_graphics.applyPaneGraphics`).
     self.app.model.startup.phase = .opening;
     self.app.bootstrap = .{
-        .graphics_shared = false,
+        .graphics_shared = client.supportsSharedMemory(),
         .client_identity = self.app.client_identity,
         .terminal_colors = colors,
     };
@@ -619,7 +635,8 @@ pub fn update(self: *GuiAdapter) !?u8 {
         self.needs_draw = self.app.presentation.needsPreparation() or animation_due or
             self.driver.configuration.pending or
             self.renderer.cursor_on != self.cursor_clock.shown(now_ns) or
-            self.renderer.focused != self.cursor_clock.focused;
+            self.renderer.focused != self.cursor_clock.focused or
+            pane_images.trimDue(&self.images, now_ns);
     }
 
     return status;
@@ -1712,7 +1729,7 @@ pub fn resize(self: *GuiAdapter, size: core.TerminalSize, theme: shared_model.Te
     capabilities.window_height_px = @as(u32, size.rows) * size.cell_height_px;
     capabilities.cell_width_px = size.cell_width_px;
     capabilities.cell_height_px = size.cell_height_px;
-    capabilities.images = .unsupported;
+    capabilities.images = image_support;
     capabilities.pointer_pixels = .supported;
     capabilities.terminal_colors = .{
         .foreground = theme.foreground,
@@ -1728,6 +1745,17 @@ pub fn resize(self: *GuiAdapter, size: core.TerminalSize, theme: shared_model.Te
         },
     );
     try window_machines.shareHost(self);
+}
+
+/// Takes the backend's report that one image upload stopped reading its
+/// pixels; a ready texture changes what the next frame draws.
+/// Example: `gui.imageReady(handle, true);`
+pub fn imageReady(self: *GuiAdapter, handle: u32, success: bool) void {
+    const elapsed = pane_images.finish(&self.images, &self.graphics_stores, handle, success, self.now()) orelse return;
+    if (comptime core.enabled) {
+        self.app.telemetry.metrics.graphics_textures += 1;
+        self.app.telemetry.metrics.graphics_upload.observe(elapsed);
+    }
 }
 
 /// Retires captured damage after GPU delivery, preserving newer received state.
@@ -1782,6 +1810,18 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
     const projected = self.projection();
     const observed = self.observation();
     _ = self.app.presentation.observe(observed);
+    pane_images.place(
+        &self.images,
+        &self.graphics_stores,
+        .{
+            .machine = self.machines.active,
+            .cell_width = renderer.metrics.cell_width,
+            .cell_height = renderer.metrics.cell_height,
+        },
+        self.now(),
+    );
+    pane_images.start(&self.images, &self.graphics_stores, self.machines.active, self.now());
+    renderer.images = self.images.resolved();
     var scene: Scene = .{
         .terminal = renderer,
         .chrome = &self.chrome,
@@ -1801,6 +1841,12 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
     }
 
     const commit = try scene.prepare(projected);
+    pane_images.noteDrawn(&self.images, renderer.imageDraws());
+    if (comptime core.enabled) {
+        self.app.telemetry.metrics.graphics_presented = self.images.presented;
+        self.app.telemetry.metrics.graphics_gpu_bytes = self.images.gpu.resident_bytes;
+    }
+
     const diagram_revision = self.diagrams.store.revision;
     self.diagrams.start(&self.driver.inbox);
     self.syntax.start(&self.driver.inbox);
@@ -1950,6 +1996,7 @@ pub fn observation(self: *const GuiAdapter) client.Observation {
     version.link +%= self.machines.revision;
     return .{
         .model = version,
+        .graphics_ingress = self.graphics_stores[self.machines.active].ingressVersion() +% self.images.revision,
         .attachment_ingress = self.previews.revision,
         .geometry_revision = shared_model.workbench.region(&self.app.model).revision,
         .presentation_ingress = self.ingress(),

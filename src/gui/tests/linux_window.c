@@ -44,7 +44,15 @@ static struct {
     atomic_bool requested, closing;
     uint8_t atlas[4];
     uint8_t sprites[16];
-    telar_gui_quad quads[7];
+    telar_gui_quad quads[9];
+    // Kitty graphics images: an RGB and an RGBA 2x2, uploaded on the first
+    // frame, drawn once ready, then one released and uploaded again.
+    uint8_t image_rgb[12], image_rgba[16];
+    telar_gui_image_upload uploads[2];
+    telar_gui_image_draw draws[2];
+    uint32_t releases[1];
+    atomic_uint images_ready, image_failures, image_frames;
+    bool reuploaded;
 } state;
 
 // Test-only interposition exercises retry paths against the real Vulkan backend.
@@ -209,6 +217,37 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
         frame->diagrams[0] = (telar_gui_diagram_texture){state.sprites, 4, 1, 1};
         frame->diagrams[7] = (telar_gui_diagram_texture){state.sprites, 1, 4, UINT64_C(0x100000000) + token};
     }
+    if (token == 1) {
+        memset(state.image_rgb, 200, sizeof state.image_rgb);
+        memset(state.image_rgba, 90, sizeof state.image_rgba);
+        state.uploads[0] = (telar_gui_image_upload){state.image_rgb, 1, 2, 2, 3};
+        state.uploads[1] = (telar_gui_image_upload){state.image_rgba, 2, 2, 2, 4};
+        frame->image_uploads = state.uploads;
+        frame->image_upload_count = 2;
+    }
+    unsigned ready_images = atomic_load(&state.images_ready);
+    if (ready_images >= 2 && !state.reuploaded) {
+        // Handle 1 is rewritten in place, as a spare of the same size; handle
+        // 2 is released and uploaded again.
+        state.reuploaded = true;
+        state.releases[0] = 2;
+        frame->image_releases = state.releases;
+        frame->image_release_count = 1;
+        frame->image_uploads = state.uploads;
+        frame->image_upload_count = 2;
+    } else if (ready_images >= 2) {
+        uint32_t first = frame->quad_count;
+        state.quads[first] = (telar_gui_quad){.x = 480, .y = 30, .width = 64, .height = 64,
+            .u1 = 1, .v1 = 1, .r = 1, .g = 1, .b = 1, .a = 1, .texture = TELAR_GUI_IMAGE_TEXTURE};
+        state.quads[first + 1] = state.quads[first];
+        state.quads[first + 1].y = 120;
+        state.draws[0] = (telar_gui_image_draw){first, 1};
+        state.draws[1] = (telar_gui_image_draw){first + 1, 2};
+        frame->quad_count = first + 2;
+        frame->image_draws = state.draws;
+        frame->image_draw_count = 2;
+        atomic_fetch_add(&state.image_frames, 1);
+    }
     if (invalid_frame_test) {
         frame->atlas_side = 0;
     }
@@ -272,6 +311,14 @@ static void complete(void *context, uint64_t token, int success) {
     }
 }
 
+static void image_ready(void *context, uint32_t handle, int success) {
+    (void)context;
+    if (handle < 1 || handle > 2) {
+        atomic_fetch_add(&state.failures, 1);
+    }
+    atomic_fetch_add(success ? &state.images_ready : &state.image_failures, 1);
+}
+
 static int input(void *context, telar_gui_input event) {
     (void)context;
     (void)event;
@@ -289,7 +336,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     telar_gui_callbacks callbacks = {
-        .render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = state.wake[0], .pointer_shape = pointer_shape, .wakeup_after = wakeup_after, .ready = ready};
+        .render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = state.wake[0], .pointer_shape = pointer_shape, .wakeup_after = wakeup_after, .ready = ready, .image_ready = image_ready};
     int status = telar_gui_run("Telar Vulkan integration test", NULL, &callbacks);
     if (invalid_frame_test) {
         telar_gui_close_pipe(state.wake);
@@ -305,8 +352,13 @@ int main(int argc, char **argv) {
     if (atomic_load(&alpha_checks) < atomic_load(&state.delivered)) {
         atomic_fetch_add(&state.failures, 1);
     }
+    if (atomic_load(&state.images_ready) < 4 || atomic_load(&state.image_failures) != 0 ||
+        atomic_load(&state.image_frames) == 0) {
+        atomic_fetch_add(&state.failures, 1);
+    }
     unsigned failures = atomic_load(&state.failures);
-    printf("native Linux: status=%d painted=%u delivered=%u retries=%u timer_wakes=%u failures=%u\n", status,
-           atomic_load(&state.painted), atomic_load(&state.delivered), atomic_load(&state.retries), atomic_load(&state.timer_wakes), failures);
+    printf("native Linux: status=%d painted=%u delivered=%u retries=%u timer_wakes=%u images_ready=%u image_frames=%u failures=%u\n", status,
+           atomic_load(&state.painted), atomic_load(&state.delivered), atomic_load(&state.retries), atomic_load(&state.timer_wakes),
+           atomic_load(&state.images_ready), atomic_load(&state.image_frames), failures);
     return status != 0 || failures != 0;
 }

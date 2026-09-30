@@ -97,7 +97,7 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
     });
     try writer.print("\"input_events\":{d},\"input_bytes\":{d},\"key_lease_overflows\":{d},\"mouse_events\":{d}," ++
         "\"server_messages\":{d},\"server_bytes\":{d},\"graphics_messages\":{d},\"graphics_bytes\":{d}," ++
-        "\"graphics_images\":{d},\"frames\":{d},\"frame_cells\":{d},\"frame_spans\":{d},\"snapshots\":{d}," ++
+        "\"graphics_images\":{d},\"graphics_textures\":{d},\"graphics_upload_avg_us\":{d},\"graphics_upload_max_us\":{d},\"graphics_presented\":{d},\"graphics_gpu_bytes\":{d},\"graphics_resyncs\":{d},\"frames\":{d},\"frame_cells\":{d},\"frame_spans\":{d},\"snapshots\":{d}," ++
         "\"decode_avg_us\":{d},\"decode_max_us\":{d},\"apply_avg_us\":{d},\"apply_max_us\":{d}," ++
         "\"input_enqueue_avg_us\":{d},\"input_enqueue_max_us\":{d}," ++
         "\"rss_bytes\":{d},\"lua_used\":{d},\"lua_limit\":{d}}}\n", .{
@@ -110,6 +110,12 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         metrics.graphics_messages,
         metrics.graphics_bytes,
         metrics.graphics_images,
+        metrics.graphics_textures,
+        metrics.graphics_upload.average() / std.time.ns_per_us,
+        metrics.graphics_upload.max_ns / std.time.ns_per_us,
+        metrics.graphics_presented,
+        metrics.graphics_gpu_bytes,
+        metrics.graphics_resyncs,
         metrics.frames,
         metrics.frame_cells,
         metrics.frame_spans,

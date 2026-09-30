@@ -60,6 +60,15 @@
         }
 
         [view pumpEvents];
+      }
+      imageReady:^(uint32_t handle, BOOL success) {
+        TelarView *view = weak;
+        if (view == nil || view->closed || view->callbacks.image_ready == NULL) {
+          return;
+        }
+
+        view->callbacks.image_ready(view->context, handle, success ? 1 : 0);
+        [view pumpEvents];
       }];
 
   if (renderer == nil) {
@@ -249,6 +258,7 @@
   dirty = NO;
   preparing = YES;
   callbacks.render(context, viewport, &frame);
+  [renderer acceptImages:&frame];
   [self refreshPointerCursor];
   if (frame.token == 0) {
     dirty = YES;

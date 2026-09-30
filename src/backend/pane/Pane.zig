@@ -13,6 +13,9 @@ const PtyResponseQueue = @import("PtyResponseQueue.zig");
 const GraphicsLimits = @import("../media/GraphicsLimits.zig");
 const PaneMediaAllocator = @import("../media/PaneMediaAllocator.zig");
 const std = @import("std");
+const vtscan = @import("vtscan");
+const kitty_protocol = @import("kitty_protocol");
+const KittyCursor = @import("KittyCursor.zig");
 const PaneInputQueue = @import("PaneInputQueue.zig");
 const State = @import("../media/State.zig");
 const exit_module = pty.exit;
@@ -94,6 +97,12 @@ output_pending: bool = false,
 ingest_pending: bool = false,
 actor_count: u8 = 0,
 output_done: bool = false,
+/// The next PTY read waits for the media actor (`Pipeline.holdsRead`).
+output_held: bool = false,
+/// Where Kitty graphics commands end in the output the interactive terminal
+/// ingests, and how far each moves its cursor (`KittyCursor`).
+kitty_commands: vtscan.KittyCommandScanner = .{},
+kitty_cursor: KittyCursor = .{},
 wait_pending: bool = false,
 close_requested: bool = false,
 exit: ?exit_module.Exit = null,
@@ -680,7 +689,17 @@ pub fn ingest(self: *Pane, io: std.Io, bytes: []const u8) !u64 {
     {
         const terminal_allocations = core.enterTerminalAllocations();
         defer terminal_allocations.restore();
-        self.stream.nextSlice(bytes);
+        var rest = bytes;
+        while (self.kitty_commands.next(rest)) |command| {
+            self.stream.nextSlice(rest[0..command.end]);
+            if (self.kitty_cursor.observe(command, self.size.cell_width_px, self.size.cell_height_px)) |cells| {
+                self.advancePastImage(cells);
+            }
+
+            rest = rest[command.end..];
+        }
+
+        self.stream.nextSlice(rest);
     }
     const foreground = self.terminal.colors.foreground.override;
     const background = self.terminal.colors.background.override;
@@ -698,6 +717,29 @@ pub fn ingest(self: *Pane, io: std.Io, bytes: []const u8) !u64 {
     self.render_pending = true;
     self.dirty = true;
     return core.elapsed(started, core.now(io));
+}
+
+/// Moves the cursor past a placement the way Ghostty's graphics command
+/// does: down through `index` so scroll regions scroll, bounded by one
+/// screen past the region's bottom, then right of the image or to the first
+/// column when it reaches the right edge.
+fn advancePastImage(self: *Pane, cells: kitty_protocol.DisplayCells) void {
+    const terminal = &self.terminal;
+    const screen = terminal.screens.active;
+    const target_x = @as(usize, screen.cursor.x) +| cells.columns;
+    const wraps = target_x >= terminal.cols;
+    const requested_rows = (@as(usize, cells.rows) -| 1) +| @intFromBool(wraps);
+    const region = terminal.scrolling_region;
+    const inside = screen.cursor.y >= region.top and screen.cursor.y <= region.bottom and
+        screen.cursor.x >= region.left and screen.cursor.x <= region.right;
+    const rows_before_scroll: usize = if (inside) region.bottom - screen.cursor.y else 0;
+    const rows = @min(requested_rows, rows_before_scroll +| terminal.rows);
+    for (0..rows) |_| {
+        terminal.index() catch break;
+    }
+
+    screen.cursor.pending_wrap = false;
+    screen.cursorHorizontalAbsolute(if (wraps) 0 else @intCast(target_x));
 }
 
 pub fn queueMediaOutput(self: *Pane, bytes: []const u8) void {

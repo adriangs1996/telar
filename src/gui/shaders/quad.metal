@@ -60,8 +60,15 @@ static float rounded_distance(float2 local, float2 size, float radius) {
 
 // Texture 0 is the alpha atlas read as coverage; texture 1 the premultiplied
 // RGBA sprite page sampled linearly, divided back to straight alpha for the
-// blend state and multiplied by the tint.
-fragment float4 quad_fragment(Vertex in [[stage_in]], texture2d<float> atlas [[texture(0)]], texture2d<float> sprites [[texture(1)]], array<texture2d<float>, 8> diagrams [[texture(2)]]) {
+// blend state and multiplied by the tint. Texture 10 is a Kitty graphics
+// image, already straight alpha, sampled linearly as kitty and Ghostty do.
+fragment float4 quad_fragment(Vertex in [[stage_in]], texture2d<float> atlas [[texture(0)]], texture2d<float> sprites [[texture(1)]], array<texture2d<float>, 8> diagrams [[texture(2)]], texture2d<float> image [[texture(10)]]) {
+    if (in.texture > 9.5) {
+        constexpr sampler linear(filter::linear, address::clamp_to_edge);
+        float4 texel = image.sample(linear, in.uv);
+        return float4(texel.rgb * in.color.rgb, texel.a * in.color.a);
+    }
+
     if (in.texture > 0.5) {
         constexpr sampler linear(filter::linear, address::clamp_to_edge);
         float4 texel;

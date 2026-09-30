@@ -61,8 +61,9 @@ pub fn receive(model: *ClientModel, frame: core.FrameView) !PaneFrameOutcome {
             .pane_id = frame.pane_id,
             .location = pane.location,
             .frame_id = frame.frame_id,
-            .graphics_visible = frame.scroll.atBottom(frame.rows) and
-                active != null and std.meta.eql(active.?, pane.location),
+            // A pane scrolled back still shows its images, lower by the rows
+            // it went back; only another tab hides them.
+            .graphics_visible = active != null and std.meta.eql(active.?, pane.location),
             .snapshot = frame.base_frame_id == 0,
             .spans = applied.spans,
             .cells = applied.cells,

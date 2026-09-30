@@ -78,6 +78,10 @@ pub fn applyPaneGraphics(client: *Client, command: data.PaneGraphicsCommand) !Pa
                 return error.InvalidPaneGraphicsResult;
             }
 
+            if (comptime core.enabled) {
+                client.telemetry.metrics.graphics_resyncs += 1;
+            }
+
             try client.model.to_runtime.push(
                 .{
                     .request_graphics_snapshot = .{

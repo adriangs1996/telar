@@ -75,6 +75,7 @@ test {
     _ = @import("media/png_test.zig");
     _ = @import("media/shared_transfer.zig");
     _ = @import("pane/pane_namespace.zig");
+    _ = @import("pane/KittyCursor.zig");
     _ = @import("persistence/checkpoint.zig");
     _ = @import("plugins/host_support.zig");
     _ = @import("plugins/protocol.zig");
