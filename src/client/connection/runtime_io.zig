@@ -80,8 +80,9 @@ pub fn receiveRuntime(client: *Client, result: anyerror!*const data.RuntimeMessa
         return exit_status;
     }
 
-    limit_reached.resumeGraphics(client);
+    // The read is re-armed before resuming paused graphics, which can fail.
     startRuntimeRead(client) catch |failed| return lose(client, failed);
+    try limit_reached.resumeGraphics(client);
 
     return null;
 }

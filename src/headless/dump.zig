@@ -5,9 +5,10 @@ const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
 
-/// Writes the tabs, the active tab's panes with their visible rows, the
-/// workspace list, the notifications, the client diagnostic, the limits the
-/// client reached and the link.
+/// Writes the tabs, the active tab's panes with their visible rows and
+/// whether a limit paused their images, the workspace list, the
+/// notifications, the client diagnostic, the limits the client reached and
+/// the link.
 ///
 /// ```zig
 /// try dump.write(writer, &client.model);
@@ -99,10 +100,11 @@ fn writePanes(writer: *std.Io.Writer, model: *const data.ClientModel, slot: usiz
 
         first = false;
         const buffer = &pane.buffer;
-        try writer.print("{{\"id\":{d},\"focused\":{},\"attached\":{},\"cols\":{d},\"rows\":{d},\"lines\":[", .{
+        try writer.print("{{\"id\":{d},\"focused\":{},\"attached\":{},\"images_paused\":{},\"cols\":{d},\"rows\":{d},\"lines\":[", .{
             @intFromEnum(pane.id),
             focused == pane.id,
             pane.attached,
+            model.graphics_pauses.contains(pane.id),
             buffer.w,
             buffer.h,
         });
@@ -175,4 +177,43 @@ test "the dump shows the client diagnostic, notice levels and reached limits" {
     try std.testing.expect(std.mem.indexOf(u8, json, "\"diagnostic\":\"invalid telar.ui.button: TooManyBarActions\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, json, "{\"level\":\"warning\",\"title\":\"Limit reached\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, json, "\"limits\":[{\"name\":\"bars.max_bar_actions\",\"value\":4,\"requested\":5,\"hits\":1}]") != null);
+}
+
+test "the dump marks a pane whose images a limit paused" {
+    var model = data.ClientModel.init(std.testing.allocator, true);
+    defer model.deinit();
+    try data.workspace_handoff.bootstrap(
+        &model,
+        .{
+            .pane_id = @enumFromInt(3),
+            .location = .{
+                .workspace = .{
+                    .workspace = @enumFromInt(1),
+                },
+                .tab_id = @enumFromInt(2),
+            },
+            .size = .{
+                .cols = 4,
+                .rows = 1,
+            },
+        },
+    );
+
+    var buffer: [4096]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+    try write(&writer, &model);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        writer.buffered(),
+        "\"id\":3,\"focused\":true,\"attached\":true,\"images_paused\":false",
+    ) != null);
+
+    _ = model.graphics_pauses.add(@enumFromInt(3), 0);
+    writer = .fixed(&buffer);
+    try write(&writer, &model);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        writer.buffered(),
+        "\"id\":3,\"focused\":true,\"attached\":true,\"images_paused\":true",
+    ) != null);
 }

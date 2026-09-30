@@ -7,6 +7,7 @@ const model_namespace = @import("../state/model_namespace.zig");
 const model_data = @import("../model.zig");
 const core = @import("telar-core");
 const ClientModel = @import("../state/ClientModel.zig");
+const limit_reached = @import("../connection/limit_reached.zig");
 const TabRemoval = @import("../state/TabRemoval.zig");
 const StaleTabRemoval = @import("../state/StaleTabRemoval.zig");
 
@@ -17,6 +18,7 @@ pub fn remove(model: *ClientModel, tab_id: core.TabId) bool {
     const slot = model.tabs.find(tab_id) orelse return false;
     const active_id = model.tabs.location[model.tabs.active].tab_id;
     model.panes.removeTab(tab_id);
+    limit_reached.forgetClosedPanes(model);
     model.tabs.remove(slot);
     if (model.tabs.count == 0) {
         model.tabs.active = 0;

@@ -27,6 +27,8 @@ pub const Message = union(enum) {
     runtime_connected: anyerror!void,
     /// The wait before connecting again to a lost runtime ended.
     runtime_retry_tick: anyerror!void,
+    /// The earliest paused pane may ask for its graphics again.
+    graphics_resume_tick: anyerror!void,
     /// A change to `machines.json` was written, or why it was not.
     machine_edited: anyerror!void,
     /// A diagnostics interval passed.
@@ -39,6 +41,7 @@ pub const Message = union(enum) {
     pub fn path(self: Message) core.Path {
         return switch (self) {
             .server, .sent, .sidebar_animation_tick, .runtime_connected => .interactive,
+            .graphics_resume_tick => .media,
             .notification_tick, .bar_tick, .bar_command, .pick_command, .plugin_result, .path_completion, .link_opened, .sound_played, .notified, .config_reload, .runtime_retry_tick, .machine_edited, .telemetry_tick, .telemetry_written => .observation,
         };
     }
