@@ -10,6 +10,7 @@ pub const GenericJoiner = @import("GenericJoiner.zig").Type;
 pub const Key = @import("Key.zig");
 pub const Quota = @import("Quota.zig");
 pub const Reservation = @import("Reservation.zig");
+pub const Truncation = @import("Truncation.zig");
 pub const buffer_support = @import("buffer_support.zig");
 pub const decode = @import("decode.zig");
 
@@ -21,6 +22,7 @@ test {
     _ = @import("Key.zig");
     _ = @import("Quota.zig");
     _ = @import("Reservation.zig");
+    _ = @import("Truncation.zig");
     _ = @import("buffer_support.zig");
     _ = @import("decode.zig");
 }

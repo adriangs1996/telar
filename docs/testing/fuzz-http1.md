@@ -93,7 +93,8 @@ close-delimited.
 `until_close`, `none`), the direction, how the payload splits into chunks,
 each chunk-size line (plain, uppercase, leading zeros, an extension, an
 extension that fills `max_chunk_line_bytes` exactly), up to 4 trailers (one
-fills the line bound exactly), a read schedule, a cut and a failing write.
+fills `max_trailer_line_bytes` exactly), a read schedule, a cut and a failing
+write.
 A message with a declared end is followed by `NEXT-BYTES`.
 
 Each generated body is relayed three times: in whole reads, in the shape's

@@ -15,7 +15,10 @@ pub const ca_seconds: i64 = 3650 * 24 * 60 * 60;
 pub const system_ca_seconds: i64 = 30 * 24 * 60 * 60;
 pub const leaf_seconds: i64 = 30 * 24 * 60 * 60;
 pub const backdate_seconds: i64 = 3600;
-pub const max_cert_len = 1024;
+/// The longest DER certificate: a leaf for a 253-byte hostname, carried as
+/// both common name and DNS name, takes about 940 bytes, so this leaves
+/// room for longer issuer names and extensions.
+pub const max_cert_len = 2048;
 pub const max_pem_len = 2 * max_cert_len;
 
 pub const Resources = @import("Resources.zig");
@@ -197,6 +200,30 @@ test "minted leaves verify against the local authority" {
     const parsed_ca = try (std.crypto.Certificate{ .buffer = authority.pair.certDer(), .index = 0 }).parse();
     try parsed_leaf.verify(parsed_ca, std.Io.Clock.real.now(io).toSeconds());
     try parsed_leaf.verifyHostName("api.anthropic.com");
+}
+
+test "a leaf for the longest hostname fits and verifies" {
+    const io = std.testing.io;
+    const host = "a" ** 63 ++ "." ++ "b" ** 63 ++ "." ++ "c" ** 63 ++ "." ++ "d" ** 61;
+    comptime std.debug.assert(host.len == 253);
+    const authority: Authority = .{
+        .pair = try generate(io, ca_seconds, test_name),
+        .common_name = test_name,
+    };
+    const leaf = try authority.mint(io, host);
+    const leaf_certificate: std.crypto.Certificate = .{
+        .buffer = leaf.certDer(),
+        .index = 0,
+    };
+    const authority_certificate: std.crypto.Certificate = .{
+        .buffer = authority.pair.certDer(),
+        .index = 0,
+    };
+
+    const parsed_leaf = try leaf_certificate.parse();
+    const parsed_ca = try authority_certificate.parse();
+    try parsed_leaf.verify(parsed_ca, std.Io.Clock.real.now(io).toSeconds());
+    try parsed_leaf.verifyHostName(host);
 }
 
 test "authority files and derived bundle are owner-only" {

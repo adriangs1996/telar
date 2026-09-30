@@ -9,6 +9,7 @@ const Observer = @import("Observer.zig");
 const header_memory = @import("header_memory.zig");
 const std = @import("std");
 const BodyCollector = @import("BodyCollector.zig");
+const observer_hooks = @import("../observer_hooks.zig");
 const RouteMatch = @import("../RouteMatch.zig");
 const localca = @import("localca");
 const Session = localca.Session;
@@ -24,6 +25,7 @@ pub const frame_data: u8 = 0x0;
 pub const frame_headers: u8 = 0x1;
 pub const frame_rst_stream: u8 = 0x3;
 pub const frame_push_promise: u8 = 0x5;
+pub const frame_ping: u8 = 0x6;
 pub const frame_goaway: u8 = 0x7;
 pub const frame_continuation: u8 = 0x9;
 
@@ -63,6 +65,8 @@ pub const Route = @import("RelayRoute.zig");
 pub const HeaderKind = enum { none, headers, push_promise };
 
 /// Relays one HTTP/2 direction byte for byte while publishing decoded events.
+/// A sink that declares `relayed()` hears every forwarded read, frames that
+/// publish no event (PING, WINDOW_UPDATE, SETTINGS) included.
 ///
 /// ```zig
 /// const stats = relay(session, route, &sink);
@@ -97,6 +101,10 @@ pub fn relay(session: anytype, route: Route, sink: anytype) Stats {
             break;
         }
 
+        if (comptime observer_hooks.declares(@TypeOf(sink), "relayed")) {
+            sink.relayed();
+        }
+
         if (route.direction == .response) {
             observer.observe(input, sink);
         }
@@ -109,7 +117,11 @@ pub fn relay(session: anytype, route: Route, sink: anytype) Stats {
     }
 
     session.halfClose(route.to);
-    return .{ .decode_failed = observer.failed };
+    return .{
+        .decode_failed = observer.failed,
+        .header_block_too_large = observer.block_too_large,
+        .untracked_streams = observer.untracked_streams,
+    };
 }
 
 pub fn isHeaderFrame(frame_type: u8) bool {
@@ -513,6 +525,116 @@ test "HPACK dynamic table survives padded response blocks" {
     try std.testing.expect(!observer.failed);
     try std.testing.expectEqual(@as(usize, 2), collector.completed);
 }
+
+test "a header block past its bound ends decoding and says so" {
+    var header: [framing.header_bytes]u8 = undefined;
+    writeFrameHeader(&header, .{
+        .length = max_header_block_bytes + 1,
+        .frame_type = frame_headers,
+        .flags = flag_end_headers,
+        .stream_id = 1,
+    });
+    const block: [max_header_block_bytes + 1]u8 = @splat(0);
+    var collector: BodyCollector = .{};
+    var memory = header_memory.of(&std.testing.allocator);
+    var observer = Observer.init(&memory, &claude_routes, .response);
+    defer observer.deinit();
+
+    observer.observe(&header, &collector);
+    observer.observe(&block, &collector);
+
+    try std.testing.expect(observer.failed);
+    try std.testing.expect(observer.block_too_large);
+}
+
+test "a request past the tracked streams is counted as untracked" {
+    const block = "\x83\x04\x0c/v1/messages";
+    var collector: BodyCollector = .{};
+    var memory = header_memory.of(&std.testing.allocator);
+    var observer = Observer.init(&memory, &claude_routes, .request);
+    defer observer.deinit();
+
+    for (0..h2frames.streams.max_tracked_streams + 1) |index| {
+        var header: [framing.header_bytes]u8 = undefined;
+        writeFrameHeader(&header, .{
+            .length = block.len,
+            .frame_type = frame_headers,
+            .flags = flag_end_headers,
+            .stream_id = @intCast(2 * index + 1),
+        });
+        observer.observe(&header, &collector);
+        observer.observe(block, &collector);
+    }
+
+    try std.testing.expect(!observer.failed);
+    try std.testing.expectEqual(@as(u32, 1), observer.untracked_streams);
+}
+
+test "a sink that asks hears every relayed read, frames without events included" {
+    var ping: [framing.header_bytes + 8]u8 = @splat(0);
+    writeFrameHeader(ping[0..framing.header_bytes], .{
+        .length = 8,
+        .frame_type = frame_ping,
+        .flags = 0,
+        .stream_id = 0,
+    });
+    var session: ReadCounter = .{
+        .input = &ping,
+    };
+    var sink: RelaySink = .{};
+
+    const stats = relay(&session, .{
+        .from = .origin,
+        .to = .child,
+        .direction = .response,
+        .gpa = std.testing.allocator,
+    }, &sink);
+
+    try std.testing.expect(!stats.decode_failed);
+    try std.testing.expect(session.reads > 1);
+    try std.testing.expectEqual(session.reads, sink.relayed_reads);
+    try std.testing.expectEqual(@as(usize, 0), sink.events);
+}
+
+/// A session that hands its input over in several reads and counts them.
+const ReadCounter = struct {
+    input: []const u8,
+    offset: usize = 0,
+    reads: usize = 0,
+
+    pub fn read(self: *ReadCounter, _: Session.Side, buffer: []u8) ?usize {
+        if (self.offset == self.input.len) {
+            return null;
+        }
+
+        const half = @max(@as(usize, 1), self.input.len / 2);
+        const len = @min(buffer.len, half, self.input.len - self.offset);
+        @memcpy(buffer[0..len], self.input[self.offset..][0..len]);
+        self.offset += len;
+        self.reads += 1;
+        return len;
+    }
+
+    pub fn writeAll(_: *ReadCounter, _: Session.Side, _: []const u8) bool {
+        return true;
+    }
+
+    pub fn halfClose(_: *ReadCounter, _: Session.Side) void {}
+};
+
+/// Counts relayed reads and published events.
+const RelaySink = struct {
+    relayed_reads: usize = 0,
+    events: usize = 0,
+
+    pub fn emit(self: *RelaySink, _: Event) void {
+        self.events += 1;
+    }
+
+    pub fn relayed(self: *RelaySink) void {
+        self.relayed_reads += 1;
+    }
+};
 
 const FrameHeader = struct {
     length: usize,
