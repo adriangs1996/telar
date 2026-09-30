@@ -124,7 +124,6 @@ pub const LimitError = error{
     SshCommandTooLong,
     StreamTooLong,
     SurfaceTooLarge,
-    SyntaxLimit,
     TabLimitReached,
     TextMetadataQuotaExceeded,
     TextMetadataTooLarge,

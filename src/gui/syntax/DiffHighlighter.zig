@@ -2,7 +2,6 @@
 const syntaxhl = @import("syntaxhl");
 const core = @import("telar-core");
 const std = @import("std");
-const client = @import("telar-client");
 const SourceSide = @import("SourceSide.zig");
 const captures = syntaxhl.captures;
 const limits = @import("limits.zig");
@@ -16,34 +15,56 @@ allocator: std.mem.Allocator,
 io: std.Io,
 text: []const u8,
 roles: []syntaxhl.Role,
+/// Milliseconds after which no new fragment starts; tests shrink it.
+job_ms: i64 = limits.job_ms,
 spans: []CapturedSpan = &.{},
 language: syntaxhl.language.Language = .plain,
 started: std.Io.Timestamp = .{ .nanoseconds = 0 },
 fragments: usize = 0,
 
-/// Highlights each before/after hunk with bundled upstream grammars and queries.
-/// Missing lines are never invented; full-file review snapshots can use the
-/// same FFI directly instead. Example: `try worker.run();`
-pub fn run(self: *Self) !void {
-    if (self.text.len > syntaxhl.limits.source_bytes or self.roles.len != self.text.len) {
-        return error.SyntaxLimit;
+/// Highlights each before/after hunk with bundled upstream grammars and
+/// queries. Missing lines are never invented. A job that reaches a limit keeps
+/// the roles it wrote, leaves the rest plain and returns the limit, which its
+/// caller on the adapter loop reports; an error means no role can be trusted.
+///
+/// ```zig
+/// prepared.limit = try worker.run();
+/// ```
+pub fn run(self: *Self) !?core.LimitReach {
+    if (self.roles.len != self.text.len) {
+        return error.InvalidSyntaxRequest;
     }
 
     @memset(self.roles, .plain);
+    if (self.text.len > syntaxhl.limits.source_bytes) {
+        return .{
+            .limit = limits.source_bytes_limit,
+            .requested = self.text.len,
+        };
+    }
+
     try self.prepareLanguages();
     self.started = std.Io.Clock.awake.now(self.io);
-    self.spans = try self.allocator.alloc(CapturedSpan, syntaxhl.limits.source_bytes);
+
+    // A span covers at least one byte of a side, and a side is never longer
+    // than the diff it comes from.
+    self.spans = try self.allocator.alloc(CapturedSpan, self.text.len);
     defer self.allocator.free(self.spans);
+
     var before: SourceSide = .{ .allocator = self.allocator, .origin = @intFromPtr(self.text.ptr), .old = true };
     defer before.deinit();
+
     var after: SourceSide = .{ .allocator = self.allocator, .origin = @intFromPtr(self.text.ptr), .old = false };
     defer after.deinit();
+
     var lines: core.ChangeReviewDiffLines = .{ .text = self.text };
     while (lines.next()) |line| {
         switch (line.kind) {
             .file, .hunk => {
-                try self.highlight(&before);
-                try self.highlight(&after);
+                if (try self.highlightHunk(&before, &after)) |reach| {
+                    return reach;
+                }
+
                 before.clear();
                 after.clear();
                 if (line.kind == .file) {
@@ -60,8 +81,7 @@ pub fn run(self: *Self) !void {
         }
     }
 
-    try self.highlight(&before);
-    try self.highlight(&after);
+    return self.highlightHunk(&before, &after);
 }
 
 // Upstream query compilation depends only on bundled grammars. Keep this cold
@@ -85,20 +105,47 @@ fn prepareLanguages(self: *Self) !void {
     }
 }
 
-fn highlight(self: *Self, side: *const SourceSide) !void {
+fn highlightHunk(self: *Self, before: *const SourceSide, after: *const SourceSide) !?core.LimitReach {
+    if (try self.highlight(before)) |reach| {
+        return reach;
+    }
+
+    return self.highlight(after);
+}
+
+// The first fragment always starts; later ones start while the job is within
+// its fragment count and time budget.
+fn highlight(self: *Self, side: *const SourceSide) !?core.LimitReach {
     if (self.language == .plain or side.source.items.len == 0) {
-        return;
+        return null;
+    }
+
+    if (self.fragments == limits.fragments) {
+        return .{
+            .limit = limits.fragments_limit,
+        };
+    }
+
+    const elapsed = self.started.durationTo(std.Io.Clock.awake.now(self.io)).toMilliseconds();
+    if (self.fragments != 0 and elapsed >= self.job_ms) {
+        return .{
+            .limit = limits.job_ms_limit,
+            .requested = @intCast(@max(elapsed, 0)),
+        };
     }
 
     self.fragments += 1;
-    const elapsed = self.started.durationTo(std.Io.Clock.awake.now(self.io)).toMilliseconds();
-    if (self.fragments > limits.fragments or elapsed > limits.job_ms) {
-        return error.SyntaxLimit;
-    }
+    const capacity = @min(self.spans.len, side.source.items.len);
+    var request: NativeRequest = .{
+        .language = @tagName(self.language),
+        .source = side.source.items.ptr,
+        .source_len = side.source.items.len,
+        .spans = self.spans.ptr,
+        .capacity = capacity,
+    };
 
-    var request: NativeRequest = .{ .language = @tagName(self.language), .source = side.source.items.ptr, .source_len = side.source.items.len, .spans = self.spans.ptr, .capacity = self.spans.len };
     const status = std.enums.fromInt(Status, telar_syntax_highlight(&request)) orelse return error.InvalidSyntaxResult;
-    if (status != .ok or request.count > self.spans.len) {
+    if (status != .ok or request.count > capacity) {
         return error.SyntaxUnavailable;
     }
 
@@ -133,6 +180,8 @@ fn highlight(self: *Self, side: *const SourceSide) !void {
     if (end != side.source.items.len) {
         return error.InvalidSyntaxResult;
     }
+
+    return null;
 }
 
 const NativeRequest = extern struct {

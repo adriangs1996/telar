@@ -62,7 +62,10 @@ model may touch: the runtime's event loop, or the client adapter's loop. No
 lock guards the table. A worker never reports. It returns the reach in its
 completion, and the `finish` that runs on the loop reports it. No worker
 reports a limit yet; this is the shape the first one takes, on worktree
-detection, whose completion gains a `limit: ?core.LimitReach = null` field:
+detection, whose completion gains a `limit: ?core.LimitReach = null` field.
+Change-review highlighting in the window already works this way: the
+observation worker records the reach in `PreparedEdition.limit`, and
+`Panel.synchronize` reports it when it adopts the edition.
 
 ```zig
 // The worker: a bounded scan that stopped at its limit.

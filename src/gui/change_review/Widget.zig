@@ -35,7 +35,10 @@ read_only: bool = false,
 delivery: enum { idle, queued, pending, sending, sent, failed } = .idle,
 live_status: [320]u8 = undefined,
 model: client.ChangeReviewModel = .{},
-roles: [2][syntaxhl.limits.source_bytes]syntaxhl.Role = undefined,
+/// Borrowed roles of each revision's source, one per byte, owned by whoever
+/// owns that source (the panel's visible edition slot). Shorter roles than
+/// the source paint it plain.
+roles: [2][]const syntaxhl.Role = @splat(&.{}),
 theme: data.theme_support.Builtin = .shade,
 widgets: ?*State = null,
 generation: u64 = 1,

@@ -106,26 +106,29 @@ parser or native dependency. The native viewer links the vendored Rust
 The library returns UTF-8 byte ranges and capture names; Telar maps those names
 to theme roles. See `tools/syntax-highlighter/README.md` for build details.
 
-`gui/syntax/Service` schedules one observation task through the existing inbox.
-It owns an immutable copy of a requested patch. `DiffHighlighter` reconstructs
-before/after hunk sources using the existing diff iterator, parses them separately,
-and projects captured byte ranges back onto the patch. File and hunk boundaries
-reset source context. No file is reopened to color an older patch.
+The review panel (`gui/change_review/Panel`) schedules one observation task
+through the existing inbox. It owns an immutable copy of the patch in an
+inactive slot. `DiffHighlighter` reconstructs before/after hunk sources using
+the existing diff iterator, parses them separately, and projects captured byte
+ranges back onto the patch. File and hunk boundaries reset source context. No
+file is reopened to color an older patch.
 
-The cache retains eight patches of at most 48 KiB each. Requests and painting do
-not parse or allocate; they consume retained roles. Worker completion is adopted
-after inbox notification, and IDs reject stale results after slot replacement.
-Shutdown uses the inbox's existing producer join before releasing GUI state.
-Theme changes recolor existing roles without reparsing. Selection and grapheme
-geometry retain their existing source offsets.
+The panel retains two patch slots, each with one role per byte, reserved when
+the window starts. Painting does not parse or allocate; it borrows the visible
+slot's roles. Worker completion is adopted after inbox notification, and
+generations reject stale results after slot replacement. Shutdown uses the
+inbox's existing producer join before releasing GUI state. Theme changes
+recolor existing roles without reparsing. Selection and grapheme geometry
+retain their existing source offsets.
 
-Each parse has a 100 ms cancellation deadline; each patch admits at most 64
-source fragments and stops admitting fragments after one second. Grammar setup
-is once per process on the worker. These are source, retention and work limits,
-not a hard allocator quota for Tree-sitter. Pending, failed, oversized or unknown
-content stays readable in the plain syntax color. Failed cached content is not
-retried every frame. The standalone sample prepares its tokens before opening
-the window; the real GUI uses the asynchronous service.
+Each parse has a 100 ms cancellation deadline; each patch admits at most 1,024
+source fragments and stops admitting fragments after one second. A patch that
+reaches either keeps the roles already highlighted, leaves the rest plain and
+reports the limit. Grammar setup is once per process on the worker. These are
+source, retention and work limits, not a hard allocator quota for Tree-sitter.
+Failed, oversized or unknown content stays readable in the plain syntax color.
+The standalone sample prepares its tokens before opening the window; the real
+GUI uses the asynchronous panel job.
 
 ## Limits that the full review design must address
 
@@ -149,7 +152,7 @@ parsing, preserved selection, and bounded work outside the input/frame path.
 ## Verification
 
 `zig build test-client test-gui test-widget build-widget test-syntax-highlighter codestyle`
-checks grammar captures, independent diff versions, cache ownership and stale
-completion, failure handling, palette changes, Unicode geometry, viewport
+checks grammar captures, independent diff versions, highlighting stopped at its
+limits, failure handling, palette changes, Unicode geometry, viewport
 clipping, warm drawing without allocations and the standalone runner.
 `zig build check-client-boundaries` checks the shared-client dependency boundary.
