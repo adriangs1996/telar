@@ -150,10 +150,8 @@ reaches such bytes but only checks the universal properties on them.
 
 ## Commands
 
-The steps are not wired yet. Six sessions each registered their own fuzz
-step, and that wiring is reviewed together. To run these targets, add the two
-lines in `robustness-fuzz-http1-integration.patch` to `build/tests.zig`: import
-`fuzz_http1.zig` and call `fuzz_http1.add(b, app);` after the handshake step.
+`build/tests.zig` registers these steps through `build/fuzz_http1.zig`.
+Run the seed corpora together, then fuzz one target per command:
 
 ```sh
 zig build test-fuzz-http1 -Dgui=false -j1                  # httprelay tests + both seed corpora
