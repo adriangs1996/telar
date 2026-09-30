@@ -191,7 +191,7 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
 
     const review = try params.gpa.create(ReviewPanel);
     errdefer params.gpa.destroy(review);
-    review.* = try ReviewPanel.init(params.gpa);
+    try review.init(params.gpa);
     errdefer review.deinit();
 
     gui.driver = try NativeLoop.init(params.io);

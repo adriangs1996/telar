@@ -31,21 +31,22 @@ paste_revision: u64 = 0,
 paste_failed: bool = false,
 
 /// Reserves both edition slots once, when the window starts, so opening,
-/// preparing and painting a review never allocate on the adapter loop.
+/// preparing and painting a review never allocate on the adapter loop. The
+/// panel is large, so it is built where it lives rather than returned.
 ///
 /// ```zig
-/// panel.* = try Panel.init(allocator);
+/// try panel.init(allocator);
 /// defer panel.deinit();
 /// ```
-pub fn init(allocator: std.mem.Allocator) !Self {
-    var first = try PreparedEdition.init(allocator);
-    errdefer first.deinit(allocator);
-
-    const second = try PreparedEdition.init(allocator);
-    return .{
+pub fn init(self: *Self, allocator: std.mem.Allocator) !void {
+    self.* = .{
         .allocator = allocator,
-        .slots = .{ first, second },
+        .slots = undefined,
     };
+    self.slots[0] = try PreparedEdition.init(allocator);
+    errdefer self.slots[0].deinit(allocator);
+
+    self.slots[1] = try PreparedEdition.init(allocator);
 }
 
 /// Call after the inbox joined its workers; a running job writes a slot.

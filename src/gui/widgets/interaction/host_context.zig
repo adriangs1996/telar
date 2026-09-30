@@ -5,6 +5,17 @@ const EditorDisplay = @import("EditorDisplay.zig");
 const GuiAdapter = @import("../../GuiAdapter.zig");
 const native = @import("../../native/native.zig");
 const FieldView = @import("FieldView.zig");
+const std = @import("std");
+const core = @import("telar-core");
+const event = @import("../../input/event.zig");
+
+comptime {
+    // The native IME and accessibility values take a whole field, up to
+    // `TELAR_GUI_TEXT_CAPACITY` (mirrored by `max_composition_bytes`); a
+    // longer field would turn input methods off for it.
+    std.debug.assert(core.max_cwd_bytes <= event.max_composition_bytes);
+    std.debug.assert(core.max_tab_label_bytes <= event.max_composition_bytes);
+}
 
 /// Uses current committed text and the delivered editor's geometry. Preedit
 /// is intentionally excluded from surrounding text sent to the native IME.
