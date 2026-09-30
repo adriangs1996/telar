@@ -60,12 +60,14 @@ The notice reads `<name>: <requested> <noun>; limit <value>`, or
 `report` writes its process model, which only the thread that owns the
 model may touch: the runtime's event loop, or the client adapter's loop. No
 lock guards the table. A worker never reports. It returns the reach in its
-completion, and the `finish` that runs on the loop reports it. No worker
-reports a limit yet; this is the shape the first one takes, on worktree
-detection, whose completion gains a `limit: ?core.LimitReach = null` field.
-Change-review highlighting in the window already works this way: the
-observation worker records the reach in `PreparedEdition.limit`, and
-`Panel.synchronize` reports it when it adopts the edition.
+completion, and the `finish` that runs on the loop reports it. The window's
+workers do so: change-review highlighting records the reach in
+`PreparedEdition.limit` and `Panel.synchronize` reports it when it adopts
+the edition, the favicon worker returns `FaviconCompletion.limit`, reported
+by `favicons.complete`, and the clipboard capture worker returns
+`Completion.limit`, reported by `clipboard_capture.completeClipboardCapture`.
+On worktree detection, whose completion would gain a
+`limit: ?core.LimitReach = null` field, the shape is:
 
 ```zig
 // The worker: a bounded scan that stopped at its limit.

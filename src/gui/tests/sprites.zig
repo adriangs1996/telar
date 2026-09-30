@@ -44,11 +44,16 @@ test "the renderer builds the page with the atlas and versions it per change" {
     renderer.seal();
     try std.testing.expectEqual(version, renderer.sprites_version);
 
-    _ = try placeFavicon(page, 200);
+    const slot = try placeFavicon(page, 200);
     renderer.seal();
     try std.testing.expectEqual(version + 1, renderer.sprites_version);
     frame = renderer.frame(2);
     try std.testing.expectEqual(version + 1, frame.sprites_version);
+
+    // A released slot is cleared on the page, so the GPU uploads it again.
+    page.removeFavicon(slot);
+    renderer.seal();
+    try std.testing.expectEqual(version + 2, renderer.sprites_version);
 
     // A new scale rebuilds the page at its cell with the provider marks only.
     const ratio = renderer.chrome.ratio;
@@ -263,19 +268,19 @@ test "the registry places one landed image per workspace and forgets a rebuilt p
     } });
     var favicons: Favicons = .{};
     defer favicons.deinit(gpa);
-    favicons.refresh(gpa, &page);
-    const first = favicons.next(&workspaces).?;
+    try std.testing.expect(favicons.refresh(gpa, &page, &workspaces) == null);
+    const first = favicons.next(&page, &workspaces).?;
     try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(1)), first.workspace);
     try std.testing.expectEqualStrings("/a", first.cwd);
-    try std.testing.expectEqual(first.workspace, favicons.next(&workspaces).?.workspace);
+    try std.testing.expectEqual(first.workspace, favicons.next(&page, &workspaces).?.workspace);
     favicons.started(first.workspace);
-    try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(2)), favicons.next(&workspaces).?.workspace);
+    try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(2)), favicons.next(&page, &workspaces).?.workspace);
     favicons.started(@enumFromInt(2));
-    try std.testing.expect(favicons.next(&workspaces) == null);
+    try std.testing.expect(favicons.next(&page, &workspaces) == null);
 
     favicons.land(gpa, .{ .workspace = @enumFromInt(1), .image = try cellImage(page.cells, 200) });
     try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(1) }, .small) == null);
-    favicons.refresh(gpa, &page);
+    try std.testing.expect(favicons.refresh(gpa, &page, &workspaces) == null);
     const placed = favicons.sprite(.{ .workspace = @enumFromInt(1) }, .medium).?;
     try std.testing.expect(placed.size == .medium);
     try std.testing.expectEqual(SpritePage.provider_mark_count, placed.index);
@@ -283,14 +288,14 @@ test "the registry places one landed image per workspace and forgets a rebuilt p
     try std.testing.expect(favicons.sprite(.{ .worktree = @enumFromInt(1) }, .small) == null);
 
     favicons.land(gpa, .{ .workspace = @enumFromInt(2), .image = null });
-    favicons.refresh(gpa, &page);
+    try std.testing.expect(favicons.refresh(gpa, &page, &workspaces) == null);
     try std.testing.expectEqual(Favicons.capacity, @as(usize, core.max_workspace_list_entries));
     try std.testing.expect(favicons.stateOf(@enumFromInt(2)) == .missing);
     try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(2) }, .small) == null);
 
     // A landing for a workspace the registry never saw is released unread.
     favicons.land(gpa, .{ .workspace = @enumFromInt(9), .image = try cellImage(page.cells, 1) });
-    favicons.refresh(gpa, &page);
+    try std.testing.expect(favicons.refresh(gpa, &page, &workspaces) == null);
     try std.testing.expectEqual(SpritePage.provider_mark_count + 1, page.count);
 
     // A cell of the wrong size asks for the lookup again.
@@ -298,9 +303,9 @@ test "the registry places one landed image per workspace and forgets a rebuilt p
         .{ .workspace = @enumFromInt(1), .name = "a", .path = "/a", .tab_count = 1 },
         .{ .workspace = @enumFromInt(3), .name = "c", .path = "/c", .tab_count = 1 },
     } });
-    favicons.started(favicons.next(&workspaces).?.workspace);
+    favicons.started(favicons.next(&page, &workspaces).?.workspace);
     favicons.land(gpa, .{ .workspace = @enumFromInt(3), .image = try cellImage(.{ 14, 18, 8 }, 1) });
-    favicons.refresh(gpa, &page);
+    try std.testing.expect(favicons.refresh(gpa, &page, &workspaces) == null);
     try std.testing.expect(favicons.stateOf(@enumFromInt(3)) == .wanted);
 
     // A full sheet keeps the glyph.
@@ -310,16 +315,124 @@ test "the registry places one landed image per workspace and forgets a rebuilt p
 
     favicons.started(@enumFromInt(3));
     favicons.land(gpa, .{ .workspace = @enumFromInt(3), .image = try cellImage(page.cells, 1) });
-    favicons.refresh(gpa, &page);
+    const reach = favicons.refresh(gpa, &page, &workspaces).?;
+    try std.testing.expectEqualStrings("gui.favicons.max_favicons", reach.limit.name);
+    try std.testing.expectEqual(@as(u64, SpritePage.max_favicons), reach.limit.value);
+    try std.testing.expectEqual(@as(?u64, SpritePage.max_favicons + 1), reach.requested);
     try std.testing.expect(favicons.stateOf(@enumFromInt(3)) == .full);
-    try std.testing.expect(favicons.next(&workspaces) == null);
+    try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(3) }, .small) == null);
+    try std.testing.expect(favicons.next(&page, &workspaces) == null);
 
     // Another page forgets every placement, so the lookups run again.
     var rebuilt = try SpritePage.init(gpa, 2);
     defer rebuilt.deinit();
-    favicons.refresh(gpa, &rebuilt);
+    try std.testing.expect(favicons.refresh(gpa, &rebuilt, &workspaces) == null);
     try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(1) }, .large) == null);
-    try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(1)), favicons.next(&workspaces).?.workspace);
+    try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(1)), favicons.next(&rebuilt, &workspaces).?.workspace);
+}
+
+/// Lists the workspaces `first` up to `first + len - 1` under one revision.
+fn listWorkspaces(workspaces: *data.WorkspaceListSnapshot, first: u32, len: u32) !void {
+    var entries: [core.max_workspace_list_entries]data.EntryInput = undefined;
+    for (entries[0..len], first..) |*entry, id| {
+        entry.* = .{
+            .workspace = @enumFromInt(id),
+            .name = "w",
+            .path = "/w",
+            .tab_count = 1,
+        };
+    }
+
+    _ = try workspaces.replace(.{
+        .revision = workspaces.revision + 1,
+        .entries = entries[0..len],
+    });
+}
+
+/// Answers every lookup the registry wants with a flat image and returns
+/// the last limit a placement reached.
+fn landEveryLookup(favicons: *Favicons, page: *SpritePage, workspaces: *const data.WorkspaceListSnapshot) !?core.LimitReach {
+    var reach: ?core.LimitReach = null;
+    while (favicons.next(page, workspaces)) |want| {
+        favicons.started(want.workspace);
+        favicons.land(std.testing.allocator, .{ .workspace = want.workspace, .image = try cellImage(page.cells, 9) });
+        reach = favicons.refresh(std.testing.allocator, page, workspaces) orelse reach;
+    }
+
+    return reach;
+}
+
+test "workspaces that come and go keep finding favicon slots in one page" {
+    const gpa = std.testing.allocator;
+    var page = try SpritePage.init(gpa, 1);
+    defer page.deinit();
+    var workspaces: data.WorkspaceListSnapshot = .{};
+    var favicons: Favicons = .{};
+    defer favicons.deinit(gpa);
+
+    // Three times the page's favicons pass through a list that shows at
+    // most 64 at once, sliding by one workspace at a time.
+    const listed: u32 = core.max_workspace_list_entries;
+    const total: u32 = 3 * SpritePage.max_favicons;
+    for (1..total + 1) |newest| {
+        const first: u32 = @intCast(@max(1, @as(i64, @intCast(newest)) - listed + 1));
+        try listWorkspaces(&workspaces, first, @as(u32, @intCast(newest)) - first + 1);
+        try std.testing.expect(try landEveryLookup(&favicons, &page, &workspaces) == null);
+        const sprite = favicons.sprite(.{ .workspace = @enumFromInt(newest) }, .large).?;
+        try std.testing.expect(sprite.index >= SpritePage.provider_mark_count);
+    }
+
+    // Every listed workspace still shows its own favicon, and the page never
+    // grew past its favicons.
+    var seen: std.StaticBitSet(SpritePage.provider_mark_count + SpritePage.max_favicons) = .initEmpty();
+    for (0..workspaces.count) |index| {
+        const sprite = favicons.sprite(.{ .workspace = workspaces.workspaceAt(index) }, .small).?;
+        try std.testing.expect(!seen.isSet(sprite.index));
+        seen.set(sprite.index);
+    }
+
+    try std.testing.expectEqual(SpritePage.provider_mark_count + SpritePage.max_favicons, page.count);
+    try std.testing.expectEqual(@as(u16, 0), page.faviconRoom());
+
+    // A whole new list takes the slots of the one it replaces.
+    try listWorkspaces(&workspaces, total + 1, listed);
+    try std.testing.expect(try landEveryLookup(&favicons, &page, &workspaces) == null);
+    for (0..workspaces.count) |index| {
+        try std.testing.expect(favicons.stateOf(workspaces.workspaceAt(index)) == .resolved);
+    }
+}
+
+test "a page whose slots all belong to listed workspaces reports its limit and keeps the glyph" {
+    const gpa = std.testing.allocator;
+    var page = try SpritePage.init(gpa, 1);
+    defer page.deinit();
+    var workspaces: data.WorkspaceListSnapshot = .{};
+    var favicons: Favicons = .{};
+    defer favicons.deinit(gpa);
+    const listed: u32 = core.max_workspace_list_entries;
+    try listWorkspaces(&workspaces, 1, listed - 1);
+    try std.testing.expect(try landEveryLookup(&favicons, &page, &workspaces) == null);
+
+    // Something else holds the last free cell, so the 64th listed workspace
+    // finds the page full of listed workspaces.
+    _ = try placeFavicon(&page, 3);
+    try listWorkspaces(&workspaces, 1, listed);
+    const reach = (try landEveryLookup(&favicons, &page, &workspaces)).?;
+    try std.testing.expectEqualStrings("gui.favicons.max_favicons", reach.limit.name);
+    try std.testing.expectEqualStrings("favicons", reach.limit.noun);
+    try std.testing.expect(favicons.stateOf(@enumFromInt(listed)) == .full);
+    try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(listed) }, .large) == null);
+    try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(1) }, .large) != null);
+
+    // The same list tries no second placement on later frames.
+    try std.testing.expect(try landEveryLookup(&favicons, &page, &workspaces) == null);
+    try std.testing.expect(favicons.stateOf(@enumFromInt(listed)) == .full);
+
+    // Once a workspace leaves, its cell goes to the one that was turned away.
+    try listWorkspaces(&workspaces, 2, listed - 1);
+    try std.testing.expect(try landEveryLookup(&favicons, &page, &workspaces) == null);
+    try std.testing.expect(favicons.stateOf(@enumFromInt(listed)) == .resolved);
+    try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(1) }, .large) == null);
 }
 
 test "the favicon worker decodes a workspace favicon.png into the sprite cell" {
@@ -379,6 +492,105 @@ test "the favicon worker decodes a workspace favicon.png into the sprite cell" {
     try temp.dir.writeFile(io, .{ .sub_path = "favicon.png", .data = "GIF89a not a png but long enough to be read" });
     try std.testing.expectError(error.NotPng, favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(3), .workspace = @enumFromInt(1), .cells = @splat(16) }, root)).result);
     try std.testing.expectError(error.InvalidSpriteCell, favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(4), .workspace = @enumFromInt(1), .cells = .{ 16, 16, 0 } }, root)).result);
+}
+
+/// Runs the favicon worker over one `favicon.png` in a fresh directory.
+fn lookUpFavicon(bytes: []const u8) !client.FaviconCompletion {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
+    try temp.dir.writeFile(io, .{ .sub_path = "favicon.png", .data = bytes });
+    const job: client.FaviconJob = .init(
+        .{
+            .execution_id = @enumFromInt(1),
+            .workspace = @enumFromInt(1),
+            .cells = @splat(16),
+        },
+        root,
+    );
+    return favicon_worker.execute(io, std.testing.allocator, job);
+}
+
+fn flatFavicon(width: u32, height: u32) ![]u8 {
+    return png.encodeFlatForTest(std.testing.allocator, .{ .header = .{ .width = width, .height = height, .color = .rgba } }, &.{ 30, 60, 90, 255 });
+}
+
+test "the favicon worker decodes a PNG up to 4096 pixels a side and returns the reach past it" {
+    const gpa = std.testing.allocator;
+
+    // Past the decoder's default of 1 Mi pixels, a logo still lands.
+    const logo = try flatFavicon(1025, 1024);
+    defer gpa.free(logo);
+    try std.testing.expect(logo.len <= client.favicon_lookup.max_file_bytes);
+    const landed = try lookUpFavicon(logo);
+    const image = try landed.result;
+    defer gpa.destroy(image);
+    try std.testing.expect(landed.limit == null);
+    try std.testing.expectEqualSlices(u8, &.{ 30, 60, 90, 255 }, image.slice(0)[0..4]);
+
+    const widest = try flatFavicon(favicon_worker.max_png_side, 1);
+    defer gpa.free(widest);
+    const at_side = try lookUpFavicon(widest);
+    gpa.destroy(try at_side.result);
+    try std.testing.expect(at_side.limit == null);
+
+    // A header that declares the whole square passes the limit; its data
+    // does not match it, so the decode fails as invalid, not as too large.
+    const square = try png.declareForTest(gpa, widest, favicon_worker.max_png_side, favicon_worker.max_png_side);
+    defer gpa.free(square);
+    const declared = try lookUpFavicon(square);
+    try std.testing.expectError(error.InvalidPngData, declared.result);
+    try std.testing.expect(declared.limit == null);
+
+    for ([_][2]u32{ .{ favicon_worker.max_png_side + 1, 1 }, .{ 1, favicon_worker.max_png_side + 1 } }) |size| {
+        const oversized = try png.declareForTest(gpa, widest, size[0], size[1]);
+        defer gpa.free(oversized);
+        const refused = try lookUpFavicon(oversized);
+        try std.testing.expectError(error.PngTooLarge, refused.result);
+        const reach = refused.limit.?;
+        try std.testing.expectEqualStrings("gui.favicons.max_png_side", reach.limit.name);
+        try std.testing.expectEqual(@as(u64, favicon_worker.max_png_side), reach.limit.value);
+        try std.testing.expectEqual(@as(?u64, favicon_worker.max_png_side + 1), reach.requested);
+    }
+}
+
+test "a favicon past its PNG limit keeps the glyph and the window reports the limit" {
+    const gpa = std.testing.allocator;
+    var fixture = try ChromeFixture.init();
+    defer fixture.deinit();
+    const gui = fixture.session.gui;
+    const widest = try flatFavicon(favicon_worker.max_png_side, 1);
+    defer gpa.free(widest);
+    const oversized = try png.declareForTest(gpa, widest, 2 * favicon_worker.max_png_side, 16);
+    defer gpa.free(oversized);
+    const workspace = Session.location.workspace.workspace;
+    _ = try gui.app.model.workspace_list_snapshot.replace(.{ .revision = 1, .entries = &.{.{ .workspace = workspace, .name = "telar", .path = "/telar", .tab_count = 1 }} });
+    const page = &gui.renderer.sprites.?;
+    try std.testing.expect(gui.chrome.favicons.next(page, &gui.app.model.workspace_list_snapshot) != null);
+    const job = client.favicons.request(
+        &gui.app.model,
+        .{
+            .workspace = workspace,
+            .cwd = "/telar",
+            .cells = page.cells,
+        },
+    ).?;
+    gui.chrome.favicons.started(workspace);
+
+    // The completion lands on the window's loop, which reports what the
+    // worker returned; the workspace keeps the glyph.
+    var completion = try lookUpFavicon(oversized);
+    completion.execution_id = job.execution_id;
+    completion.workspace = workspace;
+    try std.testing.expect(client.favicons.complete(gui.app, completion) == .missing);
+    const reaches = &gui.app.model.limit_reaches;
+    const slot = reaches.find("gui.favicons.max_png_side").?;
+    try std.testing.expectEqual(@as(u64, 1), reaches.hits[slot]);
+    try std.testing.expectEqual(@as(?u64, 2 * favicon_worker.max_png_side), reaches.requested[slot]);
+    try std.testing.expect(!gui.app.model.favicons.busy());
+    try std.testing.expect(gui.chrome.favicons.sprite(Session.location.workspace, .small) == null);
 }
 
 test "a workspace favicon reaches the card one frame after the worker completes" {

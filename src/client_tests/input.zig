@@ -288,6 +288,143 @@ test "a Pi path removed by a word deletion retires its preview on the next frame
     try std.testing.expectEqual(@as(u8, 0), shelf.catalog.snapshot().len);
 }
 
+test "closing a preview whose marker is too many steps from the cursor keeps it and reports the limit" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator), .reserves_rows = false };
+    defer shelf.catalog.deinit();
+    harness.client.attachments = shelf.port();
+    try harness.bootstrap();
+    const client = harness.client;
+    const target = try fixtures.installTestingAttachmentTarget(client, 1);
+    const capture = try client.gpa.create(data.Capture);
+    capture.* = .{
+        .request = .{ .target = target, .sequence = 1 },
+        .png = try client.gpa.dupe(u8, "png"),
+        .width = 2,
+        .height = 2,
+    };
+    _ = try client.attachments.?.adopt(capture);
+
+    // 121 cells after the marker: one step past the navigation bound.
+    const steps = data.attachment_types.max_marker_navigation_steps + 1;
+    try commitWideFrame(client, .{
+        .target = target,
+        .prompt = "> [Image #1]" ++ "x" ** steps,
+        .id = 1,
+        .cols = 200,
+        .visible_cursor = true,
+    });
+    const id = shelf.catalog.snapshot().items[0].id;
+
+    _ = try client_module.view_interactions.apply(client, client.model.tabs.active, .{
+        .intent = .{ .attachment_dismiss = id },
+        .consumed = true,
+    });
+
+    try std.testing.expectEqual(@as(u8, 1), shelf.catalog.snapshot().len);
+    try expectReach(client, "attachments.max_marker_navigation_steps", steps);
+}
+
+test "closing a Pi preview whose path needs more keys than one transaction keeps it and reports the limit" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator), .reserves_rows = false };
+    defer shelf.catalog.deinit();
+    harness.client.attachments = shelf.port();
+    try harness.bootstrap();
+    const client = harness.client;
+    const target = try fixtures.installTestingAttachmentProvider(client, 1, .pi);
+    try adoptPiPreview(client, target);
+
+    // A custom TMPDIR past the old 128-cell bound still pairs; one Backspace
+    // per cell passes the keys one pane-input transaction carries.
+    const cells = data.attachment_types.max_removal_keys + 1;
+    try commitWideFrame(client, .{
+        .target = target,
+        .prompt = "> " ++ piPathOfCells(cells),
+        .id = 1,
+        .cols = 120,
+    });
+    const id = shelf.catalog.snapshot().items[0].id;
+    try std.testing.expect(shelf.catalog.find(id).?.markerPath() != null);
+
+    _ = try client_module.view_interactions.apply(client, client.model.tabs.active, .{
+        .intent = .{ .attachment_dismiss = id },
+        .consumed = true,
+    });
+
+    try std.testing.expectEqual(@as(u8, 1), shelf.catalog.snapshot().len);
+    try expectReach(client, "attachments.max_removal_keys", cells);
+}
+
+test "closing a Pi preview whose path is longer than the scan bound keeps it and reports the limit" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator), .reserves_rows = false };
+    defer shelf.catalog.deinit();
+    harness.client.attachments = shelf.port();
+    try harness.bootstrap();
+    const client = harness.client;
+    const target = try fixtures.installTestingAttachmentProvider(client, 1, .pi);
+    try adoptPiPreview(client, target);
+    try commitWideFrame(client, .{
+        .target = target,
+        .prompt = "> " ++ piPathOfCells(data.attachments_path_marker.max_cells + 1),
+        .id = 1,
+        .cols = 120,
+    });
+    const id = shelf.catalog.snapshot().items[0].id;
+
+    _ = try client_module.view_interactions.apply(client, client.model.tabs.active, .{
+        .intent = .{ .attachment_dismiss = id },
+        .consumed = true,
+    });
+
+    try std.testing.expectEqual(@as(u8, 1), shelf.catalog.snapshot().len);
+    try expectReach(client, "attachments.path_marker.max_cells", null);
+}
+
+test "a Pi preview whose path is a long custom TMPDIR still deletes it whole" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator), .reserves_rows = false };
+    defer shelf.catalog.deinit();
+    harness.client.attachments = shelf.port();
+    try harness.bootstrap();
+    const client = harness.client;
+    const target = try fixtures.installTestingAttachmentProvider(client, 1, .pi);
+    try adoptPiPreview(client, target);
+
+    // Past the old 128-cell bound, within the keys of one transaction.
+    const cells = 200;
+    try commitWideFrame(client, .{
+        .target = target,
+        .prompt = "> " ++ piPathOfCells(cells),
+        .id = 1,
+        .cols = 120,
+    });
+    var ack_wire: [512]u8 = undefined;
+    try std.testing.expectEqual(@as(u64, 1), (try harness.nextClientMessage(&ack_wire)).frame_ack.frame_id);
+    const id = shelf.catalog.snapshot().items[0].id;
+
+    _ = try client_module.view_interactions.apply(client, client.model.tabs.active, .{
+        .intent = .{ .attachment_dismiss = id },
+        .consumed = true,
+    });
+
+    try std.testing.expectEqual(@as(u8, 0), shelf.catalog.snapshot().len);
+    try harness.settle();
+    var buffer: [1024]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .pane_input);
+    try std.testing.expectEqualStrings("\x7f" ** cells, message.pane_input.bytes);
+}
+
 test "host keys use the keyboard modes received in a pane frame" {
     const cases = [_]struct { modes: keyinput.InputModes, expected: []const u8, keys: []const keyinput.Key = &shifted_enter_keys }{
         .{
@@ -1117,6 +1254,74 @@ fn commitPiFrame(client: *client_module.Client, input: PiFrame) !void {
     });
 
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(frame));
+}
+
+/// One prompt frame laid out as Pi's editor wraps: rows of `cols - 1`
+/// cells, broken at any grapheme. The cursor follows the prompt, shown by
+/// the terminal or, as Pi draws it, as one inverse-video cell.
+const WideFrame = struct {
+    target: data.AttachmentTarget,
+    prompt: []const u8,
+    id: u64,
+    cols: u16,
+    visible_cursor: bool = false,
+};
+
+fn commitWideFrame(client: *client_module.Client, input: WideFrame) !void {
+    const width = input.cols - 1;
+    const rows: u16 = @intCast(input.prompt.len / width + 2);
+    var pane_buffer = try cellgrid.Buffer.init(std.testing.allocator, input.cols, rows);
+    defer pane_buffer.deinit();
+    for (input.prompt, 0..) |byte, index| {
+        pane_buffer.setCell(
+            .{
+                .x = @intCast(index % width),
+                .y = @intCast(index / width),
+            },
+            .{
+                .text = &.{byte},
+                .width = 1,
+                .style = .{},
+            },
+        );
+    }
+
+    const cursor: core.Cursor = .{
+        .visible = input.visible_cursor,
+        .x = @intCast(input.prompt.len % width),
+        .y = @intCast(input.prompt.len / width),
+    };
+    if (!input.visible_cursor) {
+        pane_buffer.setCell(.{ .x = cursor.x, .y = cursor.y }, .{ .text = " ", .width = 1, .style = .{ .flags = .{ .inverse = true } } });
+    }
+
+    var payload: [64 * 1024]u8 = undefined;
+    const frame = try core.encodePaneFrame(&payload, .{
+        .pane_id = input.target.pane_id,
+        .frame_id = input.id,
+        .base_frame_id = 0,
+        .cols = pane_buffer.w,
+        .rows = pane_buffer.h,
+        .cursor = if (input.visible_cursor) cursor else .{ .visible = false, .x = 0, .y = 0 },
+        .scroll = .{ .total_rows = pane_buffer.h, .offset = 0 },
+        .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
+    });
+
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(frame));
+}
+
+/// A Pi clipboard path of exactly `cells` cells with the test marker's name.
+fn piPathOfCells(comptime cells: usize) *const [cells]u8 {
+    const file = comptime pi_test_path[std.mem.lastIndexOfScalar(u8, pi_test_path, '/').?..];
+    return comptime "/" ++ ("d" ** (cells - file.len - 1)) ++ file;
+}
+
+/// The client recorded one reach of `name` asking for `requested`.
+fn expectReach(client: *client_module.Client, name: []const u8, requested: ?u64) !void {
+    const reaches = &client.model.limit_reaches;
+    const row = reaches.find(name) orelse return error.LimitNotReported;
+    try std.testing.expectEqual(@as(u64, 1), reaches.hits[row]);
+    try std.testing.expectEqual(requested, reaches.requested[row]);
 }
 
 /// The prefix and one plain suffix through the keymap, as presses only.
