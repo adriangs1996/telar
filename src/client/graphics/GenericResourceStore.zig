@@ -204,7 +204,7 @@ pub fn Type(comptime Delivery: type) type {
             if (!try self.acceptRevision(message.pane_id, message.revision)) {
                 return;
             }
-            const byte_len = try self.admitImage(message.pane_id, message.image);
+            const byte_len = self.admitImage(message.pane_id, message.image) catch |err| return self.pauseAtLimit(message.pane_id, err);
             var allocation = try self.allocatePixels(byte_len);
             errdefer self.freeAllocation(&allocation);
             try self.commitImage(.{ .pane_id = message.pane_id, .image = message.image, .allocation = &allocation, .received = 0 });
@@ -227,7 +227,7 @@ pub fn Type(comptime Delivery: type) type {
             if (!try self.acceptRevision(message.pane_id, message.revision)) {
                 return;
             }
-            const byte_len = try self.admitImage(message.pane_id, message.image);
+            const byte_len = self.admitImage(message.pane_id, message.image) catch |err| return self.pauseAtLimit(message.pane_id, err);
             var allocation = self.mapSharedPixels(message.name, byte_len) catch return error.GraphicsSharedMappingFailed;
             mapped = true;
             errdefer self.freeAllocation(&allocation);
@@ -348,7 +348,7 @@ pub fn Type(comptime Delivery: type) type {
                 return error.InvalidGraphicsChunkOffset;
             }
             if (entry.chunks == core.max_chunks_per_image) {
-                return error.GraphicsChunkLimitExceeded;
+                return self.pauseAtLimit(message.pane_id, error.GraphicsChunkLimitExceeded);
             }
             const end = std.math.add(usize, entry.received, message.bytes.len) catch
                 return error.InvalidGraphicsChunkLength;
@@ -382,7 +382,7 @@ pub fn Type(comptime Delivery: type) type {
                 Delivery.placementChanged(self, key, entry);
             } else {
                 if (self.panePlacementCount(pane_id) == core.max_placements_per_pane) {
-                    return error.GraphicsPlacementLimitExceeded;
+                    return self.pauseAtLimit(pane_id, error.GraphicsPlacementLimitExceeded);
                 }
                 const usage = try self.usageFor(pane_id);
                 const delivery = try Delivery.placementCreated(self);
@@ -729,6 +729,21 @@ pub fn Type(comptime Delivery: type) type {
                 entry.value_ptr.* = .{};
             }
             return entry.value_ptr;
+        }
+
+        /// A limit reached by one message pauses the pane's graphics until
+        /// the next snapshot: the rest of its stream, such as the chunks and
+        /// placements of an image that did not fit, is dropped instead of
+        /// failing as unknown. Returns `err` for the caller to report.
+        fn pauseAtLimit(self: *Self, pane_id: core.PaneId, err: anyerror) anyerror {
+            if (core.limit_reached.isLimitError(err)) {
+                if (self.revisions.getPtr(pane_id)) |state| {
+                    state.awaiting_snapshot = true;
+                    state.snapshot = null;
+                }
+            }
+
+            return err;
         }
 
         fn acceptRevision(self: *Self, pane_id: core.PaneId, value: u64) !bool {

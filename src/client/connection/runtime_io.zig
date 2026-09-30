@@ -62,19 +62,18 @@ pub fn receiveRuntime(client: *Client, result: anyerror!*const data.RuntimeMessa
         return null;
     };
     client.telemetry.recordMessage(received);
-    const status = runtime_messages.receiveServerMessage(client, &received.message) catch |err| skipped: {
+    const status = runtime_messages.receiveServerMessage(client, &received.message) catch |err| {
         if (!core.limit_reached.isLimitError(err)) {
             return err;
         }
 
-        // A message that stopped at a limit is recovered from; the link
-        // reads on unless the recovery closed it.
-        try limit_reached.recover(client, &received.message, err);
-        if (client.model.runtime_link.phase != .connected) {
-            return null;
-        }
-
-        break :skipped null;
+        // The read is re-armed before anything can fail, so the link keeps
+        // reading whatever the recovery does; the resync is read from the
+        // message before the next read reuses its buffer.
+        const resync = limit_reached.plan(&received.message);
+        try startRuntimeRead(client);
+        try limit_reached.recover(client, resync, err);
+        return null;
     };
 
     if (status) |exit_status| {

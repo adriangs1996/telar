@@ -151,16 +151,17 @@ stay in its own table and its headless dump until another reach sends them.
 The `limits` log scope is at `warn` in `main.zig`'s `std_options`; the
 headless client keeps Zig's default level, which already shows warnings.
 The launcher points a new background runtime's standard error at
-`<socket>.runtime.start.log`, owner-only and replaced by each launch, so a
-runtime that fails before it holds the listener (a configuration, graphics,
-history or proxy directory error) leaves its reason there. Once it holds the
-listener it writes to `<socket>.runtime.log` in every build. The runtime opens
-that file itself once it holds the listener (`RuntimeLog.open` in
-`Resources.acquire`), so only the runtime that owns the socket rotates it: a
-second launch that loses the race, or a retrying connect, never moves a live
-runtime's log aside. The previous file stays as `.runtime.log.1`, and the
-maintenance tick rotates a log that passes 1 MiB. `telar diagnostics logs`
-reads both with the telemetry logs.
+`<socket>.runtime.start.log`, emptied by each launch and opened only as a
+regular file the user owns with one link, without following a symlink or
+blocking on a FIFO, so a runtime that fails before it holds the listener (a
+configuration, graphics, history or proxy directory error) leaves its reason
+there. Once it holds the listener it writes to `<socket>.runtime.log` in every
+build. The runtime opens that file itself once it holds the listener
+(`RuntimeLog.open` in `Resources.acquire`), so only the runtime that owns the
+socket rotates it: a second launch that loses the race, or a retrying connect,
+never moves a live runtime's log aside. The previous file stays as
+`.runtime.log.1`, and the maintenance tick rotates a log that passes 1 MiB.
+`telar diagnostics logs` reads both with the telemetry logs.
 
 The runtime logs its own limits and each safety-net catch, with its route,
 once per interval. It only counts what clients report, so a client cannot
@@ -216,15 +217,24 @@ Once a flow reports its limit by name, the net no longer sees that error.
   still run. `pump` keeps a second net: the same error twice asks for no
   draw.
 - A runtime message that stops at a limit while the client applies it
-  (`runtime_io.receiveRuntime`) goes to `limit_reached.recover`, which
-  reports it and asks for the smallest resync the protocol has: none for a
-  graphics message, whose store checks its bounds before storing anything;
-  a snapshot of the pane for a pane frame; a new session for anything else,
-  which rebuilds the replica. The link keeps reading otherwise. More than
-  three resyncs within a minute give the link up (`runtime_link.abandon`)
-  with the limit's name and no retry, since each would stop at the same
-  limit; the person can retry. An error after the message was applied, in
-  the adapter, never resyncs.
+  (`runtime_io.receiveRuntime`) is recovered from. The client reads which
+  resync the message needs (`limit_reached.plan`), re-arms its read before
+  anything else can fail, and `limit_reached.recover` reports the limit and
+  asks for the smallest resync the protocol has:
+  - a graphics message: the store paused that pane's stream at the limit
+    (`awaiting_snapshot`), so the chunks and placements of an image that
+    did not fit are dropped instead of failing as unknown, and a graphics
+    snapshot resumes the pane;
+  - a pane frame: a snapshot of that pane;
+  - anything else: a new session, which rebuilds the replica.
+
+  A resync the client cannot ask for, such as a full outbox, loses the link,
+  so the replica never stays wrong while the link shows connected. More
+  than three resyncs within a minute stop asking: a pane's graphics stay
+  paused until a later snapshot, and any other resync gives the link up
+  (`runtime_link.abandon`) with the limit's name and no retry, since each
+  would stop at the same limit. Retrying by hand counts anew. An error after
+  the message was applied, in the adapter, never resyncs.
 - The window's `render` callback passes draw errors to the GUI's
   `limit_reached.absorbFrame`. Draw returns token 0, and both native
   backends keep the last presented frame. `GuiAdapter.limited` holds the
@@ -288,9 +298,13 @@ with notice levels and the client's `limits`.
 - `src/backend/runtime/resources/RuntimeLog.zig`: rotation at start and past
   the size bound.
 - `client_tests.recoverLimitedMessages`, run from
-  `src/client/notifications/limit_reached.zig`: a graphics message at a
-  limit keeps the link, and one past the resync budget gives it up naming
-  the limit, with no retry.
+  `src/client/notifications/limit_reached.zig`: the graphics and pane
+  snapshots, a new session, a resync a full outbox cannot ask for, the
+  budget that keeps graphics paused and gives the link up naming the limit,
+  and a manual retry that counts anew.
+- `src/client/graphics/tests.zig`: an image or a chunk past its limit pauses
+  the pane's stream, whose chunks and placements are then dropped, and a
+  snapshot resumes it.
 - `src/client_tests/limit_reached.zig` and `configuration.zig`: the client
   notice, folded reports, the adapter net, a real bar of five click actions
   and a failing panel, and the diagnostics their next render clears.

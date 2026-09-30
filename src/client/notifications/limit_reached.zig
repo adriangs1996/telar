@@ -11,6 +11,7 @@ const core = @import("telar-core");
 const Client = @import("../execution/Client.zig");
 const notifications = @import("notifications.zig");
 const runtime_link = @import("../connection/runtime_link.zig");
+const RuntimeResync = @import("../connection/RuntimeResync.zig").RuntimeResync;
 const pacing = @import("pacing");
 const client_tests = @import("../execution/client_tests.zig");
 
@@ -82,45 +83,75 @@ pub fn absorb(client: *Client, comptime route: []const u8, err: anyerror, limit:
     }
 }
 
+/// The resync a runtime message that stopped at a limit needs, read from
+/// the message while its buffer is still valid.
+///
+/// ```zig
+/// const resync = limit_reached.plan(message);
+/// ```
+pub fn plan(message: *const core.ServerMessage) RuntimeResync {
+    return switch (message.*) {
+        .graphics_image => |value| .{ .graphics = value.pane_id },
+        .graphics_shared_image => |value| .{ .graphics = value.pane_id },
+        .graphics_image_chunk => |value| .{ .graphics = value.pane_id },
+        .graphics_placement => |value| .{ .graphics = value.pane_id },
+        .graphics_delete_image => |value| .{ .graphics = value.pane_id },
+        .graphics_delete_placement => |value| .{ .graphics = value.pane_id },
+        .graphics_snapshot => |value| .{ .graphics = value.pane_id },
+        .pane_frame => |frame| .{ .pane = frame.pane_id },
+        else => .session,
+    };
+}
+
 /// Recovers from a runtime message that stopped at a limit while it was
 /// applied, which may have left the replica short of the runtime. The limit
-/// is reported, then the smallest resync the protocol has for the message
-/// follows:
-/// - a graphics message: none; the graphics store checks its bounds before
-///   it stores anything, so the pane shows the images that fit;
+/// is reported, then the smallest resync the protocol has follows:
+/// - graphics: the store paused that pane's stream at the limit, so a
+///   graphics snapshot resumes it;
 /// - a pane frame: a snapshot of that pane;
 /// - anything else: a new session, which rebuilds the replica.
 /// A link asking for more than `max_limit_resyncs` within
-/// `runtime_link.healthy_after_ns` gives up and names the limit.
+/// `runtime_link.healthy_after_ns` stops asking: a pane's graphics stay
+/// paused, and any other resync gives the link up naming the limit. A
+/// resync that cannot be asked for loses the link, so the replica never
+/// stays wrong while the link shows connected.
 ///
 /// ```zig
-/// runtime_messages.receiveServerMessage(client, message) catch |err| try limit_reached.recover(client, message, err);
+/// try limit_reached.recover(client, limit_reached.plan(message), err);
 /// ```
-pub fn recover(client: *Client, message: *const core.ServerMessage, err: anyerror) !void {
+pub fn recover(client: *Client, resync: RuntimeResync, err: anyerror) !void {
     const reach = core.limit_reached.unnamed(err, message_route);
     report(client, reach);
 
-    switch (message.*) {
-        .graphics_snapshot, .graphics_image, .graphics_image_chunk, .graphics_placement, .graphics_delete_image, .graphics_delete_placement, .graphics_shared_image => return,
-        else => {},
-    }
-
     if (!admitResync(client)) {
+        if (resync == .graphics) {
+            return;
+        }
+
         var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
         return runtime_link.abandon(client, reach.describe(&buffer, 1));
     }
 
-    switch (message.*) {
-        .pane_frame => |frame| {
-            const pane = client.model.panes.find(frame.pane_id) orelse return;
+    ask(client, resync, err) catch |failed| try runtime_link.lose(client, failed);
+}
+
+fn ask(client: *Client, resync: RuntimeResync, err: anyerror) !void {
+    switch (resync) {
+        .graphics => |pane_id| try client.model.to_runtime.push(.{
+            .request_graphics_snapshot = .{
+                .pane_id = pane_id,
+            },
+        }),
+        .pane => |pane_id| {
+            const pane = client.model.panes.find(pane_id) orelse return;
             try client.model.to_runtime.push(.{
                 .request_snapshot = .{
-                    .pane_id = frame.pane_id,
+                    .pane_id = pane_id,
                     .known_frame_id = pane.applied_frame_id,
                 },
             });
         },
-        else => try runtime_link.lose(client, err),
+        .session => try runtime_link.lose(client, err),
     }
 }
 

@@ -293,6 +293,9 @@ pub fn retryNow(client: *Client) !void {
 
     link.phase = .connecting;
     link.attempt = 0;
+    // The person asked again: limits that gave the link up start counting
+    // anew.
+    link.limit_resyncs = 0;
     client.model.link_revision +%= 1;
     try queueConnect(client, client.options.machine.?);
 }

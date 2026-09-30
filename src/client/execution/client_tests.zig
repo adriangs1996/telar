@@ -13,6 +13,7 @@ const actions = @import("../input/actions.zig");
 const change_review = @import("../change_review/change_review.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
 const runtime_link = @import("../connection/runtime_link.zig");
+const RuntimeResync = @import("../connection/RuntimeResync.zig").RuntimeResync;
 const runtime_messages = @import("../connection/runtime_messages.zig");
 const workspace_rename = @import("../workspace/workspace_rename.zig");
 
@@ -720,11 +721,13 @@ pub fn reconnectAfterLoss(comptime start: fn (*Client) anyerror!void) !void {
     while (app.to_workers.pop()) |_| {}
 }
 
-/// A runtime message that stops at a limit: a graphics one is only
-/// reported, another restarts the session, and one past the resync budget
-/// gives the link up naming the limit, with no retry.
+/// A runtime message that stops at a limit resyncs as little as it can: a
+/// graphics snapshot, a pane snapshot or a new session. One whose resync
+/// cannot be asked for loses the link; past the budget a pane's graphics
+/// stay paused and anything else gives the link up naming the limit, until
+/// the person retries.
 /// Example: `try client_tests.recoverLimitedMessages(limit_reached.recover);`
-pub fn recoverLimitedMessages(comptime recover: fn (*Client, *const core.ServerMessage, anyerror) anyerror!void) !void {
+pub fn recoverLimitedMessages(comptime recover: fn (*Client, RuntimeResync, anyerror) anyerror!void) !void {
     const gpa = std.testing.allocator;
     const app = try gpa.create(Client);
     defer gpa.destroy(app);
@@ -752,38 +755,100 @@ pub fn recoverLimitedMessages(comptime recover: fn (*Client, *const core.ServerM
         .client_identity = @enumFromInt(7),
     };
 
+    const pane_id: core.PaneId = @enumFromInt(3);
     try runtime_link.start(app);
-    _ = app.to_background.pop().?;
-    var pair = try socketPair();
-    defer pair.peer.deinit(std.testing.io);
-    app.connect_result = .{ .channel = pair.channel };
-    _ = try app.update(.{ .runtime_connected = {} });
-    while (app.to_workers.pop()) |_| {}
+    var first = try connectForLimits(app);
+    defer first.deinit(std.testing.io);
 
-    const image: core.ServerMessage = .{ .graphics_delete_image = .{
-        .pane_id = @enumFromInt(3),
-        .revision = 1,
-        .key = .{
-            .image_id = 1,
-            .generation = 1,
-        },
-    } };
-    try recover(app, &image, error.GraphicsQuotaExceeded);
+    // A graphics limit asks for that pane's graphics snapshot.
+    try recover(app, .{ .graphics = pane_id }, error.GraphicsQuotaExceeded);
     try std.testing.expect(app.model.runtime_link.phase == .connected);
-    try std.testing.expectEqual(@as(u8, 0), app.model.runtime_link.limit_resyncs);
+    try std.testing.expectEqual(@as(usize, 1), queuedCount(app, .request_graphics_snapshot));
     try std.testing.expect(app.model.limit_reaches.find("GraphicsQuotaExceeded") != null);
 
-    // Past the budget the link gives up and names the limit.
-    app.model.runtime_link.limit_resyncs = 3;
-    app.model.runtime_link.limit_resyncs_since_ns = pacing.clock.monotonic(app.io);
-    const completed: core.ServerMessage = .{ .request_completed = .{ .request_id = @enumFromInt(1) } };
-    try recover(app, &completed, error.ClientOutboxFull);
+    // A pane frame asks for that pane's snapshot.
+    try recover(app, .{ .pane = pane_id }, error.ClientOutboxFull);
+    try std.testing.expect(app.model.runtime_link.phase == .connected);
+    try std.testing.expectEqual(@as(usize, 1), queuedCount(app, .request_snapshot));
+
+    // Past the budget a pane's graphics stay paused and the link stays.
+    try recover(app, .{ .graphics = pane_id }, error.GraphicsQuotaExceeded);
+    try recover(app, .{ .graphics = pane_id }, error.GraphicsQuotaExceeded);
+    try std.testing.expect(app.model.runtime_link.phase == .connected);
+    try std.testing.expectEqual(@as(usize, 2), queuedCount(app, .request_graphics_snapshot));
+
+    // Anything else past the budget gives the link up, with no retry.
+    try recover(app, .session, error.TooManyTabs);
     try std.testing.expect(app.model.runtime_link.phase == .failed);
-    try std.testing.expectEqualStrings("ClientOutboxFull: limit reached", app.model.runtime_link.failure().?);
+    try std.testing.expectEqualStrings("TooManyTabs: limit reached", app.model.runtime_link.failure().?);
     while (app.to_workers.pop()) |job| {
         try std.testing.expect(!(job == .timer and job.timer.kind == .runtime_retry));
     }
 
+    // Retrying by hand counts limits anew; a resync it cannot ask for loses
+    // the link rather than leave it connected with a stale replica.
+    try closeForLimits(app);
+    try runtime_link.retryNow(app);
+    try std.testing.expectEqual(@as(u8, 0), app.model.runtime_link.limit_resyncs);
+    var second = try connectForLimits(app);
+    defer second.deinit(std.testing.io);
+    while (app.model.to_runtime.hasCapacity()) {
+        try app.model.to_runtime.push(.{ .request_graphics_snapshot = .{ .pane_id = pane_id } });
+    }
+    try recover(app, .{ .pane = pane_id }, error.ClientOutboxFull);
+    try std.testing.expect(app.model.runtime_link.phase == .lost);
+
+    // A new session is a lost link that retries.
+    try closeForLimits(app);
+    try runtime_link.retryNow(app);
+    var third = try connectForLimits(app);
+    defer third.deinit(std.testing.io);
+    try recover(app, .session, error.TooManyTabs);
+    try std.testing.expect(app.model.runtime_link.phase == .lost);
+    try closeForLimits(app);
+}
+
+/// Completes the connection `app` queued over a fresh socket pair, gives
+/// it one pane, 3, and returns the runtime's end of the pair.
+fn connectForLimits(app: *Client) !localsocket.SocketChannel {
+    _ = app.to_background.pop().?;
+    const pair = try socketPair();
+    app.connect_result = .{ .channel = pair.channel };
+    _ = try app.update(.{ .runtime_connected = {} });
+    while (app.to_workers.pop()) |_| {}
+
+    try data.workspace_handoff.bootstrap(
+        &app.model,
+        .{
+            .pane_id = @enumFromInt(3),
+            .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(2) },
+            .size = .{
+                .cols = 40,
+                .rows = 10,
+            },
+        },
+    );
+
+    return pair.peer;
+}
+
+/// How many messages of one kind wait in `app`'s outbox.
+fn queuedCount(app: *const Client, tag: std.meta.Tag(data.outbox_support.Message)) usize {
+    const outbox = &app.model.to_runtime;
+    var count: usize = 0;
+    for (0..outbox.len) |offset| {
+        const index = (@as(usize, outbox.head) + offset) % outbox.items.len;
+        if (outbox.items[index] == tag) {
+            count += 1;
+        }
+    }
+
+    return count;
+}
+
+/// Lets the closed socket's pending read and write finish.
+fn closeForLimits(app: *Client) !void {
+    _ = try app.update(.{ .server = error.EndOfStream });
     _ = try app.update(.{ .sent = error.BrokenPipe });
     while (app.to_workers.pop()) |_| {}
 }

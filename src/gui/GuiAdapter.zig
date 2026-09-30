@@ -451,7 +451,7 @@ pub fn fail(self: *GuiAdapter, err: anyerror) void {
         self.failure = err;
     }
 
-    native.telar_gui_wake(self.driver.fds[1]);
+    self.wake();
 }
 
 /// Wakes the native loop for one more pump.

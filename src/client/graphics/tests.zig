@@ -131,3 +131,80 @@ test "an adopted shared object loses its name at once and keeps its pixels mappe
     const adopted = store.images.get(store_module.identity(pane_id, image.key)).?;
     try std.testing.expectEqualStrings("rgb", adopted.pixels);
 }
+
+test "an image past the pane's limit pauses the pane's stream instead of failing its chunks and placements" {
+    var store = retained.Store.init(std.testing.allocator);
+    defer store.deinit();
+    for (1..core.max_images_per_pane + 1) |number| {
+        var kept = image;
+        kept.key.image_id = @intCast(number);
+        try receive(&store, kept);
+    }
+
+    var rejected = image;
+    rejected.key.image_id = core.max_images_per_pane + 1;
+    const revision = rejected.key.generation;
+    try std.testing.expectError(error.GraphicsImageLimitExceeded, store.applyImage(.{
+        .pane_id = pane_id,
+        .revision = revision,
+        .image = rejected,
+    }));
+
+    // The rest of the rejected image's stream is dropped, not unknown.
+    try store.applyChunk(.{
+        .pane_id = pane_id,
+        .revision = revision,
+        .key = rejected.key,
+        .offset = 0,
+        .bytes = "rgb",
+    });
+    try store.applyPlacement(.{
+        .pane_id = pane_id,
+        .revision = revision,
+        .placement = .{
+            .key = rejected.key,
+            .virtual_id = 1,
+            .placement_id = 1,
+            .x = 0,
+            .y = 0,
+        },
+    });
+    try std.testing.expectEqual(@as(usize, 3 * core.max_images_per_pane), store.total_bytes);
+
+    // The snapshot it asks for resumes the pane.
+    try store.applySnapshot(.{ .pane_id = pane_id, .revision = revision + 1, .phase = .begin });
+    try store.applyImage(.{ .pane_id = pane_id, .revision = revision + 1, .image = image });
+}
+
+test "a chunk past the image's limit pauses the pane's stream" {
+    var store = retained.Store.init(std.testing.allocator);
+    defer store.deinit();
+    var wide = image;
+    wide.width = core.max_chunks_per_image + 1;
+    wide.byte_len = 3 * wide.width;
+    const revision = wide.key.generation;
+    try store.applyImage(.{ .pane_id = pane_id, .revision = revision, .image = wide });
+
+    var offset: u64 = 0;
+    for (0..core.max_chunks_per_image) |_| {
+        try store.applyChunk(.{ .pane_id = pane_id, .revision = revision, .key = wide.key, .offset = offset, .bytes = "rgb" });
+        offset += 3;
+    }
+
+    try std.testing.expectError(error.GraphicsChunkLimitExceeded, store.applyChunk(.{
+        .pane_id = pane_id,
+        .revision = revision,
+        .key = wide.key,
+        .offset = offset,
+        .bytes = "rgb",
+    }));
+
+    // The next chunk is dropped rather than failing on its offset.
+    try store.applyChunk(.{
+        .pane_id = pane_id,
+        .revision = revision,
+        .key = wide.key,
+        .offset = offset + 3,
+        .bytes = "rgb",
+    });
+}

@@ -349,9 +349,11 @@ pub fn launchDaemon(self: *const Launch) !void {
 }
 
 /// Opens `<endpoint>.runtime.start.log` for this launch and empties it:
-/// never through a symlink, only a regular file the user owns, owner-only,
-/// and in append mode so two launches writing at once leave no gaps. A
-/// socket in a shared directory cannot hand the runtime someone else's file.
+/// never through a symlink, only a regular file the user owns with one
+/// link, owner-only, and in append mode so two launches writing at once
+/// leave no gaps. It opens without blocking, so a FIFO planted there cannot
+/// stall the launch. A socket in a shared directory cannot hand the runtime
+/// someone else's file.
 fn openStartLog(io: std.Io, endpoint: []const u8) !std.Io.File {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrintZ(&path_buffer, "{s}{s}", .{ endpoint, core.DiagnosticLogName.runtime_start_log_suffix });
@@ -362,6 +364,7 @@ fn openStartLog(io: std.Io, endpoint: []const u8) !std.Io.File {
         .APPEND = true,
         .NOFOLLOW = true,
         .CLOEXEC = true,
+        .NONBLOCK = true,
     };
     const fd = std.c.open(path.ptr, flags, @as(std.c.mode_t, 0o600));
     if (fd < 0) {
@@ -375,7 +378,7 @@ fn openStartLog(io: std.Io, endpoint: []const u8) !std.Io.File {
     errdefer file.close(io);
 
     const inode = Inode.fromDescriptor(fd) catch return error.StartLogUnavailable;
-    if (inode.kind() != .regular or inode.owner != std.c.getuid()) {
+    if (inode.kind() != .regular or inode.owner != std.c.getuid() or inode.links != 1) {
         return error.StartLogUnavailable;
     }
 
