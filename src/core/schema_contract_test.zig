@@ -62,7 +62,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 124;
+const corpus_len = 127;
 
 const failure_codes = std.enums.values(types.FailureCode);
 const failure_code_listing = listing: {
@@ -1101,6 +1101,39 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     clients.entries[0] = .{ .id = 7, .generation = 9, .identity = 11, .attachments = 2, .last_input_pane = 5, .last_input_sequence = 12 };
     helper.add(.{ .name = "client_list", .direction = .server, .golden_hex = golden.client_list }, helper.commit(
         try schema.encodeClientList(helper.space(), clients),
+    ));
+
+    helper.add(.{ .name = "report_limit", .direction = .client, .golden_hex = golden.report_limit }, helper.commit(
+        try schema.encodeReportLimit(helper.space(), .{
+            .reach = .{
+                .limit = .{
+                    .name = "bars.max_bar_actions",
+                    .noun = "click actions",
+                    .value = 4,
+                },
+                .requested = 17,
+            },
+            .hits = 3,
+        }),
+    ));
+    helper.add(.{ .name = "query_limits", .direction = .client, .golden_hex = golden.query_limits }, helper.commit(
+        try schema.encodeQueryLimits(helper.space(), .{ .request_id = @enumFromInt(5) }),
+    ));
+    var limit_reaches: schema.LimitReaches = .{};
+    _ = limit_reaches.record(
+        .{
+            .limit = .{
+                .name = "session_checkpoint.snapshot_bytes",
+                .noun = "bytes",
+                .value = 1048576,
+            },
+        },
+        .runtime,
+        1_700_000_000_000,
+        2,
+    );
+    helper.add(.{ .name = "limit_list", .direction = .server, .golden_hex = golden.limit_list }, helper.commit(
+        try schema.encodeLimitList(helper.space(), @enumFromInt(5), &limit_reaches),
     ));
 
     helper.add(.{ .name = "detach_client", .direction = .client, .golden_hex = golden.detach_client }, helper.commit(

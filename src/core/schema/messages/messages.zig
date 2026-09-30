@@ -127,6 +127,10 @@ const frame = @import("../frame_support.zig");
 const graphics_bodies = @import("../graphics.zig");
 const ClientCommand = @import("ClientCommand.zig");
 const client_commands = @import("client_commands.zig");
+const limits = @import("limits.zig");
+const ReportLimit = @import("ReportLimit.zig");
+const QueryLimits = @import("QueryLimits.zig");
+const LimitListView = @import("LimitListView.zig");
 const std = @import("std");
 
 pub const ClientMessage = union(enum) {
@@ -191,6 +195,8 @@ pub const ClientMessage = union(enum) {
     report_agent_progress: ReportAgentProgress,
     launch_tab: LaunchTabView,
     verify_pane_descent: VerifyPaneDescent,
+    report_limit: ReportLimit,
+    query_limits: QueryLimits,
 };
 
 const ChangeReviewChanged = @import("ChangeReviewChanged.zig");
@@ -252,6 +258,7 @@ pub const ServerMessage = union(enum) {
     path_results: PathResultsView,
     pane_progress: PaneProgress,
     worktree_registered: WorktreeRegistered,
+    limit_list: LimitListView,
 };
 
 pub fn decodeClient(payload: []const u8) !ClientMessage {
@@ -332,6 +339,8 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .forget_worktree => .{ .forget_worktree = try GenericDerived(ForgetWorktree).decode(&decoder) },
         .interrupt_agent => .{ .interrupt_agent = try GenericDerived(InterruptAgent).decode(&decoder) },
         .verify_pane_descent => .{ .verify_pane_descent = try GenericDerived(VerifyPaneDescent).decode(&decoder) },
+        .report_limit => .{ .report_limit = try limits.decodeReportLimit(&decoder) },
+        .query_limits => .{ .query_limits = try limits.decodeQueryLimits(&decoder) },
         .report_agent_progress => .{ .report_agent_progress = try agent.decodeReportAgentProgress(&decoder) },
         .launch_tab => .{ .launch_tab = try tab.decodeLaunchTab(&decoder) },
     };
@@ -412,6 +421,7 @@ pub fn decodeServerInto(message: *ServerMessage, payload: []const u8) !void {
         .pane_focus_result => .{ .pane_focus_result = try focus.decodePaneFocusResult(&decoder) },
         .pane_progress => .{ .pane_progress = try pane.decodePaneProgress(&decoder) },
         .worktree_registered => .{ .worktree_registered = try GenericDerived(WorktreeRegistered).decode(&decoder) },
+        .limit_list => .{ .limit_list = try limits.decodeLimitList(&decoder) },
     };
     try decoder.ensureEnd();
 }

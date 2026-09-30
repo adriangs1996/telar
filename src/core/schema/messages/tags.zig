@@ -63,6 +63,8 @@ pub const ClientTag = enum(u8) {
     report_agent_progress = 0x40,
     launch_tab = 0x41,
     verify_pane_descent = 0x42,
+    report_limit = 0x43,
+    query_limits = 0x44,
 };
 
 pub const ServerTag = enum(u8) {
@@ -116,4 +118,5 @@ pub const ServerTag = enum(u8) {
     editor_opened = 0xb2,
     path_results = 0xb3,
     worktree_registered = 0xb4,
+    limit_list = 0xb5,
 };

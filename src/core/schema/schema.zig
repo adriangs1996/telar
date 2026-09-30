@@ -4,6 +4,7 @@
 //! Every function borrows input and caller-owned output memory; none allocates.
 
 const clients = @import("messages/clients.zig");
+const limits = @import("messages/limits.zig");
 const client_actions = @import("messages/client_actions.zig");
 const client_commands = @import("messages/client_commands.zig");
 const change_review = @import("messages/change_review.zig");
@@ -390,6 +391,13 @@ pub const ClientList = @import("../ClientList.zig");
 pub const QueryClients = @import("messages/QueryClients.zig");
 pub const encodeQueryClients = clients.encodeQueryClients;
 pub const encodeClientList = clients.encodeClientList;
+
+pub const LimitReaches = @import("../LimitReaches.zig");
+pub const ReportLimit = @import("messages/ReportLimit.zig");
+pub const QueryLimits = @import("messages/QueryLimits.zig");
+pub const encodeReportLimit = limits.encodeReportLimit;
+pub const encodeQueryLimits = limits.encodeQueryLimits;
+pub const encodeLimitList = limits.encodeLimitList;
 
 pub const DetachClient = @import("messages/DetachClient.zig");
 pub const encodeDetachClient = clients.encodeDetachClient;

@@ -142,6 +142,8 @@ window_title_template_len: u8 = 0,
 configuration_revision: u64 = 0,
 client_diagnostic: model_data.Diagnostic = .{},
 diagnostic_revision: u64 = 0,
+/// Every limit this client or its window reached; `limit_reached.report` writes it.
+limit_reaches: core.LimitReaches = .{},
 workspace_list_snapshot: WorkspaceListSnapshot = .{},
 workspace_list_revision: u64 = 0,
 agent_snapshot: AgentSnapshot = .{},

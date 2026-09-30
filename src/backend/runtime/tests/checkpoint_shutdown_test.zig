@@ -80,6 +80,58 @@ test "shutdown replaces a pending checkpoint with the latest session and release
     try std.testing.expectEqualStrings("late tab", reader.tabLabel(.{ .workspace = workspace.workspace, .tab_id = tab_id }).?);
 }
 
+test "a session larger than its checkpoint is written as far as it fits, reported, and the runtime goes on" {
+    const io = std.testing.io;
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
+
+    const directory = temp.path();
+    var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/overflow.sock", .{directory});
+    var checkpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const checkpoint_path = try std.fmt.bufPrint(&checkpoint_buffer, "{s}/session.ckpt", .{directory});
+    const initialization: Initialization = .{
+        .dependencies = .{ .io = io, .allocator = std.testing.allocator },
+        .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .session_path = checkpoint_path },
+    };
+
+    var first: Runtime = undefined;
+    try first.init(initialization);
+    defer first.deinit();
+
+    const workspace = try first.model.workspaces.insert(first.model.gpa, directory, null);
+    var launch_buffer: [64]u8 = undefined;
+    _ = try pane_launch.launch(&first.model, .{
+        .location = workspace,
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try sleepLaunch(&launch_buffer),
+        .launch_cwd = directory,
+        .workspace_path = directory,
+    });
+
+    // Room for the header and the end marker only: every record overflows.
+    first.model.checkpoint.snapshot_bytes = 43;
+    session_checkpoint.noteChange(&first.model);
+    first.model.checkpoint.last_change_ns = 0;
+    try session_checkpoint.start(&first.model);
+    try std.testing.expect(first.model.checkpoint.pending != null);
+
+    const reaches = &first.model.limit_reaches;
+    const slot = reaches.find("session_checkpoint.snapshot_bytes").?;
+    try std.testing.expectEqual(@as(u64, 1), reaches.hits[slot]);
+    try std.testing.expectEqual(@as(u64, 43), reaches.value[slot]);
+
+    first.deinit();
+    try std.testing.expectEqual(@as(u64, 0), first.model.checkpoint.failures);
+
+    var second: Runtime = undefined;
+    try second.init(initialization);
+    defer second.deinit();
+
+    try std.testing.expect(!second.model.checkpoint.restore_failed);
+    try std.testing.expectEqual(@as(u16, 0), second.model.checkpoint.restored_panes);
+}
+
 fn sleepLaunch(buffer: []u8) !core_module.LaunchView {
     var encoder = bytecodec.Encoder.init(buffer);
     try encoder.writeSized16("/bin/sleep");

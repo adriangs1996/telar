@@ -108,6 +108,7 @@ pub fn deliverySources(model: *RuntimeModel) Sources {
         .client_layouts = &model.client_layouts,
         .now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
         .agent_revision = model.agent_snapshot_revision,
+        .limit_reaches = &model.limit_reaches,
     };
 }
 

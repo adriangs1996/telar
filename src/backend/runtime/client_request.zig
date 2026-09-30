@@ -36,6 +36,7 @@ const workspace_reconciliation = @import("workspace_reconciliation.zig");
 const workspace_rename = @import("workspace_rename.zig");
 const worktree_lifecycle = @import("worktree_lifecycle.zig");
 const agent_control = @import("agent_control.zig");
+const limit_reached = @import("limit_reached.zig");
 
 /// Calls the procedure that owns `message`. An error drops the sender.
 ///
@@ -113,6 +114,8 @@ pub fn receive(model: *RuntimeModel, session: *Session, message: core.ClientMess
         .interrupt_agent => |request| agent_control.interrupt(model, session, request),
         .report_agent_progress => |request| agent_hooks.receiveProgress(model, session, request),
         .verify_pane_descent => |request| agent_hooks.receiveDescent(model, session, request),
+        .report_limit => |request| limit_reached.receive(model, request),
+        .query_limits => |request| limit_reached.list(session, request),
     };
 }
 

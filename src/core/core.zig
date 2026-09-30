@@ -33,6 +33,7 @@ const clients = @import("schema/messages/clients.zig");
 const client_actions = @import("schema/messages/client_actions.zig");
 const client_commands = @import("schema/messages/client_commands.zig");
 const change_review_module = @import("schema/messages/change_review.zig");
+const limits_module = @import("schema/messages/limits.zig");
 
 pub const AcknowledgeAgent = @import("schema/messages/AcknowledgeAgent.zig");
 pub const AgentAttachmentMarkers = types.AgentAttachmentMarkers;
@@ -492,6 +493,11 @@ test {
     _ = @import("ssh_destination.zig");
     _ = @import("remote_telar.zig");
     _ = @import("schema/notification_link.zig");
+    _ = @import("Limit.zig");
+    _ = @import("LimitReach.zig");
+    _ = @import("LimitReaches.zig");
+    _ = @import("limit_reached.zig");
+    _ = @import("schema/messages/limits.zig");
 }
 
 pub const TextMetadata = @import("text_metadata/Storage.zig");
@@ -507,6 +513,20 @@ pub const ClientList = @import("ClientList.zig");
 pub const QueryClients = @import("schema/messages/QueryClients.zig");
 pub const encodeQueryClients = clients.encodeQueryClients;
 pub const encodeClientList = clients.encodeClientList;
+
+pub const Limit = @import("Limit.zig");
+pub const LimitReach = @import("LimitReach.zig");
+pub const LimitReaches = @import("LimitReaches.zig");
+pub const RecordedReach = @import("RecordedReach.zig");
+pub const LimitOrigin = @import("LimitOrigin.zig").LimitOrigin;
+pub const limit_reached = @import("limit_reached.zig");
+pub const ReportLimit = @import("schema/messages/ReportLimit.zig");
+pub const QueryLimits = @import("schema/messages/QueryLimits.zig");
+pub const LimitListEntry = @import("schema/messages/LimitListEntry.zig");
+pub const LimitListView = @import("schema/messages/LimitListView.zig");
+pub const encodeReportLimit = limits_module.encodeReportLimit;
+pub const encodeQueryLimits = limits_module.encodeQueryLimits;
+pub const encodeLimitList = limits_module.encodeLimitList;
 
 pub const DetachClient = @import("schema/messages/DetachClient.zig");
 pub const encodeDetachClient = clients.encodeDetachClient;

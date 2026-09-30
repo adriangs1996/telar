@@ -172,6 +172,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_stats = &history_stats,
             .change_review = &change_review,
             .path_results = &path_results,
+            .limit_reaches = sources.limit_reaches,
         }, entry.response);
         return self.stage(payload, .{ .response = .{
             .offset = entry.offset,
@@ -338,6 +339,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_stats = &history_stats,
             .change_review = &change_review,
             .path_results = &path_results,
+            .limit_reaches = sources.limit_reaches,
         }, entry.response);
         return self.stage(payload, .{ .response = .{
             .offset = entry.offset,

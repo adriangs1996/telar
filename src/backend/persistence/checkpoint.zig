@@ -160,6 +160,37 @@ test "checkpoint records round trip through the file encoding" {
     try std.testing.expect(try reader.next() == null);
 }
 
+test "a full checkpoint keeps the records that fit and drops the rest" {
+    var buffer: [128]u8 = undefined;
+    var encoder = try Encoder.init(&buffer, .{
+        .next_workspace_id = 2,
+        .next_tab_id = 3,
+        .next_pane_id = 2,
+        .next_pane_generation = 2,
+    });
+    try encoder.workspace(.{ .id = 1, .path = "/work", .name = "", .first_tab_id = 1, .first_tab_label = "main" });
+    try encoder.tab(.{ .workspace_id = 1, .tab_id = 2, .label = "logs" });
+    try encoder.pane(.{
+        .pane_id = 1,
+        .workspace_id = 1,
+        .tab_id = 2,
+        .cwd = "/work/a/long/directory/that/does/not/fit",
+        .cols = 80,
+        .rows = 24,
+        .arguments = "/bin/zsh\x00",
+        .argument_count = 1,
+    });
+    try encoder.tab(.{ .workspace_id = 1, .tab_id = 3, .label = "x" });
+    const bytes = try encoder.finish();
+
+    try std.testing.expectEqual(@as(u32, 2), encoder.dropped);
+
+    var reader = try Reader.init(bytes);
+    try std.testing.expectEqualStrings("/work", (try reader.next()).?.workspace.path);
+    try std.testing.expectEqualStrings("logs", (try reader.next()).?.tab.label);
+    try std.testing.expect(try reader.next() == null);
+}
+
 test "checkpoint labels distinguish automatic tabs from explicit former defaults" {
     var buffer: [4096]u8 = undefined;
     var encoder = try Encoder.init(&buffer, .{
