@@ -138,7 +138,7 @@ pub fn validate(value: anytype) !void {
     } else if (T == Snapshot) {
         try text(value.patch, limits.max_patch_bytes);
         try text(value.feedback, limits.max_feedback_bytes);
-        try text(value.status, 512);
+        try text(value.status, limits.max_status_bytes);
         if (value.comment_count > limits.max_comments) {
             return error.InvalidChangeReview;
         }
@@ -174,6 +174,65 @@ test "change review wire rejects malformed bounds and roundtrips range comments"
     var invalid = command;
     invalid.last_line = 9;
     try std.testing.expectError(error.InvalidChangeReview, encodeChangeReviewCommand(&buffer, invalid));
+}
+
+test "the largest sample and snapshot fit the buffers sized for them and one byte more is refused" {
+    const gpa = std.testing.allocator;
+    const content = try gpa.alloc(u8, limits.max_sample_bytes + 1);
+    defer gpa.free(content);
+    @memset(content, 'x');
+    const path: [limits.max_path_bytes]u8 = @splat('p');
+    const identity: [limits.max_identity_bytes]u8 = @splat('i');
+
+    const buffer = try gpa.alloc(u8, limits.max_snapshot_message_bytes);
+    defer gpa.free(buffer);
+    var sample: Sample = .{
+        .request_id = @enumFromInt(1),
+        .pane_id = @enumFromInt(2),
+        .pane_generation = 3,
+        .provider = .claude,
+        .session = &identity,
+        .tool_call_id = &identity,
+        .phase = .after,
+        .path = &path,
+        .exists = true,
+        .content = content[0..limits.max_sample_bytes],
+    };
+    _ = try encodeReportChangeReviewSample(buffer[0..limits.max_sample_message_bytes], sample);
+    sample.content = content;
+    try std.testing.expectError(error.InvalidChangeReview, encodeReportChangeReviewSample(buffer, sample));
+
+    const patch = try gpa.alloc(u8, limits.max_patch_bytes);
+    defer gpa.free(patch);
+    @memset(patch, 'x');
+    const feedback = try gpa.alloc(u8, limits.max_feedback_bytes);
+    defer gpa.free(feedback);
+    @memset(feedback, 'f');
+    const status: [limits.max_status_bytes]u8 = @splat('s');
+    const body: [limits.max_comment_bytes]u8 = @splat('b');
+    var snapshot: Snapshot = .{
+        .request_id = @enumFromInt(1),
+        .pane_id = @enumFromInt(2),
+        .pane_generation = 3,
+        .session = &identity,
+        .patch = patch,
+        .feedback = feedback,
+        .status = &status,
+        .comment_count = limits.max_comments,
+    };
+    for (snapshot.comment_storage[0..limits.max_comments], 0..) |*comment, index| {
+        comment.* = .{
+            .id = index + 1,
+            .path = &path,
+            .first_line = 1,
+            .last_line = 1,
+            .body = &body,
+        };
+    }
+
+    _ = try encodeChangeReviewSnapshot(buffer, snapshot);
+    snapshot.patch = content[0 .. limits.max_patch_bytes + 1];
+    try std.testing.expectError(error.InvalidChangeReview, encodeChangeReviewSnapshot(buffer, snapshot));
 }
 
 test "change review invalidation carries the provider conversation and rejects unbounded identities" {

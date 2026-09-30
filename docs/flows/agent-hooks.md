@@ -465,13 +465,18 @@ apply the patch or parse source languages. These shapes follow the
 [Claude hook reference](https://code.claude.com/docs/en/hooks) and
 [Codex hook reference](https://developers.openai.com/es-419/docs/hooks).
 
-Each tool can declare at most 32 distinct paths, and each file sample is capped
-at 24 KiB. Every path component rejects symlinks. Files must be regular UTF-8
-text, with stable size and modification metadata during the read. Empty files
-and absent files are distinct. Binary, oversized, inaccessible and unstable
-files are omitted rather than truncated. Traversal components and malformed or
-oversized path lists are rejected. An unmatched after sample supplies no base
-from which Telar can claim a diff.
+Each tool call samples at most 128 distinct paths, and each file sample is
+capped at 128 KiB. A tool call that declares more paths samples the first 128,
+and a file larger than the cap is skipped; either way `telar hook` prints the
+limit notice on standard error and reports `review.hook_files` or
+`review.max_sample_bytes` to the runtime, which shows it, and the hook still
+exits 0. A file the runtime refuses leaves the other files' samples in place.
+Every path component rejects symlinks. Files must be regular UTF-8 text, with
+stable size and modification metadata during the read. Empty files and absent
+files are distinct. Binary, oversized, inaccessible and unstable files are
+omitted rather than truncated. Traversal components and malformed path lists
+are rejected. An unmatched after sample supplies no base from which Telar can
+claim a diff.
 
 These editions are labeled `observed_snapshot`: they capture the transition
 around the named tool, but another process might write the same file between

@@ -107,12 +107,32 @@ active Telar theme supplies their colors, italics and weight. Bundled queries
 are compiled lazily per language on the observation worker, before the source
 parsing deadline begins. Theme changes do not require parsing the source again.
 
-The review wire bounds a patch to 48 KiB, each source sample to 24 KiB, a comment
-to 2 KiB and formatted feedback to 8 KiB. There are at most 32 comments per
-edition. The view indexes at most 32 files and 1,024 numbered rows. Unsupported
-or oversized content fails explicitly; it is not silently truncated into a
-different review. One syntax job uses an inactive source slot; its completion is
-adopted only after the preceding presentation releases its resources.
+The review wire bounds a patch to 128 KiB, each source sample to 128 KiB, a
+comment to 2 KiB and formatted feedback to 32 KiB. There are at most 32 comments
+per edition. The view indexes at most 128 files and 4,096 numbered rows.
+
+Every one of these limits keeps what fits and reports the rest by name with the
+[limit notice](limit-reached.md); none drops a whole edit:
+
+- A diff past `review.max_patch_bytes` keeps its whole files and hunks, then
+  the first lines of the hunk that crosses the bound under a recounted header.
+  The edition's status says how many bytes it left out, and the runtime reports
+  the limit with the diff's full size. Only a diff whose first hunk has no
+  change that fits is refused, and reported.
+- Feedback past `review.max_feedback_bytes` keeps the comments that fit. A
+  comment whose excerpt does not fit is sent without it; one that does not fit
+  at all is counted in the feedback's last line.
+- An edition past `change_review.view_files` or `change_review.view_lines`
+  shows its first files and rows; the status names what the view left out and
+  the window reports the limit.
+- A diff with more hunks than the highlighter's fragment or time budget keeps
+  the colors of its first hunks and shows the rest plain (`syntax.fragments`,
+  `syntax.job_ms`).
+
+Other unsupported content, such as binary or non-UTF-8 text, fails explicitly;
+it is not silently turned into a different review. One syntax job uses an
+inactive source slot; its completion is adopted only after the preceding
+presentation releases its resources.
 
 The service admits four observation jobs, at most one per client connection.
 Availability discovery uses at most three slots, leaving one for review requests.
@@ -121,11 +141,16 @@ entries can be reloaded from disk. Unsent commented editions stay in memory.
 Once all 16 are pinned, capture reports a capacity failure until reviews are
 delivered or their comments are removed. Other editions move to separate archive
 files and remain navigable and editable. Each conversation retains up to 4,096
-edition identities within an 8 MiB storage quota. All conversations together use
+edition identities within a 32 MiB storage quota. All conversations together use
 a 256 MiB retained-storage quota. Saturation preserves existing editions and
-appears in review status; it does not silently delete older reviews.
+appears in review status; it does not silently delete older reviews. Each of
+these bounds is reported by name when the review job finishes:
+`review.group_capacity`, `review.editions_in_memory`, `review.archive_capacity`,
+`review.pending_samples`, `review.conversation_storage`, `review.global_storage`
+and `review.max_storage_files`.
 
-Before/after capture holds at most 32 pending paths per conversation. Unmatched
+Before/after capture holds at most 128 pending paths per conversation. A pending
+sample holds only its own bytes, not the largest a sample may be. Unmatched
 samples expire after ten minutes and are discarded when the owning pane
 generation changes. Creation or deletion of an empty file currently has no
 supported text hunk and is rejected as an unsupported patch.

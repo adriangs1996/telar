@@ -7,6 +7,7 @@ const ReviewHookReport = @import("ReviewHookReport.zig");
 const ReviewHookFiles = @import("ReviewHookFiles.zig");
 const ReviewFileSample = @import("ReviewFileSample.zig");
 const control = @import("control.zig");
+const limit_reached = @import("limit_reached.zig");
 
 /// Runs only inside the hook subprocess; failed evidence never becomes a diff.
 /// Example: `hook_review.capture(session, pane, report);`
@@ -17,8 +18,21 @@ pub fn capture(session: *Session, pane: PaneRef, report: ReviewHookReport) void 
         return;
     }
 
+    const pane_id = core.pane(pane.pane_id) catch return;
     const files = ReviewHookFiles.collect(report.provider, input) catch return;
-    var sample: ReviewFileSample = .{};
+    if (files.skipped != 0) {
+        limit_reached.report(session, .{
+            .limit = ReviewHookFiles.files_limit,
+            .requested = files.count + files.skipped,
+        });
+    }
+
+    // Heap: the sample is as large as the largest file the review keeps.
+    const sample = session.gpa.create(ReviewFileSample) catch return;
+    defer session.gpa.destroy(sample);
+    sample.* = .{};
+
+    var largest_skipped: u64 = 0;
     for (files.paths[0..files.count]) |path| {
         const absolute = if (std.fs.path.isAbsolute(path)) session.gpa.dupe(u8, path) catch continue else std.fs.path.join(session.gpa, &.{ input.cwd, path }) catch continue;
         defer session.gpa.free(absolute);
@@ -26,10 +40,19 @@ pub fn capture(session: *Session, pane: PaneRef, report: ReviewHookReport) void 
             continue;
         }
 
-        sample.read(session.io, absolute) catch continue;
+        sample.read(session.io, absolute) catch |err| {
+            if (err == error.ReviewFileTooLarge) {
+                largest_skipped = @max(largest_skipped, sample.size);
+            }
+
+            continue;
+        };
+
+        // A refused file, one at a runtime limit included (the runtime
+        // reports that one itself), leaves the other files' evidence.
         session.reportReviewSample(.{
             .request_id = .none,
-            .pane_id = core.pane(pane.pane_id) catch return,
+            .pane_id = pane_id,
             .pane_generation = pane.pane_generation,
             .provider = report.provider,
             .session = input.session,
@@ -38,7 +61,14 @@ pub fn capture(session: *Session, pane: PaneRef, report: ReviewHookReport) void 
             .path = absolute,
             .exists = sample.exists,
             .content = sample.storage[0..sample.len],
-        }) catch return;
+        }) catch continue;
+    }
+
+    if (largest_skipped != 0) {
+        limit_reached.report(session, .{
+            .limit = core.change_review.sample_limit,
+            .requested = largest_skipped,
+        });
     }
 }
 

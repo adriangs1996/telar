@@ -1,5 +1,6 @@
 //! Reusable native change-review surface. Runtime and experiments supply editions.
 const syntaxhl = @import("syntaxhl");
+const core = @import("telar-core");
 const data = @import("model");
 const event_module = @import("../input/event.zig");
 const std = @import("std");
@@ -35,7 +36,7 @@ read_only: bool = false,
 delivery: enum { idle, queued, pending, sending, sent, failed } = .idle,
 live_status: [320]u8 = undefined,
 model: client.ChangeReviewModel = .{},
-roles: [2][syntaxhl.limits.source_bytes]syntaxhl.Role = undefined,
+roles: [2][core.change_review.max_patch_bytes]syntaxhl.Role = undefined,
 theme: data.theme_support.Builtin = .shade,
 widgets: ?*State = null,
 generation: u64 = 1,
