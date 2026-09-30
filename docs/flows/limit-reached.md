@@ -93,8 +93,30 @@ strings, so a completion carries names and nouns declared at comptime, which
 live for the whole process.
 
 A CLI command has no model and no window. When it reaches a limit it prints
-the notice text to standard error (`reach.describe`) and exits with a
-nonzero status. A library under `lib/` knows no telar limit names: it returns
+the notice text to standard error (`limit_reached.report` in `src/cli`,
+through `reach.describe`) and exits with a nonzero status
+(`limit_reached.exit_status`), even when it kept what fit: `history import`
+of a histfile past its bound imports the newest commands and still exits 1,
+since a script must not read the import as complete.
+
+One exception: a limit that only cuts what a command shows, never what it
+does or stores, prints the notice and keeps the command's status. That is
+the untracked worktrees `worktree list` shows (`worktrees.untracked_listing`,
+`worktrees.git_listing_bytes`), the editions `review list` walks
+(`review.max_listed_editions`), the logs `diagnostics logs` reads
+(`cli.diagnostic_logs`, `cli.diagnostic_directory_entries`) and the notes
+`machine setup` prints (`cli.setup_report_notes`). A machine that was set up
+does not report a failure because its report ran out of lines.
+
+A command that holds a runtime session also sends the reach as
+`report_limit` (`limit_reached.reportThrough(&session, reach)`), and since a
+control connection has no window of its own, the runtime shows its notice
+to every window, once per interval of its row. `telar hook` is the one
+command that keeps status 0 whatever it lost: a nonzero status would put
+an error in the agent's transcript, and status 2 would block a Claude Code
+tool call.
+
+A library under `lib/` knows no telar limit names: it returns
 its error, and the flow that called it, which has a model, maps the error to
 its `Limit` and reports.
 
@@ -134,9 +156,12 @@ by the monotonic clock; the time a reader sees is the wall clock.
 The runtime keeps two tables. `model.limit_reaches` holds its own limits;
 `model.client_limit_reaches` holds what clients report. A client that
 reports a runtime limit's name, or a hundred invented names, never silences,
-renames or evicts a runtime row, and never makes the runtime show a notice.
-Each connection may send 32 reports a second; the rest are refused and
-counted in `model.refused_limit_reports`. A request that stops at a limit
+renames or evicts a runtime row, and a window's report never makes the
+runtime show a notice.
+A command-line connection's report shows its notice from that table's row,
+so it too never silences a runtime limit. Each connection may send 32
+reports a second; the rest are refused and counted in
+`model.refused_limit_reports`. A request that stops at a limit
 spends the same budget before it records a row or shows a notice, so a
 client cannot flood the runtime's own table with oversized requests either.
 
@@ -291,10 +316,20 @@ with notice levels and the client's `limits`.
   `report_limit`, `query_limits` and `limit_list`.
 - `src/backend/runtime/tests/limit_reached_test.zig`: the runtime notice,
   client reports kept apart, a client that cannot silence or evict runtime
-  rows, the report rate, a refused request that keeps its connection, the
+  rows, a command-line report that shows its notice, the report rate, a refused request that keeps its connection, the
   update net, and `Runtime.update` skipping a real event.
 - `checkpoint_shutdown_test.zig`: a session larger than its checkpoint keeps
   the runtime and restores cleanly.
+- `client_events_test.zig`: a client the runtime has no room for is answered
+  with `client_limit_reached` and the runtime reports `clients.max_clients`.
+- `agent_control_test.zig`: text that does not fit a pane's input queue fails
+  its request, keeps what was queued and reports
+  `panes.input_queue_capacity`.
+- `search_pane_test.zig`: a search keeps its newest matches and one out of
+  time answers with what it found, reporting `pane_search.deadline_ms`.
+- `attachment_namespace.zig`: placements past a screen's count drop only the
+  oldest image's; `TextMetadataCapture.zig`: a link table past its quota keeps
+  the links that fit.
 - `src/backend/runtime/resources/RuntimeLog.zig`: rotation at start and past
   the size bound.
 - `client_tests.recoverLimitedMessages`, run from
@@ -315,3 +350,8 @@ with notice levels and the client's `limits`.
 - `src/cli/integration/limits.test.mjs`: against a built telar, a client
   reports a limit over the socket, `telar diagnostics limits` lists it and
   the background runtime writes its own log.
+- `src/cli/integration/hook_identity.test.mjs`: a hook payload past
+  `hooks.max_input_bytes` still reports its event from inside a pane, and
+  `telar diagnostics limits` lists the limit the hook reported.
+- `src/cli/HookStdin.zig`: input at and past the limit, a value the cut may
+  have shortened, and input that is not an object.

@@ -512,7 +512,7 @@ test "sidebar workspace round trip restores fullscreen in a previously inactive 
     try std.testing.expect(client.model.tabs.layout[fullscreen_tab].focusPane(first));
     try std.testing.expect(client.model.tabs.layout[fullscreen_tab].resizeFocused(.down, area));
     try std.testing.expect(client.model.tabs.layout[fullscreen_tab].toggleFullscreen());
-    var original_nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
+    var original_nodes: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
     const expected = client.model.tabs.layout[fullscreen_tab].clientLayoutNodes(&original_nodes);
     const other_location = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
     try std.testing.expectEqual(other_location, client.model.activeTabLocation().?);
@@ -594,7 +594,7 @@ test "sidebar workspace round trip restores fullscreen in a previously inactive 
     const restored = client.model.tabs.active;
     try std.testing.expect(client.model.tabs.layout[restored].isFullscreen());
     try std.testing.expectEqual(clicked, client.model.tabs.layout[restored].focused().?);
-    var actual_nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
+    var actual_nodes: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
     try std.testing.expectEqualDeep(expected, client.model.tabs.layout[restored].clientLayoutNodes(&actual_nodes));
     try std.testing.expectEqual(core.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, data.tab_layout.contentSize(&client.model, restored, clicked, area).?);
     try std.testing.expect(data.tab_layout.contentSize(&client.model, restored, first, area) == null);

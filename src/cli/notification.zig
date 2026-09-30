@@ -33,7 +33,7 @@ pub fn run(init: std.process.Init, options: NotificationOptions) !void {
     };
 
     if (reach) |cut| {
-        limit_reached.report(null, cut);
+        limit_reached.report(cut);
         return error.NotificationTextTooLong;
     }
 }

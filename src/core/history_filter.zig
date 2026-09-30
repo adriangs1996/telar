@@ -4,9 +4,15 @@
 
 const std = @import("std");
 const Filters = @import("Filters.zig");
+const Limit = @import("Limit.zig");
 
-pub const max_patterns = 16;
-pub const max_pattern_bytes = 96;
+/// Patterns one filter list holds. The configuration is refused past it,
+/// never cut: a dropped pattern would record the commands it hides.
+pub const max_patterns = 64;
+pub const patterns_limit = Limit.declare("history_filter.max_patterns", "patterns", max_patterns);
+/// Bytes of one pattern; cwd patterns are often whole paths.
+pub const max_pattern_bytes = 256;
+pub const pattern_bytes_limit = Limit.declare("history_filter.max_pattern_bytes", "bytes", max_pattern_bytes);
 
 const SecretRule = union(enum) {
     /// The marker anywhere in the command is enough.

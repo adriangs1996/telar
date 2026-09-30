@@ -35,3 +35,5 @@ agent_entries: []const core.AgentSnapshotEntry = &.{},
 runtime_limits: *const core.LimitReaches = &core.LimitReaches.none,
 client_limits: *const core.LimitReaches = &core.LimitReaches.none,
 refused_limit_reports: u64 = 0,
+/// Storage a `pane_text` reply is dumped into; the model owns it.
+pane_text: ?*[core.max_pane_text_bytes]u8 = null,

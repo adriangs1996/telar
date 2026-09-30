@@ -99,6 +99,26 @@ pub fn send(session: *Session, event: event_module.Event) !void {
     try input_support.pump(session.gui);
 }
 
+test "an edition past the view's file limit shows its first files, says so and reports the limit" {
+    const view_files = @typeInfo(@FieldType(client.ChangeReviewRevision, "files")).array.len;
+    const file = "Added overflow.zig\n@@ -0,0 +1 @@\n+new\n";
+    const session = try base();
+    defer session.deinit();
+    try session.gui.openChangeReview(Session.pane_id);
+
+    var snapshot = response(session, 1);
+    snapshot.patch = file ** (view_files + 2);
+    try reply(session, snapshot);
+    try adopt(session);
+
+    const panel = session.gui.review;
+    try std.testing.expectEqual(@as(usize, view_files), panel.widget.model.current().file_count);
+    const expected = std.fmt.comptimePrint("Shows the first {d} of {d} files", .{ view_files, view_files + 2 });
+    try std.testing.expect(std.mem.startsWith(u8, panel.widget.model.status, expected));
+    try std.testing.expect(!panel.widget.read_only);
+    try std.testing.expect(session.gui.app.model.limit_reaches.find("change_review.view_files") != null);
+}
+
 test "runtime review autosave acknowledges only submitted text while later typing stays queued" {
     const session = try ready();
     defer session.deinit();

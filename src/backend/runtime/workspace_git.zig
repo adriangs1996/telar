@@ -9,6 +9,7 @@ const Probe = @import("../workspace/Probe.zig");
 const Completion = @import("resources/Completion.zig");
 const Job = @import("resources/Job.zig");
 const git_probe = @import("resources/git_probe.zig");
+const limit_reached = @import("limit_reached.zig");
 
 /// Starts one due probe, rolling back its reservation on scheduling failure.
 ///
@@ -26,15 +27,32 @@ pub fn start(model: *RuntimeModel) void {
     }}) catch cancel(&model.workspaces, request.workspace);
 }
 
-/// Commits only the outstanding probe's result.
+/// Commits only the outstanding probe's result, then starts the next due
+/// probe, so with many workspaces each still refreshes about once per
+/// `probe_interval_ms` instead of one a maintenance tick.
 ///
 /// ```zig
 /// workspace_git.finish(model, completion);
 /// ```
 pub fn finish(model: *RuntimeModel, completion: Completion) void {
+    // A repository that always outlasts the timeout is named once, not on
+    // every probe.
+    const location: core.WorkspaceLocation = .{
+        .workspace = completion.workspace,
+    };
+    if (model.workspaces.slotOf(location)) |slot| {
+        const timed_out = completion.limit != null;
+        if (timed_out and !model.workspaces.git_timed_out[slot]) {
+            limit_reached.report(model, completion.limit.?);
+        }
+
+        model.workspaces.git_timed_out[slot] = timed_out;
+    }
+
     const branch = if (completion.present) completion.branchSlice() else "";
     const dirty: ?bool = if (completion.present) completion.dirty else false;
     _ = commit(&model.workspaces, completion.workspace, branch, dirty, std.Io.Timestamp.now(model.io, .real).toMilliseconds());
+    start(model);
 }
 
 /// Reserves the stalest due workspace and copies its path for the worker.

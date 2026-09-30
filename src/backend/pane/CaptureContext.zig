@@ -44,6 +44,7 @@ pub fn emit(self: *CaptureContext, command: Command) void {
             stats.captured += 1;
         } else {
             stats.dropped += 1;
+            stats.refused += 1;
         }
     }
 }

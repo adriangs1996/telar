@@ -9,6 +9,9 @@ const dispatch = @import("dispatch.zig");
 const Self = @This();
 const Pending = @import("Pending.zig");
 
+/// Bytes of the status line the panel shows.
+const status_capacity = 1024;
+
 allocator: std.mem.Allocator,
 widget: Widget = .{ .mode = .runtime, .layer = 1 },
 active: bool = false,
@@ -24,7 +27,7 @@ notified: bool = false,
 pending: ?Pending = null,
 blocked: bool = false,
 refreshing: bool = false,
-status_bytes: [1024]u8 = undefined,
+status_bytes: [status_capacity]u8 = undefined,
 paste: client.ChangeReviewComment = .{},
 paste_generation: ?u64 = null,
 paste_revision: u64 = 0,
@@ -101,12 +104,12 @@ pub fn synchronize(self: *Self, app: *client.Client) !void {
                 self.widget.read_only = true;
                 self.status(switch (err) {
                     error.SyntaxLimit, error.SyntaxUnavailable => "Syntax highlighting could not finish. Refresh to retry this edition.",
-                    error.ReviewFileLimit, error.ReviewLineLimit => "This edition exceeds the file or line limit of the review view.",
                     else => "This edition could not be prepared for review. Refresh to retry.",
                 });
             } else {
                 self.visible_slot = self.job.?;
                 self.adopt(&state.snapshot);
+                self.noteLimits(app, prepared);
             }
         }
         self.job = null;
@@ -486,6 +489,31 @@ fn localChange(self: *const Self, index: usize) bool {
 
 fn dirty(self: *const Self) bool {
     return self.widget.changed_comments != 0 or self.widget.deleted_comments != 0 or self.widget.reviewed_changed or self.pending != null;
+}
+
+/// Reports the view limits a prepared edition reached and says ahead of the
+/// status what the view left out.
+fn noteLimits(self: *Self, app: *client.Client, prepared: *const PreparedEdition) void {
+    const cut = prepared.revision.reach();
+    if (cut) |reach| {
+        client.limit_reached.report(app, reach);
+    }
+
+    if (prepared.syntax_limit) |limit| {
+        client.limit_reached.report(app, .{
+            .limit = limit,
+        });
+    }
+
+    var buffer: [status_capacity]u8 = undefined;
+    const current = self.widget.model.status;
+    const note = if (cut) |reach|
+        std.fmt.bufPrint(&buffer, "Shows the first {d} of {d} {s}; the rest passed the review view's limit. {s}", .{ reach.limit.value, reach.requested.?, reach.limit.noun, current }) catch return
+    else if (prepared.syntax_limit != null)
+        std.fmt.bufPrint(&buffer, "Syntax colors stop partway through this edition. {s}", .{current}) catch return
+    else
+        return;
+    self.status(note);
 }
 
 fn status(self: *Self, message: []const u8) void {

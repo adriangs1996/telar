@@ -15,6 +15,7 @@ const delivery_namespace = @import("delivery/delivery_namespace.zig");
 const pane_launch = @import("pane_launch.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
 const tab_creation = @import("tab_creation.zig");
+const workspace_creation = @import("workspace_creation.zig");
 const tab_removal = @import("tab_removal.zig");
 
 /// Tracks the worktree a CLI created and answers with its identity. A
@@ -74,10 +75,11 @@ pub fn launch(model: *RuntimeModel, session: *Session, request: core.LaunchWorkt
     const opened = launchCommand(model, session, request) catch |err| {
         return switch (err) {
             error.WorktreeNotFound => client_request.fail(session, request.request_id, .worktree_not_found, "worktree not found"),
-            error.WorkspaceCreateFailed => client_request.fail(session, request.request_id, .resource_limit, "could not create the worktree workspace"),
-            error.TabLimitReached => client_request.fail(session, request.request_id, .resource_limit, "tab limit reached"),
+            error.WorkspaceCreateFailed, error.InvalidWorkspaceName => client_request.fail(session, request.request_id, .resource_limit, "could not create the worktree workspace"),
+            error.WorkspaceLimitReached => client_request.fail(session, request.request_id, .resource_limit, workspace_creation.workspace_limit),
+            error.TabLimitReached => client_request.fail(session, request.request_id, .resource_limit, tab_creation.tab_limit),
             error.InvalidTabLabel => client_request.fail(session, request.request_id, .invalid_request, "invalid tab label"),
-            error.PaneLimitReached => client_request.fail(session, request.request_id, .resource_limit, "pane limit reached"),
+            error.PaneLimitReached, error.TabPaneLimitReached => client_request.fail(session, request.request_id, .resource_limit, pane_launch.limitFailure(err).?),
             error.UnsupportedEnvironment => client_request.fail(session, request.request_id, .invalid_request, "custom pane environment is not supported"),
             else => if (pane_launch.spawnFailure(err)) |reason| client_request.fail(session, request.request_id, .spawn_failed, reason) else err,
         };
@@ -165,7 +167,7 @@ fn launchCommand(model: *RuntimeModel, session: *Session, request: core.LaunchWo
 fn createWorkspace(model: *RuntimeModel, slot: usize, request: core.LaunchWorktreeView) !core.PaneOpened {
     const worktrees = &model.worktrees;
     const path = worktrees.path[slot];
-    const proposal = model.workspaces.propose(model.gpa, path, workspaceName(worktrees, slot)) catch return error.WorkspaceCreateFailed;
+    const proposal = try workspace_creation.propose(model, path, workspaceName(worktrees, slot));
     defer model.workspaces.rollback(model.gpa, proposal);
 
     const location: core.TabLocation = .{

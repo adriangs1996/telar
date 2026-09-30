@@ -116,3 +116,14 @@ test("Pi repairs a missing settled callback and cancels renewal on shutdown", as
   assert.equal(f.intervals.size, 0);
   assert.equal(f.children.at(-1).payload.event, "session_shutdown");
 });
+
+test("Pi keeps a tool event past the payload bound with only the short tool input strings", async () => {
+  const f = fixture();
+  const content = "x".repeat(80 * 1024);
+  await f.fire("tool_execution_start", { toolCallId: "call-1", toolName: "write", args: { path: "/work/big.txt", content } });
+  f.flush();
+  const sent = f.children.find((child) => child.payload.event === "tool_execution_start");
+  assert.ok(sent);
+  assert.deepEqual(sent.payload.tool_input, { path: "/work/big.txt" });
+  for (const child of f.children) assert.ok(Buffer.byteLength(JSON.stringify(child.payload)) <= 64 * 1024);
+});

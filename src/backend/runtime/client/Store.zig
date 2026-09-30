@@ -5,9 +5,6 @@ const std = @import("std");
 const ClientKey = @import("../../history/ClientKey.zig");
 const Store = @This();
 
-comptime {
-    std.debug.assert(store_support.max_clients <= @bitSizeOf(u8));
-}
 
 items: [store_support.max_clients]?*Session = @splat(null),
 count: usize = 0,
@@ -77,7 +74,7 @@ pub fn add(self: *Store, gpa: std.mem.Allocator, connection: localsocket.SocketC
 /// var observers = pane.observers;
 /// while (store.nextObserver(&observers)) |session| { ... }
 /// ```
-pub fn nextObserver(self: *Store, observers: *u8) ?*Session {
+pub fn nextObserver(self: *Store, observers: *store_support.Observers) ?*Session {
     while (observers.* != 0) {
         const index = @ctz(observers.*);
         observers.* &= observers.* - 1;

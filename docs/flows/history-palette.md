@@ -43,14 +43,22 @@ author filter (you, agents, both); a leading `!` in the field, or the GUI's
 failed chip, asks for failed commands only (`QueryHistory.failed_only`). The
 filters live on the prompt (`Prompt.mode.history`), and
 `history_palette.historyFilters` turns the field and the prompt into the wire
-query. Unavailable context falls back to global, and the displayed scope is
-the effective scope. Every query, scope or filter edit resets pagination and
+query. Unavailable context (no workspace path, no working directory yet)
+falls back to global, and the displayed scope is the effective scope. A
+workspace path or working directory travels in its outbox slot's payload,
+up to `core.max_cwd_bytes`, the most either can hold; one longer would stop
+at `ScopeTooLong` and be reported rather than widen the search to global.
+The query text is the prompt field's, 128 bytes, cut on a character
+boundary. Every query, scope or filter edit resets pagination and
 selection. Only the newest request can replace visible results. Loading
 results cannot be pasted or deleted. Each page records `utc_offset_min`, read
 from the client's zone when the reply lands, so rows and day headings show
 local time without the model reading a clock.
 
-One resident page contains at most 100 executions. Repeated commands remain
+One resident page contains at most 100 executions
+(`HistoryPaletteState.page_entries`); one reply may carry up to
+`core.max_history_results`, 1000, which `telar history --limit` can ask for.
+Repeated commands remain
 separate executions so their timestamps, outcomes and output stay meaningful.
 Up selects towards older/lower-ranked results and crosses the page boundary.
 Down returns towards newer/better-ranked results. PgUp and PgDn request older
@@ -66,9 +74,11 @@ Byte-limited pages may be smaller than 100; navigating backwards can overlap the
 previous page. This bounded one-page implementation replaces the review's
 suggested two-page prefetch cache.
 
-The existing fuzzy matcher still considers the newest 1000 candidates in the
-selected scope. The title exposes that limit when fuzzy text is entered.
-Empty queries browse chronological history without that candidate cap.
+The fuzzy matcher scores the newest 10,000 executions in the selected scope
+(`history.fuzzy_max_candidates`); older ones never match a fuzzy query. When
+a page runs out inside that window while older executions exist, the runtime
+reports the limit with the limit notice. Empty queries browse chronological
+history without that candidate cap.
 `client.history.match = "fts"` uses the existing indexed substring path instead.
 
 ## Inspection and bounds

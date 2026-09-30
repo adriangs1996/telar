@@ -91,3 +91,25 @@ test "syntax worker rejects allocator failure and oversized jobs without publish
     try std.testing.expect(store.request(&oversized) == null);
     try std.testing.expect(store.nextJob() == null);
 }
+
+test "a review edition past the fragment budget keeps its first colors and names the budget" {
+    const hunk = "@@ -1 +1 @@\n-const a = 1;\n+const b = 2;\n";
+    const hunks = limits.fragments / 2 + 2;
+    const text = "Updated main.zig\n" ++ hunk ** hunks;
+    var roles: [text.len]syntaxhl.Role = undefined;
+
+    var strict: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text, .roles = &roles };
+    try std.testing.expectError(error.SyntaxLimit, strict.run());
+
+    var partial: DiffHighlighter = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .text = text,
+        .roles = &roles,
+        .partial = true,
+    };
+    try partial.run();
+    try std.testing.expectEqualStrings("syntax.fragments", partial.limited.?.name);
+    try std.testing.expectEqual(syntaxhl.Role.keyword, roles[std.mem.indexOf(u8, text, "const b").?]);
+    try std.testing.expectEqual(syntaxhl.Role.plain, roles[std.mem.lastIndexOf(u8, text, "const b").?]);
+}

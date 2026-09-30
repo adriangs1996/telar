@@ -3,10 +3,15 @@ const std = @import("std");
 const ToolHookInput = @import("ToolHookInput.zig");
 const ReviewHookFiles = @This();
 
-pub const capacity = 32;
+/// Paths one tool call samples; the ones past it are counted in `skipped`
+/// and reported, and the first ones are still sampled.
+pub const capacity = 128;
+pub const files_limit = core.Limit.declare("review.hook_files", "files", capacity);
 
 paths: [capacity][]const u8 = undefined,
 count: usize = 0,
+/// Distinct paths past `capacity` that were not sampled.
+skipped: usize = 0,
 
 /// Reads only the tool's declared paths, never shell commands or source syntax.
 /// Example: `const files = try ReviewHookFiles.collect(.codex, input);`
@@ -108,7 +113,8 @@ fn append(self: *ReviewHookFiles, path: []const u8) !void {
     }
 
     if (self.count == self.paths.len) {
-        return error.TooManyReviewFiles;
+        self.skipped += 1;
+        return;
     }
 
     self.paths[self.count] = path;
@@ -134,17 +140,21 @@ test "review hook paths track patch moves without interpreting source or shell c
     try std.testing.expectEqual(@as(usize, 0), (try ReviewHookFiles.collect(.codex, subagent)).count);
 }
 
-test "review hook paths reject traversal and overflow without truncating the tool" {
+test "review hook paths reject traversal and keep the first files past the limit" {
     var files: ReviewHookFiles = .{};
     try std.testing.expectError(error.InvalidReviewPath, files.append("../outside"));
     try std.testing.expectError(error.InvalidReviewPath, files.append("bad\nname"));
-    var names: [capacity][8]u8 = undefined;
+    var names: [capacity][16]u8 = undefined;
     for (&names, 0..) |*name, index| {
         try files.append(try std.fmt.bufPrint(name, "file-{d}", .{index}));
     }
 
     try files.append("file-0");
-    try std.testing.expectError(error.TooManyReviewFiles, files.append("overflow"));
+    try std.testing.expectEqual(@as(usize, 0), files.skipped);
+    try files.append("overflow");
+    try std.testing.expectEqual(@as(usize, capacity), files.count);
+    try std.testing.expectEqual(@as(usize, 1), files.skipped);
+    try std.testing.expectEqualStrings("file-0", files.paths[0]);
 }
 
 test "review hook paths accept Claude file tools and reject unrelated or malformed input" {

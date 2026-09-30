@@ -12,6 +12,7 @@ const DescentCompletion = @import("../events/DescentCompletion.zig");
 const Session = @import("../client/Session.zig");
 const Pane = @import("../../pane/Pane.zig");
 const client_connection = @import("../client_connection.zig");
+const client_layout_persistence = @import("../client_layout_persistence.zig");
 const runtime_event = @import("../event.zig");
 const SessionReference = @import("../../agent/SessionReference.zig");
 
@@ -90,6 +91,69 @@ test "runtime dispatch preserves a committed pane when its reply queue is full" 
     } }));
     try std.testing.expectEqual(count + 1, fixture.runtime.model.panes.count);
     try std.testing.expectEqual(@as(usize, 2), fixture.runtime.model.attachments.len(fixture.session.slot));
+}
+
+test "a tab created beside a tab with all its panes attached attaches its root pane" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const first = try fixture.openPane();
+    var launch_buffer: [64]u8 = undefined;
+    for (1..core.max_panes_per_tab) |index| {
+        try fixture.send(.{ .create_pane = .{
+            .request_id = @enumFromInt(100 + index),
+            .location = first.location,
+            .size = .{ .cols = 30, .rows = 8 },
+            .launch = try RequestFixture.sleepLaunch(&launch_buffer),
+        } });
+        fixture.clearResponses();
+    }
+
+    const attachments = &fixture.runtime.model.attachments;
+    try std.testing.expectEqual(@as(usize, core.max_panes_per_tab), attachments.len(fixture.session.slot));
+    try fixture.send(.{ .create_tab = .{
+        .request_id = @enumFromInt(41),
+        .workspace = first.location.workspace,
+        .label = "next",
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try RequestFixture.sleepLaunch(&launch_buffer),
+    } });
+    try std.testing.expect(fixture.response().?.* == .tab_created);
+    try std.testing.expectEqual(@as(usize, core.max_panes_per_tab + 1), attachments.len(fixture.session.slot));
+}
+
+test "a window identity past the retained layouts takes the oldest record and reports it" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const nodes = [_]core.ClientLayoutNode{.{ .pane = .{ .id = pane.id } }};
+    const tabs = [_]core.ClientTabLayout{.{
+        .location = pane.location,
+        .focused_pane = pane.id,
+        .fullscreen = false,
+        .workspace_active = true,
+        .nodes = &nodes,
+    }};
+    var buffer: [core.max_client_layout_wire_bytes]u8 = undefined;
+    const encoded = try core.encodeClientLayoutUpdate(&buffer, .{
+        .sidebar_visible = true,
+        .sidebar_width = 30,
+        .workspace_list_collapsed = false,
+        .active_tab = pane.location,
+        .tabs = &tabs,
+    });
+    const update = (try core.decodeClient(encoded)).update_client_layout;
+    const model = &fixture.runtime.model;
+    for (1..core.max_client_layout_clients + 2) |identity| {
+        fixture.session.delivery.client_identity = @enumFromInt(identity);
+        try client_layout_persistence.retain(model, fixture.session, update);
+    }
+
+    try std.testing.expectEqual(@as(u64, 1), model.client_layouts.evictions);
+    try std.testing.expect(model.client_layouts.focusedPane(@enumFromInt(1)) == null);
+    try std.testing.expectEqual(pane.id, model.client_layouts.focusedPane(@enumFromInt(core.max_client_layout_clients + 1)).?);
+    try std.testing.expect(model.limit_reaches.find("client_layouts.max_client_layout_clients") != null);
 }
 
 test "runtime dispatch retains tab rename after response backpressure" {
@@ -299,6 +363,7 @@ test "a tab launched in the background keeps every focus where it was and takes 
         .focused_pane = focused.id,
         .fullscreen = false,
         .workspace_active = true,
+        .node_start = 0,
         .node_count = 0,
     };
     record.tab_count = 1;

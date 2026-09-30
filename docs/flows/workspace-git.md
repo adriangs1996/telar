@@ -11,14 +11,18 @@ workspace names and does not mark dirty workspaces.
 agent maintenance tick (1 s)
         |
 workspace_git.start: one stalest workspace, ≥ 5 s since its last probe,
-                  at most one probe in flight runtime-wide
+                  at most one probe in flight runtime-wide; each finish
+                  starts the next due probe, so many workspaces still
+                  refresh every 5 s instead of one a tick
         |
 model.select.concurrent(.git_status, git_probe.probe)   -- worker thread
         |
 read <path>/.git/HEAD  (a linked worktree's gitfile is followed)
-git -C <path> status --porcelain --no-renames   (2 s timeout, 64 KiB cap)
+git -C <path> status --porcelain --no-renames   (10 s timeout; any output
+                                                 means dirty, however long)
         |
-Event.git_status -> workspace_git.finish (bounded branch copy, change
+Event.git_status -> workspace_git.finish (reports a timeout as
+                    gitstatus.status_timeout, bounded branch copy, change
                     detection) -> workspaces.advanceRevision on change
         |
 schema.workspace_list entries carry `branch` and `dirty`
@@ -30,10 +34,18 @@ client workspace_list_snapshot.apply -> model.workspace_list_snapshot
 ## Ownership and bounds
 
 The runtime `Workspaces` table owns the observed branch (`git_branch`, at most
-`core.max_git_branch_bytes`, 64 bytes), the dirty flag (`git_dirty`) and its
+`core.max_git_branch_bytes`, 200 bytes), the dirty flag (`git_dirty`) and its
 probe bookkeeping (`git_checked_at_ms`, `git_probe`). A missing repository stores an empty branch, so a
 directory that stops being a repo clears its badge. Probe failures leave the
-previous projection and simply retry after the interval.
+previous projection and simply retry after the interval. A status that runs
+past `gitstatus.probe.status_timeout_ms` (10 s in all: one deadline for the
+config read, the version check and the status) leaves the dirty flag
+unknown and the completion carries the `gitstatus.status_timeout` limit.
+`finish` reports it on the loop the first time in a row
+(`Workspaces.git_timed_out`), so a monorepo that always takes longer is
+named once, not every minute.
+Standard error is read and dropped, so a repository that prints many
+warnings still answers.
 
 `git_probe.parseHead` resolves `refs/heads/*` to the branch name, any other ref to its
 full name and a detached head to its short hash, without running git; the

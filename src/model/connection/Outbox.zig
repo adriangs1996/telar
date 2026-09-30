@@ -146,7 +146,9 @@ pub fn push(self: *Outbox, message: outbox_support.Message) !void {
                     switch (self.items[index]) {
                         .query_history => |old| {
                             if (old.offset == 0 and old.snapshot_id == 0 and old.entry_id == 0) {
-                                self.items[index] = message;
+                                var owned = query;
+                                try owned.ownScope(self.payloadAt(index));
+                                self.items[index] = .{ .query_history = owned };
                                 return;
                             }
                         },
@@ -514,6 +516,8 @@ fn append(self: *Outbox, message: outbox_support.Message) !void {
         @memcpy(self.payloadAt(index)[request.editor.len..][0..request.path.len], request.path);
         owned.open_editor.editor = self.payloadAt(index)[0..request.editor.len];
         owned.open_editor.path = self.payloadAt(index)[request.editor.len..][0..request.path.len];
+    } else if (owned == .query_history) {
+        try owned.query_history.ownScope(self.payloadAt(index));
     } else if (owned == .create_pane) {
         try owned.create_pane.ownArguments(self.payloadAt(index));
     } else if (owned == .create_tab) {

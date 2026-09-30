@@ -33,9 +33,15 @@ Delivery: workspace_list{worktrees} when a visible value changed
 ## Budgets
 
 A row running a command is due every `active_interval_ms` (5 s), a quiet one
-every `idle_interval_ms` (30 s). After `max_failures` (2) failed measurements
-in a row it drops to the idle interval until one succeeds. Only one probe is
-in flight, so a slow repository delays its own numbers and nothing else.
+every `idle_interval_ms` (30 s). After `max_failures` (2) failed measurements in a row it drops
+to the idle interval until one succeeds. Only one probe is in flight, so a
+slow repository delays its own numbers and nothing else. `status` has 10 s,
+its config read included, and the three steps of the base measurement
+(`merge-base`, `diff --shortstat`, `rev-list --count`) share another 10 s:
+each one deadline, not a silence allowed between reads. A pass past it is
+unmeasured and the completion carries `gitstatus.status_timeout` or
+`gitstatus.base_distance_timeout`; `finish` reports only the first failure
+of a run, so a repository that always takes longer is named once.
 
 `integrated` means the worktree once had changes and now has none against
 its base: its branch was merged or its work reverted. `gone` means the

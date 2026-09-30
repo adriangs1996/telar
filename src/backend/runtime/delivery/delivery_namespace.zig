@@ -182,29 +182,32 @@ test "delivery display labels are bounded and valid" {
 }
 
 test "oversized clipboard input preserves the pending message" {
-    var delivery = try Delivery.init(std.testing.allocator);
-    defer delivery.deinit(std.testing.allocator);
+    const gpa = std.testing.allocator;
+    var delivery = try Delivery.init(gpa);
+    defer delivery.deinit(gpa);
     const pane_id = try core_module.pane(7);
-    try std.testing.expect(delivery.setClipboard(pane_id, "pending"));
-    var oversized: [core_module.max_clipboard_bytes + 1]u8 = undefined;
+    try delivery.setClipboard(gpa, pane_id, "pending");
+    const oversized = try gpa.alloc(u8, core_module.max_clipboard_bytes + 1);
+    defer gpa.free(oversized);
 
-    try std.testing.expect(!delivery.setClipboard(try core_module.pane(8), &oversized));
+    try std.testing.expectError(error.ClipboardTooLarge, delivery.setClipboard(gpa, try core_module.pane(8), oversized));
 
     try std.testing.expect(delivery.clipboard_pending);
     try std.testing.expectEqual(pane_id, delivery.clipboard_pane);
-    try std.testing.expectEqualStrings("pending", delivery.clipboard_storage[0..delivery.clipboard_len]);
+    try std.testing.expectEqualStrings("pending", delivery.clipboard_storage);
 }
 
 test "clipboard accepts exactly the wire byte limit" {
-    var delivery = try Delivery.init(std.testing.allocator);
-    defer delivery.deinit(std.testing.allocator);
-    var bytes: [core_module.max_clipboard_bytes]u8 = undefined;
-    @memset(&bytes, 'x');
+    const gpa = std.testing.allocator;
+    var delivery = try Delivery.init(gpa);
+    defer delivery.deinit(gpa);
+    const bytes = try gpa.alloc(u8, core_module.max_clipboard_bytes);
+    defer gpa.free(bytes);
+    @memset(bytes, 'x');
 
-    try std.testing.expect(delivery.setClipboard(try core_module.pane(7), &bytes));
+    try delivery.setClipboard(gpa, try core_module.pane(7), bytes);
 
-    try std.testing.expectEqual(@as(u32, core_module.max_clipboard_bytes), delivery.clipboard_len);
-    try std.testing.expectEqualSlices(u8, &bytes, &delivery.clipboard_storage);
+    try std.testing.expectEqualSlices(u8, bytes, delivery.clipboard_storage);
 }
 
 test "delivery commits one logical send transaction before completion" {

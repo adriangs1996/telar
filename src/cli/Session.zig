@@ -191,8 +191,9 @@ pub fn commandReview(self: *Session, command: core.ChangeReviewCommand) !core.Ch
 pub fn reportReviewSample(self: *Session, sample: core.ReportChangeReviewSample) !void {
     var request = sample;
     request.request_id = self.requestId();
-    var buffer: [32 * 1024]u8 = undefined;
-    try self.connection.send(self.io, try core.encodeReportChangeReviewSample(&buffer, request));
+    const buffer = try self.gpa.alloc(u8, core.change_review.max_sample_message_bytes);
+    defer self.gpa.free(buffer);
+    try self.connection.send(self.io, try core.encodeReportChangeReviewSample(buffer, request));
     const response = try self.decodeNext();
     switch (response) {
         .request_completed => |completed| if (completed.request_id != request.request_id) {
@@ -439,8 +440,10 @@ pub const WorkspaceCreation = @import("WorkspaceCreation.zig");
 /// const workspace_id = core.raw(opened.location.workspace.workspace);
 /// ```
 pub fn createWorkspace(self: *Session, request: WorkspaceCreation) !core.PaneOpened {
-    var send_buffer: [8192]u8 = undefined;
-    try self.connection.send(self.io, try core.encodeCreateWorkspace(&send_buffer, .{
+    // A name, a directory and a launch as long as the wire allows.
+    const send_buffer = try self.gpa.alloc(u8, localsocket.transport.max_frame_size);
+    defer self.gpa.free(send_buffer);
+    try self.connection.send(self.io, try core.encodeCreateWorkspace(send_buffer, .{
         .request_id = self.requestId(),
         .size = .{ .cols = request.columns, .rows = 24 },
         .name = request.name,

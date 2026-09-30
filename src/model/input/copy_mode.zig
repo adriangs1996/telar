@@ -1055,7 +1055,7 @@ test "matches select relative to the cursor, highlight and cycle with wrap" {
             .rows = 5,
         },
     );
-    try std.testing.expectEqual(@as(u8, 1), state.match_index);
+    try std.testing.expectEqual(@as(u16, 1), state.match_index);
     try std.testing.expectEqualDeep(
         Point{
             .x = 1,
@@ -1078,7 +1078,7 @@ test "matches select relative to the cursor, highlight and cycle with wrap" {
             .rows = 5,
         },
     );
-    try std.testing.expectEqual(@as(u8, 2), state.match_index);
+    try std.testing.expectEqual(@as(u16, 2), state.match_index);
     state.cycleMatch(
         1,
         .{
@@ -1086,7 +1086,7 @@ test "matches select relative to the cursor, highlight and cycle with wrap" {
             .rows = 5,
         },
     );
-    try std.testing.expectEqual(@as(u8, 0), state.match_index);
+    try std.testing.expectEqual(@as(u16, 0), state.match_index);
     try std.testing.expect(state.viewport_offset <= 4);
 
     state.search_direction = .backward;
@@ -1101,7 +1101,7 @@ test "matches select relative to the cursor, highlight and cycle with wrap" {
             .rows = 5,
         },
     );
-    try std.testing.expectEqual(@as(u8, 0), state.match_index);
+    try std.testing.expectEqual(@as(u16, 0), state.match_index);
 
     state.applyMatches(
         &.{},
@@ -1110,7 +1110,7 @@ test "matches select relative to the cursor, highlight and cycle with wrap" {
             .rows = 5,
         },
     );
-    try std.testing.expectEqual(@as(u8, 0), state.match_count);
+    try std.testing.expectEqual(@as(u16, 0), state.match_count);
 }
 
 test "slash and question mark ask for the search input" {

@@ -9,6 +9,11 @@ const Context = @import("../change_review/Context.zig");
 const Job = @import("../change_review/Job.zig");
 const PendingFailure = @import("delivery/PendingFailure.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
+const Service = @import("../change_review/Service.zig");
+const Group = @import("../change_review/Group.zig");
+const StorageInput = @import("../change_review/StorageInput.zig");
+const storage = @import("../change_review/storage.zig");
+const limit_reached = @import("limit_reached.zig");
 
 /// Admits one review query, command or sample and starts its worker.
 ///
@@ -43,6 +48,10 @@ pub fn finish(model: *RuntimeModel, job: *Job) void {
 fn retire(model: *RuntimeModel, job: *Job) void {
     model.review_jobs.remove(job);
     defer job.deinit();
+    if (reachOf(job)) |reach| {
+        limit_reached.report(model, reach);
+    }
+
     if (job.failure == null) {
         publish(model, .{ .pane_id = job.context.pane.id, .pane_generation = job.context.pane.generation, .session = job.context.sessionSlice(), .latest_edition_id = job.latest_edition_id });
     }
@@ -200,13 +209,43 @@ fn confirmedInside(client: *const Session, pane: PaneKey) bool {
     return verified.id == pane.id and verified.generation == pane.generation;
 }
 
+/// The limit a finished review job reached: the one that failed it, or the
+/// one it reached while keeping what fit.
+fn reachOf(job: *const Job) ?core.LimitReach {
+    if (job.failure) |err| {
+        const limit = limitOf(err) orelse return null;
+        return .{
+            .limit = limit,
+        };
+    }
+
+    const result = job.result orelse return null;
+    return result.limit;
+}
+
+/// Which review limit an error of the review worker means.
+fn limitOf(err: anyerror) ?core.Limit {
+    return switch (err) {
+        error.ReviewGroupsFull => Service.groups_limit,
+        error.ReviewPendingSamplesFull => Group.samples_limit,
+        error.ReviewArchiveFull => Group.archive_limit,
+        error.ReviewEditionsFull => Group.editions_limit,
+        error.ReviewConversationStorageFull => StorageInput.conversation_storage_limit,
+        error.ReviewGlobalStorageFull => StorageInput.global_storage_limit,
+        error.ReviewStorageFilesExceeded => storage.files_limit,
+        error.ReviewPatchTooLarge => core.change_review.patch_limit,
+        error.ReviewCommentCapacity => core.change_review.comments_limit,
+        else => null,
+    };
+}
+
 fn failure(request_id: core.RequestId, err: anyerror) PendingFailure {
     return .{ .request_id = request_id, .code = switch (err) {
         error.PaneNotFound => .pane_not_found,
         error.PaneExited => .pane_exited,
         error.ForeignProcess => .foreign_process,
-        error.ReviewBusy, error.ReviewCapacity, error.OutOfMemory, error.WriteFailed => .resource_limit,
-        else => .invalid_request,
+        error.ReviewBusy, error.OutOfMemory, error.WriteFailed => .resource_limit,
+        else => if (limitOf(err) != null) .resource_limit else .invalid_request,
     }, .message = switch (err) {
         error.PaneNotFound => "review pane no longer exists",
         error.ForeignProcess => "only a process inside that pane may send its agent's review evidence",
@@ -221,7 +260,14 @@ fn failure(request_id: core.RequestId, err: anyerror) PendingFailure {
         error.InvalidReviewAnchor => "comment range is outside the immutable edition",
         error.InvalidPatch => "edit has no complete supported text diff; it was not retained",
         error.MissingReviewBaseline => "no matching before snapshot; edit was not attributed",
-        error.ReviewCapacity, error.WriteFailed => "review exceeds its bounded storage or feedback limit",
+        error.ReviewGroupsFull => "review holds too many conversations with unmatched edits; retry once their tools finish",
+        error.ReviewPendingSamplesFull => "too many edits of this conversation await their after snapshot",
+        error.ReviewArchiveFull => "this conversation reached its review edition limit",
+        error.ReviewEditionsFull => "too many recent editions hold unsent comments; send or delete some",
+        error.ReviewConversationStorageFull, error.ReviewGlobalStorageFull, error.ReviewStorageFilesExceeded => "review storage is full; existing editions were preserved",
+        error.ReviewPatchTooLarge => "the edit's first hunk does not fit the review diff limit",
+        error.ReviewCommentCapacity => "this edition reached its comment limit",
+        error.WriteFailed => "review exceeds its bounded storage or feedback limit",
         error.InvalidReviewStorage => "review storage failed validation; existing file was preserved",
         error.ReviewUnavailable => "review service is unavailable",
         else => "review operation failed; retry without discarding local comments",
@@ -269,4 +315,48 @@ test "discovery binds a review owner when only its session reference changes" {
     discover(model);
     try std.testing.expect(pane.review_availability.active);
     try std.testing.expect(pane.review_availability.discovery_started);
+}
+
+test "a review job that stops at a limit reports it by name and frees its slot" {
+    const fixture = try std.testing.allocator.create(RequestFixture);
+    defer std.testing.allocator.destroy(fixture);
+    try fixture.init();
+    defer fixture.deinit();
+
+    const model = &fixture.runtime.model;
+    const context = try Context.init(.{ .id = @enumFromInt(9), .generation = 1 }, .claude, "thread");
+    const job = &model.review_jobs.storage[0];
+    job.* = .{
+        .service = model.review_service.?,
+        .context = context,
+        .client = null,
+        .request_id = .none,
+        .wire_len = 0,
+        .failure = error.ReviewGroupsFull,
+    };
+    model.review_jobs.items[0] = job;
+
+    finish(model, job);
+    try std.testing.expect(model.review_jobs.items[0] == null);
+    const slot = model.limit_reaches.find("review.group_capacity").?;
+    try std.testing.expectEqual(@as(u64, Service.group_capacity), model.limit_reaches.value[slot]);
+}
+
+test "every review worker limit error names its limit and answers resource_limit" {
+    const errors = [_]anyerror{
+        error.ReviewGroupsFull,
+        error.ReviewPendingSamplesFull,
+        error.ReviewArchiveFull,
+        error.ReviewEditionsFull,
+        error.ReviewConversationStorageFull,
+        error.ReviewGlobalStorageFull,
+        error.ReviewStorageFilesExceeded,
+        error.ReviewPatchTooLarge,
+        error.ReviewCommentCapacity,
+    };
+    for (errors) |err| {
+        try std.testing.expect(limitOf(err) != null);
+        try std.testing.expect(core.limit_reached.isLimitError(err));
+        try std.testing.expectEqual(core.FailureCode.resource_limit, failure(@enumFromInt(1), err).code);
+    }
 }
