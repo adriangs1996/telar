@@ -159,7 +159,7 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
     switch (event) {
         .stopped => |result| return self.loop.completeStop(result),
         .accepted => |result| try client_connection.accept(model, result, &self.resources.listener),
-        .handshaken => |result| client_connection.finishHandshake(model, result),
+        .handshaken => |completion| client_connection.finishHandshake(model, completion),
         .client_message => |message| client_connection.receive(model, message),
         .client_sent => |sent| client_connection.finishSend(model, sent),
         .cell_publication_due => |result| try model.cell_timer.complete(result),

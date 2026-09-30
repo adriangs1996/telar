@@ -45,8 +45,13 @@ if (args.includes("--no-daemon") || process.env.FAKE_CODEX_NO_SERVER) {
   hook({ hook_event_name: "UserPromptSubmit", prompt: "go" });
   hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "call-" + thread, tool_input: { command: "echo own-" + thread } });
 }
-// The runtime inspects the foreground process when the pane draws.
-setInterval(() => process.stdout.write("."), 200);
+// The runtime inspects the foreground process when the pane draws; with
+// FAKE_CODEX_WORKING the pane shows Codex's status clock over its composer.
+let seconds = 0;
+setInterval(() => {
+  seconds += 1;
+  process.stdout.write(process.env.FAKE_CODEX_WORKING ? "\\x1b[H\\x1b[2JWorking (" + seconds + "s)\\r\\n\\r\\n\\u203a Ask Codex to do anything" : ".");
+}, 200);
 `;
 
 // What the shared server does: it outlives the shell that started it, in a
@@ -103,19 +108,18 @@ function sandbox(t) {
   chmodSync(join(bin, "codex"), 0o755);
   chmodSync(join(bin, "codex-server"), 0o755);
 
+  // telar's Codex hooks are installed, as `telar integration install codex`
+  // leaves them.
+  writeFileSync(join(codexHome, "hooks.json"), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: `exec '${telar}' hook codex` }] }] } }));
   const database = new DatabaseSync(join(codexHome, "state_5.sqlite"));
   database.exec("CREATE TABLE threads (id TEXT PRIMARY KEY, name TEXT)");
   for (const id of Object.values(threads)) database.prepare("INSERT INTO threads (id, name) VALUES (?, NULL)").run(id);
 
   const servers = [];
-  // The runtime admits one handshake at a time and drops both connections
-  // when another arrives meanwhile, as the panes' hooks can; retry those.
   const cli = (...args) => {
-    for (let attempt = 0; ; attempt++) {
-      const result = spawnSync(telar, args, { env, encoding: "utf8", timeout: 10_000 });
-      if (result.error) throw result.error;
-      if (result.status === 0 || attempt === 5 || !result.stderr.includes("ConnectionClosed")) return result;
-    }
+    const result = spawnSync(telar, args, { env, encoding: "utf8", timeout: 10_000 });
+    if (result.error) throw result.error;
+    return result;
   };
   const json = (...args) => {
     const result = cli(...args, "--json");
@@ -182,17 +186,14 @@ test("each Codex session reports to its own pane and a shared server reaches non
 
   const alpha = s.json("workspace", "create", "--directory", s.work).pane_id;
   const beta = s.json("tab", "create", "--background", "--workspace", "1").pane_id;
-  const reported = (pane) => {
-    const agent = agentIn(s.agents(), pane);
-    return agent?.provider === "codex" && agent.last_event.includes("own-");
-  };
-  // One pane at a time: hooks connecting at once can collide in the
-  // runtime's single handshake slot, which drops both.
+  // Both agents start at once, so their hooks connect together.
   s.type(alpha, "codex-server");
   s.type(alpha, `FAKE_CODEX_THREAD=${threads.alpha} codex --no-daemon`);
-  await until("alpha runs Codex and reports its tool call", () => reported(alpha));
   s.type(beta, `FAKE_CODEX_THREAD=${threads.beta} codex --no-daemon`);
-  await until("beta runs Codex and reports its tool call", () => reported(beta));
+  await until("both panes run Codex and report their tool call", () => {
+    const agents = s.agents();
+    return [alpha, beta].every((pane) => agentIn(agents, pane)?.provider === "codex" && agentIn(agents, pane).last_event.includes("own-"));
+  });
 
   await s.fireServer();
   // A report that got through would be applied before `agent list` answers:
@@ -224,16 +225,16 @@ test("each Codex session reports to its own pane and a shared server reaches non
   }
 });
 
-test("a Codex started without --no-daemon says on its card that its hooks cannot reach it", async (t) => {
+test("a Codex started without --no-daemon that works without hooks says so on its card", async (t) => {
   const s = sandbox(t);
   await s.start();
 
   const pane = s.json("workspace", "create", "--directory", s.work).pane_id;
-  s.type(pane, `FAKE_CODEX_THREAD=${threads.alpha} codex`);
+  s.type(pane, `FAKE_CODEX_WORKING=1 FAKE_CODEX_THREAD=${threads.alpha} codex`);
   await until("the card explains the shared server", () => {
     const agent = agentIn(s.agents(), pane);
     return agent?.provider === "codex" && agent.last_event === "no hooks from this pane: if it runs on a shared server, start it with --no-daemon";
-  });
+  }, 15_000);
 });
 
 test("a Codex whose hooks reach its pane without --no-daemon shows no note and resumes without the flag", async (t) => {

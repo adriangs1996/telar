@@ -27,7 +27,7 @@ const proclineage = @import("proclineage");
 
 pub const TitleReport = enum { recorded, unchanged, pane_not_found, invalid_title };
 
-const foreign_message = "the report comes from outside the pane or names another agent";
+const foreign_message = "the report does not come from a process inside the pane";
 
 /// Parents walked from a peer process before its descent is refused: an
 /// agent, its launcher and a few shells between the pane's root process and
@@ -85,8 +85,11 @@ pub fn receive(model: *RuntimeModel, session: *Session, report: core.ReportAgent
         return client_request.fail(session, report.request_id, .pane_not_found, "pane not found");
     }
 
-    if (!admitsReporter(model, session, pane.key(), report.provider)) {
-        return client_request.fail(session, report.request_id, .foreign_process, foreign_message);
+    if (try refuseReporter(model, session, report.request_id, .{
+        .key = pane.key(),
+        .provider = report.provider,
+    })) {
+        return;
     }
 
     const reference: ?SessionReference = if (report.session.len == 0)
@@ -150,8 +153,11 @@ pub fn receiveProgress(model: *RuntimeModel, session: *Session, report: core.Rep
         return client_request.fail(session, report.request_id, .pane_not_found, "pane not found");
     }
 
-    if (!admitsReporter(model, session, pane.key(), report.provider)) {
-        return client_request.fail(session, report.request_id, .foreign_process, foreign_message);
+    if (try refuseReporter(model, session, report.request_id, .{
+        .key = pane.key(),
+        .provider = report.provider,
+    })) {
+        return;
     }
 
     const work_tree = try resolveWorkTree(model, pane, report);
@@ -232,8 +238,11 @@ pub fn receiveCommand(model: *RuntimeModel, session: *Session, report: core.Repo
     }
 
     const reporter = model.resources.agent_manifests.providerNamed(report.provider);
-    if (!admitsReporter(model, session, pane.key(), reporter)) {
-        return client_request.fail(session, report.request_id, .foreign_process, foreign_message);
+    if (try refuseReporter(model, session, report.request_id, .{
+        .key = pane.key(),
+        .provider = reporter,
+    })) {
+        return;
     }
 
     const queued = pane.recordAgentCommand(.{
@@ -269,8 +278,11 @@ pub fn receiveTitle(model: *RuntimeModel, session: *Session, report: core.Report
         .generation = report.pane_generation,
     };
 
-    if (!admitsReporter(model, session, key, report.provider)) {
-        return client_request.fail(session, report.request_id, .foreign_process, foreign_message);
+    if (try refuseReporter(model, session, report.request_id, .{
+        .key = key,
+        .provider = report.provider,
+    })) {
+        return;
     }
 
     switch (recordTitle(model, key, report.provider, report.title)) {
@@ -382,18 +394,43 @@ fn walkDescent(work: DescentWork) DescentCompletion {
     };
 }
 
+/// The pane and agent a report names.
+const Reporter = struct {
+    key: PaneKey,
+    provider: core.AgentProvider,
+};
+
 // A report that names its agent comes from a hook, which must have had this
 // connection confirmed as descending from the pane; the pane must run that
-// agent too. One that names no agent is the user's own, sent by hand.
-fn admitsReporter(model: *const RuntimeModel, session: *const Session, key: PaneKey, reporter: core.AgentProvider) bool {
-    if (reporter != .unknown) {
-        const verified = session.hook_pane orelse return false;
-        if (verified.id != key.id or verified.generation != key.generation) {
-            return false;
-        }
+// agent too. One that names no agent is the user's own, sent by hand. A
+// confirmed hook of another agent may mean the pane's process replaced
+// itself since the last probe, so the next observation identifies it again
+// and the hook may retry. Returns whether the report was refused.
+fn refuseReporter(model: *RuntimeModel, session: *Session, request_id: core.RequestId, reporter: Reporter) !bool {
+    if (reporter.provider == .unknown) {
+        return false;
     }
 
-    return agent_status.acceptsReporter(model, key, reporter);
+    const verified = session.hook_pane orelse return refuseForeign(session, request_id);
+    if (verified.id != reporter.key.id or verified.generation != reporter.key.generation) {
+        return refuseForeign(session, request_id);
+    }
+
+    if (agent_status.acceptsReporter(model, reporter.key, reporter.provider)) {
+        return false;
+    }
+
+    if (model.panes.resolve(reporter.key)) |pane| {
+        pane.agent_recheck_requested = true;
+    }
+
+    try client_request.fail(session, request_id, .agent_mismatch, "the pane was last seen running another agent; it is checked again");
+    return true;
+}
+
+fn refuseForeign(session: *Session, request_id: core.RequestId) !bool {
+    try client_request.fail(session, request_id, .foreign_process, foreign_message);
+    return true;
 }
 
 /// Records a title the hooks of `reporter` sent for one exact pane

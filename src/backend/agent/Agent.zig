@@ -40,6 +40,11 @@ pub const DescriptionJobResult = union(enum) {
     started: Job,
 };
 
+/// How long the screen must show a session working, with telar's hooks
+/// installed and none of them reaching the pane, before the card suggests
+/// how to start it: a turn's first hook arrives well within it.
+const unreported_work_grace_ms: i64 = 5_000;
+
 pub const TitlePhase = enum {
     waiting_query,
     waiting_work,
@@ -96,6 +101,12 @@ session_host: SessionHost = .unknown,
 /// A hook report of this process reached the pane, which proves its hooks
 /// run inside it whatever its arguments say.
 hooks_seen: bool = false,
+/// telar's hooks for this agent are installed, so their silence means
+/// something.
+hooks_installed: bool = false,
+/// When the screen first showed this process working while none of its
+/// hooks had reached the pane.
+unreported_work_at_ms: ?i64 = null,
 /// The tracked worktree the agent reported working in.
 work_tree: core.WorktreeId = .invalid,
 progress: Progress = .{},
@@ -175,8 +186,9 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
 
     if (self.process) |evidence| {
         if (evidence.provider == observation.provider and self.agent_process_id == observation.process_id) {
-            const changed = self.session_host != observation.session_host;
+            const changed = self.session_host != observation.session_host or self.hooks_installed != observation.hooks_installed;
             self.session_host = observation.session_host;
+            self.hooks_installed = observation.hooks_installed;
             return changed;
         }
 
@@ -193,10 +205,12 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
 
     if (replaced_process) {
         self.hooks_seen = false;
+        self.unreported_work_at_ms = null;
     }
 
     self.agent_process_id = observation.process_id;
     self.session_host = observation.session_host;
+    self.hooks_installed = observation.hooks_installed;
     self.process = Evidence.fromProcess(&observation);
     self.authority = if (replaced_process) .active else switch (self.authority) {
         .candidate, .stale, .exited => .active,
@@ -381,6 +395,9 @@ pub fn applyScreen(self: *Agent, observation: ScreenObservation) bool {
     }
 
     self.screen = Evidence.fromScreen(known_provider, &observation);
+    if (signal.status == .working and !self.hooks_seen and self.unreported_work_at_ms == null) {
+        self.unreported_work_at_ms = observation.observed_at_ms;
+    }
 
     if (signal.status == .blocked) {
         self.authority = .obscured;
@@ -481,7 +498,7 @@ pub fn reproject(self: *Agent, context: ProjectionContext) ProjectionResult {
     }
 
     const title_changed = self.advanceTitle(evidence.status, context.can_queue_description);
-    const event_changed = self.refreshEvent(evidence);
+    const event_changed = self.refreshEvent(evidence, context.now_ms);
 
     if (sameProjection(previous, self.projected)) {
         self.projected.sequence = previous.sequence;
@@ -804,14 +821,15 @@ fn blockedReason(self: *const Agent, evidence: Evidence) core.AgentBlockedReason
 }
 
 // The event line follows the report that decides the projection. Other
-// evidence carries no line, unless an interactive session was started
-// without the argument that keeps its hooks in the pane and none of its
-// hooks has reached it: the line says how to start it so they can.
+// evidence carries no line, unless telar's hooks are installed, an
+// interactive session was started without the argument that keeps them in
+// the pane, and the screen showed it working for a while without any of
+// them reaching the pane: the line says how to start it so they can.
 // Returns whether the shown line changed.
-fn refreshEvent(self: *Agent, evidence: Evidence) bool {
+fn refreshEvent(self: *Agent, evidence: Evidence, now_ms: i64) bool {
     const next: EventLine = if (evidence.source == .lifecycle_report)
         self.report_detail.event
-    else if (self.session_host == .shared_server and !self.hooks_seen)
+    else if (self.hooksMissing(now_ms))
         sharedServerLine(evidence.provider)
     else
         .{};
@@ -875,6 +893,15 @@ fn awaitsHelpers(self: *const Agent, now_ms: i64) bool {
     return self.report_detail.state == .waiting and !report.isExpired(now_ms);
 }
 
+fn hooksMissing(self: *const Agent, now_ms: i64) bool {
+    if (self.session_host != .shared_server or !self.hooks_installed or self.hooks_seen) {
+        return false;
+    }
+
+    const since = self.unreported_work_at_ms orelse return false;
+    return now_ms - since >= unreported_work_grace_ms;
+}
+
 fn sharedServerLine(agent_provider: core.AgentProvider) EventLine {
     const argument = providers.of(agent_provider).pane_session_argument orelse return .{};
     var buffer: [core.max_agent_last_event_bytes]u8 = undefined;
@@ -891,6 +918,7 @@ fn forgetReports(self: *Agent) void {
     self.session_reference = null;
     self.session_provider = .unknown;
     self.hooks_seen = false;
+    self.unreported_work_at_ms = null;
     self.work_tree = .invalid;
     self.progress = .{};
     if (self.title.source == .agent) {

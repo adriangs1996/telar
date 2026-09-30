@@ -52,8 +52,9 @@ pub fn peerUid(handle: std.c.fd_t) !u32 {
 }
 
 /// The process at the other end of a connected local socket, as the kernel
-/// recorded it when the connection was made: `LOCAL_PEERPID` on macOS,
-/// `SO_PEERCRED` on Linux.
+/// reports it: `LOCAL_PEERPID` on macOS, `SO_PEERCRED` on Linux. A socket
+/// shared by several processes may name any of them; a connection its
+/// process opened and keeps to itself names that process.
 ///
 /// ```zig
 /// const pid = try peerProcess(handle);

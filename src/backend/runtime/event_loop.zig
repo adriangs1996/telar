@@ -32,11 +32,11 @@ fn producerSlots(tag: Tag) usize {
         .pane_exit,
         => PaneStore.capacity,
         .change_review_completed => @as(ReviewJobs, .{}).items.len,
+        .handshaken => client_store.max_pending_handshakes,
         .path_index_built, .paths_found => PathIndexes.capacity,
         // Each source retains one global pending flag, admission slot or waiter.
         // Git uses workspace State.git_probe, which survives workspace removal.
         .accepted,
-        .handshaken,
         .cell_publication_due,
         .history_response,
         .telemetry_tick,

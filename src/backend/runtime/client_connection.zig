@@ -19,9 +19,14 @@ const geometry_lease = @import("geometry_lease.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const handshake = @import("../transport/handshake.zig");
 const request_role = @import("client/request_role.zig");
+const HandshakeCompletion = @import("events/HandshakeCompletion.zig");
+const store_support = @import("client/store_support.zig");
 
-/// Rearms admission and moves an accepted connection into the single
-/// handshake slot when capacity and lifecycle allow it.
+/// Rearms admission and moves an accepted connection into a free handshake
+/// slot when capacity and lifecycle allow it, so clients that connect
+/// together negotiate independently. With every slot taken, the oldest
+/// handshake is interrupted and the new connection closed, so a client that
+/// never finishes cannot hold admission.
 ///
 /// ```zig
 /// try client_connection.accept(model, result, &resources.listener);
@@ -43,8 +48,8 @@ pub fn accept(model: *RuntimeModel, result: anyerror!localsocket.SocketChannel, 
 
     try sources.acceptClient(listener);
 
-    if (model.client_admission.pendingConnection()) |pending| {
-        pending.shutdown(model.io);
+    if (model.client_admission.oldestWhenFull()) |oldest| {
+        model.client_admission.pendingConnection(oldest).?.shutdown(model.io);
         return;
     }
 
@@ -52,10 +57,16 @@ pub fn accept(model: *RuntimeModel, result: anyerror!localsocket.SocketChannel, 
         return;
     }
 
-    model.client_admission.begin(accepted);
+    const slot = model.client_admission.begin(accepted).?;
     accepted_owned = false;
-    model.select.concurrent(.handshaken, negotiate, .{ model.io, model.client_admission.pendingConnection().? }) catch {
-        var unstarted = model.client_admission.takePending();
+    const negotiation: Negotiation = .{
+        .io = model.io,
+        .slot = slot,
+        .connection = model.client_admission.pendingConnection(slot).?,
+    };
+
+    model.select.concurrent(.handshaken, negotiate, .{negotiation}) catch {
+        var unstarted = model.client_admission.take(slot);
         unstarted.deinit(model.io);
     };
 }
@@ -66,14 +77,14 @@ pub fn accept(model: *RuntimeModel, result: anyerror!localsocket.SocketChannel, 
 /// ```zig
 /// client_connection.finishHandshake(model, result);
 /// ```
-pub fn finishHandshake(model: *RuntimeModel, result: anyerror!void) void {
-    var negotiated = model.client_admission.takePending();
+pub fn finishHandshake(model: *RuntimeModel, completion: HandshakeCompletion) void {
+    var negotiated = model.client_admission.take(completion.slot);
     var connection_owned = true;
     defer if (connection_owned) {
         negotiated.deinit(model.io);
     };
 
-    result catch return;
+    completion.result catch return;
 
     if (model.shutdown.isRequested()) {
         return;
@@ -236,17 +247,21 @@ pub fn shutdownAll(model: *RuntimeModel) void {
         }
     }
 
-    if (model.client_admission.pendingConnection()) |pending| {
-        pending.shutdown(model.io);
+    for (0..store_support.max_pending_handshakes) |slot| {
+        if (model.client_admission.pendingConnection(slot)) |pending| {
+            pending.shutdown(model.io);
+        }
     }
 }
 
 /// Releases connection storage after every client actor has joined.
 /// Example: `runtime.loop.cancel(); client_connection.releaseAll(model);`.
 pub fn releaseAll(model: *RuntimeModel) void {
-    if (model.client_admission.isPending()) {
-        var pending = model.client_admission.takePending();
-        pending.deinit(model.io);
+    for (0..store_support.max_pending_handshakes) |slot| {
+        if (model.client_admission.pendingConnection(slot) != null) {
+            var pending = model.client_admission.take(slot);
+            pending.deinit(model.io);
+        }
     }
 
     for (model.clients.items) |slot| {
@@ -275,7 +290,20 @@ fn startRead(model: *RuntimeModel, session: *Session) !void {
     };
 }
 
-fn negotiate(io: std.Io, connection: *localsocket.SocketChannel) anyerror!void {
+const Negotiation = struct {
+    io: std.Io,
+    slot: usize,
+    connection: *localsocket.SocketChannel,
+};
+
+fn negotiate(negotiation: Negotiation) HandshakeCompletion {
+    return .{
+        .slot = negotiation.slot,
+        .result = negotiateSchema(negotiation.io, negotiation.connection),
+    };
+}
+
+fn negotiateSchema(io: std.Io, connection: *localsocket.SocketChannel) anyerror!void {
     const response = try handshake.perform(io, connection);
 
     if (response == .rejected) {

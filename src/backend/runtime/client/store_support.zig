@@ -5,6 +5,10 @@ const Store = @import("Store.zig");
 const std = @import("std");
 
 pub const max_clients = core.ClientList.capacity;
+/// Connections that may negotiate at once. Hooks of several agents connect
+/// together; when every slot is taken, the oldest handshake is interrupted,
+/// so a client that never finishes cannot hold admission.
+pub const max_pending_handshakes = 8;
 
 test "Store rejects exhausted identities before allocating a session" {
     var store: Store = .{ .next_id = std.math.maxInt(u64) };

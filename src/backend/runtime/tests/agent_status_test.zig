@@ -1245,7 +1245,20 @@ test "restore resumes a session only with the agent it belongs to" {
     try std.testing.expectEqualStrings(own.slice(), session.reference.slice());
 }
 
-test "an interactive session started without its pane argument says so until one of its hooks reaches the pane" {
+fn observeCodexWorking(model: *RuntimeModel, identity: Identity, observed_at_ms: i64) bool {
+    return agent_status.observeScreen(model, .{
+        .identity = identity,
+        .signal = .{
+            .provider = .codex,
+            .status = .working,
+            .confidence = 90,
+            .identity_confirmed = true,
+        },
+        .observed_at_ms = observed_at_ms,
+    });
+}
+
+test "a session that may run on a shared server says so once it worked a while and none of its installed hooks reached the pane" {
     const model = try testModel();
     defer std.testing.allocator.destroy(model);
     const identity = try testIdentity();
@@ -1258,37 +1271,67 @@ test "an interactive session started without its pane argument says so until one
         .process_id = 43,
         .observed_at_ms = 100,
         .session_host = .shared_server,
+        .hooks_installed = true,
     }));
-    try std.testing.expectEqualStrings(note, agent_status.snapshot(&model.agents, &entries, 100)[0].last_event);
+    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 100)[0].last_event);
+
+    // A turn's first hook arrives well within the grace.
+    try std.testing.expect(observeCodexWorking(model, identity, 1_000));
+    _ = agent_status.expire(model, 5_999);
+    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 5_999)[0].last_event);
+    _ = agent_status.expire(model, 6_000);
+    try std.testing.expectEqualStrings(note, agent_status.snapshot(&model.agents, &entries, 6_000)[0].last_event);
 
     try std.testing.expect(agent_status.observeReport(model, .{
         .identity = identity,
         .provider = .codex,
         .state = .working,
         .event = "\u{bb} Bash zig build",
-        .observed_at_ms = 110,
+        .observed_at_ms = 6_100,
     }));
-    try std.testing.expectEqualStrings("\u{bb} Bash zig build", agent_status.snapshot(&model.agents, &entries, 110)[0].last_event);
+    try std.testing.expectEqualStrings("\u{bb} Bash zig build", agent_status.snapshot(&model.agents, &entries, 6_100)[0].last_event);
 
-    // Its hooks reached the pane, so the note does not come back when the
+    // Its hooks reached the pane, so the line does not come back when the
     // report is withdrawn.
     try std.testing.expect(agent_status.observeReport(model, .{
         .identity = identity,
         .provider = .codex,
         .state = .exited,
-        .observed_at_ms = 120,
+        .observed_at_ms = 6_200,
     }));
-    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 120)[0].last_event);
+    _ = agent_status.expire(model, 20_000);
+    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 20_000)[0].last_event);
 
     // A new process of the same agent has proved nothing yet.
     try std.testing.expect(agent_status.observeProcess(model, .{
         .identity = identity,
         .provider = .codex,
         .process_id = 44,
-        .observed_at_ms = 130,
+        .observed_at_ms = 21_000,
+        .session_host = .shared_server,
+        .hooks_installed = true,
+    }));
+    try std.testing.expect(observeCodexWorking(model, identity, 21_100));
+    _ = agent_status.expire(model, 27_000);
+    try std.testing.expectEqualStrings(note, agent_status.snapshot(&model.agents, &entries, 27_000)[0].last_event);
+}
+
+test "without telar's hooks installed the card suggests nothing" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 43,
+        .observed_at_ms = 100,
         .session_host = .shared_server,
     }));
-    try std.testing.expectEqualStrings(note, agent_status.snapshot(&model.agents, &entries, 130)[0].last_event);
+    try std.testing.expect(observeCodexWorking(model, identity, 1_000));
+    _ = agent_status.expire(model, 60_000);
+    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 60_000)[0].last_event);
 }
 
 test "a pane whose agent is replaced by another keeps nothing the previous one reported" {

@@ -100,6 +100,9 @@ exit: ?exit_module.Exit = null,
 history_service: *Service,
 history_observer: Observer,
 agent_process_cache: Cache = .{},
+/// The next observation identifies the foreground process again, even if
+/// its group did not change.
+agent_recheck_requested: bool = false,
 foreground_revision: u64 = 1,
 progress_state: core.PaneProgressState = .remove,
 progress_percent: ?u8 = null,
@@ -1017,9 +1020,12 @@ pub fn beginHistoryObservation(self: *Pane) ?HistoryObservationBorrow {
     }
 
     self.actorStarted();
+    var process_cache = self.agent_process_cache;
+    process_cache.recheck = self.agent_recheck_requested;
+    self.agent_recheck_requested = false;
     return .{
         .current_size = self.size,
-        .process_cache = self.agent_process_cache,
+        .process_cache = process_cache,
     };
 }
 

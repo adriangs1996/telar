@@ -11,6 +11,7 @@ const core = @import("telar-core");
 const ToolHookInput = @import("ToolHookInput.zig");
 const hook_review = @import("hook_review.zig");
 const CommandReport = @import("CommandReport.zig");
+const AgentCommandReport = @import("AgentCommandReport.zig");
 const std = @import("std");
 const PiHookInput = @import("PiHookInput.zig");
 const Report = @import("Report.zig");
@@ -708,6 +709,30 @@ fn hookProvider(agent: HookOptions.Agent) core.AgentProvider {
     };
 }
 
+/// Retries of a report the runtime refused because the pane was last seen
+/// running another agent: an agent that just replaced the previous one is
+/// identified at the pane's next observation, which its first drawing
+/// starts.
+const mismatch_retries = 4;
+const mismatch_retry_ms = 250;
+
+fn sendRetrying(session: *Session, comptime send: anytype, arguments: anytype) !void {
+    var attempt: u8 = 0;
+    while (true) {
+        @call(.auto, send, .{session} ++ arguments) catch |err| {
+            if (err != error.AgentMismatch or attempt == mismatch_retries) {
+                return err;
+            }
+
+            attempt += 1;
+            session.sleepMs(mismatch_retry_ms);
+            continue;
+        };
+
+        return;
+    }
+}
+
 fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     if (reports.lifecycle == null and reports.command == null and reports.title == null and reports.review == null and reports.progress == null) {
         return;
@@ -727,10 +752,10 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
         report.pane_id = core.pane(pane.pane_id) catch return;
         report.pane_generation = pane.pane_generation;
         report.provider = target.provider;
-        session.reportProgress(report) catch {};
+        sendRetrying(&session, Session.reportProgress, .{report}) catch {};
     }
     if (reports.lifecycle) |lifecycle| {
-        session.reportAgent(pane, .{
+        const report: Session.AgentReport = .{
             .provider = target.provider,
             .state = lifecycle.state,
             .blocked_reason = lifecycle.blocked_reason,
@@ -738,16 +763,17 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
             .session = lifecycle.session,
             .session_file = lifecycle.session_file,
             .session_file_kind = lifecycle.session_file_kind,
-        }) catch return;
+        };
+        sendRetrying(&session, Session.reportAgent, .{ pane, report }) catch return;
     }
     if (reports.review) |review| {
         hook_review.capture(&session, pane, review);
     }
     if (reports.title) |title| {
-        session.reportAgentTitle(pane, target.provider, title) catch return;
+        sendRetrying(&session, Session.reportAgentTitle, .{ pane, target.provider, title }) catch return;
     }
     if (reports.command) |tool| {
-        session.reportAgentCommand(pane, .{
+        const command: AgentCommandReport = .{
             .phase = tool.phase,
             .provider = tool.provider,
             .tool_call_id = tool.tool_call_id,
@@ -755,7 +781,8 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
             .cwd = tool.cwd,
             .session = tool.session,
             .exit_code = tool.exit_code,
-        }) catch return;
+        };
+        sendRetrying(&session, Session.reportAgentCommand, .{ pane, command }) catch return;
     }
     if (reports.review) |review| {
         hook_review.feedback(&session, pane, review) catch {};

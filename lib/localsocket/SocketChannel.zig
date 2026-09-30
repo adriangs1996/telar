@@ -57,7 +57,8 @@ fn boundReader(self: *SocketChannel, io: std.Io) *std.Io.Reader {
     return &self.reader.?.interface;
 }
 
-/// The process that opened the other end of the connection.
+/// The process at the other end of the connection, as the kernel reports
+/// it.
 ///
 /// ```zig
 /// const pid = try session.connection.peerProcess();

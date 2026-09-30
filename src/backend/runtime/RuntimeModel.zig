@@ -13,7 +13,8 @@ const AgentDescriptionOptions = @import("AgentDescriptionOptions.zig");
 const LaunchTestFault = @import("LaunchTestFault.zig");
 const IngestTestGate = @import("IngestTestGate.zig");
 const Store = @import("client/Store.zig");
-const GenericState = @import("client/GenericState.zig").Type;
+const GenericHandshakes = @import("client/GenericHandshakes.zig").Type;
+const store_support = @import("client/store_support.zig");
 const LifecycleState = @import("lifecycle/State.zig");
 const Workspaces = @import("../workspace/Workspaces.zig");
 const Worktrees = @import("../workspace/Worktrees.zig");
@@ -53,8 +54,8 @@ launch_fault: ?*LaunchTestFault = null,
 /// Test seam: holds a pane's ingest actor open.
 ingest_gate: ?*IngestTestGate = null,
 clients: Store = .{},
-/// The one accepted connection whose handshake actor is in flight.
-client_admission: GenericState(localsocket.SocketChannel) = .{},
+/// Accepted connections whose handshake actors are in flight.
+client_admission: GenericHandshakes(localsocket.SocketChannel, store_support.max_pending_handshakes) = .{},
 shutdown: LifecycleState = .{},
 workspaces: Workspaces = .{},
 worktrees: Worktrees = .{},

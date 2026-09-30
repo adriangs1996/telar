@@ -163,6 +163,10 @@ pub const FailureCode = enum(u16) {
     /// The request came from a process that does not descend from the pane
     /// it names, or reports for an agent the pane does not run.
     foreign_process = 16,
+    /// A hook inside the pane reported for another agent than the pane's
+    /// process was last seen running; the runtime inspects the process again
+    /// at its next observation, and the hook may retry.
+    agent_mismatch = 17,
 };
 
 /// Who asked the runtime to track a worktree: `telar` for worktrees made

@@ -14,6 +14,12 @@ pub const capabilities: Capabilities = .{
     .completion_requires_agent_signal = true,
     .resume_prefix = "codex resume ",
     .pane_session_argument = "--no-daemon",
+    .hook_settings = .{
+        .environment = "CODEX_HOME",
+        .home_directory = ".codex",
+        .file = "hooks.json",
+        .marker = " hook codex",
+    },
     .batch_arguments = &.{
         "exec",
         "e",

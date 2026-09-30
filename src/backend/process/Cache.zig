@@ -11,6 +11,12 @@ foreground_name_len: u8 = 0,
 /// Where the identified agent's interactive session, and so its hooks,
 /// runs.
 session_host: SessionHost = .unknown,
+/// telar's hooks for the agent are installed, as read when a session that
+/// may run on a shared server was identified.
+hooks_installed: bool = false,
+/// Identify the process group again even though it did not change: a
+/// process may have replaced itself with another agent.
+recheck: bool = false,
 
 pub fn init(executable: []const u8) Cache {
     var cache: Cache = .{};

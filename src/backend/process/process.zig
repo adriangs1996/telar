@@ -38,7 +38,7 @@ fn probeWith(input: ProbeInput, comptime identify: fn (*const core.Table, u32) I
     const native_pgid = process_group_id orelse return .{ .cache = previous };
     const pgid = std.math.cast(u32, native_pgid) orelse return .{ .cache = previous };
 
-    if (previous.process_group_id == pgid and
+    if (!previous.recheck and previous.process_group_id == pgid and
         (previous.provider != .unknown or previous.attempts >= max_acquisition_attempts))
     {
         return .{ .cache = previous };
@@ -573,6 +573,34 @@ test "process acquisition is bounded and cached" {
     const stable = probeWith(.{ .process_group_id = 30, .previous = acquiring }, Fake.claude);
     try std.testing.expect(!stable.changed);
     try std.testing.expect(!stable.inspected);
+}
+
+test "a recheck identifies a known process group again, as when an agent execs another" {
+    const Fake = struct {
+        fn claude(table: *const core.Table, _: u32) Identification {
+            return .init(table, .claude, "claude");
+        }
+
+        fn codex(table: *const core.Table, _: u32) Identification {
+            return .init(table, .codex, "codex");
+        }
+    };
+
+    const identified = probeWith(.{
+        .process_group_id = 20,
+        .previous = .{},
+    }, Fake.claude);
+    var recheck = identified.cache;
+    recheck.recheck = true;
+
+    const replaced = probeWith(.{
+        .process_group_id = 20,
+        .previous = recheck,
+    }, Fake.codex);
+    try std.testing.expect(replaced.inspected);
+    try std.testing.expect(replaced.changed);
+    try std.testing.expectEqual(core.AgentProvider.codex, replaced.cache.provider);
+    try std.testing.expect(!replaced.cache.recheck);
 }
 
 test "foreground names are bounded application labels" {

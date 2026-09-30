@@ -83,9 +83,10 @@ to it, and the tools and MCP servers ran as the daemon's children.
 Two checks keep a pane's card to its own agent:
 
 1. **Descent.** Before any report, `telar hook` sends `verify_pane_descent`
-   for the pane its environment names. The runtime reads the process at the
-   other end of the connection from the socket (`LOCAL_PEERPID` on macOS,
-   `SO_PEERCRED` on Linux) and an observation worker walks that process's
+   for the pane its environment names. The runtime asks the kernel for the
+   process at the other end of the connection (`LOCAL_PEERPID` on macOS,
+   `SO_PEERCRED` on Linux; the hook opens the connection itself and shares it
+   with no one) and an observation worker walks that process's
    parents (`proclineage.ancestors`, at most 32 steps, `proc_pidinfo` or
    `/proc/<pid>/stat`, no allocation). Only when the pane generation's root
    process is the peer or one of its parents does the runtime bind that pane
@@ -95,10 +96,18 @@ Two checks keep a pane's card to its own agent:
    check or vouch for itself. The request handler reads one socket option and
    starts the worker; one check runs per connection, and a closing
    connection waits for it.
-2. **Agent.** A report names its agent. A pane whose process runs another
-   agent refuses it with `foreign_process`, before any effect: lifecycle
-   state, session, title, progress (and the external worktree a progress
-   report registers) and command history. A hook can fire before the runtime
+2. **Agent.** A report names its agent. A pane whose process was last seen
+   running another agent refuses it before any effect: lifecycle state,
+   session, title, progress (and the external worktree a progress report
+   registers) and command history. The refusal is `agent_mismatch`, and it
+   asks the pane's next observation to identify the foreground process
+   again even if its group did not change (`Cache.recheck`): the agent may
+   have replaced the previous one without an exit the probe saw, by `exec`
+   or by quitting and starting again between two probes. The hook retries
+   the report up to four times, 250 ms apart, and the new agent's first
+   drawing starts that observation, so its `SessionStart` state and title
+   are kept. A process of another agent, such as `codex exec` run by Claude
+   Code as a tool, is still refused after the check. A hook can fire before the runtime
    has identified the pane's process, as `SessionStart` can. Until then, the
    first agent that reports holds the pane (`Agent.reporter`). Process
    evidence of another agent then discards its report, session, session file
@@ -109,7 +118,12 @@ Two checks keep a pane's card to its own agent:
 A report that names no agent, as `telar agent report-state` and
 `report-title` send, is the user's own and needs no descent. `telar agent`
 reports and Claude Code's `WorktreeCreate` hook ask for descent too; outside
-the pane, a report that names an agent (`report-command`) is refused. These
+the pane, a report that names an agent (`report-command`) is refused. The
+runtime also requires a connection confirmed inside the pane to attribute a
+worktree to it (`register_worktree` with `created_by`; `telar worktree
+create` registers without attribution when it cannot confirm), and to take
+the pane's file evidence (`report_change_review_sample`) or hand its agent
+review feedback (`feedback`, `ack_feedback`). These
 checks separate agents, not users: same-user processes are not isolated from
 each other (see [invariants](../invariants.md#local-authority)), and any of
 them can start a process inside a pane.
@@ -129,24 +143,38 @@ The process probe reads Codex's arguments into a `SessionHost`
 `--no-daemon`, `shared_server` for an interactive session without it (no
 subcommand, `resume` or `fork`), `unknown` for a subcommand that runs no
 interactive session, such as `exec`, `review`, `login` or `app-server`.
-Only `shared_server` puts `no hooks from this pane: if it runs on a shared
-server, start it with --no-daemon` on the card, and only until a hook report
-of that process reaches the pane: a Codex older than the daemon, or one with
-the daemon turned off, reports and the line goes. A restore resumes the way
+The card says `no hooks from this pane: if it runs on a shared server,
+start it with --no-daemon` only when all of these hold: the session is
+`shared_server`; telar's Codex hooks are installed (the observation worker
+reads `$CODEX_HOME/hooks.json`, else `~/.codex/hooks.json`, for `hook
+codex`, once per identified process, at most 32 KiB); the screen has shown
+it working for five seconds; and no hook report of that process has
+reached the pane. A turn's first hook arrives well within those seconds, so
+a Codex older than the daemon, or one with the daemon turned off, never
+shows the line. Without the integration the line never shows: there are no
+hooks to miss. A restore resumes the way
 the session ran: `codex resume --no-daemon <id>` only for a `pane` session,
 since a Codex without the flag refuses it, and `codex resume <id>` otherwise.
 
-The same check stops agents whose process leaves the pane for another
-reason: an agent inside tmux, screen or zellij running in a telar pane (their
-server is its parent, and the server left the pane), or one started with
-`setsid` or `nohup ... &` that outlived its shell and was adopted by
-`launchd` or `init`. Their hooks reach no card, and the process and screen
-evidence of the pane decide alone.
+The same check stops agents whose process is not a descendant of the pane's
+root process, whatever runs them:
 
-One case passes both checks: a shared server that stays a child of the
-agent process that started it, in one pane, and runs the hooks of an agent
-of the same kind in another pane. Codex 0.159 detaches its daemon, so it does
-not arise today.
+- an agent inside tmux, screen, zellij, dtach or abduco running in a telar
+  pane: the multiplexer's server is its parent, and the server left the pane;
+- one started with `setsid` or `nohup ... &` that outlived its shell and was
+  adopted by `launchd` or `init`;
+- one run through `ssh localhost` or `mosh`, whose remote shell descends from
+  the SSH or mosh server, not from the pane;
+- one in a container reached with `docker exec`, `podman exec` or a
+  devcontainer, whose processes descend from the container runtime.
+
+Their hooks reach no card, and the process and screen evidence of the pane
+decide alone.
+
+One case passes both checks: a shared server that stays a descendant of
+any process in one pane, not only of its agent, and runs the hooks of an
+agent of the same kind in another pane. Codex 0.159 detaches its daemon, so
+it does not arise today.
 
 ## Mapping
 
@@ -606,14 +634,20 @@ for `SessionEnd` and `Interrupt`.
   without the flag says so on its card, and one whose hooks reach its pane
   without it shows no line and resumes without the flag.
 - `src/backend/runtime/tests/requests_test.zig` proves that a report naming
-  an agent needs a connection bound to its pane, that the binding holds for
-  one pane generation, that a pane refuses lifecycle, title, command and
-  progress reports of another agent, and one descent check per connection;
-  `agent_hooks.zig` proves the parent walk; `agent_status_test.zig` proves
-  the identification window, a pane whose agent is replaced, the resume
-  mode and the shared-server line; `process.zig` proves `SessionHost`;
-  `lib/proclineage` and `lib/localsocket` prove the parent chain and the
-  peer process.
+  an agent needs a connection bound to its pane and generation, that a
+  connection confirmed in one pane cannot report for another, that another
+  agent's report is refused with a recheck and accepted once the probe names
+  that agent, that worktree attribution and review evidence need the
+  confirmation too, one descent check per connection, and a descent check
+  through the real peer lookup and worker; `agent_hooks.zig` proves the
+  parent walk; `agent_status_test.zig` proves the identification window, a
+  pane whose agent is replaced, the resume mode and when the shared-server
+  line shows; `process.zig` proves `SessionHost` and the recheck;
+  `hook_integration.zig` proves the installed-hooks check; `lib/proclineage`
+  and `lib/localsocket` prove the parent chain and the peer process.
+- `src/backend/runtime/tests/client_events_test.zig` proves that a client
+  negotiates while another connection's handshake stalls, and that only a
+  full admission table interrupts its oldest handshake.
 - `src/cli/TempFile.zig` proves that installation writes through an
   exclusive owner-only temporary and never through a planted symlink.
 - `src/backend/history/persistence/history_sql.zig` proves that native start/finish

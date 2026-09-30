@@ -16,6 +16,7 @@ const MediaCompletion = @import("events/MediaCompletion.zig");
 const ExitCompletion = @import("events/ExitCompletion.zig");
 const Wake = @import("events/Wake.zig");
 const DescentCompletion = @import("events/DescentCompletion.zig");
+const HandshakeCompletion = @import("events/HandshakeCompletion.zig");
 const Half = owned.Half;
 const Result = @import("../plugins/Result.zig");
 const AgentResult = @import("../agent/Result.zig");
@@ -34,7 +35,7 @@ const PathQuery = @import("../paths/PathQuery.zig");
 
 pub const Event = union(enum) {
     accepted: anyerror!localsocket.SocketChannel,
-    handshaken: anyerror!void,
+    handshaken: HandshakeCompletion,
     client_message: ClientMessage,
     client_sent: ClientSent,
     cell_publication_due: anyerror!void,

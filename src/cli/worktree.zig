@@ -157,7 +157,7 @@ fn create(init: std.process.Init, command: Command) !u8 {
     const registered = try command.session.registerWorktree(.{
         .request_id = .none,
         .source = try core.workspace(source),
-        .created_by = currentPane(init.minimal.environ),
+        .created_by = attributedPane(command.session, init.minimal.environ),
         .path = checkout,
         .branch = branch,
         .base = base,
@@ -383,7 +383,7 @@ fn findOrAdopt(init: std.process.Init, command: Command) !CatalogWorktree {
         const registered = try command.session.registerWorktree(.{
             .request_id = .none,
             .source = try core.workspace(source),
-            .created_by = currentPane(init.minimal.environ),
+            .created_by = attributedPane(command.session, init.minimal.environ),
             .path = listed.path,
             .branch = listed.branch,
             .base = base,
@@ -815,8 +815,17 @@ fn briefOf(argv: []const []const u8, buffer: *[core.max_worktree_brief_bytes]u8)
     return buffer[0..len];
 }
 
-fn currentPane(environ: std.process.Environ) ?core.PaneId {
+// The pane a new worktree is attributed to: this process's own, once the
+// runtime confirms it runs inside it. A process that left the pane, or runs
+// outside any, registers without attribution.
+fn attributedPane(session: *Session, environ: std.process.Environ) ?core.PaneId {
     const id = control.currentPaneId(environ) catch return null;
+    const generation = control.currentPaneGeneration(environ) catch return null;
+    session.verifyDescent(.{
+        .pane_id = id,
+        .pane_generation = generation,
+    }) catch return null;
+
     return core.pane(id) catch null;
 }
 

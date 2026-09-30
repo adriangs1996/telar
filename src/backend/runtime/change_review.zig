@@ -174,6 +174,12 @@ fn admit(model: *RuntimeModel, client: *Session, value: anytype) !void {
         if (scoped and value.provider != context.provider) {
             return error.InvalidReviewOwner;
         }
+
+        // A hook's file evidence and the feedback handed to the agent go
+        // only through a connection confirmed inside the pane.
+        if (scoped and !confirmedInside(client, context.pane)) {
+            return error.ForeignProcess;
+        }
     }
     const service = model.review_service orelse return error.ReviewUnavailable;
     if (client.delivery.responses.hasChangeReview()) {
@@ -189,14 +195,21 @@ fn admit(model: *RuntimeModel, client: *Session, value: anytype) !void {
     try model.select.concurrent(.change_review_completed, Job.run, .{ job, model.io });
 }
 
+fn confirmedInside(client: *const Session, pane: PaneKey) bool {
+    const verified = client.hook_pane orelse return false;
+    return verified.id == pane.id and verified.generation == pane.generation;
+}
+
 fn failure(request_id: core.RequestId, err: anyerror) PendingFailure {
     return .{ .request_id = request_id, .code = switch (err) {
         error.PaneNotFound => .pane_not_found,
         error.PaneExited => .pane_exited,
+        error.ForeignProcess => .foreign_process,
         error.ReviewBusy, error.ReviewCapacity, error.OutOfMemory, error.WriteFailed => .resource_limit,
         else => .invalid_request,
     }, .message = switch (err) {
         error.PaneNotFound => "review pane no longer exists",
+        error.ForeignProcess => "only a process inside that pane may send its agent's review evidence",
         error.PaneExited => "review pane is closing",
         error.AgentNotReady, error.InvalidReviewOwner => "review does not belong to the current agent session",
         error.StaleReview => "review changed in another client; refresh before saving",

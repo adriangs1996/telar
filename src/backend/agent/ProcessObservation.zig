@@ -8,4 +8,6 @@ provider: core.AgentProvider,
 process_id: u32,
 /// Where the agent's interactive session, and so its hooks, runs.
 session_host: SessionHost = .unknown,
+/// telar's hooks for the agent are installed.
+hooks_installed: bool = false,
 observed_at_ms: i64,

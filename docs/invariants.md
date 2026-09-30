@@ -104,6 +104,9 @@ analytics.
   graphics state. A slow client never delays PTYs, other clients or
   persistence; when it falls behind, drop intermediate patches and send a
   bounded snapshot.
+- Clients that connect together negotiate independently, each in its own
+  bounded admission slot; only a full table interrupts its oldest
+  handshake, so a client that never finishes cannot hold admission.
 - Every wire frame has a checked byte limit before allocation or decoding.
 - The handshake accepts one exact schema fingerprint. Change it whenever an
   encoding changes.
