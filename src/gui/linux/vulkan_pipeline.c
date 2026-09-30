@@ -18,7 +18,8 @@ static VkShaderModule create_shader(VkDevice device, const uint32_t *code, uint3
     return result == VK_SUCCESS ? module : VK_NULL_HANDLE;
 }
 
-bool telar_vulkan_pipeline_init(telar_vulkan_pipeline *self, VkDevice device, VkFormat format) {
+bool telar_vulkan_pipeline_init(telar_vulkan_pipeline *self, VkDevice device, VkFormat format,
+                                VkDescriptorSetLayout images) {
     self->device = device;
     self->format = format;
     // Binding 1 is the alpha atlas, binding 2 the RGBA sprite page.
@@ -70,10 +71,11 @@ bool telar_vulkan_pipeline_init(telar_vulkan_pipeline *self, VkDevice device, Vk
     VK_TRY(vkAllocateDescriptorSets(self->device, &set, &self->descriptors));
 
     VkPushConstantRange push = {.stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .offset = 0, .size = 2 * sizeof(float)};
+    VkDescriptorSetLayout set_layouts[2] = {self->set_layout, images};
     VkPipelineLayoutCreateInfo layout = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = &self->set_layout,
+        .setLayoutCount = 2,
+        .pSetLayouts = set_layouts,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &push,
     };

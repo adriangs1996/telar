@@ -42,6 +42,9 @@ const fragmented_span_cells = 2;
 const fragmented_gap_cells = 2;
 pub const fragmented_span_count = fragmented_rows * fragmented_spans_per_row;
 const history_input = "\x1b[200~echo one\necho two\x1b[201~\r";
+/// One PTY read of colored listing output: what the runtime's Kitty framing
+/// and the ingest's command scanner walk on every read of a text pane.
+const kitty_scan_bytes = 16 * 1024;
 
 pub const Workload = enum { one_cell, fragmented, full_screen };
 const workloads = [_]Workload{ .one_cell, .fragmented, .full_screen };
@@ -66,6 +69,7 @@ const cases = [_]Case{
     .{ .name = "backend.damage.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
     .{ .name = "backend.frame.fragmented", .work_per_op = fragmented_rows * cols, .work_unit = "cells" },
     .{ .name = "backend.history.input_scan", .work_per_op = history_input.len, .work_unit = "bytes" },
+    .{ .name = "backend.kitty.command_scan", .work_per_op = kitty_scan_bytes, .work_unit = "bytes" },
     .{ .name = "schema.encode.one_cell", .work_per_op = 1, .work_unit = "cells" },
     .{ .name = "schema.encode.fragmented", .work_per_op = fragmented_span_count * fragmented_span_cells, .work_unit = "cells" },
     .{ .name = "schema.encode.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
@@ -256,6 +260,19 @@ fn runFrame(context: *FrameContext, iterations: usize) !u64 {
             if (iteration & 1 == 0) '0' else '1';
         const payload = try context.encode();
         checksum +%= payload.len + payload[payload.len - 1];
+    }
+    return checksum;
+}
+
+fn runKittyScan(context: *KittyScanContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        checksum +%= @intFromBool(context.framing.touchesKitty(&context.bytes));
+        var rest: []const u8 = &context.bytes;
+        while (context.scanner.next(rest)) |command| {
+            checksum +%= command.control.len;
+            rest = rest[command.end..];
+        }
     }
     return checksum;
 }
@@ -473,6 +490,17 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
         try result_writer.write(
             history_input_case,
             try measure(.{ .io = io, .config = config, .context = &context }, runHistoryInput),
+        );
+    }
+
+    const kitty_scan_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(kitty_scan_case.name)) {
+        var context: KittyScanContext = .{};
+        context.fill();
+        try result_writer.write(
+            kitty_scan_case,
+            try measure(.{ .io = io, .config = config, .context = &context }, runKittyScan),
         );
     }
 
@@ -884,6 +912,19 @@ const LuaCallbackContext = struct {
 
 const DecodeContext = struct {
     payloads: [2][]const u8,
+};
+
+const KittyScanContext = struct {
+    framing: vtscan.KittyFramingCounter = .{},
+    scanner: vtscan.KittyCommandScanner = .{},
+    bytes: [kitty_scan_bytes]u8 = undefined,
+
+    fn fill(self: *KittyScanContext) void {
+        const entry = "\x1b[01;34mdirectory\x1b[0m  \x1b[32mscript.sh\x1b[0m  notes.txt\r\n";
+        for (&self.bytes, 0..) |*byte, index| {
+            byte.* = entry[index % entry.len];
+        }
+    }
 };
 
 const HistoryInputContext = struct {

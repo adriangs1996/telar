@@ -287,7 +287,7 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     });
 
     try std.testing.expectEqual(@as(u32, 7), pane.scroll.offset);
-    try std.testing.expect(!client.graphics.paneVisible(pane.id));
+    try std.testing.expect(client.graphics.paneVisible(pane.id));
 
     try keys.routeChord(client, "x");
 
@@ -374,7 +374,6 @@ test "a full outbox preserves the committed pane viewport and rejects input" {
         .total_rows = @as(u32, pane.buffer.h) + 10,
         .offset = 0,
     };
-    try harness.graphics.setPaneVisible(pane.id, false);
     while (client.model.to_runtime.hasCapacity()) {
         try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = pane.id } });
     }
@@ -384,7 +383,6 @@ test "a full outbox preserves the committed pane viewport and rejects input" {
     try std.testing.expectError(error.ClientOutboxFull, keys.routeChord(client, "x"));
 
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
-    try std.testing.expect(client.graphics.paneVisible(pane.id));
     try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
     try fixtures.expectNonViewportVersionEqual(version, client.model.version());
 }

@@ -21,3 +21,13 @@ snapshots: u64 = 0,
 decode: core.Timing = .{},
 apply: core.Timing = .{},
 input_enqueue: core.Timing = .{},
+/// Images a window's renderer turned into textures, and how long each took
+/// from the upload request to its report.
+graphics_textures: u64 = 0,
+graphics_upload: core.Timing = .{},
+/// Image generations a window drew for the first time, and the bytes its
+/// textures hold.
+graphics_presented: u64 = 0,
+graphics_gpu_bytes: usize = 0,
+/// Graphics snapshots requested to recover a broken revision.
+graphics_resyncs: u64 = 0,

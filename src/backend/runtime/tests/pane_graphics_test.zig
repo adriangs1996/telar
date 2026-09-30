@@ -227,3 +227,37 @@ test "a failed freeze abandons only its client graphics projection" {
     try std.testing.expect(!attachment.hasFrozenGraphics());
     try std.testing.expect(attachment.graphicsCaughtUp());
 }
+
+fn expectCursor(fixture: *PaneFixture, x: usize, y: usize) !void {
+    const cursor = fixture.pane.terminal.screens.active.cursor;
+    try std.testing.expectEqual(x, cursor.x);
+    try std.testing.expectEqual(y, cursor.y);
+}
+
+test "the interactive terminal moves its cursor past a placement like the media terminal" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+
+    // Two rows high, three columns wide: down one row, right three columns.
+    _ = try fixture.pane.ingest(std.testing.io, "ab\x1b_Ga=T,f=24,s=1,v=1,c=3,r=2,i=5,q=2;AAAA\x1b\\");
+    try expectCursor(&fixture, 5, 1);
+
+    // C=1 keeps the cursor where the image was placed.
+    _ = try fixture.pane.ingest(std.testing.io, "\x1b_Ga=p,i=5,c=3,r=2,C=1,q=2\x1b\\");
+    try expectCursor(&fixture, 5, 1);
+
+    // Reaching the right edge wraps once to the first column.
+    _ = try fixture.pane.ingest(std.testing.io, "\x1b[1;19H\x1b_Ga=p,i=5,c=3,r=2,q=2\x1b\\");
+    try expectCursor(&fixture, 0, 2);
+
+    // A chunked transmission moves once, when its last chunk ends: at the
+    // ESC of its terminator, where Ghostty runs it, even when the `\\`
+    // arrives in the next read.
+    _ = try fixture.pane.ingest(std.testing.io, "\x1b[1;1H\x1b_Ga=T,f=24,s=1,v=1,c=1,r=3,m=1,q=2;AAAA\x1b\\");
+    try expectCursor(&fixture, 0, 0);
+    _ = try fixture.pane.ingest(std.testing.io, "\x1b_Gm=0;AAAA\x1b");
+    try expectCursor(&fixture, 1, 2);
+    _ = try fixture.pane.ingest(std.testing.io, "\\");
+    try expectCursor(&fixture, 1, 2);
+}

@@ -186,7 +186,9 @@ VkResult telar_vulkan_swapchain_present(telar_vulkan_swapchain *self, uint32_t i
         .pSwapchains = &self->handle,
         .pImageIndices = &index,
     };
+    pthread_mutex_lock((pthread_mutex_t *)&self->gpu->queue_lock);
     VkResult result = vkQueuePresentKHR(self->gpu->queue, &present);
+    pthread_mutex_unlock((pthread_mutex_t *)&self->gpu->queue_lock);
     // OUT_OF_DATE still enqueues the semaphore wait and presentation fence.
     target->pending = result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR;
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {

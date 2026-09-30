@@ -1,5 +1,6 @@
 #pragma once
 #define VK_USE_PLATFORM_WAYLAND_KHR
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <vulkan/vulkan.h>
@@ -14,6 +15,10 @@ typedef struct {
     VkQueue queue;
     VkPhysicalDeviceMemoryProperties memory;
     VkPhysicalDeviceLimits limits;
+    // vkQueueSubmit and vkQueuePresentKHR need the queue externally
+    // synchronized: the frame worker and the image upload thread share it.
+    pthread_mutex_t queue_lock;
+    bool queue_lock_ready;
 } telar_vulkan_device;
 
 bool telar_vulkan_device_init(telar_vulkan_device *self, struct wl_display *display, struct wl_surface *surface);

@@ -36,7 +36,8 @@ detach, reconnect, destroy), its recovery and the test that proves it.
 
 **Interactive**: input, PTY bytes, VT state, cell damage, terminal responses.
 
-- Drain the PTY before rendering or observation work.
+- Drain the PTY before rendering or observation work. The read hold under
+  **Media** is the one exception.
 - Built-in input routing does no filesystem, database, JSON, Lua,
   process-tree, network or plugin work.
 - An explicit user binding may call a client-owned Lua callback with hard
@@ -56,6 +57,14 @@ detach, reconnect, destroy), its recovery and the test that proves it.
 
 - Own queues, workers, quotas, pacing and metrics. Large decode, compression,
   hashing or copies never delay input or cell output.
+- One recorded exception: while the media actor is busy, its batch is full
+  and a Kitty command is queued or in progress, the pane holds its next PTY
+  read instead of dropping the batch (`Pipeline.holdsRead`). Only that pane's
+  output waits, as the child sending graphics would wait in Kitty or Ghostty;
+  input still reaches it, other panes keep draining, and plain output keeps
+  the drop-and-reset policy. The read resumes when the turn finishes, before
+  anything that can fail, and a read that cannot be rescheduled stays held
+  rather than lost.
 - Repeated frames are latest-wins where protocol order allows.
 - Media failure leaves the text terminal usable.
 

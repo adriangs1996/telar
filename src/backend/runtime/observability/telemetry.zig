@@ -54,6 +54,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
     var media_queue_byte_high_water: usize = 0;
     var media_dropped_events: u64 = 0;
     var media_dropped_bytes: u64 = 0;
+    var media_held_reads: u64 = 0;
     var pty_response_queue_depth: usize = 0;
     var pty_response_dropped: u64 = 0;
     var pane_input_queue_depth: usize = 0;
@@ -74,6 +75,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
         history_input_dropped +|= pane.history_observer.dropped_events;
         media_dropped_events +|= pane.media.dropped_events;
         media_dropped_bytes +|= pane.media.dropped_bytes;
+        media_held_reads +|= pane.media.held_reads;
         media_queue_event_high_water +|= pane.media.queue_event_high_water;
         media_queue_byte_high_water +|= pane.media.queue_byte_high_water;
         pane_media_used += pane.media_allocator.used;
@@ -187,6 +189,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
             "\"media_queue_event_high_water\":{d}," ++
             "\"media_queue_byte_high_water\":{d}," ++
             "\"media_dropped_events\":{d},\"media_dropped_bytes\":{d}," ++
+            "\"media_held_reads\":{d}," ++
             "\"graphics_images\":{d},\"graphics_placements\":{d}," ++
             "\"graphics_resident_bytes\":{d},\"graphics_transfer_bytes\":{d}," ++
             "\"graphics_loading_bytes\":{d}," ++
@@ -212,6 +215,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
             media_queue_byte_high_water,
             media_dropped_events,
             media_dropped_bytes,
+            media_held_reads,
             graphics_images,
             graphics_placements,
             graphics_resident_bytes,

@@ -127,7 +127,7 @@ Run a graphical child like any other command:
 zig build run -- terminal-browser open https://example.com
 ```
 
-Runtime decoded-image quotas default to 64 MiB per pane and 256 MiB globally
+Runtime decoded-image quotas default to 256 MiB per pane and 512 MiB globally
 and can be lowered on an explicit server:
 
 ```sh

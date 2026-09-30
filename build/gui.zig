@@ -66,7 +66,7 @@ pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath)
             const window_test_module = b.createModule(.{ .target = app.modules.target, .optimize = app.modules.optimize, .link_libc = true });
             window_test_module.addIncludePath(b.path("src/gui/native"));
             window_test_module.addCSourceFiles(.{
-                .files = &.{ "src/gui/tests/macos_window.m", "src/gui/tests/macos_host_input.m", "src/gui/tests/macos_diagrams.m", "src/gui/native/wake.c" },
+                .files = &.{ "src/gui/tests/macos_window.m", "src/gui/tests/macos_host_input.m", "src/gui/tests/macos_diagrams.m", "src/gui/tests/macos_images.m", "src/gui/native/wake.c" },
                 .flags = &.{ "-fobjc-arc", "-std=c23" },
             });
             macos_gui.add(b, window_test_module, false);

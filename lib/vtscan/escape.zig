@@ -16,6 +16,7 @@ const std = @import("std");
 pub const KittyFramingCounter = @import("KittyFramingCounter.zig");
 
 pub const esc = 0x1b;
+
 pub const bel = 0x07;
 
 // ---------------------------------------------------------------------------

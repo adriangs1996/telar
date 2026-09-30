@@ -27,7 +27,6 @@ int telar_test_diagrams(void) {
     _Static_assert(sizeof(telar_gui_diagram_texture) == 24, "diagram ABI");
     _Static_assert(offsetof(telar_gui_diagram_texture, version) == 16, "diagram version ABI");
     _Static_assert(offsetof(telar_gui_frame, diagrams) == 56, "frame diagram ABI");
-    _Static_assert(sizeof(telar_gui_frame) == 280, "frame ABI");
     _Static_assert(offsetof(telar_gui_frame, navigation) == 272, "frame navigation ABI");
     uint8_t red[32], green[32];
     for (unsigned i = 0; i < 8; i++) {
@@ -57,10 +56,15 @@ int telar_test_diagrams(void) {
     frame.diagrams[0] = (telar_gui_diagram_texture){0};
     assert(telar_gui_diagrams_valid(&frame, 4096));
 
-    TelarMetalRenderer *renderer = [[TelarMetalRenderer alloc] initWithCompletion:^(uint64_t token, BOOL success) {
-        (void)token;
-        (void)success;
-    }];
+    TelarMetalRenderer *renderer = [[TelarMetalRenderer alloc]
+        initWithCompletion:^(uint64_t token, BOOL success) {
+            (void)token;
+            (void)success;
+        }
+        imageReady:^(uint32_t handle, BOOL success) {
+            (void)handle;
+            (void)success;
+        }];
     assert(renderer);
     assert([renderer uploadDiagrams:&frame]);
     id<MTLTexture> first = image_at(renderer, 7);

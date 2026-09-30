@@ -25,6 +25,7 @@ test {
     _ = @import("tests/change_review.zig");
     _ = @import("tests/agent_peek.zig");
     _ = @import("tests/image_previews.zig");
+    _ = @import("tests/pane_images.zig");
     _ = @import("image/preview_decode.zig");
     _ = @import("tests/change_review_navigation.zig");
     _ = @import("tests/frame_pacer.zig");

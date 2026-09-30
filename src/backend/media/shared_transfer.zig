@@ -94,7 +94,8 @@ pub fn freezeSharedPixels(pixels: []const u8) ?core.ShmName {
 
 /// Opens, validates and maps a child's shared object by its base64 name,
 /// then unlinks the name. Null when the object is missing, undersized, or the
-/// name is malformed.
+/// name is malformed; the frame then falls back to Ghostty's parser, which
+/// unlinks what it opens.
 ///
 /// ```zig
 /// const child = mapChildObject(encoded_name, byte_len) orelse return false;
@@ -104,48 +105,80 @@ pub fn mapChildObject(encoded_name: []const u8, byte_len: usize) ?ChildObject {
     if (comptime !shm_supported) {
         return null;
     }
-    const Decoder = std.base64.standard.Decoder;
-    const name_len = Decoder.calcSizeForSlice(encoded_name) catch return null;
-    if (name_len == 0 or name_len > std.fs.max_path_bytes) {
-        return null;
-    }
-    var name_buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
-    Decoder.decode(name_buffer[0..name_len], encoded_name) catch return null;
-    if (std.mem.indexOfScalar(u8, name_buffer[0..name_len], 0) != null) {
-        return null;
-    }
-    name_buffer[name_len] = 0;
-    const name: [:0]const u8 = name_buffer[0..name_len :0];
+
+    var buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
+    const name = decodeChildName(encoded_name, &buffer) orelse return null;
     const fd = std.c.shm_open(name, @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
     if (std.posix.errno(fd) != .SUCCESS) {
         return null;
     }
+
     defer _ = std.c.close(fd);
     const inode = Inode.fromDescriptor(fd) catch return null;
     if (inode.size < byte_len) {
         return null;
     }
+
     const pixels = std.posix.mmap(null, byte_len, .{ .READ = true }, std.c.MAP{ .TYPE = .SHARED }, fd, 0) catch
         return null;
     _ = std.c.shm_unlink(name);
     return .{ .pixels = pixels };
 }
 
-fn decodeChildPath(encoded_path: []const u8, buffer: *[std.fs.max_path_bytes + 1]u8) ?[:0]const u8 {
+/// Consumes a child's shared object without reading it: a frame folded away
+/// by a newer one. Ghostty would have opened and unlinked it; skipping that
+/// would leave the object alive after its child, since the protocol leaves
+/// the unlink to the terminal.
+///
+/// ```zig
+/// shared_transfer.releaseChildObject(encoded_name);
+/// ```
+pub fn releaseChildObject(encoded_name: []const u8) void {
+    if (comptime !shm_supported) {
+        return;
+    }
+
+    var buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
+    const name = decodeChildName(encoded_name, &buffer) orelse return;
+    const fd = std.c.shm_open(name, @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
+    if (std.posix.errno(fd) != .SUCCESS) {
+        return;
+    }
+
+    _ = std.c.shm_unlink(name);
+    _ = std.c.close(fd);
+}
+
+/// Decodes a child's base64 shared-object name into `buffer`, or null when
+/// it is empty, too long, not base64 or holds a NUL.
+///
+/// ```zig
+/// var buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
+/// const name = decodeChildName(encoded_name, &buffer) orelse return false;
+/// ```
+pub fn decodeChildName(encoded_name: []const u8, buffer: *[std.fs.max_path_bytes + 1]u8) ?[:0]const u8 {
     const Decoder = std.base64.standard.Decoder;
-    const path_len = Decoder.calcSizeForSlice(encoded_path) catch return null;
-    if (path_len == 0 or path_len > std.fs.max_path_bytes) {
+    const name_len = Decoder.calcSizeForSlice(encoded_name) catch return null;
+    if (name_len == 0 or name_len > std.fs.max_path_bytes) {
         return null;
     }
-    Decoder.decode(buffer[0..path_len], encoded_path) catch return null;
-    if (std.mem.indexOfScalar(u8, buffer[0..path_len], 0) != null) {
+
+    Decoder.decode(buffer[0..name_len], encoded_name) catch return null;
+    if (std.mem.indexOfScalar(u8, buffer[0..name_len], 0) != null) {
         return null;
     }
-    if (buffer[0] != '/') {
+
+    buffer[name_len] = 0;
+    return buffer[0..name_len :0];
+}
+
+fn decodeChildPath(encoded_path: []const u8, buffer: *[std.fs.max_path_bytes + 1]u8) ?[:0]const u8 {
+    const path = decodeChildName(encoded_path, buffer) orelse return null;
+    if (path[0] != '/') {
         return null;
     }
-    buffer[path_len] = 0;
-    return buffer[0..path_len :0];
+
+    return path;
 }
 
 /// Opens a child-named file the runtime is willing to read pixels from: an
@@ -292,6 +325,22 @@ test "child shared memory validates size before mapping and unlinking" {
 
     try std.testing.expectEqualStrings("RGBA", mapped.pixels);
     try std.testing.expect(!objectExists(name));
+}
+
+test "releasing a folded child object unlinks it without reading it" {
+    if (comptime !shm_supported) {
+        return error.SkipZigTest;
+    }
+
+    const name = freezeSharedPixels("RGBA") orelse return error.SharedMemoryUnavailable;
+    defer _ = std.c.shm_unlink(name.sliceZ());
+    var encoded_buffer: [std.base64.standard.Encoder.calcSize(std.fs.max_path_bytes)]u8 = undefined;
+    const encoded = std.base64.standard.Encoder.encode(&encoded_buffer, name.sliceZ());
+
+    releaseChildObject(encoded);
+    try std.testing.expect(!objectExists(name));
+    releaseChildObject(encoded);
+    releaseChildObject("not base64!");
 }
 
 test "a newer generation replaces the parked object of its image" {

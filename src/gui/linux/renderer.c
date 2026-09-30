@@ -1,6 +1,7 @@
 #include "renderer.h"
 #include "vulkan_device.h"
 #include "vulkan_pipeline.h"
+#include "vulkan_images.h"
 #include "vulkan_resources.h"
 #include "vulkan_swapchain.h"
 #include <stdlib.h>
@@ -10,6 +11,7 @@ struct telar_renderer {
     telar_vulkan_swapchain swapchain;
     telar_vulkan_pipeline pipeline;
     telar_vulkan_resources *resources;
+    telar_vulkan_images *images;
     VkCommandPool pool;
     VkCommandBuffer commands;
     VkFence fence;
@@ -48,7 +50,8 @@ static bool resize(telar_renderer *self, telar_gui_viewport viewport) {
     telar_vulkan_resources_destroy(self->resources);
     self->resources = NULL;
     telar_vulkan_pipeline_deinit(&self->pipeline);
-    if (!telar_vulkan_pipeline_init(&self->pipeline, self->gpu.device, self->swapchain.format)) {
+    if (!telar_vulkan_pipeline_init(&self->pipeline, self->gpu.device, self->swapchain.format,
+                                    telar_vulkan_images_layout(self->images))) {
         return false;
     }
     self->resources = telar_vulkan_resources_create(&self->gpu, &self->pipeline);
@@ -63,7 +66,7 @@ telar_renderer *telar_renderer_create(struct wl_display *display, struct wl_surf
     }
     self->swapchain.gpu = &self->gpu;
     if (!telar_vulkan_device_init(&self->gpu, display, surface) || !create_submission(self) ||
-        !resize(self, viewport)) {
+        !(self->images = telar_vulkan_images_create(&self->gpu)) || !resize(self, viewport)) {
         telar_renderer_destroy(self);
         return NULL;
     }
@@ -90,6 +93,42 @@ static void attachment_barrier(telar_renderer *self, VkImage image, bool present
         .pImageMemoryBarriers = &barrier,
     };
     vkCmdPipelineBarrier2(self->commands, &dependency);
+}
+
+static void bind_image(telar_renderer *self, VkDescriptorSet set) {
+    vkCmdBindDescriptorSets(self->commands, VK_PIPELINE_BIND_POINT_GRAPHICS, self->pipeline.layout, 1, 1, &set, 0,
+                            NULL);
+}
+
+// Image quads split the instanced draw into runs: each draws alone with its
+// image bound, so quad order stays paint order across layers. A draw whose
+// handle holds no image, or that breaks the ordering, skips its quad.
+static void draw_quads(telar_renderer *self, const telar_gui_frame *frame) {
+    bind_image(self, telar_vulkan_images_fallback(self->images));
+    uint32_t next = 0;
+    uint32_t draws = frame->image_draws != NULL ? frame->image_draw_count : 0;
+    if (draws > TELAR_GUI_IMAGE_DRAWS) {
+        draws = TELAR_GUI_IMAGE_DRAWS;
+    }
+    for (uint32_t i = 0; i < draws; i++) {
+        telar_gui_image_draw draw = frame->image_draws[i];
+        if (draw.quad < next || draw.quad >= frame->quad_count) {
+            continue;
+        }
+        if (draw.quad > next) {
+            vkCmdDraw(self->commands, 6, draw.quad - next, 0, next);
+        }
+        next = draw.quad + 1;
+        VkDescriptorSet set = telar_vulkan_images_set(self->images, draw.handle);
+        if (set == VK_NULL_HANDLE) {
+            continue;
+        }
+        bind_image(self, set);
+        vkCmdDraw(self->commands, 6, 1, 0, draw.quad);
+    }
+    if (frame->quad_count > next) {
+        vkCmdDraw(self->commands, 6, frame->quad_count - next, 0, next);
+    }
 }
 
 static bool encode(telar_renderer *self, uint32_t index, const telar_gui_frame *frame) {
@@ -133,7 +172,7 @@ static bool encode(telar_renderer *self, uint32_t index, const telar_gui_frame *
         vkCmdBindDescriptorSets(self->commands, VK_PIPELINE_BIND_POINT_GRAPHICS, self->pipeline.layout, 0, 1,
                                 &self->pipeline.descriptors, 0, NULL);
         vkCmdPushConstants(self->commands, self->pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof size, size);
-        vkCmdDraw(self->commands, 6, frame->quad_count, 0, 0);
+        draw_quads(self, frame);
     }
     vkCmdEndRendering(self->commands);
     attachment_barrier(self, target->image, true);
@@ -166,7 +205,10 @@ static bool submit(telar_renderer *self, uint32_t index, bool draw) {
         .pSignalSemaphoreInfos = &signal,
     };
     VK_TRY(vkResetFences(self->gpu.device, 1, &self->fence));
-    VK_TRY(vkQueueSubmit2(self->gpu.queue, 1, &info, self->fence));
+    pthread_mutex_lock(&self->gpu.queue_lock);
+    VkResult submitted = vkQueueSubmit2(self->gpu.queue, 1, &info, self->fence);
+    pthread_mutex_unlock(&self->gpu.queue_lock);
+    VK_TRY(submitted);
     return true;
 }
 
@@ -207,10 +249,23 @@ enum telar_render_result telar_renderer_draw(telar_renderer *self, telar_gui_vie
     return presented == VK_SUCCESS || presented == VK_SUBOPTIMAL_KHR ? TELAR_RENDER_DELIVERED : TELAR_RENDER_FAILED;
 }
 
+void telar_renderer_accept_images(telar_renderer *self, const telar_gui_frame *frame) {
+    telar_vulkan_images_accept(self->images, frame);
+}
+
+int telar_renderer_images_fd(telar_renderer *self) { return telar_vulkan_images_fd(self->images); }
+
+void telar_renderer_take_images(telar_renderer *self, void (*ready)(void *, uint32_t, int), void *context) {
+    telar_vulkan_images_take(self->images, ready, context);
+}
+
 void telar_renderer_destroy(telar_renderer *self) {
     if (!self) {
         return;
     }
+    // The upload thread submits to the queue; it stops before the device
+    // waits, since vkDeviceWaitIdle needs every queue to itself.
+    telar_vulkan_images_destroy(self->images);
     if (self->gpu.device) {
         vkDeviceWaitIdle(self->gpu.device);
         telar_vulkan_swapchain_deinit(&self->swapchain);

@@ -148,7 +148,9 @@ pub fn Type(comptime Delivery: type) type {
             }
             if (allocation.shared) |*shared| {
                 if (comptime store_ops.supportsSharedMemory()) {
-                    _ = std.c.shm_unlink(shared.sliceZ());
+                    if (shared.linked) {
+                        _ = std.c.shm_unlink(shared.sliceZ());
+                    }
                     std.posix.munmap(@alignCast(allocation.pixels));
                 }
             } else {
@@ -162,7 +164,9 @@ pub fn Type(comptime Delivery: type) type {
             Delivery.releaseImage(self, entry);
             if (entry.shared) |*shared| {
                 if (comptime store_ops.supportsSharedMemory()) {
-                    _ = std.c.shm_unlink(shared.sliceZ());
+                    if (shared.linked) {
+                        _ = std.c.shm_unlink(shared.sliceZ());
+                    }
                     std.posix.munmap(@alignCast(entry.pixels));
                 }
             } else {
@@ -207,13 +211,16 @@ pub fn Type(comptime Delivery: type) type {
             self.noteIngressChange();
         }
 
+        /// Adopts a runtime-owned shared object by mapping it read-only. The
+        /// name is unlinked whether or not the mapping succeeds, so a client
+        /// that dies never strands the object: the mapping alone keeps it.
         pub fn applySharedImage(self: *Self, message: core.SharedImage) !void {
             if (comptime !store_ops.supportsSharedMemory()) {
                 return error.GraphicsSharedMappingFailed;
             }
 
-            var adopted = false;
-            defer if (!adopted) {
+            var mapped = false;
+            defer if (!mapped) {
                 _ = std.c.shm_unlink(message.name.sliceZ());
             };
 
@@ -222,13 +229,18 @@ pub fn Type(comptime Delivery: type) type {
             }
             const byte_len = try self.admitImage(message.pane_id, message.image);
             var allocation = self.mapSharedPixels(message.name, byte_len) catch return error.GraphicsSharedMappingFailed;
+            mapped = true;
             errdefer self.freeAllocation(&allocation);
             try self.commitImage(.{ .pane_id = message.pane_id, .image = message.image, .allocation = &allocation, .received = byte_len });
-            adopted = true;
             self.removeOtherGenerations(message.pane_id, message.image.key);
             self.noteIngressChange();
         }
 
+        /// Maps an object only this user owns and at least `byte_len` long,
+        /// then unlinks its name at once. Another process of the same user
+        /// could still shrink the object after the size check; touching the
+        /// lost pages then raises SIGBUS, which the invariants accept for
+        /// same-user processes (peer checks do not isolate them).
         fn mapSharedPixels(self: *Self, name: core.ShmName, byte_len: usize) !PixelAllocation {
             _ = self;
             if (comptime !store_ops.supportsSharedMemory()) {
@@ -244,7 +256,7 @@ pub fn Type(comptime Delivery: type) type {
             }
             defer _ = std.c.close(fd);
             const inode = Inode.fromDescriptor(fd) catch return error.SharedMemoryUnavailable;
-            if (inode.size < byte_len) {
+            if (inode.owner != std.c.getuid() or inode.size < byte_len) {
                 return error.SharedMemoryUnavailable;
             }
             const map = std.posix.mmap(
@@ -255,10 +267,8 @@ pub fn Type(comptime Delivery: type) type {
                 fd,
                 0,
             ) catch return error.SharedMemoryUnavailable;
-            var shared: SharedPixels = .{ .len = 0 };
-            @memcpy(shared.name[0 .. name.len + 1], name.bytes[0 .. name.len + 1]);
-            shared.len = name.len;
-            return .{ .pixels = map, .shared = shared };
+            _ = std.c.shm_unlink(name.sliceZ());
+            return .{ .pixels = map, .shared = .{ .len = 0, .linked = false } };
         }
 
         fn admitImage(self: *Self, pane_id: core.PaneId, image: core.Image) !usize {
@@ -768,6 +778,9 @@ const PixelAllocation = struct {
 const SharedPixels = struct {
     name: [64]u8 = undefined,
     len: u8,
+    /// Whether this store still owns the name: an object it created keeps
+    /// one until it frees the pixels; an adopted one was unlinked on mapping.
+    linked: bool = true,
 
     pub fn slice(self: *const SharedPixels) []const u8 {
         return self.name[0..self.len];
