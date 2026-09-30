@@ -113,8 +113,12 @@ test "pending workspace operation keeps the rename prompt without sending" {
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
-    try fixtures.expectNonPromptVersionEqual(version_before_request, client.model.version());
+    try fixtures.expectOnlyLimitReport(&client.model);
+    // The dropped rename shows the limit notice and changes nothing else.
+    var expected_version = version_before_request;
+    try std.testing.expect(client.model.version().notifications > expected_version.notifications);
+    expected_version.notifications = client.model.version().notifications;
+    try fixtures.expectNonPromptVersionEqual(expected_version, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
     try keys.routeKey(client, .plain(.escape));
@@ -424,8 +428,12 @@ test "pending tab operation keeps the rename prompt without sending" {
     try std.testing.expect(!data.copy_mode.isActive(&client.model));
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
-    try fixtures.expectNonPromptVersionEqual(version_before_request, client.model.version());
+    try fixtures.expectOnlyLimitReport(&client.model);
+    // The dropped rename shows the limit notice and changes nothing else.
+    var expected_version = version_before_request;
+    try std.testing.expect(client.model.version().notifications > expected_version.notifications);
+    expected_version.notifications = client.model.version().notifications;
+    try fixtures.expectNonPromptVersionEqual(expected_version, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
     try keys.routeKey(client, .plain(.escape));

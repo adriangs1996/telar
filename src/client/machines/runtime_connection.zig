@@ -3,7 +3,10 @@
 const localsocket = @import("localsocket");
 const std = @import("std");
 
-pub const runtime_start_attempts = 200;
+/// How long a client waits, 10 s in all, for a runtime it started to listen:
+/// a cold start that restores a large history from a slow disk takes
+/// seconds.
+pub const runtime_start_attempts = 1000;
 pub const runtime_start_interval_ms = 10;
 
 pub fn resolveEndpoint(environ: std.process.Environ, override: ?[*:0]const u8) !localsocket.Local {

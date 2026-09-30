@@ -168,7 +168,7 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
         .rename_tab => _ = name_prompt.openNamePrompt(&client.model, .rename_active_tab),
         .close_tab => _ = try tab_removal.requestTabClose(client),
         .move_tab => |direction| _ = try tab_move.requestTabMove(
-            &client.model,
+            client,
             .{
                 .direction = switch (direction) {
                     .previous => .previous,

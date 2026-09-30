@@ -234,6 +234,7 @@ test {
     _ = @import("workspace/sidebar_toggle.zig");
     _ = @import("workspace/tab_creation.zig");
     _ = @import("workspace/tab_move.zig");
+    _ = @import("workspace/pending_operation.zig");
     _ = @import("workspace/tab_removal.zig");
     _ = @import("workspace/tab_rename.zig");
     _ = @import("workspace/tab_selection.zig");

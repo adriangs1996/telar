@@ -4,11 +4,12 @@ const core = @import("telar-core");
 const std = @import("std");
 const pane_focus = @import("../panes/pane_focus.zig");
 const tab_removal = @import("tab_removal.zig");
+const pending_operation = @import("pending_operation.zig");
 const Client = @import("../execution/Client.zig");
 
 /// Example: `_ = try tab_creation.requestTabCreation(app, command);`
 pub fn requestTabCreation(client: *Client, command: data.RequestTabCreation) !bool {
-    if (client.model.request_lifecycle.tracker.has(.tab_operation)) {
+    if (pending_operation.waits(client, .tab_operation)) {
         return false;
     }
 

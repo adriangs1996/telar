@@ -501,7 +501,7 @@ test "pending tab operation suppresses a move request" {
 
     try std.testing.expectEqual(request_count, client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
+    try fixtures.expectOnlyLimitReport(&client.model);
     try std.testing.expectEqual(@as(?usize, 1), client.model.tabs.find(second.tab_id));
 }
 
@@ -1335,6 +1335,23 @@ test "tab creation validates labels before retaining a request" {
     try std.testing.expectEqual(next_request, client.model.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
+}
+
+test "a second tab operation before the runtime answers the first is dropped and named" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.model.request_lifecycle.tracker = .{};
+
+    try std.testing.expect(try client_module.tab_creation.requestTabCreation(client, .{}));
+    const queued = client.model.to_runtime.len;
+
+    // Only the limit's report joins the queue.
+    try std.testing.expect(!try client_module.tab_creation.requestTabCreation(client, .{}));
+    try std.testing.expectEqual(queued + 1, client.model.to_runtime.len);
+    try std.testing.expect(client.model.limit_reaches.find("tabs.one_operation_in_flight") != null);
 }
 
 test "tab creation outbox failure releases correlation without mutating the projection" {

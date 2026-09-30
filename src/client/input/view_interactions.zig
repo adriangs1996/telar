@@ -93,7 +93,7 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
         },
         .move_tab => |move| {
             _ = try tab_move.requestTabMove(
-                &client.model,
+                client,
                 .{
                     .location = move.location,
                     .direction = move.direction,

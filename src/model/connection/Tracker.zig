@@ -6,6 +6,10 @@ const Tracker = @This();
 
 /// One attachment per pane plus the singleton client operations.
 pub const capacity = core.max_panes_per_tab + 8;
+/// One tab create, rename, move or close waits for the runtime at a time.
+pub const tab_operation_limit = core.Limit.declare("tabs.one_operation_in_flight", "tab operations", 1);
+/// One workspace rename waits for the runtime at a time.
+pub const workspace_operation_limit = core.Limit.declare("workspaces.one_operation_in_flight", "workspace operations", 1);
 
 entries: [capacity]?Entry = @splat(null),
 count: usize = 0,
