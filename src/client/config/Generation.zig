@@ -28,6 +28,7 @@ const client_history_config = @import("client_history.zig");
 const ThemeParser = @import("ThemeParser.zig");
 const notifications_config = @import("notifications.zig");
 const GuiConfigParser = @import("GuiConfigParser.zig");
+const UnreportedReaches = @import("UnreportedReaches.zig");
 const Generation = @This();
 
 gpa: std.mem.Allocator,
@@ -41,6 +42,11 @@ bar_callback_count: u8 = 0,
 modules: State,
 profile_bytes: [generation_support.max_profile_name_bytes]u8 = undefined,
 profile_len: u8 = 0,
+/// Everything one render returns before it is fitted into its slot or
+/// panel; reused by every render of this generation.
+staged_content: *data.StagedContent,
+/// Limits this generation reached that its client has not reported yet.
+unreported: UnreportedReaches = .{},
 
 /// Compiles configuration source within the supplied loading environment.
 /// For example: `Generation.loadSource(context, .{ .source = bytes, .source_name = "@config.lua", .number = 1 })`.
@@ -53,11 +59,15 @@ pub fn loadSource(context: LoadContext, spec: SourceInput) !*Generation {
     }
     const generation = try context.gpa.create(Generation);
     errdefer context.gpa.destroy(generation);
+    const staged_content = try context.gpa.create(data.StagedContent);
+    errdefer context.gpa.destroy(staged_content);
+    staged_content.clear();
     generation.* = .{
         .gpa = context.gpa,
         .number = spec.number,
         .vm = try lua.Vm.init(context.io, context.gpa, .{}),
         .modules = undefined,
+        .staged_content = staged_content,
     };
     errdefer generation.vm.deinit();
     generation.modules = try .init(generation.vm, spec.config_dir);
@@ -118,6 +128,7 @@ pub fn loadFile(context: LoadContext, spec: FileInput) !*Generation {
 
 pub fn deinit(self: *Generation) void {
     self.vm.deinit();
+    self.gpa.destroy(self.staged_content);
     self.gpa.destroy(self);
 }
 

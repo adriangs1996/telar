@@ -42,6 +42,7 @@ const config_adoption = @import("../config/config_adoption.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
 const link_opening = @import("../links/link_opening.zig");
 const notifications = @import("../notifications/notifications.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 const plugin_actions = @import("../plugins/plugin_actions.zig");
 const client_telemetry = @import("../resources/client_telemetry.zig");
 const retired_config = @import("../config/retired_config.zig");
@@ -354,6 +355,7 @@ pub fn failBackgroundJob(self: *Client, job: BackgroundJob, err: anyerror) !void
 /// try client.flush();
 /// ```
 pub fn flush(self: *Client) !void {
+    limit_reached.reportGeneration(self);
     const transport = &self.runtime_transport;
     if (transport.connection == null) {
         // Nothing reaches a runtime this client is not connected to; a new

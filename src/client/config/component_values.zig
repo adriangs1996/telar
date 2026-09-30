@@ -2,6 +2,7 @@
 //! Every table is checked against the fields its component accepts, and
 //! every component against the place it appears in, before anything is kept.
 const ComponentSource = @import("ComponentSource.zig");
+const core = @import("telar-core");
 const data = @import("model");
 const lua_api = @import("lua-api");
 const lua_value = @import("lua_value.zig");
@@ -47,6 +48,8 @@ const Reader = struct {
     state: *lua_api.c.lua_State,
     diagnostic: *data.Diagnostic,
     generation: *Generation,
+    /// Everything the render returned, including what did not fit.
+    demand: *data.ContentDemand,
 };
 
 const Target = struct {
@@ -80,25 +83,55 @@ const kind_names = [_]struct { []const u8, data.NodeKind }{
 
 /// Parses `nil`, a string, one component, a legacy segment or a list of any
 /// of them into `content`, which is a `data.Content` or `data.PanelContent`.
+/// A list larger than `content` keeps its highest-priority components that
+/// fit and leaves each bound it passed for the client to report.
 ///
 /// ```zig
 /// var content: data.Content = .{};
 /// try component_values.parse(generation, &content, .{ .index = -1, .surface = .bar }, diagnostic);
 /// ```
 pub fn parse(generation: *Generation, content: anytype, request: ComponentSource, diagnostic: *data.Diagnostic) !void {
+    var demand: data.ContentDemand = .{};
     const reader: Reader = .{
         .state = generation.vm.state,
         .diagnostic = diagnostic,
         .generation = generation,
+        .demand = &demand,
     };
 
-    try readList(reader, content, .{
+    const staged = generation.staged_content;
+    staged.clear();
+    try readList(reader, staged, .{
         .index = lua_api.c.lua_absindex(reader.state, request.index),
         .place = switch (request.surface) {
             .bar => .bar,
             .panel => .panel,
         },
     });
+
+    content.keepFitting(staged);
+    reportDemand(generation, demand, switch (request.surface) {
+        .bar => data.bar_values.bar_limits,
+        .panel => data.bar_values.panel_limits,
+    });
+}
+
+/// Leaves every bound the render passed for the client to report.
+fn reportDemand(generation: *Generation, demand: data.ContentDemand, limits: data.ContentLimits) void {
+    const bounds = [_]struct { u32, core.Limit }{
+        .{ demand.nodes, limits.nodes },
+        .{ demand.text, limits.text },
+        .{ demand.actions, limits.actions },
+        .{ demand.samples, limits.samples },
+    };
+    for (bounds) |bound| {
+        if (bound[0] > bound[1].value) {
+            generation.unreported.add(.{
+                .limit = bound[1],
+                .requested = bound[0],
+            });
+        }
+    }
 }
 
 fn readList(reader: Reader, content: anytype, target: Target) anyerror!void {
@@ -178,7 +211,7 @@ fn readComponent(reader: Reader, content: anytype, target: Target) !void {
         .priority = try priorityField(reader, index, target.priority),
         .tone = try toneField(reader, index),
     };
-    var samples: [data.CpuHistory.capacity]u8 = undefined;
+    var samples: [data.Node.max_samples]u8 = undefined;
     switch (kind) {
         .label => {
             input.text = try stringField(reader, index, "text") orelse "";
@@ -246,7 +279,7 @@ fn readComponent(reader: Reader, content: anytype, target: Target) !void {
         .actions, .divider => {},
     }
 
-    const node = try append(reader, content, input, target.place);
+    const node = try append(reader, content, input, target.place) orelse return;
     switch (kind) {
         .group => {
             try readChildren(reader, content, .{
@@ -302,14 +335,20 @@ fn readTooltip(reader: Reader, content: anytype, target: Target) !void {
     try readList(reader, content, tooltip);
 }
 
-fn append(reader: Reader, content: anytype, input: data.NodeInput, place: Place) !u8 {
+/// Stages one component and returns its index, or null when the staged
+/// list is full; a dropped container drops its children with it.
+fn append(reader: Reader, content: anytype, input: data.NodeInput, place: Place) !?u8 {
     if (!place.accepts(input.kind)) {
         return fail(reader, "telar.ui.{s} is not allowed in a {s}", .{ @tagName(input.kind), @tagName(place) });
     }
 
-    return content.append(input) catch |err| {
-        reader.diagnostic.set("invalid telar.ui.{s}: {s}", .{ @tagName(input.kind), @errorName(err) });
-        return error.InvalidBarContent;
+    reader.demand.add(input);
+    return content.append(input) catch |err| switch (err) {
+        error.TooManyBarComponents, error.BarTextTooLong, error.TooManyBarActions, error.TooManyBarSamples => null,
+        else => {
+            reader.diagnostic.set("invalid telar.ui.{s}: {s}", .{ @tagName(input.kind), @errorName(err) });
+            return error.InvalidBarContent;
+        },
     };
 }
 
@@ -456,8 +495,10 @@ fn actionField(reader: Reader, index: c_int, name: [*:0]const u8) !?data.Action 
         return fail(reader, "component field '{s}' must be a telar.action value", .{name});
 }
 
-/// Scales `values` to percentages of `max`, or of their largest value.
-fn samplesField(reader: Reader, index: c_int, buffer: *[data.CpuHistory.capacity]u8) ![]const u8 {
+/// Scales `values` to percentages of `max`, or of their largest value. A
+/// longer list keeps its last `data.Node.max_samples` values, the most
+/// recent in a history.
+fn samplesField(reader: Reader, index: c_int, buffer: *[data.Node.max_samples]u8) ![]const u8 {
     const state = reader.state;
     const maximum = try numberField(reader, index, "max");
     _ = lua_api.c.lua_getfield(state, index, "values");
@@ -467,15 +508,20 @@ fn samplesField(reader: Reader, index: c_int, buffer: *[data.CpuHistory.capacity
     }
 
     const table = lua_api.c.lua_absindex(state, -1);
-    const count = lua_api.c.lua_rawlen(state, table);
-    if (count > buffer.len) {
-        return fail(reader, "telar.ui.sparkline accepts at most {d} values", .{buffer.len});
+    const length = lua_api.c.lua_rawlen(state, table);
+    const count = @min(length, buffer.len);
+    const first = length - count;
+    if (length > buffer.len) {
+        reader.generation.unreported.add(.{
+            .limit = data.bar_values.node_samples_limit,
+            .requested = length,
+        });
     }
 
-    var values: [data.CpuHistory.capacity]f64 = undefined;
+    var values: [data.Node.max_samples]f64 = undefined;
     var largest: f64 = 0;
     for (0..count) |item| {
-        _ = lua_api.c.lua_geti(state, table, @intCast(item + 1));
+        _ = lua_api.c.lua_geti(state, table, @intCast(first + item + 1));
         defer lua_value.pop(state, 1);
         if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNUMBER) {
             return fail(reader, "telar.ui.sparkline values must be numbers", .{});

@@ -178,6 +178,7 @@ fn transportClient(send_buffer: []u8) !*Client {
     app.options.machine = null;
     app.forward = null;
     app.channel_owned = false;
+    app.lua_generation = null;
     app.runtime_transport = .{
         .connection = &unused_channel,
         .send_buffer = send_buffer,
