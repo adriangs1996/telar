@@ -6,6 +6,9 @@ const ResumeSession = @This();
 
 provider: core.AgentProvider,
 reference: SessionReference,
+/// The session ran in the agent's own process, started with its
+/// `pane_session_argument`; the resume adds that argument.
+in_pane: bool = false,
 
 /// Accepts only a built-in provider and a reference in that provider's
 /// session format, so stored values cannot add options or shell syntax to a

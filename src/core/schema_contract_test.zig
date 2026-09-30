@@ -1176,8 +1176,6 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
-            .ancestor_count = 2,
-            .ancestors = .{ 4321, 1 } ++ @as([types.max_pane_descent_ancestors - 2]u32, @splat(0)),
         }),
     ));
     helper.add(.{ .name = "report_agent_progress", .direction = .client, .golden_hex = golden.report_agent_progress }, helper.commit(
@@ -2316,7 +2314,7 @@ test "agent snapshot attention fields are bounded and tied to the blocked status
     try std.testing.expectError(error.InvalidAgentBlockedReason, root.decodeServer(valid));
 }
 
-test "hook reports name their agent and descent requests carry bounded ancestors" {
+test "hook reports name their agent and descent requests name one pane generation" {
     var buffer: [512]u8 = undefined;
     const report = try agent_module.encodeReportAgent(&buffer, .{
         .request_id = @enumFromInt(5),
@@ -2336,23 +2334,12 @@ test "hook reports name their agent and descent requests carry bounded ancestors
     });
     try std.testing.expectEqual(types.AgentProvider.claude, (try root.decodeClient(title)).report_agent_title.provider);
 
-    var ancestors: [types.max_pane_descent_ancestors]u32 = @splat(0);
-    ancestors[0] = 812;
-    ancestors[1] = 1;
     const descent = try agent_module.encodeVerifyPaneDescent(&buffer, .{
         .request_id = @enumFromInt(5),
         .pane_id = @enumFromInt(5),
         .pane_generation = 3,
-        .ancestor_count = 2,
-        .ancestors = ancestors,
     });
-    const decoded = (try root.decodeClient(descent)).verify_pane_descent;
-    try std.testing.expectEqualSlices(u32, &.{ 812, 1 }, decoded.slice());
-
-    // The count byte follows the tag, request, pane and generation.
-    var oversized = buffer;
-    oversized[25] = types.max_pane_descent_ancestors + 1;
-    try std.testing.expectError(error.InvalidPaneDescent, root.decodeClient(oversized[0..descent.len]));
+    try std.testing.expectEqual(@as(u64, 3), (try root.decodeClient(descent)).verify_pane_descent.pane_generation);
     try std.testing.expectError(error.Truncated, root.decodeClient(descent[0 .. descent.len - 1]));
 }
 

@@ -128,8 +128,8 @@ pub fn encodeReportAgent(buffer: []u8, message: ReportAgent) ![]const u8 {
     if (message.session.len != 0) {
         try validateSessionReference(message.session);
     }
-    var encoder = Encoder.init(buffer);
     try validateAgentProvider(message.provider);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.report_agent));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
@@ -237,49 +237,8 @@ pub fn encodeInterruptAgent(buffer: []u8, message: InterruptAgent) ![]const u8 {
     return codec.encodeDerived(@intFromEnum(tags.ClientTag.interrupt_agent), buffer, message);
 }
 
-/// Encodes a pane generation and the sender's parent processes, nearest
-/// first.
-///
-/// ```zig
-/// const bytes = try encodeVerifyPaneDescent(&buffer, .{ .request_id = request, .pane_id = pane, .pane_generation = 3, .ancestor_count = 1, .ancestors = ancestors });
-/// ```
 pub fn encodeVerifyPaneDescent(buffer: []u8, message: VerifyPaneDescent) ![]const u8 {
-    try codec.validateRequestId(message.request_id);
-    try codec.validatePaneId(message.pane_id);
-    if (message.ancestor_count > message.ancestors.len) {
-        return error.InvalidPaneDescent;
-    }
-
-    var encoder = Encoder.init(buffer);
-    try encoder.writeByte(@intFromEnum(tags.ClientTag.verify_pane_descent));
-    try encoder.writeInt(u64, id.raw(message.request_id));
-    try encoder.writeInt(u64, id.raw(message.pane_id));
-    try encoder.writeInt(u64, message.pane_generation);
-    try encoder.writeByte(message.ancestor_count);
-    for (message.slice()) |ancestor| {
-        try encoder.writeInt(u32, ancestor);
-    }
-
-    return encoder.finish();
-}
-
-pub fn decodeVerifyPaneDescent(decoder: *Decoder) !VerifyPaneDescent {
-    var message: VerifyPaneDescent = .{
-        .request_id = try id.request(try decoder.readInt(u64)),
-        .pane_id = try id.pane(try decoder.readInt(u64)),
-        .pane_generation = try decoder.readInt(u64),
-        .ancestor_count = try decoder.readByte(),
-    };
-
-    if (message.ancestor_count > message.ancestors.len) {
-        return error.InvalidPaneDescent;
-    }
-
-    for (message.ancestors[0..message.ancestor_count]) |*ancestor| {
-        ancestor.* = try decoder.readInt(u32);
-    }
-
-    return message;
+    return codec.encodeDerived(@intFromEnum(tags.ClientTag.verify_pane_descent), buffer, message);
 }
 
 fn validateProgressReport(message: ReportAgentProgress) !void {

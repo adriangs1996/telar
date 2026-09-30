@@ -10,6 +10,7 @@ const Evidence = @import("Evidence.zig");
 const Title = @import("Title.zig");
 const SessionReference = @import("SessionReference.zig");
 const Identity = @import("Identity.zig");
+const SessionHost = @import("SessionHost.zig").SessionHost;
 const ProcessObservation = @import("ProcessObservation.zig");
 const providers = @import("providers/providers.zig");
 const ReportObservation = @import("ReportObservation.zig");
@@ -89,9 +90,12 @@ session_provider: core.AgentProvider = .unknown,
 /// agent. It claims the pane until then; process evidence of another agent
 /// discards what it reported, because its hooks never ran in this pane.
 reporter: core.AgentProvider = .unknown,
-/// The agent's process runs its session, and so its hooks, in a shared
-/// server outside the pane; the card says so while no report decides.
-shared_server: bool = false,
+/// Where the process's interactive session, and so its hooks, runs; a
+/// restore resumes it the same way.
+session_host: SessionHost = .unknown,
+/// A hook report of this process reached the pane, which proves its hooks
+/// run inside it whatever its arguments say.
+hooks_seen: bool = false,
 /// The tracked worktree the agent reported working in.
 work_tree: core.WorktreeId = .invalid,
 progress: Progress = .{},
@@ -171,9 +175,15 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
 
     if (self.process) |evidence| {
         if (evidence.provider == observation.provider and self.agent_process_id == observation.process_id) {
-            const changed = self.shared_server != observation.shared_server;
-            self.shared_server = observation.shared_server;
+            const changed = self.session_host != observation.session_host;
+            self.session_host = observation.session_host;
             return changed;
+        }
+
+        // Another agent took the pane: what the previous one reported does
+        // not belong to it.
+        if (evidence.provider != observation.provider) {
+            self.forgetReports();
         }
 
         self.screen = null;
@@ -181,8 +191,12 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
         self.work = null;
     }
 
+    if (replaced_process) {
+        self.hooks_seen = false;
+    }
+
     self.agent_process_id = observation.process_id;
-    self.shared_server = observation.shared_server;
+    self.session_host = observation.session_host;
     self.process = Evidence.fromProcess(&observation);
     self.authority = if (replaced_process) .active else switch (self.authority) {
         .candidate, .stale, .exited => .active,
@@ -229,6 +243,10 @@ pub fn claimReporter(self: *Agent, reporter: core.AgentProvider) void {
 /// }
 /// ```
 pub fn applyReport(self: *Agent, observation: ReportObservation) bool {
+    if (observation.provider != .unknown) {
+        self.hooks_seen = true;
+    }
+
     if (observation.state == .continuing) {
         const report = if (self.report) |*value| value else return false;
         if (!report.isWorking() or self.report_detail.state == .settling or report.isExpired(observation.observed_at_ms)) {
@@ -786,13 +804,14 @@ fn blockedReason(self: *const Agent, evidence: Evidence) core.AgentBlockedReason
 }
 
 // The event line follows the report that decides the projection. Other
-// evidence carries no line, unless the agent's hooks run in a shared server
-// and cannot reach this pane: the line says how to start it so they can.
+// evidence carries no line, unless an interactive session was started
+// without the argument that keeps its hooks in the pane and none of its
+// hooks has reached it: the line says how to start it so they can.
 // Returns whether the shown line changed.
 fn refreshEvent(self: *Agent, evidence: Evidence) bool {
     const next: EventLine = if (evidence.source == .lifecycle_report)
         self.report_detail.event
-    else if (self.shared_server)
+    else if (self.session_host == .shared_server and !self.hooks_seen)
         sharedServerLine(evidence.provider)
     else
         .{};
@@ -859,7 +878,7 @@ fn awaitsHelpers(self: *const Agent, now_ms: i64) bool {
 fn sharedServerLine(agent_provider: core.AgentProvider) EventLine {
     const argument = providers.of(agent_provider).pane_session_argument orelse return .{};
     var buffer: [core.max_agent_last_event_bytes]u8 = undefined;
-    const line = std.fmt.bufPrint(&buffer, "hooks off: shared server, start with {s}", .{argument}) catch return .{};
+    const line = std.fmt.bufPrint(&buffer, "no hooks from this pane: if it runs on a shared server, start it with {s}", .{argument}) catch return .{};
     return EventLine.init(line);
 }
 
@@ -871,6 +890,7 @@ fn forgetReports(self: *Agent) void {
     self.work = null;
     self.session_reference = null;
     self.session_provider = .unknown;
+    self.hooks_seen = false;
     self.work_tree = .invalid;
     self.progress = .{};
     if (self.title.source == .agent) {

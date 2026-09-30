@@ -104,9 +104,16 @@ fn register(init: std.process.Init, registration: Registration) !void {
 
     const workspace_text = environ.getPosix("TELAR_WORKSPACE_ID") orelse return;
     const workspace = try core.workspace(std.fmt.parseUnsigned(u64, workspace_text, 10) catch return error.InvalidWorkspaceId);
-    const pane = try core.pane(try control.currentPaneId(environ));
+    const pane_id = try control.currentPaneId(environ);
+    const pane = try core.pane(pane_id);
     var session = try Session.attach(init, registration.socket);
     defer session.close();
+    // TELAR_PANE_ID only names the pane; a process that left it keeps it.
+    try session.verifyDescent(.{
+        .pane_id = pane_id,
+        .pane_generation = try control.currentPaneGeneration(environ),
+    });
+
     _ = try session.registerWorktree(.{
         .request_id = .none,
         .source = workspace,

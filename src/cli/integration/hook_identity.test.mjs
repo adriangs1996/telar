@@ -11,7 +11,7 @@
 // `--no-daemon`.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -36,9 +36,10 @@ const args = process.argv.slice(2);
 const words = args.filter((arg) => !arg.startsWith("-"));
 const thread = words[0] === "resume" ? words[1] : process.env.FAKE_CODEX_THREAD;
 appendFileSync(${JSON.stringify(log)}, JSON.stringify({ thread, args, pane: process.env.TELAR_PANE_ID }) + "\\n");
-// Without --no-daemon the real CLI hands the session to the shared server,
-// which runs the hooks elsewhere.
-if (args.includes("--no-daemon")) {
+// Without --no-daemon the CLI hands the session to the shared server,
+// which runs the hooks elsewhere, unless it has no server: a version before
+// it, or one with the daemon turned off (FAKE_CODEX_NO_SERVER).
+if (args.includes("--no-daemon") || process.env.FAKE_CODEX_NO_SERVER) {
   const hook = (payload) => spawnSync(${JSON.stringify(telar)}, ["hook", "codex"], { input: JSON.stringify({ session_id: thread, cwd: process.cwd(), ...payload }) });
   hook({ hook_event_name: "SessionStart", source: "startup" });
   hook({ hook_event_name: "UserPromptSubmit", prompt: "go" });
@@ -107,10 +108,14 @@ function sandbox(t) {
   for (const id of Object.values(threads)) database.prepare("INSERT INTO threads (id, name) VALUES (?, NULL)").run(id);
 
   const servers = [];
+  // The runtime admits one handshake at a time and drops both connections
+  // when another arrives meanwhile, as the panes' hooks can; retry those.
   const cli = (...args) => {
-    const result = spawnSync(telar, args, { env, encoding: "utf8", timeout: 10_000 });
-    if (result.error) throw result.error;
-    return result;
+    for (let attempt = 0; ; attempt++) {
+      const result = spawnSync(telar, args, { env, encoding: "utf8", timeout: 10_000 });
+      if (result.error) throw result.error;
+      if (result.status === 0 || attempt === 5 || !result.stderr.includes("ConnectionClosed")) return result;
+    }
   };
   const json = (...args) => {
     const result = cli(...args, "--json");
@@ -143,6 +148,15 @@ function sandbox(t) {
     rename: (thread, name) => database.prepare("UPDATE threads SET name = ? WHERE id = ?").run(name, thread),
     type: (pane, text) => assert.equal(cli("pane", "send-keys", String(pane), text, "--enter").status, 0),
     agents: () => json("agent", "list").agents,
+    // The runtime writes its checkpoint shortly after a change; a stop
+    // before then would restore an older one.
+    checkpointed: (...sessions) => {
+      const files = readdirSync(root, { recursive: true }).filter((path) => path.endsWith("session.ckpt"));
+      return files.some((path) => {
+        const bytes = readFileSync(join(root, path)).toString("latin1");
+        return sessions.every((session) => bytes.includes(session));
+      });
+    },
     launches: () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : []),
     fireServer: async () => {
       writeFileSync(trigger, "");
@@ -168,13 +182,17 @@ test("each Codex session reports to its own pane and a shared server reaches non
 
   const alpha = s.json("workspace", "create", "--directory", s.work).pane_id;
   const beta = s.json("tab", "create", "--background", "--workspace", "1").pane_id;
+  const reported = (pane) => {
+    const agent = agentIn(s.agents(), pane);
+    return agent?.provider === "codex" && agent.last_event.includes("own-");
+  };
+  // One pane at a time: hooks connecting at once can collide in the
+  // runtime's single handshake slot, which drops both.
   s.type(alpha, "codex-server");
   s.type(alpha, `FAKE_CODEX_THREAD=${threads.alpha} codex --no-daemon`);
+  await until("alpha runs Codex and reports its tool call", () => reported(alpha));
   s.type(beta, `FAKE_CODEX_THREAD=${threads.beta} codex --no-daemon`);
-  await until("both panes run Codex and report their tool call", () => {
-    const agents = s.agents();
-    return [alpha, beta].every((pane) => agentIn(agents, pane)?.provider === "codex" && agentIn(agents, pane).last_event.includes("own-"));
-  });
+  await until("beta runs Codex and reports its tool call", () => reported(beta));
 
   await s.fireServer();
   // A report that got through would be applied before `agent list` answers:
@@ -194,6 +212,7 @@ test("each Codex session reports to its own pane and a shared server reaches non
   assert.equal(agentIn(s.agents(), alpha).title, "alpha task");
   assert.ok(s.agents().every((agent) => agent.title !== "server thread"));
 
+  await until("the checkpoint records both sessions", () => s.checkpointed(threads.alpha, threads.beta));
   await s.stop();
   const launched = s.launches().length;
   await s.start();
@@ -213,6 +232,22 @@ test("a Codex started without --no-daemon says on its card that its hooks cannot
   s.type(pane, `FAKE_CODEX_THREAD=${threads.alpha} codex`);
   await until("the card explains the shared server", () => {
     const agent = agentIn(s.agents(), pane);
-    return agent?.provider === "codex" && agent.last_event === "hooks off: shared server, start with --no-daemon";
+    return agent?.provider === "codex" && agent.last_event === "no hooks from this pane: if it runs on a shared server, start it with --no-daemon";
   });
+});
+
+test("a Codex whose hooks reach its pane without --no-daemon shows no note and resumes without the flag", async (t) => {
+  const s = sandbox(t);
+  await s.start();
+
+  const pane = s.json("workspace", "create", "--directory", s.work).pane_id;
+  s.type(pane, `FAKE_CODEX_NO_SERVER=1 FAKE_CODEX_THREAD=${threads.beta} codex`);
+  await until("its hooks reach the card", () => agentIn(s.agents(), pane)?.last_event.includes(`own-${threads.beta}`));
+
+  await until("the checkpoint records the session", () => s.checkpointed(threads.beta));
+  await s.stop();
+  const launched = s.launches().length;
+  await s.start();
+  await until("the session resumes", () => s.launches().length > launched);
+  assert.deepEqual(s.launches()[launched].args, ["resume", threads.beta]);
 });

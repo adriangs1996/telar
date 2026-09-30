@@ -128,7 +128,9 @@ pub fn observeSessionReference(model: *RuntimeModel, identity: Identity, referen
 pub fn resumeSession(model: *const RuntimeModel, key: PaneKey) ?ResumeSession {
     if (model.agents.findConst(key)) |agent| {
         if (agent.resumableSession()) |reference| {
-            return ResumeSession.init(agent.session_provider, reference) catch null;
+            var session = ResumeSession.init(agent.session_provider, reference) catch return null;
+            session.in_pane = agent.session_host == .pane;
+            return session;
         }
     }
 

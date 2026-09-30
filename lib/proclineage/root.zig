@@ -12,6 +12,8 @@ pub const init_process: u32 = 1;
 /// Bytes read from `/proc/<pid>/stat`: enough for the fields up to the
 /// parent id after a command name of at most 16 bytes.
 const stat_prefix_bytes = 128;
+/// `/proc/<pid>/stat` for the largest pid, with its terminator.
+const stat_path_bytes = 32;
 
 /// Fills `buffer` with the parents of `pid`, nearest first, and returns the
 /// filled part. The chain stops after the first process, at a process the
@@ -65,7 +67,14 @@ fn macosParent(pid: u32) ?u32 {
 
     var info: darwin.c.proc_bsdshortinfo = std.mem.zeroes(darwin.c.proc_bsdshortinfo);
     const expected: c_int = @intCast(@sizeOf(darwin.c.proc_bsdshortinfo));
-    if (darwin.c.proc_pidinfo(@intCast(pid), darwin.c.PROC_PIDT_SHORTBSDINFO, 0, &info, expected) != expected) {
+    const written = darwin.c.proc_pidinfo(
+        @intCast(pid),
+        darwin.c.PROC_PIDT_SHORTBSDINFO,
+        0,
+        &info,
+        expected,
+    );
+    if (written != expected) {
         return null;
     }
 
@@ -77,9 +86,13 @@ fn macosParent(pid: u32) ?u32 {
 }
 
 fn linuxParent(pid: u32) ?u32 {
-    var path_buffer: [32]u8 = undefined;
+    var path_buffer: [stat_path_bytes]u8 = undefined;
     const path = std.fmt.bufPrintZ(&path_buffer, "/proc/{d}/stat", .{pid}) catch return null;
-    const file = std.posix.openatZ(std.posix.AT.FDCWD, path, .{ .ACCMODE = .RDONLY, .CLOEXEC = true }, 0) catch return null;
+    const flags: std.posix.O = .{
+        .ACCMODE = .RDONLY,
+        .CLOEXEC = true,
+    };
+    const file = std.posix.openatZ(std.posix.AT.FDCWD, path, flags, 0) catch return null;
     defer _ = std.posix.system.close(file);
 
     var stat_buffer: [stat_prefix_bytes]u8 = undefined;

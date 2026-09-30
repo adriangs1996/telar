@@ -552,23 +552,20 @@ pub fn interruptAgent(self: *Session, pane: PaneRef) !void {
     };
 }
 
-/// Proves this process runs inside `pane`: the runtime completes the
-/// request when `ancestors`, this process's parents nearest first, include
-/// the pane's root process, and refuses it otherwise.
+/// Has the runtime confirm that this process runs inside `pane`: it reads
+/// the process from the socket and walks its parents. Once confirmed, this
+/// connection may report for the pane in the name of an agent.
 ///
 /// ```zig
-/// try session.verifyDescent(pane, proclineage.ancestors(pid, &storage));
+/// try session.verifyDescent(pane);
 /// ```
-pub fn verifyDescent(self: *Session, pane: PaneRef, ancestors: []const u32) !void {
-    var request: core.VerifyPaneDescent = .{
+pub fn verifyDescent(self: *Session, pane: PaneRef) !void {
+    const response = try self.exchange(core.encodeVerifyPaneDescent, core.VerifyPaneDescent{
         .request_id = .none,
         .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
-        .ancestor_count = @intCast(@min(ancestors.len, core.max_pane_descent_ancestors)),
-    };
-    @memcpy(request.ancestors[0..request.ancestor_count], ancestors[0..request.ancestor_count]);
+    });
 
-    const response = try self.exchange(core.encodeVerifyPaneDescent, request);
     return switch (response) {
         .request_completed => {},
         .request_failed => |failure| self.refuse(failure),

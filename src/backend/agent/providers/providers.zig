@@ -43,7 +43,7 @@ pub fn of(provider: core.AgentProvider) *const Capabilities {
 
 test "built-in agents own their capabilities and configured agents get the default" {
     try std.testing.expectEqualStrings("claude --resume ", of(.claude).resume_prefix.?);
-    try std.testing.expectEqualStrings("codex resume --no-daemon ", of(.codex).resume_prefix.?);
+    try std.testing.expectEqualStrings("codex resume ", of(.codex).resume_prefix.?);
     try std.testing.expectEqualStrings("pi --session ", of(.pi).resume_prefix.?);
     try std.testing.expectEqualStrings("cursor-agent --resume ", of(.cursor).resume_prefix.?);
     try std.testing.expectEqualStrings("opencode --session ", of(.opencode).resume_prefix.?);

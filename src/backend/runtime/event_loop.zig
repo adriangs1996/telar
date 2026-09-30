@@ -22,7 +22,7 @@ pub const event_capacity = capacity: {
 
 fn producerSlots(tag: Tag) usize {
     return switch (tag) {
-        .client_message, .client_sent, .pane_search => client_store.max_clients,
+        .client_message, .client_sent, .pane_search, .pane_descent => client_store.max_clients,
         .pane_input_written,
         .pane_response_written,
         .pane_output,

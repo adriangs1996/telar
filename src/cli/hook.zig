@@ -30,7 +30,6 @@ const ProgressStorage = @import("ProgressStorage.zig");
 const WorktreeHookInput = @import("WorktreeHookInput.zig");
 const CodexSubagents = @import("CodexSubagents.zig");
 const agentfiles = @import("agentfiles");
-const proclineage = @import("proclineage");
 
 pub const max_input_bytes = 64 * 1024;
 
@@ -719,9 +718,8 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     var session = Session.attach(init, target.socket) catch return;
     defer session.close();
     const pane = target.pane;
-    var lineage: [core.max_pane_descent_ancestors]u32 = undefined;
-    const ancestors = proclineage.ancestors(@intCast(std.c.getpid()), &lineage);
-    session.verifyDescent(pane, ancestors) catch return;
+    session.verifyDescent(pane) catch return;
+
     // Progress goes first: a final answer is stored before the lifecycle
     // report marks the turn finished, so a waiter never reads a stale one.
     if (reports.progress) |progress| {

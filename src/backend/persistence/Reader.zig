@@ -133,6 +133,11 @@ pub fn next(self: *Reader) !?checkpoint.Record {
                 const agent_title = if (self.version >= 2) try self.inner.readSized16() else "";
                 const agent_title_source = if (self.version >= 2) try self.inner.readByte() else 0;
                 try checkpoint.validateTitle(agent_title, agent_title_source);
+                const agent_in_pane = if (self.version >= checkpoint.agent_in_pane_version) switch (try self.inner.readByte()) {
+                    0 => false,
+                    1 => true,
+                    else => return error.InvalidCheckpoint,
+                } else false;
                 if (self.version == checkpoint.pane_kind_version) {
                     const legacy = std.enums.fromInt(checkpoint.LegacyPaneKind, try self.inner.readByte()) orelse return error.InvalidCheckpoint;
                     if (legacy == .agent) {
@@ -157,6 +162,7 @@ pub fn next(self: *Reader) !?checkpoint.Record {
                     .agent_session = agent_session,
                     .agent_title = agent_title,
                     .agent_title_source = agent_title_source,
+                    .agent_in_pane = agent_in_pane,
                 };
                 return .{ .pane = pane };
             },

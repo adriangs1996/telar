@@ -66,6 +66,7 @@ pub const ControlError = error{
     PromptRateLimited,
     AgentNotWorking,
     InterruptUnsupported,
+    ForeignProcess,
 };
 
 pub fn failureError(failure: core.RequestFailed) ControlError {
@@ -80,6 +81,7 @@ pub fn failureError(failure: core.RequestFailed) ControlError {
         .prompt_rate_limited => error.PromptRateLimited,
         .agent_not_working => error.AgentNotWorking,
         .interrupt_unsupported => error.InterruptUnsupported,
+        .foreign_process => error.ForeignProcess,
         else => error.RuntimeRefused,
     };
 }
@@ -107,6 +109,7 @@ pub fn describe(err: anyerror) []const u8 {
         error.PromptRateLimited => "prompt budget for that pane is spent; wait for its answer with `telar agent wait`",
         error.AgentNotWorking => "the agent is not working; nothing to interrupt",
         error.InterruptUnsupported => "that agent declares no interrupt key",
+        error.ForeignProcess => "only a process inside that pane may report for its agent, and only for the agent the pane runs",
         error.AmbiguousWorktree => "more than one worktree has that branch or title; name it by the other",
         error.WorktreeHasNoAgent => "no agent runs in that worktree",
         error.InvalidSendText => std.fmt.comptimePrint("send-keys needs text of 1 to {d} bytes, or --stdin", .{core.max_pane_text_input_bytes}),

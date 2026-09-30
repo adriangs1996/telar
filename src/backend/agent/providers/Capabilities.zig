@@ -5,10 +5,15 @@ const Capabilities = @This();
 /// that separates them from the reference. `null` means the agent cannot
 /// be resumed by Telar; only this table can ever produce a resume command.
 resume_prefix: ?[]const u8 = null,
-/// The argument that keeps the agent's session, and the hooks it runs, in
-/// the pane's own process. An agent started without it runs them in a
-/// shared server that left the pane, so its hooks cannot report there.
+/// The argument that keeps the agent's interactive session, and the hooks
+/// it runs, in the pane's own process. An interactive session started
+/// without it may run them in a shared server that left the pane, whose
+/// hooks cannot report there. A resume adds it only when the session ran
+/// with it, since a version without the argument refuses it.
 pane_session_argument: ?[]const u8 = null,
+/// Arguments naming a subcommand or an option that runs no interactive
+/// session, to which `pane_session_argument` does not apply.
+batch_arguments: []const []const u8 = &.{},
 /// The shape a session reference must have to be resumed.
 session_format: SessionFormat = .uuid,
 /// The agent's `settling` report still needs a newer idle composer.

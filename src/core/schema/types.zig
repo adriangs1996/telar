@@ -29,10 +29,6 @@ pub const max_agent_cwd_label_bytes = 48;
 pub const max_agent_last_event_bytes = 96;
 /// Path of the file an agent records its session in, as its hooks report it.
 pub const max_agent_session_file_bytes = 1024;
-/// Parent processes a hook names when it proves it runs inside a pane:
-/// enough for an agent, its launcher and a few shells between the pane's
-/// root process and the hook.
-pub const max_pane_descent_ancestors = 32;
 pub const max_foreground_name_bytes = 48;
 pub const max_pane_title_bytes = 256;
 pub const max_workspace_list_entries = 64;

@@ -220,7 +220,7 @@ pub fn drop(model: *RuntimeModel, key: ClientKey) void {
 pub fn finalize(model: *RuntimeModel, key: ClientKey) void {
     const session = model.clients.resolve(key) orelse return;
 
-    if (!session.closing or session.read_pending or session.send_pending or session.search_scheduled) {
+    if (!session.closing or session.read_pending or session.send_pending or session.search_scheduled or session.descent_pending) {
         return;
     }
 
@@ -254,6 +254,7 @@ pub fn releaseAll(model: *RuntimeModel) void {
             session.read_pending = false;
             session.send_pending = false;
             session.search_scheduled = false;
+            session.descent_pending = false;
         }
     }
 

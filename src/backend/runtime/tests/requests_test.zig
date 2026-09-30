@@ -7,6 +7,7 @@ const RequestFixture = @import("RequestFixture.zig");
 const agent_control = @import("../agent_control.zig");
 const agent_identity = @import("../agent_identity.zig");
 const agent_status = @import("../agent_status.zig");
+const agent_hooks = @import("../agent_hooks.zig");
 
 const missing_pane: core.PaneId = @enumFromInt(99);
 const missing_location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(99) }, .tab_id = @enumFromInt(99) };
@@ -343,46 +344,49 @@ test "a tab launched in the background keeps every focus where it was and takes 
     try expectFailure(&fixture, .workspace_not_found);
 }
 
-test "a hook reports for a pane only from inside it and only for the agent the pane runs" {
+test "a hook reports for a pane only on a connection confirmed inside it and only for the agent the pane runs" {
     var fixture: RequestFixture = undefined;
     try fixture.init();
     defer fixture.deinit();
     const pane = try fixture.openPane();
+    const model = &fixture.runtime.model;
     const root = agent_identity.fromPane(pane).process_id;
-    var ancestors: [core.max_pane_descent_ancestors]u32 = @splat(0);
-    ancestors[0] = root + 1;
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = agent_identity.fromPane(pane),
+        .provider = .claude,
+        .process_id = root,
+        .observed_at_ms = 1,
+    }));
 
-    try fixture.send(.{ .verify_pane_descent = .{
+    const claude_report: core.ClientMessage = .{ .report_agent = .{
         .request_id = @enumFromInt(41),
         .pane_id = pane.id,
         .pane_generation = pane.generation,
-        .ancestor_count = 1,
-        .ancestors = ancestors,
-    } });
+        .provider = .claude,
+        .state = .working,
+        .session = "019a0000-0000-7000-8000-00000000000a",
+    } };
+    try fixture.send(claude_report);
     try expectFailure(&fixture, .foreign_process);
 
-    ancestors[1] = root;
-    try fixture.send(.{ .verify_pane_descent = .{
+    try agent_hooks.finishDescent(model, .{
+        .client = fixture.session.key,
         .request_id = @enumFromInt(41),
-        .pane_id = pane.id,
-        .pane_generation = pane.generation,
-        .ancestor_count = 2,
-        .ancestors = ancestors,
-    } });
+        .pane = pane.key(),
+        .descends = false,
+    });
+    try expectFailure(&fixture, .foreign_process);
+    try fixture.send(claude_report);
+    try expectFailure(&fixture, .foreign_process);
+
+    try agent_hooks.finishDescent(model, .{
+        .client = fixture.session.key,
+        .request_id = @enumFromInt(41),
+        .pane = pane.key(),
+        .descends = true,
+    });
     try std.testing.expect(fixture.response().?.* == .request_completed);
     fixture.clearResponses();
-
-    try fixture.send(.{ .verify_pane_descent = .{
-        .request_id = @enumFromInt(41),
-        .pane_id = pane.id,
-        .pane_generation = pane.generation + 1,
-        .ancestor_count = 2,
-        .ancestors = ancestors,
-    } });
-    try expectFailure(&fixture, .pane_not_found);
-
-    const model = &fixture.runtime.model;
-    try std.testing.expect(agent_status.observeProcess(model, .{ .identity = agent_identity.fromPane(pane), .provider = .claude, .process_id = root, .observed_at_ms = 1 }));
 
     try fixture.send(.{ .report_agent = .{
         .request_id = @enumFromInt(41),
@@ -391,7 +395,7 @@ test "a hook reports for a pane only from inside it and only for the agent the p
         .provider = .codex,
         .state = .working,
         .session = "019a0000-0000-7000-8000-00000000000b",
-        .event = "» Bash echo leak",
+        .event = "\u{bb} Bash echo leak",
     } });
     try expectFailure(&fixture, .foreign_process);
     try fixture.send(.{ .report_agent_title = .{
@@ -416,19 +420,46 @@ test "a hook reports for a pane only from inside it and only for the agent the p
         .pane_id = pane.id,
         .pane_generation = pane.generation,
         .provider = .codex,
+        .cwd = "/tmp",
         .final_message = "leak",
     } });
     try expectFailure(&fixture, .foreign_process);
     try std.testing.expect(agent_status.sessionReference(model, pane.key()) == null);
 
-    try fixture.send(.{ .report_agent = .{
+    try fixture.send(claude_report);
+    try std.testing.expect(fixture.response().?.* == .request_completed);
+    fixture.clearResponses();
+    try std.testing.expectEqualStrings("019a0000-0000-7000-8000-00000000000a", agent_status.sessionReference(model, pane.key()).?.slice());
+
+    // The confirmation names one generation; a report for another is refused.
+    var stale = claude_report;
+    stale.report_agent.pane_generation = pane.generation + 1;
+    try fixture.send(stale);
+    try expectFailure(&fixture, .pane_not_found);
+
+    // A report that names no agent is the user's own and needs no descent.
+    const observer = try fixture.addClient();
+    try fixture.sendTo(observer, .{ .report_agent_title = .{
         .request_id = @enumFromInt(41),
         .pane_id = pane.id,
         .pane_generation = pane.generation,
-        .provider = .claude,
-        .state = .working,
-        .session = "019a0000-0000-7000-8000-00000000000a",
+        .title = "by hand",
     } });
-    try std.testing.expect(fixture.response().?.* == .request_completed);
-    try std.testing.expectEqualStrings("019a0000-0000-7000-8000-00000000000a", agent_status.sessionReference(model, pane.key()).?.slice());
+    try std.testing.expect(observer.delivery.responses.peek().?.* == .request_completed);
+}
+
+test "a connection runs one descent check at a time" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+
+    fixture.session.descent_pending = true;
+    defer fixture.session.descent_pending = false;
+    try fixture.send(.{ .verify_pane_descent = .{
+        .request_id = @enumFromInt(41),
+        .pane_id = pane.id,
+        .pane_generation = pane.generation,
+    } });
+    try expectFailure(&fixture, .resource_limit);
 }

@@ -9,6 +9,7 @@ const privatefile = @import("privatefile");
 const Inode = privatefile.Inode;
 const c = @cImport({
     @cInclude("sys/socket.h");
+    @cInclude("sys/un.h");
     @cInclude("unistd.h");
 });
 
@@ -47,6 +48,49 @@ pub fn peerUid(handle: std.c.fd_t) !u32 {
             break :bsd @intCast(uid);
         },
         else => @compileError("local peer authentication is unsupported on this platform"),
+    };
+}
+
+/// The process at the other end of a connected local socket, as the kernel
+/// recorded it when the connection was made: `LOCAL_PEERPID` on macOS,
+/// `SO_PEERCRED` on Linux.
+///
+/// ```zig
+/// const pid = try peerProcess(handle);
+/// ```
+pub fn peerProcess(handle: std.c.fd_t) !u32 {
+    return switch (builtin.os.tag) {
+        .linux => linux: {
+            const Credentials = extern struct {
+                pid: i32,
+                uid: u32,
+                gid: u32,
+            };
+            var credentials: Credentials = undefined;
+            var len: std.os.linux.socklen_t = @sizeOf(Credentials);
+            const result = std.os.linux.getsockopt(
+                handle,
+                std.os.linux.SOL.SOCKET,
+                std.os.linux.SO.PEERCRED,
+                @ptrCast(&credentials),
+                &len,
+            );
+            if (std.posix.errno(result) != .SUCCESS or len != @sizeOf(Credentials) or credentials.pid <= 0) {
+                return error.PeerCredentialsUnavailable;
+            }
+
+            break :linux @intCast(credentials.pid);
+        },
+        .macos => macos: {
+            var pid: c.pid_t = 0;
+            var len: c.socklen_t = @sizeOf(c.pid_t);
+            if (c.getsockopt(handle, c.SOL_LOCAL, c.LOCAL_PEERPID, &pid, &len) != 0 or len != @sizeOf(c.pid_t) or pid <= 0) {
+                return error.PeerCredentialsUnavailable;
+            }
+
+            break :macos @intCast(pid);
+        },
+        else => error.PeerCredentialsUnavailable,
     };
 }
 
@@ -255,4 +299,13 @@ test "a listener reclaims a socket left behind by a crashed process" {
         error.FileNotFound,
         std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }),
     );
+}
+
+test "the peer of a socket pair is the process that made it" {
+    var sockets: [2]std.c.fd_t = undefined;
+    try std.testing.expectEqual(@as(c_int, 0), std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets));
+    defer _ = std.c.close(sockets[0]);
+    defer _ = std.c.close(sockets[1]);
+
+    try std.testing.expectEqual(@as(u32, @intCast(std.c.getpid())), try peerProcess(sockets[0]));
 }

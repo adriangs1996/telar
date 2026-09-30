@@ -331,7 +331,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .launch_worktree => .{ .launch_worktree = try worktree.decodeLaunchWorktree(&decoder) },
         .forget_worktree => .{ .forget_worktree = try GenericDerived(ForgetWorktree).decode(&decoder) },
         .interrupt_agent => .{ .interrupt_agent = try GenericDerived(InterruptAgent).decode(&decoder) },
-        .verify_pane_descent => .{ .verify_pane_descent = try agent.decodeVerifyPaneDescent(&decoder) },
+        .verify_pane_descent => .{ .verify_pane_descent = try GenericDerived(VerifyPaneDescent).decode(&decoder) },
         .report_agent_progress => .{ .report_agent_progress = try agent.decodeReportAgentProgress(&decoder) },
         .launch_tab => .{ .launch_tab = try tab.decodeLaunchTab(&decoder) },
     };

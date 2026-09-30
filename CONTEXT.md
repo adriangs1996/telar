@@ -217,8 +217,10 @@ _Avoid_: Agent record, detector result
 
 **Pane descent**:
 A process descends from a pane when its chain of parent processes reaches the
-pane's root process. Only a descendant may report for a pane: an inherited
-`TELAR_PANE_ID` names a pane but does not prove that a process runs in it.
+pane's root process. The runtime checks it for the process at the other end of
+a connection, and only such a connection may report for a pane in the name of
+an agent: an inherited `TELAR_PANE_ID` names a pane but does not prove that a
+process runs in it.
 _Avoid_: Pane ownership, pane ancestry
 
 **Agent tracker**:

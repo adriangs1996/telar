@@ -154,11 +154,13 @@ analytics.
   blocking.
 - An inherited environment variable does not identify a process. A process
   that left its pane, such as a shared server started there, keeps
-  `TELAR_PANE_ID`. A hook reports for a pane only after the runtime confirms
-  that its chain of parent processes reaches the pane's root process, and every
-  report names its agent. A pane refuses reports of an agent other than the one
-  its process runs. Before identification, the first agent to report holds
-  the pane, and a process of another agent discards what it reported.
+  `TELAR_PANE_ID`. A report that names its agent is accepted only on a
+  connection whose peer process, read from the socket, the runtime found to
+  descend from the pane, walking its parents in an observation worker; and
+  only for the agent the pane runs. Before identification, the first agent to
+  report holds the pane, and a process of another agent discards what it
+  reported. This separates agents, not users: a same-user process can still
+  start a process inside a pane.
 - Persist typed session references, never resume commands. Restore validates
   an official allowlist and rebuilds a fixed argv; reject malformed,
   option-looking, duplicated, stale or wrong-owner references. A reference

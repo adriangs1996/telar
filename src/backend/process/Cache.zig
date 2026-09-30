@@ -1,5 +1,6 @@
 const core = @import("telar-core");
 const process = @import("process.zig");
+const SessionHost = @import("../agent/SessionHost.zig").SessionHost;
 const Cache = @This();
 
 process_group_id: ?u32 = null,
@@ -7,9 +8,9 @@ provider: core.AgentProvider = .unknown,
 attempts: u8 = 0,
 foreground_name: [core.max_foreground_name_bytes]u8 = @splat(0),
 foreground_name_len: u8 = 0,
-/// The identified agent runs its session in a shared server outside the
-/// pane.
-shared_server: bool = false,
+/// Where the identified agent's interactive session, and so its hooks,
+/// runs.
+session_host: SessionHost = .unknown,
 
 pub fn init(executable: []const u8) Cache {
     var cache: Cache = .{};

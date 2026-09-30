@@ -370,7 +370,6 @@ pub const max_agent_icon_bytes = types.max_agent_icon_bytes;
 pub const max_agent_last_event_bytes = types.max_agent_last_event_bytes;
 pub const max_agent_provider_name_bytes = types.max_agent_provider_name_bytes;
 pub const max_agent_session_file_bytes = types.max_agent_session_file_bytes;
-pub const max_pane_descent_ancestors = types.max_pane_descent_ancestors;
 pub const max_agent_session_reference_bytes = types.max_agent_session_reference_bytes;
 pub const max_agent_session_title_bytes = types.max_agent_session_title_bytes;
 pub const max_agent_snapshot_entries = types.max_agent_snapshot_entries;

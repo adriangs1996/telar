@@ -122,7 +122,7 @@ fn reconcileProcess(model: *RuntimeModel, pane: *Pane, probe: Probe, transition:
             .identity = agent_identity.fromPane(pane),
             .provider = probe.cache.provider,
             .process_id = probe.cache.process_group_id.?,
-            .shared_server = probe.cache.shared_server,
+            .session_host = probe.cache.session_host,
             .observed_at_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
         });
         return;

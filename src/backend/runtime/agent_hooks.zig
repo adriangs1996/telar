@@ -1,8 +1,10 @@
 //! An agent's official lifecycle hooks report its state, session, shell
 //! commands and title from inside its pane. Official reports outrank
-//! inferred evidence. A hook first proves it runs inside the pane its
-//! environment names, and every report names its agent, so a pane never
-//! takes reports from a process that left it or from another agent.
+//! inferred evidence. A hook first has the runtime confirm that its process
+//! descends from the pane its environment names; the confirmation holds for
+//! that connection. A report that names its agent is accepted only on such a
+//! connection and only for the agent the pane runs, so a pane never takes
+//! reports from a process that left it or from another agent.
 const agent_status = @import("agent_status.zig");
 
 const session_checkpoint = @import("session_checkpoint.zig");
@@ -18,10 +20,28 @@ const client_request = @import("client_request.zig");
 const sound = @import("../agent/sound.zig");
 const Pane = @import("../pane/Pane.zig");
 const worktree_lifecycle = @import("worktree_lifecycle.zig");
+const client_connection = @import("client_connection.zig");
+const DescentCompletion = @import("events/DescentCompletion.zig");
+const ClientKey = @import("../history/ClientKey.zig");
+const proclineage = @import("proclineage");
 
-pub const TitleReport = enum { recorded, unchanged, pane_not_found, foreign_agent, invalid_title };
+pub const TitleReport = enum { recorded, unchanged, pane_not_found, invalid_title };
 
-const foreign_agent_message = "the pane runs another agent";
+const foreign_message = "the report comes from outside the pane or names another agent";
+
+/// Parents walked from a peer process before its descent is refused: an
+/// agent, its launcher and a few shells between the pane's root process and
+/// the hook fit well within it.
+const max_descent_ancestors = 32;
+
+/// What an observation worker needs to walk one peer's parents.
+const DescentWork = struct {
+    client: ClientKey,
+    request_id: core.RequestId,
+    pane: PaneKey,
+    root: u32,
+    peer: u32,
+};
 
 /// Receives the agent's own session reference.
 ///
@@ -65,8 +85,8 @@ pub fn receive(model: *RuntimeModel, session: *Session, report: core.ReportAgent
         return client_request.fail(session, report.request_id, .pane_not_found, "pane not found");
     }
 
-    if (!agent_status.acceptsReporter(model, pane.key(), report.provider)) {
-        return client_request.fail(session, report.request_id, .foreign_process, foreign_agent_message);
+    if (!admitsReporter(model, session, pane.key(), report.provider)) {
+        return client_request.fail(session, report.request_id, .foreign_process, foreign_message);
     }
 
     const reference: ?SessionReference = if (report.session.len == 0)
@@ -130,8 +150,8 @@ pub fn receiveProgress(model: *RuntimeModel, session: *Session, report: core.Rep
         return client_request.fail(session, report.request_id, .pane_not_found, "pane not found");
     }
 
-    if (!agent_status.acceptsReporter(model, pane.key(), report.provider)) {
-        return client_request.fail(session, report.request_id, .foreign_process, foreign_agent_message);
+    if (!admitsReporter(model, session, pane.key(), report.provider)) {
+        return client_request.fail(session, report.request_id, .foreign_process, foreign_message);
     }
 
     const work_tree = try resolveWorkTree(model, pane, report);
@@ -212,8 +232,8 @@ pub fn receiveCommand(model: *RuntimeModel, session: *Session, report: core.Repo
     }
 
     const reporter = model.resources.agent_manifests.providerNamed(report.provider);
-    if (!agent_status.acceptsReporter(model, pane.key(), reporter)) {
-        return client_request.fail(session, report.request_id, .foreign_process, foreign_agent_message);
+    if (!admitsReporter(model, session, pane.key(), reporter)) {
+        return client_request.fail(session, report.request_id, .foreign_process, foreign_message);
     }
 
     const queued = pane.recordAgentCommand(.{
@@ -244,27 +264,45 @@ pub fn receiveCommand(model: *RuntimeModel, session: *Session, report: core.Repo
 /// try agent_hooks.receiveTitle(model, session, report);
 /// ```
 pub fn receiveTitle(model: *RuntimeModel, session: *Session, report: core.ReportAgentTitle) !void {
-    switch (recordTitle(model, .{ .id = report.pane_id, .generation = report.pane_generation }, report.provider, report.title)) {
+    const key: PaneKey = .{
+        .id = report.pane_id,
+        .generation = report.pane_generation,
+    };
+
+    if (!admitsReporter(model, session, key, report.provider)) {
+        return client_request.fail(session, report.request_id, .foreign_process, foreign_message);
+    }
+
+    switch (recordTitle(model, key, report.provider, report.title)) {
         .recorded => {
             try client_request.complete(session, report.request_id);
             session_checkpoint.noteChange(model);
         },
         .unchanged => try client_request.complete(session, report.request_id),
         .pane_not_found => try client_request.fail(session, report.request_id, .pane_not_found, "pane not found"),
-        .foreign_agent => try client_request.fail(session, report.request_id, .foreign_process, foreign_agent_message),
         .invalid_title => try client_request.fail(session, report.request_id, .invalid_request, "invalid session title"),
     }
 }
 
-/// Answers whether the sender descends from one exact pane generation: its
-/// parent processes, as it listed them, include the pane's root process.
-/// The hook walks its own ancestry, so the runtime inspects no process here.
+/// Starts confirming that the process at the other end of this connection
+/// descends from one exact pane generation. The runtime reads the process
+/// from the socket and an observation worker walks its parents, so the
+/// sender's word counts for nothing and no request handler inspects a
+/// process. `finishDescent` answers.
 ///
 /// ```zig
 /// try agent_hooks.receiveDescent(model, session, request);
 /// ```
 pub fn receiveDescent(model: *RuntimeModel, session: *Session, request: core.VerifyPaneDescent) !void {
-    const pane = model.panes.resolveConst(.{ .id = request.pane_id, .generation = request.pane_generation }) orelse {
+    if (session.descent_pending) {
+        return client_request.fail(session, request.request_id, .resource_limit, "a descent check is already running");
+    }
+
+    const key: PaneKey = .{
+        .id = request.pane_id,
+        .generation = request.pane_generation,
+    };
+    const pane = model.panes.resolveConst(key) orelse {
         return client_request.fail(session, request.request_id, .pane_not_found, "pane not found");
     };
 
@@ -273,11 +311,89 @@ pub fn receiveDescent(model: *RuntimeModel, session: *Session, request: core.Ver
     }
 
     const root = agent_identity.fromPane(pane).process_id;
-    if (root == 0 or std.mem.indexOfScalar(u32, request.slice(), root) == null) {
+    const peer = session.connection.peerProcess() catch 0;
+    if (root == 0 or peer == 0) {
         return client_request.fail(session, request.request_id, .foreign_process, "the process does not run inside that pane");
     }
 
-    try client_request.complete(session, request.request_id);
+    session.hook_pane = null;
+    session.descent_pending = true;
+    const work: DescentWork = .{
+        .client = session.key,
+        .request_id = request.request_id,
+        .pane = pane.key(),
+        .root = root,
+        .peer = peer,
+    };
+
+    model.select.concurrent(.pane_descent, walkDescent, .{work}) catch {
+        session.descent_pending = false;
+        return client_request.fail(session, request.request_id, .resource_limit, "no worker for the descent check");
+    };
+}
+
+/// Binds a confirmed descent to its connection and answers the request. A
+/// pane that exited meanwhile, or a connection that is closing, gets none.
+///
+/// ```zig
+/// try agent_hooks.finishDescent(model, completion);
+/// ```
+pub fn finishDescent(model: *RuntimeModel, completion: DescentCompletion) !void {
+    const session = model.clients.resolve(completion.client) orelse return;
+    session.descent_pending = false;
+    if (session.closing) {
+        client_connection.finalize(model, completion.client);
+        return;
+    }
+
+    if (!session.active()) {
+        return;
+    }
+
+    const pane = model.panes.resolveConst(completion.pane) orelse {
+        return client_request.fail(session, completion.request_id, .pane_not_found, "pane not found");
+    };
+
+    if (pane.exit != null) {
+        return client_request.fail(session, completion.request_id, .pane_not_found, "pane not found");
+    }
+
+    if (!completion.descends) {
+        return client_request.fail(session, completion.request_id, .foreign_process, "the process does not run inside that pane");
+    }
+
+    session.hook_pane = completion.pane;
+    try client_request.complete(session, completion.request_id);
+}
+
+// Observation worker: whether the peer is the pane's root process or one of
+// its descendants. Bounded, allocation-free system calls.
+fn walkDescent(work: DescentWork) DescentCompletion {
+    const path = core.enter(.observation);
+    defer path.restore();
+
+    var lineage: [max_descent_ancestors]u32 = undefined;
+    const ancestors = proclineage.ancestors(work.peer, &lineage);
+    return .{
+        .client = work.client,
+        .request_id = work.request_id,
+        .pane = work.pane,
+        .descends = work.peer == work.root or std.mem.indexOfScalar(u32, ancestors, work.root) != null,
+    };
+}
+
+// A report that names its agent comes from a hook, which must have had this
+// connection confirmed as descending from the pane; the pane must run that
+// agent too. One that names no agent is the user's own, sent by hand.
+fn admitsReporter(model: *const RuntimeModel, session: *const Session, key: PaneKey, reporter: core.AgentProvider) bool {
+    if (reporter != .unknown) {
+        const verified = session.hook_pane orelse return false;
+        if (verified.id != key.id or verified.generation != key.generation) {
+            return false;
+        }
+    }
+
+    return agent_status.acceptsReporter(model, key, reporter);
 }
 
 /// Records a title the hooks of `reporter` sent for one exact pane
@@ -292,10 +408,34 @@ pub fn recordTitle(model: *RuntimeModel, key: PaneKey, reporter: core.AgentProvi
         return .pane_not_found;
     }
 
-    if (!agent_status.acceptsReporter(model, key, reporter)) {
-        return .foreign_agent;
-    }
-
     const changed = agent_status.reportTitle(model, agent_identity.fromPane(pane), reporter, title) catch return .invalid_title;
     return if (changed) .recorded else .unchanged;
+}
+
+test "a process descends from its parent and from itself but not from an unrelated process" {
+    const pid: u32 = @intCast(std.c.getpid());
+    const parent: u32 = @intCast(std.c.getppid());
+    const work: DescentWork = .{
+        .client = .{
+            .id = 1,
+            .generation = 1,
+        },
+        .request_id = @enumFromInt(1),
+        .pane = .{
+            .id = @enumFromInt(1),
+            .generation = 1,
+        },
+        .root = parent,
+        .peer = pid,
+    };
+
+    try std.testing.expect(walkDescent(work).descends);
+
+    var itself = work;
+    itself.root = pid;
+    try std.testing.expect(walkDescent(itself).descends);
+
+    var unrelated = work;
+    unrelated.root = std.math.maxInt(u32);
+    try std.testing.expect(!walkDescent(unrelated).descends);
 }

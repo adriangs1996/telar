@@ -12,6 +12,7 @@ const std = @import("std");
 const Cache = @import("Cache.zig");
 const darwin = @import("darwin.zig");
 const providers = @import("../agent/providers/providers.zig");
+const SessionHost = @import("../agent/SessionHost.zig").SessionHost;
 
 const Native = if (builtin.os.tag == .macos) darwin else void;
 
@@ -47,7 +48,7 @@ fn probeWith(input: ProbeInput, comptime identify: fn (*const core.Table, u32) I
     var next: Cache = .{
         .process_group_id = pgid,
         .provider = identification.provider,
-        .shared_server = identification.shared_server,
+        .session_host = identification.session_host,
         .attempts = if (identification.provider == .unknown)
             if (previous.process_group_id == pgid)
                 previous.attempts +| 1
@@ -74,7 +75,7 @@ pub fn shellForeground(cache: Cache, shell_pid: std.c.pid_t) bool {
 fn sameIdentity(left: Cache, right: Cache) bool {
     return left.process_group_id == right.process_group_id and
         left.provider == right.provider and
-        left.shared_server == right.shared_server and
+        left.session_host == right.session_host and
         std.mem.eql(u8, left.name(), right.name());
 }
 
@@ -289,26 +290,35 @@ fn readSmallFile(path: []const u8, buffer: []u8) ?[]const u8 {
 
 fn identifyArguments(table: *const core.Table, command: []const u8, argv: []const u8) Identification {
     var identification: Identification = .init(table, identifyCommand(table, command, argv), command);
-    identification.shared_server = usesSharedServer(identification.provider, argv);
+    identification.session_host = sessionHost(identification.provider, argv);
     return identification;
 }
 
-// An agent whose session runs in a shared server unless an argument keeps it
-// in the pane, started without that argument. Unread arguments claim nothing.
-fn usesSharedServer(provider: core.AgentProvider, argv: []const u8) bool {
-    const argument = providers.of(provider).pane_session_argument orelse return false;
+// Where an agent that keeps its interactive session in the pane only when
+// started with an argument runs it. A subcommand that runs no interactive
+// session, and arguments not read, claim nothing.
+fn sessionHost(provider: core.AgentProvider, argv: []const u8) SessionHost {
+    const capabilities = providers.of(provider);
+    const argument = capabilities.pane_session_argument orelse return .unknown;
     if (argv.len == 0) {
-        return false;
+        return .unknown;
     }
 
+    var host: SessionHost = .shared_server;
     var args = std.mem.tokenizeScalar(u8, argv, 0);
     while (args.next()) |arg| {
+        for (capabilities.batch_arguments) |batch| {
+            if (std.mem.eql(u8, arg, batch)) {
+                return .unknown;
+            }
+        }
+
         if (std.mem.eql(u8, arg, argument)) {
-            return false;
+            host = .pane;
         }
     }
 
-    return true;
+    return host;
 }
 
 fn identifyCommand(table: *const core.Table, comm: []const u8, argv: []const u8) core.AgentProvider {
@@ -434,14 +444,68 @@ test "process file reads are bounded and missing files return null" {
     try std.testing.expectEqual(@as(?[]const u8, null), readSmallFile(path, &buffer));
 }
 
-test "a Codex started without --no-daemon runs its session in the shared server" {
+test "only an interactive Codex session started without --no-daemon may run in the shared server" {
     const table = &core.builtin_table;
+    const Case = struct {
+        argv: []const u8,
+        host: SessionHost,
+    };
+    const cases = [_]Case{
+        .{
+            .argv = "codex\x00",
+            .host = .shared_server,
+        },
+        .{
+            .argv = "codex\x00resume\x00",
+            .host = .shared_server,
+        },
+        .{
+            .argv = "codex\x00fix the tests\x00",
+            .host = .shared_server,
+        },
+        .{
+            .argv = "node\x00/usr/lib/node_modules/@openai/codex/bin/codex.js\x00--yolo\x00",
+            .host = .shared_server,
+        },
+        .{
+            .argv = "codex\x00resume\x00--no-daemon\x00019a0000-0000-7000-8000-00000000000a\x00",
+            .host = .pane,
+        },
+        .{
+            .argv = "codex\x00--no-daemon\x00",
+            .host = .pane,
+        },
+        .{
+            .argv = "codex\x00exec\x00fix the tests\x00",
+            .host = .unknown,
+        },
+        .{
+            .argv = "codex\x00review\x00",
+            .host = .unknown,
+        },
+        .{
+            .argv = "codex\x00login\x00",
+            .host = .unknown,
+        },
+        .{
+            .argv = "codex\x00app-server\x00--listen\x00unix://\x00",
+            .host = .unknown,
+        },
+        .{
+            .argv = "codex\x00--version\x00",
+            .host = .unknown,
+        },
+        .{
+            .argv = "",
+            .host = .unknown,
+        },
+    };
 
-    try std.testing.expect(identifyArguments(table, "codex", "codex\x00resume\x00").shared_server);
-    try std.testing.expect(identifyArguments(table, "node", "node\x00/usr/lib/node_modules/@openai/codex/bin/codex.js\x00--yolo\x00").shared_server);
-    try std.testing.expect(!identifyArguments(table, "codex", "codex\x00resume\x00--no-daemon\x00019a0000-0000-7000-8000-00000000000a\x00").shared_server);
-    try std.testing.expect(!identifyArguments(table, "codex", "").shared_server);
-    try std.testing.expect(!identifyArguments(table, "claude", "claude\x00").shared_server);
+    for (cases) |case| {
+        try std.testing.expectEqual(case.host, identifyArguments(table, "codex", case.argv).session_host);
+    }
+
+    try std.testing.expectEqual(SessionHost.unknown, identifyArguments(table, "claude", "claude\x00").session_host);
 }
 
 test "identifies direct agent executables" {

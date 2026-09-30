@@ -19,6 +19,7 @@ const pane_graphics = @import("pane_graphics.zig");
 const pane_input = @import("pane_input.zig");
 const pane_observation = @import("pane_observation.zig");
 const pane_output = @import("pane_output.zig");
+const agent_hooks = @import("agent_hooks.zig");
 const pane_search = @import("pane_search.zig");
 const proxy_capture = @import("proxy_capture.zig");
 const proxy_tap = @import("proxy_tap.zig");
@@ -169,6 +170,7 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
         .pane_observed => |completion| try pane_observation.finish(model, completion),
         .pane_media => |completion| try pane_graphics.finishMedia(model, completion),
         .pane_search => |wake| try pane_search.advance(model, wake),
+        .pane_descent => |completion| try agent_hooks.finishDescent(model, completion),
         .pane_exit => |completion| try pane_closure.finishExit(model, completion),
         .agent_description => |result| agent_description.finish(model, result),
         .agent_tick => |result| try agent_maintenance.tick(model, result),

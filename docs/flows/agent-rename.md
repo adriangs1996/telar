@@ -121,9 +121,9 @@ event session_name -> agent_rename.finish -> agent_status.finishSessionFileProbe
         -> Watch.remember drops an unchanged name -> Agent.reportTitle
 ```
 
-The watch exists only for a Codex whose hooks run in its pane, that is one
-started with `--no-daemon`: the shared daemon's hooks reach no pane, so no
-pane learns which thread it shows.
+The watch exists only for a Codex whose hooks run in its pane: one started
+with `--no-daemon`, or one without a shared daemon. The shared daemon's hooks
+reach no pane, so no pane learns which thread it shows.
 
 Unlike the transcript, the database is read whole every second, so the watch
 remembers the last name it handed over and only a change reaches the agent.

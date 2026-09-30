@@ -34,6 +34,12 @@ pending_pane_focus: ?PendingPaneFocus = null,
 terminal_colors: core.TerminalColors = .{},
 pending_search: ?PendingSearch = null,
 search_scheduled: bool = false,
+/// The pane generation the process at the other end of this connection
+/// descends from, as the runtime confirmed. Only then may the connection
+/// report for that pane in the name of an agent.
+hook_pane: ?PaneKey = null,
+/// A worker is walking the peer process's parents for `verify_pane_descent`.
+descent_pending: bool = false,
 cell_deadline_ns: ?u64 = null,
 
 /// Example: `if (session.setTerminalColors(colors)) { updateOwnedPanes(); }`.
