@@ -178,7 +178,7 @@ pub const text =
     \\  --workspace PATH Restrict results to a workspace path
     \\  --pane ID        Restrict results to a pane
     \\  --failed         Only show commands with a non-zero exit status
-    \\  --limit N        Return at most N results (default 20, maximum 100)
+    \\  --limit N        Return at most N results (default 20, maximum 1000)
     \\  --socket PATH    Query a specific local runtime
     \\
     \\Agent and pane options:

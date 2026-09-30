@@ -59,6 +59,7 @@ pub const LimitError = error{
     ErrorMessageTooLarge,
     FontCollectionTooLarge,
     FontSetIdentityExhausted,
+    FilterPatternTooLong,
     FrameTooLarge,
     GlyphTooLarge,
     GraphicsChunkLimitExceeded,

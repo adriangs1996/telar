@@ -1216,7 +1216,11 @@ frame. The ownership and failure order is mapped in
 The runtime evaluates the same file in a disposable VM and retains only typed,
 validated values. No Lua state or closure enters the runtime process.
 `runtime.history.path` is resolved relative to the directory containing
-`config.lua`; its parent directory must already exist. `runtime.proxy` accepts
+`config.lua`; its parent directory must already exist.
+`runtime.history.command_filters` and `cwd_filters` each accept at most 64
+substring patterns of up to 256 bytes; a list or pattern past that refuses
+the configuration and names the limit, because dropping a filter would record
+what it hides. `runtime.proxy` accepts
 `enabled`, `ca_dir`, `capture`, and `intercept_hosts`. ProxyTLS and exchange
 capture are disabled by default. A
 relative `ca_dir` is also resolved beside `config.lua`; Telar creates it
