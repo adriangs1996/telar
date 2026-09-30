@@ -836,6 +836,7 @@ fn parsePicks(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !vo
             diagnostic.set("config.client.picks keys must be pick names", .{});
             return error.InvalidConfig;
         };
+
         if (count == names.len) {
             lua_value.pop(state, 1);
             diagnostic.set("config.client.picks accepts at most {d} picks", .{names.len});
@@ -851,7 +852,14 @@ fn parsePicks(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !vo
         // Lua strings are NUL-terminated, and the key keeps this one alive.
         _ = lua_api.c.lua_getfield(state, absolute, @ptrCast(name.ptr));
         defer lua_value.pop(state, 1);
-        try self.parsePick(.{ .index = -1, .name = name }, &self.snapshot.bars.picks[pick_index], diagnostic);
+        try self.parsePick(
+            .{
+                .index = -1,
+                .name = name,
+            },
+            &self.snapshot.bars.picks[pick_index],
+            diagnostic,
+        );
     }
 
     self.snapshot.bars.pick_count = @intCast(count);
@@ -876,7 +884,16 @@ fn parsePick(self: *Generation, input: PanelInput, definition: *data.PickDefinit
         diagnostic.set("pick name '{s}' must be 1..{d} letters, digits, '-' or '_'", .{ input.name, data.PanelHeading.max_name_bytes });
         return error.InvalidConfig;
     };
-    const title = try lua_value.optionalStringField(state, .{ .index = absolute, .name = "title", .default = input.name }, diagnostic);
+
+    const title = try lua_value.optionalStringField(
+        state,
+        .{
+            .index = absolute,
+            .name = "title",
+            .default = input.name,
+        },
+        diagnostic,
+    );
     definition.heading.setTitle(title) catch {
         diagnostic.set("pick title must be printable text of at most {d} bytes", .{data.PanelHeading.max_title_bytes});
         return error.InvalidConfig;
@@ -884,26 +901,39 @@ fn parsePick(self: *Generation, input: PanelInput, definition: *data.PickDefinit
 
     const timeout_ms = try parseCommandTimeout(state, absolute, diagnostic);
     _ = lua_api.c.lua_getfield(state, absolute, "command");
+
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
         var list: data.BarCommand = .{
             .generation = self.number,
             .interval_ns = 0,
             .timeout_ms = timeout_ms,
         };
+
         parseCommandArguments(state, -1, &list, diagnostic) catch |err| {
             lua_value.pop(state, 1);
             return err;
         };
+
         definition.list = list;
     }
+
     lua_value.pop(state, 1);
 
     _ = lua_api.c.lua_getfield(state, absolute, "items");
-    definition.items = self.parsePickItems(.{ .index = -1, .name = input.name }, definition.list != null, diagnostic) catch |err| {
+    definition.items = self.parsePickItems(
+        .{
+            .index = -1,
+            .name = input.name,
+        },
+        definition.list != null,
+        diagnostic,
+    ) catch |err| {
         lua_value.pop(state, 1);
         return err;
     };
+
     lua_value.pop(state, 1);
+
     if (definition.list == null and definition.items == null) {
         diagnostic.set("pick '{s}' needs items or a command", .{input.name});
         return error.InvalidConfig;
@@ -914,12 +944,15 @@ fn parsePick(self: *Generation, input: PanelInput, definition: *data.PickDefinit
         .interval_ns = 0,
         .timeout_ms = timeout_ms,
     };
+
     _ = lua_api.c.lua_getfield(state, absolute, "on_select");
     parseCommandArguments(state, -1, &definition.on_select, diagnostic) catch |err| {
         lua_value.pop(state, 1);
         return err;
     };
+
     lua_value.pop(state, 1);
+
     if (!definition.receivesChoice()) {
         diagnostic.set("pick '{s}' on_select needs an argument \"{s}\" after the program for the chosen value", .{ input.name, data.PickDefinition.choice_marker });
         return error.InvalidConfig;
@@ -944,7 +977,14 @@ fn parsePickItems(self: *Generation, input: PanelInput, listed: bool, diagnostic
     const state = self.vm.state;
     switch (lua_api.c.lua_type(state, input.index)) {
         lua_api.c.LUA_TNIL => return null,
-        lua_api.c.LUA_TFUNCTION => return try self.referenceBarValue(input.index, diagnostic),
+        lua_api.c.LUA_TFUNCTION => {
+            if (!listed) {
+                diagnostic.set("pick '{s}' items can be a function only with a command, whose output it reads", .{input.name});
+                return error.InvalidConfig;
+            }
+
+            return try self.referenceBarValue(input.index, diagnostic);
+        },
         lua_api.c.LUA_TTABLE => {
             if (listed) {
                 diagnostic.set("pick '{s}' items must be a function when it has a command", .{input.name});
@@ -1776,7 +1816,14 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
             .allowed = &.{ "kind", "pick" },
             .path = "action",
         }, diagnostic);
-        const name = try lua_value.requiredStringField(state, .{ .index = absolute, .name = "pick" }, diagnostic);
+        const name = try lua_value.requiredStringField(
+            state,
+            .{
+                .index = absolute,
+                .name = "pick",
+            },
+            diagnostic,
+        );
         const index = self.snapshot.bars.pickIndex(name) orelse {
             diagnostic.set("pick names an unknown pick '{s}'", .{name});
             return error.InvalidConfig;

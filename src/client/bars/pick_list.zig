@@ -27,7 +27,12 @@ pub fn open(client: *Client, index: u8) !void {
     }
 
     const state = &client.model.pick_list;
-    state.begin(index, client.model.configuration_generation, definition.heading.title());
+    state.begin(.{
+        .index = index,
+        .generation = client.model.configuration_generation,
+        .prompt_generation = client.model.name_prompt.currentConst().?.generation,
+        .title = definition.heading.title(),
+    });
     if (definition.list) |list| {
         return start(client, .{
             .purpose = .list,
@@ -48,16 +53,19 @@ pub fn open(client: *Client, index: u8) !void {
 pub fn choose(client: *Client, query: []const u8, selection: u16) !void {
     const state = &client.model.pick_list;
     defer state.close();
+
     if (state.phase != .ready) {
         return;
     }
 
     const definition = current(client, state.index) orelse return;
+
     if (state.generation != client.model.configuration_generation) {
         return;
     }
 
     const option = data.pick_list.chosen(&state.items, query, selection) orelse return;
+
     if (state.selecting != .none) {
         return report(client, client_diagnostic.formatted("pick '{s}' is still running its last choice", .{definition.heading.name()}));
     }
@@ -65,15 +73,18 @@ pub fn choose(client: *Client, query: []const u8, selection: u16) !void {
     const command = definition.selection(state.items.value(option)) catch |err| {
         return report(client, client_diagnostic.formatted("pick '{s}': the choice does not fit on_select: {s}", .{ definition.heading.name(), @errorName(err) }));
     };
+
     state.selecting_index = state.index;
     state.selecting_generation = state.generation;
+
     try start(client, .{
         .purpose = .select,
         .command = command,
     });
 }
 
-/// Closes the list when its palette closes. Example: `pick_list.close(&client.model);`
+/// Closes the list when its palette closes or another prompt replaces it.
+/// Example: `pick_list.close(&client.model);`
 pub fn close(model: *data.ClientModel) void {
     model.pick_list.close();
 }
@@ -98,6 +109,11 @@ fn finishList(client: *Client, execution_id: data.command_execution.Id, result: 
     const state = &client.model.pick_list;
     if (state.listing == .none or state.listing != execution_id) {
         return;
+    }
+
+    // A palette replaced while the command ran shows nothing to fill.
+    if (!state.shownBy(client.model.name_prompt.currentConst())) {
+        return state.close();
     }
 
     const definition = current(client, state.index) orelse return state.fail("the configuration changed; open the list again");
@@ -185,9 +201,10 @@ fn reason(err: anyerror) []const u8 {
         error.StreamTooLong => "printed more than it may",
         error.FileNotFound => "was not found",
         error.InvalidBarCommandOutput => "printed control characters or invalid UTF-8",
-        error.TooManyPickItems => "printed too many options",
-        error.PickItemsTooLarge => "printed options longer than a list holds",
-        error.InvalidPickItem => "printed an option too long to show",
+        error.TooManyPickItems => "printed more than 1024 options",
+        error.PickItemsTooLarge => "printed more option text than a list holds",
+        error.PickItemTooLong => "printed a line longer than 512 bytes",
+        error.InvalidPickItem => "printed control characters or invalid UTF-8",
         else => @errorName(err),
     };
 }

@@ -4,11 +4,12 @@
 //! same whatever its items and never allocates.
 const std = @import("std");
 const PickItem = @import("PickItem.zig");
+const bar_text = @import("bar_text.zig");
 const PickItems = @This();
 
 pub const max_items = 1024;
 /// Room for every label, value and detail of the list together.
-pub const max_text_bytes = 64 * 1024;
+pub const max_text_bytes = 128 * 1024;
 pub const max_label_bytes = 128;
 pub const max_value_bytes = 512;
 pub const max_detail_bytes = 128;
@@ -38,10 +39,14 @@ pub fn append(self: *PickItems, item: PickItem) !void {
     }
 
     const chosen = item.value orelse item.label;
-    try validate(item.label, max_label_bytes);
-    try validate(chosen, max_value_bytes);
-    if (item.detail.len != 0) {
-        try validate(item.detail, max_detail_bytes);
+    try check(item.label, max_label_bytes);
+    try check(item.detail, max_detail_bytes);
+    if (item.label.len == 0 or chosen.len == 0 or !bar_text.valid(item.label) or !bar_text.valid(item.detail) or !validValue(chosen)) {
+        return error.InvalidPickItem;
+    }
+
+    if (chosen.len > max_value_bytes) {
+        return error.PickItemTooLong;
     }
 
     const shared = std.mem.eql(u8, chosen, item.label);
@@ -92,20 +97,29 @@ fn store(self: *PickItems, source: []const u8) Range {
     return range;
 }
 
-// Labels, values and details are one line of printable UTF-8: they are
-// drawn in a palette row and a value becomes one argv element.
-fn validate(source: []const u8, limit: usize) !void {
-    if (source.len == 0 or source.len > limit or !std.unicode.utf8ValidateSlice(source)) {
-        return error.InvalidPickItem;
-    }
-
-    for (source) |byte| {
-        if (byte < printable_start or byte == delete_control) {
-            return error.InvalidPickItem;
-        }
+fn check(text_value: []const u8, limit: usize) !void {
+    if (text_value.len > limit) {
+        return error.PickItemTooLong;
     }
 }
 
+// A value becomes one argv element, so a tab from tabulated output may stay;
+// any other control byte may not.
+fn validValue(text_value: []const u8) bool {
+    if (!std.unicode.utf8ValidateSlice(text_value)) {
+        return false;
+    }
+
+    for (text_value) |byte| {
+        if (byte != tab and (byte < printable_start or byte == delete_control)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+const tab: u8 = '\t';
 const printable_start: u8 = 0x20;
 const delete_control: u8 = 0x7f;
 
@@ -127,7 +141,11 @@ test "items reject empty, control, oversized and surplus options" {
     try std.testing.expectError(error.InvalidPickItem, items.append(.{ .label = "" }));
     try std.testing.expectError(error.InvalidPickItem, items.append(.{ .label = "a\nb" }));
     try std.testing.expectError(error.InvalidPickItem, items.append(.{ .label = "a", .value = "x\x00y" }));
-    try std.testing.expectError(error.InvalidPickItem, items.append(.{ .label = "a" ** (max_label_bytes + 1) }));
+    try std.testing.expectError(error.PickItemTooLong, items.append(.{ .label = "a" ** (max_label_bytes + 1) }));
+    try std.testing.expectError(error.InvalidPickItem, items.append(.{ .label = "a\tb" }));
+    try items.append(.{ .label = "a b", .value = "a\tb" });
+    try std.testing.expectEqualStrings("a\tb", items.value(0));
+    items.clear();
     try std.testing.expectEqual(@as(u16, 0), items.count);
 
     for (0..max_items) |_| {

@@ -385,13 +385,21 @@ test "a pick list fills the palette from the model, filters by label or detail a
     defer fixture.deinit();
     const picks = &fixture.model.pick_list;
     fixture.model.name_prompt.begin(.pick);
-    picks.begin(0, 1, "Pi model");
+    picks.begin(.{
+        .index = 0,
+        .generation = 1,
+        .prompt_generation = fixture.model.name_prompt.currentConst().?.generation,
+        .title = "Pi model",
+    });
     try fixture.paint();
     try std.testing.expectEqual(@as(u8, 0), fixture.overlays.presented().palette.count);
     try std.testing.expectEqual(@as(u16, 1 + 4), fixture.overlays.presented().modal.?.h);
 
     for ([_][2][]const u8{ .{ "claude-opus-5-5", "anthropic" }, .{ "gpt-6-sol", "openai-codex" }, .{ "claude-sonnet-5-5", "anthropic" } }) |option| {
-        try picks.items.append(.{ .label = option[0], .detail = option[1] });
+        try picks.items.append(.{
+            .label = option[0],
+            .detail = option[1],
+        });
     }
 
     picks.show();

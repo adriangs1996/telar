@@ -41,6 +41,7 @@ pub fn selection(self: *const PickDefinition, value: []const u8) !BarCommand {
         .interval_ns = 0,
         .timeout_ms = self.on_select.timeout_ms,
     };
+
     for (0..self.on_select.argument_count) |index| {
         const argument = self.on_select.argument(index).?;
         const chosen = index != 0 and std.mem.eql(u8, argument, choice_marker);

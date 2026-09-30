@@ -223,6 +223,10 @@ pub fn openNamePrompt(model: *data.ClientModel, intent: name_prompt_opening.Inte
     };
 
     model.name_prompt.begin(command);
+    if (intent != .pick) {
+        pick_list.close(model);
+    }
+
     return true;
 }
 

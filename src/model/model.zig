@@ -149,6 +149,7 @@ pub const PickDefinition = @import("bars/PickDefinition.zig");
 pub const PickItem = @import("bars/PickItem.zig");
 pub const PickItems = @import("bars/PickItems.zig");
 pub const PickListState = @import("state/PickListState.zig");
+pub const PickOpening = @import("state/PickOpening.zig");
 pub const PickResults = @import("state/PickResults.zig");
 pub const PanelStatus = @import("bars/PanelStatus.zig").PanelStatus;
 pub const PanelTarget = @import("bars/PanelTarget.zig").PanelTarget;

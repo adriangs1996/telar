@@ -46,7 +46,7 @@ pub fn runBackground(io: std.Io, gpa: std.mem.Allocator, job: BackgroundJob) Mes
             .execution_id = pick.execution_id,
             .purpose = pick.purpose,
             .result = command.runFor(io, pick.command, switch (pick.purpose) {
-                .list => .lines,
+                .list => .options,
                 .select => .ignored,
             }),
         } },

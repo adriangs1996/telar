@@ -7,6 +7,7 @@ const std = @import("std");
 const PickItems = @import("../bars/PickItems.zig");
 const PickResults = @import("PickResults.zig");
 const PickMatch = @import("PickMatch.zig");
+const bar_text = @import("../bars/bar_text.zig");
 
 /// Fills `results` with every option whose label or detail matches `query`.
 /// Sorting is O(n log n), so a list of a thousand options stays cheap to
@@ -48,13 +49,16 @@ pub fn chosen(items: *const PickItems, query: []const u8, selection: u16) ?u16 {
 }
 
 /// Replaces `items` with one option per nonempty line of a list command's
-/// output, trimmed of surrounding blanks.
+/// output, trimmed of surrounding blanks. The line is the value as printed,
+/// tabs included; its label shows tabs as spaces and is cut at a character
+/// when it is longer than a label may be.
 ///
 /// ```zig
 /// try pick_list.readLines(&model.pick_list.items, output);
 /// ```
 pub fn readLines(items: *PickItems, text: []const u8) !void {
     items.clear();
+    var label: [PickItems.max_label_bytes]u8 = undefined;
     var lines = std.mem.splitScalar(u8, text, '\n');
     while (lines.next()) |line| {
         const option = std.mem.trim(u8, line, " \t\r");
@@ -62,7 +66,15 @@ pub fn readLines(items: *PickItems, text: []const u8) !void {
             continue;
         }
 
-        try items.append(.{ .label = option });
+        const shown = bar_text.prefix(option, label.len);
+        for (shown, 0..) |byte, index| {
+            label[index] = if (byte == '\t') ' ' else byte;
+        }
+
+        try items.append(.{
+            .label = label[0..shown.len],
+            .value = option,
+        });
     }
 }
 
@@ -101,10 +113,18 @@ test "options match by label or detail, best first and list order on ties" {
 
 test "each nonempty trimmed line becomes an option and a surplus fails" {
     var items: PickItems = .{};
-    try readLines(&items, "  low\r\n\nmedium\t\nhigh");
+    try readLines(&items, "  low\r\n\nmedium\t\nhigh\tfast");
     try std.testing.expectEqual(@as(u16, 3), items.count);
     try std.testing.expectEqualStrings("low", items.label(0));
     try std.testing.expectEqualStrings("medium", items.value(1));
+    try std.testing.expectEqualStrings("high fast", items.label(2));
+    try std.testing.expectEqualStrings("high\tfast", items.value(2));
+
+    const long = "é" ** 100;
+    try readLines(&items, long);
+    try std.testing.expectEqualStrings(long, items.value(0));
+    try std.testing.expectEqualStrings("é" ** (PickItems.max_label_bytes / 2), items.label(0));
+    try std.testing.expectError(error.PickItemTooLong, readLines(&items, "x" ** (PickItems.max_value_bytes + 1)));
 
     var text: [2 * (PickItems.max_items + 1)]u8 = undefined;
     for (0..PickItems.max_items + 1) |line| {

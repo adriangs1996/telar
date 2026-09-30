@@ -24,7 +24,15 @@ pub fn parse(state: *lua_api.c.lua_State, index: c_int, items: *data.PickItems, 
         return error.TooManyPickItems;
     }
 
-    try lua_value.ensureArrayOnly(state, .{ .index = absolute, .count = count, .path = "pick items" }, diagnostic);
+    try lua_value.ensureArrayOnly(
+        state,
+        .{
+            .index = absolute,
+            .count = count,
+            .path = "pick items",
+        },
+        diagnostic,
+    );
     items.clear();
     for (1..count + 1) |position| {
         _ = lua_api.c.lua_rawgeti(state, absolute, @intCast(position));
@@ -49,7 +57,15 @@ fn read(state: *lua_api.c.lua_State, position: usize, diagnostic: *data.Diagnost
         return error.InvalidPickItems;
     }
 
-    try lua_value.ensureOnlyFields(state, .{ .index = -1, .allowed = &.{ "label", "value", "detail" }, .path = "pick item" }, diagnostic);
+    try lua_value.ensureOnlyFields(
+        state,
+        .{
+            .index = -1,
+            .allowed = &.{ "label", "value", "detail" },
+            .path = "pick item",
+        },
+        diagnostic,
+    );
     const label = field(state, "label") orelse {
         diagnostic.set("pick item {d} needs a string label", .{position});
         return error.InvalidPickItems;

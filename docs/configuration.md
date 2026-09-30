@@ -731,22 +731,27 @@ bars = { bottom = {
 | `items` | a list of options, or with `command` a function from the render context to that list |
 | `command` | an argv that prints the options, one per nonempty line unless `items` parses its output |
 | `on_select` | the argv to run with the choice; each argument that is exactly `"{}"` becomes the chosen value |
-| `timeout_ms` | 100 to 10000, default 2000, for `command` and `on_select` each |
+| `timeout_ms` | 100 to 10000, default 2000: how long `command` and `on_select` may each run, start to exit |
 | `refresh` | rerun the bar sources after `on_select` succeeds; `true` by default |
 
 An option is a string, or a table with a `label` to show and search, a
 `value` for `on_select` (the label by default) and a `detail` shown muted
 beside the label and searched too. A list holds at most 1024 options and
-64 KiB of text; labels and details are at most 128 bytes and values 512, all
-printable UTF-8 on one line. An `items` function receives the context of
+128 KiB of text; labels and details are at most 128 bytes and values 512, all
+printable UTF-8 on one line, and a value may also hold tabs. An `items`
+function needs a `command`: it receives the context of
 [a render callback](#dynamic-context), with the command's output in
 `ctx.output`, and returns the list. A written `items` list is checked when
-the configuration loads.
+the configuration loads. Without `items`, each nonempty line of the output,
+trimmed, is an option whose value is the line as printed; its label shows
+tabs as spaces and is cut at a character past 128 bytes.
 
 The list command runs when the pick opens, outside the client loop; the palette
-shows "Loading…" until its options arrive. A command that fails, times out,
-prints more than 64 KiB, or lists options that break the bounds leaves the
-palette open with the reason instead of a partial list.
+shows "Loading…" until its options arrive. A command that fails, runs past
+its timeout, prints more than 256 KiB of output or 4 KiB of errors, or lists
+options that break the bounds leaves the palette open with the reason instead
+of a partial list. Opening another prompt closes the list, and options that
+arrive after that are dropped.
 
 `on_select` runs as an argv without a shell. Telar replaces only whole
 arguments equal to `"{}"`, never text inside another argument and never the
@@ -755,8 +760,9 @@ characters it holds. At least one `"{}"` must follow the program. When a
 helper runs through `/bin/sh -c`, pass the value as a positional parameter
 (`"$1"`) as the example below does; never build a script string from it. A
 value may start with `-`, so helpers that take options should end them with
-`--`. The command's output is discarded; a failure, a timeout or a nonzero
-exit shows a client diagnostic. A second choice while one still runs is
+`--`. The command's output and errors go to `/dev/null`, so however much it
+prints, a zero exit status is a success; a nonzero status, a signal or a
+timeout shows a client diagnostic. A second choice while one still runs is
 refused. Pick names follow the panel rules, and a configuration holds at most
 8 picks. `telar.action.pick("name")` opens a pick from a binding as well;
 plugin effects cannot return it. See [Pick list](flows/pick-list.md).
@@ -767,7 +773,8 @@ Pi reads `defaultProvider`, `defaultModel` and `defaultThinkingLevel` from
 `~/.pi/agent/settings.json` when it starts, so writing them there changes what
 `pi` starts with in every pane. This helper, saved as
 `~/.config/telar/bin/pi-defaults` and made executable, writes one of them,
-keeps the rest of the file and replaces it atomically:
+keeps the rest of the file and replaces it atomically. It keeps the file's
+permissions but not its extended attributes:
 
 ```python
 #!/usr/bin/env python3
@@ -776,7 +783,8 @@ keeps the rest of the file and replaces it atomically:
 Usage: pi-defaults provider|model|thinking VALUE
 
 A model written as provider/model sets both keys. The rest of
-~/.pi/agent/settings.json is kept, and the file is replaced atomically.
+~/.pi/agent/settings.json is kept, and the file is replaced atomically with
+its permissions; a symbolic link is followed and its target replaced.
 """
 import json, os, sys, tempfile
 
@@ -789,21 +797,26 @@ field, value = sys.argv[1], sys.argv[2]
 if field == "thinking" and value not in LEVELS:
     sys.exit(f"unknown thinking level: {value}")
 
-path = os.path.expanduser("~/.pi/agent/settings.json")
+path = os.path.realpath(os.path.expanduser("~/.pi/agent/settings.json"))
 try:
     with open(path) as source:
         settings = json.load(source)
+        mode = os.fstat(source.fileno()).st_mode & 0o7777
 except FileNotFoundError:
-    settings = {}
+    settings, mode = {}, 0o600
+if not isinstance(settings, dict):
+    sys.exit(f"{path} does not hold a JSON object")
 
 if field == "model" and "/" in value:
     settings["defaultProvider"], value = value.split("/", 1)
 settings[KEYS[field]] = value
 
-os.makedirs(os.path.dirname(path), exist_ok=True)
-descriptor, temporary = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".settings.")
+directory = os.path.dirname(path)
+os.makedirs(directory, exist_ok=True)
+descriptor, temporary = tempfile.mkstemp(dir=directory, prefix=".settings.")
 try:
     with os.fdopen(descriptor, "w") as target:
+        os.fchmod(target.fileno(), mode)
         json.dump(settings, target, indent=2)
         target.write("\n")
         target.flush()
@@ -812,6 +825,12 @@ try:
 except BaseException:
     os.unlink(temporary)
     raise
+
+folder = os.open(directory, os.O_RDONLY)
+try:
+    os.fsync(folder)
+finally:
+    os.close(folder)
 ```
 
 The configuration lists providers and models from `pi --list-models`, whose
@@ -942,7 +961,10 @@ bounded client diagnostic.
 Commands contain 1 to 32 arguments and at most 4096 argument bytes. Telar
 executes the argv directly, without a shell, and inherits the client's process
 environment and working directory. `timeout_ms` defaults to 2000 and must be
-between 100 and 10000. Output passed to a `render` callback may hold several
+between 100 and 10000; it bounds the whole run, from start to exit, however
+the command prints. A command runs in its own process group: one that exits
+in time may leave background work running, while one that passes its
+timeout is stopped with its group, TERM first and KILL 200 ms later. Output passed to a `render` callback may hold several
 lines, up to 64 KiB of UTF-8 without control characters other than tab and
 newline, so a helper can print JSON. Without `render`, stdout must be one
 display line of at most 512 bytes. Stderr is bounded to 4096 bytes. Bar and

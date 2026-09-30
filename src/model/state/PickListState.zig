@@ -5,7 +5,10 @@
 const std = @import("std");
 const PickItems = @import("../bars/PickItems.zig");
 const PanelHeading = @import("../bars/PanelHeading.zig");
+const bar_text = @import("../bars/bar_text.zig");
 const command_execution = @import("../bars/command_execution.zig");
+const PickOpening = @import("PickOpening.zig");
+const Prompt = @import("Prompt.zig");
 const PickListState = @This();
 
 pub const max_error_bytes = 128;
@@ -22,6 +25,9 @@ phase: Phase = .closed,
 /// The configured pick, valid for `generation` only.
 index: u8 = 0,
 generation: u64 = 0,
+/// The palette opening that shows this list; another prompt replacing it
+/// closes the list.
+prompt_generation: u64 = 0,
 /// The pick's title, which the palette shows above its keys.
 title_bytes: [PanelHeading.max_title_bytes]u8 = undefined,
 title_len: u8 = 0,
@@ -40,15 +46,16 @@ next_execution_id: u64 = 1,
 /// Starts a list for one configured pick with no options yet.
 ///
 /// ```zig
-/// model.pick_list.begin(index, generation, definition.heading.title());
+/// model.pick_list.begin(.{ .index = index, .generation = generation, .prompt_generation = prompt.generation, .title = title });
 /// ```
-pub fn begin(self: *PickListState, index: u8, generation: u64, heading: []const u8) void {
-    std.debug.assert(heading.len <= self.title_bytes.len);
+pub fn begin(self: *PickListState, opening: PickOpening) void {
+    std.debug.assert(opening.title.len <= self.title_bytes.len);
     self.phase = .loading;
-    self.index = index;
-    self.generation = generation;
-    @memcpy(self.title_bytes[0..heading.len], heading);
-    self.title_len = @intCast(heading.len);
+    self.index = opening.index;
+    self.generation = opening.generation;
+    self.prompt_generation = opening.prompt_generation;
+    @memcpy(self.title_bytes[0..opening.title.len], opening.title);
+    self.title_len = @intCast(opening.title.len);
     self.items.clear();
     self.error_len = 0;
     self.listing = .none;
@@ -73,6 +80,7 @@ pub fn close(self: *PickListState) void {
 pub fn reserve(self: *PickListState) command_execution.Id {
     const id: command_execution.Id = @enumFromInt(self.next_execution_id);
     self.next_execution_id +%= 1;
+
     if (self.next_execution_id == 0) {
         self.next_execution_id = 1;
     }
@@ -87,12 +95,12 @@ pub fn show(self: *PickListState) void {
     self.revision +%= 1;
 }
 
-/// Shows why the options could not be listed, cut to the bytes it keeps.
-/// Example: `model.pick_list.fail("command failed: BarCommandFailed");`
+/// Shows why the options could not be listed, cut at a character to the
+/// bytes it keeps. Example: `model.pick_list.fail("the list command timed out");`
 pub fn fail(self: *PickListState, reason: []const u8) void {
-    const len = @min(reason.len, max_error_bytes);
-    @memcpy(self.error_text[0..len], reason[0..len]);
-    self.error_len = @intCast(len);
+    const kept = bar_text.prefix(reason, max_error_bytes);
+    @memcpy(self.error_text[0..kept.len], kept);
+    self.error_len = @intCast(kept.len);
     self.phase = .failed;
     self.listing = .none;
     self.items.clear();
@@ -113,13 +121,26 @@ pub fn shows(self: *const PickListState, index: u8, generation: u64) bool {
     return self.phase != .closed and self.index == index and self.generation == generation;
 }
 
+/// Whether the prompt on screen is the palette opening this list; any
+/// other prompt, or none, means the list was replaced.
+/// Example: `if (!model.pick_list.shownBy(model.name_prompt.currentConst())) model.pick_list.close();`
+pub fn shownBy(self: *const PickListState, prompt: ?*const Prompt) bool {
+    const current = prompt orelse return false;
+    return self.phase != .closed and current.target() == .pick and current.generation == self.prompt_generation;
+}
+
 pub fn version(self: *const PickListState) u64 {
     return self.revision;
 }
 
 test "a list closes once, keeps the running selection and fails with a bounded reason" {
     var state: PickListState = .{};
-    state.begin(2, 7, "Pi model");
+    state.begin(.{
+        .index = 2,
+        .generation = 7,
+        .prompt_generation = 1,
+        .title = "Pi model",
+    });
     try std.testing.expectEqualStrings("Pi model", state.title());
     state.listing = state.reserve();
     state.selecting = state.reserve();
@@ -129,6 +150,9 @@ test "a list closes once, keeps the running selection and fails with a bounded r
     state.fail("x" ** (max_error_bytes + 10));
     try std.testing.expectEqual(Phase.failed, state.phase);
     try std.testing.expectEqual(@as(usize, max_error_bytes), state.errorSlice().len);
+    state.fail("x" ++ "é" ** max_error_bytes);
+    try std.testing.expectEqual(@as(usize, max_error_bytes - 1), state.errorSlice().len);
+    try std.testing.expect(std.unicode.utf8ValidateSlice(state.errorSlice()));
     try std.testing.expectEqual(command_execution.Id.none, state.listing);
 
     const before = state.version();

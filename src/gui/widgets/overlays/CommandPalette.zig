@@ -29,6 +29,8 @@ pub const radius_px = 10;
 pub const legend = [_][]const u8{ ">", "actions", "@", "agents & panes", "?", "suggest", ":", "machines", "↑↓", "select", "enter", "run", "esc", "close" };
 /// The machine list's keys instead of the prefixes.
 pub const machine_legend = [_][]const u8{ "enter", "show", "⇧enter", "enable/disable", "^R", "rename", "^D", "remove", "esc", "close" };
+/// Cells between a pick's title and its keys, as between legend words.
+const title_gap_cells = 3;
 /// A pick list's keys, after its title.
 pub const pick_legend = [_][]const u8{ "↑↓", "select", "enter", "choose", "esc", "close" };
 
@@ -149,7 +151,12 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
             .failed => picks.errorSlice(),
             .ready, .closed => "No matches",
         };
-        try canvas.text(rows.row(0).splitLeft(2)[1], .{ .text = empty, .color = if (failed) colors.red else colors.subtext0, .face = .sans, .size = .body });
+        try canvas.text(rows.row(0).splitLeft(2)[1], .{
+            .text = empty,
+            .color = if (failed) colors.red else colors.subtext0,
+            .face = .sans,
+            .size = .body,
+        });
     }
 
     for (0..@min(count, total)) |offset| {
@@ -184,10 +191,16 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
 // The pick's title in the accent, before its keys; returns what is left.
 fn drawTitle(canvas: *Canvas, row: cellgrid.Rect, title: []const u8) !cellgrid.Rect {
     const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
-    const label: Label = .{ .text = title, .color = canvas.theme.palette.accent, .bold = true, .face = .sans, .size = .body };
+    const label: Label = .{
+        .text = title,
+        .color = canvas.theme.palette.accent,
+        .bold = true,
+        .face = .sans,
+        .size = .body,
+    };
     const used: u16 = @intFromFloat(@ceil(try canvas.measure(label) / cell));
     try canvas.text(row, label);
-    return row.splitLeft(@min(used + 3, row.w))[1];
+    return row.splitLeft(@min(used + title_gap_cells, row.w))[1];
 }
 
 // Keys in the monospace face, words in sans; the active prefix in accent.
@@ -259,7 +272,11 @@ fn actionRow(self: CommandPalette, index: u8, storage: *[key_label.max_bytes]u8)
 }
 
 fn pickRow(items: *const data.PickItems, index: u16) PaletteRow {
-    return .{ .icon = "›", .primary = items.label(index), .secondary = items.detail(index) };
+    return .{
+        .icon = "›",
+        .primary = items.label(index),
+        .secondary = items.detail(index),
+    };
 }
 
 fn addMachineRow() PaletteRow {

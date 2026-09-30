@@ -40,16 +40,19 @@ failure: client_diagnostic.replace    success: bar_updates.refreshSources
 ## Options
 
 A pick lists its options in one of three ways, all checked when the
-configuration loads:
+configuration loads; an `items` function without a command is rejected:
 
 - `items` as a list: parsed once at load, so a bad option fails the reload;
   kept as a Lua value and parsed again on each opening.
-- `command` alone: each nonempty line of its output, trimmed, is one option.
+- `command` alone: each nonempty line of its output, trimmed, is one option
+  (`pick_list.readLines`). The value is the line as printed, tabs included;
+  the label shows tabs as spaces and is cut at a character boundary.
 - `command` and an `items` function: the function receives the render
   context with `ctx.output` and returns the list.
 
-`PickItems` holds at most 1024 options and 64 KiB of text. A label and a
-detail are at most 128 bytes, a value 512, all printable UTF-8 on one line. A
+`PickItems` holds at most 1024 options and 128 KiB of text. A label and a
+detail are at most 128 bytes, a value 512, all printable UTF-8 on one line;
+a value may also hold tabs. A
 list that breaks any bound fails as a whole and the palette says why; it is
 never cut short, because a missing option is worse than a visible error.
 
@@ -57,10 +60,18 @@ never cut short, because a missing option is worse than a visible error.
 
 Both commands are `BarCommand` values: at most 32 arguments and 4096 bytes,
 run without a shell by the background job runner, never on the event loop.
-`timeout_ms` (100 to 10000, default 2000) bounds each of them. The list
-command's output is bounded like a render command's, 64 KiB of text.
-`on_select` output is read up to the same bound and discarded; only the exit
-status counts.
+`timeout_ms` (100 to 10000, default 2000) bounds each whole run, from spawn
+to exit (`command.runFor`): the deadline is absolute, so output that trickles
+in cannot extend it, and the wait for the exit is bounded too. Each command
+runs in its own process group. One that passes its deadline gets TERM to the
+group, KILL 200 ms later, and a bounded wait after that; a process that
+survives even KILL is left unreaped rather than blocking the worker. One that
+exits in time keeps its group, so a helper may leave background work
+running. The same runner serves bar and panel commands.
+
+The list command's output is bounded to 256 KiB (`OutputUse.options`), room
+for `pi --list-models`, which prints about 43 KiB. `on_select` output and
+errors go to `/dev/null`; only the exit status counts.
 
 `on_select` must hold an argument that is exactly `{}` after the program.
 `PickDefinition.selection` replaces each such argument with the chosen value
@@ -71,8 +82,11 @@ must use it as a positional parameter (`"$1"`), not paste it into the script.
 ## Identity and staleness
 
 `PickListState` keeps two execution ids. `listing` names the list command the
-open list waits for; closing the palette or opening another pick clears it,
-so a late completion is released and dropped. `selecting` names a running
+open list waits for; closing the palette, opening any other prompt
+(`name_prompt.openNamePrompt`) or another pick clears it, and a completion
+first checks with `PickListState.shownBy` that the palette on screen is still
+the opening that started it, so a late completion is released and dropped
+without running Lua. `selecting` names a running
 `on_select`; it outlives the palette and keeps its own pick index and
 configuration generation. A second choice while one runs is refused with a
 diagnostic rather than queued.
@@ -92,11 +106,15 @@ refresh never runs two copies of the same source.
 ## Proof
 
 `PickItems`, `PickDefinition`, `PickListState` and `pick_list` unit tests
-cover bounds, argument replacement and matching. `command.zig` tests cover
-ignored output and failed exits. The client integration tests in
-`src/client_tests/configuration.zig` open picks with written options, with a
-command, with a failing, a slow and an oversized command, and check that
-`on_select` receives the choice as one argument and that the bar reruns.
+cover bounds, tabs, argument replacement and matching. `command.zig` tests
+cover a command that keeps printing past its deadline, one that ignores TERM
+with a grandchild, ignored output and failed exits. The client integration
+tests in `src/client_tests/pick_list.zig` open picks with written options,
+with a command, with a failing, a slow and an oversized command, replace the
+palette mid-list, reload with a command running, refuse a second choice,
+skip the refresh when asked, pass a value that starts with `-`, reject one
+that overflows the argv, and check that `on_select` receives the choice as
+one argument and that the bar reruns.
 `tools/gui_pick.py` runs the Pi example of `docs/configuration.md` verbatim in
 the native window against an isolated runtime and home, clicks the bar, types
 and chooses, and checks the settings file and the refreshed bar.

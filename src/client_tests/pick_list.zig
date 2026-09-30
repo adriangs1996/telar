@@ -136,15 +136,19 @@ test "a failing, slow or overlong list command keeps the palette open with the r
         \\  a_failing = telar.pick({ command = { "/bin/sh", "-c", "exit 3" }, on_select = done }),
         \\  b_slow = telar.pick({ command = { "/bin/sh", "-c", "sleep 5" }, timeout_ms = 100, on_select = done }),
         \\  c_long = telar.pick({ command = { "/bin/sh", "-c", "seq 1 2000" }, on_select = done }),
-        \\  d_wide = telar.pick({ command = { "/bin/sh", "-c", "head -c 70000 /dev/zero | tr '\\0' x" }, on_select = done }),
+        \\  d_wide = telar.pick({ command = { "/bin/sh", "-c", "head -c 300000 /dev/zero | tr '\\0' x" }, on_select = done }),
+        \\  e_line = telar.pick({ command = { "/bin/sh", "-c", "head -c 600 /dev/zero | tr '\\0' x" }, on_select = done }),
+        \\  f_control = telar.pick({ command = { "/bin/sh", "-c", "printf 'a\\033b'" }, on_select = done }),
         \\} } }
     ));
 
     const expected = [_][]const u8{
         "the list command exited with an error",
         "the list command timed out",
-        "the list command printed too many options",
+        "the list command printed more than 1024 options",
         "the list command printed more than it may",
+        "the list command printed a line longer than 512 bytes",
+        "the list command printed control characters or invalid UTF-8",
     };
     for (expected, 0..) |reason, index| {
         _ = try client_module.actions.executeAction(client, .{ .pick = @intCast(index) }, .binding);
@@ -234,6 +238,118 @@ test "configuration rejects a pick without a choice argument or with a bad optio
         try std.testing.expectError(error.InvalidConfig, loaded);
         try std.testing.expect(diagnostic.len != 0);
     }
+}
+
+test "a second choice while on_select runs is refused and refresh can be turned off" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    _ = try fixtures.reloadConfiguration(&harness, try fixtures.testingConfigAdoptionSource(1,
+        \\local telar = require("telar")
+        \\return { api_version = 2, client = { picks = {
+        \\  quiet = telar.pick({ items = { "one" }, refresh = false, on_select = { "/bin/sh", "-c", "sleep 0.3", "sh", "{}" } }),
+        \\} } }
+    ));
+
+    _ = try client_module.actions.executeAction(client, .{ .pick = 0 }, .binding);
+    try pressEnter(client);
+    try std.testing.expect(client.model.pick_list.selecting != .none);
+
+    _ = try client_module.actions.executeAction(client, .{ .pick = 0 }, .binding);
+    try pressEnter(client);
+    try std.testing.expectEqualStrings("pick 'quiet' is still running its last choice", data.client_diagnostic.shown(&client.model).?);
+
+    const deadlines = client.model.bar_updates.deadlines;
+    try client_module.pick_list.finish(client, try receivePick(&harness));
+    try std.testing.expect(client.model.pick_list.selecting == .none);
+    try std.testing.expectEqualDeep(deadlines, client.model.bar_updates.deadlines);
+}
+
+test "a reload while the list command runs fails the list instead of filling it" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const source =
+        \\local telar = require("telar")
+        \\return { api_version = 2, client = { picks = {
+        \\  late = telar.pick({ command = { "/bin/sh", "-c", "sleep 0.2; printf late" }, on_select = { "/bin/sh", "-c", ":", "{}" } }),
+        \\} } }
+    ;
+    _ = try fixtures.reloadConfiguration(&harness, try fixtures.testingConfigAdoptionSource(1, source));
+    _ = try client_module.actions.executeAction(client, .{ .pick = 0 }, .binding);
+    _ = try fixtures.reloadConfiguration(&harness, try fixtures.testingConfigAdoptionSource(2, source));
+
+    try client_module.pick_list.finish(client, try receivePick(&harness));
+    try std.testing.expectEqual(data.PickListState.Phase.failed, client.model.pick_list.phase);
+    try std.testing.expectEqualStrings("the configuration changed; open the list again", client.model.pick_list.errorSlice());
+    try std.testing.expectEqual(@as(u16, 0), client.model.pick_list.items.count);
+}
+
+test "another prompt replacing the palette drops the late options without running items" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    _ = try fixtures.reloadConfiguration(&harness, try fixtures.testingConfigAdoptionSource(1,
+        \\local telar = require("telar")
+        \\return { api_version = 2, client = { picks = {
+        \\  late = telar.pick({
+        \\    command = { "/bin/sh", "-c", "sleep 0.2; printf late" },
+        \\    items = function() error("items ran for a replaced list") end,
+        \\    on_select = { "/bin/sh", "-c", ":", "{}" },
+        \\  }),
+        \\} } }
+    ));
+
+    _ = try client_module.actions.executeAction(client, .{ .pick = 0 }, .binding);
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(&client.model, .goto_picker));
+    try std.testing.expectEqual(data.PickListState.Phase.closed, client.model.pick_list.phase);
+
+    // A palette closed some other way still drops what arrives.
+    _ = try client_module.actions.executeAction(client, .{ .pick = 0 }, .effect);
+    client.model.name_prompt.begin(.goto_picker);
+    try client_module.pick_list.finish(client, try receivePick(&harness));
+    try client_module.pick_list.finish(client, try receivePick(&harness));
+    try std.testing.expectEqual(data.PickListState.Phase.closed, client.model.pick_list.phase);
+    try std.testing.expectEqual(@as(u16, 0), client.model.pick_list.items.count);
+    try std.testing.expect(data.client_diagnostic.shown(&client.model) == null);
+}
+
+test "a value that starts with a dash arrives as one argument and one that overflows argv is refused" {
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory = try absolutePath(&temp, &directory_buffer);
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const source = try std.fmt.allocPrint(std.testing.allocator,
+        \\local telar = require("telar")
+        \\return {{ api_version = 2, client = {{ picks = {{
+        \\  a_dash = telar.pick({{ items = {{ "-rf --help" }}, on_select = {{ "/bin/sh", "-c", 'printf %s "$1" > "$0/choice"', "{s}", "{{}}" }} }}),
+        \\  b_wide = telar.pick({{ items = {{ {{ label = "wide", value = string.rep("v", 500) }} }}, on_select = {{ "/bin/echo", string.rep("a", 3800), "{{}}" }} }}),
+        \\}} }} }}
+    , .{directory});
+    defer std.testing.allocator.free(source);
+    _ = try fixtures.reloadConfiguration(&harness, try fixtures.testingConfigAdoptionSource(1, source));
+
+    _ = try client_module.actions.executeAction(client, .{ .pick = 0 }, .binding);
+    try pressEnter(client);
+    try client_module.pick_list.finish(client, try receivePick(&harness));
+    var written: [64]u8 = undefined;
+    try std.testing.expectEqualStrings("-rf --help", try temp.dir.readFile(std.testing.io, "choice", &written));
+
+    _ = try client_module.actions.executeAction(client, .{ .pick = 1 }, .binding);
+    try pressEnter(client);
+    try std.testing.expect(client.model.pick_list.selecting == .none);
+    try std.testing.expectEqualStrings("pick 'b_wide': the choice does not fit on_select: BarCommandTooLong", data.client_diagnostic.shown(&client.model).?);
 }
 
 fn absolutePath(temp: *std.testing.TmpDir, buffer: *[std.fs.max_path_bytes]u8) ![]const u8 {
