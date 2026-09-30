@@ -54,8 +54,10 @@ pub fn decode(allocator: std.mem.Allocator, bytes: []const u8, limits: PngLimits
 }
 
 /// The width and height of the IHDR that must open every PNG, trusted only
-/// once its CRC matches.
-fn dimensions(bytes: []const u8) Error!struct { u32, u32 } {
+/// once its CRC matches. A caller that `decode` refused with `PngTooLarge`
+/// reads what the file asked for here, without decoding it.
+/// Example: `const width, const height = try png.dimensions(bytes);`
+pub fn dimensions(bytes: []const u8) Error!struct { u32, u32 } {
     if (bytes.len < header_bytes or !std.mem.eql(u8, bytes[0..signature.len], signature)) {
         return error.NotPng;
     }
@@ -121,10 +123,48 @@ pub fn encodeForTest(allocator: std.mem.Allocator, spec: PngTestSpec, samples: [
         @memcpy(raw[row * (stride + 1) + 1 ..][0..stride], filtered[0..stride]);
     }
 
+    return wrapForTest(allocator, spec, raw, .default);
+}
+
+/// Test-only encoder of an image of one colour, any size: every row is
+/// unfiltered and repeats `pixel`, the bytes of one source pixel, so a large
+/// image compresses to a small file quickly.
+/// Example: `const bytes = try png.encodeFlatForTest(gpa, .{ .header = .{ .width = 4096, .height = 1, .color = .rgba } }, &.{ 1, 2, 3, 255 });`
+pub fn encodeFlatForTest(allocator: std.mem.Allocator, spec: PngTestSpec, pixel: []const u8) ![]u8 {
+    std.debug.assert(pixel.len == spec.header.bytesPerPixel());
+    const stride = spec.header.stride();
+    const raw = try allocator.alloc(u8, (stride + 1) * spec.header.height);
+    defer allocator.free(raw);
+    for (0..spec.header.height) |row| {
+        const line = raw[row * (stride + 1) ..][0 .. stride + 1];
+        line[0] = 0;
+        for (0..spec.header.width) |column| {
+            @memcpy(line[1 + column * pixel.len ..][0..pixel.len], pixel);
+        }
+    }
+
+    return wrapForTest(allocator, spec, raw, .fastest);
+}
+
+/// Test-only copy of a PNG whose IHDR declares another size, with its CRC
+/// fixed, so the header passes and the image data no longer matches it.
+/// Example: `const lying = try png.declareForTest(gpa, bytes, 7680, 4320);`
+pub fn declareForTest(allocator: std.mem.Allocator, bytes: []const u8, width: u32, height: u32) ![]u8 {
+    _ = try dimensions(bytes);
+    const copy = try allocator.dupe(u8, bytes);
+    const chunk = copy[signature.len..];
+    std.mem.writeInt(u32, chunk[8..12], width, .big);
+    std.mem.writeInt(u32, chunk[12..16], height, .big);
+    std.mem.writeInt(u32, chunk[8 + ihdr_length ..][0..4], std.hash.Crc32.hash(chunk[4 .. 8 + ihdr_length]), .big);
+    return copy;
+}
+
+// Compresses test scanlines and writes them as a PNG file of `spec`.
+fn wrapForTest(allocator: std.mem.Allocator, spec: PngTestSpec, raw: []const u8, level: std.compress.flate.Compress.Options) ![]u8 {
     var compressed: std.Io.Writer.Allocating = try .initCapacity(allocator, 4096);
     defer compressed.deinit();
     var window: [std.compress.flate.max_window_len]u8 = undefined;
-    var compress = try std.compress.flate.Compress.init(&compressed.writer, &window, .zlib, .default);
+    var compress = try std.compress.flate.Compress.init(&compressed.writer, &window, .zlib, level);
     try compress.writer.writeAll(raw);
     try compress.finish();
 
@@ -243,6 +283,27 @@ test "decodes every filter type and a palette with transparency" {
     var image = try decode(allocator, bytes, .{});
     defer image.deinit(allocator);
     try std.testing.expectEqualSlices(u8, &.{ 10, 20, 30, 255, 40, 50, 60, 128, 70, 80, 90, 255, 40, 50, 60, 128 }, image.pixels);
+}
+
+test "a flat image of any width decodes and a declared size is read from its header" {
+    const allocator = std.testing.allocator;
+    const bytes = try encodeFlatForTest(allocator, .{ .header = .{ .width = 70, .height = 3, .color = .rgba } }, &.{ 9, 8, 7, 255 });
+    defer allocator.free(bytes);
+    try std.testing.expectEqual(.{ @as(u32, 70), @as(u32, 3) }, try dimensions(bytes));
+    var image = try decode(allocator, bytes, .{});
+    defer image.deinit(allocator);
+    for (0..70 * 3) |index| {
+        try std.testing.expectEqualSlices(u8, &.{ 9, 8, 7, 255 }, image.pixels[index * 4 ..][0..4]);
+    }
+
+    // A larger declared size passes the CRC; the limit or the data rejects it.
+    const wide = try declareForTest(allocator, bytes, 4097, 3);
+    defer allocator.free(wide);
+    try std.testing.expectEqual(.{ @as(u32, 4097), @as(u32, 3) }, try dimensions(wide));
+    try std.testing.expectError(error.PngTooLarge, decode(allocator, wide, .{}));
+    const taller = try declareForTest(allocator, bytes, 70, 4);
+    defer allocator.free(taller);
+    try std.testing.expectError(error.InvalidPngData, decode(allocator, taller, .{}));
 }
 
 test "rejects interlaced, oversized, invalid-depth, corrupt and non-PNG input without allocating pixels" {

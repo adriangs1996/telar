@@ -1978,12 +1978,17 @@ fn landFavicon(self: *GuiAdapter, completion: client.FaviconCompletion) void {
 }
 
 // Places a landed favicon into the page and starts the next lookup the
-// list needs. Warm frames find nothing landed and nothing wanted.
+// list needs. Warm frames find nothing landed and nothing wanted. A favicon
+// the full page cannot place reports `gui.favicons.max_favicons`.
 fn resolveFavicons(self: *GuiAdapter, renderer: *Renderer) !void {
     const page = if (renderer.sprites) |*sprites| sprites else return;
     const favicons = &self.chrome.favicons;
-    favicons.refresh(self.app.gpa, page);
-    const want = favicons.next(&self.app.model.workspace_list_snapshot) orelse return;
+    const workspaces = &self.app.model.workspace_list_snapshot;
+    if (favicons.refresh(self.app.gpa, page, workspaces)) |reach| {
+        client.limit_reached.report(self.app, reach);
+    }
+
+    const want = favicons.next(page, workspaces) orelse return;
 
     const job = client.favicons.request(
         &self.app.model,
