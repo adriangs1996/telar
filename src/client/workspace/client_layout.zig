@@ -25,7 +25,7 @@ pub fn synchronizeClientLayout(model: *data.ClientModel) !void {
     }
 
     var nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
-    var tabs: [core.max_client_layout_tabs]core.ClientTabLayout = undefined;
+    var tabs: [data.Tabs.capacity]core.ClientTabLayout = undefined;
     const layout_update = layout_updates.buildUpdate(
         model,
         &nodes,

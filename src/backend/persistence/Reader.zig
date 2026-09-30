@@ -61,7 +61,7 @@ pub fn next(self: *Reader) !?checkpoint.Record {
                 const path = try self.inner.readSized16();
                 try checkpoint.validatePath(path);
                 const name = try self.inner.readSized16();
-                if (name.len > core.max_tab_label_bytes) {
+                if (name.len > core.max_workspace_name_bytes) {
                     return error.InvalidCheckpoint;
                 }
                 const first_tab_id = try self.inner.readInt(u64);
@@ -118,7 +118,7 @@ pub fn next(self: *Reader) !?checkpoint.Record {
                 const cols = try self.inner.readInt(u16);
                 const rows = try self.inner.readInt(u16);
                 const argument_count = try self.inner.readInt(u16);
-                const arguments = try self.inner.readSized16();
+                const arguments = if (self.version >= checkpoint.wide_arguments_version) try self.inner.readSized32() else try self.inner.readSized16();
                 if (argument_count > checkpoint.max_launch_arguments or arguments.len > checkpoint.max_launch_bytes) {
                     return error.InvalidCheckpoint;
                 }

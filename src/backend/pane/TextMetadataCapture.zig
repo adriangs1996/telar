@@ -12,6 +12,11 @@ current: core.TextMetadata,
 scratch: core.TextMetadata,
 cols: u16 = 0,
 revision: u64 = 1,
+/// A capture since the last `takeDropped` kept only the links that fit
+/// `text_metadata.max_links` or its URI and run bounds.
+links_dropped: bool = false,
+
+pub const links_limit = core.Limit.declare("text_metadata.max_links", "links", core.text_metadata_limits.max_links);
 
 pub fn init(allocator: std.mem.Allocator, rows: u16) !TextMetadataCapture {
     var current = try core.TextMetadata.init(allocator, rows);
@@ -68,18 +73,36 @@ pub fn update(self: *TextMetadataCapture, allocator: std.mem.Allocator, state: *
     revisions.advance(&self.revision);
 }
 
+/// Whether a capture dropped links since the last call, clearing it.
+///
+/// ```zig
+/// if (pane.text_metadata.takeDropped()) report(TextMetadataCapture.links_limit);
+/// ```
+pub fn takeDropped(self: *TextMetadataCapture) bool {
+    defer self.links_dropped = false;
+    return self.links_dropped;
+}
+
 fn collect(self: *TextMetadataCapture, state: *const vt.RenderState) core.TextMetadataView {
     var builder = core.TextMetadataBuilder.init(self.scratch.buffer, state.rows);
     for (0..state.rows) |y| {
         builder.setRow(@intCast(y), rowFlags(state, y));
     }
 
-    collectLinks(&builder, state) catch return builder.finish(.omitted);
-    return builder.finish(.complete);
+    if (collectLinks(&builder, state)) {
+        return builder.finish(.complete);
+    }
+
+    self.links_dropped = true;
+    return builder.finish(.partial);
 }
 
-fn collectLinks(builder: *core.TextMetadataBuilder, state: *const vt.RenderState) !void {
+/// Adds every link run of the visible rows, keeping the links and runs that
+/// fit; a cell whose link does not fit stays unlinked. Returns false when
+/// any was left out.
+fn collectLinks(builder: *core.TextMetadataBuilder, state: *const vt.RenderState) bool {
     var identities: HyperlinkIndex = .{};
+    var complete = true;
     const rows = state.row_data.slice();
     for (rows.items(.raw), rows.items(.pin), rows.items(.cells), 0..) |row, pin, cells, y| {
         if (!row.hyperlink) {
@@ -92,7 +115,14 @@ fn collectLinks(builder: *core.TextMetadataBuilder, state: *const vt.RenderState
             const link_index = if (cell.hyperlink and cell.wide != .spacer_head) found: {
                 const live = page.getRowAndCell(x, pin.y).cell;
                 const id = page.lookupHyperlink(live) orelse break :found null;
-                break :found try identities.intern(builder, .{ .page = page, .id = id });
+                const reference: HyperlinkRef = .{
+                    .page = page,
+                    .id = id,
+                };
+                break :found identities.intern(builder, reference) catch {
+                    complete = false;
+                    break :found null;
+                };
             } else null;
             const start: u32 = @intCast(y * state.cols + x);
             if (pending) |*run| {
@@ -101,7 +131,7 @@ fn collectLinks(builder: *core.TextMetadataBuilder, state: *const vt.RenderState
                     continue;
                 }
 
-                try builder.addRun(run.*);
+                builder.addRun(run.*) catch return false;
                 pending = null;
             }
 
@@ -111,9 +141,11 @@ fn collectLinks(builder: *core.TextMetadataBuilder, state: *const vt.RenderState
         }
 
         if (pending) |run| {
-            try builder.addRun(run);
+            builder.addRun(run) catch return false;
         }
     }
+
+    return complete;
 }
 
 fn rowFlags(state: *const vt.RenderState, y: usize) core.TextRowFlags {
@@ -171,7 +203,7 @@ test "text metadata captures soft wrap and wide padding before blit clears damag
     try std.testing.expectEqual(@as(usize, 0), failing.allocations);
 }
 
-test "text metadata drops an over-quota link table whole and recovers without allocation" {
+test "text metadata keeps the links that fit its table and recovers without allocation" {
     const BlitPane = vtgrid.TestPane;
     var pane = try BlitPane.init(std.testing.allocator, 32, 10);
     defer pane.deinit();
@@ -184,15 +216,20 @@ test "text metadata drops an over-quota link table whole and recovers without al
     }
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     try capture.update(failing.allocator(), &pane.state);
-    const omitted = capture.current.view();
-    try std.testing.expectEqual(.omitted, omitted.status);
-    try std.testing.expectEqual(@as(u16, 0), omitted.link_count);
-    try std.testing.expectEqual(@as(u16, 0), omitted.run_count);
-    try std.testing.expect(omitted.rows[0].hyperlinks);
+    const partial = capture.current.view();
+    _ = try core.TextMetadataView.decode(partial.encoded, .{ 32, 10 });
+    try std.testing.expectEqual(.partial, partial.status);
+    try std.testing.expectEqual(@as(u16, core.text_metadata_limits.max_links), partial.link_count);
+    try std.testing.expectEqual(@as(u16, core.text_metadata_limits.max_links), partial.run_count);
+    try std.testing.expectEqualStrings("https://e/0", partial.link(0).?);
+    try std.testing.expect(partial.at(core.text_metadata_limits.max_links) == null);
+    try std.testing.expect(capture.takeDropped());
+    try std.testing.expect(!capture.takeDropped());
     try pane.write("\x1b[H\x1b[2J\x1b]8;;https://ok.example\x1b\\label\x1b]8;;\x1b\\");
     try capture.update(failing.allocator(), &pane.state);
     try std.testing.expectEqual(.complete, capture.current.view().status);
     try std.testing.expectEqualStrings("https://ok.example", capture.current.view().link(0).?);
+    try std.testing.expect(!capture.takeDropped());
     const revision = capture.revision;
     for (0..120) |_| {
         try capture.update(failing.allocator(), &pane.state);

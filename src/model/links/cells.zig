@@ -47,8 +47,9 @@ pub fn resolve(pane: *const Pane, position: Position) ?LinkMatch {
         };
     }
 
-    // A discarded link table cannot authorize a label as its own destination.
-    if (metadata.status == .omitted and metadata.rows[index / pane.buffer.w].hyperlinks) {
+    // A link the table dropped cannot authorize its label as its own
+    // destination.
+    if (metadata.status != .complete and metadata.rows[index / pane.buffer.w].hyperlinks) {
         return null;
     }
 

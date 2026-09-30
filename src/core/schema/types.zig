@@ -9,7 +9,10 @@ const ClientLayoutPane = @import("ClientLayoutPane.zig");
 
 pub const max_input_bytes = 64 * 1024;
 pub const max_cwd_bytes = 4096;
-pub const max_workspace_name_bytes = max_cwd_bytes;
+/// A workspace's name: one the user gives it, or the basename of its path.
+/// File systems cap a path component at 255 bytes (NAME_MAX), so every
+/// basename fits whole.
+pub const max_workspace_name_bytes = 256;
 pub const max_argument_count = 64;
 pub const max_argument_bytes = 128 * 1024;
 pub const max_environment_count = 256;
@@ -17,11 +20,18 @@ pub const max_environment_bytes = 512 * 1024;
 pub const max_error_message_bytes = 1024;
 pub const max_tab_label_bytes = 128;
 pub const max_tabs_per_workspace = 64;
+/// Panes one tab holds: the wire bound of a tab's pane list and the leaves
+/// of one split tree.
 pub const max_panes_per_tab = 64;
+/// Panes the whole runtime holds across every workspace and tab, including
+/// exited panes not yet collected. Every tab holds at least one pane, so
+/// this also bounds the tabs alive at once.
+pub const max_panes = 256;
 pub const max_history_query_bytes = 1024;
 pub const max_history_results = 100;
 pub const max_history_command_bytes = 64 * 1024;
-pub const max_agent_snapshot_entries = max_panes_per_tab;
+/// Agents the runtime tracks at once, one per agent pane generation.
+pub const max_agent_snapshot_entries = 64;
 pub const max_agent_workspace_label_bytes = 48;
 pub const max_agent_session_title_bytes = 96;
 pub const max_agent_cwd_label_bytes = 48;
@@ -48,7 +58,8 @@ pub const max_agent_final_message_bytes = 2048;
 /// Bound for one plan step or task subject an agent reports.
 pub const max_agent_plan_step_bytes = 96;
 pub const max_search_needle_bytes = 128;
-pub const max_search_matches = 64;
+/// Matches one copy-mode search returns: the newest ones when there are more.
+pub const max_search_matches = 256;
 /// A path picker query: fuzzy alignment cost grows with its length.
 pub const max_path_query_bytes = 64;
 pub const max_path_results = 50;
@@ -65,10 +76,22 @@ pub const max_notification_message_bytes = 192;
 pub const max_notification_link_bytes = 1024;
 pub const max_history_provider_bytes = 64;
 pub const max_history_tool_call_id_bytes = 256;
-pub const max_client_layout_clients = 8;
-pub const max_client_layout_tabs = max_panes_per_tab;
-pub const max_client_layout_nodes = max_panes_per_tab * 2 - 1;
-pub const max_client_layout_wire_bytes = 4096;
+/// Window identities whose layout the runtime keeps for a reconnect; the
+/// least recently used makes room for a new one.
+pub const max_client_layout_clients = 16;
+/// Tabs one retained client layout spans. A client's record keeps the tabs
+/// of every workspace it visited, and a tab needs a pane, so the runtime's
+/// pane bound bounds them.
+pub const max_client_layout_tabs = max_panes;
+/// Nodes of one tab's split tree: a full binary tree over its panes.
+pub const max_client_layout_tab_nodes = max_panes_per_tab * 2 - 1;
+/// Nodes of every tree in one layout message together. Each tree has twice
+/// its panes less one, so the runtime's panes bound the sum.
+pub const max_client_layout_nodes = max_panes * 2 - 1;
+/// Bytes of the largest layout message: `max_client_layout_tabs` trees whose
+/// nodes add up to `max_client_layout_nodes`. The layout tests encode that
+/// message into this bound.
+pub const max_client_layout_wire_bytes = 16 * 1024;
 pub const client_layout_ratio_scale: u16 = 10_000;
 pub const min_client_layout_ratio: u16 = client_layout_ratio_scale / 10;
 pub const max_client_layout_ratio: u16 = client_layout_ratio_scale - min_client_layout_ratio;

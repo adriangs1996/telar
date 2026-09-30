@@ -26,7 +26,9 @@ pub fn start(model: *RuntimeModel) void {
     }}) catch cancel(&model.workspaces, request.workspace);
 }
 
-/// Commits only the outstanding probe's result.
+/// Commits only the outstanding probe's result, then starts the next due
+/// probe, so with many workspaces each still refreshes about once per
+/// `probe_interval_ms` instead of one a maintenance tick.
 ///
 /// ```zig
 /// workspace_git.finish(model, completion);
@@ -35,6 +37,7 @@ pub fn finish(model: *RuntimeModel, completion: Completion) void {
     const branch = if (completion.present) completion.branchSlice() else "";
     const dirty: ?bool = if (completion.present) completion.dirty else false;
     _ = commit(&model.workspaces, completion.workspace, branch, dirty, std.Io.Timestamp.now(model.io, .real).toMilliseconds());
+    start(model);
 }
 
 /// Reserves the stalest due workspace and copies its path for the worker.

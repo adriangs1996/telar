@@ -23,3 +23,27 @@ pub fn performSchema(io: std.Io, connection: anytype, supported: core.SchemaId) 
     try connection.send(io, encoded);
     return response;
 }
+
+/// Reads the client's hello and refuses it for `reason`, whatever schema it
+/// speaks, so a client the runtime has no room for learns why.
+///
+/// ```zig
+/// try handshake.refuse(io, &connection, .client_limit_reached);
+/// ```
+pub fn refuse(io: std.Io, connection: anytype, reason: core.RejectReason) !void {
+    var request_buffer: [core.max_message_size]u8 = undefined;
+    const request = try connection.receive(io, &request_buffer);
+    _ = try core.decodeClientHello(request);
+
+    var response_buffer: [core.max_message_size]u8 = undefined;
+    const encoded = try core.encodeServerResponse(
+        &response_buffer,
+        .{
+            .rejected = .{
+                .reason = reason,
+                .expected_schema = core.schema_id,
+            },
+        },
+    );
+    try connection.send(io, encoded);
+}

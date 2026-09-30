@@ -1,7 +1,9 @@
 //! Incremental, allocation-free search of a terminal's scrollback: a
 //! Knuth-Morris-Pratt matcher over codepoints, ASCII case folded unless the
 //! needle has an uppercase letter, advanced a bounded number of rows per
-//! call so a search never stalls the caller.
+//! call so a search never stalls the caller. Rows are searched from the
+//! newest back, so a search with more matches than it keeps keeps the ones
+//! nearest the prompt.
 const std = @import("std");
 const SearchLimits = @import("SearchLimits.zig");
 
@@ -18,11 +20,22 @@ pub fn Type(comptime Match: type, comptime limits: SearchLimits) type {
         needle_len: usize = 0,
         fold: bool = true,
         revision: ?u64 = null,
+        /// Rows still to search are `first_row..next_row`, taken newest
+        /// first, so the matches kept are the newest ones.
+        first_row: usize = 0,
         next_row: usize = 0,
-        end_row: usize = 0,
+        /// Matches found so far, newest first; `ordered` copies them out in
+        /// document order.
         matches: [limits.matches]Match = undefined,
-        count: u8 = 0,
+        count: u16 = 0,
+        /// Some match or row was left out; the flags below say which bound.
         truncated: bool = false,
+        /// Rows older than the newest `limits.rows` were not searched.
+        rows_cut: bool = false,
+        /// Cells past `limits.columns` of some row were not searched.
+        columns_cut: bool = false,
+        /// Older matches did not fit `limits.matches`.
+        matches_cut: bool = false,
 
         /// Compiles an owned, linear-time matcher without allocating.
         /// Example: `var cursor = Cursor.init("error");`.
@@ -64,10 +77,12 @@ pub fn Type(comptime Match: type, comptime limits: SearchLimits) type {
             return cursor;
         }
 
-        /// Advances against an idle pane; changes invalidate all partial results.
-        /// `pane` provides `ingest_pending`, `search_revision` and a ghostty-vt
-        /// `terminal`.
-        /// Example: `if (try cursor.advance(pane)) publish(cursor);`.
+        /// Advances against an idle pane from the newest row back;
+        /// changes invalidate all partial results. Returns true once the
+        /// search is complete: every row searched, or the matches full.
+        /// `pane` provides `ingest_pending`, `search_revision` and a
+        /// ghostty-vt `terminal`.
+        /// Example: `if (try cursor.advance(pane)) publish(cursor.ordered(&storage));`.
         pub fn advance(self: *Cursor, pane: anytype) !bool {
             if (pane.ingest_pending) {
                 return false;
@@ -83,55 +98,90 @@ pub fn Type(comptime Match: type, comptime limits: SearchLimits) type {
                 }
             } else {
                 self.revision = pane.search_revision;
-                self.end_row = pages.total_rows;
-                self.next_row = self.end_row -| limits.rows;
-                self.truncated = self.next_row != 0;
+                self.next_row = pages.total_rows;
+                self.first_row = self.next_row -| limits.rows;
+                self.rows_cut = self.first_row != 0;
+                self.truncated = self.rows_cut;
             }
 
-            const end = @min(self.end_row, self.next_row + limits.rows_per_turn);
-            while (self.next_row < end) : (self.next_row += 1) {
-                const pin = pages.pin(.{ .screen = .{ .x = 0, .y = @intCast(self.next_row) } }) orelse continue;
-                var columns: [limits.columns]u16 = undefined;
-                var row_length: usize = 0;
-                var matched: usize = 0;
-                for (pin.cells(.all), 0..) |cell, column| {
-                    if (row_length == columns.len) {
-                        self.truncated = true;
-                        break;
-                    }
-                    if (cell.wide == .spacer_tail or cell.wide == .spacer_head) {
-                        continue;
-                    }
-
-                    columns[row_length] = @intCast(column);
-                    row_length += 1;
-                    const point = self.normalize(if (cell.hasText()) cell.codepoint() else ' ');
-                    while (matched != 0 and point != self.needle[matched]) {
-                        matched = self.prefix[matched - 1];
-                    }
-                    if (point == self.needle[matched]) {
-                        matched += 1;
-                    }
-                    if (matched != self.needle_len) {
-                        continue;
-                    }
-                    if (self.count == self.matches.len) {
-                        self.truncated = true;
-                        return true;
-                    }
-
-                    const first = columns[row_length - self.needle_len];
-                    self.matches[self.count] = .{
-                        .x = first,
-                        .y = @intCast(self.next_row),
-                        .len = @as(u16, @intCast(column)) - first + 1,
-                    };
-                    self.count += 1;
-                    matched = 0;
+            const stop = @max(self.first_row, self.next_row -| limits.rows_per_turn);
+            while (self.next_row > stop) {
+                self.next_row -= 1;
+                if (!self.searchRow(pages, self.next_row)) {
+                    self.first_row = self.next_row;
+                    return true;
                 }
             }
 
-            return self.next_row == self.end_row;
+            return self.next_row == self.first_row;
+        }
+
+        /// Copies the matches found so far into `output` in document order.
+        /// Example: `const found = cursor.ordered(&storage);`.
+        pub fn ordered(self: *const Cursor, output: []Match) []Match {
+            const count = @min(output.len, self.count);
+            for (output[0..count], 0..) |*match, index| {
+                match.* = self.matches[self.count - 1 - index];
+            }
+
+            return output[0..count];
+        }
+
+        /// Adds one row's matches, rightmost first. Returns false once a
+        /// match did not fit, which ends the search.
+        fn searchRow(self: *Cursor, pages: anytype, row: usize) bool {
+            const pin = pages.pin(.{ .screen = .{ .x = 0, .y = @intCast(row) } }) orelse return true;
+            var columns: [limits.columns]u16 = undefined;
+            var found: [limits.columns]Match = undefined;
+            var found_count: usize = 0;
+            var row_length: usize = 0;
+            var matched: usize = 0;
+            for (pin.cells(.all), 0..) |cell, column| {
+                if (row_length == columns.len) {
+                    self.columns_cut = true;
+                    self.truncated = true;
+                    break;
+                }
+                if (cell.wide == .spacer_tail or cell.wide == .spacer_head) {
+                    continue;
+                }
+
+                columns[row_length] = @intCast(column);
+                row_length += 1;
+                const point = self.normalize(if (cell.hasText()) cell.codepoint() else ' ');
+                while (matched != 0 and point != self.needle[matched]) {
+                    matched = self.prefix[matched - 1];
+                }
+                if (point == self.needle[matched]) {
+                    matched += 1;
+                }
+                if (matched != self.needle_len) {
+                    continue;
+                }
+
+                const first = columns[row_length - self.needle_len];
+                found[found_count] = .{
+                    .x = first,
+                    .y = @intCast(row),
+                    .len = @as(u16, @intCast(column)) - first + 1,
+                };
+                found_count += 1;
+                matched = 0;
+            }
+
+            while (found_count != 0) {
+                if (self.count == self.matches.len) {
+                    self.matches_cut = true;
+                    self.truncated = true;
+                    return false;
+                }
+
+                found_count -= 1;
+                self.matches[self.count] = found[found_count];
+                self.count += 1;
+            }
+
+            return true;
         }
 
         fn normalize(self: *const Cursor, point: u21) u21 {

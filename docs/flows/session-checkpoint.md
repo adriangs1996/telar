@@ -17,7 +17,7 @@ agent maintenance tick -> agent_maintenance.tick -> session_checkpoint.start
         |
 CheckpointWriter.due?  (dirty, settled ≥ 500 ms, no write in flight)
         |
-session_checkpoint.encode -> persistence Encoder (owned 1 MiB buffer)
+session_checkpoint.encode -> persistence Encoder (owned 4 MiB buffer)
         |
 CheckpointWriter.startWrite -> model.select.concurrent(.checkpoint_written, writeFile)   -- worker thread
         |
@@ -44,10 +44,11 @@ records: workspace (id, path, explicit name, first tab), tab (extra tabs in
 display order), pane (id, location, cwd, size, NUL-separated launch
 arguments, then the agent's provider, session reference and session title) and
 layout (client identity, LRU stamp and the exact bytes of one
-`update_client_layout` request). The file version is 8: version 6 added
+`update_client_layout` request). The file version is 9: version 6 added
 worktree records, version 7 the machine that dispatched each worktree,
-which older files read as none, and version 8 whether a pane's agent ran its
-session in the pane, which older files read as not. Version 4 ended each
+which older files read as none, version 8 whether a pane's agent ran its
+session in the pane, which older files read as not, and version 9 a 32-bit
+length for a pane's launch arguments, which may reach 128 KiB. Version 4 ended each
 pane record with a kind byte for the removed agent panes; the reader skips
 version 4 agent panes and restores the rest. Its layout records also encode a
 surface byte per pane leaf, which the current wire rejects, so restore drops
@@ -57,7 +58,9 @@ an empty title. Layouts reuse the wire encoding on purpose: restore
 replays them through the same validation that live updates get.
 
 Terminal panes are recorded only when their launch inherited the runtime
-environment and their arguments fit `LaunchRecord`.
+environment. `LaunchRecord` keeps any command a launch accepts (64 arguments,
+128 KiB) on the heap, sized to it, so a pane started with a long prompt comes
+back.
 
 ## Commit policy
 
@@ -72,7 +75,8 @@ so the last shape survives `telar server stop` even when an older write or
 its completion was still pending. Stopping a child's PTY does not remove its
 pane from the model; discarded exit events cannot erase the final snapshot.
 
-A session larger than `snapshot_bytes` (1 MiB, `CheckpointWriter.snapshot_bytes`)
+A session larger than `snapshot_bytes` (4 MiB, the largest file restore reads,
+`CheckpointWriter.snapshot_bytes`)
 writes the records that fit and drops the rest from the first one that does
 not. Records only point back to earlier ones, so the prefix restores. The
 runtime reports `session_checkpoint.snapshot_bytes` through

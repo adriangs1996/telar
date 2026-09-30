@@ -36,7 +36,10 @@ const limit_reached = @import("limit_reached.zig");
 const log = std.log.scoped(.checkpoint);
 
 pub const debounce_ns: u64 = 500 * std.time.ns_per_ms;
-pub const snapshot_bytes = 1024 * 1024;
+/// The buffer one checkpoint is encoded into, allocated for each write: as
+/// large as the file a restore reads, so a session the reader accepts always
+/// fits and only a larger one is cut to the records that fit.
+pub const snapshot_bytes = checkpoint.max_file_bytes;
 
 /// Writes `job.bytes()` to a temp file next to the target and renames it over
 /// the previous checkpoint. Runs on a worker; never touches runtime state.
@@ -69,7 +72,25 @@ pub fn writeFile(job: WriteJob) anyerror!void {
     };
 }
 
-pub const max_resume_command_bytes = 32 + core.max_agent_session_reference_bytes;
+/// The longest resume line: a provider's prefix, its in-pane argument and a
+/// space, the session reference and the carriage return that submits it.
+pub const max_resume_command_bytes = longestResumePrefix() + core.max_agent_session_reference_bytes + 1;
+/// A direct resume launch after its executable: every word of the resume
+/// line costs its bytes and a two-byte length, and a word has one byte at
+/// least.
+const direct_resume_bytes = 3 * max_resume_command_bytes;
+
+fn longestResumePrefix() usize {
+    var longest: usize = 0;
+    for (std.enums.values(core.AgentProvider)) |provider| {
+        const capabilities = providers.of(provider);
+        const prefix = capabilities.resume_prefix orelse continue;
+        const argument = capabilities.pane_session_argument orelse "";
+        longest = @max(longest, prefix.len + argument.len + 1);
+    }
+
+    return longest;
+}
 
 /// Builds the shell line that resumes a built-in agent's session, typed into
 /// the restored pane's shell. Only the built-in capability table
@@ -225,6 +246,18 @@ pub fn writeNow(model: *RuntimeModel) void {
     model.checkpoint.writes += 1;
 }
 
+/// Reads a checkpoint file of at most `checkpoint.max_file_bytes`, the most
+/// one write produces. A reader limit stops before the limit itself, so it
+/// is one byte past the largest file.
+///
+/// ```zig
+/// const bytes = try session_checkpoint.readFile(io, gpa, path);
+/// defer gpa.free(bytes);
+/// ```
+pub fn readFile(io: std.Io, gpa: std.mem.Allocator, path: []const u8) ![]u8 {
+    return std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(checkpoint.max_file_bytes + 1));
+}
+
 /// Rebuilds workspaces, tabs, panes and client layouts from the
 /// checkpoint file, if one exists. A file that fails validation is
 /// moved aside as `<path>.corrupt` and ignored.
@@ -235,7 +268,7 @@ pub fn writeNow(model: *RuntimeModel) void {
 pub fn restore(model: *RuntimeModel) void {
     const path = model.checkpoint.path orelse return;
     const io = model.io;
-    const bytes = std.Io.Dir.cwd().readFileAlloc(io, path, model.gpa, .limited(checkpoint.max_file_bytes)) catch |err| switch (err) {
+    const bytes = readFile(io, model.gpa, path) catch |err| switch (err) {
         error.FileNotFound => return,
         else => {
             model.checkpoint.restore_failed = true;
@@ -399,8 +432,10 @@ fn restorePane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !vo
     }
     const workspace_path = reader.workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
 
-    var argument_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
-    var encoder = bytecodec.Encoder.init(&argument_buffer);
+    // Each argument trades its NUL for a two-byte length on the wire.
+    const argument_buffer = try model.gpa.alloc(u8, record.arguments.len + record.argument_count);
+    defer model.gpa.free(argument_buffer);
+    var encoder = bytecodec.Encoder.init(argument_buffer);
     const resumable = resumeForPane(model, record);
     var arguments = ArgumentIterator.init(record.arguments);
     const executable = arguments.next() orelse return error.InvalidLaunch;
@@ -417,8 +452,9 @@ fn restorePane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !vo
         .environment_count = 0,
         .encoded_environment = "",
     };
-    var direct_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
-    var direct_encoder = bytecodec.Encoder.init(&direct_buffer);
+    const direct_buffer = try model.gpa.alloc(u8, executable.len + direct_resume_bytes);
+    defer model.gpa.free(direct_buffer);
+    var direct_encoder = bytecodec.Encoder.init(direct_buffer);
     const direct_count = if (resumable) |session|
         try directResumeArguments(&direct_encoder, executable, session)
     else
@@ -443,14 +479,15 @@ fn restorePane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !vo
         .launch_cwd = record.cwd,
         .workspace_path = workspace_path,
     });
-    pane.launch_record.capture(original_launch);
+    try pane.launch_record.capture(model.gpa, original_launch);
     model.checkpoint.restored_panes +|= 1;
 
     if (resumable) |session| {
         if (direct_count == null) {
             var command_buffer: [max_resume_command_bytes]u8 = undefined;
-            const command = resumeCommand(&command_buffer, session.provider, session.reference.slice(), session.in_pane).?;
-            try pane_input.sendRestored(model, pane, command);
+            if (resumeCommand(&command_buffer, session.provider, session.reference.slice(), session.in_pane)) |command| {
+                try pane_input.sendRestored(model, pane, command);
+            }
         }
 
         if (!agent_status.restoreSession(model, pane.key(), session)) {
@@ -761,6 +798,24 @@ test "writeFile replaces the checkpoint atomically and keeps it private" {
     try std.testing.expectEqualStrings("second!", written);
     const stat = try std.Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false });
     try std.testing.expectEqual(@as(u32, 0o600), stat.permissions.toMode() & 0o777);
+}
+
+test "a checkpoint as large as one write produces reads back whole" {
+    const gpa = std.testing.allocator;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = root_buffer[0..try temp.dir.realPath(std.testing.io, &root_buffer)];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/session.ckpt", .{root});
+    const payload = try gpa.alloc(u8, snapshot_bytes);
+    defer gpa.free(payload);
+    @memset(payload, 'x');
+
+    try writeFile(.{ .io = std.testing.io, .path = path, .buffer = payload, .len = payload.len });
+    const read = try readFile(std.testing.io, gpa, path);
+    defer gpa.free(read);
+    try std.testing.expectEqual(snapshot_bytes, read.len);
 }
 
 test "checkpoint pane records fit the bounded restore storage before model" {
