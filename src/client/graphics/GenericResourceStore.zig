@@ -186,6 +186,12 @@ pub fn Type(comptime Delivery: type) type {
                     revision.awaiting_snapshot = false;
                 },
                 .end => {
+                    // A pause at a limit already asked for the resync this
+                    // snapshot could not finish; asking again would loop.
+                    if (revision.awaiting_snapshot) {
+                        return;
+                    }
+
                     if (revision.snapshot != message.revision) {
                         revision.awaiting_snapshot = true;
                         revision.snapshot = null;
@@ -398,7 +404,7 @@ pub fn Type(comptime Delivery: type) type {
         }
 
         pub fn deleteImage(self: *Self, message: core.DeleteImage) !void {
-            if (!try self.acceptRevision(message.pane_id, message.revision)) {
+            if (!try self.acceptDelete(message.pane_id, message.revision)) {
                 return;
             }
             if (self.deleteImageData(message.pane_id, message.key)) {
@@ -440,7 +446,7 @@ pub fn Type(comptime Delivery: type) type {
         }
 
         pub fn deletePlacement(self: *Self, message: core.DeletePlacement) !void {
-            if (!try self.acceptRevision(message.pane_id, message.revision)) {
+            if (!try self.acceptDelete(message.pane_id, message.revision)) {
                 return;
             }
             const key: PlacementIdentity = .{
@@ -744,6 +750,18 @@ pub fn Type(comptime Delivery: type) type {
             }
 
             return err;
+        }
+
+        /// A pane paused at a limit still takes deletes: removing what it
+        /// shows is always safe, and a cleared screen must not keep the
+        /// images from before the pause.
+        fn acceptDelete(self: *Self, pane_id: core.PaneId, value: u64) !bool {
+            const state = try self.revisionState(pane_id);
+            if (state.awaiting_snapshot) {
+                return true;
+            }
+
+            return self.acceptRevision(pane_id, value);
         }
 
         fn acceptRevision(self: *Self, pane_id: core.PaneId, value: u64) !bool {

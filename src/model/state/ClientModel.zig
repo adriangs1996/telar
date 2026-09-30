@@ -144,6 +144,8 @@ client_diagnostic: model_data.Diagnostic = .{},
 diagnostic_revision: u64 = 0,
 /// Every limit this client or its window reached; `limit_reached.report` writes it.
 limit_reaches: core.LimitReaches = .{},
+/// Panes whose graphics paused at a limit, each with its own resync budget.
+graphics_pauses: model_data.GraphicsPauses = .{},
 workspace_list_snapshot: WorkspaceListSnapshot = .{},
 workspace_list_revision: u64 = 0,
 agent_snapshot: AgentSnapshot = .{},

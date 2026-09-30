@@ -726,8 +726,8 @@ pub fn reconnectAfterLoss(comptime start: fn (*Client) anyerror!void) !void {
 /// cannot be asked for loses the link; past the budget a pane's graphics
 /// stay paused and anything else gives the link up naming the limit, until
 /// the person retries.
-/// Example: `try client_tests.recoverLimitedMessages(limit_reached.recover);`
-pub fn recoverLimitedMessages(comptime recover: fn (*Client, RuntimeResync, anyerror) anyerror!void) !void {
+/// Example: `try client_tests.recoverLimitedMessages(limit_reached.recover, limit_reached.resumeGraphics);`
+pub fn recoverLimitedMessages(comptime recover: fn (*Client, RuntimeResync, anyerror) anyerror!void, comptime limit_reached_resume: fn (*Client) void) !void {
     const gpa = std.testing.allocator;
     const app = try gpa.create(Client);
     defer gpa.destroy(app);
@@ -760,22 +760,32 @@ pub fn recoverLimitedMessages(comptime recover: fn (*Client, RuntimeResync, anye
     var first = try connectForLimits(app);
     defer first.deinit(std.testing.io);
 
-    // A graphics limit asks for that pane's graphics snapshot.
+    // A graphics limit says the pane's images paused and asks for that
+    // pane's graphics snapshot, within the pane's own budget.
     try recover(app, .{ .graphics = pane_id }, error.GraphicsQuotaExceeded);
     try std.testing.expect(app.model.runtime_link.phase == .connected);
     try std.testing.expectEqual(@as(usize, 1), queuedCount(app, .request_graphics_snapshot));
-    try std.testing.expect(app.model.limit_reaches.find("GraphicsQuotaExceeded") != null);
+    try std.testing.expectEqualStrings("Limit reached: images paused", app.model.notification_center.itemAt(0).?.title());
+    try recover(app, .{ .graphics = pane_id }, error.GraphicsQuotaExceeded);
+    try recover(app, .{ .graphics = pane_id }, error.GraphicsQuotaExceeded);
+    try recover(app, .{ .graphics = pane_id }, error.GraphicsQuotaExceeded);
+    try std.testing.expectEqual(@as(usize, 3), queuedCount(app, .request_graphics_snapshot));
+    try std.testing.expectEqual(@as(usize, 1), app.model.graphics_pauses.waiting_count);
+    try std.testing.expectEqual(@as(u8, 0), app.model.runtime_link.limit_resyncs);
 
-    // A pane frame asks for that pane's snapshot.
+    // Once its window passes, the paused pane asks again by itself.
+    const slot = app.model.graphics_pauses.find(pane_id).?;
+    app.model.graphics_pauses.since_ns[slot] -|= runtime_link.healthy_after_ns;
+    limit_reached_resume(app);
+    try std.testing.expectEqual(@as(usize, 4), queuedCount(app, .request_graphics_snapshot));
+    try std.testing.expectEqual(@as(usize, 0), app.model.graphics_pauses.waiting_count);
+
+    // A pane frame asks for that pane's snapshot, from the link's budget.
+    try recover(app, .{ .pane = pane_id }, error.ClientOutboxFull);
+    try recover(app, .{ .pane = pane_id }, error.ClientOutboxFull);
     try recover(app, .{ .pane = pane_id }, error.ClientOutboxFull);
     try std.testing.expect(app.model.runtime_link.phase == .connected);
-    try std.testing.expectEqual(@as(usize, 1), queuedCount(app, .request_snapshot));
-
-    // Past the budget a pane's graphics stay paused and the link stays.
-    try recover(app, .{ .graphics = pane_id }, error.GraphicsQuotaExceeded);
-    try recover(app, .{ .graphics = pane_id }, error.GraphicsQuotaExceeded);
-    try std.testing.expect(app.model.runtime_link.phase == .connected);
-    try std.testing.expectEqual(@as(usize, 2), queuedCount(app, .request_graphics_snapshot));
+    try std.testing.expectEqual(@as(usize, 3), queuedCount(app, .request_snapshot));
 
     // Anything else past the budget gives the link up, with no retry.
     try recover(app, .session, error.TooManyTabs);

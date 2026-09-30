@@ -15,8 +15,9 @@ const set_names = [_][]const u8{ "LimitError", "SystemError", "NotLimitError" };
 const exemption_set = "NotLimitError";
 const limit_set = "LimitError";
 const limit_words = [_][]const u8{ "TooMany", "TooLarge", "TooLong", "TooDeep", "TooSmall", "Depth", "Full", "Exceeded", "Exhausted", "Limit", "Capacity", "Overflow", "Busy", "Quota" };
-/// Files whose errors belong to tests: what they raise does not keep a
-/// `LimitError` member alive.
+/// Files whose errors belong to tests, fuzz targets included: their own
+/// errors never reach a net, so they need no set, and what they raise does
+/// not keep a `LimitError` member alive.
 const test_path_parts = [_][]const u8{ "/tests/", "client_tests/", "_test.zig", "/test.zig" };
 
 /// Reads the sets from their file's source, which must outlive `Names`,
@@ -67,7 +68,9 @@ pub fn collect(allocator: std.mem.Allocator, source: [:0]const u8, names: *Limit
 
 /// Returns every error of one file named like a limit and in no set, both
 /// `error.X` and the members of an `error{...}` it declares, and notes
-/// which `LimitError` members the file raises outside tests.
+/// which `LimitError` members the file raises. Test files and `test`
+/// blocks raise their own fixtures' errors, which no net sees, so they are
+/// neither checked nor count as raising.
 ///
 /// ```zig
 /// const violations = try limit_errors.lint(gpa, path, source, &names);
@@ -142,7 +145,7 @@ fn check(allocator: std.mem.Allocator, occurrence: Occurrence, names: *LimitErro
         return;
     }
 
-    if (looksLikeLimit(name)) {
+    if (occurrence.raises and looksLikeLimit(name)) {
         try violations.append(allocator, at(occurrence.source, occurrence.start, .limit_error_set));
     }
 }
@@ -342,4 +345,21 @@ test "an error set's members named like limits are checked too" {
     defer std.testing.allocator.free(violations);
     try std.testing.expectEqual(@as(usize, 1), violations.len);
     try std.testing.expectEqual(@as(usize, 33), violations[0].column);
+}
+
+test "test code keeps its own fixtures' errors out of the sets" {
+    var names: LimitErrorNames = .{};
+    defer names.deinit(std.testing.allocator);
+
+    const fuzz = try lint(std.testing.allocator, "src/core/schema/messages/server_fuzz_test.zig", "const a = error.OwnedViewFull;", &names);
+    defer std.testing.allocator.free(fuzz);
+    try std.testing.expectEqual(@as(usize, 0), fuzz.len);
+
+    const block = try lint(std.testing.allocator, "src/a.zig", "test \"t\" { _ = error.FixtureQueueFull; }", &names);
+    defer std.testing.allocator.free(block);
+    try std.testing.expectEqual(@as(usize, 0), block.len);
+
+    const code = try lint(std.testing.allocator, "src/a.zig", "const a = error.QueueFull;", &names);
+    defer std.testing.allocator.free(code);
+    try std.testing.expectEqual(@as(usize, 1), code.len);
 }

@@ -222,6 +222,7 @@ pub const OpenedPane = @import("panes/OpenedPane.zig");
 pub const Opening = @import("links/Opening.zig");
 pub const Outbox = @import("connection/Outbox.zig");
 pub const RuntimeLink = @import("connection/RuntimeLink.zig");
+pub const GraphicsPauses = @import("connection/GraphicsPauses.zig");
 pub const MachineRequest = @import("state/MachineRequest.zig").MachineRequest;
 pub const MachinePrompt = @import("state/MachinePrompt.zig").MachinePrompt;
 pub const MachineLabel = @import("state/MachineLabel.zig");
@@ -374,6 +375,7 @@ test {
     _ = @import("state/PickListState.zig");
     _ = @import("state/pick_list.zig");
     _ = @import("connection/RuntimeLink.zig");
+    _ = @import("connection/GraphicsPauses.zig");
     _ = @import("bars/color_name.zig");
     _ = @import("connection/runtime_session.zig");
     _ = @import("state/model_invariants.zig");

@@ -28,6 +28,8 @@ const outbox_reserve = 8;
 const max_limit_resyncs = 3;
 /// Route of a runtime message that stopped at a limit while it was applied.
 const message_route = "runtime_message";
+/// Title of the notice for a graphics limit: the pane's images pause.
+const paused_title = "Limit reached: images paused";
 
 /// Counts one reach of a limit; shows it, logs it and reports it to the
 /// runtime when its interval allows. Never fails and allocates nothing, so
@@ -106,13 +108,14 @@ pub fn plan(message: *const core.ServerMessage) RuntimeResync {
 /// Recovers from a runtime message that stopped at a limit while it was
 /// applied, which may have left the replica short of the runtime. The limit
 /// is reported, then the smallest resync the protocol has follows:
-/// - graphics: the store paused that pane's stream at the limit, so a
-///   graphics snapshot resumes it;
+/// - graphics: the store paused that pane's stream at the limit; the notice
+///   says the pane's images paused, and a graphics snapshot resumes it,
+///   within the pane's own budget (`pauseGraphics`);
 /// - a pane frame: a snapshot of that pane;
 /// - anything else: a new session, which rebuilds the replica.
-/// A link asking for more than `max_limit_resyncs` within
-/// `runtime_link.healthy_after_ns` stops asking: a pane's graphics stay
-/// paused, and any other resync gives the link up naming the limit. A
+/// A link asking for more than `max_limit_resyncs` pane snapshots or new
+/// sessions within `runtime_link.healthy_after_ns` gives the link up naming
+/// the limit. A
 /// resync that cannot be asked for loses the link, so the replica never
 /// stays wrong while the link shows connected.
 ///
@@ -121,13 +124,13 @@ pub fn plan(message: *const core.ServerMessage) RuntimeResync {
 /// ```
 pub fn recover(client: *Client, resync: RuntimeResync, err: anyerror) !void {
     const reach = core.limit_reached.unnamed(err, message_route);
+    if (resync == .graphics) {
+        _ = noticeTitled(client, reach, paused_title);
+        return pauseGraphics(client, resync.graphics);
+    }
+
     report(client, reach);
-
     if (!admitResync(client)) {
-        if (resync == .graphics) {
-            return;
-        }
-
         var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
         return runtime_link.abandon(client, reach.describe(&buffer, 1));
     }
@@ -135,13 +138,66 @@ pub fn recover(client: *Client, resync: RuntimeResync, err: anyerror) !void {
     ask(client, resync, err) catch |failed| try runtime_link.lose(client, failed);
 }
 
+/// Asks again for the graphics snapshot of every paused pane whose budget
+/// window has passed, so a pane does not stay paused until the link
+/// reconnects. One comparison when no pane waits; called once per runtime
+/// message.
+///
+/// ```zig
+/// limit_reached.resumeGraphics(client);
+/// ```
+pub fn resumeGraphics(client: *Client) void {
+    const pauses = &client.model.graphics_pauses;
+    if (pauses.waiting_count == 0) {
+        return;
+    }
+
+    const now_ns = pacing.clock.monotonic(client.io);
+    for (0..pauses.count) |slot| {
+        if (!pauses.waiting[slot] or now_ns -| pauses.since_ns[slot] < runtime_link.healthy_after_ns) {
+            continue;
+        }
+
+        pauses.resyncs[slot] = 1;
+        pauses.since_ns[slot] = now_ns;
+        pauses.setWaiting(slot, false);
+        askGraphics(client, pauses.pane_id[slot]) catch pauses.setWaiting(slot, true);
+    }
+}
+
+/// A pane's graphics paused at a limit: its own budget allows
+/// `max_limit_resyncs` snapshots within `runtime_link.healthy_after_ns`,
+/// then it waits for the window to pass (`resumeGraphics`). It never spends
+/// the link's budget.
+fn pauseGraphics(client: *Client, pane_id: core.PaneId) !void {
+    const pauses = &client.model.graphics_pauses;
+    const now_ns = pacing.clock.monotonic(client.io);
+    const slot = pauses.find(pane_id) orelse pauses.add(pane_id, now_ns);
+    if (now_ns -| pauses.since_ns[slot] >= runtime_link.healthy_after_ns) {
+        pauses.resyncs[slot] = 0;
+        pauses.since_ns[slot] = now_ns;
+    }
+
+    pauses.resyncs[slot] +|= 1;
+    if (pauses.resyncs[slot] > max_limit_resyncs) {
+        pauses.setWaiting(slot, true);
+        return;
+    }
+
+    askGraphics(client, pane_id) catch |failed| try runtime_link.lose(client, failed);
+}
+
+fn askGraphics(client: *Client, pane_id: core.PaneId) !void {
+    try client.model.to_runtime.push(.{
+        .request_graphics_snapshot = .{
+            .pane_id = pane_id,
+        },
+    });
+}
+
 fn ask(client: *Client, resync: RuntimeResync, err: anyerror) !void {
     switch (resync) {
-        .graphics => |pane_id| try client.model.to_runtime.push(.{
-            .request_graphics_snapshot = .{
-                .pane_id = pane_id,
-            },
-        }),
+        .graphics => |pane_id| try askGraphics(client, pane_id),
         .pane => |pane_id| {
             const pane = client.model.panes.find(pane_id) orelse return;
             try client.model.to_runtime.push(.{
@@ -170,6 +226,10 @@ fn admitResync(client: *Client) bool {
 /// Records one reach and shows it when its interval allows; returns
 /// whether it showed, so a caller logs its own detail only then.
 fn notice(client: *Client, reach: core.LimitReach) bool {
+    return noticeTitled(client, reach, core.limit_reached.notice_title);
+}
+
+fn noticeTitled(client: *Client, reach: core.LimitReach, title: []const u8) bool {
     const at: core.ReachTime = .{
         .awake_ms = std.Io.Timestamp.now(client.io, .awake).toMilliseconds(),
         .real_ms = std.Io.Timestamp.now(client.io, .real).toMilliseconds(),
@@ -189,7 +249,7 @@ fn notice(client: *Client, reach: core.LimitReach) bool {
         client,
         .{
             .level = .warning,
-            .title = core.limit_reached.notice_title,
+            .title = title,
             .message = text,
             .duration_ns = notice_duration_ns,
         },
@@ -216,5 +276,5 @@ fn send(client: *Client, slot: usize, awake_ms: i64) void {
 }
 
 test "a runtime message at a limit resyncs as little as it can and gives up past its budget" {
-    try client_tests.recoverLimitedMessages(recover);
+    try client_tests.recoverLimitedMessages(recover, resumeGraphics);
 }

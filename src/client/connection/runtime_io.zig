@@ -71,7 +71,7 @@ pub fn receiveRuntime(client: *Client, result: anyerror!*const data.RuntimeMessa
         // reading whatever the recovery does; the resync is read from the
         // message before the next read reuses its buffer.
         const resync = limit_reached.plan(&received.message);
-        try startRuntimeRead(client);
+        startRuntimeRead(client) catch |failed| return lose(client, failed);
         try limit_reached.recover(client, resync, err);
         return null;
     };
@@ -80,8 +80,16 @@ pub fn receiveRuntime(client: *Client, result: anyerror!*const data.RuntimeMessa
         return exit_status;
     }
 
-    try startRuntimeRead(client);
+    limit_reached.resumeGraphics(client);
+    startRuntimeRead(client) catch |failed| return lose(client, failed);
 
+    return null;
+}
+
+/// A read that cannot be re-armed loses the link, so it never shows
+/// connected without reading.
+fn lose(client: *Client, err: anyerror) !?u8 {
+    try runtime_link.lose(client, err);
     return null;
 }
 

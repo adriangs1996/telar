@@ -208,3 +208,47 @@ test "a chunk past the image's limit pauses the pane's stream" {
         .bytes = "rgb",
     });
 }
+
+test "a snapshot that stops at a limit ends quietly, and deletes still apply while paused" {
+    var store = retained.Store.init(std.testing.allocator);
+    defer store.deinit();
+    for (1..core.max_images_per_pane + 1) |number| {
+        var kept = image;
+        kept.key.image_id = @intCast(number);
+        try receive(&store, kept);
+    }
+
+    // A delete while the pane is paused still removes what it shows.
+    var rejected = image;
+    rejected.key.image_id = core.max_images_per_pane + 1;
+    try std.testing.expectError(error.GraphicsImageLimitExceeded, store.applyImage(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .image = rejected,
+    }));
+    try store.deleteImage(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .key = image.key,
+    });
+    const deleted = store.images.getPtr(store_module.identity(pane_id, image.key));
+    try std.testing.expect(deleted == null or deleted.?.retire_pending);
+
+    // A snapshot that stops at the limit again ends without asking for
+    // another: the pause already did.
+    try store.applySnapshot(.{ .pane_id = pane_id, .revision = 2, .phase = .begin });
+    for (1..core.max_images_per_pane + 1) |number| {
+        var kept = image;
+        kept.key.image_id = @intCast(number);
+        kept.key.generation = 2;
+        try store.applyImage(.{ .pane_id = pane_id, .revision = 2, .image = kept });
+    }
+
+    rejected.key.generation = 2;
+    try std.testing.expectError(error.GraphicsImageLimitExceeded, store.applyImage(.{
+        .pane_id = pane_id,
+        .revision = 2,
+        .image = rejected,
+    }));
+    try store.applySnapshot(.{ .pane_id = pane_id, .revision = 2, .phase = .end });
+}
