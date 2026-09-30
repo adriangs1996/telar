@@ -11,7 +11,9 @@ workspace names and does not mark dirty workspaces.
 agent maintenance tick (1 s)
         |
 workspace_git.start: one stalest workspace, ≥ 5 s since its last probe,
-                  at most one probe in flight runtime-wide
+                  at most one probe in flight runtime-wide; each finish
+                  starts the next due probe, so many workspaces still
+                  refresh every 5 s instead of one a tick
         |
 model.select.concurrent(.git_status, git_probe.probe)   -- worker thread
         |

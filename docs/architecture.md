@@ -177,7 +177,15 @@ unless its inputs changed.
 
 Tables have fixed capacity and are reserved once when the model is created.
 Creating a pane allocates its cell buffer; the interactive path allocates
-nothing. Columns keep what each hot loop reads contiguous, and a lookup by id
+nothing.
+
+What a pane allocates grows with the panes alive, so the runtime's pane bound
+(`core.max_panes`, 256) sets its worst case. Each pane may keep 10 MB of
+scrollback (`default_scrollback_bytes`), 2.56 GB for 256 panes; its input
+queue, reply queue and read buffer take about 208 KiB, 52 MiB for 256; and a
+launch command of up to 128 KiB, 32 MiB for 256. Child graphics stay within
+their own 512 MiB runtime quota. A runtime that holds this much holds 256 busy
+panes; the bounds exist so that nothing past them can grow. Columns keep what each hot loop reads contiguous, and a lookup by id
 is one index probe, not a walk through nested structs.
 
 ## Packages

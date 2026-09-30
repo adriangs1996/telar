@@ -13,6 +13,8 @@ const change_review = @import("change_review.zig");
 const agent_snapshot = @import("agent_snapshot.zig");
 const Sources = @import("delivery/Sources.zig");
 const store_support = @import("client/store_support.zig");
+const limit_reached = @import("limit_reached.zig");
+const TextMetadataCapture = @import("../pane/TextMetadataCapture.zig");
 
 /// Delivers pending output to every affected client in a single pass. A
 /// client dropped during the pass may leave resync notices for clients the
@@ -144,14 +146,15 @@ fn pump(model: *RuntimeModel, session: *Session, sources: Sources) !void {
         return;
     }
 
-    const pending = try session.delivery.prepare(.{
+    const pending = session.delivery.prepare(.{
         .io = model.io,
         .attachments = &model.attachments,
         .client = session.slot,
         .sources = sources,
         .metrics = &model.metrics,
     });
-    const prepared = pending orelse {
+    reportDroppedLinks(model, session.slot);
+    const prepared = (try pending) orelse {
         session.cell_deadline_ns = model.attachments.cellDeadline(session.slot);
         return;
     };
@@ -164,6 +167,21 @@ fn pump(model: *RuntimeModel, session: *Session, sources: Sources) !void {
         .client = session.slot,
         .metrics = &model.metrics,
     });
+}
+
+/// Reports the link tables that rendering this client's panes cut to
+/// `text_metadata.max_links`; the links that fit were kept.
+fn reportDroppedLinks(model: *RuntimeModel, client: usize) void {
+    for (model.attachments.record[client]) |slot| {
+        const attachment = slot orelse continue;
+        const pane_dropped = attachment.pane.text_metadata.takeDropped();
+        const projection_dropped = attachment.cells.projected_text_metadata.takeDropped();
+        if (pane_dropped or projection_dropped) {
+            limit_reached.report(model, .{
+                .limit = TextMetadataCapture.links_limit,
+            });
+        }
+    }
 }
 
 // Scheduling exception: std.Io.Threaded allocates task records outside Telar

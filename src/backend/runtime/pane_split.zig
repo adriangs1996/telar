@@ -23,7 +23,7 @@ pub fn split(model: *RuntimeModel, session: *Session, request: core.CreatePaneVi
             error.TabNotFound => client_request.fail(session, request.request_id, .pane_not_found, "tab not found"),
             error.GeometryUnavailable => client_request.fail(session, request.request_id, .resource_limit, "workspace geometry is leased by another client"),
             error.InvalidLaunchCwd => client_request.fail(session, request.request_id, .invalid_request, "cwd source pane is unavailable"),
-            error.PaneLimitReached => client_request.fail(session, request.request_id, .resource_limit, "pane limit reached"),
+            error.PaneLimitReached, error.TabPaneLimitReached => client_request.fail(session, request.request_id, .resource_limit, pane_launch.limitFailure(err).?),
             error.UnsupportedEnvironment => client_request.fail(session, request.request_id, .invalid_request, "custom pane environment is not supported"),
             else => if (pane_launch.spawnFailure(err)) |reason| client_request.fail(session, request.request_id, .spawn_failed, reason) else err,
         };

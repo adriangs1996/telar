@@ -39,7 +39,9 @@ const PaneCwd = @import("PaneCwd.zig");
 const PaneForeground = @import("PaneForeground.zig");
 const PaneProgress = @import("PaneProgress.zig");
 
-pub const max_clipboard_bytes = 64 * 1024;
+/// Text one copy sends to a client's clipboard: a long log or diff copied
+/// from scrollback fits.
+pub const max_clipboard_bytes = 1024 * 1024;
 
 pub const PaneProgressState = enum(u8) {
     remove,

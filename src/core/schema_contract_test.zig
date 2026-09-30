@@ -157,6 +157,10 @@ const wire_bounds = [_]WireBound{
         .value = types.max_panes_per_tab,
     },
     .{
+        .name = "max_panes",
+        .value = types.max_panes,
+    },
+    .{
         .name = "max_history_query_bytes",
         .value = types.max_history_query_bytes,
     },
@@ -291,6 +295,10 @@ const wire_bounds = [_]WireBound{
     .{
         .name = "max_client_layout_tabs",
         .value = types.max_client_layout_tabs,
+    },
+    .{
+        .name = "max_client_layout_tab_nodes",
+        .value = types.max_client_layout_tab_nodes,
     },
     .{
         .name = "max_client_layout_nodes",

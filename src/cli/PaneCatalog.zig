@@ -7,7 +7,8 @@ const PaneCatalog = @This();
 session: *Session,
 workspace: ?core.WorkspaceId = null,
 tab: ?core.TabId = null,
-entries: [core.max_panes_per_tab]PaneRecord = undefined,
+/// Every pane the runtime holds fits, so an unfiltered listing is whole.
+entries: [core.max_panes]PaneRecord = undefined,
 count: usize = 0,
 
 /// Copies topology before the receive buffer is reused. Example: `try catalog.load();`

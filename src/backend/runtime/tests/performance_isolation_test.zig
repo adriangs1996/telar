@@ -51,7 +51,7 @@ test "performance probe measures bounded search turns against the complete query
         const started = now();
         const found = fixture.pane.searchText(needle, &matches);
         time.* = elapsed(started);
-        try std.testing.expectEqual(@as(u8, 0), found.count);
+        try std.testing.expectEqual(@as(u16, 0), found.count);
     }
     report("search_complete", &complete_times);
 
@@ -72,7 +72,7 @@ test "performance probe measures bounded search turns against the complete query
             }
 
             total.* = elapsed(started);
-            try std.testing.expectEqual(@as(u8, 0), cursor.count);
+            try std.testing.expectEqual(@as(u16, 0), cursor.count);
         }
         report("search_incremental_total", &total_times);
         report("search_max_turn", &turn_times);

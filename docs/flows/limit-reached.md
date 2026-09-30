@@ -307,6 +307,16 @@ with notice levels and the client's `limits`.
   update net, and `Runtime.update` skipping a real event.
 - `checkpoint_shutdown_test.zig`: a session larger than its checkpoint keeps
   the runtime and restores cleanly.
+- `client_events_test.zig`: a client the runtime has no room for is answered
+  with `client_limit_reached` and the runtime reports `clients.max_clients`.
+- `agent_control_test.zig`: text that does not fit a pane's input queue fails
+  its request, keeps what was queued and reports
+  `panes.input_queue_capacity`.
+- `search_pane_test.zig`: a search keeps its newest matches and one out of
+  time answers with what it found, reporting `pane_search.deadline_ms`.
+- `attachment_namespace.zig`: placements past a screen's count drop only the
+  oldest image's; `TextMetadataCapture.zig`: a link table past its quota keeps
+  the links that fit.
 - `src/backend/runtime/resources/RuntimeLog.zig`: rotation at start and past
   the size bound.
 - `client_tests.recoverLimitedMessages`, run from

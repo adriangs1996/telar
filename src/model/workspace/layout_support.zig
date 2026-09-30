@@ -472,7 +472,7 @@ test "fullscreen navigation follows display order and restores spatial geometry"
     );
     var before: LayoutSnapshot = .{};
     layout.snapshot(area, &before);
-    var nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
+    var nodes: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
     const original = layout.clientLayoutNodes(&nodes);
     try std.testing.expect(layout.toggleFullscreen());
 
@@ -490,7 +490,7 @@ test "fullscreen navigation follows display order and restores spatial geometry"
 
     try std.testing.expect(layout.toggleFullscreen());
     try std.testing.expectEqual(third, layout.focused().?);
-    var restored_nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
+    var restored_nodes: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
     try std.testing.expectEqualDeep(original, layout.clientLayoutNodes(&restored_nodes));
     var after: LayoutSnapshot = .{};
     layout.snapshot(area, &after);
@@ -672,7 +672,7 @@ test "client layout encoding restores single and split pane fullscreen" {
         }
 
         try std.testing.expect(original.toggleFullscreen());
-        var node_storage: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
+        var node_storage: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
         const nodes = original.clientLayoutNodes(&node_storage);
         const location: core.TabLocation = .{
             .workspace = .{
@@ -704,7 +704,7 @@ test "client layout encoding restores single and split pane fullscreen" {
         try std.testing.expectEqual(original.count(), restored.count());
         try std.testing.expectEqual(original.focused().?, restored.focused().?);
         try std.testing.expect(restored.isFullscreen());
-        var restored_storage: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
+        var restored_storage: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
         const restored_nodes = restored.clientLayoutNodes(&restored_storage);
         try std.testing.expectEqual(nodes.len, restored_nodes.len);
         for (nodes, restored_nodes) |expected, actual| {

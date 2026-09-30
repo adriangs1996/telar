@@ -10,8 +10,10 @@ const TabRemoved = @import("TabRemoved.zig");
 /// only `commit` publishes it.
 const Workspaces = @This();
 
-pub const capacity = 64;
+pub const capacity = core.max_workspace_list_entries;
+pub const workspaces_limit = core.Limit.declare("workspaces.capacity", "workspaces", capacity);
 const max_tabs = core.max_tabs_per_workspace;
+pub const tabs_limit = core.Limit.declare("workspaces.max_tabs_per_workspace", "tabs in one workspace", max_tabs);
 const Rows = std.bit_set.IntegerBitSet(capacity);
 
 comptime {
@@ -20,8 +22,8 @@ comptime {
 
 id: [capacity]core.WorkspaceId = @splat(.invalid),
 path: [capacity][]u8 = undefined,
-explicit_name: [capacity][core.max_tab_label_bytes]u8 = undefined,
-explicit_name_len: [capacity]u8 = @splat(0),
+explicit_name: [capacity][core.max_workspace_name_bytes]u8 = undefined,
+explicit_name_len: [capacity]u16 = @splat(0),
 tab_count: [capacity]u8 = @splat(0),
 tab_id: [capacity][max_tabs]core.TabId = undefined,
 tab_label: [capacity][max_tabs][core.max_tab_label_bytes]u8 = undefined,
@@ -343,7 +345,19 @@ pub fn name(self: *const Workspaces, slot: usize) []const u8 {
     }
 
     const basename = std.fs.path.basename(self.path[slot]);
-    return if (basename.len == 0) self.path[slot] else basename;
+    const derived = if (basename.len == 0) self.path[slot] else basename;
+    if (derived.len <= core.max_workspace_name_bytes) {
+        return derived;
+    }
+
+    // A file system names a component in at most 255 bytes; a longer
+    // basename is a path that does not exist, cut where a character ends.
+    var end: usize = core.max_workspace_name_bytes;
+    while (end > 0 and derived[end] & 0b1100_0000 == 0b1000_0000) {
+        end -= 1;
+    }
+
+    return derived[0..end];
 }
 
 /// Example: `const label = workspaces.labelAt(slot, index);`.
@@ -540,7 +554,7 @@ fn release(self: *Workspaces, gpa: std.mem.Allocator, slot: usize) void {
 }
 
 fn setExplicitName(self: *Workspaces, slot: usize, value: []const u8) !void {
-    if (value.len == 0 or value.len > core.max_tab_label_bytes) {
+    if (value.len == 0 or value.len > core.max_workspace_name_bytes) {
         return error.InvalidWorkspaceName;
     }
 
@@ -800,7 +814,7 @@ test "removing a missing tab leaves the table unchanged" {
     try std.testing.expectEqual(revision, table.revision);
 }
 
-test "workspace names derive from the path until an explicit rename within the label limit" {
+test "workspace names derive from the path until an explicit rename within the name limit" {
     const gpa = std.testing.allocator;
     const table = try testingTable();
     defer destroyTestingTable(table);
@@ -815,8 +829,8 @@ test "workspace names derive from the path until an explicit rename within the l
     try std.testing.expect(table.revision != before);
     try std.testing.expectError(error.InvalidWorkspaceName, table.rename(location.workspace, ""));
 
-    const accepted: [core.max_tab_label_bytes]u8 = @splat('a');
-    const oversized: [core.max_tab_label_bytes + 1]u8 = @splat('x');
+    const accepted: [core.max_workspace_name_bytes]u8 = @splat('a');
+    const oversized: [core.max_workspace_name_bytes + 1]u8 = @splat('x');
     try table.rename(location.workspace, &accepted);
     try std.testing.expectEqualSlices(u8, &accepted, table.workspaceName(location.workspace).?);
     try std.testing.expectError(error.InvalidWorkspaceName, table.rename(location.workspace, &oversized));
@@ -904,6 +918,10 @@ test "created tabs own their labels and path-derived names may exceed the label 
     const derived = table.workspaceName(long.workspace).?;
     try std.testing.expectEqual(@as(usize, core.max_tab_label_bytes + 1), derived.len);
     try std.testing.expect(std.mem.allEqual(u8, derived, 'p'));
+
+    const longest_path = "/work/" ++ [_]u8{'q'} ** (core.max_workspace_name_bytes + 1);
+    const longest = try table.insert(gpa, longest_path, null);
+    try std.testing.expectEqual(@as(usize, core.max_workspace_name_bytes), table.workspaceName(longest.workspace).?.len);
 }
 
 test "anchored tab moves preserve the order and identity of every intervening tab" {
@@ -953,7 +971,7 @@ test "a failed insertion preserves identities and revision" {
     const table = try testingTable();
     defer destroyTestingTable(table);
     const initial_revision = table.revision;
-    const oversized_name: [core.max_tab_label_bytes + 1]u8 = @splat('x');
+    const oversized_name: [core.max_workspace_name_bytes + 1]u8 = @splat('x');
 
     try std.testing.expectError(error.InvalidWorkspaceName, table.insert(gpa, "/work/rejected", &oversized_name));
     try std.testing.expectEqual(@as(usize, 0), table.count);

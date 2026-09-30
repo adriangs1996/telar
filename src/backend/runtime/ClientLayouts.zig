@@ -20,6 +20,8 @@ const Exported = struct {
     payload: []const u8,
 };
 
+/// One client identity's layout: the tabs of every workspace it visited,
+/// whose split trees share one node pool in tab order.
 const Record = struct {
     identity: core.ClientIdentity = .invalid,
     last_used: u64 = 0,
@@ -28,7 +30,58 @@ const Record = struct {
     workspace_list_collapsed: bool = false,
     active_tab: core.TabLocation = undefined,
     tabs: [core.max_client_layout_tabs]StoredTab = undefined,
-    tab_count: u8 = 0,
+    tab_count: u16 = 0,
+    nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined,
+    node_count: u16 = 0,
+
+    fn layoutAt(self: *const Record, index: usize) core.ClientTabLayout {
+        const tab = &self.tabs[index];
+        return .{
+            .location = tab.location,
+            .focused_pane = tab.focused_pane,
+            .fullscreen = tab.fullscreen,
+            .workspace_active = tab.workspace_active,
+            .nodes = self.nodes[tab.node_start..][0..tab.node_count],
+        };
+    }
+
+    /// Appends one current tab and its tree at the end of the pool.
+    fn append(self: *Record, tab: core.ClientTabLayoutView) !void {
+        if (self.tab_count == self.tabs.len or tab.node_count > self.nodes.len - self.node_count) {
+            return error.TooManyClientLayoutNodes;
+        }
+
+        const start = self.node_count;
+        var nodes = tab.nodes();
+        var index: usize = start;
+        while (try nodes.next()) |node| : (index += 1) {
+            self.nodes[index] = node;
+        }
+
+        self.tabs[self.tab_count] = .{
+            .location = tab.location,
+            .focused_pane = tab.focused_pane,
+            .fullscreen = tab.fullscreen,
+            .workspace_active = tab.workspace_active,
+            .node_start = start,
+            .node_count = @intCast(tab.node_count),
+        };
+        self.tab_count += 1;
+        self.node_count += @intCast(tab.node_count);
+    }
+
+    /// Removes the tab at `index` and closes the gap its tree left.
+    fn remove(self: *Record, index: usize) void {
+        const removed = self.tabs[index];
+        const tail_start = removed.node_start + removed.node_count;
+        std.mem.copyForwards(core.ClientLayoutNode, self.nodes[removed.node_start..], self.nodes[tail_start..self.node_count]);
+        self.node_count -= removed.node_count;
+        std.mem.copyForwards(StoredTab, self.tabs[index..], self.tabs[index + 1 .. self.tab_count]);
+        self.tab_count -= 1;
+        for (self.tabs[index..self.tab_count]) |*tab| {
+            tab.node_start -= removed.node_count;
+        }
+    }
 };
 
 const StoredTab = struct {
@@ -36,40 +89,17 @@ const StoredTab = struct {
     focused_pane: core.PaneId,
     fullscreen: bool,
     workspace_active: bool,
-    nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined,
-    node_count: u8,
-
-    fn copy(tab: core.ClientTabLayoutView) !StoredTab {
-        var stored: StoredTab = .{
-            .location = tab.location,
-            .focused_pane = tab.focused_pane,
-            .fullscreen = tab.fullscreen,
-            .workspace_active = tab.workspace_active,
-            .node_count = @intCast(tab.node_count),
-        };
-        var nodes = tab.nodes();
-        var index: usize = 0;
-        while (try nodes.next()) |node| : (index += 1) {
-            stored.nodes[index] = node;
-        }
-
-        return stored;
-    }
-
-    fn schemaLayout(self: *const StoredTab) core.ClientTabLayout {
-        return .{
-            .location = self.location,
-            .focused_pane = self.focused_pane,
-            .fullscreen = self.fullscreen,
-            .workspace_active = self.workspace_active,
-            .nodes = self.nodes[0..self.node_count],
-        };
-    }
+    node_start: u16,
+    node_count: u16,
 };
 
 gpa: ?std.mem.Allocator = null,
 records: []Record = &.{},
 clock: u64 = 0,
+/// Records given to a new identity while they still held another's layout.
+evictions: u64 = 0,
+
+pub const identities_limit = core.Limit.declare("client_layouts.max_client_layout_clients", "client layouts", core.max_client_layout_clients);
 
 /// Preallocates every bounded record before the runtime loop starts.
 ///
@@ -114,8 +144,8 @@ pub fn exportRecord(self: *const ClientLayouts, index: usize, buffer: []u8) !?Ex
     }
 
     var tabs: [core.max_client_layout_tabs]core.ClientTabLayout = undefined;
-    for (record.tabs[0..record.tab_count], 0..) |*tab, position| {
-        tabs[position] = tab.schemaLayout();
+    for (0..record.tab_count) |position| {
+        tabs[position] = record.layoutAt(position);
     }
 
     return .{
@@ -212,14 +242,11 @@ pub fn replace(self: *ClientLayouts, identity: core.ClientIdentity, layout: core
             clearWorkspaceActive(record, tab.location.workspace);
         }
 
-        const stored = try StoredTab.copy(tab);
         if (findTab(record, tab.location)) |index| {
-            record.tabs[index] = stored;
-        } else {
-            std.debug.assert(record.tab_count < record.tabs.len);
-            record.tabs[record.tab_count] = stored;
-            record.tab_count += 1;
+            record.remove(index);
         }
+
+        try record.append(tab);
     }
 }
 
@@ -235,15 +262,15 @@ pub fn snapshot(self: *ClientLayouts, identity: core.ClientIdentity, panes: *con
     self.touch(record);
     var tab_count: usize = 0;
     var active_valid = false;
-    for (record.tabs[0..record.tab_count]) |*tab| {
-        const layout = tab.schemaLayout();
+    for (0..record.tab_count) |index| {
+        const layout = record.layoutAt(index);
         if (!typedTabIsCurrent(layout, sources)) {
             continue;
         }
 
         storage.tabs[tab_count] = layout;
         tab_count += 1;
-        active_valid = active_valid or std.meta.eql(tab.location, record.active_tab);
+        active_valid = active_valid or std.meta.eql(layout.location, record.active_tab);
     }
     return .{
         .restored = true,
@@ -280,6 +307,10 @@ fn acquire(self: *ClientLayouts, identity: core.ClientIdentity) !*Record {
 
     const index = selected orelse unreachable;
     const record = &self.records[index];
+    if (record.identity != .invalid) {
+        self.evictions += 1;
+    }
+
     record.* = .{
         .identity = identity,
     };
@@ -307,17 +338,15 @@ fn touch(self: *ClientLayouts, record: *Record) void {
 }
 
 fn prune(record: *Record, sources: Sources) void {
-    var write_index: usize = 0;
-    for (record.tabs[0..record.tab_count]) |tab| {
-        if (!typedTabIsCurrent(tab.schemaLayout(), sources)) {
+    var index: usize = 0;
+    while (index < record.tab_count) {
+        if (typedTabIsCurrent(record.layoutAt(index), sources)) {
+            index += 1;
             continue;
         }
 
-        record.tabs[write_index] = tab;
-        write_index += 1;
+        record.remove(index);
     }
-
-    record.tab_count = @intCast(write_index);
 }
 
 fn findTab(record: *const Record, location: core.TabLocation) ?usize {

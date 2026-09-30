@@ -147,7 +147,9 @@ analytics.
   bounded snapshot.
 - Clients that connect together negotiate independently, each in its own
   bounded admission slot, and a handshake in flight counts against client
-  capacity. A connection that finds no slot is closed alone; the
+  capacity. A connection that finds no client capacity is answered in its
+  slot with a `client_limit_reached` refusal, which the client prints; one
+  that finds no slot is closed alone. Both report their limit. The
   maintenance tick, once a second, interrupts a handshake that has run for
   two seconds, so none holds its slot past three and a client that never
   finishes cannot hold admission.

@@ -49,11 +49,12 @@ pub fn start(model: *RuntimeModel, session: *Session, request: core.SuggestComma
 /// ```zig
 /// try suggest_command.finish(model, result);
 /// ```
-pub fn finish(model: *RuntimeModel, result: anyerror!EngineResponse) !void {
-    const response = result catch return;
+pub fn finish(model: *RuntimeModel, result: anyerror!void) !void {
+    result catch return;
+    const response = model.engine_reply;
     const service = model.resources.engineService() orelse return;
     var sources = Sources.init(model.io, model.select);
-    try sources.receiveEngine(service);
+    try sources.receiveEngine(service, &model.engine_reply);
 
     switch (response.purpose) {
         .suggestion => |target| deliver(model, target, &response),
