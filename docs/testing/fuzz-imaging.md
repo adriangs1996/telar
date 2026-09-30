@@ -16,18 +16,9 @@ Zig's built-in fuzzer, `std.testing.fuzz`, drives `imaging.png.decode` and
 images built in memory; the only file the targets read is the versioned
 `lib/imaging/testdata/telar.ico`, as one raw ICO seed.
 
-## Wiring
+## Build steps
 
-Nothing connects the registry to the build yet. Until it is, apply the patch
-that connects it:
-
-```sh
-git apply /tmp/dispatch-claude/robustness-fuzz-imaging-integration.patch
-```
-
-The patch adds two lines to `build/tests.zig`: the import of
-`fuzz_imaging.zig` and `fuzz_imaging.add(b, app.modules)`. Once applied, the
-steps are:
+`build/tests.zig` registers the steps through `fuzz_imaging.add`:
 
 | Step | Runs |
 | --- | --- |
@@ -154,9 +145,9 @@ decode allocates afterwards.
 would take its live bytes past the budget, before the testing allocator is
 asked, so the refused bytes are never reserved. The testing allocator keeps
 its leak checks. Every fuzzed decode, every injected allocation failure and
-the exhaustive allocation-failure tests run under it. A decode that reaches
-the budget fails its property: its request is refused, the decode answers
-`OutOfMemory`, and the oracle requires zero refusals.
+the exhaustive allocation-failure tests run under it. A request that would
+exceed the budget is refused and fails the property, even if the decoder
+otherwise returns a normal rejection. The oracle requires zero refusals.
 
 | Root | Budget | Measured peak | Sampled images |
 | --- | --- | --- | --- |
@@ -175,8 +166,8 @@ The samples do not prove that every admitted file stays under the budget,
 and nothing here names an exact size for the pixel buffer. The peaks count
 the three allocations the Ghostty wrapper makes (decoder state, pixels and
 work buffer) as observed, not as derived from Wuffs's code. What protects
-the fuzzed decodes is the hard limit, which fails any decode that reaches
-it.
+the fuzzed decodes is the hard limit, which fails any request that would
+exceed it.
 
 The same tests show a request past a limit is refused without being
 reserved:
@@ -246,8 +237,8 @@ fuzzed bytes.
 ## Oracles
 
 A decode error is a normal outcome. What fails a property is the wrong error,
-wrong pixels, an allocation the contract forbids, a request that reaches the
-allocation budget, or memory not released.
+wrong pixels, an allocation the contract forbids, a request that would exceed
+the allocation budget, or memory not released.
 
 PNG:
 
@@ -311,14 +302,14 @@ report.
 | --- | --- | --- |
 | PNG `max_row_bytes`, `max_rows` | 64, 16 | generated image size |
 | PNG `fuzz_limits` | 64 per side, 1024 pixels | admission of every fuzzed PNG decode |
-| PNG `allocation_budget` | 56 KiB | live bytes of every PNG decode |
+| PNG `allocation_budget` | 56 KiB | live bytes of each fuzzed PNG decode |
 | PNG `file_capacity` | 8 KiB | generated, rewritten, mutated and raw files |
 | PNG `max_ancillary_bytes`, `max_idat_parts`, `max_mutations` | 32, 4, 4 | rewrites and mutations |
 | ICO `max_payloads` | 4 | payloads per file |
 | ICO `max_dib_width` x `max_dib_height` | 40 x 24 | DIB payloads |
 | ICO `max_png_side` | 16 | PNG payloads |
 | ICO `directory_capacity` | 64 | entries, the decoder's limit |
-| ICO `allocation_budget` | 812 KiB | live bytes of every ICO decode |
+| ICO `allocation_budget` | 812 KiB | live bytes of each fuzzed ICO decode |
 | ICO `file_capacity` | 32 KiB | generated, mutated and raw files |
 
 The extreme-header tests use dimensions up to 2^32-1 with low limits, and
@@ -389,9 +380,9 @@ committed.
 
 - Wuffs C gives the fuzzer no coverage feedback. The Ghostty Wuffs wrapper is
   instrumented, but no input can pick which of its failure branches runs.
-- Grayscale, sub-byte depths, interlaced and 16-bit palette PNGs are never
-  fuzzed as valid images; they reach the fuzzed decoder only through IHDR
-  rewrites and raw bytes. The budget tests decode them with zero samples.
+- Grayscale, sub-byte depths and interlaced PNGs are not generated as valid
+  fuzz inputs; they reach the fuzzed decoder through IHDR rewrites and raw
+  bytes. The budget tests decode valid variants with zero samples.
 - ICO PNG payloads are RGBA8 only. The fuzzer generates no 256-pixel image;
   the budget tests and directed rejection tests decode the 256-pixel sizes.
 - The reference pixels only cover what `encodeForTest` can encode.
