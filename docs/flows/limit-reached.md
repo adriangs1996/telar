@@ -224,17 +224,18 @@ Once a flow reports its limit by name, the net no longer sees that error.
   - a graphics message: the store paused that pane's stream at the limit
     (`awaiting_snapshot`), so the chunks and placements of an image that
     did not fit are dropped instead of failing as unknown, and a graphics
-    snapshot resumes the pane;
+    snapshot resumes the pane, within the pane's own budget
+    ([Paused graphics](#paused-graphics));
   - a pane frame: a snapshot of that pane;
   - anything else: a new session, which rebuilds the replica.
 
   A resync the client cannot ask for, such as a full outbox, loses the link,
   so the replica never stays wrong while the link shows connected. More
-  than three resyncs within a minute stop asking: a pane's graphics stay
-  paused until a later snapshot, and any other resync gives the link up
-  (`runtime_link.abandon`) with the limit's name and no retry, since each
-  would stop at the same limit. Retrying by hand counts anew. An error after
-  the message was applied, in the adapter, never resyncs.
+  than three pane snapshots or new sessions within a minute give the link
+  up (`runtime_link.abandon`) with the limit's name and no retry, since each
+  would stop at the same limit. Retrying by hand counts anew. A pane's
+  paused graphics never spend that budget. An error after the message was
+  applied, in the adapter, never resyncs.
 - The window's `render` callback passes draw errors to the GUI's
   `limit_reached.absorbFrame`. Draw returns token 0, and both native
   backends keep the last presented frame. `GuiAdapter.limited` holds the
@@ -272,6 +273,51 @@ try next;
 `pane_output.receive`, `worktree_detection.finish` and
 `client_delivery.flush` follow the same rule.
 
+### Paused graphics
+
+A pane whose graphics paused at a limit has one row in
+`model.graphics_pauses` (`GraphicsPauses`), and only while the client
+mirrors the pane: `limit_reached.recover` adds no row for a pane that is not
+in `model.panes`, only counts the reach.
+
+- **Notice.** `core.limit_reached.record` counts every reach, so
+  `telar diagnostics limits` sees each one, but the notice follows the
+  pane, not the limit's once-a-minute interval: a warning titled
+  "Images paused in pane 2: vim", the pane's number and program as its
+  header shows them, appears when the pane's pause starts (a new row), and a
+  click focuses the pane. Further reaches of that pane only count; a second
+  pane that pauses in the same minute gets its own notice.
+- **Where it shows.** The window writes "images paused" in yellow beside the
+  program name in the pane's header while its row lives
+  (`GraphicsPauses.contains`, one comparison while no pane is paused). The
+  headless dump has `images_paused` on each pane. Adding or removing a row
+  advances `pane_graphics_revision`, so the window draws the change.
+- **Budget.** A pane asks for three graphics snapshots within
+  `runtime_link.healthy_after_ns` (a minute); the next reach makes it wait.
+  Each window that ends waiting doubles the next one: 60 s, 120 s, 240 s,
+  480 s, then 16 minutes (`max_pause_doublings`).
+- **Resume.** `limit_reached.resumeGraphics` asks again for every waiting
+  pane whose wait passed. One `graphics_resume` timer (`client.Job`) is armed
+  for the earliest due row and none while no pane waits, so idle clients
+  schedule nothing; each applied runtime message checks too, after its read
+  is re-armed. A pane that gains focus (`pane_focus.synchronizeActivePane`)
+  asks at once when a minute passed since its window started, ignoring the
+  doubling but keeping it, so a person looking at the pane waits no longer
+  than the base window and clicking cannot ask faster than it.
+- **End.** The begin of a graphics snapshot of a paused pane marks it; its
+  end, applied without the pane reaching its limit again in between
+  (`limit_reached.receiveGraphicsSnapshot`), removes the row and with it the
+  backoff. A pane that leaves the model takes its row along: every flow
+  that removes panes (`tab_layout.removePane`, `tab_removal.remove`,
+  `workspace_reconciliation.reconcileTabs`, `workspace_handoff.clear`) calls
+  the model's `limit_reached.forgetClosedPanes`, and a new session drops
+  every row through `workspace_handoff.clear`. `model_invariants.check`
+  fails on a row whose pane is gone.
+- **Capacity.** The table holds as many rows as the client holds panes, so
+  it cannot fill with live panes. If it ever does, it gives up the row whose
+  window started longest ago, and a waiting one asks its snapshot at once,
+  so no pane stays paused without a resume on the way.
+
 ## Client diagnostic
 
 The reason the last bar, panel, pick or action failed is the client
@@ -302,9 +348,23 @@ with notice levels and the client's `limits`.
   snapshots, a new session, a resync a full outbox cannot ask for, the
   budget that keeps graphics paused and gives the link up naming the limit,
   and a manual retry that counts anew.
+- The paused graphics, run from the same file: `noticePausedPanes` (one
+  notice per pane naming it and focusing it, further reaches only counted),
+  `resumeWithoutTraffic` (the timer armed for the due row, firing without a
+  runtime message and idling after; focus resuming a waiting pane),
+  `endGraphicsPauses` (a snapshot applied whole ends the pause, one the
+  limit stops again keeps it, a full table asks its evicted pane's
+  snapshot, a new session drops every row) and `backOffPausedPanes` (60 s
+  doubling to 16 minutes, reset when the pause ends).
+- `src/model/connection/GraphicsPauses.zig` and `limit_reached.zig`: row
+  removal, the next due time, and the rows a closed pane, a removed tab and
+  a new workspace drop; `runtime_session.zig`: a new session drops them.
 - `src/client/graphics/tests.zig`: an image or a chunk past its limit pauses
   the pane's stream, whose chunks and placements are then dropped, and a
   snapshot resumes it.
+- `src/gui/tests/visual_chrome.zig`: the header of a paused pane, and only
+  that pane, says its images paused. `src/headless/dump.zig`: the dump's
+  `images_paused`.
 - `src/client_tests/limit_reached.zig` and `configuration.zig`: the client
   notice, folded reports, the adapter net, a real bar of five click actions
   and a failing panel, and the diagnostics their next render clears.

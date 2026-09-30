@@ -16,6 +16,7 @@ const history_palette = @import("../input/history_palette.zig");
 const path_picker = @import("../input/path_picker.zig");
 const editor_file_links = @import("../links/editor_file_links.zig");
 const notifications = @import("../notifications/notifications.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 const pane_attachment = @import("../panes/pane_attachment.zig");
 const pane_closure = @import("../panes/pane_closure.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
@@ -142,12 +143,18 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
             },
         ),
         .workspace_list => |list| _ = try data.workspace_list_snapshot.apply(&client.model, list),
-        .graphics_snapshot => |snapshot| _ = try pane_graphics.applyPaneGraphics(
-            client,
-            .{
-                .snapshot = snapshot,
-            },
-        ),
+        .graphics_snapshot => |snapshot| {
+            const outcome = try pane_graphics.applyPaneGraphics(
+                client,
+                .{
+                    .snapshot = snapshot,
+                },
+            );
+            // A snapshot that asked for another did not resume the pane.
+            if (outcome != .resync_requested) {
+                try limit_reached.receiveGraphicsSnapshot(client, snapshot);
+            }
+        },
         .graphics_image => |image| _ = try pane_graphics.applyPaneGraphics(
             client,
             .{
