@@ -142,9 +142,9 @@ pub fn decodeBody(self: *Producer, half: *Half) void {
 
     const share_room = half.max_bytes -| half.head.len;
     const available = @min(self.config.max_part_bytes, share_room);
+    // Head and body together never pass the half's share, so a head that
+    // leaves no room also leaves no body to decode or cut.
     if (available == 0) {
-        half.body.truncated = half.body.len != 0;
-        half.truncation.exchange = half.body.len != 0;
         return;
     }
 

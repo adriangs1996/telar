@@ -121,8 +121,9 @@ The proxy admits 256 connections at once across every pane of the runtime
 must send its whole CONNECT head, at most 16 KiB (`proxy.max_connect_head_bytes`,
 a longer one is answered `431`), within 10 seconds. It must then reach its
 origin and finish TLS within 30 seconds: the TCP connect to each resolved
-address waits only for what is left of that budget and a timeout is answered
-`504`, and a TLS handshake still running at the deadline is shut down. Name
+address waits only for what is left of that budget, and stops at once when
+the proxy stops; a timeout is answered `504`, and a TLS handshake still
+running at the deadline is shut down. Name
 resolution keeps the system resolver's own timeouts, which on macOS the proxy
 cannot interrupt.
 
@@ -138,11 +139,14 @@ while an HTTP/2 stream is open, is never closed to make room, however long a
 model takes to answer; every byte relayed, HTTP/2 PING and WINDOW_UPDATE
 included, marks a connection active. A new connection that finds no room is
 answered `503 Service Unavailable`; the proxy drains what the client already
-sent before closing, so the answer is not lost to a reset. At start the proxy
-raises the process's soft descriptor limit, within its hard limit, so every
-slot has its two sockets; children started on a pty get the inherited limit
-back, so programs that use `select()` keep descriptors below `FD_SETSIZE`.
-Accepting backs off when descriptors still run out.
+sent, for at most 20 ms, before closing, so the answer is not lost to a
+reset. The accept loop waits for that drain, so a burst of refused
+connections is answered at about 50 a second. At start the proxy raises the
+process's soft descriptor limit to fit every slot's two sockets, but never
+past 1024, the `FD_SETSIZE` of Linux and macOS, so no child the runtime
+starts, however it starts it, can open a descriptor `select()` cannot hold;
+children started on a pty also get back the exact limit the runtime
+inherited. Accepting backs off when descriptors still run out.
 
 For a host outside the allowlist, Telar responds with `200` and forwards the
 TCP stream byte for byte. TLS remains end to end between the child and origin,
@@ -220,8 +224,8 @@ The memory capture can hold at once, with the defaults:
   `max_total_bytes`: 128 MiB;
 - frames tap workers are sending, within the tap's 128 MiB budget
   (`plugins.tap.max_held_bytes`), which also counts the queued exchanges;
-- one body being decoded: a scratch of `max_part_bytes` and the decoded
-  copy, 32 MiB, outside the quota;
+- one body being decoded: a scratch of `max_part_bytes`, the decoded copy
+  and a 64 KiB inflate window, about 32 MiB, outside the quota;
 - about 8.8 KiB of bookkeeping per half, outside the quota: two per
   intercepted HTTP/1.1 connection and one per captured HTTP/2 stream;
 - per live connection, its tunnel threads' stacks: a 16 KiB CONNECT head,

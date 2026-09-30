@@ -29,12 +29,16 @@ const eviction_poll_ms = 5;
 const descriptor_backoff_ms = 100;
 /// Descriptors the runtime keeps for everything but proxy connections:
 /// panes, clients, history and logs.
-const reserved_descriptors = 1024;
+const reserved_descriptors = 512;
 /// Descriptors a proxy connection holds: its child and its origin.
 const descriptors_per_connection = 2;
 /// How long the accept loop drains a refused connection so its 503 is not
 /// lost to a reset; short, since accepting waits for it.
 const refusal_drain_ms = 20;
+comptime {
+    std.debug.assert(max_connections * descriptors_per_connection + reserved_descriptors <= pty.descriptor_limit.select_descriptor_ceiling);
+}
+
 /// The answer to a connection that finds every slot taken.
 const refusal = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 
@@ -86,11 +90,13 @@ pub fn acceptConnections(service: *Service) anyerror!void {
     }
 }
 
-/// Raises the process's soft descriptor limit, within its hard limit, so
-/// every proxy connection fits beside the rest of the runtime. A launcher
-/// such as launchd starts processes with 256. Children spawned on a pty get
-/// the inherited limit back (`pty.descriptor_limit`). A limit that cannot
-/// be raised is kept; accepting then backs off when descriptors run out.
+/// Raises the process's soft descriptor limit so every proxy connection
+/// fits beside the rest of the runtime: 256 connections of two sockets and
+/// 512 more make 1024, which is also the most a raise gives, so no child
+/// ever inherits a limit past what select() holds (`pty.descriptor_limit`).
+/// A launcher such as launchd starts processes with 256. A limit that
+/// cannot be raised is kept; accepting then backs off when descriptors run
+/// out.
 ///
 /// ```zig
 /// service_support.raiseDescriptorLimit();
@@ -219,5 +225,5 @@ test "the descriptor limit rises to fit every connection within its hard limit" 
 
     raiseDescriptorLimit();
     const raised = try std.posix.getrlimit(.NOFILE);
-    try std.testing.expectEqual(@min(wanted, original.max), raised.cur);
+    try std.testing.expectEqual(@min(wanted, pty.descriptor_limit.select_descriptor_ceiling, original.max), raised.cur);
 }

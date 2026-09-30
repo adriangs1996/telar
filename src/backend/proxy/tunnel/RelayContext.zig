@@ -13,6 +13,7 @@ const h2frames = @import("h2frames");
 const Stats = httprelay.http2.Stats;
 const CaptureStreams = @import("CaptureStreams.zig");
 const EventObserver = @import("EventObserver.zig");
+const StreamsInFlight = @import("StreamsInFlight.zig");
 const h2 = httprelay.http2;
 const relay_module = httprelay.http2;
 const Counters = @import("../Counters.zig");
@@ -32,6 +33,8 @@ gpa: std.mem.Allocator,
 session: *Session,
 exchange: *Exchange,
 captures: ?*Producer = null,
+/// Streams in flight, shared by both directions' observers.
+streams: StreamsInFlight = .{},
 
 /// Relays both directions until the response side ends, then settles.
 ///
@@ -73,6 +76,7 @@ fn relayDirection(self: *RelayContext, direction: relay_module.Direction) Stats 
     var observer: EventObserver = .{
         .captures = if (captures) |*streams| streams else null,
         .exchange = self.exchange,
+        .streams = &self.streams,
     };
 
     return h2.relay(self.session, h2.relayOptions(direction, .{ .gpa = self.gpa }), &observer);

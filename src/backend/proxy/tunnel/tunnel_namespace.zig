@@ -120,11 +120,11 @@ pub fn connectUpstream(target: Upstream) !std.Io.net.Stream {
     while (resolved.getOne(io)) |result| switch (result) {
         .canonical_name => continue,
         .address => |address| {
-            if (connectBefore(address, target.deadline_ms - now(io))) |stream| {
+            if (connectBefore(io, address, target.deadline_ms)) |stream| {
                 return stream;
             } else |err| {
                 last_error = err;
-                if (err == error.Timeout) {
+                if (err == error.Timeout or err == error.Canceled) {
                     return err;
                 }
             }
@@ -147,9 +147,10 @@ const Upstream = struct {
     deadline_ms: i64,
 };
 
-/// Connects one address without blocking past `budget_ms`.
-fn connectBefore(address: std.Io.net.IpAddress, budget_ms: i64) !std.Io.net.Stream {
-    if (budget_ms <= 0) {
+/// Connects one address without blocking past `deadline_ms`, and gives up
+/// as soon as its task is canceled.
+fn connectBefore(io: std.Io, address: std.Io.net.IpAddress, deadline_ms: i64) !std.Io.net.Stream {
+    if (deadline_ms <= now(io)) {
         return error.Timeout;
     }
 
@@ -170,7 +171,7 @@ fn connectBefore(address: std.Io.net.IpAddress, budget_ms: i64) !std.Io.net.Stre
     const length = socketAddress(address, &storage);
     if (std.c.connect(handle, @ptrCast(&storage), length) != 0) {
         switch (std.posix.errno(-1)) {
-            .INPROGRESS => try awaitConnect(handle, budget_ms),
+            .INPROGRESS => try awaitConnect(io, handle, deadline_ms),
             else => return error.ConnectionRefused,
         }
     }
@@ -184,16 +185,34 @@ fn connectBefore(address: std.Io.net.IpAddress, budget_ms: i64) !std.Io.net.Stre
     };
 }
 
-/// Waits for a nonblocking connect to finish within `budget_ms`.
-fn awaitConnect(handle: std.c.fd_t, budget_ms: i64) !void {
+/// Waits for a nonblocking connect to finish by `deadline_ms`. It polls in
+/// short slices and checks for cancellation between them, since a raw poll
+/// is outside the runtime's cancelable calls, so stopping the proxy never
+/// waits for an origin that does not answer. An interrupted poll retries.
+fn awaitConnect(io: std.Io, handle: std.c.fd_t, deadline_ms: i64) !void {
     var pending = [_]std.c.pollfd{.{
         .fd = handle,
         .events = std.c.POLL.OUT,
         .revents = 0,
     }};
-    const timeout: c_int = @intCast(@min(budget_ms, std.math.maxInt(c_int)));
-    if (std.c.poll(&pending, pending.len, timeout) != pending.len) {
-        return error.Timeout;
+
+    while (true) {
+        try io.checkCancel();
+
+        const left_ms = deadline_ms - now(io);
+        if (left_ms <= 0) {
+            return error.Timeout;
+        }
+
+        const slice_ms: c_int = @intCast(@min(left_ms, connect_poll_slice_ms));
+        const ready = std.c.poll(&pending, pending.len, slice_ms);
+        if (ready > 0) {
+            break;
+        }
+
+        if (ready < 0 and std.posix.errno(ready) != .INTR) {
+            return error.SystemResources;
+        }
     }
 
     var failure: c_int = 0;
@@ -202,6 +221,10 @@ fn awaitConnect(handle: std.c.fd_t, budget_ms: i64) !void {
         return error.ConnectionRefused;
     }
 }
+
+/// How long one poll of a pending connect lasts before it checks for
+/// cancellation.
+const connect_poll_slice_ms = 50;
 
 fn setNonblocking(handle: std.c.fd_t, enabled: bool) !void {
     const flags = std.c.fcntl(handle, std.c.F.GETFL);
@@ -299,7 +322,9 @@ test "a refused client reads the whole answer after sending its request" {
     const proxy_side: std.Io.net.Stream = .{
         .socket = .{
             .handle = sockets[0],
-            .address = .{ .ip4 = .loopback(0) },
+            .address = .{
+                .ip4 = .loopback(0),
+            },
         },
     };
     const request = "CONNECT example.test:443 HTTP/1.1\r\n\r\n";
@@ -314,24 +339,49 @@ test "a refused client reads the whole answer after sending its request" {
 }
 
 test "a connect that cannot finish before its deadline times out" {
-    // 192.0.2.0/24 is reserved for documentation and never answers.
-    const unroutable: std.Io.net.IpAddress = .{ .ip4 = .{
-        .bytes = .{ 192, 0, 2, 1 },
-        .port = 443,
-    } };
+    const io = std.testing.io;
 
-    try std.testing.expectError(error.Timeout, connectBefore(unroutable, 0));
-    const started = now(std.testing.io);
-    const result = connectBefore(unroutable, 100);
+    try std.testing.expectError(error.Timeout, connectBefore(io, unroutable, now(io)));
+    const started = now(io);
+    const result = connectBefore(io, unroutable, started + 100);
     if (result) |stream| {
-        stream.close(std.testing.io);
+        stream.close(io);
         return error.UnexpectedConnect;
     } else |err| {
         try std.testing.expect(err == error.Timeout or err == error.ConnectionRefused);
     }
 
-    try std.testing.expect(now(std.testing.io) - started < 2 * std.time.ms_per_s);
+    try std.testing.expect(now(io) - started < 2 * std.time.ms_per_s);
 }
+
+test "a pending connect gives up as soon as its task is canceled" {
+    const io = std.testing.io;
+    var pending = try io.concurrent(connectBefore, .{
+        io,
+        unroutable,
+        now(io) + 30 * std.time.ms_per_s,
+    });
+    try io.sleep(.fromMilliseconds(100), .awake);
+
+    const started = now(io);
+    const result = pending.cancel(io);
+    if (result) |stream| {
+        stream.close(io);
+        return error.UnexpectedConnect;
+    } else |err| {
+        try std.testing.expect(err == error.Canceled or err == error.ConnectionRefused);
+    }
+
+    try std.testing.expect(now(io) - started < std.time.ms_per_s);
+}
+
+/// 192.0.2.0/24 is reserved for documentation and never answers.
+const unroutable: std.Io.net.IpAddress = .{
+    .ip4 = .{
+        .bytes = .{ 192, 0, 2, 1 },
+        .port = 443,
+    },
+};
 
 test "authentication rejection records total and exact reason" {
     var invalid: Counters = .{};
@@ -353,6 +403,9 @@ test "authentication rejection records total and exact reason" {
 
 fn snapshot(telemetry: *const Counters) Snapshot {
     return telemetry.snapshot(.{
-        .connections = .{ .active = 0, .limit_drops = 0 },
+        .connections = .{
+            .active = 0,
+            .limit_drops = 0,
+        },
     });
 }
