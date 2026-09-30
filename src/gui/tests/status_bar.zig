@@ -95,6 +95,26 @@ test "native footer reserves TLS ahead of widgets and mode hints in narrow windo
     }
 }
 
+test "the status bar shows the client diagnostic as a chip a press dismisses" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    const red = cellgrid.Color.rgb(.{ 243, 41, 99 });
+    fixture.session.gui.app.model.theme.palette.red = red;
+
+    var projection = fixture.projection();
+    try fixture.paint(projection);
+    try std.testing.expect(fixture.bandTarget(.diagnostic_dismiss) == null);
+
+    projection.diagnostic = "invalid telar.ui.button: TooManyBarActions";
+    try fixture.paint(projection);
+    const chip = fixture.bandTarget(.diagnostic_dismiss).?;
+    const painted = paintedBounds(&fixture, red).?;
+    const right_edge: f32 = @floatFromInt(fixture.session.gui.renderer.viewport[0]);
+    try std.testing.expect(chip.x + chip.width <= right_edge);
+    try std.testing.expect(painted.x >= chip.x - 1);
+    try std.testing.expectEqualDeep(client.Intent.diagnostic_dismiss, fixture.clickBand(chip, 0).intent);
+}
+
 test "native footer clips tall terminal line spacing without hiding configured widgets" {
     var fixture = try Fixture.init();
     defer fixture.deinit();

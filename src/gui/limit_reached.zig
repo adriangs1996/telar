@@ -11,6 +11,7 @@ const GuiAdapter = @import("GuiAdapter.zig");
 const Registry = @import("widgets/interaction/Registry.zig");
 const RetainedCells = @import("render/RetainedCells.zig");
 const GlyphAtlas = @import("text/GlyphAtlas.zig");
+const native = @import("native/native.zig");
 
 /// Where in the window a frame stopped.
 pub const Route = enum {
@@ -22,26 +23,46 @@ pub const Route = enum {
 /// returns false for any other error, which the caller fails with.
 ///
 /// ```zig
-/// if (!limit_reached.absorb(gui, .window_draw, err)) gui.fail(err);
+/// if (!limit_reached.absorb(gui, .window_update, err)) gui.fail(err);
 /// ```
 pub fn absorb(gui: *GuiAdapter, route: Route, err: anyerror) bool {
     client.limit_reached.absorb(gui.app, @tagName(route), err, limitOf(gui, err)) catch return false;
-
-    // The notice above is part of what this frame would show, so the
-    // window retries only once something after it changes.
-    if (route == .window_draw) {
-        gui.limited = gui.observation();
-    }
-
     return true;
 }
 
-/// Whether the frame the window would draw now is the one that stopped at
-/// a limit; drawing it again would stop there again.
-/// Example: `if (limit_reached.holds(gui)) return 0;`
+/// `absorb` for a frame drawn for `viewport`, which the window then holds
+/// until what it shows or the viewport changes.
+///
+/// ```zig
+/// if (!limit_reached.absorbFrame(gui, viewport, err)) gui.fail(err);
+/// ```
+pub fn absorbFrame(gui: *GuiAdapter, viewport: native.Viewport, err: anyerror) bool {
+    if (!absorb(gui, .window_draw, err)) {
+        return false;
+    }
+
+    // The notice above is part of what this frame would show, so the
+    // window retries only once something after it changes.
+    gui.limited = .{
+        .observation = gui.observation(),
+        .viewport = viewport,
+    };
+    return true;
+}
+
+/// Whether what the window would show is still the frame that stopped at a
+/// limit, so asking for a draw would stop there again.
+/// Example: `const due = needs and !limit_reached.holds(gui);`
 pub fn holds(gui: *const GuiAdapter) bool {
     const limited = gui.limited orelse return false;
-    return std.meta.eql(limited, gui.observation());
+    return std.meta.eql(limited.observation, gui.observation());
+}
+
+/// `holds` for a draw at `viewport`: a new viewport measures again.
+/// Example: `if (limit_reached.holdsFrame(gui, viewport)) return 0;`
+pub fn holdsFrame(gui: *const GuiAdapter, viewport: native.Viewport) bool {
+    const limited = gui.limited orelse return false;
+    return std.meta.eql(limited.viewport, viewport) and holds(gui);
 }
 
 /// The named limit behind an error the window's own code raises.

@@ -84,6 +84,8 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
             .notification_activate => "Open notification",
             .notification_dismiss => "Dismiss notification",
             .attachment_dismiss => "Dismiss attachment",
+            // The chip reads as the reason it shows; a press dismisses it.
+            .diagnostic_dismiss => projection.diagnostic orelse "Dismiss diagnostic",
             .prompt_row => "Choose result",
             .bar_component => |component| blk: {
                 const content = projection.bar_state.layout.content(component.position) orelse break :blk "Bar item";

@@ -24,13 +24,19 @@ const notice_duration_ns = 8 * std.time.ns_per_s;
 /// });
 /// ```
 pub fn report(client: *Client, reach: core.LimitReach) void {
+    _ = notice(client, reach);
+}
+
+/// Records one reach and shows it when its interval allows; returns
+/// whether it showed, so a caller logs its own detail only then.
+fn notice(client: *Client, reach: core.LimitReach) bool {
     const now_ms = std.Io.Timestamp.now(client.io, .real).toMilliseconds();
     const reaches = &client.model.limit_reaches;
     const recorded = reaches.record(reach, .client, now_ms, 1);
     send(client, recorded.slot, now_ms);
 
     if (!recorded.show) {
-        return;
+        return false;
     }
 
     var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
@@ -45,11 +51,14 @@ pub fn report(client: *Client, reach: core.LimitReach) void {
             .duration_ns = notice_duration_ns,
         },
     ) catch |err| log.warn("limit notice not shown: {s}", .{@errorName(err)});
+
+    return true;
 }
 
-/// The safety net of a presentation adapter: a capacity error is logged
-/// with its route and reported under `limit` (or under its own name when
-/// null), and the caller keeps what it has; any other error returns.
+/// The safety net of a presentation adapter: a capacity error is reported
+/// under `limit`, or under its own name when null, and the caller keeps
+/// what it has; any other error returns. The route and the error are logged
+/// with the notice, so a limit reached every frame logs once a minute.
 ///
 /// ```zig
 /// gui.draw(viewport) catch |err| try limit_reached.absorb(gui.app, "window draw", err, null);
@@ -59,11 +68,10 @@ pub fn absorb(client: *Client, route: []const u8, err: anyerror, limit: ?core.Li
         return err;
     }
 
-    log.warn("{s} stopped at a limit: {s}", .{ route, @errorName(err) });
-    report(
-        client,
-        if (limit) |named| .{ .limit = named } else core.limit_reached.unnamed(err),
-    );
+    const reach: core.LimitReach = if (limit) |named| .{ .limit = named } else core.limit_reached.unnamed(err);
+    if (notice(client, reach)) {
+        log.warn("{s} stopped at a limit: {s}", .{ route, @errorName(err) });
+    }
 }
 
 fn send(client: *Client, slot: usize, now_ms: i64) void {

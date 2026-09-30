@@ -29,15 +29,22 @@ const notice_duration_ms = 8_000;
 /// });
 /// ```
 pub fn report(model: *RuntimeModel, reach: core.LimitReach) void {
+    _ = notice(model, reach);
+}
+
+/// Records one reach and shows it when its interval allows; returns
+/// whether it showed, so a caller logs its own detail only then.
+fn notice(model: *RuntimeModel, reach: core.LimitReach) bool {
     const recorded = model.limit_reaches.record(reach, .runtime, nowMs(model), 1);
     if (!recorded.show) {
-        return;
+        return false;
     }
 
     var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
     const text = model.limit_reaches.reachAt(recorded.slot).describe(&buffer, model.limit_reaches.hits[recorded.slot]);
     log.warn("{s}", .{text});
     show(model, text);
+    return true;
 }
 
 /// Counts what a client reported. The client already showed and logged
@@ -62,8 +69,8 @@ pub fn list(session: *Session, query: core.QueryLimits) !void {
 }
 
 /// The safety net of `Runtime.update`: a capacity error from one event is
-/// logged with its route, reported, and the event is skipped; any other
-/// error returns to the caller unchanged.
+/// reported and the event is skipped; its route is logged with the notice.
+/// Any other error returns to the caller unchanged.
 ///
 /// ```zig
 /// dispatch(event) catch |err| try limit_reached.absorb(model, @tagName(event), err);
@@ -73,8 +80,9 @@ pub fn absorb(model: *RuntimeModel, route: []const u8, err: anyerror) anyerror!v
         return err;
     }
 
-    log.warn("{s} stopped at a limit: {s}", .{ route, @errorName(err) });
-    report(model, core.limit_reached.unnamed(err));
+    if (notice(model, core.limit_reached.unnamed(err))) {
+        log.warn("{s} stopped at a limit: {s}", .{ route, @errorName(err) });
+    }
 }
 
 /// The safety net of one client request: a capacity error answers the
@@ -90,8 +98,9 @@ pub fn refuse(model: *RuntimeModel, session: *Session, message: core.ClientMessa
         return err;
     }
 
-    log.warn("request {s} stopped at a limit: {s}", .{ @tagName(message), @errorName(err) });
-    report(model, core.limit_reached.unnamed(err));
+    if (notice(model, core.limit_reached.unnamed(err))) {
+        log.warn("request {s} stopped at a limit: {s}", .{ @tagName(message), @errorName(err) });
+    }
 
     const request_id = requestId(message) orelse return;
     try client_request.fail(session, request_id, .resource_limit, @errorName(err));

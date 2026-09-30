@@ -128,6 +128,7 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
         .notification_activate => |id| _ = try notifications.activateNotificationNow(client, id),
         .notification_dismiss => |id| _ = try notifications.dismissNotificationNow(client, id),
         .attachment_dismiss => |id| outcome.layout_changed = try agent_attachments.dismissAttachment(client, id),
+        .diagnostic_dismiss => _ = data.client_diagnostic.clear(&client.model),
         .prompt_row => |index| try name_prompt.choosePromptRow(client, index),
         .bar_component => |component| try bar_components.activate(client, component),
         .panel_component => |index| try bar_components.activatePanel(client, index),

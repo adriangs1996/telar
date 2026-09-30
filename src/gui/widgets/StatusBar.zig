@@ -1,7 +1,7 @@
 //! Configured components occupy the bottom band. Prefix and copy mode replace
 //! them with key hints, while the reserved TLS badge and the client
 //! diagnostic, the reason the last bar, panel, pick or action failed,
-//! remain visible.
+//! remain visible. A press on the diagnostic chip dismisses it.
 const Context = @import("Context.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
@@ -59,7 +59,7 @@ fn tls(self: StatusBar, canvas: *Canvas, row: *Rect) !void {
     const color = if (!projection.proxy_tls_active) palette.yellow else if (projection.proxy_tls_scope == .wildcard) palette.red else palette.peach;
     var label = inline_nodes.caption("TLS");
     label.color = color;
-    try badge(canvas, row, label);
+    _ = try badge(canvas, row, label);
 }
 
 /// Shows the client diagnostic until its source clears it, cut to fit.
@@ -79,11 +79,13 @@ fn diagnostic(self: StatusBar, canvas: *Canvas, row: *Rect) !void {
         return;
     }
 
-    try badge(canvas, row, label);
+    const chip = try badge(canvas, row, label);
+    try self.context.bands.add(.{ .area = chip, .action = .{ .intent = .diagnostic_dismiss } });
 }
 
-/// Draws one chip at the row's right end and takes its width from the row.
-fn badge(canvas: *Canvas, row: *Rect, label: Label) !void {
+/// Draws one chip at the row's right end, takes its width from the row and
+/// returns where it went.
+fn badge(canvas: *Canvas, row: *Rect, label: Label) !Rect {
     const chrome = canvas.chrome;
     const width = @min(try canvas.measure(label) + 2 * chrome.px(badge_padding), row.width);
     const height = chrome.px(badge_height);
@@ -101,4 +103,5 @@ fn badge(canvas: *Canvas, row: *Rect, label: Label) !void {
         .height = chip.height,
     }, label);
     row.width = @max(0, row.width - width - chrome.px(badge_gap));
+    return chip;
 }

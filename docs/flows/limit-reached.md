@@ -111,7 +111,8 @@ runtime's log. A client logs to its own standard error.
 ## Safety nets
 
 A net is for limits nobody named yet. It reports the limit under the error's
-name (`ChromeHitCapacityExceeded: limit reached`) and logs the route. Once a
+name (`ChromeHitCapacityExceeded: limit reached`) and logs the route with the
+notice, so a limit reached every frame writes two lines a minute. Once a
 flow reports its limit by name, the net no longer sees that error.
 
 - `Runtime.update` runs each event through `dispatch`. A capacity error skips
@@ -125,8 +126,8 @@ flow reports its limit by name, the net no longer sees that error.
 - The window's `render` and `pump` callbacks pass errors to the GUI's
   `limit_reached.absorb`. Draw returns token 0, and both native backends
   then keep the last presented frame. `GuiAdapter.limited` holds the
-  observation that stopped, and the window does not prepare it again until
-  something it shows changes. Errors the window raises itself are named
+  observation and the viewport that stopped, and the window neither
+  measures nor prepares that frame again until one of them changes. Errors the window raises itself are named
   (`render.retained_max_cells`, `protocol.max_cell_count`,
   `render.frame_quad_budget`, `gui.widgets.registry_capacity`,
   `text.glyph_atlas_side`). A failed update loses only the event that failed;

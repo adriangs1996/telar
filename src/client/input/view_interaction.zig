@@ -24,6 +24,8 @@ pub const Intent = union(enum) {
     notification_activate: model_data.NotificationId,
     notification_dismiss: model_data.NotificationId,
     attachment_dismiss: model_data.AttachmentId,
+    /// The status bar's diagnostic chip: clears the client diagnostic.
+    diagnostic_dismiss,
     /// A pointer press on one visible row of the active list prompt.
     prompt_row: u16,
     /// A click on a configured bar component with an action or a url.

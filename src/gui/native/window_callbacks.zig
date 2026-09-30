@@ -42,7 +42,7 @@ fn render(context: ?*anyopaque, viewport: native.Viewport, out: *native.Frame) c
     defer core.mark(gui.app.io, .host_flush_start);
     // Token 0 keeps the previous frame on screen.
     const token = gui.draw(viewport) catch |err| blk: {
-        if (err != error.PresentationBusy and !limit_reached.absorb(gui, .window_draw, err)) {
+        if (err != error.PresentationBusy and !limit_reached.absorbFrame(gui, viewport, err)) {
             gui.fail(err);
         }
 

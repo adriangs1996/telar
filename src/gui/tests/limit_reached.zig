@@ -40,10 +40,18 @@ test "a frame that stops at a limit keeps the previous frame and the window open
     try std.testing.expectEqual(@as(u64, 65536), reaches.value[slot]);
     try std.testing.expectEqual(@as(u8, 1), gui.app.model.notification_center.count);
 
-    // The frame that stopped is not asked for again until something it
-    // shows changes; another attempt counts without a second notice.
+    // The frame that stopped is not asked for, nor measured, again until
+    // what it shows or its viewport changes.
     try std.testing.expect(!gui.needs_draw);
     callbacks.render(gui, huge, &frame);
+    try std.testing.expectEqual(@as(u64, 0), frame.token);
+    try std.testing.expectEqual(@as(u64, 1), reaches.hits[slot]);
+
+    // A viewport just as large measures again and counts, without a second
+    // notice inside the interval.
+    var taller = huge;
+    taller.height += gui.renderer.metrics.cell_height;
+    callbacks.render(gui, taller, &frame);
     try std.testing.expectEqual(@as(u64, 0), frame.token);
     try std.testing.expectEqual(@as(u64, 2), reaches.hits[slot]);
     try std.testing.expectEqual(@as(u8, 1), gui.app.model.notification_center.count);

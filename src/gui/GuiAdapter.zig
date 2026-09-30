@@ -58,6 +58,7 @@ const animate = @import("animate");
 const FrameClock = animate.FrameClock;
 const native_callbacks = @import("native/window_callbacks.zig");
 const limit_reached = @import("limit_reached.zig");
+const LimitedFrame = @import("LimitedFrame.zig");
 const window_machines = @import("window_machines.zig");
 const clipboard_image = @import("clipboard_image.zig");
 const ImagePreviews = @import("ImagePreviews.zig");
@@ -110,8 +111,8 @@ profiles_seen: u64 = 0,
 driver: NativeLoop,
 renderer: Renderer,
 failure: ?anyerror = null,
-/// The observation whose frame stopped at a limit; it is not drawn again.
-limited: ?client.Observation = null,
+/// The frame that stopped at a limit; it is not drawn again.
+limited: ?LimitedFrame = null,
 exit_status: ?u8 = null,
 started: bool = false,
 needs_draw: bool = false,
@@ -378,6 +379,11 @@ pub fn draw(self: *GuiAdapter, viewport: native.Viewport) !u64 {
     if (try self.driver.configuration.apply(self, &self.renderer)) {
         self.cursor_clock.config = self.renderer.config.cursor;
         self.cursor_clock.reset(self.now());
+        self.limited = null;
+    }
+
+    if (limit_reached.holdsFrame(self, viewport)) {
+        return 0;
     }
 
     _ = self.resizeViewport(viewport) catch |err| switch (err) {
@@ -389,10 +395,6 @@ pub fn draw(self: *GuiAdapter, viewport: native.Viewport) !u64 {
     self.cursor_clock.observe(self.cursorTarget(), now_ns);
     self.renderer.cursor_on = self.cursor_clock.shown(now_ns);
     self.renderer.focused = self.cursor_clock.focused;
-    if (limit_reached.holds(self)) {
-        return 0;
-    }
-
     const token = try self.prepare(&self.renderer);
     self.limited = null;
 
