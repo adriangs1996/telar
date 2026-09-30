@@ -65,7 +65,7 @@ test "text metadata rejects malformed counts status row flags and URI offsets" {
     const original = try linked(&scratch);
     var corrupted: [limits.capacity(fixture_rows)]u8 = undefined;
     const mutations = .{
-        .{ .offset = 0, .bytes = &[_]u8{2} },
+        .{ .offset = 0, .bytes = &[_]u8{3} }, // Unknown status.
         .{ .offset = 0, .bytes = &[_]u8{1} }, // Omitted must not retain links.
         .{ .offset = 1, .bytes = &[_]u8{ 1, 0 } },
         .{ .offset = 3, .bytes = &[_]u8{ 1, 1 } }, // 257 links.

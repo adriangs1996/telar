@@ -63,10 +63,10 @@ pub fn hasBorders(self: *const Layout) bool {
 /// Writes this split tree in the protocol's pre-order representation.
 ///
 /// ```zig
-/// var nodes: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+/// var nodes: [schema.max_client_layout_tab_nodes]schema.ClientLayoutNode = undefined;
 /// const encoded = layout.clientLayoutNodes(&nodes);
 /// ```
-pub fn clientLayoutNodes(self: *const Layout, output: *[core.max_client_layout_nodes]core.ClientLayoutNode) []const core.ClientLayoutNode {
+pub fn clientLayoutNodes(self: *const Layout, output: *[core.max_client_layout_tab_nodes]core.ClientLayoutNode) []const core.ClientLayoutNode {
     const root = self.root orelse return output[0..0];
     var stack: [layout_support.max_nodes]layout_support.NodeIndex = undefined;
     var stack_len: usize = 1;
@@ -111,19 +111,45 @@ pub fn clientLayoutNodes(self: *const Layout, output: *[core.max_client_layout_n
 /// const saved = try Layout.fromClientLayout(tab_layout);
 /// ```
 pub fn fromClientLayout(encoded: core.ClientTabLayoutView) !Layout {
+    var storage: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
     var iterator = encoded.nodes();
+    var len: usize = 0;
+    while (try iterator.next()) |node| : (len += 1) {
+        if (len == storage.len) {
+            return error.NodeLimitReached;
+        }
+
+        storage[len] = node;
+    }
+
+    return fromClientLayoutNodes(.{
+        .location = encoded.location,
+        .focused_pane = encoded.focused_pane,
+        .fullscreen = encoded.fullscreen,
+        .workspace_active = encoded.workspace_active,
+        .nodes = storage[0..len],
+    });
+}
+
+/// Builds a layout from one tab's pre-order tree, as `clientLayoutNodes`
+/// writes it.
+///
+/// ```zig
+/// const layout = try WorkspaceLayout.fromClientLayoutNodes(tab);
+/// ```
+pub fn fromClientLayoutNodes(tab: core.ClientTabLayout) !Layout {
     var builder: ClientLayoutBuilder = .{
-        .iterator = &iterator,
+        .nodes = tab.nodes,
     };
     const root = try builder.build(null);
-    if (try iterator.next() != null) {
+    if (builder.next_index != tab.nodes.len) {
         return error.InvalidClientLayoutTree;
     }
 
     builder.layout.root = root;
-    builder.layout.focused_pane = encoded.focused_pane;
-    builder.layout.fullscreen = encoded.fullscreen;
-    if (!builder.layout.contains(encoded.focused_pane)) {
+    builder.layout.focused_pane = tab.focused_pane;
+    builder.layout.fullscreen = tab.fullscreen;
+    if (!builder.layout.contains(tab.focused_pane)) {
         return error.InvalidClientLayoutFocus;
     }
 

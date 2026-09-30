@@ -20,8 +20,6 @@ const HandshakeCompletion = @import("events/HandshakeCompletion.zig");
 const Half = owned.Half;
 const Result = @import("../plugins/Result.zig");
 const AgentResult = @import("../agent/Result.zig");
-const EngineRuntime = @import("resources/EngineRuntime.zig");
-const Response = EngineRuntime.Service.Response;
 const hostmetrics = @import("hostmetrics");
 const SystemMetricsSample = hostmetrics.SystemMetricsSample;
 const Completion = @import("resources/Completion.zig");
@@ -55,7 +53,8 @@ pub const Event = union(enum) {
     plugin_effects: anyerror!*Result,
     agent_tick: anyerror!void,
     agent_description: AgentResult,
-    engine_response: anyerror!Response,
+    /// The reply is in `RuntimeModel.engine_reply`.
+    engine_response: anyerror!void,
     change_review_completed: *Job,
     metrics_tick: anyerror!void,
     metrics_sampled: SystemMetricsSample,

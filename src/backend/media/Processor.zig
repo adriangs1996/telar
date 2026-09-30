@@ -31,20 +31,24 @@ pub fn processMedia(self: *Processor, current_size: core.TerminalSize, stats: *S
 
     const Sink = struct {
         processor: *Processor,
+        stats: *Stats,
 
         pub fn observe(sink: *@This(), bytes: []const u8) void {
-            sink.processor.ingestMediaOutput(bytes);
+            sink.processor.ingestMediaOutput(bytes, sink.stats);
         }
 
         pub fn observeSharedFrame(sink: *@This(), frame: SharedFrameView) bool {
-            return sink.processor.ingestSharedFrame(frame);
+            return sink.processor.ingestSharedFrame(frame, sink.stats);
         }
 
         pub fn observeFileQuery(sink: *@This(), query: FileQueryView) bool {
             return sink.processor.answerFileQuery(query);
         }
     };
-    var sink: Sink = .{ .processor = self };
+    var sink: Sink = .{
+        .processor = self,
+        .stats = stats,
+    };
     self.media.processSealed(.{ .current_size = current_size, .stats = stats }, &sink);
     if (!stats.failed and self.state.shared_transport_clients.load(.acquire) != 0) {
         self.prepareSharedTransfers(stats);
@@ -115,9 +119,9 @@ pub fn prepareSharedTransfers(self: *Processor, stats: *Stats) void {
 /// emulator parse the frame the ordinary way.
 ///
 /// ```zig
-/// if (!processor.ingestSharedFrame(frame)) processor.ingestMediaOutput(frame.bytes);
+/// if (!processor.ingestSharedFrame(frame, stats)) processor.ingestMediaOutput(frame.bytes, stats);
 /// ```
-fn ingestSharedFrame(self: *Processor, frame: SharedFrameView) bool {
+fn ingestSharedFrame(self: *Processor, frame: SharedFrameView, stats: *Stats) bool {
     if (comptime !shared_transfer.shared_memory_supported) {
         return false;
     }
@@ -165,7 +169,7 @@ fn ingestSharedFrame(self: *Processor, frame: SharedFrameView) bool {
         return false;
     }
 
-    self.ingestMediaOutput(frame.bytes[0..frame.apc_start]);
+    self.ingestMediaOutput(frame.bytes[0..frame.apc_start], stats);
     const images = &self.media.terminal.screens.active.kitty_images;
     images.addImage(self.io, media, self.media.terminal.screens.active, .{
         .id = frame.image_id,
@@ -181,7 +185,7 @@ fn ingestSharedFrame(self: *Processor, frame: SharedFrameView) bool {
         // reservation exactly once.
         media.free(placeholder);
         _ = std.c.shm_unlink(name.sliceZ());
-        self.ingestMediaOutput(frame.bytes[frame.apc_end..]);
+        self.ingestMediaOutput(frame.bytes[frame.apc_end..], stats);
         return true;
     };
     var placement: [64]u8 = undefined;
@@ -190,8 +194,8 @@ fn ingestSharedFrame(self: *Processor, frame: SharedFrameView) bool {
         "\x1b_Ga=p,i={d},p={d},C=1,q=2\x1b\\",
         .{ frame.image_id, frame.placement_id },
     ) catch unreachable;
-    self.ingestMediaOutput(command);
-    self.ingestMediaOutput(frame.bytes[frame.apc_end..]);
+    self.ingestMediaOutput(command, stats);
+    self.ingestMediaOutput(frame.bytes[frame.apc_end..], stats);
 
     const generation = images.imageById(frame.image_id).?.generation;
     var parked = metadata;
@@ -230,7 +234,7 @@ fn answerFileQuery(self: *Processor, query: FileQueryView) bool {
     return true;
 }
 
-fn ingestMediaOutput(self: *Processor, bytes: []const u8) void {
+fn ingestMediaOutput(self: *Processor, bytes: []const u8, stats: *Stats) void {
     const loading_id = if (self.media.terminal.screens.active.kitty_images.loading) |loading|
         loading.image.id
     else
@@ -241,6 +245,7 @@ fn ingestMediaOutput(self: *Processor, bytes: []const u8) void {
         .io = self.io,
         .previous_loading_id = loading_id,
         .completed_commands = kitty_commands,
+        .stats = stats,
     });
 }
 
@@ -264,6 +269,7 @@ fn enforceIncompleteGraphics(self: *Processor, observation: GraphicsIngest) void
                     .delete = true,
                     .image_id = image_id,
                 } });
+                observation.stats.chunk_limited_uploads +|= 1;
                 self.queueGraphicsLimitResponse(image_id);
             }
         }
@@ -280,6 +286,12 @@ fn enforceIncompleteGraphics(self: *Processor, observation: GraphicsIngest) void
     loading.destroy(self.media_allocator.allocator());
     storage.loading = null;
     self.state.kitty_loading_chunks = 0;
+    if (chunk_limit_exceeded) {
+        observation.stats.chunk_limited_uploads +|= 1;
+    } else {
+        observation.stats.byte_limited_uploads +|= 1;
+    }
+
     self.queueGraphicsLimitResponse(image_id);
 }
 
@@ -294,6 +306,7 @@ const GraphicsIngest = struct {
     io: std.Io,
     previous_loading_id: ?u32,
     completed_commands: usize,
+    stats: *Stats,
 };
 
 const LiveImages = struct {

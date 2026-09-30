@@ -23,23 +23,39 @@ const Command = pty.Command;
 const support_module = @import("../tests/support.zig");
 const CellPreparation = @import("CellPreparation.zig");
 const graphics = @import("graphics.zig");
+const GraphicsTrim = @import("GraphicsTrim.zig");
 
 pub fn initSharedFreezeNonce(io: std.Io) void {
     shared_transfer.initSharedFreezeNonce(io);
 }
 
-pub fn enforceGraphicsQuotas(io: std.Io, pane: *Pane) void {
+/// Keeps each screen of `pane` within its image and placement counts after
+/// a complete ingest and returns what it dropped, for the caller to report.
+///
+/// ```zig
+/// const trim = attachment_namespace.enforceGraphicsQuotas(io, pane);
+/// ```
+pub fn enforceGraphicsQuotas(io: std.Io, pane: *Pane) GraphicsTrim {
     // The allocator has already reserved every VT and frozen-transfer byte
     // against the pane and runtime counters. This pass only enforces count
     // limits after a complete ingest. It never touches another pane because
     // that pane may be parsing concurrently in its own actor.
-    enforceGraphicsCounts(io, pane, .primary);
-    enforceGraphicsCounts(io, pane, .alternate);
+    var trim = enforceGraphicsCounts(io, pane, .primary);
+    trim.add(enforceGraphicsCounts(io, pane, .alternate));
+    return trim;
 }
 
-pub fn enforceGraphicsCounts(io: std.Io, pane: *Pane, screen_key: vt.ScreenSet.Key) void {
+/// Drops the oldest images of one screen past its image count, then only
+/// the placements past its placement count: first those scrolled out of the
+/// screen, then those of the oldest images, so what the child drew last
+/// stays.
+///
+/// ```zig
+/// const trim = attachment_namespace.enforceGraphicsCounts(io, pane, .primary);
+/// ```
+pub fn enforceGraphicsCounts(io: std.Io, pane: *Pane, screen_key: vt.ScreenSet.Key) GraphicsTrim {
     const terminal = &pane.media.terminal;
-    const screen = terminal.screens.get(screen_key) orelse return;
+    const screen = terminal.screens.get(screen_key) orelse return .{};
     const previous_key = terminal.screens.active_key;
     const previous = terminal.screens.active;
     terminal.screens.active_key = screen_key;
@@ -48,29 +64,106 @@ pub fn enforceGraphicsCounts(io: std.Io, pane: *Pane, screen_key: vt.ScreenSet.K
         terminal.screens.active_key = previous_key;
         terminal.screens.active = previous;
     }
-    const storage = &screen.kitty_images;
-    const placement_limit = pane.graphics_limits.placements_per_pane / 2;
-    if (storage.placements.count() > placement_limit) {
-        storage.delete(io, pane.media_allocator.allocator(), terminal, .{ .all = false });
-    }
 
+    var trim: GraphicsTrim = .{};
+    const storage = &screen.kitty_images;
     const image_limit = pane.graphics_limits.images_per_pane / 2;
+    trim.images_found = storage.images.count();
     while (storage.images.count() > image_limit) {
-        var oldest_id: ?u32 = null;
-        var oldest_generation: u64 = std.math.maxInt(u64);
-        var iterator = storage.images.iterator();
-        while (iterator.next()) |entry| {
-            if (entry.value_ptr.generation >= oldest_generation) {
-                continue;
-            }
-            oldest_generation = entry.value_ptr.generation;
-            oldest_id = entry.key_ptr.*;
-        }
+        const oldest_id = oldestImage(storage, false) orelse break;
         storage.delete(io, pane.media_allocator.allocator(), terminal, .{ .id = .{
             .delete = true,
-            .image_id = oldest_id orelse break,
+            .image_id = oldest_id,
         } });
+        trim.images_dropped += 1;
     }
+
+    const placement_limit = pane.graphics_limits.placements_per_pane / 2;
+    trim.placements_found = storage.placements.count();
+    if (trim.placements_found > placement_limit) {
+        trim.placements_dropped = trimPlacements(terminal, storage, placement_limit);
+        storage.dirty = true;
+        storage.generation = vt.kitty.graphics.nextGeneration(io);
+    }
+
+    return trim;
+}
+
+const PlacementEntry = @FieldType(vt.kitty.graphics.ImageStorage, "placements").Entry;
+
+fn oldestImage(storage: *const vt.kitty.graphics.ImageStorage, placed: bool) ?u32 {
+    var oldest_id: ?u32 = null;
+    var oldest_generation: u64 = std.math.maxInt(u64);
+    var iterator = storage.images.iterator();
+    while (iterator.next()) |entry| {
+        if (placed and entry.value_ptr.metadata.placement_count == 0) {
+            continue;
+        }
+
+        if (entry.value_ptr.generation >= oldest_generation) {
+            continue;
+        }
+
+        oldest_generation = entry.value_ptr.generation;
+        oldest_id = entry.key_ptr.*;
+    }
+
+    return oldest_id;
+}
+
+/// Drops placements until `limit` remain, in passes over the placement
+/// map: one for the placements wholly outside the screen, then one per
+/// image from the oldest. The images stay, within their own count.
+fn trimPlacements(terminal: *vt.Terminal, storage: *vt.kitty.graphics.ImageStorage, limit: usize) usize {
+    const found = storage.placements.count();
+    var offscreen = storage.placements.iterator();
+    while (storage.placements.count() > limit) {
+        const entry = offscreen.next() orelse break;
+        if (placementVisible(terminal, storage, entry.key_ptr.*, entry.value_ptr)) {
+            continue;
+        }
+
+        removePlacement(terminal, storage, entry);
+    }
+
+    while (storage.placements.count() > limit) {
+        const image_id = oldestImage(storage, true) orelse break;
+        var placements = storage.placements.iterator();
+        while (storage.placements.count() > limit) {
+            const entry = placements.next() orelse break;
+            if (entry.key_ptr.image_id == image_id) {
+                removePlacement(terminal, storage, entry);
+            }
+        }
+    }
+
+    return found - storage.placements.count();
+}
+
+fn placementVisible(terminal: *vt.Terminal, storage: *const vt.kitty.graphics.ImageStorage, key: vt.kitty.graphics.ImageStorage.PlacementKey, placement: *const vt.kitty.graphics.ImageStorage.Placement) bool {
+    const pin = switch (placement.location) {
+        .pin => |pin| pin,
+        .virtual => return true,
+    };
+    if (pin.garbage) {
+        return false;
+    }
+
+    const pages = &terminal.screens.active.pages;
+    if (pages.pointFromPin(.active, pin.*) != null) {
+        return true;
+    }
+
+    const image = storage.imageById(key.image_id) orelse return false;
+    const rect = placement.rect(image, terminal) orelse return false;
+    return pages.pointFromPin(.active, rect.bottom_right) != null;
+}
+
+fn removePlacement(terminal: *vt.Terminal, storage: *vt.kitty.graphics.ImageStorage, entry: PlacementEntry) void {
+    entry.value_ptr.deinit(terminal.screens.active);
+    const image = storage.images.getPtr(entry.key_ptr.image_id).?;
+    image.metadata.placement_count -= 1;
+    storage.placements.removeByPtr(entry.key_ptr);
 }
 
 /// Abandons the in-flight graphics batch after a media failure. The client
@@ -979,10 +1072,73 @@ test "graphics quota enforcement evicts oldest images on the ingested pane" {
 
     // The pass runs after this pane's own ingest completes; the limit is
     // half the configured maximum, evicting by oldest generation.
-    enforceGraphicsQuotas(io, pane);
+    const trim = enforceGraphicsQuotas(io, pane);
+    try std.testing.expectEqual(@as(usize, 1), trim.images_dropped);
+    try std.testing.expectEqual(@as(usize, 3), trim.images_found);
     try std.testing.expectEqual(@as(usize, 2), screen.kitty_images.images.count());
     try std.testing.expect(screen.kitty_images.imageById(1) == null);
     try std.testing.expect(screen.kitty_images.imageById(3) != null);
+}
+
+test "placements past the screen's count drop the oldest image's and keep the rest" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var service = try Service.init(gpa, .{ .database_path = ":memory:" });
+    defer {
+        service.stop(io);
+        service.deinit(io);
+    }
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
+    const args = [_][*:0]const u8{ "/bin/sleep", "600" };
+    const command = try Command.fromArgv(&args);
+    const location: core.TabLocation = .{
+        .workspace = .{ .workspace = try core.workspace(1) },
+        .tab_id = try core.tab(1),
+    };
+    const pane = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = try core.pane(1), .generation = 1 },
+        .location = location,
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/",
+        .size = .{ .cols = 20, .rows = 5 },
+        .graphics_limits = .{ .placements_per_pane = 8 },
+    });
+    defer {
+        pane.session.shutdown();
+        pane.destroy();
+    }
+
+    const media = pane.media_allocator.allocator();
+    const screen = pane.media.terminal.screens.active;
+    const storage = &screen.kitty_images;
+    for (1..3) |image_id| {
+        const pixels = try media.dupe(u8, &[_]u8{ 0, 0, 0 });
+        try storage.addImage(io, media, screen, .{
+            .id = @intCast(image_id),
+            .width = 1,
+            .height = 1,
+            .format = .rgb,
+            .data = .{ .complete = pixels },
+        });
+        for (1..4) |placement_id| {
+            try storage.addPlacement(io, media, screen, @intCast(image_id), @intCast(placement_id), .{ .location = .virtual });
+        }
+    }
+
+    const generation = storage.generation;
+    const trim = enforceGraphicsQuotas(io, pane);
+    try std.testing.expectEqual(@as(usize, 2), trim.placements_dropped);
+    try std.testing.expectEqual(@as(usize, 6), trim.placements_found);
+    try std.testing.expectEqual(@as(usize, 4), storage.placements.count());
+    try std.testing.expectEqual(@as(u30, 1), storage.imageById(1).?.metadata.placement_count);
+    try std.testing.expectEqual(@as(u30, 3), storage.imageById(2).?.metadata.placement_count);
+    try std.testing.expect(storage.generation != generation);
 }
 
 test "a shared-transport attachment ships one name instead of pixel chunks" {

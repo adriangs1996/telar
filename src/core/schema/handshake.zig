@@ -12,13 +12,13 @@ const ClientHello = @import("ClientHello.zig");
 pub const SchemaId = [8]u8;
 /// Human-readable schema generation. Bump it on any breaking wire change so a
 /// mismatch log can say which side is newer.
-pub const schema_version: *const [2]u8 = "78";
+pub const schema_version: *const [2]u8 = "79";
 /// Version prefix plus a fingerprint of the golden corpus in
 /// `schema_contract_test.zig`. The test "the handshake fingerprint derives from the
 /// golden corpus" recomputes the hash, so an encoding change cannot ship
 /// without updating this constant. Do not keep the old decoder until rolling
 /// upgrades become a supported product requirement.
-pub const schema_id: SchemaId = (schema_version.* ++ "ff64d2".*);
+pub const schema_id: SchemaId = (schema_version.* ++ "424261".*);
 
 pub const magic: [8]u8 = "TELARIPC".*;
 
@@ -36,6 +36,9 @@ pub const Tag = enum(u8) {
 
 pub const RejectReason = enum(u8) {
     incompatible_schema = 1,
+    /// The runtime holds all the client sessions it can; the connection is
+    /// refused so the client can say so instead of seeing a closed socket.
+    client_limit_reached = 2,
 };
 
 pub const ServerResponse = union(enum) {
@@ -127,10 +130,7 @@ fn decodeServerReject(payload: []const u8) DecodeError!ServerReject {
     if (payload.len != server_reject_size) {
         return error.InvalidLength;
     }
-    const reason: RejectReason = switch (payload[header_size]) {
-        @intFromEnum(RejectReason.incompatible_schema) => .incompatible_schema,
-        else => return error.UnknownRejectReason,
-    };
+    const reason = std.enums.fromInt(RejectReason, payload[header_size]) orelse return error.UnknownRejectReason;
     return .{
         .reason = reason,
         .expected_schema = payload[header_size + 1 .. server_reject_size][0..schema_id.len].*,
@@ -186,6 +186,7 @@ test "server responses round trip" {
     const responses = [_]ServerResponse{
         .{ .accepted = .{ .schema = schema_id } },
         .{ .rejected = .{ .reason = .incompatible_schema, .expected_schema = incompatible } },
+        .{ .rejected = .{ .reason = .client_limit_reached, .expected_schema = schema_id } },
     };
     for (responses) |response| {
         var buffer: [max_message_size]u8 = undefined;

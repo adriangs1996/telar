@@ -52,6 +52,7 @@ const Frame = @import("schema/Frame.zig");
 const tags = @import("schema/messages/tags.zig");
 const TextMetadataBuilder = @import("text_metadata/Builder.zig");
 const text_metadata_limits = @import("text_metadata/limits.zig");
+const core_graphics = @import("graphics.zig");
 const ChangeReviewSnapshotView = @import("schema/messages/ChangeReviewSnapshotView.zig");
 const MoveTab = @import("schema/messages/MoveTab.zig");
 
@@ -62,7 +63,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 127;
+const corpus_len = 128;
 
 const failure_codes = std.enums.values(types.FailureCode);
 const failure_code_listing = listing: {
@@ -73,6 +74,27 @@ const failure_code_listing = listing: {
 
     break :listing text;
 };
+/// Bounds a peer enforces without changing any encoding. Pinning their
+/// values here makes raising one change the fingerprint, so peers built
+/// with different bounds never talk.
+const wire_bounds_listing = std.fmt.comptimePrint(
+    "max_panes={d} max_panes_per_tab={d} max_workspace_name_bytes={d} max_search_matches={d} max_clipboard_bytes={d} max_client_layout_tabs={d} max_client_layout_nodes={d} max_client_layout_tab_nodes={d} max_client_layout_wire_bytes={d} client_list_capacity={d} reject_reasons={d} text_metadata_statuses={d} max_chunks_per_image={d}",
+    .{
+        types.max_panes,
+        types.max_panes_per_tab,
+        types.max_workspace_name_bytes,
+        types.max_search_matches,
+        pane_module.max_clipboard_bytes,
+        types.max_client_layout_tabs,
+        types.max_client_layout_nodes,
+        types.max_client_layout_tab_nodes,
+        types.max_client_layout_wire_bytes,
+        schema.ClientList.capacity,
+        std.enums.values(handshake.RejectReason).len,
+        std.enums.values(text_metadata_limits.Status).len,
+        core_graphics.max_chunks_per_image,
+    },
+);
 const corpus_storage_size = 12 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -672,6 +694,13 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(5),
             .code = failure_codes[failure_codes.len - 1],
             .message = failure_code_listing,
+        }),
+    ));
+    helper.addTailTolerant(.{ .name = "wire_bounds", .direction = .server, .golden_hex = golden.wire_bounds }, helper.commit(
+        try runtime.encodeRequestFailed(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .code = .resource_limit,
+            .message = wire_bounds_listing,
         }),
     ));
     helper.add(.{ .name = "runtime_stopping", .direction = .server, .golden_hex = golden.runtime_stopping }, helper.commit(

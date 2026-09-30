@@ -82,9 +82,11 @@ metadata or an invalid frame base cannot install a partial replacement. The
 metadata shares the frame ID and base: no extra queue, ACK, or GPU dependency.
 
 Limits per viewport are 256 destinations, 2,048 runs, 4,096 bytes per URI and
-64 KiB of combined URI bytes. Exceeding any capture quota emits `omitted` with
-row flags and no links; hyperlink rows then decline textual fallback. Later valid
-content restores a complete table. One reserved buffer occupies `87,563 + rows`
+64 KiB of combined URI bytes. A capture past any quota keeps the destinations
+and runs that fit, leaves the other cells unlinked and emits `partial`; hyperlink
+rows of a table that is not `complete` decline textual fallback, and the runtime
+reports `text_metadata.max_links`. Later valid content restores a complete
+table. One reserved buffer occupies `87,563 + rows`
 bytes: a pane uses one in the client, two in the runtime and two per attachment
 for its independent history projection. Normal unchanged patches add only a
 four-byte marker. The maximum cell grid reserves the worst-case metadata size

@@ -16,6 +16,8 @@ const launch_cwd = @import("client/launch_cwd.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const pane_launch = @import("pane_launch.zig");
 const resync_required = @import("resync_required.zig");
+const limit_reached = @import("limit_reached.zig");
+const Workspaces = @import("../workspace/Workspaces.zig");
 
 /// Creates the tab and its root pane, then attaches the client to it.
 ///
@@ -26,11 +28,11 @@ pub fn create(model: *RuntimeModel, session: *Session, request: core.CreateTabVi
     const pending = createTab(model, session, request) catch |err| {
         return switch (err) {
             error.WorkspaceNotFound => client_request.fail(session, request.request_id, .workspace_not_found, "workspace not found"),
-            error.TabLimitReached => client_request.fail(session, request.request_id, .resource_limit, "tab limit reached"),
+            error.TabLimitReached => client_request.fail(session, request.request_id, .resource_limit, tab_limit),
             error.InvalidTabLabel => client_request.fail(session, request.request_id, .invalid_request, "invalid tab label"),
             error.GeometryUnavailable => client_request.fail(session, request.request_id, .resource_limit, "workspace geometry is leased by another client"),
             error.InvalidLaunchCwd => client_request.fail(session, request.request_id, .invalid_request, "cwd source pane is unavailable"),
-            error.PaneLimitReached => client_request.fail(session, request.request_id, .resource_limit, "pane limit reached"),
+            error.PaneLimitReached, error.TabPaneLimitReached => client_request.fail(session, request.request_id, .resource_limit, pane_launch.limitFailure(err).?),
             error.UnsupportedEnvironment => client_request.fail(session, request.request_id, .invalid_request, "custom pane environment is not supported"),
             else => if (pane_launch.spawnFailure(err)) |reason| client_request.fail(session, request.request_id, .spawn_failed, reason) else err,
         };
@@ -49,7 +51,7 @@ fn createTab(model: *RuntimeModel, session: *Session, request: core.CreateTabVie
 
     const cwd = launch_cwd.resolveLaunchCwd(model, session, request.launch, .{ .workspace = request.workspace }) catch return error.InvalidLaunchCwd;
     const tab_id = try workspaces.nextTabId();
-    const position = try workspaces.addTab(slot, tab_id, request.label);
+    const position = try addTab(model, slot, tab_id, request.label);
     const created: core.TabLocation = .{ .workspace = request.workspace, .tab_id = tab_id };
     var committed = false;
     defer if (!committed) {
@@ -102,9 +104,9 @@ pub fn launch(model: *RuntimeModel, session: *Session, request: core.LaunchTabVi
         return switch (err) {
             error.WorkspaceNotFound => client_request.fail(session, request.request_id, .workspace_not_found, "workspace not found"),
             error.InvalidLaunchCwd => client_request.fail(session, request.request_id, .invalid_request, "a background tab needs an explicit working directory"),
-            error.TabLimitReached => client_request.fail(session, request.request_id, .resource_limit, "tab limit reached"),
+            error.TabLimitReached => client_request.fail(session, request.request_id, .resource_limit, tab_limit),
             error.InvalidTabLabel => client_request.fail(session, request.request_id, .invalid_request, "invalid tab label"),
-            error.PaneLimitReached => client_request.fail(session, request.request_id, .resource_limit, "pane limit reached"),
+            error.PaneLimitReached, error.TabPaneLimitReached => client_request.fail(session, request.request_id, .resource_limit, pane_launch.limitFailure(err).?),
             error.UnsupportedEnvironment => client_request.fail(session, request.request_id, .invalid_request, "custom pane environment is not supported"),
             else => if (pane_launch.spawnFailure(err)) |reason| client_request.fail(session, request.request_id, .spawn_failed, reason) else err,
         };
@@ -143,6 +145,22 @@ const TabOpening = struct {
     launch_cwd: []const u8,
 };
 
+/// What a client reads when a workspace holds all the tabs it can.
+pub const tab_limit = std.fmt.comptimePrint("this workspace holds its limit of {d} tabs; close one first", .{core.max_tabs_per_workspace});
+
+fn addTab(model: *RuntimeModel, slot: usize, tab_id: core.TabId, label: []const u8) !u16 {
+    return model.workspaces.addTab(slot, tab_id, label) catch |err| {
+        if (err == error.TabLimitReached) {
+            limit_reached.report(model, .{
+                .limit = Workspaces.tabs_limit,
+                .requested = core.max_tabs_per_workspace + 1,
+            });
+        }
+
+        return err;
+    };
+}
+
 /// Adds a tab and its root pane to a workspace without leasing its geometry
 /// or attaching anyone, and tells the clients showing the workspace. The
 /// tab exists only once its pane has started.
@@ -153,7 +171,7 @@ const TabOpening = struct {
 pub fn open(model: *RuntimeModel, session: *const Session, opening: TabOpening) !*Pane {
     const workspaces = &model.workspaces;
     const tab_id = try workspaces.nextTabId();
-    const position = try workspaces.addTab(opening.workspace_slot, tab_id, opening.label);
+    const position = try addTab(model, opening.workspace_slot, tab_id, opening.label);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = workspaces.id[opening.workspace_slot] },
         .tab_id = tab_id,

@@ -13,6 +13,9 @@ const launch_cwd = @import("client/launch_cwd.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const pane_launch = @import("pane_launch.zig");
 const resync_required = @import("resync_required.zig");
+const limit_reached = @import("limit_reached.zig");
+const Workspaces = @import("../workspace/Workspaces.zig");
+const std = @import("std");
 
 /// Creates the workspace and moves the client's attachments to its root pane.
 ///
@@ -25,8 +28,10 @@ pub fn create(model: *RuntimeModel, session: *Session, request: core.CreateWorks
             error.InvalidLaunchCwd => client_request.fail(session, request.request_id, .invalid_request, "cwd source pane is unavailable"),
             error.LaunchCwdCreateFailed => client_request.fail(session, request.request_id, .spawn_failed, "could not create the working directory"),
             error.WorkspaceCreateFailed => client_request.fail(session, request.request_id, .resource_limit, "could not create workspace"),
+            error.WorkspaceLimitReached => client_request.fail(session, request.request_id, .resource_limit, workspace_limit),
+            error.InvalidWorkspaceName => client_request.fail(session, request.request_id, .invalid_request, invalid_name),
             error.GeometryUnavailable => client_request.fail(session, request.request_id, .resource_limit, "workspace geometry is unavailable"),
-            error.PaneLimitReached => client_request.fail(session, request.request_id, .resource_limit, "pane limit reached"),
+            error.PaneLimitReached, error.TabPaneLimitReached => client_request.fail(session, request.request_id, .resource_limit, pane_launch.limitFailure(err).?),
             error.UnsupportedEnvironment => client_request.fail(session, request.request_id, .invalid_request, "custom pane environment is not supported"),
             else => if (pane_launch.spawnFailure(err)) |reason| client_request.fail(session, request.request_id, .spawn_failed, reason) else err,
         };
@@ -40,13 +45,40 @@ pub fn create(model: *RuntimeModel, session: *Session, request: core.CreateWorks
     } });
 }
 
+/// What a client reads when every workspace row is taken, or when the name
+/// it asked for does not fit.
+pub const workspace_limit = std.fmt.comptimePrint("the runtime holds its limit of {d} workspaces; close one first", .{Workspaces.capacity});
+pub const invalid_name = std.fmt.comptimePrint("a workspace name is 1 to {d} bytes", .{core.max_workspace_name_bytes});
+
+/// Reserves an invisible workspace row, reporting the workspace limit when
+/// every row is taken. A failure other than the limit or the name is
+/// `WorkspaceCreateFailed`.
+///
+/// ```zig
+/// const proposal = try workspace_creation.propose(model, path, name);
+/// defer model.workspaces.rollback(model.gpa, proposal);
+/// ```
+pub fn propose(model: *RuntimeModel, path: []const u8, name: ?[]const u8) !usize {
+    return model.workspaces.propose(model.gpa, path, name) catch |err| switch (err) {
+        error.WorkspaceLimitReached => {
+            limit_reached.report(model, .{
+                .limit = Workspaces.workspaces_limit,
+                .requested = Workspaces.capacity + 1,
+            });
+            return err;
+        },
+        error.InvalidWorkspaceName => err,
+        else => error.WorkspaceCreateFailed,
+    };
+}
+
 fn createWorkspace(model: *RuntimeModel, session: *Session, request: core.CreateWorkspaceView) !*Pane {
     const cwd = launch_cwd.resolveLaunchCwd(model, session, request.launch, .any) catch return error.InvalidLaunchCwd;
     if (request.create_cwd and request.launch.cwd_source == null) {
         launch_cwd.createLaunchDirectory(model.io, cwd) catch return error.LaunchCwdCreateFailed;
     }
 
-    const proposal = model.workspaces.propose(model.gpa, cwd, request.name) catch return error.WorkspaceCreateFailed;
+    const proposal = try propose(model, cwd, request.name);
     defer model.workspaces.rollback(model.gpa, proposal);
 
     const location: core.TabLocation = .{

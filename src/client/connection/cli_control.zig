@@ -395,7 +395,7 @@ fn writeCommandSidebarState(model: *const data.ClientModel, reply: *core.ClientC
 fn writeCommandLayout(model: *const data.ClientModel, reply: *core.ClientCommand) !void {
     const tab = model.tabs.activeSlot() orelse return error.NoActiveTab;
     const focused = model.tabs.layout[tab].focused() orelse return error.NoFocusedPane;
-    var nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
+    var nodes: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
     const tabs = [_]core.ClientTabLayout{
         .{
             .location = model.tabs.location[tab],
