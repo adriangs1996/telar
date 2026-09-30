@@ -1,3 +1,4 @@
+const std = @import("std");
 const streams = @import("streams.zig");
 const Response = @import("Response.zig");
 const Tracker = @This();
@@ -29,6 +30,15 @@ pub fn startRequest(self: *Tracker, stream_id: u32) bool {
     const destination = free orelse return false;
     destination.* = stream_id;
     return true;
+}
+
+/// Whether every request slot holds a stream, so a new one goes untracked.
+///
+/// ```zig
+/// if (!tracker.startRequest(id) and tracker.requestsFull()) untracked += 1;
+/// ```
+pub fn requestsFull(self: *const Tracker) bool {
+    return std.mem.indexOfScalar(u32, &self.requests, 0) == null;
 }
 
 pub fn finishRequest(self: *Tracker, stream_id: u32) void {

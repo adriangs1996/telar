@@ -7,6 +7,7 @@ pub const Override = @import("Override.zig");
 pub const Session = @import("Session.zig");
 pub const Size = @import("Size.zig");
 pub const command_support = @import("command_support.zig");
+pub const descriptor_limit = @import("descriptor_limit.zig");
 pub const exit = @import("exit.zig");
 pub const login_shell = @import("login_shell.zig");
 
@@ -20,6 +21,7 @@ test {
     _ = @import("Session.zig");
     _ = @import("Size.zig");
     _ = @import("command_support.zig");
+    _ = @import("descriptor_limit.zig");
     _ = @import("environment.zig");
     _ = @import("exit.zig");
     _ = @import("login_shell.zig");
