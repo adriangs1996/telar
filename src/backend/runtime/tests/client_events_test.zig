@@ -7,6 +7,7 @@ const RequestFixture = @import("RequestFixture.zig");
 const client_delivery = @import("../client_delivery.zig");
 const pane_attachment = @import("../pane_attachment.zig");
 const store_support = @import("../client/store_support.zig");
+const client_connection = @import("../client_connection.zig");
 
 fn socketPair() ![2]localsocket.SocketChannel {
     var sockets: [2]std.c.fd_t = undefined;
@@ -24,6 +25,12 @@ fn expectPeerClosed(peer: *localsocket.SocketChannel) !void {
     var byte: [1]u8 = undefined;
     const received = std.c.recv(peer.stream.socket.handle, &byte, byte.len, std.c.MSG.DONTWAIT);
     try std.testing.expectEqual(@as(isize, 0), received);
+}
+
+fn expectPeerOpen(peer: *localsocket.SocketChannel) !void {
+    var byte: [1]u8 = undefined;
+    const received = std.c.recv(peer.stream.socket.handle, &byte, byte.len, std.c.MSG.DONTWAIT);
+    try std.testing.expectEqual(@as(isize, -1), received);
 }
 
 fn commitQueuedResponse(fixture: *RequestFixture) !void {
@@ -59,7 +66,7 @@ test "runtime update releases a rejected handshake slot and closes its exact soc
     var sockets = try socketPair();
     defer sockets[1].deinit(std.testing.io);
     const clients_before = fixture.runtime.model.clients.count;
-    const slot = fixture.runtime.model.client_admission.begin(sockets[0]).?;
+    const slot = fixture.runtime.model.client_admission.begin(sockets[0], 0).?;
 
     try std.testing.expect(!try fixture.runtime.update(.{ .handshaken = .{ .slot = slot, .result = error.IncompatibleProtocol } }));
     try std.testing.expect(!fixture.runtime.model.client_admission.isPending());
@@ -74,7 +81,7 @@ test "runtime update refuses completed negotiation after shutdown starts" {
     var sockets = try socketPair();
     defer sockets[1].deinit(std.testing.io);
     const clients_before = fixture.runtime.model.clients.count;
-    const slot = fixture.runtime.model.client_admission.begin(sockets[0]).?;
+    const slot = fixture.runtime.model.client_admission.begin(sockets[0], 0).?;
     try fixture.send(.runtime_stop);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .handshaken = .{ .slot = slot, .result = {} } }));
@@ -90,7 +97,7 @@ test "runtime update closes a negotiated socket when client identities are exhau
     var sockets = try socketPair();
     defer sockets[1].deinit(std.testing.io);
     const clients_before = fixture.runtime.model.clients.count;
-    const slot = fixture.runtime.model.client_admission.begin(sockets[0]).?;
+    const slot = fixture.runtime.model.client_admission.begin(sockets[0], 0).?;
     fixture.runtime.model.clients.next_id = std.math.maxInt(u64);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .handshaken = .{ .slot = slot, .result = {} } }));
@@ -109,7 +116,7 @@ test "runtime update transfers a negotiated connection before starting its first
     const clients = &fixture.runtime.model.clients;
     const expected_key: ClientKey = .{ .id = clients.next_id, .generation = clients.next_generation };
     const admitted_fd = sockets[0].stream.socket.handle;
-    const slot = fixture.runtime.model.client_admission.begin(sockets[0]).?;
+    const slot = fixture.runtime.model.client_admission.begin(sockets[0], 0).?;
 
     try std.testing.expect(!try fixture.runtime.update(.{ .handshaken = .{ .slot = slot, .result = {} } }));
     try std.testing.expect(!fixture.runtime.model.client_admission.isPending());
@@ -136,7 +143,7 @@ test "runtime update closes accepted sockets while shutdown owns the runtime" {
     try expectPeerClosed(&sockets[1]);
 }
 
-test "runtime update interrupts the oldest handshake only when every slot is taken" {
+test "a connection that finds every handshake slot taken is closed alone, and a handshake past its deadline is interrupted" {
     var fixture: RequestFixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -144,7 +151,7 @@ test "runtime update interrupts the oldest handshake only when every slot is tak
     var stalled: [store_support.max_pending_handshakes][2]localsocket.SocketChannel = undefined;
     for (&stalled) |*pair| {
         pair.* = try socketPair();
-        _ = admission.begin(pair[0]).?;
+        _ = admission.begin(pair[0], 0).?;
     }
     defer for (&stalled) |*pair| pair[1].deinit(std.testing.io);
     var incoming = try socketPair();
@@ -152,10 +159,14 @@ test "runtime update interrupts the oldest handshake only when every slot is tak
 
     try std.testing.expect(!try fixture.runtime.update(.{ .accepted = incoming[0] }));
     try expectPeerClosed(&incoming[1]);
-    try expectPeerClosed(&stalled[0][1]);
-    for (stalled[1..]) |*pair| {
-        var byte: [1]u8 = undefined;
-        try std.testing.expectEqual(@as(isize, -1), std.c.recv(pair[1].stream.socket.handle, &byte, byte.len, std.c.MSG.DONTWAIT));
+    for (&stalled) |*pair| {
+        try expectPeerOpen(&pair[1]);
+    }
+
+    // Every handshake started at 0 is past its deadline by now.
+    client_connection.expireHandshakes(&fixture.runtime.model);
+    for (&stalled) |*pair| {
+        try expectPeerClosed(&pair[1]);
     }
 
     for (0..store_support.max_pending_handshakes) |slot| {
@@ -167,6 +178,34 @@ test "runtime update interrupts the oldest handshake only when every slot is tak
     try std.testing.expect(!admission.isPending());
 }
 
+test "handshakes in flight count against client capacity" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const model = &fixture.runtime.model;
+    var pending = try socketPair();
+    defer pending[1].deinit(std.testing.io);
+    const slot = model.client_admission.begin(pending[0], std.Io.Timestamp.now(model.io, .awake).toMilliseconds()).?;
+    var incoming = try socketPair();
+    defer incoming[1].deinit(std.testing.io);
+
+    // One place is left, and the pending handshake holds it.
+    const count = model.clients.count;
+    model.clients.count = model.clients.items.len - 1;
+    defer model.clients.count = count;
+    try std.testing.expect(!try fixture.runtime.update(.{ .accepted = incoming[0] }));
+    try expectPeerClosed(&incoming[1]);
+    try expectPeerOpen(&pending[1]);
+    try std.testing.expectEqual(@as(usize, 1), model.client_admission.count());
+
+    pending[0].shutdown(std.testing.io);
+    model.clients.count = count;
+    try std.testing.expect(!try fixture.runtime.update(.{ .handshaken = .{
+        .slot = slot,
+        .result = error.ConnectionClosed,
+    } }));
+}
+
 test "a client negotiates while another connection's handshake stalls" {
     var fixture: RequestFixture = undefined;
     try fixture.init();
@@ -174,7 +213,7 @@ test "a client negotiates while another connection's handshake stalls" {
     const admission = &fixture.runtime.model.client_admission;
     var stalled = try socketPair();
     defer stalled[1].deinit(std.testing.io);
-    const stalled_slot = admission.begin(stalled[0]).?;
+    const stalled_slot = admission.begin(stalled[0], std.Io.Timestamp.now(fixture.runtime.model.io, .awake).toMilliseconds()).?;
     var incoming = try socketPair();
     defer incoming[1].deinit(std.testing.io);
     const clients_before = fixture.runtime.model.clients.count;

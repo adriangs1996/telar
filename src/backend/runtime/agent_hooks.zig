@@ -24,6 +24,7 @@ const client_connection = @import("client_connection.zig");
 const DescentCompletion = @import("events/DescentCompletion.zig");
 const ClientKey = @import("../history/ClientKey.zig");
 const proclineage = @import("proclineage");
+const pane_observation = @import("pane_observation.zig");
 
 pub const TitleReport = enum { recorded, unchanged, pane_not_found, invalid_title };
 
@@ -420,8 +421,22 @@ fn refuseReporter(model: *RuntimeModel, session: *Session, request_id: core.Requ
         return false;
     }
 
-    if (model.panes.resolve(reporter.key)) |pane| {
+    const pane = model.panes.resolve(reporter.key) orelse return refuseForeign(session, request_id);
+    if (pane.exit != null) {
+        return refuseForeign(session, request_id);
+    }
+
+    if (session.recheck_mark) |mark| {
+        // The pane was identified again since this hook asked: it still
+        // runs another agent, such as the one that ran this hook as a tool.
+        if (pane.agent_rechecks != mark) {
+            try client_request.fail(session, request_id, .foreign_process, "the pane runs another agent");
+            return true;
+        }
+    } else {
+        session.recheck_mark = pane.agent_rechecks;
         pane.agent_recheck_requested = true;
+        try pane_observation.start(model, pane);
     }
 
     try client_request.fail(session, request_id, .agent_mismatch, "the pane was last seen running another agent; it is checked again");

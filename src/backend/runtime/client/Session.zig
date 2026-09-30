@@ -40,6 +40,9 @@ search_scheduled: bool = false,
 hook_pane: ?PaneKey = null,
 /// A worker is walking the peer process's parents for `verify_pane_descent`.
 descent_pending: bool = false,
+/// The pane's completed rechecks when this connection's report asked for
+/// one; a later completion makes the pane's answer final for it.
+recheck_mark: ?u32 = null,
 cell_deadline_ns: ?u64 = null,
 
 /// Example: `if (session.setTerminalColors(colors)) { updateOwnedPanes(); }`.

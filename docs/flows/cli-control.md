@@ -367,9 +367,9 @@ telemetry logs, client discovery/detach, sidebar controls, layout round-trip,
 pane split/close, forced config reload, and plugin enable/run/disable. All test
 sockets, configuration and persistent data live under temporary directories.
 It waits for UI negotiation before polling. The runtime now negotiates up to
-eight connections at once, each in its own admission slot, and interrupts the
-oldest unfinished handshake only when every slot is taken
-(`client_connection.accept`).
+eight connections at once, each in its own admission slot; a connection that
+finds none is closed, and a handshake unfinished after two seconds is
+interrupted (`client_connection.accept`, `expireHandshakes`).
 
 The earlier broad `test-schema` transport run stalled and was terminated;
 these results do not claim that transport integration suite passed. GUI thread

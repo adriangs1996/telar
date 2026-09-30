@@ -24,9 +24,10 @@ const store_support = @import("client/store_support.zig");
 
 /// Rearms admission and moves an accepted connection into a free handshake
 /// slot when capacity and lifecycle allow it, so clients that connect
-/// together negotiate independently. With every slot taken, the oldest
-/// handshake is interrupted and the new connection closed, so a client that
-/// never finishes cannot hold admission.
+/// together negotiate independently. Handshakes in flight count against
+/// client capacity, so every one that finishes has a place; a connection
+/// that finds no slot or no capacity is closed. `expireHandshakes`
+/// interrupts one that never finishes.
 ///
 /// ```zig
 /// try client_connection.accept(model, result, &resources.listener);
@@ -48,16 +49,12 @@ pub fn accept(model: *RuntimeModel, result: anyerror!localsocket.SocketChannel, 
 
     try sources.acceptClient(listener);
 
-    if (model.client_admission.oldestWhenFull()) |oldest| {
-        model.client_admission.pendingConnection(oldest).?.shutdown(model.io);
+    if (!model.clients.hasCapacityAfter(model.client_admission.count())) {
         return;
     }
 
-    if (!model.clients.hasCapacity()) {
-        return;
-    }
-
-    const slot = model.client_admission.begin(accepted).?;
+    const now_ms = std.Io.Timestamp.now(model.io, .awake).toMilliseconds();
+    const slot = model.client_admission.begin(accepted, now_ms) orelse return;
     accepted_owned = false;
     const negotiation: Negotiation = .{
         .io = model.io,
@@ -236,6 +233,21 @@ pub fn finalize(model: *RuntimeModel, key: ClientKey) void {
     }
 
     _ = model.clients.remove(.{ .io = model.io, .gpa = model.gpa }, key);
+}
+
+/// Interrupts every handshake unfinished after `handshake_deadline_ms`; its
+/// actor then fails and its completion frees the slot. Runs on the
+/// maintenance tick.
+///
+/// ```zig
+/// client_connection.expireHandshakes(model);
+/// ```
+pub fn expireHandshakes(model: *RuntimeModel) void {
+    const now_ms = std.Io.Timestamp.now(model.io, .awake).toMilliseconds();
+    var from: usize = 0;
+    while (model.client_admission.expired(now_ms, store_support.handshake_deadline_ms, from)) |slot| : (from = slot + 1) {
+        model.client_admission.pendingConnection(slot).?.shutdown(model.io);
+    }
 }
 
 /// Unblocks client actors without releasing the connections they borrow.

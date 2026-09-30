@@ -99,15 +99,20 @@ Two checks keep a pane's card to its own agent:
 2. **Agent.** A report names its agent. A pane whose process was last seen
    running another agent refuses it before any effect: lifecycle state,
    session, title, progress (and the external worktree a progress report
-   registers) and command history. The refusal is `agent_mismatch`, and it
-   asks the pane's next observation to identify the foreground process
-   again even if its group did not change (`Cache.recheck`): the agent may
-   have replaced the previous one without an exit the probe saw, by `exec`
-   or by quitting and starting again between two probes. The hook retries
-   the report up to four times, 250 ms apart, and the new agent's first
-   drawing starts that observation, so its `SessionStart` state and title
-   are kept. A process of another agent, such as `codex exec` run by Claude
-   Code as a tool, is still refused after the check. A hook can fire before the runtime
+   registers) and command history. The refusal is `agent_mismatch`: the
+   agent may have replaced the previous one without an exit the probe saw,
+   by `exec` or by quitting and starting again between two probes. The
+   first such report of a connection starts an observation of the pane at
+   once, even without output to replay (`Observer.sealForProbe`), that
+   identifies the foreground process again even if its group did not
+   change (`Cache.recheck`). Once that observation completed
+   (`Pane.agent_rechecks` moved past the connection's `recheck_mark`), a
+   report the pane still refuses gets `foreign_process`, final. The hook
+   retries `agent_mismatch` within one budget of one second for all its
+   reports, 100 ms apart, and stops at the final answer. A new agent's
+   `SessionStart` state and title are kept; a process of another agent,
+   such as `codex exec` run by Claude Code as a tool, is refused after one
+   observation, and its hook waits at most that long. A hook can fire before the runtime
    has identified the pane's process, as `SessionStart` can. Until then, the
    first agent that reports holds the pane (`Agent.reporter`). Process
    evidence of another agent then discards its report, session, session file
@@ -146,10 +151,10 @@ interactive session, such as `exec`, `review`, `login` or `app-server`.
 The card says `no hooks from this pane: if it runs on a shared server,
 start it with --no-daemon` only when all of these hold: the session is
 `shared_server`; telar's Codex hooks are installed (the observation worker
-reads `$CODEX_HOME/hooks.json`, else `~/.codex/hooks.json`, for `hook
-codex`, once per identified process, at most 32 KiB); the screen has shown
-it working for five seconds; and no hook report of that process has
-reached the pane. A turn's first hook arrives well within those seconds, so
+reads the file `telar integration install` writes, `core.HookSettings.codex`,
+for its marker, once per identified process, at most 32 KiB); the screen
+has shown it working for five seconds without a break; and no hook report
+of that process has reached the pane. A turn's first hook arrives well within those seconds, so
 a Codex older than the daemon, or one with the daemon turned off, never
 shows the line. Without the integration the line never shows: there are no
 hooks to miss. A restore resumes the way
@@ -646,8 +651,10 @@ for `SessionEnd` and `Interrupt`.
   `hook_integration.zig` proves the installed-hooks check; `lib/proclineage`
   and `lib/localsocket` prove the parent chain and the peer process.
 - `src/backend/runtime/tests/client_events_test.zig` proves that a client
-  negotiates while another connection's handshake stalls, and that only a
-  full admission table interrupts its oldest handshake.
+  negotiates while another connection's handshake stalls, that a connection
+  finding every slot taken is closed alone, that the maintenance tick
+  interrupts a handshake past its deadline, and that handshakes in flight
+  count against client capacity.
 - `src/cli/TempFile.zig` proves that installation writes through an
   exclusive owner-only temporary and never through a planted symlink.
 - `src/backend/history/persistence/history_sql.zig` proves that native start/finish

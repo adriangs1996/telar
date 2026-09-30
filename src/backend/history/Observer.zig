@@ -148,6 +148,25 @@ pub fn seal(self: *Observer) bool {
     return true;
 }
 
+/// Seals the active batch even when it holds nothing, so an observation can
+/// identify the pane's process without output to replay. False while a
+/// worker still holds a batch.
+///
+/// ```zig
+/// if (observer.sealForProbe()) startWorker();
+/// ```
+pub fn sealForProbe(self: *Observer) bool {
+    if (self.worker != null) {
+        return false;
+    }
+
+    const sealed = self.active;
+    self.active ^= 1;
+    std.debug.assert(self.batches[self.active].event_count == 0);
+    self.worker = sealed;
+    return true;
+}
+
 pub fn finishSealed(self: *Observer) void {
     const index = self.worker orelse unreachable;
     self.batches[index].reset();

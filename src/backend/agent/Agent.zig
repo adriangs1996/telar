@@ -104,8 +104,8 @@ hooks_seen: bool = false,
 /// telar's hooks for this agent are installed, so their silence means
 /// something.
 hooks_installed: bool = false,
-/// When the screen first showed this process working while none of its
-/// hooks had reached the pane.
+/// Since when the screen has shown this process working without a break
+/// while none of its hooks had reached the pane.
 unreported_work_at_ms: ?i64 = null,
 /// The tracked worktree the agent reported working in.
 work_tree: core.WorktreeId = .invalid,
@@ -395,7 +395,10 @@ pub fn applyScreen(self: *Agent, observation: ScreenObservation) bool {
     }
 
     self.screen = Evidence.fromScreen(known_provider, &observation);
-    if (signal.status == .working and !self.hooks_seen and self.unreported_work_at_ms == null) {
+    // Only work that lasts counts: any other screen starts it over.
+    if (signal.status != .working) {
+        self.unreported_work_at_ms = null;
+    } else if (!self.hooks_seen and self.unreported_work_at_ms == null) {
         self.unreported_work_at_ms = observation.observed_at_ms;
     }
 

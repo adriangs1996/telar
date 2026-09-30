@@ -62,7 +62,17 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 123;
+const corpus_len = 124;
+
+const failure_codes = std.enums.values(types.FailureCode);
+const failure_code_listing = listing: {
+    var text: []const u8 = "";
+    for (failure_codes) |code| {
+        text = text ++ std.fmt.comptimePrint("{s}={d} ", .{ @tagName(code), @intFromEnum(code) });
+    }
+
+    break :listing text;
+};
 const corpus_storage_size = 12 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -652,6 +662,16 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(5),
             .code = .pane_not_found,
             .message = "pane 12 does not exist",
+        }),
+    ));
+    // Failure codes travel as numbers in any request_failed, so this entry
+    // lists every one with its number: adding, renaming or renumbering a
+    // code changes the fingerprint.
+    helper.addTailTolerant(.{ .name = "request_failed_codes", .direction = .server, .golden_hex = golden.request_failed_codes }, helper.commit(
+        try runtime.encodeRequestFailed(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .code = failure_codes[failure_codes.len - 1],
+            .message = failure_code_listing,
         }),
     ));
     helper.add(.{ .name = "runtime_stopping", .direction = .server, .golden_hex = golden.runtime_stopping }, helper.commit(

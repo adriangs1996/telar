@@ -1,5 +1,5 @@
 const SessionFormat = @import("SessionFormat.zig").SessionFormat;
-const HookSettings = @import("HookSettings.zig");
+const core = @import("telar-core");
 const Capabilities = @This();
 
 /// Shell words that resume a session by its reference, ending in the space
@@ -17,7 +17,7 @@ pane_session_argument: ?[]const u8 = null,
 batch_arguments: []const []const u8 = &.{},
 /// Where telar's hooks for the agent are installed; the card suggests
 /// `pane_session_argument` only to someone who installed them.
-hook_settings: ?HookSettings = null,
+hook_settings: ?core.HookSettings = null,
 /// The shape a session reference must have to be resumed.
 session_format: SessionFormat = .uuid,
 /// The agent's `settling` report still needs a newer idle composer.

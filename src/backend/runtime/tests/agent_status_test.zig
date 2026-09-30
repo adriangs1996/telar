@@ -1316,6 +1316,26 @@ test "a session that may run on a shared server says so once it worked a while a
     try std.testing.expectEqualStrings(note, agent_status.snapshot(&model.agents, &entries, 27_000)[0].last_event);
 }
 
+test "a short burst of work does not count as work without hooks" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 43,
+        .observed_at_ms = 100,
+        .session_host = .shared_server,
+        .hooks_installed = true,
+    }));
+    try std.testing.expect(observeCodexWorking(model, identity, 1_000));
+    try std.testing.expect(observeTestReadyPrompt(model, identity, testReadyPrompt(.codex, 2_000)));
+    _ = agent_status.expire(model, 7_000);
+    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 7_000)[0].last_event);
+}
+
 test "without telar's hooks installed the card suggests nothing" {
     const model = try testModel();
     defer std.testing.allocator.destroy(model);

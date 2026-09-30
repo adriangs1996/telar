@@ -4,6 +4,7 @@
 //! settings files; Pi and OpenCode load a Telar source file from their
 //! global extension or plugin directory.
 
+const core = @import("telar-core");
 const std = @import("std");
 const IntegrationOptions = @import("arguments/IntegrationOptions.zig");
 const values = @import("arguments/values.zig");
@@ -38,9 +39,9 @@ pub const coordinator_skill_header =
     \\
     \\
 ;
-pub const claude_marker = " hook claude";
-pub const codex_marker = " hook codex";
-pub const cursor_marker = " hook cursor";
+const claude_marker = core.HookSettings.claude.marker;
+const codex_marker = core.HookSettings.codex.marker;
+const cursor_marker = core.HookSettings.cursor.marker;
 /// The only `hooks.json` schema Cursor Agent documents.
 const cursor_hooks_version = 1;
 
@@ -152,20 +153,14 @@ fn integrationFor(agent: values.HookAgent) Integration {
     return switch (agent) {
         .claude => .{
             .name = "claude",
-            .settings_environment = null,
-            .settings_directory = ".claude",
-            .settings_file = "settings.json",
-            .marker = claude_marker,
+            .settings = core.HookSettings.claude,
             .events = &claude_events,
             .worktree_events = &claude_worktree_events,
             .timeout_seconds = 5,
         },
         .codex => .{
             .name = "codex",
-            .settings_environment = "CODEX_HOME",
-            .settings_directory = ".codex",
-            .settings_file = "hooks.json",
-            .marker = codex_marker,
+            .settings = core.HookSettings.codex,
             .events = &codex_events,
             .timeout_seconds = 3,
             .launch_note = "Codex runs its hooks in its shared daemon, outside any pane, unless it starts with --no-daemon; launch it that way, for instance with `alias codex='codex --no-daemon'`",
@@ -174,10 +169,7 @@ fn integrationFor(agent: values.HookAgent) Integration {
         // says; Cursor reads its user hooks from the home directory.
         .cursor => .{
             .name = "cursor",
-            .settings_environment = null,
-            .settings_directory = ".cursor",
-            .settings_file = "hooks.json",
-            .marker = cursor_marker,
+            .settings = core.HookSettings.cursor,
             .events = &cursor_events,
             .timeout_seconds = 5,
             .layout = .flat,
@@ -424,13 +416,13 @@ const HookCommands = struct {
 // The lifecycle hooks, guarded to telar panes, and the worktree hooks an
 // agent needs answered in every session, both running `executable`.
 fn hookSetsFor(integration: Integration, executable: []const u8, commands: *HookCommands) !struct { HookSet, HookSet } {
-    const command = try renderHookCommand(&commands.lifecycle, executable, integration.marker);
-    const worktree_command = try renderUnguardedCommand(&commands.worktree, executable, integration.marker);
+    const command = try renderHookCommand(&commands.lifecycle, executable, integration.settings.marker);
+    const worktree_command = try renderUnguardedCommand(&commands.worktree, executable, integration.settings.marker);
     return .{
         hookSetFor(integration, command),
         .{
             .events = integration.worktree_events,
-            .marker = integration.marker,
+            .marker = integration.settings.marker,
             .command = worktree_command,
             .timeout_seconds = worktree_timeout_seconds,
         },
@@ -475,7 +467,7 @@ pub fn telarCommand(command: []const u8) bool {
 fn hookSetFor(integration: Integration, command: []const u8) HookSet {
     return .{
         .events = integration.events,
-        .marker = integration.marker,
+        .marker = integration.settings.marker,
         .command = command,
         .timeout_seconds = integration.timeout_seconds,
         .layout = integration.layout,
@@ -483,16 +475,9 @@ fn hookSetFor(integration: Integration, command: []const u8) HookSet {
 }
 
 fn defaultSettingsPath(environ: std.process.Environ, integration: Integration, buffer: *[std.fs.max_path_bytes]u8) ![]const u8 {
-    if (integration.settings_environment) |environment_name| {
-        if (std.process.Environ.getPosix(environ, environment_name)) |settings_directory| {
-            if (settings_directory.len != 0) {
-                return std.fmt.bufPrint(buffer, "{s}/{s}", .{ settings_directory, integration.settings_file });
-            }
-        }
-    }
-
-    const home = std.process.Environ.getPosix(environ, "HOME") orelse return error.HomeUnavailable;
-    return std.fmt.bufPrint(buffer, "{s}/{s}/{s}", .{ home, integration.settings_directory, integration.settings_file });
+    const settings = integration.settings;
+    const override = if (settings.environment) |name| std.process.Environ.getPosix(environ, name) else null;
+    return settings.path(override, std.process.Environ.getPosix(environ, "HOME"), buffer) orelse error.HomeUnavailable;
 }
 
 /// Reports whether `event` already runs a command ending in the hook set's

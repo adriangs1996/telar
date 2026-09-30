@@ -8,18 +8,14 @@
 //! older versions and non-interactive subcommands refuse it.
 
 const Capabilities = @import("Capabilities.zig");
+const core = @import("telar-core");
 const std = @import("std");
 
 pub const capabilities: Capabilities = .{
     .completion_requires_agent_signal = true,
     .resume_prefix = "codex resume ",
     .pane_session_argument = "--no-daemon",
-    .hook_settings = .{
-        .environment = "CODEX_HOME",
-        .home_directory = ".codex",
-        .file = "hooks.json",
-        .marker = " hook codex",
-    },
+    .hook_settings = core.HookSettings.codex,
     .batch_arguments = &.{
         "exec",
         "e",

@@ -114,8 +114,10 @@ analytics.
   persistence; when it falls behind, drop intermediate patches and send a
   bounded snapshot.
 - Clients that connect together negotiate independently, each in its own
-  bounded admission slot; only a full table interrupts its oldest
-  handshake, so a client that never finishes cannot hold admission.
+  bounded admission slot, and a handshake in flight counts against client
+  capacity. A connection that finds no slot is closed alone; a handshake
+  unfinished after two seconds is interrupted at the next maintenance tick,
+  so a client that never finishes cannot hold admission.
 - Every wire frame has a checked byte limit before allocation or decoding.
 - The handshake accepts one exact schema fingerprint. Change it whenever an
   encoding changes.

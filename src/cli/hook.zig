@@ -342,14 +342,8 @@ pub fn mapClaudeTitle(buffer: *[core.max_agent_session_title_bytes]u8, input: Cl
 
 /// Codex's state directory: `CODEX_HOME`, else `~/.codex`.
 fn codexHome(environ: std.process.Environ, buffer: *[std.fs.max_path_bytes]u8) ?[]const u8 {
-    if (std.process.Environ.getPosix(environ, "CODEX_HOME")) |home| {
-        if (home.len != 0) {
-            return std.fmt.bufPrint(buffer, "{s}", .{home}) catch null;
-        }
-    }
-
-    const home = std.process.Environ.getPosix(environ, "HOME") orelse return null;
-    return std.fmt.bufPrint(buffer, "{s}/.codex", .{home}) catch null;
+    const settings = core.HookSettings.codex;
+    return settings.directory(std.process.Environ.getPosix(environ, settings.environment.?), std.process.Environ.getPosix(environ, "HOME"), buffer);
 }
 
 /// Finds the current Codex state database, `state_<n>.sqlite` with the
@@ -709,22 +703,22 @@ fn hookProvider(agent: HookOptions.Agent) core.AgentProvider {
     };
 }
 
-/// Retries of a report the runtime refused because the pane was last seen
-/// running another agent: an agent that just replaced the previous one is
-/// identified at the pane's next observation, which its first drawing
-/// starts.
-const mismatch_retries = 4;
-const mismatch_retry_ms = 250;
+/// How long one hook waits, over all its reports, while the runtime
+/// identifies a pane last seen running another agent again: an agent that
+/// just replaced the previous one is recognised by the pane's next
+/// observation, which the refusal starts. Once that observation ran, the
+/// runtime answers for good and the hook stops waiting.
+const mismatch_budget_ms: u32 = 1_000;
+const mismatch_retry_ms: u32 = 100;
 
-fn sendRetrying(session: *Session, comptime send: anytype, arguments: anytype) !void {
-    var attempt: u8 = 0;
+fn sendRetrying(session: *Session, budget_ms: *u32, comptime send: anytype, arguments: anytype) !void {
     while (true) {
         @call(.auto, send, .{session} ++ arguments) catch |err| {
-            if (err != error.AgentMismatch or attempt == mismatch_retries) {
+            if (err != error.AgentMismatch or budget_ms.* < mismatch_retry_ms) {
                 return err;
             }
 
-            attempt += 1;
+            budget_ms.* -= mismatch_retry_ms;
             session.sleepMs(mismatch_retry_ms);
             continue;
         };
@@ -744,6 +738,7 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     defer session.close();
     const pane = target.pane;
     session.verifyDescent(pane) catch return;
+    var budget_ms = mismatch_budget_ms;
 
     // Progress goes first: a final answer is stored before the lifecycle
     // report marks the turn finished, so a waiter never reads a stale one.
@@ -752,7 +747,7 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
         report.pane_id = core.pane(pane.pane_id) catch return;
         report.pane_generation = pane.pane_generation;
         report.provider = target.provider;
-        sendRetrying(&session, Session.reportProgress, .{report}) catch {};
+        sendRetrying(&session, &budget_ms, Session.reportProgress, .{report}) catch {};
     }
     if (reports.lifecycle) |lifecycle| {
         const report: Session.AgentReport = .{
@@ -764,13 +759,13 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
             .session_file = lifecycle.session_file,
             .session_file_kind = lifecycle.session_file_kind,
         };
-        sendRetrying(&session, Session.reportAgent, .{ pane, report }) catch return;
+        sendRetrying(&session, &budget_ms, Session.reportAgent, .{ pane, report }) catch return;
     }
     if (reports.review) |review| {
         hook_review.capture(&session, pane, review);
     }
     if (reports.title) |title| {
-        sendRetrying(&session, Session.reportAgentTitle, .{ pane, target.provider, title }) catch return;
+        sendRetrying(&session, &budget_ms, Session.reportAgentTitle, .{ pane, target.provider, title }) catch return;
     }
     if (reports.command) |tool| {
         const command: AgentCommandReport = .{
@@ -782,7 +777,7 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
             .session = tool.session,
             .exit_code = tool.exit_code,
         };
-        sendRetrying(&session, Session.reportAgentCommand, .{ pane, command }) catch return;
+        sendRetrying(&session, &budget_ms, Session.reportAgentCommand, .{ pane, command }) catch return;
     }
     if (reports.review) |review| {
         hook_review.feedback(&session, pane, review) catch {};

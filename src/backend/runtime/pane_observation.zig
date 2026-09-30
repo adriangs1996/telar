@@ -111,7 +111,8 @@ fn hooksInstalled(cache: Cache) bool {
     }
 
     const settings = providers.of(cache.provider).hook_settings orelse return false;
-    return hook_integration.installed(settings, environmentValue(settings.environment), environmentValue("HOME"));
+    const override = if (settings.environment) |name| environmentValue(name) else null;
+    return hook_integration.installed(settings, override, environmentValue("HOME"));
 }
 
 /// Longest environment variable name a hook setting names.

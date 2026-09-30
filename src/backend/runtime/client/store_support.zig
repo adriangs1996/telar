@@ -6,9 +6,11 @@ const std = @import("std");
 
 pub const max_clients = core.ClientList.capacity;
 /// Connections that may negotiate at once. Hooks of several agents connect
-/// together; when every slot is taken, the oldest handshake is interrupted,
-/// so a client that never finishes cannot hold admission.
+/// together; a connection that arrives with every slot taken is closed.
 pub const max_pending_handshakes = 8;
+/// A handshake still unfinished this long is interrupted at the next
+/// maintenance tick, so a client that never finishes cannot hold a slot.
+pub const handshake_deadline_ms: i64 = 2_000;
 
 test "Store rejects exhausted identities before allocating a session" {
     var store: Store = .{ .next_id = std.math.maxInt(u64) };

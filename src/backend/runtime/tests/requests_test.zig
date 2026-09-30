@@ -424,13 +424,26 @@ test "a hook reports for a pane only on a connection confirmed inside it and onl
         } },
     };
 
-    // A confirmed hook of another agent: the pane is checked again and the
-    // report refused until the check names that agent.
+    // An observation is already running, so the recheck waits for it.
+    try std.testing.expect(pane.history_observer.sealForProbe());
+    defer pane.history_observer.finishSealed();
+
+    // A confirmed hook of another agent: the pane is checked again, once
+    // per connection, and the report refused until the check answers.
+    try fixture.send(codex_reports[0]);
+    try expectFailure(&fixture, .agent_mismatch);
+    try std.testing.expect(pane.agent_recheck_requested);
+    pane.agent_recheck_requested = false;
+    try fixture.send(codex_reports[1]);
+    try expectFailure(&fixture, .agent_mismatch);
+    try std.testing.expect(!pane.agent_recheck_requested);
+
+    // The check ran and still found Claude: the refusal is final, so the
+    // hook stops waiting.
+    pane.agent_rechecks +%= 1;
     for (codex_reports) |message| {
-        pane.agent_recheck_requested = false;
         try fixture.send(message);
-        try expectFailure(&fixture, .agent_mismatch);
-        try std.testing.expect(pane.agent_recheck_requested);
+        try expectFailure(&fixture, .foreign_process);
     }
     try std.testing.expect(agent_status.sessionReference(model, pane.key()) == null);
 
