@@ -494,16 +494,17 @@ fn prepareForeground(self: *Delivery, preparation: Preparation) !?Prepared {
     return null;
 }
 
+/// One bit per attachment slot of a client.
+const PendingAttachments = std.meta.Int(.unsigned, Attachments.capacity);
+
 /// Marks the client's attachments for which some lane could publish, in one
 /// visit per attachment, so each lane skips the idle ones.
-fn pendingAttachments(preparation: Preparation) u64 {
-    comptime std.debug.assert(Attachments.capacity == @bitSizeOf(u64));
-
-    var pending: u64 = 0;
+fn pendingAttachments(preparation: Preparation) PendingAttachments {
+    var pending: PendingAttachments = 0;
     for (&preparation.attachments.record[preparation.client], 0..) |slot, index| {
         const attachment = slot orelse continue;
         if (attachment.hasDelivery()) {
-            pending |= @as(u64, 1) << @intCast(index);
+            pending |= @as(PendingAttachments, 1) << @intCast(index);
         }
     }
 
@@ -512,13 +513,13 @@ fn pendingAttachments(preparation: Preparation) u64 {
 
 /// Offers the lane to the pending attachments only, in round-robin order
 /// from the attachment after the last one delivered.
-fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane, pending: u64) !?Prepared {
+fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane, pending: PendingAttachments) !?Prepared {
     if (std.debug.runtime_safety) {
         try self.assertIdle(preparation, lane, pending);
     }
 
-    const start: u6 = @intCast(self.next_attachment);
-    var remaining = std.math.rotr(u64, pending, start);
+    const start: std.math.Log2Int(PendingAttachments) = @intCast(self.next_attachment);
+    var remaining = std.math.rotr(PendingAttachments, pending, start);
     while (remaining != 0) {
         const offset = @ctz(remaining);
         remaining &= remaining - 1;
@@ -538,10 +539,10 @@ fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane, pend
 
 /// Proves the skip exact in safe builds: every attachment left out of the
 /// pending mask yields nothing on this lane and changes nothing.
-fn assertIdle(self: *Delivery, preparation: Preparation, lane: Lane, pending: u64) !void {
+fn assertIdle(self: *Delivery, preparation: Preparation, lane: Lane, pending: PendingAttachments) !void {
     for (&preparation.attachments.record[preparation.client], 0..) |slot, index| {
         const attachment = slot orelse continue;
-        if (pending & (@as(u64, 1) << @intCast(index)) == 0) {
+        if (pending & (@as(PendingAttachments, 1) << @intCast(index)) == 0) {
             std.debug.assert(try self.candidate(preparation, attachment, lane) == null);
         }
     }

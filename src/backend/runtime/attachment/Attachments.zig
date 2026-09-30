@@ -9,9 +9,10 @@ const store_support = @import("../client/store_support.zig");
 /// `Pane.observers` is the table's reverse index; `add` and `remove` keep it.
 const Attachments = @This();
 
-/// A client attaches to the panes of the tab it shows and detaches one tab
-/// before it attaches the next, so it never holds more than a tab's panes.
-pub const capacity = core.max_panes_per_tab;
+/// A client attaches to the panes of the tab it shows. A tab it creates or
+/// a pane it opens elsewhere is attached before the client lets the
+/// previous tab go, so a client briefly holds two tabs' panes.
+pub const capacity = 2 * core.max_panes_per_tab;
 pub const clients = store_support.max_clients;
 
 record: [clients][capacity]?*Attachment = @splat(@splat(null)),

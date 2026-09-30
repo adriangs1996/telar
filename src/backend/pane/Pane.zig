@@ -544,7 +544,10 @@ pub fn searchText(self: *const Pane, needle: []const u8, storage: []core.SearchM
     var cursor = PaneCursor.init(needle);
     while (!(cursor.advance(self) catch unreachable)) {}
     const found = cursor.ordered(storage);
-    return .{ .count = @intCast(found.len), .truncated = cursor.truncated or cursor.count > found.len };
+    return .{
+        .count = @intCast(found.len),
+        .truncated = cursor.truncated or cursor.count > found.len,
+    };
 }
 
 pub fn key(self: *const Pane) PaneKey {

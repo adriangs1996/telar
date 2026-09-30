@@ -103,19 +103,27 @@ pub fn advance(model: *RuntimeModel, completion: Wake) !void {
 
 fn reportLimits(model: *RuntimeModel, cursor: *const Cursor, expired: bool) void {
     if (cursor.matches_cut) {
-        limit_reached.report(model, .{ .limit = text_search.matches_limit });
+        limit_reached.report(model, .{
+            .limit = text_search.matches_limit,
+        });
     }
 
     if (cursor.rows_cut and !cursor.matches_cut) {
-        limit_reached.report(model, .{ .limit = text_search.rows_limit });
+        limit_reached.report(model, .{
+            .limit = text_search.rows_limit,
+        });
     }
 
     if (cursor.columns_cut) {
-        limit_reached.report(model, .{ .limit = text_search.columns_limit });
+        limit_reached.report(model, .{
+            .limit = text_search.columns_limit,
+        });
     }
 
     if (expired) {
-        limit_reached.report(model, .{ .limit = text_search.deadline_limit });
+        limit_reached.report(model, .{
+            .limit = text_search.deadline_limit,
+        });
     }
 }
 

@@ -14,11 +14,14 @@ const std = @import("std");
 
 /// Names arrive whole; views clip them to the room they have.
 pub const max_name_bytes = core.max_workspace_name_bytes;
-/// One shared pool for every stored path, half a KiB a workspace on
-/// average. Paths stay whole so the replica never exposes a fabricated
-/// location: a list whose paths do not all fit keeps the entries before the
-/// first that does not and counts the rest in `dropped`.
-pub const path_pool_size = core.max_workspace_list_entries * 512;
+/// Bytes of path the pool holds for each workspace on average; paths of a
+/// project or worktree checkout run well under it.
+const average_path_bytes = 512;
+/// One shared pool for every stored path. Paths stay whole so the replica
+/// never exposes a fabricated location: a list whose paths do not all fit
+/// keeps the entries before the first that does not and counts the rest in
+/// `dropped`.
+pub const path_pool_size = core.max_workspace_list_entries * average_path_bytes;
 pub const path_pool_limit = core.Limit.declare("workspace_list.path_pool_size", "path bytes", path_pool_size);
 
 test "replacement rejects stale revisions and copies into fixed storage" {

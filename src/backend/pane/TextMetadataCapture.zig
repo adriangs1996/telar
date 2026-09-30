@@ -115,7 +115,11 @@ fn collectLinks(builder: *core.TextMetadataBuilder, state: *const vt.RenderState
             const link_index = if (cell.hyperlink and cell.wide != .spacer_head) found: {
                 const live = page.getRowAndCell(x, pin.y).cell;
                 const id = page.lookupHyperlink(live) orelse break :found null;
-                break :found identities.intern(builder, .{ .page = page, .id = id }) catch {
+                const reference: HyperlinkRef = .{
+                    .page = page,
+                    .id = id,
+                };
+                break :found identities.intern(builder, reference) catch {
                     complete = false;
                     break :found null;
                 };

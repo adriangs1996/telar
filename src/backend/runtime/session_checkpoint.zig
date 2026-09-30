@@ -246,6 +246,18 @@ pub fn writeNow(model: *RuntimeModel) void {
     model.checkpoint.writes += 1;
 }
 
+/// Reads a checkpoint file of at most `checkpoint.max_file_bytes`, the most
+/// one write produces. A reader limit stops before the limit itself, so it
+/// is one byte past the largest file.
+///
+/// ```zig
+/// const bytes = try session_checkpoint.readFile(io, gpa, path);
+/// defer gpa.free(bytes);
+/// ```
+pub fn readFile(io: std.Io, gpa: std.mem.Allocator, path: []const u8) ![]u8 {
+    return std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(checkpoint.max_file_bytes + 1));
+}
+
 /// Rebuilds workspaces, tabs, panes and client layouts from the
 /// checkpoint file, if one exists. A file that fails validation is
 /// moved aside as `<path>.corrupt` and ignored.
@@ -256,7 +268,7 @@ pub fn writeNow(model: *RuntimeModel) void {
 pub fn restore(model: *RuntimeModel) void {
     const path = model.checkpoint.path orelse return;
     const io = model.io;
-    const bytes = std.Io.Dir.cwd().readFileAlloc(io, path, model.gpa, .limited(checkpoint.max_file_bytes)) catch |err| switch (err) {
+    const bytes = readFile(io, model.gpa, path) catch |err| switch (err) {
         error.FileNotFound => return,
         else => {
             model.checkpoint.restore_failed = true;
@@ -786,6 +798,24 @@ test "writeFile replaces the checkpoint atomically and keeps it private" {
     try std.testing.expectEqualStrings("second!", written);
     const stat = try std.Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false });
     try std.testing.expectEqual(@as(u32, 0o600), stat.permissions.toMode() & 0o777);
+}
+
+test "a checkpoint as large as one write produces reads back whole" {
+    const gpa = std.testing.allocator;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = root_buffer[0..try temp.dir.realPath(std.testing.io, &root_buffer)];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/session.ckpt", .{root});
+    const payload = try gpa.alloc(u8, snapshot_bytes);
+    defer gpa.free(payload);
+    @memset(payload, 'x');
+
+    try writeFile(.{ .io = std.testing.io, .path = path, .buffer = payload, .len = payload.len });
+    const read = try readFile(std.testing.io, gpa, path);
+    defer gpa.free(read);
+    try std.testing.expectEqual(snapshot_bytes, read.len);
 }
 
 test "checkpoint pane records fit the bounded restore storage before model" {

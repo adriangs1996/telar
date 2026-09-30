@@ -12,13 +12,16 @@ At startup, the frontend derives a stable terminal identity from emulator
 session variables or the host TTY. `request_runtime_state` subscribes the
 connection with that identity before any layout update is accepted.
 
-The runtime preallocates eight records before entering its event loop. A
+The runtime preallocates sixteen records before entering its event loop. A
 record keeps the tabs of every workspace its client visited, so it is bounded
 by what the runtime holds: `max_client_layout_tabs` (256, one per pane at most)
 tabs whose trees share one pool of `max_client_layout_nodes` (511) nodes, and
 127 nodes for one tab's tree. The client's saved layouts use the same shape,
 and give way oldest first when their pool fills. A layout message is at most
-16 KiB. Least-recently used identity replacement bounds disconnected state. Each accepted update marks
+16 KiB. Least-recently used identity replacement bounds disconnected state; a
+new identity that takes another's record reports
+`client_layouts.max_client_layout_clients`. A saved layout that does not fit
+leaves the one it would replace in place. Each accepted update marks
 the session checkpoint dirty; the checkpoint writes every record and a restart
 restores them. See [Session checkpoint](session-checkpoint.md).
 

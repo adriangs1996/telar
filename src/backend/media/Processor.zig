@@ -45,7 +45,10 @@ pub fn processMedia(self: *Processor, current_size: core.TerminalSize, stats: *S
             return sink.processor.answerFileQuery(query);
         }
     };
-    var sink: Sink = .{ .processor = self, .stats = stats };
+    var sink: Sink = .{
+        .processor = self,
+        .stats = stats,
+    };
     self.media.processSealed(.{ .current_size = current_size, .stats = stats }, &sink);
     if (!stats.failed and self.state.shared_transport_clients.load(.acquire) != 0) {
         self.prepareSharedTransfers(stats);

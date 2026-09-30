@@ -36,9 +36,14 @@ pub fn refuse(io: std.Io, connection: anytype, reason: core.RejectReason) !void 
     _ = try core.decodeClientHello(request);
 
     var response_buffer: [core.max_message_size]u8 = undefined;
-    const encoded = try core.encodeServerResponse(&response_buffer, .{ .rejected = .{
-        .reason = reason,
-        .expected_schema = core.schema_id,
-    } });
+    const encoded = try core.encodeServerResponse(
+        &response_buffer,
+        .{
+            .rejected = .{
+                .reason = reason,
+                .expected_schema = core.schema_id,
+            },
+        },
+    );
     try connection.send(io, encoded);
 }

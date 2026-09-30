@@ -96,6 +96,10 @@ const StoredTab = struct {
 gpa: ?std.mem.Allocator = null,
 records: []Record = &.{},
 clock: u64 = 0,
+/// Records given to a new identity while they still held another's layout.
+evictions: u64 = 0,
+
+pub const identities_limit = core.Limit.declare("client_layouts.max_client_layout_clients", "client layouts", core.max_client_layout_clients);
 
 /// Preallocates every bounded record before the runtime loop starts.
 ///
@@ -303,6 +307,10 @@ fn acquire(self: *ClientLayouts, identity: core.ClientIdentity) !*Record {
 
     const index = selected orelse unreachable;
     const record = &self.records[index];
+    if (record.identity != .invalid) {
+        self.evictions += 1;
+    }
+
     record.* = .{
         .identity = identity,
     };

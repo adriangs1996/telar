@@ -44,10 +44,11 @@ records: workspace (id, path, explicit name, first tab), tab (extra tabs in
 display order), pane (id, location, cwd, size, NUL-separated launch
 arguments, then the agent's provider, session reference and session title) and
 layout (client identity, LRU stamp and the exact bytes of one
-`update_client_layout` request). The file version is 8: version 6 added
+`update_client_layout` request). The file version is 9: version 6 added
 worktree records, version 7 the machine that dispatched each worktree,
-which older files read as none, and version 8 whether a pane's agent ran its
-session in the pane, which older files read as not. Version 4 ended each
+which older files read as none, version 8 whether a pane's agent ran its
+session in the pane, which older files read as not, and version 9 a 32-bit
+length for a pane's launch arguments, which may reach 128 KiB. Version 4 ended each
 pane record with a kind byte for the removed agent panes; the reader skips
 version 4 agent panes and restores the rest. Its layout records also encode a
 surface byte per pane leaf, which the current wire rejects, so restore drops

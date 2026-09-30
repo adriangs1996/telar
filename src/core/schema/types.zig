@@ -76,7 +76,9 @@ pub const max_notification_message_bytes = 192;
 pub const max_notification_link_bytes = 1024;
 pub const max_history_provider_bytes = 64;
 pub const max_history_tool_call_id_bytes = 256;
-pub const max_client_layout_clients = 8;
+/// Window identities whose layout the runtime keeps for a reconnect; the
+/// least recently used makes room for a new one.
+pub const max_client_layout_clients = 16;
 /// Tabs one retained client layout spans. A client's record keeps the tabs
 /// of every workspace it visited, and a tab needs a pane, so the runtime's
 /// pane bound bounds them.

@@ -188,7 +188,15 @@ fn launchTerminal(model: *RuntimeModel, request: LaunchRequest) !*Pane {
     });
 
     fresh.launch_record.capture(model.gpa, request.launch) catch |err| {
-        recordFailure(model, fresh, .{ .shell = shell, .phase = .pane_registration, .cause = err });
+        recordFailure(
+            model,
+            fresh,
+            .{
+                .shell = shell,
+                .phase = .pane_registration,
+                .cause = err,
+            },
+        );
         fresh.abortLaunch();
         fresh.destroy();
         return err;

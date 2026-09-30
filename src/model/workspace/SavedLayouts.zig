@@ -21,20 +21,24 @@ count: usize = 0,
 nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined,
 node_total: usize = 0,
 
-/// Retains the latest split tree for one stable tab identity.
+/// Retains the latest split tree for one stable tab identity. A tree that
+/// does not fit leaves every saved one, the tab's own included, in place.
 ///
 /// ```zig
 /// try layouts.remember(saved);
 /// ```
 pub fn remember(self: *Layouts, saved: data.SavedLayout) !void {
-    if (self.row(saved.location)) |existing| {
-        self.remove(existing);
-    }
-
     var storage: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
     const tree = saved.layout.clientLayoutNodes(&storage);
-    if (self.count == capacity or tree.len > self.nodes.len - self.node_total) {
+    const existing = self.row(saved.location);
+    const freed_rows: usize = if (existing != null) 1 else 0;
+    const freed_nodes: usize = if (existing) |slot| self.node_count[slot] else 0;
+    if (self.count - freed_rows == capacity or tree.len > self.nodes.len - self.node_total + freed_nodes) {
         return error.TooManySavedLayouts;
+    }
+
+    if (existing) |slot| {
+        self.remove(slot);
     }
 
     const slot = self.count;
@@ -215,4 +219,38 @@ test "a full node pool gives way to the oldest trees" {
     try std.testing.expectEqual(trees_that_fit, layouts.count);
     try std.testing.expect(layouts.find(.{ .workspace = saved.location.workspace, .tab_id = @enumFromInt(1) }) == null);
     try std.testing.expect(layouts.find(saved.location) != null);
+}
+
+test "a tree that does not fit keeps the one it would replace" {
+    var layouts: Layouts = .{};
+    var small: data.WorkspaceLayout = .{};
+    try small.addRoot(@enumFromInt(1));
+    var large: data.WorkspaceLayout = .{};
+    try large.addRoot(@enumFromInt(1));
+    for (1..core.max_panes_per_tab) |pane| {
+        try large.splitFocused(@enumFromInt(pane + 1), .vertical);
+    }
+
+    var saved: data.SavedLayout = .{
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        },
+        .pane_id = @enumFromInt(1),
+        .workspace_active = true,
+        .layout = large,
+    };
+    const trees_that_fit = core.max_client_layout_nodes / core.max_client_layout_tab_nodes;
+    for (0..trees_that_fit) |index| {
+        saved.location.tab_id = @enumFromInt(index + 2);
+        try layouts.remember(saved);
+    }
+
+    saved.location.tab_id = @enumFromInt(1);
+    saved.layout = small;
+    try layouts.remember(saved);
+    saved.layout = large;
+    try std.testing.expectError(error.TooManySavedLayouts, layouts.remember(saved));
+    try std.testing.expectEqual(@as(usize, 1), layouts.find(saved.location).?.layout.count());
+    try std.testing.expectEqual(trees_that_fit + 1, layouts.count);
 }
