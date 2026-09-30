@@ -300,11 +300,17 @@ fn parseEffectBatch(self: *Generation, index: c_int, diagnostic: *data.Diagnosti
         batch.len = 1;
         return batch;
     }
-    const count = lua_api.c.lua_rawlen(state, absolute);
-    if (count > data.effects.max_callback_effects) {
-        diagnostic.set("Lua callback exceeds {d} effects", .{data.effects.max_callback_effects});
-        return error.InvalidCallbackResult;
+    // A callback that returns more effects than a batch holds runs the
+    // first ones, in order, and the limit is reported.
+    const listed = lua_api.c.lua_rawlen(state, absolute);
+    const count = @min(listed, data.effects.max_callback_effects);
+    if (listed > count) {
+        self.unreported.add(.{
+            .limit = data.effects.callback_effects_limit,
+            .requested = listed,
+        });
     }
+
     for (0..count) |effect_index| {
         _ = lua_api.c.lua_geti(state, absolute, @intCast(effect_index + 1));
         batch.items[effect_index] = self.parseReturnedAction(-1, diagnostic) catch |err| {
@@ -366,7 +372,7 @@ fn parseSnapshot(self: *Generation, diagnostic: *data.Diagnostic) !void {
 
     _ = lua_api.c.lua_getfield(state, -1, "plugins");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
-        try plugins_config.parse(state, &self.snapshot, diagnostic);
+        try plugins_config.parse(state, &self.snapshot, &self.unreported, diagnostic);
     }
     lua_value.pop(state, 1);
 
@@ -417,7 +423,7 @@ fn parseProfile(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !
 
     _ = lua_api.c.lua_getfield(state, absolute, "plugins");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
-        try plugins_config.parse(state, &self.snapshot, diagnostic);
+        try plugins_config.parse(state, &self.snapshot, &self.unreported, diagnostic);
     }
     lua_value.pop(state, 1);
     _ = lua_api.c.lua_getfield(state, absolute, "client");

@@ -1733,3 +1733,41 @@ test "a pick's items function lists a full command output within the render budg
     try std.testing.expectEqual(@as(u16, data.PickItems.max_items), items.count);
     try std.testing.expect(vm.instruction_count < lua.default_render_instruction_limit / 4);
 }
+
+test "a configuration past its plugin limit loads the first plugins and a callback past its effects runs the first ones" {
+    const source =
+        \\local telar = require("telar")
+        \\local plugins = {}
+        \\for index = 1, 34 do plugins[index] = telar.plugin({ path = "plugins/p" .. index, enabled = false }) end
+        \\return { api_version = 2, plugins = plugins, client = { keybindings = {
+        \\  telar.bind({ "g" }, function()
+        \\    local effects = {}
+        \\    for _ = 1, 20 do effects[#effects + 1] = telar.action.toggle_sidebar() end
+        \\    return effects
+        \\  end),
+        \\} } }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    const generation = Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 }) catch |err| {
+        std.debug.print("{s}\n", .{diagnostic.message()});
+        return err;
+    };
+    defer generation.deinit();
+
+    try std.testing.expectEqual(@as(u8, data.config_values.max_plugins), generation.snapshot.plugin_count);
+    try std.testing.expectEqualStrings("plugins.max_plugins", generation.unreported.slice()[0].limit.name);
+    try std.testing.expectEqual(@as(?u64, 34), generation.unreported.slice()[0].requested);
+
+    const batch = try generation.invokeCallback(.{
+        .reference = generation.snapshot.bindings[0].action.lua_callback,
+        .context = .{
+            .sidebar_visible = true,
+            .tab_count = 1,
+            .active_tab_index = 0,
+            .pane_count = 1,
+            .focused_pane_id = 1,
+        },
+    }, &diagnostic);
+    try std.testing.expectEqual(@as(u8, data.effects.max_callback_effects), batch.len);
+    try std.testing.expectEqualStrings("config.max_callback_effects", generation.unreported.slice()[1].limit.name);
+}

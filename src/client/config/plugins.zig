@@ -3,19 +3,29 @@
 const data = @import("model");
 const lua_api = @import("lua-api");
 const Snapshot = @import("Snapshot.zig");
+const UnreportedReaches = @import("UnreportedReaches.zig");
 const value = @import("lua_value.zig");
 
-pub fn parse(state: *lua_api.c.lua_State, snapshot: *Snapshot, diagnostic: *data.Diagnostic) !void {
+/// Reads `config.plugins`. A list past `max_plugins` keeps its first
+/// entries and leaves the limit in `unreported`; the rest never load.
+///
+/// ```zig
+/// try plugins.parse(state, &generation.snapshot, &generation.unreported, diagnostic);
+/// ```
+pub fn parse(state: *lua_api.c.lua_State, snapshot: *Snapshot, unreported: *UnreportedReaches, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.plugins must be an array", .{});
         return error.InvalidConfig;
     }
 
-    const count = lua_api.c.lua_rawlen(state, absolute);
-    if (count > data.config_values.max_plugins) {
-        diagnostic.set("config.plugins exceeds {d} entries", .{data.config_values.max_plugins});
-        return error.InvalidConfig;
+    const listed = lua_api.c.lua_rawlen(state, absolute);
+    const count = @min(listed, data.config_values.max_plugins);
+    if (listed > count) {
+        unreported.add(.{
+            .limit = data.config_values.plugins_limit,
+            .requested = listed,
+        });
     }
 
     snapshot.plugin_count = 0;

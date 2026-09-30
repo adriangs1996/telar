@@ -13,6 +13,7 @@ pub const bindings_limit = core.Limit.declare("config.max_bindings", "key bindin
 pub const max_binding_keys = 5;
 
 pub const max_plugins = 32;
+pub const plugins_limit = core.Limit.declare("plugins.max_plugins", "plugins", max_plugins);
 pub const max_plugin_path_bytes = 512;
 pub const max_history_path_bytes = 1024;
 pub const max_editor_bytes = 4096;
