@@ -13,13 +13,20 @@
 //! input may also fail one of the allocations its clean decode made, which
 //! must surface as `OutOfMemory` with nothing held.
 //!
+//! As in `png_fuzz_test.zig`, the admission limits are the ones `ico.decode`
+//! applies itself (64 entries, 256 x 256 pixels per frame) and the
+//! allocation budget, `allocation_budget`, is a hard limit that
+//! `BoundedTestAllocator` enforces on every decode.
+//!
 //! This root imports the configured `imaging` library and runs only through
-//! `zig build test-fuzz-imaging` and `test-fuzz-imaging-ico`, for the reasons
-//! `png_fuzz_test.zig` gives.
+//! `zig build test-fuzz-imaging` and `test-fuzz-imaging-ico`, built like
+//! `png_fuzz_test.zig`.
 
 const std = @import("std");
 const imaging = @import("imaging");
 const seed = @import("png_fuzz_seed.zig");
+const png_file = @import("png_fuzz_file.zig");
+const BoundedTestAllocator = @import("BoundedTestAllocator.zig");
 
 const ico = imaging.ico;
 const png = imaging.png;
@@ -39,21 +46,43 @@ const directory_capacity = 64;
 const max_entry_side = 256;
 
 const bitmap_header_bytes = 40;
-const png_signature_bytes = 8;
+const rgba_bytes = 4;
 
-/// A PNG chunk's length and type before its data.
-const png_chunk_head_bytes = 8;
-const png_ihdr_data_bytes = 13;
+/// Where a PNG payload's IHDR chunk starts, where its data ends, and the
+/// first byte of its CRC.
+const png_ihdr_offset = png_file.signature.len;
+const png_ihdr_data_end = png_file.chunk_head_bytes + png_file.ihdr_data_bytes;
+const png_ihdr_crc_offset = png_ihdr_offset + png_ihdr_data_end;
 
-/// Where a PNG payload's IHDR chunk starts, and the first byte of its CRC.
-const png_ihdr_offset = png_signature_bytes;
-const png_ihdr_crc_offset = png_ihdr_offset + png_chunk_head_bytes + png_ihdr_data_bytes;
+/// The most bytes one ICO decode may hold live. Its value is the largest
+/// peak measured by "the allocation budget sits one rounding above the
+/// sampled frame peaks" over zero-sample PNG frames in every color type, bit
+/// depth and interlacing, and zero DIB frames, at the sampled widths and the
+/// full 256-pixel height: 831 320 bytes, at width 256, with Zig 0.16.0 and
+/// the pinned Wuffs, rounded up to `budget_rounding`. The samples do not
+/// prove every admitted file stays under it; the hard limit does, by failing
+/// any fuzzed decode that reaches it.
+const allocation_budget = 812 * 1024;
+
+/// The measured peak must sit within this below the budget.
+const budget_rounding = 4 * 1024;
+
+/// Widths the budget test samples, each at the full 256-pixel height; the
+/// largest peak must come from the widest.
+const sampled_widths = [_]u32{ 1, 128, 255, max_entry_side };
 
 /// The bit count, compression and palette size that make a DIB unsupported:
 /// 24 bits per pixel, BI_BITFIELDS and a 16-color table.
 const unsupported_bit_count = 24;
 const bitfields_compression = 3;
 const unsupported_colors_used = 16;
+
+/// The one bit count `IcoFrame` decodes.
+const supported_bit_count = 32;
+
+/// Where alpha sits in an RGBA pixel.
+const alpha_index = 3;
+const bits_per_byte = 8;
 
 /// The one bit of a mask byte that hides its leftmost pixel.
 const leftmost_mask_bit = 0x80;
@@ -66,7 +95,11 @@ const max_dib_width = 40;
 const max_dib_height = 24;
 const max_png_side = 16;
 const max_payload_pixels = max_dib_width * max_dib_height;
-const max_mask_stride = ((max_dib_width + 31) / 32) * 4;
+const max_mask_stride = maskStride(max_dib_width);
+
+/// AND mask rows are padded to words of this many bits.
+const mask_word_bits = 32;
+const mask_word_bytes = mask_word_bits / bits_per_byte;
 
 /// Room for a generated file and for the raw inputs, which include the
 /// versioned 32 KiB favicon.
@@ -158,43 +191,116 @@ const IcoMutation = enum {
 };
 
 const dib_defect_weights = [_]Weight{
-    .value(PayloadDefect, .none, 18),
-    .rangeAtMost(PayloadDefect, .unsupported_depth, .truncated_mask, 1),
+    .value(
+        PayloadDefect,
+        .none,
+        18,
+    ),
+    .rangeAtMost(
+        PayloadDefect,
+        .unsupported_depth,
+        .truncated_mask,
+        1,
+    ),
 };
 
 const png_defect_weights = [_]Weight{
-    .value(PayloadDefect, .none, 6),
-    .value(PayloadDefect, .broken_png_header, 1),
+    .value(
+        PayloadDefect,
+        .none,
+        6,
+    ),
+    .value(
+        PayloadDefect,
+        .broken_png_header,
+        1,
+    ),
 };
 
 const entry_defect_weights = [_]Weight{
-    .value(EntryDefect, .none, 30),
-    .rangeAtMost(EntryDefect, .reserved, .width_mismatch, 1),
+    .value(
+        EntryDefect,
+        .none,
+        30,
+    ),
+    .rangeAtMost(
+        EntryDefect,
+        .reserved,
+        .width_mismatch,
+        1,
+    ),
 };
 
 const header_defect_weights = [_]Weight{
-    .value(HeaderDefect, .none, 20),
-    .rangeAtMost(HeaderDefect, .too_short, .short_directory, 1),
+    .value(
+        HeaderDefect,
+        .none,
+        20,
+    ),
+    .rangeAtMost(
+        HeaderDefect,
+        .too_short,
+        .short_directory,
+        1,
+    ),
 };
 
 const entry_count_weights = [_]Weight{
-    .rangeAtMost(u8, 1, 6, 16),
-    .rangeAtMost(u8, 1, directory_capacity, 1),
+    .rangeAtMost(
+        u8,
+        1,
+        6,
+        16,
+    ),
+    .rangeAtMost(
+        u8,
+        1,
+        directory_capacity,
+        1,
+    ),
 };
 
 /// Cells around the generated sizes, and the extremes.
 const cell_weights = [_]Weight{
-    .rangeAtMost(u32, 0, max_dib_width + 1, 1 << 20),
-    .rangeAtMost(u32, 0, max_entry_side + 1, 1 << 10),
-    .value(u32, std.math.maxInt(u32), 1 << 10),
+    .rangeAtMost(
+        u32,
+        0,
+        max_dib_width + 1,
+        1 << 20,
+    ),
+    .rangeAtMost(
+        u32,
+        0,
+        max_entry_side + 1,
+        1 << 10,
+    ),
+    .value(
+        u32,
+        std.math.maxInt(u32),
+        1 << 10,
+    ),
 };
 
 /// Sizes and offsets a rewritten entry takes: within the file, and the
 /// extremes.
 const entry_value_weights = [_]Weight{
-    .rangeAtMost(u32, 0, file_capacity, 1 << 20),
-    .value(u32, std.math.maxInt(u32), 1 << 30),
-    .rangeAtMost(u32, 0, std.math.maxInt(u32), 1),
+    .rangeAtMost(
+        u32,
+        0,
+        file_capacity,
+        1 << 20,
+    ),
+    .value(
+        u32,
+        std.math.maxInt(u32),
+        1 << 30,
+    ),
+    .rangeAtMost(
+        u32,
+        0,
+        std.math.maxInt(u32),
+        1,
+    ),
 };
 
 /// A payload this file generated: straight RGBA and its AND mask, both
@@ -205,7 +311,7 @@ const IcoPayload = struct {
     height: u32,
     filter: FilterType,
     defect: PayloadDefect,
-    pixels: [max_payload_pixels * 4]u8,
+    pixels: [max_payload_pixels * rgba_bytes]u8,
     mask: [max_dib_height * max_mask_stride]u8,
 };
 
@@ -282,31 +388,33 @@ fn pattern(comptime len: usize, comptime start: u8) []const u8 {
     }
 }
 
-/// A DIB payload with an alpha channel and no defect.
+/// A DIB payload's generating calls.
 fn dibInput(comptime width: u32, comptime height: u32, comptime alpha: AlphaSource, comptime defect: PayloadDefect) []const u8 {
-    const stride = ((width + 31) / 32) * 4;
     return seed.input(&.{
         seed.tag(PayloadFormat.dib),
         seed.int(width),
         seed.int(height),
-        seed.bytes(pattern(width * height * 4, 1)),
+        seed.bytes(pattern(width * height * rgba_bytes, 1)),
         seed.tag(alpha),
-        seed.bytes(pattern(stride * height, 3)),
+        seed.bytes(pattern(maskStride(width) * height, 3)),
         seed.tag(defect),
     });
 }
 
+/// A PNG payload's generating calls, with the Paeth filter.
 fn pngInput(comptime width: u32, comptime height: u32, comptime defect: PayloadDefect) []const u8 {
     return seed.input(&.{
         seed.tag(PayloadFormat.png),
         seed.int(width),
         seed.int(height),
-        seed.bytes(pattern(width * height * 4, 5)),
+        seed.bytes(pattern(width * height * rgba_bytes, 5)),
         seed.tag(FilterType.paeth),
         seed.tag(defect),
     });
 }
 
+/// A directory entry's generating calls; a defect other than none also
+/// takes its amount.
 fn entryInput(comptime payload: u8, comptime defect: EntryDefect, comptime amount: u32) []const u8 {
     return switch (defect) {
         .none => seed.input(&.{
@@ -321,16 +429,46 @@ fn entryInput(comptime payload: u8, comptime defect: EntryDefect, comptime amoun
     };
 }
 
+/// The case and payload count a generated seed starts with.
+fn generatedInput(comptime payload_count: u8) []const u8 {
+    return seed.input(&.{
+        seed.tag(IcoCase.generated),
+        seed.int(payload_count),
+    });
+}
+
+/// A header without defect and the cell to decode for.
+fn cellInput(comptime cell: u32) []const u8 {
+    return seed.input(&.{
+        seed.tag(HeaderDefect.none),
+        seed.int(cell),
+    });
+}
+
+/// The one entry of the single-entry seeds, naming payload 0.
+const one_plain_entry = seed.join(&.{
+    seed.input(&.{seed.int(1)}),
+    entryInput(
+        0,
+        .none,
+        0,
+    ),
+});
+
 const telar_ico = imaging.testing.telar_ico;
 
 const ico_seeds = [_]IcoSeed{
     .{
         .input = seed.join(&.{
-            seed.input(&.{ seed.tag(IcoCase.generated), seed.int(1) }),
-            dibInput(2, 2, .alpha, .none),
-            seed.input(&.{seed.int(1)}),
-            entryInput(0, .none, 0),
-            seed.input(&.{ seed.tag(HeaderDefect.none), seed.int(16) }),
+            generatedInput(1),
+            dibInput(
+                2,
+                2,
+                .alpha,
+                .none,
+            ),
+            one_plain_entry,
+            cellInput(16),
         }),
         .trial = .{
             .case = .generated,
@@ -340,15 +478,41 @@ const ico_seeds = [_]IcoSeed{
     },
     .{
         .input = seed.join(&.{
-            seed.input(&.{ seed.tag(IcoCase.generated), seed.int(3) }),
-            dibInput(8, 8, .mask, .none),
-            pngInput(16, 16, .none),
-            dibInput(33, 3, .mask, .none),
+            generatedInput(3),
+            dibInput(
+                8,
+                8,
+                .mask,
+                .none,
+            ),
+            pngInput(
+                16,
+                16,
+                .none,
+            ),
+            dibInput(
+                33,
+                3,
+                .mask,
+                .none,
+            ),
             seed.input(&.{seed.int(3)}),
-            entryInput(0, .none, 0),
-            entryInput(1, .none, 0),
-            entryInput(2, .none, 0),
-            seed.input(&.{ seed.tag(HeaderDefect.none), seed.int(10) }),
+            entryInput(
+                0,
+                .none,
+                0,
+            ),
+            entryInput(
+                1,
+                .none,
+                0,
+            ),
+            entryInput(
+                2,
+                .none,
+                0,
+            ),
+            cellInput(10),
         }),
         .trial = .{
             .case = .generated,
@@ -358,13 +522,31 @@ const ico_seeds = [_]IcoSeed{
     },
     .{
         .input = seed.join(&.{
-            seed.input(&.{ seed.tag(IcoCase.generated), seed.int(2) }),
-            dibInput(4, 4, .alpha, .unsupported_depth),
-            dibInput(5, 5, .alpha, .compressed),
+            generatedInput(2),
+            dibInput(
+                4,
+                4,
+                .alpha,
+                .unsupported_depth,
+            ),
+            dibInput(
+                5,
+                5,
+                .alpha,
+                .compressed,
+            ),
             seed.input(&.{seed.int(2)}),
-            entryInput(0, .none, 0),
-            entryInput(1, .width_mismatch, 7),
-            seed.input(&.{ seed.tag(HeaderDefect.none), seed.int(4) }),
+            entryInput(
+                0,
+                .none,
+                0,
+            ),
+            entryInput(
+                1,
+                .width_mismatch,
+                7,
+            ),
+            cellInput(4),
         }),
         .trial = .{
             .case = .generated,
@@ -374,11 +556,14 @@ const ico_seeds = [_]IcoSeed{
     },
     .{
         .input = seed.join(&.{
-            seed.input(&.{ seed.tag(IcoCase.generated), seed.int(1) }),
-            pngInput(4, 4, .broken_png_header),
-            seed.input(&.{seed.int(1)}),
-            entryInput(0, .none, 0),
-            seed.input(&.{ seed.tag(HeaderDefect.none), seed.int(4) }),
+            generatedInput(1),
+            pngInput(
+                4,
+                4,
+                .broken_png_header,
+            ),
+            one_plain_entry,
+            cellInput(4),
         }),
         .trial = .{
             .case = .generated,
@@ -388,12 +573,24 @@ const ico_seeds = [_]IcoSeed{
     },
     .{
         .input = seed.join(&.{
-            seed.input(&.{ seed.tag(IcoCase.generated), seed.int(1) }),
-            pngInput(4, 4, .none),
+            generatedInput(1),
+            pngInput(
+                4,
+                4,
+                .none,
+            ),
             seed.input(&.{seed.int(2)}),
-            entryInput(0, .width_mismatch, max_entry_side),
-            entryInput(0, .reserved, 1),
-            seed.input(&.{ seed.tag(HeaderDefect.none), seed.int(4) }),
+            entryInput(
+                0,
+                .width_mismatch,
+                max_entry_side,
+            ),
+            entryInput(
+                0,
+                .reserved,
+                1,
+            ),
+            cellInput(4),
         }),
         .trial = .{
             .case = .generated,
@@ -403,12 +600,24 @@ const ico_seeds = [_]IcoSeed{
     },
     .{
         .input = seed.join(&.{
-            seed.input(&.{ seed.tag(IcoCase.generated), seed.int(1) }),
-            pngInput(4, 4, .none),
+            generatedInput(1),
+            pngInput(
+                4,
+                4,
+                .none,
+            ),
             seed.input(&.{seed.int(2)}),
-            entryInput(0, .width_mismatch, max_entry_side),
-            entryInput(0, .none, 0),
-            seed.input(&.{ seed.tag(HeaderDefect.none), seed.int(4) }),
+            entryInput(
+                0,
+                .width_mismatch,
+                max_entry_side,
+            ),
+            entryInput(
+                0,
+                .none,
+                0,
+            ),
+            cellInput(4),
         }),
         .trial = .{
             .case = .generated,
@@ -418,11 +627,15 @@ const ico_seeds = [_]IcoSeed{
     },
     .{
         .input = seed.join(&.{
-            seed.input(&.{ seed.tag(IcoCase.generated), seed.int(1) }),
-            dibInput(3, 2, .mask, .truncated_mask),
-            seed.input(&.{seed.int(1)}),
-            entryInput(0, .none, 0),
-            seed.input(&.{ seed.tag(HeaderDefect.none), seed.int(4) }),
+            generatedInput(1),
+            dibInput(
+                3,
+                2,
+                .mask,
+                .truncated_mask,
+            ),
+            one_plain_entry,
+            cellInput(4),
         }),
         .trial = .{
             .case = .generated,
@@ -432,11 +645,19 @@ const ico_seeds = [_]IcoSeed{
     },
     .{
         .input = seed.join(&.{
-            seed.input(&.{ seed.tag(IcoCase.generated), seed.int(1) }),
-            dibInput(2, 2, .alpha, .none),
-            seed.input(&.{seed.int(1)}),
-            entryInput(0, .none, 0),
-            seed.input(&.{ seed.tag(HeaderDefect.too_many_entries), seed.int(directory_capacity + 1), seed.int(16) }),
+            generatedInput(1),
+            dibInput(
+                2,
+                2,
+                .alpha,
+                .none,
+            ),
+            one_plain_entry,
+            seed.input(&.{
+                seed.tag(HeaderDefect.too_many_entries),
+                seed.int(directory_capacity + 1),
+                seed.int(16),
+            }),
         }),
         .trial = .{
             .case = .generated,
@@ -446,11 +667,19 @@ const ico_seeds = [_]IcoSeed{
     },
     .{
         .input = seed.join(&.{
-            seed.input(&.{ seed.tag(IcoCase.generated), seed.int(1) }),
-            dibInput(2, 2, .alpha, .none),
-            seed.input(&.{seed.int(1)}),
-            entryInput(0, .none, 0),
-            seed.input(&.{ seed.tag(HeaderDefect.bad_magic), seed.int(2), seed.int(16) }),
+            generatedInput(1),
+            dibInput(
+                2,
+                2,
+                .alpha,
+                .none,
+            ),
+            one_plain_entry,
+            seed.input(&.{
+                seed.tag(HeaderDefect.bad_magic),
+                seed.int(2),
+                seed.int(16),
+            }),
         }),
         .trial = .{
             .case = .generated,
@@ -460,12 +689,25 @@ const ico_seeds = [_]IcoSeed{
     },
     .{
         .input = seed.join(&.{
-            seed.input(&.{ seed.tag(IcoCase.mutated), seed.int(1) }),
-            dibInput(2, 2, .alpha, .none),
-            seed.input(&.{seed.int(1)}),
-            entryInput(0, .none, 0),
-            seed.input(&.{ seed.tag(HeaderDefect.none), seed.int(16) }),
-            seed.input(&.{ seed.int(1), seed.tag(IcoMutation.rewrite_entry), seed.int(0), seed.tag(EntryField.offset), seed.int(std.math.maxInt(u32)) }),
+            seed.input(&.{
+                seed.tag(IcoCase.mutated),
+                seed.int(1),
+            }),
+            dibInput(
+                2,
+                2,
+                .alpha,
+                .none,
+            ),
+            one_plain_entry,
+            cellInput(16),
+            seed.input(&.{
+                seed.int(1),
+                seed.tag(IcoMutation.rewrite_entry),
+                seed.int(0),
+                seed.tag(EntryField.offset),
+                seed.int(std.math.maxInt(u32)),
+            }),
         }),
         .trial = .{
             .case = .mutated,
@@ -488,11 +730,18 @@ const ico_seeds = [_]IcoSeed{
     },
     .{
         .input = seed.join(&.{
-            seed.input(&.{ seed.tag(IcoCase.generated), seed.int(1) }),
-            pngInput(4, 4, .none),
-            seed.input(&.{seed.int(1)}),
-            entryInput(0, .none, 0),
-            seed.input(&.{ seed.tag(HeaderDefect.none), seed.int(4), seed.int(1), seed.int(2) }),
+            generatedInput(1),
+            pngInput(
+                4,
+                4,
+                .none,
+            ),
+            one_plain_entry,
+            cellInput(4),
+            seed.input(&.{
+                seed.int(1),
+                seed.int(2),
+            }),
         }),
         .trial = .{
             .case = .generated,
@@ -513,17 +762,32 @@ const ico_corpus = corpus: {
     break :corpus entries;
 };
 
+/// Bytes of one row of the AND mask: one bit per pixel, padded to a 32-bit
+/// word.
 fn maskStride(width: u32) usize {
-    return ((width + 31) / 32) * 4;
+    const words = std.math.divCeil(
+        u32,
+        width,
+        mask_word_bits,
+    ) catch unreachable;
+    return @as(usize, words) * mask_word_bytes;
 }
 
 fn generatePayload(smith: *Smith, payload: *IcoPayload) void {
     payload.format = smith.value(PayloadFormat);
     const max_width: u32 = if (payload.format == .dib) max_dib_width else max_png_side;
     const max_height: u32 = if (payload.format == .dib) max_dib_height else max_png_side;
-    payload.width = smith.valueRangeAtMost(u32, 1, max_width);
-    payload.height = smith.valueRangeAtMost(u32, 1, max_height);
-    smith.bytes(payload.pixels[0 .. payload.width * payload.height * 4]);
+    payload.width = smith.valueRangeAtMost(
+        u32,
+        1,
+        max_width,
+    );
+    payload.height = smith.valueRangeAtMost(
+        u32,
+        1,
+        max_height,
+    );
+    smith.bytes(payload.pixels[0 .. payload.width * payload.height * rgba_bytes]);
     payload.filter = .none;
 
     if (payload.format == .png) {
@@ -534,7 +798,7 @@ fn generatePayload(smith: *Smith, payload: *IcoPayload) void {
 
     if (smith.value(AlphaSource) == .mask) {
         for (0..payload.width * payload.height) |index| {
-            payload.pixels[index * 4 + 3] = 0;
+            payload.pixels[index * rgba_bytes + alpha_index] = 0;
         }
     }
 
@@ -542,8 +806,68 @@ fn generatePayload(smith: *Smith, payload: *IcoPayload) void {
     payload.defect = smith.valueWeighted(PayloadDefect, &dib_defect_weights);
 }
 
+/// The amount an entry's defect needs: the reserved byte, the offset or the
+/// size overrun, or the width it declares instead of its payload's.
+fn entryAmount(smith: *Smith, defect: EntryDefect, directory_end: u32) u32 {
+    return switch (defect) {
+        .none => 0,
+        .reserved => smith.valueRangeAtMost(
+            u32,
+            1,
+            std.math.maxInt(u8),
+        ),
+        .offset_before_directory => smith.valueRangeLessThan(
+            u32,
+            0,
+            directory_end,
+        ),
+        .offset_past_end, .size_past_end => smith.valueRangeAtMost(
+            u32,
+            1,
+            std.math.maxInt(u32),
+        ),
+        .width_mismatch => smith.valueRangeAtMost(
+            u32,
+            1,
+            max_entry_side,
+        ),
+    };
+}
+
+/// The amount a header's defect needs: the length it is cut to, the magic
+/// byte it breaks or the entry count it claims.
+fn headerAmount(smith: *Smith, defect: HeaderDefect, directory_end: u32) u32 {
+    return switch (defect) {
+        .none, .no_entries => 0,
+        .too_short => smith.valueRangeLessThan(
+            u32,
+            0,
+            directory_head_bytes,
+        ),
+        .bad_magic => smith.valueRangeLessThan(
+            u32,
+            0,
+            magic.len,
+        ),
+        .too_many_entries => smith.valueRangeAtMost(
+            u32,
+            directory_capacity + 1,
+            std.math.maxInt(u16),
+        ),
+        .short_directory => smith.valueRangeLessThan(
+            u32,
+            directory_head_bytes,
+            directory_end,
+        ),
+    };
+}
+
 fn generateIco(smith: *Smith, generated: *GeneratedIco) void {
-    generated.payload_count = smith.valueRangeAtMost(u8, 1, max_payloads);
+    generated.payload_count = smith.valueRangeAtMost(
+        u8,
+        1,
+        max_payloads,
+    );
     for (generated.payloads[0..generated.payload_count]) |*payload| {
         generatePayload(smith, payload);
     }
@@ -554,30 +878,49 @@ fn generateIco(smith: *Smith, generated: *GeneratedIco) void {
         entry.payload = @intCast(smith.index(generated.payload_count));
         entry.defect = smith.valueWeighted(EntryDefect, &entry_defect_weights);
         entry.declared_width = @intCast(generated.payloads[entry.payload].width);
-        entry.amount = switch (entry.defect) {
-            .none => 0,
-            .reserved => smith.valueRangeAtMost(u32, 1, std.math.maxInt(u8)),
-            .offset_before_directory => smith.valueRangeLessThan(u32, 0, directory_end),
-            .offset_past_end, .size_past_end => smith.valueRangeAtMost(u32, 1, std.math.maxInt(u32)),
-            .width_mismatch => smith.valueRangeAtMost(u32, 1, max_entry_side),
-        };
-        if (entry.defect == .width_mismatch) {
-            entry.declared_width = if (entry.amount == entry.declared_width) entry.declared_width % max_entry_side + 1 else @intCast(entry.amount);
+        entry.amount = entryAmount(
+            smith,
+            entry.defect,
+            directory_end,
+        );
+        if (entry.defect != .width_mismatch) {
+            continue;
         }
+
+        entry.declared_width = if (entry.amount == entry.declared_width) entry.declared_width % max_entry_side + 1 else @intCast(entry.amount);
     }
 
     generated.header_defect = smith.valueWeighted(HeaderDefect, &header_defect_weights);
-    generated.header_amount = switch (generated.header_defect) {
-        .none, .no_entries => 0,
-        .too_short => smith.valueRangeLessThan(u32, 0, directory_head_bytes),
-        .bad_magic => smith.valueRangeLessThan(u32, 0, magic.len),
-        .too_many_entries => smith.valueRangeAtMost(u32, directory_capacity + 1, std.math.maxInt(u16)),
-        .short_directory => smith.valueRangeLessThan(u32, directory_head_bytes, directory_end),
-    };
+    generated.header_amount = headerAmount(
+        smith,
+        generated.header_defect,
+        directory_end,
+    );
 }
 
-fn writeBitmapField(bytes: []u8, field: BitmapField, comptime T: type, value: T) void {
-    std.mem.writeInt(T, bytes[@intFromEnum(field)..][0..@sizeOf(T)], value, .little);
+fn writeLittle(comptime T: type, bytes: *[@sizeOf(T)]u8, value: T) void {
+    std.mem.writeInt(
+        T,
+        bytes,
+        value,
+        .little,
+    );
+}
+
+fn writeBitmapWord(header: []u8, field: BitmapField, value: u32) void {
+    writeLittle(
+        u32,
+        header[@intFromEnum(field)..][0..@sizeOf(u32)],
+        value,
+    );
+}
+
+fn writeBitmapHalf(header: []u8, field: BitmapField, value: u16) void {
+    writeLittle(
+        u16,
+        header[@intFromEnum(field)..][0..@sizeOf(u16)],
+        value,
+    );
 }
 
 /// A 32-bit BITMAPINFOHEADER image, bottom-up BGRA then the bottom-up AND
@@ -585,22 +928,50 @@ fn writeBitmapField(bytes: []u8, field: BitmapField, comptime T: type, value: T)
 fn writeDib(payload: *const IcoPayload, out: []u8) usize {
     const header = out[0..bitmap_header_bytes];
     @memset(header, 0);
-    writeBitmapField(header, .header_size, u32, bitmap_header_bytes);
-    writeBitmapField(header, .width, u32, payload.width);
-    writeBitmapField(header, .height, u32, if (payload.defect == .wrong_height) payload.height else payload.height * 2);
-    writeBitmapField(header, .planes, u16, if (payload.defect == .wrong_planes) 2 else 1);
-    writeBitmapField(header, .bit_count, u16, if (payload.defect == .unsupported_depth) unsupported_bit_count else 32);
-    writeBitmapField(header, .compression, u32, if (payload.defect == .compressed) bitfields_compression else 0);
-    writeBitmapField(header, .colors_used, u32, if (payload.defect == .color_table) unsupported_colors_used else 0);
+    writeBitmapWord(
+        header,
+        .header_size,
+        bitmap_header_bytes,
+    );
+    writeBitmapWord(
+        header,
+        .width,
+        payload.width,
+    );
+    writeBitmapWord(
+        header,
+        .height,
+        if (payload.defect == .wrong_height) payload.height else payload.height * 2,
+    );
+    writeBitmapHalf(
+        header,
+        .planes,
+        if (payload.defect == .wrong_planes) 2 else 1,
+    );
+    writeBitmapHalf(
+        header,
+        .bit_count,
+        if (payload.defect == .unsupported_depth) unsupported_bit_count else supported_bit_count,
+    );
+    writeBitmapWord(
+        header,
+        .compression,
+        if (payload.defect == .compressed) bitfields_compression else 0,
+    );
+    writeBitmapWord(
+        header,
+        .colors_used,
+        if (payload.defect == .color_table) unsupported_colors_used else 0,
+    );
 
     const width: usize = payload.width;
     const height: usize = payload.height;
-    const bitmap = out[bitmap_header_bytes..][0 .. width * height * 4];
+    const bitmap = out[bitmap_header_bytes..][0 .. width * height * rgba_bytes];
     for (0..height) |row| {
         const source_row = height - 1 - row;
         for (0..width) |column| {
-            const rgba = payload.pixels[(source_row * width + column) * 4 ..][0..4];
-            bitmap[(row * width + column) * 4 ..][0..4].* = .{ rgba[2], rgba[1], rgba[0], rgba[3] };
+            const rgba = payload.pixels[(source_row * width + column) * rgba_bytes ..][0..rgba_bytes];
+            bitmap[(row * width + column) * rgba_bytes ..][0..rgba_bytes].* = .{ rgba[2], rgba[1], rgba[0], rgba[3] };
         }
     }
 
@@ -626,7 +997,7 @@ fn writePng(payload: *const IcoPayload, out: []u8) !usize {
             },
             .filter = @intFromEnum(payload.filter),
         },
-        payload.pixels[0 .. payload.width * payload.height * 4],
+        payload.pixels[0 .. payload.width * payload.height * rgba_bytes],
     );
     defer gpa.free(bytes);
 
@@ -638,6 +1009,14 @@ fn writePng(payload: *const IcoPayload, out: []u8) !usize {
     return bytes.len;
 }
 
+fn writeEntryCount(file: *IcoFile, count: u16) void {
+    writeLittle(
+        u16,
+        file.bytes[magic.len..directory_head_bytes],
+        count,
+    );
+}
+
 /// Lays out the directory, then the payloads in order, then writes each
 /// entry's defect and the header defect.
 fn writeIco(generated: *const GeneratedIco, file: *IcoFile) !void {
@@ -645,7 +1024,8 @@ fn writeIco(generated: *const GeneratedIco, file: *IcoFile) !void {
     var offsets: [max_payloads]u32 = undefined;
     var sizes: [max_payloads]u32 = undefined;
     var end = directory_end;
-    for (generated.payloads[0..generated.payload_count], offsets[0..generated.payload_count], sizes[0..generated.payload_count]) |*payload, *offset, *size| {
+    const payloads = generated.payloads[0..generated.payload_count];
+    for (payloads, offsets[0..payloads.len], sizes[0..payloads.len]) |*payload, *offset, *size| {
         const len = switch (payload.format) {
             .dib => writeDib(payload, file.bytes[end..]),
             .png => try writePng(payload, file.bytes[end..]),
@@ -657,7 +1037,7 @@ fn writeIco(generated: *const GeneratedIco, file: *IcoFile) !void {
 
     file.len = end;
     @memcpy(file.bytes[0..magic.len], magic);
-    std.mem.writeInt(u16, file.bytes[magic.len..directory_head_bytes], generated.entry_count, .little);
+    writeEntryCount(file, generated.entry_count);
 
     const total: u32 = @intCast(end);
     for (generated.entries[0..generated.entry_count], 0..) |entry, index| {
@@ -677,21 +1057,33 @@ fn writeIco(generated: *const GeneratedIco, file: *IcoFile) !void {
             .size_past_end => size = (total - offset) +| entry.amount,
         }
 
-        writeEntryField(bytes, .size, size);
-        writeEntryField(bytes, .offset, offset);
+        writeEntryField(
+            bytes,
+            .size,
+            size,
+        );
+        writeEntryField(
+            bytes,
+            .offset,
+            offset,
+        );
     }
 
     switch (generated.header_defect) {
         .none => {},
         .too_short, .short_directory => file.len = generated.header_amount,
         .bad_magic => file.bytes[generated.header_amount] ^= std.math.maxInt(u8),
-        .no_entries => std.mem.writeInt(u16, file.bytes[magic.len..directory_head_bytes], 0, .little),
-        .too_many_entries => std.mem.writeInt(u16, file.bytes[magic.len..directory_head_bytes], @intCast(generated.header_amount), .little),
+        .no_entries => writeEntryCount(file, 0),
+        .too_many_entries => writeEntryCount(file, @intCast(generated.header_amount)),
     }
 }
 
 fn writeEntryField(entry: []u8, field: EntryField, value: u32) void {
-    std.mem.writeInt(u32, entry[@intFromEnum(field)..][0..4], value, .little);
+    writeLittle(
+        u32,
+        entry[@intFromEnum(field)..][0..@sizeOf(u32)],
+        value,
+    );
 }
 
 /// How `decode` treats an entry before selection, in the order it checks:
@@ -749,42 +1141,59 @@ fn selectEntry(generated: *const GeneratedIco, cell: u32) ?usize {
 /// What `decode` owes a generated file, computed from its generation.
 fn expectedIco(generated: *const GeneratedIco, cell: u32) IcoExpectation {
     switch (generated.header_defect) {
-        .too_short, .bad_magic => return .{ .rejected = error.NotIco },
-        .no_entries, .too_many_entries => return .{ .rejected = error.UnsupportedIco },
-        .short_directory => return .{ .rejected = error.InvalidIcoData },
+        .too_short, .bad_magic => return .{
+            .rejected = error.NotIco,
+        },
+        .no_entries, .too_many_entries => return .{
+            .rejected = error.UnsupportedIco,
+        },
+        .short_directory => return .{
+            .rejected = error.InvalidIcoData,
+        },
         .none => {},
     }
 
     for (generated.entries[0..generated.entry_count]) |entry| {
         if (entryVerdict(generated, entry) == .fatal) {
-            return .{ .rejected = error.InvalidIcoData };
+            return .{
+                .rejected = error.InvalidIcoData,
+            };
         }
     }
 
-    const selected = generated.entries[selectEntry(generated, cell) orelse return .{ .rejected = error.UnsupportedIco }];
+    const selected_index = selectEntry(generated, cell) orelse return .{
+        .rejected = error.UnsupportedIco,
+    };
+    const selected = generated.entries[selected_index];
     const payload = &generated.payloads[selected.payload];
     if (payload.defect == .broken_png_header) {
-        return .{ .rejected = error.InvalidPngData };
+        return .{
+            .rejected = error.InvalidPngData,
+        };
     }
 
     if (selected.defect == .width_mismatch) {
-        return .{ .rejected = error.InvalidIcoData };
+        return .{
+            .rejected = error.InvalidIcoData,
+        };
     }
 
-    return .{ .image = selected.payload };
+    return .{
+        .image = selected.payload,
+    };
 }
 
 /// The straight RGBA a payload decodes to: its pixels, with a DIB whose
 /// alpha channel is empty taking alpha from the mask instead.
 fn expectedPixels(payload: *const IcoPayload, pixels: []u8) void {
     const count = payload.width * payload.height;
-    @memcpy(pixels, payload.pixels[0 .. count * 4]);
+    @memcpy(pixels, payload.pixels[0 .. count * rgba_bytes]);
     if (payload.format == .png) {
         return;
     }
 
     for (0..count) |index| {
-        if (pixels[index * 4 + 3] != 0) {
+        if (pixels[index * rgba_bytes + alpha_index] != 0) {
             return;
         }
     }
@@ -792,26 +1201,40 @@ fn expectedPixels(payload: *const IcoPayload, pixels: []u8) void {
     const stride = maskStride(payload.width);
     for (0..payload.height) |row| {
         for (0..payload.width) |column| {
-            const hidden = payload.mask[row * stride + column / 8] & (@as(u8, leftmost_mask_bit) >> @intCast(column % 8)) != 0;
-            pixels[(row * payload.width + column) * 4 + 3] = if (hidden) 0 else std.math.maxInt(u8);
+            const mask_byte = payload.mask[row * stride + column / bits_per_byte];
+            const hidden = mask_byte & (@as(u8, leftmost_mask_bit) >> @intCast(column % bits_per_byte)) != 0;
+            pixels[(row * payload.width + column) * rgba_bytes + alpha_index] = if (hidden) 0 else std.math.maxInt(u8);
         }
     }
 }
 
 fn mutate(smith: *Smith, file: *IcoFile) void {
-    const count = smith.valueRangeAtMost(u8, 1, max_mutations);
+    const count = smith.valueRangeAtMost(
+        u8,
+        1,
+        max_mutations,
+    );
     for (0..count) |_| {
         if (file.len == 0) {
             return;
         }
 
         switch (smith.value(IcoMutation)) {
-            .flip_byte => file.bytes[smith.index(file.len)] ^= smith.valueRangeAtMost(u8, 1, std.math.maxInt(u8)),
+            .flip_byte => file.bytes[smith.index(file.len)] ^= nonZeroByte(smith),
             .set_byte => file.bytes[smith.index(file.len)] = smith.value(u8),
             .truncate => file.len = smith.index(file.len),
             .rewrite_entry => rewriteEntry(smith, file),
         }
     }
+}
+
+/// A byte that changes whatever it is XORed into.
+fn nonZeroByte(smith: *Smith) u8 {
+    return smith.valueRangeAtMost(
+        u8,
+        1,
+        std.math.maxInt(u8),
+    );
 }
 
 fn rewriteEntry(smith: *Smith, file: *IcoFile) void {
@@ -825,18 +1248,22 @@ fn rewriteEntry(smith: *Smith, file: *IcoFile) void {
     const bytes = file.bytes[start..][0..entry_bytes];
     switch (field) {
         .width, .height, .reserved => bytes[@intFromEnum(field)] = smith.value(u8),
-        .size, .offset => writeEntryField(bytes, field, smith.valueWeighted(u32, &entry_value_weights)),
+        .size, .offset => writeEntryField(
+            bytes,
+            field,
+            smith.valueWeighted(u32, &entry_value_weights),
+        ),
     }
 }
 
 /// The error `decode` owes `bytes` from its header alone, in the order it
 /// checks: length and magic, the entry count, then the directory's length.
 fn expectedHeaderRejection(bytes: []const u8) ?anyerror {
-    if (bytes.len < directory_head_bytes or !std.mem.eql(u8, bytes[0..magic.len], magic)) {
+    if (bytes.len < directory_head_bytes or !equalBytes(bytes[0..magic.len], magic)) {
         return error.NotIco;
     }
 
-    const count = std.mem.readInt(u16, bytes[magic.len..directory_head_bytes], .little);
+    const count = entryCount(bytes);
     if (count == 0 or count > directory_capacity) {
         return error.UnsupportedIco;
     }
@@ -848,14 +1275,33 @@ fn expectedHeaderRejection(bytes: []const u8) ?anyerror {
     return null;
 }
 
-/// The width and height an entry of a well-formed directory declares, 0
-/// standing for 256.
+fn equalBytes(a: []const u8, b: []const u8) bool {
+    return std.mem.eql(
+        u8,
+        a,
+        b,
+    );
+}
+
+fn entryCount(bytes: []const u8) u16 {
+    return std.mem.readInt(
+        u16,
+        bytes[magic.len..directory_head_bytes],
+        .little,
+    );
+}
+
+/// The side an entry byte declares, 0 standing for 256.
+fn declaredSide(byte: u8) u32 {
+    return if (byte == 0) max_entry_side else byte;
+}
+
+/// Whether an entry of a well-formed directory declares `width` x `height`.
 fn declaresSize(bytes: []const u8, width: u32, height: u32) bool {
-    const count = std.mem.readInt(u16, bytes[magic.len..directory_head_bytes], .little);
-    for (0..count) |index| {
+    for (0..entryCount(bytes)) |index| {
         const entry = bytes[directory_head_bytes + index * entry_bytes ..][0..entry_bytes];
-        const declared_width: u32 = if (entry[@intFromEnum(EntryField.width)] == 0) max_entry_side else entry[@intFromEnum(EntryField.width)];
-        const declared_height: u32 = if (entry[@intFromEnum(EntryField.height)] == 0) max_entry_side else entry[@intFromEnum(EntryField.height)];
+        const declared_width = declaredSide(entry[@intFromEnum(EntryField.width)]);
+        const declared_height = declaredSide(entry[@intFromEnum(EntryField.height)]);
         if (declared_width == width and declared_height == height) {
             return true;
         }
@@ -872,32 +1318,43 @@ fn isIcoRejection(err: anyerror) bool {
     };
 }
 
-/// Decodes `bytes` once without failing allocations. A header rejection
-/// must be exactly the one owed and allocate nothing. With an expectation,
-/// the outcome and pixels must be exactly it; without one, a rejection comes
-/// from the ICO and PNG error sets and an image has the size a directory
-/// entry declares, four bytes per pixel.
+/// Decodes `bytes` once without failing allocations, under the hard
+/// `allocation_budget`. A header rejection must be exactly the one owed and
+/// allocate nothing. With an expectation, the outcome and pixels must be
+/// exactly it; without one, a rejection comes from the ICO and PNG error
+/// sets and an image has the size a directory entry declares, four bytes
+/// per pixel. No request may be refused by the budget, and every allocation
+/// is released.
 fn expectDecoding(bytes: []const u8, cell: u32, expectation: ?IcoExpectation, generated: *const GeneratedIco) !IcoDecoding {
-    var failing: FailingAllocator = .init(std.testing.allocator, .{});
+    var bounded: BoundedTestAllocator = .init(std.testing.allocator, allocation_budget);
+    var failing: FailingAllocator = .init(bounded.allocator(), .{});
     const gpa = failing.allocator();
     const rejection = expectedHeaderRejection(bytes);
 
-    const outcome: ?anyerror = if (ico.decode(gpa, bytes, cell)) |decoded| accepted: {
-        var image = decoded;
+    const decoded = ico.decode(
+        gpa,
+        bytes,
+        cell,
+    );
+    const outcome: ?anyerror = if (decoded) |accepted_image| accepted: {
+        var image = accepted_image;
         defer image.deinit(gpa);
 
         try std.testing.expectEqual(null, rejection);
         try std.testing.expect(image.width >= 1 and image.width <= max_entry_side);
         try std.testing.expect(image.height >= 1 and image.height <= max_entry_side);
-        try std.testing.expectEqual(@as(usize, image.width) * image.height * 4, image.pixels.len);
-        try std.testing.expect(declaresSize(bytes, image.width, image.height));
+        try std.testing.expectEqual(@as(usize, image.width) * image.height * rgba_bytes, image.pixels.len);
+        try std.testing.expect(declaresSize(
+            bytes,
+            image.width,
+            image.height,
+        ));
         if (expectation) |owed| {
-            const payload = &generated.payloads[try expectImage(owed)];
-            var pixels: [max_payload_pixels * 4]u8 = undefined;
-            expectedPixels(payload, pixels[0 .. payload.width * payload.height * 4]);
-            try std.testing.expectEqual(payload.width, image.width);
-            try std.testing.expectEqual(payload.height, image.height);
-            try std.testing.expectEqualSlices(u8, pixels[0 .. payload.width * payload.height * 4], image.pixels);
+            try expectPayloadPixels(
+                generated,
+                try expectImage(owed),
+                image.pixels,
+            );
         }
 
         break :accepted null;
@@ -906,7 +1363,12 @@ fn expectDecoding(bytes: []const u8, cell: u32, expectation: ?IcoExpectation, ge
             try std.testing.expectEqual(owed, err);
             try std.testing.expectEqual(0, failing.allocations);
         } else if (expectation) |owed| {
-            try std.testing.expectEqual(owed, IcoExpectation{ .rejected = err });
+            try std.testing.expectEqual(
+                owed,
+                IcoExpectation{
+                    .rejected = err,
+                },
+            );
         } else {
             try std.testing.expect(isIcoRejection(err));
         }
@@ -915,10 +1377,24 @@ fn expectDecoding(bytes: []const u8, cell: u32, expectation: ?IcoExpectation, ge
     };
 
     try seed.expectReleased(&failing);
+    try seed.expectWithinBudget(&bounded);
     return .{
         .outcome = outcome,
         .allocations = failing.allocations,
     };
+}
+
+/// `pixels` are exactly what payload `index` of `generated` decodes to.
+fn expectPayloadPixels(generated: *const GeneratedIco, index: u8, pixels: []const u8) !void {
+    const payload = &generated.payloads[index];
+    var expected: [max_payload_pixels * rgba_bytes]u8 = undefined;
+    const owed = expected[0 .. payload.width * payload.height * rgba_bytes];
+    expectedPixels(payload, owed);
+    try std.testing.expectEqualSlices(
+        u8,
+        owed,
+        pixels,
+    );
 }
 
 fn expectImage(expectation: IcoExpectation) !u8 {
@@ -929,18 +1405,27 @@ fn expectImage(expectation: IcoExpectation) !u8 {
 }
 
 /// Maybe fails one of the `allocations` the clean decode made, which must
-/// be `OutOfMemory` with everything released.
+/// be `OutOfMemory` with everything released and nothing refused.
 fn expectAllocationFailure(smith: *Smith, bytes: []const u8, cell: u32, allocations: usize) !bool {
     if (allocations == 0 or !smith.valueWeighted(bool, &seed.failure_weights)) {
         return false;
     }
 
-    var failing: FailingAllocator = .init(std.testing.allocator, .{
-        .fail_index = smith.index(allocations),
-    });
+    var bounded: BoundedTestAllocator = .init(std.testing.allocator, allocation_budget);
+    var failing: FailingAllocator = .init(
+        bounded.allocator(),
+        .{
+            .fail_index = smith.index(allocations),
+        },
+    );
     const gpa = failing.allocator();
-    if (ico.decode(gpa, bytes, cell)) |decoded| {
-        var image = decoded;
+    const decoded = ico.decode(
+        gpa,
+        bytes,
+        cell,
+    );
+    if (decoded) |accepted_image| {
+        var image = accepted_image;
         image.deinit(gpa);
         return error.AllocationFailureIgnored;
     } else |err| {
@@ -948,11 +1433,12 @@ fn expectAllocationFailure(smith: *Smith, bytes: []const u8, cell: u32, allocati
     }
 
     try seed.expectReleased(&failing);
+    try seed.expectWithinBudget(&bounded);
     return true;
 }
 
-/// A broken property panics so the fuzzer keeps the input; Wuffs warnings
-/// are muted as in `png_fuzz_test.zig`.
+/// A broken property panics rather than returning its error, as in
+/// `png_fuzz_test.zig`, which also says why Wuffs warnings are muted.
 fn decodeFuzzedIco(_: void, smith: *Smith) anyerror!void {
     const log_level = std.testing.log_level;
     std.testing.log_level = .err;
@@ -981,16 +1467,28 @@ fn expectIcoDecoding(smith: *Smith) !IcoTrial {
         .raw => {},
     }
 
-    const decoding = try expectDecoding(file.written(), cell, expectation, &generated);
+    const decoding = try expectDecoding(
+        file.written(),
+        cell,
+        expectation,
+        &generated,
+    );
     return .{
         .case = case,
         .outcome = decoding.outcome,
-        .failed_allocation = try expectAllocationFailure(smith, file.written(), cell, decoding.allocations),
+        .failed_allocation = try expectAllocationFailure(
+            smith,
+            file.written(),
+            cell,
+            decoding.allocations,
+        ),
     };
 }
 
 fn replay(input: []const u8) !IcoTrial {
-    var smith: Smith = .{ .in = input };
+    var smith: Smith = .{
+        .in = input,
+    };
     return expectIcoDecoding(&smith);
 }
 
@@ -1003,64 +1501,287 @@ fn generateFromSeed(index: usize, generated: *GeneratedIco, file: *IcoFile) !voi
     try writeIco(generated, file);
 }
 
+/// An ICO whose only entry holds `payload` and declares `width` x `height`.
+/// The caller owns it.
+fn singleEntryIco(payload: []const u8, width: u32, height: u32) ![]u8 {
+    const payload_offset = directory_head_bytes + entry_bytes;
+    const bytes = try std.testing.allocator.alloc(u8, payload_offset + payload.len);
+    @memset(bytes[0..payload_offset], 0);
+    @memcpy(bytes[0..magic.len], magic);
+    writeLittle(
+        u16,
+        bytes[magic.len..directory_head_bytes],
+        1,
+    );
+
+    const entry = bytes[directory_head_bytes..][0..entry_bytes];
+    entry[@intFromEnum(EntryField.width)] = @truncate(width);
+    entry[@intFromEnum(EntryField.height)] = @truncate(height);
+    writeEntryField(
+        entry,
+        .size,
+        @intCast(payload.len),
+    );
+    writeEntryField(
+        entry,
+        .offset,
+        payload_offset,
+    );
+    @memcpy(bytes[payload_offset..], payload);
+    return bytes;
+}
+
+/// A 32-bit DIB of `width` x `height` whose pixels and mask are all zero.
+/// The caller owns it.
+fn zeroDib(width: u32, height: u32) ![]u8 {
+    const pixels = @as(usize, width) * height * rgba_bytes;
+    const bytes = try std.testing.allocator.alloc(u8, bitmap_header_bytes + pixels + maskStride(width) * height);
+    @memset(bytes, 0);
+
+    const header = bytes[0..bitmap_header_bytes];
+    writeBitmapWord(
+        header,
+        .header_size,
+        bitmap_header_bytes,
+    );
+    writeBitmapWord(
+        header,
+        .width,
+        width,
+    );
+    writeBitmapWord(
+        header,
+        .height,
+        height * 2,
+    );
+    writeBitmapHalf(
+        header,
+        .planes,
+        1,
+    );
+    writeBitmapHalf(
+        header,
+        .bit_count,
+        supported_bit_count,
+    );
+    return bytes;
+}
+
+/// Decodes a single-entry ICO around `payload`, which must succeed, with no
+/// limit on the allocator, and returns the most bytes it held live at once.
+fn framePeak(payload: []const u8, width: u32, height: u32) !usize {
+    const bytes = try singleEntryIco(
+        payload,
+        width,
+        height,
+    );
+    defer std.testing.allocator.free(bytes);
+
+    var bounded: BoundedTestAllocator = .init(std.testing.allocator, std.math.maxInt(usize));
+    const gpa = bounded.allocator();
+    var image = try ico.decode(
+        gpa,
+        bytes,
+        max_entry_side,
+    );
+    image.deinit(gpa);
+
+    try std.testing.expectEqual(0, bounded.live_bytes);
+    return bounded.peak_bytes;
+}
+
+/// The largest peak over every sampled frame, and the largest over those of
+/// the widest sampled width.
+const FramePeaks = struct {
+    largest: usize,
+    widest: usize,
+};
+
+/// Decodes, at every sampled width and the full 256-pixel height, a
+/// zero-sample PNG frame in every color type, bit depth and interlacing,
+/// and a zero DIB frame.
+fn measureFramePeaks() !FramePeaks {
+    var peaks: FramePeaks = .{
+        .largest = 0,
+        .widest = 0,
+    };
+    for (sampled_widths) |width| {
+        var width_peak: usize = 0;
+        for (png_file.color_depths) |color_depth| {
+            for ([_]bool{ false, true }) |interlaced| {
+                const frame = try png_file.zeroPng(
+                    std.testing.allocator,
+                    .{
+                        .width = width,
+                        .height = max_entry_side,
+                        .color_depth = color_depth,
+                        .interlaced = interlaced,
+                    },
+                );
+                defer std.testing.allocator.free(frame);
+
+                width_peak = @max(width_peak, try framePeak(
+                    frame,
+                    width,
+                    max_entry_side,
+                ));
+            }
+        }
+
+        const dib = try zeroDib(width, max_entry_side);
+        defer std.testing.allocator.free(dib);
+        width_peak = @max(width_peak, try framePeak(
+            dib,
+            width,
+            max_entry_side,
+        ));
+
+        peaks.largest = @max(peaks.largest, width_peak);
+        if (width == max_entry_side) {
+            peaks.widest = width_peak;
+        }
+    }
+
+    return peaks;
+}
+
 test "every ico fuzz seed reaches its case and outcome" {
     for (ico_seeds) |ico_seed| {
         try std.testing.expectEqual(ico_seed.trial, try replay(ico_seed.input));
     }
 
-    try std.testing.expectEqual(IcoTrial{
-        .case = .generated,
-        .outcome = null,
-        .failed_allocation = false,
-    }, try replay(""));
+    try std.testing.expectEqual(
+        IcoTrial{
+            .case = .generated,
+            .outcome = null,
+            .failed_allocation = false,
+        },
+        try replay(""),
+    );
+}
+
+test "the allocation budget sits one rounding above the sampled frame peaks, and a request past a limit is refused unreserved" {
+    const peaks = try measureFramePeaks();
+    try std.testing.expectEqual(peaks.widest, peaks.largest);
+    try std.testing.expect(peaks.largest <= allocation_budget);
+    try std.testing.expect(allocation_budget - peaks.largest < budget_rounding);
+
+    // A 256 x 256 DIB allocates its pixels in one request; one byte less
+    // of limit refuses it before the backing allocator reserves anything.
+    const dib = try zeroDib(max_entry_side, max_entry_side);
+    defer std.testing.allocator.free(dib);
+    const bytes = try singleEntryIco(
+        dib,
+        max_entry_side,
+        max_entry_side,
+    );
+    defer std.testing.allocator.free(bytes);
+
+    const pixels = max_entry_side * max_entry_side * rgba_bytes;
+    var backing: BoundedTestAllocator = .init(std.testing.allocator, std.math.maxInt(usize));
+    var bounded: BoundedTestAllocator = .init(backing.allocator(), pixels - 1);
+    const decoded = ico.decode(
+        bounded.allocator(),
+        bytes,
+        max_entry_side,
+    );
+    try std.testing.expectError(error.OutOfMemory, decoded);
+    try std.testing.expectEqual(1, bounded.refusals);
+    try std.testing.expectEqual(0, backing.peak_bytes);
 }
 
 test "cells pick the smallest covering entry, else the largest, across mask strides" {
     var generated: GeneratedIco = undefined;
     var file: IcoFile = undefined;
-    try generateFromSeed(1, &generated, &file);
+    try generateFromSeed(
+        1,
+        &generated,
+        &file,
+    );
 
     // Sides 8, 16 and 3 (a 33 x 3 bitmap with two mask words per row).
-    for ([_]u32{ 0, 3, 4, 8, 9, 16, 17, max_entry_side }, [_]u8{ 2, 2, 0, 0, 1, 1, 1, 1 }) |cell, payload| {
-        try std.testing.expectEqual(IcoExpectation{ .image = payload }, expectedIco(&generated, cell));
-        _ = try expectDecoding(file.written(), cell, expectedIco(&generated, cell), &generated);
+    const cells = [_]u32{ 0, 3, 4, 8, 9, 16, 17, max_entry_side };
+    const payloads = [_]u8{ 2, 2, 0, 0, 1, 1, 1, 1 };
+    for (cells, payloads) |cell, payload| {
+        const expectation = expectedIco(&generated, cell);
+        try std.testing.expectEqual(
+            IcoExpectation{
+                .image = payload,
+            },
+            expectation,
+        );
+        _ = try expectDecoding(
+            file.written(),
+            cell,
+            expectation,
+            &generated,
+        );
     }
 }
 
 test "directory bounds are checked at the 64-entry limit and at 256-pixel entries" {
     var generated: GeneratedIco = undefined;
     var file: IcoFile = undefined;
-    try generateFromSeed(0, &generated, &file);
+    try generateFromSeed(
+        0,
+        &generated,
+        &file,
+    );
 
     // 64 entries naming one 2 x 2 bitmap decode; a 65th is unsupported.
     const payload_len = file.len - directory_head_bytes - entry_bytes;
     var wide: IcoFile = undefined;
     const directory_end = directory_head_bytes + directory_capacity * entry_bytes;
     @memcpy(wide.bytes[0..directory_head_bytes], file.bytes[0..directory_head_bytes]);
-    std.mem.writeInt(u16, wide.bytes[magic.len..directory_head_bytes], directory_capacity, .little);
+    writeEntryCount(&wide, directory_capacity);
     for (0..directory_capacity) |index| {
         const entry = wide.bytes[directory_head_bytes + index * entry_bytes ..][0..entry_bytes];
         @memcpy(entry, file.bytes[directory_head_bytes..][0..entry_bytes]);
-        writeEntryField(entry, .offset, directory_end);
+        writeEntryField(
+            entry,
+            .offset,
+            directory_end,
+        );
     }
 
     @memcpy(wide.bytes[directory_end..][0..payload_len], file.bytes[directory_head_bytes + entry_bytes ..][0..payload_len]);
     wide.len = directory_end + payload_len;
-    var image = try ico.decode(std.testing.allocator, wide.written(), 2);
+    var image = try ico.decode(
+        std.testing.allocator,
+        wide.written(),
+        2,
+    );
     image.deinit(std.testing.allocator);
 
-    std.mem.writeInt(u16, wide.bytes[magic.len..directory_head_bytes], directory_capacity + 1, .little);
-    var failing: FailingAllocator = .init(std.testing.allocator, .{
-        .fail_index = 0,
-    });
-    try std.testing.expectError(error.UnsupportedIco, ico.decode(failing.allocator(), wide.written(), 2));
+    writeEntryCount(&wide, directory_capacity + 1);
+    var failing: FailingAllocator = .init(
+        std.testing.allocator,
+        .{
+            .fail_index = 0,
+        },
+    );
+    const unsupported = ico.decode(
+        failing.allocator(),
+        wide.written(),
+        2,
+    );
+    try std.testing.expectError(error.UnsupportedIco, unsupported);
 
     // An entry whose width byte 0 declares 256, over a bitmap header that
     // agrees, needs 256 x 2 pixels and mask rows the 2 x 2 payload lacks: it
     // is rejected before its pixels are allocated.
     file.bytes[directory_head_bytes + @intFromEnum(EntryField.width)] = 0;
-    writeBitmapField(file.bytes[directory_head_bytes + entry_bytes ..], .width, u32, max_entry_side);
-    try std.testing.expectError(error.InvalidIcoData, ico.decode(failing.allocator(), file.written(), 2));
+    writeBitmapWord(
+        file.bytes[directory_head_bytes + entry_bytes ..],
+        .width,
+        max_entry_side,
+    );
+    const short = ico.decode(
+        failing.allocator(),
+        file.written(),
+        2,
+    );
+    try std.testing.expectError(error.InvalidIcoData, short);
     try std.testing.expectEqual(0, failing.allocations);
     try std.testing.expectEqual(false, failing.has_induced_failure);
 }
@@ -1068,29 +1789,55 @@ test "directory bounds are checked at the 64-entry limit and at 256-pixel entrie
 test "a PNG entry past the ICO limit is rejected before any allocation" {
     var generated: GeneratedIco = undefined;
     var file: IcoFile = undefined;
-    try generateFromSeed(3, &generated, &file);
+    try generateFromSeed(
+        3,
+        &generated,
+        &file,
+    );
 
     // Seed 3 breaks the IHDR CRC; restore it with a width past the ICO limit.
     const ihdr = file.bytes[directory_head_bytes + entry_bytes + png_ihdr_offset ..];
-    const data_end = png_chunk_head_bytes + png_ihdr_data_bytes;
-    std.mem.writeInt(u32, ihdr[png_chunk_head_bytes..][0..4], max_entry_side + 1, .big);
-    std.mem.writeInt(u32, ihdr[data_end..][0..4], std.hash.Crc32.hash(ihdr[4..data_end]), .big);
+    std.mem.writeInt(
+        u32,
+        ihdr[png_file.chunk_head_bytes..][0..4],
+        max_entry_side + 1,
+        .big,
+    );
+    std.mem.writeInt(
+        u32,
+        ihdr[png_ihdr_data_end..][0..4],
+        std.hash.Crc32.hash(ihdr[4..png_ihdr_data_end]),
+        .big,
+    );
 
-    var failing: FailingAllocator = .init(std.testing.allocator, .{
-        .fail_index = 0,
-    });
-    try std.testing.expectError(error.PngTooLarge, ico.decode(failing.allocator(), file.written(), 4));
+    var failing: FailingAllocator = .init(
+        std.testing.allocator,
+        .{
+            .fail_index = 0,
+        },
+    );
+    const decoded = ico.decode(
+        failing.allocator(),
+        file.written(),
+        4,
+    );
+    try std.testing.expectError(error.PngTooLarge, decoded);
     try std.testing.expectEqual(false, failing.has_induced_failure);
 }
 
-test "mixed ICO directories release every allocation failure" {
+test "mixed ICO directories release every allocation failure within the budget" {
     for ([_]usize{ 0, 1, 11 }) |index| {
         var generated: GeneratedIco = undefined;
         var file: IcoFile = undefined;
-        try generateFromSeed(index, &generated, &file);
+        try generateFromSeed(
+            index,
+            &generated,
+            &file,
+        );
         for ([_]u32{ 1, 10, 32 }) |cell| {
+            var bounded: BoundedTestAllocator = .init(std.testing.allocator, allocation_budget);
             try std.testing.checkAllAllocationFailures(
-                std.testing.allocator,
+                bounded.allocator(),
                 expectOwedDecoding,
                 .{
                     file.written(),
@@ -1098,22 +1845,32 @@ test "mixed ICO directories release every allocation failure" {
                     &generated,
                 },
             );
+            try seed.expectWithinBudget(&bounded);
         }
     }
 }
 
 fn expectOwedDecoding(gpa: std.mem.Allocator, bytes: []const u8, cell: u32, generated: *const GeneratedIco) !void {
-    var image = try ico.decode(gpa, bytes, cell);
+    var image = try ico.decode(
+        gpa,
+        bytes,
+        cell,
+    );
     defer image.deinit(gpa);
 
-    const payload = &generated.payloads[try expectImage(expectedIco(generated, cell))];
-    var pixels: [max_payload_pixels * 4]u8 = undefined;
-    expectedPixels(payload, pixels[0 .. payload.width * payload.height * 4]);
-    try std.testing.expectEqualSlices(u8, pixels[0 .. payload.width * payload.height * 4], image.pixels);
+    try expectPayloadPixels(
+        generated,
+        try expectImage(expectedIco(generated, cell)),
+        image.pixels,
+    );
 }
 
 test "fuzz ico decoding" {
-    try std.testing.fuzz({}, decodeFuzzedIco, .{
-        .corpus = &ico_corpus,
-    });
+    try std.testing.fuzz(
+        {},
+        decodeFuzzedIco,
+        .{
+            .corpus = &ico_corpus,
+        },
+    );
 }

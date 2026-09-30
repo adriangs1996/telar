@@ -9,6 +9,7 @@
 //! fuzzer saves has the same form.
 
 const std = @import("std");
+const BoundedTestAllocator = @import("BoundedTestAllocator.zig");
 
 const FailingAllocator = std.testing.FailingAllocator;
 const Weight = std.testing.Smith.Weight;
@@ -21,8 +22,16 @@ const SeedCall = union(enum) {
 
 /// Fails one allocation of a clean decode in about a quarter of the inputs.
 pub const failure_weights = [_]Weight{
-    .value(bool, false, 3),
-    .value(bool, true, 1),
+    .value(
+        bool,
+        false,
+        3,
+    ),
+    .value(
+        bool,
+        true,
+        1,
+    ),
 };
 
 /// An integer choice.
@@ -52,7 +61,12 @@ pub fn bytes(value: []const u8) SeedCall {
 pub fn sliceLength(comptime len: u32) SeedCall {
     comptime {
         var prefix: [@sizeOf(u32)]u8 = undefined;
-        std.mem.writeInt(u32, &prefix, len, .little);
+        std.mem.writeInt(
+            u32,
+            &prefix,
+            len,
+            .little,
+        );
         const constant = prefix;
         return bytes(&constant);
     }
@@ -82,7 +96,12 @@ pub fn input(comptime calls: []const SeedCall) []const u8 {
             switch (call) {
                 .int => |value| {
                     var little: [@sizeOf(u64)]u8 = undefined;
-                    std.mem.writeInt(u64, &little, value, .little);
+                    std.mem.writeInt(
+                        u64,
+                        &little,
+                        value,
+                        .little,
+                    );
                     encoded = encoded ++ little;
                 },
                 .bytes => |value| encoded = encoded ++ value,
@@ -101,6 +120,13 @@ pub fn expectReleased(failing: *const FailingAllocator) !void {
     try std.testing.expectEqual(failing.allocations, failing.deallocations);
 }
 
+/// No request reached the hard limit of `bounded`, and nothing is live.
+/// Example: `try seed.expectWithinBudget(&bounded);`
+pub fn expectWithinBudget(bounded: *const BoundedTestAllocator) !void {
+    try std.testing.expectEqual(0, bounded.refusals);
+    try std.testing.expectEqual(0, bounded.live_bytes);
+}
+
 test "seed calls encode as the Smith input that replays them" {
     const encoded = comptime join(&.{
         input(&.{ int(7), bytes("ab") }),
@@ -110,7 +136,12 @@ test "seed calls encode as the Smith input that replays them" {
     var smith: std.testing.Smith = .{
         .in = encoded,
     };
-    try std.testing.expectEqual(7, smith.valueRangeAtMost(u32, 0, 9));
+    const choice = smith.valueRangeAtMost(
+        u32,
+        0,
+        9,
+    );
+    try std.testing.expectEqual(7, choice);
 
     var two: [2]u8 = undefined;
     smith.bytes(&two);

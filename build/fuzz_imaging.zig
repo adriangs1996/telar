@@ -1,10 +1,9 @@
 //! The imaging fuzz targets: PNG and ICO decoding, each fuzzed from its own
-//! root under `lib/imaging` against the configured `imaging` library, so the
-//! same Wuffs module decodes in the fuzzer and in telar. The roots stay out
-//! of `test-libraries`, the suites and the coverage build, which compile with
-//! `-ffuzz`: Zig 0.16.0's test runner does not compile a `std.testing.fuzz`
-//! call in Debug with error return traces, and segfaults on one in an
-//! instrumented binary run without `--fuzz`.
+//! root under `lib/imaging` against a copy of the configured `imaging`
+//! library, so the same sources and Wuffs build decode in the fuzzer and in
+//! telar. The roots stay out of `test-libraries`, the suites and the
+//! coverage build, and are built like the handshake fuzz target of commit
+//! d519fb1d, whose message records why.
 //!
 //! `--fuzz` rebuilds the whole compilation with `-ffuzz`, which also reaches
 //! the Wuffs C that `wuffs_c` compiles. Clang then emits comparison callbacks
@@ -12,7 +11,14 @@
 //! list, so the fuzzer would neither link nor start. The fuzz roots import a
 //! copy of the configured library whose `wuffs_c` is built without fuzz
 //! instrumentation; the shared modules stay untouched, and the Zig of
-//! `imaging` is still instrumented.
+//! `imaging` is still instrumented under `--fuzz`.
+//!
+//! `-Dcoverage` sets `fuzz` on every shared library module and, through
+//! `Libraries.addTests`, links the zcov runtime object into it. The copy of
+//! `imaging` drops only the inherited `fuzz`; it still shares the runtime
+//! link object. A flag check with a placeholder runtime path shows no
+//! `-ffuzz` on the fuzz roots' compile command, but these steps have not run
+//! under `-Dcoverage` with a real runtime: run them without it.
 const std = @import("std");
 const Modules = @import("Modules.zig");
 
@@ -50,7 +56,12 @@ pub fn add(b: *std.Build, modules: Modules) void {
     step.dependOn(modules.libraries.addTestRun(b, "imaging"));
 
     for (targets) |target| {
-        const run = &b.addRunArtifact(addFuzzTest(b, modules, target)).step;
+        const tests = addFuzzTest(
+            b,
+            modules,
+            target,
+        );
+        const run = &b.addRunArtifact(tests).step;
         step.dependOn(run);
         b.step(target.step, target.description).dependOn(run);
     }
@@ -67,7 +78,7 @@ fn addFuzzTest(b: *std.Build, modules: Modules, target: FuzzTarget) *std.Build.S
         .optimize = modules.optimize,
         .error_tracing = false,
     });
-    root.addImport("imaging", uninstrumentedWuffs(b, modules.libraries.get("imaging")));
+    root.addImport("imaging", fuzzImaging(b, modules.libraries.get("imaging")));
 
     return b.addTest(.{
         .name = target.name,
@@ -77,8 +88,10 @@ fn addFuzzTest(b: *std.Build, modules: Modules, target: FuzzTarget) *std.Build.S
 }
 
 /// `imaging` over a copy of its `wuffs` whose `wuffs_c` builds without fuzz
-/// instrumentation; every other setting is the configured one.
-fn uninstrumentedWuffs(b: *std.Build, imaging: *std.Build.Module) *std.Build.Module {
+/// instrumentation. The `imaging` copy inherits `fuzz` from the root instead
+/// of the setting `-Dcoverage` gives the shared module; every other setting
+/// is the configured one.
+fn fuzzImaging(b: *std.Build, imaging: *std.Build.Module) *std.Build.Module {
     const wuffs = imaging.import_table.get("wuffs").?;
     const wuffs_c = copyModule(b, wuffs.import_table.get("wuffs_c").?);
     wuffs_c.fuzz = false;
@@ -87,13 +100,23 @@ fn uninstrumentedWuffs(b: *std.Build, imaging: *std.Build.Module) *std.Build.Mod
     wuffs_copy.addImport("wuffs_c", wuffs_c);
 
     const imaging_copy = copyModule(b, imaging);
+    imaging_copy.fuzz = null;
     imaging_copy.addImport("wuffs", wuffs_copy);
     return imaging_copy;
 }
 
 /// A module with the same sources, settings and imports as `module`, whose
-/// imports and settings change without touching the original. Its graph is
-/// computed again from its own import table.
+/// import table and settings change without touching the original. The
+/// copy owns its import table and computes its graph again from it.
+///
+/// Every other list and map of `std.Build.Module` (`c_macros`,
+/// `include_dirs`, `lib_paths`, `rpaths`, `frameworks`, `link_objects`) is
+/// shared with the original. That is safe only because both are already
+/// configured when the registry runs from `tests.add`, and nothing appends
+/// to either afterwards; a later `addCSourceFile`, `addIncludePath` or
+/// `linkFramework` on either could reallocate storage the other still
+/// points to. The graph reset writes the value `Module` declares as the
+/// field's default.
 fn copyModule(b: *std.Build, module: *std.Build.Module) *std.Build.Module {
     const copy = b.allocator.create(std.Build.Module) catch @panic("OOM");
     copy.* = module.*;
