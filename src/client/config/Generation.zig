@@ -221,7 +221,7 @@ pub fn invokeBar(self: *Generation, invocation: BarInvocation, content: anytype,
     const state = self.vm.state;
     lua_api.c.lua_settop(state, 0);
     defer lua_api.c.lua_settop(state, 0);
-    self.vm.resetBudget(lua.default_callback_instruction_limit, lua.default_callback_deadline_ns);
+    self.vm.resetBudget(lua.default_render_instruction_limit, lua.default_callback_deadline_ns);
     _ = lua_api.c.lua_rawgeti(state, lua_api.c.LUA_REGISTRYINDEX, self.bar_callbacks[reference.id].registry_ref);
     generation_support.pushReadonlyBarContext(state, invocation.context);
     if (lua_api.c.lua_pcallk(state, 1, 1, 0, 0, null) != lua_api.c.LUA_OK) {
@@ -249,7 +249,7 @@ pub fn invokePick(self: *Generation, invocation: BarInvocation, items: *data.Pic
     const state = self.vm.state;
     lua_api.c.lua_settop(state, 0);
     defer lua_api.c.lua_settop(state, 0);
-    self.vm.resetBudget(lua.default_callback_instruction_limit, lua.default_callback_deadline_ns);
+    self.vm.resetBudget(lua.default_render_instruction_limit, lua.default_callback_deadline_ns);
     _ = lua_api.c.lua_rawgeti(state, lua_api.c.LUA_REGISTRYINDEX, self.bar_callbacks[reference.id].registry_ref);
     if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TFUNCTION) {
         generation_support.pushReadonlyBarContext(state, invocation.context);
@@ -780,7 +780,7 @@ fn parsePanel(self: *Generation, input: PanelInput, diagnostic: *data.Diagnostic
         return error.InvalidConfig;
     };
     const title = try lua_value.optionalStringField(state, .{ .index = absolute, .name = "title", .default = input.name }, diagnostic);
-    definition.heading.setTitle(title) catch {
+    definition.heading.setTitle(self.fitted(title, data.PanelHeading.title_limit)) catch {
         diagnostic.set("panel title must be printable text of at most {d} bytes", .{data.PanelHeading.max_title_bytes});
         return error.InvalidConfig;
     };
@@ -909,7 +909,7 @@ fn parsePick(self: *Generation, input: PanelInput, definition: *data.PickDefinit
         },
         diagnostic,
     );
-    definition.heading.setTitle(title) catch {
+    definition.heading.setTitle(self.fitted(title, data.PanelHeading.title_limit)) catch {
         diagnostic.set("pick title must be printable text of at most {d} bytes", .{data.PanelHeading.max_title_bytes});
         return error.InvalidConfig;
     };
@@ -1053,6 +1053,20 @@ fn firstNames(state: *lua_api.c.lua_State, absolute: c_int, names: [][]const u8,
     }
 
     return listed;
+}
+
+/// The start of `text` that fits `limit`, cut at a character; a cut leaves
+/// the limit for the client to report.
+fn fitted(self: *Generation, text: []const u8, limit: core.Limit) []const u8 {
+    if (text.len <= limit.value) {
+        return text;
+    }
+
+    self.unreported.add(.{
+        .limit = limit,
+        .requested = text.len,
+    });
+    return data.bar_text.prefix(text, @intCast(limit.value));
 }
 
 /// The index an action gets when it names a panel or pick that may have
@@ -1907,8 +1921,8 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
             .level = level,
             .duration_ms = @intCast(duration),
             .target = target,
-            .title = title,
-            .message = body,
+            .title = self.fitted(title, data.Notification.title_limit),
+            .message = self.fitted(body, data.Notification.message_limit),
         }) catch {
             diagnostic.set("notification title or body is invalid or too long", .{});
             return error.InvalidConfig;

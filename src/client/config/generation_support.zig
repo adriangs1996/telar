@@ -10,6 +10,8 @@ const BarCallbackContext = @import("BarCallbackContext.zig");
 const Callback = @import("Callback.zig");
 const lua_value = @import("lua_value.zig");
 const Generation = @import("Generation.zig");
+const lua = @import("telar-lua");
+const pick_values = @import("pick_values.zig");
 const CommandTabs = @import("CommandTabs.zig");
 const default_bindings = @import("default_bindings.zig");
 
@@ -833,7 +835,7 @@ test "client bars reject invalid positions timing and tab ownership" {
         },
         .{
             .source = "local t = require('telar'); return { api_version = 2, client = { bars = { bottom = { left = t.bar.command({ command = {}, timeout_ms = 99 }), right = t.bar.tabs() } } } }",
-            .message = "timeout_ms must be in 100..10000",
+            .message = "timeout_ms must be in 100..60000",
         },
     };
 
@@ -1607,4 +1609,62 @@ test "command tabs hold a bar command's argv, share equal commands and leave out
 
         try std.testing.expect(found);
     }
+}
+
+test "a notification action with a long title and body keeps their start and reports both limits" {
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{
+        .source = "local telar = require('telar') return { api_version = 2, client = { keybindings = { telar.bind({ 'n' }, telar.action.notification({ title = string.rep('é', 40), body = string.rep('b', 300) })) } } }",
+        .source_name = "@config.lua",
+        .number = 1,
+    });
+    defer generation.deinit();
+
+    const notification = generation.snapshot.bindings[0].action.notification;
+    try std.testing.expectEqualStrings("é" ** (core.max_notification_title_bytes / 2), notification.title());
+    try std.testing.expectEqual(@as(usize, core.max_notification_message_bytes), notification.message().len);
+    try std.testing.expectEqual(@as(u8, 2), generation.unreported.count);
+    try std.testing.expectEqual(@as(?u64, 80), generation.unreported.slice()[0].requested);
+}
+
+test "a pick's items function lists a full command output within the render budget" {
+    var vm = try lua.Vm.init(std.testing.io, std.testing.allocator, .{});
+    defer vm.deinit();
+    try lua.open(vm.state);
+
+    // As many lines as a list holds, each a provider and a model name, which
+    // fills most of what a list command may print. The wall-time net is
+    // left wide: a debug build with a tracing allocator is far slower than
+    // a release build, and the instruction count is what the budget bounds.
+    const line = "openrouter-provider anthropic/claude-opus-5-5-long-name\n";
+    const output = try std.testing.allocator.alloc(u8, line.len * data.PickItems.max_items);
+    defer std.testing.allocator.free(output);
+    for (0..data.PickItems.max_items) |index| {
+        @memcpy(output[index * line.len ..][0..line.len], line);
+    }
+
+    const state = vm.state;
+    _ = lua_api.c.lua_pushlstring(state, output.ptr, output.len);
+    lua_api.c.lua_setglobal(state, "output");
+    vm.resetBudget(lua.default_render_instruction_limit, 10 * std.time.ns_per_s);
+    const started = std.Io.Timestamp.now(std.testing.io, .awake);
+    try vm.evaluate(
+        \\local list = {}
+        \\for line in output:gmatch("[^\n]+") do
+        \\  local provider, name = line:match("^(%S+)%s+(%S+)")
+        \\  list[#list + 1] = { label = name or line, value = name, detail = provider }
+        \\end
+        \\return list
+    , "@items.lua");
+    const elapsed = started.durationTo(std.Io.Timestamp.now(std.testing.io, .awake));
+
+    const items = try std.testing.allocator.create(data.PickItems);
+    defer std.testing.allocator.destroy(items);
+    items.clear();
+    var diagnostic: data.Diagnostic = .{};
+    try pick_values.parse(state, -1, items, &diagnostic);
+
+    std.debug.print("items render: {d} instructions, {d} us\n", .{ vm.instruction_count, elapsed.toMicroseconds() });
+    try std.testing.expectEqual(@as(u16, data.PickItems.max_items), items.count);
+    try std.testing.expect(vm.instruction_count < lua.default_render_instruction_limit / 4);
 }

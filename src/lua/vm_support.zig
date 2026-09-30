@@ -22,6 +22,11 @@ pub const default_memory_limit: usize = 16 * 1024 * 1024;
 pub const default_load_instruction_limit: u64 = 1_000_000;
 pub const default_load_deadline_ns: u64 = 2 * std.time.ns_per_s;
 pub const default_callback_instruction_limit: u64 = 100_000;
+// Bar, panel and pick renders run on the client's loop between events, not
+// inside a key press, and a pick's `items` may turn a whole list command's
+// output into thousands of options; they get ten times a key callback's
+// budget, about 20 ms of work, under the same wall-time net.
+pub const default_render_instruction_limit: u64 = 1_000_000;
 // Callbacks run on the interactive path, so their net is the longest stall a
 // runaway callback may cause: 100 ms, against about 2 ms for its budget.
 pub const default_callback_deadline_ns: u64 = 100 * std.time.ns_per_ms;

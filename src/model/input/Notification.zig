@@ -3,6 +3,11 @@ const Notification = @This();
 
 pub const Input = @import("Input.zig");
 
+/// A configured notification whose title or body is longer is cut at a
+/// character to these, the wire's bounds.
+pub const title_limit = core.Limit.declare("notification.max_title_bytes", "title bytes", core.max_notification_title_bytes);
+pub const message_limit = core.Limit.declare("notification.max_message_bytes", "body bytes", core.max_notification_message_bytes);
+
 level: core.NotificationLevel = .info,
 duration_ms: u32 = core.default_notification_duration_ms,
 target: core.NotificationTarget = .none,

@@ -109,11 +109,16 @@ error-name-only fallback.
 The synchronous callback path keeps its existing hard limits:
 
 - 16 MiB for the client configuration VM;
-- 100,000 callback instructions;
-- 10 ms callback deadline;
+- 100,000 callback instructions, about 2 ms of work;
+- a 100 ms callback deadline, the safety net checked between instructions;
 - 16 effects per callback;
 - 16 semantic keys per expression;
 - 4 KiB of expression paste.
+
+Bar, panel and pick renders are not key presses: they run on the loop
+between events, under 1,000,000 instructions and the same 100 ms deadline.
+A pick `items` function that turns a full list of 4096 options into tables
+takes about 61,000 instructions.
 
 Only an explicit Lua binding enters this path. Native bindings do not enter
 Lua. The VM has no ambient filesystem, process, network, debug or native-module
