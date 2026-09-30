@@ -6,6 +6,8 @@ const SharedFrame = @This();
 
 start: usize,
 end: usize,
+/// DECSC and DECRC surround the envelope, inside `start..end`.
+wrapped: bool,
 /// The KGP command inside the envelope, APC introducer to terminator.
 apc_start: usize,
 apc_end: usize,

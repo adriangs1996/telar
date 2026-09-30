@@ -254,6 +254,14 @@ const SharedMemoryAvailability = struct {
                 shared_transfer.validateChildFile(resource.encoded_name, resource.byte_len),
         };
     }
+
+    /// A child file is the child's to delete; a shared object is the
+    /// terminal's to unlink.
+    pub fn release(_: SharedMemoryAvailability, resource: FrameResource) void {
+        if (resource.medium == .shared) {
+            shared_transfer.releaseChildObject(resource.encoded_name);
+        }
+    }
 };
 
 const Processing = struct {
