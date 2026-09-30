@@ -3,12 +3,18 @@ const std = @import("std");
 const core = @import("telar-core");
 const Target = @import("Target.zig");
 const Id = @import("Id.zig");
+const BandHitMap = @import("../BandHitMap.zig");
 const Registry = @This();
 
 /// Room for every chrome band target (`BandHitMap.capacity`), the open
 /// overlay's rows and editors, and a change review's visible rows.
 pub const capacity = 1024;
 pub const limit = core.Limit.declare("gui.widgets.registry_capacity", "widget targets", capacity);
+
+comptime {
+    // Every chrome band target fits with room for an open overlay's rows.
+    std.debug.assert(capacity >= 2 * BandHitMap.capacity);
+}
 /// Open-addressed index from identity to row, twice the rows so probes
 /// stay short; a duplicate identity is found in one probe run.
 const index_len = 2 * capacity;
