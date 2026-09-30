@@ -8,6 +8,8 @@ const ProxyInterceptHosts = @import("ProxyInterceptHosts.zig");
 const std = @import("std");
 
 pub const max_bindings = 256;
+/// Configured bindings first, then the defaults they leave room for.
+pub const bindings_limit = core.Limit.declare("config.max_bindings", "key bindings", max_bindings);
 pub const max_binding_keys = 5;
 
 pub const max_plugins = 32;

@@ -4,6 +4,8 @@ const Resolved = @This();
 
 bindings: [data.config_values.max_bindings]default_bindings.Binding = undefined,
 len: u16 = 0,
+/// Bindings, configured or default, the keymap had no room for.
+dropped: u16 = 0,
 
 pub fn slice(self: *const Resolved) []const default_bindings.Binding {
     return self.bindings[0..self.len];

@@ -45,6 +45,7 @@ pub const LimitError = error{
     ClipboardCaptureIdExhausted,
     ClipboardImageTooLarge,
     ClipboardTooLarge,
+    ConfigLimitReached,
     ConfigPathTooLong,
     ConfigStreamTooLarge,
     DestinationTooLong,

@@ -5,6 +5,10 @@ const Layout = @import("BarLayout.zig");
 const std = @import("std");
 const Configuration = @This();
 
+/// The panel or pick index of an action that names an entry left out at
+/// its limit; no entry has it, so the action does nothing.
+pub const dropped_index: u8 = std.math.maxInt(u8);
+
 bottom: [3]model.Source = .{ .metrics, .empty, .tabs },
 top_right: model.Source = .empty,
 /// Left-to-right slots of the sidebar footer row; tabs are never accepted here.

@@ -86,36 +86,60 @@ pub fn load(prefix: keyinput.Key) ![count]Binding {
 /// Builds the effective keymap. Explicit bindings keep their order and
 /// replace every default they conflict with — same sequence, or one a prefix
 /// of the other. Dropping prefix conflicts too keeps the merged keymap free
-/// of the ambiguity the router rejects; every other default is appended.
+/// of the ambiguity the router rejects; every other default is appended
+/// while the keymap has room, and `Resolved.dropped` counts the rest, so a
+/// full keymap never stops the window from starting.
 pub fn resolve(prefix: keyinput.Key, configured: []const Binding) !Resolved {
-    if (configured.len > data.config_values.max_bindings) {
-        return error.TooManyBindings;
-    }
-
     var resolved: Resolved = .{};
-    @memcpy(resolved.bindings[0..configured.len], configured);
-    resolved.len = @intCast(configured.len);
+    const kept = configured[0..@min(configured.len, data.config_values.max_bindings)];
+    @memcpy(resolved.bindings[0..kept.len], kept);
+    resolved.len = @intCast(kept.len);
+    resolved.dropped = @intCast(configured.len - kept.len);
 
     const defaults = try load(prefix);
     for (&defaults) |*default| {
-        var overridden = false;
-        for (configured) |*binding| {
-            if (binding.conflictsWith(default)) {
-                overridden = true;
-                break;
-            }
-        }
-        if (overridden) {
+        if (overridden(default, configured)) {
             continue;
         }
+
         if (resolved.len == data.config_values.max_bindings) {
-            return error.TooManyBindings;
+            resolved.dropped += 1;
+            continue;
         }
+
         resolved.bindings[resolved.len] = default.*;
         resolved.len += 1;
     }
 
     return resolved;
+}
+
+/// How many bindings, configured or default, the keymap for `configured`
+/// has no room for; `resolve` leaves exactly these out.
+///
+/// ```zig
+/// if (try default_bindings.surplus(prefix, bindings) != 0) report(...);
+/// ```
+pub fn surplus(prefix: keyinput.Key, configured: []const Binding) !usize {
+    const defaults = try load(prefix);
+    var wanted = configured.len;
+    for (&defaults) |*default| {
+        if (!overridden(default, configured)) {
+            wanted += 1;
+        }
+    }
+
+    return wanted -| data.config_values.max_bindings;
+}
+
+fn overridden(default: *const Binding, configured: []const Binding) bool {
+    for (configured) |*binding| {
+        if (binding.conflictsWith(default)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /// Proves the merged keymap compiles with the same parameters the client's
@@ -208,11 +232,16 @@ test "validating rejects configured bindings that conflict with each other" {
     try testing.expectError(error.AmbiguousBindingPrefix, validate(prefix, &.{ short, long }));
 }
 
-test "resolving bindings enforces the router capacity" {
+test "a full keymap keeps the configured bindings and leaves out the defaults it has no room for" {
     const testing = std.testing;
     const prefix = try keyinput.chord.parseKey("ctrl+s");
     const configured = try Binding.parse(&.{"ctrl+d"}, .detach);
-    const bindings: [data.config_values.max_bindings]Binding = @splat(configured);
+    const bindings: [data.config_values.max_bindings - 1]Binding = @splat(configured);
 
-    try testing.expectError(error.TooManyBindings, resolve(prefix, &bindings));
+    const resolved = try resolve(prefix, &bindings);
+    try testing.expectEqual(@as(u16, data.config_values.max_bindings), resolved.len);
+    try testing.expectEqualDeep(configured.action, resolved.bindings[bindings.len - 1].action);
+    try testing.expectEqual(@as(u16, count - 1), resolved.dropped);
+    try testing.expectEqual(@as(usize, count - 1), try surplus(prefix, &bindings));
+    try testing.expectEqual(@as(usize, 0), try surplus(prefix, bindings[0 .. data.config_values.max_bindings - count]));
 }

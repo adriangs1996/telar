@@ -1494,3 +1494,68 @@ const FieldTarget = struct {
     index: c_int,
     name: [*:0]const u8,
 };
+
+test "a configuration past its panel, pick and binding limits keeps the first entries and reports each limit" {
+    const source =
+        \\local telar = require("telar")
+        \\local panels, picks = {}, {}
+        \\for index = 1, 18 do
+        \\  panels[string.format("p%02d", index)] = telar.panel({ title = "P", render = function() return {} end })
+        \\end
+        \\for index = 1, 17 do
+        \\  picks[string.format("k%02d", index)] = telar.pick({ items = { "a" }, on_select = { "/bin/sh", "-c", ":", "{}" } })
+        \\end
+        \\local keys = {
+        \\  telar.bind({ "u" }, telar.action.open_panel("p18")),
+        \\  telar.bind({ "i" }, telar.action.pick("k17")),
+        \\}
+        \\for _ = 1, 258 do
+        \\  keys[#keys + 1] = telar.bind_global({ "ctrl+d" }, telar.action.detach())
+        \\end
+        \\return { api_version = 2, client = { panels = panels, picks = picks, keybindings = keys } }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    const generation = Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 }) catch |err| {
+        std.debug.print("{s}\n", .{diagnostic.message()});
+        return err;
+    };
+    defer generation.deinit();
+
+    const bars = &generation.snapshot.bars;
+    try std.testing.expectEqual(@as(u8, data.bar_values.max_panels), bars.panel_count);
+    try std.testing.expectEqualStrings("p01", bars.panels[0].heading.name());
+    try std.testing.expectEqualStrings("p16", bars.panels[15].heading.name());
+    try std.testing.expectEqual(@as(u8, data.bar_values.max_picks), bars.pick_count);
+    try std.testing.expectEqualStrings("k16", bars.picks[15].heading.name());
+
+    const bindings = generation.snapshot.bindingSlice();
+    try std.testing.expectEqual(@as(usize, data.config_values.max_bindings), bindings.len);
+    try std.testing.expectEqual(data.BarConfiguration.dropped_index, bindings[0].action.open_panel);
+    try std.testing.expectEqual(data.BarConfiguration.dropped_index, bindings[1].action.pick);
+
+    const expected = [_]struct { []const u8, u64 }{
+        .{ "panels.max_panels", 18 },
+        .{ "picks.max_picks", 17 },
+        .{ "config.max_bindings", 260 },
+    };
+    for (expected) |limit| {
+        var found = false;
+        for (generation.unreported.slice()) |reach| {
+            if (std.mem.eql(u8, reach.limit.name, limit[0])) {
+                try std.testing.expect(reach.requested.? >= limit[1]);
+                found = true;
+            }
+        }
+
+        try std.testing.expect(found);
+    }
+}
+
+test "an action naming a panel no configuration has still fails when nothing was left out" {
+    var diagnostic: data.Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{
+        .source = "local telar = require('telar') return { api_version = 2, client = { keybindings = { telar.bind({ 'u' }, telar.action.open_panel('missing')) } } }",
+        .source_name = "@config.lua",
+        .number = 1,
+    }));
+}

@@ -29,6 +29,7 @@ const ThemeParser = @import("ThemeParser.zig");
 const notifications_config = @import("notifications.zig");
 const GuiConfigParser = @import("GuiConfigParser.zig");
 const UnreportedReaches = @import("UnreportedReaches.zig");
+const default_bindings = @import("default_bindings.zig");
 const Generation = @This();
 
 gpa: std.mem.Allocator,
@@ -47,6 +48,9 @@ profile_len: u8 = 0,
 staged_content: *data.StagedContent,
 /// Limits this generation reached that its client has not reported yet.
 unreported: UnreportedReaches = .{},
+/// Whether `client.panels` or `client.picks` held more entries than fit,
+/// so an action may name one that was left out.
+dropped: std.EnumSet(DroppedEntries) = .initEmpty(),
 
 /// Compiles configuration source within the supplied loading environment.
 /// For example: `Generation.loadSource(context, .{ .source = bytes, .source_name = "@config.lua", .number = 1 })`.
@@ -92,6 +96,7 @@ pub fn loadSource(context: LoadContext, spec: SourceInput) !*Generation {
         return err;
     };
     generation.parseSnapshot(context.diagnostic) catch |err| return err;
+    generation.checkKeymapRoom();
     generation.syncCallbackTriggers();
     lua_api.c.lua_settop(generation.vm.state, 0);
     return generation;
@@ -146,6 +151,21 @@ pub fn configDir(self: *const Generation) []const u8 {
 
 pub fn pluginSlice(self: *const Generation) []const data.PluginSpec {
     return self.snapshot.plugins[0..self.snapshot.plugin_count];
+}
+
+/// Leaves the keymap limit for the client to report when the configured
+/// bindings and the defaults they keep do not all fit; the router then
+/// keeps the configured ones and the defaults that fit.
+fn checkKeymapRoom(self: *Generation) void {
+    const extra = default_bindings.surplus(self.snapshot.prefix, self.snapshot.bindingSlice()) catch return;
+    if (extra == 0) {
+        return;
+    }
+
+    self.unreported.add(.{
+        .limit = data.config_values.bindings_limit,
+        .requested = data.config_values.max_bindings + extra,
+    });
 }
 
 /// Adds `telar.json.decode` for render callbacks that read command output.
@@ -719,26 +739,16 @@ fn parsePanels(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !v
     }
 
     var names: [data.bar_values.max_panels][]const u8 = undefined;
-    var count: usize = 0;
-    lua_api.c.lua_pushnil(state);
-    while (lua_api.c.lua_next(state, absolute) != 0) {
-        lua_value.pop(state, 1);
-        const name = lua_value.string(state, -1) orelse {
-            lua_value.pop(state, 1);
-            diagnostic.set("config.client.panels keys must be panel names", .{});
-            return error.InvalidConfig;
-        };
-        if (count == names.len) {
-            lua_value.pop(state, 1);
-            diagnostic.set("config.client.panels accepts at most {d} panels", .{names.len});
-            return error.InvalidConfig;
-        }
-
-        names[count] = name;
-        count += 1;
+    const listed = try firstNames(state, absolute, &names, "config.client.panels keys must be panel names", diagnostic);
+    if (listed.total > listed.kept) {
+        self.dropped.insert(.panels);
+        self.unreported.add(.{
+            .limit = data.bar_values.panels_limit,
+            .requested = listed.total,
+        });
     }
 
-    std.mem.sort([]const u8, names[0..count], {}, lessName);
+    const count = listed.kept;
     for (names[0..count], 0..) |name, panel_index| {
         // Lua strings are NUL-terminated, and the key keeps this one alive.
         _ = lua_api.c.lua_getfield(state, absolute, @ptrCast(name.ptr));
@@ -838,27 +848,16 @@ fn parsePicks(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !vo
     }
 
     var names: [data.bar_values.max_picks][]const u8 = undefined;
-    var count: usize = 0;
-    lua_api.c.lua_pushnil(state);
-    while (lua_api.c.lua_next(state, absolute) != 0) {
-        lua_value.pop(state, 1);
-        const name = lua_value.string(state, -1) orelse {
-            lua_value.pop(state, 1);
-            diagnostic.set("config.client.picks keys must be pick names", .{});
-            return error.InvalidConfig;
-        };
-
-        if (count == names.len) {
-            lua_value.pop(state, 1);
-            diagnostic.set("config.client.picks accepts at most {d} picks", .{names.len});
-            return error.InvalidConfig;
-        }
-
-        names[count] = name;
-        count += 1;
+    const listed = try firstNames(state, absolute, &names, "config.client.picks keys must be pick names", diagnostic);
+    if (listed.total > listed.kept) {
+        self.dropped.insert(.picks);
+        self.unreported.add(.{
+            .limit = data.bar_values.picks_limit,
+            .requested = listed.total,
+        });
     }
 
-    std.mem.sort([]const u8, names[0..count], {}, lessName);
+    const count = listed.kept;
     for (names[0..count], 0..) |name, pick_index| {
         // Lua strings are NUL-terminated, and the key keeps this one alive.
         _ = lua_api.c.lua_getfield(state, absolute, @ptrCast(name.ptr));
@@ -1019,6 +1018,60 @@ fn parsePickItems(self: *Generation, input: PanelInput, listed: bool, diagnostic
         },
     }
 }
+
+/// Keeps the `names.len` first keys, in name order, of the table at
+/// `absolute`, so a table past its limit keeps the same entries whatever
+/// order Lua walks it in. The key strings stay alive in the table.
+fn firstNames(state: *lua_api.c.lua_State, absolute: c_int, names: [][]const u8, invalid_key: []const u8, diagnostic: *data.Diagnostic) !ListedNames {
+    var listed: ListedNames = .{};
+    lua_api.c.lua_pushnil(state);
+    while (lua_api.c.lua_next(state, absolute) != 0) {
+        lua_value.pop(state, 1);
+        const name = lua_value.string(state, -1) orelse {
+            lua_value.pop(state, 1);
+            diagnostic.set("{s}", .{invalid_key});
+            return error.InvalidConfig;
+        };
+
+        listed.total += 1;
+        if (listed.kept == names.len and !lessName({}, name, names[listed.kept - 1])) {
+            continue;
+        }
+
+        var slot = @min(listed.kept, names.len - 1);
+        while (slot > 0 and lessName({}, name, names[slot - 1])) : (slot -= 1) {
+            names[slot] = names[slot - 1];
+        }
+
+        names[slot] = name;
+        listed.kept = @min(listed.kept + 1, names.len);
+    }
+
+    return listed;
+}
+
+/// The index an action gets when it names a panel or pick that may have
+/// been left out at its limit: no configuration entry has it, so running
+/// the action does nothing. Null when nothing was left out, so the name is
+/// simply unknown.
+fn droppedIndex(self: *const Generation, entries: DroppedEntries) ?u8 {
+    if (!self.dropped.contains(entries)) {
+        return null;
+    }
+
+    return data.BarConfiguration.dropped_index;
+}
+
+const DroppedEntries = enum {
+    panels,
+    picks,
+};
+
+/// How many keys a table has and how many `firstNames` kept.
+const ListedNames = struct {
+    kept: usize = 0,
+    total: usize = 0,
+};
 
 fn lessName(_: void, left: []const u8, right: []const u8) bool {
     return std.mem.lessThan(u8, left, right);
@@ -1386,11 +1439,15 @@ fn parseBindings(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) 
         diagnostic.set("config.client.keybindings must be an array", .{});
         return error.InvalidConfig;
     }
-    const count = lua_api.c.lua_rawlen(state, absolute);
-    if (count > data.config_values.max_bindings) {
-        diagnostic.set("config.client.keybindings exceeds {d} entries", .{data.config_values.max_bindings});
-        return error.InvalidConfig;
+    const listed = lua_api.c.lua_rawlen(state, absolute);
+    const count = @min(listed, data.config_values.max_bindings);
+    if (listed > count) {
+        self.unreported.add(.{
+            .limit = data.config_values.bindings_limit,
+            .requested = listed,
+        });
     }
+
     self.snapshot.binding_count = 0;
     for (0..count) |binding_index| {
         _ = lua_api.c.lua_geti(state, absolute, @intCast(binding_index + 1));
@@ -1820,7 +1877,7 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
             .path = "action",
         }, diagnostic);
         const name = try lua_value.requiredStringField(state, .{ .index = absolute, .name = "panel" }, diagnostic);
-        const index = self.snapshot.bars.panelIndex(name) orelse {
+        const index = self.snapshot.bars.panelIndex(name) orelse self.droppedIndex(.panels) orelse {
             diagnostic.set("open_panel names an unknown panel '{s}'", .{name});
             return error.InvalidConfig;
         };
@@ -1840,7 +1897,7 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
             },
             diagnostic,
         );
-        const index = self.snapshot.bars.pickIndex(name) orelse {
+        const index = self.snapshot.bars.pickIndex(name) orelse self.droppedIndex(.picks) orelse {
             diagnostic.set("pick names an unknown pick '{s}'", .{name});
             return error.InvalidConfig;
         };
