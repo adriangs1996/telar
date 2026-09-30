@@ -114,6 +114,20 @@ The top-bar shield is peach for exact-only interception and red when any
 suffix or global wildcard expands the active scope. A yellow shield means the
 system-trust authority remains installed while interception is off.
 
+## Connections
+
+The proxy admits 256 connections at once across every pane of the runtime
+(`proxy.max_connections`), passthrough and intercepted alike. A connection
+must send its whole CONNECT head, at most 16 KiB (`proxy.max_connect_head_bytes`,
+a longer one is answered `431`), within 10 seconds, and must reach its origin
+and finish TLS within 30 seconds more; the proxy closes one that does not. When
+every slot is taken, the proxy closes the connection idle the longest to make
+room: an HTTP/1.1 connection waiting a minute for its next request, or any
+other connection silent for ten minutes. When none is that idle, the new
+connection is answered `503 Service Unavailable`. At start the proxy raises the
+process's soft descriptor limit, within its hard limit, so every slot has its
+two sockets; accepting backs off when descriptors still run out.
+
 For a host outside the allowlist, Telar responds with `200` and forwards the
 TCP stream byte for byte. TLS remains end to end between the child and origin,
 Telar captures nothing, and the child validates the origin with its normal
@@ -130,6 +144,12 @@ copy of each bounded header block through an independent nghttp2 HPACK
 inflater per direction; invalid framing, an HPACK error, or an oversized header
 block disables capture for that direction while traffic continues unchanged.
 
+An HTTP/1.1 head may be 64 KiB (`proxy.http1.max_head_bytes`), as large
+cookies and bearer tokens need. A longer request head is answered `431` and a
+longer response head `502`; neither is forwarded, and the connection ends. A
+chunk-size line may be 1 KiB and a trailer line 8 KiB; a longer one ends the
+body after its forwarded prefix.
+
 ## Exchange capture
 
 `runtime.proxy.capture.enabled` copies each intercepted HTTP exchange for a
@@ -140,25 +160,35 @@ bytes forwarded to either endpoint.
 
 Request and response directions publish independent heap-owned halves. The
 runtime pairs them by connection and stream ID, or releases a partial exchange
-after `join_timeout_ms` when one direction never arrives. A half carries the
-protocol it travelled over, its host, method, target, status and timestamps;
-it carries no secret and no pane.
+after `join_timeout_ms` when one direction never arrives. The request half
+waits while its response streams, so the default, 15 minutes, covers a long
+streamed model response. The join table holds 256 exchanges waiting for their
+second half; a half that finds it full goes to the taps alone, as a partial
+exchange. A half carries the protocol it travelled over, its host, method,
+target, status and timestamps; it carries no secret and no pane.
 
-Each head and body stops growing at `max_part_bytes`, each exchange is bounded
-by `max_exchange_bytes`, and all active captures share `max_total_bytes`.
-Truncation is recorded on the affected part. Queue publication is nonblocking;
-quota exhaustion, queue saturation, and shutdown free the abandoned buffers
-while traffic continues. Captured buffers are erased before release.
+Each head and body stops growing at `max_part_bytes` (16 MiB by default).
+Request and response each get half of `max_exchange_bytes` (32 MiB), head and
+body together, so a request cannot borrow what its response leaves unused. All
+captures share `max_total_bytes` (128 MiB). A half reserves quota only as it
+captures bytes: an idle keep-alive connection waiting for its next request
+holds none. The configuration refuses a `max_part_bytes` or
+`max_exchange_bytes` above 64 MiB, a `max_total_bytes` above 1 GiB and a
+`join_timeout_ms` above one hour. Truncation is recorded on the affected part
+and reported under the bound that cut it. Queue publication is nonblocking;
+queue saturation and shutdown free the abandoned buffers while traffic
+continues. Captured buffers are erased before release.
 
-The runtime decodes `gzip`, `deflate`, `zstd`, and Brotli bodies after queue
-delivery, never on a relay task. At most two chained content codings are
-applied in reverse order. Decoded output remains bounded by
-`max_part_bytes`; an unknown or malformed coding preserves the captured wire
-body and marks it as undecoded. Completed exchanges are offered to supervised
-runtime-side Lua workers for enabled packages with an exact `proxy.tap` grant.
-Each worker has its own bounded queue and cannot delay proxy traffic. With no
-authorized tap worker, the runtime records capture metrics and releases the
-exchange.
+When a tap worker is configured, the runtime decodes `gzip`, `deflate`,
+`zstd`, and Brotli bodies after queue delivery, never on a relay task. At most
+two chained content codings are applied in reverse order. Decoded output
+remains bounded by `max_part_bytes` and the half's share; an unknown or
+malformed coding preserves the captured wire body and marks it as undecoded.
+Completed exchanges are offered to supervised runtime-side Lua workers for
+enabled packages with an exact `proxy.tap` grant. Each worker has its own
+bounded queue and cannot delay proxy traffic. With no authorized tap worker,
+the runtime records capture metrics and releases the exchange without
+decoding it.
 
 The `proxy.tap` capability is full trust: it receives unredacted headers and
 bodies, including authorization and cookie values. Grant it only to plugin
@@ -178,9 +208,22 @@ and it never receives a Zig pointer. See [Proxy tap](flows/proxy-tap.md).
 
 Bounded counters distinguish rejected authentication, upstream connection
 failures, each TLS interception stage, HTTP/2 decode failures, passthrough
-connections, and capture starts, truncations, quota skips, queue drops and
+connections, and capture starts, truncations, skipped halves, queue drops and
 decode failures. No metric retains the destination hostname or payload.
 Runtime telemetry exposes them with a `proxy_` prefix.
+
+The proxy's threads only count the limits they reach. Once a second the
+runtime's maintenance tick reports every limit whose count grew with the
+[limit notice](flows/limit-reached.md): `proxy.max_connections`,
+`proxy.max_connect_head_bytes`, `proxy.connect_head_timeout_ms`,
+`proxy.establish_timeout_ms`, `proxy.http1.max_head_bytes`,
+`proxy.http1.max_chunk_line_bytes`, `proxy.http1.max_trailer_line_bytes`,
+`proxy.capture.h2_stream_slots`, `proxy.capture.queue_capacity`,
+`proxy.capture.max_part_bytes`, `proxy.capture.max_exchange_bytes` and
+`proxy.capture.max_total_bytes`, and for the taps
+`plugins.tap.queue_depth`, `plugins.tap.max_queued_bytes`,
+`plugins.tap.reply_timeout_ms` and `plugins.tap.restart_limit`. The event
+loop reports `proxy.capture.joiner_capacity` where it joins halves.
 
 ## System trust
 

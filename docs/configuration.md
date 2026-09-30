@@ -47,10 +47,10 @@ return telar.config({
       ca_dir = "state/proxy",
       capture = {
         enabled = false,
-        max_part_bytes = 4 * 1024 * 1024,
-        max_exchange_bytes = 8 * 1024 * 1024,
-        max_total_bytes = 64 * 1024 * 1024,
-        join_timeout_ms = 30000,
+        max_part_bytes = 16 * 1024 * 1024,
+        max_exchange_bytes = 32 * 1024 * 1024,
+        max_total_bytes = 128 * 1024 * 1024,
+        join_timeout_ms = 15 * 60 * 1000,
       },
       intercept_hosts = { "api.example.com" },
     },
@@ -1246,10 +1246,15 @@ server starts with less than one day remaining.
 `runtime.proxy.capture` accepts `enabled`, `max_part_bytes`,
 `max_exchange_bytes`, `max_total_bytes`, and `join_timeout_ms`. The byte limits
 must satisfy `max_part_bytes <= max_exchange_bytes <= max_total_bytes`; all
-limits and the timeout must be positive. Captured heads and de-framed bodies
-are bounded independently, and a full queue or exhausted quota drops capture
-data without delaying or changing proxied traffic. Response decompression is
-performed on the runtime observation path and is capped by `max_part_bytes`.
+limits and the timeout must be positive. `max_part_bytes` and
+`max_exchange_bytes` may be at most 64 MiB, `max_total_bytes` at most 1 GiB
+and `join_timeout_ms` at most one hour. Captured heads and de-framed bodies
+are bounded independently; request and response each get half of
+`max_exchange_bytes`. A full queue or exhausted quota drops capture data
+without delaying or changing proxied traffic, and the limit notice names the
+bound that cut it. Response decompression is performed on the runtime
+observation path, only while a tap plugin listens, and is capped by
+`max_part_bytes`.
 Until a trusted tap plugin is configured, completed captures are consumed only
 for metrics and are not persisted. Runtime tap workers are created only at
 server startup, so restart the runtime after changing a tap package or its

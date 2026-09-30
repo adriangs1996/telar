@@ -57,3 +57,23 @@ test "capture config rejects impossible bounds" {
     try std.testing.expectError(error.InvalidCaptureQuota, (Config{ .max_exchange_bytes = 9, .max_total_bytes = 8 }).validate());
     try std.testing.expectError(error.InvalidCaptureTimeout, (Config{ .join_timeout_ms = 0 }).validate());
 }
+
+test "capture config accepts its ceilings and rejects one byte or millisecond more" {
+    try (Config{
+        .max_part_bytes = Config.max_exchange_ceiling,
+        .max_exchange_bytes = Config.max_exchange_ceiling,
+        .max_total_bytes = Config.max_total_ceiling,
+        .join_timeout_ms = Config.max_join_timeout_ms,
+    }).validate();
+    try std.testing.expectError(error.InvalidCaptureQuota, (Config{
+        .max_exchange_bytes = Config.max_exchange_ceiling + 1,
+        .max_total_bytes = Config.max_total_ceiling,
+    }).validate());
+    try std.testing.expectError(error.InvalidCaptureQuota, (Config{ .max_total_bytes = Config.max_total_ceiling + 1 }).validate());
+    try std.testing.expectError(error.InvalidCaptureTimeout, (Config{ .join_timeout_ms = Config.max_join_timeout_ms + 1 }).validate());
+}
+
+test "the default half share holds a whole default part" {
+    const config: Config = .{};
+    try std.testing.expect(config.max_exchange_bytes / 2 >= config.max_part_bytes);
+}

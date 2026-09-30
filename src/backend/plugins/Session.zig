@@ -20,7 +20,7 @@ timeout_ms: u32,
 /// Starts one isolated `tap-worker` with empty environment and root cwd.
 ///
 /// ```zig
-/// const session = try Session.open(io, gpa, .{ .entry = entry, .timeout_ms = 200 });
+/// const session = try Session.open(io, gpa, .{ .entry = entry, .timeout_ms = service_support.reply_timeout_ms });
 /// ```
 pub fn open(io: std.Io, gpa: std.mem.Allocator, options: OpenOptions) !*Session {
     const session = try gpa.create(Session);

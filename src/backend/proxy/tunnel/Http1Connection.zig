@@ -1,6 +1,7 @@
 //! HTTP/1.1 for one intercepted CONNECT exchange: the generic relay drives
 //! the connection and calls these methods for each step, which feed
 //! exchange capture and finish each half with the outcome the step means.
+const core = @import("telar-core");
 const exchangecapture = @import("exchangecapture");
 const owned = @import("../capture/owned.zig");
 const httprelay = @import("httprelay");
@@ -25,6 +26,10 @@ const Config = exchangecapture.Config;
 const GenericConnection = httprelay.http1.GenericConnection;
 const GenericExchange = httprelay.http1.GenericExchange;
 const Connection = @This();
+
+pub const head_limit = core.Limit.declare("proxy.http1.max_head_bytes", "bytes", http.max_head_bytes);
+pub const chunk_line_limit = core.Limit.declare("proxy.http1.max_chunk_line_bytes", "bytes", http.max_chunk_line_bytes);
+pub const trailer_line_limit = core.Limit.declare("proxy.http1.max_trailer_line_bytes", "bytes", http.max_trailer_line_bytes);
 
 const RelayConnection = GenericConnection(Connection);
 const RelayExchange = GenericExchange(Connection);
@@ -97,20 +102,28 @@ const Http1Options = struct {
     captures: ?*Producer = null,
 };
 
-/// Relays the next request head unchanged.
+/// Relays the next request head unchanged. While it waits for one, the
+/// connection is idle and may be closed to admit another at the bound.
 ///
 /// ```zig
 /// const request = connection.readRequest() orelse return;
 /// ```
 pub fn readRequest(self: *Connection) ?RequestHead {
     self.beginCapture();
+    self.exchange.enter(.idle);
 
     const parsed = http.relayHead(self.session, .{
         .from = .child,
         .to = .origin,
         .is_response = false,
         .response_to_head = false,
-    }, HeadCapture{ .half = self.request_capture }) orelse return null;
+    }, HeadCapture{
+        .half = self.request_capture,
+        .exchange = self.exchange,
+        .side = .request,
+        .session = self.session,
+    }) orelse return null;
+    self.exchange.enter(.open);
 
     return .{
         .watched = parsed.watched,
@@ -137,7 +150,11 @@ pub fn relayRequestBody(self: *Connection, framing: types.BodyPlan) bool {
     const forwarded = http.relayBody(
         self.session,
         .{ .from = .child, .to = .origin, .framing = framing },
-        BodyCapture{ .part = .request_body, .half = self.request_capture },
+        BodyCapture{
+            .part = .request_body,
+            .half = self.request_capture,
+            .exchange = self.exchange,
+        },
     );
 
     if (forwarded) {
@@ -171,7 +188,12 @@ pub fn relayResponse(self: *Connection, request: RequestHead) ?ResponseHead {
             .to = .child,
             .is_response = true,
             .response_to_head = request.response_context == .head_request,
-        }, HeadCapture{ .half = self.response_capture }) orelse return null;
+        }, HeadCapture{
+            .half = self.response_capture,
+            .exchange = self.exchange,
+            .side = .response,
+            .session = self.session,
+        }) orelse return null;
 
         if (head.message.informational) {
             if (self.response_capture) |half| {
@@ -183,7 +205,11 @@ pub fn relayResponse(self: *Connection, request: RequestHead) ?ResponseHead {
         const forwarded = http.relayBody(
             self.session,
             .{ .from = .origin, .to = .child, .framing = head.framing },
-            BodyCapture{ .part = .response_body, .half = self.response_capture },
+            BodyCapture{
+                .part = .response_body,
+                .half = self.response_capture,
+                .exchange = self.exchange,
+            },
         );
 
         if (!forwarded) {
@@ -274,6 +300,8 @@ fn pumpUpgrade(self: *Connection, route: UpgradeRoute) void {
         if (!self.session.writeAll(route.to, buffer[0..len])) {
             break;
         }
+
+        self.exchange.touch();
     }
 
     self.session.halfClose(route.to);
@@ -364,12 +392,20 @@ test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
             .to = .origin,
             .is_response = false,
             .response_to_head = false,
-        }, HeadCapture{ .half = request_half }).?;
+        }, HeadCapture{
+            .half = request_half,
+            .exchange = &exchange,
+            .side = .request,
+        }).?;
         try std.testing.expect(http.relayBody(&session, .{
             .from = .child,
             .to = .origin,
             .framing = parsed_request.framing,
-        }, BodyCapture{ .part = .request_body, .half = request_half }));
+        }, BodyCapture{
+            .part = .request_body,
+            .half = request_half,
+            .exchange = &exchange,
+        }));
         request_half.finish(.finished, 2);
         producer.publish(std.testing.io, request_half);
 
@@ -385,12 +421,20 @@ test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
             .to = .child,
             .is_response = true,
             .response_to_head = false,
-        }, HeadCapture{ .half = response_half }).?;
+        }, HeadCapture{
+            .half = response_half,
+            .exchange = &exchange,
+            .side = .response,
+        }).?;
         try std.testing.expect(http.relayBody(&session, .{
             .from = .origin,
             .to = .child,
             .framing = parsed_response.framing,
-        }, BodyCapture{ .part = .response_body, .half = response_half }));
+        }, BodyCapture{
+            .part = .response_body,
+            .half = response_half,
+            .exchange = &exchange,
+        }));
         response_half.status_code = parsed_response.message.status_code;
         response_half.finish(.finished, 3);
         producer.publish(std.testing.io, response_half);
@@ -431,39 +475,115 @@ test "capture truncation never truncates HTTP1 forwarding" {
         .started_at_ms = 1,
     }).?;
     var session: FakeSession = .{ .child_input = wire, .max_read_bytes = 1 };
+    var counters: Counters = .{};
+    var exchange = try testExchange(&counters, "example.test");
 
     try std.testing.expect(http.relayBody(&session, .{
         .from = .child,
         .to = .origin,
         .framing = .chunked,
-    }, BodyCapture{ .part = .request_body, .half = half }));
+    }, BodyCapture{
+        .part = .request_body,
+        .half = half,
+        .exchange = &exchange,
+    }));
     try std.testing.expectEqualStrings(wire, session.originOutput());
     try std.testing.expectEqualStrings("Wikip", half.body.bytes());
     try std.testing.expect(half.body.truncated);
     half.deinit();
 }
 
-/// Copies each forwarded head into the exchange half that captures it.
+test "a head past its bound is counted and a line past its bound too" {
+    const FakeSession = FakeSessionType;
+    var counters: Counters = .{};
+    var exchange = try testExchange(&counters, "example.test");
+    const oversized: [http.max_head_bytes + 1]u8 = @splat('h');
+    var head_session: FakeSession = .{ .child_input = &oversized };
+
+    try std.testing.expect(http.relayHead(&head_session, .{
+        .from = .child,
+        .to = .origin,
+        .is_response = false,
+        .response_to_head = false,
+    }, HeadCapture{
+        .half = null,
+        .exchange = &exchange,
+        .side = .request,
+    }) == null);
+    try std.testing.expectEqualStrings("", head_session.originOutput());
+
+    const long_line: [http.max_chunk_line_bytes + 1]u8 = @splat('f');
+    var body_session: FakeSession = .{ .child_input = &long_line };
+    try std.testing.expect(!http.relayBody(&body_session, .{
+        .from = .child,
+        .to = .origin,
+        .framing = .chunked,
+    }, BodyCapture{
+        .part = .request_body,
+        .exchange = &exchange,
+    }));
+
+    const snapshot = counters.snapshot(.{
+        .connections = .{
+            .active = 0,
+            .limit_drops = 0,
+        },
+    });
+    try std.testing.expectEqual(@as(u64, 1), snapshot.http1_heads_too_large);
+    try std.testing.expectEqual(@as(u64, 1), snapshot.http1_chunk_lines_too_long);
+}
+
+/// Copies each forwarded head into the exchange half that captures it, and
+/// answers a head past `http1.max_head_bytes` for the child: 431 for its
+/// own request, 502 for the origin's response. Nothing of that head was
+/// forwarded, and the connection ends.
 const HeadCapture = struct {
     half: ?*Half,
+    exchange: *Exchange,
+    side: buffer_support.Side,
+    /// Where the answer to a head past the bound goes; tests relay without one.
+    session: ?*Session = null,
 
     pub fn head(self: HeadCapture, bytes: []const u8) void {
+        self.exchange.touch();
         if (self.half) |half| {
             half.appendHead(bytes);
         }
     }
+
+    pub fn headTooLarge(self: HeadCapture) void {
+        self.exchange.record(.http1_head_too_large);
+        const session = self.session orelse return;
+        const answer = switch (self.side) {
+            .request => request_head_too_large,
+            .response => response_head_too_large,
+        };
+        _ = session.writeAll(.child, answer);
+    }
 };
 
-/// Copies each already-forwarded body fragment into the half that captures it.
+/// The answer to a request head past `http1.max_head_bytes`.
+const request_head_too_large = "HTTP/1.1 431 Request Header Fields Too Large\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+/// The answer to a response head past `http1.max_head_bytes`.
+const response_head_too_large = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+
+/// Copies each already-forwarded body fragment into the half that captures
+/// it, and counts a chunk-size or trailer line past its bound.
 const BodyCapture = struct {
     part: buffer_support.Part,
     half: ?*Half = null,
+    exchange: *Exchange,
 
     /// Example: `observer.observe(.{ .payload = bytes, .forwarded_bytes = bytes.len });`
     pub fn observe(self: BodyCapture, fragment: Fragment) void {
+        self.exchange.touch();
         if (self.half) |half| {
             _ = half.append(self.part, fragment.payload);
         }
+    }
+
+    pub fn lineTooLong(self: BodyCapture, bound: usize) void {
+        self.exchange.record(if (bound == http.max_chunk_line_bytes) .http1_chunk_line_too_long else .http1_trailer_line_too_long);
     }
 };
 

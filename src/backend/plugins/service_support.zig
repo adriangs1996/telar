@@ -14,6 +14,22 @@ pub const max_workers = 16;
 pub const queue_depth = 64;
 pub const restart_limit = 5;
 pub const restart_window_ms = 10 * 60 * 1000;
+/// How long one tap callback may run inside its worker; instructions bound
+/// the work and this deadline is the safety net.
+pub const callback_deadline_ms = 2 * std.time.ms_per_s;
+/// How long the runtime waits for a worker's reply: the callback's deadline
+/// plus the time to decode the exchange and write the reply, so a callback
+/// that fails at its deadline replies before the runtime gives up.
+pub const reply_timeout_ms = callback_deadline_ms + std.time.ms_per_s;
+/// Bytes of exchange frames every tap worker queue holds together. A frame
+/// that does not fit is dropped and counted, so a slow plugin never grows
+/// the runtime past this.
+pub const max_queued_bytes = 256 * 1024 * 1024;
+
+pub const queue_depth_limit = core.Limit.declare("plugins.tap.queue_depth", "exchanges", queue_depth);
+pub const queued_bytes_limit = core.Limit.declare("plugins.tap.max_queued_bytes", "bytes", max_queued_bytes);
+pub const reply_timeout_limit = core.Limit.declare("plugins.tap.reply_timeout_ms", "ms", reply_timeout_ms);
+pub const restart_limit_reach = core.Limit.declare("plugins.tap.restart_limit", "restarts in 10 min", restart_limit);
 
 pub fn requireCapability(spec: *const ServiceSpec, capability: core.Capability) !void {
     if (!spec.declared.contains(capability)) {
@@ -104,5 +120,9 @@ test "five restarts in one window disable a worker" {
 
     for (0..restart_limit) |_| worker.recordRestart(std.testing.io);
 
-    try std.testing.expect(worker.disabled);
+    try std.testing.expect(worker.disabled.load(.monotonic));
+}
+
+test "a worker replies within the runtime's wait even at its callback deadline" {
+    try std.testing.expect(reply_timeout_ms > callback_deadline_ms);
 }

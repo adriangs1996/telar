@@ -12,6 +12,7 @@ const std = @import("std");
 const connect_authentication = @import("connect_authentication.zig");
 const identity = @import("identity.zig");
 const service_mod = @import("service/service_namespace.zig");
+const Tunnel = @import("tunnel/Tunnel.zig");
 const localca = @import("localca");
 const tls = localca.tls;
 
@@ -184,11 +185,45 @@ test "proxy connection admission enforces the real worker limit" {
 
     clients[connection_limit] = try address.connect(io, .{ .mode = .stream });
     try waitForConnectionMetrics(proxy, service_support.max_connections, 1);
+    try expectAnswer(io, clients[connection_limit].?, "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+}
+
+test "a CONNECT head past its bound is answered 431 and counted" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var files = try ProxyTestFiles.init(io);
+    defer files.deinit();
+    const proxy = try Proxy.create(io, gpa, files.config());
+    defer proxy.destroy();
+
+    const client = try proxy.address().connect(io, .{
+        .mode = .stream,
+    });
+    defer client.close(io);
+    var write_buffer: [1024]u8 = undefined;
+    var writer = client.writer(io, &write_buffer);
+    // Exactly the bound and nothing past it, so no unread byte turns the
+    // proxy's close into a reset before the answer is read.
+    const start = "CONNECT example.test:443 HTTP/1.1\r\nX-Pad: ";
+    try writer.interface.writeAll(start);
+    try writer.interface.splatByteAll('p', Tunnel.max_connect_head_bytes - start.len);
+    try writer.interface.flush();
+
+    try expectAnswer(io, client, "HTTP/1.1 431 Request Header Fields Too Large\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    try std.testing.expectEqual(@as(u64, 1), proxy.metrics().connect_heads_too_large);
+}
+
+fn expectAnswer(io: std.Io, stream: std.Io.net.Stream, comptime expected: []const u8) !void {
+    var read_buffer: [256]u8 = undefined;
+    var reader = stream.reader(io, &read_buffer);
+    var answer: [expected.len]u8 = undefined;
+    try reader.interface.readSliceAll(&answer);
+    try std.testing.expectEqualStrings(expected, &answer);
 }
 
 test {
     std.testing.refAllDecls(ca);
-    _ = @import("Slots.zig");
+    _ = @import("Connections.zig");
     _ = @import("capture/capture_tests.zig");
     _ = @import("tunnel/tunnel_namespace.zig");
     _ = @import("tunnel/EventObserver.zig");

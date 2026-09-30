@@ -4,7 +4,7 @@ const std = @import("std");
 const Listener = @import("Listener.zig");
 const Interception = @import("Interception.zig");
 const Producer = @import("../capture/Producer.zig");
-const Slots = @import("../Slots.zig");
+const Connections = @import("../Connections.zig");
 const service_support = @import("service_support.zig");
 const Counters = @import("../Counters.zig");
 const Paths = @import("Paths.zig");
@@ -26,11 +26,13 @@ secret: identity.Secret,
 /// bound port that differs means another process held this one.
 preferred_port: ?u16,
 captures: Producer = undefined,
-connection_slots: Slots = .init(service_support.max_connections),
+connections: Connections = .{},
 telemetry: Counters = .{},
 next_connection_id: std.atomic.Value(u64) = .init(1),
 /// The accept loop while the service runs; `stop` joins it.
 worker: ?service_support.Worker = null,
+/// The loop that closes connections past their deadlines; `stop` joins it.
+reaper: ?service_support.Worker = null,
 
 /// Builds the loopback listener and every bounded dependency without
 /// starting concurrent traffic: the secret is read or created, and the
@@ -43,6 +45,8 @@ worker: ?service_support.Worker = null,
 /// defer service.destroy();
 /// ```
 pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
+    service_support.raiseDescriptorLimit();
+
     var interception = try Interception.init(io, gpa, paths);
     errdefer interception.deinit();
 
@@ -93,6 +97,9 @@ pub fn destroy(self: *Service) void {
 pub fn start(self: *Service) !void {
     std.debug.assert(self.worker == null);
     self.worker = try self.io.concurrent(run, .{self});
+    errdefer self.stop();
+
+    self.reaper = try self.io.concurrent(reap, .{self});
 }
 
 /// Stops traffic, then delivery: joins the accept loop, which cancels every
@@ -103,6 +110,11 @@ pub fn start(self: *Service) !void {
 /// service.stop();
 /// ```
 pub fn stop(self: *Service) void {
+    if (self.reaper) |*reaper| {
+        _ = reaper.cancel(self.io) catch {};
+        self.reaper = null;
+    }
+
     if (self.worker) |*worker| {
         _ = worker.cancel(self.io) catch {};
         self.worker = null;
@@ -134,6 +146,13 @@ fn run(self: *Service) anyerror!void {
     return service_support.acceptConnections(self);
 }
 
+fn reap(self: *Service) anyerror!void {
+    const path = core.enter(.observation);
+    defer path.restore();
+
+    return service_support.expireConnections(self);
+}
+
 /// Waits for one captured half.
 ///
 /// ```zig
@@ -160,7 +179,7 @@ pub fn decodeCapture(self: *Service, half: *Half) void {
 /// ```
 pub fn metrics(self: *const Service) Snapshot {
     return self.telemetry.snapshot(.{
-        .connections = self.connection_slots.snapshot(),
+        .connections = self.connections.snapshot(),
         .captures = self.captures.metrics(),
     });
 }

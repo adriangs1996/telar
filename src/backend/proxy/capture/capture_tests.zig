@@ -30,5 +30,5 @@ test "disabled capture does not allocate or reserve quota" {
     }) == null);
     try std.testing.expectEqual(@as(usize, 0), producer.quota.used());
     try std.testing.expectEqual(@as(u64, 0), producer.metrics().started);
-    try std.testing.expectEqual(@as(u64, 0), producer.metrics().skipped_quota);
+    try std.testing.expectEqual(@as(u64, 0), producer.metrics().skipped);
 }

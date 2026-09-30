@@ -14,6 +14,22 @@ pub const Counter = enum {
     tls_upstream_handshake_failure,
     tls_downstream_handshake_failure,
     tls_mint_failure,
+    /// An HTTP/2 stream relayed without capture: every capture slot was taken.
+    h2_capture_stream_skipped,
+    /// An HTTP/1.1 head longer than `http1.max_head_bytes`.
+    http1_head_too_large,
+    /// A chunk-size line longer than `http1.max_chunk_line_bytes`.
+    http1_chunk_line_too_long,
+    /// A trailer line longer than `http1.max_trailer_line_bytes`.
+    http1_trailer_line_too_long,
+    /// A CONNECT head longer than `proxy.max_connect_head_bytes`.
+    connect_head_too_large,
+    /// A connection that sent no complete CONNECT head in time.
+    connect_head_timeout,
+    /// A connection that did not reach its origin and finish TLS in time.
+    establish_timeout,
+    /// An idle connection closed to admit a new one at the connection bound.
+    idle_eviction,
 };
 
 test "each proxy counter has one independent snapshot field" {
@@ -30,7 +46,10 @@ test "each proxy counter has one independent snapshot field" {
         .captures = .{
             .started = 43,
             .truncated = 47,
-            .skipped_quota = 53,
+            .truncated_part = 31,
+            .truncated_exchange = 37,
+            .truncated_total = 41,
+            .skipped = 53,
             .dropped_queue = 59,
             .decode_failed = 61,
             .queued = 67,
@@ -50,9 +69,20 @@ test "each proxy counter has one independent snapshot field" {
     try std.testing.expectEqual(@as(u64, 8), snapshot.tls_upstream_handshake_failures);
     try std.testing.expectEqual(@as(u64, 9), snapshot.tls_downstream_handshake_failures);
     try std.testing.expectEqual(@as(u64, 10), snapshot.tls_mint_failures);
+    try std.testing.expectEqual(@as(u64, 11), snapshot.h2_capture_streams_skipped);
+    try std.testing.expectEqual(@as(u64, 12), snapshot.http1_heads_too_large);
+    try std.testing.expectEqual(@as(u64, 13), snapshot.http1_chunk_lines_too_long);
+    try std.testing.expectEqual(@as(u64, 14), snapshot.http1_trailer_lines_too_long);
+    try std.testing.expectEqual(@as(u64, 15), snapshot.connect_heads_too_large);
+    try std.testing.expectEqual(@as(u64, 16), snapshot.connect_head_timeouts);
+    try std.testing.expectEqual(@as(u64, 17), snapshot.establish_timeouts);
+    try std.testing.expectEqual(@as(u64, 18), snapshot.idle_evictions);
     try std.testing.expectEqual(@as(u64, 43), snapshot.capture_started);
     try std.testing.expectEqual(@as(u64, 47), snapshot.capture_truncated);
-    try std.testing.expectEqual(@as(u64, 53), snapshot.capture_skipped_quota);
+    try std.testing.expectEqual(@as(u64, 31), snapshot.capture_truncated_part);
+    try std.testing.expectEqual(@as(u64, 37), snapshot.capture_truncated_exchange);
+    try std.testing.expectEqual(@as(u64, 41), snapshot.capture_truncated_total);
+    try std.testing.expectEqual(@as(u64, 53), snapshot.capture_skipped);
     try std.testing.expectEqual(@as(u64, 59), snapshot.capture_dropped_queue);
     try std.testing.expectEqual(@as(u64, 61), snapshot.capture_decode_failed);
     try std.testing.expectEqual(@as(u64, 67), snapshot.queued_captures);

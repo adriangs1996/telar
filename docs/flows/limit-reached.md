@@ -60,9 +60,13 @@ The notice reads `<name>: <requested> <noun>; limit <value>`, or
 `report` writes its process model, which only the thread that owns the
 model may touch: the runtime's event loop, or the client adapter's loop. No
 lock guards the table. A worker never reports. It returns the reach in its
-completion, and the `finish` that runs on the loop reports it. No worker
-reports a limit yet; this is the shape the first one takes, on worktree
-detection, whose completion gains a `limit: ?core.LimitReach = null` field:
+completion, and the `finish` that runs on the loop reports it. Workers that
+live as long as the runtime and have no completion per piece of work, the
+proxy's tunnels and the tap workers, count each limit in an atomic instead;
+`proxy_limits.report`, on the maintenance tick, reports every limit whose
+count grew since the last tick. This is the shape a worker with a completion
+takes, on worktree detection, whose completion gains a
+`limit: ?core.LimitReach = null` field:
 
 ```zig
 // The worker: a bounded scan that stopped at its limit.

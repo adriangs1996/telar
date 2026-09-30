@@ -1,6 +1,8 @@
 //! One direction of one captured exchange: its head and de-framed body
-//! within a byte reservation, and the request line and content encoding
-//! read from its head.
+//! within its share of the exchange bound, and the request line and content
+//! encoding read from its head. The half reserves quota as bytes arrive, so
+//! a half that is still empty, such as one waiting on an idle keep-alive
+//! connection, holds none.
 const std = @import("std");
 const Reservation = @import("Reservation.zig");
 const Key = @import("Key.zig");
@@ -8,6 +10,7 @@ const buffer_support = @import("buffer_support.zig");
 const Buffer = @import("Buffer.zig");
 const Quota = @import("Quota.zig");
 const Config = @import("Config.zig");
+const Truncation = @import("Truncation.zig");
 
 /// A half owned by `Meta`, the caller's record of who the exchange belongs
 /// to.
@@ -20,7 +23,11 @@ pub fn Type(comptime Meta: type) type {
         const Half = @This();
 
         gpa: std.mem.Allocator,
+        /// Quota this half holds: every byte it captured, never more than
+        /// `max_bytes`.
         reservation: Reservation,
+        /// This half's share of `max_exchange_bytes`: head and body together.
+        max_bytes: usize,
         /// The caller's description of who owns the exchange; never read here.
         meta: Meta,
         key: Key,
@@ -41,27 +48,25 @@ pub fn Type(comptime Meta: type) type {
         outcome: buffer_support.Outcome = .failed,
         captured_bytes: usize = 0,
         body_decoded: bool = false,
+        truncation: Truncation = .{},
 
         pub fn create(options: Options) ?*Half {
             if (!options.config.enabled) {
                 return null;
             }
 
-            const reservation_bytes = @max(@as(usize, 1), options.config.max_exchange_bytes / 2);
-            var reservation = options.quota.reserve(reservation_bytes) orelse return null;
-
             if (options.host.len > buffer_support.max_host_bytes) {
-                reservation.release();
                 return null;
             }
 
-            const half = options.gpa.create(Half) catch {
-                reservation.release();
-                return null;
-            };
+            const half = options.gpa.create(Half) catch return null;
             half.* = .{
                 .gpa = options.gpa,
-                .reservation = reservation,
+                .reservation = .{
+                    .quota = options.quota,
+                    .bytes = 0,
+                },
+                .max_bytes = shareOf(options.config),
                 .meta = options.meta,
                 .key = options.key,
                 .side = options.side,
@@ -73,6 +78,16 @@ pub fn Type(comptime Meta: type) type {
             half.host_len = @intCast(options.host.len);
 
             return half;
+        }
+
+        /// The bytes one half may capture: head and body together get half
+        /// of `max_exchange_bytes`, so request and response split it evenly.
+        ///
+        /// ```zig
+        /// const share = Half.shareOf(config);
+        /// ```
+        pub fn shareOf(config: Config) usize {
+            return @max(@as(usize, 1), config.max_exchange_bytes / 2);
         }
 
         pub fn host(self: *const Half) []const u8 {
@@ -92,15 +107,8 @@ pub fn Type(comptime Meta: type) type {
         }
 
         pub fn setRoute(self: *Half, method_value: []const u8, target_value: []const u8) void {
-            if (method_value.len > self.method_storage.len or target_value.len > self.target_storage.len) {
-                self.head.truncated = true;
-                return;
-            }
-
-            @memcpy(self.method_storage[0..method_value.len], method_value);
-            self.method_len = @intCast(method_value.len);
-            @memcpy(self.target_storage[0..target_value.len], target_value);
-            self.target_len = @intCast(target_value.len);
+            self.setMethod(method_value);
+            self.setTarget(target_value);
         }
 
         pub fn setMethod(self: *Half, value: []const u8) void {
@@ -135,6 +143,14 @@ pub fn Type(comptime Meta: type) type {
             self.encoding_len = @intCast(value.len);
         }
 
+        /// Captures what fits of one fragment and records the first bound
+        /// that cut it: the part's `max_part_bytes`, the half's share of
+        /// `max_exchange_bytes`, or the quota every capture shares. Returns
+        /// whether the whole fragment fit.
+        ///
+        /// ```zig
+        /// _ = half.append(.request_body, fragment);
+        /// ```
         pub fn append(self: *Half, part: buffer_support.Part, input: []const u8) bool {
             const selected = switch (part) {
                 .request_head => if (self.side == .request) &self.head else return false,
@@ -142,8 +158,22 @@ pub fn Type(comptime Meta: type) type {
                 .response_head => if (self.side == .response) &self.head else return false,
                 .response_body => if (self.side == .response) &self.body else return false,
             };
-            const available = self.reservation.bytes -| self.captured_bytes;
-            const accepted = @min(available, input.len);
+
+            const part_room = selected.max_bytes -| selected.len;
+            const half_room = self.max_bytes -| self.captured_bytes;
+            const allowed = @min(input.len, part_room, half_room);
+            if (allowed != input.len) {
+                if (part_room <= half_room) {
+                    self.truncation.part = true;
+                } else {
+                    self.truncation.exchange = true;
+                }
+            }
+
+            const accepted = self.reserve(allowed);
+            if (accepted != allowed) {
+                self.truncation.total = true;
+            }
 
             if (accepted != 0) {
                 const before = selected.len;
@@ -156,6 +186,17 @@ pub fn Type(comptime Meta: type) type {
             }
 
             return accepted == input.len and !selected.truncated;
+        }
+
+        /// Grows the reservation to cover `bytes` more captured bytes and
+        /// returns how many of them the quota covers.
+        fn reserve(self: *Half, bytes: usize) usize {
+            const needed = self.captured_bytes + bytes;
+            if (needed > self.reservation.bytes) {
+                _ = self.reservation.grow(needed - self.reservation.bytes);
+            }
+
+            return @min(bytes, self.reservation.bytes -| self.captured_bytes);
         }
 
         pub fn finish(self: *Half, outcome: buffer_support.Outcome, finished_at_ms: i64) void {
@@ -225,4 +266,106 @@ pub fn Type(comptime Meta: type) type {
             started_at_ms: i64,
         };
     };
+}
+
+/// The owner the tests attach to each half.
+const TestOwner = struct { id: u64 };
+const TestHalf = Type(TestOwner);
+
+fn testHalf(quota: *Quota, config: Config) *TestHalf {
+    return TestHalf.create(.{
+        .gpa = std.testing.allocator,
+        .quota = quota,
+        .config = config,
+        .meta = .{
+            .id = 1,
+        },
+        .key = .{
+            .connection_id = 1,
+            .stream_id = 0,
+        },
+        .side = .request,
+        .host = "example.test",
+        .started_at_ms = 1,
+    }).?;
+}
+
+test "an empty half holds no quota and reserves only what it captures" {
+    var quota = Quota.init(64);
+    const half = testHalf(&quota, .{
+        .enabled = true,
+        .max_part_bytes = 32,
+        .max_exchange_bytes = 64,
+        .max_total_bytes = 64,
+    });
+
+    try std.testing.expectEqual(@as(usize, 0), quota.used());
+    try std.testing.expect(half.append(.request_body, "hello"));
+    try std.testing.expectEqual(@as(usize, 5), quota.used());
+    try std.testing.expect(!half.truncation.any());
+
+    half.deinit();
+    try std.testing.expectEqual(@as(usize, 0), quota.used());
+}
+
+test "a spent quota keeps what fits and names the total bound" {
+    var quota = Quota.init(4);
+    const half = testHalf(&quota, .{
+        .enabled = true,
+        .max_part_bytes = 32,
+        .max_exchange_bytes = 64,
+        .max_total_bytes = 64,
+    });
+    defer half.deinit();
+
+    try std.testing.expect(!half.append(.request_body, "hello"));
+    try std.testing.expectEqualStrings("hell", half.body.bytes());
+    try std.testing.expect(half.body.truncated);
+    try std.testing.expectEqual(Truncation{ .total = true }, half.truncation);
+    try std.testing.expectEqual(@as(usize, 4), quota.used());
+}
+
+test "the part bound and the exchange share name their own cause" {
+    var quota = Quota.init(64);
+    const parts = testHalf(&quota, .{
+        .enabled = true,
+        .max_part_bytes = 4,
+        .max_exchange_bytes = 64,
+        .max_total_bytes = 64,
+    });
+    defer parts.deinit();
+
+    try std.testing.expect(!parts.append(.request_body, "hello"));
+    try std.testing.expectEqualStrings("hell", parts.body.bytes());
+    try std.testing.expectEqual(Truncation{ .part = true }, parts.truncation);
+
+    const shared = testHalf(&quota, .{
+        .enabled = true,
+        .max_part_bytes = 8,
+        .max_exchange_bytes = 12,
+        .max_total_bytes = 64,
+    });
+    defer shared.deinit();
+
+    try std.testing.expect(shared.append(.request_head, "head"));
+    try std.testing.expect(!shared.append(.request_body, "hello"));
+    try std.testing.expectEqualStrings("he", shared.body.bytes());
+    try std.testing.expectEqual(Truncation{ .exchange = true }, shared.truncation);
+}
+
+test "a request target past its bound keeps the method" {
+    var quota = Quota.init(64);
+    const half = testHalf(&quota, .{
+        .enabled = true,
+        .max_part_bytes = 32,
+        .max_exchange_bytes = 64,
+        .max_total_bytes = 64,
+    });
+    defer half.deinit();
+    const target: [buffer_support.max_target_bytes + 1]u8 = @splat('a');
+
+    half.setRoute("POST", &target);
+    try std.testing.expectEqualStrings("POST", half.method());
+    try std.testing.expectEqualStrings("", half.target());
+    try std.testing.expect(half.head.truncated);
 }

@@ -43,10 +43,14 @@ pub fn Type(comptime Meta: type) type {
             }
         };
 
+        /// What a push did with its half: kept it to wait for its peer,
+        /// completed an exchange, or handed it back alone because its side
+        /// was already waiting (`partial`) or every slot was taken (`full`).
         pub const PushResult = union(enum) {
             pending,
             complete: Exchange,
             partial: Exchange,
+            full: Exchange,
         };
 
         slots: [capacity]?Entry = .{null} ** capacity,
@@ -83,7 +87,7 @@ pub fn Type(comptime Meta: type) type {
         /// ```
         pub fn push(self: *Joiner, now_ms: i64, half: *Half) PushResult {
             const index = self.find(half.key) orelse self.empty() orelse {
-                return .{ .partial = sideExchange(half) };
+                return .{ .full = sideExchange(half) };
             };
             var entry = self.slots[index] orelse Entry{
                 .key = half.key,
@@ -227,4 +231,33 @@ test "joiner returns a partial exchange only after its deadline" {
     defer exchange.deinit();
     try std.testing.expect(exchange.request != null);
     try std.testing.expect(exchange.response == null);
+}
+
+test "a full joiner hands the half back alone and keeps every waiting half" {
+    var quota = Quota.init(16);
+    var joiner = TestJoiner.init(30);
+    defer joiner.deinit();
+
+    for (0..TestJoiner.capacity) |index| {
+        const half = testHalf(&quota, .request);
+        half.key.stream_id = @intCast(index + 1);
+        try std.testing.expectEqual(TestJoiner.PushResult.pending, joiner.push(10, half));
+    }
+
+    const extra = testHalf(&quota, .request);
+    extra.key.stream_id = TestJoiner.capacity + 1;
+    var exchange = switch (joiner.push(10, extra)) {
+        .full => |value| value,
+        else => return error.ExpectedFullJoiner,
+    };
+    defer exchange.deinit();
+    try std.testing.expect(exchange.request == extra);
+
+    const peer = testHalf(&quota, .response);
+    peer.key.stream_id = 1;
+    var completed = switch (joiner.push(11, peer)) {
+        .complete => |value| value,
+        else => return error.ExpectedCompleteCapture,
+    };
+    completed.deinit();
 }

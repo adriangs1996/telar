@@ -3,6 +3,7 @@
 //! whole exchange to the plugin tap. Traffic never waits for any of it.
 
 const owned = @import("../proxy/capture/owned.zig");
+const limit_reached = @import("limit_reached.zig");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Half = owned.Half;
@@ -20,6 +21,12 @@ pub fn receive(model: *RuntimeModel, result: anyerror!*Half) !void {
     var sources = Sources.init(model.io, model.select);
     try sources.receiveProxyCapture(&model.resources.proxy);
 
-    model.resources.proxy.decodeCapture(half);
-    model.resources.proxy.acceptCapture(std.Io.Timestamp.now(model.io, .real).toMilliseconds(), half, model.resources.pluginService());
+    model.resources.proxy.decodeCapture(half, model.resources.pluginService());
+    const now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
+    switch (model.resources.proxy.acceptCapture(now_ms, half, model.resources.pluginService())) {
+        .joined => {},
+        .table_full => limit_reached.report(model, .{
+            .limit = owned.joiner_capacity_limit,
+        }),
+    }
 }

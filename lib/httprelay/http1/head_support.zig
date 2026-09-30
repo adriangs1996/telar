@@ -12,7 +12,9 @@ const header_rules = @import("../header_rules.zig");
 const RouteMatch = @import("../RouteMatch.zig");
 const FakeSessionType = @import("FakeSession.zig");
 
-pub const max_bytes = 32 * 1024;
+/// The longest head the relay reads: request lines, large cookies and
+/// bearer tokens fit, as in common servers.
+pub const max_bytes = 64 * 1024;
 
 pub const Message = @import("Message.zig");
 
@@ -26,25 +28,41 @@ pub const AnalyzeOptions = @import("AnalyzeOptions.zig");
 ///
 /// The function reads one byte at a time because the session has no pushback
 /// buffer. This guarantees that a successful call leaves the first body byte
-/// unread. It returns `null` on EOF, a zero-length read, or an oversized head.
+/// unread. It returns `.ended` on EOF or a zero-length read, and
+/// `.too_large` when the buffer fills before the head ends.
 ///
 /// ```zig
-/// const head_len = read(session, .child, &buffer) orelse return;
+/// const head_len = switch (read(session, .child, &buffer)) {
+///     .complete => |len| len,
+///     .ended, .too_large => return,
+/// };
 /// ```
-pub fn read(session: anytype, side: Session.Side, buffer: []u8) ?usize {
+pub fn read(session: anytype, side: Session.Side, buffer: []u8) HeadRead {
     var len: usize = 0;
     while (len < buffer.len) {
-        const read_len = session.read(side, buffer[len..][0..1]) orelse return null;
+        const read_len = session.read(side, buffer[len..][0..1]) orelse return .ended;
         if (read_len != 1) {
-            return null;
+            return .ended;
         }
+
         len += 1;
         if (len >= 4 and std.mem.eql(u8, buffer[len - 4 .. len], "\r\n\r\n")) {
-            return len;
+            return .{ .complete = len };
         }
     }
-    return null;
+
+    return .too_large;
 }
+
+/// What reading one head found.
+pub const HeadRead = union(enum) {
+    /// A whole head of this many bytes.
+    complete: usize,
+    /// The stream ended first.
+    ended,
+    /// The buffer filled before the head ended.
+    too_large,
+};
 
 /// Derives message and framing metadata from one complete HTTP/1.1 head.
 ///
@@ -276,7 +294,7 @@ test "head reader stops before the first body byte" {
     var fake: FakeSession = .{ .child_input = input };
     var buffer: [max_bytes]u8 = undefined;
 
-    const len = read(&fake, .child, &buffer).?;
+    const len = read(&fake, .child, &buffer).complete;
 
     try std.testing.expectEqual(expected_len, len);
     try std.testing.expectEqual(expected_len, fake.child_offset);
@@ -289,7 +307,7 @@ test "head reader rejects EOF before the blank line" {
     var fake: FakeSession = .{ .child_input = input };
     var buffer: [max_bytes]u8 = undefined;
 
-    try std.testing.expect(read(&fake, .child, &buffer) == null);
+    try std.testing.expectEqual(HeadRead.ended, read(&fake, .child, &buffer));
     try std.testing.expectEqual(input.len, fake.child_offset);
 }
 
@@ -299,7 +317,7 @@ test "head reader rejects a head that fills its bound" {
     var fake: FakeSession = .{ .child_input = &input };
     var buffer: [max_bytes]u8 = undefined;
 
-    try std.testing.expect(read(&fake, .child, &buffer) == null);
+    try std.testing.expectEqual(HeadRead.too_large, read(&fake, .child, &buffer));
     try std.testing.expectEqual(max_bytes, fake.child_offset);
 }
 

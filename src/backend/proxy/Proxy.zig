@@ -1,3 +1,4 @@
+const exchangecapture = @import("exchangecapture");
 const owned = @import("capture/owned.zig");
 const std = @import("std");
 const proxy_namespace = @import("proxy_namespace.zig");
@@ -116,6 +117,15 @@ pub fn environment(self: *Proxy, options: PaneEnvironmentOptions) !PaneEnvironme
 /// ```
 pub fn metrics(self: *const Proxy) Snapshot {
     return self.service.metrics();
+}
+
+/// Returns the capture bounds the proxy was started with.
+///
+/// ```zig
+/// const bounds = proxy.captureConfig();
+/// ```
+pub fn captureConfig(self: *const Proxy) exchangecapture.Config {
+    return self.service.captures.config;
 }
 
 pub fn address(self: *const Proxy) std.Io.net.IpAddress {

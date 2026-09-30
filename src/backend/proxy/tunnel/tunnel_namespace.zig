@@ -1,6 +1,7 @@
 //! One authenticated CONNECT tunnel from request head through protocol relay.
 
 const Counters = @import("../Counters.zig");
+const Exchange = @import("Exchange.zig");
 const connect_authentication = @import("../connect_authentication.zig");
 const std = @import("std");
 const Snapshot = @import("../Snapshot.zig");
@@ -14,13 +15,21 @@ pub fn recordAuthenticationRejection(telemetry: *Counters, rejection: connect_au
     }
 }
 
-pub fn relayPassthrough(io: std.Io, child: std.Io.net.Stream, origin: std.Io.net.Stream) void {
-    var outbound = io.concurrent(pumpPassthrough, .{ io, child, origin }) catch return;
-    pumpPassthrough(io, origin, child);
+/// Relays opaque bytes both ways until either side closes; every copy
+/// marks the connection active.
+///
+/// ```zig
+/// tunnel_namespace.relayPassthrough(child, origin, &exchange);
+/// ```
+pub fn relayPassthrough(child: std.Io.net.Stream, origin: std.Io.net.Stream, exchange: *Exchange) void {
+    const io = exchange.io;
+    var outbound = io.concurrent(pumpPassthrough, .{ child, origin, exchange }) catch return;
+    pumpPassthrough(origin, child, exchange);
     outbound.await(io);
 }
 
-fn pumpPassthrough(io: std.Io, source: std.Io.net.Stream, destination: std.Io.net.Stream) void {
+fn pumpPassthrough(source: std.Io.net.Stream, destination: std.Io.net.Stream, exchange: *Exchange) void {
+    const io = exchange.io;
     var read_buffer: [16 * 1024]u8 = undefined;
     var write_buffer: [16 * 1024]u8 = undefined;
     var reader = source.reader(io, &read_buffer);
@@ -33,29 +42,47 @@ fn pumpPassthrough(io: std.Io, source: std.Io.net.Stream, destination: std.Io.ne
         if (copied == 0) {
             break;
         }
+
+        exchange.touch();
     }
 
     destination.shutdown(io, .send) catch {};
 }
 
-pub fn readConnectHead(io: std.Io, stream: std.Io.net.Stream, buffer: []u8) ?usize {
-    var read_buffer: [8 * 1024]u8 = undefined;
+/// Reads one CONNECT head into `buffer`: its length, the end of the
+/// stream, or a head past the buffer, which the caller answers with 431.
+///
+/// ```zig
+/// switch (tunnel_namespace.readConnectHead(io, stream, &head)) { ... }
+/// ```
+pub fn readConnectHead(io: std.Io, stream: std.Io.net.Stream, buffer: []u8) ConnectHead {
+    var read_buffer: [connect_read_bytes]u8 = undefined;
     defer std.crypto.secureZero(u8, &read_buffer);
     var reader = stream.reader(io, &read_buffer);
     var len: usize = 0;
 
     while (len < buffer.len) {
-        const byte = reader.interface.takeByte() catch return null;
+        const byte = reader.interface.takeByte() catch return .ended;
         buffer[len] = byte;
         len += 1;
 
         if (len >= 4 and std.mem.eql(u8, buffer[len - 4 .. len], "\r\n\r\n")) {
-            return len;
+            return .{ .complete = len };
         }
     }
 
-    return null;
+    return .too_large;
 }
+
+/// Bytes the CONNECT head reader buffers per read.
+const connect_read_bytes = 8 * 1024;
+
+/// What reading a CONNECT head found.
+const ConnectHead = union(enum) {
+    complete: usize,
+    ended,
+    too_large,
+};
 
 pub fn reply(io: std.Io, stream: std.Io.net.Stream, bytes: []const u8) void {
     var buffer: [1024]u8 = undefined;

@@ -15,8 +15,13 @@ session: ?*Session = null,
 future: ?std.Io.Future(anyerror!void) = null,
 restarts: [service_support.restart_limit]i64 = .{0} ** service_support.restart_limit,
 restart_count: u8 = 0,
-disabled: bool = false,
+/// Set by the worker thread after `restart_limit` restarts in the window;
+/// the runtime reads it to report the plugin.
+disabled: std.atomic.Value(bool) = .init(false),
+/// Frames dropped because the queue held `queue_depth`.
 dropped: std.atomic.Value(u64) = .init(0),
+/// Replies that did not arrive within `reply_timeout_ms`.
+timeouts: std.atomic.Value(u64) = .init(0),
 
 pub fn init(self: *Worker, options: WorkerInitOptions) void {
     self.* = .{ .gpa = options.gpa, .spec = options.spec, .results = options.results };
@@ -45,7 +50,7 @@ pub fn stop(self: *Worker, io: std.Io) void {
 }
 
 pub fn submit(self: *Worker, io: std.Io, frame: *Frame) void {
-    if (self.disabled) {
+    if (self.disabled.load(.monotonic)) {
         frame.deinit();
         return;
     }
@@ -68,7 +73,7 @@ fn run(self: *Worker, io: std.Io) anyerror!void {
     while (true) {
         const frame = self.requests.getOne(io) catch return;
         defer frame.deinit();
-        if (self.disabled) {
+        if (self.disabled.load(.monotonic)) {
             continue;
         }
         const session = self.ensureSession(io) catch {
@@ -84,6 +89,10 @@ fn run(self: *Worker, io: std.Io) anyerror!void {
             .event_id = frame.event_id,
             .bytes = frame.bytes(),
         }) catch |err| {
+            if (err == error.WorkerTimeout) {
+                _ = self.timeouts.fetchAdd(1, .monotonic);
+            }
+
             if (err != error.WorkerEventFailed) {
                 self.closeSession();
                 self.recordRestart(io);
@@ -100,7 +109,10 @@ fn ensureSession(self: *Worker, io: std.Io) !*Session {
     if (self.session) |session| {
         return session;
     }
-    self.session = try Session.open(io, self.gpa, .{ .entry = self.spec.entry(), .timeout_ms = 200 });
+    self.session = try Session.open(io, self.gpa, .{
+        .entry = self.spec.entry(),
+        .timeout_ms = service_support.reply_timeout_ms,
+    });
     return self.session.?;
 }
 
@@ -116,12 +128,12 @@ pub fn recordRestart(self: *Worker, io: std.Io) void {
         self.restarts[self.restart_count] = now_ms;
         self.restart_count += 1;
         if (self.restart_count == service_support.restart_limit and now_ms - self.restarts[0] <= service_support.restart_window_ms) {
-            self.disabled = true;
+            self.disabled.store(true, .monotonic);
         }
         return;
     }
     if (now_ms - self.restarts[0] <= service_support.restart_window_ms) {
-        self.disabled = true;
+        self.disabled.store(true, .monotonic);
         return;
     }
     std.mem.copyForwards(i64, self.restarts[0 .. service_support.restart_limit - 1], self.restarts[1..]);

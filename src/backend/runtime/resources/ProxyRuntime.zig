@@ -10,6 +10,7 @@ const Half = owned.Half;
 const Snapshot = @import("../../proxy/Snapshot.zig");
 const PluginsService = @import("../../plugins/Service.zig");
 const ProxyTestFiles = @import("ProxyTestFiles.zig");
+const TapLimitCounts = @import("../../plugins/TapLimitCounts.zig");
 /// The runtime's optional observation proxy and the join table that pairs
 /// the captured halves of each exchange.
 const ProxyRuntime = @This();
@@ -19,6 +20,10 @@ proxy: ?*Proxy,
 scope: core.ProxyScope,
 system_trusted: bool,
 captures: Joiner,
+/// The proxy's counters when its limits were last reported.
+reported: Snapshot = .{},
+/// The tap's counters when its limits were last reported.
+tap_reported: TapLimitCounts = .{},
 
 /// Creates the configured proxy, or an inactive runtime when disabled.
 ///
@@ -101,35 +106,63 @@ pub fn preferredPort(self: *const ProxyRuntime) ?u16 {
 }
 
 /// Joins one captured half and submits every completed or expired exchange
-/// to the plugin tap.
+/// to the plugin tap. A half the join table cannot hold goes to the tap
+/// alone, as a partial exchange; the result says whether the table was
+/// full, so the caller reports `proxy.capture.joiner_capacity`.
 ///
 /// ```zig
-/// proxy_runtime.acceptCapture(now_ms, half, plugins);
+/// const joined = proxy_runtime.acceptCapture(now_ms, half, plugins);
 /// ```
-pub fn acceptCapture(self: *ProxyRuntime, now_ms: i64, half: *Half, tap: *PluginsService) void {
+pub fn acceptCapture(self: *ProxyRuntime, now_ms: i64, half: *Half, tap: *PluginsService) CaptureJoin {
     self.expireCaptures(now_ms, tap);
 
     switch (self.captures.push(now_ms, half)) {
-        .pending => {},
-        .complete => |value| {
+        .pending => return .joined,
+        .complete, .partial => |value| {
             var exchange = value;
             tap.submit(&exchange);
+            return .joined;
         },
-        .partial => |value| {
+        .full => |value| {
             var exchange = value;
-            exchange.deinit();
+            tap.submit(&exchange);
+            return .table_full;
         },
     }
 }
 
-/// Delegates bounded content decoding to the active proxy.
+/// Whether a captured half found room in the join table.
+pub const CaptureJoin = enum {
+    joined,
+    /// Every slot waited for a peer; the half went to the tap alone.
+    table_full,
+};
+
+/// Delegates bounded content decoding to the active proxy, when a tap
+/// worker will read the body; otherwise the exchange is only counted and
+/// released, so decoding it would be wasted work on the event loop.
 ///
 /// ```zig
-/// proxy_runtime.decodeCapture(half);
+/// proxy_runtime.decodeCapture(half, plugins);
 /// ```
-pub fn decodeCapture(self: *ProxyRuntime, half: *Half) void {
+pub fn decodeCapture(self: *ProxyRuntime, half: *Half, tap: *const PluginsService) void {
     const proxy = self.proxy orelse return;
+    if (!tap.listening()) {
+        return;
+    }
+
     proxy.decodeCapture(half);
+}
+
+/// Returns the active proxy's capture bounds, or the defaults while
+/// disabled.
+///
+/// ```zig
+/// const bounds = proxy_runtime.captureConfig();
+/// ```
+pub fn captureConfig(self: *const ProxyRuntime) Config {
+    const proxy = self.proxy orelse return .{};
+    return proxy.captureConfig();
 }
 
 /// Submits every partial capture whose join deadline has elapsed.

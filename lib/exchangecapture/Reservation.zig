@@ -5,6 +5,18 @@ const Reservation = @This();
 quota: *Quota,
 bytes: usize,
 
+/// Grows the reservation by up to `bytes`, as much as its quota has left,
+/// and returns how many bytes it gained.
+///
+/// ```zig
+/// const gained = reservation.grow(needed - reservation.bytes);
+/// ```
+pub fn grow(self: *Reservation, bytes: usize) usize {
+    const granted = self.quota.reserveAtMost(bytes);
+    self.bytes += granted;
+    return granted;
+}
+
 pub fn release(self: *Reservation) void {
     if (self.bytes == 0) {
         return;

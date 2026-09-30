@@ -363,7 +363,7 @@ const HeadShape = struct {
     field_count: u8 = 0,
     fields: [max_fields]FieldShape = @splat(.{ .field = .host }),
     padding: Padding = .none,
-    padding_len: u16 = 0,
+    padding_len: u32 = 0,
     ending: Ending = .complete,
     /// The session's `max_read_bytes`; zero leaves reads unlimited.
     read_limit: u8 = 0,

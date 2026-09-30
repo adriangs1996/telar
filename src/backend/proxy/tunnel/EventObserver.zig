@@ -5,15 +5,22 @@ const exchangecapture = @import("exchangecapture");
 const httprelay = @import("httprelay");
 const std = @import("std");
 const CaptureStreams = @import("CaptureStreams.zig");
+const Exchange = @import("Exchange.zig");
 const relay = httprelay.http2;
 const buffer_support = exchangecapture.buffer_support;
 const Lifecycle = httprelay.http2.Lifecycle;
 const EventObserver = @This();
 
 captures: ?*CaptureStreams = null,
+/// The connection each event proves active; null in tests.
+exchange: ?*Exchange = null,
 
 /// Example: `observer.emit(.{ .request_body = .{ .stream_id = 3, .bytes = fragment } });`
 pub fn emit(self: *EventObserver, event: relay.Event) void {
+    if (self.exchange) |exchange| {
+        exchange.touch();
+    }
+
     const captures = self.captures orelse return;
     switch (event) {
         .lifecycle => |lifecycle| if (outcomeOf(lifecycle)) |outcome| {

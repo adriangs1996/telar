@@ -66,7 +66,10 @@ fn relayDirection(self: *RelayContext, direction: relay_module.Direction) Stats 
         },
     } else null;
     defer if (captures) |*streams| streams.deinit();
-    var observer: EventObserver = .{ .captures = if (captures) |*streams| streams else null };
+    var observer: EventObserver = .{
+        .captures = if (captures) |*streams| streams else null,
+        .exchange = self.exchange,
+    };
 
     return h2.relay(self.session, h2.relayOptions(direction, .{ .gpa = self.gpa }), &observer);
 }
@@ -175,7 +178,7 @@ test "HTTP2 capture keeps interleaved streams independent" {
                     try std.testing.expectEqualStrings("two", response.body.bytes());
                 }
             },
-            .partial => |value| {
+            .partial, .full => |value| {
                 var exchange = value;
                 exchange.deinit();
                 return error.UnexpectedPartialCapture;

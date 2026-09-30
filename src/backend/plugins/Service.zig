@@ -9,6 +9,7 @@ const Exchange = owned.Exchange;
 const ExchangeIdentity = @import("ExchangeIdentity.zig");
 const Frame = @import("Frame.zig");
 const protocol = @import("protocol.zig");
+const TapLimitCounts = @import("TapLimitCounts.zig");
 const Service = @This();
 
 gpa: std.mem.Allocator,
@@ -18,6 +19,10 @@ worker_count: u8 = 0,
 results: std.Io.Queue(*Result) = undefined,
 result_storage: [service_support.queue_depth]*Result = undefined,
 next_event_id: std.atomic.Value(u64) = .init(1),
+/// Bytes of frames every worker queue holds, within `max_queued_bytes`.
+queued_bytes: std.atomic.Value(usize) = .init(0),
+/// Frames dropped because they did not fit `max_queued_bytes`.
+dropped_bytes: std.atomic.Value(u64) = .init(0),
 
 /// Starts one actor for every configured and trusted tap plugin.
 ///
@@ -72,9 +77,27 @@ pub fn submit(self: *Service, captured: *Exchange) void {
     const event_id = self.next_event_id.fetchAdd(1, .monotonic);
     for (self.workers[0..self.worker_count]) |*worker| {
         const identity: ExchangeIdentity = .{ .id = event_id, .generation = worker.spec.generation };
-        const frame = self.encodeFrame(captured, identity) catch continue;
+        const size = service_support.capturedBytes(captured) + protocol.overhead_bytes;
+        if (!self.charge(size)) {
+            _ = self.dropped_bytes.fetchAdd(1, .monotonic);
+            continue;
+        }
+
+        const frame = self.encodeFrame(captured, identity, size) catch {
+            _ = self.queued_bytes.fetchSub(size, .monotonic);
+            continue;
+        };
         worker.submit(self.io, frame);
     }
+}
+
+/// Whether any tap worker receives exchanges.
+///
+/// ```zig
+/// if (service.listening()) decode(half);
+/// ```
+pub fn listening(self: *const Service) bool {
+    return self.worker_count != 0;
 }
 
 /// Waits for the next validated worker protocol result.
@@ -108,8 +131,26 @@ pub fn authorize(self: *const Service, result: *const Result) !void {
     }
 }
 
-fn encodeFrame(self: *Service, captured: *const Exchange, identity: ExchangeIdentity) !*Frame {
-    const size = service_support.capturedBytes(captured) + protocol.overhead_bytes;
+/// Counts what the tap reached: frames dropped at a full queue or past the
+/// queued-bytes budget, replies past their timeout, and disabled workers.
+///
+/// ```zig
+/// const counts = service.limitCounts();
+/// ```
+pub fn limitCounts(self: *const Service) TapLimitCounts {
+    var counts: TapLimitCounts = .{ .dropped_bytes = self.dropped_bytes.load(.monotonic) };
+    for (self.workers[0..self.worker_count]) |*worker| {
+        counts.dropped_queue += worker.dropped.load(.monotonic);
+        counts.timeouts += worker.timeouts.load(.monotonic);
+        counts.disabled += @intFromBool(worker.disabled.load(.monotonic));
+    }
+
+    return counts;
+}
+
+/// Encodes one exchange into a frame of `size` bytes already charged to the
+/// queued-bytes budget; the frame releases them when it is freed.
+fn encodeFrame(self: *Service, captured: *const Exchange, identity: ExchangeIdentity, size: usize) !*Frame {
     const bytes = try self.gpa.alloc(u8, size);
     errdefer self.gpa.free(bytes);
     const payload = try protocol.encodeExchange(bytes, identity, captured);
@@ -119,8 +160,19 @@ fn encodeFrame(self: *Service, captured: *const Exchange, identity: ExchangeIden
         .event_id = identity.id,
         .storage = bytes,
         .len = payload.len,
+        .budget = &self.queued_bytes,
     };
     return frame;
+}
+
+/// Charges `size` bytes to the queued-bytes budget when they fit.
+fn charge(self: *Service, size: usize) bool {
+    var current = self.queued_bytes.load(.monotonic);
+    while (size <= service_support.max_queued_bytes -| current) {
+        current = self.queued_bytes.cmpxchgWeak(current, current + size, .monotonic, .monotonic) orelse return true;
+    }
+
+    return false;
 }
 
 const InitOptions = struct {
@@ -128,3 +180,26 @@ const InitOptions = struct {
     gpa: std.mem.Allocator,
     specs: []const ServiceSpec,
 };
+
+test "the queued-bytes budget refuses a frame past it and a freed frame returns its bytes" {
+    var service: Service = undefined;
+    service.queued_bytes = .init(0);
+
+    try std.testing.expect(service.charge(service_support.max_queued_bytes - 1));
+    try std.testing.expect(!service.charge(2));
+    try std.testing.expect(service.charge(1));
+    try std.testing.expect(!service.charge(1));
+
+    const frame = try std.testing.allocator.create(Frame);
+    frame.* = .{
+        .gpa = std.testing.allocator,
+        .event_id = 1,
+        .storage = try std.testing.allocator.alloc(u8, 1),
+        .len = 1,
+        .budget = &service.queued_bytes,
+    };
+    frame.deinit();
+
+    try std.testing.expectEqual(@as(usize, service_support.max_queued_bytes - 1), service.queued_bytes.load(.monotonic));
+    try std.testing.expect(service.charge(1));
+}
