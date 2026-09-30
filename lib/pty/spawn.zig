@@ -5,6 +5,7 @@ const std = @import("std");
 const native = @import("native.zig");
 const ChildDescriptor = @import("ChildDescriptor.zig");
 const command_mod = @import("command_support.zig");
+const descriptor_limit = @import("descriptor_limit.zig");
 
 const default_path = "/usr/local/bin:/bin:/usr/bin";
 
@@ -153,6 +154,8 @@ fn childFailureError(failure: ChildFailure) anyerror {
 /// No allocator, error unwinding, or operation that can acquire a userspace
 /// libc lock may run in the child between `fork` and successful `execve`.
 fn childExec(child: ChildExec) noreturn {
+    descriptor_limit.restoreInChild();
+
     const session_result = native.createSession();
     if (session_result < 0) {
         childFail(child.error_fd, .session, std.posix.errno(session_result));

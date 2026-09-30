@@ -7,10 +7,13 @@ pub const http1 = @import("http1/http1.zig");
 pub const http2 = @import("http2/http2.zig");
 pub const RouteMatch = @import("RouteMatch.zig");
 pub const header_rules = @import("header_rules.zig");
+pub const observer_hooks = @import("observer_hooks.zig");
 
 test {
     _ = @import("RouteMatch.zig");
     _ = @import("header_rules.zig");
+    _ = @import("observer_hooks.zig");
+    _ = @import("http1/FramingLine.zig");
     _ = @import("http1/AnalyzeOptions.zig");
     _ = @import("http1/ConnectionCapture.zig");
     _ = @import("http1/ConnectionIntegration.zig");

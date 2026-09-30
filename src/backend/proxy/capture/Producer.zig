@@ -9,6 +9,7 @@ const Half = owned.Half;
 const decode_mod = exchangecapture.decode;
 const buffer = exchangecapture.buffer_support;
 const CaptureMetrics = @import("CaptureMetrics.zig");
+const Truncation = exchangecapture.Truncation;
 const Producer = @This();
 
 gpa: std.mem.Allocator,
@@ -17,7 +18,14 @@ quota: Quota,
 channel: Channel = undefined,
 started: std.atomic.Value(u64) = .init(0),
 truncated: std.atomic.Value(u64) = .init(0),
-skipped_quota: std.atomic.Value(u64) = .init(0),
+/// Halves cut short by `max_part_bytes`, by their share of
+/// `max_exchange_bytes` and by `max_total_bytes`; a half counts once per
+/// bound that cut it.
+truncated_part: std.atomic.Value(u64) = .init(0),
+truncated_exchange: std.atomic.Value(u64) = .init(0),
+truncated_total: std.atomic.Value(u64) = .init(0),
+/// Directions not captured because their half could not be allocated.
+skipped: std.atomic.Value(u64) = .init(0),
 decode_failed: std.atomic.Value(u64) = .init(0),
 
 /// Initializes bounded capture storage and its delivery queue.
@@ -35,7 +43,8 @@ pub fn init(self: *Producer, gpa: std.mem.Allocator, config: Config) !void {
     self.channel.init();
 }
 
-/// Reserves one direction of an exchange without blocking the relay.
+/// Starts one direction of an exchange without blocking the relay. The half
+/// reserves quota only as bytes arrive.
 ///
 /// ```zig
 /// const half = producer.start(options) orelse return;
@@ -52,7 +61,7 @@ pub fn start(self: *Producer, options: StartOptions) ?*Half {
         .started_at_ms = options.started_at_ms,
     }) orelse {
         if (self.config.enabled) {
-            _ = self.skipped_quota.fetchAdd(1, .monotonic);
+            _ = self.skipped.fetchAdd(1, .monotonic);
         }
 
         return null;
@@ -75,7 +84,22 @@ pub fn publish(self: *Producer, io: std.Io, half: *Half) void {
         _ = self.truncated.fetchAdd(1, .monotonic);
     }
 
+    self.countTruncation(half.truncation);
     _ = self.channel.publish(io, half);
+}
+
+fn countTruncation(self: *Producer, truncation: Truncation) void {
+    if (truncation.part) {
+        _ = self.truncated_part.fetchAdd(1, .monotonic);
+    }
+
+    if (truncation.exchange) {
+        _ = self.truncated_exchange.fetchAdd(1, .monotonic);
+    }
+
+    if (truncation.total) {
+        _ = self.truncated_total.fetchAdd(1, .monotonic);
+    }
 }
 
 /// Waits for one captured half.
@@ -116,9 +140,11 @@ pub fn decodeBody(self: *Producer, half: *Half) void {
         return;
     }
 
-    const available = @min(self.config.max_part_bytes, half.reservation.bytes -| half.head.len);
+    const share_room = half.max_bytes -| half.head.len;
+    const available = @min(self.config.max_part_bytes, share_room);
+    // Head and body together never pass the half's share, so a head that
+    // leaves no room also leaves no body to decode or cut.
     if (available == 0) {
-        half.body.truncated = half.body.len != 0;
         return;
     }
 
@@ -137,15 +163,30 @@ pub fn decodeBody(self: *Producer, half: *Half) void {
     }
 
     const was_truncated = half.body.truncated;
+    const cut_before = half.truncation;
     half.captured_bytes -= half.body.len;
     half.body.reset();
     const part: buffer.Part = if (half.side == .request) .request_body else .response_body;
     _ = half.append(part, result.bytes);
+    if (result.truncated) {
+        if (self.config.max_part_bytes <= share_room) {
+            half.truncation.part = true;
+        } else {
+            half.truncation.exchange = true;
+        }
+    }
+
     half.body.truncated = half.body.truncated or result.truncated or was_truncated;
     half.body_decoded = result.decoded;
     if (!was_truncated and half.body.truncated) {
         _ = self.truncated.fetchAdd(1, .monotonic);
     }
+
+    self.countTruncation(.{
+        .part = half.truncation.part and !cut_before.part,
+        .exchange = half.truncation.exchange and !cut_before.exchange,
+        .total = half.truncation.total and !cut_before.total,
+    });
 }
 
 /// Returns current atomic counters and queue depth as one value snapshot.
@@ -159,7 +200,10 @@ pub fn metrics(self: *const Producer) CaptureMetrics {
     return .{
         .started = self.started.load(.monotonic),
         .truncated = self.truncated.load(.monotonic),
-        .skipped_quota = self.skipped_quota.load(.monotonic),
+        .truncated_part = self.truncated_part.load(.monotonic),
+        .truncated_exchange = self.truncated_exchange.load(.monotonic),
+        .truncated_total = self.truncated_total.load(.monotonic),
+        .skipped = self.skipped.load(.monotonic),
         .dropped_queue = queue_metrics.dropped,
         .decode_failed = self.decode_failed.load(.monotonic),
         .queued = queue_metrics.queued,

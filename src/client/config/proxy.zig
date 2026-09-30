@@ -2,10 +2,12 @@
 
 const data = @import("model");
 const core = @import("telar-core");
+const exchangecapture = @import("exchangecapture");
 const lua_api = @import("lua-api");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
 const std = @import("std");
+const CaptureConfig = exchangecapture.Config;
 
 pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
@@ -101,13 +103,10 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic:
             return error.InvalidConfig;
         }
 
-        runtime.proxy_intercept_hosts.append(host) catch {
-            diagnostic.set(
-                "config.runtime.proxy.intercept_hosts exceeds its {d}-byte budget",
-                .{core.max_intercept_bytes},
-            );
-            return error.InvalidConfig;
-        };
+        // The count and each hostname's length were checked above, and the
+        // byte budget holds `max_intercept_hosts` hostnames of
+        // `max_hostname_bytes`, so the host always fits.
+        runtime.proxy_intercept_hosts.append(host) catch unreachable;
     }
     runtime.proxy_intercept_hosts.sortAndDeduplicate();
 }
@@ -157,8 +156,8 @@ fn parseCapture(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnost
         .name = "join_timeout_ms",
         .default = runtime.proxy_capture_join_timeout_ms,
     }, diagnostic);
-    if (timeout > std.math.maxInt(u32)) {
-        diagnostic.set("config.runtime.proxy.capture.join_timeout_ms is out of range", .{});
+    if (timeout > CaptureConfig.max_join_timeout_ms) {
+        diagnostic.set("config.runtime.proxy.capture.join_timeout_ms exceeds its {d} ms ceiling", .{CaptureConfig.max_join_timeout_ms});
         return error.InvalidConfig;
     }
     runtime.proxy_capture_join_timeout_ms = @intCast(timeout);
@@ -168,6 +167,16 @@ fn parseCapture(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnost
         runtime.proxy_capture_max_exchange_bytes > runtime.proxy_capture_max_total_bytes)
     {
         diagnostic.set("config.runtime.proxy.capture byte limits must satisfy part <= exchange <= total", .{});
+        return error.InvalidConfig;
+    }
+
+    if (runtime.proxy_capture_max_exchange_bytes > CaptureConfig.max_exchange_ceiling) {
+        diagnostic.set("config.runtime.proxy.capture.max_exchange_bytes exceeds its {d}-byte ceiling", .{CaptureConfig.max_exchange_ceiling});
+        return error.InvalidConfig;
+    }
+
+    if (runtime.proxy_capture_max_total_bytes > CaptureConfig.max_total_ceiling) {
+        diagnostic.set("config.runtime.proxy.capture.max_total_bytes exceeds its {d}-byte ceiling", .{CaptureConfig.max_total_ceiling});
         return error.InvalidConfig;
     }
 }

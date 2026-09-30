@@ -66,8 +66,12 @@ workers do so: change-review highlighting records the reach in
 the edition, the favicon worker returns `FaviconCompletion.limit`, reported
 by `favicons.complete`, and the clipboard capture worker returns
 `Completion.limit`, reported by `clipboard_capture.completeClipboardCapture`.
-On worktree detection, whose completion would gain a
-`limit: ?core.LimitReach = null` field, the shape is:
+Workers that live as long as the runtime and have no completion per piece
+of work, the proxy's tunnels and the tap workers, count each limit in an
+atomic instead; `proxy_limits.report`, on the maintenance tick, reports
+every limit whose count grew since the last tick. This is the shape a worker
+with a completion takes, on worktree detection, whose completion gains a
+`limit: ?core.LimitReach = null` field:
 
 ```zig
 // The worker: a bounded scan that stopped at its limit.
