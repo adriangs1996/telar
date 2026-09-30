@@ -51,6 +51,7 @@ pub const max_suggestion_bytes = types.max_suggestion_bytes;
 pub const max_pane_title_bytes = types.max_pane_title_bytes;
 pub const max_agent_manifests = types.max_agent_manifests;
 pub const first_custom_agent_provider = types.first_custom_agent_provider;
+pub const max_custom_agent_manifests = types.max_custom_agent_manifests;
 pub const max_agent_provider_index = types.max_agent_provider_index;
 pub const max_agent_provider_name_bytes = types.max_agent_provider_name_bytes;
 pub const max_agent_display_name_bytes = types.max_agent_display_name_bytes;
