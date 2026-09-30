@@ -4,6 +4,7 @@ const lua_api = @import("lua-api");
 const host_support = @import("host_support.zig");
 const Exchange = @import("Exchange.zig");
 const Batch = @import("Batch.zig");
+const service_support = @import("service_support.zig");
 const Host = @This();
 
 // A listener's budget per event. As in configuration, instructions bound the
@@ -13,7 +14,7 @@ const Host = @This();
 const limits: lua.Limits = .{
     .memory = 64 * 1024 * 1024,
     .instructions = 5_000_000,
-    .deadline_after_ns = 2 * std.time.ns_per_s,
+    .deadline_after_ns = service_support.callback_deadline_ms * std.time.ns_per_ms,
 };
 
 io: std.Io,

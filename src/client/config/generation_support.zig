@@ -1008,6 +1008,18 @@ test "runtime proxy rejects unsafe intercept host patterns" {
             .source = "return { api_version = 2, runtime = { proxy = { capture = { max_part_bytes = 9, max_exchange_bytes = 8 } } } }",
             .message = "byte limits must satisfy part <= exchange <= total",
         },
+        .{
+            .source = "return { api_version = 2, runtime = { proxy = { capture = { max_exchange_bytes = 64 * 1024 * 1024 + 1, max_total_bytes = 1024 * 1024 * 1024 } } } }",
+            .message = "max_exchange_bytes exceeds its 67108864-byte ceiling",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { proxy = { capture = { max_total_bytes = 1024 * 1024 * 1024 + 1 } } } }",
+            .message = "max_total_bytes exceeds its 1073741824-byte ceiling",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { proxy = { capture = { join_timeout_ms = 3600001 } } } }",
+            .message = "join_timeout_ms exceeds its 3600000 ms ceiling",
+        },
     };
     for (cases) |case| {
         var diagnostic: data.Diagnostic = .{};
@@ -1016,6 +1028,51 @@ test "runtime proxy rejects unsafe intercept host patterns" {
             Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = case.source, .source_name = "@config.lua", .number = 1 }),
         );
         try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), case.message) != null);
+    }
+}
+
+test "runtime proxy capture accepts every bound at its ceiling" {
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try Generation.loadSource(
+        .{
+            .gpa = std.testing.allocator,
+            .io = std.testing.io,
+            .diagnostic = &diagnostic,
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { proxy = { capture = { max_part_bytes = 64 * 1024 * 1024, max_exchange_bytes = 64 * 1024 * 1024, max_total_bytes = 1024 * 1024 * 1024, join_timeout_ms = 3600000 } } } }",
+            .source_name = "@config.lua",
+            .number = 1,
+        },
+    );
+    defer generation.deinit();
+
+    try std.testing.expectEqual(@as(usize, 64 * 1024 * 1024), generation.snapshot.runtime.proxy_capture_max_exchange_bytes);
+    try std.testing.expectEqual(@as(usize, 1024 * 1024 * 1024), generation.snapshot.runtime.proxy_capture_max_total_bytes);
+    try std.testing.expectEqual(@as(u32, 3600000), generation.snapshot.runtime.proxy_capture_join_timeout_ms);
+}
+
+test "runtime proxy accepts 256 intercept hosts of the longest hostname" {
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try Generation.loadSource(
+        .{
+            .gpa = std.testing.allocator,
+            .io = std.testing.io,
+            .diagnostic = &diagnostic,
+        },
+        .{
+            .source = "local h = {}; for i = 1, 256 do local n = string.format('%03d', i); h[i] = n .. string.rep('a', 59) .. '.' .. string.rep('b', 63) .. '.' .. string.rep('c', 63) .. '.' .. string.rep('d', 62) end; return { api_version = 2, runtime = { proxy = { intercept_hosts = h } } }",
+            .source_name = "@config.lua",
+            .number = 1,
+        },
+    );
+    defer generation.deinit();
+    var storage: [core.max_intercept_hosts][]const u8 = undefined;
+    const hosts = generation.snapshot.runtime.proxyInterceptHosts(&storage);
+
+    try std.testing.expectEqual(@as(usize, core.max_intercept_hosts), hosts.len);
+    for (hosts) |host| {
+        try std.testing.expectEqual(@as(usize, core.max_hostname_bytes), host.len);
     }
 }
 

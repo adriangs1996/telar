@@ -26,7 +26,7 @@ test "running service leaves exchange capture inert when disabled" {
 
     const snapshot = service.metrics();
     try std.testing.expectEqual(@as(u64, 0), snapshot.capture_started);
-    try std.testing.expectEqual(@as(u64, 0), snapshot.capture_skipped_quota);
+    try std.testing.expectEqual(@as(u64, 0), snapshot.capture_skipped);
     try std.testing.expectEqual(@as(u64, 0), snapshot.queued_captures);
 }
 
