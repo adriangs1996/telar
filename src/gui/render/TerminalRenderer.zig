@@ -70,6 +70,10 @@ origin: [2]u32 = .{ 0, 0 },
 viewport: [2]u32 = .{ 0, 0 },
 atlas_version: u32 = 0,
 last_page_version: u32 = 0,
+/// The frame version the backend must hold to upload only `atlas_dirty`,
+/// the rows written since; any other version uploads the whole page.
+atlas_dirty_base: u32 = 0,
+atlas_dirty: [2]u32 = .{ 0, 0 },
 /// The side glyph pages open at: `GlyphAtlas.min_side` until one frame
 /// outgrew it.
 atlas_side: u32 = GlyphAtlas.min_side,
@@ -220,18 +224,23 @@ pub fn settleAtlas(self: *Renderer) !GlyphAtlas.Settled {
     switch (settled) {
         .kept, .exhausted => {},
         .emptied => self.retained.invalidate(),
-        .outgrown => {
-            var replacement = try self.openAtlas(atlas.pixel_height, GlyphAtlas.max_side);
-            errdefer replacement.deinit();
-            atlas.deinit();
-            self.atlas = replacement;
-            self.atlas_side = GlyphAtlas.max_side;
-            self.last_page_version = 0;
-            self.retained.invalidate();
-        },
+        .outgrown => try self.reopenAtlas(GlyphAtlas.max_side),
+        .shrunk => try self.reopenAtlas(GlyphAtlas.min_side),
     }
 
     return settled;
+}
+
+/// Replaces the glyph page with an empty one of `side` at the same height.
+fn reopenAtlas(self: *Renderer, side: u32) !void {
+    const atlas = &self.atlas.?;
+    var replacement = try self.openAtlas(atlas.pixel_height, side);
+    errdefer replacement.deinit();
+    atlas.deinit();
+    self.atlas = replacement;
+    self.atlas_side = side;
+    self.last_page_version = 0;
+    self.retained.invalidate();
 }
 
 /// Whether the glyph page filled and the next frame settles it into room
@@ -314,10 +323,14 @@ pub fn prepare(self: *Renderer, projection: client.Projection) !data.Presentatio
 /// changed, so the backend uploads once per change and never on a warm frame.
 /// Example: `renderer.seal();`
 pub fn seal(self: *Renderer) void {
-    const page_version = self.atlas.?.version;
+    const atlas = &self.atlas.?;
+    atlas.frameDrawn();
+    const page_version = atlas.version;
     if (self.last_page_version != page_version) {
         self.last_page_version = page_version;
+        self.atlas_dirty_base = self.atlas_version;
         self.atlas_version +%= 1;
+        self.atlas_dirty = atlas.takeDirty();
     }
 
     const sprites_version = if (self.sprites) |page| page.version else 0;
@@ -609,6 +622,9 @@ pub fn frame(self: *const Renderer, token: u64) native.Frame {
         .atlas = if (self.atlas) |atlas| atlas.pixels.ptr else null,
         .atlas_side = if (self.atlas) |atlas| atlas.side else 0,
         .atlas_version = self.atlas_version,
+        .atlas_dirty_base = self.atlas_dirty_base,
+        .atlas_dirty_top = self.atlas_dirty[0],
+        .atlas_dirty_bottom = self.atlas_dirty[1],
         .sprites = if (self.sprites) |page| page.pixels.ptr else null,
         .sprites_side = if (self.sprites) |page| page.side else 0,
         .sprites_version = self.sprites_version,

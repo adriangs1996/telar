@@ -2,9 +2,11 @@
 //! budget: how many graphics snapshots it asked for since `since_ns`, and
 //! whether it waits until `due_ns` before it asks again. Each window that
 //! ends waiting counts in `backoff`, so a pane whose limit stays full waits
-//! longer every time. A pane past its budget never spends the link's. A row
-//! lives while its pane is paused: a snapshot that applies without pausing
-//! again, the pane leaving the model or a new session removes it.
+//! longer every time. A pane past its budget never spends the link's. A
+//! snapshot that applies without pausing again ends the pause but keeps
+//! the row, with its backoff, as resumed: a pane that pauses again soon
+//! goes on from there without a second notice. The pane leaving the model
+//! or a new session removes the row.
 const std = @import("std");
 const core = @import("telar-core");
 const GraphicsPauses = @This();
@@ -24,6 +26,8 @@ waiting: [capacity]bool = undefined,
 /// A graphics snapshot began since the pane last reached its limit; its
 /// end, applied, ends the pause.
 snapshot_begun: [capacity]bool = undefined,
+/// When the pause ended, or null while the pane is paused.
+resumed_ns: [capacity]?u64 = undefined,
 count: usize = 0,
 /// Rows waiting for their window to pass; zero keeps every check to one
 /// comparison and schedules no timer.
@@ -45,7 +49,8 @@ pub fn find(self: *const GraphicsPauses, pane_id: core.PaneId) ?usize {
 /// pane with it. One comparison while no pane is paused.
 /// Example: `if (model.graphics_pauses.contains(pane.id)) try drawPausedMark(canvas);`
 pub fn contains(self: *const GraphicsPauses, pane_id: core.PaneId) bool {
-    return self.find(pane_id) != null;
+    const slot = self.find(pane_id) orelse return false;
+    return self.resumed_ns[slot] == null;
 }
 
 /// Adds a row for a pane `find` did not find. The table must have room:
@@ -64,6 +69,7 @@ pub fn add(self: *GraphicsPauses, pane_id: core.PaneId, now_ns: u64) usize {
     self.backoff[slot] = 0;
     self.waiting[slot] = false;
     self.snapshot_begun[slot] = false;
+    self.resumed_ns[slot] = null;
     return slot;
 }
 
@@ -81,18 +87,21 @@ pub fn remove(self: *GraphicsPauses, slot: usize) void {
     self.backoff[slot] = self.backoff[last];
     self.waiting[slot] = self.waiting[last];
     self.snapshot_begun[slot] = self.snapshot_begun[last];
+    self.resumed_ns[slot] = self.resumed_ns[last];
     self.count = last;
 }
 
-/// The row whose window started longest ago, the one a full table gives
-/// up first.
+/// The row a full table gives up first: a resumed one if any, else the
+/// one whose window started longest ago.
 /// Example: `const evicted = pauses.oldest();`
 pub fn oldest(self: *const GraphicsPauses) usize {
     std.debug.assert(self.count != 0);
 
     var slot: usize = 0;
     for (1..self.count) |candidate| {
-        if (self.since_ns[candidate] < self.since_ns[slot]) {
+        const resumed = self.resumed_ns[candidate] != null;
+        const current_resumed = self.resumed_ns[slot] != null;
+        if ((resumed and !current_resumed) or (resumed == current_resumed and self.since_ns[candidate] < self.since_ns[slot])) {
             slot = candidate;
         }
     }

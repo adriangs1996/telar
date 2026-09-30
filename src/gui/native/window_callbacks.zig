@@ -104,14 +104,14 @@ fn input(context: ?*anyopaque, event: native.InputEvent) callconv(.c) c_int {
     const decoded = decode_input.decode(event) catch |err| {
         // A native paste past the clipboard capacity is refused whole.
         if (err == error.InputTooLarge) {
-            _ = limit_reached.absorb(gui, .window_input, err);
+            _ = limit_reached.absorbInput(gui, null, err);
         }
 
         return 0;
     };
     // An event that reaches a limit is refused alone; the window goes on.
     const accepted = gui.input(decoded) catch |err| {
-        if (!limit_reached.absorb(gui, .window_input, err)) {
+        if (!limit_reached.absorbInput(gui, decoded, err)) {
             gui.fail(err);
         }
 

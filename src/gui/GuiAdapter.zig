@@ -39,6 +39,7 @@ const ClipboardResult = @import("input/ClipboardResult.zig");
 const ScrollSample = @import("input/ScrollSample.zig");
 const PointerEvent = @import("input/PointerEvent.zig");
 const PasteChunk = @import("PasteChunk.zig");
+const TextCommit = @import("input/TextCommit.zig");
 
 const HostServices = @import("host/Services.zig");
 const SidebarPreference = @import("SidebarPreference.zig");
@@ -59,6 +60,7 @@ const native_callbacks = @import("native/window_callbacks.zig");
 const limit_reached = @import("limit_reached.zig");
 const PresentationResult = @import("PresentationResult.zig");
 const GlyphAtlas = @import("text/GlyphAtlas.zig");
+const WindowLimit = @import("WindowLimit.zig").WindowLimit;
 const LimitedFrame = @import("LimitedFrame.zig");
 const window_machines = @import("window_machines.zig");
 const clipboard_image = @import("clipboard_image.zig");
@@ -123,6 +125,8 @@ update_limited: ?anyerror = null,
 /// next pump posts it before anything else, so the frame in flight always
 /// completes and focus stays ordered.
 unposted: Unposted = .{},
+/// The window's own limits it is at now; each reports when entered.
+reached: std.EnumSet(WindowLimit) = .{},
 exit_status: ?u8 = null,
 started: bool = false,
 needs_draw: bool = false,
@@ -215,7 +219,8 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.app.model.host.clipboard_capture = clipboard_image.supported();
 
     gui.driver.configuration.inbox = &gui.driver.inbox;
-    gui.input_queue = .{};
+    try gui.input_queue.init(params.gpa);
+    errdefer gui.input_queue.deinit(params.gpa);
     gui.router = router;
     gui.binding_timeout = .{};
     gui.binding_revision = 0;
@@ -226,10 +231,12 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.paste_route = .shared;
     gui.recovery_interactions_finished = false;
     gui.stopped = false;
-    gui.host = .{};
+    try gui.host.init(params.gpa);
+    errdefer gui.host.deinit(params.gpa);
     gui.limited = null;
     gui.update_limited = null;
     gui.unposted = .{};
+    gui.reached = .{};
     gui.input_revision = 0;
     gui.focused = true;
     gui.widgets = .{};
@@ -265,6 +272,8 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
 /// Call after native GPU consumers stop; joins workers before releasing resources. Example: `gui.deinit();`
 pub fn deinit(self: *GuiAdapter) void {
     const gpa = self.app.gpa;
+    self.input_queue.deinit(gpa);
+    self.host.deinit(gpa);
     self.driver.deinit();
     self.renderer.deinit();
 
@@ -895,43 +904,38 @@ fn drainInput(self: *GuiAdapter) !void {
 
         switch (pending_input.front().?.*) {
             .key => |key| try self.dispatchKey(key),
-            .text => |*text| {
-                if (!try self.widgetInput(
-                    .{
-                        .text = text.text(),
-                    },
-                )) {
-                    _ = try self.routeKey(
-                        .{
-                            .key = text.key(),
-                            .now_ns = pacing.clock.monotonic(app.io),
-                        },
-                    );
+            .text => |*text| try self.dispatchText(text),
+            .text_block => |*held| {
+                const bytes = pending_input.large_events.view(held.slot).text.bytes;
+                const len = std.unicode.utf8ByteSequenceLength(bytes[held.offset]) catch 1;
+                var scalar: TextCommit = .{ .bytes = @splat(0), .len = len };
+                @memcpy(scalar.bytes[0..len], bytes[held.offset..][0..len]);
+                held.offset += len;
+                try self.dispatchText(&scalar);
+                if (held.offset < bytes.len) {
+                    continue;
                 }
             },
-            .paste_start => {
-                _ = try self.applyInputDecision(self.router.interrupt());
-                self.paste_route = if (try self.beginWidgetPaste()) .widget else .shared;
-
-                if (self.paste_route == .shared) {
-                    _ = try client.paste_routing.start(app);
-                }
-            },
-            .paste_text => |*chunk| {
-                if (self.paste_route == .widget) {
-                    try self.widgetPaste(chunk.bytes[0..chunk.len]);
-                } else {
-                    _ = try client.paste_routing.content(app, chunk.bytes[0..chunk.len]);
-                }
-            },
-            .paste_finish => {
-                if (self.paste_route == .widget) {
-                    try self.endWidgetPaste();
-                } else {
-                    _ = try client.paste_routing.finish(app);
+            .paste_start => try self.startPaste(),
+            .paste_text => |*chunk| try self.pasteContent(chunk.bytes[0..chunk.len]),
+            .paste_finish => try self.finishPaste(),
+            .paste_block => |*held| {
+                const bytes = pending_input.large_events.view(held.slot).paste;
+                if (!held.started) {
+                    held.started = true;
+                    try self.startPaste();
+                    continue;
                 }
 
-                self.paste_route = .shared;
+                if (held.offset < bytes.len) {
+                    const count = PasteChunk.nextSize(bytes[held.offset..]);
+                    const chunk = bytes[held.offset..][0..count];
+                    held.offset += @intCast(count);
+                    try self.pasteContent(chunk);
+                    continue;
+                }
+
+                try self.finishPaste();
             },
             .release_recovery => {
                 if (!self.recovery_interactions_finished) {
@@ -1010,6 +1014,51 @@ fn drainInput(self: *GuiAdapter) !void {
     }
 
     try self.finishInput(pending);
+}
+
+/// Delivers one committed scalar to the focused widget or, failing that, to
+/// the shared key router.
+fn dispatchText(self: *GuiAdapter, text: *const TextCommit) !void {
+    if (!try self.widgetInput(
+        .{
+            .text = text.text(),
+        },
+    )) {
+        _ = try self.routeKey(
+            .{
+                .key = text.key(),
+                .now_ns = pacing.clock.monotonic(self.app.io),
+            },
+        );
+    }
+}
+
+/// Opens a native paste on the widget that takes it or the shared route.
+fn startPaste(self: *GuiAdapter) !void {
+    _ = try self.applyInputDecision(self.router.interrupt());
+    self.paste_route = if (try self.beginWidgetPaste()) .widget else .shared;
+
+    if (self.paste_route == .shared) {
+        _ = try client.paste_routing.start(self.app);
+    }
+}
+
+fn pasteContent(self: *GuiAdapter, bytes: []const u8) !void {
+    if (self.paste_route == .widget) {
+        try self.widgetPaste(bytes);
+    } else {
+        _ = try client.paste_routing.content(self.app, bytes);
+    }
+}
+
+fn finishPaste(self: *GuiAdapter) !void {
+    if (self.paste_route == .widget) {
+        try self.endWidgetPaste();
+    } else {
+        _ = try client.paste_routing.finish(self.app);
+    }
+
+    self.paste_route = .shared;
 }
 
 /// Resolve and execute one semantic key before accepting the next event.
@@ -1830,15 +1879,14 @@ fn measure(self: *GuiAdapter, renderer: *Renderer, viewport: native.Viewport) !c
     ) or renderer.scale != viewport.scale;
     renderer.sidebar_request = self.sidebar.request(self.app.model.sidebar_visible);
     const size = try renderer.measure(viewport);
-    if (renderer.cut_from) |wanted| {
-        client.limit_reached.report(
-            self.app,
-            .{
-                .limit = limit_reached.cell_count_limit,
-                .requested = wanted,
-            },
-        );
-    }
+    limit_reached.reportEntering(
+        self,
+        .grid_cells,
+        if (renderer.cut_from) |wanted| .{
+            .limit = limit_reached.cell_count_limit,
+            .requested = wanted,
+        } else null,
+    );
 
     if (viewport_changed or !std.meta.eql(size, self.app.model.host.host_size) or self.widgets.tab_drag_step != renderer.chrome.px(@intFromEnum(TabDragStep.logical_pixels))) {
         self.widgets.tab_drag.cancel();
@@ -1976,13 +2024,18 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
         self.chrome.invalidate();
     }
 
-    if (try renderer.settleAtlas() == .exhausted) {
-        client.limit_reached.report(
-            self.app,
+    // A page held full reports once; one that changes size may reach the
+    // limit anew.
+    switch (try renderer.settleAtlas()) {
+        .exhausted => limit_reached.reportEntering(
+            self,
+            .glyph_page,
             .{
                 .limit = GlyphAtlas.side_limit,
             },
-        );
+        ),
+        .outgrown, .shrunk => limit_reached.reportEntering(self, .glyph_page, null),
+        .kept, .emptied => {},
     }
 
     const commit = try scene.prepare(projected);

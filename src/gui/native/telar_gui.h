@@ -159,6 +159,12 @@ typedef struct {
   uint32_t image_release_count;
   const telar_gui_image_draw *image_draws;
   uint32_t image_draw_count;
+  // A host holding atlas version atlas_dirty_base uploads only rows
+  // atlas_dirty_top..atlas_dirty_bottom (half open) of atlas_version; any
+  // other host uploads the whole page.
+  uint32_t atlas_dirty_base;
+  uint32_t atlas_dirty_top;
+  uint32_t atlas_dirty_bottom;
 } telar_gui_frame;
 
 // Input kinds: 1 committed UTF-8 text, 2 clipboard paste, 3 semantic key,

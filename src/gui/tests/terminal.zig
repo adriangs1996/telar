@@ -468,7 +468,10 @@ test "native inbox holds input and GPU completion until the consumer runs" {
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
     try std.testing.expect(session.gui.app.presentation.active != null);
     _ = try session.gui.update();
-    try std.testing.expect(session.gui.input_queue.len >= 48);
+    // A text past the inline scalars is held whole and delivered a scalar
+    // per step, within the turn's budget.
+    const held = session.gui.input_queue.front().?.text_block;
+    try std.testing.expect(held.offset <= 80 - 48);
     try session.settle();
     try std.testing.expectEqual(@as(usize, 80), session.input_len);
     for (session.input[0..session.input_len]) |byte| {
@@ -653,4 +656,22 @@ test "warm retained rendering and repeated glyph edits allocate no adapter stora
     }
     try std.testing.expectEqual(shape_calls, renderer.atlas.?.shape_calls);
     try std.testing.expect(!failing.has_induced_failure);
+}
+
+test "a committed text longer than the input ring reaches the pane whole and in order" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    const text = "\u{3042}" ** 1200;
+    try input_support.acceptNative(session.gui, .{ .kind = 1, .text = text.ptr, .len = text.len });
+    var turns: usize = 0;
+    while (session.gui.input_queue.len != 0 and turns < 64) : (turns += 1) {
+        try input_support.pump(session.gui);
+        try session.settle();
+    }
+
+    try session.settle();
+    try std.testing.expectEqual(@as(usize, 0), session.gui.input_queue.len);
+    try std.testing.expectEqualStrings(text, session.input[0..session.input_len]);
 }

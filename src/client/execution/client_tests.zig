@@ -1057,9 +1057,10 @@ pub fn endGraphicsPauses(comptime recover: fn (*Client, RuntimeResync, anyerror)
     try closeForLimits(app);
 }
 
-/// Each window a pause ends waiting doubles the next wait, up to its cap;
-/// a snapshot that ends the pause resets it, so the next pause waits one
-/// window again.
+/// Each window a pause ends waiting doubles the next wait, up to its cap.
+/// A pane that pauses again soon after a snapshot ended its pause goes on
+/// with that backoff and no second notice; one that pauses after a healthy
+/// window starts a new pause that waits one window again.
 /// Example: `try client_tests.backOffPausedPanes(limit_reached.recover, limit_reached.resumeGraphics, limit_reached.receiveGraphicsSnapshot);`
 pub fn backOffPausedPanes(comptime recover: fn (*Client, RuntimeResync, anyerror) anyerror!void, comptime limit_reached_resume: fn (*Client) anyerror!void, comptime receive_snapshot: fn (*Client, core.Snapshot) anyerror!void) !void {
     const gpa = std.testing.allocator;
@@ -1102,11 +1103,22 @@ pub fn backOffPausedPanes(comptime recover: fn (*Client, RuntimeResync, anyerror
     ended.phase = .end;
     try receive_snapshot(app, ended);
     try std.testing.expect(!pauses.contains(limits_pane));
+    const notices = app.model.notification_center.count;
+    try reachImageLimit(recover, app);
+    try std.testing.expect(pauses.contains(limits_pane));
+    try std.testing.expectEqual(notices, app.model.notification_center.count);
+    const kept = pauses.find(limits_pane).?;
+    try std.testing.expect(pauses.backoff[kept] > 1);
+
+    try receive_snapshot(app, snapshot);
+    try receive_snapshot(app, ended);
+    pauses.resumed_ns[kept] = 0;
     for (0..4) |_| {
         try reachImageLimit(recover, app);
     }
 
     const slot = pauses.find(limits_pane).?;
+    try std.testing.expectEqual(@as(u8, 1), pauses.backoff[slot]);
     try std.testing.expectEqual(pauses.since_ns[slot] + runtime_link.healthy_after_ns, pauses.due_ns[slot]);
     try closeForLimits(app);
 }

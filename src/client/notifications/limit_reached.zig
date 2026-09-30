@@ -219,7 +219,9 @@ pub fn finishResumeTick(client: *Client, result: anyerror!void) !void {
 
 /// A graphics snapshot of a paused pane arrived and was applied. Its begin
 /// marks the pause as resuming; its end, when the pane did not reach its
-/// limit again in between, ends the pause: the row and its backoff go.
+/// limit again in between, ends the pause. The row stays as resumed, with
+/// its backoff, so a pane that pauses again soon neither notices again nor
+/// asks sooner.
 ///
 /// ```zig
 /// try limit_reached.receiveGraphicsSnapshot(client, snapshot);
@@ -234,7 +236,9 @@ pub fn receiveGraphicsSnapshot(client: *Client, snapshot: core.Snapshot) !void {
                 return;
             }
 
-            pauses.remove(slot);
+            pauses.snapshot_begun[slot] = false;
+            pauses.setWaiting(slot, false);
+            pauses.resumed_ns[slot] = pacing.clock.monotonic(client.io);
             client.model.pane_graphics_revision +%= 1;
             try scheduleResume(client);
         },
@@ -250,6 +254,19 @@ fn pauseGraphics(client: *Client, reach: core.LimitReach, pane_id: core.PaneId) 
     const pauses = &client.model.graphics_pauses;
     const now_ns = pacing.clock.monotonic(client.io);
     var found = pauses.find(pane_id);
+    if (found) |slot| {
+        if (pauses.resumed_ns[slot]) |resumed_ns| {
+            // Paused again: soon after resuming it goes on quietly with its
+            // backoff; after a healthy window it is a new pause.
+            pauses.resumed_ns[slot] = null;
+            client.model.pane_graphics_revision +%= 1;
+            if (now_ns -| resumed_ns >= runtime_link.healthy_after_ns) {
+                pauses.remove(slot);
+                found = null;
+            }
+        }
+    }
+
     if (found == null) {
         found = try startPause(
             client,

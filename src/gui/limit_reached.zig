@@ -23,6 +23,8 @@ const AccessibilityTree = @import("native/AccessibilityTree.zig");
 const TerminalRenderer = @import("render/TerminalRenderer.zig");
 const event = @import("input/event.zig");
 const CellMesh = @import("render/CellMesh.zig");
+const InputQueue = @import("InputQueue.zig");
+const WindowLimit = @import("WindowLimit.zig").WindowLimit;
 const PaneImages = @import("image/PaneImages.zig");
 
 /// The largest display scale a report names; a larger one reports this.
@@ -38,7 +40,6 @@ pub const title_suffix_bytes = 32 + core.Limit.max_name_bytes;
 pub const Route = enum {
     window_draw,
     window_update,
-    window_input,
 };
 
 /// Reports a capacity error and returns true when the window goes on;
@@ -93,23 +94,23 @@ pub fn titleSuffix(gui: *const GuiAdapter, buffer: *[title_suffix_bytes]u8) []co
 /// ```
 pub fn reportFrame(gui: *GuiAdapter, scene: *const Scene) void {
     const chrome = gui.chrome.prepared();
-    reportDropped(gui, frame_widget.limit, frame_widget.capacity, scene.dropped_widgets);
-    reportDropped(gui, BandHitMap.limit, chrome.band_hits.len, chrome.band_hits.dropped);
-    reportDropped(gui, HitMap.limit, chrome.hits.len, chrome.hits.dropped);
+    reportDropped(gui, .frame_widgets, frame_widget.limit, frame_widget.capacity, scene.dropped_widgets);
+    reportDropped(gui, .band_hits, BandHitMap.limit, chrome.band_hits.len, chrome.band_hits.dropped);
+    reportDropped(gui, .cell_hits, HitMap.limit, chrome.hits.len, chrome.hits.dropped);
 
     const targets = gui.widgets.dispatcher.maps.prepared();
-    reportDropped(gui, Registry.limit, targets.len, targets.dropped);
+    reportDropped(gui, .widget_targets, Registry.limit, targets.len, targets.dropped);
 
     const editors = gui.widgets.editors.prepared();
-    reportDropped(gui, State.editors_limit, editors.len, editors.dropped);
+    reportDropped(gui, .editors, State.editors_limit, editors.len, editors.dropped);
 
     const quads = &gui.renderer.quads;
-    reportDropped(gui, frameQuadLimit(gui), quads.items().len, quads.dropped);
+    reportDropped(gui, .frame_quads, frameQuadLimit(gui), quads.items().len, quads.dropped);
 
     const cell_quads = &gui.renderer.cell_quads;
-    reportDropped(gui, CellMesh.limit, CellMesh.capacity, cell_quads.dropped);
+    reportDropped(gui, .cell_quads, CellMesh.limit, CellMesh.capacity, cell_quads.dropped);
 
-    reportDropped(gui, PaneImages.limit, gui.images.placement_count, gui.images.dropped);
+    reportDropped(gui, .image_placements, PaneImages.limit, gui.images.placement_count, gui.images.dropped);
 }
 
 /// The quads this frame reserved: its cells, overlays and chrome.
@@ -117,16 +118,37 @@ fn frameQuadLimit(gui: *const GuiAdapter) core.Limit {
     return core.Limit.declare("render.frame_quad_budget", "quads", gui.renderer.quads.limit orelse 0);
 }
 
+/// The input callback's net: an event refused at a limit is reported under
+/// the table that refused it and dropped alone. Returns false for any other
+/// error, which the caller fails with.
+/// Example: `if (!limit_reached.absorbInput(gui, decoded, err)) gui.fail(err);`
+pub fn absorbInput(gui: *GuiAdapter, input: ?event.Event, err: anyerror) bool {
+    const limit: ?core.Limit = switch (err) {
+        error.NativeInputFull => InputQueue.queue_limit,
+        error.InputTooLarge => if (input) |value| switch (value) {
+            .text => |text| if (text.target_id == 0) event.clipboard_limit else InputQueue.small_limit,
+            .paste, .clipboard => event.clipboard_limit,
+            else => InputQueue.small_limit,
+        } else event.clipboard_limit,
+        else => null,
+    };
+
+    client.limit_reached.absorb(gui.app, "window_input", err, limit) catch return false;
+    return true;
+}
+
 /// The viewport the window draws: a display scale past the renderer's
 /// bound draws at the bound, with smaller glyphs, and is reported.
 /// Example: `const viewport = limit_reached.boundViewport(gui, native_viewport);`
 pub fn boundViewport(gui: *GuiAdapter, viewport: native.Viewport) native.Viewport {
     if (!(viewport.scale > TerminalRenderer.max_display_scale)) {
+        reportEntering(gui, .display_scale, null);
         return viewport;
     }
 
-    client.limit_reached.report(
-        gui.app,
+    reportEntering(
+        gui,
+        .display_scale,
         .{
             .limit = TerminalRenderer.display_scale_limit,
             .requested = @intFromFloat(@ceil(@min(viewport.scale, max_reported_scale))),
@@ -141,17 +163,35 @@ pub fn boundViewport(gui: *GuiAdapter, viewport: native.Viewport) native.Viewpor
 /// Reports the targets the last published accessibility tree left out.
 /// Example: `limit_reached.reportAccessibility(gui);`
 pub fn reportAccessibility(gui: *GuiAdapter) void {
-    reportDropped(gui, AccessibilityTree.limit, AccessibilityTree.capacity, gui.widgets.accessibility_dropped);
+    reportDropped(gui, .accessible_nodes, AccessibilityTree.limit, AccessibilityTree.capacity, gui.widgets.accessibility_dropped);
 }
 
-fn reportDropped(gui: *GuiAdapter, limit: core.Limit, kept: usize, dropped: usize) void {
-    if (dropped == 0) {
+/// Reports `reach` when the window enters `which`; staying at it reports
+/// nothing more, and a null reach, the window below it again, lets the
+/// next entry report. A limit held for many frames counts once.
+///
+/// ```zig
+/// limit_reached.reportEntering(gui, .grid_cells, if (cut) reach else null);
+/// ```
+pub fn reportEntering(gui: *GuiAdapter, which: WindowLimit, reach: ?core.LimitReach) void {
+    const value = reach orelse {
+        gui.reached.remove(which);
+        return;
+    };
+
+    if (gui.reached.contains(which)) {
         return;
     }
 
-    client.limit_reached.report(
-        gui.app,
-        .{
+    gui.reached.insert(which);
+    client.limit_reached.report(gui.app, value);
+}
+
+fn reportDropped(gui: *GuiAdapter, which: WindowLimit, limit: core.Limit, kept: usize, dropped: usize) void {
+    reportEntering(
+        gui,
+        which,
+        if (dropped == 0) null else .{
             .limit = limit,
             .requested = kept + dropped,
         },
@@ -179,7 +219,6 @@ fn limitOf(err: anyerror) ?core.Limit {
         error.ScreenTooLarge => cell_count_limit,
         error.NativeCellBudgetExceeded => core.Limit.declare("render.retained_max_cells", "cells", RetainedCells.max_cells),
         error.AtlasFull => GlyphAtlas.side_limit,
-        error.InputTooLarge => event.clipboard_limit,
         else => null,
     };
 }

@@ -64,12 +64,19 @@ pub fn accessibility(gui: *GuiAdapter, output: *native.AccessibilityTree) bool {
             continue;
         }
 
-        if (count == state.native_nodes.len) {
-            state.accessibility_dropped += 1;
-            continue;
-        }
-
         const focused = if (state.dispatcher.focused) |id| id.eql(target.id) else false;
+        // A full tree still publishes the focused control, in place of the
+        // last node it holds.
+        var slot = count;
+        if (count == state.native_nodes.len) {
+            if (!focused) {
+                state.accessibility_dropped += 1;
+                continue;
+            }
+
+            slot = count - 1;
+            state.accessibility_dropped += 1;
+        }
         var node: native.AccessibilityNode = .{
             .id = target.id.target_id,
             .generation = target.id.generation,
@@ -94,8 +101,8 @@ pub fn accessibility(gui: *GuiAdapter, output: *native.AccessibilityTree) bool {
             node.selection_end = current.head;
         }
 
-        state.native_nodes[count] = node;
-        count += 1;
+        state.native_nodes[slot] = node;
+        count = slot + 1;
     }
 
     output.* = .{ .revision = gui.chrome.revision +% gui.app.model.name_prompt.version() +% gui.app.model.version().panes +% state.dispatcher.revision, .nodes = &state.native_nodes, .count = @intCast(count) };

@@ -8,6 +8,8 @@ const limit_reached = @import("../limit_reached.zig");
 const event = @import("../input/event.zig");
 const Scene = @import("../render/Scene.zig");
 const TerminalRenderer = @import("../render/TerminalRenderer.zig");
+const AccessibilityTree = @import("../native/AccessibilityTree.zig");
+const Id = @import("../widgets/interaction/Id.zig");
 
 test "a frame that stops at a limit keeps the previous frame and the window open" {
     const session = try TestSession.init();
@@ -241,4 +243,65 @@ test "a frame whose tables filled reports each by name and still draws" {
     try std.testing.expect(reaches.find("render.frame_quad_budget") != null);
     try std.testing.expect(reaches.find("chrome.hit_map_capacity") == null);
     try std.testing.expect(gui.failure == null);
+}
+
+test "a limit held for many frames reports once and again only after the window leaves it" {
+    const session = try TestSession.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+    const reach: core.LimitReach = .{
+        .limit = limit_reached.cell_count_limit,
+        .requested = core.max_cell_count + 1,
+    };
+    for (0..5) |_| {
+        limit_reached.reportEntering(gui, .grid_cells, reach);
+    }
+
+    const reaches = &gui.app.model.limit_reaches;
+    const slot = reaches.find("protocol.max_cell_count").?;
+    try std.testing.expectEqual(@as(u64, 1), reaches.hits[slot]);
+    limit_reached.reportEntering(gui, .grid_cells, null);
+    limit_reached.reportEntering(gui, .grid_cells, reach);
+    try std.testing.expectEqual(@as(u64, 2), reaches.hits[slot]);
+}
+
+test "a full accessibility tree still publishes the focused control" {
+    const session = try TestSession.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    const gui = session.gui;
+    const token = try session.draw();
+    try input_support.presented(gui, token, true);
+
+    const registry = @constCast(gui.widgets.dispatcher.maps.presented());
+    registry.reset();
+    const total = AccessibilityTree.capacity + 40;
+    for (0..total) |index| {
+        try registry.add(.{
+            .id = .{
+                .target_id = index + 1,
+            },
+            .bounds = .{
+                .x = @floatFromInt(index),
+                .y = 0,
+                .width = 1,
+                .height = 1,
+            },
+            .action = .{
+                .custom = index,
+            },
+        });
+    }
+
+    const focused: Id = .{
+        .target_id = total,
+    };
+    gui.widgets.dispatcher.focused = focused;
+    var tree: native.AccessibilityTree = .{};
+    try std.testing.expect(gui.widgetAccessibility(&tree));
+    try std.testing.expectEqual(@as(u32, AccessibilityTree.capacity), tree.count);
+    try std.testing.expectEqual(focused.target_id, tree.nodes.?[AccessibilityTree.capacity - 1].id);
+    try std.testing.expect(gui.app.model.limit_reaches.find("gui.native.accessibility_capacity") != null);
 }
