@@ -32,7 +32,6 @@ pub const LimitError = error{
     AttachmentLimitReached,
     AttachmentSelfFull,
     BarCommandExecutionIdExhausted,
-    BarCommandOutputTooLong,
     BarCommandTooLong,
     BarTextTooLong,
     BoxQuadBudgetExceeded,

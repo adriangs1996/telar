@@ -3,8 +3,10 @@
 //! runs off the event loop, and the chosen value runs the pick's `on_select`
 //! as an argv without a shell. After a successful choice the bar sources and
 //! the open panel run again, so they show what the command changed.
+const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
+const limit_reached = @import("../notifications/limit_reached.zig");
 const Client = @import("../execution/Client.zig");
 const bar_updates = @import("../config/bar_updates.zig");
 const client_diagnostic = @import("../config/client_diagnostic.zig");
@@ -96,6 +98,7 @@ pub fn close(model: *data.ClientModel) void {
 /// try pick_list.finish(client, completion);
 /// ```
 pub fn finish(client: *Client, completion: PickCommandCompletion) !void {
+    bar_updates.reportOutputLimit(client, completion.result);
     var result = completion.result;
     defer if (result) |*output| output.deinit() else |_| {};
 
@@ -144,12 +147,13 @@ fn finishSelection(client: *Client, execution_id: data.command_execution.Id, res
 }
 
 // Lists the options: the written table, or the `items` function over the
-// command's output, or one option per line of that output.
+// command's output, or one option per line of that output. A list past its
+// limits shows what fit and reports each limit it passed.
 fn fill(client: *Client, definition: *const data.PickDefinition, output: ?[]const u8) void {
     const state = &client.model.pick_list;
     const reference = definition.items orelse {
         data.pick_list.readLines(&state.items, output orelse "") catch |err| return failList(state, err);
-        return state.show();
+        return show(client);
     };
 
     const generation = client.lua_generation orelse return state.fail("the configuration is not loaded");
@@ -160,6 +164,16 @@ fn fill(client: *Client, definition: *const data.PickDefinition, output: ?[]cons
     }, &state.items, &diagnostic) catch |err| {
         return state.fail(if (diagnostic.len != 0) diagnostic.message() else @errorName(err));
     };
+    show(client);
+}
+
+fn show(client: *Client) void {
+    const state = &client.model.pick_list;
+    var buffer: [data.PickItems.max_reaches]core.LimitReach = undefined;
+    for (state.items.reaches(&buffer)) |reach| {
+        limit_reached.report(client, reach);
+    }
+
     state.show();
 }
 
@@ -201,9 +215,6 @@ fn reason(err: anyerror) []const u8 {
         error.StreamTooLong => "printed more than it may",
         error.FileNotFound => "was not found",
         error.InvalidBarCommandOutput => "printed control characters or invalid UTF-8",
-        error.TooManyPickItems => "printed more than 1024 options",
-        error.PickItemsTooLarge => "printed more option text than a list holds",
-        error.PickItemTooLong => "printed a line longer than 512 bytes",
         error.InvalidPickItem => "printed control characters or invalid UTF-8",
         else => @errorName(err),
     };

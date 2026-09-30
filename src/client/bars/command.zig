@@ -6,11 +6,14 @@
 //! grace period. A command that exits in time keeps its group alive, so a
 //! helper may leave work running in the background on purpose.
 
+const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
 const Output = @import("Output.zig");
 const builtin = @import("builtin");
 
+/// Standard error a captured command keeps; nothing shows it, so what it
+/// prints past this is dropped without a report and never fails it.
 const stderr_limit = 4096;
 const tab: u8 = '\t';
 const line_feed: u8 = '\n';
@@ -45,6 +48,15 @@ pub const OutputUse = enum {
             .ignored => 0,
         };
     }
+
+    /// The limit a command reports when it prints more than `limit`.
+    fn named(self: OutputUse) core.Limit {
+        return switch (self) {
+            .line, .ignored => data.bar_values.text_limit,
+            .lines => data.bar_values.command_output_limit,
+            .options => data.bar_values.pick_output_limit,
+        };
+    }
 };
 
 /// Runs a bar or panel source. Output handed to a render callback may hold
@@ -60,7 +72,10 @@ pub fn run(io: std.Io, command: data.BarCommand) !Output {
 }
 
 /// Runs the argv directly, without a shell, stops it at its deadline, and
-/// validates its output for `use`.
+/// validates its output for `use`. Output past its limit is dropped: the
+/// kept output ends at the last whole line (or, for one display line, at a
+/// character) and `Output.limit` names the limit for the finishing flow to
+/// report.
 ///
 /// ```zig
 /// var output = try command.runFor(io, on_select, .ignored);
@@ -89,10 +104,12 @@ pub fn runFor(io: std.Io, command: data.BarCommand, use: OutputUse) !Output {
 
     var output: Output = .{};
     errdefer output.deinit();
+    var printed: usize = 0;
     if (captured) {
         output.buffer = try read(io, &child, .{
             .limit = use.limit(),
             .deadline = deadline,
+            .printed = &printed,
         });
     }
 
@@ -105,9 +122,19 @@ pub fn runFor(io: std.Io, command: data.BarCommand, use: OutputUse) !Output {
     }
 
     const rendered = use != .line;
-    const trimmed = std.mem.trim(u8, output.buffer, " \t\r\n");
+    var cut = printed > output.buffer.len;
+    const kept = if (cut and rendered) wholeLines(output.buffer) else output.buffer;
+    var trimmed = std.mem.trim(u8, kept, " \t\r\n");
     if (!rendered and trimmed.len > data.bar_values.max_text_bytes) {
-        return error.BarCommandOutputTooLong;
+        trimmed = data.bar_text.prefix(trimmed, data.bar_values.max_text_bytes);
+        cut = true;
+    }
+
+    if (cut) {
+        output.limit = .{
+            .limit = use.named(),
+            .requested = printed,
+        };
     }
 
     for (trimmed) |byte| {
@@ -135,11 +162,15 @@ const process_groups = builtin.os.tag != .windows;
 const ReadLimits = struct {
     limit: usize,
     deadline: std.Io.Clock.Timestamp,
+    /// Receives how many bytes stdout printed, kept or not.
+    printed: *usize,
 };
 
 // Reads stdout and a bounded stderr until both close or the deadline
 // passes; the deadline is absolute, so steady trickles of output cannot
-// extend it. Returns stdout, owned by `Output.allocator`.
+// extend it. Each stream keeps its first bytes up to its limit and drops
+// the rest as it arrives, so a noisy command still finishes. Returns
+// stdout, owned by `Output.allocator`.
 fn read(io: std.Io, child: *std.process.Child, limits: ReadLimits) ![]u8 {
     var buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
     var multi_reader: std.Io.File.MultiReader = undefined;
@@ -151,17 +182,38 @@ fn read(io: std.Io, child: *std.process.Child, limits: ReadLimits) ![]u8 {
     const deadline: std.Io.Timeout = .{
         .deadline = limits.deadline,
     };
+    var dropped: usize = 0;
     while (multi_reader.fill(read_reserve, deadline)) |_| {
-        if (stdout_reader.buffered().len > limits.limit or stderr_reader.buffered().len > stderr_limit) {
-            return error.StreamTooLong;
-        }
+        dropped += keepFirst(stdout_reader, limits.limit);
+        _ = keepFirst(stderr_reader, stderr_limit);
     } else |err| switch (err) {
         error.EndOfStream => {},
         else => |other| return other,
     }
 
     try multi_reader.checkAnyError();
+    limits.printed.* = stdout_reader.bufferedLen() + dropped;
     return multi_reader.toOwnedSlice(0);
+}
+
+// Drops what a stream holds past `limit` and returns how much. The reader
+// already asked for its next bytes after its old end, so they never land
+// on the kept ones.
+fn keepFirst(stream: *std.Io.Reader, limit: usize) usize {
+    const held = stream.bufferedLen();
+    if (held <= limit) {
+        return 0;
+    }
+
+    stream.end = stream.seek + limit;
+    return held - limit;
+}
+
+// The output up to its last line feed, so a cut never leaves half a line
+// or half a character.
+fn wholeLines(output: []const u8) []const u8 {
+    const last = std.mem.lastIndexOfScalar(u8, output, line_feed) orelse return output[0..0];
+    return output[0..last];
 }
 
 // Waits for the process to exit without passing the deadline and returns
@@ -434,4 +486,43 @@ test "command output for a render callback may span lines" {
     defer output.deinit();
 
     try std.testing.expectEqualStrings("{\n  \"used\": 22\n}", output.slice());
+}
+
+test "a command that prints past its limit keeps its first whole lines and names the limit" {
+    if (comptime builtin.os.tag == .windows) {
+        return error.SkipZigTest;
+    }
+
+    var command: data.BarCommand = .{
+        .generation = 1,
+        .interval_ns = std.time.ns_per_s,
+        .timeout_ms = 5_000,
+    };
+    try command.appendArgument("/bin/sh");
+    try command.appendArgument("-c");
+    // 300 KiB of numbered lines on stdout and 64 KiB of noise on stderr.
+    try command.appendArgument("i=0; while [ $i -lt 30000 ]; do echo \"option-$i\"; i=$((i+1)); done; head -c 65536 /dev/zero | tr '\\0' e >&2");
+
+    var output = try runFor(std.testing.io, command, .options);
+    defer output.deinit();
+
+    const kept = output.slice();
+    try std.testing.expect(kept.len <= data.bar_values.max_pick_output_bytes);
+    try std.testing.expect(std.mem.startsWith(u8, kept, "option-0\noption-1\n"));
+    try std.testing.expect(std.mem.endsWith(u8, kept, "\n") or kept[kept.len - 1] != '-');
+    try std.testing.expectEqualStrings("picks.max_pick_output_bytes", output.limit.?.limit.name);
+    try std.testing.expect(output.limit.?.requested.? > data.bar_values.max_pick_output_bytes);
+
+    var line = command;
+    line.argument_count = 0;
+    line.byte_len = 0;
+    try line.appendArgument("/bin/sh");
+    try line.appendArgument("-c");
+    try line.appendArgument("head -c 2000 /dev/zero | tr '\\0' x");
+
+    var shown = try run(std.testing.io, line);
+    defer shown.deinit();
+
+    try std.testing.expectEqual(@as(usize, data.bar_values.max_text_bytes), shown.slice().len);
+    try std.testing.expectEqualStrings("bars.max_text_bytes", shown.limit.?.limit.name);
 }

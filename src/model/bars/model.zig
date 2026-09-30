@@ -18,6 +18,7 @@ pub const max_segments = 16;
 /// Legacy plain command output without a render callback stays one line of
 /// at most this many bytes.
 pub const max_text_bytes = 512;
+pub const text_limit = core.Limit.declare("bars.max_text_bytes", "output bytes", max_text_bytes);
 pub const max_panels = 16;
 pub const panels_limit = core.Limit.declare("panels.max_panels", "panels", max_panels);
 pub const max_picks = 16;
@@ -54,9 +55,11 @@ pub const panel_limits: ContentLimits = .{
 pub const node_samples_limit = core.Limit.declare("bars.max_node_samples", "sparkline values", Node.max_samples);
 /// Command output handed to a render callback, such as a JSON document.
 pub const max_command_output_bytes = 64 * 1024;
+pub const command_output_limit = core.Limit.declare("bars.max_command_output_bytes", "output bytes", max_command_output_bytes);
 /// Output a pick's list command may print; `pi --list-models` prints
 /// about 43 KiB.
 pub const max_pick_output_bytes = 256 * 1024;
+pub const pick_output_limit = core.Limit.declare("picks.max_pick_output_bytes", "output bytes", max_pick_output_bytes);
 
 /// The components of one bar slot.
 pub const Content = GenericContent(bar_limits.bounds());

@@ -17,6 +17,7 @@ const Output = @import("../bars/Output.zig");
 const BarUpdateCommand = @import("BarUpdateCommand.zig");
 const BarCallbackContext = @import("BarCallbackContext.zig");
 const BarMetrics = @import("BarMetrics.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 
 pub const no_deadline = data.bar_timing.no_deadline;
 pub const position_count = data.bar_timing.position_count;
@@ -66,6 +67,7 @@ pub fn handleTick(client: *Client, result: anyerror!void) !void {
 /// ```
 pub fn completeCommand(client: *Client, completion: BarUpdatesCompletion) !void {
     defer releaseOutput(completion.result);
+    reportOutputLimit(client, completion.result);
     const execution = client.model.bar_updates.finishCommand(completion.execution_id) orelse return;
     const generation = client.lua_generation;
     const configuration = barConfiguration(client);
@@ -523,6 +525,16 @@ fn openPanelSource(client: *const Client, configuration: *const data.BarConfigur
     const run = client.model.bar_updates.panel_run orelse return null;
     const definition = configuration.panel(run.index) orelse return null;
     return &definition.source;
+}
+
+/// Reports the limit a command printed past, whose excess its worker
+/// dropped.
+/// Example: `bar_updates.reportOutputLimit(client, completion.result);`
+pub fn reportOutputLimit(client: *Client, result: anyerror!Output) void {
+    const output = result catch return;
+    if (output.limit) |reach| {
+        limit_reached.report(client, reach);
+    }
 }
 
 fn releaseOutput(result: anyerror!Output) void {

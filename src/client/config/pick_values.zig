@@ -5,8 +5,9 @@ const data = @import("model");
 const lua_api = @import("lua-api");
 const lua_value = @import("lua_value.zig");
 
-/// Replaces `items` with the list at `index`; a rejected option rejects the
-/// whole list.
+/// Replaces `items` with the list at `index`. Options past the list's
+/// limits are left out or cut (`PickItems.keep`) and `items.reaches` names
+/// the limits passed; an invalid option rejects the whole list.
 ///
 /// ```zig
 /// try pick_values.parse(state, -1, &items, diagnostic);
@@ -19,11 +20,6 @@ pub fn parse(state: *lua_api.c.lua_State, index: c_int, items: *data.PickItems, 
     }
 
     const count = lua_api.c.lua_rawlen(state, absolute);
-    if (count > data.PickItems.max_items) {
-        diagnostic.set("pick items hold at most {d} options, got {d}", .{ data.PickItems.max_items, count });
-        return error.TooManyPickItems;
-    }
-
     try lua_value.ensureArrayOnly(
         state,
         .{
@@ -38,7 +34,7 @@ pub fn parse(state: *lua_api.c.lua_State, index: c_int, items: *data.PickItems, 
         _ = lua_api.c.lua_rawgeti(state, absolute, @intCast(position));
         defer lua_value.pop(state, 1);
         const item = try read(state, position, diagnostic);
-        items.append(item) catch |err| {
+        items.keep(item) catch |err| {
             diagnostic.set("pick item {d} is invalid: {s}", .{ position, @errorName(err) });
             return err;
         };

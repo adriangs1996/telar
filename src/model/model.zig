@@ -35,6 +35,7 @@ pub const attachments_path_marker = @import("attachments/path_marker.zig");
 pub const bar_timing = @import("operations/configuration/bar_timing.zig");
 pub const bar_values = @import("bars/model.zig");
 pub const color_name = @import("bars/color_name.zig");
+pub const bar_text = @import("bars/bar_text.zig");
 pub const MachineFact = @import("bars/MachineFact.zig");
 pub const cells = @import("links/cells.zig");
 pub const command_execution = @import("bars/command_execution.zig");

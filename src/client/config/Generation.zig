@@ -1004,8 +1004,13 @@ fn parsePickItems(self: *Generation, input: PanelInput, listed: bool, diagnostic
 
             const items = try self.gpa.create(data.PickItems);
             defer self.gpa.destroy(items);
-            items.* = .{};
+            items.clear();
             pick_values.parse(state, input.index, items, diagnostic) catch return error.InvalidConfig;
+            var buffer: [data.PickItems.max_reaches]core.LimitReach = undefined;
+            for (items.reaches(&buffer)) |reach| {
+                self.unreported.add(reach);
+            }
+
             return try self.referenceBarValue(input.index, diagnostic);
         },
         else => {

@@ -123,7 +123,7 @@ test "a command lists one option per line or through its items function" {
     try std.testing.expectEqualStrings("openai/gpt", items.value(1));
 }
 
-test "a failing, slow or overlong list command keeps the palette open with the reason" {
+test "a failing or slow list command keeps the palette open with the reason" {
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();
@@ -135,19 +135,13 @@ test "a failing, slow or overlong list command keeps the palette open with the r
         \\return { api_version = 2, client = { picks = {
         \\  a_failing = telar.pick({ command = { "/bin/sh", "-c", "exit 3" }, on_select = done }),
         \\  b_slow = telar.pick({ command = { "/bin/sh", "-c", "sleep 5" }, timeout_ms = 100, on_select = done }),
-        \\  c_long = telar.pick({ command = { "/bin/sh", "-c", "seq 1 2000" }, on_select = done }),
-        \\  d_wide = telar.pick({ command = { "/bin/sh", "-c", "head -c 300000 /dev/zero | tr '\\0' x" }, on_select = done }),
-        \\  e_line = telar.pick({ command = { "/bin/sh", "-c", "head -c 600 /dev/zero | tr '\\0' x" }, on_select = done }),
-        \\  f_control = telar.pick({ command = { "/bin/sh", "-c", "printf 'a\\033b'" }, on_select = done }),
+        \\  c_control = telar.pick({ command = { "/bin/sh", "-c", "printf 'a\\033b'" }, on_select = done }),
         \\} } }
     ));
 
     const expected = [_][]const u8{
         "the list command exited with an error",
         "the list command timed out",
-        "the list command printed more than 1024 options",
-        "the list command printed more than it may",
-        "the list command printed a line longer than 512 bytes",
         "the list command printed control characters or invalid UTF-8",
     };
     for (expected, 0..) |reason, index| {
@@ -159,6 +153,38 @@ test "a failing, slow or overlong list command keeps the palette open with the r
 
         try pressEnter(client);
         try std.testing.expect(client.model.name_prompt.active());
+        _ = try client_module.name_prompt.inputPrompt(client, .{ .key = .{ .code = .escape } });
+    }
+}
+
+test "a list command past a limit shows the options that fit and reports the limit" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    _ = try fixtures.reloadConfiguration(&harness, try fixtures.testingConfigAdoptionSource(1,
+        \\local telar = require("telar")
+        \\local done = { "/bin/sh", "-c", ":", "{}" }
+        \\return { api_version = 2, client = { picks = {
+        \\  a_long = telar.pick({ command = { "/bin/sh", "-c", "seq 1 5000" }, on_select = done }),
+        \\  b_wide = telar.pick({ command = { "/bin/sh", "-c", "seq 1 3; head -c 300000 /dev/zero | tr '\\0' x" }, on_select = done }),
+        \\  c_line = telar.pick({ command = { "/bin/sh", "-c", "head -c 600 /dev/zero | tr '\\0' x; echo; echo short" }, on_select = done }),
+        \\} } }
+    ));
+
+    const cases = [_]struct { []const u8, u16 }{
+        .{ "picks.max_items", data.PickItems.max_items },
+        .{ "picks.max_pick_output_bytes", 3 },
+        .{ "picks.max_value_bytes", 1 },
+    };
+    for (cases, 0..) |case, index| {
+        _ = try client_module.actions.executeAction(client, .{ .pick = @intCast(index) }, .binding);
+        try client_module.pick_list.finish(client, try receivePick(&harness));
+        try std.testing.expectEqual(data.PickListState.Phase.ready, client.model.pick_list.phase);
+        try std.testing.expectEqual(case[1], client.model.pick_list.items.count);
+        try std.testing.expect(client.model.limit_reaches.find(case[0]) != null);
+
         _ = try client_module.name_prompt.inputPrompt(client, .{ .key = .{ .code = .escape } });
     }
 }
