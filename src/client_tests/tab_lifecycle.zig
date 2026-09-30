@@ -1337,6 +1337,34 @@ test "tab creation validates labels before retaining a request" {
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
+test "a command tab asked for while another tab operation waits is named" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.model.request_lifecycle.tracker = .{};
+    const command = try data.CommandTab.init(&.{"lazygit"}, "git");
+
+    _ = try client_module.actions.executeAction(
+        client,
+        .{
+            .command_tab = command,
+        },
+        .effect,
+    );
+    try std.testing.expect(client.model.limit_reaches.find("tabs.one_operation_in_flight") == null);
+
+    _ = try client_module.actions.executeAction(
+        client,
+        .{
+            .command_tab = command,
+        },
+        .effect,
+    );
+    try std.testing.expect(client.model.limit_reaches.find("tabs.one_operation_in_flight") != null);
+}
+
 test "tab creation outbox failure releases correlation without mutating the projection" {
     var harness: ClientHarness = undefined;
     try harness.init();

@@ -13,6 +13,7 @@ const WorktreeProbeCompletion = @import("resources/WorktreeProbeCompletion.zig")
 const worktree_probe = @import("resources/worktree_probe.zig");
 const WorktreeProbeJob = @import("resources/WorktreeProbeJob.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
+const limit_reached = @import("limit_reached.zig");
 
 /// Starts one due probe, rolling back its reservation on scheduling failure.
 ///
@@ -36,6 +37,15 @@ pub fn start(model: *RuntimeModel) void {
 /// worktree_git.finish(model, completion);
 /// ```
 pub fn finish(model: *RuntimeModel, completion: WorktreeProbeCompletion) void {
+    // Only the first failure of a run names its limit; a worktree whose
+    // probes keep timing out waits the idle interval without a notice each.
+    if (completion.limit) |reach| {
+        const slot = model.worktrees.slotOf(completion.worktree);
+        if (slot == null or model.worktrees.probe_failures[slot.?] == 0) {
+            limit_reached.report(model, reach);
+        }
+    }
+
     const now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
     if (commit(&model.worktrees, completion, now_ms)) {
         model.workspaces.advanceRevision();

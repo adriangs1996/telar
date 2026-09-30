@@ -13,6 +13,8 @@ const PathIndex = @import("../paths/PathIndex.zig");
 const PathQuery = @import("../paths/PathQuery.zig");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
+const PathIndexes = @import("../paths/PathIndexes.zig");
+const limit_reached = @import("limit_reached.zig");
 
 /// Records the client's newest query and starts whatever worker it needs.
 ///
@@ -21,12 +23,18 @@ const Session = @import("client/Session.zig");
 /// ```
 pub fn request(model: *RuntimeModel, session: *Session, find: core.FindPaths) !void {
     const index = model.path_indexes.find(session.key) orelse model.path_indexes.add(model.gpa, session.key) catch |err| switch (err) {
-        error.PathPickerBusy => return client_request.fail(
-            session,
-            find.request_id,
-            .resource_limit,
-            "every path picker slot is busy",
-        ),
+        error.PathPickerBusy => {
+            limit_reached.report(model, .{
+                .limit = PathIndexes.capacity_limit,
+                .requested = PathIndexes.capacity + 1,
+            });
+            return client_request.fail(
+                session,
+                find.request_id,
+                .resource_limit,
+                "every path picker slot is busy",
+            );
+        },
         error.OutOfMemory => return client_request.fail(
             session,
             find.request_id,
@@ -35,6 +43,7 @@ pub fn request(model: *RuntimeModel, session: *Session, find: core.FindPaths) !v
         ),
     };
 
+    model.path_indexes.touch(index);
     index.want(find.root, find.refresh);
     index.wanted = .init(find);
     index.pending = true;
@@ -48,6 +57,15 @@ pub fn request(model: *RuntimeModel, session: *Session, find: core.FindPaths) !v
 /// ```
 pub fn finishBuild(model: *RuntimeModel, index: *PathIndex) void {
     index.building = false;
+    if (index.truncation()) |limit| {
+        limit_reached.report(
+            model,
+            .{
+                .limit = limit,
+            },
+        );
+    }
+
     if (index.abandoned) {
         releaseIdle(model, index);
         return;

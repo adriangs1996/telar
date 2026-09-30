@@ -17,6 +17,8 @@ const body = httprelay.http1.body;
 const Service = @import("../../history/Service.zig");
 const Query = @import("../../history/Query.zig");
 const model_module = @import("../../history/model.zig");
+const PathIndex = @import("../../paths/PathIndex.zig");
+const PathQuery = @import("../../paths/PathQuery.zig");
 
 fn now() i96 {
     return std.Io.Clock.awake.now(std.testing.io).nanoseconds;
@@ -75,6 +77,78 @@ test "performance probe measures bounded search turns against the complete query
         report("search_incremental_total", &total_times);
         report("search_max_turn", &turn_times);
     }
+}
+
+test "performance probe measures a read of every row a reply may carry" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    try fixture.pane.resize(.{
+        .cols = 200,
+        .rows = 50,
+    });
+
+    // A test run: 2000 rows of about 120 columns, most of a real width.
+    var line: [128]u8 = undefined;
+    for (0..core.max_pane_text_rows) |number| {
+        const text = try std.fmt.bufPrint(&line, "test {d:0>4} {s} ok\r\n", .{ number, "." ** 104 });
+        _ = try fixture.pane.ingest(std.testing.io, text);
+    }
+    try fixture.pane.render(false);
+
+    const storage = try std.testing.allocator.create([core.max_pane_text_bytes]u8);
+    defer std.testing.allocator.destroy(storage);
+    var timings: [20]u64 = undefined;
+    for (&timings) |*timing| {
+        const started = now();
+        const dump = fixture.pane.dumpText(.{
+            .rows = core.max_pane_text_rows,
+            .source = .recent,
+        }, storage);
+        timing.* = elapsed(started);
+        try std.testing.expect(dump.len > 0);
+    }
+
+    report("pane_read_2000_rows", &timings);
+}
+
+test "performance probe measures one keystroke over a full path index" {
+    const index = try PathIndex.create(
+        std.testing.allocator,
+        .{
+            .id = 1,
+            .generation = 1,
+        },
+    );
+    defer index.destroy();
+
+    // A monorepo at the index's bound: 512 Ki files of about 40 bytes.
+    index.want("/monorepo", true);
+    index.reset();
+    var path: [64]u8 = undefined;
+    var number: usize = 0;
+    while (index.append(try std.fmt.bufPrint(&path, "services/team{d}/src/module_{d}.ts", .{ number % 512, number }), .file)) {
+        number += 1;
+    }
+    index.publish();
+    index.complete.store(true, .release);
+
+    var timings: [5]u64 = undefined;
+    for (&timings) |*timing| {
+        index.wanted = .init(.{
+            .request_id = @enumFromInt(4),
+            .root = "/monorepo",
+            .query = "tm1mod42",
+        });
+        const query = try PathQuery.create(std.testing.allocator, index);
+        defer query.destroy();
+
+        const started = now();
+        _ = query.run(std.testing.io);
+        timing.* = elapsed(started);
+    }
+
+    report("path_query_512ki_entries", &timings);
 }
 
 test "performance probe measures runtime staging of a 4K RGBA transfer" {

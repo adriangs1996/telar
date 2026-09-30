@@ -278,7 +278,13 @@ pub fn integrate(init: std.process.Init, report: *SetupReport, destination: []co
             continue;
         }
 
-        const unchanged = std.mem.indexOf(u8, result.stdout, "already present") != null;
+        const stdout = result.wholeStdout() catch |err| {
+            try report.note(.integrations, "{s}: {s}", .{ @tagName(agent), @errorName(err) });
+            failed = true;
+            continue;
+        };
+
+        const unchanged = std.mem.indexOf(u8, stdout, "already present") != null;
         changed = changed or !unchanged;
         try report.note(.integrations, "{s}: {s}", .{ @tagName(agent), if (unchanged) "already integrated" else "integrated" });
     }

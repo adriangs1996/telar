@@ -5,7 +5,6 @@
 //! ```sh
 //! telar-headless --size 120x40 --trace trace.json --no-config -- cat
 //! ```
-const pty = @import("pty");
 const core = @import("telar-core");
 const std = @import("std");
 const build_options = @import("build_options");
@@ -28,8 +27,7 @@ pub var echo_recorder: if (build_options.echo_trace) core.Recorder else void = i
 const failure: u8 = 2;
 
 pub fn main(init: std.process.Init) !void {
-    var storage: [pty.command_support.max_args][*:0]const u8 = undefined;
-    const args = try collectArgs(init, &storage);
+    const args = try collectArgs(init);
     const status = launch(init, args) catch |err| {
         std.debug.print("telar-headless: {s}\n", .{@errorName(err)});
         std.process.exit(failure);
@@ -118,20 +116,17 @@ fn identity(io: std.Io) core.ClientIdentity {
     return @enumFromInt(std.hash.Wyhash.hash(now, std.mem.asBytes(&pid)) | 1);
 }
 
-fn collectArgs(init: std.process.Init, storage: *[pty.command_support.max_args][*:0]const u8) ![]const [*:0]const u8 {
-    var iterator = init.minimal.args.iterate();
-    _ = iterator.next();
-    var len: usize = 0;
-    while (iterator.next()) |arg| {
-        if (len == storage.len) {
-            return error.TooManyArguments;
-        }
-
-        storage[len] = arg.ptr;
-        len += 1;
+// The arguments after the program name, in the process arena however
+// many there are; the options that take them bound them.
+fn collectArgs(init: std.process.Init) ![]const [*:0]const u8 {
+    const arena = init.arena.allocator();
+    const args = try init.minimal.args.toSlice(arena);
+    const pointers = try arena.alloc([*:0]const u8, args.len -| 1);
+    for (args[@min(args.len, 1)..], pointers) |arg, *pointer| {
+        pointer.* = arg.ptr;
     }
 
-    return storage[0..len];
+    return pointers;
 }
 
 fn dumpEchoTrace(init: std.process.Init) void {

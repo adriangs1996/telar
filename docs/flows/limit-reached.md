@@ -98,8 +98,20 @@ strings, so a completion carries names and nouns declared at comptime, which
 live for the whole process.
 
 A CLI command has no model and no window. When it reaches a limit it prints
-the notice text to standard error (`reach.describe`) and exits with a
-nonzero status. A library under `lib/` knows no telar limit names: it returns
+the notice text to standard error (`limit_reached.report` in `src/cli`,
+through `reach.describe`) and exits with a nonzero status
+(`limit_reached.exit_status`), even when it kept what fit: `history import`
+of a histfile past its bound imports the newest commands and still exits 1,
+since a script must not read the import as complete.
+
+One exception: a limit that only cuts what a command shows, never what it
+does or stores, prints the notice and keeps the command's status. That is
+the untracked worktrees `worktree list` shows (`worktrees.untracked_listing`,
+`worktrees.git_listing_bytes`), the editions `review list` walks
+(`review.max_listed_editions`), the logs `diagnostics logs` reads
+(`cli.diagnostic_logs`, `cli.diagnostic_directory_entries`) and the notes
+`machine setup` prints (`cli.setup_report_notes`). A machine that was set up
+does not report a failure because its report ran out of lines. A library under `lib/` knows no telar limit names: it returns
 its error, and the flow that called it, which has a model, maps the error to
 its `Limit` and reports.
 
