@@ -95,7 +95,8 @@ new name arrives with the table full. The runtime's table lives in
 
 A client reports what it reached to the runtime so one command lists both
 sides. A reach inside the one-second report interval waits and rides on the
-next report. The last reaches before a client goes quiet stay in its own
+next report, and so does one that finds fewer than eight free outbox slots:
+a report never takes the room pane input needs. The last reaches before a client goes quiet stay in its own
 table and its headless dump until another reach sends them.
 
 ## Logs

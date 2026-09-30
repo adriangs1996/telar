@@ -12,6 +12,9 @@ const log = std.log.scoped(.limits);
 
 /// How long a limit notice stays on screen.
 const notice_duration_ns = 8 * std.time.ns_per_s;
+/// Outbox slots a report leaves free, so input and requests never wait
+/// behind one; a report that finds fewer waits for the next reach.
+const outbox_reserve = 8;
 
 /// Counts one reach of a limit; shows it, logs it and reports it to the
 /// runtime when its interval allows. Never fails and allocates nothing, so
@@ -75,6 +78,10 @@ pub fn absorb(client: *Client, route: []const u8, err: anyerror, limit: ?core.Li
 }
 
 fn send(client: *Client, slot: usize, now_ms: i64) void {
+    if (client.model.to_runtime.availableCapacity() <= outbox_reserve) {
+        return;
+    }
+
     const reaches = &client.model.limit_reaches;
     const hits = reaches.takeReport(slot, now_ms) orelse return;
     const reported: core.ReportLimit = .{
