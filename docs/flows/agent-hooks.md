@@ -517,7 +517,7 @@ hooks attach to an existing runtime and never start an orphaned one.
 for a pane that runs another agent, with a malformed payload or an
 unreachable runtime it exits 0, so the agent is unaffected. Lifecycle,
 command and title reports remain bounded; supported file tools add at most
-32 file samples, and cooperative feedback adds one read and acknowledgement.
+128 file samples, and cooperative feedback adds one read and acknowledgement.
 Each report is sent on its own, so one the runtime refuses never costs the
 others.
 
