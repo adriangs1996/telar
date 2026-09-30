@@ -88,6 +88,18 @@ A durable data-only representation of the restorable parts of a runtime model.
 It excludes live resources and does not promise child-process or PTY continuity.
 _Avoid_: Runtime snapshot, Process snapshot
 
+**Limit**:
+A fixed bound telar enforces to keep its memory fixed, named by the stable
+identifier of the constant that sets it (`bars.max_bar_actions`), with the
+noun it counts and its value.
+_Avoid_: Quota, Cap, Capacity error
+
+**Limit reach**:
+One time work asked for more than a limit allows: the limit and, when known,
+the amount asked for. Telar keeps what fits, drops the excess, counts the
+reach and shows it at most once per interval.
+_Avoid_: Overflow, Limit hit, Capacity failure
+
 **Workspace**:
 The runtime-owned workspace identity, path, name and ordered tabs.
 _Avoid_: Workspace aggregate, Workspace store, Workspace record

@@ -1,6 +1,6 @@
-//! Limit reached, runtime side: a limit the runtime reached, or one a
-//! client reported, is counted in `model.limit_reaches`, logged, and shown
-//! to every window at most once per `LimitReaches.show_interval_ms`.
+//! Limit reached, runtime side: a limit the runtime reached is counted in
+//! `model.limit_reaches`, logged, and shown to every window at most once per
+//! `LimitReaches.show_interval_ms`; one a client reported is counted.
 //! `telar diagnostics limits` lists the registry. The safety nets here keep
 //! a capacity error from ending `Runtime.run`. See
 //! `docs/flows/limit-reached.md`.
@@ -40,21 +40,15 @@ pub fn report(model: *RuntimeModel, reach: core.LimitReach) void {
     show(model, text);
 }
 
-/// Counts what a client reported. The client already showed its own
-/// notice, so the runtime only logs, at most once per interval.
+/// Counts what a client reported. The client already showed and logged
+/// its own notice, so the runtime only counts: a client inventing names
+/// cannot grow the runtime's log.
 ///
 /// ```zig
 /// limit_reached.receive(model, report);
 /// ```
 pub fn receive(model: *RuntimeModel, reported: core.ReportLimit) void {
-    const recorded = model.limit_reaches.record(reported.reach, .client, nowMs(model), reported.hits);
-    if (!recorded.show) {
-        return;
-    }
-
-    var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
-    const text = model.limit_reaches.reachAt(recorded.slot).describe(&buffer, model.limit_reaches.hits[recorded.slot]);
-    log.warn("client {s}", .{text});
+    _ = model.limit_reaches.record(reported.reach, .client, nowMs(model), reported.hits);
 }
 
 /// Answers `telar diagnostics limits` with the whole registry, encoded

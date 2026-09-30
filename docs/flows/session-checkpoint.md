@@ -72,6 +72,13 @@ so the last shape survives `telar server stop` even when an older write or
 its completion was still pending. Stopping a child's PTY does not remove its
 pane from the model; discarded exit events cannot erase the final snapshot.
 
+A session larger than `snapshot_bytes` (1 MiB, `CheckpointWriter.snapshot_bytes`)
+writes the records that fit and drops the rest from the first one that does
+not. Records only point back to earlier ones, so the prefix restores. The
+runtime reports `session_checkpoint.snapshot_bytes` through
+[Limit reached](limit-reached.md) and goes on; it used to stop and kill every
+pane.
+
 The interactive path allocates nothing for this: `noteChange` stores a flag
 and a timestamp. Encoding runs on the observation-budget tick into a buffer
 allocated for that write and freed when the worker completes.

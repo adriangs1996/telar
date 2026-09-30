@@ -10,6 +10,23 @@ client, core value or worker), its path (interactive, media or observation),
 its bounds (bytes, items, time, queue depth), its lifecycle (create, cancel,
 detach, reconnect, destroy), its recovery and the test that proves it.
 
+## Limits
+
+- A limit never takes telar down. Reaching one keeps what fits, drops only
+  the excess and reports it with the limit notice, `limit_reached.report`,
+  which names the limit, its value and what was asked for. The runtime keeps
+  running, the window keeps its last frame, and a request that stopped at a
+  limit gets `resource_limit` as its answer.
+- Reporting is one probe into a fixed table at the place that enforces the
+  limit. It allocates nothing and never fails, so it may sit on the
+  interactive path. The notice appears at most once a minute per limit.
+- A safety net catches only capacity errors, whose names contain `TooMany`
+  or end in `Full`, `Exceeded`, `TooLarge` or `TooLong`, plus
+  `BufferTooSmall` and `OutOfMemory`. It logs the route and the error so it
+  hides no bug. Every other error keeps its old path. A flow that knows its
+  limit reports it by name where it enforces it and does not leave it to the
+  net.
+
 ## Ownership
 
 - The runtime owns PTYs, child processes, terminal state, agent truth,
