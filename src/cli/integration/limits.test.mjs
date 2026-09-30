@@ -121,8 +121,10 @@ test("a limit a client reports is listed by telar diagnostics limits, and the ru
   const text = s.cli("diagnostics", "limits");
   assert.match(text.stdout, /^bars\.max_bar_actions: 17 click actions; limit 4 \(3 times\)  \(client, last \d\d:\d\d:\d\d UTC\)\n$/);
 
+  assert.ok(existsSync(`${socket}.runtime.start.log`), "the launch keeps what the runtime wrote before the listener");
   assert.ok(existsSync(`${socket}.runtime.log`), "the background runtime writes its own log");
   const logs = s.cli("diagnostics", "logs", "--component", "runtime");
   assert.equal(logs.status, 0, logs.stderr);
   assert.ok(logs.stdout.includes(`${socket}.runtime.log`), logs.stdout);
+  assert.ok(logs.stdout.includes(`${socket}.runtime.start.log`), logs.stdout);
 });

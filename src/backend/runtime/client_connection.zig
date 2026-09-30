@@ -221,12 +221,6 @@ pub fn startSend(model: *RuntimeModel, session: *Session, payload: []const u8) !
     };
 }
 
-/// Starts idempotent client teardown and removes the session once its read,
-/// write and search actors have retired.
-///
-/// ```zig
-/// client_connection.drop(model, session.key);
-/// ```
 /// Applies the slow-client policy to a reply an event owes: one that does
 /// not fit the client's response queue drops that client, as a request's
 /// would; any other error returns.
@@ -244,6 +238,12 @@ pub fn dropUnanswered(model: *RuntimeModel, key: ClientKey, result: anyerror!voi
     };
 }
 
+/// Starts idempotent client teardown and removes the session once its read,
+/// write and search actors have retired.
+///
+/// ```zig
+/// client_connection.drop(model, session.key);
+/// ```
 pub fn drop(model: *RuntimeModel, key: ClientKey) void {
     const session = model.clients.resolve(key) orelse return;
     if (!session.closing) {

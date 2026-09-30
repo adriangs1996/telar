@@ -37,12 +37,24 @@ pub fn report(client: *Client, reach: core.LimitReach) void {
 /// under `limit`, or under its own name when null, with `route`, and the
 /// caller keeps what it has. Any other error returns; a host error is
 /// logged as an error first. The route line is logged with the notice, so
-/// a limit reached every frame logs once a minute.
+/// a limit reached every frame logs once a minute. A route a report could
+/// not carry fails the build.
 ///
 /// ```zig
 /// try limit_reached.absorb(gui.app, "window_draw", err, null);
 /// ```
-pub fn absorb(client: *Client, route: []const u8, err: anyerror, limit: ?core.Limit) anyerror!void {
+pub fn absorb(client: *Client, comptime route: []const u8, err: anyerror, limit: ?core.Limit) anyerror!void {
+    comptime {
+        const routed: core.LimitReach = .{
+            .limit = .{
+                .name = "route",
+                .value = 0,
+            },
+            .route = route,
+        };
+        routed.validate() catch |invalid| @compileError("limit route '" ++ route ++ "': " ++ @errorName(invalid));
+    }
+
     if (!core.limit_reached.isLimitError(err)) {
         if (core.limit_reached.isSystemError(err)) {
             log.err("{s} failed on the host: {s}", .{ route, @errorName(err) });

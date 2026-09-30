@@ -197,7 +197,7 @@ pub fn parseInputDecision(state: *lua_api.c.lua_State, input_decision: DecisionI
 
 test "local module loader rejects oversized roots before copying" {
     var diagnostic: data.Diagnostic = .{};
-    try std.testing.expectError(error.NameTooLong, Generation.loadSource(.{
+    try std.testing.expectError(error.ConfigPathTooLong, Generation.loadSource(.{
         .gpa = std.testing.allocator,
         .io = std.testing.io,
         .diagnostic = &diagnostic,

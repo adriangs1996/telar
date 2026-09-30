@@ -79,16 +79,20 @@ fn readLogs(init: std.process.Init, options: Options) !void {
         try logs.append(init.gpa, log);
     }
 
+    // The background runtime's own log, and what its last launch wrote
+    // before it held the listener.
     if (options.component != .client and options.pid == null) {
-        var runtime_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const runtime_name = try std.fmt.bufPrint(&runtime_name_buffer, "{s}{s}", .{ base, core.DiagnosticLogName.runtime_log_suffix });
-        if (directory.statFile(init.io, runtime_name, .{})) |_| {
-            try logs.append(init.gpa, .{
-                .name = try init.gpa.dupe(u8, runtime_name),
-                .component = .runtime,
-                .pid = 0,
-            });
-        } else |_| {}
+        for ([_][]const u8{ core.DiagnosticLogName.runtime_start_log_suffix, core.DiagnosticLogName.runtime_log_suffix }) |suffix| {
+            var runtime_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            const runtime_name = try std.fmt.bufPrint(&runtime_name_buffer, "{s}{s}", .{ base, suffix });
+            if (directory.statFile(init.io, runtime_name, .{})) |_| {
+                try logs.append(init.gpa, .{
+                    .name = try init.gpa.dupe(u8, runtime_name),
+                    .component = .runtime,
+                    .pid = 0,
+                });
+            } else |_| {}
+        }
     }
 
     if (logs.items.len == 0) {

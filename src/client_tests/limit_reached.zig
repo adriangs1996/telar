@@ -56,13 +56,13 @@ test "the adapter safety net reports capacity errors and returns the rest" {
     try harness.bootstrap();
     const client = harness.client;
 
-    try client_module.limit_reached.absorb(client, "window draw", error.WidgetTargetCapacityExceeded, .{
+    try client_module.limit_reached.absorb(client, "window_draw", error.WidgetTargetCapacityExceeded, .{
         .name = "gui.widgets.registry_capacity",
         .noun = "widget targets",
         .value = 256,
     });
-    try client_module.limit_reached.absorb(client, "window draw", error.ChromeHitCapacityExceeded, null);
-    try std.testing.expectError(error.DeviceLost, client_module.limit_reached.absorb(client, "window draw", error.DeviceLost, null));
+    try client_module.limit_reached.absorb(client, "window_draw", error.ChromeHitCapacityExceeded, null);
+    try std.testing.expectError(error.DeviceLost, client_module.limit_reached.absorb(client, "window_draw", error.DeviceLost, null));
 
     const reaches = &client.model.limit_reaches;
     try std.testing.expect(reaches.find("gui.widgets.registry_capacity") != null);

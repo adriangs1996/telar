@@ -328,14 +328,35 @@ pub fn launchDaemon(self: *const Launch) !void {
         argc += 2;
     }
 
+    // Until it holds the listener and opens its own log, the runtime's
+    // standard error is this launch's start log: a runtime that never
+    // starts leaves its reason there.
+    const start_log = openStartLog(self.process.io, self.connector.endpointPath()) catch null;
+    defer if (start_log) |file| {
+        file.close(self.process.io);
+    };
+
     const daemon = try std.process.spawn(self.process.io, .{
         .argv = argv[0..argc],
         .cwd = .{ .path = "/" },
         .stdin = .ignore,
         .stdout = .ignore,
-        .stderr = .ignore,
+        .stderr = if (start_log) |file| .{ .file = file } else .ignore,
     });
     _ = daemon;
+}
+
+/// Opens `<endpoint>.runtime.start.log` for this launch, replacing the last
+/// launch's: owner-only, never rotated, since only what happens before the
+/// listener lands in it.
+fn openStartLog(io: std.Io, endpoint: []const u8) !std.Io.File {
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}{s}", .{ endpoint, core.DiagnosticLogName.runtime_start_log_suffix });
+
+    return std.Io.Dir.createFileAbsolute(io, path, .{
+        .truncate = true,
+        .permissions = std.Io.File.Permissions.fromMode(0o600),
+    });
 }
 
 pub fn deinit(self: *Launch) void {

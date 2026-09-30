@@ -17,9 +17,11 @@ detach, reconnect, destroy), its recovery and the test that proves it.
   which names the limit, its value and what was asked for. The runtime keeps
   running, the window keeps its last frame and names the limit in its title,
   and a request that stopped at a limit gets `resource_limit` as its answer.
-- Reporting is one probe into a fixed table at the place that enforces the
-  limit. It allocates nothing and never fails, so it may sit on the
-  interactive path. The notice appears at most once a minute per limit.
+- Reporting finds its row in a fixed table by hashing the name, at most
+  four times, and a new limit in a full table scans its 128 rows once for
+  the one reached longest ago. It allocates nothing and never fails, so it
+  may sit on the interactive path. The notice appears at most once a
+  minute per limit.
 - Only the thread that owns the process model reports: the runtime's event
   loop or the client adapter's loop. A worker returns the reach in its
   completion and its `finish` reports it. A CLI command prints the notice to

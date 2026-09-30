@@ -48,6 +48,16 @@ pub fn report(model: *RuntimeModel, reach: core.LimitReach) void {
 /// ```
 pub fn receive(model: *RuntimeModel, session: *Session, reported: core.ReportLimit) void {
     const at = now(model);
+    if (!admit(model, session, at)) {
+        return;
+    }
+
+    _ = core.limit_reached.record(&model.client_limit_reaches, reported.reach, at, reported.hits);
+}
+
+/// Whether one more report from this connection fits its second; one that
+/// does not is counted as refused.
+fn admit(model: *RuntimeModel, session: *Session, at: core.ReachTime) bool {
     if (at.awake_ms - session.limit_report_window_ms >= std.time.ms_per_s) {
         session.limit_report_window_ms = at.awake_ms;
         session.limit_reports = 0;
@@ -55,11 +65,11 @@ pub fn receive(model: *RuntimeModel, session: *Session, reported: core.ReportLim
 
     if (session.limit_reports >= max_reports_per_second) {
         model.refused_limit_reports +|= 1;
-        return;
+        return false;
     }
 
     session.limit_reports += 1;
-    _ = core.limit_reached.record(&model.client_limit_reaches, reported.reach, at, reported.hits);
+    return true;
 }
 
 /// Answers `telar diagnostics limits` with both tables, encoded from them
@@ -91,9 +101,11 @@ pub fn absorb(model: *RuntimeModel, route: []const u8, err: anyerror) anyerror!v
 }
 
 /// The safety net of one client request: a limit error answers the request
-/// with `resource_limit` and keeps the connection. A full response queue is
-/// the slow-client policy, not a limit, so it and every other error return
-/// and the connection is dropped as before.
+/// with `resource_limit` and keeps the connection. The limit is recorded
+/// within the connection's report budget, so a client sending requests
+/// that stop at a limit cannot flood the runtime's table or its notices. A
+/// full response queue is the slow-client policy, not a limit, so it and
+/// every other error return and the connection is dropped as before.
 ///
 /// ```zig
 /// client_request.receive(model, session, message) catch |err| try limit_reached.refuse(model, session, message, err);
@@ -105,7 +117,7 @@ pub fn refuse(model: *RuntimeModel, session: *Session, message: core.ClientMessa
         return err;
     }
 
-    if (notice(model, core.limit_reached.unnamed(err, route))) {
+    if (admit(model, session, now(model)) and notice(model, core.limit_reached.unnamed(err, route))) {
         log.warn("request {s} stopped at a limit: {s}", .{ route, @errorName(err) });
     }
 

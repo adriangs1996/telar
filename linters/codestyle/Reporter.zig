@@ -72,5 +72,8 @@ fn writeViolation(self: *Reporter, path: []const u8, violation: ViolationType) !
         .dedicated_layout_file => try self.writer.writeAll("a public packed/extern layout requires a dedicated type file [codestyle/dedicated-layout-file]\n"),
         .receiver_name => try self.writer.writeAll("a method names its receiver self; a procedure names its process model model [codestyle/receiver-name]\n"),
         .inline_import => try self.writer.writeAll("declare this @import as a named constant instead of using it inline [codestyle/inline-import]\n"),
+        .limit_error_set => try self.writer.writeAll("an error named like a limit must be in LimitError, SystemError or NotLimitError of src/core/limit_reached.zig [codestyle/limit-error-set]\n"),
+        .limit_error_unraised => try self.writer.writeAll("no checked file raises this LimitError member; remove it [codestyle/limit-error-unraised]\n"),
+        .limit_error_reason => try self.writer.writeAll("a NotLimitError member needs a doc comment saying why it is not a limit [codestyle/limit-error-reason]\n"),
     }
 }

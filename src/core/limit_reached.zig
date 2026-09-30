@@ -17,9 +17,10 @@ pub const report_interval_ms: i64 = std.time.ms_per_s;
 
 /// The errors telar raises when one of its own fixed limits runs out. A
 /// flow that adds a limit error adds it here; a safety net absorbs exactly
-/// these. `NoSpaceLeft` and `WriteFailed` are what a fixed buffer or writer
-/// returns when full; the nets run on event loops, where files are not
-/// written.
+/// these, and `zig build codestyle` fails on an error named like a limit
+/// that is in no set. A fixed buffer or writer that overflows returns
+/// `NoSpaceLeft` or `WriteFailed`, the same errors a full disk returns, so
+/// a flow that can overflow one maps that to a named limit error.
 pub const LimitError = error{
     AckCapacityExceeded,
     AgentCapacityExceeded,
@@ -46,6 +47,7 @@ pub const LimitError = error{
     ClipboardCaptureIdExhausted,
     ClipboardImageTooLarge,
     ClipboardTooLarge,
+    ConfigPathTooLong,
     ConfigStreamTooLarge,
     DestinationTooLong,
     DiagnosticLineTooLong,
@@ -56,7 +58,6 @@ pub const LimitError = error{
     EntryTooLong,
     EnvironmentTooLarge,
     ErrorMessageTooLarge,
-    FallbackPoolFull,
     FontCollectionTooLarge,
     FontSetIdentityExhausted,
     FrameTooLarge,
@@ -70,29 +71,29 @@ pub const LimitError = error{
     GraphicsQuotaExceeded,
     HeadlessCellBudgetExceeded,
     HeadlessReceiveTooLarge,
-    HistoryQueueFull,
     HostEffectsFull,
     HostRequestIdsExhausted,
     HostRequestsFull,
     ImageQuotaExceeded,
-    ImageTooLarge,
     InboxFull,
     InputCapacityExceeded,
     InputTooLarge,
+    LengthOverflow,
     LimitExceeded,
+    LockNameTooLong,
     MachineCommandTooLong,
+    MachineLabelTooLong,
     ManifestTooLarge,
-    MappingLimitReached,
     NativeCellBudgetExceeded,
     NativeInputFull,
     NativeQuadBudgetExceeded,
-    NoSpaceLeft,
     NodeLimitReached,
     NotificationTooLarge,
     OriginTooLong,
     OutputFull,
     PaneGenerationExhausted,
     PaneLimitReached,
+    PathEntryTooLong,
     PathTooLong,
     PickItemTooLong,
     PickItemsTooLarge,
@@ -104,6 +105,7 @@ pub const LimitError = error{
     ProfileCounterOverflow,
     ProviderFrameTooLarge,
     ProxyInterceptHostsTooLarge,
+    ProxyPathTooLong,
     QueryTooLong,
     QueueFull,
     RecordTooLarge,
@@ -129,6 +131,7 @@ pub const LimitError = error{
     TextMetadataQuotaExceeded,
     TextMetadataTooLarge,
     TextTooLong,
+    TooLarge,
     TooManyActions,
     TooManyAgentEntries,
     TooManyAgents,
@@ -187,19 +190,78 @@ pub const LimitError = error{
     WorkspaceListTooLarge,
     WorkspacePathTooLong,
     WorktreeLimitReached,
-    WriteFailed,
 };
 
 /// Errors the host raises, not a telar limit: memory from a real
-/// allocator, a full disk, descriptor quotas, a name the file system
-/// refuses. A net logs them as errors and lets them keep their path.
+/// allocator, a full disk (`NoSpaceLeft`) or quota, descriptor quotas, a
+/// name the file system refuses. A net logs them as errors and lets them
+/// keep their path.
 pub const SystemError = error{
     BrotliOutOfMemory,
-    DiskFull,
+    DiskQuota,
     NameTooLong,
+    NoSpaceLeft,
     OutOfMemory,
     ProcessFdQuotaExceeded,
     SystemFdQuotaExceeded,
+};
+
+/// Errors named like a limit that are not one. `zig build codestyle`
+/// requires every error named like a limit to be in a set, and each member
+/// here to say why it is not a limit.
+pub const NotLimitError = error{
+    /// A test fixture's own bound, not telar's.
+    FixtureClientLimit,
+    /// Arithmetic on dimensions a child sent: a malformed image.
+    ImageSizeOverflow,
+    /// A configured decode bound out of range: invalid configuration.
+    InvalidDecodeLimit,
+    /// A profiling workload that does not exist: invalid arguments.
+    InvalidFullWorkload,
+    /// A configured graphics bound out of range: invalid configuration.
+    InvalidGraphicsLimit,
+    /// Configured graphics bounds that contradict: invalid configuration.
+    InvalidGraphicsLimits,
+    /// A configured history bound out of range: invalid configuration.
+    InvalidHistoryLimit,
+    /// A bound given on the command line out of range: invalid arguments.
+    InvalidLimit,
+    /// A limit report whose name is not an identifier: an invalid message.
+    InvalidLimitName,
+    /// A limit report whose noun is not printable: an invalid message.
+    InvalidLimitNoun,
+    /// A limit list row of an unknown origin: an invalid message.
+    InvalidLimitOrigin,
+    /// A limit report with no reaches: an invalid message.
+    InvalidLimitReport,
+    /// A limit report whose route is not an identifier: an invalid message.
+    InvalidLimitRoute,
+    /// A configured path bound out of range: invalid configuration.
+    InvalidPathLimit,
+    /// A deadline a test measures, not a bound telar enforces.
+    LivePaneInputForwardingDeadlineExceeded,
+    /// A deadline a test measures, not a bound telar enforces.
+    LivePaneInputReadinessDeadlineExceeded,
+    /// A graphics bound the options must name: invalid configuration.
+    MissingGraphicsGlobalLimit,
+    /// A graphics bound the options must name: invalid configuration.
+    MissingGraphicsPaneLimit,
+    /// A history bound the options must name: invalid configuration.
+    MissingHistoryLimit,
+    /// Arithmetic overflow inside a decoder: a malformed input.
+    Overflow,
+    /// A command for a fullscreen state the pane cannot take.
+    PaneFullscreenUnavailable,
+    /// A performance gate a benchmark measures, not a bound telar enforces.
+    PerformanceBudgetExceeded,
+    /// A rate policy answered to the sender, which keeps working.
+    PromptRateLimited,
+    /// A deadline a test measures, not a bound telar enforces.
+    PtyInputForwardingDeadlineExceeded,
+    /// A deadline a test measures, not a bound telar enforces.
+    TestReceiveDeadlineExceeded,
+    /// A test fixture's own bound, not telar's.
+    TestScreenTooLarge,
 };
 
 /// Whether an error is one of telar's own limits (`LimitError`).
@@ -335,9 +397,11 @@ test "limit errors are told apart from host errors and bugs" {
     try std.testing.expect(isLimitError(error.PaneLimitReached));
     try std.testing.expect(isLimitError(error.WidgetIdentityExhausted));
     try std.testing.expect(isLimitError(error.ReviewLineLimit));
-    try std.testing.expect(isLimitError(error.NoSpaceLeft));
+    try std.testing.expect(!isLimitError(error.NoSpaceLeft));
+    try std.testing.expect(!isLimitError(error.WriteFailed));
     try std.testing.expect(!isLimitError(error.OutOfMemory));
-    try std.testing.expect(!isLimitError(error.DiskFull));
+    try std.testing.expect(isSystemError(error.NoSpaceLeft));
+    try std.testing.expect(isSystemError(error.DiskQuota));
     try std.testing.expect(!isLimitError(error.InvalidPresentationCommit));
 
     try std.testing.expect(isSystemError(error.OutOfMemory));

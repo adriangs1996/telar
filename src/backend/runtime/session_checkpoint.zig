@@ -709,7 +709,7 @@ test "checkpoint state debounces, coalesces and retries after failure" {
     try std.testing.expectEqual(@as(u64, 1), state.writes);
 
     try state.startWrite(try testingWrite(), &scheduler);
-    state.completeWrite(error.DiskFull);
+    state.completeWrite(error.NoSpaceLeft);
     try std.testing.expect(state.dirty);
     try std.testing.expectEqual(@as(u64, 1), state.failures);
     try std.testing.expect(state.due(2_000 + debounce_ns));

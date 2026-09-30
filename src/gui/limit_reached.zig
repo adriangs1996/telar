@@ -31,7 +31,10 @@ pub const Route = enum {
 /// if (!limit_reached.absorb(gui, .window_update, err)) gui.fail(err);
 /// ```
 pub fn absorb(gui: *GuiAdapter, route: Route, err: anyerror) bool {
-    client.limit_reached.absorb(gui.app, @tagName(route), err, limitOf(gui, err)) catch return false;
+    switch (route) {
+        inline else => |known| client.limit_reached.absorb(gui.app, @tagName(known), err, limitOf(gui, err)) catch return false,
+    }
+
     return true;
 }
 

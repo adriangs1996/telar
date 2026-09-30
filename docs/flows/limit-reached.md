@@ -136,7 +136,9 @@ The runtime keeps two tables. `model.limit_reaches` holds its own limits;
 reports a runtime limit's name, or a hundred invented names, never silences,
 renames or evicts a runtime row, and never makes the runtime show a notice.
 Each connection may send 32 reports a second; the rest are refused and
-counted in `model.refused_limit_reports`.
+counted in `model.refused_limit_reports`. A request that stops at a limit
+spends the same budget before it records a row or shows a notice, so a
+client cannot flood the runtime's own table with oversized requests either.
 
 A client reports to the runtime so one command lists both sides. A reach
 inside the one-second report interval waits and rides on the next report,
@@ -148,13 +150,16 @@ stay in its own table and its headless dump until another reach sends them.
 
 The `limits` log scope is at `warn` in `main.zig`'s `std_options`; the
 headless client keeps Zig's default level, which already shows warnings.
-The background runtime writes its standard error to `<socket>.runtime.log`
-in every build. The runtime opens that file itself once it holds the
+The launcher points a new background runtime's standard error at
+`<socket>.runtime.start.log`, owner-only and replaced by each launch, so a
+runtime that fails before it holds the listener (a configuration, graphics,
+history or proxy directory error) leaves its reason there. Once it holds the
+listener it writes to `<socket>.runtime.log` in every build. The runtime opens that file itself once it holds the
 listener (`RuntimeLog.open` in `Resources.acquire`), so only the runtime that
 owns the socket rotates it: a second launch that loses the race, or a
 retrying connect, never moves a live runtime's log aside. The previous file
 stays as `.runtime.log.1`, and the maintenance tick rotates a log that passes
-1 MiB. `telar diagnostics logs` reads it with the telemetry logs.
+1 MiB. `telar diagnostics logs` reads both with the telemetry logs.
 
 The runtime logs its own limits and each safety-net catch, with its route,
 once per interval. It only counts what clients report, so a client cannot
@@ -164,10 +169,21 @@ grow the runtime's log. A client logs to its own standard error.
 
 A net catches exactly `core.limit_reached.LimitError`, the errors telar
 raises when one of its own limits runs out. A flow that adds a limit error
-adds it there. `SystemError` holds what the host raises: memory from a real
-allocator, a full disk, descriptor quotas and names the file system refuses.
-A net logs those as errors with their route and lets them keep their old
-path, like every other error, so it hides no host failure and no bug.
+adds it there, and `zig build codestyle` makes sure it does: every
+`error.X` whose name contains `TooMany`, `TooLarge`, `TooLong`, `Full`,
+`Exceeded`, `Exhausted`, `Limit`, `Capacity` or `Overflow` must be in
+`LimitError`, `SystemError` or `NotLimitError`, each `NotLimitError` member
+says why in a doc comment, and a `LimitError` member no file raises is an
+error too.
+
+`SystemError` holds what the host raises: memory from a real allocator, a
+full disk (`NoSpaceLeft`) or disk quota, descriptor quotas and names the file
+system refuses. A net logs those as errors with their route and lets them
+keep their old path. `NoSpaceLeft` and `WriteFailed` are also what a fixed
+buffer or writer returns when it overflows; since the two cannot be told
+apart, neither is a limit error, and a flow that can overflow a fixed buffer
+maps that to a named limit error. Any other error keeps its old path too, so
+a net hides no host failure and no bug.
 
 A net reports the limit under the error's name
 (`ChromeHitCapacityExceeded: limit reached`) with the route that caught it.
@@ -183,15 +199,18 @@ Once a flow reports its limit by name, the net no longer sees that error.
   when the reply an event owes does not fit (`dropUnanswered`).
 - `GuiAdapter.update` absorbs a limit error per event and per step of the
   turn, so the rest of the batch, `reconcileFocus` and the presentation
-  still run. `pump` keeps a second net: the same error twice asks for no
-  draw.
+  still run. A runtime message that stopped at a limit may have applied in
+  part, so its machine's link restarts (`runtime_link.lose`) and the next
+  session rebuilds that client's replica from snapshots. `pump` keeps a
+  second net: the same error twice asks for no draw.
 - The window's `render` callback passes draw errors to the GUI's
   `limit_reached.absorbFrame`. Draw returns token 0, and both native
   backends keep the last presented frame. `GuiAdapter.limited` holds the
   observation and viewport that stopped, and the window neither measures nor
   prepares that frame again until one of them changes. Because a frame that
   keeps failing cannot show its own notice, the window title ends with
-  " — limit reached: <name>" until a frame draws. Errors the window raises
+  " — limit reached: <name>" until a frame draws, and the frame that draws
+  wakes the loop so the title drops it. Errors the window raises
   itself are named (`render.retained_max_cells`, `protocol.max_cell_count`,
   `render.frame_quad_budget`, `gui.widgets.registry_capacity`,
   `text.glyph_atlas_side`).

@@ -52,8 +52,11 @@ the working directory, because a fixed buffer per pane would cost megabytes
 per client model.
 
 `client.window_title` is a template with `{hostname}`, `{workspace}`, `{tab}`
-and `{pane_title}`. An empty template, the default, never touches the window
-title. After each client pump the native loop asks `GuiAdapter.windowTitle`,
+and `{pane_title}`. An empty template, the default, leaves the window its
+default title, `GuiAdapter.default_title`. While a frame is held at a limit
+the title ends with " — limit reached: <name>" either way
+([Limit reached](limit-reached.md)). After each client pump the native loop
+asks `GuiAdapter.windowTitle`,
 which renders the template with `pane_title.focusedTitle`, `workspaceName`,
 `tab_label.text`, and the active machine's label (or the local hostname) as
 `{hostname}`. `WindowTitleState.sync` hands the text to the platform only when
