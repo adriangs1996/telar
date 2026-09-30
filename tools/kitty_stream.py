@@ -3,6 +3,9 @@
 memory transport (t=s) inside the atomic envelope the runtime folds.
 
 Each frame is one POSIX shared-memory object the terminal adopts and unlinks.
+Objects still named when the stream ends (frames the terminal never read
+because the stream was cut short) are unlinked on exit, SIGHUP and SIGTERM
+included, so a run never strands shared memory.
 The cursor is saved and restored around every frame so a program sharing the
 pane (the latency probe's cat) keeps its own position. Frames alternate
 between two contents, so every generation changes what the window draws.
@@ -11,6 +14,7 @@ import argparse
 import base64
 import mmap
 import os
+import signal
 import sys
 import time
 
@@ -54,20 +58,31 @@ def main():
     started = time.monotonic()
     published = 0
     deadline = started
-    while time.monotonic() - started < args.seconds:
-        if args.text:
-            out.write(("\0337\033[?2026h\033[20;1H%08d\033[?2026l\0338" % published).encode())
-            out.flush()
-        else:
-            name = '/tkg-%d-%d' % (os.getpid(), published)
-            publish(out, name, frames[published & 1], (args.width, args.height))
-        published += 1
-        deadline += interval
-        pause = deadline - time.monotonic()
-        if pause > 0:
-            time.sleep(pause)
-        else:
-            deadline = time.monotonic()
+    for stop in (signal.SIGHUP, signal.SIGTERM):
+        signal.signal(stop, lambda *_: sys.exit(1))
+    try:
+        while time.monotonic() - started < args.seconds:
+            if args.text:
+                out.write(("\0337\033[?2026h\033[20;1H%08d\033[?2026l\0338" % published).encode())
+                out.flush()
+            else:
+                name = '/tkg-%d-%d' % (os.getpid(), published)
+                publish(out, name, frames[published & 1], (args.width, args.height))
+            published += 1
+            deadline += interval
+            pause = deadline - time.monotonic()
+            if pause > 0:
+                time.sleep(pause)
+            else:
+                deadline = time.monotonic()
+    finally:
+        # The terminal unlinks what it read; the rest is ours to remove.
+        # A frame cut short between its object and its command counts too.
+        for index in range(0 if args.text else published + 1):
+            try:
+                _posixshmem.shm_unlink('/tkg-%d-%d' % (os.getpid(), index))
+            except OSError:
+                pass
     if args.report:
         with open(args.report, 'w') as report:
             report.write('%d %.3f\n' % (published, time.monotonic() - started))
