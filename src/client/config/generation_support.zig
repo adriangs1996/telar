@@ -1745,6 +1745,11 @@ test "renders that return new command tabs on every tick never run out of rows" 
             .surface = .panel,
         }, content, &diagnostic);
         try std.testing.expectEqual(@as(u8, data.bar_values.max_panel_actions), content.action_count);
+        // Every button this render kept still names its command.
+        for (content.actions[0..content.action_count]) |action| {
+            var kept: data.CommandTab = undefined;
+            try std.testing.expect(generation.snapshot.command_tabs.find(generation.number, action.command_tab, &kept));
+        }
     }
 
     // The last render's buttons still name their commands.
@@ -1890,4 +1895,28 @@ test "only the base and the selected profile count against the bar callbacks and
     try std.testing.expectEqual(@as(u8, 16), generation.snapshot.bars.panel_count);
     // The unselected profile with 20 panels was checked but reports nothing.
     try std.testing.expectEqual(@as(u8, 0), generation.unreported.count);
+}
+
+test "a selected profile whose panels fit makes a name only the base declared an error again" {
+    const source =
+        \\local telar = require("telar")
+        \\local panels = {}
+        \\for index = 1, 18 do
+        \\  panels[string.format("p%02d", index)] = telar.panel({ render = function() return {} end })
+        \\end
+        \\return { api_version = 2, client = { panels = panels }, profiles = {
+        \\  small = { client = {
+        \\    panels = { only = telar.panel({ render = function() return {} end }) },
+        \\    keybindings = { telar.bind({ "u" }, telar.action.open_panel("p18")) },
+        \\  } },
+        \\} }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{
+        .source = source,
+        .source_name = "@config.lua",
+        .number = 1,
+        .profile = "small",
+    }));
+    try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), "p18") != null);
 }

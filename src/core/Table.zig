@@ -5,7 +5,12 @@ const std = @import("std");
 const Signal = @import("Signal.zig");
 const Table = @This();
 
-items: [types.max_agent_manifests]AgentManifest = undefined,
+/// Manifests one table holds: every built-in agent plus the custom ones
+/// the wire's provider range allows, so built-ins never take a configured
+/// agent's room.
+pub const capacity = types.first_custom_agent_provider - 1 + types.max_agent_manifests;
+
+items: [capacity]AgentManifest = undefined,
 count: u8 = 0,
 
 /// Registers one agent. Built-in names return their existing manifest so
@@ -26,13 +31,13 @@ pub fn add(self: *Table, name: []const u8) agent_manifest.AddError!*AgentManifes
         }
         return error.DuplicateName;
     }
-    if (self.count == types.max_agent_manifests) {
+    if (self.count == capacity) {
         return error.TooManyAgents;
     }
 
     const builtin = agent_manifest.builtinProvider(name);
     // A custom index past the range would be refused on the wire.
-    if (builtin == null and self.customCount() == types.max_custom_agent_manifests) {
+    if (builtin == null and self.customCount() == types.max_agent_manifests) {
         return error.TooManyAgents;
     }
 

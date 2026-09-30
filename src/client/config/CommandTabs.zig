@@ -18,13 +18,21 @@ const CommandTabs = @This();
 /// Bytes the fixed and recent rows share; the fixed ones may take all but
 /// `recent_reserve`, room for a full keymap of 256 command tabs of 256
 /// bytes.
-pub const pool_bytes = 96 * 1024;
-/// Bytes always left to the recent rows: three commands of the largest argv.
-const recent_reserve = 16 * 1024;
+pub const pool_bytes = 112 * 1024;
+/// Bytes always left to the recent rows: seven commands of the largest
+/// argv, or hundreds of the short ones a render's buttons run.
+const recent_reserve = 32 * 1024;
 /// Rows of both kinds: the bindings and static components of the base
 /// configuration and of the selected profile, and what renders keep.
 pub const max_rows = 1024;
-pub const limit = core.Limit.declare("config.command_tab_bytes", "command tab bytes", pool_bytes - recent_reserve);
+/// Rows always left to the recent ones, so clearing them always makes
+/// room and never writes past `offsets`.
+const recent_rows = 256;
+pub const bytes_limit = core.Limit.declare("config.command_tab_bytes", "command tab bytes", pool_bytes - recent_reserve);
+pub const rows_limit = core.Limit.declare("config.command_tab_rows", "command tabs", max_rows - recent_rows);
+/// Reported when one render keeps more command tabs than half the recent
+/// rows hold, which clears its own earlier rows.
+pub const recent_limit = core.Limit.declare("config.recent_command_tab_bytes", "command tab bytes", recent_reserve / 2);
 /// A row's header: its argument count and its label length.
 const header_bytes = 2;
 const length_bytes = @sizeOf(u16);
@@ -32,7 +40,8 @@ const length_bytes = @sizeOf(u16);
 const max_row_bytes = header_bytes + length_bytes * data.CommandTab.max_arguments + data.CommandTab.max_command_bytes + data.CommandTab.max_label_bytes;
 
 comptime {
-    std.debug.assert(recent_reserve >= 3 * max_row_bytes);
+    std.debug.assert(recent_reserve >= 7 * max_row_bytes);
+    std.debug.assert(recent_rows > 0 and recent_rows < max_rows);
 }
 
 bytes: [pool_bytes]u8 = undefined,
@@ -49,9 +58,11 @@ sealed: bool = false,
 epoch: u32 = 1,
 
 /// Keeps `command` and returns the reference that names it in the
-/// generation `number`, sharing an equal row. Before `seal` the row is fixed; a full fixed pool fails with
-/// `TooManyCommandTabs`. After it the row is recent, and full recent rows
-/// are cleared to make room, so it never fails.
+/// generation `number`, sharing an equal row. Before `seal` the row is
+/// fixed, and fixed rows past their share of rows or bytes fail with
+/// `TooManyCommandTabs` (`fixedRowsFull` tells which). After it the row is
+/// recent, and full recent rows are cleared to make room, so it never
+/// fails.
 ///
 /// ```zig
 /// const reference = try generation.snapshot.command_tabs.add(generation.number, &command);
@@ -59,6 +70,7 @@ epoch: u32 = 1,
 pub fn add(self: *CommandTabs, number: u64, command: *const data.CommandTab) !data.CommandTabRef {
     var encoded: [max_row_bytes]u8 = undefined;
     const row = encode(command, &encoded);
+
     for (0..self.count) |id| {
         if (std.mem.eql(u8, self.rowBytes(@intCast(id)), row)) {
             return self.reference(number, @intCast(id));
@@ -66,23 +78,54 @@ pub fn add(self: *CommandTabs, number: u64, command: *const data.CommandTab) !da
     }
 
     if (!self.sealed) {
-        if (self.used + row.len > pool_bytes - recent_reserve or self.count == max_rows) {
+        if (self.used + row.len > pool_bytes - recent_reserve or self.fixedRowsFull()) {
             return error.TooManyCommandTabs;
         }
 
         return self.reference(number, self.append(row));
     }
 
+    // Fixed rows stop `recent_rows` and `recent_reserve` short of the end,
+    // so a cleared recent region always has room for this row.
     if (self.used + row.len > pool_bytes or self.count == max_rows) {
-        self.used = self.fixed_bytes;
-        self.count = self.fixed_rows;
-        self.epoch +%= 1;
-        if (self.epoch == 0) {
-            self.epoch = 1;
-        }
+        self.clearRecent();
     }
 
     return self.reference(number, self.append(row));
+}
+
+/// Clears the recent rows before a render when less than half of their
+/// room is left, so a render's own rows are cleared only when it alone
+/// keeps more than half of them (`recent_limit`), never halfway through
+/// because earlier renders filled the room. Other surfaces' buttons that
+/// named cleared rows render them again when clicked.
+/// Example: `generation.snapshot.command_tabs.makeRoom();`
+pub fn makeRoom(self: *CommandTabs) void {
+    if (!self.sealed) {
+        return;
+    }
+
+    if (pool_bytes - self.used >= recent_reserve / 2 and max_rows - self.count >= recent_rows / 2) {
+        return;
+    }
+
+    self.clearRecent();
+}
+
+fn clearRecent(self: *CommandTabs) void {
+    self.used = self.fixed_bytes;
+    self.count = self.fixed_rows;
+    self.epoch +%= 1;
+    if (self.epoch == 0) {
+        self.epoch = 1;
+    }
+}
+
+/// Whether the configuration fixed as many rows as it may, rather than
+/// as many bytes, for the limit its failure reports.
+/// Example: `const limit = if (tabs.fixedRowsFull()) CommandTabs.rows_limit else CommandTabs.bytes_limit;`
+pub fn fixedRowsFull(self: *const CommandTabs) bool {
+    return self.count >= max_rows - recent_rows;
 }
 
 /// Ends loading: the rows kept so far stay for the generation and later
@@ -243,4 +286,32 @@ test "the fixed rows stop at their share of the pool and leave the recent reserv
 
     try std.testing.expect(kept_rows >= (pool_bytes - recent_reserve) / max_row_bytes);
     try std.testing.expect(tabs.used <= pool_bytes - recent_reserve);
+}
+
+test "fixed rows stop short of the table, so clearing the recent ones never writes past it" {
+    const tabs = try std.testing.allocator.create(CommandTabs);
+    defer std.testing.allocator.destroy(tabs);
+    tabs.* = .{};
+
+    var number: [8]u8 = undefined;
+    var index: usize = 0;
+    while (true) : (index += 1) {
+        const text = std.fmt.bufPrint(&number, "{d}", .{index}) catch unreachable;
+        const command = try data.CommandTab.init(&.{text}, "");
+        _ = tabs.add(1, &command) catch |err| {
+            try std.testing.expectEqual(error.TooManyCommandTabs, err);
+            break;
+        };
+    }
+
+    try std.testing.expect(tabs.fixedRowsFull());
+    tabs.seal();
+    for (0..3 * max_rows) |recent| {
+        const text = std.fmt.bufPrint(&number, "r{d}", .{recent}) catch unreachable;
+        const command = try data.CommandTab.init(&.{text}, "");
+        const kept = try tabs.add(1, &command);
+        var loaded: data.CommandTab = undefined;
+        try std.testing.expect(tabs.find(1, kept, &loaded));
+        try std.testing.expect(tabs.count <= max_rows);
+    }
 }

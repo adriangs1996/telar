@@ -167,10 +167,14 @@ pub fn Type(comptime bounds: ContentBounds) type {
         /// order. The kept components stay in their document order, so a
         /// source that fits is copied whole.
         ///
+        /// `had_children` names the source's containers that had children
+        /// before the source was built, some perhaps left out already; null
+        /// takes them from the source.
+        ///
         /// ```zig
-        /// content.keepFitting(generation.staged_content);
+        /// content.keepFitting(generation.staged_content, null);
         /// ```
-        pub fn keepFitting(self: *Self, source: anytype) void {
+        pub fn keepFitting(self: *Self, source: anytype, had_children: ?*const [max_node_capacity]bool) void {
             self.clear();
             const count = source.node_count;
             var rank: [max_node_capacity]u8 = undefined;
@@ -203,7 +207,7 @@ pub fn Type(comptime bounds: ContentBounds) type {
                 budget = next;
             }
 
-            dropEmptyContainers(source, &kept);
+            dropEmptyContainers(source, &kept, had_children);
 
             var copied: [max_node_capacity]u8 = undefined;
             for (0..count) |index| {
@@ -231,8 +235,8 @@ pub fn Type(comptime bounds: ContentBounds) type {
         /// Leaves out a kept container none of whose children were kept,
         /// deepest first, so a group never shows empty. A container that had
         /// no children stays.
-        fn dropEmptyContainers(source: anytype, kept: *[max_node_capacity]bool) void {
-            var had_children: [max_node_capacity]bool = @splat(false);
+        fn dropEmptyContainers(source: anytype, kept: *[max_node_capacity]bool, known: ?*const [max_node_capacity]bool) void {
+            var had_children: [max_node_capacity]bool = if (known) |value| value.* else @splat(false);
             var kept_children: [max_node_capacity]u8 = @splat(0);
             for (source.slice(), 0..) |node, index| {
                 if (node.isRoot()) {
@@ -508,7 +512,7 @@ test "a larger list keeps its highest-priority components with their containers,
     });
 
     var content: TestContent = .{};
-    content.keepFitting(&source);
+    content.keepFitting(&source, null);
 
     // The button needs a second action this list has no room for, so the
     // next component that fits takes its place.
@@ -553,11 +557,11 @@ test "a list that fits is copied whole and a dropped container drops its childre
         .actions = 2,
         .samples = 64,
     }) = .{};
-    wide.keepFitting(&source);
+    wide.keepFitting(&source, null);
     try std.testing.expect(wide.eql(&source));
 
     var content: TestContent = .{};
-    content.keepFitting(&source);
+    content.keepFitting(&source, null);
     try std.testing.expectEqual(@as(u8, 4), content.node_count);
     for (content.slice()) |node| {
         try std.testing.expect(node.isRoot());
@@ -594,7 +598,7 @@ test "a group none of whose children fit is left out instead of shown empty" {
         .actions = 1,
         .samples = 64,
     }) = .{};
-    content.keepFitting(&source);
+    content.keepFitting(&source, null);
 
     try std.testing.expectEqual(@as(u8, 1), content.node_count);
     try std.testing.expectEqualStrings("kept", content.text(content.slice()[0].text));

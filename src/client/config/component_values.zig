@@ -2,6 +2,7 @@
 //! Every table is checked against the fields its component accepts, and
 //! every component against the place it appears in, before anything is kept.
 const ComponentSource = @import("ComponentSource.zig");
+const CommandTabs = @import("CommandTabs.zig");
 const core = @import("telar-core");
 const data = @import("model");
 const lua_api = @import("lua-api");
@@ -70,6 +71,9 @@ const Pass = struct {
     /// Everything the render returned, children of any container included.
     demand: data.ContentDemand = .{},
     ranked: [rank_count]data.ContentDemand = @splat(.{}),
+    /// Staged containers the render gave children, staged or not, so one
+    /// whose children all fell under the cutoff is not kept empty.
+    had_children: [data.Node.max_list_nodes]bool = @splat(false),
 
     /// Picks the lowest rank to stage and the room its components share:
     /// rank 0 and all of `bounds` when the whole render fits.
@@ -177,9 +181,18 @@ pub fn parse(generation: *Generation, content: anytype, request: ComponentSource
     try readList(reader, staged, root);
     pass.chooseCutoff(data.StagedContent.capacity);
     staged.clear();
+    generation.snapshot.command_tabs.makeRoom();
+    const epoch = generation.snapshot.command_tabs.epoch;
     try readList(reader, staged, root);
+    if (generation.snapshot.command_tabs.epoch != epoch) {
+        // The render's own command tabs outgrew the recent rows, so the
+        // first of its buttons name cleared rows.
+        generation.unreported.add(.{
+            .limit = CommandTabs.recent_limit,
+        });
+    }
 
-    content.keepFitting(staged);
+    content.keepFitting(staged, &pass.had_children);
     reportDemand(generation, pass.demand, switch (request.surface) {
         .bar => data.bar_values.bar_limits,
         .panel => data.bar_values.panel_limits,
@@ -216,7 +229,7 @@ fn readList(reader: Reader, content: anytype, target: Target) anyerror!void {
                 .in_tooltip = target.place == .tooltip,
                 .text = lua_value.string(state, index).?,
                 .priority = target.priority,
-            }, target);
+            }, target, null);
             return;
         },
         lua_api.c.LUA_TTABLE => {},
@@ -255,7 +268,7 @@ fn readSegment(reader: Reader, content: anytype, target: Target) !void {
         .icon = segment.icon,
         .style = segment.style,
         .priority = target.priority,
-    }, target);
+    }, target, null);
 }
 
 fn readComponent(reader: Reader, content: anytype, target: Target) !void {
@@ -282,6 +295,9 @@ fn readComponent(reader: Reader, content: anytype, target: Target) !void {
         .tone = try toneField(reader, index),
     };
     var samples: [data.Node.max_samples]u8 = undefined;
+    // The action is parsed only once the component is staged, so a
+    // component left out never keeps a command tab.
+    var action_field: ?[*:0]const u8 = null;
     switch (kind) {
         .label => {
             input.text = try stringField(reader, index, "text") orelse "";
@@ -325,7 +341,7 @@ fn readComponent(reader: Reader, content: anytype, target: Target) !void {
         .group => {
             input.mark = try markField(reader, index);
             input.icon = try iconField(reader, index, "icon");
-            input.action = actionField(reader, index, "on_click") catch |err| return leaveOut(err);
+            action_field = if (hasField(state, index, "on_click")) "on_click" else null;
             input.url = try stringField(reader, index, "url") orelse "";
         },
         .kv => {
@@ -339,17 +355,17 @@ fn readComponent(reader: Reader, content: anytype, target: Target) !void {
         },
         .button => {
             input.text = try stringField(reader, index, "text") orelse "";
-            input.action = actionField(reader, index, "action") catch |err| return leaveOut(err);
+            action_field = if (hasField(state, index, "action")) "action" else null;
             input.url = try stringField(reader, index, "url") orelse "";
             input.primary = try boolField(reader, index, "primary");
-            if (input.action == null and input.url.len == 0) {
+            if (action_field == null and input.url.len == 0) {
                 return fail(reader, "telar.ui.button needs an action or a url", .{});
             }
         },
         .actions, .divider => {},
     }
 
-    const node = try append(reader, content, input, target) orelse return;
+    const node = try append(reader, content, input, target, action_field) orelse return;
     switch (kind) {
         .group => {
             try readChildren(reader, content, .{
@@ -410,9 +426,10 @@ fn readTooltip(reader: Reader, content: anytype, target: Target) !void {
 }
 
 /// Counts one component on the first pass; stages it on the second when
-/// its rank reaches the cutoff and the staged list has room. Null leaves
-/// it out, and a container left out takes its children with it.
-fn append(reader: Reader, content: anytype, input: data.NodeInput, target: Target) !?Staged {
+/// its rank reaches the cutoff and the staged list has room, parsing its
+/// `action_field` of the component table only then. Null leaves it out,
+/// and a container left out takes its children with it.
+fn append(reader: Reader, content: anytype, input: data.NodeInput, target: Target, action_field: ?[*:0]const u8) !?Staged {
     if (!target.place.accepts(input.kind)) {
         return fail(reader, "telar.ui.{s} is not allowed in a {s}", .{ @tagName(input.kind), @tagName(target.place) });
     }
@@ -422,21 +439,40 @@ fn append(reader: Reader, content: anytype, input: data.NodeInput, target: Targe
         .tone = input.tone,
     };
     const rank = @min(ranked.effectivePriority(), target.rank);
+    // Counts as the component will: the placeholder stands for its action,
+    // which is not parsed yet.
+    var counted = input;
+    if (action_field != null) {
+        counted.action = .close_panel;
+    }
+
     const pass = reader.pass;
     if (pass.counting) {
-        pass.demand.add(input);
-        pass.ranked[rank].add(input);
+        pass.demand.add(counted);
+        pass.ranked[rank].add(counted);
         return .{
             .index = 0,
             .rank = rank,
         };
     }
 
-    if (rank < pass.cutoff or (rank == pass.cutoff and !pass.admits(input))) {
+    if (target.parent != data.Node.no_parent) {
+        pass.had_children[target.parent] = true;
+    }
+
+    if (rank < pass.cutoff or (rank == pass.cutoff and !pass.admits(counted))) {
         return null;
     }
 
-    const index = content.append(input) catch |err| switch (err) {
+    var staged = input;
+    if (action_field) |name| {
+        staged.action = actionField(reader, target.index, name) catch |err| {
+            try leaveOut(err);
+            return null;
+        };
+    }
+
+    const index = content.append(staged) catch |err| switch (err) {
         error.TooManyBarComponents, error.BarTextTooLong, error.TooManyBarActions, error.TooManyBarSamples => return null,
         else => {
             reader.diagnostic.set("invalid telar.ui.{s}: {s}", .{ @tagName(input.kind), @errorName(err) });

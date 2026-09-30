@@ -29,7 +29,7 @@ pub const command_tools_limit = Limit.declare("agent_manifest.max_command_tools"
 pub const max_tool_name_bytes = 64;
 pub const max_command_field_bytes = 32;
 /// Agents configuration may declare besides the built-in ones.
-pub const custom_manifests_limit = Limit.declare("agent_manifest.max_custom_agents", "agents", types.max_custom_agent_manifests);
+pub const custom_manifests_limit = Limit.declare("agent_manifest.max_custom_agents", "agents", types.max_agent_manifests);
 
 /// Labels for an agent the table does not know. Clients and the runtime use
 /// the same words so an unknown agent reads identically everywhere.
@@ -450,7 +450,7 @@ test "every built-in list leaves at least half its room to configuration" {
 test "a table holds every built-in agent and sixteen custom ones within the wire's provider range" {
     var table = builtin_table;
     var name_buffer: [types.max_agent_provider_name_bytes]u8 = undefined;
-    for (0..types.max_custom_agent_manifests) |index| {
+    for (0..types.max_agent_manifests) |index| {
         const name = try std.fmt.bufPrint(&name_buffer, "agent-{d}", .{index});
         const manifest = try table.add(name);
         try std.testing.expect(@intFromEnum(manifest.provider) <= types.max_agent_provider_index);

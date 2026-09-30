@@ -823,6 +823,8 @@ fn parsePanels(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !v
 
     var names: [data.bar_values.max_panels][]const u8 = undefined;
     const listed = try firstNames(state, absolute, &names, "config.client.panels keys must be panel names", diagnostic);
+    // A table that fits replaces one that did not: its names alone count.
+    self.dropped.set(.panels, null);
     if (listed.total > listed.kept) {
         self.keepDropped(.panels, absolute);
         self.unreported.add(.{
@@ -936,6 +938,8 @@ fn parsePicks(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !vo
 
     var names: [data.bar_values.max_picks][]const u8 = undefined;
     const listed = try firstNames(state, absolute, &names, "config.client.picks keys must be pick names", diagnostic);
+    // A table that fits replaces one that did not: its names alone count.
+    self.dropped.set(.picks, null);
     if (listed.total > listed.kept) {
         self.keepDropped(.picks, absolute);
         self.unreported.add(.{
@@ -1375,13 +1379,13 @@ fn parseCommandTimeout(state: *lua_api.c.lua_State, index: c_int, max_ms: u32, d
     else
         lua_value.integer(state, -1) orelse {
             lua_value.pop(state, 1);
-            diagnostic.set("bar command timeout_ms must be an integer", .{});
+            diagnostic.set("command timeout_ms must be an integer", .{});
             return error.InvalidConfig;
         };
     lua_value.pop(state, 1);
     if (timeout_value < data.bar_values.min_command_timeout_ms or timeout_value > max_ms) {
         diagnostic.set(
-            "bar command timeout_ms must be in {d}..{d}",
+            "command timeout_ms must be in {d}..{d}",
             .{ data.bar_values.min_command_timeout_ms, max_ms },
         );
         return error.InvalidConfig;
@@ -1930,9 +1934,10 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
             },
         };
         const reference = self.snapshot.command_tabs.add(self.number, &command) catch |err| {
-            diagnostic.set("the configuration's command tabs pass {d} bytes", .{CommandTabs.limit.value});
+            const limit = if (self.snapshot.command_tabs.fixedRowsFull()) CommandTabs.rows_limit else CommandTabs.bytes_limit;
+            diagnostic.set("the configuration's command tabs pass their {d} {s}", .{ limit.value, limit.noun });
             self.unreported.add(.{
-                .limit = CommandTabs.limit,
+                .limit = limit,
             });
             return err;
         };

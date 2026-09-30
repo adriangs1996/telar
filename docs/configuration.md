@@ -1027,9 +1027,12 @@ The keymap holds 256 bindings: past that it keeps the first configured ones,
 then the defaults that fit, and reports `config.max_bindings`; the window
 always starts. `telar.action.command_tab({ command = argv, label = text })`
 takes an argv of up to 32 arguments and 4096 bytes, like a bar command, and a
-label of at most 32 bytes; a configuration opens at most 32 different command
-tabs. A binding whose command passes one of these is left out and its limit
-reported; a command is never cut.
+label of at most 32 bytes. The commands a configuration's bindings and
+static components open share 80 KiB (768 of them); a binding whose command
+passes one of these is left out and its limit reported, and a command is
+never cut. What renders and callbacks return shares 32 KiB of recent rows,
+cleared between renders when half is used; a button whose command was
+cleared says so and renders the bars again.
 `telar config check` compiles the merged keymap and reports conflicts between
 configured bindings. `client.input.sequence_timeout_ms` applies only to partial
 global sequences; prefixed sequences do not expire.

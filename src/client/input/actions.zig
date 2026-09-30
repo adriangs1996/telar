@@ -190,6 +190,10 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
             const generation = client.lua_generation orelse return .continue_routing;
             var command: data.CommandTab = undefined;
             if (!generation.snapshot.command_tabs.find(generation.number, reference, &command)) {
+                // Its recent row was cleared for newer ones: say so and
+                // render the bars and panel again, which keep it anew.
+                _ = try data.client_diagnostic.set(&client.model, "that button's command tab expired; the bars are rendering it again", .{});
+                try bar_updates.refreshSources(client);
                 return .continue_routing;
             }
 

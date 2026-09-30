@@ -535,7 +535,9 @@ test "a command that never stops printing is stopped once what it keeps is full"
         .interval_ns = std.time.ns_per_s,
         .timeout_ms = 10_000,
     };
-    try command.appendArgument("/usr/bin/yes");
+    try command.appendArgument("/bin/sh");
+    try command.appendArgument("-c");
+    try command.appendArgument("exec yes");
 
     const started = std.Io.Timestamp.now(std.testing.io, .awake);
     var output = try runFor(std.testing.io, command, .options);

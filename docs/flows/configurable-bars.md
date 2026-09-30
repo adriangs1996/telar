@@ -138,7 +138,7 @@ while the proxy is off. The native bars span the window.
 - Memory, all fixed and reserved when a configuration loads or a client
   starts, none on the interactive path. A configuration generation is about
   1 MB (`Snapshot` 827 KB: bar sources and 16 panels and picks 326 KB, the
-  agent manifest table 173 KB, the keymap 123 KB, command tabs 102 KB) plus
+  agent manifest table 173 KB, the keymap 123 KB, command tabs 118 KB) plus
   a 65 KB staged list on the heap; each client model is 1.9 MB, of which the
   open pick holds 360 KB (4096 options and 256 KiB of text, the list
   command's output bound) and the bar slots and panel 150 KB. Against the
