@@ -128,6 +128,10 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
             var skill_buffer: [std.fs.max_path_bytes]u8 = undefined;
             const skill_path = try installSkill(init.io, path, &skill_buffer);
             try writer.print("telar integration: coordinator skill written to {s}\n", .{skill_path});
+            if (integration.launch_note.len != 0) {
+                try writer.print("telar integration: {s}\n", .{integration.launch_note});
+            }
+
             return 0;
         },
         .uninstall => {
@@ -164,6 +168,7 @@ fn integrationFor(agent: values.HookAgent) Integration {
             .marker = codex_marker,
             .events = &codex_events,
             .timeout_seconds = 3,
+            .launch_note = "Codex runs its hooks in its shared daemon, outside any pane, unless it starts with --no-daemon; launch it that way, for instance with `alias codex='codex --no-daemon'`",
         },
         // Hooks live in `~/.cursor/hooks.json` whatever `CURSOR_CONFIG_DIR`
         // says; Cursor reads its user hooks from the home directory.

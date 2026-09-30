@@ -581,7 +581,7 @@ test "resume commands exist only for built-in providers and references in their 
     const session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000";
 
     try std.testing.expectEqualStrings("claude --resume " ++ session ++ "\r", resumeCommand(&buffer, .claude, session).?);
-    try std.testing.expectEqualStrings("codex resume " ++ session ++ "\r", resumeCommand(&buffer, .codex, session).?);
+    try std.testing.expectEqualStrings("codex resume --no-daemon " ++ session ++ "\r", resumeCommand(&buffer, .codex, session).?);
     try std.testing.expectEqualStrings("pi --session " ++ session ++ "\r", resumeCommand(&buffer, .pi, session).?);
     try std.testing.expectEqualStrings("cursor-agent --resume " ++ session ++ "\r", resumeCommand(&buffer, .cursor, session).?);
     const opencode_session = "ses_f212d4cc3ffeR3t3CA08EwN5Ap";
@@ -591,6 +591,22 @@ test "resume commands exist only for built-in providers and references in their 
     try std.testing.expect(resumeCommand(&buffer, @enumFromInt(core.first_custom_agent_provider), session) == null);
     try std.testing.expect(resumeCommand(&buffer, .claude, "not-a-uuid") == null);
     try std.testing.expect(resumeCommand(&buffer, .claude, "0192aaaa-bbbb-cccc-dddd-eeeeffff000g") == null);
+}
+
+test "a Codex pane that launched Codex itself resumes it with a fixed argv that keeps its hooks in the pane" {
+    var buffer: [256]u8 = undefined;
+    var encoder = bytecodec.Encoder.init(&buffer);
+    const reference = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 0);
+    const session = try ResumeSession.init(.codex, reference);
+
+    try std.testing.expectEqual(@as(?u16, 4), try directResumeArguments(&encoder, "/opt/bin/codex", session));
+    var decoder = bytecodec.Decoder.init(encoder.finish());
+    for ([_][]const u8{ "/opt/bin/codex", "resume", "--no-daemon", reference.slice() }) |expected| {
+        try std.testing.expectEqualStrings(expected, try decoder.readSized16());
+    }
+
+    var other = bytecodec.Encoder.init(&buffer);
+    try std.testing.expect(try directResumeArguments(&other, "/bin/zsh", session) == null);
 }
 
 test "checkpoint state debounces, coalesces and retries after failure" {

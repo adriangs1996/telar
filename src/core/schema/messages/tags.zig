@@ -62,6 +62,7 @@ pub const ClientTag = enum(u8) {
     interrupt_agent = 0x3f,
     report_agent_progress = 0x40,
     launch_tab = 0x41,
+    verify_pane_descent = 0x42,
 };
 
 pub const ServerTag = enum(u8) {

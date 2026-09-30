@@ -24,6 +24,10 @@ telar hook <agent>   (stdin JSON; TELAR_PANE_ID + TELAR_PANE_GENERATION from the
         |
 parse the harness payload once
         |
+proclineage.ancestors(own pid) -> schema.verify_pane_descent
+        -> agent_hooks.receiveDescent: the pane's root process is among them?
+        |   no: exit 0, report nothing (a process that left the pane)
+        |
         +-> lifecycle mapping -> schema.report_agent
         |                         -> client_request.receive -> agent_hooks.receive
         |                         -> agent_status.observeReport -> Agent.applyReport
@@ -45,6 +49,12 @@ one (`Session.attach` in `src/cli/Session.zig`). The pane environment outlives t
 that injected it, so an orphaned agent must not resurrect a stopped runtime
 from its hooks. Without a runtime the hook exits 0 and reports nothing.
 
+Every report names the agent whose hook sent it (`provider` on
+`report_agent`, `report_agent_title` and `report_agent_progress`, the
+manifest name on `report_agent_command`), and `agent_status.acceptsReporter`
+refuses one for a pane that runs another agent with `foreign_process`; see
+[pane identity](#pane-identity).
+
 The hook keeps the parsed JSON arena alive until both requests have been sent.
 A lifecycle request updates the agent projection and session reference. A
 title request carries the name the user gave the session inside the agent
@@ -54,6 +64,52 @@ title clears it back to the placeholder. The agent never clears a manual
 title. A command request runs only for a configured shell-tool mapping. `PreToolUse`
 opens a `running` history row keyed by the tool call id; `PostToolUse` updates
 that row in place. A finish without an open row inserts a completed row.
+
+## Pane identity
+
+`TELAR_PANE_ID` names the pane a process was started in; it does not prove
+the process still runs there. A process that leaves the pane keeps the
+variable: a server started from the pane that detaches into a session of its
+own, or anything it starts. Codex's CLI hands every session to one shared
+`codex app-server --managed-daemon` unless it runs with `--no-daemon` (Codex
+0.159). The daemon runs the hooks of every session it serves with the
+environment it inherited from wherever it was started, so its reports once
+named that pane for sessions running in others. Measured on 2026-09-30: the
+daemon's parent was `launchd`, the Codex CLI in the pane held only a socket
+to it, and the tools and MCP servers ran as the daemon's children.
+
+Two checks keep a pane's card to its own agent:
+
+1. **Descent.** Before any report, `telar hook` lists its parent processes,
+   nearest first (`proclineage.ancestors`, at most 32, from `proc_pidinfo`
+   on macOS and `/proc/<pid>/stat` on Linux), and sends them with
+   `verify_pane_descent`. The runtime completes the request only when the
+   pane generation's root process is among them, and the hook reports
+   nothing otherwise. The walk costs the hook a few system calls; the runtime
+   compares at most 32 numbers and inspects no process, so nothing reaches the
+   interactive path.
+2. **Agent.** A report names its agent. A pane whose process runs another
+   agent refuses it with `foreign_process`, and a report that names no agent,
+   as `telar agent report-state` sends, is the user's own and always
+   accepted. A hook can fire before the runtime has identified the pane's
+   process, as `SessionStart` can. Until then, the first agent that reports
+   holds the pane (`Agent.reporter`). Process evidence of another agent then
+   discards its report, session, session file watch, agent title and
+   progress.
+
+A session reference also keeps the agent it belongs to, and a restore
+resumes it only with that agent (`Agent.resumableSession`).
+
+With the daemon, no process in the pane runs the hooks, so they reach no
+card. Launch Codex with `--no-daemon` to keep its session in the pane, for
+instance with a shell alias; `codex resume` accepts the flag too, and
+`telar integration install codex` says so after installing. Telar
+installs no wrapper: a directory Telar put first in the pane's `PATH` loses to
+shell configuration that prepends its own, as `mise` and `pnpm` do. A restore
+always resumes with `codex resume --no-daemon <id>`. The process probe reads
+Codex's arguments, and a Codex without the flag
+(`Capabilities.pane_session_argument`) shows `hooks off: shared server, start
+with --no-daemon` on its card while no report decides it.
 
 ## Mapping
 
@@ -354,8 +410,9 @@ hooks attach to an existing runtime and never start an orphaned one.
 
 ## Ownership
 
-`telar hook` never fails loudly: outside a pane, with a malformed payload or
-an unreachable runtime it exits 0, so the agent is unaffected. Lifecycle,
+`telar hook` never fails loudly: outside a pane, from a process that left it,
+for a pane that runs another agent, with a malformed payload or an
+unreachable runtime it exits 0, so the agent is unaffected. Lifecycle,
 command and title reports remain bounded; supported file tools add at most
 32 file samples, and cooperative feedback adds one read and acknowledgement.
 
@@ -504,10 +561,21 @@ for `SessionEnd` and `Interrupt`.
 - `zig build test-integrations`, part of `zig build test`, runs both with
   Node (22.13 or newer, for `module.stripTypeScriptTypes`) along with
   `pi.test.mjs`.
+- `src/cli/integration/hook_identity.test.mjs` drives a built telar in a
+  runtime of its own: two Codex sessions with `--no-daemon` in two panes of
+  one directory report only to their own cards, a server started from one
+  pane that leaves it reaches no card, each rename reaches only its own card,
+  a restart resumes each session in its pane with `--no-daemon`, and a Codex
+  without the flag says so on its card.
+- `src/backend/runtime/tests/requests_test.zig` proves `verify_pane_descent`
+  and that a pane refuses lifecycle, title, command and progress reports of
+  another agent; `agent_status_test.zig` proves the identification window
+  and the shared-server line; `lib/proclineage` proves the parent chain.
 - `src/cli/TempFile.zig` proves that installation writes through an
   exclusive owner-only temporary and never through a planted symlink.
 - `src/backend/history/persistence/history_sql.zig` proves that native start/finish
   updates one row and a later plugin observation with the same tool call id is
   deduplicated.
 - `src/core/schema_contract_test.zig` pins the `report_agent`,
-  `report_agent_command` and `report_agent_title` bytes.
+  `report_agent_command`, `report_agent_title` and `verify_pane_descent`
+  bytes.

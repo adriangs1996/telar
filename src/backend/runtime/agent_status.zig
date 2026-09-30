@@ -55,9 +55,10 @@ pub fn observeReport(model: *RuntimeModel, observation: ReportObservation) bool 
     }
 
     const agent = ensure(model, observation.identity) orelse return false;
+    agent.claimReporter(observation.provider);
     var changed = false;
     if (observation.session) |session| {
-        changed = agent.applySessionReference(session);
+        changed = agent.applySessionReference(session, observation.provider);
         model.agent_session_revision +%= @intFromBool(changed);
     }
 
@@ -87,6 +88,7 @@ pub fn observeReport(model: *RuntimeModel, observation: ReportObservation) bool 
 /// ```
 pub fn observeProgress(model: *RuntimeModel, observation: ProgressObservation) bool {
     const agent = ensure(model, observation.identity) orelse return false;
+    agent.claimReporter(observation.provider);
     var changed = false;
     if (observation.work_tree) |work_tree| {
         changed = agent.work_tree != work_tree;
@@ -115,7 +117,7 @@ pub fn observeProgress(model: *RuntimeModel, observation: ProgressObservation) b
 pub fn observeSessionReference(model: *RuntimeModel, identity: Identity, reference: SessionReference) bool {
     supersedeRestoredSession(model, identity.key, reference);
     const agent = ensure(model, identity) orelse return false;
-    const changed = agent.applySessionReference(reference);
+    const changed = agent.applySessionReference(reference, .unknown);
     model.agent_session_revision +%= @intFromBool(changed);
     return changed;
 }
@@ -125,10 +127,8 @@ pub fn observeSessionReference(model: *RuntimeModel, identity: Identity, referen
 /// Example: `const session = agent_status.resumeSession(model, key) orelse return;`.
 pub fn resumeSession(model: *const RuntimeModel, key: PaneKey) ?ResumeSession {
     if (model.agents.findConst(key)) |agent| {
-        if (agent.session_reference) |reference| {
-            if (agent.process) |process| {
-                return ResumeSession.init(process.provider, reference) catch null;
-            }
+        if (agent.resumableSession()) |reference| {
+            return ResumeSession.init(agent.session_provider, reference) catch null;
         }
     }
 
@@ -153,6 +153,18 @@ pub fn hasRestoredSession(model: *const RuntimeModel, session: ResumeSession) bo
 pub fn awaitingResume(model: *const RuntimeModel, key: PaneKey) bool {
     const pending = model.restored_agents.get(key) orelse return false;
     return pending.session != null;
+}
+
+/// Whether hooks of `reporter` may report for one exact pane generation: a
+/// pane without an agent yet, or one whose agent is `reporter`. A report
+/// that names no agent is the user's own and always may.
+///
+/// ```zig
+/// if (!agent_status.acceptsReporter(model, key, .codex)) return refuse();
+/// ```
+pub fn acceptsReporter(model: *const RuntimeModel, key: PaneKey, reporter: core.AgentProvider) bool {
+    const agent = model.agents.findConst(key) orelse return true;
+    return agent.acceptsReporter(reporter);
 }
 
 /// Returns the provider currently projected for one exact pane generation.
@@ -270,15 +282,23 @@ pub fn observeProcess(model: *RuntimeModel, observation: ProcessObservation) boo
     }
 
     const agent = ensure(model, observation.identity) orelse return false;
+    const had_session = agent.session_reference != null;
 
     if (!agent.applyProcess(observation)) {
         return false;
     }
 
+    // Another agent's hooks reported before this process was identified:
+    // their session is not this agent's, nor is the file they named.
+    if (had_session and agent.session_reference == null) {
+        _ = model.agent_watches.remove(observation.identity.key);
+        model.agent_session_revision +%= 1;
+    }
+
     if (model.restored_agents.take(observation.identity.key)) |pending| {
         if (pending.session) |session| {
             if (agent.session_reference == null) {
-                model.agent_session_revision +%= @intFromBool(agent.applySessionReference(session.reference));
+                model.agent_session_revision +%= @intFromBool(agent.applySessionReference(session.reference, session.provider));
             }
         }
 
@@ -468,10 +488,11 @@ pub fn setManualTitle(model: *RuntimeModel, key: PaneKey, value: []const u8) !bo
 /// other evidence, so the aggregate is created when missing.
 ///
 /// ```zig
-/// if (try agent_status.reportTitle(model, identity, "Fix proxy")) noteSessionChange();
+/// if (try agent_status.reportTitle(model, identity, .claude, "Fix proxy")) noteSessionChange();
 /// ```
-pub fn reportTitle(model: *RuntimeModel, identity: Identity, value: []const u8) !bool {
+pub fn reportTitle(model: *RuntimeModel, identity: Identity, reporter: core.AgentProvider, value: []const u8) !bool {
     const agent = ensure(model, identity) orelse return false;
+    agent.claimReporter(reporter);
     if (!try agent.reportTitle(value)) {
         return false;
     }

@@ -152,9 +152,17 @@ analytics.
   runtime's environment points it at another repository. Files beside a
   checkout are read only when they are regular files, opened without
   blocking.
+- An inherited environment variable does not identify a process. A process
+  that left its pane, such as a shared server started there, keeps
+  `TELAR_PANE_ID`. A hook reports for a pane only after the runtime confirms
+  that its chain of parent processes reaches the pane's root process, and every
+  report names its agent. A pane refuses reports of an agent other than the one
+  its process runs. Before identification, the first agent to report holds
+  the pane, and a process of another agent discards what it reported.
 - Persist typed session references, never resume commands. Restore validates
   an official allowlist and rebuilds a fixed argv; reject malformed,
-  option-looking, duplicated, stale or wrong-owner references.
+  option-looking, duplicated, stale or wrong-owner references. A reference
+  resumes only with the agent that reported it.
 - The runtime decides audible transitions; only clients touch host audio.
 
 ## History and proxy

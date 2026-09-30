@@ -17,6 +17,7 @@ const ReportAgentCommand = @import("ReportAgentCommand.zig");
 const ReportAgentTitle = @import("ReportAgentTitle.zig");
 const ReportAgentProgress = @import("ReportAgentProgress.zig");
 const InterruptAgent = @import("InterruptAgent.zig");
+const VerifyPaneDescent = @import("VerifyPaneDescent.zig");
 const AgentSoundNotification = @import("../AgentSoundNotification.zig");
 const AgentSnapshot = @import("AgentSnapshot.zig");
 const AgentSnapshotView = @import("AgentSnapshotView.zig");
@@ -128,10 +129,12 @@ pub fn encodeReportAgent(buffer: []u8, message: ReportAgent) ![]const u8 {
         try validateSessionReference(message.session);
     }
     var encoder = Encoder.init(buffer);
+    try validateAgentProvider(message.provider);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.report_agent));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeInt(u64, message.pane_generation);
+    try encoder.writeByte(@intFromEnum(message.provider));
     try codec.validateBytes(message.session_file, types.max_agent_session_file_bytes, true);
     try validateAgentDisplayText(message.event, types.max_agent_last_event_bytes, true);
     try validateReportBlockedReason(message.state, message.blocked_reason);
@@ -148,6 +151,7 @@ pub fn decodeReportAgent(decoder: *Decoder) !ReportAgent {
     const request_id = try id.request(try decoder.readInt(u64));
     const pane_id = try id.pane(try decoder.readInt(u64));
     const pane_generation = try decoder.readInt(u64);
+    const provider = try decodeAgentProvider(try decoder.readByte());
     const state = std.enums.fromInt(types.AgentReportState, try decoder.readByte()) orelse
         return error.InvalidAgentReportState;
     const session = try decoder.readSized16();
@@ -167,6 +171,7 @@ pub fn decodeReportAgent(decoder: *Decoder) !ReportAgent {
         .request_id = request_id,
         .pane_id = pane_id,
         .pane_generation = pane_generation,
+        .provider = provider,
         .state = state,
         .session = session,
         .session_file = session_file,
@@ -185,11 +190,13 @@ pub fn encodeReportAgentProgress(buffer: []u8, message: ReportAgentProgress) ![]
     try codec.validateRequestId(message.request_id);
     try codec.validatePaneId(message.pane_id);
     try validateProgressReport(message);
+    try validateAgentProvider(message.provider);
     var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.report_agent_progress));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeInt(u64, message.pane_generation);
+    try encoder.writeByte(@intFromEnum(message.provider));
     try encoder.writeSized16(message.cwd);
     try encoder.writeSized16(message.work_tree_path);
     try encoder.writeSized16(message.work_tree_branch);
@@ -208,6 +215,7 @@ pub fn decodeReportAgentProgress(decoder: *Decoder) !ReportAgentProgress {
         .request_id = try id.request(try decoder.readInt(u64)),
         .pane_id = try id.pane(try decoder.readInt(u64)),
         .pane_generation = try decoder.readInt(u64),
+        .provider = try decodeAgentProvider(try decoder.readByte()),
         .cwd = try decoder.readSized16(),
         .work_tree_path = try decoder.readSized16(),
         .work_tree_branch = try decoder.readSized16(),
@@ -227,6 +235,51 @@ pub fn decodeReportAgentProgress(decoder: *Decoder) !ReportAgentProgress {
 
 pub fn encodeInterruptAgent(buffer: []u8, message: InterruptAgent) ![]const u8 {
     return codec.encodeDerived(@intFromEnum(tags.ClientTag.interrupt_agent), buffer, message);
+}
+
+/// Encodes a pane generation and the sender's parent processes, nearest
+/// first.
+///
+/// ```zig
+/// const bytes = try encodeVerifyPaneDescent(&buffer, .{ .request_id = request, .pane_id = pane, .pane_generation = 3, .ancestor_count = 1, .ancestors = ancestors });
+/// ```
+pub fn encodeVerifyPaneDescent(buffer: []u8, message: VerifyPaneDescent) ![]const u8 {
+    try codec.validateRequestId(message.request_id);
+    try codec.validatePaneId(message.pane_id);
+    if (message.ancestor_count > message.ancestors.len) {
+        return error.InvalidPaneDescent;
+    }
+
+    var encoder = Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(tags.ClientTag.verify_pane_descent));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeInt(u64, message.pane_generation);
+    try encoder.writeByte(message.ancestor_count);
+    for (message.slice()) |ancestor| {
+        try encoder.writeInt(u32, ancestor);
+    }
+
+    return encoder.finish();
+}
+
+pub fn decodeVerifyPaneDescent(decoder: *Decoder) !VerifyPaneDescent {
+    var message: VerifyPaneDescent = .{
+        .request_id = try id.request(try decoder.readInt(u64)),
+        .pane_id = try id.pane(try decoder.readInt(u64)),
+        .pane_generation = try decoder.readInt(u64),
+        .ancestor_count = try decoder.readByte(),
+    };
+
+    if (message.ancestor_count > message.ancestors.len) {
+        return error.InvalidPaneDescent;
+    }
+
+    for (message.ancestors[0..message.ancestor_count]) |*ancestor| {
+        ancestor.* = try decoder.readInt(u32);
+    }
+
+    return message;
 }
 
 fn validateProgressReport(message: ReportAgentProgress) !void {
@@ -315,11 +368,13 @@ pub fn encodeReportAgentTitle(buffer: []u8, message: ReportAgentTitle) ![]const 
         try validateSessionTitle(message.title);
     }
 
+    try validateAgentProvider(message.provider);
     var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.report_agent_title));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeInt(u64, message.pane_generation);
+    try encoder.writeByte(@intFromEnum(message.provider));
     try encoder.writeSized16(message.title);
     return encoder.finish();
 }
@@ -328,6 +383,7 @@ pub fn decodeReportAgentTitle(decoder: *Decoder) !ReportAgentTitle {
     const request_id = try id.request(try decoder.readInt(u64));
     const pane_id = try id.pane(try decoder.readInt(u64));
     const pane_generation = try decoder.readInt(u64);
+    const provider = try decodeAgentProvider(try decoder.readByte());
     const title = try decoder.readSized16();
     if (title.len != 0) {
         try validateSessionTitle(title);
@@ -337,6 +393,7 @@ pub fn decodeReportAgentTitle(decoder: *Decoder) !ReportAgentTitle {
         .request_id = request_id,
         .pane_id = pane_id,
         .pane_generation = pane_generation,
+        .provider = provider,
         .title = title,
     };
 }

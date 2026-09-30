@@ -12,3 +12,6 @@ events: []const []const u8,
 worktree_events: []const []const u8 = &.{},
 timeout_seconds: i64,
 layout: HookLayout = .nested,
+/// What the user must do beyond installing for the hooks to reach a pane;
+/// printed after install. Empty when nothing is needed.
+launch_note: []const u8 = "",

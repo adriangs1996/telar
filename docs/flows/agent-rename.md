@@ -121,6 +121,10 @@ event session_name -> agent_rename.finish -> agent_status.finishSessionFileProbe
         -> Watch.remember drops an unchanged name -> Agent.reportTitle
 ```
 
+The watch exists only for a Codex whose hooks run in its pane, that is one
+started with `--no-daemon`: the shared daemon's hooks reach no pane, so no
+pane learns which thread it shows.
+
 Unlike the transcript, the database is read whole every second, so the watch
 remembers the last name it handed over and only a change reaches the agent.
 The first probe therefore titles a resumed named thread without any
@@ -176,7 +180,10 @@ future Cursor can move them and the probe then degrades to reporting nothing.
 - Budget: observation. The hook process and the transcript probe never touch
   the interactive path; the completion applies one bounded aggregate change.
 - Authority: only the pane generation that hosts the agent may report a title
-  or a transcript path; a stale generation fails with `pane_not_found`.
+  or a transcript path; a stale generation fails with `pane_not_found`. The
+  hook must descend from that pane and name the pane's agent, or nothing is
+  reported ([pane identity](agent-hooks.md#pane-identity)), so a rename
+  reaches only its own card even when two agents share a directory.
 - Bounds: 96-byte titles cut on a UTF-8 boundary, 1 KiB session-file paths,
   one watch per agent record, one probe in flight, 64 KiB per transcript
   probe, one row per database probe.

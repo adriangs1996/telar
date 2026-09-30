@@ -8,6 +8,8 @@ const ReportAgentProgress = @This();
 request_id: id.RequestId,
 pane_id: id.PaneId,
 pane_generation: u64,
+/// The agent whose hook reports; a pane running another agent refuses it.
+provider: types.AgentProvider = .unknown,
 cwd: []const u8 = "",
 /// Top level of the linked worktree `cwd` lies in; empty for a main checkout.
 work_tree_path: []const u8 = "",

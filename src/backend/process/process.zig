@@ -11,6 +11,7 @@ const Identification = @import("Identification.zig");
 const std = @import("std");
 const Cache = @import("Cache.zig");
 const darwin = @import("darwin.zig");
+const providers = @import("../agent/providers/providers.zig");
 
 const Native = if (builtin.os.tag == .macos) darwin else void;
 
@@ -46,6 +47,7 @@ fn probeWith(input: ProbeInput, comptime identify: fn (*const core.Table, u32) I
     var next: Cache = .{
         .process_group_id = pgid,
         .provider = identification.provider,
+        .shared_server = identification.shared_server,
         .attempts = if (identification.provider == .unknown)
             if (previous.process_group_id == pgid)
                 previous.attempts +| 1
@@ -72,6 +74,7 @@ pub fn shellForeground(cache: Cache, shell_pid: std.c.pid_t) bool {
 fn sameIdentity(left: Cache, right: Cache) bool {
     return left.process_group_id == right.process_group_id and
         left.provider == right.provider and
+        left.shared_server == right.shared_server and
         std.mem.eql(u8, left.name(), right.name());
 }
 
@@ -154,7 +157,7 @@ fn identifyMacosProcess(table: *const core.Table, pid: u32) Identification {
     var args_buffer: [max_process_args_bytes]u8 = undefined;
     const argv = readMacosArgv(pid, &args_buffer) orelse &.{};
     const command = comm_bytes[0..comm_end];
-    return .init(table, identifyCommand(table, command, argv), command);
+    return identifyArguments(table, command, argv);
 }
 
 fn readMacosArgv(pid: u32, buffer: []u8) ?[]const u8 {
@@ -225,7 +228,7 @@ fn identifyLinuxProcess(table: *const core.Table, pid: u32) Identification {
     const args_path = std.fmt.bufPrint(&path_buffer, "/proc/{d}/cmdline", .{pid}) catch return .{};
     const argv = readSmallFile(args_path, &args_buffer) orelse &.{};
     const command = std.mem.trim(u8, comm, " \r\n\t");
-    return .init(table, identifyCommand(table, command, argv), command);
+    return identifyArguments(table, command, argv);
 }
 
 fn linuxProcessGroup(pid: u32) ?u32 {
@@ -282,6 +285,30 @@ fn readSmallFile(path: []const u8, buffer: []u8) ?[]const u8 {
 
     const len = std.posix.read(file, buffer) catch return null;
     return buffer[0..len];
+}
+
+fn identifyArguments(table: *const core.Table, command: []const u8, argv: []const u8) Identification {
+    var identification: Identification = .init(table, identifyCommand(table, command, argv), command);
+    identification.shared_server = usesSharedServer(identification.provider, argv);
+    return identification;
+}
+
+// An agent whose session runs in a shared server unless an argument keeps it
+// in the pane, started without that argument. Unread arguments claim nothing.
+fn usesSharedServer(provider: core.AgentProvider, argv: []const u8) bool {
+    const argument = providers.of(provider).pane_session_argument orelse return false;
+    if (argv.len == 0) {
+        return false;
+    }
+
+    var args = std.mem.tokenizeScalar(u8, argv, 0);
+    while (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, argument)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 fn identifyCommand(table: *const core.Table, comm: []const u8, argv: []const u8) core.AgentProvider {
@@ -405,6 +432,16 @@ test "process file reads are bounded and missing files return null" {
     try std.testing.expectEqualStrings("abc\x00", readSmallFile(path, &buffer).?);
     try temp.dir.deleteFile(io, "sample");
     try std.testing.expectEqual(@as(?[]const u8, null), readSmallFile(path, &buffer));
+}
+
+test "a Codex started without --no-daemon runs its session in the shared server" {
+    const table = &core.builtin_table;
+
+    try std.testing.expect(identifyArguments(table, "codex", "codex\x00resume\x00").shared_server);
+    try std.testing.expect(identifyArguments(table, "node", "node\x00/usr/lib/node_modules/@openai/codex/bin/codex.js\x00--yolo\x00").shared_server);
+    try std.testing.expect(!identifyArguments(table, "codex", "codex\x00resume\x00--no-daemon\x00019a0000-0000-7000-8000-00000000000a\x00").shared_server);
+    try std.testing.expect(!identifyArguments(table, "codex", "").shared_server);
+    try std.testing.expect(!identifyArguments(table, "claude", "claude\x00").shared_server);
 }
 
 test "identifies direct agent executables" {

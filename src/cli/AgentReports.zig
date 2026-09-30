@@ -17,7 +17,7 @@ pub fn run(self: *AgentReports) !void {
     switch (self.options.action) {
         .report_command => try self.session.reportAgentCommand(pane, self.options.command_report.?),
         .report_state => try self.session.reportAgent(pane, self.options.report.?),
-        .report_title => try self.session.reportAgentTitle(pane, std.mem.span(self.options.text.?)),
+        .report_title => try self.session.reportAgentTitle(pane, .unknown, std.mem.span(self.options.text.?)),
         else => return error.InvalidAgentReport,
     }
 

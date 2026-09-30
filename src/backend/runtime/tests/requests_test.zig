@@ -5,6 +5,8 @@ const core = @import("telar-core");
 const LaunchTestFault = @import("../LaunchTestFault.zig");
 const RequestFixture = @import("RequestFixture.zig");
 const agent_control = @import("../agent_control.zig");
+const agent_identity = @import("../agent_identity.zig");
+const agent_status = @import("../agent_status.zig");
 
 const missing_pane: core.PaneId = @enumFromInt(99);
 const missing_location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(99) }, .tab_id = @enumFromInt(99) };
@@ -339,4 +341,94 @@ test "a tab launched in the background keeps every focus where it was and takes 
         .launch = try RequestFixture.sleepLaunch(&launch_buffer),
     } });
     try expectFailure(&fixture, .workspace_not_found);
+}
+
+test "a hook reports for a pane only from inside it and only for the agent the pane runs" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const root = agent_identity.fromPane(pane).process_id;
+    var ancestors: [core.max_pane_descent_ancestors]u32 = @splat(0);
+    ancestors[0] = root + 1;
+
+    try fixture.send(.{ .verify_pane_descent = .{
+        .request_id = @enumFromInt(41),
+        .pane_id = pane.id,
+        .pane_generation = pane.generation,
+        .ancestor_count = 1,
+        .ancestors = ancestors,
+    } });
+    try expectFailure(&fixture, .foreign_process);
+
+    ancestors[1] = root;
+    try fixture.send(.{ .verify_pane_descent = .{
+        .request_id = @enumFromInt(41),
+        .pane_id = pane.id,
+        .pane_generation = pane.generation,
+        .ancestor_count = 2,
+        .ancestors = ancestors,
+    } });
+    try std.testing.expect(fixture.response().?.* == .request_completed);
+    fixture.clearResponses();
+
+    try fixture.send(.{ .verify_pane_descent = .{
+        .request_id = @enumFromInt(41),
+        .pane_id = pane.id,
+        .pane_generation = pane.generation + 1,
+        .ancestor_count = 2,
+        .ancestors = ancestors,
+    } });
+    try expectFailure(&fixture, .pane_not_found);
+
+    const model = &fixture.runtime.model;
+    try std.testing.expect(agent_status.observeProcess(model, .{ .identity = agent_identity.fromPane(pane), .provider = .claude, .process_id = root, .observed_at_ms = 1 }));
+
+    try fixture.send(.{ .report_agent = .{
+        .request_id = @enumFromInt(41),
+        .pane_id = pane.id,
+        .pane_generation = pane.generation,
+        .provider = .codex,
+        .state = .working,
+        .session = "019a0000-0000-7000-8000-00000000000b",
+        .event = "» Bash echo leak",
+    } });
+    try expectFailure(&fixture, .foreign_process);
+    try fixture.send(.{ .report_agent_title = .{
+        .request_id = @enumFromInt(41),
+        .pane_id = pane.id,
+        .pane_generation = pane.generation,
+        .provider = .codex,
+        .title = "leak",
+    } });
+    try expectFailure(&fixture, .foreign_process);
+    try fixture.send(.{ .report_agent_command = .{
+        .request_id = @enumFromInt(41),
+        .pane_id = pane.id,
+        .pane_generation = pane.generation,
+        .phase = .started,
+        .provider = "codex",
+        .command = "echo leak",
+    } });
+    try expectFailure(&fixture, .foreign_process);
+    try fixture.send(.{ .report_agent_progress = .{
+        .request_id = @enumFromInt(41),
+        .pane_id = pane.id,
+        .pane_generation = pane.generation,
+        .provider = .codex,
+        .final_message = "leak",
+    } });
+    try expectFailure(&fixture, .foreign_process);
+    try std.testing.expect(agent_status.sessionReference(model, pane.key()) == null);
+
+    try fixture.send(.{ .report_agent = .{
+        .request_id = @enumFromInt(41),
+        .pane_id = pane.id,
+        .pane_generation = pane.generation,
+        .provider = .claude,
+        .state = .working,
+        .session = "019a0000-0000-7000-8000-00000000000a",
+    } });
+    try std.testing.expect(fixture.response().?.* == .request_completed);
+    try std.testing.expectEqualStrings("019a0000-0000-7000-8000-00000000000a", agent_status.sessionReference(model, pane.key()).?.slice());
 }

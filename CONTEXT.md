@@ -215,6 +215,12 @@ with an exact pane generation. Process, screen and lifecycle observations
 describe the same agent; none of those observations is an agent by itself.
 _Avoid_: Agent record, detector result
 
+**Pane descent**:
+A process descends from a pane when its chain of parent processes reaches the
+pane's root process. Only a descendant may report for a pane: an inherited
+`TELAR_PANE_ID` names a pane but does not prove that a process runs in it.
+_Avoid_: Pane ownership, pane ancestry
+
 **Agent tracker**:
 The runtime authority that reconciles process, screen and lifecycle
 observations with the corresponding agents and publishes their client-facing

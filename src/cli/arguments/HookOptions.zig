@@ -2,6 +2,8 @@ const values = @import("values.zig");
 const std = @import("std");
 const HookOptions = @This();
 
+pub const Agent = values.HookAgent;
+
 agent: values.HookAgent,
 socket: ?[*:0]const u8 = null,
 

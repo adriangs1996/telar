@@ -62,7 +62,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 122;
+const corpus_len = 123;
 const corpus_storage_size = 12 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -455,6 +455,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
+            .provider = .codex,
             .state = .blocked,
             .session = "abc",
             .blocked_reason = .permission,
@@ -521,6 +522,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
+            .provider = .claude,
             .title = "Fix proxy",
         }),
     ));
@@ -1169,11 +1171,21 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .pane_generation = 3,
         }),
     ));
+    helper.add(.{ .name = "verify_pane_descent", .direction = .client, .golden_hex = golden.verify_pane_descent }, helper.commit(
+        try agent_module.encodeVerifyPaneDescent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .ancestor_count = 2,
+            .ancestors = .{ 4321, 1 } ++ @as([types.max_pane_descent_ancestors - 2]u32, @splat(0)),
+        }),
+    ));
     helper.add(.{ .name = "report_agent_progress", .direction = .client, .golden_hex = golden.report_agent_progress }, helper.commit(
         try agent_module.encodeReportAgentProgress(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
+            .provider = .claude,
             .cwd = "/work/telar-worktrees/fix/src",
             .work_tree_path = "/work/telar-worktrees/fix",
             .work_tree_branch = "fix",
@@ -2302,6 +2314,46 @@ test "agent snapshot attention fields are bounded and tied to the blocked status
     const reason_offset = std.mem.indexOf(u8, valid, "marker").? - 3;
     buffer[reason_offset] = 9;
     try std.testing.expectError(error.InvalidAgentBlockedReason, root.decodeServer(valid));
+}
+
+test "hook reports name their agent and descent requests carry bounded ancestors" {
+    var buffer: [512]u8 = undefined;
+    const report = try agent_module.encodeReportAgent(&buffer, .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+        .provider = .codex,
+        .state = .working,
+    });
+    try std.testing.expectEqual(types.AgentProvider.codex, (try root.decodeClient(report)).report_agent.provider);
+
+    const title = try agent_module.encodeReportAgentTitle(&buffer, .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+        .provider = .claude,
+        .title = "Fix proxy",
+    });
+    try std.testing.expectEqual(types.AgentProvider.claude, (try root.decodeClient(title)).report_agent_title.provider);
+
+    var ancestors: [types.max_pane_descent_ancestors]u32 = @splat(0);
+    ancestors[0] = 812;
+    ancestors[1] = 1;
+    const descent = try agent_module.encodeVerifyPaneDescent(&buffer, .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+        .ancestor_count = 2,
+        .ancestors = ancestors,
+    });
+    const decoded = (try root.decodeClient(descent)).verify_pane_descent;
+    try std.testing.expectEqualSlices(u32, &.{ 812, 1 }, decoded.slice());
+
+    // The count byte follows the tag, request, pane and generation.
+    var oversized = buffer;
+    oversized[25] = types.max_pane_descent_ancestors + 1;
+    try std.testing.expectError(error.InvalidPaneDescent, root.decodeClient(oversized[0..descent.len]));
+    try std.testing.expectError(error.Truncated, root.decodeClient(descent[0 .. descent.len - 1]));
 }
 
 test "agent reports carry a bounded event and a reason only while blocked" {

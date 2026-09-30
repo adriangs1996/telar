@@ -5,6 +5,8 @@ const PlanChange = @import("PlanChange.zig");
 const ProgressObservation = @This();
 
 identity: Identity,
+/// The agent whose hook reported; `unknown` for a report the user sent.
+provider: core.AgentProvider = .unknown,
 /// The worktree the report resolved to; null keeps the current one.
 work_tree: ?core.WorktreeId = null,
 plan: PlanChange = .{ .op = .none },

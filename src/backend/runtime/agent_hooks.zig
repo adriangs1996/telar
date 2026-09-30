@@ -1,6 +1,8 @@
 //! An agent's official lifecycle hooks report its state, session, shell
 //! commands and title from inside its pane. Official reports outrank
-//! inferred evidence.
+//! inferred evidence. A hook first proves it runs inside the pane its
+//! environment names, and every report names its agent, so a pane never
+//! takes reports from a process that left it or from another agent.
 const agent_status = @import("agent_status.zig");
 
 const session_checkpoint = @import("session_checkpoint.zig");
@@ -17,7 +19,9 @@ const sound = @import("../agent/sound.zig");
 const Pane = @import("../pane/Pane.zig");
 const worktree_lifecycle = @import("worktree_lifecycle.zig");
 
-pub const TitleReport = enum { recorded, unchanged, pane_not_found, invalid_title };
+pub const TitleReport = enum { recorded, unchanged, pane_not_found, foreign_agent, invalid_title };
+
+const foreign_agent_message = "the pane runs another agent";
 
 /// Receives the agent's own session reference.
 ///
@@ -61,6 +65,10 @@ pub fn receive(model: *RuntimeModel, session: *Session, report: core.ReportAgent
         return client_request.fail(session, report.request_id, .pane_not_found, "pane not found");
     }
 
+    if (!agent_status.acceptsReporter(model, pane.key(), report.provider)) {
+        return client_request.fail(session, report.request_id, .foreign_process, foreign_agent_message);
+    }
+
     const reference: ?SessionReference = if (report.session.len == 0)
         null
     else
@@ -73,6 +81,7 @@ pub fn receive(model: *RuntimeModel, session: *Session, report: core.ReportAgent
 
     const changed = agent_status.observeReport(model, .{
         .identity = identity,
+        .provider = report.provider,
         .state = report.state,
         .blocked_reason = report.blocked_reason,
         .event = report.event,
@@ -121,9 +130,14 @@ pub fn receiveProgress(model: *RuntimeModel, session: *Session, report: core.Rep
         return client_request.fail(session, report.request_id, .pane_not_found, "pane not found");
     }
 
+    if (!agent_status.acceptsReporter(model, pane.key(), report.provider)) {
+        return client_request.fail(session, report.request_id, .foreign_process, foreign_agent_message);
+    }
+
     const work_tree = try resolveWorkTree(model, pane, report);
     _ = agent_status.observeProgress(model, .{
         .identity = agent_identity.fromPane(pane),
+        .provider = report.provider,
         .work_tree = work_tree,
         .plan = .{
             .op = report.plan_op,
@@ -197,6 +211,11 @@ pub fn receiveCommand(model: *RuntimeModel, session: *Session, report: core.Repo
         return client_request.fail(session, report.request_id, .pane_not_found, "pane not found");
     }
 
+    const reporter = model.resources.agent_manifests.providerNamed(report.provider);
+    if (!agent_status.acceptsReporter(model, pane.key(), reporter)) {
+        return client_request.fail(session, report.request_id, .foreign_process, foreign_agent_message);
+    }
+
     const queued = pane.recordAgentCommand(.{
         .command = .{
             .bytes = report.command,
@@ -225,28 +244,58 @@ pub fn receiveCommand(model: *RuntimeModel, session: *Session, report: core.Repo
 /// try agent_hooks.receiveTitle(model, session, report);
 /// ```
 pub fn receiveTitle(model: *RuntimeModel, session: *Session, report: core.ReportAgentTitle) !void {
-    switch (recordTitle(model, .{ .id = report.pane_id, .generation = report.pane_generation }, report.title)) {
+    switch (recordTitle(model, .{ .id = report.pane_id, .generation = report.pane_generation }, report.provider, report.title)) {
         .recorded => {
             try client_request.complete(session, report.request_id);
             session_checkpoint.noteChange(model);
         },
         .unchanged => try client_request.complete(session, report.request_id),
         .pane_not_found => try client_request.fail(session, report.request_id, .pane_not_found, "pane not found"),
+        .foreign_agent => try client_request.fail(session, report.request_id, .foreign_process, foreign_agent_message),
         .invalid_title => try client_request.fail(session, report.request_id, .invalid_request, "invalid session title"),
     }
 }
 
-/// Records an agent-reported title for one exact pane generation.
+/// Answers whether the sender descends from one exact pane generation: its
+/// parent processes, as it listed them, include the pane's root process.
+/// The hook walks its own ancestry, so the runtime inspects no process here.
 ///
 /// ```zig
-/// if (agent_hooks.recordTitle(model, pane.key(), name) == .recorded) persist();
+/// try agent_hooks.receiveDescent(model, session, request);
 /// ```
-pub fn recordTitle(model: *RuntimeModel, key: PaneKey, title: []const u8) TitleReport {
+pub fn receiveDescent(model: *RuntimeModel, session: *Session, request: core.VerifyPaneDescent) !void {
+    const pane = model.panes.resolveConst(.{ .id = request.pane_id, .generation = request.pane_generation }) orelse {
+        return client_request.fail(session, request.request_id, .pane_not_found, "pane not found");
+    };
+
+    if (pane.exit != null) {
+        return client_request.fail(session, request.request_id, .pane_not_found, "pane not found");
+    }
+
+    const root = agent_identity.fromPane(pane).process_id;
+    if (root == 0 or std.mem.indexOfScalar(u32, request.slice(), root) == null) {
+        return client_request.fail(session, request.request_id, .foreign_process, "the process does not run inside that pane");
+    }
+
+    try client_request.complete(session, request.request_id);
+}
+
+/// Records a title the hooks of `reporter` sent for one exact pane
+/// generation.
+///
+/// ```zig
+/// if (agent_hooks.recordTitle(model, pane.key(), .claude, name) == .recorded) persist();
+/// ```
+pub fn recordTitle(model: *RuntimeModel, key: PaneKey, reporter: core.AgentProvider, title: []const u8) TitleReport {
     const pane = model.panes.resolveConst(key) orelse return .pane_not_found;
     if (pane.exit != null) {
         return .pane_not_found;
     }
 
-    const changed = agent_status.reportTitle(model, agent_identity.fromPane(pane), title) catch return .invalid_title;
+    if (!agent_status.acceptsReporter(model, key, reporter)) {
+        return .foreign_agent;
+    }
+
+    const changed = agent_status.reportTitle(model, agent_identity.fromPane(pane), reporter, title) catch return .invalid_title;
     return if (changed) .recorded else .unchanged;
 }

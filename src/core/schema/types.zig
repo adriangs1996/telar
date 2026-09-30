@@ -29,6 +29,10 @@ pub const max_agent_cwd_label_bytes = 48;
 pub const max_agent_last_event_bytes = 96;
 /// Path of the file an agent records its session in, as its hooks report it.
 pub const max_agent_session_file_bytes = 1024;
+/// Parent processes a hook names when it proves it runs inside a pane:
+/// enough for an agent, its launcher and a few shells between the pane's
+/// root process and the hook.
+pub const max_pane_descent_ancestors = 32;
 pub const max_foreground_name_bytes = 48;
 pub const max_pane_title_bytes = 256;
 pub const max_workspace_list_entries = 64;
@@ -160,6 +164,9 @@ pub const FailureCode = enum(u16) {
     agent_not_working = 14,
     /// The agent's manifest declares no interrupt keys.
     interrupt_unsupported = 15,
+    /// The request came from a process that does not descend from the pane
+    /// it names, or reports for an agent the pane does not run.
+    foreign_process = 16,
 };
 
 /// Who asked the runtime to track a worktree: `telar` for worktrees made

@@ -62,6 +62,22 @@ pub fn findByName(self: *Table, name: []const u8) ?*AgentManifest {
     return null;
 }
 
+/// The provider a manifest name stands for; `unknown` when no manifest has
+/// that name.
+///
+/// ```zig
+/// const provider = table.providerNamed(report.provider);
+/// ```
+pub fn providerNamed(self: *const Table, name: []const u8) types.AgentProvider {
+    for (self.slice()) |*manifest| {
+        if (std.mem.eql(u8, manifest.nameSlice(), name)) {
+            return manifest.provider;
+        }
+    }
+
+    return .unknown;
+}
+
 /// Display name for a provider index; unknown indexes read as "unknown".
 ///
 /// ```zig

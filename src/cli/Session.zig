@@ -359,6 +359,7 @@ pub fn reportAgent(self: *Session, pane: PaneRef, report: AgentReport) !void {
         .request_id = self.requestId(),
         .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
+        .provider = report.provider,
         .state = report.state,
         .blocked_reason = report.blocked_reason,
         .event = report.event,
@@ -404,16 +405,18 @@ pub fn reportAgentCommand(self: *Session, pane: PaneRef, command: AgentCommandRe
 }
 
 /// Sends the name the agent's own session carries; empty clears it.
+/// `provider` names the agent whose hook reports, `unknown` the user.
 ///
 /// ```zig
-/// try session.reportAgentTitle(pane, "Fix proxy");
+/// try session.reportAgentTitle(pane, .claude, "Fix proxy");
 /// ```
-pub fn reportAgentTitle(self: *Session, pane: PaneRef, title: []const u8) !void {
+pub fn reportAgentTitle(self: *Session, pane: PaneRef, provider: core.AgentProvider, title: []const u8) !void {
     var send_buffer: [core.max_agent_session_title_bytes + 64]u8 = undefined;
     try self.connection.send(self.io, try core.encodeReportAgentTitle(&send_buffer, .{
         .request_id = self.requestId(),
         .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
+        .provider = provider,
         .title = title,
     }));
 
@@ -542,6 +545,30 @@ pub fn interruptAgent(self: *Session, pane: PaneRef) !void {
         .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
     });
+    return switch (response) {
+        .request_completed => {},
+        .request_failed => |failure| self.refuse(failure),
+        else => error.UnexpectedRuntimeResponse,
+    };
+}
+
+/// Proves this process runs inside `pane`: the runtime completes the
+/// request when `ancestors`, this process's parents nearest first, include
+/// the pane's root process, and refuses it otherwise.
+///
+/// ```zig
+/// try session.verifyDescent(pane, proclineage.ancestors(pid, &storage));
+/// ```
+pub fn verifyDescent(self: *Session, pane: PaneRef, ancestors: []const u32) !void {
+    var request: core.VerifyPaneDescent = .{
+        .request_id = .none,
+        .pane_id = try core.pane(pane.pane_id),
+        .pane_generation = pane.pane_generation,
+        .ancestor_count = @intCast(@min(ancestors.len, core.max_pane_descent_ancestors)),
+    };
+    @memcpy(request.ancestors[0..request.ancestor_count], ancestors[0..request.ancestor_count]);
+
+    const response = try self.exchange(core.encodeVerifyPaneDescent, request);
     return switch (response) {
         .request_completed => {},
         .request_failed => |failure| self.refuse(failure),

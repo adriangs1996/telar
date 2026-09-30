@@ -1,8 +1,11 @@
 //! `telar hook <agent>`: the command an agent's lifecycle hooks run. It
 //! reads the hook's JSON from stdin, maps the event to one official report
-//! and sends it to the runtime that owns the pane. It never fails loudly:
-//! outside a telar pane, or on any error, it exits 0 so the agent is
-//! unaffected.
+//! and sends it to the runtime that owns the pane. `TELAR_PANE_ID` only
+//! names the pane: the hook reports only after the runtime confirms that
+//! its chain of parent processes reaches that pane, because a process that
+//! left the pane, such as a shared server started there, inherits the same
+//! variable. It never fails loudly: outside a telar pane, from a process
+//! that left it, or on any error, it exits 0 so the agent is unaffected.
 
 const core = @import("telar-core");
 const ToolHookInput = @import("ToolHookInput.zig");
@@ -27,6 +30,7 @@ const ProgressStorage = @import("ProgressStorage.zig");
 const WorktreeHookInput = @import("WorktreeHookInput.zig");
 const CodexSubagents = @import("CodexSubagents.zig");
 const agentfiles = @import("agentfiles");
+const proclineage = @import("proclineage");
 
 pub const max_input_bytes = 64 * 1024;
 
@@ -556,6 +560,7 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
     const target: Target = .{
         .socket = options.socket,
         .pane = .{ .pane_id = pane_id, .pane_generation = pane_generation },
+        .provider = hookProvider(options.agent),
     };
     switch (options.agent) {
         .claude => {
@@ -694,6 +699,16 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
     }
 }
 
+fn hookProvider(agent: HookOptions.Agent) core.AgentProvider {
+    return switch (agent) {
+        .claude => .claude,
+        .codex => .codex,
+        .pi => .pi,
+        .cursor => .cursor,
+        .opencode => .opencode,
+    };
+}
+
 fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     if (reports.lifecycle == null and reports.command == null and reports.title == null and reports.review == null and reports.progress == null) {
         return;
@@ -704,16 +719,21 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     var session = Session.attach(init, target.socket) catch return;
     defer session.close();
     const pane = target.pane;
+    var lineage: [core.max_pane_descent_ancestors]u32 = undefined;
+    const ancestors = proclineage.ancestors(@intCast(std.c.getpid()), &lineage);
+    session.verifyDescent(pane, ancestors) catch return;
     // Progress goes first: a final answer is stored before the lifecycle
     // report marks the turn finished, so a waiter never reads a stale one.
     if (reports.progress) |progress| {
         var report = progress;
         report.pane_id = core.pane(pane.pane_id) catch return;
         report.pane_generation = pane.pane_generation;
+        report.provider = target.provider;
         session.reportProgress(report) catch {};
     }
     if (reports.lifecycle) |lifecycle| {
         session.reportAgent(pane, .{
+            .provider = target.provider,
             .state = lifecycle.state,
             .blocked_reason = lifecycle.blocked_reason,
             .event = lifecycle.event,
@@ -726,7 +746,7 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
         hook_review.capture(&session, pane, review);
     }
     if (reports.title) |title| {
-        session.reportAgentTitle(pane, title) catch return;
+        session.reportAgentTitle(pane, target.provider, title) catch return;
     }
     if (reports.command) |tool| {
         session.reportAgentCommand(pane, .{
