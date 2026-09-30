@@ -9,7 +9,6 @@ const ClientLayouts = @import("../ClientLayouts.zig");
 const Sources = @This();
 
 const no_worktrees: Worktrees = .{};
-const no_limit_reaches: core.LimitReaches = .{};
 
 panes: *const PaneStore,
 workspaces: *const Workspaces,
@@ -33,4 +32,6 @@ agent_revision: u64 = 0,
 /// The enriched agent snapshot, built once per flush when a client sends it.
 agent_entries: []const core.AgentSnapshotEntry = &.{},
 /// The limit registry `limit_list` replies are encoded from.
-limit_reaches: *const core.LimitReaches = &no_limit_reaches,
+runtime_limits: *const core.LimitReaches = &core.LimitReaches.none,
+client_limits: *const core.LimitReaches = &core.LimitReaches.none,
+refused_limit_reports: u64 = 0,

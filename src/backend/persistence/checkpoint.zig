@@ -168,8 +168,18 @@ test "a full checkpoint keeps the records that fit and drops the rest" {
         .next_pane_id = 2,
         .next_pane_generation = 2,
     });
-    try encoder.workspace(.{ .id = 1, .path = "/work", .name = "", .first_tab_id = 1, .first_tab_label = "main" });
-    try encoder.tab(.{ .workspace_id = 1, .tab_id = 2, .label = "logs" });
+    try encoder.workspace(.{
+        .id = 1,
+        .path = "/work",
+        .name = "",
+        .first_tab_id = 1,
+        .first_tab_label = "main",
+    });
+    try encoder.tab(.{
+        .workspace_id = 1,
+        .tab_id = 2,
+        .label = "logs",
+    });
     try encoder.pane(.{
         .pane_id = 1,
         .workspace_id = 1,
@@ -180,7 +190,11 @@ test "a full checkpoint keeps the records that fit and drops the rest" {
         .arguments = "/bin/zsh\x00",
         .argument_count = 1,
     });
-    try encoder.tab(.{ .workspace_id = 1, .tab_id = 3, .label = "x" });
+    try encoder.tab(.{
+        .workspace_id = 1,
+        .tab_id = 3,
+        .label = "x",
+    });
     const bytes = try encoder.finish();
 
     try std.testing.expectEqual(@as(u32, 2), encoder.dropped);

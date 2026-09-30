@@ -393,6 +393,8 @@ pub const encodeQueryClients = clients.encodeQueryClients;
 pub const encodeClientList = clients.encodeClientList;
 
 pub const LimitReaches = @import("../LimitReaches.zig");
+pub const LimitList = @import("messages/LimitList.zig");
+pub const limit_reached = @import("../limit_reached.zig");
 pub const ReportLimit = @import("messages/ReportLimit.zig");
 pub const QueryLimits = @import("messages/QueryLimits.zig");
 pub const encodeReportLimit = limits.encodeReportLimit;

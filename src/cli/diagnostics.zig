@@ -170,7 +170,11 @@ fn listLimits(init: std.process.Init, options: Options) !void {
 fn writeLimits(writer: *std.Io.Writer, list: core.LimitListView, json: bool) !void {
     var entries = list.entries();
     if (json) {
-        try writer.writeByte('[');
+        try writer.print("{{\"runtime_evicted\":{d},\"client_evicted\":{d},\"refused_reports\":{d},\"limits\":[", .{
+            list.runtime_evicted,
+            list.client_evicted,
+            list.refused_reports,
+        });
         var first = true;
         while (try entries.next()) |entry| {
             if (!first) {
@@ -183,61 +187,92 @@ fn writeLimits(writer: *std.Io.Writer, list: core.LimitListView, json: bool) !vo
                 .noun = entry.reach.limit.noun,
                 .value = entry.reach.limit.value,
                 .requested = entry.reach.requested,
+                .route = entry.reach.route,
                 .origin = @tagName(entry.origin),
                 .hits = entry.hits,
                 .last_ms = entry.last_ms,
             }, .{}, writer);
         }
 
-        try writer.writeAll("]\n");
+        try writer.writeAll("]}\n");
         return;
     }
 
     if (list.entry_count == 0) {
         try writer.writeAll("no limit reached\n");
-        return;
     }
 
     while (try entries.next()) |entry| {
         var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
         const seconds: u64 = @intCast(@max(0, @divFloor(entry.last_ms, std.time.ms_per_s)));
         const day = (std.time.epoch.EpochSeconds{ .secs = seconds }).getDaySeconds();
-        try writer.print("{s}  ({s}, last {d:0>2}:{d:0>2}:{d:0>2} UTC)\n", .{
+        try writer.print("{s}  ({s}{s}{s}, last {d:0>2}:{d:0>2}:{d:0>2} UTC)\n", .{
             entry.reach.describe(&buffer, entry.hits),
             @tagName(entry.origin),
+            if (entry.reach.route.len == 0) "" else ", ",
+            entry.reach.route,
             day.getHoursIntoDay(),
             day.getMinutesIntoHour(),
             day.getSecondsIntoMinute(),
         });
     }
+
+    if (list.runtime_evicted != 0 or list.client_evicted != 0 or list.refused_reports != 0) {
+        try writer.print("{d} runtime and {d} client limits replaced by newer ones; {d} client reports refused\n", .{
+            list.runtime_evicted,
+            list.client_evicted,
+            list.refused_reports,
+        });
+    }
 }
 
 test "limits print one line per limit with where and when it was last reached" {
-    var reaches: core.LimitReaches = .{};
-    _ = reaches.record(
+    var runtime: core.LimitReaches = .{};
+    var clients: core.LimitReaches = .{};
+    _ = core.limit_reached.record(
+        &clients,
         .{
-            .limit = .{
-                .name = "bars.max_bar_actions",
-                .noun = "click actions",
-                .value = 4,
-            },
+            .limit = core.Limit.declare("bars.max_bar_actions", "click actions", 4),
             .requested = 17,
         },
-        .client,
-        45_296_000,
+        .{
+            .awake_ms = 0,
+            .real_ms = 45_296_000,
+        },
         3,
     );
+    _ = core.limit_reached.record(
+        &runtime,
+        core.limit_reached.unnamed(error.BufferTooSmall, "agent_tick"),
+        .{
+            .awake_ms = 0,
+            .real_ms = 45_297_000,
+        },
+        1,
+    );
+    clients.evicted = 2;
 
     var wire: [512]u8 = undefined;
-    const bytes = try core.encodeLimitList(&wire, @enumFromInt(1), &reaches);
+    const bytes = try core.encodeLimitList(&wire, .{
+        .request_id = @enumFromInt(1),
+        .runtime = &runtime,
+        .clients = &clients,
+        .refused_reports = 0,
+    });
     const decoded = try core.decodeServer(bytes);
 
-    var buffer: [512]u8 = undefined;
+    var buffer: [1024]u8 = undefined;
     var writer: std.Io.Writer = .fixed(&buffer);
     try writeLimits(&writer, decoded.limit_list, false);
-    try std.testing.expectEqualStrings("bars.max_bar_actions: 17 click actions; limit 4 (3 times)  (client, last 12:34:56 UTC)\n", writer.buffered());
+    try std.testing.expectEqualStrings(
+        "BufferTooSmall: limit reached  (runtime, agent_tick, last 12:34:57 UTC)\n" ++
+            "bars.max_bar_actions: 17 click actions; limit 4 (3 times)  (client, last 12:34:56 UTC)\n" ++
+            "0 runtime and 2 client limits replaced by newer ones; 0 client reports refused\n",
+        writer.buffered(),
+    );
 
     writer = .fixed(&buffer);
     try writeLimits(&writer, decoded.limit_list, true);
-    try std.testing.expectEqualStrings("[{\"name\":\"bars.max_bar_actions\",\"noun\":\"click actions\",\"value\":4,\"requested\":17,\"origin\":\"client\",\"hits\":3,\"last_ms\":45296000}]\n", writer.buffered());
+    try std.testing.expect(std.mem.startsWith(u8, writer.buffered(), "{\"runtime_evicted\":0,\"client_evicted\":2,\"refused_reports\":0,\"limits\":[{\"name\":\"BufferTooSmall\""));
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\"route\":\"agent_tick\"") != null);
 }

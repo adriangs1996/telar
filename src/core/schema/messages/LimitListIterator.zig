@@ -5,7 +5,7 @@ const limits = @import("limits.zig");
 const LimitListIterator = @This();
 
 decoder: Decoder,
-remaining: u8,
+remaining: u16,
 
 pub fn next(self: *LimitListIterator) !?LimitListEntry {
     if (self.remaining == 0) {

@@ -43,10 +43,18 @@ pub fn flush(model: *RuntimeModel) !void {
         // The timer reset itself; the next flush retries it.
     };
 
+    // One pane whose media cannot start does not keep the others' damage.
+    var failure: ?anyerror = null;
     for (model.panes.items) |slot| {
         const pane = slot orelse continue;
-        try pane_graphics.startMedia(model, pane);
+        pane_graphics.startMedia(model, pane) catch |err| {
+            failure = failure orelse err;
+        };
         settleDamage(model, pane);
+    }
+
+    if (failure) |err| {
+        return err;
     }
 }
 
@@ -108,7 +116,9 @@ pub fn deliverySources(model: *RuntimeModel) Sources {
         .client_layouts = &model.client_layouts,
         .now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
         .agent_revision = model.agent_snapshot_revision,
-        .limit_reaches = &model.limit_reaches,
+        .runtime_limits = &model.limit_reaches,
+        .client_limits = &model.client_limit_reaches,
+        .refused_limit_reports = model.refused_limit_reports,
     };
 }
 

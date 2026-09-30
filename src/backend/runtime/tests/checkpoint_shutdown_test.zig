@@ -46,7 +46,7 @@ test "shutdown replaces a pending checkpoint with the latest session and release
     const first_pane_id = first_pane.id;
 
     first.model.checkpoint.last_change_ns = 0;
-    try session_checkpoint.start(&first.model);
+    session_checkpoint.start(&first.model);
     try std.testing.expect(first.model.checkpoint.pending != null);
 
     const tab_id = try workspaces.nextTabId();
@@ -91,8 +91,15 @@ test "a session larger than its checkpoint is written as far as it fits, reporte
     var checkpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const checkpoint_path = try std.fmt.bufPrint(&checkpoint_buffer, "{s}/session.ckpt", .{directory});
     const initialization: Initialization = .{
-        .dependencies = .{ .io = io, .allocator = std.testing.allocator },
-        .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .session_path = checkpoint_path },
+        .dependencies = .{
+            .io = io,
+            .allocator = std.testing.allocator,
+        },
+        .options = .{
+            .endpoint = endpoint,
+            .environment = std.testing.environ,
+            .session_path = checkpoint_path,
+        },
     };
 
     var first: Runtime = undefined;
@@ -103,7 +110,10 @@ test "a session larger than its checkpoint is written as far as it fits, reporte
     var launch_buffer: [64]u8 = undefined;
     _ = try pane_launch.launch(&first.model, .{
         .location = workspace,
-        .size = .{ .cols = 20, .rows = 5 },
+        .size = .{
+            .cols = 20,
+            .rows = 5,
+        },
         .launch = try sleepLaunch(&launch_buffer),
         .launch_cwd = directory,
         .workspace_path = directory,
@@ -113,7 +123,7 @@ test "a session larger than its checkpoint is written as far as it fits, reporte
     first.model.checkpoint.snapshot_bytes = 43;
     session_checkpoint.noteChange(&first.model);
     first.model.checkpoint.last_change_ns = 0;
-    try session_checkpoint.start(&first.model);
+    session_checkpoint.start(&first.model);
     try std.testing.expect(first.model.checkpoint.pending != null);
 
     const reaches = &first.model.limit_reaches;

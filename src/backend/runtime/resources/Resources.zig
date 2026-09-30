@@ -15,6 +15,7 @@ const resources_namespace = @import("resources_namespace.zig");
 const attachment = @import("../attachment/attachment_namespace.zig");
 const Service = EngineRuntime.Service;
 const PluginsService = @import("../../plugins/Service.zig");
+const RuntimeLog = @import("RuntimeLog.zig");
 /// Owns runtime-wide physical resources acquired during startup.
 const Resources = @This();
 
@@ -31,6 +32,8 @@ history: HistoryRuntime,
 plugins: PluginsRuntime,
 /// Present only when `runtime.engine` is configured.
 engine: ?EngineRuntime,
+/// The background runtime's standard error; empty in the foreground.
+log: RuntimeLog,
 
 /// Acquires physical resources in dependency order and rolls back every
 /// completed acquisition if a later one fails.
@@ -69,6 +72,9 @@ pub fn acquire(self: *Resources, initialization: Initialization, comptime fail_a
 
     self.listener = try LocalListener.listen(self.io(), initialization.options.endpoint);
     errdefer self.listener.deinit(self.io());
+    // Only the runtime holding the socket rotates its log, so a second
+    // launch racing this one never moves a live runtime's log aside.
+    self.log = if (initialization.options.own_log) RuntimeLog.open(self.io(), initialization.options.endpoint) else .{};
     try resources_namespace.checkpoint(fail_after, .listener);
 
     self.telemetry = resources_namespace.initTelemetry(self.io(), initialization.options.endpoint);

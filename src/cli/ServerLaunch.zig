@@ -265,6 +265,7 @@ pub fn runtimeInitialization(self: *const Launch) backend.Initialization {
         },
         .options = .{
             .endpoint = self.connector.endpointPath(),
+            .own_log = self.options.mode == .daemonized,
             .graphics = self.options.graphics,
             .environment = self.process.minimal.environ,
             .history_path = self.history_path.path,
@@ -327,40 +328,14 @@ pub fn launchDaemon(self: *const Launch) !void {
         argc += 2;
     }
 
-    // The runtime's standard error is its log: reached limits and a fatal
-    // error land there in every build. Without the file it stays ignored.
-    const log = openRuntimeLog(self.process.io, self.connector.endpointPath()) catch null;
-    defer if (log) |file| {
-        file.close(self.process.io);
-    };
-
     const daemon = try std.process.spawn(self.process.io, .{
         .argv = argv[0..argc],
         .cwd = .{ .path = "/" },
         .stdin = .ignore,
         .stdout = .ignore,
-        .stderr = if (log) |file| .{ .file = file } else .ignore,
+        .stderr = .ignore,
     });
     _ = daemon;
-}
-
-/// Opens `<endpoint>.runtime.log` for a new background runtime, keeping the
-/// previous runtime's log as `.runtime.log.1`, so at most two lifetimes stay.
-fn openRuntimeLog(io: std.Io, endpoint: []const u8) !std.Io.File {
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}{s}", .{ endpoint, core.DiagnosticLogName.runtime_log_suffix });
-    var rotated_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const rotated = try std.fmt.bufPrint(&rotated_buffer, "{s}{s}", .{ path, core.DiagnosticLogName.rotated_suffix });
-
-    std.Io.Dir.renameAbsolute(path, rotated, io) catch |err| switch (err) {
-        error.FileNotFound => {},
-        else => return err,
-    };
-
-    return std.Io.Dir.createFileAbsolute(io, path, .{
-        .exclusive = true,
-        .permissions = std.Io.File.Permissions.fromMode(0o600),
-    });
 }
 
 pub fn deinit(self: *Launch) void {

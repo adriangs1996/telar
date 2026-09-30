@@ -1,8 +1,12 @@
 //! Limit reached, runtime side: a limit the runtime reached is counted in
 //! `model.limit_reaches`, logged, and shown to every window at most once per
-//! `LimitReaches.show_interval_ms`; one a client reported is counted.
-//! `telar diagnostics limits` lists the registry. The safety nets here keep
-//! a capacity error from ending `Runtime.run`. See
+//! `limit_reached.show_interval_ms`; one a client reported is counted apart
+//! in `model.client_limit_reaches`. `telar diagnostics limits` lists both.
+//! The safety nets here keep a limit error from ending `Runtime.run`.
+//!
+//! Everything here runs on the runtime's event loop, the thread that owns
+//! the model. A worker never calls it: it returns the reach in its
+//! completion and the flow's `finish` reports it. See
 //! `docs/flows/limit-reached.md`.
 const std = @import("std");
 const core = @import("telar-core");
@@ -17,14 +21,17 @@ const log = std.log.scoped(.limits);
 const notice_validation_bytes = 512;
 /// How long a limit notice stays on screen.
 const notice_duration_ms = 8_000;
+/// `report_limit` messages one connection may send a second; an honest
+/// client sends one a second per limit it keeps reaching.
+const max_reports_per_second = 32;
 
 /// Counts one reach of a runtime limit, and at most once per interval logs
 /// it and shows it to every window. Never fails and allocates nothing, so
-/// it can sit where the limit is enforced.
+/// it can sit where the limit is enforced. Call it on the event loop only.
 ///
 /// ```zig
 /// limit_reached.report(model, .{
-///     .limit = .{ .name = "session_checkpoint.snapshot_bytes", .noun = "bytes", .value = snapshot_bytes },
+///     .limit = core.Limit.declare("session_checkpoint.snapshot_bytes", "bytes", snapshot_bytes),
 ///     .requested = needed,
 /// });
 /// ```
@@ -32,34 +39,31 @@ pub fn report(model: *RuntimeModel, reach: core.LimitReach) void {
     _ = notice(model, reach);
 }
 
-/// Records one reach and shows it when its interval allows; returns
-/// whether it showed, so a caller logs its own detail only then.
-fn notice(model: *RuntimeModel, reach: core.LimitReach) bool {
-    const recorded = model.limit_reaches.record(reach, .runtime, nowMs(model), 1);
-    if (!recorded.show) {
-        return false;
-    }
-
-    var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
-    const text = model.limit_reaches.reachAt(recorded.slot).describe(&buffer, model.limit_reaches.hits[recorded.slot]);
-    log.warn("{s}", .{text});
-    show(model, text);
-    return true;
-}
-
-/// Counts what a client reported. The client already showed and logged
-/// its own notice, so the runtime only counts: a client inventing names
-/// cannot grow the runtime's log.
+/// Counts what a client reported, apart from the runtime's own limits. The
+/// client already showed and logged its notice, so the runtime only counts;
+/// a connection past `max_reports_per_second` is refused and counted.
 ///
 /// ```zig
-/// limit_reached.receive(model, report);
+/// limit_reached.receive(model, session, report);
 /// ```
-pub fn receive(model: *RuntimeModel, reported: core.ReportLimit) void {
-    _ = model.limit_reaches.record(reported.reach, .client, nowMs(model), reported.hits);
+pub fn receive(model: *RuntimeModel, session: *Session, reported: core.ReportLimit) void {
+    const at = now(model);
+    if (at.awake_ms - session.limit_report_window_ms >= std.time.ms_per_s) {
+        session.limit_report_window_ms = at.awake_ms;
+        session.limit_reports = 0;
+    }
+
+    if (session.limit_reports >= max_reports_per_second) {
+        model.refused_limit_reports +|= 1;
+        return;
+    }
+
+    session.limit_reports += 1;
+    _ = core.limit_reached.record(&model.client_limit_reaches, reported.reach, at, reported.hits);
 }
 
-/// Answers `telar diagnostics limits` with the whole registry, encoded
-/// from the table when the reply is sent.
+/// Answers `telar diagnostics limits` with both tables, encoded from them
+/// when the reply is sent.
 ///
 /// ```zig
 /// try limit_reached.list(session, query);
@@ -68,42 +72,69 @@ pub fn list(session: *Session, query: core.QueryLimits) !void {
     try session.delivery.responses.push(.{ .limit_list = query.request_id });
 }
 
-/// The safety net of `Runtime.update`: a capacity error from one event is
-/// reported and the event is skipped; its route is logged with the notice.
-/// Any other error returns to the caller unchanged.
+/// The safety net of `Runtime.update`: a limit error from one event is
+/// reported with its route and the event is skipped. A host error is
+/// logged as an error and returns, like any other error.
 ///
 /// ```zig
 /// dispatch(event) catch |err| try limit_reached.absorb(model, @tagName(event), err);
 /// ```
 pub fn absorb(model: *RuntimeModel, route: []const u8, err: anyerror) anyerror!void {
-    if (!core.limit_reached.isCapacityError(err)) {
+    if (!core.limit_reached.isLimitError(err)) {
+        logUncaught(route, err);
         return err;
     }
 
-    if (notice(model, core.limit_reached.unnamed(err))) {
+    if (notice(model, core.limit_reached.unnamed(err, route))) {
         log.warn("{s} stopped at a limit: {s}", .{ route, @errorName(err) });
     }
 }
 
-/// The safety net of one client request: a capacity error answers the
-/// request with `resource_limit` and keeps the connection. A full response
-/// queue is the slow-client policy, not a limit, so it and every other
-/// error return and the connection is dropped as before.
+/// The safety net of one client request: a limit error answers the request
+/// with `resource_limit` and keeps the connection. A full response queue is
+/// the slow-client policy, not a limit, so it and every other error return
+/// and the connection is dropped as before.
 ///
 /// ```zig
 /// client_request.receive(model, session, message) catch |err| try limit_reached.refuse(model, session, message, err);
 /// ```
 pub fn refuse(model: *RuntimeModel, session: *Session, message: core.ClientMessage, err: anyerror) anyerror!void {
-    if (err == error.ResponseQueueFull or !core.limit_reached.isCapacityError(err)) {
+    const route = @tagName(message);
+    if (err == error.ResponseQueueFull or !core.limit_reached.isLimitError(err)) {
+        logUncaught(route, err);
         return err;
     }
 
-    if (notice(model, core.limit_reached.unnamed(err))) {
-        log.warn("request {s} stopped at a limit: {s}", .{ @tagName(message), @errorName(err) });
+    if (notice(model, core.limit_reached.unnamed(err, route))) {
+        log.warn("request {s} stopped at a limit: {s}", .{ route, @errorName(err) });
     }
 
     const request_id = requestId(message) orelse return;
     try client_request.fail(session, request_id, .resource_limit, @errorName(err));
+}
+
+/// Records one reach and shows it when its interval allows; returns
+/// whether it showed, so a caller logs its own detail only then.
+fn notice(model: *RuntimeModel, reach: core.LimitReach) bool {
+    const reaches = &model.limit_reaches;
+    const recorded = core.limit_reached.record(reaches, reach, now(model), 1);
+    if (!recorded.show) {
+        return false;
+    }
+
+    var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
+    const text = reaches.reachAt(recorded.slot).describe(&buffer, reaches.hits[recorded.slot]);
+    log.warn("{s}", .{text});
+    show(model, text);
+    return true;
+}
+
+/// A host error is not hidden: it is logged with its route before it
+/// takes its old path.
+fn logUncaught(route: []const u8, err: anyerror) void {
+    if (core.limit_reached.isSystemError(err)) {
+        log.err("{s} failed on the host: {s}", .{ route, @errorName(err) });
+    }
 }
 
 fn requestId(message: core.ClientMessage) ?core.RequestId {
@@ -134,6 +165,9 @@ fn show(model: *RuntimeModel, text: []const u8) void {
     _ = notifications.publish(model, notification);
 }
 
-fn nowMs(model: *const RuntimeModel) i64 {
-    return std.Io.Timestamp.now(model.io, .real).toMilliseconds();
+fn now(model: *const RuntimeModel) core.ReachTime {
+    return .{
+        .awake_ms = std.Io.Timestamp.now(model.io, .awake).toMilliseconds(),
+        .real_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
+    };
 }

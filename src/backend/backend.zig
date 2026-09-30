@@ -155,6 +155,7 @@ test {
     _ = @import("runtime/tests/cell_projection_test.zig");
     _ = @import("runtime/tests/checkpoint_shutdown_test.zig");
     _ = @import("runtime/tests/limit_reached_test.zig");
+    _ = @import("runtime/resources/RuntimeLog.zig");
     _ = @import("runtime/tests/pane_title_test.zig");
     _ = @import("runtime/tests/performance_isolation_test.zig");
     _ = @import("runtime/tests/agent_control_test.zig");

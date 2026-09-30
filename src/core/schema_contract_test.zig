@@ -1119,21 +1119,30 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     helper.add(.{ .name = "query_limits", .direction = .client, .golden_hex = golden.query_limits }, helper.commit(
         try schema.encodeQueryLimits(helper.space(), .{ .request_id = @enumFromInt(5) }),
     ));
-    var limit_reaches: schema.LimitReaches = .{};
-    _ = limit_reaches.record(
+    var runtime_limits: schema.LimitReaches = .{};
+    _ = schema.limit_reached.record(
+        &runtime_limits,
         .{
             .limit = .{
                 .name = "session_checkpoint.snapshot_bytes",
                 .noun = "bytes",
                 .value = 1048576,
             },
+            .route = "agent_tick",
         },
-        .runtime,
-        1_700_000_000_000,
+        .{
+            .awake_ms = 1_000,
+            .real_ms = 1_700_000_000_000,
+        },
         2,
     );
     helper.add(.{ .name = "limit_list", .direction = .server, .golden_hex = golden.limit_list }, helper.commit(
-        try schema.encodeLimitList(helper.space(), @enumFromInt(5), &limit_reaches),
+        try schema.encodeLimitList(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .runtime = &runtime_limits,
+            .clients = &schema.LimitReaches.none,
+            .refused_reports = 1,
+        }),
     ));
 
     helper.add(.{ .name = "detach_client", .direction = .client, .golden_hex = golden.detach_client }, helper.commit(

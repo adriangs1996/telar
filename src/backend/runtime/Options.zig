@@ -29,6 +29,9 @@ agent_descriptions: ?AgentDescriptionOptions = null,
 engine: ?OptionsType = null,
 /// Agent identification rules; the built-in table unless configured.
 agent_manifests: core.Table = core.builtin_table,
+/// The background runtime: once it holds the listener, its standard error
+/// goes to `<endpoint>.runtime.log` (`RuntimeLog`).
+own_log: bool = false,
 /// Absolute session checkpoint path; null keeps the session volatile.
 session_path: ?[]const u8 = null,
 /// Type each restored agent's resume command into its relaunched shell.

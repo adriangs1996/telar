@@ -13,6 +13,30 @@ name: []const u8,
 noun: []const u8 = "",
 value: u64,
 
+/// Declares a limit beside its constant; a name or noun a report could not
+/// carry fails the build instead of every report at run time.
+///
+/// ```zig
+/// pub const max_bar_actions = 4;
+/// pub const bar_actions_limit = Limit.declare("bars.max_bar_actions", "click actions", max_bar_actions);
+/// ```
+pub fn declare(comptime name: []const u8, comptime noun: []const u8, value: u64) Limit {
+    comptime {
+        const declared: Limit = .{
+            .name = name,
+            .noun = noun,
+            .value = 0,
+        };
+        declared.validate() catch |err| @compileError("limit '" ++ name ++ "': " ++ @errorName(err));
+    }
+
+    return .{
+        .name = name,
+        .noun = noun,
+        .value = value,
+    };
+}
+
 /// Checks what a report from another process carries: a name of letters,
 /// digits, `.`, `_` and `-`, and a noun of printable ASCII.
 ///
@@ -42,8 +66,24 @@ pub fn validate(self: Limit) !void {
 }
 
 test "limit names are identifiers and nouns are printable" {
-    try (Limit{ .name = "bars.max_bar_actions", .noun = "click actions", .value = 4 }).validate();
-    try std.testing.expectError(error.InvalidLimitName, (Limit{ .name = "", .value = 1 }).validate());
-    try std.testing.expectError(error.InvalidLimitName, (Limit{ .name = "bars max", .value = 1 }).validate());
-    try std.testing.expectError(error.InvalidLimitNoun, (Limit{ .name = "a", .noun = "\x1b[31m", .value = 1 }).validate());
+    try declare("bars.max_bar_actions", "click actions", 4).validate();
+
+    const empty: Limit = .{
+        .name = "",
+        .value = 1,
+    };
+    try std.testing.expectError(error.InvalidLimitName, empty.validate());
+
+    const spaced: Limit = .{
+        .name = "bars max",
+        .value = 1,
+    };
+    try std.testing.expectError(error.InvalidLimitName, spaced.validate());
+
+    const escaped: Limit = .{
+        .name = "a",
+        .noun = "\x1b[31m",
+        .value = 1,
+    };
+    try std.testing.expectError(error.InvalidLimitNoun, escaped.validate());
 }

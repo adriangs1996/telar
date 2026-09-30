@@ -163,7 +163,7 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
 
     // A limit reached in one event skips that event, never the runtime.
     self.dispatch(event) catch |err| try limit_reached.absorb(model, @tagName(event), err);
-    client_delivery.flush(model) catch |err| try limit_reached.absorb(model, "client delivery", err);
+    client_delivery.flush(model) catch |err| try limit_reached.absorb(model, "client_delivery", err);
 
     return switch (event) {
         .client_message, .client_sent => client_delivery.shutdownDelivered(model),
@@ -186,8 +186,8 @@ fn dispatch(self: *Runtime, event: runtime_event.Event) !void {
         .pane_response_written => |completion| try pane_input.finishResponseWrite(model, completion),
         .pane_observed => |completion| try pane_observation.finish(model, completion),
         .pane_media => |completion| try pane_graphics.finishMedia(model, completion),
-        .pane_search => |wake| try pane_search.advance(model, wake),
-        .pane_descent => |completion| try agent_hooks.finishDescent(model, completion),
+        .pane_search => |wake| try client_connection.dropUnanswered(model, wake.client, pane_search.advance(model, wake)),
+        .pane_descent => |completion| try client_connection.dropUnanswered(model, completion.client, agent_hooks.finishDescent(model, completion)),
         .pane_exit => |completion| try pane_closure.finishExit(model, completion),
         .agent_description => |result| agent_description.finish(model, result),
         .agent_tick => |result| try agent_maintenance.tick(model, result),

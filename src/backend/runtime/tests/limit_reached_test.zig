@@ -10,11 +10,7 @@ const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
 
 const checkpoint_limit: core.LimitReach = .{
-    .limit = .{
-        .name = "session_checkpoint.snapshot_bytes",
-        .noun = "bytes",
-        .value = 1024,
-    },
+    .limit = core.Limit.declare("session_checkpoint.snapshot_bytes", "bytes", 1024),
     .requested = 4096,
 };
 
@@ -36,13 +32,13 @@ test "a runtime limit notifies the windows once per interval and counts every re
     try std.testing.expectEqualStrings("session_checkpoint.snapshot_bytes: 4096 bytes; limit 1024", notice.message);
     try std.testing.expectEqual(core.NotificationLevel.warning, notice.level);
 
-    model.limit_reaches.shown_ms[slot] = model.limit_reaches.shown_ms[slot].? - core.LimitReaches.show_interval_ms;
+    model.limit_reaches.shown_ms[slot] = model.limit_reaches.shown_ms[slot].? - core.limit_reached.show_interval_ms;
     limit_reached.report(model, checkpoint_limit);
     try std.testing.expectEqual(@as(usize, 2), countNotices(fixture.session));
     try std.testing.expectEqual(@as(u64, 3), model.limit_reaches.hits[slot]);
 }
 
-test "a client's reaches are counted and listed with the runtime's" {
+test "a client's reaches are counted apart and listed with the runtime's" {
     var fixture: RequestFixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -53,16 +49,13 @@ test "a client's reaches are counted and listed with the runtime's" {
 
     try fixture.send(.{ .report_limit = .{
         .reach = .{
-            .limit = .{
-                .name = "bars.max_bar_actions",
-                .noun = "click actions",
-                .value = 4,
-            },
+            .limit = core.Limit.declare("bars.max_bar_actions", "click actions", 4),
             .requested = 5,
         },
         .hits = 3,
     } });
     try std.testing.expect(fixture.response() == null);
+    try std.testing.expect(model.limit_reaches.find("bars.max_bar_actions") == null);
 
     try fixture.send(.{ .query_limits = .{ .request_id = @enumFromInt(7) } });
     const pending = fixture.response().?;
@@ -79,10 +72,12 @@ test "a client's reaches are counted and listed with the runtime's" {
         .history_result = &history_result,
         .history_output = &history_output,
         .history_stats = &history_stats,
-        .limit_reaches = &model.limit_reaches,
+        .runtime_limits = &model.limit_reaches,
+        .client_limits = &model.client_limit_reaches,
+        .refused_limit_reports = model.refused_limit_reports,
     }, pending);
     const decoded = try core.decodeServer(payload);
-    try std.testing.expectEqual(@as(u8, 2), decoded.limit_list.entry_count);
+    try std.testing.expectEqual(@as(u16, 2), decoded.limit_list.entry_count);
 
     var entries = decoded.limit_list.entries();
     const runtime_entry = (try entries.next()).?;
@@ -94,6 +89,57 @@ test "a client's reaches are counted and listed with the runtime's" {
     try std.testing.expectEqual(@as(?u64, 5), client_entry.reach.requested);
 }
 
+test "a client reporting a runtime limit's name neither silences nor evicts it" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+
+    const model = &fixture.runtime.model;
+    try fixture.send(.{ .report_limit = .{
+        .reach = checkpoint_limit,
+        .hits = 1,
+    } });
+
+    var name_buffer: [32]u8 = undefined;
+    for (0..core.LimitReaches.capacity + 1) |number| {
+        // A new second for every report keeps this client under its rate.
+        fixture.session.limit_report_window_ms = 0;
+        try fixture.send(.{ .report_limit = .{
+            .reach = .{
+                .limit = .{
+                    .name = try std.fmt.bufPrint(&name_buffer, "invented.{d}", .{number}),
+                    .value = 1,
+                },
+            },
+            .hits = 1,
+        } });
+    }
+
+    limit_reached.report(model, checkpoint_limit);
+    try std.testing.expectEqual(@as(usize, 1), countNotices(fixture.session));
+    try std.testing.expectEqual(@as(u64, 1), model.limit_reaches.hits[model.limit_reaches.find("session_checkpoint.snapshot_bytes").?]);
+    try std.testing.expect(model.client_limit_reaches.evicted >= 2);
+    try std.testing.expectEqual(@as(u64, 0), model.limit_reaches.evicted);
+}
+
+test "a connection sending too many reports a second is refused and counted" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+
+    const model = &fixture.runtime.model;
+    for (0..40) |_| {
+        try fixture.send(.{ .report_limit = .{
+            .reach = checkpoint_limit,
+            .hits = 1,
+        } });
+    }
+
+    const slot = model.client_limit_reaches.find("session_checkpoint.snapshot_bytes").?;
+    try std.testing.expectEqual(@as(u64, 32), model.client_limit_reaches.hits[slot]);
+    try std.testing.expectEqual(@as(u64, 8), model.refused_limit_reports);
+}
+
 test "a request stopped by a limit is refused and its connection stays" {
     var fixture: RequestFixture = undefined;
     try fixture.init();
@@ -101,12 +147,13 @@ test "a request stopped by a limit is refused and its connection stays" {
 
     const model = &fixture.runtime.model;
     const message: core.ClientMessage = .{ .query_limits = .{ .request_id = @enumFromInt(9) } };
-    try limit_reached.refuse(model, fixture.session, message, error.TooManyThings);
+    try limit_reached.refuse(model, fixture.session, message, error.TooManyTabs);
 
     const failure = findFailure(fixture.session).?;
     try std.testing.expectEqual(core.FailureCode.resource_limit, failure.code);
     try std.testing.expectEqual(@as(core.RequestId, @enumFromInt(9)), failure.request_id);
-    try std.testing.expect(model.limit_reaches.find("TooManyThings") != null);
+    const slot = model.limit_reaches.find("TooManyTabs").?;
+    try std.testing.expectEqualStrings("query_limits", model.limit_reaches.reachAt(slot).route);
 
     try std.testing.expectError(error.ResponseQueueFull, limit_reached.refuse(model, fixture.session, message, error.ResponseQueueFull));
     try std.testing.expectError(error.Unexpected, limit_reached.refuse(model, fixture.session, message, error.Unexpected));
@@ -119,8 +166,14 @@ test "the update safety net skips an event at a limit and returns every other er
 
     const model = &fixture.runtime.model;
     try limit_reached.absorb(model, "agent_tick", error.BufferTooSmall);
-    try std.testing.expectEqual(@as(u64, 1), model.limit_reaches.hits[model.limit_reaches.find("BufferTooSmall").?]);
+    const slot = model.limit_reaches.find("BufferTooSmall").?;
+    try std.testing.expectEqual(@as(u64, 1), model.limit_reaches.hits[slot]);
+    try std.testing.expectEqualStrings("agent_tick", model.limit_reaches.reachAt(slot).route);
+
+    // A host error is logged as an error before it returns, which a test
+    // counts as a failure; core's tests prove its classification.
     try std.testing.expectError(error.InvalidCheckpoint, limit_reached.absorb(model, "agent_tick", error.InvalidCheckpoint));
+    try std.testing.expect(model.limit_reaches.find("InvalidCheckpoint") == null);
 }
 
 fn countNotices(session: *Session) usize {
@@ -146,4 +199,39 @@ fn findFailure(session: *Session) ?PendingFailure {
     }
 
     return null;
+}
+
+test "Runtime.update skips an event that stops at a limit and keeps running" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+
+    const runtime = fixture.runtime;
+    const stopped = try runtime.update(.{ .pane_search = .{
+        .client = fixture.session.key,
+        .request_id = @enumFromInt(3),
+        .result = error.QueueFull,
+    } });
+    try std.testing.expect(!stopped);
+
+    const reaches = &runtime.model.limit_reaches;
+    const slot = reaches.find("QueueFull").?;
+    try std.testing.expectEqualStrings("pane_search", reaches.reachAt(slot).route);
+    try std.testing.expect(runtime.model.clients.resolve(fixture.session.key) != null);
+
+    // The next event runs as usual.
+    try fixture.send(.{ .query_limits = .{ .request_id = @enumFromInt(4) } });
+    try std.testing.expect(findLimitList(fixture.session));
+}
+
+fn findLimitList(session: *Session) bool {
+    const queue = &session.delivery.responses;
+    for (0..queue.len) |offset| {
+        const index = (@as(usize, queue.head) + offset) % queue.items.len;
+        if (queue.items[index] == .limit_list) {
+            return true;
+        }
+    }
+
+    return false;
 }

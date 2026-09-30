@@ -114,7 +114,7 @@ pub fn receive(model: *RuntimeModel, session: *Session, message: core.ClientMess
         .interrupt_agent => |request| agent_control.interrupt(model, session, request),
         .report_agent_progress => |request| agent_hooks.receiveProgress(model, session, request),
         .verify_pane_descent => |request| agent_hooks.receiveDescent(model, session, request),
-        .report_limit => |request| limit_reached.receive(model, request),
+        .report_limit => |request| limit_reached.receive(model, session, request),
         .query_limits => |request| limit_reached.list(session, request),
     };
 }
