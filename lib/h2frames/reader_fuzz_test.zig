@@ -445,8 +445,9 @@ fn expectEveryFeeding(wire: []const u8, plan: RejectionPlan, partition: Partitio
     try expectFeeding(wire, plan, partition);
 }
 
-/// A broken property panics instead of returning its error: Zig 0.16.0's
-/// fuzzer saves the failing input only on an abort.
+/// A broken property panics instead of returning its error, so the output
+/// names the property that broke. Zig 0.16.0 saves the input for any
+/// non-zero exit (`saveCrash` in `std/Build/Step/Run.zig`), a panic included.
 fn feedFuzzedWire(_: void, smith: *std.testing.Smith) anyerror!void {
     expectFuzzedFeeding(smith) catch |err| std.debug.panic("Reader property failed: {t}", .{err});
 }

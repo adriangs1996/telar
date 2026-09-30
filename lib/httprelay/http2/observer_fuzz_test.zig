@@ -337,7 +337,13 @@ const ExpectedField = struct {
 
 /// A generated wire and what it promises. `valid` wires must relay without
 /// a decode failure and emit exactly `expected`; `opaque` wires carry bytes
-/// the model does not follow.
+/// the model does not follow. `expects_failure` holds only failures the
+/// observer has certainly committed: one inside a breakage's own frames
+/// while the model still knows where frames start, or a block left open
+/// that a generated frame or the end of the wire then abandons. Raw bytes
+/// make frame boundaries unknown, so they settle nothing already open and
+/// promise nothing about later breakages; a failure committed before them
+/// stays expected, because the observer never recovers.
 const SyntheticStream = struct {
     direction: http2.Direction,
     wire: std.ArrayList(u8),
@@ -350,6 +356,11 @@ const SyntheticStream = struct {
     valid: bool = true,
     is_opaque: bool = false,
     expects_failure: bool = false,
+    /// Every byte so far came from a generated frame, so the next generated
+    /// frame starts where the observer's reader expects a frame header.
+    framing_known: bool = true,
+    /// A generated block ended without END_HEADERS and nothing followed yet.
+    open_block: bool = false,
 
     fn textOf(self: *const SyntheticStream, span: TextSpan) []const u8 {
         return self.text[span.start..][0..span.len];
@@ -365,16 +376,49 @@ const SyntheticStream = struct {
         return span;
     }
 
-    /// The wire breaks the protocol in a way the observer must fail on.
+    /// The operation's own frames break the protocol in a way the observer
+    /// fails on at once, provided they start on a frame boundary.
     fn breaks(self: *SyntheticStream) void {
         self.valid = false;
-        self.expects_failure = true;
+        if (self.framing_known) {
+            self.expects_failure = true;
+        }
     }
 
-    /// The wire now holds bytes the model does not follow.
+    /// The operation's block ended without END_HEADERS. Whether that fails
+    /// depends on what follows it.
+    fn leavesBlockOpen(self: *SyntheticStream) void {
+        self.valid = false;
+        self.open_block = self.framing_known;
+    }
+
+    /// A generated frame starts: it is no CONTINUATION, so a block still
+    /// open fails the observer there.
+    fn startsFrame(self: *SyntheticStream) void {
+        if (self.open_block) {
+            self.expects_failure = true;
+            self.open_block = false;
+        }
+    }
+
+    /// The wire ends: a block still open fails the relay's final check.
+    fn ends(self: *SyntheticStream) void {
+        self.startsFrame();
+    }
+
+    /// The wire now holds fields the model does not follow, in frames it
+    /// still delimits.
     fn loses(self: *SyntheticStream) void {
         self.valid = false;
         self.is_opaque = true;
+    }
+
+    /// Raw bytes: the model no longer knows where frames start or whether
+    /// an open block was closed.
+    fn losesFraming(self: *SyntheticStream) void {
+        self.loses();
+        self.framing_known = false;
+        self.open_block = false;
     }
 };
 
@@ -565,7 +609,7 @@ fn generateHeaderBlock(synthetic: *SyntheticStream, smith: *std.testing.Smith, k
             fragments = @max(fragments, 2);
             synthetic.breaks();
         },
-        .missing_end_headers => synthetic.breaks(),
+        .missing_end_headers => synthetic.leavesBlockOpen(),
         .corrupt_block => {
             if (block.items.len == 0) {
                 block.appendAssumeCapacity(indexed_pattern);
@@ -699,7 +743,12 @@ fn generateFrames(synthetic: *SyntheticStream, smith: *std.testing.Smith) void {
     var ops: usize = 0;
 
     while (ops < max_frame_ops and !smith.eosWeightedSimple(3, 1)) : (ops += 1) {
-        switch (smith.value(FrameOp)) {
+        const op = smith.value(FrameOp);
+        if (op != .raw) {
+            synthetic.startsFrame();
+        }
+
+        switch (op) {
             .headers => generateHeaderBlock(synthetic, smith, .headers),
             .push_promise => generateHeaderBlock(synthetic, smith, .push_promise),
             .data => generateData(synthetic, smith),
@@ -724,10 +773,12 @@ fn generateFrames(synthetic: *SyntheticStream, smith: *std.testing.Smith) void {
             .raw => {
                 var raw: [max_raw_bytes]u8 = undefined;
                 synthetic.wire.appendSliceAssumeCapacity(raw[0..smith.slice(&raw)]);
-                synthetic.loses();
+                synthetic.losesFraming();
             },
         }
     }
+
+    synthetic.ends();
 }
 
 const ObservationKind = enum {
@@ -1097,8 +1148,9 @@ fn expectAllocationFailure(synthetic: *const SyntheticStream, whole: *const Obse
     try expectHeaderPrefix(whole, &starved);
 }
 
-/// A broken property panics instead of returning its error: Zig 0.16.0's
-/// fuzzer saves the failing input only on an abort.
+/// A broken property panics instead of returning its error, so the output
+/// names the property that broke. Zig 0.16.0 saves the input for any
+/// non-zero exit (`saveCrash` in `std/Build/Step/Run.zig`), a panic included.
 fn observeFuzzedWire(_: void, smith: *std.testing.Smith) anyerror!void {
     expectFuzzedObservation(smith) catch |err| std.debug.panic("Observer property failed: {t}", .{err});
 }
@@ -1483,6 +1535,10 @@ const observation_seeds = [_]ObservationSeed{
         },
         .outcome = .decodes,
     },
+    completed_continuation_seed,
+    committed_failure_seed,
+    swallowed_breakage_seed,
+    open_at_end_seed,
     huffman_seed,
     .{
         .direction = .request,
@@ -1654,6 +1710,125 @@ test "every allocation failure in valid observer seeds fails the observer and fr
 
         try std.testing.checkAllAllocationFailures(std.testing.allocator, relayUnderAllocation, .{ &synthetic, &unfailed });
     }
+}
+
+/// A CONTINUATION with END_HEADERS and no fragment on the first client
+/// stream, written as raw bytes.
+const raw_closing_continuation = "\x00\x00\x00\x09\x04\x00\x00\x00\x01";
+
+/// A block left open, then raw bytes that close it: the observer decodes it
+/// and does not fail, so a failure predicted for the open block must not
+/// survive bytes the model does not follow.
+const completed_continuation_seed: ObservationSeed = .{
+    .direction = .request,
+    .ops = &.{
+        blockOp(.headers, .{
+            .fields = &.{post_method},
+            .breakage = .missing_end_headers,
+        }),
+        rawOp(raw_closing_continuation),
+    },
+    .outcome = .is_opaque,
+};
+
+/// A failure the observer commits at once stays expected after raw bytes.
+const committed_failure_seed: ObservationSeed = .{
+    .direction = .request,
+    .ops = &.{
+        blockOp(.headers, .{
+            .fields = &.{post_method},
+            .breakage = .stream_zero,
+        }),
+        rawOp(raw_closing_continuation),
+    },
+    .outcome = .is_opaque,
+};
+
+/// The HEADERS frame `swallowed_breakage_seed` breaks: a header and the
+/// one-byte indexed `:method POST`.
+const stream_zero_headers_bytes = frame_header_bytes + 1;
+
+/// A raw DATA header on the first client stream whose length covers the next
+/// operation's frame, which the observer then reads as body.
+const raw_swallowing_data = "\x00\x00" ++ [_]u8{stream_zero_headers_bytes} ++ "\x00\x00\x00\x00\x00\x01";
+
+/// Raw bytes put the next breakage inside a DATA payload, so it breaks
+/// nothing and must not be expected to.
+const swallowed_breakage_seed: ObservationSeed = .{
+    .direction = .request,
+    .ops = &.{
+        rawOp(raw_swallowing_data),
+        blockOp(.headers, .{
+            .fields = &.{post_method},
+            .breakage = .stream_zero,
+        }),
+    },
+    .outcome = .is_opaque,
+};
+
+/// A block left open at the end of the wire fails the relay's final check.
+const open_at_end_seed: ObservationSeed = .{
+    .direction = .response,
+    .ops = &.{
+        blockOp(.headers, .{
+            .fields = &.{status_ok},
+            .breakage = .missing_end_headers,
+        }),
+    },
+    .outcome = .fails,
+};
+
+test "raw bytes that close an open block leave the observer decoding" {
+    var synthetic: SyntheticStream = undefined;
+    const entry = comptime smithInput(completed_continuation_seed);
+    _ = generateSeed(&synthetic, entry);
+    var trace: ObservationTrace = .{};
+    const stats = try relayWire(std.testing.allocator, &synthetic, .{}, &trace);
+
+    try std.testing.expect(!stats.decode_failed);
+    try std.testing.expectEqual(@as(usize, 1), countHeaderObservations(&trace));
+    try std.testing.expect(!synthetic.expects_failure);
+
+    var smith: std.testing.Smith = .{ .in = entry };
+    try expectFuzzedObservation(&smith);
+}
+
+test "a failure committed before raw bytes stays expected" {
+    var synthetic: SyntheticStream = undefined;
+    const entry = comptime smithInput(committed_failure_seed);
+    _ = generateSeed(&synthetic, entry);
+    var trace: ObservationTrace = .{};
+    const stats = try relayWire(std.testing.allocator, &synthetic, .{}, &trace);
+
+    try std.testing.expect(stats.decode_failed);
+    try std.testing.expect(synthetic.expects_failure);
+
+    var smith: std.testing.Smith = .{ .in = entry };
+    try expectFuzzedObservation(&smith);
+}
+
+test "a breakage inside raw-declared DATA is not expected to fail" {
+    var synthetic: SyntheticStream = undefined;
+    const entry = comptime smithInput(swallowed_breakage_seed);
+    _ = generateSeed(&synthetic, entry);
+    var trace: ObservationTrace = .{};
+    const stats = try relayWire(std.testing.allocator, &synthetic, .{}, &trace);
+
+    try std.testing.expect(!stats.decode_failed);
+    try std.testing.expect(!synthetic.expects_failure);
+
+    var smith: std.testing.Smith = .{ .in = entry };
+    try expectFuzzedObservation(&smith);
+}
+
+test "a block left open at the end of the wire is expected to fail" {
+    var synthetic: SyntheticStream = undefined;
+    _ = generateSeed(&synthetic, comptime smithInput(open_at_end_seed));
+    var trace: ObservationTrace = .{};
+    const stats = try relayWire(std.testing.allocator, &synthetic, .{}, &trace);
+
+    try std.testing.expect(stats.decode_failed);
+    try std.testing.expect(synthetic.expects_failure);
 }
 
 test "fuzz HTTP/2 header observation" {

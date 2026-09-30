@@ -93,11 +93,11 @@ operations:
 - `headers`, `push_promise`: a header block of up to `max_block_fields` (6)
   fields. It may start with a dynamic table size update (0, 64, 256 or 4096)
   and may carry padding (up to `max_padding` 8), a PRIORITY prefix, and a
-  split over up to `max_fragments` (4) frames. Fields use each RFC 7541
-  representation except Huffman: indexed static, indexed dynamic, literal
-  with incremental indexing, without indexing and never indexed, with a new
-  or indexed name. Values come from a table or are up to `max_value_bytes`
-  (24) of fuzzed printable text.
+  split over up to `max_fragments` (4) frames. Fields use indexed static,
+  indexed dynamic, literals with incremental indexing and without indexing
+  (each with a new or an indexed name), and never-indexed literals with a new
+  name only. No literal is Huffman-coded. Values come from a table or are up
+  to `max_value_bytes` (24) of fuzzed printable text.
 - `data` with padding and up to `max_body_bytes` (48) of body, `rst_stream`,
   `goaway`, `settings`.
 - `raw_block`: a HEADERS frame around up to 48 fuzzed HPACK bytes.
@@ -107,6 +107,19 @@ A header operation may break the protocol in one named way (`Breakage`):
 stream id zero, a pad length past the payload, a PING between HEADERS and
 CONTINUATION, a CONTINUATION on another stream, a missing END_HEADERS, index
 zero as the first field, or the block's last byte cut off.
+
+The generator predicts only failures the observer has certainly committed
+(`SyntheticStream.expects_failure`). A breakage fails inside its own frames,
+so it counts only while every earlier byte came from generated frames and
+the model knows where the next frame starts. A missing END_HEADERS fails
+nothing by itself. It leaves the block open, and the failure becomes certain
+when a generated frame follows, since none is a CONTINUATION, or when the
+wire ends and the relay finds the block unfinished. `raw` bytes make frame
+boundaries unknown. They may close an open block with a CONTINUATION, or
+turn a later breakage into DATA payload, so after them neither counts. A
+failure already committed stays expected, because the observer never
+recovers from one. `raw_block` is a whole HEADERS frame with END_HEADERS, so
+frame boundaries stay known after it.
 
 The generator keeps a model of the inflater's dynamic table. It starts at
 nghttp2's 4096 bytes, evicts oldest first and costs name, value and 32 bytes
@@ -134,7 +147,7 @@ chunking.
 - A valid wire, with no breakage and no raw bytes, never fails. It emits
   exactly the generated fields, in order, on their streams, which shows every
   block went through `decodeBlock` and nghttp2's inflater.
-- A breakage the observer must fail on sets `decode_failed`.
+- A failure the generator predicts, as above, sets `decode_failed`.
 - Unless raw bytes are involved, the decoded fields are a prefix of the
   generated ones. A failure may stop decoding but may not change a field it
   already emitted.
@@ -148,14 +161,16 @@ An observer that failed keeps reporting DATA and lifecycle events, as the
 code does. The oracles do not model lifecycle events, only compare them
 across chunkings.
 
-**Seeds.** 18 seeds: empty wires in both directions, a watched POST with a
+**Seeds.** 22 seeds: empty wires in both directions, a watched POST with a
 body, dynamic table references across blocks with table size updates, a
 padded and prioritized response split over three frames with SSE bodies,
 PUSH_PROMISE feeding the dynamic table, RST_STREAM and GOAWAY, HEADERS whose
 first frame is only padding, a cut that drops a whole indexed field (found by
 fuzzing, see below), one seed per breakage, RFC 7541 C.4.1 (Huffman) as a raw
-block, the relay tests' `\x83\x04\x0c/v1/messages` block, and raw bytes that
-leave a frame incomplete.
+block, the relay tests' `\x83\x04\x0c/v1/messages` block, raw bytes that
+leave a frame incomplete, and four for the failure prediction: raw bytes that
+close an open block, a stream-zero failure before raw bytes, a breakage
+inside raw-declared DATA, and a block left open at the end of the wire.
 
 **Deterministic tests** in the root, run by `test-fuzz-http2` without
 `--fuzz`:
@@ -167,7 +182,12 @@ leave a frame incomplete.
 - every seed keeps its trace when split at every position;
 - `checkAllAllocationFailures` fails every allocation index of each valid
   seed. A run that lost an allocation must report `decode_failed`, which the
-  test turns into `error.OutOfMemory`, and must free everything.
+  test turns into `error.OutOfMemory`, and must free everything;
+- raw bytes that close an open block leave the observer decoding, and no
+  failure is predicted;
+- a stream-zero failure before raw bytes stays predicted and happens;
+- a breakage inside raw-declared DATA fails nothing and is not predicted;
+- a block left open at the end of the wire is predicted to fail and does.
 
 ## Commands
 
@@ -212,4 +232,19 @@ that drops a whole indexed field" pins it.
   code has no errors.
 - The generator does not produce Huffman literals. Only the C.4.1 seed and
   fuzzed raw blocks reach Huffman decoding.
+- The production bounds are not reached, neither by fuzzing nor by a
+  deterministic test. A generated block stays near 270 bytes and a wire near
+  4 KiB, far from the observer's 128 KiB header block limit
+  (`max_header_block_bytes`, where `observePayload` fails a longer block).
+  Table size updates are only 0, 64, 256 and 4096, and the table model holds
+  4096 bytes. So a table larger than 4096 bytes, which this observer allows
+  up to 128 KiB, and an update past 128 KiB, which must fail, are both
+  untested.
+- A fuzz run fails one allocation index between 1 and 96. A long wire may make
+  more allocations; its later indexes are covered only for the valid seeds,
+  through `checkAllAllocationFailures`, which walks every index.
+- Flags without meaning for a frame type are never generated on generated
+  frames: no PADDED, PRIORITY or END_STREAM on CONTINUATION, no PRIORITY on
+  PUSH_PROMISE. Only `raw` bytes can carry them, and those are opaque. How the
+  observer treats them is not checked here.
 - HTTP/1, decompression, TLS and the live relay are out of scope.
