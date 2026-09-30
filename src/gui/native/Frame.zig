@@ -67,6 +67,12 @@ test "the native headers and their Zig mirrors agree on every bound" {
     try std.testing.expectEqual(@as(usize, header.TELAR_GUI_TEXT_CAPACITY), event.max_composition_bytes);
     try std.testing.expectEqual(@as(usize, header.TELAR_GUI_IMAGE_DRAWS), ImageDrawBound.capacity);
     try std.testing.expectEqual(@as(usize, header.TELAR_GUI_IMAGE_CAPACITY), ImageUploadBound.capacity);
+    try std.testing.expectEqual(@as(usize, header.TELAR_GUI_IMAGE_MAX_SIDE), ImageUploadBound.max_side);
+    try std.testing.expectEqual(@as(usize, header.TELAR_GUI_IMAGE_UPLOADS), ImageUploadBound.uploads_in_flight);
+    try std.testing.expectEqual(@as(usize, header.TELAR_GUI_DIAGRAM_SLOTS), gfx.Quad.diagram_slot_count);
+    try std.testing.expectEqual(@as(usize, header.TELAR_GUI_DIAGRAM_MAX_SIDE), diagram.max_side);
+    try std.testing.expectEqual(@as(usize, header.TELAR_GUI_DIAGRAM_MAX_PIXELS), diagram.max_pixels);
+    try std.testing.expectEqual(@as(usize, header.TELAR_GUI_DIAGRAM_FRAME_PIXELS), diagram.max_frame_pixels);
     try std.testing.expectEqual(@as(usize, header.TELAR_GUI_ACCESSIBILITY_CAPACITY), AccessibilityTree.capacity);
     try std.testing.expectEqual(@as(u32, header.TELAR_GLYPH_ATLAS_MAX_SIDE), GlyphAtlas.max_side);
     try std.testing.expectEqual(@sizeOf(header.telar_gui_frame), @sizeOf(Frame));

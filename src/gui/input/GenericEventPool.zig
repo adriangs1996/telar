@@ -31,6 +31,13 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
         /// Copies before admission completes, without retaining native pointers.
         /// Example: `const slot = try pool.admit(event);`
         pub fn admit(self: *Pool, event: event_module.Event) !u8 {
+            return self.admitLeaving(event, 0);
+        }
+
+        /// `admit` that leaves `spare` slots free for events only `admit`
+        /// takes, so one kind of event cannot take the room another needs.
+        /// Example: `const slot = try pool.admitLeaving(event, 1);`
+        pub fn admitLeaving(self: *Pool, event: event_module.Event, spare: usize) !u8 {
             const bytes = payload(event);
             if (bytes.len > byte_capacity) {
                 return error.InputTooLarge;
@@ -38,6 +45,15 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
 
             if (!std.unicode.utf8ValidateSlice(bytes)) {
                 return error.InvalidUtf8;
+            }
+
+            var free: usize = 0;
+            for (self.slots) |slot| {
+                free += @intFromBool(!slot.used);
+            }
+
+            if (free <= spare) {
+                return error.InputPoolFull;
             }
 
             for (&self.slots, 0..) |*slot, index| {
@@ -52,7 +68,7 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
                 return @intCast(index);
             }
 
-            return error.NativeInputFull;
+            unreachable;
         }
 
         /// Example: `try dispatch(pool.view(index));`
@@ -111,8 +127,9 @@ test "payload slots own UTF8 and reject oversized or exhausted admission atomica
     try std.testing.expectError(error.InputTooLarge, pool.admit(.{ .paste = "123456789" }));
     try std.testing.expectError(error.InvalidUtf8, pool.admit(.{ .paste = "\xff" }));
     const other = try pool.admit(.{ .paste = "🌍" });
-    try std.testing.expectError(error.NativeInputFull, pool.admit(.{ .paste = "a" }));
+    try std.testing.expectError(error.InputPoolFull, pool.admit(.{ .paste = "a" }));
     pool.release(index);
+    try std.testing.expectError(error.InputPoolFull, pool.admitLeaving(.{ .paste = "b" }, 1));
     _ = try pool.admit(.{ .paste = "new" });
     try std.testing.expectEqualStrings("🌍", pool.view(other).paste);
 }

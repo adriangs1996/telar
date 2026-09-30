@@ -73,6 +73,7 @@ pub const LimitError = error{
     HostRequestsFull,
     ImageQuotaExceeded,
     InboxFull,
+    InputPoolFull,
     InputTooLarge,
     JsonDepth,
     LengthOverflow,

@@ -123,13 +123,15 @@ fn frameQuadLimit(gui: *const GuiAdapter) core.Limit {
 /// error, which the caller fails with.
 /// Example: `if (!limit_reached.absorbInput(gui, decoded, err)) gui.fail(err);`
 pub fn absorbInput(gui: *GuiAdapter, input: ?event.Event, err: anyerror) bool {
+    const large = if (input) |value| switch (value) {
+        .text => |text| text.target_id == 0,
+        .paste, .clipboard => true,
+        else => false,
+    } else true;
     const limit: ?core.Limit = switch (err) {
         error.NativeInputFull => InputQueue.queue_limit,
-        error.InputTooLarge => if (input) |value| switch (value) {
-            .text => |text| if (text.target_id == 0) event.clipboard_limit else InputQueue.small_limit,
-            .paste, .clipboard => event.clipboard_limit,
-            else => InputQueue.small_limit,
-        } else event.clipboard_limit,
+        error.InputPoolFull => if (large) InputQueue.large_slots_limit else InputQueue.small_slots_limit,
+        error.InputTooLarge => if (large) event.clipboard_limit else InputQueue.small_limit,
         else => null,
     };
 

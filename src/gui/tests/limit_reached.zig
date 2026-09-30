@@ -321,3 +321,19 @@ test "a full accessibility tree still publishes the focused control" {
     try std.testing.expectEqual(focused.target_id, tree.nodes.?[AccessibilityTree.capacity - 1].id);
     try std.testing.expect(gui.app.model.limit_reaches.find("gui.native.accessibility_capacity") != null);
 }
+
+test "an input refused at a limit is reported under the table that refused it" {
+    const session = try TestSession.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+    try std.testing.expect(limit_reached.absorbInput(gui, .{ .paste = "held" }, error.InputPoolFull));
+    try std.testing.expect(limit_reached.absorbInput(gui, .{ .text = .{ .bytes = "a", .target_id = 3 } }, error.InputPoolFull));
+    try std.testing.expect(limit_reached.absorbInput(gui, .{ .text = .{ .bytes = "a", .target_id = 3 } }, error.InputTooLarge));
+    try std.testing.expect(limit_reached.absorbInput(gui, null, error.NativeInputFull));
+    try std.testing.expect(!limit_reached.absorbInput(gui, null, error.DeviceLost));
+    const reaches = &gui.app.model.limit_reaches;
+    for ([_][]const u8{ "gui.input.large_events", "gui.input.small_events", "gui.input.event_pool_bytes", "gui.input.queue_capacity" }) |name| {
+        try std.testing.expect(reaches.find(name) != null);
+    }
+}

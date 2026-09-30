@@ -217,10 +217,10 @@ pub fn measure(self: *Renderer, viewport: native.Viewport) !core.TerminalSize {
 /// emptied, and one a single frame outgrew reopens at
 /// `GlyphAtlas.max_side`; either drops the retained cells that sampled it.
 /// Returns what happened so the adapter reports an exhausted page.
-/// Example: `if (try renderer.settleAtlas() == .exhausted) report();`
-pub fn settleAtlas(self: *Renderer) !GlyphAtlas.Settled {
+/// Example: `if (try renderer.settleAtlas(now_ns) == .exhausted) report();`
+pub fn settleAtlas(self: *Renderer, now_ns: u64) !GlyphAtlas.Settled {
     const atlas = if (self.atlas) |*value| value else return .kept;
-    const settled = try atlas.settle();
+    const settled = try atlas.settle(now_ns);
     switch (settled) {
         .kept, .exhausted => {},
         .emptied => self.retained.invalidate(),
@@ -245,10 +245,19 @@ fn reopenAtlas(self: *Renderer, side: u32) !void {
 
 /// Whether the glyph page filled and the next frame settles it into room
 /// for what the last frame drew as the replacement glyph.
-/// Example: `const due = renderer.atlasSettleDue();`
-pub fn atlasSettleDue(self: *const Renderer) bool {
+/// Example: `const due = renderer.atlasSettleDue(now_ns);`
+pub fn atlasSettleDue(self: *const Renderer, now_ns: u64) bool {
     const atlas = if (self.atlas) |*value| value else return false;
-    return atlas.full and !atlas.held;
+    return atlas.settleDue(now_ns);
+}
+
+/// Milliseconds until a held glyph page may be emptied, zero when none is
+/// held, so a still window wakes to draw what the hold kept out.
+/// Example: `const delay = renderer.atlasWakeupAfter(now_ns);`
+pub fn atlasWakeupAfter(self: *const Renderer, now_ns: u64) u32 {
+    const atlas = if (self.atlas) |*value| value else return 0;
+    const deadline = atlas.heldUntil() orelse return 0;
+    return @intCast(@max(1, std.math.divCeil(u64, deadline -| now_ns, std.time.ns_per_ms) catch unreachable));
 }
 
 /// Opens a glyph page for the configured font at one height and side, with

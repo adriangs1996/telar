@@ -12,23 +12,22 @@ const Services = @This();
 /// Clipboard reads and writes queued for the native host at once.
 pub const capacity = 4;
 pub const limit = core.Limit.declare("gui.host.requests", "host requests", capacity);
-/// Writes whose bytes wait for the host at once. The host copies a write
-/// when it takes it, so two cover a copy that lands while another waits.
-pub const write_slots = 2;
-
 requests: [capacity]Request = @splat(.{}),
-/// `write_slots` payloads of `event.max_text_bytes`, reserved once by `init`
-/// and written only by the bytes a write copies. Without them, as a widget's
-/// own fallback services, writes are refused.
+/// One payload of `event.max_text_bytes` per request, reserved once by
+/// `init` and written only by the bytes a write copies, so an idle payload
+/// costs no resident memory. Without them, as a widget's own fallback
+/// services, writes are refused.
 payloads: []u8 = &.{},
-payload_used: [write_slots]bool = @splat(false),
+/// Queued copies a newer copy replaced because every request was taken:
+/// the clipboard keeps the newest, and the window reports `limit`.
+superseded: u64 = 0,
 next_id: u64 = 1,
 
 /// Reserves the write payloads where the services live, without writing them.
 /// Example: `try gui.host.init(gpa);`
 pub fn init(self: *Services, gpa: std.mem.Allocator) !void {
     self.* = .{
-        .payloads = try gpa.alloc(u8, write_slots * event.max_text_bytes),
+        .payloads = try gpa.alloc(u8, capacity * event.max_text_bytes),
     };
 }
 
@@ -61,12 +60,24 @@ pub fn writeOwned(self: *Services, owner: Owner, bytes: []const u8) !u64 {
         return error.InvalidUtf8;
     }
 
-    const payload = self.freePayload() orelse return error.HostRequestsFull;
-    const request = try self.reserve(.write);
+    if (self.payloads.len == 0) {
+        return error.HostRequestsFull;
+    }
+
+    const request = self.reserve(.write) catch |err| request: {
+        if (err != error.HostRequestsFull) {
+            return err;
+        }
+
+        // A copy past a full queue keeps the newest: it takes the place of
+        // the oldest copy still waiting that nothing awaits.
+        const replaced = self.oldestPlainWrite() orelse return err;
+        self.superseded += 1;
+        replaced.state = .free;
+        break :request try self.reserve(.write);
+    };
     request.owner = owner;
-    request.payload = payload;
-    self.payload_used[payload] = true;
-    @memcpy(self.payloadBytes(payload)[0..bytes.len], bytes);
+    @memcpy(self.payloadBytes(request)[0..bytes.len], bytes);
     request.len = bytes.len;
     return request.id;
 }
@@ -88,7 +99,7 @@ pub fn next(self: *Services, out: *native.HostRequest) bool {
         .request_id = request.id,
         .target_id = request.owner.target_id,
         .generation = request.owner.generation,
-        .text = if (request.payload) |payload| if (request.len == 0) null else self.payloadBytes(payload).ptr else null,
+        .text = if (request.kind == .write and request.len != 0) self.payloadBytes(request).ptr else null,
         .len = request.len,
     };
     return true;
@@ -103,11 +114,6 @@ pub fn complete(self: *Services, result: Result) ?Request.Kind {
         }
 
         request.state = .free;
-        if (request.payload) |payload| {
-            self.payload_used[payload] = false;
-            request.payload = null;
-        }
-
         return request.kind;
     }
 
@@ -128,7 +134,6 @@ fn reserve(self: *Services, kind: Request.Kind) !*Request {
         request.kind = kind;
         request.id = self.next_id;
         request.owner = .{};
-        request.payload = null;
         request.len = 0;
         self.next_id += 1;
         return request;
@@ -137,22 +142,25 @@ fn reserve(self: *Services, kind: Request.Kind) !*Request {
     return error.HostRequestsFull;
 }
 
-fn freePayload(self: *const Services) ?u8 {
-    if (self.payloads.len == 0) {
-        return null;
-    }
+fn oldestPlainWrite(self: *Services) ?*Request {
+    var oldest: ?*Request = null;
+    for (&self.requests) |*request| {
+        if (request.state != .queued or request.kind != .write or request.owner.target_id != 0) {
+            continue;
+        }
 
-    for (self.payload_used, 0..) |used, index| {
-        if (!used) {
-            return @intCast(index);
+        if (oldest == null or request.id < oldest.?.id) {
+            oldest = request;
         }
     }
 
-    return null;
+    return oldest;
 }
 
-fn payloadBytes(self: *const Services, payload: u8) []u8 {
-    return self.payloads[@as(usize, payload) * event.max_text_bytes ..][0..event.max_text_bytes];
+/// The payload of a request: the one at its own index in `payloads`.
+fn payloadBytes(self: *const Services, request: *const Request) []u8 {
+    const index = (@intFromPtr(request) - @intFromPtr(&self.requests)) / @sizeOf(Request);
+    return self.payloads[index * event.max_text_bytes ..][0..event.max_text_bytes];
 }
 
 test "host request owns writes and matches reads by request and original owner" {
@@ -189,27 +197,30 @@ test "host request owns writes and matches reads by request and original owner" 
     }) == null);
 }
 
-test "writes share two payloads and a third waits for one to complete" {
+test "a copy past a full queue replaces the oldest waiting copy, never an owned one" {
     var services: Services = .{};
     try services.init(std.testing.allocator);
     defer services.deinit(std.testing.allocator);
-    const first = try services.write("one");
+    const owned = try services.writeOwned(.{ .target_id = 4, .generation = 1 }, "cut");
+    _ = try services.write("one");
     _ = try services.write("two");
-    try std.testing.expectError(error.HostRequestsFull, services.write("three"));
     _ = try services.read(.{});
+    const newest = try services.write("three");
+    try std.testing.expectEqual(@as(u64, 1), services.superseded);
+
     var request: native.HostRequest = .{};
-    try std.testing.expect(services.next(&request));
-    try std.testing.expectEqual(first, request.request_id);
-    try std.testing.expect(services.complete(.{
-        .request_id = first,
-        .target_id = 0,
-        .generation = 0,
-        .status = .success,
-    }) != null);
-    const third = try services.write("three");
-    try std.testing.expect(services.next(&request));
-    try std.testing.expect(services.next(&request));
-    try std.testing.expect(services.next(&request));
-    try std.testing.expectEqual(third, request.request_id);
-    try std.testing.expectEqualStrings("three", request.text.?[0..request.len]);
+    var seen: [4][]const u8 = undefined;
+    var ids: [4]u64 = undefined;
+    for (&seen, &ids) |*text, *id| {
+        try std.testing.expect(services.next(&request));
+        text.* = if (request.text) |bytes| bytes[0..request.len] else "";
+        id.* = request.request_id;
+    }
+
+    try std.testing.expectEqual(owned, ids[0]);
+    try std.testing.expectEqualStrings("cut", seen[0]);
+    try std.testing.expectEqualStrings("two", seen[1]);
+    try std.testing.expectEqual(newest, ids[3]);
+    try std.testing.expectEqualStrings("three", seen[3]);
+    try std.testing.expectError(error.HostRequestsFull, services.read(.{}));
 }

@@ -482,7 +482,8 @@ pub fn wakeupAfter(self: *const GuiAdapter) u32 {
     const now_ns = self.now();
     const widgets = if (self.app.presentation.active == null) self.chrome.animation.wakeupAfter(now_ns) else 0;
     const images = pane_images.wakeupAfter(&self.images, now_ns);
-    return FrameClock.earliest(FrameClock.earliest(self.cursor_clock.wakeupAfter(now_ns), widgets), images);
+    const glyphs = self.renderer.atlasWakeupAfter(now_ns);
+    return FrameClock.earliest(FrameClock.earliest(FrameClock.earliest(self.cursor_clock.wakeupAfter(now_ns), widgets), images), glyphs);
 }
 
 /// Reports native frame admission delay from visible terminal frame identities.
@@ -737,7 +738,7 @@ pub fn update(self: *GuiAdapter) !?u8 {
             self.driver.configuration.pending or
             self.renderer.cursor_on != self.cursor_clock.shown(now_ns) or
             self.renderer.focused != self.cursor_clock.focused or
-            self.renderer.atlasSettleDue() or
+            self.renderer.atlasSettleDue(now_ns) or
             pane_images.trimDue(&self.images, now_ns);
     }
 
@@ -906,11 +907,15 @@ fn drainInput(self: *GuiAdapter) !void {
             .key => |key| try self.dispatchKey(key),
             .text => |*text| try self.dispatchText(text),
             .text_block => |*held| {
-                const bytes = pending_input.large_events.view(held.slot).text.bytes;
+                const text = pending_input.large_events.view(held.slot).text;
+                const bytes = text.bytes;
                 const len = std.unicode.utf8ByteSequenceLength(bytes[held.offset]) catch 1;
+                // A held text has many scalars, so no physical key: each
+                // keeps the text's phase.
                 var scalar: TextCommit = .{
                     .bytes = @splat(0),
                     .len = len,
+                    .phase = text.phase,
                 };
                 @memcpy(scalar.bytes[0..len], bytes[held.offset..][0..len]);
                 held.offset += len;
@@ -1752,8 +1757,26 @@ fn startJobs(self: *GuiAdapter) !void {
 }
 
 pub fn requestClipboardWrite(self: *GuiAdapter, bytes: []const u8) !void {
+    const superseded = self.host.superseded;
     _ = self.host.write(bytes) catch |err| return self.refuseHostRequest(err, bytes.len);
+    self.reportSuperseded(superseded);
     native.telar_gui_wake(self.driver.fds[@intFromEnum(PipeEnd.write)]);
+}
+
+/// Reports a copy that replaced an older one waiting in a full queue; the
+/// clipboard keeps the newest.
+fn reportSuperseded(self: *GuiAdapter, before: u64) void {
+    if (self.host.superseded == before) {
+        return;
+    }
+
+    client.limit_reached.report(
+        self.app,
+        .{
+            .limit = HostServices.limit,
+            .requested = HostServices.capacity + 1,
+        },
+    );
 }
 
 /// Reports a clipboard request refused at a limit, then returns its error
@@ -1787,7 +1810,9 @@ pub fn copyLink(self: *GuiAdapter, bytes: []const u8) !void {
 /// The editor can commit a cut only after the matching native write succeeds.
 /// Example: `const request = try gui.requestClipboardWriteOwned(owner, bytes);`
 pub fn requestClipboardWriteOwned(self: *GuiAdapter, owner: ClipboardOwner, bytes: []const u8) !u64 {
+    const superseded = self.host.superseded;
     const request = self.host.writeOwned(owner, bytes) catch |err| return self.refuseHostRequest(err, bytes.len);
+    self.reportSuperseded(superseded);
     native.telar_gui_wake(self.driver.fds[@intFromEnum(PipeEnd.write)]);
 
     return request;
@@ -2029,7 +2054,7 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
 
     // A page held full reports once; one that changes size may reach the
     // limit anew.
-    switch (try renderer.settleAtlas()) {
+    switch (try renderer.settleAtlas(self.now())) {
         .exhausted => limit_reached.reportEntering(
             self,
             .glyph_page,

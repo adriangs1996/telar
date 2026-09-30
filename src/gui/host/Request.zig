@@ -4,8 +4,6 @@ state: State = .free,
 kind: Kind = .read,
 id: u64 = 0,
 owner: Owner = .{},
-/// The write payload slot holding this request's bytes; reads hold none.
-payload: ?u8 = null,
 len: usize = 0,
 
 pub const Kind = enum(u32) { read = 1, write = 2 };

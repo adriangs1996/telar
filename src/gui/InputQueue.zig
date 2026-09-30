@@ -21,10 +21,20 @@ const inline_text_scalars = 64;
 /// Ring entries a native paste takes as chunks; a longer paste is held
 /// whole in the large pool.
 const inline_paste_items = 64;
-const SmallEvents = GenericEventPool(4096, 8);
-const LargeEvents = GenericEventPool(max_paste_bytes, 2);
+/// Bytes and slots of the pool holding widget text, compositions and
+/// accessibility edits.
+const small_event_bytes = 4096;
+const small_event_slots = 8;
+/// Slots of the pool holding clipboard results and held texts and pastes;
+/// held ones leave `clipboard_spare` for a clipboard result.
+const large_event_slots = 3;
+const clipboard_spare = 1;
+const SmallEvents = GenericEventPool(small_event_bytes, small_event_slots);
+const LargeEvents = GenericEventPool(max_paste_bytes, large_event_slots);
 pub const queue_limit = core.Limit.declare("gui.input.queue_capacity", "input events", capacity);
-pub const small_limit = core.Limit.declare("gui.input.event_pool_bytes", "text bytes", 4096);
+pub const small_limit = core.Limit.declare("gui.input.event_pool_bytes", "text bytes", small_event_bytes);
+pub const small_slots_limit = core.Limit.declare("gui.input.small_events", "held events", small_event_slots);
+pub const large_slots_limit = core.Limit.declare("gui.input.large_events", "held payloads", large_event_slots);
 
 items: [capacity]input_item.Item = undefined,
 head: usize = 0,
@@ -98,7 +108,7 @@ pub fn accept(self: *InputQueue, event: event_types.Event, stamp: PointerStamp) 
 
             if (count > inline_text_scalars) {
                 try self.reserve(1);
-                self.push(.{ .text_block = .{ .slot = try self.large_events.admit(event) } });
+                self.push(.{ .text_block = .{ .slot = try self.large_events.admitLeaving(event, clipboard_spare) } });
                 return .accepted;
             }
 
@@ -143,7 +153,7 @@ pub fn accept(self: *InputQueue, event: event_types.Event, stamp: PointerStamp) 
 
             if (chunks + 2 > inline_paste_items) {
                 try self.reserve(1);
-                self.push(.{ .paste_block = .{ .slot = try self.large_events.admit(event) } });
+                self.push(.{ .paste_block = .{ .slot = try self.large_events.admitLeaving(event, clipboard_spare) } });
                 return .accepted;
             }
 
