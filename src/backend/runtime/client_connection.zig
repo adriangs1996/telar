@@ -24,11 +24,12 @@ const HandshakeCompletion = @import("events/HandshakeCompletion.zig");
 const store_support = @import("client/store_support.zig");
 
 /// Rearms admission and moves an accepted connection into a free handshake
-/// slot when capacity and lifecycle allow it, so clients that connect
-/// together negotiate independently. Handshakes in flight count against
-/// client capacity, so every one that finishes has a place; a connection
-/// that finds no slot or no capacity is closed. `expireHandshakes`
-/// interrupts one that never finishes.
+/// slot when lifecycle allows it, so clients that connect together
+/// negotiate independently. Handshakes in flight count against client
+/// capacity, so every one that finishes has a place. A connection that
+/// finds no capacity is answered with a `client_limit_reached` refusal in
+/// its slot; one that finds no slot is closed. Both report their limit.
+/// `expireHandshakes` interrupts a handshake that never finishes.
 ///
 /// ```zig
 /// try client_connection.accept(model, result, &resources.listener);
@@ -50,17 +51,32 @@ pub fn accept(model: *RuntimeModel, result: anyerror!localsocket.SocketChannel, 
 
     try sources.acceptClient(listener);
 
-    if (!model.clients.hasCapacityAfter(model.client_admission.count())) {
-        return;
+    const admitted = model.clients.hasCapacityAfter(model.client_admission.count());
+    if (!admitted) {
+        limit_reached.report(model, .{
+            .limit = store_support.clients_limit,
+            .requested = model.clients.count + model.client_admission.count() + 1,
+        });
     }
 
     const now_ms = std.Io.Timestamp.now(model.io, .awake).toMilliseconds();
-    const slot = model.client_admission.begin(accepted, now_ms) orelse return;
+    const begun = if (admitted)
+        model.client_admission.begin(accepted, now_ms)
+    else
+        model.client_admission.beginRefusal(accepted, now_ms);
+    const slot = begun orelse {
+        limit_reached.report(model, .{
+            .limit = store_support.handshakes_limit,
+        });
+        return;
+    };
+
     accepted_owned = false;
     const negotiation: Negotiation = .{
         .io = model.io,
         .slot = slot,
         .connection = model.client_admission.pendingConnection(slot).?,
+        .refusal = !admitted,
     };
 
     model.select.concurrent(.handshaken, negotiate, .{negotiation}) catch {
@@ -76,6 +92,7 @@ pub fn accept(model: *RuntimeModel, result: anyerror!localsocket.SocketChannel, 
 /// client_connection.finishHandshake(model, result);
 /// ```
 pub fn finishHandshake(model: *RuntimeModel, completion: HandshakeCompletion) void {
+    const refused = model.client_admission.refuses(completion.slot);
     var negotiated = model.client_admission.take(completion.slot);
     var connection_owned = true;
     defer if (connection_owned) {
@@ -84,7 +101,7 @@ pub fn finishHandshake(model: *RuntimeModel, completion: HandshakeCompletion) vo
 
     completion.result catch return;
 
-    if (model.shutdown.isRequested()) {
+    if (refused or model.shutdown.isRequested()) {
         return;
     }
 
@@ -345,9 +362,18 @@ const Negotiation = struct {
     io: std.Io,
     slot: usize,
     connection: *localsocket.SocketChannel,
+    /// The runtime has no room for this client; answer with a refusal.
+    refusal: bool = false,
 };
 
 fn negotiate(negotiation: Negotiation) HandshakeCompletion {
+    if (negotiation.refusal) {
+        return .{
+            .slot = negotiation.slot,
+            .result = handshake.refuse(negotiation.io, negotiation.connection, .client_limit_reached),
+        };
+    }
+
     return .{
         .slot = negotiation.slot,
         .result = negotiateSchema(negotiation.io, negotiation.connection),

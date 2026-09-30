@@ -17,6 +17,8 @@ worktrees: [core.max_worktree_entries]WorktreeRow = undefined,
 worktree_count: usize = 0,
 path_pool: [workspace_list.path_pool_size]u8 = undefined,
 pool_len: usize = 0,
+/// Entries of the last list whose paths did not fit `path_pool`.
+dropped: usize = 0,
 
 /// Atomically stores one newer runtime snapshot in fixed memory.
 ///
@@ -67,7 +69,10 @@ pub fn replace(self: *Snapshot, input: SnapshotInput) !bool {
             return error.WorkspacePathTooLong;
         }
         if (replacement.pool_len + entry.path.len > workspace_list.path_pool_size) {
-            return error.WorkspaceListTooLarge;
+            replacement.count = index;
+            replacement.project_count = @min(replacement.project_count, index);
+            replacement.dropped = ordered_len - index;
+            break;
         }
 
         for (ordered[0..index]) |previous| {
@@ -76,7 +81,7 @@ pub fn replace(self: *Snapshot, input: SnapshotInput) !bool {
             }
         }
 
-        const name = workspace_list.truncateName(entry.name);
+        const name = entry.name[0..@min(entry.name.len, workspace_list.max_name_bytes)];
         var stored: Entry = .{
             .workspace = entry.workspace,
             .name = undefined,

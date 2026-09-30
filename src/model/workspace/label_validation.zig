@@ -11,7 +11,8 @@ pub fn validate(text: []const u8, kind: Kind) !void {
         .new_tab, .renamed_tab => error.InvalidTabLabel,
         .workspace => error.InvalidWorkspaceName,
     };
-    if ((text.len == 0 and kind != .new_tab) or text.len > core.max_tab_label_bytes) {
+    const max_bytes: usize = if (kind == .workspace) core.max_workspace_name_bytes else core.max_tab_label_bytes;
+    if ((text.len == 0 and kind != .new_tab) or text.len > max_bytes) {
         return invalid;
     }
 
@@ -35,7 +36,10 @@ test "label validation preserves default names, error kinds and byte limits" {
         try validate(&(@as([core.max_tab_label_bytes]u8, @splat('x'))), kind);
         try std.testing.expectError(error.InvalidUtf8, validate("\xff", kind));
         const invalid = if (kind == .workspace) error.InvalidWorkspaceName else error.InvalidTabLabel;
-        try std.testing.expectError(invalid, validate(&(@as([core.max_tab_label_bytes + 1]u8, @splat('x'))), kind));
+        const longest: usize = if (kind == .workspace) core.max_workspace_name_bytes else core.max_tab_label_bytes;
+        const oversized: [core.max_workspace_name_bytes + 1]u8 = @splat('x');
+        try validate(oversized[0..longest], kind);
+        try std.testing.expectError(invalid, validate(oversized[0 .. longest + 1], kind));
         try std.testing.expectError(invalid, validate("line\n", kind));
         try std.testing.expectError(invalid, validate("line\x7f", kind));
     }

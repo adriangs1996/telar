@@ -29,7 +29,7 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
 
     var descriptor_storage: [core.max_panes_per_tab]core.PaneDescriptor = undefined;
     var tab_storage: [core.max_tabs_per_workspace]core.TabDescriptor = undefined;
-    var foreground_storage: [core.max_panes_per_tab]core.PaneForeground = undefined;
+    var foreground_storage: [core.max_panes]core.PaneForeground = undefined;
     var history_storage: [core.max_history_results]core.HistoryEntry = undefined;
     var text_storage: [core.max_pane_text_bytes]u8 = undefined;
     return switch (response.*) {

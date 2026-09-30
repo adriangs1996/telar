@@ -14,6 +14,7 @@ const client_request = @import("client_request.zig");
 const geometry_lease = @import("geometry_lease.zig");
 const launch_cwd = @import("client/launch_cwd.zig");
 const pane_launch = @import("pane_launch.zig");
+const workspace_creation = @import("workspace_creation.zig");
 const resync_required = @import("resync_required.zig");
 
 /// Attaches the client to the requested pane, or launches the workspace's
@@ -32,8 +33,9 @@ pub fn open(model: *RuntimeModel, session: *Session, request: core.OpenPaneView)
             error.InvalidOpenRequest => client_request.fail(session, request.request_id, .invalid_request, "default pane launch is missing"),
             error.InvalidLaunchCwd => client_request.fail(session, request.request_id, .invalid_request, "cwd source pane is unavailable"),
             error.WorkspaceCreateFailed => client_request.fail(session, request.request_id, .resource_limit, "could not create workspace"),
+            error.WorkspaceLimitReached => client_request.fail(session, request.request_id, .resource_limit, workspace_creation.workspace_limit),
             error.GeometryUnavailable => client_request.fail(session, request.request_id, .resource_limit, "workspace geometry is leased by another client"),
-            error.PaneLimitReached => client_request.fail(session, request.request_id, .resource_limit, "pane limit reached"),
+            error.PaneLimitReached, error.TabPaneLimitReached => client_request.fail(session, request.request_id, .resource_limit, pane_launch.limitFailure(err).?),
             error.UnsupportedEnvironment => client_request.fail(session, request.request_id, .invalid_request, "custom pane environment is not supported"),
             error.PaneResizeFailed => client_request.fail(session, request.request_id, .internal, "could not resize pane"),
             else => if (pane_launch.spawnFailure(err)) |reason| client_request.fail(session, request.request_id, .spawn_failed, reason) else err,
@@ -212,7 +214,7 @@ fn openDefault(model: *RuntimeModel, session: *Session, request: core.OpenPaneVi
     };
 
     const location = model.workspaces.locationByPath(cwd) orelse location: {
-        const slot = model.workspaces.propose(model.gpa, cwd, null) catch return error.WorkspaceCreateFailed;
+        const slot = try workspace_creation.propose(model, cwd, null);
         proposal = slot;
         break :location core.TabLocation{
             .workspace = .{ .workspace = model.workspaces.id[slot] },

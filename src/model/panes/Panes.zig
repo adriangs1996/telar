@@ -6,9 +6,9 @@ const Pane = @import("Pane.zig");
 const Spec = @import("Spec.zig");
 const Panes = @This();
 
-/// The runtime keeps at most this many panes alive, so one client never
-/// mirrors more.
-pub const capacity = core.max_panes_per_tab;
+/// A workspace may hold every pane the runtime keeps alive, so one client
+/// never mirrors more.
+pub const capacity = core.max_panes;
 
 /// Records live on the heap so their addresses survive tab moves. Removing a
 /// pane invalidates every borrow of its record.

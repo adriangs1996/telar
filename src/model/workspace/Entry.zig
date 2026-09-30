@@ -4,7 +4,7 @@ const Entry = @This();
 
 workspace: core.WorkspaceId,
 name: [workspace_list.max_name_bytes]u8,
-name_len: u8,
+name_len: u16,
 path_offset: u32,
 path_len: u32,
 tab_count: u16,

@@ -178,7 +178,7 @@ test "a connection that finds every handshake slot taken is closed alone, and a 
     try std.testing.expect(!admission.isPending());
 }
 
-test "handshakes in flight count against client capacity" {
+test "handshakes in flight count against client capacity and a client with no room is refused" {
     var fixture: RequestFixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -194,8 +194,29 @@ test "handshakes in flight count against client capacity" {
     model.clients.count = model.clients.items.len - 1;
     defer model.clients.count = count;
     try std.testing.expect(!try fixture.runtime.update(.{ .accepted = incoming[0] }));
-    try expectPeerClosed(&incoming[1]);
     try expectPeerOpen(&pending[1]);
+    try std.testing.expectEqual(@as(usize, 1), model.client_admission.count());
+    try std.testing.expect(model.limit_reaches.find("clients.max_clients") != null);
+
+    var hello_buffer: [core.max_message_size]u8 = undefined;
+    try incoming[1].send(std.testing.io, try core.encodeClientHello(&hello_buffer, .{}));
+    var refused = false;
+    for (0..64) |_| {
+        const event = try fixture.runtime.loop.next();
+        const handshake = event == .handshaken;
+        _ = try fixture.runtime.update(event);
+        if (handshake) {
+            refused = true;
+            break;
+        }
+    }
+
+    try std.testing.expect(refused);
+    var response_buffer: [core.max_message_size]u8 = undefined;
+    const response = try core.decodeServerResponse(try incoming[1].receive(std.testing.io, &response_buffer));
+    try std.testing.expectEqual(core.RejectReason.client_limit_reached, response.rejected.reason);
+    try expectPeerClosed(&incoming[1]);
+    try std.testing.expectEqual(model.clients.items.len - 1, model.clients.count);
     try std.testing.expectEqual(@as(usize, 1), model.client_admission.count());
 
     pending[0].shutdown(std.testing.io);

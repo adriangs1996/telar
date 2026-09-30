@@ -25,6 +25,9 @@ inner: bytecodec.Encoder,
 buffer: []u8,
 /// Records left out because the buffer was full.
 dropped: u32 = 0,
+/// Files before `checkpoint.wide_arguments_version` size a pane's launch
+/// arguments in 16 bits; a test that writes one of their records clears it.
+wide_arguments: bool = true,
 
 pub fn init(buffer: []u8, counters: Counters) !Encoder {
     if (buffer.len == 0) {
@@ -51,7 +54,7 @@ pub fn workspace(self: *Encoder, record: WorkspaceRecord) !void {
 fn writeWorkspace(self: *Encoder, record: WorkspaceRecord) !void {
     try checkpoint.validatePath(record.path);
     try self.inner.writeByte(@intFromEnum(checkpoint.Kind.workspace));
-    if (record.first_tab_label.len > core.max_tab_label_bytes or record.name.len > core.max_tab_label_bytes) {
+    if (record.first_tab_label.len > core.max_tab_label_bytes or record.name.len > core.max_workspace_name_bytes) {
         return error.InvalidCheckpoint;
     }
     try self.inner.writeInt(u64, record.id);
@@ -89,7 +92,12 @@ fn writePane(self: *Encoder, record: PaneRecord) !void {
     try self.inner.writeInt(u16, record.cols);
     try self.inner.writeInt(u16, record.rows);
     try self.inner.writeInt(u16, record.argument_count);
-    try self.inner.writeSized16(record.arguments);
+    if (self.wide_arguments) {
+        try self.inner.writeSized32(record.arguments);
+    } else {
+        try self.inner.writeSized16(record.arguments);
+    }
+
     if (record.agent_session.len > core.max_agent_session_reference_bytes) {
         return error.InvalidCheckpoint;
     }

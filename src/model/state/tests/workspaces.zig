@@ -195,7 +195,7 @@ fn expectInactiveFullscreenReturn(replace: bool) !void {
     try std.testing.expect(model.tabs.layout[model.tabs.active].focusPane(first));
     try std.testing.expect(model.tabs.layout[model.tabs.active].resizeFocused(.down, area));
     try std.testing.expect(model.tabs.layout[model.tabs.active].toggleFullscreen());
-    var node_storage: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
+    var node_storage: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
     const expected_nodes = model.tabs.layout[model.tabs.active].clientLayoutNodes(&node_storage);
     _ = try model_data.tab_creation.add(&model, .{
         .location = other_location,
@@ -221,7 +221,7 @@ fn expectInactiveFullscreenReturn(replace: bool) !void {
     _ = try tab_snapshot_reconciliation.reconcileTab(&model, .{ .location = location, .panes = &.{ first, clicked } }, area);
     try std.testing.expect(model.tabs.layout[model.tabs.active].isFullscreen());
     try std.testing.expectEqual(clicked, model.tabs.layout[model.tabs.active].focused().?);
-    var restored_storage: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
+    var restored_storage: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
     try std.testing.expectEqualDeep(expected_nodes, model.tabs.layout[model.tabs.active].clientLayoutNodes(&restored_storage));
     try std.testing.expect(model_data.tab_layout.contentSize(&model, model.tabs.active, first, area) == null);
     try std.testing.expectEqual(core.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, model_data.tab_layout.contentSize(&model, model.tabs.active, clicked, area).?);
@@ -432,11 +432,11 @@ test "provisional arrivals cannot overwrite retained fullscreen layouts" {
     const arrival: model_data.WorkspaceArrival = .{ .pane_id = clicked, .location = location, .size = .{ .cols = area.w, .rows = area.h } };
     _ = try workspace_handoff.arrive(&model, arrival);
     _ = workspace_handoff.depart(&model);
-    try std.testing.expectEqualDeep(saved, model.saved_layouts.find(location).?.layout);
+    try expectSameTree(saved, model.saved_layouts.find(location).?.layout);
 
     _ = try workspace_handoff.arrive(&model, arrival);
     try std.testing.expectError(error.DuplicatePane, tab_snapshot_reconciliation.reconcileTab(&model, .{ .location = location, .panes = &.{ clicked, clicked } }, area));
-    try std.testing.expectEqualDeep(saved, model.saved_layouts.find(location).?.layout);
+    try expectSameTree(saved, model.saved_layouts.find(location).?.layout);
     _ = try tab_snapshot_reconciliation.reconcileTab(&model, .{ .location = location, .panes = &.{ first, clicked } }, area);
     try std.testing.expect(model.saved_layouts.find(location) == null);
     try std.testing.expect(model.tabs.layout[model.tabs.active].isFullscreen());
@@ -867,4 +867,13 @@ test "tab detachment plans exact operational state before a silent commit" {
         .workspace = workspace,
         .tab_id = @enumFromInt(9),
     }));
+}
+
+fn expectSameTree(expected: model_data.WorkspaceLayout, actual: model_data.WorkspaceLayout) !void {
+    var expected_storage: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
+    var actual_storage: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
+    try std.testing.expectEqualDeep(expected.clientLayoutNodes(&expected_storage), actual.clientLayoutNodes(&actual_storage));
+    try std.testing.expectEqual(expected.focused(), actual.focused());
+    try std.testing.expectEqual(expected.isFullscreen(), actual.isFullscreen());
+    try std.testing.expectEqual(expected.currentRevision(), actual.currentRevision());
 }

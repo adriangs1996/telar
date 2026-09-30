@@ -84,7 +84,7 @@ fn scheduleInitialEvents(self: *Runtime) !void {
     try sources.waitForStop(self.loop.stop);
     try sources.receiveHistory(resources.history.service());
     if (resources.engineService()) |engine_service| {
-        try sources.receiveEngine(engine_service);
+        try sources.receiveEngine(engine_service, &self.model.engine_reply);
     }
     try sources.receiveProxyCapture(&resources.proxy, resources.pluginService());
     try sources.receivePluginEffects(resources.pluginService());

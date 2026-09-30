@@ -61,13 +61,19 @@ pub fn receiveHistory(self: *Sources, history_service: *HistoryService) !void {
     try self.select.concurrent(.history_response, HistoryService.receiveResponse, .{ history_service, self.io });
 }
 
-/// Arms the next engine reply receive.
+/// Arms the next engine reply receive. The reply lands in `slot`, which the
+/// loop reads once the event arrives, so a kilobytes-long reply never
+/// widens every event the loop can queue.
 ///
 /// ```zig
-/// try sources.receiveEngine(engine_service);
+/// try sources.receiveEngine(engine_service, &model.engine_reply);
 /// ```
-pub fn receiveEngine(self: *Sources, engine_service: *EngineService) !void {
-    try self.select.concurrent(.engine_response, EngineService.receiveResponse, .{ engine_service, self.io });
+pub fn receiveEngine(self: *Sources, engine_service: *EngineService, slot: *EngineService.Response) !void {
+    try self.select.concurrent(.engine_response, receiveEngineReply, .{ engine_service, self.io, slot });
+}
+
+fn receiveEngineReply(engine_service: *EngineService, io: std.Io, slot: *EngineService.Response) anyerror!void {
+    slot.* = try engine_service.receiveResponse(io);
 }
 
 /// Arms the next captured exchange half. A disabled proxy arms nothing.

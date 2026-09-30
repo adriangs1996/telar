@@ -19,16 +19,27 @@ pub fn Type(comptime Connection: type, comptime capacity: usize) type {
 
         connections: [capacity]Connection = undefined,
         busy: std.bit_set.IntegerBitSet(capacity) = .initEmpty(),
+        /// Busy slots that only answer a refusal; their client never joins.
+        refusing: std.bit_set.IntegerBitSet(capacity) = .initEmpty(),
         /// Monotonic milliseconds at which each slot's handshake started.
         started_ms: [capacity]i64 = @splat(0),
 
-        /// Handshakes in flight.
+        /// Handshakes in flight whose client joins when they succeed.
         ///
         /// ```zig
         /// const pending = handshakes.count();
         /// ```
         pub fn count(self: *const Self) usize {
-            return self.busy.count();
+            return self.busy.count() - self.refusing.count();
+        }
+
+        /// Whether the handshake in `slot` only answers a refusal.
+        ///
+        /// ```zig
+        /// if (handshakes.refuses(slot)) return;
+        /// ```
+        pub fn refuses(self: *const Self, slot: usize) bool {
+            return self.refusing.isSet(slot);
         }
 
         /// Reports whether any handshake actor still borrows a connection.
@@ -88,6 +99,19 @@ pub fn Type(comptime Connection: type, comptime capacity: usize) type {
             self.connections[slot] = connection;
             self.started_ms[slot] = now_ms;
             self.busy.set(slot);
+            self.refusing.unset(slot);
+            return slot;
+        }
+
+        /// Like `begin`, for a connection that is only answered with a
+        /// refusal: it holds a slot but no client capacity.
+        ///
+        /// ```zig
+        /// const slot = handshakes.beginRefusal(connection, now_ms) orelse return;
+        /// ```
+        pub fn beginRefusal(self: *Self, connection: Connection, now_ms: i64) ?usize {
+            const slot = self.begin(connection, now_ms) orelse return null;
+            self.refusing.set(slot);
             return slot;
         }
 
@@ -101,6 +125,7 @@ pub fn Type(comptime Connection: type, comptime capacity: usize) type {
         pub fn take(self: *Self, slot: usize) Connection {
             std.debug.assert(self.busy.isSet(slot));
             self.busy.unset(slot);
+            self.refusing.unset(slot);
             return self.connections[slot];
         }
     };
@@ -123,4 +148,22 @@ test "handshakes take free slots and name the ones past their deadline" {
     try std.testing.expect(handshakes.pendingConnection(0) == null);
     try std.testing.expectEqual(@as(?usize, 0), handshakes.begin(13, 4_000));
     try std.testing.expectEqual(@as(u32, 11), handshakes.pendingConnection(1).?.*);
+}
+
+test "a refusal holds a slot but no client capacity" {
+    var handshakes: Type(u32, 2) = .{};
+
+    const refusal = handshakes.beginRefusal(10, 0).?;
+    try std.testing.expect(handshakes.refuses(refusal));
+    try std.testing.expectEqual(@as(usize, 0), handshakes.count());
+    try std.testing.expect(handshakes.isPending());
+
+    const admission = handshakes.begin(11, 0).?;
+    try std.testing.expect(!handshakes.refuses(admission));
+    try std.testing.expectEqual(@as(usize, 1), handshakes.count());
+    try std.testing.expect(handshakes.begin(12, 0) == null);
+
+    try std.testing.expectEqual(@as(u32, 10), handshakes.take(refusal));
+    try std.testing.expect(!handshakes.refuses(refusal));
+    try std.testing.expectEqual(@as(usize, 1), handshakes.count());
 }

@@ -87,8 +87,15 @@ frame repairs the operational projection. Copy mode uses the same
 `/` and `?` open a bounded search input rendered by the same prompt widget
 that renames tabs; while it is open, keys belong to the prompt and copy mode
 waits. Submit sends `search_pane` with the needle; the runtime scans the most
-recent 10,000 rows of retained history and screen (ASCII smart-case, at most
-64 matches) and replies with `pane_matches` in absolute coordinates. The
+recent 50,000 rows of retained history and screen from the newest back (ASCII
+smart-case, 512 cells a row, 32 rows a turn) and replies with `pane_matches` in
+absolute coordinates and document order. A search with more than 256 matches
+keeps the newest 256, the ones nearest the prompt. A search still running after
+`text_search.deadline_ns` (one millisecond a turn, about 1.6 s) answers with the
+matches it reached. Either way the reply is marked `truncated` and the runtime
+reports the bound that cut it (`pane_search.max_search_matches`,
+`pane_search.max_rows`, `pane_search.max_cols` or `pane_search.deadline_ms`)
+through [Limit reached](limit-reached.md). The
 client stores the matches in copy state, selects the first match relative to
 the cursor in the chosen direction, highlights it as the selection and
 follows it with the viewport. `n` and `N` cycle with wrap. A reply for

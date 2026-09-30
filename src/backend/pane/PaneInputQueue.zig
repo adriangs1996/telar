@@ -11,11 +11,21 @@ const std = @import("std");
 const PaneInputQueue = @This();
 
 pub const capacity = 2 * core.max_input_bytes;
+pub const limit = core.Limit.declare("panes.input_queue_capacity", "queued input bytes", capacity);
 
 bytes: [capacity]u8 = undefined,
 head: usize = 0,
 len: usize = 0,
 dropped_bytes: u64 = 0,
+
+/// Whether `len` more bytes fit behind the ones already queued.
+///
+/// ```zig
+/// if (!queue.fits(bytes.len)) return error.PaneInputQueueFull;
+/// ```
+pub fn fits(self: *const PaneInputQueue, len: usize) bool {
+    return len <= self.bytes.len - self.len;
+}
 
 /// All-or-nothing: partial keystroke sequences would corrupt the child's
 /// input stream, so a message that does not fit is dropped whole.

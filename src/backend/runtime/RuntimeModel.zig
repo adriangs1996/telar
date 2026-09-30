@@ -1,5 +1,7 @@
 const localsocket = @import("localsocket");
 const pacing = @import("pacing");
+const EngineRuntime = @import("resources/EngineRuntime.zig");
+const EngineReply = EngineRuntime.Service.Response;
 const core = @import("telar-core");
 const std = @import("std");
 const ReviewJobs = @import("../change_review/Jobs.zig");
@@ -115,6 +117,9 @@ editor_open: EditorOpenState = .{},
 path_indexes: PathIndexes = .{},
 input_sequence: u64 = 0,
 cell_timer: pacing.DeadlineScheduler = .{},
+/// The engine reply an `engine_response` event announces; its actor writes
+/// it and only the loop reads it once the event arrives.
+engine_reply: EngineReply = undefined,
 
 /// Composes the model over resources that outlive it. The caller keeps the
 /// model at a stable address until `deinit` completes.
