@@ -376,13 +376,13 @@ test "native resize publishes exact grid pixels and preserves runtime-owned pane
     const session = try Session.init();
     defer session.deinit();
     try session.bootstrap();
-    const size = try session.gui.renderer.metrics.measure(
+    const size = (try session.gui.renderer.metrics.measure(
         .{
             .width = 303,
             .height = 199,
             .scale = 1,
         },
-    );
+    )).size;
     try session.gui.resize(size, session.gui.renderer.theme);
     try session.settle();
     try std.testing.expectEqual(cellgrid.Rect{ .w = size.cols, .h = size.rows }, data.workbench.region(&session.gui.app.model).area);

@@ -78,7 +78,7 @@ test "the preference steps drags and reloads inside the observed band" {
     try std.testing.expect(preference.step(.left));
     try std.testing.expectEqual(@as(f32, 268), preference.logical);
     try std.testing.expect(preference.drag(1000));
-    try std.testing.expectEqual(@as(f32, 480), preference.logical);
+    try std.testing.expectEqual(@as(f32, 800), preference.logical);
     try std.testing.expect(!preference.step(.right));
     try std.testing.expect(preference.drag(1));
     try std.testing.expectEqual(@as(f32, 220), preference.logical);

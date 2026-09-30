@@ -263,7 +263,7 @@ fn drawTab(self: TabStrip, canvas: *Canvas, entry: Painted) !void {
     }
 
     canvas.quads.clipFrom(first, bounds);
-    try context.bands.add(.{ .area = bounds, .action = action });
+    context.bands.add(.{ .area = bounds, .action = action });
 }
 
 // The chip holds the application's mark, or the tab's number while the

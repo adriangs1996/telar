@@ -114,7 +114,7 @@
 
 - (void)sendText:(NSString *)text kind:(uint32_t)kind replacement:(NSRange)replacement {
   NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
-  if (data == nil || data.length > 64 * 1024) return;
+  if (data == nil || data.length > TELAR_GUI_CLIPBOARD_CAPACITY) return;
   const BOOL scalar = text.length == 1 ||
       (text.length == 2 && CFStringIsSurrogateHighCharacter([text characterAtIndex:0]) &&
        CFStringIsSurrogateLowCharacter([text characterAtIndex:1]));

@@ -47,8 +47,14 @@ pub fn accessibility(gui: *GuiAdapter, output: *native.AccessibilityTree) bool {
     const registry = state.dispatcher.maps.presented();
     const modal = gui.app.model.name_prompt.active();
     var count: usize = 0;
+    state.accessibility_dropped = 0;
     for (registry.targets[0..registry.len]) |*target| {
         if (target.layer < registry.modal_layer or (target.layer != 0) != modal) {
+            continue;
+        }
+
+        if (count == state.native_nodes.len) {
+            state.accessibility_dropped += 1;
             continue;
         }
 

@@ -15,6 +15,8 @@ const Card = @This();
 
 /// Room for "Open …HOST ↗"; a host is at most a link's length.
 const link_label_bytes = 16 + core.max_notification_link_bytes;
+/// The screen-reader label's words beside the title, link host and message.
+const accessible_label_bytes = core.max_notification_title_bytes + core.max_notification_link_bytes + core.max_notification_message_bytes + ", opens : ".len;
 
 item: *const shared_model.NotificationItem,
 bounds: Rect,
@@ -62,7 +64,9 @@ pub fn draw(self: *const Card, canvas: *Canvas) !void {
     }
     // Body and close can share a dismiss action, so use distinct namespaces.
     target.namespace = 2;
-    var accessible: [128]u8 = undefined;
+    // Room for the longest title, link and message a notification holds, so
+    // the label always formats; `labelled` then keeps the prefix that fits.
+    var accessible: [accessible_label_bytes]u8 = undefined;
     const label = if (self.item.link_len != 0)
         std.fmt.bufPrint(&accessible, "{s}, opens {s}: {s}", .{ self.item.title(), self.item.linkHost(), self.item.message() }) catch self.item.title()
     else

@@ -177,7 +177,7 @@ fn drawOverflow(self: BarOverlay, canvas: *Canvas, facts: *const data.BarFacts) 
                 try canvas.fillRoundedAt(row, .{ .radius = chrome.px(close_radius), .color = canvas.theme.palette.surface0 });
             }
 
-            try self.context.bands.add(.{ .area = row, .action = .{ .intent = intent } });
+            self.context.bands.add(.{ .area = row, .action = .{ .intent = intent } });
         }
 
         try panel_blocks.drawInline(canvas, content, .{ .index = component.node, .bounds = inset(row, chrome.px(inline_nodes.group_padding)), .facts = facts });
@@ -218,7 +218,7 @@ fn drawFrame(self: BarOverlay, canvas: *Canvas, frame: Frame) !Rect {
     }
 
     try canvas.iconAt(close, .{ .text = data.icons.Icon.close.nerdGlyph(), .color = if (close_hovered) palette.text else palette.subtext0, .face = .sans, .size = .small });
-    try self.context.bands.add(.{ .area = close, .action = .{ .intent = .close_panel } });
+    self.context.bands.add(.{ .area = close, .action = .{ .intent = .close_panel } });
 
     var right = close.x - chrome.px(inline_nodes.child_gap);
     if (frame.updated) |time| {

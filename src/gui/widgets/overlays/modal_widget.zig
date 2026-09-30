@@ -39,12 +39,12 @@ pub const Widget = union(enum) {
 pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) !void {
     const prompt = if (input.projection.prompt) |*value| value else return;
     if (prompt.target() == .palette or prompt.target() == .pick) {
-        try widgets.append(.{ .modal = .{ .palette = .{ .projection = input.projection, .hits = &pending.palette, .modal = &pending.modal, .router = input.router, .scale = input.scale } } });
+        widgets.append(.{ .modal = .{ .palette = .{ .projection = input.projection, .hits = &pending.palette, .modal = &pending.modal, .router = input.router, .scale = input.scale } } });
         return;
     }
 
     if (prompt.target() == .paths) {
-        try widgets.append(.{ .modal = .{ .paths = .{
+        widgets.append(.{ .modal = .{ .paths = .{
             .projection = input.projection,
             .hits = &pending.palette,
             .modal = &pending.modal,
@@ -58,7 +58,7 @@ pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) 
         const layout = try WorkspaceFormLayout.measure(input.canvas, input.projection);
         pending.modal = host;
         pending.native_modal = layout.bounds;
-        try widgets.append(.{ .modal = .{ .workspace_form = .{ .layout = layout, .projection = input.projection } } });
+        widgets.append(.{ .modal = .{ .workspace_form = .{ .layout = layout, .projection = input.projection } } });
         return;
     }
 
@@ -69,7 +69,7 @@ pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) 
         layout.offsetY(offset * (1 - input.history_reveal));
         pending.modal = host;
         pending.native_modal = layout.bounds;
-        try widgets.append(.{
+        widgets.append(.{
             .modal = .{
                 .history = .{
                     .layout = layout,
@@ -103,5 +103,5 @@ pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) 
         .copy_search => |direction| .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = if (direction == .forward) "Search forward" else "Search backward" } },
         .palette, .pick, .create_workspace, .history, .paths => unreachable,
     };
-    try widgets.append(.{ .modal = widget });
+    widgets.append(.{ .modal = widget });
 }

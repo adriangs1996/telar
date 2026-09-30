@@ -231,8 +231,14 @@ pub fn accessibility(self: *Self, out: *native.AccessibilityTree) bool {
     const state = self.widgets orelse return false;
     const registry = state.dispatcher.maps.presented();
     var count: usize = 0;
+    state.accessibility_dropped = 0;
     for (registry.targets[0..registry.len]) |*target| {
         if (target.id.generation != self.generation or target.label_len == 0) {
+            continue;
+        }
+
+        if (count == state.native_nodes.len) {
+            state.accessibility_dropped += 1;
             continue;
         }
 

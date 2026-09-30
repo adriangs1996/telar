@@ -90,7 +90,7 @@ fn border(self: PaneDecorations, canvas: *Canvas, view: data.LayoutView) !void {
     };
     for (bands) |band| {
         try canvas.panel(band);
-        try context.hits.add(.{ .area = band, .action = .{ .intent = .{ .focus_pane = view.pane_id } } });
+        context.hits.add(.{ .area = band, .action = .{ .intent = .{ .focus_pane = view.pane_id } } });
     }
 
     const original = canvas.rect(outer);
@@ -101,7 +101,7 @@ fn border(self: PaneDecorations, canvas: *Canvas, view: data.LayoutView) !void {
     };
     for (extensions) |extension| {
         try canvas.panelAt(extension);
-        try context.bands.add(.{ .area = extension, .action = .{ .intent = .{ .focus_pane = view.pane_id } } });
+        context.bands.add(.{ .area = extension, .action = .{ .intent = .{ .focus_pane = view.pane_id } } });
     }
 
     try canvas.ringAt(frame, .{

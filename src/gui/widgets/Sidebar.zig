@@ -54,7 +54,7 @@ pub fn draw(self: Sidebar, canvas: *Canvas) !void {
         self.state.agents.hide();
     }
 
-    try context.bands.add(.{ .area = canvas.sidebar.handle(area), .action = .resize_sidebar });
+    context.bands.add(.{ .area = canvas.sidebar.handle(area), .action = .resize_sidebar });
 }
 
 fn drawHeader(canvas: *Canvas, header: Rect, text: []const u8) !void {
@@ -139,7 +139,7 @@ fn drawList(self: Sidebar, canvas: *Canvas, list: SidebarList) !void {
             };
             try card.draw(canvas);
             canvas.quads.clipFrom(first, list.bounds);
-            try context.bands.add(.{ .area = list.hitArea(bounds), .action = card.action() });
+            context.bands.add(.{ .area = list.hitArea(bounds), .action = card.action() });
             continue;
         }
 
@@ -154,7 +154,7 @@ fn drawList(self: Sidebar, canvas: *Canvas, list: SidebarList) !void {
         };
         try card.draw(canvas);
         canvas.quads.clipFrom(first, list.bounds);
-        try context.bands.add(.{ .area = list.hitArea(bounds), .action = card.action() });
+        context.bands.add(.{ .area = list.hitArea(bounds), .action = card.action() });
     }
 
     if (scroll.maximum_scroll != 0) {

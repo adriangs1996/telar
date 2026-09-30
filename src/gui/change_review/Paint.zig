@@ -379,9 +379,13 @@ fn addTarget(self: *Self, original: Target, label_text: []const u8) !void {
     var target_value = original.labelled(label_text);
     target_value.id.generation = self.widget.generation;
     target_value.layer = self.widget.layer;
-    if (self.widget.widgets.?.dispatcher.maps.preparing().len >= Registry.capacity - reserved_controls) {
+    const registry = self.widget.widgets.?.dispatcher.maps.preparing();
+    if (registry.len >= Registry.capacity - reserved_controls) {
+        // The row still draws; the window reports the registry's limit.
+        registry.dropped += 1;
         return;
     }
+
     _ = try self.widget.widgets.?.dispatcher.add(target_value);
 }
 

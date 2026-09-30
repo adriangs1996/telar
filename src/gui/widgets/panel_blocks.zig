@@ -15,9 +15,12 @@ const Context = @import("Context.zig");
 const Label = @import("Label.zig");
 const bar_tone = @import("bar_tone.zig");
 const inline_nodes = @import("inline_nodes.zig");
+const TextFit = @import("TextFit.zig");
 
 pub const block_gap: f32 = 12;
-const max_lines = 3;
+/// Lines a heading or text block wraps to; a longer one ends its last line
+/// with an ellipsis.
+const max_lines = 8;
 const line_height: f32 = 18;
 const heading_line: f32 = 21;
 const detail_line: f32 = 16;
@@ -159,7 +162,8 @@ fn textLabel(canvas: *const Canvas, view: data.NodeView) Label {
     };
 }
 
-/// Wraps at spaces, at most `max_lines` lines; the last one is clipped.
+/// Wraps at spaces, at most `max_lines` lines; the last one takes the rest
+/// of the text and `drawLines` fits it with an ellipsis.
 fn wrap(canvas: *Canvas, label: Label, width: f32, lines: *[max_lines][]const u8) !usize {
     const text = label.text;
     var count: usize = 0;
@@ -203,9 +207,14 @@ fn lineCount(canvas: *Canvas, label: Label, width: f32) !usize {
 fn drawLines(canvas: *Canvas, label: Label, lines_layout: Lines) !void {
     var lines: [max_lines][]const u8 = undefined;
     const count = try wrap(canvas, label, lines_layout.bounds.width, &lines);
+    var fitted: [TextFit.max_bytes]u8 = undefined;
     for (lines[0..count], 0..) |line, index| {
         var part = label;
         part.text = line;
+        if (index == max_lines - 1) {
+            part.text = try (TextFit{ .canvas = canvas, .width = lines_layout.bounds.width }).fit(part, &fitted);
+        }
+
         _ = try canvas.textAt(.{
             .x = lines_layout.bounds.x,
             .y = lines_layout.bounds.y + @as(f32, @floatFromInt(index)) * lines_layout.line,
@@ -381,7 +390,7 @@ fn drawButton(canvas: *Canvas, view: data.NodeView, button: Button) !f32 {
 
     _ = try canvas.textAt(.{ .x = bounds.x + chrome.px(button_padding), .y = bounds.y, .width = width - chrome.px(button_padding), .height = bounds.height }, label);
     if (button.stack.scope.interactive) {
-        try button.stack.context.bands.add(.{ .area = bounds, .action = .{ .intent = intent } });
+        button.stack.context.bands.add(.{ .area = bounds, .action = .{ .intent = intent } });
     }
 
     return bounds.x;

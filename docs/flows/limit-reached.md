@@ -201,7 +201,7 @@ const text = std.fmt.bufPrint(&buffer, "{s}: {s}", .{ label, value }) catch {
 ```
 
 A net reports the limit under the error's name
-(`ChromeHitCapacityExceeded: limit reached`) with the route that caught it.
+(`PresentationIdExhausted: limit reached`) with the route that caught it.
 Once a flow reports its limit by name, the net no longer sees that error.
 
 - `Runtime.update` runs each event through `dispatch`. A limit error skips

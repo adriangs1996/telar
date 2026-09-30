@@ -6,9 +6,14 @@ const native = @import("../native/native.zig");
 const Result = @import("../input/ClipboardResult.zig");
 const Request = @import("Request.zig");
 const Owner = @import("Owner.zig");
+const core = @import("telar-core");
 const Services = @This();
 
-requests: [4]Request = @splat(.{}),
+/// Clipboard reads and writes queued for the native host at once.
+pub const capacity = 4;
+pub const limit = core.Limit.declare("gui.host.requests", "host requests", capacity);
+
+requests: [capacity]Request = @splat(.{}),
 next_id: u64 = 1,
 
 /// A delayed read keeps its original destination. Example: `try host.read(owner);`

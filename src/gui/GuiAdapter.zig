@@ -58,6 +58,8 @@ const animate = @import("animate");
 const FrameClock = animate.FrameClock;
 const native_callbacks = @import("native/window_callbacks.zig");
 const limit_reached = @import("limit_reached.zig");
+const PresentationResult = @import("PresentationResult.zig");
+const GlyphAtlas = @import("text/GlyphAtlas.zig");
 const LimitedFrame = @import("LimitedFrame.zig");
 const window_machines = @import("window_machines.zig");
 const clipboard_image = @import("clipboard_image.zig");
@@ -118,6 +120,10 @@ limited: ?LimitedFrame = null,
 /// The limit error the last update stopped at, so the same one again does
 /// not ask for another draw.
 update_limited: ?anyerror = null,
+/// A presentation's completion or a focus change a full inbox refused; the
+/// next pump posts it before anything else, so the frame in flight always
+/// completes and focus stays ordered.
+unposted: Unposted = .{},
 exit_status: ?u8 = null,
 started: bool = false,
 needs_draw: bool = false,
@@ -221,6 +227,9 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.recovery_interactions_finished = false;
     gui.stopped = false;
     gui.host = .{};
+    gui.limited = null;
+    gui.update_limited = null;
+    gui.unposted = .{};
     gui.input_revision = 0;
     gui.focused = true;
     gui.widgets = .{};
@@ -584,12 +593,25 @@ fn start(self: *GuiAdapter, colors: core.TerminalColors) !void {
 /// rejects admission; inbox failures propagate to the host. Example: `_ = try gui.acceptInput(event);`
 pub fn acceptInput(self: *GuiAdapter, event: event_module.Event) !bool {
     if (event == .focus) {
-        // Focus transitions must remain ordered even when native input coalesces.
-        try self.driver.inbox.post(
+        // Focus transitions must remain ordered even when native input
+        // coalesces; a full inbox keeps the latest for the next pump.
+        if (self.unposted.focus != null) {
+            self.unposted.focus = event.focus;
+            return true;
+        }
+
+        self.driver.inbox.post(
             .{
                 .focus = event.focus,
             },
-        );
+        ) catch |err| {
+            if (err != error.InboxFull) {
+                return err;
+            }
+
+            self.unposted.focus = event.focus;
+            self.wake();
+        };
 
         return true;
     }
@@ -609,6 +631,49 @@ pub fn acceptInput(self: *GuiAdapter, event: event_module.Event) !bool {
     try self.driver.inbox.notify(.input_ready);
 
     return true;
+}
+
+/// Completes a delivered or dropped presentation through the inbox. A full
+/// inbox keeps the completion for the next pump, so the frame in flight
+/// always completes and the window never waits on it forever.
+/// Example: `gui.completePresentation(.{ .token = token, .delivered = true });`
+pub fn completePresentation(self: *GuiAdapter, result: PresentationResult) void {
+    self.driver.inbox.post(
+        .{
+            .presented = result,
+        },
+    ) catch |err| {
+        if (err != error.InboxFull) {
+            self.fail(err);
+            return;
+        }
+
+        self.unposted.presented = result;
+        self.wake();
+    };
+}
+
+/// Posts what the native callbacks kept while the inbox was full, oldest
+/// kind first; what still does not fit waits for the next pump.
+/// Example: `gui.postUnposted();`
+pub fn postUnposted(self: *GuiAdapter) void {
+    if (self.unposted.presented) |result| {
+        self.driver.inbox.post(
+            .{
+                .presented = result,
+            },
+        ) catch return;
+        self.unposted.presented = null;
+    }
+
+    if (self.unposted.focus) |focused| {
+        self.driver.inbox.post(
+            .{
+                .focus = focused,
+            },
+        ) catch return;
+        self.unposted.focus = null;
+    }
 }
 
 /// Drains one bounded turn, then folds reconnectable layout state once.
@@ -669,6 +734,7 @@ pub fn update(self: *GuiAdapter) !?u8 {
             self.driver.configuration.pending or
             self.renderer.cursor_on != self.cursor_clock.shown(now_ns) or
             self.renderer.focused != self.cursor_clock.focused or
+            self.renderer.atlasSettleDue() or
             pane_images.trimDue(&self.images, now_ns);
     }
 
@@ -1096,11 +1162,11 @@ fn readTerminalClipboard(self: *GuiAdapter) !void {
 
     const tab = self.app.model.tabs.activeSlot() orelse return;
     const pane = shared_model.tab_layout.focusedPaneConst(&self.app.model, tab) orelse return;
-    clipboard.request_id = try self.host.read(
+    clipboard.request_id = self.host.read(
         .{
             .generation = pane.attachment_generation,
         },
-    );
+    ) catch |err| return self.refuseHostRequest(err, 0);
     clipboard.pane_id = pane.id;
     clipboard.generation = pane.attachment_generation;
     native.telar_gui_wake(self.driver.fds[@intFromEnum(PipeEnd.write)]);
@@ -1128,6 +1194,17 @@ fn takeTerminalClipboard(self: *GuiAdapter, result: ClipboardResult) bool {
 }
 
 fn dispatchClipboard(self: *GuiAdapter, result: ClipboardResult) !bool {
+    if (result.status == .too_large) {
+        // The host refused a paste larger than the window carries; it is
+        // dropped whole, never cut, and the notice names the limit.
+        client.limit_reached.report(
+            self.app,
+            .{
+                .limit = event_module.clipboard_limit,
+            },
+        );
+    }
+
     if (self.terminal_clipboard.offset == null) {
         const kind = self.host.complete(result) orelse return true;
 
@@ -1585,6 +1662,7 @@ fn deliverRequests(self: *GuiAdapter) !void {
     while (effects.pop()) |effect| {
         switch (effect) {
             .clipboard => self.requestClipboardWrite(effects.clipboard.items) catch |err| switch (err) {
+                // A refused size or queue is reported where it was refused.
                 error.HostRequestsFull, error.ClipboardTooLarge, error.InvalidUtf8 => std.log.warn("native clipboard update was not admitted: {s}", .{@errorName(err)}),
                 else => return err,
             },
@@ -1630,8 +1708,27 @@ fn startJobs(self: *GuiAdapter) !void {
 }
 
 pub fn requestClipboardWrite(self: *GuiAdapter, bytes: []const u8) !void {
-    _ = try self.host.write(bytes);
+    _ = self.host.write(bytes) catch |err| return self.refuseHostRequest(err, bytes.len);
     native.telar_gui_wake(self.driver.fds[@intFromEnum(PipeEnd.write)]);
+}
+
+/// Reports a clipboard request refused at a limit, then returns its error
+/// so the caller keeps its own path: the old clipboard stays, nothing is cut.
+fn refuseHostRequest(self: *GuiAdapter, err: anyerror, bytes: usize) anyerror {
+    const limit = switch (err) {
+        error.ClipboardTooLarge => event_module.clipboard_limit,
+        error.HostRequestsFull => HostServices.limit,
+        else => return err,
+    };
+    client.limit_reached.report(
+        self.app,
+        .{
+            .limit = limit,
+            .requested = if (err == error.ClipboardTooLarge) bytes else HostServices.capacity + 1,
+        },
+    );
+
+    return err;
 }
 
 /// Requests a link copy with a bottom confirmation after host success.
@@ -1646,7 +1743,7 @@ pub fn copyLink(self: *GuiAdapter, bytes: []const u8) !void {
 /// The editor can commit a cut only after the matching native write succeeds.
 /// Example: `const request = try gui.requestClipboardWriteOwned(owner, bytes);`
 pub fn requestClipboardWriteOwned(self: *GuiAdapter, owner: ClipboardOwner, bytes: []const u8) !u64 {
-    const request = try self.host.writeOwned(owner, bytes);
+    const request = self.host.writeOwned(owner, bytes) catch |err| return self.refuseHostRequest(err, bytes.len);
     native.telar_gui_wake(self.driver.fds[@intFromEnum(PipeEnd.write)]);
 
     return request;
@@ -1741,6 +1838,15 @@ fn measure(self: *GuiAdapter, renderer: *Renderer, viewport: native.Viewport) !c
     ) or renderer.scale != viewport.scale;
     renderer.sidebar_request = self.sidebar.request(self.app.model.sidebar_visible);
     const size = try renderer.measure(viewport);
+    if (renderer.cut_from) |wanted| {
+        client.limit_reached.report(
+            self.app,
+            .{
+                .limit = limit_reached.cell_count_limit,
+                .requested = wanted,
+            },
+        );
+    }
 
     if (viewport_changed or !std.meta.eql(size, self.app.model.host.host_size) or self.widgets.tab_drag_step != renderer.chrome.px(@intFromEnum(TabDragStep.logical_pixels))) {
         self.widgets.tab_drag.cancel();
@@ -1880,7 +1986,17 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
         self.chrome.invalidate();
     }
 
+    if (try renderer.settleAtlas() == .exhausted) {
+        client.limit_reached.report(
+            self.app,
+            .{
+                .limit = GlyphAtlas.side_limit,
+            },
+        );
+    }
+
     const commit = try scene.prepare(projected);
+    limit_reached.reportFrame(self, &scene);
     pane_images.noteDrawn(&self.images, renderer.imageDraws());
     if (comptime core.enabled) {
         self.app.telemetry.metrics.graphics_presented = self.images.presented;
@@ -2109,11 +2225,9 @@ pub fn widgetTextContext(self: *GuiAdapter, output: *native.TextContext) bool {
 /// Publishes owned widget semantics using delivered geometry.
 /// Example: `const available = gui.widgetAccessibility(&tree);`
 pub fn widgetAccessibility(self: *GuiAdapter, output: *native.AccessibilityTree) bool {
-    if (self.review.active) {
-        return self.review.widget.accessibility(output);
-    }
-
-    return host_context.accessibility(self, output);
+    const published = if (self.review.active) self.review.widget.accessibility(output) else host_context.accessibility(self, output);
+    limit_reached.reportAccessibility(self);
+    return published;
 }
 
 test "widget draw failure preserves delivered targets and pending pane damage before retry" {
@@ -2152,12 +2266,11 @@ test "widget draw failure preserves delivered targets and pending pane damage be
         },
     );
     const pane = gui.app.model.panes.find(TestSession.pane_id).?;
-    const limit = session.gui.renderer.quads.limit;
-    session.gui.renderer.quads.limit = 1;
-    defer session.gui.renderer.quads.limit = limit;
-    // Inject failure after measurement reserves the production frame budget.
-    try std.testing.expectError(error.NativeQuadBudgetExceeded, gui.prepare(&gui.renderer));
-    try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.quads.items().len);
+    const next_token = gui.app.presentation.next_token;
+    gui.app.presentation.next_token = std.math.maxInt(u64);
+    defer gui.app.presentation.next_token = next_token;
+    // Inject failure after every widget drew and registered its targets.
+    try std.testing.expectError(error.PresentationIdExhausted, gui.prepare(&gui.renderer));
     try std.testing.expect(gui.app.presentation.active == null);
     try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
     try std.testing.expectEqual(chrome, gui.chrome.presented());
@@ -2172,7 +2285,7 @@ test "widget draw failure preserves delivered targets and pending pane damage be
     try std.testing.expectEqual(targets, gui.widgets.dispatcher.maps.presented());
     try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
 
-    session.gui.renderer.quads.limit = limit;
+    gui.app.presentation.next_token = next_token;
     const retry = try session.draw();
     try std.testing.expect(retry != delivered);
     try std.testing.expectEqual(targets, gui.widgets.dispatcher.maps.presented());
@@ -2264,4 +2377,10 @@ const LinkGesture = struct {
     pub fn cancel(self: *LinkGesture) void {
         self.pressed = null;
     }
+};
+
+/// Messages the native callbacks could not post because the inbox was full.
+const Unposted = struct {
+    presented: ?PresentationResult = null,
+    focus: ?bool = null,
 };

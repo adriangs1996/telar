@@ -22,12 +22,15 @@
 // Uploads started per frame; the client keeps at most this many in flight.
 #define TELAR_GUI_IMAGE_UPLOADS 4
 // Image quads one frame may draw.
-#define TELAR_GUI_IMAGE_DRAWS 512
+#define TELAR_GUI_IMAGE_DRAWS 2048
 // The quad texture selector that samples the image named by an image draw.
 #define TELAR_GUI_IMAGE_TEXTURE 10
 
 #define TELAR_GUI_RANGE_NONE UINT32_MAX
 #define TELAR_GUI_TEXT_CAPACITY 4096
+// UTF-8 bytes one clipboard read, write or native paste event carries; the
+// only definition every backend and `input/event.zig` mirror.
+#define TELAR_GUI_CLIPBOARD_CAPACITY (1024 * 1024)
 #define TELAR_GUI_ACCESSIBILITY_CAPACITY 256
 #define TELAR_GUI_TITLE_CAPACITY 256
 

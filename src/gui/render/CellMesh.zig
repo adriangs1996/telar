@@ -7,6 +7,7 @@
 //! cold `overflow` array that warm draws touch only for the cells using it.
 const cellgrid = @import("cellgrid");
 const std = @import("std");
+const core = @import("telar-core");
 const Paint = @import("CellPaint.zig");
 const Metadata = @import("CellMetadata.zig");
 const gfx = @import("gfx");
@@ -16,6 +17,7 @@ const Rect = gfx.Rect;
 const Mesh = @This();
 
 pub const capacity = 24;
+pub const limit = core.Limit.declare("render.cell_mesh_capacity", "quads per cell", capacity);
 pub const primary_capacity = 2;
 pub const overflow_capacity = capacity - primary_capacity;
 metadata: *Metadata,

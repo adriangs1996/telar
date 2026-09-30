@@ -164,7 +164,7 @@ fn workspace(self: WorkspaceIndicators, canvas: *Canvas, index: usize) !void {
     }
 
     canvas.quads.clipFrom(first, bounds);
-    try self.context.bands.add(.{ .area = bounds, .action = .{ .intent = .{ .select_workspace = id } } });
+    self.context.bands.add(.{ .area = bounds, .action = .{ .intent = .{ .select_workspace = id } } });
 }
 
 fn overflowCounter(self: WorkspaceIndicators, canvas: *Canvas, range: [2]usize) !void {

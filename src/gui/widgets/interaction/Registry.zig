@@ -1,16 +1,24 @@
 //! One bounded presentation's owned hit and focus targets.
 const std = @import("std");
+const core = @import("telar-core");
 const Target = @import("Target.zig");
 const Id = @import("Id.zig");
 const Registry = @This();
 
-pub const capacity = 256;
+/// Room for every chrome band target (`BandHitMap.capacity`), the open
+/// overlay's rows and editors, and a change review's visible rows.
+pub const capacity = 1024;
+pub const limit = core.Limit.declare("gui.widgets.registry_capacity", "widget targets", capacity);
 targets: [capacity]Target = undefined,
 len: usize = 0,
 modal_layer: u8 = 0,
+/// Targets left out because the registry was full; their controls still
+/// draw and the window reports `gui.widgets.registry_capacity`.
+dropped: usize = 0,
 
-/// Rejects invalid geometry, duplicate identities and capacity failure before
-/// publishing an unreachable control. Empty clipped targets are omitted.
+/// Rejects invalid geometry and duplicate identities. A full registry keeps
+/// the targets it holds and counts the rest as dropped, so the frame still
+/// draws. Empty clipped targets are omitted.
 /// Example: `try registry.add(.{ .id = id, .bounds = bounds, .action = .{ .custom = 1 } });`
 pub fn add(self: *Registry, target: Target) !void {
     const bounds = target.bounds;
@@ -23,7 +31,8 @@ pub fn add(self: *Registry, target: Target) !void {
     }
 
     if (self.len == capacity) {
-        return error.WidgetTargetCapacityExceeded;
+        self.dropped += 1;
+        return;
     }
 
     if (self.find(target.id) != null) {
@@ -74,4 +83,19 @@ pub fn equivalent(self: *const Registry, right: *const Registry) bool {
     }
 
     return true;
+}
+
+test "a full registry keeps its targets and counts the dropped one" {
+    const registry = try std.testing.allocator.create(Registry);
+    defer std.testing.allocator.destroy(registry);
+    registry.* = .{};
+    for (0..capacity) |index| {
+        try registry.add(.{ .id = .{ .target_id = index + 1 }, .bounds = .{ .x = @floatFromInt(index), .y = 0, .width = 1, .height = 1 }, .action = .{ .custom = index } });
+    }
+
+    try registry.add(.{ .id = .{ .target_id = capacity + 1 }, .bounds = .{ .x = 0, .y = 0, .width = 1, .height = 1 }, .action = .{ .custom = 0 } });
+    try std.testing.expectEqual(@as(usize, capacity), registry.len);
+    try std.testing.expectEqual(@as(usize, 1), registry.dropped);
+    try std.testing.expect(registry.find(.{ .target_id = capacity + 1 }) == null);
+    try std.testing.expect(registry.at(.{ 0.5, 0.5 }) != null);
 }

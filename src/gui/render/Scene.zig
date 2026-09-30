@@ -26,6 +26,8 @@ diagrams: ?*Store = null,
 syntax: ?*SyntaxStore = null,
 review: ?*ReviewWidget = null,
 previews: ?*const ImagePreviews = null,
+/// Frame widgets the last `prepare` left out because the list was full.
+dropped_widgets: usize = 0,
 
 /// Nothing retained by a layer may borrow the projection after this returns.
 /// Example: `const commit = try scene.prepare(projection);`
@@ -52,6 +54,7 @@ pub fn prepare(self: *Scene, projection: client.Projection) !data.PresentationCo
     self.overlays.scale = renderer.scale;
     var composition: Composition = .{ .chrome = self.chrome, .overlays = self.overlays, .canvas = &canvas, .link = self.link, .previews = self.previews };
     const widgets = try composition.render(&projection);
+    self.dropped_widgets = widgets.dropped;
     try widgets.draw(&canvas);
 
     if (self.review) |review| {

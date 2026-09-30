@@ -102,7 +102,7 @@ test "full atlas and extreme cells cannot retry failed box rasterizations or cor
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
     try list.reserve(1);
-    atlas.shelf_y = Atlas.side;
+    atlas.shelf_y = atlas.side;
     const pixels_hash = std.hash.Wyhash.hash(0, atlas.pixels);
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0, .resize_fail_index = 0 });
     atlas.allocator = failing.allocator();

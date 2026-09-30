@@ -258,7 +258,7 @@ fn drawRoot(self: BarRow, canvas: *Canvas, root: Root) !void {
             try canvas.fillRoundedAt(target, .{ .radius = canvas.chrome.px(hover_radius), .color = canvas.theme.palette.surface0 });
         }
 
-        try self.context.bands.add(.{ .area = target, .action = .{ .intent = .{ .bar_component = component } } });
+        self.context.bands.add(.{ .area = target, .action = .{ .intent = .{ .bar_component = component } } });
     }
 
     const view = data.NodeView.of(content, root.index, slot.facts);
@@ -353,7 +353,7 @@ fn overflowChip(self: BarRow, canvas: *Canvas, chip: OverflowChip) !void {
         .width = width - chrome.px(chip_padding),
         .height = bounds.height,
     }, label);
-    try self.context.bands.add(.{ .area = bounds, .action = .{ .intent = .toggle_bar_overflow } });
+    self.context.bands.add(.{ .area = bounds, .action = .{ .intent = .toggle_bar_overflow } });
 }
 
 const OverflowChip = struct {

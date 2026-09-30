@@ -242,13 +242,16 @@ test "native chrome warm repaint reuses glyphs and performs no allocation" {
     try std.testing.expectEqual(@as(usize, 0), failure.allocations);
 }
 
-test "native hit capacity fails explicitly" {
+test "a full native hit map keeps its targets and counts the dropped one" {
     var hits: HitMap = .{};
     for (0..HitMap.capacity) |index| {
-        try hits.add(.{ .area = .{ .x = @intCast(index), .w = 1, .h = 1 }, .action = .{ .intent = .toggle_sidebar } });
+        hits.add(.{ .area = .{ .x = @intCast(index), .w = 1, .h = 1 }, .action = .{ .intent = .toggle_sidebar } });
     }
 
-    try std.testing.expectError(error.ChromeHitCapacityExceeded, hits.add(.{ .area = .{ .w = 1, .h = 1 }, .action = .resize_sidebar }));
+    hits.add(.{ .area = .{ .w = 1, .h = 1 }, .action = .resize_sidebar });
+    try std.testing.expectEqual(@as(usize, HitMap.capacity), hits.len);
+    try std.testing.expectEqual(@as(usize, 1), hits.dropped);
+    try std.testing.expect(hits.at(.{ 0, 0 }).? == .intent);
 }
 
 test "native pane presses focus before forwarding and chrome cancellation releases capture" {
