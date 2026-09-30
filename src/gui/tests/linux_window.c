@@ -227,12 +227,14 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
     }
     unsigned ready_images = atomic_load(&state.images_ready);
     if (ready_images >= 2 && !state.reuploaded) {
+        // Handle 1 is rewritten in place, as a spare of the same size; handle
+        // 2 is released and uploaded again.
         state.reuploaded = true;
         state.releases[0] = 2;
         frame->image_releases = state.releases;
         frame->image_release_count = 1;
-        frame->image_uploads = &state.uploads[1];
-        frame->image_upload_count = 1;
+        frame->image_uploads = state.uploads;
+        frame->image_upload_count = 2;
     } else if (ready_images >= 2) {
         uint32_t first = frame->quad_count;
         state.quads[first] = (telar_gui_quad){.x = 480, .y = 30, .width = 64, .height = 64,
@@ -350,7 +352,7 @@ int main(int argc, char **argv) {
     if (atomic_load(&alpha_checks) < atomic_load(&state.delivered)) {
         atomic_fetch_add(&state.failures, 1);
     }
-    if (atomic_load(&state.images_ready) < 3 || atomic_load(&state.image_failures) != 0 ||
+    if (atomic_load(&state.images_ready) < 4 || atomic_load(&state.image_failures) != 0 ||
         atomic_load(&state.image_frames) == 0) {
         atomic_fetch_add(&state.failures, 1);
     }

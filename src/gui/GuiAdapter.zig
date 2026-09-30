@@ -444,7 +444,8 @@ fn now(self: *const GuiAdapter) u64 {
 pub fn wakeupAfter(self: *const GuiAdapter) u32 {
     const now_ns = self.now();
     const widgets = if (self.app.presentation.active == null) self.chrome.animation.wakeupAfter(now_ns) else 0;
-    return FrameClock.earliest(self.cursor_clock.wakeupAfter(now_ns), widgets);
+    const images = pane_images.wakeupAfter(&self.images, now_ns);
+    return FrameClock.earliest(FrameClock.earliest(self.cursor_clock.wakeupAfter(now_ns), widgets), images);
 }
 
 /// Reports native frame admission delay from visible terminal frame identities.
@@ -634,7 +635,8 @@ pub fn update(self: *GuiAdapter) !?u8 {
         self.needs_draw = self.app.presentation.needsPreparation() or animation_due or
             self.driver.configuration.pending or
             self.renderer.cursor_on != self.cursor_clock.shown(now_ns) or
-            self.renderer.focused != self.cursor_clock.focused;
+            self.renderer.focused != self.cursor_clock.focused or
+            pane_images.trimDue(&self.images, now_ns);
     }
 
     return status;
@@ -1816,6 +1818,7 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
             .cell_width = renderer.metrics.cell_width,
             .cell_height = renderer.metrics.cell_height,
         },
+        self.now(),
     );
     pane_images.start(&self.images, &self.graphics_stores, self.machines.active, self.now());
     renderer.images = self.images.resolved();
@@ -1839,6 +1842,11 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
 
     const commit = try scene.prepare(projected);
     pane_images.noteDrawn(&self.images, renderer.imageDraws());
+    if (comptime core.enabled) {
+        self.app.telemetry.metrics.graphics_presented = self.images.presented;
+        self.app.telemetry.metrics.graphics_gpu_bytes = self.images.gpu.resident_bytes;
+    }
+
     const diagram_revision = self.diagrams.store.revision;
     self.diagrams.start(&self.driver.inbox);
     self.syntax.start(&self.driver.inbox);

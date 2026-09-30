@@ -24,16 +24,25 @@ const rgba_bytes = 4;
 /// previous finishes, so a stream turns one generation per frame into a
 /// texture instead of one every few frames. Older generations never queue.
 const uploads_per_image = 2;
+/// Released textures kept for an upload of the same size.
+const spare_limit = 4;
+/// A spare nobody reused for this long is released.
+const spare_ttl_ns: u64 = 2 * std.time.ns_per_s;
+/// A texture no frame drew for this long, as a hidden tab's or another
+/// machine's, is released; its pixels stay in the store for a re-upload.
+const idle_ttl_ns: u64 = 5 * std.time.ns_per_s;
 
 /// Resolves the presented machine's placements when its images, its
-/// textures or the cell size changed, then releases textures nothing needs.
-/// Runs once per prepared frame, before the scene draws panes.
+/// textures or the cell size changed, then releases textures nothing needs
+/// and trims idle ones. Runs once per prepared frame, before the scene.
 ///
 /// ```zig
-/// pane_images.place(&gui.images, &gui.graphics_stores, .{ .machine = slot, .cell_width = 16, .cell_height = 32 });
+/// pane_images.place(&gui.images, &gui.graphics_stores, .{ .machine = slot, .cell_width = 16, .cell_height = 32 }, now_ns);
 /// ```
-pub fn place(images: *PaneImages, stores: []Store, view: ImageView) void {
+pub fn place(images: *PaneImages, stores: []Store, view: ImageView, now_ns: u64) void {
     images.frame += 1;
+    images.now_ns = now_ns;
+    trim(images);
     const store = &stores[view.machine];
     const built: ResolvedFrom = .{
         .machine = view.machine,
@@ -65,6 +74,15 @@ pub fn place(images: *PaneImages, stores: []Store, view: ImageView) void {
 /// ```
 pub fn start(images: *PaneImages, stores: []Store, machine: u8, now_ns: u64) void {
     const store = &stores[machine];
+    // Nothing to start unless the images, the textures or the uploads in
+    // flight changed since the last pass: an echo frame costs nothing here.
+    const started: [3]u64 = .{ store.ingressVersion(), images.revision, images.gpu.uploading };
+    if (std.mem.eql(u64, &started, &images.started_from) and images.started_machine == machine) {
+        return;
+    }
+
+    images.started_from = started;
+    images.started_machine = machine;
     for (images.resolved()) |placement| {
         if (images.gpu.uploading >= ImageUpload.uploads_in_flight or images.upload_count >= images.uploads.len) {
             return;
@@ -79,19 +97,22 @@ pub fn start(images: *PaneImages, stores: []Store, machine: u8, now_ns: u64) voi
         }
 
         const metadata = store.images.getPtr(identity).?.metadata;
-        const row = images.gpu.add(machine, identity) orelse
-            (if (evictOne(images)) images.gpu.add(machine, identity) else null) orelse
-            return;
-        images.gpu.width[row] = metadata.width;
-        images.gpu.height[row] = metadata.height;
-        if (metadata.width > ImageUpload.max_side or metadata.height > ImageUpload.max_side) {
-            // Stays failed: this image can never be a texture.
-            continue;
-        }
-
         const bytes = @as(usize, metadata.width) * metadata.height * rgba_bytes;
-        if (bytes > GpuImages.budget or !reserve(images, bytes)) {
-            images.gpu.remove(row);
+        const row = takeRow(images, stores, .{
+            .machine = machine,
+            .identity = identity,
+            .width = metadata.width,
+            .height = metadata.height,
+        }) orelse {
+            // Out of budget or rows: textures the next frames stop drawing
+            // become evictable without any revision changing, so retry.
+            images.started_from = @splat(std.math.maxInt(u64));
+            continue;
+        };
+        if (images.gpu.residency[row] == .failed and images.gpu.bytes[row] == 0 and
+            (metadata.width > ImageUpload.max_side or metadata.height > ImageUpload.max_side))
+        {
+            // Stays failed: this image can never be a texture.
             continue;
         }
 
@@ -100,11 +121,14 @@ pub fn start(images: *PaneImages, stores: []Store, machine: u8, now_ns: u64) voi
             continue;
         };
 
+        if (images.gpu.bytes[row] == 0) {
+            images.gpu.bytes[row] = bytes;
+            images.gpu.resident_bytes += bytes;
+        }
+
         images.gpu.residency[row] = .uploading;
         images.gpu.lease[row] = lease;
         images.gpu.started_ns[row] = now_ns;
-        images.gpu.bytes[row] = bytes;
-        images.gpu.resident_bytes += bytes;
         images.gpu.uploading += 1;
         images.uploads[images.upload_count] = .{
             .pixels = lease.pixels.ptr,
@@ -144,13 +168,47 @@ pub fn finish(images: *PaneImages, stores: []Store, handle: u32, success: bool, 
     return null;
 }
 
-/// Records which textures the prepared frame draws, so eviction spares them.
+/// Records which textures the prepared frame draws, so eviction spares them,
+/// and counts each generation the first time a frame draws it.
 /// Example: `pane_images.noteDrawn(&gui.images, renderer.imageDraws());`.
 pub fn noteDrawn(images: *PaneImages, draws: []const native.ImageDraw) void {
     for (draws) |draw| {
         const row = GpuImages.rowOf(draw.handle) orelse continue;
         images.gpu.used_frame[row] = images.frame;
+        images.gpu.used_ns[row] = images.now_ns;
+        if (!images.gpu.presented[row]) {
+            images.gpu.presented[row] = true;
+            images.presented +%= 1;
+        }
     }
+}
+
+/// Milliseconds until a spare or an idle texture should be released, or zero
+/// when none waits: an idle window wakes to trim them.
+/// Example: `const delay = pane_images.wakeupAfter(&gui.images, now_ns);`.
+pub fn wakeupAfter(images: *const PaneImages, now_ns: u64) u32 {
+    var earliest: ?u64 = null;
+    for (images.gpu.rows()) |row| {
+        const deadline = expiry(&images.gpu, row) orelse continue;
+        earliest = if (earliest) |value| @min(value, deadline) else deadline;
+    }
+
+    const deadline = earliest orelse return 0;
+    const remaining = deadline -| now_ns;
+    return @intCast(@max(1, std.math.divCeil(u64, remaining, std.time.ns_per_ms) catch unreachable));
+}
+
+/// Whether a spare or idle texture is due for release, so the window
+/// prepares a frame that carries it. Example: `if (pane_images.trimDue(&gui.images, now_ns)) draw();`.
+pub fn trimDue(images: *const PaneImages, now_ns: u64) bool {
+    for (images.gpu.rows()) |row| {
+        const deadline = expiry(&images.gpu, row) orelse continue;
+        if (deadline <= now_ns) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /// Moves pending uploads and releases into the frame the backend takes when
@@ -292,13 +350,46 @@ fn markStandIns(images: *PaneImages) void {
     for (images.resolved()) |placement| {
         const row = GpuImages.rowOf(placement.handle) orelse continue;
         images.gpu.used_frame[row] = images.frame;
+        images.gpu.used_ns[row] = images.now_ns;
+    }
+}
+
+// When a spare or a ready texture falls out of use, if it can.
+fn expiry(gpu: *const GpuImages, row: usize) ?u64 {
+    return switch (gpu.residency[row]) {
+        .spare => gpu.used_ns[row] +| spare_ttl_ns,
+        .ready => gpu.used_ns[row] +| idle_ttl_ns,
+        .free, .uploading, .failed => null,
+    };
+}
+
+// Releases spares nobody reused and textures no frame drew for a while.
+fn trim(images: *PaneImages) void {
+    var index: usize = 0;
+    while (index < images.gpu.count) {
+        const row = images.gpu.rows()[index];
+        const deadline = expiry(&images.gpu, row) orelse {
+            index += 1;
+            continue;
+        };
+        if (deadline > images.now_ns or images.gpu.used_frame[row] == images.frame) {
+            index += 1;
+            continue;
+        }
+
+        // Removing moves the last row into `index`; look at it next.
+        discard(images, row);
     }
 }
 
 // Releases textures whose image left its store and that no placement uses
 // as a stand-in this frame. Uploading rows wait for their report.
 fn sweep(images: *PaneImages, stores: []Store) void {
-    for (images.gpu.residency, 0..) |residency, row| {
+    var index: usize = 0;
+    while (index < images.gpu.count) {
+        const row = images.gpu.rows()[index];
+        const residency = images.gpu.residency[row];
+        index += 1;
         if (residency != .ready and residency != .failed) {
             continue;
         }
@@ -314,14 +405,53 @@ fn sweep(images: *PaneImages, stores: []Store) void {
             continue;
         }
 
-        release(images, row);
+        retire(images, row);
+        // A row that left the dense list moved another into its place.
+        if (images.gpu.residency[row] == .free) {
+            index -= 1;
+        }
     }
 }
 
-// Makes room for `bytes` by releasing the least recently used textures the
-// last frame did not draw.
-fn reserve(images: *PaneImages, bytes: usize) bool {
-    while (images.gpu.resident_bytes + bytes > GpuImages.budget) {
+// Picks the row an upload of this image uses: a spare of the same size,
+// whose texture the backend rewrites in place, else a new row within the
+// budget, evicting what the last frame did not draw.
+fn takeRow(images: *PaneImages, stores: []Store, wanted: Wanted) ?usize {
+    if (images.gpu.findSpare(wanted.width, wanted.height)) |spare| {
+        images.gpu.assign(spare, wanted.machine, wanted.identity);
+        return spare;
+    }
+
+    const bytes = @as(usize, wanted.width) * wanted.height * rgba_bytes;
+    if (wanted.width <= ImageUpload.max_side and wanted.height <= ImageUpload.max_side and !reserve(images, stores, bytes)) {
+        return null;
+    }
+
+    const row = images.gpu.add(wanted.machine, wanted.identity) orelse
+        (if (evictOne(images)) images.gpu.add(wanted.machine, wanted.identity) else null) orelse
+        return null;
+    images.gpu.width[row] = wanted.width;
+    images.gpu.height[row] = wanted.height;
+    return row;
+}
+
+const Wanted = struct {
+    machine: u8,
+    identity: client.ImageIdentity,
+    width: u32,
+    height: u32,
+};
+
+// Makes room for `bytes` within the quota the stores' retained pixels share
+// with the textures, evicting spares, then textures the last frame did not
+// draw.
+fn reserve(images: *PaneImages, stores: []Store, bytes: usize) bool {
+    var retained_bytes: usize = 0;
+    for (stores) |*store| {
+        retained_bytes += store.total_bytes;
+    }
+
+    while (images.gpu.resident_bytes + retained_bytes + bytes > GpuImages.budget) {
         if (!evictOne(images)) {
             return false;
         }
@@ -332,21 +462,38 @@ fn reserve(images: *PaneImages, bytes: usize) bool {
 
 fn evictOne(images: *PaneImages) bool {
     var oldest: ?usize = null;
-    for (images.gpu.residency, 0..) |residency, row| {
-        if (residency != .ready or images.gpu.used_frame[row] + 1 >= images.frame) {
+    for (images.gpu.rows()) |row| {
+        const residency = images.gpu.residency[row];
+        const evictable = residency == .spare or
+            (residency == .ready and images.gpu.used_frame[row] + 1 < images.frame);
+        if (!evictable) {
             continue;
         }
 
-        if (oldest == null or images.gpu.used_frame[row] < images.gpu.used_frame[oldest.?]) {
+        if (oldest == null or images.gpu.used_ns[row] < images.gpu.used_ns[oldest.?]) {
             oldest = row;
         }
     }
 
-    release(images, oldest orelse return false);
+    discard(images, oldest orelse return false);
     return true;
 }
 
-fn release(images: *PaneImages, row: usize) void {
+// A texture leaving use becomes a spare while there is room for one, so the
+// next upload of the same size rewrites it; otherwise it is released.
+fn retire(images: *PaneImages, row: usize) void {
+    if (images.gpu.residency[row] == .ready and images.gpu.spares < spare_limit) {
+        images.gpu.residency[row] = .spare;
+        images.gpu.spares += 1;
+        images.gpu.used_ns[row] = images.now_ns;
+        images.revision +%= 1;
+        return;
+    }
+
+    discard(images, row);
+}
+
+fn discard(images: *PaneImages, row: usize) void {
     images.releases[images.release_count] = GpuImages.handleOf(row);
     images.release_count += 1;
     images.gpu.remove(row);

@@ -6,6 +6,7 @@ const data = @import("model");
 const gfx = @import("gfx");
 const kitty_protocol = @import("kitty_protocol");
 const PaneImages = @import("../image/PaneImages.zig");
+const GpuImages = @import("../image/GpuImages.zig");
 const pane_images = @import("../image/pane_images.zig");
 const ImageUpload = @import("../native/ImageUpload.zig");
 const native = @import("../native/native.zig");
@@ -70,7 +71,7 @@ fn placement(image_id: u32, generation: u64, virtual_id: u64, z_index: i32) core
 
 // Resolves, uploads and reports every pending upload as done.
 fn settle(images: *PaneImages, stores: []Store) void {
-    pane_images.place(images, stores, view);
+    pane_images.place(images, stores, view, 0);
     pane_images.start(images, stores, view.machine, 0);
     var frame: native.Frame = .{
         .quads = null,
@@ -85,7 +86,7 @@ fn settle(images: *PaneImages, stores: []Store) void {
         _ = pane_images.finish(images, stores, upload.handle, true, 0);
     }
 
-    pane_images.place(images, stores, view);
+    pane_images.place(images, stores, view, 0);
 }
 
 test "a placement uploads once and then draws its texture at natural size" {
@@ -95,7 +96,7 @@ test "a placement uploads once and then draws its texture at natural size" {
     try receiveImage(&stores[0], 7, 1);
     try receivePlacement(&stores[0], placement(7, 1, 1, -1));
 
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     try std.testing.expectEqual(@as(usize, 1), images.placement_count);
     try std.testing.expectEqual(@as(u32, 0), images.placements[0].handle);
     try std.testing.expectEqual(kitty_protocol.Layer.below_text, images.placements[0].layer);
@@ -119,12 +120,12 @@ test "a placement uploads once and then draws its texture at natural size" {
     pane_images.handOff(&images, &frame);
     try std.testing.expectEqual(@as(u32, 1), frame.image_upload_count);
     try std.testing.expectEqual(@as(u32, 0), images.upload_count);
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     pane_images.start(&images, &stores, view.machine, 0);
     try std.testing.expectEqual(@as(u32, 0), images.upload_count);
 
     _ = pane_images.finish(&images, &stores, upload.handle, true, 0);
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     try std.testing.expectEqual(upload.handle, images.placements[0].handle);
     try std.testing.expectEqual([4]f32{ 0, 0, 1, 1 }, images.placements[0].uv);
     try std.testing.expectEqual(@as(u32, 2), images.placements[0].box.width);
@@ -143,7 +144,7 @@ test "a new generation keeps drawing the previous texture until its own is ready
 
     try receiveImage(&stores[0], 7, 2);
     try receivePlacement(&stores[0], placement(7, 2, 1, 0));
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     try std.testing.expectEqual(first, images.placements[0].handle);
     try std.testing.expectEqual(@as(u32, 0), images.release_count);
 
@@ -152,11 +153,21 @@ test "a new generation keeps drawing the previous texture until its own is ready
     const second = images.uploads[0].handle;
     try std.testing.expect(second != first);
     _ = pane_images.finish(&images, &stores, second, true, 0);
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     try std.testing.expectEqual(second, images.placements[0].handle);
-    try std.testing.expectEqual(@as(u32, 1), images.release_count);
-    try std.testing.expectEqual(first, images.releases[0]);
-    try std.testing.expectEqual(@as(usize, 1), images.gpu.count);
+    // The replaced texture waits as a spare for the next generation.
+    try std.testing.expectEqual(@as(u32, 0), images.release_count);
+    try std.testing.expectEqual(@as(usize, 1), images.gpu.spares);
+    try std.testing.expectEqual(GpuImages.Residency.spare, images.gpu.residency[first - 1]);
+
+    // Generation 3 has the same size: it reuses that spare's handle.
+    try receiveImage(&stores[0], 7, 3);
+    try receivePlacement(&stores[0], placement(7, 3, 1, 0));
+    pane_images.place(&images, &stores, view, 0);
+    pane_images.start(&images, &stores, view.machine, 0);
+    try std.testing.expectEqual(first, images.uploads[images.upload_count - 1].handle);
+    try std.testing.expectEqual(@as(usize, 2 * 2 * 4 * 2), images.gpu.resident_bytes);
+    pane_images.abandon(&images, &stores);
 }
 
 test "uploads stay within the in-flight bound" {
@@ -168,7 +179,7 @@ test "uploads stay within the in-flight bound" {
         try receivePlacement(&stores[0], placement(@intCast(id), 1, id, 0));
     }
 
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     pane_images.start(&images, &stores, view.machine, 0);
     try std.testing.expectEqual(@as(u32, ImageUpload.uploads_in_flight), images.upload_count);
     pane_images.abandon(&images, &stores);
@@ -191,12 +202,21 @@ test "a deleted image releases its texture and returns its pixels" {
             .generation = 1,
         },
     });
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     try std.testing.expectEqual(@as(usize, 0), images.placement_count);
+    try std.testing.expectEqual(@as(usize, 0), stores[0].total_bytes);
+    // Kept as a spare, still charged, until nobody reuses it for a while.
+    try std.testing.expectEqual(@as(u32, 0), images.release_count);
+    try std.testing.expectEqual(@as(usize, 16), images.gpu.resident_bytes);
+    try std.testing.expect(pane_images.wakeupAfter(&images, 0) > 0);
+    try std.testing.expect(!pane_images.trimDue(&images, 0));
+    const later = 3 * std.time.ns_per_s;
+    try std.testing.expect(pane_images.trimDue(&images, later));
+    pane_images.place(&images, &stores, view, later);
     try std.testing.expectEqual(@as(u32, 1), images.release_count);
     try std.testing.expectEqual(handle, images.releases[0]);
     try std.testing.expectEqual(@as(usize, 0), images.gpu.resident_bytes);
-    try std.testing.expectEqual(@as(usize, 0), stores[0].total_bytes);
+    try std.testing.expectEqual(@as(u32, 0), pane_images.wakeupAfter(&images, later));
 }
 
 test "a pixel lease survives a pane clear until its upload reports" {
@@ -205,7 +225,7 @@ test "a pixel lease survives a pane clear until its upload reports" {
     var images: PaneImages = .{};
     try receiveImage(&stores[0], 7, 1);
     try receivePlacement(&stores[0], placement(7, 1, 1, 0));
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     pane_images.start(&images, &stores, view.machine, 0);
     const handle = images.uploads[0].handle;
 
@@ -213,8 +233,8 @@ test "a pixel lease survives a pane clear until its upload reports" {
     try std.testing.expectEqual(@as(usize, 12), stores[0].total_bytes);
     _ = pane_images.finish(&images, &stores, handle, true, 0);
     try std.testing.expectEqual(@as(usize, 0), stores[0].total_bytes);
-    pane_images.place(&images, &stores, view);
-    try std.testing.expectEqual(@as(u32, 1), images.release_count);
+    pane_images.place(&images, &stores, view, 0);
+    try std.testing.expectEqual(@as(usize, 1), images.gpu.spares);
 }
 
 test "a failed upload draws nothing and is not retried for the same image" {
@@ -223,12 +243,12 @@ test "a failed upload draws nothing and is not retried for the same image" {
     var images: PaneImages = .{};
     try receiveImage(&stores[0], 7, 1);
     try receivePlacement(&stores[0], placement(7, 1, 1, 0));
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     pane_images.start(&images, &stores, view.machine, 0);
     _ = pane_images.finish(&images, &stores, images.uploads[0].handle, false, 0);
     images.upload_count = 0;
 
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     pane_images.start(&images, &stores, view.machine, 0);
     try std.testing.expectEqual(@as(u32, 0), images.upload_count);
     try std.testing.expectEqual(@as(u32, 0), images.placements[0].handle);
@@ -242,7 +262,7 @@ test "hidden panes resolve no placements" {
     try receiveImage(&stores[0], 7, 1);
     try receivePlacement(&stores[0], placement(7, 1, 1, 0));
     try stores[0].setPaneVisible(pane_id, false);
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     try std.testing.expectEqual(@as(usize, 0), images.placement_count);
 }
 
@@ -264,10 +284,10 @@ test "the three layers paint around cell backgrounds and text, clipped and scrol
         .cell_width = renderer.metrics.cell_width,
         .cell_height = renderer.metrics.cell_height,
     };
-    pane_images.place(&images, &stores, cell_view);
+    pane_images.place(&images, &stores, cell_view, 0);
     pane_images.start(&images, &stores, 0, 0);
     _ = pane_images.finish(&images, &stores, images.uploads[0].handle, true, 0);
-    pane_images.place(&images, &stores, cell_view);
+    pane_images.place(&images, &stores, cell_view, 0);
 
     var pane = try data.Pane.init(std.testing.allocator, .{
         .spec = .{
@@ -355,19 +375,19 @@ test "a stream uploads its next generation while the previous one finishes, neve
     var images: PaneImages = .{};
     try receiveImage(&stores[0], 7, 1);
     try receivePlacement(&stores[0], placement(7, 1, 1, 0));
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     pane_images.start(&images, &stores, view.machine, 0);
     try std.testing.expectEqual(@as(u32, 1), images.upload_count);
 
     try receiveImage(&stores[0], 7, 2);
     try receivePlacement(&stores[0], placement(7, 2, 1, 0));
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     pane_images.start(&images, &stores, view.machine, 0);
     try std.testing.expectEqual(@as(u32, 2), images.upload_count);
 
     try receiveImage(&stores[0], 7, 3);
     try receivePlacement(&stores[0], placement(7, 3, 1, 0));
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     pane_images.start(&images, &stores, view.machine, 0);
     try std.testing.expectEqual(@as(u32, 2), images.upload_count);
     pane_images.abandon(&images, &stores);
@@ -382,12 +402,42 @@ test "a placement shows the newest complete generation that arrived before its o
     // Generation 2 arrives; the placement still names generation 1.
     try receiveImage(&stores[0], 7, 2);
 
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     pane_images.start(&images, &stores, view.machine, 0);
     try std.testing.expectEqual(@as(u32, 1), images.upload_count);
     const upload = images.uploads[0];
     _ = pane_images.finish(&images, &stores, upload.handle, true, 0);
-    pane_images.place(&images, &stores, view);
+    pane_images.place(&images, &stores, view, 0);
     try std.testing.expectEqual(upload.handle, images.placements[0].handle);
     try std.testing.expectEqual(@as(u64, 2), images.gpu.identity[upload.handle - 1].generation);
+}
+
+test "a texture no frame draws for a while is released, as a hidden tab's" {
+    var stores = [_]Store{.init(std.testing.allocator)};
+    defer stores[0].deinit();
+    var images: PaneImages = .{};
+    try receiveImage(&stores[0], 7, 1);
+    try receivePlacement(&stores[0], placement(7, 1, 1, 0));
+    settle(&images, &stores);
+    try stores[0].setPaneVisible(pane_id, false);
+    const later = 6 * std.time.ns_per_s;
+    try std.testing.expect(pane_images.trimDue(&images, later));
+    pane_images.place(&images, &stores, view, later);
+    try std.testing.expectEqual(@as(u32, 1), images.release_count);
+    try std.testing.expectEqual(@as(usize, 0), images.gpu.count);
+    // Its pixels stay in the store for a re-upload when the tab returns.
+    try std.testing.expectEqual(@as(usize, 12), stores[0].total_bytes);
+}
+
+test "textures and retained pixels share one quota" {
+    var stores = [_]Store{.init(std.testing.allocator)};
+    defer stores[0].deinit();
+    var images: PaneImages = .{};
+    try receiveImage(&stores[0], 7, 1);
+    try receivePlacement(&stores[0], placement(7, 1, 1, 0));
+    images.gpu.resident_bytes = GpuImages.budget - stores[0].total_bytes - 1;
+    pane_images.place(&images, &stores, view, 0);
+    pane_images.start(&images, &stores, view.machine, 0);
+    try std.testing.expectEqual(@as(u32, 0), images.upload_count);
+    images.gpu.resident_bytes = 0;
 }

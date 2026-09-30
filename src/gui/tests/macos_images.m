@@ -88,8 +88,9 @@ int telar_test_images(void) {
     frame.image_uploads = uploads;
     frame.image_upload_count = 3;
     [renderer acceptImages:&frame];
-    assert(failed_mask == 1u << 3);
-    assert(wait_until(^BOOL { return ready_mask == ((1u << 1) | (1u << 2)); }));
+    // Rejections are reported on a later main-queue turn, not inside the call.
+    assert(failed_mask == 0);
+    assert(wait_until(^BOOL { return ready_mask == ((1u << 1) | (1u << 2)) && failed_mask == 1u << 3; }));
 
     uint8_t texel[4];
     read_texel(image_at(renderer, 1), 3, 3, texel);
@@ -159,6 +160,25 @@ int telar_test_images(void) {
     [renderer acceptImages:&frame];
     assert(wait_until(^BOOL { return ready_mask == 1u << 1; }));
     assert(image_at(renderer, 1).width == 2 && image_at(renderer, 1).height == 8);
+
+    // A handle that still holds a texture of the same size is rewritten in
+    // place; another size is refused.
+    id<MTLTexture> held = image_at(renderer, 1);
+    uploads[0] = (telar_gui_image_upload){green, 1, 2, 2, 3};
+    uploads[0].width = 2;
+    uploads[0].height = 8;
+    uploads[0].bytes_per_pixel = 4;
+    uploads[0].pixels = blue;
+    ready_mask = 0;
+    [renderer acceptImages:&frame];
+    assert(wait_until(^BOOL { return ready_mask == 1u << 1; }));
+    assert(image_at(renderer, 1) == held);
+    uploads[0].width = 4;
+    uploads[0].height = 4;
+    failed_mask = 0;
+    [renderer acceptImages:&frame];
+    assert(wait_until(^BOOL { return failed_mask == 1u << 1; }));
+    assert(image_at(renderer, 1) == held);
 
     [renderer shutdown];
     assert(image_at(renderer, 2) == nil);

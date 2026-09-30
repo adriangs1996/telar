@@ -12,11 +12,6 @@ static const size_t image_scratch_bytes = 1024 * 1024;
 static const uint32_t rgb_bytes = 3;
 static const uint32_t rgba_bytes = 4;
 static const NSUInteger image_texture_index = 2 + TELAR_GUI_DIAGRAM_SLOTS;
-// Released image textures kept for reuse by an upload of the same size: a
-// stream replaces one generation per frame, and allocating and making
-// resident a fresh 4K texture each time costs the GPU driver more than the
-// copy itself.
-enum { image_spares = 4 };
 
 @implementation TelarMetalRenderer {
   id<MTLDevice> device;
@@ -50,7 +45,6 @@ enum { image_spares = 4 };
   dispatch_queue_t upload_queue;
   dispatch_group_t upload_work;
   uint8_t *image_scratch;
-  id<MTLTexture> spares[image_spares];
   id<MTLResidencySet> image_residency;
 }
 
@@ -117,7 +111,7 @@ enum { image_spares = 4 };
   // Image textures stay resident from install to release instead of being
   // re-added to the frame's set every frame.
   MTLResidencySetDescriptor *resident_images = [MTLResidencySetDescriptor new];
-  resident_images.initialCapacity = TELAR_GUI_IMAGE_CAPACITY + image_spares;
+  resident_images.initialCapacity = TELAR_GUI_IMAGE_CAPACITY;
   image_residency = [device newResidencySetWithDescriptor:resident_images error:&error];
   if (image_residency == nil) {
     NSLog(@"telar-gui: Metal 4 image residency failed: %@", error);
@@ -380,16 +374,31 @@ static BOOL image_upload_valid(telar_gui_image_upload upload) {
          (upload.bytes_per_pixel == rgb_bytes || upload.bytes_per_pixel == rgba_bytes);
 }
 
+// Reports a rejected upload on a later main-queue turn, never inside the
+// render callback that handed it over.
+- (void)rejectUpload:(uint32_t)handle {
+  __weak TelarMetalRenderer *weak = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    TelarMetalRenderer *renderer = weak;
+    if (renderer != nil && !renderer->stopped) {
+      renderer->image_ready(handle, NO);
+    }
+  });
+}
+
 - (void)acceptImages:(const telar_gui_frame *)frame {
   if (stopped) {
     return;
   }
 
+  // No frame is in flight: nothing reads a released texture again.
   if (frame->image_releases != NULL) {
     for (uint32_t i = 0; i < frame->image_release_count; i++) {
       uint32_t handle = frame->image_releases[i];
-      if (handle >= 1 && handle <= TELAR_GUI_IMAGE_CAPACITY && !image_pending[handle - 1]) {
-        [self keepSpare:images[handle - 1]];
+      if (handle >= 1 && handle <= TELAR_GUI_IMAGE_CAPACITY && !image_pending[handle - 1] &&
+          images[handle - 1] != nil) {
+        [image_residency removeAllocation:images[handle - 1]];
+        [image_residency commit];
         images[handle - 1] = nil;
       }
     }
@@ -402,20 +411,23 @@ static BOOL image_upload_valid(telar_gui_image_upload upload) {
   uint32_t count = MIN(frame->image_upload_count, (uint32_t)TELAR_GUI_IMAGE_UPLOADS);
   for (uint32_t i = 0; i < count; i++) {
     telar_gui_image_upload upload = frame->image_uploads[i];
-    if (!image_upload_valid(upload) || image_pending[upload.handle - 1] ||
-        images[upload.handle - 1] != nil) {
-      if (upload.handle >= 1 && upload.handle <= TELAR_GUI_IMAGE_CAPACITY &&
-          !image_pending[upload.handle - 1]) {
-        image_ready(upload.handle, NO);
+    BOOL valid = image_upload_valid(upload) && !image_pending[upload.handle - 1];
+    // A handle that still holds a texture of the same size is a spare the
+    // client reuses: the upload rewrites it in place. Any other held
+    // texture refuses the upload.
+    id<MTLTexture> spare = valid ? images[upload.handle - 1] : nil;
+    if (!valid || (spare != nil && (spare.width != upload.width || spare.height != upload.height))) {
+      if (upload.handle >= 1 && upload.handle <= TELAR_GUI_IMAGE_CAPACITY && !image_pending[upload.handle - 1]) {
+        [self rejectUpload:upload.handle];
       }
       continue;
     }
 
     image_pending[upload.handle - 1] = YES;
+    images[upload.handle - 1] = nil;
     __weak TelarMetalRenderer *weak = self;
     id<MTLDevice> gpu = device;
     uint8_t *scratch = image_scratch;
-    id<MTLTexture> spare = [self takeSpareWidth:upload.width height:upload.height];
     dispatch_group_async(upload_work, upload_queue, ^{
       id<MTLTexture> texture = build_image(gpu, upload, scratch, spare);
       dispatch_async(dispatch_get_main_queue(), ^{
@@ -438,42 +450,6 @@ static BOOL image_upload_valid(telar_gui_image_upload upload) {
       });
     });
   }
-}
-
-// Main thread, no frame in flight: nothing reads a released texture again.
-// A spare stays resident for its next upload; one dropped from the pool
-// leaves the residency set.
-- (void)keepSpare:(id<MTLTexture>)texture {
-  if (texture == nil) {
-    return;
-  }
-
-  for (unsigned i = 0; i < image_spares; i++) {
-    if (spares[i] == nil) {
-      spares[i] = texture;
-      return;
-    }
-  }
-
-  // Full: the oldest spare goes, the newest size is the likeliest reused.
-  [image_residency removeAllocation:spares[0]];
-  [image_residency commit];
-  for (unsigned i = 1; i < image_spares; i++) {
-    spares[i - 1] = spares[i];
-  }
-  spares[image_spares - 1] = texture;
-}
-
-- (id<MTLTexture>)takeSpareWidth:(uint32_t)width height:(uint32_t)height {
-  for (unsigned i = 0; i < image_spares; i++) {
-    id<MTLTexture> spare = spares[i];
-    if (spare != nil && spare.width == width && spare.height == height) {
-      spares[i] = nil;
-      return spare;
-    }
-  }
-
-  return nil;
 }
 
 // Draws instances [first, last) with whatever textures are bound.
@@ -571,13 +547,18 @@ static void draw_quads(id<MTL4RenderCommandEncoder> encoder, uint32_t first, uin
     uint32_t draws = frame->image_draws != NULL ? MIN(frame->image_draw_count, (uint32_t)TELAR_GUI_IMAGE_DRAWS) : 0;
     for (uint32_t i = 0; i < draws; i++) {
       telar_gui_image_draw draw = frame->image_draws[i];
-      if (draw.quad < next || draw.quad >= frame->quad_count || draw.handle < 1 ||
-          draw.handle > TELAR_GUI_IMAGE_CAPACITY) {
+      if (draw.quad < next || draw.quad >= frame->quad_count) {
         continue;
       }
 
+      // The quad is consumed whatever its handle, so an invalid one never
+      // falls into the next run with another image bound.
       draw_quads(encoder, next, draw.quad);
       next = draw.quad + 1;
+      if (draw.handle < 1 || draw.handle > TELAR_GUI_IMAGE_CAPACITY) {
+        continue;
+      }
+
       id<MTLTexture> image = images[draw.handle - 1];
       if (image == nil) {
         continue;
@@ -648,9 +629,6 @@ static void draw_quads(id<MTL4RenderCommandEncoder> encoder, uint32_t first, uin
   active_drawable = nil;
   for (unsigned i = 0; i < TELAR_GUI_IMAGE_CAPACITY; i++) {
     images[i] = nil;
-  }
-  for (unsigned i = 0; i < image_spares; i++) {
-    spares[i] = nil;
   }
   [image_residency removeAllAllocations];
   [image_residency commit];

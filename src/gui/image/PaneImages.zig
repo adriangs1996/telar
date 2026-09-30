@@ -2,6 +2,7 @@
 //! the presented machine's placements resolved for drawing, and the uploads
 //! and releases the next frame hands to the backend. Procedures live in
 //! `pane_images.zig`.
+const std = @import("std");
 const GpuImages = @import("GpuImages.zig");
 const ImagePlacement = @import("ImagePlacement.zig");
 const ResolvedFrom = @import("ResolvedFrom.zig");
@@ -23,6 +24,14 @@ frame: u64 = 0,
 /// Advances when a texture becomes ready, fails or leaves.
 revision: u64 = 1,
 built: ?ResolvedFrom = null,
+/// The window clock of the current prepare.
+now_ns: u64 = 0,
+/// What the last upload pass saw: store ingress, texture revision and
+/// uploads in flight, and for which machine.
+started_from: [3]u64 = @splat(std.math.maxInt(u64)),
+started_machine: u8 = 0,
+/// Generations drawn for the first time, for telemetry.
+presented: u64 = 0,
 uploads: [ImageUpload.uploads_in_flight]native.ImageUpload = undefined,
 upload_count: u32 = 0,
 releases: [GpuImages.capacity]u32 = undefined,

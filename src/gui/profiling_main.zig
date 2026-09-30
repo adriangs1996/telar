@@ -306,7 +306,7 @@ const Probe = struct {
             }
 
             stores[0].damage = true;
-            pane_images.place(images, &stores, view);
+            pane_images.place(images, &stores, view, 0);
         }
 
         const elapsed = std.Io.Clock.awake.now(self.io).nanoseconds - started;

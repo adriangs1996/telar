@@ -19,8 +19,16 @@ typedef struct {
     VkDeviceMemory memory;
     VkImageView view;
     VkDescriptorSet set;
+    uint32_t width, height;
     enum residency residency;
 } image_slot;
+
+// A released image the upload thread destroys, off the window thread.
+typedef struct {
+    VkImage image;
+    VkDeviceMemory memory;
+    VkImageView view;
+} released_image;
 
 typedef struct {
     uint32_t handle;
@@ -48,25 +56,44 @@ struct telar_vulkan_images {
     bool stopping;
     telar_gui_image_upload queue[RING];
     uint32_t queue_head, queue_len;
+    // The upload the thread took off the queue and is running, if any.
+    uint32_t running;
     completion done[RING];
     uint32_t done_len;
+    released_image released[TELAR_GUI_IMAGE_CAPACITY];
+    uint32_t released_len;
     int wake[2];
 };
 
+static void destroy_image(VkDevice device, released_image image) {
+    if (image.view) {
+        vkDestroyImageView(device, image.view, NULL);
+    }
+    if (image.image) {
+        vkDestroyImage(device, image.image, NULL);
+    }
+    if (image.memory) {
+        vkFreeMemory(device, image.memory, NULL);
+    }
+}
+
 static void destroy_slot(telar_vulkan_images *self, image_slot *slot) {
-    VkDevice device = self->gpu->device;
-    if (slot->view) {
-        vkDestroyImageView(device, slot->view, NULL);
-    }
-    if (slot->image) {
-        vkDestroyImage(device, slot->image, NULL);
-    }
-    if (slot->memory) {
-        vkFreeMemory(device, slot->memory, NULL);
-    }
+    destroy_image(self->gpu->device, (released_image){slot->image, slot->memory, slot->view});
     slot->view = VK_NULL_HANDLE;
     slot->image = VK_NULL_HANDLE;
     slot->memory = VK_NULL_HANDLE;
+    slot->width = slot->height = 0;
+    slot->residency = FREE;
+}
+
+// Hands a slot's image to the upload thread to destroy and frees the slot.
+// Called with the mutex held and no frame in flight.
+static void release_slot(telar_vulkan_images *self, image_slot *slot) {
+    self->released[self->released_len++] = (released_image){slot->image, slot->memory, slot->view};
+    slot->view = VK_NULL_HANDLE;
+    slot->image = VK_NULL_HANDLE;
+    slot->memory = VK_NULL_HANDLE;
+    slot->width = slot->height = 0;
     slot->residency = FREE;
 }
 
@@ -109,6 +136,8 @@ static bool create_image(telar_vulkan_images *self, image_slot *slot, uint32_t w
         .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
     };
     VK_TRY(vkCreateImageView(device, &view, NULL, &slot->view));
+    slot->width = width;
+    slot->height = height;
     VkDescriptorImageInfo sampled = {self->sampler, slot->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkWriteDescriptorSet write = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -187,9 +216,13 @@ static bool submit_band(telar_vulkan_images *self, VkImage image, uint32_t width
     return true;
 }
 
+// Writes the request into the slot's image, reusing one of the same size
+// the client kept as a spare, else creating it.
 static bool upload(telar_vulkan_images *self, image_slot *slot, telar_gui_image_upload request) {
-    if (request.width > self->gpu->limits.maxImageDimension2D || request.height > self->gpu->limits.maxImageDimension2D ||
-        !create_image(self, slot, request.width, request.height)) {
+    bool reused = slot->image != VK_NULL_HANDLE && slot->width == request.width && slot->height == request.height;
+    if (!reused && (request.width > self->gpu->limits.maxImageDimension2D ||
+                    request.height > self->gpu->limits.maxImageDimension2D ||
+                    !create_image(self, slot, request.width, request.height))) {
         return false;
     }
     size_t row_bytes = (size_t)request.width * RGBA_BYTES;
@@ -218,29 +251,50 @@ static bool upload(telar_vulkan_images *self, image_slot *slot, telar_gui_image_
     return true;
 }
 
+static void destroy_released(telar_vulkan_images *self) {
+    released_image images[TELAR_GUI_IMAGE_CAPACITY];
+    uint32_t count = self->released_len;
+    memcpy(images, self->released, count * sizeof *images);
+    self->released_len = 0;
+    pthread_mutex_unlock(&self->mutex);
+    for (uint32_t i = 0; i < count; i++) {
+        destroy_image(self->gpu->device, images[i]);
+    }
+    pthread_mutex_lock(&self->mutex);
+}
+
 static void *run(void *context) {
     telar_vulkan_images *self = context;
     pthread_mutex_lock(&self->mutex);
     for (;;) {
-        while (self->queue_len == 0 && !self->stopping) {
+        while (self->queue_len == 0 && self->released_len == 0 && !self->stopping) {
             pthread_cond_wait(&self->condition, &self->mutex);
         }
         if (self->stopping) {
             break;
         }
+        if (self->released_len != 0) {
+            destroy_released(self);
+            continue;
+        }
         telar_gui_image_upload request = self->queue[self->queue_head];
         self->queue_head = (self->queue_head + 1) % RING;
         self->queue_len--;
+        self->running = 1;
         image_slot *slot = &self->slots[request.handle - 1];
         pthread_mutex_unlock(&self->mutex);
         bool ok = upload(self, slot, request);
         pthread_mutex_lock(&self->mutex);
+        self->running = 0;
         if (ok) {
             slot->residency = READY;
         } else {
             destroy_slot(self, slot);
         }
-        self->done[self->done_len++] = (completion){request.handle, ok ? 1 : 0};
+        // Admission keeps queued, running and unreported uploads under RING.
+        if (self->done_len < RING) {
+            self->done[self->done_len++] = (completion){request.handle, ok ? 1 : 0};
+        }
         telar_gui_wake(self->wake[1]);
     }
     pthread_mutex_unlock(&self->mutex);
@@ -367,8 +421,9 @@ void telar_vulkan_images_accept(telar_vulkan_images *self, const telar_gui_frame
     if (frame->image_releases != NULL) {
         for (uint32_t i = 0; i < frame->image_release_count; i++) {
             uint32_t handle = frame->image_releases[i];
-            if (handle >= 1 && handle <= TELAR_GUI_IMAGE_CAPACITY && self->slots[handle - 1].residency == READY) {
-                destroy_slot(self, &self->slots[handle - 1]);
+            if (handle >= 1 && handle <= TELAR_GUI_IMAGE_CAPACITY && self->slots[handle - 1].residency == READY &&
+                self->released_len < TELAR_GUI_IMAGE_CAPACITY) {
+                release_slot(self, &self->slots[handle - 1]);
             }
         }
     }
@@ -378,10 +433,16 @@ void telar_vulkan_images_accept(telar_vulkan_images *self, const telar_gui_frame
     }
     for (uint32_t i = 0; i < count; i++) {
         telar_gui_image_upload upload = frame->image_uploads[i];
-        bool taken = upload.handle >= 1 && upload.handle <= TELAR_GUI_IMAGE_CAPACITY &&
-                     self->slots[upload.handle - 1].residency != FREE;
-        if (!upload_valid(upload) || taken || self->queue_len == RING || self->done_len + self->queue_len >= RING) {
-            if (!taken && upload.handle >= 1 && upload.handle <= TELAR_GUI_IMAGE_CAPACITY && self->done_len < RING) {
+        bool in_range = upload.handle >= 1 && upload.handle <= TELAR_GUI_IMAGE_CAPACITY;
+        image_slot *slot = in_range ? &self->slots[upload.handle - 1] : NULL;
+        // A ready slot of the same size is a spare the client reuses: the
+        // upload rewrites its image. Any other occupied slot refuses it.
+        bool reusable = slot != NULL && slot->residency == READY && slot->width == upload.width &&
+                        slot->height == upload.height;
+        bool taken = slot != NULL && slot->residency != FREE && !reusable;
+        bool full = self->queue_len + self->running + self->done_len >= RING;
+        if (!upload_valid(upload) || taken || full) {
+            if (in_range && slot->residency != UPLOADING && self->done_len < RING) {
                 self->done[self->done_len++] = (completion){upload.handle, 0};
                 telar_gui_wake(self->wake[1]);
             }
@@ -440,6 +501,9 @@ void telar_vulkan_images_destroy(telar_vulkan_images *self) {
         vkDeviceWaitIdle(device);
         for (unsigned i = 0; i < TELAR_GUI_IMAGE_CAPACITY; i++) {
             destroy_slot(self, &self->slots[i]);
+        }
+        for (uint32_t i = 0; i < self->released_len; i++) {
+            destroy_image(device, self->released[i]);
         }
         destroy_slot(self, &self->fallback);
         if (self->sampler) {
