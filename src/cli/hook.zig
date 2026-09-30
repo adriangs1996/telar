@@ -31,8 +31,8 @@ const ProgressStorage = @import("ProgressStorage.zig");
 const WorktreeHookInput = @import("WorktreeHookInput.zig");
 const CodexSubagents = @import("CodexSubagents.zig");
 const agentfiles = @import("agentfiles");
-
-pub const max_input_bytes = 64 * 1024;
+const HookStdin = @import("HookStdin.zig");
+const limit_reached = @import("limit_reached.zig");
 
 /// Extracts a shell command using the provider's manifest mapping.
 ///
@@ -534,13 +534,12 @@ fn cursorChatMeta(init: std.process.Init, input: *const CursorHookInput, buffer:
 /// ```
 pub fn run(init: std.process.Init, options: HookOptions) !void {
     const environ = init.minimal.environ;
-    const input = try init.gpa.alloc(u8, max_input_bytes);
-    defer init.gpa.free(input);
-    var stdin_reader = std.Io.File.stdin().readerStreaming(init.io, &.{});
-    const len = stdin_reader.interface.readSliceShort(input) catch return;
+    var stdin = HookStdin.read(init) catch return;
+    defer stdin.deinit(init.gpa);
+    const input = stdin.text;
 
     if (options.agent == .claude) {
-        const worktree_hook = std.json.parseFromSlice(WorktreeHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch null;
+        const worktree_hook = std.json.parseFromSlice(WorktreeHookInput, init.gpa, input, .{ .ignore_unknown_fields = true }) catch null;
         if (worktree_hook) |parsed| {
             defer parsed.deinit();
             if (hook_worktree.handles(parsed.value.hook_event_name)) {
@@ -563,7 +562,7 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
     };
     switch (options.agent) {
         .claude => {
-            const parsed = std.json.parseFromSlice(ClaudeHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromSlice(ClaudeHookInput, init.gpa, input, .{ .ignore_unknown_fields = true }) catch return;
             defer parsed.deinit();
             const tool: ToolHookInput = .{
                 .event = parsed.value.hook_event_name,
@@ -580,6 +579,7 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
             var event_buffer: hook_event.Buffer = undefined;
             var progress_storage: ProgressStorage = .{};
             sendReports(init, target, .{
+                .limit = stdin.limit,
                 .lifecycle = mapClaudeHook(parsed.value, &event_buffer),
                 .command = command,
                 .title = mapClaudeTitle(&title_buffer, parsed.value),
@@ -596,7 +596,7 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
             });
         },
         .codex => {
-            var parsed = std.json.parseFromSlice(CodexHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
+            var parsed = std.json.parseFromSlice(CodexHookInput, init.gpa, input, .{ .ignore_unknown_fields = true }) catch return;
             defer parsed.deinit();
             var home_buffer: [std.fs.max_path_bytes]u8 = undefined;
             var database_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -619,6 +619,7 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
             var event_buffer: hook_event.Buffer = undefined;
             var progress_storage: ProgressStorage = .{};
             sendReports(init, target, .{
+                .limit = stdin.limit,
                 .lifecycle = mapCodexHook(parsed.value, &event_buffer),
                 .command = command,
                 .review = .{ .provider = .codex, .input = tool },
@@ -633,7 +634,7 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
             });
         },
         .pi => {
-            const parsed = std.json.parseFromSlice(PiHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromSlice(PiHookInput, init.gpa, input, .{ .ignore_unknown_fields = true }) catch return;
             defer parsed.deinit();
             const command = mapToolCommand(.pi, .{
                 .event = parsed.value.event,
@@ -646,13 +647,14 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
             });
             var title_buffer: [core.max_agent_session_title_bytes]u8 = undefined;
             sendReports(init, target, .{
+                .limit = stdin.limit,
                 .lifecycle = mapPiHook(parsed.value),
                 .command = command,
                 .title = mapPiTitle(&title_buffer, parsed.value),
             });
         },
         .opencode => {
-            const parsed = std.json.parseFromSlice(OpenCodeHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromSlice(OpenCodeHookInput, init.gpa, input, .{ .ignore_unknown_fields = true }) catch return;
             defer parsed.deinit();
             const command = mapToolCommand(.opencode, .{
                 .event = parsed.value.event,
@@ -666,13 +668,14 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
             var title_buffer: [core.max_agent_session_title_bytes]u8 = undefined;
             var event_buffer: hook_event.Buffer = undefined;
             sendReports(init, target, .{
+                .limit = stdin.limit,
                 .lifecycle = mapOpenCodeHook(parsed.value, &event_buffer),
                 .command = command,
                 .title = mapOpenCodeTitle(&title_buffer, parsed.value),
             });
         },
         .cursor => {
-            var parsed = std.json.parseFromSlice(CursorHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
+            var parsed = std.json.parseFromSlice(CursorHookInput, init.gpa, input, .{ .ignore_unknown_fields = true }) catch return;
             defer parsed.deinit();
             var meta_buffer: [std.fs.max_path_bytes]u8 = undefined;
             parsed.value.chat_meta = cursorChatMeta(init, &parsed.value, &meta_buffer);
@@ -687,6 +690,7 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
             };
             var event_buffer: hook_event.Buffer = undefined;
             sendReports(init, target, .{
+                .limit = stdin.limit,
                 .lifecycle = mapCursorHook(parsed.value, &event_buffer),
                 .command = mapToolCommand(.cursor, tool),
                 .review = .{
@@ -708,17 +712,39 @@ fn hookProvider(agent: HookOptions.Agent) core.AgentProvider {
     };
 }
 
+/// Sends every report the event produced. Each is independent of the ones
+/// before it, so one the runtime refuses never costs the others, and a
+/// limit the input reached is reported last.
 fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     if (reports.lifecycle == null and reports.command == null and reports.title == null and reports.review == null and reports.progress == null) {
+        if (reports.limit) |reach| {
+            limit_reached.report(null, reach);
+        }
+
         return;
     }
 
     // Attach only. The pane environment survives a stopped runtime, and a
     // hook that started one would resurrect it from every orphaned agent.
-    var session = Session.attach(init, target.socket) catch return;
+    var session = Session.attach(init, target.socket) catch {
+        if (reports.limit) |reach| {
+            limit_reached.report(null, reach);
+        }
+
+        return;
+    };
     defer session.close();
+
     const pane = target.pane;
     session.verifyDescent(pane) catch return;
+    sendVerified(&session, target, reports);
+    if (reports.limit) |reach| {
+        limit_reached.report(&session, reach);
+    }
+}
+
+fn sendVerified(session: *Session, target: Target, reports: Reports) void {
+    const pane = target.pane;
 
     // Progress goes first: a final answer is stored before the lifecycle
     // report marks the turn finished, so a waiter never reads a stale one.
@@ -729,6 +755,7 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
         report.provider = target.provider;
         session.reportProgress(report) catch {};
     }
+
     if (reports.lifecycle) |lifecycle| {
         const report: Session.AgentReport = .{
             .provider = target.provider,
@@ -739,14 +766,17 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
             .session_file = lifecycle.session_file,
             .session_file_kind = lifecycle.session_file_kind,
         };
-        session.reportAgent(pane, report) catch return;
+        session.reportAgent(pane, report) catch {};
     }
+
     if (reports.review) |review| {
-        hook_review.capture(&session, pane, review);
+        hook_review.capture(session, pane, review);
     }
+
     if (reports.title) |title| {
-        session.reportAgentTitle(pane, target.provider, title) catch return;
+        session.reportAgentTitle(pane, target.provider, title) catch {};
     }
+
     if (reports.command) |tool| {
         const command: AgentCommandReport = .{
             .phase = tool.phase,
@@ -757,10 +787,11 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
             .session = tool.session,
             .exit_code = tool.exit_code,
         };
-        session.reportAgentCommand(pane, command) catch return;
+        session.reportAgentCommand(pane, command) catch {};
     }
+
     if (reports.review) |review| {
-        hook_review.feedback(&session, pane, review) catch {};
+        hook_review.feedback(session, pane, review) catch {};
     }
 }
 

@@ -94,7 +94,12 @@ live for the whole process.
 
 A CLI command has no model and no window. When it reaches a limit it prints
 the notice text to standard error (`reach.describe`) and exits with a
-nonzero status. A library under `lib/` knows no telar limit names: it returns
+nonzero status. A command that holds a runtime session also sends the reach
+as `report_limit` (`limit_reached.report(&session, reach)` in `src/cli`), and
+since a control connection has no window of its own, the runtime shows its
+notice to every window, once per interval of its row. `telar hook` is the
+one command that still exits 0: a nonzero status would put an error in the
+agent's transcript, and status 2 would block a Claude Code tool call. A library under `lib/` knows no telar limit names: it returns
 its error, and the flow that called it, which has a model, maps the error to
 its `Limit` and reports.
 
@@ -134,9 +139,12 @@ by the monotonic clock; the time a reader sees is the wall clock.
 The runtime keeps two tables. `model.limit_reaches` holds its own limits;
 `model.client_limit_reaches` holds what clients report. A client that
 reports a runtime limit's name, or a hundred invented names, never silences,
-renames or evicts a runtime row, and never makes the runtime show a notice.
-Each connection may send 32 reports a second; the rest are refused and
-counted in `model.refused_limit_reports`. A request that stops at a limit
+renames or evicts a runtime row, and a window's report never makes the
+runtime show a notice.
+A command-line connection's report shows its notice from that table's row,
+so it too never silences a runtime limit. Each connection may send 32
+reports a second; the rest are refused and counted in
+`model.refused_limit_reports`. A request that stops at a limit
 spends the same budget before it records a row or shows a notice, so a
 client cannot flood the runtime's own table with oversized requests either.
 
@@ -291,7 +299,7 @@ with notice levels and the client's `limits`.
   `report_limit`, `query_limits` and `limit_list`.
 - `src/backend/runtime/tests/limit_reached_test.zig`: the runtime notice,
   client reports kept apart, a client that cannot silence or evict runtime
-  rows, the report rate, a refused request that keeps its connection, the
+  rows, a command-line report that shows its notice, the report rate, a refused request that keeps its connection, the
   update net, and `Runtime.update` skipping a real event.
 - `checkpoint_shutdown_test.zig`: a session larger than its checkpoint keeps
   the runtime and restores cleanly.
@@ -315,3 +323,8 @@ with notice levels and the client's `limits`.
 - `src/cli/integration/limits.test.mjs`: against a built telar, a client
   reports a limit over the socket, `telar diagnostics limits` lists it and
   the background runtime writes its own log.
+- `src/cli/integration/hook_identity.test.mjs`: a hook payload past
+  `hooks.max_input_bytes` still reports its event from inside a pane, and
+  `telar diagnostics limits` lists the limit the hook reported.
+- `src/cli/HookStdin.zig`: input at and past the limit, a value the cut may
+  have shortened, and input that is not an object.
