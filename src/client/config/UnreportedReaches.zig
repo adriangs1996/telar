@@ -42,10 +42,14 @@ pub fn add(self: *UnreportedReaches, reach: core.LimitReach) void {
     self.count += 1;
 }
 
+/// The reaches kept so far, one per limit name.
+/// Example: `for (generation.unreported.slice()) |reach| limit_reached.report(client, reach);`
 pub fn slice(self: *const UnreportedReaches) []const core.LimitReach {
     return self.reach[0..self.count];
 }
 
+/// Forgets every reach once the client reported them.
+/// Example: `generation.unreported.clear();`
 pub fn clear(self: *UnreportedReaches) void {
     self.count = 0;
     self.dropped = 0;

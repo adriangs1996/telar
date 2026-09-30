@@ -104,16 +104,19 @@ pub fn runFor(io: std.Io, command: data.BarCommand, use: OutputUse) !Output {
 
     var output: Output = .{};
     errdefer output.deinit();
-    var printed: usize = 0;
+    var full = false;
     if (captured) {
         output.buffer = try read(io, &child, .{
             .limit = use.limit(),
             .deadline = deadline,
-            .printed = &printed,
+            .full = &full,
         });
     }
 
-    if (try waitUntil(io, &child, deadline) != 0) {
+    // A command that filled what is kept is stopped now, by the deferred
+    // stop, instead of printing on until its deadline; its exit status no
+    // longer matters.
+    if (!full and try waitUntil(io, &child, deadline) != 0) {
         return error.BarCommandFailed;
     }
 
@@ -122,8 +125,10 @@ pub fn runFor(io: std.Io, command: data.BarCommand, use: OutputUse) !Output {
     }
 
     const rendered = use != .line;
-    var cut = printed > output.buffer.len;
-    const kept = if (cut and rendered) wholeLines(output.buffer) else output.buffer;
+    const printed = output.buffer.len;
+    var cut = full;
+    const held = output.buffer[0..@min(output.buffer.len, use.limit())];
+    const kept = if (cut and rendered) wholeLines(held) else held;
     var trimmed = std.mem.trim(u8, kept, " \t\r\n");
     if (!rendered and trimmed.len > data.bar_values.max_text_bytes) {
         trimmed = data.bar_text.prefix(trimmed, data.bar_values.max_text_bytes);
@@ -162,15 +167,16 @@ const process_groups = builtin.os.tag != .windows;
 const ReadLimits = struct {
     limit: usize,
     deadline: std.Io.Clock.Timestamp,
-    /// Receives how many bytes stdout printed, kept or not.
-    printed: *usize,
+    /// Set when stdout printed past `limit` and reading stopped.
+    full: *bool,
 };
 
-// Reads stdout and a bounded stderr until both close or the deadline
-// passes; the deadline is absolute, so steady trickles of output cannot
-// extend it. Each stream keeps its first bytes up to its limit and drops
-// the rest as it arrives, so a noisy command still finishes. Returns
-// stdout, owned by `Output.allocator`.
+// Reads stdout and a bounded stderr until both close, the deadline passes
+// or stdout prints past its limit; the deadline is absolute, so steady
+// trickles of output cannot extend it. Standard error is dropped as it
+// passes its limit, since nothing shows it. Returns stdout, owned by
+// `Output.allocator`, which may hold a little more than the limit when it
+// is full.
 fn read(io: std.Io, child: *std.process.Child, limits: ReadLimits) ![]u8 {
     var buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
     var multi_reader: std.Io.File.MultiReader = undefined;
@@ -182,31 +188,23 @@ fn read(io: std.Io, child: *std.process.Child, limits: ReadLimits) ![]u8 {
     const deadline: std.Io.Timeout = .{
         .deadline = limits.deadline,
     };
-    var dropped: usize = 0;
     while (multi_reader.fill(read_reserve, deadline)) |_| {
-        dropped += keepFirst(stdout_reader, limits.limit);
-        _ = keepFirst(stderr_reader, stderr_limit);
+        const noise = stderr_reader.bufferedLen();
+        if (noise > stderr_limit) {
+            stderr_reader.toss(noise);
+        }
+
+        if (stdout_reader.bufferedLen() > limits.limit) {
+            limits.full.* = true;
+            return multi_reader.toOwnedSlice(0);
+        }
     } else |err| switch (err) {
         error.EndOfStream => {},
         else => |other| return other,
     }
 
     try multi_reader.checkAnyError();
-    limits.printed.* = stdout_reader.bufferedLen() + dropped;
     return multi_reader.toOwnedSlice(0);
-}
-
-// Drops what a stream holds past `limit` and returns how much. The reader
-// already asked for its next bytes after its old end, so they never land
-// on the kept ones.
-fn keepFirst(stream: *std.Io.Reader, limit: usize) usize {
-    const held = stream.bufferedLen();
-    if (held <= limit) {
-        return 0;
-    }
-
-    stream.end = stream.seek + limit;
-    return held - limit;
 }
 
 // The output up to its last line feed, so a cut never leaves half a line
@@ -525,4 +523,26 @@ test "a command that prints past its limit keeps its first whole lines and names
 
     try std.testing.expectEqual(@as(usize, data.bar_values.max_text_bytes), shown.slice().len);
     try std.testing.expectEqualStrings("bars.max_text_bytes", shown.limit.?.limit.name);
+}
+
+test "a command that never stops printing is stopped once what it keeps is full" {
+    if (comptime builtin.os.tag == .windows) {
+        return error.SkipZigTest;
+    }
+
+    var command: data.BarCommand = .{
+        .generation = 1,
+        .interval_ns = std.time.ns_per_s,
+        .timeout_ms = 10_000,
+    };
+    try command.appendArgument("/usr/bin/yes");
+
+    const started = std.Io.Timestamp.now(std.testing.io, .awake);
+    var output = try runFor(std.testing.io, command, .options);
+    defer output.deinit();
+    const elapsed = started.durationTo(std.Io.Timestamp.now(std.testing.io, .awake));
+
+    try std.testing.expect(elapsed.toMilliseconds() < 5_000);
+    try std.testing.expect(std.mem.startsWith(u8, output.slice(), "y\ny\n"));
+    try std.testing.expectEqualStrings("picks.max_pick_output_bytes", output.limit.?.limit.name);
 }

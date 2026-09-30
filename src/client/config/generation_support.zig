@@ -834,7 +834,7 @@ test "client bars reject invalid positions timing and tab ownership" {
         },
         .{
             .source = "local t = require('telar'); return { api_version = 2, client = { bars = { bottom = { left = t.bar.command({ command = {}, timeout_ms = 99 }), right = t.bar.tabs() } } } }",
-            .message = "timeout_ms must be in 100..60000",
+            .message = "timeout_ms must be in 100..10000",
         },
     };
 

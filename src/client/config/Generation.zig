@@ -996,7 +996,7 @@ fn parsePick(self: *Generation, input: PanelInput, definition: *data.PickDefinit
         return error.InvalidConfig;
     };
 
-    const timeout_ms = try parseCommandTimeout(state, absolute, diagnostic);
+    const timeout_ms = try parseCommandTimeout(state, absolute, data.bar_values.max_pick_timeout_ms, diagnostic);
     _ = lua_api.c.lua_getfield(state, absolute, "command");
 
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
@@ -1348,7 +1348,7 @@ fn parseBarCommand(self: *Generation, index: c_int, diagnostic: *data.Diagnostic
     var command: data.BarCommand = .{
         .generation = self.number,
         .interval_ns = interval_ns,
-        .timeout_ms = try parseCommandTimeout(state, absolute, diagnostic),
+        .timeout_ms = try parseCommandTimeout(state, absolute, data.bar_values.max_command_timeout_ms, diagnostic),
     };
     _ = lua_api.c.lua_getfield(state, absolute, "command");
     parseCommandArguments(state, -1, &command, diagnostic) catch |err| {
@@ -1367,7 +1367,8 @@ fn parseBarCommand(self: *Generation, index: c_int, diagnostic: *data.Diagnostic
 }
 
 /// The `timeout_ms` of a table that runs a command, 2 seconds when absent.
-fn parseCommandTimeout(state: *lua_api.c.lua_State, index: c_int, diagnostic: *data.Diagnostic) !u32 {
+/// Reads `timeout_ms`, which must be in 100..`max_ms`.
+fn parseCommandTimeout(state: *lua_api.c.lua_State, index: c_int, max_ms: u32, diagnostic: *data.Diagnostic) !u32 {
     _ = lua_api.c.lua_getfield(state, index, "timeout_ms");
     const timeout_value = if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL)
         default_command_timeout_ms
@@ -1378,10 +1379,10 @@ fn parseCommandTimeout(state: *lua_api.c.lua_State, index: c_int, diagnostic: *d
             return error.InvalidConfig;
         };
     lua_value.pop(state, 1);
-    if (timeout_value < data.bar_values.min_command_timeout_ms or timeout_value > data.bar_values.max_command_timeout_ms) {
+    if (timeout_value < data.bar_values.min_command_timeout_ms or timeout_value > max_ms) {
         diagnostic.set(
             "bar command timeout_ms must be in {d}..{d}",
-            .{ data.bar_values.min_command_timeout_ms, data.bar_values.max_command_timeout_ms },
+            .{ data.bar_values.min_command_timeout_ms, max_ms },
         );
         return error.InvalidConfig;
     }

@@ -751,7 +751,7 @@ bars = { bottom = {
 | `items` | a list of options, or with `command` a function from the render context to that list |
 | `command` | an argv that prints the options, one per nonempty line unless `items` parses its output |
 | `on_select` | the argv to run with the choice; each argument that is exactly `"{}"` becomes the chosen value |
-| `timeout_ms` | 100 to 60000, default 2000: how long `command` and `on_select` may each run, start to exit |
+| `timeout_ms` | 100 to 60000, default 2000: how long `command` and `on_select` may each run, start to exit; picks run apart from the bar worker, so a slow one delays no bar |
 | `refresh` | rerun the bar sources after `on_select` succeeds; `true` by default |
 
 An option is a string, or a table with a `label` to show and search, a
@@ -986,15 +986,17 @@ bounded client diagnostic.
 Commands contain 1 to 32 arguments and at most 4096 argument bytes. Telar
 executes the argv directly, without a shell, and inherits the client's process
 environment and working directory. `timeout_ms` defaults to 2000 and must be
-between 100 and 60000; it bounds the whole run, from start to exit, however
-the command prints. Keep bar sources short: one worker runs them in turn. A command runs in its own process group: one that exits
+between 100 and 10000, since bar and panel commands share one worker and a
+slow one delays the others; it bounds the whole run, from start to exit,
+however the command prints. A command runs in its own process group: one that exits
 in time may leave background work running, while one that passes its
 timeout is stopped with its group, TERM first and KILL 200 ms later. Output passed to a `render` callback may hold several
 lines, up to 64 KiB of UTF-8 without control characters other than tab and
 newline, so a helper can print JSON. Without `render`, stdout must be one
 display line of at most 512 bytes. Output past its bound keeps its first
-whole lines (its first 512 bytes, cut at a character, for one line) and
-reports `bars.max_command_output_bytes` or `bars.max_text_bytes`. Stderr
+whole lines (its first 512 bytes, cut at a character, for one line), is
+stopped there rather than left printing until its timeout, and reports
+`bars.max_command_output_bytes` or `bars.max_text_bytes`. Stderr
 past 4096 bytes is dropped and never fails the command. Bar and
 panel commands share one worker, and another elapsed tick records only one
 pending rerun. Reloading the configuration discards a completion from the

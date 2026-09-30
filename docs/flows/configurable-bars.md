@@ -135,6 +135,16 @@ while the proxy is off. The native bars span the window.
 
 ## Bounds and scheduling
 
+- Memory, all fixed and reserved when a configuration loads or a client
+  starts, none on the interactive path. A configuration generation is about
+  1 MB (`Snapshot` 827 KB: bar sources and 16 panels and picks 326 KB, the
+  agent manifest table 173 KB, the keymap 123 KB, command tabs 102 KB) plus
+  a 65 KB staged list on the heap; each client model is 1.9 MB, of which the
+  open pick holds 360 KB (4096 options and 256 KiB of text, the list
+  command's output bound) and the bar slots and panel 150 KB. Against the
+  limits before they were raised that is +0.47 MB per generation and +0.37
+  MB per client; a reload holds two generations until the swap. Checking an
+  unselected profile copies the snapshot to the heap once, not the stack.
 - Seven configurable positions, with exactly one bottom tabs source.
 - 64 components, 4096 text bytes, 256 samples and 32 actions per bar slot;
   128 components, 16 KiB of text, 1024 samples and 32 actions per panel; 16
@@ -149,12 +159,15 @@ while the proxy is off. The native bars span the window.
 - One command process at a time and one coalesced pending bit per position and
   for the open panel.
 - Thirty-two argv entries and 4096 argv bytes per command.
-- Command timeouts from 100 ms through 60 seconds; 64 KiB of stdout for a
-  render callback, one 512-byte line without one; 4096 stderr bytes. Output
-  past its bound keeps its first whole lines and the completion carries the
-  reach (`Output.limit`); stderr past its bound is dropped.
+- Command timeouts from 100 ms through 10 seconds (a pick's commands, which
+  run apart, through 60 seconds); 64 KiB of stdout for a render callback,
+  one 512-byte line without one; 4096 stderr bytes. Output past its bound
+  keeps its first whole lines, the command is stopped there, and the
+  completion carries the reach (`Output.limit`); stderr past its bound is
+  dropped.
 - Lua renders run under the client configuration VM: bounded allocator,
-  1,000,000 instructions, a 100 ms wall-time net and validated output.
+  100,000 instructions, a 100 ms wall-time net (1 s in a debug build) and
+  validated output.
 
 When several intervals expire before the client handles them, `BarUpdatesState`
 advances each deadline to its first future occurrence and evaluates once.

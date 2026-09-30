@@ -116,10 +116,12 @@ pub const max_command_bytes = 4096;
 pub const min_interval_ms: u32 = 100;
 pub const max_interval_ms: u32 = 60 * 60 * 1000;
 pub const min_command_timeout_ms: u32 = 100;
-/// Room for an `on_select` or list command that reaches the network or
-/// installs something; the default stays short, since one command runs at a
-/// time and a slow one delays the other sources.
-pub const max_command_timeout_ms: u32 = 60_000;
+/// Bar and panel commands share one worker, so a slow one delays every
+/// other source; they stop within this.
+pub const max_command_timeout_ms: u32 = 10_000;
+/// A pick's list and `on_select` commands run in jobs of their own, when a
+/// person opens or chooses, and may reach the network or install something.
+pub const max_pick_timeout_ms: u32 = 60_000;
 
 pub const Position = enum(u3) {
     bottom_left,
