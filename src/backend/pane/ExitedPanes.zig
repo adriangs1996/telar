@@ -1,4 +1,3 @@
-const core = @import("telar-core");
 const std = @import("std");
 const PaneKey = @import("PaneKey.zig");
 const TextTail = @import("TextTail.zig");
@@ -9,8 +8,9 @@ const TextTail = @import("TextTail.zig");
 const ExitedPanes = @This();
 
 pub const capacity = 16;
-/// Rows of scrollback and screen kept per pane.
-pub const kept_rows = core.max_pane_text_rows;
+/// Rows of scrollback and screen kept per pane: about what
+/// `max_text_bytes` holds, so a pane's exit walks no rows it cannot keep.
+pub const kept_rows = 200;
 pub const max_text_bytes = 16 * 1024;
 
 key: [capacity]PaneKey = @splat(.{ .id = .invalid, .generation = 0 }),

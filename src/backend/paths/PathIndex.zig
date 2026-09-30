@@ -12,8 +12,14 @@ const IndexedPath = @import("IndexedPath.zig");
 const OwnedQuery = @import("OwnedQuery.zig");
 const PathIndex = @This();
 
-pub const max_entries = 128 * 1024;
-pub const max_bytes = 8 * 1024 * 1024;
+/// Paths one index holds: a monorepo lists a few hundred thousand files.
+/// Storage is reserved at once but only the part a build writes becomes
+/// resident.
+pub const max_entries = 512 * 1024;
+/// Path bytes one index holds, in proportion: 64 bytes a path.
+pub const max_bytes = 32 * 1024 * 1024;
+pub const entries_limit = core.Limit.declare("paths.max_entries", "paths", max_entries);
+pub const bytes_limit = core.Limit.declare("paths.max_bytes", "bytes", max_bytes);
 
 /// Why a build produced nothing a query can use.
 pub const Failure = enum {
@@ -47,6 +53,9 @@ building: bool = false,
 querying: bool = false,
 /// The client left; the last worker to finish frees the index.
 abandoned: bool = false,
+/// When a request last used it, in `PathIndexes` ticks; the least recent
+/// idle index makes room for another client.
+used_at: u64 = 0,
 /// The newest request; `pending` until a query answers it.
 wanted: OwnedQuery = .{},
 pending: bool = false,
@@ -57,6 +66,19 @@ rebuild: bool = false,
 /// The last answer was taken before the build completed.
 answered_partial: bool = false,
 
+/// Maps `count` items of address space straight from the system, so no
+/// byte of it is resident until a build writes it; `Allocator.alloc` would
+/// fill all of it with `undefined` in safe builds.
+fn reserve(comptime T: type, count: usize) ![]T {
+    const bytes = std.heap.page_allocator.rawAlloc(count * @sizeOf(T), .of(T), @returnAddress()) orelse return error.OutOfMemory;
+    const items: [*]T = @ptrCast(@alignCast(bytes));
+    return items[0..count];
+}
+
+fn release(comptime T: type, items: []T) void {
+    std.heap.page_allocator.rawFree(std.mem.sliceAsBytes(items), .of(T), @returnAddress());
+}
+
 /// Reserves every buffer the build and query workers use.
 ///
 /// ```zig
@@ -64,11 +86,11 @@ answered_partial: bool = false,
 /// defer index.destroy();
 /// ```
 pub fn create(gpa: std.mem.Allocator, client: ClientKey) !*PathIndex {
-    const bytes = try gpa.alloc(u8, max_bytes);
-    errdefer gpa.free(bytes);
+    const bytes = try reserve(u8, max_bytes);
+    errdefer release(u8, bytes);
 
-    const entries = try gpa.alloc(IndexedPath, max_entries);
-    errdefer gpa.free(entries);
+    const entries = try reserve(IndexedPath, max_entries);
+    errdefer release(IndexedPath, entries);
 
     const matrix = try fuzzymatch.Matrix.create(gpa);
     errdefer gpa.destroy(matrix);
@@ -86,8 +108,8 @@ pub fn create(gpa: std.mem.Allocator, client: ClientKey) !*PathIndex {
 
 pub fn destroy(self: *PathIndex) void {
     const gpa = self.gpa;
-    gpa.free(self.bytes);
-    gpa.free(self.entries);
+    release(u8, self.bytes);
+    release(IndexedPath, self.entries);
     gpa.destroy(self.matrix);
     gpa.destroy(self);
 }
@@ -167,6 +189,15 @@ pub fn append(self: *PathIndex, relative: []const u8, kind: core.PathKind) bool 
     return true;
 }
 
+/// The bound a truncated build stopped at. Example: `limit_reached.report(model, .{ .limit = index.truncation().? });`
+pub fn truncation(self: *const PathIndex) ?core.Limit {
+    if (!self.truncated) {
+        return null;
+    }
+
+    return if (self.entry_count == self.entries.len) entries_limit else bytes_limit;
+}
+
 /// Makes every appended entry visible to queries.
 pub fn publish(self: *PathIndex) void {
     self.published.store(self.entry_count, .release);
@@ -197,4 +228,28 @@ test "entries append within bounds and publish on demand" {
     try std.testing.expect(!index.rebuild);
     index.want("/other", false);
     try std.testing.expect(index.rebuild);
+}
+
+test "a build at the entry bound keeps what it listed and names the bound" {
+    const index = try PathIndex.create(
+        std.testing.allocator,
+        .{
+            .id = 1,
+            .generation = 1,
+        },
+    );
+    defer index.destroy();
+
+    index.want("/monorepo", false);
+    index.reset();
+    try std.testing.expect(index.truncation() == null);
+
+    var appended: usize = 0;
+    while (index.append("f", .file)) {
+        appended += 1;
+    }
+
+    try std.testing.expectEqual(@as(usize, max_entries), appended);
+    try std.testing.expectEqual(@as(u32, max_entries), index.entry_count);
+    try std.testing.expectEqualStrings("paths.max_entries", index.truncation().?.name);
 }

@@ -370,7 +370,7 @@ fn recordedLoginPane(init: std.process.Init, destination: []const u8, agent: Age
         return error.LoginRecordUnreadable;
     }
 
-    return parseRecord(result.stdout);
+    return parseRecord(try result.wholeStdout());
 }
 
 fn runRecordScript(init: std.process.Init, destination: []const u8, script: []const u8) !void {

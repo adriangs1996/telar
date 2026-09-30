@@ -9,9 +9,12 @@ const control = @import("control.zig");
 const worktree = @import("worktree.zig");
 const workspace_output = @import("workspace_output.zig");
 const core = @import("telar-core");
+const limit_reached = @import("limit_reached.zig");
 
-/// The most words `create -- COMMAND` passes.
-const max_command_words = 64;
+/// The most words `create -- COMMAND` passes: the command is the pane's
+/// launch argv, so the wire's bound is its bound.
+const max_command_words = core.max_argument_count;
+const command_words_limit = core.Limit.declare("cli.workspace_command_words", "words", max_command_words);
 
 /// Runs one workspace command and returns the process exit code.
 ///
@@ -60,6 +63,10 @@ fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Wr
 
     var command_buffer: [max_command_words][]const u8 = undefined;
     if (options.command.len > command_buffer.len) {
+        limit_reached.report(.{
+            .limit = command_words_limit,
+            .requested = options.command.len,
+        });
         return error.WorkspaceCommandTooLong;
     }
 

@@ -18,15 +18,27 @@
 //! Every call here turns each of them off, so observation never runs a
 //! program the repository chose.
 const std = @import("std");
+const childoutput = @import("childoutput");
 const GitRequest = @import("GitRequest.zig");
 const GitOutput = @import("GitOutput.zig");
+const ChildOutput = childoutput.ChildOutput;
+const Bounds = childoutput.Bounds;
 
 /// Filter drivers the repository may define before it is refused outright.
 pub const max_filter_drivers = 8;
 
 const max_arguments = 128;
-const max_stderr_bytes = 4096;
 const max_config_bytes = 64 * 1024;
+/// Longest `git version` line read.
+const max_version_bytes = 256;
+
+/// Why a hardened Git command gave no output.
+pub const RunError = error{
+    /// Git could not run safely, failed, or printed more than asked for.
+    GitFailed,
+    /// Git ran past the request's timeout and was stopped.
+    GitTimedOut,
+};
 
 /// Every hook event `githooks(5)` lists for Git 2.55. `hook.<event>.enabled`
 /// turns off every hook of that event, from the hooks directory or config.
@@ -68,47 +80,73 @@ const lazy_fetch_switch: std.SemanticVersion = .{ .major = 2, .minor = 45, .patc
 const filter_keys = [_][]const u8{ "clean", "smudge", "process" };
 
 /// Runs one read-only Git command with every repository-chosen program
-/// turned off and returns what it printed. Null when Git fails, times out,
-/// or the repository cannot be read safely.
+/// turned off and returns what it printed, bounded as `request.stdout`
+/// says. Standard error is read and dropped. `request.timeout` is one
+/// deadline for the config read, the version check and the command
+/// together. `error.GitTimedOut` when Git ran past it; `error.GitFailed`
+/// when it failed or the repository cannot be read safely.
 ///
 /// ```zig
-/// const output = untrusted_git.run(io, .{ .environ = environ, .path = path, .arguments = &.{ "status", "--porcelain" }, .timeout = timeout, .stdout_limit = 4096 }) orelse return null;
+/// const output = untrusted_git.run(io, .{ .environ = environ, .path = path, .arguments = &.{ "status", "--porcelain" }, .timeout = timeout, .stdout = .{ .fail_past = 4096 } }) catch return null;
 /// defer output.deinit();
 /// ```
-pub fn run(io: std.Io, request: GitRequest) ?GitOutput {
+pub fn run(io: std.Io, request_in: GitRequest) RunError!GitOutput {
+    var request = request_in;
+    request.timeout = request_in.timeout.toDeadline(io);
+
     var command: HardenedCommand = undefined;
-    command.prepare(io, request) orelse return null;
+    try command.prepare(io, request);
     defer command.deinit();
 
-    const gpa = std.heap.page_allocator;
-    const result = std.process.run(gpa, io, .{
-        .argv = command.argvSlice(),
-        .stdout_limit = .limited(request.stdout_limit),
-        .stderr_limit = .limited(max_stderr_bytes),
+    const output = try collect(io, command.argvSlice(), &command.environ_map, .{
+        .stdout = request.stdout,
+        .stderr = .{
+            .keep_tail = 0,
+        },
         .timeout = request.timeout,
-        .environ_map = &command.environ_map,
-    }) catch return null;
-    gpa.free(result.stderr);
-    if (result.term != .exited or result.term.exited != 0) {
-        gpa.free(result.stdout);
-        return null;
+    });
+    if (!output.succeeded()) {
+        output.deinit(std.heap.page_allocator);
+        return error.GitFailed;
     }
 
-    return .{ .stdout = result.stdout };
+    std.heap.page_allocator.free(output.stderr.bytes);
+    return .{
+        .stdout = output.stdout.bytes,
+        .dropped = output.stdout.dropped,
+    };
+}
+
+// Runs one Git child to its end within `bounds`, on the page allocator
+// `GitOutput` frees with.
+fn collect(io: std.Io, argv: []const []const u8, environ_map: *const std.process.Environ.Map, bounds: Bounds) RunError!ChildOutput {
+    var child = std.process.spawn(io, .{
+        .argv = argv,
+        .stdin = .ignore,
+        .stdout = .pipe,
+        .stderr = .pipe,
+        .environ_map = environ_map,
+    }) catch return error.GitFailed;
+    defer child.kill(io);
+
+    return ChildOutput.collect(std.heap.page_allocator, io, &child, bounds) catch |err| switch (err) {
+        error.Timeout => error.GitTimedOut,
+        else => error.GitFailed,
+    };
 }
 
 /// Starts one read-only Git command, hardened as `run` does, with its
 /// output on a pipe for a caller that streams it; the caller waits for or
 /// kills the child. `request.timeout` bounds only the config read before
-/// it; `request.stdout_limit` is unused.
+/// it; `request.stdout` is unused.
 ///
 /// ```zig
-/// var child = untrusted_git.spawn(io, .{ .environ = environ, .path = root, .arguments = &.{ "ls-files", "-z" }, .timeout = timeout, .stdout_limit = 0 }) orelse return;
+/// var child = untrusted_git.spawn(io, .{ .environ = environ, .path = root, .arguments = &.{ "ls-files", "-z" }, .timeout = timeout }) orelse return;
 /// defer child.kill(io);
 /// ```
 pub fn spawn(io: std.Io, request: GitRequest) ?std.process.Child {
     var command: HardenedCommand = undefined;
-    command.prepare(io, request) orelse return null;
+    command.prepare(io, request) catch return null;
     defer command.deinit();
 
     return std.process.spawn(io, .{
@@ -128,21 +166,22 @@ const HardenedCommand = struct {
     argv: [max_arguments][]const u8,
     len: usize,
 
-    fn prepare(self: *HardenedCommand, io: std.Io, request: GitRequest) ?void {
+    fn prepare(self: *HardenedCommand, io: std.Io, request: GitRequest) RunError!void {
         const gpa = std.heap.page_allocator;
-        self.environ_map = request.environ.createMap(gpa) catch return null;
+        self.environ_map = request.environ.createMap(gpa) catch return error.GitFailed;
         self.arena_state = .init(gpa);
         self.len = 0;
+        errdefer self.deinit();
 
-        removeGitVariables(&self.environ_map) catch return self.fail();
+        removeGitVariables(&self.environ_map) catch return error.GitFailed;
         for (hardened_environment) |entry| {
-            self.environ_map.put(entry[0], entry[1]) catch return self.fail();
+            self.environ_map.put(entry[0], entry[1]) catch return error.GitFailed;
         }
 
         var facts: RepositoryFacts = .{};
-        readRepositoryFacts(io, request, &self.environ_map, self.arena_state.allocator(), &facts) orelse return self.fail();
-        if (facts.fetchesLazily() and !lazyFetchSwitchable(io, request, &self.environ_map)) {
-            return self.fail();
+        try readRepositoryFacts(io, request, &self.environ_map, self.arena_state.allocator(), &facts);
+        if (facts.fetchesLazily() and !try lazyFetchSwitchable(io, request, &self.environ_map)) {
+            return error.GitFailed;
         }
 
         self.push("git");
@@ -154,12 +193,12 @@ const HardenedCommand = struct {
         for (facts.drivers[0..facts.driver_count]) |driver| {
             for (filter_keys) |key| {
                 self.push("-c");
-                self.push(std.fmt.allocPrint(self.arena_state.allocator(), "filter.{s}.{s}=", .{ driver, key }) catch return self.fail());
+                self.push(std.fmt.allocPrint(self.arena_state.allocator(), "filter.{s}.{s}=", .{ driver, key }) catch return error.GitFailed);
             }
         }
 
         if (self.len + 2 + request.arguments.len > self.argv.len) {
-            return self.fail();
+            return error.GitFailed;
         }
 
         self.push("-C");
@@ -176,12 +215,6 @@ const HardenedCommand = struct {
 
     fn argvSlice(self: *const HardenedCommand) []const []const u8 {
         return self.argv[0..self.len];
-    }
-
-    /// Releases what `prepare` took and reports that it could not finish.
-    fn fail(self: *HardenedCommand) ?void {
-        self.deinit();
-        return null;
     }
 
     fn deinit(self: *HardenedCommand) void {
@@ -209,36 +242,36 @@ const RepositoryFacts = struct {
 
 /// Reads the repository's own config (local and worktree scope, including
 /// the files it includes); the user's global and system config, such as a
-/// Git LFS driver, stays trusted. Reading config runs no program. Null when
-/// there are too many drivers or a name `-c` cannot carry. Driver names are
-/// copied into `arena`.
-fn readRepositoryFacts(io: std.Io, request: GitRequest, environ_map: *const std.process.Environ.Map, arena: std.mem.Allocator, facts: *RepositoryFacts) ?void {
+/// Git LFS driver, stays trusted. Reading config runs no program. Fails
+/// when there are too many drivers or a name `-c` cannot carry. Driver
+/// names are copied into `arena`.
+fn readRepositoryFacts(io: std.Io, request: GitRequest, environ_map: *const std.process.Environ.Map, arena: std.mem.Allocator, facts: *RepositoryFacts) RunError!void {
     const pattern = "^(filter\\.|extensions\\.partialclone$|remote\\..*\\.(promisor|partialclonefilter|uploadpack)$)";
     const argv = [_][]const u8{"git"} ++ hardened_options ++ [_][]const u8{ "-C", request.path, "config", "--show-scope", "-z", "--get-regexp", pattern };
-    const gpa = std.heap.page_allocator;
-    const result = std.process.run(gpa, io, .{
-        .argv = &argv,
-        .stdout_limit = .limited(max_config_bytes),
-        .stderr_limit = .limited(max_stderr_bytes),
+    const output = try collect(io, &argv, environ_map, .{
+        .stdout = .{
+            .fail_past = max_config_bytes,
+        },
+        .stderr = .{
+            .keep_tail = 0,
+        },
         .timeout = request.timeout,
-        .environ_map = environ_map,
-    }) catch return null;
-    defer gpa.free(result.stdout);
-    defer gpa.free(result.stderr);
-    if (result.term != .exited) {
-        return null;
+    });
+    defer output.deinit(std.heap.page_allocator);
+    if (output.term != .exited) {
+        return error.GitFailed;
     }
 
     // `git config --get-regexp` exits 1 when nothing matches.
-    switch (result.term.exited) {
+    switch (output.term.exited) {
         0 => {},
         1 => return,
-        else => return null,
+        else => return error.GitFailed,
     }
 
-    parseFacts(result.stdout, facts) orelse return null;
+    parseFacts(output.stdout.bytes, facts) orelse return error.GitFailed;
     for (facts.drivers[0..facts.driver_count]) |*driver| {
-        driver.* = arena.dupe(u8, driver.*) catch return null;
+        driver.* = arena.dupe(u8, driver.*) catch return error.GitFailed;
     }
 }
 
@@ -309,22 +342,25 @@ fn addDriver(key: []const u8, facts: *RepositoryFacts) ?void {
 }
 
 /// Whether this Git honours `GIT_NO_LAZY_FETCH`.
-fn lazyFetchSwitchable(io: std.Io, request: GitRequest, environ_map: *const std.process.Environ.Map) bool {
-    const gpa = std.heap.page_allocator;
-    const result = std.process.run(gpa, io, .{
-        .argv = &.{ "git", "version" },
-        .stdout_limit = .limited(256),
-        .stderr_limit = .limited(max_stderr_bytes),
+fn lazyFetchSwitchable(io: std.Io, request: GitRequest, environ_map: *const std.process.Environ.Map) RunError!bool {
+    const output = collect(io, &.{ "git", "version" }, environ_map, .{
+        .stdout = .{
+            .fail_past = max_version_bytes,
+        },
+        .stderr = .{
+            .keep_tail = 0,
+        },
         .timeout = request.timeout,
-        .environ_map = environ_map,
-    }) catch return false;
-    defer gpa.free(result.stdout);
-    defer gpa.free(result.stderr);
-    if (result.term != .exited or result.term.exited != 0) {
+    }) catch |err| switch (err) {
+        error.GitTimedOut => return err,
+        error.GitFailed => return false,
+    };
+    defer output.deinit(std.heap.page_allocator);
+    if (!output.succeeded()) {
         return false;
     }
 
-    const version = parseVersion(result.stdout) orelse return false;
+    const version = parseVersion(output.stdout.bytes) orelse return false;
     return version.order(lazy_fetch_switch) != .lt;
 }
 

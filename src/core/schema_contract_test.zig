@@ -6,6 +6,7 @@
 //! change cannot ship without a visible schema bump.
 
 const std = @import("std");
+const localsocket = @import("localsocket");
 const schema = @import("schema/schema.zig");
 const Entry = @import("Entry.zig");
 const TabLocation = @import("schema/TabLocation.zig");
@@ -52,6 +53,7 @@ const Frame = @import("schema/Frame.zig");
 const tags = @import("schema/messages/tags.zig");
 const TextMetadataBuilder = @import("text_metadata/Builder.zig");
 const text_metadata_limits = @import("text_metadata/limits.zig");
+const ClientList = @import("ClientList.zig");
 const core_graphics = @import("graphics.zig");
 const ChangeReviewSnapshotView = @import("schema/messages/ChangeReviewSnapshotView.zig");
 const MoveTab = @import("schema/messages/MoveTab.zig");
@@ -63,7 +65,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 128;
+const corpus_len = 127;
 
 const failure_codes = std.enums.values(types.FailureCode);
 const failure_code_listing = listing: {
@@ -74,27 +76,279 @@ const failure_code_listing = listing: {
 
     break :listing text;
 };
-/// Bounds a peer enforces without changing any encoding. Pinning their
-/// values here makes raising one change the fingerprint, so peers built
-/// with different bounds never talk.
-const wire_bounds_listing = std.fmt.comptimePrint(
-    "max_panes={d} max_panes_per_tab={d} max_workspace_name_bytes={d} max_search_matches={d} max_clipboard_bytes={d} max_client_layout_tabs={d} max_client_layout_nodes={d} max_client_layout_tab_nodes={d} max_client_layout_wire_bytes={d} client_list_capacity={d} reject_reasons={d} text_metadata_statuses={d} max_chunks_per_image={d}",
+/// One bound both ends check on the wire. A peer with another bound refuses
+/// what this one sends, so every bound is part of the fingerprint.
+const WireBound = struct {
+    name: []const u8,
+    value: u64,
+};
+
+/// Every wire bound, named one by one: the frame each message travels in,
+/// the bounds messages declare beside themselves, the count of each enum a
+/// peer refuses to extend, and each bound `types.zig` declares. A test
+/// checks no `types.zig` bound is left out.
+const wire_bounds = [_]WireBound{
     .{
-        types.max_panes,
-        types.max_panes_per_tab,
-        types.max_workspace_name_bytes,
-        types.max_search_matches,
-        pane_module.max_clipboard_bytes,
-        types.max_client_layout_tabs,
-        types.max_client_layout_nodes,
-        types.max_client_layout_tab_nodes,
-        types.max_client_layout_wire_bytes,
-        schema.ClientList.capacity,
-        std.enums.values(handshake.RejectReason).len,
-        std.enums.values(text_metadata_limits.Status).len,
-        core_graphics.max_chunks_per_image,
+        .name = "max_frame_size",
+        .value = localsocket.transport.max_frame_size,
     },
-);
+    .{
+        .name = "max_clipboard_bytes",
+        .value = pane_module.max_clipboard_bytes,
+    },
+    .{
+        .name = "client_list_capacity",
+        .value = ClientList.capacity,
+    },
+    .{
+        .name = "reject_reasons",
+        .value = std.enums.values(handshake.RejectReason).len,
+    },
+    .{
+        .name = "text_metadata_statuses",
+        .value = std.enums.values(text_metadata_limits.Status).len,
+    },
+    .{
+        .name = "max_chunks_per_image",
+        .value = core_graphics.max_chunks_per_image,
+    },
+    .{
+        .name = "max_input_bytes",
+        .value = types.max_input_bytes,
+    },
+    .{
+        .name = "max_cwd_bytes",
+        .value = types.max_cwd_bytes,
+    },
+    .{
+        .name = "max_workspace_name_bytes",
+        .value = types.max_workspace_name_bytes,
+    },
+    .{
+        .name = "max_argument_count",
+        .value = types.max_argument_count,
+    },
+    .{
+        .name = "max_argument_bytes",
+        .value = types.max_argument_bytes,
+    },
+    .{
+        .name = "max_environment_count",
+        .value = types.max_environment_count,
+    },
+    .{
+        .name = "max_environment_bytes",
+        .value = types.max_environment_bytes,
+    },
+    .{
+        .name = "max_error_message_bytes",
+        .value = types.max_error_message_bytes,
+    },
+    .{
+        .name = "max_tab_label_bytes",
+        .value = types.max_tab_label_bytes,
+    },
+    .{
+        .name = "max_tabs_per_workspace",
+        .value = types.max_tabs_per_workspace,
+    },
+    .{
+        .name = "max_panes_per_tab",
+        .value = types.max_panes_per_tab,
+    },
+    .{
+        .name = "max_panes",
+        .value = types.max_panes,
+    },
+    .{
+        .name = "max_history_query_bytes",
+        .value = types.max_history_query_bytes,
+    },
+    .{
+        .name = "max_history_results",
+        .value = types.max_history_results,
+    },
+    .{
+        .name = "max_history_command_bytes",
+        .value = types.max_history_command_bytes,
+    },
+    .{
+        .name = "max_agent_snapshot_entries",
+        .value = types.max_agent_snapshot_entries,
+    },
+    .{
+        .name = "max_agent_workspace_label_bytes",
+        .value = types.max_agent_workspace_label_bytes,
+    },
+    .{
+        .name = "max_agent_session_title_bytes",
+        .value = types.max_agent_session_title_bytes,
+    },
+    .{
+        .name = "max_agent_cwd_label_bytes",
+        .value = types.max_agent_cwd_label_bytes,
+    },
+    .{
+        .name = "max_agent_last_event_bytes",
+        .value = types.max_agent_last_event_bytes,
+    },
+    .{
+        .name = "max_agent_session_file_bytes",
+        .value = types.max_agent_session_file_bytes,
+    },
+    .{
+        .name = "max_foreground_name_bytes",
+        .value = types.max_foreground_name_bytes,
+    },
+    .{
+        .name = "max_pane_title_bytes",
+        .value = types.max_pane_title_bytes,
+    },
+    .{
+        .name = "max_workspace_list_entries",
+        .value = types.max_workspace_list_entries,
+    },
+    .{
+        .name = "max_git_branch_bytes",
+        .value = types.max_git_branch_bytes,
+    },
+    .{
+        .name = "max_worktree_entries",
+        .value = types.max_worktree_entries,
+    },
+    .{
+        .name = "max_worktree_title_bytes",
+        .value = types.max_worktree_title_bytes,
+    },
+    .{
+        .name = "max_worktree_brief_bytes",
+        .value = types.max_worktree_brief_bytes,
+    },
+    .{
+        .name = "max_worktree_command_label_bytes",
+        .value = types.max_worktree_command_label_bytes,
+    },
+    .{
+        .name = "max_agent_final_message_bytes",
+        .value = types.max_agent_final_message_bytes,
+    },
+    .{
+        .name = "max_agent_plan_step_bytes",
+        .value = types.max_agent_plan_step_bytes,
+    },
+    .{
+        .name = "max_search_needle_bytes",
+        .value = types.max_search_needle_bytes,
+    },
+    .{
+        .name = "max_search_matches",
+        .value = types.max_search_matches,
+    },
+    .{
+        .name = "max_path_query_bytes",
+        .value = types.max_path_query_bytes,
+    },
+    .{
+        .name = "max_path_results",
+        .value = types.max_path_results,
+    },
+    .{
+        .name = "max_path_match_bytes",
+        .value = types.max_path_match_bytes,
+    },
+    .{
+        .name = "max_pane_text_rows",
+        .value = types.max_pane_text_rows,
+    },
+    .{
+        .name = "max_pane_text_bytes",
+        .value = types.max_pane_text_bytes,
+    },
+    .{
+        .name = "max_pane_text_input_bytes",
+        .value = types.max_pane_text_input_bytes,
+    },
+    .{
+        .name = "max_notification_title_bytes",
+        .value = types.max_notification_title_bytes,
+    },
+    .{
+        .name = "max_notification_message_bytes",
+        .value = types.max_notification_message_bytes,
+    },
+    .{
+        .name = "max_notification_link_bytes",
+        .value = types.max_notification_link_bytes,
+    },
+    .{
+        .name = "max_history_provider_bytes",
+        .value = types.max_history_provider_bytes,
+    },
+    .{
+        .name = "max_history_tool_call_id_bytes",
+        .value = types.max_history_tool_call_id_bytes,
+    },
+    .{
+        .name = "max_client_layout_clients",
+        .value = types.max_client_layout_clients,
+    },
+    .{
+        .name = "max_client_layout_tabs",
+        .value = types.max_client_layout_tabs,
+    },
+    .{
+        .name = "max_client_layout_tab_nodes",
+        .value = types.max_client_layout_tab_nodes,
+    },
+    .{
+        .name = "max_client_layout_nodes",
+        .value = types.max_client_layout_nodes,
+    },
+    .{
+        .name = "max_client_layout_wire_bytes",
+        .value = types.max_client_layout_wire_bytes,
+    },
+    .{
+        .name = "max_client_layout_ratio",
+        .value = types.max_client_layout_ratio,
+    },
+    .{
+        .name = "max_notification_duration_ms",
+        .value = types.max_notification_duration_ms,
+    },
+    .{
+        .name = "max_suggestion_request_bytes",
+        .value = types.max_suggestion_request_bytes,
+    },
+    .{
+        .name = "max_suggestion_bytes",
+        .value = types.max_suggestion_bytes,
+    },
+    .{
+        .name = "max_agent_manifests",
+        .value = types.max_agent_manifests,
+    },
+    .{
+        .name = "max_agent_provider_index",
+        .value = types.max_agent_provider_index,
+    },
+    .{
+        .name = "max_agent_provider_name_bytes",
+        .value = types.max_agent_provider_name_bytes,
+    },
+    .{
+        .name = "max_agent_display_name_bytes",
+        .value = types.max_agent_display_name_bytes,
+    },
+    .{
+        .name = "max_agent_icon_bytes",
+        .value = types.max_agent_icon_bytes,
+    },
+    .{
+        .name = "max_agent_session_reference_bytes",
+        .value = types.max_agent_session_reference_bytes,
+    },
+};
 const corpus_storage_size = 12 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -694,13 +948,6 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(5),
             .code = failure_codes[failure_codes.len - 1],
             .message = failure_code_listing,
-        }),
-    ));
-    helper.addTailTolerant(.{ .name = "wire_bounds", .direction = .server, .golden_hex = golden.wire_bounds }, helper.commit(
-        try runtime.encodeRequestFailed(helper.space(), .{
-            .request_id = @enumFromInt(5),
-            .code = .resource_limit,
-            .message = wire_bounds_listing,
         }),
     ));
     helper.add(.{ .name = "runtime_stopping", .direction = .server, .golden_hex = golden.runtime_stopping }, helper.commit(
@@ -1345,6 +1592,13 @@ fn fingerprint(entries: []const Entry) [6]u8 {
         hasher.update(entry.bytes);
         hasher.update(&.{0});
     }
+
+    for (wire_bounds) |bound| {
+        hasher.update(bound.name);
+        hasher.update(&.{0});
+        hasher.update(std.mem.asBytes(&std.mem.nativeToLittle(u64, bound.value)));
+    }
+
     var digest: [32]u8 = undefined;
     hasher.final(&digest);
     var hex: [6]u8 = undefined;
@@ -1542,6 +1796,54 @@ test "placements with a zero virtual id are rejected on both sides" {
     }
 }
 
+test "pane text requests and replies hold their whole bounds and refuse one more" {
+    const gpa = std.testing.allocator;
+    const buffer = try gpa.alloc(u8, types.max_pane_text_bytes + 64);
+    defer gpa.free(buffer);
+    const text = try gpa.alloc(u8, types.max_pane_text_bytes + 1);
+    defer gpa.free(text);
+    @memset(text, 'x');
+
+    const send: schema.SendPaneText = .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+        .mode = .raw,
+        .text = text[0..types.max_pane_text_input_bytes],
+    };
+    const sent = try pane_module.encodeSendPaneText(buffer, send);
+    try std.testing.expectEqual(types.max_pane_text_input_bytes, (try root.decodeClient(sent)).send_pane_text.text.len);
+    var longer = send;
+    longer.text = text[0 .. types.max_pane_text_input_bytes + 1];
+    try std.testing.expect(std.meta.isError(pane_module.encodeSendPaneText(buffer, longer)));
+
+    const reply = try pane_module.encodePaneText(buffer, .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .truncated = false,
+        .text = text[0..types.max_pane_text_bytes],
+    });
+    try std.testing.expectEqual(types.max_pane_text_bytes, (try root.decodeServer(reply)).pane_text.text.len);
+    try std.testing.expectError(error.InvalidByteString, pane_module.encodePaneText(buffer, .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .truncated = false,
+        .text = text,
+    }));
+
+    const read: schema.ReadPane = .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+        .rows = types.max_pane_text_rows,
+        .source = .recent,
+    };
+    try read.validateWire();
+    var more = read;
+    more.rows += 1;
+    try std.testing.expectError(error.InvalidPaneTextRows, more.validateWire());
+}
+
 test "pane cwd rejects empty nul-containing and oversized paths" {
     var buffer: [types.max_cwd_bytes + 32]u8 = undefined;
     const pane_id: id_module.PaneId = @enumFromInt(1);
@@ -1645,6 +1947,22 @@ test "malformed cell bytes surface as errors during iteration" {
     const span = (try span_iterator.next()).?;
     var cell_iterator = span.cells();
     try std.testing.expectError(error.InvalidCell, cell_iterator.next());
+}
+
+test "every bound types.zig declares is part of the fingerprint" {
+    inline for (@typeInfo(types).@"struct".decls) |declaration| {
+        if (comptime std.mem.startsWith(u8, declaration.name, "max_")) {
+            const listed = for (wire_bounds) |bound| {
+                if (std.mem.eql(u8, bound.name, declaration.name)) {
+                    break bound.value == @field(types, declaration.name);
+                }
+            } else false;
+            std.testing.expect(listed) catch |err| {
+                std.debug.print("add types.{s} to wire_bounds\n", .{declaration.name});
+                return err;
+            };
+        }
+    }
 }
 
 test "the handshake fingerprint derives from the golden corpus" {

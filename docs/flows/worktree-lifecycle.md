@@ -21,7 +21,11 @@ cli.worktree.create
         |  base: --from, else the main checkout's branch; one the runtime
         |        cannot record whole, or a full Worktrees table, is refused
         |        before Git runs
-        |  worktree_git.add (git worktree add -b <branch> <dir> <base>)
+        |  worktree_git.add (git worktree add -b <branch> <dir> <base>);
+        |        each local Git command has 300 s (`worktrees.git_timeout`,
+        |        a push or fetch 600 s) and keeps the newest 64 KiB of what
+        |        it prints, so a noisy post-checkout hook never fails an add
+        |        Git finished; Claude Code's worktree hooks get 360 s
         |
 schema.register_worktree{source, created_by, path, branch, base, title, brief}
         |

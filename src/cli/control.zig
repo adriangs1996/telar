@@ -2,6 +2,7 @@
 //! agents through the local runtime.
 
 const core = @import("telar-core");
+const pty = @import("pty");
 const std = @import("std");
 const ControlAgent = @import("ControlAgent.zig");
 const Snapshot = @import("Snapshot.zig");
@@ -69,6 +70,9 @@ pub const ControlError = error{
     ForeignProcess,
 };
 
+/// Arguments of one command telar launches in a pane or window.
+pub const command_arguments_limit = core.Limit.declare("cli.command_arguments", "arguments", pty.command_support.max_args);
+
 pub fn failureError(failure: core.RequestFailed) ControlError {
     return switch (failure.code) {
         .pane_not_found => error.PaneNotFound,
@@ -113,6 +117,7 @@ pub fn describe(err: anyerror) []const u8 {
         error.AmbiguousWorktree => "more than one worktree has that branch or title; name it by the other",
         error.WorktreeHasNoAgent => "no agent runs in that worktree",
         error.InvalidSendText => std.fmt.comptimePrint("send-keys needs text of 1 to {d} bytes, or --stdin", .{core.max_pane_text_input_bytes}),
+        error.TooManyArguments => std.fmt.comptimePrint("a command telar launches takes at most {d} arguments", .{pty.command_support.max_args}),
         else => @errorName(err),
     };
 }

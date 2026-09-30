@@ -14,6 +14,7 @@ const WorktreeCatalog = @import("WorktreeCatalog.zig");
 const agent = @import("agent.zig");
 const control = @import("control.zig");
 const worktree_git = @import("worktree_git.zig");
+const limit_reached = @import("limit_reached.zig");
 const ListedWorktree = @import("ListedWorktree.zig");
 const CatalogWorktree = @import("CatalogWorktree.zig");
 const machine_dispatch = @import("machine_dispatch.zig");
@@ -311,13 +312,15 @@ fn list(init: std.process.Init, command: Command) !u8 {
     return agent.exit_ok;
 }
 
+const untracked_limit = core.Limit.declare("worktrees.untracked_listing", "worktrees", UntrackedWorktrees.max_untracked);
+
 const UntrackedWorktrees = struct {
     gpa: std.mem.Allocator,
     bytes: []u8 = &.{},
     items: [max_untracked]ListedWorktree = undefined,
     count: usize = 0,
 
-    const max_untracked = 64;
+    const max_untracked = 256;
 
     fn init(gpa: std.mem.Allocator) UntrackedWorktrees {
         return .{ .gpa = gpa };
@@ -337,20 +340,31 @@ fn untrackedWorktrees(init: std.process.Init, command: Command, storage: *Untrac
     const root = try worktree_git.mainRoot(init, cwd, &root_buffer);
     storage.bytes = try worktree_git.listPorcelain(init, root);
     var listed = worktree_git.listed(storage.bytes);
+    var omitted: usize = 0;
     while (listed.next()) |entry| {
-        if (storage.count == UntrackedWorktrees.max_untracked) {
-            break;
-        }
-
         const tracked = for (command.catalog.worktrees.items) |*worktree| {
             if (std.mem.eql(u8, worktree.path, entry.path)) {
                 break true;
             }
         } else false;
-        if (!tracked) {
-            storage.items[storage.count] = entry;
-            storage.count += 1;
+        if (tracked) {
+            continue;
         }
+
+        if (storage.count == UntrackedWorktrees.max_untracked) {
+            omitted += 1;
+            continue;
+        }
+
+        storage.items[storage.count] = entry;
+        storage.count += 1;
+    }
+
+    if (omitted != 0) {
+        limit_reached.report(.{
+            .limit = untracked_limit,
+            .requested = storage.count + omitted,
+        });
     }
 
     return storage.items[0..storage.count];
