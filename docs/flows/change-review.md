@@ -112,7 +112,20 @@ to 2 KiB and formatted feedback to 8 KiB. There are at most 32 comments per
 edition. The view indexes at most 32 files and 1,024 numbered rows. Unsupported
 or oversized content fails explicitly; it is not silently truncated into a
 different review. One syntax job uses an inactive source slot; its completion is
-adopted only after the preceding presentation releases its resources.
+adopted only after the preceding presentation releases its resources. The two
+slots, each a source and one role per byte, are reserved when the window starts
+and sized by the patch limit; the view borrows the visible slot's roles.
+
+Syntax highlighting never refuses an edition. A job highlights at most 1,024
+fragments (one side of one hunk; `syntax.job_fragments`) and starts no fragment
+after one second (`syntax.job_ms`); a source larger than 256 KiB
+(`syntax.source_bytes`, which the build asserts holds the patch limit) is not
+highlighted. A job that reaches one of these keeps the roles it wrote, leaves
+the rest in the plain syntax color and returns the limit with its edition; the
+window's loop adopts the edition as usual and reports the limit. A job that
+fails (a grammar, a malformed native result, memory) shows the whole edition
+plain and logs why. Copying review code takes at most the clipboard's 64 KiB; a
+longer selection copies the lines that fit and reports `ClipboardTooLarge`.
 
 The service admits four observation jobs, at most one per client connection.
 Availability discovery uses at most three slots, leaving one for review requests.

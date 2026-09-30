@@ -30,7 +30,6 @@ const native = @import("native/native.zig");
 const selection = @import("render/copy_selection.zig");
 const State = @import("widgets/interaction/State.zig");
 const Chrome = @import("widgets/Chrome.zig");
-const SyntaxService = @import("syntax/Service.zig");
 const ReviewPanel = @import("change_review/Panel.zig");
 const review_dispatch = @import("change_review/dispatch.zig");
 
@@ -160,7 +159,6 @@ diagrams: DiagramService,
 previews: ImagePreviews,
 /// The preview revision the chrome was last prepared at.
 previews_prepared: u64 = 0,
-syntax: SyntaxService,
 review: *ReviewPanel,
 
 /// Adopts options on success and binds all ports before receiving messages.
@@ -187,6 +185,8 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
 
     const review = try params.gpa.create(ReviewPanel);
     errdefer params.gpa.destroy(review);
+    review.* = try ReviewPanel.init(params.gpa);
+    errdefer review.deinit();
 
     gui.driver = try NativeLoop.init(params.io);
     errdefer gui.driver.deinit();
@@ -239,14 +239,7 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
 
     gui.diagrams = .init(params.gpa);
 
-    gui.syntax = .{
-        .allocator = params.gpa,
-    };
-
     gui.review = review;
-    gui.review.* = .{
-        .allocator = params.gpa,
-    };
 
     gui.review.widget.host_port = &gui.host;
     gui.review.widget.widgets = &gui.widgets;
@@ -280,6 +273,7 @@ pub fn deinit(self: *GuiAdapter) void {
     self.diagrams.deinit();
     self.previews.deinit();
     self.chrome.favicons.deinit(gpa);
+    self.review.deinit();
     gpa.destroy(self.review);
     // Other machines share the window client's configuration, so they go
     // first.
@@ -703,7 +697,6 @@ fn dispatch(self: *GuiAdapter, event: gui_event.Message) !?u8 {
         .binding_timeout => |result| try self.expireBinding(result),
         .favicon => |result| self.landFavicon(result),
         .diagram_ready => self.landDiagram(),
-        .syntax_ready => self.landSyntax(),
         .change_review_ready => self.landChangeReview(),
         .clipboard_image => |completion| try clipboard_image.finish(self, completion),
     }
@@ -731,7 +724,6 @@ fn pathFor(event: gui_event.Message) core.Path {
         .profiles_changed,
         .favicon,
         .diagram_ready,
-        .syntax_ready,
         .change_review_ready,
         => .observation,
         else => .interactive,
@@ -1841,7 +1833,6 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
     self.chrome.now_ns = pacing.clock.monotonic(self.app.io);
     self.diagrams.beginFrame();
     self.previews.beginFrame();
-    self.syntax.beginFrame();
     try self.review.synchronize(self.app);
     self.review.widget.theme_override = self.app.model.theme;
 
@@ -1870,7 +1861,6 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
         .link = if (self.pointer.hover.link) |*hit| hit else null,
         .widgets = &self.widgets,
         .diagrams = &self.diagrams.store,
-        .syntax = &self.syntax.store,
         .review = if (self.review.active) &self.review.widget else null,
         .previews = if (self.showsPreviews()) &self.previews else null,
     };
@@ -1889,7 +1879,6 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
 
     const diagram_revision = self.diagrams.store.revision;
     self.diagrams.start(&self.driver.inbox);
-    self.syntax.start(&self.driver.inbox);
     self.review.start(
         .{
             .app = self.app,
@@ -1930,12 +1919,6 @@ fn showsPreviews(self: *const GuiAdapter) bool {
 /// Defers image adoption until the current GPU consumer releases its frame.
 fn landDiagram(self: *GuiAdapter) void {
     self.diagrams.notify();
-    self.chrome.invalidate();
-}
-
-/// The inbox synchronizes completed tokens; adoption waits for frame preparation.
-fn landSyntax(self: *GuiAdapter) void {
-    self.syntax.notify();
     self.chrome.invalidate();
 }
 

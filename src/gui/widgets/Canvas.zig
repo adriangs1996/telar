@@ -1,6 +1,5 @@
 //! Native chrome drawing over the terminal atlas and the host's measured grid.
 //! Every primitive is clipped to its supplied area; no widget owns GPU resources.
-const syntaxhl = @import("syntaxhl");
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
@@ -23,7 +22,6 @@ const LabelPlacement = @import("LabelPlacement.zig");
 const SpritePage = @import("../image/SpritePage.zig");
 const Sprite = @import("../image/Sprite.zig");
 const Canvas = @This();
-const SyntaxStore = syntaxhl.Store;
 const State = @import("interaction/State.zig");
 const TerminalMetrics = @import("../TerminalMetrics.zig");
 const animate = @import("animate");
@@ -58,7 +56,6 @@ controls: u32 = 0,
 sprites: ?*const SpritePage = null,
 /// Diagram requests copy their source into the client-owned deferred store.
 diagrams: ?*Store = null,
-syntax: ?*SyntaxStore = null,
 
 /// Draws canonical terminal cells and their cursor through the frame's retained
 /// cache. A canvas backed by another quad list cannot use that cache.

@@ -69,7 +69,9 @@ pub fn draw(self: *Self) !void {
     try self.drawSidebar(.{ .x = 0, .y = top, .width = sidebar, .height = self.viewport.height });
     const revision = w.model.current();
     const file = revision.files[w.model.file];
-    var diff: DiffPaint = .{ .canvas = canvas, .bounds = self.viewport, .viewport = self.viewport, .text = revision.text(w.model.file), .roles = w.roles[w.model.revision][file.start..file.end], .paint = false, .annotations = .{ .context = self, .row = row, .after = after } };
+    const roles = w.roles[w.model.revision];
+    const file_roles = if (file.end <= roles.len) roles[file.start..file.end] else null;
+    var diff: DiffPaint = .{ .canvas = canvas, .bounds = self.viewport, .viewport = self.viewport, .text = revision.text(w.model.file), .roles = file_roles, .paint = false, .annotations = .{ .context = self, .row = row, .after = after } };
     w.maximum_scroll = @max(0, try diff.layout() - self.viewport.height);
     w.prepared_viewport.maximum_scroll = w.maximum_scroll;
     if (w.reveal) {

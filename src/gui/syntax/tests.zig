@@ -1,14 +1,10 @@
 const syntaxhl = @import("syntaxhl");
-const gui_event = @import("../gui_event.zig");
 const std = @import("std");
-const client = @import("telar-client");
-const Store = syntaxhl.Store;
-const Service = @import("Service.zig");
-const Result = syntaxhl.Result;
 const DiffHighlighter = @import("DiffHighlighter.zig");
 const limits = @import("limits.zig");
 
 const source = "Updated main.zig\n@@ -0,0 +1 @@\n+fn run(context: *anyopaque) void { _ = context; }\n";
+const hunk = "@@ -0,0 +1 @@\n+const value = 1;\n";
 
 test "new language extensions select bundled grammars and project keyword captures" {
     const files = .{ "main.go", "Review.cs", "Review.java", "review.kt", "Review.swift", "review.c", "review.cpp", "Review.m" };
@@ -18,7 +14,7 @@ test "new language extensions select bundled grammars and project keyword captur
         const text = "Updated " ++ file ++ "\n@@ -0,0 +1 @@\n+" ++ line ++ "\n";
         var roles: [text.len]syntaxhl.Role = undefined;
         var worker: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text, .roles = &roles };
-        try worker.run();
+        try std.testing.expect((try worker.run()) == null);
         try std.testing.expectEqual(syntaxhl.Role.keyword, roles[std.mem.indexOf(u8, text, keyword).?]);
     }
 }
@@ -27,7 +23,7 @@ test "Tree-sitter captures map to original diff bytes with independent versions 
     const text = "Updated main.ts\n@@ -1,2 +1 @@\n-/* old comment\n-let stale = true; */\n+const fresh = 1;\n@@ -20 +20 @@\n-old\n+const next = 2;\n";
     var roles: [text.len]syntaxhl.Role = undefined;
     var worker: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text, .roles = &roles };
-    try worker.run();
+    try std.testing.expect((try worker.run()) == null);
     try std.testing.expectEqual(syntaxhl.Role.comment, roles[std.mem.indexOf(u8, text, "stale").?]);
     try std.testing.expectEqual(syntaxhl.Role.keyword, roles[std.mem.indexOf(u8, text, "const fresh").?]);
     try std.testing.expectEqual(syntaxhl.Role.keyword, roles[std.mem.indexOf(u8, text, "const next").?]);
@@ -35,59 +31,87 @@ test "Tree-sitter captures map to original diff bytes with independent versions 
     try std.testing.expectEqual(syntaxhl.Role.plain, roles[std.mem.indexOf(u8, text, "+const").?]);
 }
 
-test "syntax cache retains tokens without jobs on repaint and owns immutable input" {
-    const store = try std.testing.allocator.create(Store);
-    defer std.testing.allocator.destroy(store);
-    store.* = .{};
-    var mutable = source.*;
-    try std.testing.expect(store.request(&mutable) == null);
-    var job = store.nextJob().?;
-    @memset(&mutable, 'x');
-    try std.testing.expectEqualStrings(source, job.source[0..job.len]);
-    var result: Result = .{ .id = job.id };
-    var worker: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = job.source[0..job.len], .roles = result.roles[0..job.len] };
-    try worker.run();
-    store.finish(&result);
-    const parameter = std.mem.indexOf(u8, source, "context").?;
-    for (0..3) |_| {
-        store.beginFrame();
-        const roles = store.request(source).?;
-        try std.testing.expectEqual(syntaxhl.Role.parameter, roles[parameter]);
-        try std.testing.expect(store.nextJob() == null);
-    }
-}
-
-test "syntax service adopts only notified results and rolls back closed inbox admission" {
-    const service = try std.testing.allocator.create(Service);
-    defer std.testing.allocator.destroy(service);
-    service.* = .{ .allocator = std.testing.allocator };
-    _ = service.store.request(source);
-    service.job = service.store.nextJob().?;
-    service.execute(std.testing.io);
-    try std.testing.expect(service.store.request(source) == null);
-    service.notify();
-    try std.testing.expect(service.store.request(source) == null);
-    service.beginFrame();
-    try std.testing.expect(service.store.request(source) != null);
-    try std.testing.expect(service.job == null);
-    var inbox: gui_event.Inbox = .init(std.testing.io, .{});
-    defer inbox.deinit();
-    inbox.close();
-    _ = service.store.request("Updated other.zig\n+const x = 0;\n");
-    service.start(&inbox);
-    try std.testing.expect(service.job == null);
-    try std.testing.expect(service.store.nextJob() == null);
-}
-
-test "syntax worker rejects allocator failure and oversized jobs without publishing partial colors" {
+test "syntax worker returns allocator failure for its caller to show plain text" {
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     var roles: [source.len]syntaxhl.Role = undefined;
     var worker: DiffHighlighter = .{ .allocator = failing.allocator(), .io = std.testing.io, .text = source, .roles = &roles };
     try std.testing.expectError(error.OutOfMemory, worker.run());
-    const store = try std.testing.allocator.create(Store);
-    defer std.testing.allocator.destroy(store);
-    store.* = .{};
-    const oversized: [syntaxhl.limits.source_bytes + 1]u8 = @splat('x');
-    try std.testing.expect(store.request(&oversized) == null);
-    try std.testing.expect(store.nextJob() == null);
+}
+
+test "syntax worker highlights every fragment up to its limit and keeps them past it" {
+    const at_limit = try hunks(limits.fragments);
+    defer std.testing.allocator.free(at_limit);
+
+    const full = try std.testing.allocator.alloc(syntaxhl.Role, at_limit.len);
+    defer std.testing.allocator.free(full);
+
+    var worker: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = at_limit, .roles = full, .job_ms = std.math.maxInt(i64) };
+    try std.testing.expect((try worker.run()) == null);
+    try std.testing.expectEqual(syntaxhl.Role.keyword, full[std.mem.lastIndexOf(u8, at_limit, "const").?]);
+
+    const past_limit = try hunks(limits.fragments + 1);
+    defer std.testing.allocator.free(past_limit);
+
+    const partial = try std.testing.allocator.alloc(syntaxhl.Role, past_limit.len);
+    defer std.testing.allocator.free(partial);
+
+    worker = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = past_limit, .roles = partial, .job_ms = std.math.maxInt(i64) };
+    const reach = (try worker.run()).?;
+    try std.testing.expectEqualStrings("syntax.job_fragments", reach.limit.name);
+    try std.testing.expectEqual(@as(u64, limits.fragments), reach.limit.value);
+
+    const last = std.mem.lastIndexOf(u8, past_limit, "const").?;
+    const kept = std.mem.lastIndexOf(u8, past_limit[0..last], "const").?;
+    try std.testing.expectEqual(syntaxhl.Role.keyword, partial[kept]);
+    try std.testing.expectEqual(syntaxhl.Role.plain, partial[last]);
+}
+
+test "syntax worker past its time budget keeps the fragments it highlighted" {
+    const text = try hunks(3);
+    defer std.testing.allocator.free(text);
+
+    const roles = try std.testing.allocator.alloc(syntaxhl.Role, text.len);
+    defer std.testing.allocator.free(roles);
+
+    var worker: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text, .roles = roles, .job_ms = 0 };
+    const reach = (try worker.run()).?;
+    try std.testing.expectEqualStrings("syntax.job_ms", reach.limit.name);
+    try std.testing.expectEqual(@as(u64, limits.job_ms), reach.limit.value);
+
+    const first = std.mem.indexOf(u8, text, "const").?;
+    const second = std.mem.indexOfPos(u8, text, first + 1, "const").?;
+    try std.testing.expectEqual(syntaxhl.Role.keyword, roles[first]);
+    try std.testing.expectEqual(syntaxhl.Role.plain, roles[second]);
+    try std.testing.expectEqual(syntaxhl.Role.plain, roles[std.mem.lastIndexOf(u8, text, "const").?]);
+}
+
+test "syntax worker leaves a source past its byte limit plain and names the limit" {
+    const text = try std.testing.allocator.alloc(u8, syntaxhl.limits.source_bytes + 1);
+    defer std.testing.allocator.free(text);
+
+    @memset(text, 'x');
+    const roles = try std.testing.allocator.alloc(syntaxhl.Role, text.len);
+    defer std.testing.allocator.free(roles);
+
+    var worker: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text[0..syntaxhl.limits.source_bytes], .roles = roles[0..syntaxhl.limits.source_bytes] };
+    try std.testing.expect((try worker.run()) == null);
+
+    @memset(roles, .keyword);
+    worker = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text, .roles = roles };
+    const reach = (try worker.run()).?;
+    try std.testing.expectEqualStrings("syntax.source_bytes", reach.limit.name);
+    try std.testing.expectEqual(@as(?u64, text.len), reach.requested);
+    try std.testing.expect(std.mem.allEqual(syntaxhl.Role, roles, .plain));
+}
+
+// A Zig diff of `count` hunks that each add one line: one fragment per hunk.
+fn hunks(count: usize) ![]u8 {
+    const header = "Updated main.zig\n";
+    const text = try std.testing.allocator.alloc(u8, header.len + count * hunk.len);
+    @memcpy(text[0..header.len], header);
+    for (0..count) |index| {
+        @memcpy(text[header.len + index * hunk.len ..][0..hunk.len], hunk);
+    }
+
+    return text;
 }

@@ -1,11 +1,9 @@
 //! Composes and draws one widget list during a synchronous semantic-model borrow.
-const syntaxhl = @import("syntaxhl");
 const core = @import("telar-core");
 const data = @import("model");
 const client = @import("telar-client");
 const Canvas = @import("../widgets/Canvas.zig");
 const Composition = @import("../widgets/Composition.zig");
-const SyntaxStore = syntaxhl.Store;
 const ReviewWidget = @import("../change_review/Widget.zig");
 const TerminalRenderer = @import("TerminalRenderer.zig");
 const Chrome = @import("../widgets/Chrome.zig");
@@ -23,7 +21,6 @@ theme: data.ColorTheme,
 link: ?*const LinkHit = null,
 widgets: ?*State = null,
 diagrams: ?*Store = null,
-syntax: ?*SyntaxStore = null,
 review: ?*ReviewWidget = null,
 previews: ?*const ImagePreviews = null,
 
@@ -44,7 +41,6 @@ pub fn prepare(self: *Scene, projection: client.Projection) !data.PresentationCo
     canvas.animation = &self.chrome.animation;
     canvas.widgets = self.widgets;
     canvas.diagrams = self.diagrams;
-    canvas.syntax = self.syntax;
     if (self.widgets) |widgets| {
         widgets.begin(projection.prompt != null);
         widgets.prompt_generation = if (projection.prompt) |prompt| prompt.generation else 0;
