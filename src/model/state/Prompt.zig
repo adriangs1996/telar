@@ -23,6 +23,7 @@ mode: union(enum) {
     peek: AgentKey,
     paths: struct { selection: u16 = 0 },
     machine: MachinePrompt,
+    pick: struct { selection: u16 = 0 },
 },
 field: name_prompt.Field,
 /// Working directory of the new-context form; unused by other targets.
@@ -43,6 +44,7 @@ pub fn target(self: *const Prompt) name_prompt.Target {
         .peek => |key| .{ .peek = key },
         .paths => .paths,
         .machine => |machine| .{ .machine = machine },
+        .pick => .pick,
     };
 }
 
@@ -54,6 +56,7 @@ pub fn selection(self: *const Prompt) u16 {
         .create_workspace => |form_state| form_state.selection,
         .palette => |palette| palette.selection,
         .paths => |paths| paths.selection,
+        .pick => |pick| pick.selection,
         else => 0,
     };
 }
@@ -99,6 +102,7 @@ pub fn setSelection(self: *Prompt, selected: u16) void {
         .create_workspace => |*form_state| form_state.selection = selected,
         .palette => |*palette| palette.selection = selected,
         .paths => |*paths| paths.selection = selected,
+        .pick => |*pick| pick.selection = selected,
         else => {},
     }
 }

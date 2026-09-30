@@ -13,6 +13,7 @@ const machine_profiles = @import("../machines/machine_profiles.zig");
 const MachineResults = @import("../machines/MachineResults.zig");
 const Machines = @import("../machines/Machines.zig");
 const path_picker = @import("path_picker.zig");
+const pick_list = @import("../bars/pick_list.zig");
 const suggest_command = @import("suggest_command.zig");
 const tab_rename = @import("../workspace/tab_rename.zig");
 const tab_selection = @import("../workspace/tab_selection.zig");
@@ -104,6 +105,10 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
     );
     if (outcome == .cancelled and before.kind == .paths) {
         path_picker.close(&client.model);
+    }
+
+    if (outcome == .cancelled and before.kind == .pick) {
+        pick_list.close(&client.model);
     }
 
     try history_palette.navigateHistoryPage(&client.model);
@@ -213,6 +218,7 @@ pub fn openNamePrompt(model: *data.ClientModel, intent: name_prompt_opening.Inte
 
             break :peek .{ .peek = key };
         },
+        .pick => .pick,
         .copy_search => unreachable,
     };
 
@@ -248,6 +254,9 @@ pub fn promptListSnapshot(prompt_state: *const data.NamePromptState) data.Prompt
         },
         .suggest => .{
             .kind = .suggest,
+        },
+        .pick => .{
+            .kind = .pick,
         },
         .palette => switch (prompt.paletteMode()) {
             .goto => .{
@@ -328,6 +337,7 @@ fn finishPromptList(client: *Client, before: data.PromptListSnapshot) !void {
 
             try machine_picker.choose(client, machineRow(client, before), before.alternate);
         },
+        .pick => try pick_list.choose(client, before.textSlice(), before.selection),
     }
 }
 
@@ -388,6 +398,11 @@ fn constrainPickerSelection(model: *data.ClientModel, machines_for_selection: ?*
         .paths => model.path_picker.len,
         .suggest => 1,
         .create_workspace => @intCast(model.path_completion.entries().len),
+        .pick => blk: {
+            var results: data.PickResults = .{};
+            data.pick_list.collect(&model.pick_list.items, prompt.field.text(), &results);
+            break :blk results.len;
+        },
         .palette => switch (prompt.paletteMode()) {
             .goto => pickerCount(model, prompt.paletteQuery()),
             .suggest => 1,
@@ -503,6 +518,9 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
             break :blk true;
         },
         .suggest => suggest_command.submitSuggestion(&client.model, submission.name),
+        // Enter is inert until the options arrive and while none matches.
+        .pick => data.pick_list.chosen(&client.model.pick_list.items, submission.name, client.model.name_prompt.currentConst().?.selection()) != null and
+            client.model.pick_list.phase == .ready,
         .peek => |key| try agent_peek.submit(client, key, submission.name),
         // The palette closes like the list its prefix selects; `>` closes
         // only when a catalogue entry matches, so Enter on no match is inert.

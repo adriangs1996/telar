@@ -25,6 +25,8 @@ pub const Intent = union(enum) {
     add_machine,
     /// A peek at one agent, opened from its task card.
     peek: model_data.AgentKey,
+    /// The palette on a configured pick's options.
+    pick,
 };
 
 pub fn renameTab(tab_id: core.TabId, label: []const u8) model_data.PromptBegin {

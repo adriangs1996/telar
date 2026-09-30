@@ -702,6 +702,204 @@ too; it appears above the bar component that opens the same panel.
 `telar.action.close_panel()` and `telar.action.refresh_panel()` complete the
 set. These actions are for configuration; plugin effects cannot return them.
 
+### Picks
+
+`client.picks` names lists a bar component or a key binding opens in the
+command palette. The person filters the options by typing, chooses one with
+Enter or a click, and Telar runs the pick's `on_select` command with the chosen
+value, then reruns the bar sources and the open panel so they show the change.
+
+```lua
+picks = {
+  thinking = telar.pick({
+    title = "Thinking level",
+    items = { "off", "minimal", "low", "medium", "high", "xhigh", "max" },
+    on_select = { "my-agent-config", "thinking", "{}" },
+  }),
+},
+bars = { bottom = {
+  right = telar.bar.static(ui.group({ on_click = telar.action.pick("thinking"), ui.label("thinking") })),
+  -- ...
+} },
+```
+
+`telar.pick` accepts:
+
+| Field | Meaning |
+| --- | --- |
+| `title` | shown in the palette; the pick's name by default |
+| `items` | a list of options, or with `command` a function from the render context to that list |
+| `command` | an argv that prints the options, one per nonempty line unless `items` parses its output |
+| `on_select` | the argv to run with the choice; each argument that is exactly `"{}"` becomes the chosen value |
+| `timeout_ms` | 100 to 10000, default 2000, for `command` and `on_select` each |
+| `refresh` | rerun the bar sources after `on_select` succeeds; `true` by default |
+
+An option is a string, or a table with a `label` to show and search, a
+`value` for `on_select` (the label by default) and a `detail` shown muted
+beside the label and searched too. A list holds at most 1024 options and
+64 KiB of text; labels and details are at most 128 bytes and values 512, all
+printable UTF-8 on one line. An `items` function receives the context of
+[a render callback](#dynamic-context), with the command's output in
+`ctx.output`, and returns the list. A written `items` list is checked when
+the configuration loads.
+
+The list command runs when the pick opens, outside the client loop; the palette
+shows "Loading…" until its options arrive. A command that fails, times out,
+prints more than 64 KiB, or lists options that break the bounds leaves the
+palette open with the reason instead of a partial list.
+
+`on_select` runs as an argv without a shell. Telar replaces only whole
+arguments equal to `"{}"`, never text inside another argument and never the
+program, so the chosen value is always exactly one argument, whatever
+characters it holds. At least one `"{}"` must follow the program. When a
+helper runs through `/bin/sh -c`, pass the value as a positional parameter
+(`"$1"`) as the example below does; never build a script string from it. A
+value may start with `-`, so helpers that take options should end them with
+`--`. The command's output is discarded; a failure, a timeout or a nonzero
+exit shows a client diagnostic. A second choice while one still runs is
+refused. Pick names follow the panel rules, and a configuration holds at most
+8 picks. `telar.action.pick("name")` opens a pick from a binding as well;
+plugin effects cannot return it. See [Pick list](flows/pick-list.md).
+
+#### Example: Pi's default provider, model and thinking level
+
+Pi reads `defaultProvider`, `defaultModel` and `defaultThinkingLevel` from
+`~/.pi/agent/settings.json` when it starts, so writing them there changes what
+`pi` starts with in every pane. This helper, saved as
+`~/.config/telar/bin/pi-defaults` and made executable, writes one of them,
+keeps the rest of the file and replaces it atomically:
+
+```python
+#!/usr/bin/env python3
+"""Sets Pi's default provider, model or thinking level.
+
+Usage: pi-defaults provider|model|thinking VALUE
+
+A model written as provider/model sets both keys. The rest of
+~/.pi/agent/settings.json is kept, and the file is replaced atomically.
+"""
+import json, os, sys, tempfile
+
+KEYS = {"provider": "defaultProvider", "model": "defaultModel", "thinking": "defaultThinkingLevel"}
+LEVELS = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
+
+if len(sys.argv) != 3 or sys.argv[1] not in KEYS:
+    sys.exit("usage: pi-defaults provider|model|thinking VALUE")
+field, value = sys.argv[1], sys.argv[2]
+if field == "thinking" and value not in LEVELS:
+    sys.exit(f"unknown thinking level: {value}")
+
+path = os.path.expanduser("~/.pi/agent/settings.json")
+try:
+    with open(path) as source:
+        settings = json.load(source)
+except FileNotFoundError:
+    settings = {}
+
+if field == "model" and "/" in value:
+    settings["defaultProvider"], value = value.split("/", 1)
+settings[KEYS[field]] = value
+
+os.makedirs(os.path.dirname(path), exist_ok=True)
+descriptor, temporary = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".settings.")
+try:
+    with os.fdopen(descriptor, "w") as target:
+        json.dump(settings, target, indent=2)
+        target.write("\n")
+        target.flush()
+        os.fsync(target.fileno())
+    os.replace(temporary, path)
+except BaseException:
+    os.unlink(temporary)
+    raise
+```
+
+The configuration lists providers and models from `pi --list-models`, whose
+first line is a header and whose first two columns are the provider and the
+model, and the thinking levels from a fixed list. The helper is reached
+through `/bin/sh` only to expand `$HOME`; the choice arrives as `"$2"`, a
+positional parameter, never as script text:
+
+```lua
+local telar = require("telar")
+local ui = telar.ui
+
+local function pi_defaults(key)
+  return {
+    "/bin/sh", "-c", 'exec "$HOME/.config/telar/bin/pi-defaults" "$1" "$2"',
+    "pi-defaults", key, "{}",
+  }
+end
+
+-- `pi --list-models` rows: provider, model, then sizes and capabilities.
+local function pi_models(ctx)
+  local options = {}
+  for provider, model in ctx.output:gmatch("\n(%S+)%s+(%S+)") do
+    options[#options + 1] = { label = model, detail = provider, value = provider .. "/" .. model }
+  end
+  return options
+end
+
+local function pi_providers(ctx)
+  local options, seen = {}, {}
+  for provider in ctx.output:gmatch("\n(%S+)") do
+    if not seen[provider] then
+      seen[provider] = true
+      options[#options + 1] = provider
+    end
+  end
+  return options
+end
+
+return telar.config({
+  api_version = 2,
+  client = {
+    picks = {
+      pi_provider = telar.pick({
+        title = "Pi provider",
+        command = { "pi", "--list-models" },
+        timeout_ms = 5000,
+        items = pi_providers,
+        on_select = pi_defaults("provider"),
+      }),
+      pi_model = telar.pick({
+        title = "Pi model",
+        command = { "pi", "--list-models" },
+        timeout_ms = 5000,
+        items = pi_models,
+        on_select = pi_defaults("model"),
+      }),
+      pi_thinking = telar.pick({
+        title = "Pi thinking level",
+        items = { "off", "minimal", "low", "medium", "high", "xhigh", "max" },
+        on_select = pi_defaults("thinking"),
+      }),
+    },
+    bars = { bottom = {
+      left = telar.bar.tabs(),
+      right = telar.bar.command({
+        command = { "/bin/sh", "-c", 'cat "$HOME/.pi/agent/settings.json" 2>/dev/null || echo "{}"' },
+        every_ms = 30000,
+        render = function(ctx)
+          local ok, pi = pcall(telar.json.decode, ctx.output)
+          pi = ok and pi or {}
+          return {
+            ui.group({ mark = "pi", on_click = telar.action.pick("pi_provider"), ui.label(pi.defaultProvider or "provider") }),
+            ui.group({ on_click = telar.action.pick("pi_model"), ui.label(pi.defaultModel or "model") }),
+            ui.group({ on_click = telar.action.pick("pi_thinking"), ui.label({ text = pi.defaultThinkingLevel or "medium", tone = "muted" }) }),
+          }
+        end,
+      }),
+    } },
+  },
+})
+```
+
+Choosing a model writes both keys, since its value is `provider/model`. Telar
+runs `pi` with the window's `PATH`; write its absolute path, such as
+`/opt/homebrew/bin/pi`, when the window does not find it. The same shape
+serves any agent that reads its defaults from a file.
+
 ### Dynamic context
 
 A dynamic, command or panel render callback receives one immutable table. Tab

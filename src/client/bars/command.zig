@@ -1,4 +1,5 @@
-//! Bounded external command worker for configured bar and panel sources.
+//! Bounded external command worker for configured bar and panel sources
+//! and for pick lists.
 
 const data = @import("model");
 const std = @import("std");
@@ -12,22 +13,44 @@ const carriage_return: u8 = '\r';
 const first_printable: u8 = 0x20;
 const delete_control: u8 = 0x7f;
 
-/// Runs the argv directly, without a shell. Output handed to a render
-/// callback may hold several lines, up to `max_command_output_bytes`; output
-/// shown as plain text must be one display line of `max_text_bytes`.
+/// What the caller does with a command's standard output.
+pub const OutputUse = enum {
+    /// Shown as plain text: one display line.
+    line,
+    /// Handed to a callback or split into options: several lines.
+    lines,
+    /// Only the exit status matters, as for a pick's `on_select`.
+    ignored,
+};
+
+/// Runs a bar or panel source. Output handed to a render callback may hold
+/// several lines, up to `max_command_output_bytes`; output shown as plain
+/// text must be one display line of `max_text_bytes`.
 ///
 /// ```zig
 /// var output = try command.run(io, bar_command);
 /// defer output.deinit();
 /// ```
 pub fn run(io: std.Io, command: data.BarCommand) !Output {
+    return runFor(io, command, if (command.render != null) .lines else .line);
+}
+
+/// Runs the argv directly, without a shell, within its timeout, and
+/// validates its output for `use`. Ignored output is still bounded and
+/// released before returning.
+///
+/// ```zig
+/// var output = try command.runFor(io, on_select, .ignored);
+/// defer output.deinit();
+/// ```
+pub fn runFor(io: std.Io, command: data.BarCommand, use: OutputUse) !Output {
     var argument_storage: [data.bar_values.max_command_args][]const u8 = undefined;
     const argv = command.argumentSlice(&argument_storage);
     if (argv.len == 0) {
         return error.EmptyBarCommand;
     }
 
-    const rendered = command.render != null;
+    const rendered = use != .line;
     const limit: usize = if (rendered) data.bar_values.max_command_output_bytes else data.bar_values.max_text_bytes + 2;
     const result = try std.process.run(Output.allocator, io, .{
         .argv = argv,
@@ -49,6 +72,11 @@ pub fn run(io: std.Io, command: data.BarCommand) !Output {
             }
         },
         else => return error.BarCommandFailed,
+    }
+
+    if (use == .ignored) {
+        output.deinit();
+        return output;
     }
 
     const trimmed = std.mem.trim(u8, result.stdout, " \t\r\n");
@@ -100,6 +128,33 @@ test "command runner executes argv directly and validates one display line" {
     try invalid.appendArgument("printf 'first\\nsecond\\n'");
 
     try std.testing.expectError(error.InvalidBarCommandOutput, run(std.testing.io, invalid));
+}
+
+test "ignored output needs only a successful exit and a failure keeps its status" {
+    if (comptime builtin.os.tag == .windows) {
+        return error.SkipZigTest;
+    }
+
+    var command: data.BarCommand = .{
+        .generation = 1,
+        .interval_ns = 0,
+        .timeout_ms = 1_000,
+    };
+    try command.appendArgument("/bin/sh");
+    try command.appendArgument("-c");
+    try command.appendArgument("printf '\\033[1mdone\\n\\n'");
+
+    var output = try runFor(std.testing.io, command, .ignored);
+    defer output.deinit();
+    try std.testing.expectEqual(@as(usize, 0), output.slice().len);
+
+    var failing = command;
+    failing.argument_count = 0;
+    failing.byte_len = 0;
+    try failing.appendArgument("/bin/sh");
+    try failing.appendArgument("-c");
+    try failing.appendArgument("exit 3");
+    try std.testing.expectError(error.BarCommandFailed, runFor(std.testing.io, failing, .ignored));
 }
 
 test "command output for a render callback may span lines" {

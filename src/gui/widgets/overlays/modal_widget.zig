@@ -38,7 +38,7 @@ pub const Widget = union(enum) {
 /// until the list finishes. Example: `try modal_widget.compose(input, pending, widgets);`
 pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) !void {
     const prompt = if (input.projection.prompt) |*value| value else return;
-    if (prompt.target() == .palette) {
+    if (prompt.target() == .palette or prompt.target() == .pick) {
         try widgets.append(.{ .modal = .{ .palette = .{ .projection = input.projection, .hits = &pending.palette, .modal = &pending.modal, .router = input.router, .scale = input.scale } } });
         return;
     }
@@ -101,7 +101,7 @@ pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) 
             .add_destination => "Its SSH destination: user@host or an alias",
         } } },
         .copy_search => |direction| .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = if (direction == .forward) "Search forward" else "Search backward" } },
-        .palette, .create_workspace, .history, .paths => unreachable,
+        .palette, .pick, .create_workspace, .history, .paths => unreachable,
     };
     try widgets.append(.{ .modal = widget });
 }

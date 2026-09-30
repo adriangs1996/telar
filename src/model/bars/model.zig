@@ -29,6 +29,7 @@ pub const Content = GenericContent(max_bar_nodes, max_bar_text_bytes, max_bar_ac
 /// The components of one open panel.
 pub const PanelContent = GenericContent(max_panel_nodes, max_panel_text_bytes, max_panel_actions);
 pub const max_panels = 8;
+pub const max_picks = 8;
 
 /// What `telar.bar.metrics()` shows: one group of CPU, memory and battery,
 /// each formatted by the adapter from the runtime's latest sample.

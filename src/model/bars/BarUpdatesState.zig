@@ -75,6 +75,16 @@ pub fn takeDue(self: *BarUpdatesState, input: DueInput) Due {
     return due;
 }
 
+/// Makes every scheduled bar source due at `now_ns`; unscheduled ones stay
+/// idle. Example: `model.bar_updates.expire(now_ns);`
+pub fn expire(self: *BarUpdatesState, now_ns: u64) void {
+    for (&self.deadlines) |*deadline_ns| {
+        if (deadline_ns.* != bar_updates.no_deadline) {
+            deadline_ns.* = @min(deadline_ns.*, now_ns);
+        }
+    }
+}
+
 /// Starts the source of a panel that just opened; it runs immediately.
 /// Example: `model.bar_updates.startPanel(.{ .index = 0, .opening = 3 }, now_ns);`
 pub fn startPanel(self: *BarUpdatesState, run: PanelRun, now_ns: u64) void {

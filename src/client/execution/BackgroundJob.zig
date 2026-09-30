@@ -1,5 +1,5 @@
 //! Work the shared client asks its adapter to run off the event loop that
-//! carries its own copy of the request: bar commands, plugin actions, path
+//! carries its own copy of the request: bar and pick commands, plugin actions, path
 //! completion, links, sounds, system notices, the configuration watch and
 //! connecting to the runtime.
 //! The copies are kilobytes, so these jobs queue apart from the interactive
@@ -8,6 +8,7 @@
 const core = @import("telar-core");
 const data = @import("model");
 const BarUpdatesJob = @import("../bars/BarUpdatesJob.zig");
+const PickCommandJob = @import("../bars/PickCommandJob.zig");
 const PluginActionsJob = @import("../plugins/PluginActionsJob.zig");
 const PathCompletionJob = @import("../completion/PathCompletionJob.zig");
 const WaitArgs = @import("../resources/WaitArgs.zig");
@@ -16,6 +17,7 @@ const MachineEditJob = @import("../machines/MachineEditJob.zig");
 
 pub const BackgroundJob = union(enum) {
     bar_command: BarUpdatesJob,
+    pick_command: PickCommandJob,
     plugin: PluginActionsJob,
     path_completion: PathCompletionJob,
     link: data.LinkTarget,
