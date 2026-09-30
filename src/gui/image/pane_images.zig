@@ -83,7 +83,7 @@ pub fn start(images: *PaneImages, stores: []Store, machine: u8, now_ns: u64) voi
 
     images.started_from = started;
     images.started_machine = machine;
-    for (images.resolved()) |placement| {
+    for (images.shown[0..images.shown_count]) |shown| {
         if (images.gpu.uploading >= ImageUpload.uploads_in_flight or images.upload_count >= images.uploads.len) {
             return;
         }
@@ -91,7 +91,7 @@ pub fn start(images: *PaneImages, stores: []Store, machine: u8, now_ns: u64) voi
         // Latest wins: with a stream, a newer generation usually arrived
         // before the placement that will point at it, so the newest complete
         // generation of the image is what this placement shows next.
-        const identity = newestComplete(store, identityOf(placement)) orelse continue;
+        const identity = newestComplete(store, shown.identity) orelse continue;
         if (images.gpu.find(machine, identity) != null or images.gpu.uploadsOf(machine, identity) == uploads_per_image) {
             continue;
         }
@@ -240,6 +240,8 @@ pub fn abandon(images: *PaneImages, stores: []Store) void {
 fn resolve(images: *PaneImages, store: *Store, view: ImageView) void {
     images.placement_count = 0;
     images.dropped = 0;
+    images.shown_count = 0;
+    @memset(&images.shown_index, empty_shown);
     var entries = store.placements.iterator();
     while (entries.next()) |entry| {
         const pane_id = entry.key_ptr.pane_id;
@@ -275,7 +277,7 @@ fn resolve(images: *PaneImages, store: *Store, view: ImageView) void {
             continue;
         }
 
-        const texture = textureFor(images, view.machine, identity);
+        const texture = images.shown[shownOf(images, view.machine, identity)].texture;
         images.placements[images.placement_count] = .{
             .pane_id = pane_id,
             .layer = kitty_protocol.displayLayer(placement.z_index),
@@ -296,16 +298,47 @@ fn resolve(images: *PaneImages, store: *Store, view: ImageView) void {
     markStandIns(images);
 }
 
-// The newest ready generation of the placement's image: its own once ready,
-// a newer one a stream already delivered, or the previous one while the next
-// uploads, so a replaced frame keeps showing until a newer is ready.
-fn textureFor(images: *const PaneImages, machine: u8, identity: client.ImageIdentity) ?usize {
-    return images.gpu.findNewestReady(machine, identity);
+const empty_shown = std.math.maxInt(u16);
+
+// The `shown` entry of a placement's image, added on first sight with the
+// texture it draws: the newest ready generation of the image, its own once
+// ready, a newer one a stream already delivered, or the previous one while
+// the next uploads, so a replaced frame keeps showing until a newer is ready.
+fn shownOf(images: *PaneImages, machine: u8, identity: client.ImageIdentity) usize {
+    const key = (@as(u64, @intFromEnum(identity.pane_id)) << 32) ^ identity.image_id;
+    var probe: usize = @intCast(std.hash.int(key) & (PaneImages.shown_index_len - 1));
+    while (true) : (probe = (probe + 1) & (PaneImages.shown_index_len - 1)) {
+        const index = images.shown_index[probe];
+        if (index == empty_shown) {
+            break;
+        }
+
+        const other = images.shown[index].identity;
+        if (other.pane_id == identity.pane_id and other.image_id == identity.image_id) {
+            return index;
+        }
+    }
+
+    const index = images.shown_count;
+    images.shown[index] = .{
+        .identity = identity,
+        .texture = images.gpu.findNewestReady(machine, identity),
+    };
+    images.shown_index[probe] = @intCast(index);
+    images.shown_count += 1;
+    return index;
 }
 
 // The newest generation of the placement's image the store holds whole and
-// has not superseded.
+// has not superseded. A complete generation nothing superseded is the
+// newest, found without walking the store.
 fn newestComplete(store: *Store, identity: client.ImageIdentity) ?client.ImageIdentity {
+    if (store.images.getPtr(identity)) |own| {
+        if (own.received == own.pixels.len and !own.retire_pending) {
+            return identity;
+        }
+    }
+
     var newest: ?client.ImageIdentity = null;
     var entries = store.images.iterator();
     while (entries.next()) |entry| {
@@ -498,12 +531,4 @@ fn discard(images: *PaneImages, row: usize) void {
     images.release_count += 1;
     images.gpu.remove(row);
     images.revision +%= 1;
-}
-
-fn identityOf(placement: ImagePlacement) client.ImageIdentity {
-    return .{
-        .pane_id = placement.pane_id,
-        .image_id = placement.image_id,
-        .generation = placement.generation,
-    };
 }

@@ -13,10 +13,19 @@ const PaneImages = @This();
 
 /// Placements resolved at once; the frame cannot draw more image quads.
 pub const capacity = ImageDraw.capacity;
+/// Twice `capacity`, a power of two, so probes stay short.
+pub const shown_index_len = 2 * capacity;
+pub const ShownImage = @import("ShownImage.zig");
 
 gpu: GpuImages = .{},
 placements: [capacity]ImagePlacement = undefined,
 placement_count: usize = 0,
+/// The distinct images the resolved placements show, each with the texture
+/// it draws; uploads are looked for once per image, not per placement.
+shown: [capacity]ShownImage = undefined,
+shown_count: usize = 0,
+/// Open-addressed index from (pane, image id) to `shown`, rebuilt with it.
+shown_index: [shown_index_len]u16 = undefined,
 /// Visible placements left out of the last build because the list was full.
 dropped: usize = 0,
 /// Advances once per prepared frame; rows remember the last one that used them.

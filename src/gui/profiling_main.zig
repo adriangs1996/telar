@@ -260,8 +260,10 @@ const Probe = struct {
         try self.counts(before);
     }
 
-    /// Rebuilds the resolved placements of 64 images and 256 placements every
-    /// sample, as a pane streaming a new generation each frame forces.
+    /// Prepares 256 placements of 64 images whose textures are all ready,
+    /// two ways: a stream frame, where the store changed so placements are
+    /// resolved and uploads looked for, and an echo frame, where nothing
+    /// changed.
     fn resolveImages(self: *Probe) !void {
         const samples = self.sample_count orelse iterations;
         const preheat = self.warmup_count orelse warmup;
@@ -297,24 +299,53 @@ const Probe = struct {
         defer self.gpa.destroy(images);
         images.* = .{};
         const view: ImageView = .{ .machine = 0, .cell_width = 16, .cell_height = 32 };
-        var allocated: usize = 0;
-        var started: i96 = 0;
-        for (0..preheat + samples) |index| {
-            if (index == preheat) {
-                allocated = accounting.allocations;
-                started = std.Io.Clock.awake.now(self.io).nanoseconds;
+        // Upload every image, four at a time, as the window would.
+        while (true) {
+            pane_images.place(images, &stores, view, 0);
+            pane_images.start(images, &stores, 0, 0);
+            if (images.upload_count == 0) {
+                break;
             }
 
-            stores[0].damage = true;
-            pane_images.place(images, &stores, view, 0);
+            for (images.uploads[0..images.upload_count]) |upload| {
+                _ = pane_images.finish(images, &stores, upload.handle, true, 0);
+            }
+
+            images.upload_count = 0;
         }
 
-        const elapsed = std.Io.Clock.awake.now(self.io).nanoseconds - started;
-        if (images.placement_count != image_placements) {
-            return error.InvalidImageWorkload;
+        for (images.resolved()) |placement| {
+            if (placement.handle == 0) {
+                return error.InvalidImageWorkload;
+            }
         }
 
-        try self.writer.print("{{\"type\":\"workload\",\"name\":\"images/resolve/{d}\",\"iterations\":{d},\"warmup\":{d},\"elapsed_ns\":{d},\"measured_allocations\":{d}}}\n", .{ image_placements, samples, preheat, elapsed, accounting.allocations - allocated });
+        inline for (.{ "stream_frame", "echo_frame" }) |name| {
+            const stream = comptime std.mem.eql(u8, name, "stream_frame");
+            var allocated: usize = 0;
+            var started: i96 = 0;
+            for (0..preheat + samples) |index| {
+                if (index == preheat) {
+                    allocated = accounting.allocations;
+                    started = std.Io.Clock.awake.now(self.io).nanoseconds;
+                }
+
+                if (stream) {
+                    stores[0].damage = true;
+                    images.started_from = @splat(std.math.maxInt(u64));
+                }
+
+                pane_images.place(images, &stores, view, 0);
+                pane_images.start(images, &stores, 0, 0);
+            }
+
+            const elapsed = std.Io.Clock.awake.now(self.io).nanoseconds - started;
+            if (images.placement_count != image_placements or images.upload_count != 0) {
+                return error.InvalidImageWorkload;
+            }
+
+            try self.writer.print("{{\"type\":\"workload\",\"name\":\"images/{s}/{d}\",\"iterations\":{d},\"warmup\":{d},\"elapsed_ns\":{d},\"measured_allocations\":{d}}}\n", .{ name, image_placements, samples, preheat, elapsed, accounting.allocations - allocated });
+        }
     }
 
     fn chrome(self: *Probe, count: usize, title_bytes: usize, width: u32) !void {
