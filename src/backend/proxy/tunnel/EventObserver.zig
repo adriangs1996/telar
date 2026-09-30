@@ -12,13 +12,14 @@ const Lifecycle = httprelay.http2.Lifecycle;
 const EventObserver = @This();
 
 captures: ?*CaptureStreams = null,
-/// The connection each event proves active; null in tests.
+/// The connection whose activity and streams in flight the relay reports;
+/// null in tests.
 exchange: ?*Exchange = null,
 
 /// Example: `observer.emit(.{ .request_body = .{ .stream_id = 3, .bytes = fragment } });`
 pub fn emit(self: *EventObserver, event: relay.Event) void {
     if (self.exchange) |exchange| {
-        exchange.touch();
+        countStream(exchange, event);
     }
 
     const captures = self.captures orelse return;
@@ -30,6 +31,31 @@ pub fn emit(self: *EventObserver, event: relay.Event) void {
         .request_body => |body| captures.feedBody(body.stream_id, body.bytes),
         .response_body => |body| captures.feedBody(body.stream_id, body.bytes),
         .request_finished => |finished| captures.finish(finished.stream_id, .finished),
+    }
+}
+
+/// Every read the relay forwards marks the connection active, frames that
+/// publish no event, such as PING and WINDOW_UPDATE, included.
+///
+/// ```zig
+/// observer.relayed();
+/// ```
+pub fn relayed(self: *EventObserver) void {
+    const exchange = self.exchange orelse return;
+    exchange.touch();
+}
+
+/// A started stream is an exchange in flight until it ends or resets.
+fn countStream(exchange: *Exchange, event: relay.Event) void {
+    const lifecycle = switch (event) {
+        .lifecycle => |value| value,
+        else => return,
+    };
+
+    switch (lifecycle.stage) {
+        .request_started => exchange.beginExchange(),
+        .response_ended, .stream_reset => exchange.endExchange(),
+        .response_activity, .connection_lost => {},
     }
 }
 

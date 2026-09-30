@@ -140,9 +140,11 @@ pub fn decodeBody(self: *Producer, half: *Half) void {
         return;
     }
 
-    const available = @min(self.config.max_part_bytes, half.max_bytes -| half.head.len);
+    const share_room = half.max_bytes -| half.head.len;
+    const available = @min(self.config.max_part_bytes, share_room);
     if (available == 0) {
         half.body.truncated = half.body.len != 0;
+        half.truncation.exchange = half.body.len != 0;
         return;
     }
 
@@ -167,7 +169,11 @@ pub fn decodeBody(self: *Producer, half: *Half) void {
     const part: buffer.Part = if (half.side == .request) .request_body else .response_body;
     _ = half.append(part, result.bytes);
     if (result.truncated) {
-        half.truncation.part = true;
+        if (self.config.max_part_bytes <= share_room) {
+            half.truncation.part = true;
+        } else {
+            half.truncation.exchange = true;
+        }
     }
 
     half.body.truncated = half.body.truncated or result.truncated or was_truncated;

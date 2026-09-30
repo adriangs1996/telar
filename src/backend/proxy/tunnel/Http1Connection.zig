@@ -103,7 +103,8 @@ const Http1Options = struct {
 };
 
 /// Relays the next request head unchanged. While it waits for one, the
-/// connection is idle and may be closed to admit another at the bound.
+/// connection is idle and may be closed to make room; from the head's first
+/// byte until its response ends, the exchange is in flight and it may not.
 ///
 /// ```zig
 /// const request = connection.readRequest() orelse return;
@@ -123,7 +124,6 @@ pub fn readRequest(self: *Connection) ?RequestHead {
         .side = .request,
         .session = self.session,
     }) orelse return null;
-    self.exchange.enter(.open);
 
     return .{
         .watched = parsed.watched,
@@ -258,6 +258,7 @@ pub fn publishRequest(self: *Connection, request: RequestHead) void {
 /// ```
 pub fn publishResponse(self: *Connection, response: ResponseHead) void {
     self.finishCapture(.response, captureOutcome(response.status_code));
+    self.exchange.endExchange();
 }
 
 fn captureOutcome(status_code: u16) buffer_support.Outcome {
@@ -272,6 +273,7 @@ fn captureOutcome(status_code: u16) buffer_support.Outcome {
 pub fn publishFailure(self: *Connection) void {
     self.finishCapture(.request, .failed);
     self.finishCapture(.response, .failed);
+    self.exchange.endExchange();
 }
 
 /// Relays an upgraded connection until either side closes.
@@ -498,7 +500,9 @@ test "a head past its bound is counted and a line past its bound too" {
     var counters: Counters = .{};
     var exchange = try testExchange(&counters, "example.test");
     const oversized: [http.max_head_bytes + 1]u8 = @splat('h');
-    var head_session: FakeSession = .{ .child_input = &oversized };
+    var head_session: FakeSession = .{
+        .child_input = &oversized,
+    };
 
     try std.testing.expect(http.relayHead(&head_session, .{
         .from = .child,
@@ -513,7 +517,9 @@ test "a head past its bound is counted and a line past its bound too" {
     try std.testing.expectEqualStrings("", head_session.originOutput());
 
     const long_line: [http.max_chunk_line_bytes + 1]u8 = @splat('f');
-    var body_session: FakeSession = .{ .child_input = &long_line };
+    var body_session: FakeSession = .{
+        .child_input = &long_line,
+    };
     try std.testing.expect(!http.relayBody(&body_session, .{
         .from = .child,
         .to = .origin,
@@ -551,8 +557,21 @@ const HeadCapture = struct {
         }
     }
 
+    /// A request's first byte starts its exchange: the connection is busy
+    /// from here, even while the rest of the head arrives.
+    pub fn headStarted(self: HeadCapture) void {
+        if (self.side == .request) {
+            self.exchange.enter(.open);
+            self.exchange.beginExchange();
+            return;
+        }
+
+        self.exchange.touch();
+    }
+
     pub fn headTooLarge(self: HeadCapture) void {
         self.exchange.record(.http1_head_too_large);
+
         const session = self.session orelse return;
         const answer = switch (self.side) {
             .request => request_head_too_large,
@@ -582,8 +601,11 @@ const BodyCapture = struct {
         }
     }
 
-    pub fn lineTooLong(self: BodyCapture, bound: usize) void {
-        self.exchange.record(if (bound == http.max_chunk_line_bytes) .http1_chunk_line_too_long else .http1_trailer_line_too_long);
+    pub fn lineTooLong(self: BodyCapture, line: http.FramingLine) void {
+        self.exchange.record(switch (line) {
+            .chunk_size => .http1_chunk_line_too_long,
+            .trailer => .http1_trailer_line_too_long,
+        });
     }
 };
 

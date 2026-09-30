@@ -300,7 +300,10 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
             "\"proxy_tls_mint_failures\":{d}," ++
             "\"proxy_capture_started\":{d}," ++
             "\"proxy_capture_truncated\":{d}," ++
-            "\"proxy_capture_skipped\":{d}," ++
+            // The key keeps its old name for the readers of telemetry logs; it
+            // counts directions whose half could not start, since capture no
+            // longer reserves quota up front.
+            "\"proxy_capture_skipped_quota\":{d}," ++
             "\"proxy_capture_dropped_queue\":{d}," ++
             "\"proxy_capture_decode_failed\":{d}," ++
             "\"proxy_capture_queue_depth\":{d}," ++
@@ -551,7 +554,7 @@ test "runtime telemetry reports retained memory domains" {
             "\"proxy_tls_mint_failures\":73",
             "\"proxy_capture_started\":103",
             "\"proxy_capture_truncated\":107",
-            "\"proxy_capture_skipped\":109",
+            "\"proxy_capture_skipped_quota\":109",
             "\"proxy_capture_dropped_queue\":113",
             "\"proxy_capture_decode_failed\":127",
             "\"proxy_capture_queue_depth\":131",

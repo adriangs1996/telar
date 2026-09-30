@@ -8,6 +8,8 @@ const FakeSessionType = @import("FakeSession.zig");
 const localca = @import("localca");
 const Session = localca.Session;
 const types = @import("types.zig");
+const observer_hooks = @import("../observer_hooks.zig");
+const FramingLine = @import("FramingLine.zig").FramingLine;
 
 /// The longest chunk-size line, extensions included.
 pub const max_chunk_line_bytes = 1024;
@@ -24,9 +26,8 @@ pub const Fragment = @import("Fragment.zig");
 ///
 /// The observer's `observe(Fragment)` method runs only after the corresponding
 /// bytes have been written. Its return value, if any, is ignored. An observer
-/// that declares `lineTooLong(bound)` hears when a chunk-size or trailer line
-/// passes its bound, `max_chunk_line_bytes` or `max_trailer_line_bytes`,
-/// which ends the body.
+/// that declares `lineTooLong(FramingLine)` hears when a chunk-size or
+/// trailer line passes its bound, which ends the body.
 ///
 /// ```zig
 /// const route: Route = .{ .from = .origin, .to = .child, .framing = .chunked };
@@ -86,7 +87,10 @@ fn relayChunked(session: anytype, direction: Direction, observer: anytype) bool 
     var line: [max_chunk_line_bytes]u8 = undefined;
 
     while (true) {
-        const line_len = relayLine(session, direction, &line, observer) orelse return false;
+        const line_len = relayLine(session, direction, .{
+            .buffer = &line,
+            .kind = .chunk_size,
+        }, observer) orelse return false;
         const trimmed = std.mem.trim(u8, line[0..line_len], " \t\r\n");
         const extension = std.mem.indexOfScalar(u8, trimmed, ';') orelse trimmed.len;
         const chunk_len = std.fmt.parseInt(usize, trimmed[0..extension], 16) catch return false;
@@ -117,7 +121,10 @@ fn relayTrailers(session: anytype, direction: Direction, observer: anytype) bool
     var line: [max_trailer_line_bytes]u8 = undefined;
 
     while (true) {
-        const len = relayLine(session, direction, &line, observer) orelse return false;
+        const len = relayLine(session, direction, .{
+            .buffer = &line,
+            .kind = .trailer,
+        }, observer) orelse return false;
 
         if (len == 2 and std.mem.eql(u8, line[0..2], "\r\n")) {
             return true;
@@ -125,7 +132,8 @@ fn relayTrailers(session: anytype, direction: Direction, observer: anytype) bool
     }
 }
 
-fn relayLine(session: anytype, direction: Direction, buffer: []u8, observer: anytype) ?usize {
+fn relayLine(session: anytype, direction: Direction, line: Line, observer: anytype) ?usize {
+    const buffer = line.buffer;
     var len: usize = 0;
 
     while (len < buffer.len) {
@@ -150,24 +158,11 @@ fn relayLine(session: anytype, direction: Direction, buffer: []u8, observer: any
 
     // Preserve the consumed prefix even when framing fails at its bound.
     _ = session.writeAll(direction.to, buffer[0..len]);
-    if (comptime hasHook(@TypeOf(observer), "lineTooLong")) {
-        observer.lineTooLong(buffer.len);
+    if (comptime observer_hooks.declares(@TypeOf(observer), "lineTooLong")) {
+        observer.lineTooLong(line.kind);
     }
 
     return null;
-}
-
-/// Whether an observer, passed by value or by pointer, declares `name`.
-pub fn hasHook(comptime Observer: type, comptime name: []const u8) bool {
-    const Declared = switch (@typeInfo(Observer)) {
-        .pointer => |pointer| pointer.child,
-        else => Observer,
-    };
-
-    return switch (@typeInfo(Declared)) {
-        .@"struct", .@"enum", .@"union", .@"opaque" => @hasDecl(Declared, name),
-        else => false,
-    };
 }
 
 test "chunk lines use one write each and preserve single-byte input boundaries" {
@@ -301,7 +296,9 @@ test "an invalid chunk size reports failure after forwarding its line" {
 test "an oversized chunk line reports failure at its bound" {
     const FakeSession = FakeSessionType;
     const input: [max_chunk_line_bytes + 2]u8 = @splat('f');
-    var fake: FakeSession = .{ .origin_input = &input };
+    var fake: FakeSession = .{
+        .origin_input = &input,
+    };
     var activity: Activity = .{};
 
     try std.testing.expect(!relay(
@@ -316,7 +313,9 @@ test "an oversized chunk line reports failure at its bound" {
 test "a trailer line longer than a chunk-size line still relays" {
     const FakeSession = FakeSessionType;
     const encoded = "0\r\nX-Trace: " ++ "t" ** (max_chunk_line_bytes + 1) ++ "\r\n\r\n";
-    var fake: FakeSession = .{ .origin_input = encoded };
+    var fake: FakeSession = .{
+        .origin_input = encoded,
+    };
     var activity: Activity = .{};
 
     try std.testing.expect(relay(
@@ -330,7 +329,9 @@ test "a trailer line longer than a chunk-size line still relays" {
 test "a line past its bound is reported to an observer that asks" {
     const FakeSession = FakeSessionType;
     const input: [max_chunk_line_bytes + 2]u8 = @splat('f');
-    var fake: FakeSession = .{ .origin_input = &input };
+    var fake: FakeSession = .{
+        .origin_input = &input,
+    };
     var watcher: LineWatcher = .{};
 
     try std.testing.expect(!relay(
@@ -339,37 +340,41 @@ test "a line past its bound is reported to an observer that asks" {
         &watcher,
     ));
     try std.testing.expectEqual(@as(usize, 1), watcher.too_long);
-    try std.testing.expectEqual(@as(usize, max_chunk_line_bytes), watcher.bound);
+    try std.testing.expectEqual(FramingLine.chunk_size, watcher.kind);
 
     const trailer = "0\r\n" ++ "t" ** (max_trailer_line_bytes + 2);
-    var trailer_fake: FakeSession = .{ .origin_input = trailer };
+    var trailer_fake: FakeSession = .{
+        .origin_input = trailer,
+    };
     try std.testing.expect(!relay(
         &trailer_fake,
         testRoute(.origin, .child, .chunked),
         &watcher,
     ));
     try std.testing.expectEqual(@as(usize, 2), watcher.too_long);
-    try std.testing.expectEqual(@as(usize, max_trailer_line_bytes), watcher.bound);
+    try std.testing.expectEqual(FramingLine.trailer, watcher.kind);
     try std.testing.expectEqual(3 + max_trailer_line_bytes, trailer_fake.origin_offset);
 }
 
 /// Counts the lines that passed their bound.
 const LineWatcher = struct {
     too_long: usize = 0,
-    bound: usize = 0,
+    kind: ?FramingLine = null,
 
     pub fn observe(_: *LineWatcher, _: Fragment) void {}
 
-    pub fn lineTooLong(self: *LineWatcher, bound: usize) void {
+    pub fn lineTooLong(self: *LineWatcher, kind: FramingLine) void {
         self.too_long += 1;
-        self.bound = bound;
+        self.kind = kind;
     }
 };
 
 test "an incomplete trailer block reports failure" {
     const FakeSession = FakeSessionType;
     const encoded = "0\r\nX-Trace: incomplete\r\n";
-    var fake: FakeSession = .{ .origin_input = encoded };
+    var fake: FakeSession = .{
+        .origin_input = encoded,
+    };
     var activity: Activity = .{};
 
     try std.testing.expect(!relay(
@@ -384,6 +389,12 @@ const Exact = struct {
     direction: Direction,
     count: usize,
     payload: bool,
+};
+
+/// One framing line's buffer, which bounds it, and what the line is.
+const Line = struct {
+    buffer: []u8,
+    kind: FramingLine,
 };
 
 const Direction = struct {

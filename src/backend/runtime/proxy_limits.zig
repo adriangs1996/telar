@@ -8,6 +8,7 @@ const limit_reached = @import("limit_reached.zig");
 const Connections = @import("../proxy/Connections.zig");
 const Http1Connection = @import("../proxy/tunnel/Http1Connection.zig");
 const CaptureStreams = @import("../proxy/tunnel/CaptureStreams.zig");
+const RelayContext = @import("../proxy/tunnel/RelayContext.zig");
 const Tunnel = @import("../proxy/tunnel/Tunnel.zig");
 const capture_queue = @import("../proxy/capture/queue.zig");
 const plugins_support = @import("../plugins/service_support.zig");
@@ -37,7 +38,9 @@ pub fn report(model: *RuntimeModel) void {
 
 fn reportProxy(model: *RuntimeModel, now: Snapshot, last: Snapshot, capture: CaptureConfig) void {
     reportGrowth(model, now.connection_limit_drops, last.connection_limit_drops, proxy_service.connections_limit);
-    reportGrowth(model, now.idle_evictions, last.idle_evictions, proxy_service.connections_limit);
+    reportGrowth(model, now.evictions, last.evictions, proxy_service.connections_limit);
+    reportGrowth(model, now.unauthenticated_refusals, last.unauthenticated_refusals, Connections.unauthenticated_limit);
+    reportGrowth(model, now.unauthenticated_evictions, last.unauthenticated_evictions, Connections.unauthenticated_limit);
     reportGrowth(model, now.connect_heads_too_large, last.connect_heads_too_large, Tunnel.connect_head_limit);
     reportGrowth(model, now.connect_head_timeouts, last.connect_head_timeouts, Connections.connect_head_timeout_limit);
     reportGrowth(model, now.establish_timeouts, last.establish_timeouts, Connections.establish_timeout_limit);
@@ -45,6 +48,8 @@ fn reportProxy(model: *RuntimeModel, now: Snapshot, last: Snapshot, capture: Cap
     reportGrowth(model, now.http1_chunk_lines_too_long, last.http1_chunk_lines_too_long, Http1Connection.chunk_line_limit);
     reportGrowth(model, now.http1_trailer_lines_too_long, last.http1_trailer_lines_too_long, Http1Connection.trailer_line_limit);
     reportGrowth(model, now.h2_capture_streams_skipped, last.h2_capture_streams_skipped, CaptureStreams.capacity_limit);
+    reportGrowth(model, now.h2_header_blocks_too_large, last.h2_header_blocks_too_large, RelayContext.header_block_limit);
+    reportGrowth(model, now.h2_streams_untracked, last.h2_streams_untracked, RelayContext.tracked_streams_limit);
     reportGrowth(model, now.capture_dropped_queue, last.capture_dropped_queue, capture_queue.capacity_limit);
     reportGrowth(model, now.capture_truncated_part, last.capture_truncated_part, core.Limit.declare("proxy.capture.max_part_bytes", "bytes", capture.max_part_bytes));
     reportGrowth(model, now.capture_truncated_exchange, last.capture_truncated_exchange, core.Limit.declare("proxy.capture.max_exchange_bytes", "bytes", capture.max_exchange_bytes));
@@ -53,7 +58,7 @@ fn reportProxy(model: *RuntimeModel, now: Snapshot, last: Snapshot, capture: Cap
 
 fn reportTap(model: *RuntimeModel, now: TapLimitCounts, last: TapLimitCounts) void {
     reportGrowth(model, now.dropped_queue, last.dropped_queue, plugins_support.queue_depth_limit);
-    reportGrowth(model, now.dropped_bytes, last.dropped_bytes, plugins_support.queued_bytes_limit);
+    reportGrowth(model, now.dropped_bytes, last.dropped_bytes, plugins_support.held_bytes_limit);
     reportGrowth(model, now.timeouts, last.timeouts, plugins_support.reply_timeout_limit);
     reportGrowth(model, now.disabled, last.disabled, plugins_support.restart_limit_reach);
 }
@@ -62,7 +67,9 @@ fn reportTap(model: *RuntimeModel, now: TapLimitCounts, last: TapLimitCounts) vo
 /// notice itself is paced per limit by `limit_reached`.
 fn reportGrowth(model: *RuntimeModel, now: u64, last: u64, limit: core.Limit) void {
     if (now > last) {
-        limit_reached.report(model, .{ .limit = limit });
+        limit_reached.report(model, .{
+            .limit = limit,
+        });
     }
 }
 
@@ -72,14 +79,32 @@ test "a proxy counter that grew reports its limit by name, and an unchanged one 
     defer fixture.deinit();
     const model = &fixture.runtime.model;
 
-    reportProxy(model, .{ .connection_limit_drops = 3 }, .{ .connection_limit_drops = 1 }, .{});
+    reportProxy(
+        model,
+        .{
+            .connection_limit_drops = 3,
+        },
+        .{
+            .connection_limit_drops = 1,
+        },
+        .{},
+    );
     const slot = model.limit_reaches.find("proxy.max_connections").?;
     try std.testing.expectEqual(@as(u64, 1), model.limit_reaches.hits[slot]);
 
     const notice = fixture.response().?.notification.view();
     try std.testing.expectEqualStrings("proxy.max_connections: limit 256 connections reached", notice.message);
 
-    reportProxy(model, .{ .connection_limit_drops = 3 }, .{ .connection_limit_drops = 3 }, .{});
+    reportProxy(
+        model,
+        .{
+            .connection_limit_drops = 3,
+        },
+        .{
+            .connection_limit_drops = 3,
+        },
+        .{},
+    );
     try std.testing.expectEqual(@as(u64, 1), model.limit_reaches.hits[slot]);
 }
 
@@ -89,7 +114,16 @@ test "capture truncation names the configured bound that cut it" {
     defer fixture.deinit();
     const model = &fixture.runtime.model;
 
-    reportProxy(model, .{ .capture_truncated_total = 1 }, .{}, .{ .max_total_bytes = 1024 });
+    reportProxy(
+        model,
+        .{
+            .capture_truncated_total = 1,
+        },
+        .{},
+        .{
+            .max_total_bytes = 1024,
+        },
+    );
     try std.testing.expect(model.limit_reaches.find("proxy.capture.max_part_bytes") == null);
 
     const notice = fixture.response().?.notification.view();

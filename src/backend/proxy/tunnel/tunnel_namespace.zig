@@ -67,7 +67,9 @@ pub fn readConnectHead(io: std.Io, stream: std.Io.net.Stream, buffer: []u8) Conn
         len += 1;
 
         if (len >= 4 and std.mem.eql(u8, buffer[len - 4 .. len], "\r\n\r\n")) {
-            return .{ .complete = len };
+            return .{
+                .complete = len,
+            };
         }
     }
 
@@ -91,22 +93,40 @@ pub fn reply(io: std.Io, stream: std.Io.net.Stream, bytes: []const u8) void {
     writer.interface.flush() catch {};
 }
 
-// Resolve asynchronously but connect sequentially. This avoids a Zig 0.16
-// Darwin race where concurrent connect attempts can report EISCONN.
-pub fn connectUpstream(host: std.Io.net.HostName, io: std.Io, port: u16) !std.Io.net.Stream {
+/// Resolves the origin and connects to its addresses one at a time, each
+/// connect waiting at most until `deadline_ms` on the awake clock. Resolution
+/// runs asynchronously but connects run sequentially, which avoids a Zig
+/// 0.16 Darwin race where concurrent connect attempts can report EISCONN.
+/// The resolver keeps its own timeouts; on Darwin it cannot be interrupted.
+///
+/// ```zig
+/// const origin = try tunnel_namespace.connectUpstream(.{ .host = host, .io = io, .port = 443, .deadline_ms = deadline });
+/// ```
+pub fn connectUpstream(target: Upstream) !std.Io.net.Stream {
+    const io = target.io;
     var lookup_storage: [32]std.Io.net.HostName.LookupResult = undefined;
     var resolved: std.Io.Queue(std.Io.net.HostName.LookupResult) = .init(&lookup_storage);
-    var lookup = io.async(std.Io.net.HostName.lookup, .{ host, io, &resolved, .{ .port = port } });
+    var lookup = io.async(std.Io.net.HostName.lookup, .{
+        target.host,
+        io,
+        &resolved,
+        .{
+            .port = target.port,
+        },
+    });
     defer lookup.cancel(io) catch {};
     var last_error: ?anyerror = null;
 
     while (resolved.getOne(io)) |result| switch (result) {
         .canonical_name => continue,
         .address => |address| {
-            if (address.connect(io, .{ .mode = .stream })) |stream| {
+            if (connectBefore(address, target.deadline_ms - now(io))) |stream| {
                 return stream;
             } else |err| {
                 last_error = err;
+                if (err == error.Timeout) {
+                    return err;
+                }
             }
         },
     } else |err| switch (err) {
@@ -116,6 +136,201 @@ pub fn connectUpstream(host: std.Io.net.HostName, io: std.Io, port: u16) !std.Io
             return last_error orelse error.UnknownHostName;
         },
     }
+}
+
+/// Where a tunnel connects and by when.
+const Upstream = struct {
+    host: std.Io.net.HostName,
+    io: std.Io,
+    port: u16,
+    /// On the awake clock.
+    deadline_ms: i64,
+};
+
+/// Connects one address without blocking past `budget_ms`.
+fn connectBefore(address: std.Io.net.IpAddress, budget_ms: i64) !std.Io.net.Stream {
+    if (budget_ms <= 0) {
+        return error.Timeout;
+    }
+
+    const family: c_uint = switch (address) {
+        .ip4 => std.c.AF.INET,
+        .ip6 => std.c.AF.INET6,
+    };
+    const handle = std.c.socket(family, std.c.SOCK.STREAM, 0);
+    if (handle < 0) {
+        return error.SystemResources;
+    }
+    errdefer _ = std.c.close(handle);
+
+    try setCloseOnExec(handle);
+    try setNonblocking(handle, true);
+
+    var storage: std.c.sockaddr.storage = undefined;
+    const length = socketAddress(address, &storage);
+    if (std.c.connect(handle, @ptrCast(&storage), length) != 0) {
+        switch (std.posix.errno(-1)) {
+            .INPROGRESS => try awaitConnect(handle, budget_ms),
+            else => return error.ConnectionRefused,
+        }
+    }
+
+    try setNonblocking(handle, false);
+    return .{
+        .socket = .{
+            .handle = handle,
+            .address = address,
+        },
+    };
+}
+
+/// Waits for a nonblocking connect to finish within `budget_ms`.
+fn awaitConnect(handle: std.c.fd_t, budget_ms: i64) !void {
+    var pending = [_]std.c.pollfd{.{
+        .fd = handle,
+        .events = std.c.POLL.OUT,
+        .revents = 0,
+    }};
+    const timeout: c_int = @intCast(@min(budget_ms, std.math.maxInt(c_int)));
+    if (std.c.poll(&pending, pending.len, timeout) != pending.len) {
+        return error.Timeout;
+    }
+
+    var failure: c_int = 0;
+    var failure_len: std.c.socklen_t = @sizeOf(c_int);
+    if (std.c.getsockopt(handle, std.c.SOL.SOCKET, std.c.SO.ERROR, &failure, &failure_len) != 0 or failure != 0) {
+        return error.ConnectionRefused;
+    }
+}
+
+fn setNonblocking(handle: std.c.fd_t, enabled: bool) !void {
+    const flags = std.c.fcntl(handle, std.c.F.GETFL);
+    if (flags < 0) {
+        return error.SystemResources;
+    }
+
+    var status: std.c.O = @bitCast(@as(u32, @intCast(flags)));
+    status.NONBLOCK = enabled;
+    if (std.c.fcntl(handle, std.c.F.SETFL, @as(c_int, @bitCast(status))) != 0) {
+        return error.SystemResources;
+    }
+}
+
+fn setCloseOnExec(handle: std.c.fd_t) !void {
+    if (std.c.fcntl(handle, std.c.F.SETFD, @as(c_int, std.posix.FD_CLOEXEC)) != 0) {
+        return error.SystemResources;
+    }
+}
+
+fn socketAddress(address: std.Io.net.IpAddress, storage: *std.c.sockaddr.storage) std.c.socklen_t {
+    switch (address) {
+        .ip4 => |ip4| {
+            const destination: *std.c.sockaddr.in = @ptrCast(@alignCast(storage));
+            destination.* = .{
+                .port = std.mem.nativeToBig(u16, ip4.port),
+                .addr = @bitCast(ip4.bytes),
+            };
+            return @sizeOf(std.c.sockaddr.in);
+        },
+        .ip6 => |ip6| {
+            const destination: *std.c.sockaddr.in6 = @ptrCast(@alignCast(storage));
+            destination.* = .{
+                .port = std.mem.nativeToBig(u16, ip6.port),
+                .flowinfo = ip6.flow,
+                .addr = ip6.bytes,
+                .scope_id = ip6.interface.index,
+            };
+            return @sizeOf(std.c.sockaddr.in6);
+        },
+    }
+}
+
+fn now(io: std.Io) i64 {
+    return std.Io.Timestamp.now(io, .awake).toMilliseconds();
+}
+
+/// Answers a connection the proxy refuses and lets the answer reach it: the
+/// write side is shut down, then what the client already sent is drained
+/// for at most `drain_ms`, so closing does not reset the connection and
+/// discard the answer before the client reads it. The caller closes.
+///
+/// ```zig
+/// tunnel_namespace.refuse(io, stream, "HTTP/1.1 503 Service Unavailable\r\n\r\n", 20);
+/// ```
+pub fn refuse(io: std.Io, stream: std.Io.net.Stream, answer: []const u8, drain_ms: i64) void {
+    reply(io, stream, answer);
+    stream.shutdown(io, .send) catch return;
+
+    const deadline_ms = now(io) + drain_ms;
+    var drained: usize = 0;
+    var discard: [4096]u8 = undefined;
+    while (drained < max_drained_bytes) {
+        const left_ms = deadline_ms - now(io);
+        if (left_ms <= 0) {
+            return;
+        }
+
+        var pending = [_]std.c.pollfd{.{
+            .fd = stream.socket.handle,
+            .events = std.c.POLL.IN,
+            .revents = 0,
+        }};
+        if (std.c.poll(&pending, pending.len, @intCast(left_ms)) != pending.len) {
+            return;
+        }
+
+        const count = std.c.recv(stream.socket.handle, &discard, discard.len, std.c.MSG.DONTWAIT);
+        if (count <= 0) {
+            return;
+        }
+
+        drained += @intCast(count);
+    }
+}
+
+/// The most a refusal drains before it closes anyway.
+const max_drained_bytes = 64 * 1024;
+
+test "a refused client reads the whole answer after sending its request" {
+    const io = std.testing.io;
+    var sockets: [2]std.c.fd_t = undefined;
+    try std.testing.expectEqual(@as(c_int, 0), std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets));
+    defer _ = std.c.close(sockets[1]);
+    const proxy_side: std.Io.net.Stream = .{
+        .socket = .{
+            .handle = sockets[0],
+            .address = .{ .ip4 = .loopback(0) },
+        },
+    };
+    const request = "CONNECT example.test:443 HTTP/1.1\r\n\r\n";
+    try std.testing.expectEqual(@as(isize, request.len), std.c.send(sockets[1], request, request.len, 0));
+
+    refuse(io, proxy_side, "HTTP/1.1 503 Service Unavailable\r\n\r\n", 50);
+    proxy_side.close(io);
+
+    var answer: [64]u8 = undefined;
+    const count = std.c.recv(sockets[1], &answer, answer.len, 0);
+    try std.testing.expectEqualStrings("HTTP/1.1 503 Service Unavailable\r\n\r\n", answer[0..@intCast(count)]);
+}
+
+test "a connect that cannot finish before its deadline times out" {
+    // 192.0.2.0/24 is reserved for documentation and never answers.
+    const unroutable: std.Io.net.IpAddress = .{ .ip4 = .{
+        .bytes = .{ 192, 0, 2, 1 },
+        .port = 443,
+    } };
+
+    try std.testing.expectError(error.Timeout, connectBefore(unroutable, 0));
+    const started = now(std.testing.io);
+    const result = connectBefore(unroutable, 100);
+    if (result) |stream| {
+        stream.close(std.testing.io);
+        return error.UnexpectedConnect;
+    } else |err| {
+        try std.testing.expect(err == error.Timeout or err == error.ConnectionRefused);
+    }
+
+    try std.testing.expect(now(std.testing.io) - started < 2 * std.time.ms_per_s);
 }
 
 test "authentication rejection records total and exact reason" {

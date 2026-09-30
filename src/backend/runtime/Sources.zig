@@ -73,11 +73,11 @@ pub fn receiveEngine(self: *Sources, engine_service: *EngineService) !void {
 /// Arms the next captured exchange half. A disabled proxy arms nothing.
 ///
 /// ```zig
-/// try sources.receiveProxyCapture(&resources.proxy);
+/// try sources.receiveProxyCapture(&resources.proxy, resources.pluginService());
 /// ```
-pub fn receiveProxyCapture(self: *Sources, proxy_runtime: *ProxyRuntime) !void {
+pub fn receiveProxyCapture(self: *Sources, proxy_runtime: *ProxyRuntime, tap: *const PluginsService) !void {
     const proxy = proxy_runtime.capability() orelse return;
-    try self.select.concurrent(.proxy_capture, Proxy.receiveCapture, .{ proxy, self.io });
+    try self.select.concurrent(.proxy_capture, Proxy.receiveCapture, .{ proxy, self.io, tap.listening() });
 }
 
 /// Arms the next bounded effect batch from a tap worker.
@@ -131,7 +131,9 @@ test "a disabled stop signal and a disabled proxy arm nothing" {
     defer proxy.deinit();
 
     try sources.waitForStop(null);
-    try sources.receiveProxyCapture(&proxy);
+    var tap: PluginsService = undefined;
+    tap.worker_count = 0;
+    try sources.receiveProxyCapture(&proxy, &tap);
 }
 
 test "an armed stop signal and an active proxy propagate scheduling failures" {
@@ -146,7 +148,9 @@ test "an armed stop signal and an active proxy propagate scheduling failures" {
     defer proxy.deinit();
 
     try std.testing.expectError(error.ConcurrencyUnavailable, sources.waitForStop(&queue));
-    try std.testing.expectError(error.ConcurrencyUnavailable, sources.receiveProxyCapture(&proxy));
+    var tap: PluginsService = undefined;
+    tap.worker_count = 0;
+    try std.testing.expectError(error.ConcurrencyUnavailable, sources.receiveProxyCapture(&proxy, &tap));
     try std.testing.expect(proxy.active());
 }
 

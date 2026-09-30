@@ -6,9 +6,8 @@ const Worker = @import("Worker.zig");
 const Result = @import("Result.zig");
 const ServiceSpec = @import("ServiceSpec.zig");
 const Exchange = owned.Exchange;
-const ExchangeIdentity = @import("ExchangeIdentity.zig");
-const Frame = @import("Frame.zig");
-const protocol = @import("protocol.zig");
+const SharedExchange = @import("SharedExchange.zig");
+const TapBudget = @import("TapBudget.zig");
 const TapLimitCounts = @import("TapLimitCounts.zig");
 const Service = @This();
 
@@ -19,10 +18,10 @@ worker_count: u8 = 0,
 results: std.Io.Queue(*Result) = undefined,
 result_storage: [service_support.queue_depth]*Result = undefined,
 next_event_id: std.atomic.Value(u64) = .init(1),
-/// Bytes of frames every worker queue holds, within `max_queued_bytes`.
-queued_bytes: std.atomic.Value(usize) = .init(0),
-/// Frames dropped because they did not fit `max_queued_bytes`.
-dropped_bytes: std.atomic.Value(u64) = .init(0),
+/// Bytes of queued exchanges and frames being sent, within `max_held_bytes`.
+budget: TapBudget = .{
+    .max_bytes = service_support.max_held_bytes,
+},
 
 /// Starts one actor for every configured and trusted tap plugin.
 ///
@@ -64,7 +63,10 @@ pub fn deinit(self: *Service) void {
     }
 }
 
-/// Fans one completed exchange out to bounded per-plugin queues and frees it.
+/// Hands one completed exchange to every tap worker's bounded queue, shared
+/// rather than copied: each worker encodes its frame on its own thread, so
+/// the event loop only moves pointers. An exchange past the queued-bytes
+/// budget is dropped and counted.
 ///
 /// ```zig
 /// service.submit(&exchange);
@@ -74,20 +76,24 @@ pub fn submit(self: *Service, captured: *Exchange) void {
     if (self.worker_count == 0) {
         return;
     }
-    const event_id = self.next_event_id.fetchAdd(1, .monotonic);
-    for (self.workers[0..self.worker_count]) |*worker| {
-        const identity: ExchangeIdentity = .{ .id = event_id, .generation = worker.spec.generation };
-        const size = service_support.capturedBytes(captured) + protocol.overhead_bytes;
-        if (!self.charge(size)) {
-            _ = self.dropped_bytes.fetchAdd(1, .monotonic);
-            continue;
-        }
 
-        const frame = self.encodeFrame(captured, identity, size) catch {
-            _ = self.queued_bytes.fetchSub(size, .monotonic);
-            continue;
-        };
-        worker.submit(self.io, frame);
+    const size = service_support.capturedBytes(captured);
+    if (!self.budget.charge(size)) {
+        return;
+    }
+
+    const shared = SharedExchange.create(self.gpa, captured, .{
+        .event_id = self.next_event_id.fetchAdd(1, .monotonic),
+        .charged = size,
+        .budget = &self.budget,
+        .holders = self.worker_count,
+    }) catch {
+        self.budget.release(size);
+        return;
+    };
+
+    for (self.workers[0..self.worker_count]) |*worker| {
+        worker.submit(self.io, shared);
     }
 }
 
@@ -138,7 +144,9 @@ pub fn authorize(self: *const Service, result: *const Result) !void {
 /// const counts = service.limitCounts();
 /// ```
 pub fn limitCounts(self: *const Service) TapLimitCounts {
-    var counts: TapLimitCounts = .{ .dropped_bytes = self.dropped_bytes.load(.monotonic) };
+    var counts: TapLimitCounts = .{
+        .dropped_bytes = self.budget.dropped.load(.monotonic),
+    };
     for (self.workers[0..self.worker_count]) |*worker| {
         counts.dropped_queue += worker.dropped.load(.monotonic);
         counts.timeouts += worker.timeouts.load(.monotonic);
@@ -148,58 +156,28 @@ pub fn limitCounts(self: *const Service) TapLimitCounts {
     return counts;
 }
 
-/// Encodes one exchange into a frame of `size` bytes already charged to the
-/// queued-bytes budget; the frame releases them when it is freed.
-fn encodeFrame(self: *Service, captured: *const Exchange, identity: ExchangeIdentity, size: usize) !*Frame {
-    const bytes = try self.gpa.alloc(u8, size);
-    errdefer self.gpa.free(bytes);
-    const payload = try protocol.encodeExchange(bytes, identity, captured);
-    const frame = try self.gpa.create(Frame);
-    frame.* = .{
-        .gpa = self.gpa,
-        .event_id = identity.id,
-        .storage = bytes,
-        .len = payload.len,
-        .budget = &self.queued_bytes,
-    };
-    return frame;
-}
-
-/// Charges `size` bytes to the queued-bytes budget when they fit.
-fn charge(self: *Service, size: usize) bool {
-    var current = self.queued_bytes.load(.monotonic);
-    while (size <= service_support.max_queued_bytes -| current) {
-        current = self.queued_bytes.cmpxchgWeak(current, current + size, .monotonic, .monotonic) orelse return true;
-    }
-
-    return false;
-}
-
 const InitOptions = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
     specs: []const ServiceSpec,
 };
 
-test "the queued-bytes budget refuses a frame past it and a freed frame returns its bytes" {
-    var service: Service = undefined;
-    service.queued_bytes = .init(0);
-
-    try std.testing.expect(service.charge(service_support.max_queued_bytes - 1));
-    try std.testing.expect(!service.charge(2));
-    try std.testing.expect(service.charge(1));
-    try std.testing.expect(!service.charge(1));
-
-    const frame = try std.testing.allocator.create(Frame);
-    frame.* = .{
-        .gpa = std.testing.allocator,
-        .event_id = 1,
-        .storage = try std.testing.allocator.alloc(u8, 1),
-        .len = 1,
-        .budget = &service.queued_bytes,
+test "the last worker to release a shared exchange returns its bytes" {
+    var budget: TapBudget = .{
+        .max_bytes = 8,
     };
-    frame.deinit();
+    try std.testing.expect(budget.charge(8));
 
-    try std.testing.expectEqual(@as(usize, service_support.max_queued_bytes - 1), service.queued_bytes.load(.monotonic));
-    try std.testing.expect(service.charge(1));
+    var exchange: Exchange = .{};
+    const shared = try SharedExchange.create(std.testing.allocator, &exchange, .{
+        .event_id = 1,
+        .charged = 8,
+        .budget = &budget,
+        .holders = 2,
+    });
+    shared.release();
+    try std.testing.expect(!budget.charge(1));
+
+    shared.release();
+    try std.testing.expect(budget.charge(8));
 }

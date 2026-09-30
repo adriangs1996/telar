@@ -86,7 +86,7 @@ fn scheduleInitialEvents(self: *Runtime) !void {
     if (resources.engineService()) |engine_service| {
         try sources.receiveEngine(engine_service);
     }
-    try sources.receiveProxyCapture(&resources.proxy);
+    try sources.receiveProxyCapture(&resources.proxy, resources.pluginService());
     try sources.receivePluginEffects(resources.pluginService());
     try sources.waitForAgentMaintenance();
     try sources.waitForSystemMetrics();

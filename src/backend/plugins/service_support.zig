@@ -8,7 +8,8 @@ const Service = @import("Service.zig");
 const Result = @import("Result.zig");
 const std = @import("std");
 const Worker = @import("Worker.zig");
-const Frame = @import("Frame.zig");
+const SharedExchange = @import("SharedExchange.zig");
+const TapBudget = @import("TapBudget.zig");
 
 pub const max_workers = 16;
 pub const queue_depth = 64;
@@ -21,13 +22,14 @@ pub const callback_deadline_ms = 2 * std.time.ms_per_s;
 /// plus the time to decode the exchange and write the reply, so a callback
 /// that fails at its deadline replies before the runtime gives up.
 pub const reply_timeout_ms = callback_deadline_ms + std.time.ms_per_s;
-/// Bytes of exchange frames every tap worker queue holds together. A frame
-/// that does not fit is dropped and counted, so a slow plugin never grows
-/// the runtime past this.
-pub const max_queued_bytes = 256 * 1024 * 1024;
+/// Bytes the tap holds together: exchanges waiting in every worker queue
+/// and the frames workers are sending. Queued exchanges also stay within
+/// the capture quota, so this mostly bounds the frames: four of the
+/// largest default exchanges at once.
+pub const max_held_bytes = 128 * 1024 * 1024;
 
 pub const queue_depth_limit = core.Limit.declare("plugins.tap.queue_depth", "exchanges", queue_depth);
-pub const queued_bytes_limit = core.Limit.declare("plugins.tap.max_queued_bytes", "bytes", max_queued_bytes);
+pub const held_bytes_limit = core.Limit.declare("plugins.tap.max_held_bytes", "bytes", max_held_bytes);
 pub const reply_timeout_limit = core.Limit.declare("plugins.tap.reply_timeout_ms", "ms", reply_timeout_ms);
 pub const restart_limit_reach = core.Limit.declare("plugins.tap.restart_limit", "restarts in 10 min", restart_limit);
 
@@ -90,26 +92,35 @@ test "effect authorization checks exact identity, declaration and grant" {
     try std.testing.expectError(error.StaleTapWorker, service.authorize(&result));
 }
 
-test "worker queue drops the oldest frame when full" {
+test "worker queue drops the oldest exchange when full and releases it" {
     const io = std.testing.io;
     var result_storage: [1]*Result = undefined;
     var results: std.Io.Queue(*Result) = .init(&result_storage);
     var worker: Worker = undefined;
-    worker.init(.{ .gpa = std.testing.allocator, .spec = undefined, .results = &results });
+    worker.init(.{
+        .gpa = std.testing.allocator,
+        .spec = undefined,
+        .results = &results,
+    });
     defer worker.stop(io);
+    var budget: TapBudget = .{
+        .max_bytes = queue_depth + 1,
+    };
+    try std.testing.expect(budget.charge(queue_depth + 1));
 
     for (0..queue_depth + 1) |index| {
-        const frame = try std.testing.allocator.create(Frame);
-        frame.* = .{
-            .gpa = std.testing.allocator,
+        var exchange: Exchange = .{};
+        const shared = try SharedExchange.create(std.testing.allocator, &exchange, .{
             .event_id = index,
-            .storage = try std.testing.allocator.alloc(u8, 1),
-            .len = 1,
-        };
-        worker.submit(io, frame);
+            .charged = 1,
+            .budget = &budget,
+            .holders = 1,
+        });
+        worker.submit(io, shared);
     }
 
     try std.testing.expectEqual(@as(u64, 1), worker.dropped.load(.monotonic));
+    try std.testing.expectEqual(@as(usize, queue_depth), budget.held.load(.monotonic));
 }
 
 test "five restarts in one window disable a worker" {

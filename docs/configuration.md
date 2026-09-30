@@ -1252,9 +1252,8 @@ and `join_timeout_ms` at most one hour. Captured heads and de-framed bodies
 are bounded independently; request and response each get half of
 `max_exchange_bytes`. A full queue or exhausted quota drops capture data
 without delaying or changing proxied traffic, and the limit notice names the
-bound that cut it. Response decompression is performed on the runtime
-observation path, only while a tap plugin listens, and is capped by
-`max_part_bytes`.
+bound that cut it. Response decompression runs off the runtime's event loop,
+only while a tap plugin listens, and is capped by `max_part_bytes`.
 Until a trusted tap plugin is configured, completed captures are consumed only
 for metrics and are not persisted. Runtime tap workers are created only at
 server startup, so restart the runtime after changing a tap package or its

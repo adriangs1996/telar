@@ -80,6 +80,8 @@ test {
     _ = @import("plugins/host_support.zig");
     _ = @import("plugins/protocol.zig");
     _ = @import("plugins/service_support.zig");
+    _ = @import("plugins/Service.zig");
+    _ = @import("plugins/TapBudget.zig");
     _ = @import("process/cwd.zig");
     _ = @import("process/process.zig");
     _ = @import("proxy/capture/capture_tests.zig");

@@ -1,8 +1,9 @@
 //! One direction of one captured exchange: its head and de-framed body
 //! within its share of the exchange bound, and the request line and content
-//! encoding read from its head. The half reserves quota as bytes arrive, so
-//! a half that is still empty, such as one waiting on an idle keep-alive
-//! connection, holds none.
+//! encoding read from its head. The half's reservation is the storage its
+//! buffers hold, charged before they grow, so a half that is still empty,
+//! such as one waiting on an idle keep-alive connection, holds none, and
+//! the quota bounds the heap capture uses, copies while growing included.
 const std = @import("std");
 const Reservation = @import("Reservation.zig");
 const Key = @import("Key.zig");
@@ -23,8 +24,7 @@ pub fn Type(comptime Meta: type) type {
         const Half = @This();
 
         gpa: std.mem.Allocator,
-        /// Quota this half holds: every byte it captured, never more than
-        /// `max_bytes`.
+        /// Quota this half holds: the storage of its head and body buffers.
         reservation: Reservation,
         /// This half's share of `max_exchange_bytes`: head and body together.
         max_bytes: usize,
@@ -170,7 +170,7 @@ pub fn Type(comptime Meta: type) type {
                 }
             }
 
-            const accepted = self.reserve(allowed);
+            const accepted = self.reserve(selected, allowed);
             if (accepted != allowed) {
                 self.truncation.total = true;
             }
@@ -188,15 +188,26 @@ pub fn Type(comptime Meta: type) type {
             return accepted == input.len and !selected.truncated;
         }
 
-        /// Grows the reservation to cover `bytes` more captured bytes and
-        /// returns how many of them the quota covers.
-        fn reserve(self: *Half, bytes: usize) usize {
-            const needed = self.captured_bytes + bytes;
-            if (needed > self.reservation.bytes) {
-                _ = self.reservation.grow(needed - self.reservation.bytes);
+        /// Grows `buffer` to hold `bytes` more when the quota covers its new
+        /// storage, and returns how many of them fit. The new storage is
+        /// charged before it is allocated and the old storage released
+        /// after the copy, so the quota covers both while they coexist; a
+        /// quota that covers less grows the buffer only as far as it goes.
+        fn reserve(self: *Half, buffer: *Buffer, bytes: usize) usize {
+            const needed = buffer.len + bytes;
+            const old_capacity = buffer.storage.len;
+            if (needed <= old_capacity) {
+                return bytes;
             }
 
-            return @min(bytes, self.reservation.bytes -| self.captured_bytes);
+            const capacity = self.reservation.grow(buffer.grownCapacity(needed));
+            if (capacity <= old_capacity or !buffer.growTo(capacity)) {
+                self.reservation.shrink(capacity);
+                return old_capacity - buffer.len;
+            }
+
+            self.reservation.shrink(old_capacity);
+            return @min(bytes, capacity - buffer.len);
         }
 
         pub fn finish(self: *Half, outcome: buffer_support.Outcome, finished_at_ms: i64) void {
@@ -290,7 +301,7 @@ fn testHalf(quota: *Quota, config: Config) *TestHalf {
     }).?;
 }
 
-test "an empty half holds no quota and reserves only what it captures" {
+test "an empty half holds no quota and the quota holds its buffers' storage" {
     var quota = Quota.init(64);
     const half = testHalf(&quota, .{
         .enabled = true,
@@ -301,11 +312,32 @@ test "an empty half holds no quota and reserves only what it captures" {
 
     try std.testing.expectEqual(@as(usize, 0), quota.used());
     try std.testing.expect(half.append(.request_body, "hello"));
-    try std.testing.expectEqual(@as(usize, 5), quota.used());
+    try std.testing.expectEqual(half.body.storage.len, quota.used());
     try std.testing.expect(!half.truncation.any());
 
     half.deinit();
     try std.testing.expectEqual(@as(usize, 0), quota.used());
+}
+
+test "growing charges the new storage before the old is freed" {
+    var quota = Quota.init(1024);
+    const half = testHalf(&quota, .{
+        .enabled = true,
+        .max_part_bytes = 1024,
+        .max_exchange_bytes = 2048,
+        .max_total_bytes = 2048,
+    });
+    defer half.deinit();
+    const fragment: [300]u8 = @splat('x');
+
+    try std.testing.expect(half.append(.request_body, &fragment));
+    try std.testing.expectEqual(@as(usize, 512), half.body.storage.len);
+    try std.testing.expectEqual(@as(usize, 512), quota.used());
+
+    try std.testing.expect(!half.append(.request_body, &fragment));
+    try std.testing.expectEqual(@as(usize, 512), half.body.len);
+    try std.testing.expectEqual(@as(usize, 512), quota.used());
+    try std.testing.expect(half.truncation.total);
 }
 
 test "a spent quota keeps what fits and names the total bound" {
@@ -321,7 +353,10 @@ test "a spent quota keeps what fits and names the total bound" {
     try std.testing.expect(!half.append(.request_body, "hello"));
     try std.testing.expectEqualStrings("hell", half.body.bytes());
     try std.testing.expect(half.body.truncated);
-    try std.testing.expectEqual(Truncation{ .total = true }, half.truncation);
+    const cut_by_total: Truncation = .{
+        .total = true,
+    };
+    try std.testing.expectEqual(cut_by_total, half.truncation);
     try std.testing.expectEqual(@as(usize, 4), quota.used());
 }
 
@@ -337,7 +372,10 @@ test "the part bound and the exchange share name their own cause" {
 
     try std.testing.expect(!parts.append(.request_body, "hello"));
     try std.testing.expectEqualStrings("hell", parts.body.bytes());
-    try std.testing.expectEqual(Truncation{ .part = true }, parts.truncation);
+    const cut_by_part: Truncation = .{
+        .part = true,
+    };
+    try std.testing.expectEqual(cut_by_part, parts.truncation);
 
     const shared = testHalf(&quota, .{
         .enabled = true,
@@ -350,7 +388,10 @@ test "the part bound and the exchange share name their own cause" {
     try std.testing.expect(shared.append(.request_head, "head"));
     try std.testing.expect(!shared.append(.request_body, "hello"));
     try std.testing.expectEqualStrings("he", shared.body.bytes());
-    try std.testing.expectEqual(Truncation{ .exchange = true }, shared.truncation);
+    const cut_by_exchange: Truncation = .{
+        .exchange = true,
+    };
+    try std.testing.expectEqual(cut_by_exchange, shared.truncation);
 }
 
 test "a request target past its bound keeps the method" {

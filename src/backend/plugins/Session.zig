@@ -161,5 +161,5 @@ const SessionSpec = struct {
 
 const Request = struct {
     event_id: u64,
-    bytes: []u8,
+    bytes: []const u8,
 };

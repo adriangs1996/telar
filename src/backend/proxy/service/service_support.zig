@@ -1,9 +1,11 @@
 //! Runtime-owned loopback ProxyTLS service.
 
 const core = @import("telar-core");
+const pty = @import("pty");
 const std = @import("std");
 const Connections = @import("../Connections.zig");
 const Tunnel = @import("../tunnel/Tunnel.zig");
+const tunnel_namespace = @import("../tunnel/tunnel_namespace.zig");
 
 pub const max_connections: u32 = Connections.capacity;
 pub const connections_limit = core.Limit.declare("proxy.max_connections", "connections", max_connections);
@@ -30,6 +32,9 @@ const descriptor_backoff_ms = 100;
 const reserved_descriptors = 1024;
 /// Descriptors a proxy connection holds: its child and its origin.
 const descriptors_per_connection = 2;
+/// How long the accept loop drains a refused connection so its 503 is not
+/// lost to a reset; short, since accepting waits for it.
+const refusal_drain_ms = 20;
 /// The answer to a connection that finds every slot taken.
 const refusal = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 
@@ -56,10 +61,23 @@ pub fn acceptConnections(service: *Service) anyerror!void {
             else => continue,
         };
 
-        const slot = try admit(service, stream.socket.handle) orelse {
-            service.connections.refuse();
-            refuse(service.io, stream);
-            continue;
+        const admission = admit(service, stream.socket.handle) catch |err| {
+            stream.close(service.io);
+            return err;
+        };
+
+        const slot = switch (admission) {
+            .admitted => |slot| slot,
+            .full => {
+                service.connections.refuse();
+                refuse(service.io, stream);
+                continue;
+            },
+            .unauthenticated_full => {
+                service.telemetry.record(.unauthenticated_refusal);
+                refuse(service.io, stream);
+                continue;
+            },
         };
 
         connections.concurrent(service.io, serveConnection, .{ service, stream, slot }) catch {
@@ -70,21 +88,15 @@ pub fn acceptConnections(service: *Service) anyerror!void {
 
 /// Raises the process's soft descriptor limit, within its hard limit, so
 /// every proxy connection fits beside the rest of the runtime. A launcher
-/// such as launchd starts processes with 256. A limit that cannot be raised
-/// is kept; accepting then backs off when descriptors run out.
+/// such as launchd starts processes with 256. Children spawned on a pty get
+/// the inherited limit back (`pty.descriptor_limit`). A limit that cannot
+/// be raised is kept; accepting then backs off when descriptors run out.
 ///
 /// ```zig
 /// service_support.raiseDescriptorLimit();
 /// ```
 pub fn raiseDescriptorLimit() void {
-    const wanted: std.posix.rlim_t = max_connections * descriptors_per_connection + reserved_descriptors;
-    var limits = std.posix.getrlimit(.NOFILE) catch return;
-    if (limits.cur >= wanted) {
-        return;
-    }
-
-    limits.cur = @min(wanted, limits.max);
-    std.posix.setrlimit(.NOFILE, limits) catch {};
+    pty.descriptor_limit.raise(max_connections * descriptors_per_connection + reserved_descriptors);
 }
 
 /// Closes every connection past its CONNECT head or establishment deadline,
@@ -108,28 +120,53 @@ pub fn expireConnections(service: *Service) anyerror!void {
     }
 }
 
-/// A row for a new connection: a free one, or the one an evicted idle
-/// connection frees within `eviction_wait_ms`.
-fn admit(service: *Service, child: Connections.Handle) std.Io.Cancelable!?Connections.Slot {
-    if (service.connections.acquire(child, now(service.io))) |slot| {
-        return slot;
+/// A row for a new connection. At `max_unauthenticated` connections still
+/// sending their CONNECT head, one of them that had a second is closed, or
+/// the new one is refused. Then a free row, or the one a connection closed
+/// to make room frees within `eviction_wait_ms`.
+fn admit(service: *Service, child: Connections.Handle) std.Io.Cancelable!Admission {
+    const connections = &service.connections;
+    if (connections.unauthenticated() >= Connections.max_unauthenticated) {
+        if (!connections.evict(now(service.io), .unauthenticated)) {
+            return .unauthenticated_full;
+        }
+
+        service.telemetry.record(.unauthenticated_eviction);
     }
 
-    if (!service.connections.evictIdle(now(service.io))) {
-        return null;
+    if (connections.acquire(child, now(service.io))) |slot| {
+        return .{
+            .admitted = slot,
+        };
     }
 
-    service.telemetry.record(.idle_eviction);
+    if (!connections.evict(now(service.io), .any)) {
+        return .full;
+    }
+
+    service.telemetry.record(.eviction);
     var waited_ms: u32 = 0;
     while (waited_ms < eviction_wait_ms) : (waited_ms += eviction_poll_ms) {
         try pause(service.io, eviction_poll_ms);
-        if (service.connections.acquire(child, now(service.io))) |slot| {
-            return slot;
+        if (connections.acquire(child, now(service.io))) |slot| {
+            return .{
+                .admitted = slot,
+            };
         }
     }
 
-    return null;
+    return .full;
 }
+
+/// Whether a new connection got a row, or why not.
+const Admission = union(enum) {
+    admitted: Connections.Slot,
+    /// Every row is taken and none could be freed in time.
+    full,
+    /// `max_unauthenticated` connections are still sending their CONNECT
+    /// head, none of them for a second yet.
+    unauthenticated_full,
+};
 
 fn serveConnection(service: *Service, stream: std.Io.net.Stream, slot: Connections.Slot) std.Io.Cancelable!void {
     defer close(service, stream, slot);
@@ -160,11 +197,7 @@ fn close(service: *Service, stream: std.Io.net.Stream, slot: Connections.Slot) v
 fn refuse(io: std.Io, stream: std.Io.net.Stream) void {
     defer stream.close(io);
 
-    var buffer: [refusal.len]u8 = undefined;
-    var writer = stream.writer(io, &buffer);
-    writer.interface.writeAll(refusal) catch return;
-    writer.interface.flush() catch return;
-    stream.shutdown(io, .send) catch {};
+    tunnel_namespace.refuse(io, stream, refusal, refusal_drain_ms);
 }
 
 fn pause(io: std.Io, duration_ms: i64) std.Io.Cancelable!void {

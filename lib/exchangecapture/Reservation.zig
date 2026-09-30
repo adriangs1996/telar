@@ -17,6 +17,18 @@ pub fn grow(self: *Reservation, bytes: usize) usize {
     return granted;
 }
 
+/// Returns `bytes` of the reservation to its quota.
+///
+/// ```zig
+/// reservation.shrink(old_capacity);
+/// ```
+pub fn shrink(self: *Reservation, bytes: usize) void {
+    std.debug.assert(bytes <= self.bytes);
+    const previous = self.quota.reserved.fetchSub(bytes, .monotonic);
+    std.debug.assert(previous >= bytes);
+    self.bytes -= bytes;
+}
+
 pub fn release(self: *Reservation) void {
     if (self.bytes == 0) {
         return;

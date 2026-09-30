@@ -9,6 +9,7 @@ const localca = @import("localca");
 const Session = localca.Session;
 const std = @import("std");
 const header_rules = @import("../header_rules.zig");
+const observer_hooks = @import("../observer_hooks.zig");
 const RouteMatch = @import("../RouteMatch.zig");
 const FakeSessionType = @import("FakeSession.zig");
 
@@ -29,15 +30,16 @@ pub const AnalyzeOptions = @import("AnalyzeOptions.zig");
 /// The function reads one byte at a time because the session has no pushback
 /// buffer. This guarantees that a successful call leaves the first body byte
 /// unread. It returns `.ended` on EOF or a zero-length read, and
-/// `.too_large` when the buffer fills before the head ends.
+/// `.too_large` when the buffer fills before the head ends. An observer that
+/// declares `headStarted()` hears the first byte arrive.
 ///
 /// ```zig
-/// const head_len = switch (read(session, .child, &buffer)) {
+/// const head_len = switch (read(session, .child, &buffer, &observer)) {
 ///     .complete => |len| len,
 ///     .ended, .too_large => return,
 /// };
 /// ```
-pub fn read(session: anytype, side: Session.Side, buffer: []u8) HeadRead {
+pub fn read(session: anytype, side: Session.Side, buffer: []u8, observer: anytype) HeadRead {
     var len: usize = 0;
     while (len < buffer.len) {
         const read_len = session.read(side, buffer[len..][0..1]) orelse return .ended;
@@ -45,9 +47,15 @@ pub fn read(session: anytype, side: Session.Side, buffer: []u8) HeadRead {
             return .ended;
         }
 
+        if (len == 0 and comptime observer_hooks.declares(@TypeOf(observer), "headStarted")) {
+            observer.headStarted();
+        }
+
         len += 1;
         if (len >= 4 and std.mem.eql(u8, buffer[len - 4 .. len], "\r\n\r\n")) {
-            return .{ .complete = len };
+            return .{
+                .complete = len,
+            };
         }
     }
 
@@ -294,12 +302,33 @@ test "head reader stops before the first body byte" {
     var fake: FakeSession = .{ .child_input = input };
     var buffer: [max_bytes]u8 = undefined;
 
-    const len = read(&fake, .child, &buffer).complete;
+    const len = read(&fake, .child, &buffer, {}).complete;
 
     try std.testing.expectEqual(expected_len, len);
     try std.testing.expectEqual(expected_len, fake.child_offset);
     try std.testing.expectEqualStrings(input[0..expected_len], buffer[0..len]);
 }
+
+test "head reader tells an observer that asks when the first byte arrives" {
+    const FakeSession = FakeSessionType;
+    var fake: FakeSession = .{
+        .child_input = "GET / HTTP/1.1\r\n\r\n",
+    };
+    var buffer: [max_bytes]u8 = undefined;
+    var watcher: StartWatcher = .{};
+
+    _ = read(&fake, .child, &buffer, &watcher);
+    try std.testing.expectEqual(@as(usize, 1), watcher.started);
+}
+
+/// Counts the heads whose first byte arrived.
+const StartWatcher = struct {
+    started: usize = 0,
+
+    pub fn headStarted(self: *StartWatcher) void {
+        self.started += 1;
+    }
+};
 
 test "head reader rejects EOF before the blank line" {
     const FakeSession = FakeSessionType;
@@ -307,7 +336,7 @@ test "head reader rejects EOF before the blank line" {
     var fake: FakeSession = .{ .child_input = input };
     var buffer: [max_bytes]u8 = undefined;
 
-    try std.testing.expectEqual(HeadRead.ended, read(&fake, .child, &buffer));
+    try std.testing.expectEqual(HeadRead.ended, read(&fake, .child, &buffer, {}));
     try std.testing.expectEqual(input.len, fake.child_offset);
 }
 
@@ -317,7 +346,7 @@ test "head reader rejects a head that fills its bound" {
     var fake: FakeSession = .{ .child_input = &input };
     var buffer: [max_bytes]u8 = undefined;
 
-    try std.testing.expectEqual(HeadRead.too_large, read(&fake, .child, &buffer));
+    try std.testing.expectEqual(HeadRead.too_large, read(&fake, .child, &buffer, {}));
     try std.testing.expectEqual(max_bytes, fake.child_offset);
 }
 

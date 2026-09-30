@@ -119,14 +119,30 @@ system-trust authority remains installed while interception is off.
 The proxy admits 256 connections at once across every pane of the runtime
 (`proxy.max_connections`), passthrough and intercepted alike. A connection
 must send its whole CONNECT head, at most 16 KiB (`proxy.max_connect_head_bytes`,
-a longer one is answered `431`), within 10 seconds, and must reach its origin
-and finish TLS within 30 seconds more; the proxy closes one that does not. When
-every slot is taken, the proxy closes the connection idle the longest to make
-room: an HTTP/1.1 connection waiting a minute for its next request, or any
-other connection silent for ten minutes. When none is that idle, the new
-connection is answered `503 Service Unavailable`. At start the proxy raises the
-process's soft descriptor limit, within its hard limit, so every slot has its
-two sockets; accepting backs off when descriptors still run out.
+a longer one is answered `431`), within 10 seconds. It must then reach its
+origin and finish TLS within 30 seconds: the TCP connect to each resolved
+address waits only for what is left of that budget and a timeout is answered
+`504`, and a TLS handshake still running at the deadline is shut down. Name
+resolution keeps the system resolver's own timeouts, which on macOS the proxy
+cannot interrupt.
+
+At most 64 connections may still be sending their CONNECT head at once
+(`proxy.max_unauthenticated`), so a local process that opens silent
+connections can fill those rows and no others. Making room closes, in this
+order: the oldest connection still sending its CONNECT head after a second,
+far longer than a client needs; the HTTP/1.1 connection that has waited
+longest, past a minute, for its next request; the connection silent longest,
+past ten minutes, with nothing in flight. A connection with an exchange in
+flight, from the first byte of an HTTP/1.1 request until its response ends or
+while an HTTP/2 stream is open, is never closed to make room, however long a
+model takes to answer; every byte relayed, HTTP/2 PING and WINDOW_UPDATE
+included, marks a connection active. A new connection that finds no room is
+answered `503 Service Unavailable`; the proxy drains what the client already
+sent before closing, so the answer is not lost to a reset. At start the proxy
+raises the process's soft descriptor limit, within its hard limit, so every
+slot has its two sockets; children started on a pty get the inherited limit
+back, so programs that use `select()` keep descriptors below `FD_SETSIZE`.
+Accepting backs off when descriptors still run out.
 
 For a host outside the allowlist, Telar responds with `200` and forwards the
 TCP stream byte for byte. TLS remains end to end between the child and origin,
@@ -143,6 +159,9 @@ without deadlock. In HTTP/2 the relay forwards frames byte for byte and feeds a
 copy of each bounded header block through an independent nghttp2 HPACK
 inflater per direction; invalid framing, an HPACK error, or an oversized header
 block disables capture for that direction while traffic continues unchanged.
+A header block past 128 KiB (`proxy.h2.max_header_block_bytes`) and a stream
+past the 128 the relay tracks (`proxy.h2.max_tracked_streams`) are counted and
+reported by name.
 
 An HTTP/1.1 head may be 64 KiB (`proxy.http1.max_head_bytes`), as large
 cookies and bearer tokens need. A longer request head is answered `431` and a
@@ -170,25 +189,48 @@ target, status and timestamps; it carries no secret and no pane.
 Each head and body stops growing at `max_part_bytes` (16 MiB by default).
 Request and response each get half of `max_exchange_bytes` (32 MiB), head and
 body together, so a request cannot borrow what its response leaves unused. All
-captures share `max_total_bytes` (128 MiB). A half reserves quota only as it
-captures bytes: an idle keep-alive connection waiting for its next request
-holds none. The configuration refuses a `max_part_bytes` or
+captures share `max_total_bytes` (128 MiB). The quota counts the storage the
+capture buffers hold, charged before a buffer grows and released after the
+copy, so it bounds their heap, copies while growing included; an idle
+keep-alive connection waiting for its next request holds none. The
+configuration refuses a `max_part_bytes` or
 `max_exchange_bytes` above 64 MiB, a `max_total_bytes` above 1 GiB and a
 `join_timeout_ms` above one hour. Truncation is recorded on the affected part
 and reported under the bound that cut it. Queue publication is nonblocking;
 queue saturation and shutdown free the abandoned buffers while traffic
 continues. Captured buffers are erased before release.
 
-When a tap worker is configured, the runtime decodes `gzip`, `deflate`,
-`zstd`, and Brotli bodies after queue delivery, never on a relay task. At most
+When a tap worker is configured, `gzip`, `deflate`, `zstd`, and Brotli bodies
+are decoded on the task that receives each half from the queue, never on a
+relay task and never on the runtime's event loop, which only joins halves and
+hands exchanges on by pointer. At most
 two chained content codings are applied in reverse order. Decoded output
 remains bounded by `max_part_bytes` and the half's share; an unknown or
 malformed coding preserves the captured wire body and marks it as undecoded.
 Completed exchanges are offered to supervised runtime-side Lua workers for
-enabled packages with an exact `proxy.tap` grant. Each worker has its own
-bounded queue and cannot delay proxy traffic. With no authorized tap worker,
-the runtime records capture metrics and releases the exchange without
-decoding it.
+enabled packages with an exact `proxy.tap` grant. The workers share one copy
+of each exchange; each encodes its own frame on its own thread. Each worker
+has its own bounded queue and cannot delay proxy traffic. With no authorized
+tap worker, the runtime records capture metrics and releases the exchange
+without decoding it.
+
+The memory capture can hold at once, with the defaults:
+
+- capture buffers, queued, joined and in the tap's queues included, within
+  `max_total_bytes`: 128 MiB;
+- frames tap workers are sending, within the tap's 128 MiB budget
+  (`plugins.tap.max_held_bytes`), which also counts the queued exchanges;
+- one body being decoded: a scratch of `max_part_bytes` and the decoded
+  copy, 32 MiB, outside the quota;
+- about 8.8 KiB of bookkeeping per half, outside the quota: two per
+  intercepted HTTP/1.1 connection and one per captured HTTP/2 stream;
+- per live connection, its tunnel threads' stacks: a 16 KiB CONNECT head,
+  up to 64 KiB of HTTP/1.1 head and 8 KiB of trailer line when one is that
+  long, 16 or 32 KiB of relay buffers per direction, plus a TLS session of
+  about 66 KiB when intercepted.
+
+At worst that is about 300 MiB beyond the connections' own cost, reached only
+while taps are slower than the traffic they read.
 
 The `proxy.tap` capability is full trust: it receives unredacted headers and
 bodies, including authorization and cookie values. Grant it only to plugin
@@ -218,10 +260,12 @@ runtime's maintenance tick reports every limit whose count grew with the
 `proxy.max_connect_head_bytes`, `proxy.connect_head_timeout_ms`,
 `proxy.establish_timeout_ms`, `proxy.http1.max_head_bytes`,
 `proxy.http1.max_chunk_line_bytes`, `proxy.http1.max_trailer_line_bytes`,
+`proxy.max_unauthenticated`, `proxy.h2.max_header_block_bytes`,
+`proxy.h2.max_tracked_streams`,
 `proxy.capture.h2_stream_slots`, `proxy.capture.queue_capacity`,
 `proxy.capture.max_part_bytes`, `proxy.capture.max_exchange_bytes` and
 `proxy.capture.max_total_bytes`, and for the taps
-`plugins.tap.queue_depth`, `plugins.tap.max_queued_bytes`,
+`plugins.tap.queue_depth`, `plugins.tap.max_held_bytes`,
 `plugins.tap.reply_timeout_ms` and `plugins.tap.restart_limit`. The event
 loop reports `proxy.capture.joiner_capacity` where it joins halves.
 

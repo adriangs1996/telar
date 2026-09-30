@@ -342,7 +342,7 @@ traffic.
   chain listed above. Keep `capture` off by default.
 - build.zig: `brotli` option and `brotlidec` link in the five mirror
   points. Add a CI note to `.github/` if the workflow installs `nghttp2`.
-- Metrics: `capture_started`, `capture_truncated`, `capture_skipped_quota`,
+- Metrics: `capture_started`, `capture_truncated`, `capture_skipped`,
   `capture_dropped_queue`, `capture_decode_failed` in `proxy/metrics.zig`
   and the snapshot.
 - Tests: `FakeSession` HTTP/1.1 request with chunked body and response

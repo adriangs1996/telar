@@ -63,22 +63,14 @@ pub fn destroy(self: *Proxy) void {
     gpa.destroy(self);
 }
 
-/// Waits for one heap-owned captured exchange half.
+/// Waits for one heap-owned captured exchange half, its body decoded when
+/// `decode` asks, off the event loop.
 ///
 /// ```zig
-/// const half = try proxy.receiveCapture(io);
+/// const half = try proxy.receiveCapture(io, tap_listens);
 /// ```
-pub fn receiveCapture(self: *Proxy, io: std.Io) anyerror!*Half {
-    return self.service.receiveCapture(io);
-}
-
-/// Decodes one captured body on the runtime observation path.
-///
-/// ```zig
-/// proxy.decodeCapture(half);
-/// ```
-pub fn decodeCapture(self: *Proxy, half: *Half) void {
-    self.service.decodeCapture(half);
+pub fn receiveCapture(self: *Proxy, io: std.Io, decode: bool) anyerror!*Half {
+    return self.service.receiveCapture(io, decode);
 }
 
 /// Returns the owned child environment of a new pane. `pane_overrides`

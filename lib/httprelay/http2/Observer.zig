@@ -11,6 +11,10 @@ const Observer = @This();
 
 inflater: ?*relay.c.nghttp2_hd_inflater = null,
 failed: bool = false,
+/// A header block passed `max_header_block_bytes`.
+block_too_large: bool = false,
+/// Streams not followed because the tracker was full.
+untracked_streams: u32 = 0,
 /// Request routes to report as watched; at most 64.
 watched_routes: []const RouteMatch,
 direction: relay.Direction,
@@ -177,6 +181,7 @@ fn observePayload(self: *Observer, payload: []const u8, sink: anytype) void {
     }
     const source = payload[copy_start - input_start .. copy_end - input_start];
     if (source.len > self.block.len - self.block_len) {
+        self.block_too_large = true;
         self.fail();
         return;
     }
@@ -203,6 +208,8 @@ fn finishFrame(self: *Observer, sink: anytype) void {
                                 .stream_id = self.block_stream,
                                 .status_code = 0,
                             } });
+                        } else if (decoded.request and self.streams.requestsFull()) {
+                            self.untracked_streams +|= 1;
                         }
 
                         if (self.block_end_stream) {
@@ -211,12 +218,12 @@ fn finishFrame(self: *Observer, sink: anytype) void {
                         }
                     },
                     .response => {
-                        if (decoded.status_code >= 200) {
-                            _ = self.streams.setResponse(.{
-                                .stream_id = self.block_stream,
-                                .status_code = decoded.status_code,
-                                .sse_body = decoded.hasObservableSseBody(),
-                            });
+                        if (decoded.status_code >= 200 and !self.streams.setResponse(.{
+                            .stream_id = self.block_stream,
+                            .status_code = decoded.status_code,
+                            .sse_body = decoded.hasObservableSseBody(),
+                        })) {
+                            self.untracked_streams +|= 1;
                         }
 
                         if (self.block_end_stream) {

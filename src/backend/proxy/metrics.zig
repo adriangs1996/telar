@@ -28,8 +28,19 @@ pub const Counter = enum {
     connect_head_timeout,
     /// A connection that did not reach its origin and finish TLS in time.
     establish_timeout,
-    /// An idle connection closed to admit a new one at the connection bound.
-    idle_eviction,
+    /// A connection closed to make room for a new one.
+    eviction,
+    /// A connection refused because `max_unauthenticated` connections were
+    /// still sending their CONNECT head.
+    unauthenticated_refusal,
+    /// A connection still sending its CONNECT head closed at
+    /// `max_unauthenticated` to admit a new one.
+    unauthenticated_eviction,
+    /// An HTTP/2 header block past `max_header_block_bytes`, which ends
+    /// decoding of its direction.
+    h2_header_block_too_large,
+    /// An HTTP/2 stream the relay could not follow past its tracked streams.
+    h2_stream_untracked,
 };
 
 test "each proxy counter has one independent snapshot field" {
@@ -76,7 +87,11 @@ test "each proxy counter has one independent snapshot field" {
     try std.testing.expectEqual(@as(u64, 15), snapshot.connect_heads_too_large);
     try std.testing.expectEqual(@as(u64, 16), snapshot.connect_head_timeouts);
     try std.testing.expectEqual(@as(u64, 17), snapshot.establish_timeouts);
-    try std.testing.expectEqual(@as(u64, 18), snapshot.idle_evictions);
+    try std.testing.expectEqual(@as(u64, 18), snapshot.evictions);
+    try std.testing.expectEqual(@as(u64, 19), snapshot.unauthenticated_refusals);
+    try std.testing.expectEqual(@as(u64, 20), snapshot.unauthenticated_evictions);
+    try std.testing.expectEqual(@as(u64, 21), snapshot.h2_header_blocks_too_large);
+    try std.testing.expectEqual(@as(u64, 22), snapshot.h2_streams_untracked);
     try std.testing.expectEqual(@as(u64, 43), snapshot.capture_started);
     try std.testing.expectEqual(@as(u64, 47), snapshot.capture_truncated);
     try std.testing.expectEqual(@as(u64, 31), snapshot.capture_truncated_part);

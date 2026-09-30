@@ -17,6 +17,9 @@ const Tunnel = @This();
 pub const max_connect_head_bytes = 16 * 1024;
 pub const connect_head_limit = core.Limit.declare("proxy.max_connect_head_bytes", "bytes", max_connect_head_bytes);
 
+/// How long a refused CONNECT is drained so its answer is not lost to a
+/// reset.
+const refusal_drain_ms = 200;
 /// The answer to a CONNECT head past `max_connect_head_bytes`.
 const connect_head_too_large = "HTTP/1.1 431 Request Header Fields Too Large\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 
@@ -60,7 +63,7 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
         .ended => return,
         .too_large => {
             dependencies.tls.telemetry.record(.connect_head_too_large);
-            tunnel_namespace.reply(io, self.child, connect_head_too_large);
+            tunnel_namespace.refuse(io, self.child, connect_head_too_large, refusal_drain_ms);
             return;
         },
     };
@@ -89,7 +92,18 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
 
     exchange.enter(.establishing);
 
-    const upstream = tunnel_namespace.connectUpstream(target.host, io, target.port) catch {
+    const upstream = tunnel_namespace.connectUpstream(.{
+        .host = target.host,
+        .io = io,
+        .port = target.port,
+        .deadline_ms = exchange.deadline(Connections.establish_timeout_ms),
+    }) catch |err| {
+        if (err == error.Timeout) {
+            dependencies.tls.telemetry.record(.establish_timeout);
+            tunnel_namespace.reply(io, self.child, "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\n\r\n");
+            return;
+        }
+
         dependencies.tls.telemetry.record(.upstream_connect_failure);
         tunnel_namespace.reply(io, self.child, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
         return;

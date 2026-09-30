@@ -87,7 +87,9 @@ pub fn Type(comptime Meta: type) type {
         /// ```
         pub fn push(self: *Joiner, now_ms: i64, half: *Half) PushResult {
             const index = self.find(half.key) orelse self.empty() orelse {
-                return .{ .full = sideExchange(half) };
+                return .{
+                    .full = sideExchange(half),
+                };
             };
             var entry = self.slots[index] orelse Entry{
                 .key = half.key,

@@ -138,22 +138,6 @@ pub const CaptureJoin = enum {
     table_full,
 };
 
-/// Delegates bounded content decoding to the active proxy, when a tap
-/// worker will read the body; otherwise the exchange is only counted and
-/// released, so decoding it would be wasted work on the event loop.
-///
-/// ```zig
-/// proxy_runtime.decodeCapture(half, plugins);
-/// ```
-pub fn decodeCapture(self: *ProxyRuntime, half: *Half, tap: *const PluginsService) void {
-    const proxy = self.proxy orelse return;
-    if (!tap.listening()) {
-        return;
-    }
-
-    proxy.decodeCapture(half);
-}
-
 /// Returns the active proxy's capture bounds, or the defaults while
 /// disabled.
 ///

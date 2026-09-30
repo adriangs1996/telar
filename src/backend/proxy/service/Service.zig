@@ -153,22 +153,21 @@ fn reap(self: *Service) anyerror!void {
     return service_support.expireConnections(self);
 }
 
-/// Waits for one captured half.
+/// Waits for one captured half and, when `decode` asks, decodes its body.
+/// It runs on the task that waits, off the runtime's event loop and off
+/// every relay task, so decompression delays neither keystrokes nor
+/// traffic.
 ///
 /// ```zig
-/// const half = try service.receiveCapture(io);
+/// const half = try service.receiveCapture(io, true);
 /// ```
-pub fn receiveCapture(self: *Service, io: std.Io) anyerror!*Half {
-    return self.captures.receive(io);
-}
+pub fn receiveCapture(self: *Service, io: std.Io, decode: bool) anyerror!*Half {
+    const half = try self.captures.receive(io);
+    if (decode) {
+        self.captures.decodeBody(half);
+    }
 
-/// Decodes a captured body outside the traffic relay task.
-///
-/// ```zig
-/// service.decodeCapture(half);
-/// ```
-pub fn decodeCapture(self: *Service, half: *Half) void {
-    self.captures.decodeBody(half);
+    return half;
 }
 
 /// Returns one lock-free snapshot without exposing admission or counter

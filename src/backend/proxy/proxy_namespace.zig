@@ -5,7 +5,6 @@
 
 const core = @import("telar-core");
 const Service = @import("service/Service.zig");
-const service_support = @import("service/service_support.zig");
 const pty = @import("pty");
 const Override = pty.Override;
 const std = @import("std");
@@ -13,6 +12,7 @@ const connect_authentication = @import("connect_authentication.zig");
 const identity = @import("identity.zig");
 const service_mod = @import("service/service_namespace.zig");
 const Tunnel = @import("tunnel/Tunnel.zig");
+const Connections = @import("Connections.zig");
 const localca = @import("localca");
 const tls = localca.tls;
 
@@ -152,7 +152,7 @@ test "proxy lifecycle accepts traffic and cancels an active tunnel during destru
     proxy = null;
 }
 
-test "proxy connection admission enforces the real worker limit" {
+test "silent connections fill only the unauthenticated rows, and the oldest past a second makes room" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     var files = try ProxyTestFiles.init(io);
@@ -161,9 +161,8 @@ test "proxy connection admission enforces the real worker limit" {
     defer proxy.destroy();
 
     const address = proxy.address();
-    const connection_limit: usize = service_support.max_connections;
-    const client_count = connection_limit + 1;
-    var clients: [client_count]?std.Io.net.Stream = @splat(null);
+    const silent_count = Connections.max_unauthenticated;
+    var clients: [silent_count + 2]?std.Io.net.Stream = @splat(null);
     defer {
         for (clients) |client| {
             if (client) |stream| {
@@ -172,20 +171,46 @@ test "proxy connection admission enforces the real worker limit" {
         }
     }
 
-    for (clients[0..connection_limit]) |*client| {
-        const stream = try address.connect(io, .{ .mode = .stream });
-        client.* = stream;
-        var write_buffer: [32]u8 = undefined;
-        var writer = stream.writer(io, &write_buffer);
-        try writer.interface.writeAll("CONNECT unfinished");
-        try writer.interface.flush();
+    for (clients[0..silent_count]) |*client| {
+        client.* = try address.connect(io, .{
+            .mode = .stream,
+        });
     }
 
-    try waitForConnectionMetrics(proxy, service_support.max_connections, 0);
+    try waitForConnectionMetrics(proxy, silent_count, 0);
 
-    clients[connection_limit] = try address.connect(io, .{ .mode = .stream });
-    try waitForConnectionMetrics(proxy, service_support.max_connections, 1);
-    try expectAnswer(io, clients[connection_limit].?, "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    clients[silent_count] = try address.connect(io, .{
+        .mode = .stream,
+    });
+    try expectAnswer(io, clients[silent_count].?, "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    try std.testing.expectEqual(@as(u64, 1), proxy.metrics().unauthenticated_refusals);
+
+    try io.sleep(.fromMilliseconds(Connections.min_evictable_connect_head_ms + 100), .awake);
+    clients[silent_count + 1] = try address.connect(io, .{
+        .mode = .stream,
+    });
+    try waitForEvictions(proxy, 1);
+
+    var evicted: usize = 0;
+    for (clients[0..silent_count]) |client| {
+        var byte: [1]u8 = undefined;
+        evicted += @intFromBool(std.c.recv(client.?.socket.handle, &byte, byte.len, std.c.MSG.DONTWAIT) == 0);
+    }
+
+    try std.testing.expectEqual(@as(usize, 1), evicted);
+    try waitForConnectionMetrics(proxy, silent_count, 0);
+}
+
+fn waitForEvictions(proxy: *const Proxy, expected: u64) !void {
+    for (0..1000) |_| {
+        if (proxy.metrics().unauthenticated_evictions == expected) {
+            return;
+        }
+
+        try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+    }
+
+    return error.ProxyEvictionNotObserved;
 }
 
 test "a CONNECT head past its bound is answered 431 and counted" {
