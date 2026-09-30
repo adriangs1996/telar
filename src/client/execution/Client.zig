@@ -9,6 +9,7 @@ const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
 const bar_updates = @import("../config/bar_updates.zig");
+const pick_list = @import("../bars/pick_list.zig");
 const client_tests = @import("client_tests.zig");
 
 const Options = @import("../Options.zig");
@@ -301,6 +302,7 @@ pub fn update(self: *Client, message: Message) !?u8 {
         .notification_tick => |result| _ = try notifications.completeNotificationTick(self, result),
         .bar_tick => |result| try bar_updates.handleTick(self, result),
         .bar_command => |completion| try bar_updates.completeCommand(self, completion),
+        .pick_command => |completion| try pick_list.finish(self, completion),
         .plugin_result => |completion| {
             if (try plugin_actions.completePluginAction(self, completion)) {
                 return 0;

@@ -104,7 +104,7 @@ pub fn settle(self: *ClientHarness) !void {
         try self.deliverHostEffects();
         switch (try self.inbox.receive()) {
             .client => |message| switch (message) {
-                .sent, .sidebar_animation_tick, .notification_tick, .bar_tick, .bar_command, .path_completion => {
+                .sent, .sidebar_animation_tick, .notification_tick, .bar_tick, .bar_command, .pick_command, .path_completion => {
                     _ = try self.client.update(message);
                     try self.deliverHostEffects();
                     try self.present();

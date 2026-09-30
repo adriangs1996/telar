@@ -25,4 +25,7 @@ pub const PromptTarget = union(enum) {
     paths,
     /// Renames or adds one of the window's machines.
     machine: MachinePrompt,
+    /// The options of a configured pick; they live in the pick-list model
+    /// state and Enter runs the pick's `on_select`.
+    pick,
 };

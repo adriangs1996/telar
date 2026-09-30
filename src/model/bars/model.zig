@@ -23,12 +23,16 @@ pub const max_panel_text_bytes = 4096;
 pub const max_panel_actions = 8;
 /// Command output handed to a render callback, such as a JSON document.
 pub const max_command_output_bytes = 64 * 1024;
+/// Output a pick's list command may print; `pi --list-models` prints
+/// about 43 KiB.
+pub const max_pick_output_bytes = 256 * 1024;
 
 /// The components of one bar slot.
 pub const Content = GenericContent(max_bar_nodes, max_bar_text_bytes, max_bar_actions);
 /// The components of one open panel.
 pub const PanelContent = GenericContent(max_panel_nodes, max_panel_text_bytes, max_panel_actions);
 pub const max_panels = 8;
+pub const max_picks = 8;
 
 /// What `telar.bar.metrics()` shows: one group of CPU, memory and battery,
 /// each formatted by the adapter from the runtime's latest sample.

@@ -1,6 +1,8 @@
 //! The native command palette: one rounded surface with the prefixed field,
 //! up to sixteen result rows and the prefix legend. It reads the client's
-//! canonical results for every mode and never scores anything itself.
+//! canonical results for every mode and never scores anything itself. A
+//! pick list uses the same surface with a plain field and its title in the
+//! legend.
 const cellgrid = @import("cellgrid");
 const TextField = @import("../TextField.zig");
 const data = @import("model");
@@ -27,6 +29,32 @@ pub const radius_px = 10;
 pub const legend = [_][]const u8{ ">", "actions", "@", "agents & panes", "?", "suggest", ":", "machines", "↑↓", "select", "enter", "run", "esc", "close" };
 /// The machine list's keys instead of the prefixes.
 pub const machine_legend = [_][]const u8{ "enter", "show", "⇧enter", "enable/disable", "^R", "rename", "^D", "remove", "esc", "close" };
+/// Cells between a pick's title and its keys, as between legend words.
+const title_gap_cells = 3;
+/// A pick list's keys, after its title.
+pub const pick_legend = [_][]const u8{ "↑↓", "select", "enter", "choose", "esc", "close" };
+
+/// The list the palette shows: the mode its prefix selects, or a pick.
+const List = enum {
+    goto,
+    actions,
+    suggest,
+    machines,
+    pick,
+
+    fn of(prompt: *const data.Prompt) List {
+        if (prompt.target() == .pick) {
+            return .pick;
+        }
+
+        return switch (prompt.paletteMode()) {
+            .goto => .goto,
+            .actions => .actions,
+            .suggest => .suggest,
+            .machines => .machines,
+        };
+    }
+};
 
 projection: *const client.Projection,
 hits: *PaletteHits,
@@ -66,10 +94,13 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
     const prompt = self.projection.prompt.?;
     const colors = canvas.theme.palette;
     const scale = if (self.scale > 0) self.scale else 1;
+    const list = List.of(&prompt);
+    const picks = &self.projection.model.pick_list;
     var goto_results: data.Results = .{};
     var action_results: data.CommandResults = .{};
     var machine_results: client.MachineResults = .{};
-    const total: u16 = switch (prompt.paletteMode()) {
+    var pick_results: data.PickResults = .{};
+    const total: u16 = switch (list) {
         .goto => blk: {
             data.goto_picker.collect(self.sources(), prompt.paletteQuery(), &goto_results);
             break :blk goto_results.len;
@@ -84,6 +115,10 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
             client.machine_picker.collect(machines, prompt.paletteQuery(), &machine_results);
             break :blk machine_results.rows();
         },
+        .pick => blk: {
+            data.pick_list.collect(&picks.items, prompt.field.text(), &pick_results);
+            break :blk pick_results.len;
+        },
     };
     const visible: u16 = @max(@min(total, max_rows), 1);
     const frame = self.area(canvas, visible);
@@ -96,21 +131,32 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
         return;
     }
 
-    if (prompt.paletteMode() == .suggest) {
+    if (list == .suggest) {
         const inset: u16 = @min(2, content.w / 8);
         const suggestion_area: cellgrid.Rect = .{ .x = content.x + inset, .y = content.y, .w = content.w - inset * 2, .h = content.h };
         try (SuggestionPanel{ .area = suggestion_area, .projection = self.projection, .hits = hits }).draw(canvas);
         return;
     }
 
-    try drawField(canvas, content.row(0), prompt);
+    try drawField(canvas, content.row(0), prompt, list);
     const rows = content.splitTop(1)[1].splitBottom(1)[0];
     const selected: u16 = if (total == 0) 0 else @min(prompt.selection(), total - 1);
     const count = @min(rows.h, visible);
     const start = (selected + 1) -| count;
     hits.first = start;
     if (total == 0) {
-        try canvas.text(rows.row(0).splitLeft(2)[1], .{ .text = "No matches", .color = colors.subtext0, .face = .sans, .size = .body });
+        const failed = list == .pick and picks.phase == .failed;
+        const empty: []const u8 = if (list != .pick) "No matches" else switch (picks.phase) {
+            .loading => "Loading…",
+            .failed => picks.errorSlice(),
+            .ready, .closed => "No matches",
+        };
+        try canvas.text(rows.row(0).splitLeft(2)[1], .{
+            .text = empty,
+            .color = if (failed) colors.red else colors.subtext0,
+            .face = .sans,
+            .size = .body,
+        });
     }
 
     for (0..@min(count, total)) |offset| {
@@ -123,28 +169,53 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
 
         var label_storage: [data.goto_picker.max_label_bytes]u8 = undefined;
         var key_storage: [key_label.max_bytes]u8 = undefined;
-        var child = switch (prompt.paletteMode()) {
+        var child = switch (list) {
             .goto => self.pickerRow(goto_results.slice()[index].item, &label_storage),
             .actions => self.actionRow(action_results.slice()[index].index, &key_storage),
             .machines => if (machine_results.slotAt(index)) |slot| self.machineRow(slot, &label_storage) else addMachineRow(),
+            .pick => pickRow(&picks.items, pick_results.slice()[index].index),
             .suggest => unreachable,
         };
         child.area = row;
         try child.draw(canvas);
     }
 
-    try drawLegend(canvas, content.row(content.h - 1), prompt.paletteMode());
+    var legend_row = content.row(content.h - 1);
+    if (list == .pick) {
+        legend_row = try drawTitle(canvas, legend_row, picks.title());
+    }
+
+    try drawLegend(canvas, legend_row, list, prompt.paletteMode());
+}
+
+// The pick's title in the accent, before its keys; returns what is left.
+fn drawTitle(canvas: *Canvas, row: cellgrid.Rect, title: []const u8) !cellgrid.Rect {
+    const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
+    const label: Label = .{
+        .text = title,
+        .color = canvas.theme.palette.accent,
+        .bold = true,
+        .face = .sans,
+        .size = .body,
+    };
+    const used: u16 = @intFromFloat(@ceil(try canvas.measure(label) / cell));
+    try canvas.text(row, label);
+    return row.splitLeft(@min(used + title_gap_cells, row.w))[1];
 }
 
 // Keys in the monospace face, words in sans; the active prefix in accent.
-fn drawLegend(canvas: *Canvas, row: cellgrid.Rect, mode: data.command_palette.Prefix) !void {
+fn drawLegend(canvas: *Canvas, row: cellgrid.Rect, list: List, mode: data.command_palette.Prefix) !void {
     const colors = canvas.theme.palette;
     const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
     var remaining = row;
-    const tokens: []const []const u8 = if (mode == .machines) &machine_legend else &legend;
+    const tokens: []const []const u8 = switch (list) {
+        .machines => &machine_legend,
+        .pick => &pick_legend,
+        .goto, .actions, .suggest => &legend,
+    };
     for (tokens, 0..) |token, index| {
         const is_key = index % 2 == 0;
-        const active = token.len == 1 and data.command_palette.Prefix.parse(token[0]) == mode;
+        const active = list != .pick and token.len == 1 and data.command_palette.Prefix.parse(token[0]) == mode;
         const label: Label = .{ .text = token, .color = if (active) colors.accent else colors.subtext0, .bold = active, .face = if (is_key) .mono else .sans, .size = .body };
         const used: u16 = @intFromFloat(@ceil(try canvas.measure(label) / cell));
         if (used + 1 > remaining.w) {
@@ -162,12 +233,13 @@ fn sources(self: CommandPalette) data.Sources {
 
 // The prefix byte is painted over the field text in the accent color; the
 // field keeps it as ordinary text so editing never needs a second cursor.
-fn drawField(canvas: *Canvas, row: cellgrid.Rect, prompt: data.Prompt) !void {
+// A pick's field has no prefix.
+fn drawField(canvas: *Canvas, row: cellgrid.Rect, prompt: data.Prompt, list: List) !void {
     const colors = canvas.theme.palette;
     var field = prompt.field;
     const view = field.view(row.w);
     try TextField.fromPrompt(&prompt, canvas.rect(row), .name).draw(canvas);
-    if (!view.clipped_left and view.text.len != 0 and data.command_palette.Prefix.parse(view.text[0]) != null) {
+    if (list != .pick and !view.clipped_left and view.text.len != 0 and data.command_palette.Prefix.parse(view.text[0]) != null) {
         const cell = row.splitLeft(1)[0];
         try canvas.fill(cell, colors.surface0);
         try canvas.text(cell, .{ .text = view.text[0..1], .color = colors.accent, .bold = true });
@@ -197,6 +269,14 @@ fn actionRow(self: CommandPalette, index: u8, storage: *[key_label.max_bytes]u8)
         break :blk key_label.chord(storage, router.prefix, key, key_label.host_style);
     } else "";
     return .{ .icon = "»", .primary = entry.label, .hint = hint };
+}
+
+fn pickRow(items: *const data.PickItems, index: u16) PaletteRow {
+    return .{
+        .icon = "›",
+        .primary = items.label(index),
+        .secondary = items.detail(index),
+    };
 }
 
 fn addMachineRow() PaletteRow {

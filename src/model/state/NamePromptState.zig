@@ -128,6 +128,10 @@ pub fn begin(self: *State, command: name_prompt.Begin) void {
             .mode = .{ .peek = key },
             .field = .init(""),
         },
+        .pick => .{
+            .mode = .{ .pick = .{} },
+            .field = .init(""),
+        },
     };
     self.value.?.generation = self.generation;
     self.revision +%= 1;

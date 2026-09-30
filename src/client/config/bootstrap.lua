@@ -125,6 +125,28 @@ function telar.panel(options)
 	}
 end
 
+-- A list of options a bar component or a binding opens in the palette.
+-- `items` is a list, or with `command` a function that turns `ctx.output`
+-- into one; `on_select` runs with the chosen value in place of "{}".
+function telar.pick(options)
+	return {
+		pick_kind = "pick",
+		title = options.title,
+		command = options.command,
+		items = options.items,
+		on_select = options.on_select,
+		timeout_ms = options.timeout_ms,
+		refresh = options.refresh,
+	}
+end
+
+function telar.action.pick(options)
+	if type(options) == "string" then
+		options = { pick = options }
+	end
+	return { kind = "pick", pick = options.pick }
+end
+
 function telar.action.open_panel(options)
 	if type(options) == "string" then
 		options = { panel = options }

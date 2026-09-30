@@ -4,6 +4,7 @@
 const core = @import("telar-core");
 const data = @import("model");
 const BarUpdatesCompletion = @import("../bars/BarUpdatesCompletion.zig");
+const PickCommandCompletion = @import("../bars/PickCommandCompletion.zig");
 const config_reload = @import("../resources/config_reload.zig");
 
 pub const Message = union(enum) {
@@ -13,6 +14,8 @@ pub const Message = union(enum) {
     notification_tick: anyerror!void,
     bar_tick: anyerror!void,
     bar_command: BarUpdatesCompletion,
+    /// A pick list's options command or its `on_select` finished.
+    pick_command: PickCommandCompletion,
     plugin_result: data.PluginActionsCompletion,
     path_completion: data.PathCompletionCompletion,
     link_opened: anyerror!void,
@@ -36,7 +39,7 @@ pub const Message = union(enum) {
     pub fn path(self: Message) core.Path {
         return switch (self) {
             .server, .sent, .sidebar_animation_tick, .runtime_connected => .interactive,
-            .notification_tick, .bar_tick, .bar_command, .plugin_result, .path_completion, .link_opened, .sound_played, .notified, .config_reload, .runtime_retry_tick, .machine_edited, .telemetry_tick, .telemetry_written => .observation,
+            .notification_tick, .bar_tick, .bar_command, .pick_command, .plugin_result, .path_completion, .link_opened, .sound_played, .notified, .config_reload, .runtime_retry_tick, .machine_edited, .telemetry_tick, .telemetry_written => .observation,
         };
     }
 };

@@ -1,4 +1,5 @@
 const PanelDefinition = @import("PanelDefinition.zig");
+const PickDefinition = @import("PickDefinition.zig");
 const model = @import("model.zig");
 const Layout = @import("BarLayout.zig");
 const std = @import("std");
@@ -11,6 +12,9 @@ sidebar_footer: [3]model.Source = .{ .metrics, .empty, .empty },
 /// `client.panels`, in the order their names were sorted while loading.
 panels: [model.max_panels]PanelDefinition = @splat(.{}),
 panel_count: u8 = 0,
+/// `client.picks`, in the order their names were sorted while loading.
+picks: [model.max_picks]PickDefinition = @splat(.{}),
+pick_count: u8 = 0,
 
 pub fn source(self: *const Configuration, position: model.Position) *const model.Source {
     return switch (position) {
@@ -36,6 +40,26 @@ pub fn panel(self: *const Configuration, index: u8) ?*const PanelDefinition {
 /// Example: `const index = configuration.panelIndex("claude") orelse return error.UnknownPanel;`
 pub fn panelIndex(self: *const Configuration, name: []const u8) ?u8 {
     for (self.panels[0..self.panel_count], 0..) |*definition, index| {
+        if (std.mem.eql(u8, definition.heading.name(), name)) {
+            return @intCast(index);
+        }
+    }
+
+    return null;
+}
+
+pub fn pick(self: *const Configuration, index: u8) ?*const PickDefinition {
+    if (index >= self.pick_count) {
+        return null;
+    }
+
+    return &self.picks[index];
+}
+
+/// Resolves a pick name while configuration and callback results are parsed.
+/// Example: `const index = configuration.pickIndex("pi_model") orelse return error.UnknownPick;`
+pub fn pickIndex(self: *const Configuration, name: []const u8) ?u8 {
+    for (self.picks[0..self.pick_count], 0..) |*definition, index| {
         if (std.mem.eql(u8, definition.heading.name(), name)) {
             return @intCast(index);
         }
