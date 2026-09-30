@@ -21,7 +21,13 @@ pub const max_image_bytes_global: usize = 512 * 1024 * 1024;
 pub const max_image_bytes_per_screen: usize = max_image_bytes_per_pane / 2;
 pub const max_encoded_chunk_bytes: usize = 64 * 1024;
 pub const max_ipc_chunk_bytes: usize = 1024 * 1024;
-pub const max_chunks_per_image: usize = 4096;
+/// Image bytes one Kitty chunk carries when a child follows the protocol's
+/// advice of 4096 base64 bytes a chunk.
+const recommended_chunk_image_bytes: usize = 3072;
+/// Chunks one image upload may span: enough for an image the size of a
+/// screen's quota sent in recommended chunks, so the byte quota is the
+/// bound a real upload meets.
+pub const max_chunks_per_image: usize = max_image_bytes_per_screen / recommended_chunk_image_bytes;
 /// Darwin rejects POSIX shared memory names longer than PSHMNAMLEN (31)
 /// bytes, so the wire and both processes agree on that bound.
 pub const max_shm_name_bytes: usize = 31;

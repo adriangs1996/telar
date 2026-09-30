@@ -40,8 +40,9 @@ agent_snapshot_requested: bool = false,
 system_metrics_revision_sent: u64 = 0,
 workspace_list_revision_sent: u64 = 0,
 foregrounds_sent: [PaneStore.capacity]?ForegroundProjection = @splat(null),
-clipboard_storage: [core.max_clipboard_bytes]u8 = undefined,
-clipboard_len: u32 = 0,
+/// The latest selection the client copied, awaiting delivery, on the heap
+/// and sized to it.
+clipboard_storage: []u8 = &.{},
 clipboard_pane: core.PaneId = .invalid,
 clipboard_pending: bool = false,
 
@@ -51,6 +52,7 @@ pub fn init(gpa: std.mem.Allocator) !Delivery {
 
 pub fn deinit(self: *Delivery, gpa: std.mem.Allocator) void {
     self.responses.clear();
+    gpa.free(self.clipboard_storage);
     gpa.free(self.send_buffer);
 }
 
@@ -117,24 +119,23 @@ pub fn stopping(self: *const Delivery) bool {
     };
 }
 
-/// Replaces the pending clipboard message only when `bytes` fits the wire
-/// bound. Rejected input preserves any clipboard already awaiting delivery.
+/// Replaces the pending clipboard message with a copy of `bytes` when they
+/// fit the wire bound. Rejected input preserves any clipboard already
+/// awaiting delivery.
 ///
 /// ```zig
-/// if (!delivery.setClipboard(pane_id, bytes)) {
-///     return error.ClipboardTooLarge;
-/// }
+/// try delivery.setClipboard(gpa, pane_id, bytes);
 /// ```
-pub fn setClipboard(self: *Delivery, pane_id: core.PaneId, bytes: []const u8) bool {
+pub fn setClipboard(self: *Delivery, gpa: std.mem.Allocator, pane_id: core.PaneId, bytes: []const u8) !void {
     if (bytes.len > core.max_clipboard_bytes) {
-        return false;
+        return error.ClipboardTooLarge;
     }
 
-    std.mem.copyForwards(u8, self.clipboard_storage[0..bytes.len], bytes);
-    self.clipboard_len = @intCast(bytes.len);
+    const copy = try gpa.dupe(u8, bytes);
+    gpa.free(self.clipboard_storage);
+    self.clipboard_storage = copy;
     self.clipboard_pane = pane_id;
     self.clipboard_pending = true;
-    return true;
 }
 
 /// Selects and stages the highest-priority deliverable without committing
@@ -201,7 +202,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         return self.stage(
             try core.encodePaneClipboard(buffer, .{
                 .pane_id = self.clipboard_pane,
-                .bytes = self.clipboard_storage[0..self.clipboard_len],
+                .bytes = self.clipboard_storage,
             }),
             .clipboard,
         );

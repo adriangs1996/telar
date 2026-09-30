@@ -24,5 +24,9 @@ prepared_frames: u64 = 0,
 direct_frames: u64 = 0,
 /// The subset of `direct_frames` whose pixels came from a child file.
 file_frames: u64 = 0,
+/// Uploads dropped whole because they spanned more chunks than one image
+/// may, or grew past the bytes one screen holds.
+chunk_limited_uploads: u32 = 0,
+byte_limited_uploads: u32 = 0,
 reset: bool = false,
 failed: bool = false,

@@ -17,7 +17,7 @@ agent maintenance tick -> agent_maintenance.tick -> session_checkpoint.start
         |
 CheckpointWriter.due?  (dirty, settled ≥ 500 ms, no write in flight)
         |
-session_checkpoint.encode -> persistence Encoder (owned 1 MiB buffer)
+session_checkpoint.encode -> persistence Encoder (owned 4 MiB buffer)
         |
 CheckpointWriter.startWrite -> model.select.concurrent(.checkpoint_written, writeFile)   -- worker thread
         |
@@ -57,7 +57,9 @@ an empty title. Layouts reuse the wire encoding on purpose: restore
 replays them through the same validation that live updates get.
 
 Terminal panes are recorded only when their launch inherited the runtime
-environment and their arguments fit `LaunchRecord`.
+environment. `LaunchRecord` keeps any command a launch accepts (64 arguments,
+128 KiB) on the heap, sized to it, so a pane started with a long prompt comes
+back.
 
 ## Commit policy
 
@@ -72,7 +74,8 @@ so the last shape survives `telar server stop` even when an older write or
 its completion was still pending. Stopping a child's PTY does not remove its
 pane from the model; discarded exit events cannot erase the final snapshot.
 
-A session larger than `snapshot_bytes` (1 MiB, `CheckpointWriter.snapshot_bytes`)
+A session larger than `snapshot_bytes` (4 MiB, the largest file restore reads,
+`CheckpointWriter.snapshot_bytes`)
 writes the records that fit and drops the rest from the first one that does
 not. Records only point back to earlier ones, so the prefix restores. The
 runtime reports `session_checkpoint.snapshot_bytes` through
