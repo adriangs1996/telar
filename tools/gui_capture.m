@@ -2,8 +2,10 @@
 // the screen recording permission `screencapture` needs. Inject it with
 // DYLD_INSERT_LIBRARIES; TELAR_GUI_CAPTURE_DIR names the output directory.
 // Each quiet period after a frame (no newer frame for 300 ms) writes
-// frame-NNN.png from the drawable Metal presented. It adds no branches to
-// the application.
+// frame-NNN.png from the drawable Metal presented; with
+// TELAR_GUI_CAPTURE_EVERY_MS set, a frame is also written at most that
+// often while frames keep coming, so a stream can be captured. It adds no
+// branches to the application.
 #import <AppKit/AppKit.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/QuartzCore.h>
@@ -14,6 +16,7 @@ static IMP original_render;
 static id<CAMetalDrawable> last_drawable;
 static uint64_t frame_serial;
 static unsigned capture_serial;
+static double last_periodic;
 
 static CALayer *make_layer(id self, SEL command) {
     CALayer *layer = ((CALayer * (*)(id, SEL)) original_layer)(self, command);
@@ -51,6 +54,16 @@ static BOOL render(id self, SEL command, const void *frame, id<CAMetalDrawable> 
 
     last_drawable = drawable;
     uint64_t serial = ++frame_serial;
+    const char *every = getenv("TELAR_GUI_CAPTURE_EVERY_MS");
+    double now = CACurrentMediaTime();
+    if (every != NULL && (now - last_periodic) * 1000 >= atof(every)) {
+        last_periodic = now;
+        id<CAMetalDrawable> presented = drawable;
+        // Read once the GPU finished this frame.
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+            write_png(presented.texture);
+        });
+    }
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 300 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
         if (serial == frame_serial) {
             write_png(last_drawable.texture);

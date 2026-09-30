@@ -22,6 +22,8 @@ def main():
     parser.add_argument('directory', type=Path, help='new directory for isolated runtime and retained results')
     parser.add_argument('--samples', type=int, default=100)
     parser.add_argument('--gap', type=float, default=0.03)
+    parser.add_argument('--settle', type=float, default=1.0,
+                        help='seconds after the first frame before the baseline scene is taken')
     parser.add_argument('--dense', action='store_true', help='fill 20 rows, keeping the input cell empty')
     parser.add_argument('--config', type=Path,
                         help='a config whose chrome holds still, instead of --no-config and its fixture check')
@@ -51,6 +53,7 @@ def main():
                DYLD_INSERT_LIBRARIES=str(dylib),
                TELAR_GUI_PROBE_SAMPLES=str(args.samples),
                TELAR_GUI_PROBE_GAP=str(args.gap),
+               TELAR_GUI_PROBE_SETTLE=str(args.settle),
                TELAR_GUI_PROBE_RESULT=str(directory / 'samples.json'))
     command = ['/bin/cat']
     echo = '/bin/cat'
@@ -84,8 +87,9 @@ def main():
         subprocess.run([str(binary), 'server', 'stop'], env=env,
                        stdout=subprocess.DEVNULL, timeout=10, check=False)
     result = json.loads((directory / 'samples.json').read_text())
-    # A streamed image is one more textured quad in every frame.
-    if not args.config and result['baseline_glyphs'] != (1240 if args.dense else 0) + (1 if args.stream > 0 and not args.stream_text else 0):
+    # With a config the chrome's glyphs join the baseline, which the caller
+    # compares across runs; image quads never count.
+    if not args.config and result['baseline_glyphs'] != (1240 if args.dense else 0):
         raise RuntimeError('the initial scene does not match the fixture')
     values = result['samples_ms']
     if result['failed'] or len(values) != args.samples:
@@ -94,6 +98,11 @@ def main():
                    viewport=result['viewport'], baseline_glyphs=result['baseline_glyphs'],
                    p50_ms=statistics.median(values), p95_ms=percentile(values, .95),
                    p99_ms=percentile(values, .99), max_ms=max(values))
+    for name in ('prepare_ms', 'upload_ms'):
+        trace = sorted(result.get(name, []))
+        if trace:
+            summary[name] = dict(n=len(trace), p50=statistics.median(trace), p95=percentile(trace, .95),
+                                 p99=percentile(trace, .99), max=trace[-1])
     (directory / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     print(json.dumps(summary, indent=2))
 
