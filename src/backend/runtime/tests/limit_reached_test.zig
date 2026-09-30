@@ -122,6 +122,37 @@ test "a client reporting a runtime limit's name neither silences nor evicts it" 
     try std.testing.expectEqual(@as(u64, 0), model.limit_reaches.evicted);
 }
 
+test "a command-line report shows its notice once per interval and keeps the runtime's rows" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+
+    const model = &fixture.runtime.model;
+    const hook = try fixture.addClient();
+    hook.role = .control;
+    const reach: core.LimitReach = .{
+        .limit = core.Limit.declare("hooks.max_input_bytes", "bytes", 16),
+        .requested = 17,
+    };
+
+    try fixture.sendTo(hook, .{ .report_limit = .{
+        .reach = reach,
+        .hits = 1,
+    } });
+    try fixture.sendTo(hook, .{ .report_limit = .{
+        .reach = reach,
+        .hits = 1,
+    } });
+
+    try std.testing.expectEqual(@as(usize, 1), countNotices(fixture.session));
+    try std.testing.expectEqual(@as(usize, 0), countNotices(hook));
+    try std.testing.expectEqualStrings("hooks.max_input_bytes: 17 bytes; limit 16", fixture.response().?.notification.view().message);
+    try std.testing.expect(model.limit_reaches.find("hooks.max_input_bytes") == null);
+
+    const slot = model.client_limit_reaches.find("hooks.max_input_bytes").?;
+    try std.testing.expectEqual(@as(u64, 2), model.client_limit_reaches.hits[slot]);
+}
+
 test "a connection sending too many reports a second is refused and counted" {
     var fixture: RequestFixture = undefined;
     try fixture.init();
