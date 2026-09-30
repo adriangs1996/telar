@@ -42,7 +42,8 @@ function sandbox(t) {
   };
   t.after(() => {
     cli(["server", "stop"]);
-    rmSync(root, { recursive: true, force: true });
+    // A stopped runtime may still be writing its log as it exits.
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   });
   return { cli, work };
 }
