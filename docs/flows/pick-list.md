@@ -50,17 +50,20 @@ configuration loads; an `items` function without a command is rejected:
 - `command` and an `items` function: the function receives the render
   context with `ctx.output` and returns the list.
 
-`PickItems` holds at most 1024 options and 128 KiB of text. A label and a
+`PickItems` holds at most 4096 options and 256 KiB of text. A label and a
 detail are at most 128 bytes, a value 512, all printable UTF-8 on one line;
-a value may also hold tabs. A
-list that breaks any bound fails as a whole and the palette says why; it is
-never cut short, because a missing option is worse than a visible error.
+a value may also hold tabs. `PickItems.keep` keeps what fits: a longer label
+or detail is cut at a character, an option whose value is longer is left out
+(a value is one argv element and is never cut), and options past the count or
+the text are left out. `PickItems.reaches` names each limit passed and the
+pick flow reports them, so the palette shows the options that fit and the
+notice says which limit to raise. An invalid option still fails the list.
 
 ## Commands
 
 Both commands are `BarCommand` values: at most 32 arguments and 4096 bytes,
 run without a shell by the background job runner, never on the event loop.
-`timeout_ms` (100 to 10000, default 2000) bounds each whole run, from spawn
+`timeout_ms` (100 to 60000, default 2000) bounds each whole run, from spawn
 to exit (`command.runFor`): the deadline is absolute, so output that trickles
 in cannot extend it, and the wait for the exit is bounded too. Each command
 runs in its own process group. One that passes its deadline gets TERM to the
@@ -70,7 +73,8 @@ exits in time keeps its group, so a helper may leave background work
 running. The same runner serves bar and panel commands.
 
 The list command's output is bounded to 256 KiB (`OutputUse.options`), room
-for `pi --list-models`, which prints about 43 KiB. `on_select` output and
+for `pi --list-models`, which prints about 43 KiB; past it the command keeps
+its first whole lines and reports `picks.max_pick_output_bytes`. `on_select` output and
 errors go to `/dev/null`; only the exit status counts.
 
 `on_select` must hold an argument that is exactly `{}` after the program.

@@ -121,7 +121,9 @@ only after the whole effect batch passes validation.
 
 ## Bounds and interaction
 
-Titles are limited to 48 UTF-8 bytes, bodies to 192 bytes, and each client
+Titles are limited to 48 UTF-8 bytes, bodies to 192 bytes (a configured
+notification action with longer text is cut at a character and reports
+`notification.max_title_bytes` or `notification.max_message_bytes`), and each client
 keeps at most four notifications. A fifth replaces the oldest. The native GUI
 shows at most two cards at a time, newest first, and suppresses a card whose
 target pane is already visible in the active tab. Items outside the visible

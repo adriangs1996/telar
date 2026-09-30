@@ -111,7 +111,8 @@ The synchronous callback path keeps its existing hard limits:
 - 16 MiB for the client configuration VM;
 - 100,000 callback instructions, about 2 ms of work;
 - a 100 ms callback deadline, the safety net checked between instructions;
-- 16 effects per callback;
+- 16 effects per callback; a callback that returns more runs the first 16
+  and reports `config.max_callback_effects`;
 - 16 semantic keys per expression;
 - 4 KiB of expression paste.
 

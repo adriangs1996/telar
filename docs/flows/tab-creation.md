@@ -19,8 +19,9 @@ actions.executeAction
 ```
 
 Planning requires an attached focused source and supplies its workspace and
-CWD identity. `command_tab` carries a bounded argv and optional label, replacing
-the default launch command. Workbench size and launch configuration are copied
+CWD identity. `command_tab` names a row of the configuration's
+`CommandTabs` (32 arguments and 4096 bytes of argv, and an optional label),
+whose argv replaces the default launch command. Workbench size and launch configuration are copied
 into the request. The outbox owns name, CWD and argument bytes before the input
 event returns. No provisional tab or presentation version is created.
 
