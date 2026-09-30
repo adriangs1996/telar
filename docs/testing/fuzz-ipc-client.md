@@ -11,18 +11,6 @@ It is QA on telar's own decoder. Every input is a synthetic buffer in memory.
 No socket, runtime, child process or user data is involved, and a decoded
 message is never executed.
 
-## The build connection is pending
-
-`build/tests.zig` does not call `fuzz_ipc_client.add` yet. Until the shared
-connection is integrated, apply it first:
-
-```sh
-git apply /tmp/dispatch-claude/robustness-fuzz-ipc-client-integration.patch
-```
-
-The patch adds one import and the call `fuzz_ipc_client.add(b, app.modules);`
-after the handshake target. Every command below needs it.
-
 ## Commands
 
 Replay the corpus and run the deterministic tests, without fuzzing:
@@ -224,7 +212,7 @@ decoder or the property changes.
 
 - The root imports `telar-core` and `bytecodec` as modules and nothing else.
   No suite root imports it, and the coverage build never compiles it.
-- The artifact uses LLVM and Debug with runtime safety. Only its root module
+- The artifact uses LLVM and defaults to Debug with runtime safety. Only its root module
   drops error return traces, because Zig 0.16.0's test runner does not compile
   its fuzz loop with them.
 - It does not link the shared `telar-core` module. That module imports every

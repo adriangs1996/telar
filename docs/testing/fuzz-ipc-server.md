@@ -206,15 +206,7 @@ buffer writes and text layout do.
 
 ## Commands
 
-The step is not wired into `build/tests.zig` yet. Until the shared wiring
-lands, apply the integration patch first:
-
-```sh
-git apply /tmp/dispatch-claude/robustness-fuzz-ipc-server-integration.patch
-```
-
-It adds `const fuzz_ipc_server = @import("fuzz_ipc_server.zig");` and
-`fuzz_ipc_server.add(b, app.modules);` after the handshake target. Then:
+`build/tests.zig` registers the step through `fuzz_ipc_server.add`.
 
 ```sh
 # Seeds and properties, no fuzzing.

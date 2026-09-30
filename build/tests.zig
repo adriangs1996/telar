@@ -6,6 +6,8 @@ const Libraries = @import("Libraries.zig");
 const model_build = @import("model.zig");
 const fuzz_http1 = @import("fuzz_http1.zig");
 const fuzz_frames = @import("fuzz_frames.zig");
+const fuzz_ipc_client = @import("fuzz_ipc_client.zig");
+const fuzz_ipc_server = @import("fuzz_ipc_server.zig");
 
 const source_roots: []const []const u8 = &.{ "build.zig", "build", "lib", "src", "examples", "benchmarks", "linters" };
 
@@ -226,6 +228,8 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     handshake_step.dependOn(&b.addRunArtifact(handshake_fuzz_tests).step);
     fuzz_http1.add(b, app);
     fuzz_frames.add(b, app.modules);
+    fuzz_ipc_client.add(b, app.modules);
+    fuzz_ipc_server.add(b, app.modules);
     const wire_test_step = b.step("test-wire", "Run wire contracts without PTY integration tests");
     wire_test_step.dependOn(app.modules.libraries.addTestRun(b, "bytecodec"));
     wire_test_step.dependOn(app.modules.libraries.addTestRun(b, "cellcodec"));
