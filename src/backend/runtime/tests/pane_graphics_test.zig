@@ -251,12 +251,13 @@ test "the interactive terminal moves its cursor past a placement like the media 
     _ = try fixture.pane.ingest(std.testing.io, "\x1b[1;19H\x1b_Ga=p,i=5,c=3,r=2,q=2\x1b\\");
     try expectCursor(&fixture, 0, 2);
 
-    // A chunked transmission moves once, when its last chunk arrives, even
-    // when the terminator splits across reads.
+    // A chunked transmission moves once, when its last chunk ends: at the
+    // ESC of its terminator, where Ghostty runs it, even when the `\\`
+    // arrives in the next read.
     _ = try fixture.pane.ingest(std.testing.io, "\x1b[1;1H\x1b_Ga=T,f=24,s=1,v=1,c=1,r=3,m=1,q=2;AAAA\x1b\\");
     try expectCursor(&fixture, 0, 0);
     _ = try fixture.pane.ingest(std.testing.io, "\x1b_Gm=0;AAAA\x1b");
-    try expectCursor(&fixture, 0, 0);
+    try expectCursor(&fixture, 1, 2);
     _ = try fixture.pane.ingest(std.testing.io, "\\");
     try expectCursor(&fixture, 1, 2);
 }

@@ -1,11 +1,11 @@
 //! Finds where each Kitty graphics command ends in a PTY stream split at
 //! arbitrary read boundaries, keeping its control data and the first bytes
 //! of its payload, so a caller can act at the exact point a terminal would.
-//! Framing follows `KittyFramingCounter`: only ESC-introduced APCs count and
-//! only `ESC \` ends one. Runs of bytes that cannot change the state are
-//! skipped with a vector search for ESC. Nothing allocates.
+//! Framing is Ghostty's (`ApcFraming`): a command ends at ESC, ST, CAN, SUB
+//! or a terminating C1 byte, aborted or not, and bytes Ghostty ignores
+//! inside it are not kept. Nothing allocates.
 const std = @import("std");
-const escape_ops = @import("escape.zig");
+const ApcFraming = @import("ApcFraming.zig");
 const KittyCommand = @import("KittyCommand.zig");
 const KittyCommandScanner = @This();
 
@@ -14,14 +14,14 @@ pub const control_capacity = 256;
 /// Enough base64 for a PNG signature and its IHDR dimensions.
 pub const payload_capacity = 64;
 
-state: State = .normal,
+framing: ApcFraming = .{},
+/// The current command's `;` was seen: content is payload from here on.
+in_payload: bool = false,
 control: [control_capacity]u8 = undefined,
 control_len: usize = 0,
 truncated: bool = false,
 payload: [payload_capacity]u8 = undefined,
 payload_len: usize = 0,
-
-const State = enum { normal, escape, apc_identify, control, control_escape, payload, payload_escape, other, other_escape };
 
 /// The first command that ends inside `bytes`, or null when none does.
 /// Call again with `bytes[command.end..]` for the next one.
@@ -31,121 +31,74 @@ const State = enum { normal, escape, apc_identify, control, control_escape, payl
 /// ```
 pub fn next(self: *KittyCommandScanner, bytes: []const u8) ?KittyCommand {
     var index: usize = 0;
-    while (index < bytes.len) {
-        switch (self.state) {
-            .normal, .escape => {
-                // Only an APC can start a command: jump to the next `ESC _`.
-                const start = escape_ops.findApc(bytes, index, self.state == .escape and index == 0) orelse {
-                    self.state = if (bytes[bytes.len - 1] == escape_ops.esc) .escape else .normal;
-                    return null;
-                };
-                self.state = .apc_identify;
-                index = start;
-                continue;
-            },
-            .other, .payload => {
-                const at = std.mem.indexOfScalarPos(u8, bytes, index, escape_ops.esc) orelse bytes.len;
-                if (self.state == .payload) {
-                    self.capturePayload(bytes[index..at]);
-                }
+    while (true) {
+        const start = index;
+        const inside = self.framing.inKitty();
+        const transition = self.framing.advance(bytes, &index) orelse {
+            if (inside) {
+                self.capture(bytes[start..]);
+            }
 
-                index = at;
-                if (index == bytes.len) {
-                    return null;
-                }
-            },
-            else => {},
-        }
+            return null;
+        };
 
-        const byte = bytes[index];
-        index += 1;
-        if (self.step(byte)) {
-            return .{
-                .end = index,
-                .control = self.control[0..self.control_len],
-                .payload = self.payload[0..self.payload_len],
-                .truncated = self.truncated,
-            };
-        }
-    }
-
-    return null;
-}
-
-// Advances one byte; true when it ended a Kitty command.
-fn step(self: *KittyCommandScanner, byte: u8) bool {
-    const esc = escape_ops.esc;
-    switch (self.state) {
-        .normal => self.state = if (byte == esc) .escape else .normal,
-        .escape => self.state = switch (byte) {
-            '_' => .apc_identify,
-            esc => .escape,
-            else => .normal,
-        },
-        .apc_identify => {
-            if (byte == 'G') {
+        switch (transition) {
+            .kitty_started => {
+                self.in_payload = false;
                 self.control_len = 0;
                 self.payload_len = 0;
                 self.truncated = false;
-                self.state = .control;
-            } else {
-                self.state = if (byte == esc) .other_escape else .other;
-            }
-        },
-        .control => switch (byte) {
-            ';' => self.state = .payload,
-            esc => self.state = .control_escape,
-            else => self.captureControl(byte),
-        },
-        .control_escape => {
-            if (byte == '\\') {
-                self.state = .normal;
-                return true;
-            }
-
-            if (byte != esc) {
-                self.state = .control;
-                self.captureControl(byte);
-            }
-        },
-        .payload => self.state = if (byte == esc) .payload_escape else .payload,
-        .payload_escape => {
-            if (byte == '\\') {
-                self.state = .normal;
-                return true;
-            }
-
-            if (byte != esc) {
-                self.state = .payload;
-                self.capturePayload(&.{byte});
-            }
-        },
-        .other => self.state = if (byte == esc) .other_escape else .other,
-        .other_escape => self.state = switch (byte) {
-            '\\' => .normal,
-            esc => .other_escape,
-            else => .other,
-        },
+            },
+            .kitty_ended => {
+                // The byte before `index` is the terminator.
+                self.capture(bytes[start .. index - 1]);
+                return .{
+                    .end = index,
+                    .control = self.control[0..self.control_len],
+                    .payload = self.payload[0..self.payload_len],
+                    .truncated = self.truncated,
+                };
+            },
+        }
     }
-
-    return false;
 }
 
-fn captureControl(self: *KittyCommandScanner, byte: u8) void {
-    if (self.control_len == self.control.len) {
-        self.truncated = true;
-        return;
+// Keeps the command's content: control data up to `;`, then the first
+// payload bytes. A long payload is not walked past what is kept.
+fn capture(self: *KittyCommandScanner, content: []const u8) void {
+    var rest = content;
+    if (!self.in_payload) {
+        const separator = std.mem.indexOfScalar(u8, rest, ';');
+        const control = rest[0 .. separator orelse rest.len];
+        for (control) |byte| {
+            if (!ApcFraming.isContent(byte)) {
+                continue;
+            }
+
+            if (self.control_len == self.control.len) {
+                self.truncated = true;
+                break;
+            }
+
+            self.control[self.control_len] = byte;
+            self.control_len += 1;
+        }
+
+        const at = separator orelse return;
+        self.in_payload = true;
+        rest = rest[at + 1 ..];
     }
 
-    self.control[self.control_len] = byte;
-    self.control_len += 1;
-}
+    for (rest) |byte| {
+        if (self.payload_len == self.payload.len) {
+            return;
+        }
 
-fn capturePayload(self: *KittyCommandScanner, bytes: []const u8) void {
-    const room = self.payload.len - self.payload_len;
-    const kept = @min(room, bytes.len);
-    @memcpy(self.payload[self.payload_len..][0..kept], bytes[0..kept]);
-    self.payload_len += kept;
+        if (ApcFraming.isContent(byte)) {
+            self.payload[self.payload_len] = byte;
+            self.payload_len += 1;
+        }
+    }
 }
 
 test "commands end at their terminator across every split" {
@@ -170,10 +123,11 @@ test "commands end at their terminator across every split" {
         }
 
         try std.testing.expectEqual(@as(usize, 2), count);
-        try std.testing.expectEqual(std.mem.indexOf(u8, stream, "text").?, found[0].end);
+        // A command ends at its ESC; the `\\` that follows is the next byte.
+        try std.testing.expectEqual(std.mem.indexOf(u8, stream, "text").? - 1, found[0].end);
         try std.testing.expectEqualStrings("a=T,f=100", found[0].control[0..found[0].control_len]);
         try std.testing.expectEqual(@as(usize, 11), found[0].payload_len);
-        try std.testing.expectEqual(stream.len, found[1].end);
+        try std.testing.expectEqual(stream.len - 1, found[1].end);
         try std.testing.expectEqualStrings("a=d", found[1].control[0..found[1].control_len]);
         try std.testing.expectEqual(@as(usize, 0), found[1].payload_len);
     }
@@ -182,17 +136,26 @@ test "commands end at their terminator across every split" {
 test "long control data is truncated and the payload keeps its first bytes" {
     var scanner: KittyCommandScanner = .{};
     var stream: [control_capacity + 200]u8 = undefined;
-    stream[0] = escape_ops.esc;
+    stream[0] = 0x1b;
     stream[1] = '_';
     stream[2] = 'G';
     @memset(stream[3 .. control_capacity + 10], 'x');
     stream[control_capacity + 10] = ';';
     @memset(stream[control_capacity + 11 .. stream.len - 2], 'A');
-    stream[stream.len - 2] = escape_ops.esc;
+    stream[stream.len - 2] = 0x1b;
     stream[stream.len - 1] = '\\';
     const command = scanner.next(&stream).?;
     try std.testing.expect(command.truncated);
     try std.testing.expectEqual(@as(usize, control_capacity), command.control.len);
     try std.testing.expectEqual(@as(usize, payload_capacity), command.payload.len);
-    try std.testing.expectEqual(stream.len, command.end);
+    try std.testing.expectEqual(stream.len - 1, command.end);
+}
+
+test "an aborted command ends where Ghostty ends it and keeps no ignored bytes" {
+    var scanner: KittyCommandScanner = .{};
+    const stream = "\x1b_Ga=T,\x9ef=24;AAAA\x18text";
+    const command = scanner.next(stream).?;
+    try std.testing.expectEqualStrings("a=T,f=24", command.control);
+    try std.testing.expectEqualStrings("AAAA", command.payload);
+    try std.testing.expectEqualStrings("text", stream[command.end..]);
 }

@@ -17,28 +17,6 @@ pub const KittyFramingCounter = @import("KittyFramingCounter.zig");
 
 pub const esc = 0x1b;
 
-/// Index just past the next `ESC _` (an APC introducer) at or after `from`,
-/// or null. `escape_before` says the byte before `bytes` was an ESC, so an
-/// introducer split across reads is found. Searching for the rarer `_` and
-/// checking the byte before it keeps colored output, an ESC every few
-/// bytes, to one vector scan.
-///
-/// ```zig
-/// const start = escape.findApc(bytes, 0, state == .escape) orelse return;
-/// ```
-pub fn findApc(bytes: []const u8, from: usize, escape_before: bool) ?usize {
-    var index = from;
-    while (std.mem.indexOfScalarPos(u8, bytes, index, '_')) |underscore| {
-        const preceded = if (underscore > 0) bytes[underscore - 1] == esc else escape_before;
-        if (preceded) {
-            return underscore + 1;
-        }
-
-        index = underscore + 1;
-    }
-
-    return null;
-}
 pub const bel = 0x07;
 
 // ---------------------------------------------------------------------------

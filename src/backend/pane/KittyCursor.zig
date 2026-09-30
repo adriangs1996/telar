@@ -4,10 +4,18 @@
 //! on top of it. Kitty and Ghostty move the cursor past a placement unless
 //! it asked `C=1`, is virtual (`U=1`) or relative (`P`).
 //!
+//! Commands follow Ghostty's `graphics_exec`: while a chunked transmission
+//! loads, any further transmission continues it (`m` other than 0 means more
+//! chunks), a delete aborts it, and a put or query runs on its own. A put
+//! needs an image id or number whose image this pane transmitted, or it
+//! fails with ENOENT and the cursor stays; `i` and `I` together are EINVAL.
+//!
 //! Only control data and the first payload bytes are read: sizes come from
 //! `s`/`v`, from a direct PNG's IHDR, or, for `a=p`, from the sizes this
-//! pane transmitted before. Nothing is decoded beyond 24 bytes and nothing
-//! allocates.
+//! pane transmitted and has not deleted. Nothing is decoded beyond 24 bytes
+//! and nothing allocates. What this cannot see - an image the media
+//! terminal failed to load, or evicted for its quota - still moves the
+//! cursor here while Ghostty's stays.
 const std = @import("std");
 const core = @import("telar-core");
 const kitty_protocol = @import("kitty_protocol");
@@ -23,7 +31,7 @@ const png_chunk_type_offset = 12;
 
 /// A chunked command's first header, applied when its last chunk arrives.
 pending: ?Header = null,
-/// Image sizes by child image id, replaced round robin when full.
+/// Image sizes by child image id or number, replaced round robin when full.
 sizes: [sizes_capacity]ImageSize = @splat(.{}),
 next_size: usize = 0,
 
@@ -37,6 +45,7 @@ const PixelFormat = enum(u32) {
 
 const ImageSize = struct {
     image_id: u32 = 0,
+    image_number: u32 = 0,
     width: u32 = 0,
     height: u32 = 0,
 };
@@ -44,6 +53,9 @@ const ImageSize = struct {
 const Header = struct {
     action: u8 = 't',
     image_id: u32 = 0,
+    image_number: u32 = 0,
+    /// The `d` key of a delete.
+    target: u8 = 'a',
     width: u32 = 0,
     height: u32 = 0,
     source_x: u32 = 0,
@@ -66,24 +78,27 @@ const Header = struct {
 /// if (pane.kitty_cursor.observe(command, cell_width, cell_height)) |cells| advance(cells);
 /// ```
 pub fn observe(self: *KittyCursor, command: vtscan.KittyCommand, cell_width: u32, cell_height: u32) ?kitty_protocol.DisplayCells {
-    if (command.truncated) {
-        self.pending = null;
+    const header = parse(command) orelse return null;
+    if (command.truncated or (header.image_id != 0 and header.image_number != 0)) {
         return null;
     }
 
+    const transmits = header.action == 't' or header.action == 'T';
     if (self.pending) |first| {
-        // Continuation chunks carry only `m`; the first header decides.
-        const more = continues(command.control);
-        if (more) {
-            return null;
+        if (transmits) {
+            // A continuation: the first chunk's header decides.
+            if (header.more) {
+                return null;
+            }
+
+            self.pending = null;
+            return self.execute(first, cell_width, cell_height);
         }
 
-        self.pending = null;
-        return self.execute(first, cell_width, cell_height);
-    }
-
-    const header = parse(command) orelse return null;
-    if (header.more) {
+        if (header.action == 'd') {
+            self.pending = null;
+        }
+    } else if (transmits and header.more) {
         self.pending = header;
         return null;
     }
@@ -93,8 +108,15 @@ pub fn observe(self: *KittyCursor, command: vtscan.KittyCommand, cell_width: u32
 
 fn execute(self: *KittyCursor, header: Header, cell_width: u32, cell_height: u32) ?kitty_protocol.DisplayCells {
     const transmits = header.action == 't' or header.action == 'T';
-    if (transmits and header.image_id != 0 and header.width != 0 and header.height != 0) {
+    if (transmits and header.width != 0 and header.height != 0 and
+        (header.image_id != 0 or header.image_number != 0))
+    {
         self.remember(header);
+    }
+
+    if (header.action == 'd') {
+        self.forget(header);
+        return null;
     }
 
     if ((header.action != 'T' and header.action != 'p') or header.stays) {
@@ -104,9 +126,10 @@ fn execute(self: *KittyCursor, header: Header, cell_width: u32, cell_height: u32
     var width = header.width;
     var height = header.height;
     if (header.action == 'p') {
-        const known = self.find(header.image_id);
-        width = if (known) |size| size.width else 0;
-        height = if (known) |size| size.height else 0;
+        // ENOENT without an image this pane transmitted: the cursor stays.
+        const known = self.find(header) orelse return null;
+        width = known.width;
+        height = known.height;
     }
 
     if ((width == 0 or height == 0) and (header.columns == 0 or header.rows == 0)) {
@@ -135,40 +158,52 @@ fn execute(self: *KittyCursor, header: Header, cell_width: u32, cell_height: u32
 }
 
 fn remember(self: *KittyCursor, header: Header) void {
-    for (&self.sizes) |*size| {
-        if (size.image_id == header.image_id) {
-            size.* = .{ .image_id = header.image_id, .width = header.width, .height = header.height };
-            return;
-        }
+    const size: ImageSize = .{
+        .image_id = header.image_id,
+        .image_number = header.image_number,
+        .width = header.width,
+        .height = header.height,
+    };
+    if (self.slotOf(header)) |slot| {
+        self.sizes[slot] = size;
+        return;
     }
 
-    self.sizes[self.next_size] = .{ .image_id = header.image_id, .width = header.width, .height = header.height };
+    self.sizes[self.next_size] = size;
     self.next_size = (self.next_size + 1) % self.sizes.len;
 }
 
-fn find(self: *const KittyCursor, image_id: u32) ?ImageSize {
-    if (image_id == 0) {
-        return null;
+// The deletes that free an image's data: `d=I` by id, `d=N` by number,
+// `d=A` everything. Lowercase ones keep the image for later puts.
+fn forget(self: *KittyCursor, header: Header) void {
+    switch (header.target) {
+        'A' => self.sizes = @splat(.{}),
+        'I', 'N' => if (self.slotOf(header)) |slot| {
+            self.sizes[slot] = .{};
+        },
+        else => {},
     }
+}
 
-    for (self.sizes) |size| {
-        if (size.image_id == image_id) {
-            return size;
+fn find(self: *const KittyCursor, header: Header) ?ImageSize {
+    const slot = self.slotOf(header) orelse return null;
+    return self.sizes[slot];
+}
+
+// By id when the command names one, else by number; the newest image with a
+// number wins, as Ghostty's `imageByNumber` does.
+fn slotOf(self: *const KittyCursor, header: Header) ?usize {
+    for (self.sizes, 0..) |size, slot| {
+        if (header.image_id != 0 and size.image_id == header.image_id) {
+            return slot;
+        }
+
+        if (header.image_id == 0 and header.image_number != 0 and size.image_number == header.image_number) {
+            return slot;
         }
     }
 
     return null;
-}
-
-fn continues(control: []const u8) bool {
-    var fields = kitty_protocol.ControlFields.init(control);
-    while (fields.next() catch return false) |field| {
-        if (field.key == 'm') {
-            return std.mem.eql(u8, field.value, "1");
-        }
-    }
-
-    return false;
 }
 
 // Reads the fields a placement's size depends on; null for malformed data.
@@ -183,6 +218,8 @@ fn parse(command: vtscan.KittyCommand) ?Header {
         switch (field.key) {
             'a' => header.action = field.value[0],
             'i' => header.image_id = number,
+            'I' => header.image_number = number,
+            'd' => header.target = field.value[0],
             'f' => format = @enumFromInt(number),
             's' => header.width = number,
             'v' => header.height = number,
@@ -197,7 +234,7 @@ fn parse(command: vtscan.KittyCommand) ?Header {
             'C' => header.stays = header.stays or number == 1,
             'U' => header.stays = header.stays or number == 1,
             'P' => header.stays = true,
-            'm' => header.more = number == 1,
+            'm' => header.more = number != 0,
             't' => direct = field.value[0] == 'd',
             'o' => compressed = true,
             else => {},
@@ -295,4 +332,42 @@ test "malformed or truncated control data never moves the cursor" {
     truncated.truncated = true;
     try std.testing.expect(cursor.observe(truncated, 10, 20) == null);
     try std.testing.expect(cursor.observe(commandOf("a=T,f=32,s=10,v=10", ""), 0, 0) == null);
+}
+
+test "a put or query during a chunked upload runs on its own and a delete aborts it" {
+    var cursor: KittyCursor = .{};
+    try std.testing.expect(cursor.observe(commandOf("a=t,f=32,s=10,v=10,i=1", ""), 10, 20) == null);
+    try std.testing.expect(cursor.observe(commandOf("a=T,f=32,s=100,v=40,i=2,m=1", ""), 10, 20) == null);
+    // A put of image 1 in the middle moves by image 1 and keeps the upload.
+    try std.testing.expectEqual(
+        kitty_protocol.DisplayCells{ .columns = 1, .rows = 1 },
+        cursor.observe(commandOf("a=p,i=1", ""), 10, 20).?,
+    );
+    try std.testing.expect(cursor.observe(commandOf("m=2", "AAAA"), 10, 20) == null);
+    try std.testing.expectEqual(
+        kitty_protocol.DisplayCells{ .columns = 10, .rows = 2 },
+        cursor.observe(commandOf("m=0", "AAAA"), 10, 20).?,
+    );
+
+    try std.testing.expect(cursor.observe(commandOf("a=T,f=32,s=100,v=40,i=3,m=1", ""), 10, 20) == null);
+    try std.testing.expect(cursor.observe(commandOf("a=d,d=a", ""), 10, 20) == null);
+    // Aborted: the next chunk starts nothing and moves nothing.
+    try std.testing.expect(cursor.observe(commandOf("m=0", "AAAA"), 10, 20) == null);
+}
+
+test "puts need an image that exists, by id or number, and deletes forget it" {
+    var cursor: KittyCursor = .{};
+    try std.testing.expect(cursor.observe(commandOf("a=p,c=2,r=2", ""), 10, 20) == null);
+    try std.testing.expect(cursor.observe(commandOf("a=p,i=9,c=2,r=2", ""), 10, 20) == null);
+    try std.testing.expect(cursor.observe(commandOf("a=t,f=32,s=10,v=10,I=4", ""), 10, 20) == null);
+    try std.testing.expect(cursor.observe(commandOf("a=p,I=4", ""), 10, 20) != null);
+    try std.testing.expect(cursor.observe(commandOf("a=p,i=1,I=4", ""), 10, 20) == null);
+    try std.testing.expect(cursor.observe(commandOf("a=d,d=N,I=4", ""), 10, 20) == null);
+    try std.testing.expect(cursor.observe(commandOf("a=p,I=4", ""), 10, 20) == null);
+
+    try std.testing.expect(cursor.observe(commandOf("a=t,f=32,s=10,v=10,i=5", ""), 10, 20) == null);
+    try std.testing.expect(cursor.observe(commandOf("a=d,d=i,i=5", ""), 10, 20) == null);
+    try std.testing.expect(cursor.observe(commandOf("a=p,i=5", ""), 10, 20) != null);
+    try std.testing.expect(cursor.observe(commandOf("a=d,d=I,i=5", ""), 10, 20) == null);
+    try std.testing.expect(cursor.observe(commandOf("a=p,i=5", ""), 10, 20) == null);
 }
