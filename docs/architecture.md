@@ -227,6 +227,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `imaging` | PNG through Wuffs with limits checked first, ICO frames, box-filter and bilinear resampling |
 | `proclineage` | the chain of parent processes above one process, read from the kernel |
 | `hostmetrics` | cpu, memory and battery of the host; nothing is kept between samples |
+| `childoutput` | a child process's standard output and error read within bounds: a stream fails past its bound or keeps its newest bytes and counts what it dropped |
 | `gitstatus` | a working tree's branch and whether it has changes, the linked worktree a directory belongs to, and a worktree's diffstat and commits ahead of its base, with Git run so no program a repository's config names ever runs |
 | `localsocket` | same-user Unix sockets, the process at the other end and length-prefixed framing |
 | `bytecodec` | bounds-checked little-endian encoding into caller buffers and decoding from borrowed bytes |

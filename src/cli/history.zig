@@ -12,6 +12,7 @@ const ImportParser = @import("ImportParser.zig");
 const ResolvedImport = @import("ResolvedImport.zig");
 const history = @import("arguments/history.zig");
 const ImportedEntry = @import("ImportedEntry.zig");
+const limit_reached = @import("limit_reached.zig");
 
 const request_buffer_size = core.max_history_query_bytes + core.max_cwd_bytes + 64;
 
@@ -188,7 +189,10 @@ test "history fields preserve printable UTF-8" {
     try std.testing.expectEqualStrings("git commit -m 'listo ✓'", writer.buffered());
 }
 
+/// The newest bytes of a histfile imported; older commands are left out
+/// and the limit is named.
 const max_histfile_bytes = 32 * 1024 * 1024;
+const histfile_limit = core.Limit.declare("history.max_histfile_bytes", "bytes", max_histfile_bytes);
 
 pub const max_batch_payload = 48 * 1024;
 
@@ -198,8 +202,9 @@ pub const max_batch_payload = 48 * 1024;
 fn runImport(init: std.process.Init, options: HistoryOptions) !void {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const resolved = try resolveImport(init, options, &path_buffer);
-    const source_data = try std.Io.Dir.cwd().readFileAlloc(init.io, resolved.path, init.gpa, .limited(max_histfile_bytes));
-    defer init.gpa.free(source_data);
+    const histfile = try readNewest(init, resolved.path, histfile_limit);
+    defer init.gpa.free(histfile.buffer);
+    const source_data = histfile.lines;
 
     const connector = try RuntimeConnector.init(init.io, init.minimal.environ, options.socket);
     var connection = try connector.connectOrStart(.{});
@@ -230,6 +235,43 @@ fn runImport(init: std.process.Init, options: HistoryOptions) !void {
     var output = std.Io.File.stdout().writerStreaming(init.io, &stdout_buffer);
     try output.interface.print("imported {d} commands from {s}\n", .{ sender.total, resolved.path });
     try output.interface.flush();
+}
+
+/// A histfile's newest whole lines, in `buffer`.
+const NewestLines = struct {
+    buffer: []u8,
+    lines: []const u8,
+};
+
+// Reads at most `limit.value` bytes from the end of the file. A longer file
+// starts at its first whole line in that window, and the limit is named:
+// the newest commands are the ones worth keeping.
+fn readNewest(init: std.process.Init, path: []const u8, limit: core.Limit) !NewestLines {
+    const file = try std.Io.Dir.cwd().openFile(init.io, path, .{});
+    defer file.close(init.io);
+
+    const size = (try file.stat(init.io)).size;
+    const offset = size -| limit.value;
+    const buffer = try init.gpa.alloc(u8, @intCast(size - offset));
+    errdefer init.gpa.free(buffer);
+
+    const read = try file.readPositionalAll(init.io, buffer, offset);
+    if (offset == 0) {
+        return .{
+            .buffer = buffer,
+            .lines = buffer[0..read],
+        };
+    }
+
+    limit_reached.report(.{
+        .limit = limit,
+        .requested = size,
+    });
+    const first_line = if (std.mem.indexOfScalar(u8, buffer[0..read], '\n')) |at| at + 1 else read;
+    return .{
+        .buffer = buffer,
+        .lines = buffer[first_line..read],
+    };
 }
 
 fn resolveImport(init: std.process.Init, options: HistoryOptions, buffer: *[std.fs.max_path_bytes]u8) !ResolvedImport {
@@ -540,4 +582,27 @@ fn runStats(init: std.process.Init, options: HistoryOptions) !void {
         try writer.writeAll("\n");
     }
     try writer.flush();
+}
+
+test "a histfile past its bound imports its newest whole lines" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    try temp.dir.writeFile(io, .{ .sub_path = "zsh_history", .data = "oldest command\nmake build\nmake test\n" });
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory = path_buffer[0..try temp.dir.realPath(io, &path_buffer)];
+    var file_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&file_buffer, "{s}/zsh_history", .{directory});
+
+    var init: std.process.Init = undefined;
+    init.gpa = std.testing.allocator;
+    init.io = io;
+    const newest = try readNewest(init, path, core.Limit.declare("history.max_histfile_bytes", "bytes", 24));
+    defer std.testing.allocator.free(newest.buffer);
+    try std.testing.expectEqualStrings("make build\nmake test\n", newest.lines);
+
+    const whole = try readNewest(init, path, histfile_limit);
+    defer std.testing.allocator.free(whole.buffer);
+    try std.testing.expectEqualStrings("oldest command\nmake build\nmake test\n", whole.lines);
 }

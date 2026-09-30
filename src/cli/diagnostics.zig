@@ -3,6 +3,7 @@ const core = @import("telar-core");
 const std = @import("std");
 const Session = @import("Session.zig");
 const Options = @import("arguments/DiagnosticsOptions.zig");
+const limit_reached = @import("limit_reached.zig");
 const RuntimeConnector = client.RuntimeConnector;
 const Log = @import("DiagnosticLog.zig");
 const privatefile = @import("privatefile");
@@ -12,7 +13,10 @@ const native = @cImport({
     @cInclude("unistd.h");
 });
 const max_files = 64;
-const max_directory_entries = 4096;
+const files_limit = core.Limit.declare("cli.diagnostic_logs", "logs", max_files);
+/// Entries of the runtime directory looked at; the rest are not read.
+const max_directory_entries = 64 * 1024;
+const directory_entries_limit = core.Limit.declare("cli.diagnostic_directory_entries", "entries", max_directory_entries);
 
 /// `logs` reads the runtime's log and the telemetry beside the socket
 /// without connecting; `limits` lists the limits the runtime and its
@@ -57,11 +61,14 @@ fn readLogs(init: std.process.Init, options: Options) !void {
     }
     var iterator = directory.iterate();
     var visited: usize = 0;
+    var skipped_logs: usize = 0;
     while (try iterator.next(init.io)) |entry| {
         visited += 1;
         if (visited > max_directory_entries) {
-            return error.TooManyDirectoryEntries;
+            limit_reached.report(.{ .limit = directory_entries_limit });
+            break;
         }
+
         if (entry.kind != .file) {
             continue;
         }
@@ -70,8 +77,10 @@ fn readLogs(init: std.process.Init, options: Options) !void {
         if ((options.component != .all and log.component != options.component) or (options.pid != null and log.pid != options.pid.?)) {
             continue;
         }
+
         if (logs.items.len == max_files) {
-            return error.TooManyDiagnosticLogs;
+            skipped_logs += 1;
+            continue;
         }
 
         log.name = try init.gpa.dupe(u8, log.name);
@@ -95,9 +104,19 @@ fn readLogs(init: std.process.Init, options: Options) !void {
         }
     }
 
+    if (skipped_logs != 0) {
+        limit_reached.report(.{
+            .limit = files_limit,
+            .requested = max_files + skipped_logs,
+        });
+    }
+
     if (logs.items.len == 0) {
         return error.DiagnosticLogsNotFound;
     }
+
+    const bytes = try init.gpa.alloc(u8, Log.max_tail_bytes);
+    defer init.gpa.free(bytes);
 
     std.mem.sort(Log, logs.items, {}, lessThan);
     var output = std.Io.Writer.Allocating.init(init.gpa);
@@ -122,9 +141,11 @@ fn readLogs(init: std.process.Init, options: Options) !void {
         }
 
         const offset = inode.size -| Log.max_tail_bytes;
-        var bytes: [Log.max_tail_bytes]u8 = undefined;
-        const read = try file.readPositionalAll(init.io, &bytes, offset);
-        const start = if (offset != 0) (std.mem.indexOfScalar(u8, bytes[0..read], '\n') orelse return error.DiagnosticLineTooLong) + 1 else 0;
+        const read = try file.readPositionalAll(init.io, bytes, offset);
+        // The tail starts at its first whole line; one line longer than the
+        // whole tail is shown from where the tail begins.
+        const first_line = if (offset != 0) std.mem.indexOfScalar(u8, bytes[0..read], '\n') else null;
+        const start = if (first_line) |at| at + 1 else 0;
         const tail = Log.tail(bytes[start..read], options.lines);
         const truncated = offset != 0 or tail.len < read - start;
         var path_buffer: [std.fs.max_path_bytes]u8 = undefined;

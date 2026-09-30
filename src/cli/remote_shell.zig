@@ -6,16 +6,20 @@
 //! login shell parses.
 const client = @import("telar-client");
 const std = @import("std");
+const childoutput = @import("childoutput");
 const ScriptOutput = @import("ScriptOutput.zig");
 const SshOptions = client.SshOptions;
 const RuntimeConnector = client.RuntimeConnector;
+const ChildOutput = childoutput.ChildOutput;
 
 /// What the login shell there runs; `/bin/sh` reads the script from stdin.
 pub const script_command = "exec /bin/sh -s";
 
-/// The most a script may print on standard output and error, in bytes.
-const stdout_limit = 256 * 1024;
-const stderr_limit = 64 * 1024;
+/// Newest bytes kept of what a script prints. An installer may print any
+/// amount; what callers parse is a few lines, bounded again where parsed.
+const kept_stdout_bytes = 256 * 1024;
+/// Newest diagnostic bytes kept: the last lines say why a script stopped.
+const kept_stderr_bytes = 64 * 1024;
 
 /// Writes `value` as one `/bin/sh` word: single-quoted, each quote closed,
 /// escaped and reopened, so no byte of it is ever read as syntax.
@@ -48,8 +52,8 @@ pub fn assign(writer: *std.Io.Writer, name: []const u8, value: []const u8) !void
     try writer.writeByte('\n');
 }
 
-/// Runs `script` with `/bin/sh` on the machine and collects what it printed.
-/// The script goes through an owner-only file beside the control sockets,
+/// Runs `script` with `/bin/sh` on the machine and collects the newest
+/// bytes it printed; no amount of output fails it. The script goes through an owner-only file beside the control sockets,
 /// removed when the call returns.
 ///
 /// ```zig
@@ -99,30 +103,21 @@ pub fn runWithInput(init: std.process.Init, destination: []const u8, remote_comm
     });
     defer child.kill(init.io);
 
-    var streams_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
-    var streams: std.Io.File.MultiReader = undefined;
-    streams.init(init.gpa, init.io, streams_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
-    defer streams.deinit();
+    return collect(init.gpa, init.io, &child, timeout_s);
+}
 
+// The newest bytes a script printed on each stream, and how it ended.
+fn collect(gpa: std.mem.Allocator, io: std.Io, child: *std.process.Child, timeout_s: u32) !ScriptOutput {
     const timeout: std.Io.Timeout = .{ .duration = .{ .clock = .awake, .raw = .fromSeconds(timeout_s) } };
-    while (streams.fill(64, timeout)) |_| {
-        if (streams.reader(0).buffered().len > stdout_limit or streams.reader(1).buffered().len > stderr_limit) {
-            return error.RemoteOutputTooLong;
-        }
-    } else |err| switch (err) {
-        error.EndOfStream => {},
-        else => |other| return other,
-    }
-
-    try streams.checkAnyError();
-    const term = try child.wait(init.io);
-    const stdout = try streams.toOwnedSlice(0);
-    errdefer init.gpa.free(stdout);
-    const stderr = try streams.toOwnedSlice(1);
+    const output = try ChildOutput.collect(gpa, io, child, .{
+        .stdout = .{ .keep_tail = kept_stdout_bytes },
+        .stderr = .{ .keep_tail = kept_stderr_bytes },
+        .timeout = timeout,
+    });
     return .{
-        .term = term,
-        .stdout = stdout,
-        .stderr = stderr,
+        .term = output.term,
+        .stdout = output.stdout.bytes,
+        .stderr = output.stderr.bytes,
     };
 }
 
@@ -163,4 +158,23 @@ test "a quoted word reads back unchanged through /bin/sh" {
     defer std.testing.allocator.free(result.stderr);
 
     try std.testing.expectEqualStrings(value, result.stdout);
+}
+
+test "a script that prints more than is kept still reports how it ended" {
+    const io = std.testing.io;
+    var child = try std.process.spawn(io, .{
+        .argv = &.{ "/bin/sh", "-c", "i=0; while [ $i -lt 20000 ]; do echo \"npm warn deprecated package-$i\" >&2; i=$((i+1)); done; echo installed; echo 'last words' >&2" },
+        .stdin = .ignore,
+        .stdout = .pipe,
+        .stderr = .pipe,
+    });
+    defer child.kill(io);
+
+    const output = try collect(std.testing.allocator, io, &child, 60);
+    defer output.deinit(std.testing.allocator);
+
+    try std.testing.expect(output.succeeded());
+    try std.testing.expectEqualStrings("installed\n", output.stdout);
+    try std.testing.expect(output.stderr.len <= kept_stderr_bytes);
+    try std.testing.expectEqualStrings("last words", output.errorLine());
 }

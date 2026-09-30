@@ -113,6 +113,7 @@ pub fn describe(err: anyerror) []const u8 {
         error.AmbiguousWorktree => "more than one worktree has that branch or title; name it by the other",
         error.WorktreeHasNoAgent => "no agent runs in that worktree",
         error.InvalidSendText => std.fmt.comptimePrint("send-keys needs text of 1 to {d} bytes, or --stdin", .{core.max_pane_text_input_bytes}),
+        error.TooManyArguments => std.fmt.comptimePrint("a command telar launches takes at most {d} arguments", .{core.max_argument_count}),
         else => @errorName(err),
     };
 }

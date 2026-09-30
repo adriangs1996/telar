@@ -3,8 +3,10 @@
 //! and a long step prints what it is doing meanwhile, so the person sees
 //! progress; with `--json` nothing prints until `finish` writes one object. Details and notes are bounded copies, so a report
 //! never borrows from output that is freed after a step.
+const core = @import("telar-core");
 const std = @import("std");
 const control = @import("control.zig");
+const limit_reached = @import("limit_reached.zig");
 const SetupReport = @This();
 
 pub const Step = enum {
@@ -44,6 +46,7 @@ const max_text_bytes = 512;
 /// The longest progress line, in bytes: room for a login link.
 const max_progress_bytes = 2048;
 const max_notes = 96;
+const notes_limit = core.Limit.declare("cli.setup_report_notes", "notes", max_notes);
 
 const Note = struct {
     step: Step,
@@ -58,6 +61,8 @@ detail_bytes: [step_count][max_text_bytes]u8 = undefined,
 detail_len: [step_count]u16 = @splat(0),
 notes: [max_notes]Note = undefined,
 note_count: u8 = 0,
+/// Notes past `max_notes`, counted so `finish` names the limit.
+omitted_notes: u32 = 0,
 
 /// Records how a step ended and, in text mode, prints its line.
 ///
@@ -114,6 +119,7 @@ pub fn progress(self: *SetupReport, comptime format: []const u8, arguments: anyt
 /// ```
 pub fn note(self: *SetupReport, step: Step, comptime format: []const u8, arguments: anytype) !void {
     if (self.note_count == max_notes) {
+        self.omitted_notes +|= 1;
         return;
     }
 
@@ -197,6 +203,13 @@ pub fn pending(self: *const SetupReport) bool {
 /// try report.finish("box", "dev@box");
 /// ```
 pub fn finish(self: *SetupReport, label: []const u8, destination: []const u8) !void {
+    if (self.omitted_notes != 0) {
+        limit_reached.report(.{
+            .limit = notes_limit,
+            .requested = max_notes + @as(u64, self.omitted_notes),
+        });
+    }
+
     if (!self.json) {
         const verdict = if (self.failed())
             "is not ready; see the failed steps above"
@@ -215,7 +228,12 @@ pub fn finish(self: *SetupReport, label: []const u8, destination: []const u8) !v
     try control.writeJsonString(self.writer, label);
     try self.writer.writeAll(",\"destination\":");
     try control.writeJsonString(self.writer, destination);
-    try self.writer.print(",\"ready\":{},\"pending\":{},\"changed\":{},\"steps\":[", .{ !self.failed() and !self.pending(), self.pending(), self.changed() });
+    try self.writer.print(",\"ready\":{},\"pending\":{},\"changed\":{},", .{ !self.failed() and !self.pending(), self.pending(), self.changed() });
+    if (self.omitted_notes != 0) {
+        try self.writer.print("\"omitted_notes\":{d},", .{self.omitted_notes});
+    }
+
+    try self.writer.writeAll("\"steps\":[");
     var first = true;
     for (self.status, 0..) |maybe_status, index| {
         const status = maybe_status orelse continue;
@@ -335,4 +353,23 @@ test "a setup refused before it starts says why in one object" {
         "{\"label\":\"box\",\"destination\":\"dev@box\",\"ready\":false,\"pending\":false,\"changed\":false,\"refused\":\"--confirm needs a terminal\",\"steps\":[]}\n",
         writer.buffered(),
     );
+}
+
+test "notes past the bound are counted and named in the JSON" {
+    var buffer: [4096]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+    var report: SetupReport = .{
+        .json = true,
+        .writer = &writer,
+    };
+
+    for (0..max_notes + 3) |index| {
+        try report.note(.configuration, "skipped file {d}", .{index});
+    }
+
+    try std.testing.expectEqual(@as(u8, max_notes), report.note_count);
+    try std.testing.expectEqual(@as(u32, 3), report.omitted_notes);
+
+    try report.finish("box", "dev@box");
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\"omitted_notes\":3,") != null);
 }

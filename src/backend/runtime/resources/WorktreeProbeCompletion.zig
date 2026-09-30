@@ -16,6 +16,8 @@ found_base: [core.max_git_branch_bytes]u8 = undefined,
 found_base_len: u8 = 0,
 measured: bool = false,
 stat: gitstatus.DiffStat = .{},
+/// The limit Git ran past, for `finish` to report on the loop.
+limit: ?core.LimitReach = null,
 
 pub fn branchSlice(self: *const WorktreeProbeCompletion) []const u8 {
     return self.branch[0..self.branch_len];

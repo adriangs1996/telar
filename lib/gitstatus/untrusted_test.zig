@@ -162,7 +162,7 @@ test "observation measures a planted repository without running any program it n
     try std.testing.expectEqualStrings("task", status.branch);
     try std.testing.expect(status.dirty.?);
 
-    const stat = base_distance.run(io, .{ .environ = std.testing.environ, .path = planted.repo() }, "main").?;
+    const stat = try base_distance.run(io, .{ .environ = std.testing.environ, .path = planted.repo() }, "main");
     try std.testing.expectEqual(@as(u32, 1), stat.commits_ahead);
     try std.testing.expectEqual(@as(u32, 3), stat.files);
     try planted.expectNothingRan();
@@ -207,7 +207,7 @@ test "files named after the merge base cannot fake a worktree's numbers" {
         try planted.temp.dir.writeFile(std.testing.io, .{ .sub_path = try std.fmt.bufPrint(&path_buffer, "repo/{s}", .{name}), .data = "x\n" });
     }
 
-    const stat = base_distance.run(std.testing.io, .{ .environ = std.testing.environ, .path = repo }, "main").?;
+    const stat = try base_distance.run(std.testing.io, .{ .environ = std.testing.environ, .path = repo }, "main");
     try std.testing.expectEqual(@as(u32, 1), stat.commits_ahead);
     try std.testing.expectEqual(@as(u32, 3), stat.files);
 }
@@ -248,6 +248,6 @@ fn expectEnvironmentRedirectsNothing() !void {
 
     var head: [256]u8 = undefined;
     try std.testing.expect(probe.run(io, environ, planted.repo(), &head).?.dirty.?);
-    const stat = base_distance.run(io, .{ .environ = environ, .path = planted.repo() }, "main").?;
+    const stat = try base_distance.run(io, .{ .environ = environ, .path = planted.repo() }, "main");
     try std.testing.expectEqual(@as(u32, 1), stat.commits_ahead);
 }

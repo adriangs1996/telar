@@ -9,6 +9,7 @@ const Probe = @import("../workspace/Probe.zig");
 const Completion = @import("resources/Completion.zig");
 const Job = @import("resources/Job.zig");
 const git_probe = @import("resources/git_probe.zig");
+const limit_reached = @import("limit_reached.zig");
 
 /// Starts one due probe, rolling back its reservation on scheduling failure.
 ///
@@ -32,6 +33,10 @@ pub fn start(model: *RuntimeModel) void {
 /// workspace_git.finish(model, completion);
 /// ```
 pub fn finish(model: *RuntimeModel, completion: Completion) void {
+    if (completion.limit) |reach| {
+        limit_reached.report(model, reach);
+    }
+
     const branch = if (completion.present) completion.branchSlice() else "";
     const dirty: ?bool = if (completion.present) completion.dirty else false;
     _ = commit(&model.workspaces, completion.workspace, branch, dirty, std.Io.Timestamp.now(model.io, .real).toMilliseconds());

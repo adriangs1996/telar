@@ -5,6 +5,7 @@ const client = @import("telar-client");
 const core = @import("telar-core");
 const std = @import("std");
 const dispatch_argv = @import("dispatch_argv.zig");
+const limit_reached = @import("limit_reached.zig");
 const SshOptions = client.SshOptions;
 
 /// Where a label points.
@@ -17,8 +18,10 @@ pub const Target = union(enum) {
 const ssh_failure: u8 = 255;
 /// The longest remote command line, in bytes.
 const max_command_bytes = 64 * 1024;
-/// The most output `capture` keeps, in bytes.
-const max_captured_bytes = 64 * 1024;
+/// The most output `capture` reads, in bytes: the JSON of `pane list` or
+/// `workspace list` on a busy runtime runs to hundreds of kilobytes.
+const max_captured_bytes = 4 * 1024 * 1024;
+const captured_limit = core.Limit.declare("machines.dispatch_captured_bytes", "bytes", max_captured_bytes);
 
 /// Finds the machine a label names: a saved profile first, then this
 /// machine's own label.
@@ -128,7 +131,13 @@ pub fn captureWithInput(init: std.process.Init, profile: *const core.MachineProf
 
     var read_buffer: [4096]u8 = undefined;
     var reader = child.stdout.?.readerStreaming(init.io, &read_buffer);
-    const output = reader.interface.allocRemaining(init.gpa, .limited(max_captured_bytes)) catch return error.MachineCommandFailed;
+    const output = reader.interface.allocRemaining(init.gpa, .limited(max_captured_bytes)) catch |err| switch (err) {
+        error.StreamTooLong => {
+            limit_reached.report(.{ .limit = captured_limit });
+            return error.MachineCommandFailed;
+        },
+        else => return error.MachineCommandFailed,
+    };
     errdefer init.gpa.free(output);
 
     const term = try child.wait(init.io);

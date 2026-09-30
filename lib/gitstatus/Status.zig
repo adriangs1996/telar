@@ -5,3 +5,5 @@ const Status = @This();
 branch: []const u8,
 /// Null when `git status` failed or timed out: unknown, never clean.
 dirty: ?bool,
+/// Whether `git status` ran past its timeout, `probe.status_timeout_ms`.
+timed_out: bool = false,

@@ -32,7 +32,9 @@ pub const Target = union(enum) {
 
 pub const worktree_prefix = "worktree:";
 
-pub const max_wait_timeout_seconds = 3600;
+/// A day: an agent turn that runs a long build or test suite outlasts an
+/// hour, and a coordinator should not have to loop around the wait.
+pub const max_wait_timeout_seconds = 24 * 60 * 60;
 
 pub const default_wait_timeout_seconds = 30;
 

@@ -1,4 +1,3 @@
-const pty = @import("pty");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
 const std = @import("std");
@@ -98,18 +97,17 @@ fn dumpEchoTrace(init: std.process.Init) void {
     }
 }
 
-fn collectArgs(init: std.process.Init, storage: *[pty.command_support.max_args][*:0]const u8) ![]const [*:0]const u8 {
-    var iterator = init.minimal.args.iterate();
-    var len: usize = 0;
-    while (iterator.next()) |arg| {
-        if (len == storage.len) {
-            return error.TooManyArguments;
-        }
-
-        storage[len] = arg.ptr;
-        len += 1;
+// The command line in the process arena, however long: each command
+// bounds its own arguments and says so by name.
+fn collectArgs(init: std.process.Init) ![]const [*:0]const u8 {
+    const arena = init.arena.allocator();
+    const args = try init.minimal.args.toSlice(arena);
+    const pointers = try arena.alloc([*:0]const u8, args.len);
+    for (args, pointers) |arg, *pointer| {
+        pointer.* = arg.ptr;
     }
-    return storage[0..len];
+
+    return pointers;
 }
 
 /// Selects and runs exactly one Telar command from the process arguments.
@@ -158,8 +156,7 @@ fn mainOnSlabHeap(minimal: std.process.Init.Minimal) !void {
 
 fn runMain(init: std.process.Init) !void {
     defer dumpEchoTrace(init);
-    var arg_storage: [pty.command_support.max_args][*:0]const u8 = undefined;
-    const args = try collectArgs(init, &arg_storage);
+    const args = try collectArgs(init);
 
     try dispatch(init, args);
 }
@@ -297,6 +294,7 @@ test {
     _ = @import("cli/repository_identity.zig");
     _ = @import("cli/worktree_dispatch.zig");
     _ = @import("cli/worktree_git.zig");
+    _ = @import("cli/limit_reached.zig");
     _ = @import("cli/runtime.zig");
     _ = @import("cli/DiagnosticLog.zig");
     _ = @import("cli/arguments/DiagnosticsOptions.zig");

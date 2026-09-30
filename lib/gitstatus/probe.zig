@@ -6,11 +6,17 @@ const Status = @import("Status.zig");
 const gitfile = @import("gitfile.zig");
 const untrusted_git = @import("untrusted_git.zig");
 
-const max_status_bytes = 64 * 1024;
+/// How long `git status` may take, config read included. A large
+/// monorepo on a cold cache takes seconds; the probe runs on a worker.
+pub const status_timeout_ms = 10 * std.time.ms_per_s;
 
 const status_timeout: std.Io.Timeout = .{
-    .duration = .{ .clock = .awake, .raw = .fromSeconds(2) },
+    .duration = .{ .clock = .awake, .raw = .fromMilliseconds(status_timeout_ms) },
 };
+
+/// Bytes of `git status --porcelain` kept: only whether it printed matters,
+/// so the rest is read and dropped, never a failure.
+const kept_status_bytes = 256;
 
 /// Probes the working tree at `workspace_path`, or null when it is not a
 /// repository. Git gets `environ` with every repository-chosen program
@@ -22,9 +28,11 @@ const status_timeout: std.Io.Timeout = .{
 /// ```
 pub fn run(io: std.Io, environ: std.process.Environ, workspace_path: []const u8, buffer: []u8) ?Status {
     const head = readHead(io, workspace_path, buffer) orelse return null;
+    const dirty = statusDirty(io, environ, workspace_path);
     return .{
         .branch = parseHead(head),
-        .dirty = statusDirty(io, environ, workspace_path),
+        .dirty = dirty catch null,
+        .timed_out = dirty == error.GitTimedOut,
     };
 }
 
@@ -62,18 +70,18 @@ pub fn parseHead(bytes: []const u8) []const u8 {
     return trimmed[0..@min(trimmed.len, 8)];
 }
 
-/// Null when Git failed or ran out of time; a failure is no evidence the
-/// tree is clean.
-fn statusDirty(io: std.Io, environ: std.process.Environ, workspace_path: []const u8) ?bool {
-    const output = untrusted_git.run(io, .{
+/// An error when Git failed or ran out of time; a failure is no evidence
+/// the tree is clean. Any output at all means changes, however long.
+fn statusDirty(io: std.Io, environ: std.process.Environ, workspace_path: []const u8) untrusted_git.RunError!bool {
+    const output = try untrusted_git.run(io, .{
         .environ = environ,
         .path = workspace_path,
         .arguments = &.{ "status", "--porcelain", "--no-renames", "--ignore-submodules=all" },
         .timeout = status_timeout,
-        .stdout_limit = max_status_bytes,
-    }) orelse return null;
+        .stdout = .{ .keep_tail = kept_status_bytes },
+    });
     defer output.deinit();
-    return output.line().len != 0;
+    return output.printed();
 }
 
 test "HEAD contents resolve to a branch or a short detached hash" {
@@ -81,4 +89,30 @@ test "HEAD contents resolve to a branch or a short detached hash" {
     try std.testing.expectEqualStrings("feature/x", parseHead("ref: refs/heads/feature/x"));
     try std.testing.expectEqualStrings("refs/tags/v1", parseHead("ref: refs/tags/v1\n"));
     try std.testing.expectEqualStrings("0a1b2c3d", parseHead("0a1b2c3d4e5f60718293a4b5c6d7e8f901234567\n"));
+}
+
+test "a status longer than any buffer still reads as dirty" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
+    const init = std.process.run(std.testing.allocator, io, .{ .argv = &.{ "git", "init", "-q", "-b", "main", root } }) catch return error.SkipZigTest;
+    std.testing.allocator.free(init.stdout);
+    std.testing.allocator.free(init.stderr);
+
+    // About 3000 untracked paths print more than the 64 KiB a status once
+    // had to fit whole.
+    var name_buffer: [64]u8 = undefined;
+    for (0..3000) |index| {
+        const name = try std.fmt.bufPrint(&name_buffer, "untracked-file-with-a-long-name-{d}.txt", .{index});
+        try temp.dir.writeFile(io, .{ .sub_path = name, .data = "" });
+    }
+
+    var head: [256]u8 = undefined;
+    const status = run(io, std.testing.environ, root, &head).?;
+    try std.testing.expectEqualStrings("main", status.branch);
+    try std.testing.expect(status.dirty.?);
+    try std.testing.expect(!status.timed_out);
 }
