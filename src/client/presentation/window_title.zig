@@ -66,6 +66,20 @@ fn tokenValue(name: []const u8, tokens: Tokens) ?[]const u8 {
     return null;
 }
 
+/// Ends a rendered title with `suffix`, cutting the title at a character
+/// boundary when both do not fit, so the suffix always shows.
+/// Example: `const title = appendSuffix(&buffer, rendered.len, " — limit reached: x");`.
+pub fn appendSuffix(buffer: *[max_title_bytes]u8, len: usize, suffix: []const u8) []const u8 {
+    const kept_suffix = suffix[0..@min(suffix.len, buffer.len)];
+    var kept = @min(len, buffer.len - kept_suffix.len);
+    while (kept > 0 and kept < len and buffer[kept] & 0xc0 == 0x80) {
+        kept -= 1;
+    }
+
+    @memcpy(buffer[kept..][0..kept_suffix.len], kept_suffix);
+    return buffer[0 .. kept + kept_suffix.len];
+}
+
 fn append(buffer: *[max_title_bytes]u8, len: usize, value: []const u8) usize {
     const room = buffer.len - len;
     const count = @min(room, value.len);
@@ -118,4 +132,16 @@ test "window title truncation preserves complete Unicode and excludes host contr
     try std.testing.expectEqualStrings("safe]0;title", render(&buffer, "safe\x1b]0;title\x07\x7f", .{}));
     try std.testing.expectEqualStrings("safetitle", render(&buffer, "safe\u{009b}title", .{}));
     try std.testing.expectEqualStrings("safe", render(&buffer, "safe\xff", .{}));
+}
+
+test "a suffix always shows and cuts the title at a character" {
+    var buffer: [max_title_bytes]u8 = undefined;
+    const short = render(&buffer, "{tab}", .{ .tab = "build" });
+    try std.testing.expectEqualStrings("build | limit", appendSuffix(&buffer, short.len, " | limit"));
+
+    const long = render(&buffer, "{tab}", .{ .tab = "漢" ** 100 });
+    const title = appendSuffix(&buffer, long.len, " | limit");
+    try std.testing.expect(std.mem.endsWith(u8, title, " | limit"));
+    try std.testing.expect(std.unicode.utf8ValidateSlice(title));
+    try std.testing.expect(title.len <= max_title_bytes);
 }

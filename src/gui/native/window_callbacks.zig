@@ -62,15 +62,21 @@ fn pump(context: ?*anyopaque) callconv(.c) c_int {
         return -1;
     }
 
-    if (gui.update() catch |err| {
+    const status = gui.update() catch |err| {
         if (limit_reached.absorb(gui, .window_update, err)) {
-            // The rest of the batch stays queued; a draw shows the notice.
-            return 1;
+            // The rest of the batch stays queued. A draw shows the notice,
+            // once: the same error again asks for nothing.
+            const repeated = if (gui.update_limited) |previous| previous == err else false;
+            gui.update_limited = err;
+            return @intFromBool(!repeated);
         }
 
         gui.fail(err);
         return -1;
-    }) |_| {
+    };
+    gui.update_limited = null;
+
+    if (status != null) {
         return -1;
     }
 

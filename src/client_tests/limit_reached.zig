@@ -40,7 +40,7 @@ test "a client limit is shown once per interval, counts every reach and reaches 
 
     // The reach inside the report interval waits; the next one after it
     // carries both.
-    reaches.reported_ms[slot] = reaches.reported_ms[slot].? - core.LimitReaches.report_interval_ms;
+    reaches.reported_ms[slot] = reaches.reported_ms[slot].? - core.limit_reached.report_interval_ms;
     client_module.limit_reached.report(client, bar_actions);
     try harness.settle();
     const folded = try harness.nextClientMessage(&buffer);

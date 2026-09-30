@@ -154,17 +154,16 @@ test "the dump shows the client diagnostic, notice levels and reached limits" {
         .title = core.limit_reached.notice_title,
         .message = "bars.max_bar_actions: 5 click actions; limit 4",
     });
-    _ = model.limit_reaches.record(
+    _ = core.limit_reached.record(
+        &model.limit_reaches,
         .{
-            .limit = .{
-                .name = "bars.max_bar_actions",
-                .noun = "click actions",
-                .value = 4,
-            },
+            .limit = core.Limit.declare("bars.max_bar_actions", "click actions", 4),
             .requested = 5,
         },
-        .client,
-        0,
+        .{
+            .awake_ms = 0,
+            .real_ms = 0,
+        },
         1,
     );
 

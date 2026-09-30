@@ -121,8 +121,18 @@ fn drawConfigured(self: BarOverlay, canvas: *Canvas, configured: Configured) !vo
             .size = .small,
         };
         var fit_buffer: [TextFit.max_bytes]u8 = undefined;
-        label.text = try (TextFit{ .canvas = canvas, .width = content_area.width }).fit(label, &fit_buffer);
-        _ = try canvas.textAt(.{ .x = content_area.x, .y = content_area.y, .width = content_area.width, .height = chrome.px(status_height) }, label);
+        const fit: TextFit = .{
+            .canvas = canvas,
+            .width = content_area.width,
+        };
+        label.text = try fit.fit(label, &fit_buffer);
+        const line: Rect = .{
+            .x = content_area.x,
+            .y = content_area.y,
+            .width = content_area.width,
+            .height = chrome.px(status_height),
+        };
+        _ = try canvas.textAt(line, label);
         const used = chrome.px(status_height) + chrome.px(panel_blocks.block_gap);
         content_area.y += used;
         content_area.height = @max(0, content_area.height - used);

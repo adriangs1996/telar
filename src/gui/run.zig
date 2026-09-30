@@ -38,5 +38,5 @@ pub fn run(init: std.process.Init, connection: ?*localsocket.SocketChannel, opti
 
     adopted = true;
     defer app.deinit();
-    return app.run("Telar");
+    return app.run(GuiAdapter.default_title);
 }

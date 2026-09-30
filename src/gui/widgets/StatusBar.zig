@@ -80,7 +80,12 @@ fn diagnostic(self: StatusBar, canvas: *Canvas, row: *Rect) !void {
     }
 
     const chip = try badge(canvas, row, label);
-    try self.context.bands.add(.{ .area = chip, .action = .{ .intent = .diagnostic_dismiss } });
+    try self.context.bands.add(.{
+        .area = chip,
+        .action = .{
+            .intent = .diagnostic_dismiss,
+        },
+    });
 }
 
 /// Draws one chip at the row's right end, takes its width from the row and
@@ -95,7 +100,14 @@ fn badge(canvas: *Canvas, row: *Rect, label: Label) !Rect {
         .width = width,
         .height = height,
     };
-    try canvas.fillRoundedAt(chip, .{ .radius = chrome.px(badge_radius), .color = label.color, .alpha = badge_alpha });
+    try canvas.fillRoundedAt(
+        chip,
+        .{
+            .radius = chrome.px(badge_radius),
+            .color = label.color,
+            .alpha = badge_alpha,
+        },
+    );
     _ = try canvas.textAt(.{
         .x = chip.x + chrome.px(badge_padding),
         .y = chip.y,

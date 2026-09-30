@@ -69,6 +69,8 @@ const GuiAdapter = @This();
 
 /// Clients one window can hold: the local machine and every saved one.
 pub const machine_slots = core.MachineProfiles.capacity + 1;
+/// The window's title when no template is configured.
+pub const default_title = "Telar";
 /// Both backends upload and draw Kitty graphics images, so no pane keeps
 /// the cell fallback for them.
 const image_support: data.environment.Support = .supported;
@@ -113,6 +115,9 @@ renderer: Renderer,
 failure: ?anyerror = null,
 /// The frame that stopped at a limit; it is not drawn again.
 limited: ?LimitedFrame = null,
+/// The limit error the last update stopped at, so the same one again does
+/// not ask for another draw.
+update_limited: ?anyerror = null,
 exit_status: ?u8 = null,
 started: bool = false,
 needs_draw: bool = false,
@@ -493,19 +498,22 @@ pub fn windowTitle(self: *GuiAdapter, out: *native.WindowTitle) !bool {
     out.* = .{};
     const model = &self.app.model;
     const tab_label = if (model.tabs.activeSlot()) |tab| shared_model.tab_label.text(model, tab) else "";
+    var suffix_buffer: [limit_reached.title_suffix_bytes]u8 = undefined;
     return self.window_title.sync(
         .{
             .context = out,
             .set = copyWindowTitle,
         },
         .{
-            .template = data.config_reload.windowTitleTemplate(model),
+            // Without a template the window still names a held limit.
+            .template = if (data.config_reload.windowTitleTemplate(model).len != 0) data.config_reload.windowTitleTemplate(model) else default_title,
             .tokens = .{
                 .workspace = model.workspaceName(),
                 .tab = tab_label,
                 .pane_title = data.pane_title.focusedTitle(model),
                 .hostname = if (self.machines.count() != 0) self.machines.label(self.machines.active) else self.hostname[0..self.hostname_len],
             },
+            .suffix = limit_reached.titleSuffix(self, &suffix_buffer),
         },
     );
 }
@@ -603,23 +611,28 @@ pub fn update(self: *GuiAdapter) !?u8 {
         var batch = try loop.inbox.begin();
         defer loop.inbox.end();
 
+        // A limit reached by one event skips that event; the rest of the
+        // batch and of the turn still run.
         while (try loop.inbox.next(&batch)) |event| {
             const path = core.enter(pathFor(event));
             defer path.restore();
 
-            const exit_status = try self.dispatch(event);
-            try self.deliverHostEffects();
+            const exit_status = self.dispatch(event) catch |err| skipped: {
+                try self.absorbUpdate(err);
+                break :skipped null;
+            };
+            self.deliverHostEffects() catch |err| try self.absorbUpdate(err);
             if (exit_status) |value| {
                 break :turn value;
             }
         }
 
         if (batch.processed != 0) {
-            try client.client_layout.synchronizeClientLayout(&self.app.model);
+            client.client_layout.synchronizeClientLayout(&self.app.model) catch |err| try self.absorbUpdate(err);
         }
 
-        try loop.configuration.poll(window_machines.window(self));
-        try self.deliverHostEffects();
+        loop.configuration.poll(window_machines.window(self)) catch |err| try self.absorbUpdate(err);
+        self.deliverHostEffects() catch |err| try self.absorbUpdate(err);
 
         break :turn null;
     };
@@ -650,6 +663,13 @@ pub fn update(self: *GuiAdapter) !?u8 {
     }
 
     return status;
+}
+
+/// Keeps the turn going past a limit error; any other error ends it.
+fn absorbUpdate(self: *GuiAdapter, err: anyerror) !void {
+    if (!limit_reached.absorb(self, .window_update, err)) {
+        return err;
+    }
 }
 
 fn dispatch(self: *GuiAdapter, event: gui_event.Message) !?u8 {
