@@ -129,6 +129,7 @@ pub fn start(images: *PaneImages, stores: []Store, machine: u8, now_ns: u64) voi
         images.gpu.residency[row] = .uploading;
         images.gpu.lease[row] = lease;
         images.gpu.started_ns[row] = now_ns;
+        images.gpu.used_ns[row] = now_ns;
         images.gpu.uploading += 1;
         images.uploads[images.upload_count] = .{
             .pixels = lease.pixels.ptr,
@@ -158,7 +159,9 @@ pub fn finish(images: *PaneImages, stores: []Store, handle: u32, success: bool, 
     images.gpu.uploading -= 1;
     images.revision +%= 1;
     if (success) {
+        // Idle time counts from here, not from before the upload.
         images.gpu.residency[row] = .ready;
+        images.gpu.used_ns[row] = now_ns;
         return now_ns -| images.gpu.started_ns[row];
     }
 

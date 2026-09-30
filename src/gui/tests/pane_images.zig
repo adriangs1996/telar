@@ -441,3 +441,19 @@ test "textures and retained pixels share one quota" {
     try std.testing.expectEqual(@as(u32, 0), images.upload_count);
     images.gpu.resident_bytes = 0;
 }
+
+test "a texture that just became ready survives the next frame on a real clock" {
+    var stores = [_]Store{.init(std.testing.allocator)};
+    defer stores[0].deinit();
+    var images: PaneImages = .{};
+    try receiveImage(&stores[0], 7, 1);
+    try receivePlacement(&stores[0], placement(7, 1, 1, 0));
+    // A monotonic clock days past its epoch.
+    const now = 2_000_000 * std.time.ns_per_s;
+    pane_images.place(&images, &stores, view, now);
+    pane_images.start(&images, &stores, view.machine, now);
+    _ = pane_images.finish(&images, &stores, images.uploads[0].handle, true, now + std.time.ns_per_ms);
+    pane_images.place(&images, &stores, view, now + 2 * std.time.ns_per_ms);
+    try std.testing.expect(images.placements[0].handle != 0);
+    try std.testing.expectEqual(@as(u32, 0), images.release_count);
+}
