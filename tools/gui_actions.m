@@ -361,7 +361,7 @@ static NSDictionary *pointer_record(NSView *view) {
              @"view_points": @[@(view.bounds.size.width), @(view.bounds.size.height)],
              @"marker": @[@(marker.x), @(marker.y), @(marker.width), @(marker.height)],
              @"quads": @(frame_quads), @"frame_token": @(frame_token), @"horizontal_rules": lines,
-             @"diagrams": diagrams, @"controls": controls};
+             @"diagrams": diagrams, @"controls": controls, @"window_title": view.window.title ?: @""};
 }
 
 __attribute__((constructor)) static void install(void) {
