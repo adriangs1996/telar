@@ -73,6 +73,10 @@ def probe(binary, directory, samples, stream, text=False):
     summary['retried'] = retried
     client = last_json(directory, '*.client-*.log')
     runtime = last_json(directory, '*.runtime-*.log')
+    # Without telemetry every counter below would read as zero and pass for
+    # a window that presents nothing.
+    if not client or not runtime:
+        raise RuntimeError(f'no telemetry in {directory}: build with -Doptimize=ReleaseFast -Ddiagnostics=true')
     final = runtime[-1] if runtime else {}
     summary.update(
         presented_per_second=counter_rate(client, 'graphics_presented'),
