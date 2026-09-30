@@ -15,14 +15,16 @@ const resize = imaging.resize;
 const SpritePage = @import("SpritePage.zig");
 const SpriteSize = @import("SpriteSize.zig").SpriteSize;
 
-/// The widest or tallest favicon PNG decoded. Logos ship at 2048 or 4096
-/// pixels a side and are resized to a cell of at most `SpritePage.max_cell`
-/// texels. The file is at most `favicon_lookup.max_file_bytes` (1 MiB), yet
-/// a flat image that size can declare the whole square, so one decode holds
-/// the 64 MiB of RGBA plus Wuffs's work buffer of one filter byte a row and
-/// one to eight bytes a pixel: 128 MiB for 8-bit RGBA and 192 MiB at worst
-/// (16-bit RGBA), on this worker for the length of the decode.
-pub const max_png_side: u32 = 4096;
+/// The widest or tallest favicon PNG decoded. Logos commonly ship at 512 to
+/// 2048 pixels a side and are resized to a cell of at most
+/// `SpritePage.max_cell` texels. The file is at most
+/// `favicon_lookup.max_file_bytes` (1 MiB), yet a flat image that size can
+/// declare the whole square, and any cloned repository chooses it, so one
+/// decode holds the 16 MiB of RGBA plus Wuffs's work buffer of one filter
+/// byte a row and one to eight bytes a pixel: 32 MiB for 8-bit RGBA and
+/// 48 MiB at worst (16-bit RGBA), on this worker for the length of the
+/// decode. 4096 would let any repository ask for 192 MiB.
+pub const max_png_side: u32 = 2048;
 /// Every PNG past `max_png_pixels` also has a side past `max_png_side`, so
 /// the side names the limit.
 pub const max_png_pixels: u32 = max_png_side * max_png_side;

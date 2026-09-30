@@ -230,13 +230,13 @@ the padded AND mask when every alpha byte is zero, following the
 SVG and other ICO bitmap encodings are unsupported.
 `imaging.png` reads the IHDR, which must be the first chunk, checks its CRC
 and rejects dimensions beyond the caller's limits before Wuffs allocates
-anything. The favicon worker passes 4096 px a side and 16 Mi pixels
-(`favicon_worker.max_png_side`), so a 2048 or 4096 px logo lands. Wuffs then
+anything. The favicon worker passes 2048 px a side and 4 Mi pixels
+(`favicon_worker.max_png_side`), so a logo up to 2048 px lands. Wuffs then
 decodes every standard PNG (interlaced, grayscale, palette, 1 to 16 bits)
-into straight RGBA8 of exactly the checked size, at most 64 MiB, beside a
+into straight RGBA8 of exactly the checked size, at most 16 MiB, beside a
 work buffer of one filter byte a row and one to eight bytes a pixel: one
-decode holds 128 MiB for 8-bit RGBA and 192 MiB at worst on the worker,
-since a flat 1 MiB file can declare the whole square. It rejects a zlib
+decode holds 32 MiB for 8-bit RGBA and 48 MiB at worst on the worker,
+since a flat 1 MiB file from any repository can declare the whole square. It rejects a zlib
 stream that ends short or carries more data than the image needs. A larger
 PNG returns `gui.favicons.max_png_side` with its longer side in the
 completion, and `favicons.complete` reports it when the lookup lands on the
@@ -449,7 +449,7 @@ config, font resources, cursor clock and rendering contracts.
   worker and one favicon reaching the card a frame after its completion;
   slots released and reused as three pages' worth of workspaces pass
   through a list of 64, the full page that reports `gui.favicons.max_favicons`,
-  and PNGs at and one past 4096 px a side, the latter reported on the loop;
+  and PNGs at and one past 2048 px a side, the latter reported on the loop;
   installed font resolution, missing family failure,
   scaled metrics, all cursor shapes, wide-cell ink, palette rendering and
   allocation failure after warmup. Twenty cursor phases reuse the atlas and

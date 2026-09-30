@@ -517,7 +517,7 @@ fn flatFavicon(width: u32, height: u32) ![]u8 {
     return png.encodeFlatForTest(std.testing.allocator, .{ .header = .{ .width = width, .height = height, .color = .rgba } }, &.{ 30, 60, 90, 255 });
 }
 
-test "the favicon worker decodes a PNG up to 4096 pixels a side and returns the reach past it" {
+test "the favicon worker decodes a PNG up to its side bound and returns the reach past it" {
     const gpa = std.testing.allocator;
 
     // Past the decoder's default of 1 Mi pixels, a logo still lands.
