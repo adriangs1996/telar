@@ -129,3 +129,12 @@ pub fn parseTextSource(text: []const u8) !core.PaneTextSource {
     }
     return error.InvalidTextSource;
 }
+
+test "waits run up to a day and reads up to every row a reply carries" {
+    try std.testing.expectEqual(@as(u32, 24 * 60 * 60), try parseTimeoutSeconds("86400s"));
+    try std.testing.expectError(error.InvalidTimeout, parseTimeoutSeconds("86401"));
+    try std.testing.expectError(error.InvalidTimeout, parseTimeoutSeconds("0"));
+
+    try std.testing.expectEqual(@as(u16, core.max_pane_text_rows), try parseLineCount("2000"));
+    try std.testing.expectError(error.InvalidLineCount, parseLineCount("2001"));
+}
