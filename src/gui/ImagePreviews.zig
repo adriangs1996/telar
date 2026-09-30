@@ -317,7 +317,7 @@ fn changed(self: *ImagePreviews, had_items: bool) bool {
     return had_items != self.catalog.hasVisibleItems();
 }
 
-fn adoptPreview(context: *anyopaque, capture: *data.Capture) anyerror!bool {
+fn adoptPreview(context: *anyopaque, capture: *data.Capture) anyerror!client.ShelfAdoption {
     const self = previews(context);
     if (self.landing) |landing| {
         if (landing.sequence == capture.request.sequence) {
@@ -332,8 +332,11 @@ fn adoptPreview(context: *anyopaque, capture: *data.Capture) anyerror!bool {
     };
 
     const had_items = self.catalog.hasVisibleItems();
-    try self.catalog.adopt(capture);
-    return changed(self, had_items);
+    const evicted = try self.catalog.adopt(capture);
+    return .{
+        .layout_changed = changed(self, had_items),
+        .evicted = evicted,
+    };
 }
 
 fn reconcileMarkers(context: *anyopaque, target: data.AttachmentTarget, screen: client.MarkerScreen) ?bool {
@@ -404,7 +407,7 @@ fn visibleTarget(context: *anyopaque) ?data.AttachmentTarget {
     return previews(context).catalog.visibleTarget();
 }
 
-fn planMarkerRemoval(context: *anyopaque, id: data.AttachmentId, screen: client.MarkerScreen) ?data.MarkerRemoval {
+fn planMarkerRemoval(context: *anyopaque, id: data.AttachmentId, screen: client.MarkerScreen) client.MarkerRemovalPlan {
     return previews(context).catalog.planMarkerRemoval(id, screen);
 }
 

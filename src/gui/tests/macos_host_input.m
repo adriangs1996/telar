@@ -238,8 +238,9 @@ int telar_test_host_input(NSView *host) {
   size_t limited_length = 0;
   uint32_t limited_width = 0, limited_height = 0;
   if (telar_clipboard_copy_png(pasteboard, &limited_bytes, &limited_length, &limited_width, &limited_height, png.length - 1, 1024 * 1024, 64) != TELAR_CLIPBOARD_TOO_LARGE || limited_bytes != NULL) { fprintf(stderr, "image source quota failed\n"); failures++; }
-  if (telar_clipboard_copy_png(pasteboard, &limited_bytes, &limited_length, &limited_width, &limited_height, 1024 * 1024, 1024 * 1024, 63) != TELAR_CLIPBOARD_TOO_LARGE || limited_bytes != NULL) { fprintf(stderr, "image pixel quota failed\n"); failures++; }
-  if (telar_clipboard_copy_png(pasteboard, &limited_bytes, &limited_length, &limited_width, &limited_height, 1024 * 1024, 1, 64) != TELAR_CLIPBOARD_TOO_LARGE || limited_bytes != NULL) { fprintf(stderr, "image PNG quota failed\n"); failures++; }
+  if (telar_clipboard_copy_png(pasteboard, &limited_bytes, &limited_length, &limited_width, &limited_height, 1024 * 1024, 1024 * 1024, 63) != TELAR_CLIPBOARD_TOO_MANY_PIXELS || limited_bytes != NULL || limited_width != 8 || limited_height != 8) { fprintf(stderr, "image pixel quota failed\n"); failures++; }
+  limited_length = 0;
+  if (telar_clipboard_copy_png(pasteboard, &limited_bytes, &limited_length, &limited_width, &limited_height, 1024 * 1024, 1, 64) != TELAR_CLIPBOARD_PNG_TOO_LARGE || limited_bytes != NULL || limited_length <= 1) { fprintf(stderr, "image PNG quota failed\n"); failures++; }
   fixture.requests[3] = (telar_gui_host_request){.kind = 3, .request_id = 105, .target_id = 41, .generation = 7};
   fixture.request_count = 4;
   before = fixture.received;

@@ -5,6 +5,7 @@ const model_data = @import("model");
 
 const MarkerScreen = @import("MarkerScreen.zig");
 const MarkerPosition = @import("MarkerPosition.zig");
+const MarkerRemovalPlan = @import("MarkerRemovalPlan.zig").MarkerRemovalPlan;
 const std = @import("std");
 const MarkerScan = @import("MarkerScan.zig");
 
@@ -16,51 +17,80 @@ pub const minimum_marker_width: u16 = marker_head_width + marker_separator_width
 
 /// The cursor must share a row with the marker's end or start. A wrapped
 /// marker spans two rows, and steps across the wrap cannot be counted from
-/// cells alone.
-pub fn planPlaceholderRemoval(number: ?u16, ordinal: u8, screen: MarkerScreen) ?model_data.MarkerRemoval {
+/// cells alone. A cursor more than `max_marker_navigation_steps` away
+/// stops the plan at that limit.
+///
+/// ```zig
+/// const plan = markers.planPlaceholderRemoval(slot.markerNumber(), ordinal, screen);
+/// ```
+pub fn planPlaceholderRemoval(number: ?u16, ordinal: u8, screen: MarkerScreen) MarkerRemovalPlan {
     const marker_number = number orelse @as(u16, ordinal) + 1;
     if (!screen.cursor.visible) {
-        return null;
+        return .unreachable_marker;
     }
 
-    const marker = findMarker(screen.buffer, marker_number, screen.cursor) orelse return null;
+    const marker = findMarker(screen.buffer, marker_number, screen.cursor) orelse return .unreachable_marker;
     const cursor = screen.cursor;
     if (cursor.y == marker.end.y and cursor.x >= marker.end.x) {
         const steps = atomicSteps(screen.buffer, marker.end.y, .{
             .from = marker.end.x,
             .to = cursor.x,
-        }) orelse return null;
+        }) orelse return .unreachable_marker;
 
-        return .{ .direction = .left, .steps = steps, .deletion = .backward };
+        return navigated(.{
+            .direction = .left,
+            .steps = steps,
+            .deletion = .backward,
+        });
     }
 
     if (cursor.y == marker.start.y and cursor.x <= marker.start.x) {
         const steps = atomicSteps(screen.buffer, marker.start.y, .{
             .from = cursor.x,
             .to = marker.start.x,
-        }) orelse return null;
+        }) orelse return .unreachable_marker;
 
-        return .{ .direction = .right, .steps = steps, .deletion = .forward };
+        return navigated(.{
+            .direction = .right,
+            .steps = steps,
+            .deletion = .forward,
+        });
     }
 
-    return null;
+    return .unreachable_marker;
 }
 
 /// Pi's cursor must share a row with the path's end or start; steps across a
-/// wrapped row cannot be counted from cells alone.
-pub fn planPathRemoval(path: ?model_data.attachments_path_marker.Uuid, screen: MarkerScreen) ?model_data.MarkerRemoval {
-    const uuid = path orelse return null;
-    const marker = model_data.attachments_path_marker.find(screen.buffer, uuid) orelse return null;
-    const cells = marker.cells orelse return null;
+/// wrapped row cannot be counted from cells alone. A path longer than
+/// `path_marker.max_cells` stops the plan at that limit.
+///
+/// ```zig
+/// const plan = markers.planPathRemoval(slot.markerPath(), screen);
+/// ```
+pub fn planPathRemoval(path: ?model_data.attachments_path_marker.Uuid, screen: MarkerScreen) MarkerRemovalPlan {
+    const uuid = path orelse return .unreachable_marker;
+    const marker = model_data.attachments_path_marker.find(screen.buffer, uuid) orelse return .unreachable_marker;
+    const cells = marker.cells orelse return .{
+        .limited = .{
+            .limit = model_data.attachments_path_marker.cells_limit,
+        },
+    };
     const path_screen = pathScreen(screen);
     if (model_data.attachments_path_marker.cursorOnRow(path_screen, marker.end.y)) |cursor_x| {
         if (cursor_x >= marker.end.x) {
             const steps = model_data.attachments_path_marker.stepsOnRow(screen.buffer, marker.end.y, .{
                 .from = marker.end.x,
                 .to = cursor_x,
-            }) orelse return null;
+            }) orelse return .unreachable_marker;
 
-            return .{ .direction = .left, .steps = steps, .deletion = .backward, .deletions = cells };
+            return .{
+                .planned = .{
+                    .direction = .left,
+                    .steps = steps,
+                    .deletion = .backward,
+                    .deletions = cells,
+                },
+            };
         }
     }
     if (model_data.attachments_path_marker.cursorOnRow(path_screen, marker.start.y)) |cursor_x| {
@@ -68,13 +98,35 @@ pub fn planPathRemoval(path: ?model_data.attachments_path_marker.Uuid, screen: M
             const steps = model_data.attachments_path_marker.stepsOnRow(screen.buffer, marker.start.y, .{
                 .from = cursor_x,
                 .to = marker.start.x,
-            }) orelse return null;
+            }) orelse return .unreachable_marker;
 
-            return .{ .direction = .right, .steps = steps, .deletion = .forward, .deletions = cells };
+            return .{
+                .planned = .{
+                    .direction = .right,
+                    .steps = steps,
+                    .deletion = .forward,
+                    .deletions = cells,
+                },
+            };
         }
     }
 
-    return null;
+    return .unreachable_marker;
+}
+
+// A placeholder removal, or the navigation limit its steps passed.
+fn navigated(removal: model_data.MarkerRemoval) MarkerRemovalPlan {
+    const limit = model_data.attachment_types.max_marker_navigation_steps;
+    if (removal.steps > limit) {
+        return .{
+            .limited = .{
+                .limit = model_data.attachment_types.marker_navigation_steps_limit,
+                .requested = removal.steps,
+            },
+        };
+    }
+
+    return .{ .planned = removal };
 }
 
 pub fn pathTouchesCursor(uuid: model_data.attachments_path_marker.Uuid, screen: MarkerScreen, deletion: model_data.AttachmentMarkerDeletion) bool {
@@ -299,7 +351,13 @@ pub fn editorCursor(screen: MarkerScreen) ?cellgrid.Point {
     return null;
 }
 
-pub fn atomicSteps(buffer: *const cellgrid.Buffer, y: u16, span: model_data.Span) ?u8 {
+/// Editor steps between two columns of one row, a whole placeholder counting
+/// as one; null when the span is not on the row.
+///
+/// ```zig
+/// const steps = markers.atomicSteps(buffer, cursor.y, .{ .from = marker.end.x, .to = cursor.x }) orelse return;
+/// ```
+pub fn atomicSteps(buffer: *const cellgrid.Buffer, y: u16, span: model_data.Span) ?u16 {
     if (span.from > span.to or span.to > buffer.w) {
         return null;
     }
@@ -316,12 +374,9 @@ pub fn atomicSteps(buffer: *const cellgrid.Buffer, y: u16, span: model_data.Span
             steps += @intFromBool(cell.width != 0);
             x += 1;
         }
-        if (steps > model_data.attachment_types.max_marker_navigation_steps) {
-            return null;
-        }
     }
 
-    return @intCast(steps);
+    return steps;
 }
 
 const MarkerBoundary = struct {

@@ -61,12 +61,15 @@ fn previewShelf(context: *anyopaque) *PreviewShelf {
     return @ptrCast(@alignCast(context));
 }
 
-fn adoptPreview(context: *anyopaque, capture: *data.Capture) anyerror!bool {
+fn adoptPreview(context: *anyopaque, capture: *data.Capture) anyerror!client_module.ShelfAdoption {
     const catalog = &previewShelf(context).catalog;
     const had_items = catalog.hasVisibleItems();
-    try catalog.adopt(capture);
+    const evicted = try catalog.adopt(capture);
 
-    return had_items != catalog.hasVisibleItems();
+    return .{
+        .layout_changed = had_items != catalog.hasVisibleItems(),
+        .evicted = evicted,
+    };
 }
 
 fn reconcilePreviewMarkers(context: *anyopaque, target: data.AttachmentTarget, screen: client_module.MarkerScreen) ?bool {
@@ -133,7 +136,7 @@ fn visiblePreviewTarget(context: *anyopaque) ?data.AttachmentTarget {
     return previewShelf(context).catalog.visibleTarget();
 }
 
-fn planPreviewMarkerRemoval(context: *anyopaque, id: data.AttachmentId, screen: client_module.MarkerScreen) ?data.MarkerRemoval {
+fn planPreviewMarkerRemoval(context: *anyopaque, id: data.AttachmentId, screen: client_module.MarkerScreen) client_module.MarkerRemovalPlan {
     return previewShelf(context).catalog.planMarkerRemoval(id, screen);
 }
 
