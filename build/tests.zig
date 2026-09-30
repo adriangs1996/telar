@@ -5,7 +5,7 @@ const Suite = @import("Suite.zig");
 const Libraries = @import("Libraries.zig");
 const model_build = @import("model.zig");
 
-const source_roots: []const []const u8 = &.{ "build.zig", "build", "lib", "src", "examples", "benchmarks", "test", "linters" };
+const source_roots: []const []const u8 = &.{ "build.zig", "build", "lib", "src", "examples", "benchmarks", "linters" };
 
 /// Register tests/checks and return the parallel-test barrier: `tests.add(b, app, bench)`.
 pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
@@ -184,6 +184,44 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     const transport_test_step = b.step("test-transport", "Run the local transport tests");
     transport_test_step.dependOn(app.modules.libraries.addTestRun(b, "localsocket"));
     const schema_test_step = b.step("test-schema", "Run the shared protocol schema tests");
+    // The handshake's own tests, plus the one native fuzz target in its own
+    // root so the suites and the coverage build never compile a
+    // `std.testing.fuzz` call. `zig build test-handshake --fuzz=10K` fuzzes
+    // `decodeClientHello` alone.
+    const handshake_step = b.step("test-handshake", "Run the handshake tests; add --fuzz=<limit> to fuzz ClientHello decoding");
+    const handshake_source = b.path("src/core/schema/handshake.zig");
+    const handshake_tests = b.addTest(.{
+        .name = "handshake",
+        .root_module = b.createModule(.{
+            .root_source_file = handshake_source,
+            .target = app.modules.target,
+            .optimize = app.modules.optimize,
+        }),
+    });
+    handshake_step.dependOn(&b.addRunArtifact(handshake_tests).step);
+
+    // The test runner skips fuzzing on backends without instrumentation, so
+    // LLVM is not left to the host's default. Zig 0.16.0's runner does not
+    // compile its fuzz loop with error return traces (test_runner.zig passes
+    // a `builtin.StackTrace` to `std.debug.writeStackTrace`), so this one
+    // artifact goes without them; runtime safety stays on.
+    const handshake_fuzz_module = b.createModule(.{
+        .root_source_file = b.path("src/core/schema/handshake_fuzz_test.zig"),
+        .target = app.modules.target,
+        .optimize = app.modules.optimize,
+        .error_tracing = false,
+    });
+    handshake_fuzz_module.addImport("handshake", b.createModule(.{
+        .root_source_file = handshake_source,
+        .target = app.modules.target,
+        .optimize = app.modules.optimize,
+    }));
+    const handshake_fuzz_tests = b.addTest(.{
+        .name = "handshake-fuzz",
+        .root_module = handshake_fuzz_module,
+        .use_llvm = true,
+    });
+    handshake_step.dependOn(&b.addRunArtifact(handshake_fuzz_tests).step);
     const wire_test_step = b.step("test-wire", "Run wire contracts without PTY integration tests");
     wire_test_step.dependOn(app.modules.libraries.addTestRun(b, "bytecodec"));
     wire_test_step.dependOn(app.modules.libraries.addTestRun(b, "cellcodec"));

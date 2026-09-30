@@ -193,21 +193,43 @@ zig-crap src --lcov coverage.lcov --lcov-base .
 
 ## Fuzzing
 
-Telar has development-only AFL++ harnesses for byte-stream boundaries owned by
-Telar:
+Telar fuzzes one boundary so far: `decodeClientHello`, the first message a
+runtime decodes from a connecting client. It uses Zig's built-in fuzzer
+(`std.testing.fuzz`) and needs no other tools. The target lives in
+[`src/core/schema/handshake_fuzz_test.zig`](src/core/schema/handshake_fuzz_test.zig)
+and runs only through the `test-handshake` step. Client and server IPC
+decoding and the history escape scanners have no fuzz target yet.
+
+Run the handshake tests and replay the seed corpus, without fuzzing:
 
 ```sh
-just fuzz-check
-just fuzz schema-client
-just fuzz schema-server
-just fuzz escape
+just fuzz-check   # zig build test-handshake
 ```
 
-The fuzz package builds instrumented binaries for client IPC schema decoding,
-server IPC schema decoding, and history escape scanners. AFL++ output is kept
-under `test/fuzz/afl-out/` and ignored. The harness glue is never linked into
-Telar's runtime or client binaries. See [`test/fuzz/README.md`](test/fuzz/README.md)
-for setup, replay, and target details.
+Fuzz for a bounded number of runs; the argument takes Zig's `K`, `M` and `G`
+suffixes:
+
+```sh
+just fuzz         # zig build test-handshake --fuzz=10K
+just fuzz 1M
+```
+
+The run ends with a report of runs, unique runs and covered program counters.
+The coverage counts the whole test executable, including Zig's test runner,
+not only the decoder. `zig build test-handshake --fuzz` without a limit keeps
+fuzzing and serves Zig's web interface; this mode has not been tried on Telar.
+
+With Zig 0.16.0, a failure found while fuzzing does not change the exit status
+of `zig build`, so read the output instead of trusting it. A failing input is
+reported as `input saved to '.zig-cache/f/crash'`. That file holds the input
+in the form the fuzz test reads it, so to reproduce the failure copy it next
+to the fuzz test and add `@embedFile` of it to the test's corpus; a plain
+`zig build test-handshake` then replays it.
+
+Zig 0.16.0 constrains how the target is built: its test runner does not
+compile a fuzz test in Debug with error return traces, so the fuzz executable
+is built without them (runtime safety stays on), and a broken property panics
+rather than returning an error, because only an abort keeps the saved input.
 
 ## Performance benchmarks
 

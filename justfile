@@ -44,11 +44,11 @@ run *args:
 
 # Format the project Zig sources.
 fmt:
-    zig fmt build.zig build.zig.zon src examples benchmarks linters test/fuzz/build.zig test/fuzz/build.zig.zon test/fuzz/src test/fuzz/afl/build.zig test/fuzz/afl/build.zig.zon
+    zig fmt build.zig build.zig.zon src examples benchmarks linters
 
 # Check formatting without changing files.
 fmt-check:
-    zig fmt --check build.zig build.zig.zon src examples benchmarks linters test/fuzz/build.zig test/fuzz/build.zig.zon test/fuzz/src test/fuzz/afl/build.zig test/fuzz/afl/build.zig.zon
+    zig fmt --check build.zig build.zig.zon src examples benchmarks linters
 
 # Check code style. Extra arguments are passed to codestyle.
 codestyle *args:
@@ -72,13 +72,14 @@ test *args:
 coverage *args:
     tools/coverage.sh {{ args }}
 
-# Build AFL++ harnesses and replay their seed corpus.
+# Run the handshake tests and replay the ClientHello fuzz corpus, without fuzzing.
 fuzz-check:
-    cd test/fuzz && zig build check
+    zig build test-handshake
 
-# Run one AFL++ campaign: schema-client, schema-server, or escape.
-fuzz target="schema-client":
-    cd test/fuzz && zig build run-{{ target }}
+# Fuzz ClientHello decoding for a bounded number of runs, e.g. `just fuzz 1M`.
+# A found failure does not change the exit status: read the output.
+fuzz runs="10K":
+    zig build test-handshake --fuzz={{ runs }}
 
 # Run the shared client's tests: its own, over a real socket, and headless.
 test-client:
