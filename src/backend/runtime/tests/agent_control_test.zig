@@ -163,6 +163,39 @@ test "Enter follows the kitty keyboard protocol once the child enables it" {
     try std.testing.expectEqualStrings("\x1b[200~run the tests\x1b[201~\x1b[13u", queued(fixture.pane));
 }
 
+test "a prompt of the whole wire bound queues whole, and one the pane cannot hold is refused and named" {
+    var fixture: EventFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    holdWrites(fixture.pane);
+    defer releaseWrites(fixture.pane);
+
+    const text = try std.testing.allocator.alloc(u8, core.max_pane_text_input_bytes);
+    defer std.testing.allocator.free(text);
+    @memset(text, 'x');
+
+    try sendText(&fixture, .raw, text);
+    try expectCompleted(&fixture);
+    try std.testing.expectEqual(text.len, fixture.pane.input_queue.len);
+
+    try sendText(&fixture, .raw, text);
+    try expectCompleted(&fixture);
+
+    // The child has read none of it: the third one does not fit. The limit
+    // notice reaches this window too, so the answer is found among them.
+    try sendText(&fixture, .raw, "y");
+    const responses = &fixture.request.session.delivery.responses;
+    const refused = for (0..responses.len) |offset| {
+        const response = &responses.items[(@as(usize, responses.head) + offset) % responses.items.len];
+        if (response.* == .request_failed) {
+            break response.request_failed.code == .resource_limit;
+        }
+    } else false;
+    try std.testing.expect(refused);
+    try std.testing.expectEqual(2 * text.len, fixture.pane.input_queue.len);
+    try std.testing.expect(fixture.model.limit_reaches.find("pane_input.queue_bytes") != null);
+}
+
 test "text never reaches the pane a person has focused" {
     var fixture: EventFixture = undefined;
     try fixture.init();

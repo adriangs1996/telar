@@ -54,9 +54,14 @@ pub const max_path_query_bytes = 64;
 pub const max_path_results = 50;
 /// One path relative to the picker's root.
 pub const max_path_match_bytes = 1024;
-pub const max_pane_text_rows = 200;
-pub const max_pane_text_bytes = 64 * 1024;
-pub const max_pane_text_input_bytes = 16 * 1024;
+/// Rows `telar pane read` may ask for: a long test run or build log.
+pub const max_pane_text_rows = 2000;
+/// Text one `pane_text` reply carries, room for `max_pane_text_rows` rows
+/// of about 128 bytes; a longer read keeps its newest whole lines.
+pub const max_pane_text_bytes = 256 * 1024;
+/// Text one `send_pane_text` carries: as much as one typed input, so a
+/// prompt with pasted context fits.
+pub const max_pane_text_input_bytes = max_input_bytes;
 pub const max_notification_title_bytes = 48;
 pub const max_notification_message_bytes = 192;
 /// A notification's link: an https URL, such as an agent's login page.

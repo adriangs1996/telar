@@ -32,6 +32,9 @@ pane_input.sendText: PaneStore.resolveControl(exact generation)
         |            bracketed paste framing if the child enabled mode 2004,
         |            then Enter for the child's keyboard mode (pane_input.enterBytes)
         |
+text that does not fit the pane's input queue (128 KiB the child has not
+read) -> request_failed resource_limit, pane_input.queue_bytes reported
+        |
 pane_input.forward  (history observer first, then the PTY queue)
         |
 schema.request_completed
@@ -101,7 +104,8 @@ list (a login code `telar machine setup` types over SSH) never enters an
 argv.
 
 Text reads are late-bound: the response queue stores the pane key, rows and
-source, and the encoder dumps the text into a fixed 64 KiB buffer when the send
+source, and the encoder dumps the text into a fixed 256 KiB
+(`core.max_pane_text_bytes`) buffer when the send
 slot frees. A pane that closed in between yields `request_failed
 pane_not_found` instead of tearing the client down. When the rows do not fit,
 the dump keeps the newest whole lines and sets `truncated`.

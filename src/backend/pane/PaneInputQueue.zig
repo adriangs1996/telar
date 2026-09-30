@@ -11,6 +11,7 @@ const std = @import("std");
 const PaneInputQueue = @This();
 
 pub const capacity = 2 * core.max_input_bytes;
+pub const capacity_limit = core.Limit.declare("pane_input.queue_bytes", "bytes", capacity);
 
 bytes: [capacity]u8 = undefined,
 head: usize = 0,
@@ -47,6 +48,15 @@ pub fn push(self: *PaneInputQueue, input: []const u8) bool {
 /// ```zig
 /// const chunk = queue.nextChunk() orelse return;
 /// ```
+/// Whether `bytes` more fit behind what the child has not read yet.
+///
+/// ```zig
+/// if (!queue.fits(text.len)) return refuse();
+/// ```
+pub fn fits(self: *const PaneInputQueue, bytes: usize) bool {
+    return bytes <= self.bytes.len - self.len;
+}
+
 pub fn nextChunk(self: *const PaneInputQueue) ?[]const u8 {
     if (self.len == 0) {
         return null;

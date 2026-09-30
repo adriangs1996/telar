@@ -196,7 +196,7 @@ pub fn encodeSendPaneText(buffer: []u8, message: SendPaneText) ![]const u8 {
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeInt(u64, message.pane_generation);
     try encoder.writeByte(@intFromEnum(message.mode));
-    try encoder.writeSized16(message.text);
+    try encoder.writeSized32(message.text);
     try encoder.writeByte(@intFromBool(message.sender != null));
     if (message.sender) |sender| {
         try codec.validatePaneId(sender);
@@ -212,7 +212,7 @@ pub fn decodeSendPaneText(decoder: *Decoder) !SendPaneText {
     const pane_generation = try decoder.readInt(u64);
     const mode = std.enums.fromInt(types.PaneTextMode, try decoder.readByte()) orelse
         return error.InvalidPaneTextMode;
-    const text = try decoder.readSized16();
+    const text = try decoder.readSized32();
     try codec.validateBytes(text, types.max_pane_text_input_bytes, mode == .raw_enter);
     const sender: ?id.PaneId = if (try decoder.readBool()) try id.pane(try decoder.readInt(u64)) else null;
     return .{

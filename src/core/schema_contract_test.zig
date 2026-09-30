@@ -62,7 +62,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 127;
+const corpus_len = 128;
 
 const failure_codes = std.enums.values(types.FailureCode);
 const failure_code_listing = listing: {
@@ -73,7 +73,29 @@ const failure_code_listing = listing: {
 
     break :listing text;
 };
-const corpus_storage_size = 12 * 1024;
+// Every wire bound with its value, in declaration order: a peer with other
+// bounds refuses what this one sends, so changing one changes the
+// fingerprint.
+const wire_limit_listing = listing: {
+    @setEvalBranchQuota(20_000);
+    var text: []const u8 = "";
+    for (@typeInfo(types).@"struct".decls) |declaration| {
+        if (!std.mem.startsWith(u8, declaration.name, "max_")) {
+            continue;
+        }
+
+        const value = @field(types, declaration.name);
+        switch (@typeInfo(@TypeOf(value))) {
+            .comptime_int, .int => {
+                text = text ++ std.fmt.comptimePrint("{s}={d} ", .{ declaration.name, value });
+            },
+            else => {},
+        }
+    }
+
+    break :listing text;
+};
+const corpus_storage_size = 16 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     var entries: [corpus_len]Entry = undefined;
@@ -1053,6 +1075,15 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .text = "hi",
         }),
     ));
+    // A pane text carries up to `max_pane_text_bytes`, room for the listing.
+    helper.add(.{ .name = "wire_limits", .direction = .server, .golden_hex = golden.wire_limits }, helper.commit(
+        try pane_module.encodePaneText(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .truncated = false,
+            .text = wire_limit_listing,
+        }),
+    ));
     helper.add(.{ .name = "request_completed", .direction = .server, .golden_hex = golden.request_completed }, helper.commit(
         try runtime.encodeRequestCompleted(helper.space(), .{ .request_id = @enumFromInt(5) }),
     ));
@@ -1511,6 +1542,54 @@ test "placements with a zero virtual id are rejected on both sides" {
         @memset(bytes[virtual_id_offset..][0..8], 0);
         try std.testing.expectError(error.InvalidGraphicsIdentity, root.decodeServer(bytes));
     }
+}
+
+test "pane text requests and replies hold their whole bounds and refuse one more" {
+    const gpa = std.testing.allocator;
+    const buffer = try gpa.alloc(u8, types.max_pane_text_bytes + 64);
+    defer gpa.free(buffer);
+    const text = try gpa.alloc(u8, types.max_pane_text_bytes + 1);
+    defer gpa.free(text);
+    @memset(text, 'x');
+
+    const send: schema.SendPaneText = .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+        .mode = .raw,
+        .text = text[0..types.max_pane_text_input_bytes],
+    };
+    const sent = try pane_module.encodeSendPaneText(buffer, send);
+    try std.testing.expectEqual(types.max_pane_text_input_bytes, (try root.decodeClient(sent)).send_pane_text.text.len);
+    var longer = send;
+    longer.text = text[0 .. types.max_pane_text_input_bytes + 1];
+    try std.testing.expect(std.meta.isError(pane_module.encodeSendPaneText(buffer, longer)));
+
+    const reply = try pane_module.encodePaneText(buffer, .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .truncated = false,
+        .text = text[0..types.max_pane_text_bytes],
+    });
+    try std.testing.expectEqual(types.max_pane_text_bytes, (try root.decodeServer(reply)).pane_text.text.len);
+    try std.testing.expectError(error.InvalidByteString, pane_module.encodePaneText(buffer, .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .truncated = false,
+        .text = text,
+    }));
+
+    const read: schema.ReadPane = .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+        .rows = types.max_pane_text_rows,
+        .source = .recent,
+    };
+    try read.validateWire();
+    var more = read;
+    more.rows += 1;
+    try std.testing.expectError(error.InvalidPaneTextRows, more.validateWire());
 }
 
 test "pane cwd rejects empty nul-containing and oversized paths" {

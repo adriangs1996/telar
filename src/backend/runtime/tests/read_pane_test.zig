@@ -131,6 +131,28 @@ test "a verbose command keeps its last line when its rows overflow the buffer" {
     try std.testing.expect(std.mem.indexOf(u8, text, "line 2000 ........\n") != null);
 }
 
+test "a read of every row it may ask for holds a long test run whole" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    var line_buffer: [64]u8 = undefined;
+    for (1..core.max_pane_text_rows + 1) |number| {
+        _ = try fixture.pane.ingest(std.testing.io, try std.fmt.bufPrint(&line_buffer, "test {d:0>4} ..... ok\r\n", .{number}));
+    }
+    try fixture.pane.render(false);
+
+    // Ten times the 200 rows a read once carried, each within the pane's
+    // 20 columns.
+    const storage = try std.testing.allocator.create([core.max_pane_text_bytes]u8);
+    defer std.testing.allocator.destroy(storage);
+    const dump = fixture.pane.dumpText(.{ .rows = core.max_pane_text_rows, .source = .recent }, storage);
+    const text = storage[0..dump.len];
+
+    try std.testing.expect(!dump.truncated);
+    try std.testing.expect(std.mem.startsWith(u8, text, "test 0001 "));
+    try std.testing.expect(std.mem.endsWith(u8, text, "test 2000 ..... ok"));
+}
+
 test "a read of an exited pane serves its kept tail and says when older rows were dropped" {
     var panes: PaneStore = .{};
     const key: PaneKey = .{ .id = try core.pane(7), .generation = 3 };

@@ -118,8 +118,10 @@ SetupReport: one numbered line per step as it ends, or one JSON object
 
 A step that fails stops what depends on it: no SSH, no telar, no runtime
 means no profile change. SSH failing inside a step (ssh not starting, a
-timeout, exit 255, a script's output past 256 KiB) fails that step and no
-other, and the report always comes; a status check or a question about the
+timeout, exit 255) fails that step and no other, and the report always
+comes. How much a script prints never fails it: `remote_shell` keeps the
+newest 256 KiB of its output and 64 KiB of its errors, so an installer's
+warnings cannot turn its success into a failure; a status check or a question about the
 machine that SSH did not answer is never read as a "no". A login that is
 still waiting is `pending`, not a failure, and the machine is reported as
 waiting for it, not ready; the next setup reports it done. The exit status

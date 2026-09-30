@@ -14,6 +14,8 @@ const PaneKey = @import("../pane/PaneKey.zig");
 const pane_namespace = @import("../pane/pane_namespace.zig");
 const client_request = @import("client_request.zig");
 const agent_control = @import("agent_control.zig");
+const limit_reached = @import("limit_reached.zig");
+const PaneInputQueue = @import("../pane/PaneInputQueue.zig");
 const InputCompletion = @import("events/InputCompletion.zig");
 const ResponseCompletion = @import("events/ResponseCompletion.zig");
 
@@ -103,6 +105,16 @@ pub fn sendText(model: *RuntimeModel, session: *Session, request: core.SendPaneT
             );
         },
     };
+
+    // Text a child has not read yet stays whole; this request is refused
+    // rather than dropped after it was answered as sent.
+    if (!pane.input_queue.fits(bytes.len)) {
+        limit_reached.report(model, .{
+            .limit = PaneInputQueue.capacity_limit,
+            .requested = pane.input_queue.len + bytes.len,
+        });
+        return client_request.fail(session, request.request_id, .resource_limit, "the pane has not read the text it was sent; try again once it has");
+    }
 
     try forward(model, pane, bytes);
     if (request.mode != .raw or std.mem.indexOfScalar(u8, bytes, '\r') != null) {
