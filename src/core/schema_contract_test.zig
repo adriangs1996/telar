@@ -53,6 +53,8 @@ const Frame = @import("schema/Frame.zig");
 const tags = @import("schema/messages/tags.zig");
 const TextMetadataBuilder = @import("text_metadata/Builder.zig");
 const text_metadata_limits = @import("text_metadata/limits.zig");
+const ClientList = @import("ClientList.zig");
+const core_graphics = @import("graphics.zig");
 const ChangeReviewSnapshotView = @import("schema/messages/ChangeReviewSnapshotView.zig");
 const MoveTab = @import("schema/messages/MoveTab.zig");
 
@@ -81,12 +83,34 @@ const WireBound = struct {
     value: u64,
 };
 
-/// Every wire bound, named one by one: the frame each message travels in
-/// and each bound `types.zig` declares. A test checks none is left out.
+/// Every wire bound, named one by one: the frame each message travels in,
+/// the bounds messages declare beside themselves, the count of each enum a
+/// peer refuses to extend, and each bound `types.zig` declares. A test
+/// checks no `types.zig` bound is left out.
 const wire_bounds = [_]WireBound{
     .{
         .name = "max_frame_size",
         .value = localsocket.transport.max_frame_size,
+    },
+    .{
+        .name = "max_clipboard_bytes",
+        .value = pane_module.max_clipboard_bytes,
+    },
+    .{
+        .name = "client_list_capacity",
+        .value = ClientList.capacity,
+    },
+    .{
+        .name = "reject_reasons",
+        .value = std.enums.values(handshake.RejectReason).len,
+    },
+    .{
+        .name = "text_metadata_statuses",
+        .value = std.enums.values(text_metadata_limits.Status).len,
+    },
+    .{
+        .name = "max_chunks_per_image",
+        .value = core_graphics.max_chunks_per_image,
     },
     .{
         .name = "max_input_bytes",
