@@ -1,4 +1,6 @@
 const std = @import("std");
+const childoutput = @import("childoutput");
+const Bound = childoutput.Bound;
 /// One read-only Git command `untrusted_git.run` runs in a checkout.
 const GitRequest = @This();
 
@@ -9,4 +11,7 @@ path: []const u8,
 /// The Git command and its arguments, without `git`.
 arguments: []const []const u8,
 timeout: std.Io.Timeout,
-stdout_limit: usize,
+/// How much of standard output `run` keeps; `spawn` streams it instead.
+stdout: Bound = .{
+    .keep_tail = 0,
+},

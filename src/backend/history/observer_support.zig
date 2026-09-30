@@ -15,11 +15,22 @@ const vt = @import("ghostty-vt");
 const std = @import("std");
 const Command = cmdcapture.Command;
 
-/// Terminal bytes one observation batch holds; two alternate per pane. A
-/// burst past it between two observation passes drops the batch and resets
-/// the history emulator, so commands in flight are not recorded.
+/// Room a control prompt adds around its text: the sender line
+/// (`agent_control.max_sender_line_bytes`, 192), bracketed-paste framing and
+/// the Enter a keyboard mode encodes, rounded up.
+const prompt_framing_bytes = 1024;
+/// Terminal bytes one observation batch holds; two alternate per pane. It
+/// holds the largest input a client or a prompt can send whole, so the
+/// observer never drops one for its size. A burst of output past it between
+/// two observation passes drops the batch and resets the history emulator,
+/// so commands in flight are not recorded, and the limit is reported.
 pub const batch_bytes = 128 * 1024;
 pub const batch_bytes_limit = core.Limit.declare("history.observer_batch_bytes", "bytes", batch_bytes);
+
+comptime {
+    std.debug.assert(batch_bytes >= core.max_input_bytes + prompt_framing_bytes);
+}
+
 /// Events one batch holds, with the same drop.
 pub const batch_events = 512;
 pub const batch_events_limit = core.Limit.declare("history.observer_batch_events", "events", batch_events);

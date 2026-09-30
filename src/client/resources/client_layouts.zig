@@ -32,9 +32,9 @@ pub fn captureVersion(model: *data.ClientModel) ?data.LayoutSyncVersion {
 
 /// Writes a bounded layout snapshot into caller-owned node and tab buffers.
 /// Example: `const update = client_layouts.buildUpdate(model, &nodes, &tabs) orelse return;`
-pub fn buildUpdate(model: *data.ClientModel, nodes: *[core.max_client_layout_nodes]core.ClientLayoutNode, output: *[core.max_client_layout_tabs]core.ClientTabLayout) ?core.ClientLayoutUpdate {
+pub fn buildUpdate(model: *data.ClientModel, nodes: *[core.max_client_layout_nodes]core.ClientLayoutNode, output: *[data.Tabs.capacity]core.ClientTabLayout) ?core.ClientLayoutUpdate {
     const active_tab = model.activeTabLocation() orelse return null;
-    var scratch: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
+    var scratch: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
     var node_count: usize = 0;
     var tab_count: usize = 0;
     var active_included = false;

@@ -440,8 +440,10 @@ pub const WorkspaceCreation = @import("WorkspaceCreation.zig");
 /// const workspace_id = core.raw(opened.location.workspace.workspace);
 /// ```
 pub fn createWorkspace(self: *Session, request: WorkspaceCreation) !core.PaneOpened {
-    var send_buffer: [8192]u8 = undefined;
-    try self.connection.send(self.io, try core.encodeCreateWorkspace(&send_buffer, .{
+    // A name, a directory and a launch as long as the wire allows.
+    const send_buffer = try self.gpa.alloc(u8, localsocket.transport.max_frame_size);
+    defer self.gpa.free(send_buffer);
+    try self.connection.send(self.io, try core.encodeCreateWorkspace(send_buffer, .{
         .request_id = self.requestId(),
         .size = .{ .cols = request.columns, .rows = 24 },
         .name = request.name,

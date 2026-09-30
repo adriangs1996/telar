@@ -101,7 +101,6 @@ fn listTracked(index: *PathIndex, io: std.Io, environ: std.process.Environ) !voi
         .path = index.rootSlice(),
         .arguments = &.{ "ls-files", "-z", "--cached", "--others", "--exclude-standard" },
         .timeout = config_read_timeout,
-        .stdout_limit = 0,
     }) orelse return error.GitUnavailable;
     defer child.kill(io);
 

@@ -16,6 +16,13 @@ const PendingSuggestion = @import("PendingSuggestion.zig");
 const ResponseQueue = @import("ResponseQueue.zig");
 const std = @import("std");
 
+/// Replies one session may hold. A reply that must not be lost (`push`)
+/// answers a request of that same client, and a client keeps at most one
+/// request per pane of the tab it shows plus a few singletons in flight
+/// (`max_panes_per_tab + 8`, the client's request tracker), so the runtime's
+/// pane total does not bound it. What reaches every client at once (closed
+/// tabs, notifications) uses `pushOrDrop` or `pushNotification`, which fall
+/// back to a resync or a counted drop instead of filling the queue.
 pub const capacity = core.max_panes_per_tab * 2;
 
 pub const PendingResponse = union(enum) {

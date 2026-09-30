@@ -93,13 +93,30 @@ strings, so a completion carries names and nouns declared at comptime, which
 live for the whole process.
 
 A CLI command has no model and no window. When it reaches a limit it prints
-the notice text to standard error (`reach.describe`) and exits with a
-nonzero status. A command that holds a runtime session also sends the reach
-as `report_limit` (`limit_reached.report(&session, reach)` in `src/cli`), and
-since a control connection has no window of its own, the runtime shows its
-notice to every window, once per interval of its row. `telar hook` is the
-one command that still exits 0: a nonzero status would put an error in the
-agent's transcript, and status 2 would block a Claude Code tool call. A library under `lib/` knows no telar limit names: it returns
+the notice text to standard error (`limit_reached.report` in `src/cli`,
+through `reach.describe`) and exits with a nonzero status
+(`limit_reached.exit_status`), even when it kept what fit: `history import`
+of a histfile past its bound imports the newest commands and still exits 1,
+since a script must not read the import as complete.
+
+One exception: a limit that only cuts what a command shows, never what it
+does or stores, prints the notice and keeps the command's status. That is
+the untracked worktrees `worktree list` shows (`worktrees.untracked_listing`,
+`worktrees.git_listing_bytes`), the editions `review list` walks
+(`review.max_listed_editions`), the logs `diagnostics logs` reads
+(`cli.diagnostic_logs`, `cli.diagnostic_directory_entries`) and the notes
+`machine setup` prints (`cli.setup_report_notes`). A machine that was set up
+does not report a failure because its report ran out of lines.
+
+A command that holds a runtime session also sends the reach as
+`report_limit` (`limit_reached.reportThrough(&session, reach)`), and since a
+control connection has no window of its own, the runtime shows its notice
+to every window, once per interval of its row. `telar hook` is the one
+command that keeps status 0 whatever it lost: a nonzero status would put
+an error in the agent's transcript, and status 2 would block a Claude Code
+tool call.
+
+A library under `lib/` knows no telar limit names: it returns
 its error, and the flow that called it, which has a model, maps the error to
 its `Limit` and reports.
 
@@ -303,6 +320,16 @@ with notice levels and the client's `limits`.
   update net, and `Runtime.update` skipping a real event.
 - `checkpoint_shutdown_test.zig`: a session larger than its checkpoint keeps
   the runtime and restores cleanly.
+- `client_events_test.zig`: a client the runtime has no room for is answered
+  with `client_limit_reached` and the runtime reports `clients.max_clients`.
+- `agent_control_test.zig`: text that does not fit a pane's input queue fails
+  its request, keeps what was queued and reports
+  `panes.input_queue_capacity`.
+- `search_pane_test.zig`: a search keeps its newest matches and one out of
+  time answers with what it found, reporting `pane_search.deadline_ms`.
+- `attachment_namespace.zig`: placements past a screen's count drop only the
+  oldest image's; `TextMetadataCapture.zig`: a link table past its quota keeps
+  the links that fit.
 - `src/backend/runtime/resources/RuntimeLog.zig`: rotation at start and past
   the size bound.
 - `client_tests.recoverLimitedMessages`, run from

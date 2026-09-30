@@ -450,9 +450,9 @@ fn tagValues() [@typeInfo(ClientTag).@"enum".fields.len]u8 {
 
 /// The balanced-to-the-right tree with the most nodes a tab may carry:
 /// every split's first child is a pane and its second the next split.
-fn largestLayoutNodes() [schema.max_client_layout_nodes]schema.ClientLayoutNode {
-    var nodes: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
-    const split_count = (schema.max_client_layout_nodes - 1) / 2;
+fn largestLayoutNodes() [schema.max_client_layout_tab_nodes]schema.ClientLayoutNode {
+    var nodes: [schema.max_client_layout_tab_nodes]schema.ClientLayoutNode = undefined;
+    const split_count = (schema.max_client_layout_tab_nodes - 1) / 2;
     for (0..split_count) |index| {
         nodes[2 * index] = .{ .split = .{
             .axis = .vertical,
@@ -461,7 +461,7 @@ fn largestLayoutNodes() [schema.max_client_layout_nodes]schema.ClientLayoutNode 
         nodes[2 * index + 1] = .{ .pane = .{ .id = @enumFromInt(index + 1) } };
     }
 
-    nodes[schema.max_client_layout_nodes - 1] = .{ .pane = .{ .id = @enumFromInt(split_count + 1) } };
+    nodes[schema.max_client_layout_tab_nodes - 1] = .{ .pane = .{ .id = @enumFromInt(split_count + 1) } };
     return nodes;
 }
 

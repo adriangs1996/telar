@@ -1,11 +1,12 @@
 const core = @import("telar-core");
 const TabVersion = @import("TabVersion.zig");
 const std = @import("std");
+const Tabs = @import("../workspace/Tabs.zig");
 const LayoutSyncVersion = @This();
 
 chrome: u64,
 active_tab: core.TabLocation,
-tabs: [core.max_client_layout_tabs]TabVersion = undefined,
+tabs: [Tabs.capacity]TabVersion = undefined,
 tab_count: u8 = 0,
 
 pub fn eql(self: *const LayoutSyncVersion, right: *const LayoutSyncVersion) bool {

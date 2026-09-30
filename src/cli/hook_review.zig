@@ -21,7 +21,7 @@ pub fn capture(session: *Session, pane: PaneRef, report: ReviewHookReport) void 
     const pane_id = core.pane(pane.pane_id) catch return;
     const files = ReviewHookFiles.collect(report.provider, input) catch return;
     if (files.skipped != 0) {
-        limit_reached.report(session, .{
+        limit_reached.reportThrough(session, .{
             .limit = ReviewHookFiles.files_limit,
             .requested = files.count + files.skipped,
         });
@@ -65,7 +65,7 @@ pub fn capture(session: *Session, pane: PaneRef, report: ReviewHookReport) void 
     }
 
     if (largest_skipped != 0) {
-        limit_reached.report(session, .{
+        limit_reached.reportThrough(session, .{
             .limit = core.change_review.sample_limit,
             .requested = largest_skipped,
         });

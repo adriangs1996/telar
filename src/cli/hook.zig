@@ -718,7 +718,7 @@ fn hookProvider(agent: HookOptions.Agent) core.AgentProvider {
 fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     if (reports.lifecycle == null and reports.command == null and reports.title == null and reports.review == null and reports.progress == null) {
         if (reports.limit) |reach| {
-            limit_reached.report(null, reach);
+            limit_reached.report(reach);
         }
 
         return;
@@ -728,7 +728,7 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     // hook that started one would resurrect it from every orphaned agent.
     var session = Session.attach(init, target.socket) catch {
         if (reports.limit) |reach| {
-            limit_reached.report(null, reach);
+            limit_reached.report(reach);
         }
 
         return;
@@ -739,7 +739,7 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     session.verifyDescent(pane) catch return;
     sendVerified(&session, target, reports);
     if (reports.limit) |reach| {
-        limit_reached.report(&session, reach);
+        limit_reached.reportThrough(&session, reach);
     }
 }
 

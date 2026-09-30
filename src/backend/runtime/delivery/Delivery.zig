@@ -40,8 +40,9 @@ agent_snapshot_requested: bool = false,
 system_metrics_revision_sent: u64 = 0,
 workspace_list_revision_sent: u64 = 0,
 foregrounds_sent: [PaneStore.capacity]?ForegroundProjection = @splat(null),
-clipboard_storage: [core.max_clipboard_bytes]u8 = undefined,
-clipboard_len: u32 = 0,
+/// The latest selection the client copied, awaiting delivery, on the heap
+/// and sized to it.
+clipboard_storage: []u8 = &.{},
 clipboard_pane: core.PaneId = .invalid,
 clipboard_pending: bool = false,
 
@@ -51,6 +52,7 @@ pub fn init(gpa: std.mem.Allocator) !Delivery {
 
 pub fn deinit(self: *Delivery, gpa: std.mem.Allocator) void {
     self.responses.clear();
+    gpa.free(self.clipboard_storage);
     gpa.free(self.send_buffer);
 }
 
@@ -117,24 +119,23 @@ pub fn stopping(self: *const Delivery) bool {
     };
 }
 
-/// Replaces the pending clipboard message only when `bytes` fits the wire
-/// bound. Rejected input preserves any clipboard already awaiting delivery.
+/// Replaces the pending clipboard message with a copy of `bytes` when they
+/// fit the wire bound. Rejected input preserves any clipboard already
+/// awaiting delivery.
 ///
 /// ```zig
-/// if (!delivery.setClipboard(pane_id, bytes)) {
-///     return error.ClipboardTooLarge;
-/// }
+/// try delivery.setClipboard(gpa, pane_id, bytes);
 /// ```
-pub fn setClipboard(self: *Delivery, pane_id: core.PaneId, bytes: []const u8) bool {
+pub fn setClipboard(self: *Delivery, gpa: std.mem.Allocator, pane_id: core.PaneId, bytes: []const u8) !void {
     if (bytes.len > core.max_clipboard_bytes) {
-        return false;
+        return error.ClipboardTooLarge;
     }
 
-    std.mem.copyForwards(u8, self.clipboard_storage[0..bytes.len], bytes);
-    self.clipboard_len = @intCast(bytes.len);
+    const copy = try gpa.dupe(u8, bytes);
+    gpa.free(self.clipboard_storage);
+    self.clipboard_storage = copy;
     self.clipboard_pane = pane_id;
     self.clipboard_pending = true;
-    return true;
 }
 
 /// Selects and stages the highest-priority deliverable without committing
@@ -175,6 +176,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .runtime_limits = sources.runtime_limits,
             .client_limits = sources.client_limits,
             .refused_limit_reports = sources.refused_limit_reports,
+            .pane_text = sources.pane_text,
         }, entry.response);
         return self.stage(payload, .{ .response = .{
             .offset = entry.offset,
@@ -201,7 +203,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         return self.stage(
             try core.encodePaneClipboard(buffer, .{
                 .pane_id = self.clipboard_pane,
-                .bytes = self.clipboard_storage[0..self.clipboard_len],
+                .bytes = self.clipboard_storage,
             }),
             .clipboard,
         );
@@ -344,6 +346,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .runtime_limits = sources.runtime_limits,
             .client_limits = sources.client_limits,
             .refused_limit_reports = sources.refused_limit_reports,
+            .pane_text = sources.pane_text,
         }, entry.response);
         return self.stage(payload, .{ .response = .{
             .offset = entry.offset,
@@ -493,16 +496,17 @@ fn prepareForeground(self: *Delivery, preparation: Preparation) !?Prepared {
     return null;
 }
 
+/// One bit per attachment slot of a client.
+const PendingAttachments = std.meta.Int(.unsigned, Attachments.capacity);
+
 /// Marks the client's attachments for which some lane could publish, in one
 /// visit per attachment, so each lane skips the idle ones.
-fn pendingAttachments(preparation: Preparation) u64 {
-    comptime std.debug.assert(Attachments.capacity == @bitSizeOf(u64));
-
-    var pending: u64 = 0;
+fn pendingAttachments(preparation: Preparation) PendingAttachments {
+    var pending: PendingAttachments = 0;
     for (&preparation.attachments.record[preparation.client], 0..) |slot, index| {
         const attachment = slot orelse continue;
         if (attachment.hasDelivery()) {
-            pending |= @as(u64, 1) << @intCast(index);
+            pending |= @as(PendingAttachments, 1) << @intCast(index);
         }
     }
 
@@ -511,13 +515,13 @@ fn pendingAttachments(preparation: Preparation) u64 {
 
 /// Offers the lane to the pending attachments only, in round-robin order
 /// from the attachment after the last one delivered.
-fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane, pending: u64) !?Prepared {
+fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane, pending: PendingAttachments) !?Prepared {
     if (std.debug.runtime_safety) {
         try self.assertIdle(preparation, lane, pending);
     }
 
-    const start: u6 = @intCast(self.next_attachment);
-    var remaining = std.math.rotr(u64, pending, start);
+    const start: std.math.Log2Int(PendingAttachments) = @intCast(self.next_attachment);
+    var remaining = std.math.rotr(PendingAttachments, pending, start);
     while (remaining != 0) {
         const offset = @ctz(remaining);
         remaining &= remaining - 1;
@@ -537,10 +541,10 @@ fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane, pend
 
 /// Proves the skip exact in safe builds: every attachment left out of the
 /// pending mask yields nothing on this lane and changes nothing.
-fn assertIdle(self: *Delivery, preparation: Preparation, lane: Lane, pending: u64) !void {
+fn assertIdle(self: *Delivery, preparation: Preparation, lane: Lane, pending: PendingAttachments) !void {
     for (&preparation.attachments.record[preparation.client], 0..) |slot, index| {
         const attachment = slot orelse continue;
-        if (pending & (@as(u64, 1) << @intCast(index)) == 0) {
+        if (pending & (@as(PendingAttachments, 1) << @intCast(index)) == 0) {
             std.debug.assert(try self.candidate(preparation, attachment, lane) == null);
         }
     }

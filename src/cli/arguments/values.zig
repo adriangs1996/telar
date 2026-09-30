@@ -32,7 +32,9 @@ pub const Target = union(enum) {
 
 pub const worktree_prefix = "worktree:";
 
-pub const max_wait_timeout_seconds = 3600;
+/// A day: an agent turn that runs a long build or test suite outlasts an
+/// hour, and a coordinator should not have to loop around the wait.
+pub const max_wait_timeout_seconds = 24 * 60 * 60;
 
 pub const default_wait_timeout_seconds = 30;
 
@@ -126,4 +128,13 @@ pub fn parseTextSource(text: []const u8) !core.PaneTextSource {
         return .recent;
     }
     return error.InvalidTextSource;
+}
+
+test "waits run up to a day and reads up to every row a reply carries" {
+    try std.testing.expectEqual(@as(u32, 24 * 60 * 60), try parseTimeoutSeconds("86400s"));
+    try std.testing.expectError(error.InvalidTimeout, parseTimeoutSeconds("86401"));
+    try std.testing.expectError(error.InvalidTimeout, parseTimeoutSeconds("0"));
+
+    try std.testing.expectEqual(@as(u16, core.max_pane_text_rows), try parseLineCount("2000"));
+    try std.testing.expectError(error.InvalidLineCount, parseLineCount("2001"));
 }

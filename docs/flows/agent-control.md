@@ -101,7 +101,8 @@ list (a login code `telar machine setup` types over SSH) never enters an
 argv.
 
 Text reads are late-bound: the response queue stores the pane key, rows and
-source, and the encoder dumps the text into a fixed 64 KiB buffer when the send
+source, and the encoder dumps the text into a fixed 256 KiB
+(`core.max_pane_text_bytes`) buffer when the send
 slot frees. A pane that closed in between yields `request_failed
 pane_not_found` instead of tearing the client down. When the rows do not fit,
 the dump keeps the newest whole lines and sets `truncated`.

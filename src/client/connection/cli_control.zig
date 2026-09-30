@@ -18,6 +18,7 @@ const pane_viewport = @import("../panes/pane_viewport.zig");
 const plugin_actions = @import("../plugins/plugin_actions.zig");
 const sidebar_toggle = @import("../workspace/sidebar_toggle.zig");
 const tab_creation = @import("../workspace/tab_creation.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 const tab_selection = @import("../workspace/tab_selection.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 const Client = @import("../execution/Client.zig");
@@ -395,7 +396,7 @@ fn writeCommandSidebarState(model: *const data.ClientModel, reply: *core.ClientC
 fn writeCommandLayout(model: *const data.ClientModel, reply: *core.ClientCommand) !void {
     const tab = model.tabs.activeSlot() orelse return error.NoActiveTab;
     const focused = model.tabs.layout[tab].focused() orelse return error.NoFocusedPane;
-    var nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
+    var nodes: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
     const tabs = [_]core.ClientTabLayout{
         .{
             .location = model.tabs.location[tab],
@@ -483,19 +484,36 @@ fn applyCommandLayout(client: *Client, reply: *core.ClientCommand) !void {
     reply.status = .applied;
 }
 
+/// One tab operation waits for the runtime at a time.
+const pending_tab_limit = core.Limit.declare("tabs.one_operation_in_flight", "tab operations", 1);
+
+/// Opens a bound command in its own tab. A command asked for while another
+/// tab operation waits is lost, unlike a repeated key press, so it is named.
+///
+/// ```zig
+/// try cli_control.createCommandTab(client, &command);
+/// ```
 pub fn createCommandTab(client: *Client, command: *const data.CommandTab) !void {
     var arguments: [data.CommandTab.max_arguments][]const u8 = undefined;
     for (0..command.argument_count) |index| {
         arguments[index] = command.argument(index);
     }
 
-    _ = try tab_creation.requestTabCreation(
+    const requested = try tab_creation.requestTabCreation(
         client,
         .{
             .label = command.label(),
             .arguments = arguments[0..command.argument_count],
         },
     );
+    if (!requested and client.model.request_lifecycle.tracker.has(.tab_operation)) {
+        limit_reached.report(
+            client,
+            .{
+                .limit = pending_tab_limit,
+            },
+        );
+    }
 }
 
 test "layout export decodes to the same active pane and split tree" {

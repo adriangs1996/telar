@@ -7,8 +7,11 @@ const Snapshot = @import("Snapshot.zig");
 const PaneRef = @import("PaneRef.zig");
 const Context = @import("ExecutionContext.zig");
 const control = @import("control.zig");
+const limit_reached = @import("limit_reached.zig");
 
-const max_listed_editions = 32;
+/// Editions `review list` walks back from the newest, one request each.
+const max_listed_editions = 128;
+const listed_editions_limit = core.Limit.declare("review.max_listed_editions", "editions", max_listed_editions);
 
 /// Attaches to an existing runtime and executes one explicit review command.
 /// Example: `try review.run(init, options);`
@@ -147,6 +150,13 @@ fn list(session: *Session, options: Options, context: Context) !void {
 
     if (options.json) {
         try writer.writeAll("]\n");
+    }
+
+    // The walk ran out of room, not out of editions.
+    if (count == max_listed_editions) {
+        limit_reached.report(.{
+            .limit = listed_editions_limit,
+        });
     }
 }
 

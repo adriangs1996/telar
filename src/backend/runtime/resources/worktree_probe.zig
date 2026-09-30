@@ -7,6 +7,7 @@ const gitstatus = @import("gitstatus");
 const WorktreeProbeJob = @import("WorktreeProbeJob.zig");
 const WorktreeProbeCompletion = @import("WorktreeProbeCompletion.zig");
 const WorktreeProbe = @import("../../workspace/WorktreeProbe.zig");
+const git_probe = @import("git_probe.zig");
 
 /// A worktree running a command is measured this often.
 pub const active_interval_ms: i64 = 5_000;
@@ -14,6 +15,8 @@ pub const active_interval_ms: i64 = 5_000;
 pub const idle_interval_ms: i64 = 30_000;
 /// After this many failed measurements a worktree waits for the idle interval.
 pub const max_failures = 2;
+/// A Git step of the base measurement past this leaves the diff unknown.
+pub const base_distance_timeout_limit = core.Limit.declare("gitstatus.base_distance_timeout", "milliseconds", gitstatus.base_distance.git_timeout_ms);
 
 /// Runs on a worker: never touches runtime state.
 ///
@@ -42,6 +45,12 @@ pub fn probe(job: WorktreeProbeJob) WorktreeProbeCompletion {
             completion.dirty = dirty;
             status_known = true;
         }
+
+        if (status.timed_out) {
+            completion.limit = .{
+                .limit = git_probe.status_timeout_limit,
+            };
+        }
     }
 
     // A worktree found by observation has no base; measure it against the
@@ -66,6 +75,12 @@ pub fn probe(job: WorktreeProbeJob) WorktreeProbeCompletion {
     if (gitstatus.base_distance.run(job.io, .{ .environ = job.environ, .path = path }, base)) |measured| {
         completion.measured = true;
         completion.stat = measured;
+    } else |err| {
+        if (err == error.GitTimedOut) {
+            completion.limit = .{
+                .limit = base_distance_timeout_limit,
+            };
+        }
     }
 
     return completion;

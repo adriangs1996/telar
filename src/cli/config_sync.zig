@@ -22,9 +22,11 @@ const remote_shell = @import("remote_shell.zig");
 const Agent = config_allowlist.Agent;
 const Format = ConfigEntry.Format;
 
-/// Directories below an allowlisted one the walk enters, at most.
-const max_depth = 8;
-const send_timeout_s = 120;
+/// Directories below an allowlisted one the walk enters, at most: plugin
+/// marketplaces nest skills and their references a dozen levels down.
+const max_depth = 16;
+/// Up to 16 MiB of configuration over a slow link.
+const send_timeout_s = 600;
 const query_timeout_s = 60;
 
 /// One file on its way to the machine.
@@ -172,8 +174,12 @@ const Staging = struct {
     // real path leaves its root is skipped, and depth is bounded, so a
     // cycle ends.
     fn addTree(self: *Staging, local_dir: []const u8, remote_dir: []const u8, depth: u8) !void {
-        if (depth > max_depth or config_allowlist.telarOwned(remote_dir)) {
+        if (config_allowlist.telarOwned(remote_dir)) {
             return;
+        }
+
+        if (depth > max_depth) {
+            return self.leave("{s}/: deeper than {d} directories, not sent", .{ remote_dir, max_depth });
         }
 
         var real_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -279,7 +285,7 @@ fn sync(init: std.process.Init, report: *SetupReport, destination: []const u8, p
     }
 
     var written: usize = 0;
-    var lines = std.mem.splitScalar(u8, std.mem.trimEnd(u8, result.stdout, "\n"), '\n');
+    var lines = std.mem.splitScalar(u8, std.mem.trimEnd(u8, try result.wholeStdout(), "\n"), '\n');
     while (lines.next()) |line| {
         if (std.mem.startsWith(u8, line, "written ")) {
             written += 1;
@@ -537,7 +543,7 @@ fn queryPaths(init: std.process.Init, destination: []const u8, staging: *Staging
         return error.MachinePathsUnreadable;
     }
 
-    var lines = std.mem.splitScalar(u8, result.stdout, '\n');
+    var lines = std.mem.splitScalar(u8, try result.wholeStdout(), '\n');
     while (lines.next()) |line| {
         if (line.len != 0) {
             try existing.put(staging.arena, try staging.arena.dupe(u8, line), {});
@@ -1009,4 +1015,47 @@ test "a hook never brings a session, history or project file along" {
         try std.testing.expect(std.mem.indexOf(u8, file.remote_path, "history") == null);
         try std.testing.expect(std.mem.indexOf(u8, file.remote_path, "projects") == null);
     }
+}
+
+test "a skill nested a dozen levels deep is sent and a deeper one is named as left out" {
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    const io = std.testing.io;
+    var home_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const home = home_buffer[0..try temp.dir.realPath(io, &home_buffer)];
+    const nested = ".claude/skills/a/b/c/d/e/f/g/h/i/j/k";
+    const deeper = nested ++ "/l/m/n/o/p/q/r/s";
+    try temp.dir.createDirPath(io, deeper);
+    try temp.dir.writeFile(
+        io,
+        .{
+            .sub_path = nested ++ "/SKILL.md",
+            .data = "# Nested",
+        },
+    );
+    try temp.dir.writeFile(
+        io,
+        .{
+            .sub_path = deeper ++ "/SKILL.md",
+            .data = "# Deeper",
+        },
+    );
+
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    var environment: std.process.Environ.Map = .init(std.testing.allocator);
+    defer environment.deinit();
+    try environment.put("HOME", home);
+
+    const staged = try stageForTest(arena_state.allocator(), home, &environment);
+    try std.testing.expect(std.mem.indexOf(u8, staged.stream, nested ++ "/SKILL.md") != null);
+    try std.testing.expect(std.mem.indexOf(u8, staged.stream, deeper ++ "/SKILL.md") == null);
+
+    const left = for (staged.staging.left.items) |note| {
+        if (std.mem.indexOf(u8, note, "deeper than") != null) {
+            break true;
+        }
+    } else false;
+    try std.testing.expect(left);
 }

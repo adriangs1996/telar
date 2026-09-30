@@ -147,6 +147,12 @@ fn finishHandshake(self: *const RuntimeConnector, connection: localsocket.Socket
     return negotiate(self.io, connection, self.report);
 }
 
+/// What a refused client reads when the runtime holds all the clients it can.
+pub const client_limit_reached = std.fmt.comptimePrint(
+    "clients.max_clients: the runtime holds its limit of {d} clients (windows, CLI calls and agent hooks); close a window or retry once running commands finish",
+    .{core.ClientList.capacity},
+);
+
 /// Completes the schema handshake on a connected channel, closing it on
 /// failure. A refusal explains itself in `report`, or on standard error
 /// when null.
@@ -161,14 +167,25 @@ pub fn negotiate(io: std.Io, connection: localsocket.SocketChannel, report: ?*st
     const response = try handshake.perform(io, &result);
     switch (response) {
         .accepted => return result,
-        .rejected => |rejected| {
-            if (report) |writer| {
-                writer.print("the runtime speaks wire schema {s}; this telar speaks {s}. Update telar on one side", .{ &rejected.expected_schema, &core.schema_id }) catch {};
-            } else {
-                std.debug.print("telar protocol mismatch: runtime expects schema {s}\n", .{&rejected.expected_schema});
-            }
+        .rejected => |rejected| switch (rejected.reason) {
+            .incompatible_schema => {
+                if (report) |writer| {
+                    writer.print("the runtime speaks wire schema {s}; this telar speaks {s}. Update telar on one side", .{ &rejected.expected_schema, &core.schema_id }) catch {};
+                } else {
+                    std.debug.print("telar protocol mismatch: runtime expects schema {s}\n", .{&rejected.expected_schema});
+                }
 
-            return error.IncompatibleSchema;
+                return error.IncompatibleSchema;
+            },
+            .client_limit_reached => {
+                if (report) |writer| {
+                    writer.writeAll(client_limit_reached) catch {};
+                } else {
+                    std.debug.print("telar: {s}\n", .{client_limit_reached});
+                }
+
+                return error.ClientLimitReached;
+            },
         },
     }
 }

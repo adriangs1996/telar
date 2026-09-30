@@ -141,7 +141,7 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
                 .memory_total_decigib = metrics.memory_total_decigib,
             },
         ),
-        .workspace_list => |list| _ = try data.workspace_list_snapshot.apply(&client.model, list),
+        .workspace_list => |list| try workspace_list_snapshot.applyWorkspaceList(client, list),
         .graphics_snapshot => |snapshot| _ = try pane_graphics.applyPaneGraphics(
             client,
             .{

@@ -12,6 +12,7 @@ const Integration = @import("Integration.zig");
 const TempFile = @import("TempFile.zig");
 const HookSet = @import("HookSet.zig");
 const skill = @import("skill.zig");
+const worktree_git = @import("worktree_git.zig");
 
 const max_settings_bytes = 4 * 1024 * 1024;
 const max_extension_bytes = 64 * 1024;
@@ -26,8 +27,12 @@ pub const cursor_events = [_][]const u8{ "sessionStart", "beforeSubmitPrompt", "
 /// Claude Code asks these hooks to create and remove its worktrees, so they
 /// run in every session and answer with a path, never through the pane guard.
 pub const claude_worktree_events = [_][]const u8{ "WorktreeCreate", "WorktreeRemove" };
-/// Worktree hooks run `git worktree add`, which may take a while.
-pub const worktree_timeout_seconds = 60;
+/// Time a worktree hook spends beside `git worktree add`: finding the
+/// repository and registering the worktree with the runtime.
+const worktree_hook_margin_seconds = 60;
+/// Worktree hooks run `git worktree add`, which may take minutes in a large
+/// monorepo; Claude Code must not stop the hook before Git's own deadline.
+pub const worktree_timeout_seconds = worktree_git.git_timeout_seconds + worktree_hook_margin_seconds;
 /// The coordinator skill, installed next to an agent's settings so the agent
 /// finds it among its own skills.
 pub const coordinator_skill_directory = "skills/telar-coordinator";

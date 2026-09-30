@@ -12,6 +12,8 @@ const MediaStats = @import("../media/Stats.zig");
 const attachment_namespace = @import("attachment/attachment_namespace.zig");
 const pane_input = @import("pane_input.zig");
 const pane_output = @import("pane_output.zig");
+const limit_reached = @import("limit_reached.zig");
+const GraphicsTrim = @import("attachment/GraphicsTrim.zig");
 const std = @import("std");
 
 /// Replaces the client's graphics baseline for one pane.
@@ -105,7 +107,8 @@ pub fn finishMedia(model: *RuntimeModel, completion: MediaCompletion) !void {
     // read falls back to the queue's drop-and-reset policy.
     const resumed = pane_output.resumeRead(model, pane);
     recordMediaMetrics(model, completion.stats);
-    attachment_namespace.enforceGraphicsQuotas(model.io, pane);
+    const trim = attachment_namespace.enforceGraphicsQuotas(model.io, pane);
+    reportLimits(model, pane, trim, completion.stats);
     pane.refreshGraphicsProjection();
 
     const projection = synchronize(&model.attachments, pane, completion.stats.reset);
@@ -116,6 +119,37 @@ pub fn finishMedia(model: *RuntimeModel, completion: MediaCompletion) !void {
     const response = pane_input.startResponseWrite(model, pane);
     try resumed;
     try response;
+}
+
+/// Reports every graphics bound this batch reached: images and placements
+/// the count pass dropped, and uploads the media actor dropped whole.
+fn reportLimits(model: *RuntimeModel, pane: *const Pane, trim: GraphicsTrim, stats: MediaStats) void {
+    const limits = pane.graphics_limits;
+    if (trim.images_dropped != 0) {
+        limit_reached.report(model, .{
+            .limit = core.Limit.declare("graphics.images_per_screen", "images", limits.images_per_pane / 2),
+            .requested = trim.images_found,
+        });
+    }
+
+    if (trim.placements_dropped != 0) {
+        limit_reached.report(model, .{
+            .limit = core.Limit.declare("graphics.placements_per_screen", "placements", limits.placements_per_pane / 2),
+            .requested = trim.placements_found,
+        });
+    }
+
+    if (stats.chunk_limited_uploads != 0) {
+        limit_reached.report(model, .{
+            .limit = core.Limit.declare("graphics.max_chunks_per_image", "chunks", limits.chunks_per_image),
+        });
+    }
+
+    if (stats.byte_limited_uploads != 0) {
+        limit_reached.report(model, .{
+            .limit = core.Limit.declare("graphics.max_image_bytes_per_screen", "bytes", pane.graphics_storage_limit),
+        });
+    }
 }
 
 /// Invalidates reset projections first, then freezes at most one transfer per

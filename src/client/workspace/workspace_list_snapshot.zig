@@ -9,6 +9,7 @@ const pane_focus = @import("../panes/pane_focus.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
 const tab_snapshot = @import("tab_snapshot.zig");
 const Client = @import("../execution/Client.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 
 /// Requests a canonical snapshot with its exact target retained until the reply.
 /// Example: `try workspace_list_snapshot.requestWorkspaceSnapshot(client, workspace);`
@@ -31,6 +32,23 @@ pub fn requestWorkspaceSnapshot(model: *data.ClientModel, workspace: core.Worksp
             },
         },
     );
+}
+
+/// Applies the runtime's workspace list and reports the entries whose paths
+/// did not fit the replica; the entries before them stay navigable.
+///
+/// ```zig
+/// try workspace_list_snapshot.applyWorkspaceList(client, list);
+/// ```
+pub fn applyWorkspaceList(client: *Client, list: core.WorkspaceListView) !void {
+    const outcome = try data.workspace_list_snapshot.apply(&client.model, list);
+    if (outcome != .applied or client.model.workspace_list_snapshot.dropped == 0) {
+        return;
+    }
+
+    limit_reached.report(client, .{
+        .limit = data.workspace_list.path_pool_limit,
+    });
 }
 
 pub fn applyWorkspaceSnapshot(client: *Client, snapshot: core.WorkspaceSnapshotView) !void {

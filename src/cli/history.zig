@@ -190,15 +190,14 @@ test "history fields preserve printable UTF-8" {
     try std.testing.expectEqualStrings("git commit -m 'listo ✓'", writer.buffered());
 }
 
+/// The newest bytes of a histfile imported; older commands are left out
+/// and the limit is named.
 const max_histfile_bytes = 32 * 1024 * 1024;
+const histfile_limit = core.Limit.declare("history.max_histfile_bytes", "bytes", max_histfile_bytes);
 
 /// Command bytes one import batch carries: room for the longest command
 /// the wire accepts several times over, far below a frame.
 pub const max_batch_payload = 4 * core.max_import_command_bytes;
-
-/// Exit status of an import that skipped commands past the limit; the
-/// rest were imported.
-const skipped_exit_status: u8 = 1;
 
 /// Streams one shell histfile to the runtime in bounded idempotent batches.
 /// The source label pins the deterministic import session, so re-running the
@@ -206,8 +205,9 @@ const skipped_exit_status: u8 = 1;
 fn runImport(init: std.process.Init, options: HistoryOptions) !void {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const resolved = try resolveImport(init, options, &path_buffer);
-    const source_data = try std.Io.Dir.cwd().readFileAlloc(init.io, resolved.path, init.gpa, .limited(max_histfile_bytes));
-    defer init.gpa.free(source_data);
+    const histfile = try readNewest(init, resolved.path, histfile_limit);
+    defer init.gpa.free(histfile.buffer);
+    const source_data = histfile.lines;
 
     var session = try Session.open(init, options.socket);
     defer session.close();
@@ -237,16 +237,61 @@ fn runImport(init: std.process.Init, options: HistoryOptions) !void {
     var output = std.Io.File.stdout().writerStreaming(init.io, &stdout_buffer);
     try output.interface.print("imported {d} commands from {s}\n", .{ sender.total, resolved.path });
     try output.interface.flush();
-    if (parser_state.skipped == 0) {
-        return;
+
+    if (parser_state.skipped != 0) {
+        std.debug.print("telar history import: skipped {d} commands longer than {d} bytes\n", .{ parser_state.skipped, core.max_import_command_bytes });
+        limit_reached.reportThrough(&session, .{
+            .limit = core.import_command_limit,
+            .requested = parser_state.largest_skipped,
+        });
     }
 
-    std.debug.print("telar history import: skipped {d} commands longer than {d} bytes\n", .{ parser_state.skipped, core.max_import_command_bytes });
-    limit_reached.report(&session, .{
-        .limit = core.import_command_limit,
-        .requested = parser_state.largest_skipped,
+    // Older or longer commands were left out: the import did not do all it
+    // was asked, and a script must not read it as complete.
+    if (histfile.truncated or parser_state.skipped != 0) {
+        std.process.exit(limit_reached.exit_status);
+    }
+}
+
+/// A histfile's newest whole lines, in `buffer`, and whether older ones
+/// did not fit.
+const NewestLines = struct {
+    buffer: []u8,
+    lines: []const u8,
+    truncated: bool = false,
+};
+
+// Reads at most `limit.value` bytes from the end of the file. A longer file
+// starts at its first whole line in that window, and the limit is named:
+// the newest commands are the ones worth keeping.
+fn readNewest(init: std.process.Init, path: []const u8, limit: core.Limit) !NewestLines {
+    const file = try std.Io.Dir.cwd().openFile(init.io, path, .{});
+    defer file.close(init.io);
+
+    const size = (try file.stat(init.io)).size;
+    const offset = size -| limit.value;
+    const buffer = try init.gpa.alloc(u8, @intCast(size - offset));
+    errdefer init.gpa.free(buffer);
+
+    const read = try file.readPositionalAll(init.io, buffer, offset);
+
+    if (offset == 0) {
+        return .{
+            .buffer = buffer,
+            .lines = buffer[0..read],
+        };
+    }
+
+    limit_reached.report(.{
+        .limit = limit,
+        .requested = size,
     });
-    std.process.exit(skipped_exit_status);
+    const first_line = if (std.mem.indexOfScalar(u8, buffer[0..read], '\n')) |at| at + 1 else read;
+    return .{
+        .buffer = buffer,
+        .lines = buffer[first_line..read],
+        .truncated = true,
+    };
 }
 
 fn resolveImport(init: std.process.Init, options: HistoryOptions, buffer: *[std.fs.max_path_bytes]u8) !ResolvedImport {
@@ -582,4 +627,34 @@ fn runStats(init: std.process.Init, options: HistoryOptions) !void {
         try writer.writeAll("\n");
     }
     try writer.flush();
+}
+
+test "a histfile past its bound imports its newest whole lines" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    try temp.dir.writeFile(
+        io,
+        .{
+            .sub_path = "zsh_history",
+            .data = "oldest command\nmake build\nmake test\n",
+        },
+    );
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory = path_buffer[0..try temp.dir.realPath(io, &path_buffer)];
+    var file_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&file_buffer, "{s}/zsh_history", .{directory});
+
+    var init: std.process.Init = undefined;
+    init.gpa = std.testing.allocator;
+    init.io = io;
+    const newest = try readNewest(init, path, core.Limit.declare("history.max_histfile_bytes", "bytes", 24));
+    defer std.testing.allocator.free(newest.buffer);
+    try std.testing.expectEqualStrings("make build\nmake test\n", newest.lines);
+    try std.testing.expect(newest.truncated);
+
+    const whole = try readNewest(init, path, histfile_limit);
+    defer std.testing.allocator.free(whole.buffer);
+    try std.testing.expectEqualStrings("oldest command\nmake build\nmake test\n", whole.lines);
 }
