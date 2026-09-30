@@ -103,6 +103,9 @@ pub const Projection = @import("presentation/Projection.zig");
 pub const Route = @import("input/Route.zig");
 pub const RuntimeTransportState = @import("connection/RuntimeTransportState.zig");
 pub const Message = @import("execution/Message.zig").Message;
+pub const PickCommandCompletion = @import("bars/PickCommandCompletion.zig");
+pub const PickCommandJob = @import("bars/PickCommandJob.zig");
+pub const pick_list = @import("bars/pick_list.zig");
 pub const Job = @import("execution/Job.zig").Job;
 pub const BackgroundJob = @import("execution/BackgroundJob.zig").BackgroundJob;
 pub const job_runner = @import("execution/job_runner.zig");
@@ -245,6 +248,7 @@ test {
     _ = @import("machines/profile_file.zig");
     _ = @import("machines/machine_profiles.zig");
     _ = @import("machines/machine_picker.zig");
+    _ = @import("bars/pick_list.zig");
     _ = @import("machines/runtime_connection.zig");
     _ = @import("machines/RuntimeConnector.zig");
     _ = @import("machines/SshOptions.zig");

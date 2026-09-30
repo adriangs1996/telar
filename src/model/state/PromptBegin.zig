@@ -26,4 +26,6 @@ pub const PromptBegin = union(enum) {
     },
     add_machine,
     peek: AgentKey,
+    /// Opens the palette on the options of a configured pick.
+    pick,
 };

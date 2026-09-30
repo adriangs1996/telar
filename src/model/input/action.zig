@@ -57,6 +57,9 @@ pub const Action = union(enum) {
     close_panel,
     /// Runs the open panel's source now instead of at its next interval.
     refresh_panel,
+    /// Opens the configured pick with this index in the palette.
+    /// Configuration resolves the pick's name to the index.
+    pick: u8,
     /// Presents the next (1) or previous (-1) machine the window holds.
     select_machine_offset: i8,
     /// Opens the command palette on the window's machines.

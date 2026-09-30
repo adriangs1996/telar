@@ -131,6 +131,17 @@ pub fn refreshPanel(client: *Client) !void {
     try rearm(client);
 }
 
+/// Runs every dynamic and command bar source and the open panel now
+/// instead of at their next interval, as after a pick changed what they
+/// read. A command already running records one pending rerun.
+/// Example: `try bar_updates.refreshSources(client);`
+pub fn refreshSources(client: *Client) !void {
+    const now_ns = pacing.clock.monotonic(client.io);
+    client.model.bar_updates.expire(now_ns);
+    data.bar_panels.refresh(&client.model, now_ns);
+    try rearm(client);
+}
+
 fn completeBarCommand(client: *Client, finished: FinishedBarCommand) !void {
     const source = finished.configuration.source(finished.position);
     if (source.* != .command or source.command.generation != finished.execution.generation) {
@@ -312,7 +323,10 @@ fn publishEvaluation(model: *data.ClientModel, command: BarUpdateCommand) !bar_u
     };
 }
 
-fn callbackContext(client: *const Client, output: ?[]const u8) BarCallbackContext {
+/// The immutable table a render or pick callback receives; `output` is the
+/// command's output when one ran.
+/// Example: `const context = bar_updates.callbackContext(client, output);`
+pub fn callbackContext(client: *const Client, output: ?[]const u8) BarCallbackContext {
     const local = local_time.now();
     const metrics: ?BarMetrics = if (client.model.system_metrics) |value| .{
         .cpu_percent = value.cpu_percent,

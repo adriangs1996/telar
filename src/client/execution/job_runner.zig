@@ -42,6 +42,14 @@ pub fn runBackground(io: std.Io, gpa: std.mem.Allocator, job: BackgroundJob) Mes
             .execution_id = bar.execution_id,
             .result = command.run(io, bar.command),
         } },
+        .pick_command => |pick| .{ .pick_command = .{
+            .execution_id = pick.execution_id,
+            .purpose = pick.purpose,
+            .result = command.runFor(io, pick.command, switch (pick.purpose) {
+                .list => .options,
+                .select => .ignored,
+            }),
+        } },
         .plugin => |plugin| .{ .plugin_result = .{
             .execution_id = plugin.execution_id,
             .result = runPlugin(io, gpa, plugin),
@@ -90,6 +98,11 @@ pub fn failedBackground(job: BackgroundJob, err: anyerror) Message {
     return switch (job) {
         .bar_command => |bar| .{ .bar_command = .{
             .execution_id = bar.execution_id,
+            .result = err,
+        } },
+        .pick_command => |pick| .{ .pick_command = .{
+            .execution_id = pick.execution_id,
+            .purpose = pick.purpose,
             .result = err,
         } },
         .plugin => |plugin| .{ .plugin_result = .{

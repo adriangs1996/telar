@@ -379,3 +379,48 @@ test "native prefix keys open the palette prefixed and enter runs the chosen act
     try special(session, 4);
     try std.testing.expect(!model.name_prompt.active());
 }
+
+test "a pick list fills the palette from the model, filters by label or detail and shows why it failed" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    const picks = &fixture.model.pick_list;
+    fixture.model.name_prompt.begin(.pick);
+    picks.begin(.{
+        .index = 0,
+        .generation = 1,
+        .prompt_generation = fixture.model.name_prompt.currentConst().?.generation,
+        .title = "Pi model",
+    });
+    try fixture.paint();
+    try std.testing.expectEqual(@as(u8, 0), fixture.overlays.presented().palette.count);
+    try std.testing.expectEqual(@as(u16, 1 + 4), fixture.overlays.presented().modal.?.h);
+
+    for ([_][2][]const u8{ .{ "claude-opus-5-5", "anthropic" }, .{ "gpt-6-sol", "openai-codex" }, .{ "claude-sonnet-5-5", "anthropic" } }) |option| {
+        try picks.items.append(.{
+            .label = option[0],
+            .detail = option[1],
+        });
+    }
+
+    picks.show();
+    try fixture.paint();
+    var presented = fixture.overlays.presented();
+    try std.testing.expectEqual(@as(u8, 3), presented.palette.count);
+    try quadsInside(fixture, presented.modal.?);
+
+    // A prefix byte is ordinary query text in a pick list.
+    _ = fixture.model.name_prompt.apply(.{ .insert = ">anthropic" });
+    try fixture.paint();
+    try std.testing.expectEqual(@as(u8, 0), fixture.overlays.presented().palette.count);
+    _ = fixture.model.name_prompt.apply(.{ .home = false });
+    _ = fixture.model.name_prompt.apply(.delete);
+    try fixture.paint();
+    presented = fixture.overlays.presented();
+    try std.testing.expectEqual(@as(u8, 2), presented.palette.count);
+
+    const quads = fixture.renderer.quads.items().len;
+    picks.fail("the list command timed out");
+    try fixture.paint();
+    try std.testing.expectEqual(@as(u8, 0), fixture.overlays.presented().palette.count);
+    try std.testing.expect(fixture.renderer.quads.items().len != quads);
+}

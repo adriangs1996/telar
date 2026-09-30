@@ -31,6 +31,7 @@ const PluginExecutionState = @import("PluginExecutionState.zig");
 const HostState = @import("HostState.zig");
 const HistoryPaletteState = @import("HistoryPaletteState.zig");
 const PathPickerState = @import("PathPickerState.zig");
+const PickListState = @import("PickListState.zig");
 const SuggestionState = @import("SuggestionState.zig");
 const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
 const AgentSnapshot = @import("../agents/AgentSnapshot.zig");
@@ -132,6 +133,8 @@ history_palette: HistoryPaletteState = .{},
 suggestion: SuggestionState = .{},
 path_completion: model_data.PathCompletionState = .{},
 path_picker: PathPickerState = .{},
+/// The list a configured pick opened in the palette.
+pick_list: PickListState = .{},
 workspace_revision: u64 = 0,
 configuration_generation: u64 = 0,
 window_title_template: [max_window_title_template_bytes]u8 = undefined,
@@ -302,8 +305,9 @@ pub fn version(model: *const ClientModel) Version {
         .pane_progress = model.pane_progress_revision,
         .pane_graphics = model.pane_graphics_revision,
         .chrome = model.chrome_revision,
-        // A peek draws inside its prompt, so its pane text is prompt state.
-        .prompt = model.name_prompt.version() +% model.peek_screen.revision,
+        // A peek and a pick list draw inside their prompt, so the pane
+        // text and the options are prompt state.
+        .prompt = model.name_prompt.version() +% model.peek_screen.revision +% model.pick_list.version(),
         .history = model.history_palette.version(),
         .suggestion = model.suggestion.version(),
         .path_completion = model.path_completion.version(),

@@ -16,6 +16,7 @@ const lua_api = @import("lua-api");
 const BarCallbackContext = @import("BarCallbackContext.zig");
 const bar_values = @import("bar_values.zig");
 const component_values = @import("component_values.zig");
+const pick_values = @import("pick_values.zig");
 const lua_value = @import("lua_value.zig");
 const plugins_config = @import("plugins.zig");
 const commands_config = @import("commands.zig");
@@ -200,6 +201,33 @@ pub fn invokeBar(self: *Generation, invocation: BarInvocation, content: anytype,
         .index = -1,
         .surface = invocation.surface,
     }, diagnostic);
+}
+
+/// Lists a pick's options into `items`: its `items` table as written, or
+/// what its `items` function returns for the context, whose `output` holds
+/// the list command's output.
+/// Example: `try generation.invokePick(.{ .reference = ref, .context = context }, &items, diagnostic);`
+pub fn invokePick(self: *Generation, invocation: BarInvocation, items: *data.PickItems, diagnostic: *data.Diagnostic) !void {
+    const reference = invocation.reference;
+    if (reference.generation != self.number or reference.id >= self.bar_callback_count) {
+        diagnostic.set("pick items belong to an obsolete configuration generation", .{});
+        return error.StaleBarCallback;
+    }
+
+    const state = self.vm.state;
+    lua_api.c.lua_settop(state, 0);
+    defer lua_api.c.lua_settop(state, 0);
+    self.vm.resetBudget(lua.default_callback_instruction_limit, lua.default_callback_deadline_ns);
+    _ = lua_api.c.lua_rawgeti(state, lua_api.c.LUA_REGISTRYINDEX, self.bar_callbacks[reference.id].registry_ref);
+    if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TFUNCTION) {
+        generation_support.pushReadonlyBarContext(state, invocation.context);
+        if (lua_api.c.lua_pcallk(state, 1, 1, 0, 0, null) != lua_api.c.LUA_OK) {
+            diagnostic.set("Lua pick items failed: {s}", .{self.vm.errorMessage()});
+            return error.LuaBarCallbackFailed;
+        }
+    }
+
+    try pick_values.parse(state, -1, items, diagnostic);
 }
 
 fn prepareCallback(self: *Generation, preparation: CallbackPreparation, diagnostic: *data.Diagnostic) !*const Callback {
@@ -508,7 +536,7 @@ fn parseClient(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !v
     }
     try lua_value.ensureOnlyFields(state, .{
         .index = absolute,
-        .allowed = &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "panels", "history" },
+        .allowed = &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "panels", "picks", "history" },
         .path = "config.client",
     }, diagnostic);
 
@@ -613,10 +641,17 @@ fn parseClient(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !v
     }
     lua_value.pop(state, 1);
 
-    // Panels come first: bindings and bars name them in open_panel.
+    // Panels and picks come first: bindings and bars name them in
+    // open_panel and pick.
     _ = lua_api.c.lua_getfield(state, absolute, "panels");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
         try self.parsePanels(-1, diagnostic);
+    }
+    lua_value.pop(state, 1);
+
+    _ = lua_api.c.lua_getfield(state, absolute, "picks");
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        try self.parsePicks(-1, diagnostic);
     }
     lua_value.pop(state, 1);
 
@@ -781,6 +816,194 @@ fn parsePanel(self: *Generation, input: PanelInput, diagnostic: *data.Diagnostic
     return definition;
 }
 
+/// Reads `client.picks`, a table from pick names to `telar.pick` values.
+/// Names are sorted so a pick keeps its index across equal reloads.
+fn parsePicks(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
+    const state = self.vm.state;
+    const absolute = lua_api.c.lua_absindex(state, index);
+    if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
+        diagnostic.set("config.client.picks must be a table of telar.pick values", .{});
+        return error.InvalidConfig;
+    }
+
+    var names: [data.bar_values.max_picks][]const u8 = undefined;
+    var count: usize = 0;
+    lua_api.c.lua_pushnil(state);
+    while (lua_api.c.lua_next(state, absolute) != 0) {
+        lua_value.pop(state, 1);
+        const name = lua_value.string(state, -1) orelse {
+            lua_value.pop(state, 1);
+            diagnostic.set("config.client.picks keys must be pick names", .{});
+            return error.InvalidConfig;
+        };
+
+        if (count == names.len) {
+            lua_value.pop(state, 1);
+            diagnostic.set("config.client.picks accepts at most {d} picks", .{names.len});
+            return error.InvalidConfig;
+        }
+
+        names[count] = name;
+        count += 1;
+    }
+
+    std.mem.sort([]const u8, names[0..count], {}, lessName);
+    for (names[0..count], 0..) |name, pick_index| {
+        // Lua strings are NUL-terminated, and the key keeps this one alive.
+        _ = lua_api.c.lua_getfield(state, absolute, @ptrCast(name.ptr));
+        defer lua_value.pop(state, 1);
+        try self.parsePick(
+            .{
+                .index = -1,
+                .name = name,
+            },
+            &self.snapshot.bars.picks[pick_index],
+            diagnostic,
+        );
+    }
+
+    self.snapshot.bars.pick_count = @intCast(count);
+}
+
+fn parsePick(self: *Generation, input: PanelInput, definition: *data.PickDefinition, diagnostic: *data.Diagnostic) !void {
+    const state = self.vm.state;
+    const absolute = lua_api.c.lua_absindex(state, input.index);
+    if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
+        diagnostic.set("config.client.picks.{s} must be a telar.pick value", .{input.name});
+        return error.InvalidConfig;
+    }
+
+    try lua_value.ensureOnlyFields(state, .{
+        .index = absolute,
+        .allowed = &.{ "pick_kind", "title", "command", "items", "on_select", "timeout_ms", "refresh" },
+        .path = "telar.pick",
+    }, diagnostic);
+
+    definition.* = .{};
+    definition.heading.setName(input.name) catch {
+        diagnostic.set("pick name '{s}' must be 1..{d} letters, digits, '-' or '_'", .{ input.name, data.PanelHeading.max_name_bytes });
+        return error.InvalidConfig;
+    };
+
+    const title = try lua_value.optionalStringField(
+        state,
+        .{
+            .index = absolute,
+            .name = "title",
+            .default = input.name,
+        },
+        diagnostic,
+    );
+    definition.heading.setTitle(title) catch {
+        diagnostic.set("pick title must be printable text of at most {d} bytes", .{data.PanelHeading.max_title_bytes});
+        return error.InvalidConfig;
+    };
+
+    const timeout_ms = try parseCommandTimeout(state, absolute, diagnostic);
+    _ = lua_api.c.lua_getfield(state, absolute, "command");
+
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        var list: data.BarCommand = .{
+            .generation = self.number,
+            .interval_ns = 0,
+            .timeout_ms = timeout_ms,
+        };
+
+        parseCommandArguments(state, -1, &list, diagnostic) catch |err| {
+            lua_value.pop(state, 1);
+            return err;
+        };
+
+        definition.list = list;
+    }
+
+    lua_value.pop(state, 1);
+
+    _ = lua_api.c.lua_getfield(state, absolute, "items");
+    definition.items = self.parsePickItems(
+        .{
+            .index = -1,
+            .name = input.name,
+        },
+        definition.list != null,
+        diagnostic,
+    ) catch |err| {
+        lua_value.pop(state, 1);
+        return err;
+    };
+
+    lua_value.pop(state, 1);
+
+    if (definition.list == null and definition.items == null) {
+        diagnostic.set("pick '{s}' needs items or a command", .{input.name});
+        return error.InvalidConfig;
+    }
+
+    definition.on_select = .{
+        .generation = self.number,
+        .interval_ns = 0,
+        .timeout_ms = timeout_ms,
+    };
+
+    _ = lua_api.c.lua_getfield(state, absolute, "on_select");
+    parseCommandArguments(state, -1, &definition.on_select, diagnostic) catch |err| {
+        lua_value.pop(state, 1);
+        return err;
+    };
+
+    lua_value.pop(state, 1);
+
+    if (!definition.receivesChoice()) {
+        diagnostic.set("pick '{s}' on_select needs an argument \"{s}\" after the program for the chosen value", .{ input.name, data.PickDefinition.choice_marker });
+        return error.InvalidConfig;
+    }
+
+    _ = lua_api.c.lua_getfield(state, absolute, "refresh");
+    defer lua_value.pop(state, 1);
+    switch (lua_api.c.lua_type(state, -1)) {
+        lua_api.c.LUA_TNIL => {},
+        lua_api.c.LUA_TBOOLEAN => definition.refresh = lua_api.c.lua_toboolean(state, -1) != 0,
+        else => {
+            diagnostic.set("pick '{s}' refresh must be a boolean", .{input.name});
+            return error.InvalidConfig;
+        },
+    }
+}
+
+// A pick's `items`: a list checked now, or with a command a function that
+// parses its output. A list is parsed once here so a mistake fails the load
+// instead of the first click.
+fn parsePickItems(self: *Generation, input: PanelInput, listed: bool, diagnostic: *data.Diagnostic) !?data.CallbackRef {
+    const state = self.vm.state;
+    switch (lua_api.c.lua_type(state, input.index)) {
+        lua_api.c.LUA_TNIL => return null,
+        lua_api.c.LUA_TFUNCTION => {
+            if (!listed) {
+                diagnostic.set("pick '{s}' items can be a function only with a command, whose output it reads", .{input.name});
+                return error.InvalidConfig;
+            }
+
+            return try self.referenceBarValue(input.index, diagnostic);
+        },
+        lua_api.c.LUA_TTABLE => {
+            if (listed) {
+                diagnostic.set("pick '{s}' items must be a function when it has a command", .{input.name});
+                return error.InvalidConfig;
+            }
+
+            const items = try self.gpa.create(data.PickItems);
+            defer self.gpa.destroy(items);
+            items.* = .{};
+            pick_values.parse(state, input.index, items, diagnostic) catch return error.InvalidConfig;
+            return try self.referenceBarValue(input.index, diagnostic);
+        },
+        else => {
+            diagnostic.set("pick '{s}' items must be a list or a function", .{input.name});
+            return error.InvalidConfig;
+        },
+    }
+}
+
 fn lessName(_: void, left: []const u8, right: []const u8) bool {
     return std.mem.lessThan(u8, left, right);
 }
@@ -936,9 +1159,32 @@ fn parseBarCommand(self: *Generation, index: c_int, diagnostic: *data.Diagnostic
     }, diagnostic);
 
     const interval_ns = try bar_values.parseBarInterval(state, absolute, diagnostic);
-    _ = lua_api.c.lua_getfield(state, absolute, "timeout_ms");
+    var command: data.BarCommand = .{
+        .generation = self.number,
+        .interval_ns = interval_ns,
+        .timeout_ms = try parseCommandTimeout(state, absolute, diagnostic),
+    };
+    _ = lua_api.c.lua_getfield(state, absolute, "command");
+    parseCommandArguments(state, -1, &command, diagnostic) catch |err| {
+        lua_value.pop(state, 1);
+        return err;
+    };
+    lua_value.pop(state, 1);
+
+    _ = lua_api.c.lua_getfield(state, absolute, "render");
+    defer lua_value.pop(state, 1);
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        command.render = try self.registerBarCallback(-1, diagnostic);
+    }
+
+    return .{ .command = command };
+}
+
+/// The `timeout_ms` of a table that runs a command, 2 seconds when absent.
+fn parseCommandTimeout(state: *lua_api.c.lua_State, index: c_int, diagnostic: *data.Diagnostic) !u32 {
+    _ = lua_api.c.lua_getfield(state, index, "timeout_ms");
     const timeout_value = if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL)
-        2_000
+        default_command_timeout_ms
     else
         lua_value.integer(state, -1) orelse {
             lua_value.pop(state, 1);
@@ -954,48 +1200,36 @@ fn parseBarCommand(self: *Generation, index: c_int, diagnostic: *data.Diagnostic
         return error.InvalidConfig;
     }
 
-    var command: data.BarCommand = .{
-        .generation = self.number,
-        .interval_ns = interval_ns,
-        .timeout_ms = @intCast(timeout_value),
-    };
-    _ = lua_api.c.lua_getfield(state, absolute, "command");
-    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TTABLE) {
-        lua_value.pop(state, 1);
+    return @intCast(timeout_value);
+}
+
+/// Appends the argv array at `index` to `command`.
+fn parseCommandArguments(state: *lua_api.c.lua_State, index: c_int, command: *data.BarCommand, diagnostic: *data.Diagnostic) !void {
+    if (lua_api.c.lua_type(state, index) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("bar command must be an array", .{});
         return error.InvalidConfig;
     }
-    const command_table = lua_api.c.lua_absindex(state, -1);
+
+    const command_table = lua_api.c.lua_absindex(state, index);
     const count = lua_api.c.lua_rawlen(state, command_table);
     if (count == 0 or count > data.bar_values.max_command_args) {
-        lua_value.pop(state, 1);
         diagnostic.set("bar command must contain 1..{d} arguments", .{data.bar_values.max_command_args});
         return error.InvalidConfig;
     }
+
     try lua_value.ensureArrayOnly(state, .{ .index = command_table, .count = count, .path = "bar command" }, diagnostic);
     for (0..count) |argument_index| {
         _ = lua_api.c.lua_geti(state, command_table, @intCast(argument_index + 1));
+        defer lua_value.pop(state, 1);
         const argument_value = lua_value.string(state, -1) orelse {
-            lua_value.pop(state, 2);
             diagnostic.set("bar command argument {d} must be a string", .{argument_index + 1});
             return error.InvalidConfig;
         };
         command.appendArgument(argument_value) catch |err| {
-            lua_value.pop(state, 2);
             diagnostic.set("invalid bar command: {s}", .{@errorName(err)});
             return error.InvalidConfig;
         };
-        lua_value.pop(state, 1);
     }
-    lua_value.pop(state, 1);
-
-    _ = lua_api.c.lua_getfield(state, absolute, "render");
-    defer lua_value.pop(state, 1);
-    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
-        command.render = try self.registerBarCallback(-1, diagnostic);
-    }
-
-    return .{ .command = command };
 }
 
 fn registerBarCallback(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !data.CallbackRef {
@@ -1004,6 +1238,13 @@ fn registerBarCallback(self: *Generation, index: c_int, diagnostic: *data.Diagno
         diagnostic.set("bar render must be a Lua function", .{});
         return error.InvalidConfig;
     }
+
+    return self.referenceBarValue(index, diagnostic);
+}
+
+/// Keeps the Lua value at `index` for later bar or pick invocations.
+fn referenceBarValue(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !data.CallbackRef {
+    const state = self.vm.state;
     if (self.bar_callback_count == data.config_values.max_bar_callbacks) {
         diagnostic.set("configuration exceeds {d} bar callbacks", .{data.config_values.max_bar_callbacks});
         return error.InvalidConfig;
@@ -1569,6 +1810,26 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
         };
         return .{ .open_panel = index };
     }
+    if (std.mem.eql(u8, kind, "pick")) {
+        try lua_value.ensureOnlyFields(state, .{
+            .index = absolute,
+            .allowed = &.{ "kind", "pick" },
+            .path = "action",
+        }, diagnostic);
+        const name = try lua_value.requiredStringField(
+            state,
+            .{
+                .index = absolute,
+                .name = "pick",
+            },
+            diagnostic,
+        );
+        const index = self.snapshot.bars.pickIndex(name) orelse {
+            diagnostic.set("pick names an unknown pick '{s}'", .{name});
+            return error.InvalidConfig;
+        };
+        return .{ .pick = index };
+    }
     if (std.mem.eql(u8, kind, "plugin")) {
         try lua_value.ensureOnlyFields(state, .{
             .index = absolute,
@@ -1589,6 +1850,8 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
     try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"kind"}, .path = "action" }, diagnostic);
     return action;
 }
+
+const default_command_timeout_ms = 2_000;
 
 const BarCallback = struct {
     registry_ref: c_int,

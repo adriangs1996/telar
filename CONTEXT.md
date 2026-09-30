@@ -66,6 +66,12 @@ The panel a bar component opens above the bottom bar, filled from its own
 configured source while it is open. Disposable client state.
 _Avoid_: Popup, modal, dropdown
 
+**Pick list**:
+The command palette on the options of a configured pick, written in the
+configuration or printed by a command. Choosing one runs the pick's
+`on_select` command with it as one argument. Disposable client state.
+_Avoid_: Dropdown, selector, menu
+
 **Telar view**:
 Content Telar composes from client and runtime projections instead of from a
 PTY, such as a history browser or a change review. The layout may

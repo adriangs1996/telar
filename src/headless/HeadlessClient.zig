@@ -440,7 +440,7 @@ fn recordedInstead(job: client.BackgroundJob) ?client.Message {
         .link => .{ .link_opened = {} },
         .sound => .{ .sound_played = {} },
         .system_notification => .{ .notified = {} },
-        .bar_command, .plugin, .path_completion, .config_watch, .runtime_connect, .machine_edit => null,
+        .bar_command, .pick_command, .plugin, .path_completion, .config_watch, .runtime_connect, .machine_edit => null,
     };
 }
 
