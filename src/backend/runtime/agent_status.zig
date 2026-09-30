@@ -182,10 +182,10 @@ pub fn agentProcess(model: *const RuntimeModel, key: PaneKey) ?AgentProcess {
         return null;
     }
 
-    const group = agent.agent_process_id orelse return null;
+    const group = agent.agent_process_group orelse return null;
     return .{
         .group = group,
-        .pid = if (agent.agent_pid != 0) agent.agent_pid else group,
+        .pid = agent.agent_pid orelse group,
     };
 }
 

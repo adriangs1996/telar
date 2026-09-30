@@ -56,10 +56,11 @@ pub const TitlePhase = enum {
 
 key: PaneKey,
 process_id: u32,
-agent_process_id: ?u32 = null,
-/// The agent's own process inside the group `agent_process_id` names, when
-/// the probe found which one it is.
-agent_pid: u32 = 0,
+/// The foreground process group process evidence named.
+agent_process_group: ?u32 = null,
+/// The agent's own process inside that group, when the probe found which
+/// member it is.
+agent_pid: ?u32 = null,
 session_id: [16]u8,
 authority: core.AgentAuthority = .candidate,
 process: ?Evidence = null,
@@ -188,7 +189,7 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
     }
 
     if (self.process) |evidence| {
-        if (evidence.provider == observation.provider and self.agent_process_id == observation.process_id) {
+        if (evidence.provider == observation.provider and self.agent_process_group == observation.process_id) {
             const changed = self.session_host != observation.session_host or self.hooks_installed != observation.hooks_installed;
             self.session_host = observation.session_host;
             self.hooks_installed = observation.hooks_installed;
@@ -212,7 +213,7 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
         self.unreported_work_at_ms = null;
     }
 
-    self.agent_process_id = observation.process_id;
+    self.agent_process_group = observation.process_id;
     self.agent_pid = observation.agent_pid;
     self.session_host = observation.session_host;
     self.hooks_installed = observation.hooks_installed;
@@ -264,6 +265,18 @@ pub fn claimReporter(self: *Agent, reporter: core.AgentProvider) void {
 pub fn applyReport(self: *Agent, observation: ReportObservation) bool {
     if (observation.provider != .unknown) {
         self.hooks_seen = true;
+    }
+
+    // A report that waited for its pane to be identified again keeps the
+    // time it arrived, and never replaces one that arrived after it.
+    if (self.report) |current| {
+        if (observation.observed_at_ns) |arrived| {
+            if (current.observed_at_ns) |current_arrived| {
+                if (arrived < current_arrived) {
+                    return false;
+                }
+            }
+        }
     }
 
     if (observation.state == .continuing) {
@@ -488,7 +501,7 @@ pub fn reproject(self: *Agent, context: ProjectionContext) ProjectionResult {
     self.projected = .{
         .pane_id = self.key.id,
         .pane_generation = self.key.generation,
-        .process_id = self.agent_process_id orelse self.process_id,
+        .process_id = self.agent_process_group orelse self.process_id,
         .session_id = self.session_id,
         .provider = provider_value,
         .status = self.visibleStatus(previous.status, evidence.status),

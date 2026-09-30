@@ -110,10 +110,13 @@ Two checks keep a pane's card to its own agent:
    started once it arrived: one already running when it arrives may have
    read the process before the new agent replaced it, so it waits for the
    next. It is dispatched again then, accepted if the pane now runs its
-   agent and refused with `foreign_process` otherwise. Reports parked on one
-   recheck are answered in the order they arrived, each with the time it
-   arrived, so a late answer neither reorders a turn nor outranks screen
-   evidence seen while it waited. The maintenance tick, once a second,
+   agent and refused with `foreign_process` otherwise. A report still
+   parked for a later recheck is answered as soon as the pane runs its
+   agent, so the agent's later reports, taken directly, never go before
+   it. Reports are answered in the order they arrived, each with the time
+   it arrived, and a report never replaces one that arrived after it
+   (`Agent.applyReport`), so a late answer neither reorders a turn nor
+   outranks evidence seen while it waited. The maintenance tick, once a second,
    answers a parked report whose pane is gone or that waited two seconds:
    the hook waits three seconds at most, its reply included. A parked hook
    holds one of the runtime's eight client slots meanwhile; the handshake
@@ -126,10 +129,11 @@ Two checks keep a pane's card to its own agent:
    chain, which the descent check keeps, or right under the pane's root
    process when the hook does not descend from the agent, as for an agent
    run in the background), and its later hooks are refused at once, without
-   another identification, while the same agent runs the pane. The agent's
-   own process is never remembered: it may have replaced itself with the
-   reporting agent by `exec`. A probe that identifies another process
-   forgets the rejection. A recheck keeps the
+   another identification, while the same agent runs the pane. Only a
+   refusal after a recheck is remembered, not one answered because its
+   recheck was late. The agent's own process is never remembered: it may
+   have replaced itself with the reporting agent by `exec`. A probe that
+   identifies another process forgets the rejection. A recheck keeps the
    agent it had identified while that agent still runs in the group, even
    if another agent runs there beside it; the group's leader wins when it
    is an agent itself. Claude Code runs its tools in process groups of
@@ -614,19 +618,27 @@ project directory otherwise.
 
 `telar integration` edits only the event arrays owned by the selected agent,
 adds an entry once per event, rewrites a telar entry whose command is stale
-(an older unguarded form or another executable path), removes only entries
-whose command ends in ` hook claude`, ` hook codex` or ` hook cursor`, and
-rewrites the file
-atomically with
-two-space indentation. Other settings and hooks are untouched. Where each
+(an older unguarded form or another executable path), removes only the
+commands that end in ` hook claude`, ` hook codex` or ` hook cursor`,
+leaving the user's hooks in the same group (a group goes only once empty,
+an event once it has no group), and rewrites the file atomically with
+two-space indentation. A settings file that is a symlink is written
+through to the file it names, and an existing file keeps its mode. The
+coordinator skill beside the settings is removed only when it starts with
+telar's header. Other settings and hooks are untouched. Where each
 file lives is `core.HookSettings`, built on the configuration roots
 `telar machine setup` uses too (`core.AgentConfigRoot`). Codex uses
 `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set and `~/.codex/hooks.json`
 otherwise; Claude Code uses `$CLAUDE_CONFIG_DIR/settings.json` when
 `CLAUDE_CONFIG_DIR` is set, where Claude Code reads its user settings, and
 `~/.claude/settings.json` otherwise. Hooks installed there before telar
-followed `CLAUDE_CONFIG_DIR` stay where Claude Code no longer reads them:
-`status` says so and `uninstall` removes them and the skill beside them.
+followed `CLAUDE_CONFIG_DIR` stay where Claude Code, run with the
+variable, no longer reads them; a shell without it still does, so
+`uninstall` leaves that file alone. `status` names it and the command that
+cleans it, `telar integration uninstall claude --legacy`, which touches
+only that file. The two paths are compared as the files they resolve to,
+so a trailing slash or a symlink to the same directory names no other
+file.
 The Pi extension goes to `extensions/` under `$PI_CODING_AGENT_DIR`, else
 `~/.pi/agent`, and the OpenCode plugin to `plugins/` under
 `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`. Codex asks the user to trust the new hook definitions; telar does

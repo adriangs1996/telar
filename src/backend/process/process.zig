@@ -53,7 +53,7 @@ fn probeWith(input: ProbeInput, comptime identify: fn (*const core.Table, u32, c
         .process_group_id = pgid,
         .provider = identification.provider,
         .session_host = identification.session_host,
-        .agent_process_id = identification.process_id,
+        .agent_pid = identification.pid,
         .attempts = if (identification.provider == .unknown)
             if (previous.process_group_id == pgid)
                 previous.attempts +| 1
@@ -81,7 +81,7 @@ fn sameIdentity(left: Cache, right: Cache) bool {
     return left.process_group_id == right.process_group_id and
         left.provider == right.provider and
         left.session_host == right.session_host and
-        left.agent_process_id == right.agent_process_id and
+        left.agent_pid == right.agent_pid and
         std.mem.eql(u8, left.name(), right.name());
 }
 
@@ -201,7 +201,7 @@ fn identifyMacosProcess(table: *const core.Table, pid: u32) Identification {
     const argv = readMacosArgv(pid, &args_buffer) orelse &.{};
     const command = comm_bytes[0..comm_end];
     var identified = identifyArguments(table, command, argv);
-    identified.process_id = pid;
+    identified.pid = pid;
     return identified;
 }
 
@@ -282,7 +282,7 @@ fn identifyLinuxProcess(table: *const core.Table, pid: u32) Identification {
     const argv = readSmallFile(args_path, &args_buffer) orelse &.{};
     const command = std.mem.trim(u8, comm, " \r\n\t");
     var identified = identifyArguments(table, command, argv);
-    identified.process_id = pid;
+    identified.pid = pid;
     return identified;
 }
 

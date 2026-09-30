@@ -9,7 +9,7 @@ name_len: u8 = 0,
 /// Where the agent's interactive session, and so its hooks, runs.
 session_host: SessionHost = .unknown,
 /// The group member identified, which may not be the group's leader.
-process_id: u32 = 0,
+pid: ?u32 = null,
 
 pub fn init(table: *const core.Table, provider: core.AgentProvider, command: []const u8) Identification {
     var result: Identification = .{ .provider = provider };

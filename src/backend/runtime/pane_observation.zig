@@ -158,7 +158,7 @@ fn reconcileProcess(model: *RuntimeModel, pane: *Pane, probe: Probe, transition:
             .process_id = probe.cache.process_group_id.?,
             .session_host = probe.cache.session_host,
             .hooks_installed = probe.cache.hooks_installed,
-            .agent_pid = probe.cache.agent_process_id,
+            .agent_pid = probe.cache.agent_pid,
             .observed_at_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
         });
         return;

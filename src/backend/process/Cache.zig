@@ -11,8 +11,8 @@ foreground_name_len: u8 = 0,
 /// Where the identified agent's interactive session, and so its hooks,
 /// runs.
 session_host: SessionHost = .unknown,
-/// The group member the agent was identified in; 0 when none was.
-agent_process_id: u32 = 0,
+/// The group member the agent was identified in.
+agent_pid: ?u32 = null,
 /// telar's hooks for the agent are installed, as read when a session that
 /// may run on a shared server was identified.
 hooks_installed: bool = false,

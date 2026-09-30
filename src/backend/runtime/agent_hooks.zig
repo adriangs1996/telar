@@ -450,9 +450,12 @@ fn refuseReporter(model: *RuntimeModel, session: *Session, request_id: core.Requ
     const rejection = reportingRejection(model, session, pane);
     if (session.answering_parked) {
         // Identified again after this report arrived: the pane still runs
-        // another agent, such as the one that ran this hook as a tool.
-        if (rejection) |value| {
-            pane.rejected_reporter = value;
+        // another agent, such as the one that ran this hook as a tool. A
+        // report answered because its recheck was late proves nothing.
+        if (session.parked_rechecked) {
+            if (rejection) |value| {
+                pane.rejected_reporter = value;
+            }
         }
 
         return refuseForeign(session, request_id);
@@ -517,9 +520,10 @@ fn reportingRejection(model: *const RuntimeModel, session: *const Session, pane:
     return null;
 }
 
-/// Answers the reports parked on `key` whose recheck has completed, in
-/// the order they arrived, by dispatching them again. Runs after each
-/// observation of the pane.
+/// Answers the reports parked on `key` whose recheck has completed, and
+/// those of an agent the pane now runs, whose later reports are no longer
+/// parked, in the order they arrived, by dispatching them again. Runs
+/// after each observation of the pane.
 ///
 /// ```zig
 /// agent_hooks.answerParked(model, pane.key());
@@ -535,12 +539,23 @@ pub fn answerParked(model: *RuntimeModel, key: PaneKey) void {
         }
 
         // Wrapping counters: the answer is due once the count reached it.
-        if (@as(i32, @bitCast(pane.agent_rechecks -% session.parked_recheck)) >= 0) {
+        const rechecked = @as(i32, @bitCast(pane.agent_rechecks -% session.parked_recheck)) >= 0;
+        if (rechecked or agent_status.acceptsReporter(model, key, parkedProvider(model, session.parked.?))) {
             due.add(session);
         }
     }
 
-    due.answerInOrder(model);
+    due.answerInOrder(model, true);
+}
+
+fn parkedProvider(model: *const RuntimeModel, message: core.ClientMessage) core.AgentProvider {
+    return switch (message) {
+        .report_agent => |report| report.provider,
+        .report_agent_title => |report| report.provider,
+        .report_agent_progress => |report| report.provider,
+        .report_agent_command => |report| model.resources.agent_manifests.providerNamed(report.provider),
+        else => .unknown,
+    };
 }
 
 /// Answers every parked report whose pane is gone or whose recheck did not
@@ -567,7 +582,7 @@ pub fn expireParked(model: *RuntimeModel) void {
         }
     }
 
-    due.answerInOrder(model);
+    due.answerInOrder(model, false);
 }
 
 /// Sessions whose parked reports are due, answered by arrival.
@@ -580,11 +595,14 @@ const ParkedReports = struct {
         self.len += 1;
     }
 
-    fn answerInOrder(self: *ParkedReports, model: *RuntimeModel) void {
+    // `rechecked`: the pane's process was identified again since the
+    // reports arrived, so a refusal then is worth remembering.
+    fn answerInOrder(self: *ParkedReports, model: *RuntimeModel, rechecked: bool) void {
         const due = self.sessions[0..self.len];
         std.mem.sort(*Session, due, {}, arrivedBefore);
 
         for (due) |session| {
+            session.parked_rechecked = rechecked;
             answer(model, session);
         }
     }

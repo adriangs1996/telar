@@ -86,6 +86,11 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = if (options.settings) |value|
         std.mem.span(value)
+    else if (options.legacy)
+        legacySettingsPath(init, integration, &path_buffer) orelse {
+            std.debug.print("telar integration: no {s} settings under the home directory differ from the ones in use\n", .{integration.name});
+            return 1;
+        }
     else
         try defaultSettingsPath(init.minimal.environ, integration, &path_buffer);
     var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -123,8 +128,8 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
 
             if (options.settings == null) {
                 var legacy_buffer: [std.fs.max_path_bytes]u8 = undefined;
-                if (legacySettingsPath(init.minimal.environ, integration, &legacy_buffer)) |legacy| {
-                    try reportLegacyHooks(init, legacy, hook_set, writer);
+                if (legacySettingsPath(init, integration, &legacy_buffer)) |legacy| {
+                    try reportLegacyHooks(init, legacy, .{ hook_set, worktree_hooks }, writer);
                 }
             }
 
@@ -155,13 +160,11 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
                 try writeSettings(init.io, path, parsed.value);
             }
             try writer.print("telar integration: {s} hooks {s} in {s}\n", .{ integration.name, if (changed) "removed" else "not present", path });
-            removeSkill(init.io, path);
 
-            if (options.settings == null) {
-                var legacy_buffer: [std.fs.max_path_bytes]u8 = undefined;
-                if (legacySettingsPath(init.minimal.environ, integration, &legacy_buffer)) |legacy| {
-                    try removeLegacyHooks(init, legacy, .{ hook_set, worktree_hooks }, writer);
-                }
+            // Another file the agent does not read keeps a skill that came
+            // with hooks no one removed.
+            if (changed or !options.legacy) {
+                removeSkill(init.io, path);
             }
 
             return 0;
@@ -170,9 +173,13 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
 }
 
 // Where an agent's settings lived before telar followed its directory
-// variable: under the home directory. Only while that variable is set does
-// that file differ from the current one; the agent then no longer reads it.
-fn legacySettingsPath(environ: std.process.Environ, integration: Integration, buffer: *[std.fs.max_path_bytes]u8) ?[]const u8 {
+// variable: under the home directory. Only while that variable names
+// another directory does that file differ from the one in use, and the
+// agent then no longer reads it. The two are compared as the files they
+// resolve to, so a trailing slash, a relative variable or a symlink to the
+// same file names no other file.
+fn legacySettingsPath(init: std.process.Init, integration: Integration, buffer: *[std.fs.max_path_bytes]u8) ?[]const u8 {
+    const environ = init.minimal.environ;
     const settings = integration.settings;
     const name = settings.environment() orelse return null;
     const value = std.process.Environ.getPosix(environ, name) orelse return null;
@@ -184,7 +191,12 @@ fn legacySettingsPath(environ: std.process.Environ, integration: Integration, bu
     var current_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const current = settings.path(value, home, &current_buffer) orelse return null;
     const legacy = settings.path(null, home, buffer) orelse return null;
-    return if (std.mem.eql(u8, current, legacy)) null else legacy;
+
+    var legacy_real: [std.fs.max_path_bytes]u8 = undefined;
+    const legacy_len = std.Io.Dir.cwd().realPathFile(init.io, legacy, &legacy_real) catch return null;
+    var current_real: [std.fs.max_path_bytes]u8 = undefined;
+    const current_len = std.Io.Dir.cwd().realPathFile(init.io, current, &current_real) catch return legacy;
+    return if (std.mem.eql(u8, legacy_real[0..legacy_len], current_real[0..current_len])) null else legacy;
 }
 
 fn readSettings(init: std.process.Init, path: []const u8) !?std.json.Parsed(std.json.Value) {
@@ -203,37 +215,28 @@ fn readSettings(init: std.process.Init, path: []const u8) !?std.json.Parsed(std.
     return parsed;
 }
 
-// Says that telar's hooks remain in a file the agent no longer reads.
-fn reportLegacyHooks(init: std.process.Init, path: []const u8, hook_set: HookSet, writer: *std.Io.Writer) !void {
+// Says that telar's hooks remain in a file the agent no longer reads, and
+// how to remove them.
+fn reportLegacyHooks(init: std.process.Init, path: []const u8, hook_sets: [2]HookSet, writer: *std.Io.Writer) !void {
     var parsed = try readSettings(init, path) orelse return;
     defer parsed.deinit();
 
-    for (hook_set.events) |event| {
-        if (hasHook(parsed.value, event, hook_set)) {
-            try writer.print("telar integration: hooks remain in {s}, which is not read while its directory variable is set; uninstall removes them\n", .{path});
+    for (hook_sets) |hook_set| {
+        for (hook_set.events) |event| {
+            if (!hasHook(parsed.value, event, hook_set)) {
+                continue;
+            }
+
+            try writer.print("telar integration: hooks remain in {s}, which is not read while its directory variable is set; `telar integration uninstall {s} --legacy` removes them\n", .{ path, agentName(hook_set.marker) });
             return;
         }
     }
 }
 
-// Removes telar's hooks, and the coordinator skill beside them, from a
-// file the agent no longer reads.
-fn removeLegacyHooks(init: std.process.Init, path: []const u8, hook_sets: [2]HookSet, writer: *std.Io.Writer) !void {
-    var parsed = try readSettings(init, path) orelse return;
-    defer parsed.deinit();
-
-    var changed = false;
-    for (hook_sets) |hook_set| {
-        changed = uninstallHooks(&parsed.value, hook_set) or changed;
-    }
-
-    removeSkill(init.io, path);
-    if (!changed) {
-        return;
-    }
-
-    try writeSettings(init.io, path, parsed.value);
-    try writer.print("telar integration: hooks removed from {s} too\n", .{path});
+// The agent a hook marker names, ` hook <agent>`.
+fn agentName(marker: []const u8) []const u8 {
+    const prefix = " hook ";
+    return if (std.mem.startsWith(u8, marker, prefix)) marker[prefix.len..] else marker;
 }
 
 fn integrationFor(agent: values.HookAgent) Integration {
@@ -649,18 +652,68 @@ pub fn uninstallHooks(settings: *std.json.Value, hook_set: HookSet) bool {
 
         var index: usize = 0;
         while (index < entries.array.items.len) {
-            if (entryHasCommand(entries.array.items[index], hook_set)) {
-                _ = entries.array.orderedRemove(index);
+            const entry = &entries.array.items[index];
+            if (removeTelarCommands(entry, hook_set)) {
                 changed = true;
+            }
+
+            if (entryIsEmpty(entry.*, hook_set)) {
+                _ = entries.array.orderedRemove(index);
             } else {
                 index += 1;
             }
         }
+
         if (entries.array.items.len == 0) {
             _ = hooks.object.orderedRemove(event);
         }
     }
+
     return changed;
+}
+
+// Removes telar's commands from one entry: the entry itself in the flat
+// layout, the matching hooks of its group in the nested one, so the user's
+// hooks in the same group stay. Returns whether any went.
+fn removeTelarCommands(entry: *std.json.Value, hook_set: HookSet) bool {
+    if (hook_set.layout == .flat) {
+        return entryHasCommand(entry.*, hook_set);
+    }
+
+    if (entry.* != .object) {
+        return false;
+    }
+
+    const hooks = entry.object.getPtr("hooks") orelse return false;
+    if (hooks.* != .array) {
+        return false;
+    }
+
+    var removed = false;
+    var index: usize = 0;
+    while (index < hooks.array.items.len) {
+        const command = objectField(hooks.array.items[index], "command");
+        const telar = if (command) |value| value == .string and std.mem.endsWith(u8, value.string, hook_set.marker) else false;
+        if (telar) {
+            _ = hooks.array.orderedRemove(index);
+            removed = true;
+        } else {
+            index += 1;
+        }
+    }
+
+    return removed;
+}
+
+// An entry with nothing left to run: telar's own in the flat layout, a
+// group whose hooks are all gone in the nested one.
+fn entryIsEmpty(entry: std.json.Value, hook_set: HookSet) bool {
+    if (hook_set.layout == .flat) {
+        return entryHasCommand(entry, hook_set);
+    }
+
+    const hooks = objectField(entry, "hooks") orelse return false;
+    return hooks == .array and hooks.array.items.len == 0;
 }
 
 // One event entry holding telar's command: a matcher group with a `hooks`
@@ -773,20 +826,33 @@ fn installSkill(io: std.Io, settings_path: []const u8, buffer: *[std.fs.max_path
     return path;
 }
 
+// Removes the coordinator skill beside the settings, only when telar wrote
+// it: a file of the user's at that path is left alone.
 fn removeSkill(io: std.Io, settings_path: []const u8) void {
     const directory = std.fs.path.dirname(settings_path) orelse return;
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = std.fmt.bufPrint(&buffer, "{s}/{s}/SKILL.md", .{ directory, coordinator_skill_directory }) catch return;
-    std.Io.Dir.deleteFileAbsolute(io, path) catch {};
+    var header: [coordinator_skill_header.len]u8 = undefined;
+    const read = std.Io.Dir.cwd().readFile(io, path, &header) catch return;
+    if (!std.mem.eql(u8, read, coordinator_skill_header)) {
+        return;
+    }
+
+    std.Io.Dir.cwd().deleteFile(io, path) catch {};
 }
 
-// An agent that never ran has no settings directory yet.
+// An agent that never ran has no settings directory yet. A settings file
+// that is a symlink, as a dotfiles checkout makes it, is written through
+// to the file it names, and an existing file keeps its mode.
 fn writeSettings(io: std.Io, path: []const u8, settings: std.json.Value) !void {
-    if (std.fs.path.dirname(path)) |directory| {
+    var real_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const target = if (std.Io.Dir.cwd().realPathFile(io, path, &real_buffer)) |len| real_buffer[0..len] else |_| path;
+    const permissions = if (std.Io.Dir.cwd().statFile(io, target, .{})) |stat| stat.permissions else |_| null;
+    if (std.fs.path.dirname(target)) |directory| {
         try std.Io.Dir.cwd().createDirPath(io, directory);
     }
 
-    var temp = try TempFile.begin(io, path);
+    var temp = try TempFile.begin(io, target);
     var buffer: [16 * 1024]u8 = undefined;
     var file_writer = temp.file.writerStreaming(io, &buffer);
     file_writer.interface.print("{f}\n", .{std.json.fmt(settings, .{ .whitespace = .indent_2 })}) catch |err| {
@@ -798,6 +864,10 @@ fn writeSettings(io: std.Io, path: []const u8, settings: std.json.Value) !void {
         return err;
     };
     try temp.commit();
+
+    if (permissions) |mode| {
+        try std.Io.Dir.cwd().setFilePermissions(io, target, mode, .{});
+    }
 }
 
 test "Claude install adds telar hooks once and uninstall removes only them" {
@@ -825,6 +895,25 @@ test "Claude install adds telar hooks once and uninstall removes only them" {
     const stop = parsed.value.object.get("hooks").?.object.get("Stop").?.array;
     try std.testing.expectEqual(@as(usize, 1), stop.items.len);
     try std.testing.expect(parsed.value.object.get("hooks").?.object.get("SessionStart") == null);
+}
+
+test "uninstall keeps the user's hooks that share a group with telar's" {
+    const source =
+        \\{"hooks":{"Stop":[{"matcher":"","hooks":[{"type":"command","command":"mine.sh"},{"type":"command","command":"exec '/opt/telar' hook claude"}]},{"hooks":[{"type":"command","command":"exec '/opt/telar' hook claude"}]}]}}
+    ;
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, source, .{});
+    defer parsed.deinit();
+    const hook_set = hookSetFor(integrationFor(.claude), "/opt/telar hook claude");
+
+    try std.testing.expect(uninstallHooks(&parsed.value, hook_set));
+    const stop = parsed.value.object.get("hooks").?.object.get("Stop").?.array;
+    try std.testing.expectEqual(@as(usize, 1), stop.items.len);
+    const group = stop.items[0].object;
+    try std.testing.expectEqualStrings("", group.get("matcher").?.string);
+    const hooks = group.get("hooks").?.array;
+    try std.testing.expectEqual(@as(usize, 1), hooks.items.len);
+    try std.testing.expectEqualStrings("mine.sh", hooks.items[0].object.get("command").?.string);
+    try std.testing.expect(!uninstallHooks(&parsed.value, hook_set));
 }
 
 test "hook commands are guarded by the pane environment and keep the marker" {
@@ -947,7 +1036,6 @@ test "settings and extensions follow each agent's directory variable, else the h
     const xdg_environ: std.process.Environ = .{ .block = xdg_block };
     try std.testing.expectEqualStrings("/state/config/opencode/plugins/telar.ts", try extensionPath(xdg_environ, .opencode, &buffer));
     try std.testing.expectEqualStrings("/home/adrian/.pi/agent/extensions/telar.ts", try extensionPath(xdg_environ, .pi, &buffer));
-    try std.testing.expect(legacySettingsPath(xdg_environ, integrationFor(.claude), &buffer) == null);
 
     try environment.put("CLAUDE_CONFIG_DIR", "/state/claude");
     try environment.put("PI_CODING_AGENT_DIR", "/state/pi");
@@ -956,9 +1044,7 @@ test "settings and extensions follow each agent's directory variable, else the h
     defer directories_block.deinit(std.testing.allocator);
     const directories: std.process.Environ = .{ .block = directories_block };
     try std.testing.expectEqualStrings("/state/claude/settings.json", try defaultSettingsPath(directories, integrationFor(.claude), &buffer));
-    try std.testing.expectEqualStrings("/home/adrian/.claude/settings.json", legacySettingsPath(directories, integrationFor(.claude), &buffer).?);
     try std.testing.expectEqualStrings("/home/adrian/.cursor/hooks.json", try defaultSettingsPath(directories, integrationFor(.cursor), &buffer));
-    try std.testing.expect(legacySettingsPath(directories, integrationFor(.cursor), &buffer) == null);
     try std.testing.expectEqualStrings("/state/pi/extensions/telar.ts", try extensionPath(directories, .pi, &buffer));
 }
 

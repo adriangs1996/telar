@@ -63,9 +63,12 @@ parked_real_ms: i64 = 0,
 parked_awake_ns: i64 = 0,
 /// Arrival order among parked reports.
 parked_sequence: u64 = 0,
-/// The parked report is being dispatched again after its recheck; another
-/// agent then is the pane's final answer.
+/// The parked report is being dispatched again; another agent then is the
+/// pane's final answer.
 answering_parked: bool = false,
+/// It is dispatched because its recheck ran, not because it waited too
+/// long, so a refusal is remembered.
+parked_rechecked: bool = false,
 cell_deadline_ns: ?u64 = null,
 
 /// Example: `if (session.setTerminalColors(colors)) { updateOwnedPanes(); }`.

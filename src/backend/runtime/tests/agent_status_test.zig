@@ -1432,3 +1432,32 @@ test "restore resumes a session the way it ran" {
     });
     try std.testing.expect(!agent_status.resumeSession(model, identity.key).?.in_pane);
 }
+
+test "a report that arrived before the one in force does not replace it" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 43,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(agent_status.observeReport(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .state = .ready,
+        .observed_at_ms = 300,
+        .observed_at_ns = 300,
+    }));
+    try std.testing.expect(!agent_status.observeReport(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .state = .working,
+        .observed_at_ms = 200,
+        .observed_at_ns = 200,
+    }));
+    try std.testing.expect(agent_status.snapshot(&model.agents, &entries, 300)[0].status != .working);
+}
