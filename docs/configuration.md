@@ -395,7 +395,16 @@ show it, and which client capability it supports. Telar ships manifests for
 `claude`, `codex`, `pi`, `cursor` and `opencode`. Naming one of them extends or overrides the
 shipped manifest; any other name creates a new agent that the sidebar, the
 `telar agent` command, notifications and the image shelf treat exactly like a
-built-in one. At most 16 agents can be configured.
+built-in one. Up to 16 agents can be configured besides the built-in ones.
+
+A manifest past a limit keeps what fits and the rest of the configuration
+loads: a 17th new agent, list entries past a list's room and entries longer
+than their bound are left out, and each limit reached is reported with the
+limit notice (`agent_manifest.max_custom_agents`, `agent_manifest.max_phrases`,
+`agent_manifest.max_phrase_bytes`, `agent_manifest.max_paths`,
+`agent_manifest.max_path_bytes`, `agent_manifest.max_command_tools`) and
+listed by `telar diagnostics limits`. Configured entries extend a built-in
+list, and every built-in list leaves at least half its room free.
 
 ```lua
 runtime = {
@@ -413,14 +422,15 @@ runtime = {
       icon = "G",                         -- one glyph, exactly one cell wide;
                                           -- built-ins use Telar's artwork when unset
 
-      -- Identity: how the foreground process is recognized (optional, max 4 each).
+      -- Identity: how the foreground process is recognized (optional, max 8 each,
+      -- max 128 bytes each).
       process_names = { "gemini" },                 -- executable basenames, launcher
                                                     -- suffixes (.exe/.cmd/.bat/.js) ignored
       process_paths = { "/@google/gemini-cli/" },   -- entry-point path fragments for
                                                     -- interpreter launches (node, python)
 
       -- Screen phrases: case-insensitive substrings of the pane's visible
-      -- screen, not of its byte stream (optional, max 8 each, max 48 bytes each).
+      -- screen, not of its byte stream (optional, max 16 each, max 64 bytes each).
       brand = { "gemini" },          -- attributes a generic working/blocked phrase to this agent
       identity = { "gemini cli" },   -- confirms identity on screen without proving readiness
       working = { "esc to cancel" },

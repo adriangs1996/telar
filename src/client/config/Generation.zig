@@ -484,7 +484,7 @@ fn parseRuntime(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !
     lua_value.pop(state, 1);
     _ = lua_api.c.lua_getfield(state, absolute, "agents");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
-        try agents_config.parse(state, &self.snapshot.runtime, diagnostic);
+        try agents_config.parse(state, &self.snapshot.runtime, &self.unreported, diagnostic);
     }
     lua_value.pop(state, 1);
     _ = lua_api.c.lua_getfield(state, absolute, "history");

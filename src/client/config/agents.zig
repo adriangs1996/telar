@@ -6,19 +6,32 @@
 //! `icon`) and which client capability it supports (`attachments`). Every
 //! field except `name` is optional; a built-in name extends or overrides the
 //! shipped manifest instead of creating a new agent.
+//!
+//! A configuration past a manifest limit keeps what fits: an agent past the
+//! table, an entry past its list or an entry longer than its bound is left
+//! out and its limit reported, and the rest of the configuration loads.
 
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const core = @import("telar-core");
 const lua_api = @import("lua-api");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
+const UnreportedReaches = @import("UnreportedReaches.zig");
 const value = @import("lua_value.zig");
 const std = @import("std");
 
 const phrase_fields = .{ "process_names", "process_paths", "brand", "identity", "working", "blocked", "ready_prompt" };
 const text_fields = .{ "display_name", "placeholder", "icon" };
 
-pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic: *data.Diagnostic) !void {
+const agent_manifest = core.agent_manifest;
+
+/// Reads `config.runtime.agents` into the manifest table of `runtime`,
+/// leaving the limits it passed in `unreported`.
+///
+/// ```zig
+/// try agents.parse(state, &snapshot.runtime, &generation.unreported, diagnostic);
+/// ```
+pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, unreported: *UnreportedReaches, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.agents must be an array", .{});
@@ -27,6 +40,7 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic:
 
     const count = lua_api.c.lua_rawlen(state, absolute);
     try value.ensureArrayOnly(state, .{ .index = absolute, .count = count, .path = "config.runtime.agents" }, diagnostic);
+    var dropped_agents: u64 = 0;
     for (1..count + 1) |position| {
         _ = lua_api.c.lua_rawgeti(state, absolute, @intCast(position));
         defer value.pop(state, 1);
@@ -45,27 +59,41 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic:
         const name = value.string(state, -1) orelse "";
         const manifest = runtime.agent_manifests.add(name) catch |err| {
             value.pop(state, 1);
+            if (err == error.TooManyAgents) {
+                dropped_agents += 1;
+                continue;
+            }
+
             diagnostic.set("config.runtime.agents[{d}].name {s}", .{ position, switch (err) {
                 error.InvalidName => "must be lowercase letters, digits, '-', '_' or '.' (1..32 bytes)",
                 error.DuplicateName => "is already defined",
-                error.TooManyAgents => "exceeds the agent limit",
+                error.TooManyAgents => unreachable,
             } });
             return error.InvalidConfig;
         };
         value.pop(state, 1);
 
+        const input: EntryInput = .{
+            .entry = entry,
+            .manifest = manifest,
+            .position = position,
+            .unreported = unreported,
+        };
         inline for (phrase_fields) |field| {
-            try parseList(state, .{
-                .entry = entry,
-                .field = field,
-                .list = &@field(manifest, field),
-                .position = position,
-            }, diagnostic);
+            try parseList(state, input, field, diagnostic);
         }
 
-        const input: EntryInput = .{ .entry = entry, .manifest = manifest, .position = position };
         try parseCommandTools(state, input, diagnostic);
         try parsePresentation(state, input, diagnostic);
+    }
+
+    // Only custom agents fill the table, since a built-in name extends its
+    // own manifest.
+    if (dropped_agents != 0) {
+        unreported.add(.{
+            .limit = agent_manifest.custom_manifests_limit,
+            .requested = agent_manifest.custom_manifests_limit.value + dropped_agents,
+        });
     }
 }
 
@@ -97,16 +125,45 @@ fn parseCommandTools(state: *lua_api.c.lua_State, input: EntryInput, diagnostic:
         const tool = value.string(state, -1) orelse "";
         _ = lua_api.c.lua_getfield(state, mapping, "field");
         const field = value.string(state, -1) orelse "";
+        const kept = input.manifest.command_tools.count;
         input.manifest.command_tools.append(tool, field) catch |err| {
             value.pop(state, 2);
-            diagnostic.set("config.runtime.agents[{d}].command_tools[{d}] {s}", .{ input.position, tool_position, switch (err) {
-                error.EmptyEntry => "requires non-empty tool and field strings",
-                error.EntryTooLong => "contains an oversized tool or field",
-                error.TooManyEntries => "exceeds the command tool limit",
-            } });
-            return error.InvalidConfig;
+            switch (err) {
+                error.EmptyEntry => {
+                    diagnostic.set("config.runtime.agents[{d}].command_tools[{d}] requires non-empty tool and field strings", .{ input.position, tool_position });
+                    return error.InvalidConfig;
+                },
+                // An oversized mapping is left out; the others still apply.
+                error.EntryTooLong => {
+                    reportLongTool(input.unreported, tool, field);
+                    continue;
+                },
+                error.TooManyEntries => {
+                    input.unreported.add(.{
+                        .limit = agent_manifest.command_tools_limit,
+                        .requested = kept + (count - tool_position + 1),
+                    });
+                    return;
+                },
+            }
         };
         value.pop(state, 2);
+    }
+}
+
+fn reportLongTool(unreported: *UnreportedReaches, tool: []const u8, field: []const u8) void {
+    if (tool.len > agent_manifest.max_tool_name_bytes) {
+        unreported.add(.{
+            .limit = tool_name_limit,
+            .requested = tool.len,
+        });
+    }
+
+    if (field.len > agent_manifest.max_command_field_bytes) {
+        unreported.add(.{
+            .limit = command_field_limit,
+            .requested = field.len,
+        });
     }
 }
 
@@ -181,40 +238,67 @@ fn applyText(input: EntryInput, item: TextValue, diagnostic: *data.Diagnostic) !
     };
 }
 
-fn parseList(state: *lua_api.c.lua_State, input: anytype, diagnostic: *data.Diagnostic) !void {
-    _ = lua_api.c.lua_getfield(state, input.entry, input.field.ptr);
+/// Appends one configured list to the manifest's. An entry longer than the
+/// list allows is left out and entries past the list's room are dropped;
+/// both report their limit and the rest of the entry still loads.
+fn parseList(state: *lua_api.c.lua_State, input: EntryInput, comptime field: [:0]const u8, diagnostic: *data.Diagnostic) !void {
+    _ = lua_api.c.lua_getfield(state, input.entry, field.ptr);
     defer value.pop(state, 1);
     if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TTABLE) {
-        diagnostic.set("config.runtime.agents[{d}].{s} must be an array of strings", .{ input.position, input.field });
+        diagnostic.set("config.runtime.agents[{d}].{s} must be an array of strings", .{ input.position, field });
         return error.InvalidConfig;
     }
 
     const table = lua_api.c.lua_absindex(state, -1);
     const count = lua_api.c.lua_rawlen(state, table);
-    var path_buffer: [96]u8 = undefined;
-    const path = std.fmt.bufPrint(&path_buffer, "config.runtime.agents[].{s}", .{input.field}) catch unreachable;
-    try value.ensureArrayOnly(state, .{ .index = table, .count = count, .path = path }, diagnostic);
+    try value.ensureArrayOnly(state, .{ .index = table, .count = count, .path = "config.runtime.agents[]." ++ field }, diagnostic);
+
+    const list = &@field(input.manifest, field);
+    const limits = comptime listLimits(field);
     for (1..count + 1) |item| {
         _ = lua_api.c.lua_rawgeti(state, table, @intCast(item));
         defer value.pop(state, 1);
         const phrase = value.string(state, -1) orelse "";
         if (phrase.len == 0 or !std.unicode.utf8ValidateSlice(phrase) or hasControlBytes(phrase)) {
-            diagnostic.set("config.runtime.agents[{d}].{s}[{d}] must be a printable string", .{ input.position, input.field, item });
+            diagnostic.set("config.runtime.agents[{d}].{s}[{d}] must be a printable string", .{ input.position, field, item });
             return error.InvalidConfig;
         }
 
-        input.list.append(phrase) catch |err| {
-            diagnostic.set("config.runtime.agents[{d}].{s}[{d}] {s}", .{ input.position, input.field, item, switch (err) {
-                error.EntryTooLong => "is too long",
-                error.TooManyEntries => "exceeds the list limit",
-                error.EmptyEntry => "is empty",
-            } });
-            return error.InvalidConfig;
+        const kept = list.count;
+        list.append(phrase) catch |err| switch (err) {
+            error.EntryTooLong => input.unreported.add(.{
+                .limit = limits.bytes,
+                .requested = phrase.len,
+            }),
+            error.TooManyEntries => {
+                input.unreported.add(.{
+                    .limit = limits.entries,
+                    .requested = kept + (count - item + 1),
+                });
+                return;
+            },
+            // Checked above: an empty entry is refused as unprintable.
+            error.EmptyEntry => unreachable,
         };
     }
+}
+
+/// The count and byte limits of one manifest list.
+fn listLimits(comptime field: []const u8) ListLimits {
+    if (std.mem.startsWith(u8, field, "process_")) {
+        return .{
+            .entries = agent_manifest.paths_limit,
+            .bytes = agent_manifest.path_bytes_limit,
+        };
+    }
+
+    return .{
+        .entries = agent_manifest.phrases_limit,
+        .bytes = agent_manifest.phrase_bytes_limit,
+    };
 }
 
 fn hasControlBytes(text: []const u8) bool {
@@ -227,10 +311,20 @@ fn hasControlBytes(text: []const u8) bool {
     return false;
 }
 
+const tool_name_limit = core.Limit.declare("agent_manifest.max_tool_name_bytes", "bytes", agent_manifest.max_tool_name_bytes);
+const command_field_limit = core.Limit.declare("agent_manifest.max_command_field_bytes", "bytes", agent_manifest.max_command_field_bytes);
+
 const EntryInput = struct {
     entry: c_int,
     manifest: *core.AgentManifest,
     position: usize,
+    /// Where the limits this entry passes wait for the client to report.
+    unreported: *UnreportedReaches,
+};
+
+const ListLimits = struct {
+    entries: core.Limit,
+    bytes: core.Limit,
 };
 
 const FieldLookup = struct {

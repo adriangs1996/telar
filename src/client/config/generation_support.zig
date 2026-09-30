@@ -1279,14 +1279,79 @@ test "runtime agents extend built-ins and add custom manifests" {
     try std.testing.expectEqual(core.AgentProvider.claude, table.detect("Claude Code").?.provider);
 }
 
-test "runtime agents reject bad names and oversized phrases" {
+test "runtime agents reject bad names" {
     var diagnostic: data.Diagnostic = .{};
     try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, runtime = { agents = { { name = \"Gemini\" } } } }", .source_name = "@config.lua", .number = 1 }));
     try std.testing.expect(std.mem.startsWith(u8, diagnostic.message(), "config.runtime.agents[1].name must be"));
+}
 
-    var long_phrase: data.Diagnostic = .{};
-    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &long_phrase }, .{ .source = "return { api_version = 2, runtime = { agents = { { name = \"x\", working = { string.rep(\"a\", 49) } } } } }", .source_name = "@config.lua", .number = 1 }));
-    try std.testing.expectEqualStrings("config.runtime.agents[1].working[1] is too long", long_phrase.message());
+test "runtime agent lists keep the entries that fit, extend full built-ins and report the rest" {
+    const source =
+        \\local phrases = {}
+        \\for index = 1, 17 do phrases[index] = "phrase " .. index end
+        \\local paths = {}
+        \\for index = 1, 5 do paths[index] = "/pi-launcher-" .. index .. "/" end
+        \\local tools = {}
+        \\for index = 1, 9 do tools[index] = { tool = "tool" .. index, field = "command" } end
+        \\return { api_version = 2, runtime = { agents = {
+        \\  { name = "gemini", working = phrases, identity = { string.rep("a", 64), string.rep("b", 65) },
+        \\    process_paths = { string.rep("/", 128), string.rep("/", 129) }, command_tools = tools },
+        \\  { name = "claude", blocked = { "approve this plan?" } },
+        \\  { name = "pi", process_paths = paths },
+        \\} } }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    var generation = Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 }) catch |err| {
+        std.debug.print("{s}\n", .{diagnostic.message()});
+        return err;
+    };
+    defer generation.deinit();
+    const table = &generation.snapshot.runtime.agent_manifests;
+    const agent_manifest = core.agent_manifest;
+
+    const gemini = table.find(@enumFromInt(core.first_custom_agent_provider)).?;
+    try std.testing.expectEqual(@as(u8, agent_manifest.max_phrases), gemini.working.count);
+    try std.testing.expectEqualStrings("phrase 16", gemini.working.get(agent_manifest.max_phrases - 1));
+    try std.testing.expectEqual(@as(u8, 1), gemini.identity.count);
+    try std.testing.expectEqual(@as(usize, agent_manifest.max_phrase_bytes), gemini.identity.get(0).len);
+    try std.testing.expectEqual(@as(u8, 1), gemini.process_paths.count);
+    try std.testing.expectEqual(@as(u8, agent_manifest.max_command_tools), gemini.command_tools.count);
+    // Its eight built-in blocked phrases and the configured one.
+    try std.testing.expectEqual(@as(u8, 9), table.find(.claude).?.blocked.count);
+    try std.testing.expectEqual(@as(u8, agent_manifest.max_paths), table.find(.pi).?.process_paths.count);
+
+    try std.testing.expectEqual(@as(?u64, 17), unreportedRequest(generation, "agent_manifest.max_phrases"));
+    try std.testing.expectEqual(@as(?u64, 65), unreportedRequest(generation, "agent_manifest.max_phrase_bytes"));
+    try std.testing.expectEqual(@as(?u64, 129), unreportedRequest(generation, "agent_manifest.max_path_bytes"));
+    try std.testing.expectEqual(@as(?u64, 9), unreportedRequest(generation, "agent_manifest.max_paths"));
+    try std.testing.expectEqual(@as(?u64, 9), unreportedRequest(generation, "agent_manifest.max_command_tools"));
+}
+
+test "sixteen custom agents fit and the next one is left out and reported" {
+    const source =
+        \\local agents = {}
+        \\for index = 1, 17 do agents[index] = { name = "agent-" .. index, process_names = { "agent-" .. index } } end
+        \\return { api_version = 2, runtime = { agents = agents } }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
+    defer generation.deinit();
+    const table = &generation.snapshot.runtime.agent_manifests;
+
+    try std.testing.expectEqual(core.builtin_table.count + core.max_custom_agent_manifests, table.count);
+    try std.testing.expect(table.providerFromExecutable("agent-16") != null);
+    try std.testing.expect(table.providerFromExecutable("agent-17") == null);
+    try std.testing.expectEqual(@as(?u64, 17), unreportedRequest(generation, "agent_manifest.max_custom_agents"));
+}
+
+fn unreportedRequest(generation: *const Generation, name: []const u8) ?u64 {
+    for (generation.unreported.slice()) |reach| {
+        if (std.mem.eql(u8, reach.limit.name, name)) {
+            return reach.requested;
+        }
+    }
+
+    return null;
 }
 
 test "runtime agents carry presentation and the attachment scheme" {

@@ -320,9 +320,13 @@ pub const AgentProvider = enum(u8) {
     _,
 };
 
-pub const max_agent_manifests = 16;
 pub const first_custom_agent_provider: u8 = 6;
-pub const max_agent_provider_index: u8 = first_custom_agent_provider + max_agent_manifests - 1;
+/// Agents a configuration may declare beyond the built-in ones.
+pub const max_custom_agent_manifests = 16;
+/// Manifests one table holds: every built-in agent plus the custom ones,
+/// so built-ins never take a configured agent's room.
+pub const max_agent_manifests = first_custom_agent_provider - 1 + max_custom_agent_manifests;
+pub const max_agent_provider_index: u8 = first_custom_agent_provider + max_custom_agent_manifests - 1;
 pub const max_agent_provider_name_bytes = 32;
 /// Bound for a manifest display name such as "Claude Code".
 pub const max_agent_display_name_bytes = 32;

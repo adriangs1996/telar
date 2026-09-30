@@ -30,7 +30,13 @@ pub fn add(self: *Table, name: []const u8) agent_manifest.AddError!*AgentManifes
         return error.TooManyAgents;
     }
 
-    const provider: types.AgentProvider = agent_manifest.builtinProvider(name) orelse
+    const builtin = agent_manifest.builtinProvider(name);
+    // A custom index past the range would be refused on the wire.
+    if (builtin == null and self.customCount() == types.max_custom_agent_manifests) {
+        return error.TooManyAgents;
+    }
+
+    const provider: types.AgentProvider = builtin orelse
         @enumFromInt(types.first_custom_agent_provider + self.customCount());
     const manifest = &self.items[self.count];
     manifest.* = .{ .provider = provider };
