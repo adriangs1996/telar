@@ -174,9 +174,12 @@ test "text of the whole wire bound queues whole" {
     defer std.testing.allocator.free(text);
     @memset(text, 'x');
 
-    try sendText(&fixture, .raw, text);
+    try sendText(&fixture, .prompt, text);
     try expectCompleted(&fixture);
-    try std.testing.expectEqual(text.len, fixture.pane.input_queue.len);
+    try std.testing.expect(fixture.pane.input_queue.len >= text.len);
+
+    // History saw it whole: the observer dropped nothing for its size.
+    try std.testing.expectEqual(@as(u64, 0), fixture.pane.history_observer.dropped_bytes);
 }
 
 test "text never reaches the pane a person has focused" {

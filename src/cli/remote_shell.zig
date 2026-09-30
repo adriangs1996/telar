@@ -15,9 +15,6 @@ const ChildOutput = childoutput.ChildOutput;
 /// What the login shell there runs; `/bin/sh` reads the script from stdin.
 pub const script_command = "exec /bin/sh -s";
 
-/// Newest bytes kept of what a script prints. An installer may print any
-/// amount; what callers parse is a few lines, bounded again where parsed.
-const kept_stdout_bytes = 256 * 1024;
 /// Newest diagnostic bytes kept: the last lines say why a script stopped.
 const kept_stderr_bytes = 64 * 1024;
 
@@ -53,7 +50,8 @@ pub fn assign(writer: *std.Io.Writer, name: []const u8, value: []const u8) !void
 }
 
 /// Runs `script` with `/bin/sh` on the machine and collects the newest
-/// bytes it printed; no amount of output fails it. The script goes through an owner-only file beside the control sockets,
+/// bytes it printed; no amount of output fails it, and a caller that parses
+/// standard output reads it through `ScriptOutput.wholeStdout`. The script goes through an owner-only file beside the control sockets,
 /// removed when the call returns.
 ///
 /// ```zig
@@ -110,14 +108,19 @@ pub fn runWithInput(init: std.process.Init, destination: []const u8, remote_comm
 fn collect(gpa: std.mem.Allocator, io: std.Io, child: *std.process.Child, timeout_s: u32) !ScriptOutput {
     const timeout: std.Io.Timeout = .{ .duration = .{ .clock = .awake, .raw = .fromSeconds(timeout_s) } };
     const output = try ChildOutput.collect(gpa, io, child, .{
-        .stdout = .{ .keep_tail = kept_stdout_bytes },
-        .stderr = .{ .keep_tail = kept_stderr_bytes },
+        .stdout = .{
+            .keep_tail = ScriptOutput.kept_stdout_bytes,
+        },
+        .stderr = .{
+            .keep_tail = kept_stderr_bytes,
+        },
         .timeout = timeout,
     });
     return .{
         .term = output.term,
         .stdout = output.stdout.bytes,
         .stderr = output.stderr.bytes,
+        .stdout_dropped = output.stdout.dropped,
     };
 }
 

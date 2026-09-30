@@ -7,6 +7,7 @@ const slabheap = @import("slabheap");
 const sqlite = @import("sqlite");
 const parser = @import("cli/parser.zig");
 const control = @import("cli/control.zig");
+const cli_limit_reached = @import("cli/limit_reached.zig");
 const usage_module = @import("cli/usage.zig");
 const server_module = @import("cli/server.zig");
 const diagnostics_module = @import("cli/diagnostics.zig");
@@ -234,6 +235,13 @@ fn openWindowOn(init: std.process.Init, label: [:0]const u8, run: RunOptions) an
 // what is wrong, not with the parser's error return trace.
 fn parseCommand(init: std.process.Init, args: []const [*:0]const u8) parser.Cli {
     return parser.Cli.parse(args, init.minimal.environ) catch |err| {
+        if (err == error.TooManyArguments) {
+            cli_limit_reached.report(.{
+                .limit = control.command_arguments_limit,
+                .requested = args.len,
+            });
+        }
+
         std.debug.print("telar: {s}; see `telar --help`\n", .{control.describe(err)});
         std.process.exit(agent_module.exit_failure);
     };

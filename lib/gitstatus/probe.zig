@@ -11,7 +11,10 @@ const untrusted_git = @import("untrusted_git.zig");
 pub const status_timeout_ms = 10 * std.time.ms_per_s;
 
 const status_timeout: std.Io.Timeout = .{
-    .duration = .{ .clock = .awake, .raw = .fromMilliseconds(status_timeout_ms) },
+    .duration = .{
+        .clock = .awake,
+        .raw = .fromMilliseconds(status_timeout_ms),
+    },
 };
 
 /// Bytes of `git status --porcelain` kept: only whether it printed matters,
@@ -78,7 +81,9 @@ fn statusDirty(io: std.Io, environ: std.process.Environ, workspace_path: []const
         .path = workspace_path,
         .arguments = &.{ "status", "--porcelain", "--no-renames", "--ignore-submodules=all" },
         .timeout = status_timeout,
-        .stdout = .{ .keep_tail = kept_status_bytes },
+        .stdout = .{
+            .keep_tail = kept_status_bytes,
+        },
     });
     defer output.deinit();
     return output.printed();
@@ -107,7 +112,13 @@ test "a status longer than any buffer still reads as dirty" {
     var name_buffer: [64]u8 = undefined;
     for (0..3000) |index| {
         const name = try std.fmt.bufPrint(&name_buffer, "untracked-file-with-a-long-name-{d}.txt", .{index});
-        try temp.dir.writeFile(io, .{ .sub_path = name, .data = "" });
+        try temp.dir.writeFile(
+            io,
+            .{
+                .sub_path = name,
+                .data = "",
+            },
+        );
     }
 
     var head: [256]u8 = undefined;

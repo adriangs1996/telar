@@ -1,4 +1,5 @@
 //! `telar gui` takes the client's run options plus one flag of its own.
+const pty = @import("pty");
 const std = @import("std");
 const RunOptions = @import("RunOptions.zig");
 const GuiOptions = @This();
@@ -12,7 +13,7 @@ login_shell: bool = false,
 
 /// Example: `const options = try GuiOptions.parse(args, environ);`.
 pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !GuiOptions {
-    var storage: [64][*:0]const u8 = undefined;
+    var storage: [pty.command_support.max_args][*:0]const u8 = undefined;
     if (args.len > storage.len) {
         return error.TooManyArguments;
     }

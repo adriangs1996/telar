@@ -30,6 +30,9 @@ git_branch: [capacity][core.max_git_branch_bytes]u8 = undefined,
 git_branch_len: [capacity]u8 = @splat(0),
 git_dirty: [capacity]bool = @splat(false),
 git_checked_at_ms: [capacity]i64 = @splat(0),
+/// Whether the last Git probe ran out of time; only the first of a run of
+/// timeouts is reported.
+git_timed_out: [capacity]bool = @splat(false),
 /// The client generation that may resize this workspace's panes.
 lease: [capacity]?ClientKey = @splat(null),
 /// Rows that hold storage: proposed or committed.
@@ -519,6 +522,7 @@ fn reserve(self: *Workspaces, gpa: std.mem.Allocator, request: RowRequest) !usiz
     self.git_branch_len[slot] = 0;
     self.git_dirty[slot] = false;
     self.git_checked_at_ms[slot] = 0;
+    self.git_timed_out[slot] = false;
     self.lease[slot] = null;
     self.reserved.set(slot);
     self.index.put(core.raw(request.id), slot);

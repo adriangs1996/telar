@@ -24,6 +24,8 @@ const ChildOutput = childoutput.ChildOutput;
 /// Newest bytes of SSH's error output kept; a long login banner before the
 /// error never hides it.
 const ssh_error_limit = 16 * 1024;
+/// What `telar server endpoint` may print: its few lines, and no more.
+const discovery_output_limit = core.Limit.declare("machines.discovery_output_bytes", "bytes", Discovery.max_output_bytes);
 
 const endpoint_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(30) },
@@ -184,11 +186,18 @@ pub fn discover(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ
     // More than an endpoint's few lines is a startup file that prints, which
     // no retry cures.
     const result = ChildOutput.collect(gpa, io, &child, .{
-        .stdout = .{ .fail_past = Discovery.max_output_bytes },
-        .stderr = .{ .keep_tail = ssh_error_limit },
+        .stdout = .{
+            .fail_past = Discovery.max_output_bytes,
+        },
+        .stderr = .{
+            .keep_tail = ssh_error_limit,
+        },
         .timeout = endpoint_timeout,
     }) catch |err| switch (err) {
-        error.StreamTooLong => return unreadable(report),
+        error.StreamTooLong => {
+            nameLimit(report, discovery_output_limit);
+            return unreadable(report);
+        },
         else => return error.RemoteEndpointUnavailable,
     };
     defer result.deinit(gpa);
@@ -205,6 +214,21 @@ pub fn discover(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ
     }
 
     return Discovery.parse(result.stdout.bytes) catch unreadable(report);
+}
+
+// Names the limit a discovery stopped at, where its failure is reported;
+// no client model exists yet to count it.
+fn nameLimit(report: ?*std.Io.Writer, limit: core.Limit) void {
+    var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
+    const reach: core.LimitReach = .{
+        .limit = limit,
+    };
+    const text = reach.describe(&buffer, 1);
+    if (report) |writer| {
+        writer.print("{s}: {s}; ", .{ core.limit_reached.notice_title, text }) catch {};
+    } else {
+        std.debug.print("telar: {s}: {s}\n", .{ core.limit_reached.notice_title, text });
+    }
 }
 
 // Says the endpoint's answer could not be read, and why that happens.

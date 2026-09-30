@@ -8,12 +8,15 @@ const Checkout = @import("Checkout.zig");
 
 const max_output_bytes = 4096;
 
-/// How long each of the three Git steps may take. `diff --shortstat` on a
+/// How long the three Git steps may take together. `diff --shortstat` on a
 /// large branch takes seconds; the measurement runs on a worker.
 pub const git_timeout_ms = 10 * std.time.ms_per_s;
 
 const git_timeout: std.Io.Timeout = .{
-    .duration = .{ .clock = .awake, .raw = .fromMilliseconds(git_timeout_ms) },
+    .duration = .{
+        .clock = .awake,
+        .raw = .fromMilliseconds(git_timeout_ms),
+    },
 };
 
 /// Measures `checkout` against `base`, or an error when any Git step fails
@@ -31,19 +34,22 @@ pub fn run(io: std.Io, checkout: Checkout, base: []const u8) untrusted_git.RunEr
         return error.GitFailed;
     }
 
+    // One deadline for the whole measurement.
+    const deadline = git_timeout.toDeadline(io);
+
     var merge_base_buffer: [64]u8 = undefined;
-    const merge_base = try gitLine(io, checkout, &.{ "merge-base", base, "HEAD" }, &merge_base_buffer);
+    const merge_base = try gitLine(io, checkout, deadline, &.{ "merge-base", base, "HEAD" }, &merge_base_buffer);
     var stat: DiffStat = .{};
 
     var shortstat_buffer: [max_output_bytes]u8 = undefined;
     const diff = [_][]const u8{ "diff", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all", "--shortstat", merge_base, "--" };
-    const shortstat = try gitLine(io, checkout, &diff, &shortstat_buffer);
+    const shortstat = try gitLine(io, checkout, deadline, &diff, &shortstat_buffer);
     parseShortstat(shortstat, &stat);
 
     var range_buffer: [160]u8 = undefined;
     const range = std.fmt.bufPrint(&range_buffer, "{s}..HEAD", .{merge_base}) catch return error.GitFailed;
     var count_buffer: [32]u8 = undefined;
-    const count = try gitLine(io, checkout, &.{ "rev-list", "--count", range, "--" }, &count_buffer);
+    const count = try gitLine(io, checkout, deadline, &.{ "rev-list", "--count", range, "--" }, &count_buffer);
     stat.commits_ahead = std.fmt.parseUnsigned(u32, count, 10) catch return error.GitFailed;
     return stat;
 }
@@ -70,13 +76,15 @@ pub fn parseShortstat(line: []const u8, stat: *DiffStat) void {
     }
 }
 
-fn gitLine(io: std.Io, checkout: Checkout, arguments: []const []const u8, buffer: []u8) untrusted_git.RunError![]const u8 {
+fn gitLine(io: std.Io, checkout: Checkout, deadline: std.Io.Timeout, arguments: []const []const u8, buffer: []u8) untrusted_git.RunError![]const u8 {
     const output = try untrusted_git.run(io, .{
         .environ = checkout.environ,
         .path = checkout.path,
         .arguments = arguments,
-        .timeout = git_timeout,
-        .stdout = .{ .fail_past = max_output_bytes },
+        .timeout = deadline,
+        .stdout = .{
+            .fail_past = max_output_bytes,
+        },
     });
     defer output.deinit();
 

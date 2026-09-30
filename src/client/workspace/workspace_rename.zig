@@ -2,8 +2,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const pending_operation = @import("pending_operation.zig");
-const Client = @import("../execution/Client.zig");
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try workspace_rename.sendWorkspaceRenameRequest(client, rename);`
@@ -19,12 +17,11 @@ pub fn sendWorkspaceRenameRequest(model: *data.ClientModel, rename: core.RenameW
 }
 
 /// Validates one request and retains its correlation before delivery. Example: `_ = try request(client, command);`
-pub fn requestWorkspaceRename(client: *Client, command: data.RequestRenameWorkspace) !bool {
-    if (pending_operation.waits(client, .workspace_operation)) {
+pub fn requestWorkspaceRename(model: *data.ClientModel, command: data.RequestRenameWorkspace) !bool {
+    if (model.request_lifecycle.tracker.has(.workspace_operation)) {
         return false;
     }
 
-    const model = &client.model;
     const current = model.workspace orelse return false;
     if (!std.meta.eql(current, command.workspace)) {
         return false;

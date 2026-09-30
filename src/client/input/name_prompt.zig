@@ -481,7 +481,7 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
         .create_workspace => workspace_creation.submitWorkspacePrompt(client, submission),
         .rename_workspace => |workspace| blk: {
             break :blk try workspace_rename.requestWorkspaceRename(
-                client,
+                &client.model,
                 .{
                     .workspace = workspace,
                     .name = submission.name,
@@ -490,7 +490,7 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
         },
         .rename_tab => |tab_id| blk: {
             break :blk try tab_rename.requestTabRename(
-                client,
+                &client.model,
                 .{
                     .tab_id = tab_id,
                     .label = submission.name,

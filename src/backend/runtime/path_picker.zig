@@ -58,7 +58,12 @@ pub fn request(model: *RuntimeModel, session: *Session, find: core.FindPaths) !v
 pub fn finishBuild(model: *RuntimeModel, index: *PathIndex) void {
     index.building = false;
     if (index.truncation()) |limit| {
-        limit_reached.report(model, .{ .limit = limit });
+        limit_reached.report(
+            model,
+            .{
+                .limit = limit,
+            },
+        );
     }
 
     if (index.abandoned) {

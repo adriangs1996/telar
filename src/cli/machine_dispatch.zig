@@ -133,7 +133,9 @@ pub fn captureWithInput(init: std.process.Init, profile: *const core.MachineProf
     var reader = child.stdout.?.readerStreaming(init.io, &read_buffer);
     const output = reader.interface.allocRemaining(init.gpa, .limited(max_captured_bytes)) catch |err| switch (err) {
         error.StreamTooLong => {
-            limit_reached.report(.{ .limit = captured_limit });
+            limit_reached.report(.{
+                .limit = captured_limit,
+            });
             return error.MachineCommandFailed;
         },
         else => return error.MachineCommandFailed,

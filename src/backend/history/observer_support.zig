@@ -15,7 +15,13 @@ const vt = @import("ghostty-vt");
 const std = @import("std");
 const Command = cmdcapture.Command;
 
-pub const batch_bytes = 4 * 16 * 1024;
+/// Room a control prompt adds around its text: the sender line
+/// (`agent_control.max_sender_line_bytes`, 192), bracketed-paste framing and
+/// the Enter a keyboard mode encodes, rounded up.
+const prompt_framing_bytes = 1024;
+/// One batch holds the largest input a client or a prompt can send whole, so
+/// the observer never drops one for its size; two batches a pane.
+pub const batch_bytes = core.max_input_bytes + prompt_framing_bytes;
 pub const batch_events = 512;
 
 /// An unchanged screen signal is handed over again after this long, so the

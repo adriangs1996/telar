@@ -3,17 +3,14 @@ const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
 const runtime_io = @import("../connection/runtime_io.zig");
-const pending_operation = @import("pending_operation.zig");
-const Client = @import("../execution/Client.zig");
 
 /// Validates one request and retains its correlation before delivery.
 /// Example: `_ = try tab_move.requestTabMove(client, command);`
-pub fn requestTabMove(client: *Client, command: data.RequestTabMove) !bool {
-    if (pending_operation.waits(client, .tab_operation)) {
+pub fn requestTabMove(model: *data.ClientModel, command: data.RequestTabMove) !bool {
+    if (model.request_lifecycle.tracker.has(.tab_operation)) {
         return false;
     }
 
-    const model = &client.model;
     const location = command.location orelse model.activeTabLocation() orelse return false;
     const workspace = model.workspace orelse return false;
     if (!std.meta.eql(workspace, location.workspace) or model.tabs.find(location.tab_id) == null) {

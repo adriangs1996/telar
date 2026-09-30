@@ -29,7 +29,9 @@ pub fn probe(job: Job) Completion {
     // Unknown when Git failed; the workspace keeps what it showed before.
     completion.dirty = status.dirty;
     if (status.timed_out) {
-        completion.limit = .{ .limit = status_timeout_limit };
+        completion.limit = .{
+            .limit = status_timeout_limit,
+        };
     }
 
     return completion;

@@ -33,8 +33,18 @@ pub fn start(model: *RuntimeModel) void {
 /// workspace_git.finish(model, completion);
 /// ```
 pub fn finish(model: *RuntimeModel, completion: Completion) void {
-    if (completion.limit) |reach| {
-        limit_reached.report(model, reach);
+    // A repository that always outlasts the timeout is named once, not on
+    // every probe.
+    const location: core.WorkspaceLocation = .{
+        .workspace = completion.workspace,
+    };
+    if (model.workspaces.slotOf(location)) |slot| {
+        const timed_out = completion.limit != null;
+        if (timed_out and !model.workspaces.git_timed_out[slot]) {
+            limit_reached.report(model, completion.limit.?);
+        }
+
+        model.workspaces.git_timed_out[slot] = timed_out;
     }
 
     const branch = if (completion.present) completion.branchSlice() else "";

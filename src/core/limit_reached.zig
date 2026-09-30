@@ -110,6 +110,7 @@ pub const LimitError = error{
     RecordTooLarge,
     ReleaseUrlTooLong,
     RemoteCommandTooLong,
+    RemoteOutputTooLong,
     RemoteTelarPathTooLong,
     RequestIdExhausted,
     ResponseQueueFull,

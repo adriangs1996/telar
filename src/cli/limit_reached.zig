@@ -5,6 +5,10 @@ const builtin = @import("builtin");
 const core = @import("telar-core");
 const std = @import("std");
 
+/// The status a command exits with when a limit cost it data: what it kept
+/// was done, but not all it was asked for.
+pub const exit_status: u8 = 1;
+
 /// Prints the notice of one reached limit on standard error.
 ///
 /// ```zig

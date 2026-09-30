@@ -27,7 +27,8 @@ pub fn start(model: *RuntimeModel, session: *Session, request: core.SuggestComma
         return reply(session, request.request_id, .failed);
     };
 
-    var screen_storage: [core.max_pane_text_bytes]u8 = undefined;
+    // The prompt keeps no more than this of the screen.
+    var screen_storage: [suggestion.max_context_bytes]u8 = undefined;
     const dump = pane.dumpText(.{ .rows = suggestion.context_rows, .source = .screen }, &screen_storage);
     var prompt_buffer: [pi_rpc.types.max_prompt_bytes]u8 = undefined;
     const prompt = suggestion.buildPrompt(pane.cwd.slice(), screen_storage[0..dump.len], request.text, &prompt_buffer);

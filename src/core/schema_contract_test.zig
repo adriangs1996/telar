@@ -6,6 +6,7 @@
 //! change cannot ship without a visible schema bump.
 
 const std = @import("std");
+const localsocket = @import("localsocket");
 const schema = @import("schema/schema.zig");
 const Entry = @import("Entry.zig");
 const TabLocation = @import("schema/TabLocation.zig");
@@ -62,7 +63,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 128;
+const corpus_len = 127;
 
 const failure_codes = std.enums.values(types.FailureCode);
 const failure_code_listing = listing: {
@@ -73,29 +74,250 @@ const failure_code_listing = listing: {
 
     break :listing text;
 };
-// Every wire bound with its value, in declaration order: a peer with other
-// bounds refuses what this one sends, so changing one changes the
-// fingerprint.
-const wire_limit_listing = listing: {
-    @setEvalBranchQuota(20_000);
-    var text: []const u8 = "";
-    for (@typeInfo(types).@"struct".decls) |declaration| {
-        if (!std.mem.startsWith(u8, declaration.name, "max_")) {
-            continue;
-        }
-
-        const value = @field(types, declaration.name);
-        switch (@typeInfo(@TypeOf(value))) {
-            .comptime_int, .int => {
-                text = text ++ std.fmt.comptimePrint("{s}={d} ", .{ declaration.name, value });
-            },
-            else => {},
-        }
-    }
-
-    break :listing text;
+/// One bound both ends check on the wire. A peer with another bound refuses
+/// what this one sends, so every bound is part of the fingerprint.
+const WireBound = struct {
+    name: []const u8,
+    value: u64,
 };
-const corpus_storage_size = 16 * 1024;
+
+/// Every wire bound, named one by one: the frame each message travels in
+/// and each bound `types.zig` declares. A test checks none is left out.
+const wire_bounds = [_]WireBound{
+    .{
+        .name = "max_frame_size",
+        .value = localsocket.transport.max_frame_size,
+    },
+    .{
+        .name = "max_input_bytes",
+        .value = types.max_input_bytes,
+    },
+    .{
+        .name = "max_cwd_bytes",
+        .value = types.max_cwd_bytes,
+    },
+    .{
+        .name = "max_workspace_name_bytes",
+        .value = types.max_workspace_name_bytes,
+    },
+    .{
+        .name = "max_argument_count",
+        .value = types.max_argument_count,
+    },
+    .{
+        .name = "max_argument_bytes",
+        .value = types.max_argument_bytes,
+    },
+    .{
+        .name = "max_environment_count",
+        .value = types.max_environment_count,
+    },
+    .{
+        .name = "max_environment_bytes",
+        .value = types.max_environment_bytes,
+    },
+    .{
+        .name = "max_error_message_bytes",
+        .value = types.max_error_message_bytes,
+    },
+    .{
+        .name = "max_tab_label_bytes",
+        .value = types.max_tab_label_bytes,
+    },
+    .{
+        .name = "max_tabs_per_workspace",
+        .value = types.max_tabs_per_workspace,
+    },
+    .{
+        .name = "max_panes_per_tab",
+        .value = types.max_panes_per_tab,
+    },
+    .{
+        .name = "max_history_query_bytes",
+        .value = types.max_history_query_bytes,
+    },
+    .{
+        .name = "max_history_results",
+        .value = types.max_history_results,
+    },
+    .{
+        .name = "max_history_command_bytes",
+        .value = types.max_history_command_bytes,
+    },
+    .{
+        .name = "max_agent_snapshot_entries",
+        .value = types.max_agent_snapshot_entries,
+    },
+    .{
+        .name = "max_agent_workspace_label_bytes",
+        .value = types.max_agent_workspace_label_bytes,
+    },
+    .{
+        .name = "max_agent_session_title_bytes",
+        .value = types.max_agent_session_title_bytes,
+    },
+    .{
+        .name = "max_agent_cwd_label_bytes",
+        .value = types.max_agent_cwd_label_bytes,
+    },
+    .{
+        .name = "max_agent_last_event_bytes",
+        .value = types.max_agent_last_event_bytes,
+    },
+    .{
+        .name = "max_agent_session_file_bytes",
+        .value = types.max_agent_session_file_bytes,
+    },
+    .{
+        .name = "max_foreground_name_bytes",
+        .value = types.max_foreground_name_bytes,
+    },
+    .{
+        .name = "max_pane_title_bytes",
+        .value = types.max_pane_title_bytes,
+    },
+    .{
+        .name = "max_workspace_list_entries",
+        .value = types.max_workspace_list_entries,
+    },
+    .{
+        .name = "max_git_branch_bytes",
+        .value = types.max_git_branch_bytes,
+    },
+    .{
+        .name = "max_worktree_entries",
+        .value = types.max_worktree_entries,
+    },
+    .{
+        .name = "max_worktree_title_bytes",
+        .value = types.max_worktree_title_bytes,
+    },
+    .{
+        .name = "max_worktree_brief_bytes",
+        .value = types.max_worktree_brief_bytes,
+    },
+    .{
+        .name = "max_worktree_command_label_bytes",
+        .value = types.max_worktree_command_label_bytes,
+    },
+    .{
+        .name = "max_agent_final_message_bytes",
+        .value = types.max_agent_final_message_bytes,
+    },
+    .{
+        .name = "max_agent_plan_step_bytes",
+        .value = types.max_agent_plan_step_bytes,
+    },
+    .{
+        .name = "max_search_needle_bytes",
+        .value = types.max_search_needle_bytes,
+    },
+    .{
+        .name = "max_search_matches",
+        .value = types.max_search_matches,
+    },
+    .{
+        .name = "max_path_query_bytes",
+        .value = types.max_path_query_bytes,
+    },
+    .{
+        .name = "max_path_results",
+        .value = types.max_path_results,
+    },
+    .{
+        .name = "max_path_match_bytes",
+        .value = types.max_path_match_bytes,
+    },
+    .{
+        .name = "max_pane_text_rows",
+        .value = types.max_pane_text_rows,
+    },
+    .{
+        .name = "max_pane_text_bytes",
+        .value = types.max_pane_text_bytes,
+    },
+    .{
+        .name = "max_pane_text_input_bytes",
+        .value = types.max_pane_text_input_bytes,
+    },
+    .{
+        .name = "max_notification_title_bytes",
+        .value = types.max_notification_title_bytes,
+    },
+    .{
+        .name = "max_notification_message_bytes",
+        .value = types.max_notification_message_bytes,
+    },
+    .{
+        .name = "max_notification_link_bytes",
+        .value = types.max_notification_link_bytes,
+    },
+    .{
+        .name = "max_history_provider_bytes",
+        .value = types.max_history_provider_bytes,
+    },
+    .{
+        .name = "max_history_tool_call_id_bytes",
+        .value = types.max_history_tool_call_id_bytes,
+    },
+    .{
+        .name = "max_client_layout_clients",
+        .value = types.max_client_layout_clients,
+    },
+    .{
+        .name = "max_client_layout_tabs",
+        .value = types.max_client_layout_tabs,
+    },
+    .{
+        .name = "max_client_layout_nodes",
+        .value = types.max_client_layout_nodes,
+    },
+    .{
+        .name = "max_client_layout_wire_bytes",
+        .value = types.max_client_layout_wire_bytes,
+    },
+    .{
+        .name = "max_client_layout_ratio",
+        .value = types.max_client_layout_ratio,
+    },
+    .{
+        .name = "max_notification_duration_ms",
+        .value = types.max_notification_duration_ms,
+    },
+    .{
+        .name = "max_suggestion_request_bytes",
+        .value = types.max_suggestion_request_bytes,
+    },
+    .{
+        .name = "max_suggestion_bytes",
+        .value = types.max_suggestion_bytes,
+    },
+    .{
+        .name = "max_agent_manifests",
+        .value = types.max_agent_manifests,
+    },
+    .{
+        .name = "max_agent_provider_index",
+        .value = types.max_agent_provider_index,
+    },
+    .{
+        .name = "max_agent_provider_name_bytes",
+        .value = types.max_agent_provider_name_bytes,
+    },
+    .{
+        .name = "max_agent_display_name_bytes",
+        .value = types.max_agent_display_name_bytes,
+    },
+    .{
+        .name = "max_agent_icon_bytes",
+        .value = types.max_agent_icon_bytes,
+    },
+    .{
+        .name = "max_agent_session_reference_bytes",
+        .value = types.max_agent_session_reference_bytes,
+    },
+};
+const corpus_storage_size = 12 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     var entries: [corpus_len]Entry = undefined;
@@ -1075,15 +1297,6 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .text = "hi",
         }),
     ));
-    // A pane text carries up to `max_pane_text_bytes`, room for the listing.
-    helper.add(.{ .name = "wire_limits", .direction = .server, .golden_hex = golden.wire_limits }, helper.commit(
-        try pane_module.encodePaneText(helper.space(), .{
-            .request_id = @enumFromInt(5),
-            .pane_id = @enumFromInt(5),
-            .truncated = false,
-            .text = wire_limit_listing,
-        }),
-    ));
     helper.add(.{ .name = "request_completed", .direction = .server, .golden_hex = golden.request_completed }, helper.commit(
         try runtime.encodeRequestCompleted(helper.space(), .{ .request_id = @enumFromInt(5) }),
     ));
@@ -1347,6 +1560,13 @@ fn fingerprint(entries: []const Entry) [6]u8 {
         hasher.update(entry.bytes);
         hasher.update(&.{0});
     }
+
+    for (wire_bounds) |bound| {
+        hasher.update(bound.name);
+        hasher.update(&.{0});
+        hasher.update(std.mem.asBytes(&std.mem.nativeToLittle(u64, bound.value)));
+    }
+
     var digest: [32]u8 = undefined;
     hasher.final(&digest);
     var hex: [6]u8 = undefined;
@@ -1695,6 +1915,22 @@ test "malformed cell bytes surface as errors during iteration" {
     const span = (try span_iterator.next()).?;
     var cell_iterator = span.cells();
     try std.testing.expectError(error.InvalidCell, cell_iterator.next());
+}
+
+test "every bound types.zig declares is part of the fingerprint" {
+    inline for (@typeInfo(types).@"struct".decls) |declaration| {
+        if (comptime std.mem.startsWith(u8, declaration.name, "max_")) {
+            const listed = for (wire_bounds) |bound| {
+                if (std.mem.eql(u8, bound.name, declaration.name)) {
+                    break bound.value == @field(types, declaration.name);
+                }
+            } else false;
+            std.testing.expect(listed) catch |err| {
+                std.debug.print("add types.{s} to wire_bounds\n", .{declaration.name});
+                return err;
+            };
+        }
+    }
 }
 
 test "the handshake fingerprint derives from the golden corpus" {

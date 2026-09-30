@@ -285,7 +285,7 @@ fn sync(init: std.process.Init, report: *SetupReport, destination: []const u8, p
     }
 
     var written: usize = 0;
-    var lines = std.mem.splitScalar(u8, std.mem.trimEnd(u8, result.stdout, "\n"), '\n');
+    var lines = std.mem.splitScalar(u8, std.mem.trimEnd(u8, try result.wholeStdout(), "\n"), '\n');
     while (lines.next()) |line| {
         if (std.mem.startsWith(u8, line, "written ")) {
             written += 1;
@@ -543,7 +543,7 @@ fn queryPaths(init: std.process.Init, destination: []const u8, staging: *Staging
         return error.MachinePathsUnreadable;
     }
 
-    var lines = std.mem.splitScalar(u8, result.stdout, '\n');
+    var lines = std.mem.splitScalar(u8, try result.wholeStdout(), '\n');
     while (lines.next()) |line| {
         if (line.len != 0) {
             try existing.put(staging.arena, try staging.arena.dupe(u8, line), {});
@@ -1027,8 +1027,20 @@ test "a skill nested a dozen levels deep is sent and a deeper one is named as le
     const nested = ".claude/skills/a/b/c/d/e/f/g/h/i/j/k";
     const deeper = nested ++ "/l/m/n/o/p/q/r/s";
     try temp.dir.createDirPath(io, deeper);
-    try temp.dir.writeFile(io, .{ .sub_path = nested ++ "/SKILL.md", .data = "# Nested" });
-    try temp.dir.writeFile(io, .{ .sub_path = deeper ++ "/SKILL.md", .data = "# Deeper" });
+    try temp.dir.writeFile(
+        io,
+        .{
+            .sub_path = nested ++ "/SKILL.md",
+            .data = "# Nested",
+        },
+    );
+    try temp.dir.writeFile(
+        io,
+        .{
+            .sub_path = deeper ++ "/SKILL.md",
+            .data = "# Deeper",
+        },
+    );
 
     var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
     defer arena_state.deinit();

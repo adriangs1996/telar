@@ -119,6 +119,7 @@ pub fn deliverySources(model: *RuntimeModel) Sources {
         .runtime_limits = &model.limit_reaches,
         .client_limits = &model.client_limit_reaches,
         .refused_limit_reports = model.refused_limit_reports,
+        .pane_text = &model.pane_text,
     };
 }
 

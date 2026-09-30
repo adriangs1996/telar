@@ -65,7 +65,9 @@ fn readLogs(init: std.process.Init, options: Options) !void {
     while (try iterator.next(init.io)) |entry| {
         visited += 1;
         if (visited > max_directory_entries) {
-            limit_reached.report(.{ .limit = directory_entries_limit });
+            limit_reached.report(.{
+                .limit = directory_entries_limit,
+            });
             break;
         }
 

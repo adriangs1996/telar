@@ -235,12 +235,20 @@ fn runImport(init: std.process.Init, options: HistoryOptions) !void {
     var output = std.Io.File.stdout().writerStreaming(init.io, &stdout_buffer);
     try output.interface.print("imported {d} commands from {s}\n", .{ sender.total, resolved.path });
     try output.interface.flush();
+
+    // The older commands were left out: the import did not do all it was
+    // asked, and a script must not read it as complete.
+    if (histfile.truncated) {
+        std.process.exit(limit_reached.exit_status);
+    }
 }
 
-/// A histfile's newest whole lines, in `buffer`.
+/// A histfile's newest whole lines, in `buffer`, and whether older ones
+/// did not fit.
 const NewestLines = struct {
     buffer: []u8,
     lines: []const u8,
+    truncated: bool = false,
 };
 
 // Reads at most `limit.value` bytes from the end of the file. A longer file
@@ -256,6 +264,7 @@ fn readNewest(init: std.process.Init, path: []const u8, limit: core.Limit) !Newe
     errdefer init.gpa.free(buffer);
 
     const read = try file.readPositionalAll(init.io, buffer, offset);
+
     if (offset == 0) {
         return .{
             .buffer = buffer,
@@ -271,6 +280,7 @@ fn readNewest(init: std.process.Init, path: []const u8, limit: core.Limit) !Newe
     return .{
         .buffer = buffer,
         .lines = buffer[first_line..read],
+        .truncated = true,
     };
 }
 
@@ -589,7 +599,13 @@ test "a histfile past its bound imports its newest whole lines" {
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
-    try temp.dir.writeFile(io, .{ .sub_path = "zsh_history", .data = "oldest command\nmake build\nmake test\n" });
+    try temp.dir.writeFile(
+        io,
+        .{
+            .sub_path = "zsh_history",
+            .data = "oldest command\nmake build\nmake test\n",
+        },
+    );
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const directory = path_buffer[0..try temp.dir.realPath(io, &path_buffer)];
     var file_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -601,6 +617,7 @@ test "a histfile past its bound imports its newest whole lines" {
     const newest = try readNewest(init, path, core.Limit.declare("history.max_histfile_bytes", "bytes", 24));
     defer std.testing.allocator.free(newest.buffer);
     try std.testing.expectEqualStrings("make build\nmake test\n", newest.lines);
+    try std.testing.expect(newest.truncated);
 
     const whole = try readNewest(init, path, histfile_limit);
     defer std.testing.allocator.free(whole.buffer);

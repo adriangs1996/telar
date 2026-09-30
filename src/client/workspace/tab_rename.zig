@@ -4,16 +4,13 @@ const core = @import("telar-core");
 const std = @import("std");
 const client_tests = @import("../execution/client_tests.zig");
 const tab_creation = @import("tab_creation.zig");
-const pending_operation = @import("pending_operation.zig");
-const Client = @import("../execution/Client.zig");
 
 /// Example: `_ = try tab_rename.requestTabRename(app, command);`
-pub fn requestTabRename(client: *Client, command: data.RequestRenameTab) !bool {
-    if (pending_operation.waits(client, .tab_operation)) {
+pub fn requestTabRename(model: *data.ClientModel, command: data.RequestRenameTab) !bool {
+    if (model.request_lifecycle.tracker.has(.tab_operation)) {
         return false;
     }
 
-    const model = &client.model;
     try data.label_validation.validate(command.label, .renamed_tab);
     const location = model.tabLocation(command.tab_id) orelse return false;
     const request_id = try model.request_lifecycle.nextId();

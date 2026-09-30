@@ -20,6 +20,8 @@ const GitTransfer = @import("GitTransfer.zig");
 const repository_identity = @import("repository_identity.zig");
 
 const ChildOutput = childoutput.ChildOutput;
+const Bound = childoutput.Bound;
+const KeptStream = childoutput.KeptStream;
 
 /// How long one local Git command may take: `git worktree add` checks out a
 /// whole tree, which takes minutes in a large monorepo.
@@ -190,10 +192,18 @@ pub fn hasChanges(init: std.process.Init, directory: []const u8) !bool {
 /// const left = try worktree_git.changedFiles(init, root);
 /// ```
 pub fn changedFiles(init: std.process.Init, directory: []const u8) !usize {
-    const output = try capture(init, &.{ "git", "-C", directory, "status", "--porcelain" }, .{
-        .stdout = .{ .keep_tail = 0 },
-        .stderr = .{ .keep_tail = kept_diagnostic_bytes },
-    });
+    const output = try capture(
+        init,
+        &.{ "git", "-C", directory, "status", "--porcelain" },
+        .{
+            .stdout = .{
+                .keep_tail = 0,
+            },
+            .stderr = .{
+                .keep_tail = kept_diagnostic_bytes,
+            },
+        },
+    );
     defer output.deinit(init.gpa);
     if (!output.succeeded()) {
         printDiagnostics(output.stderr);
@@ -234,8 +244,9 @@ pub fn diff(init: std.process.Init, request: DiffRequest) !void {
     }
 }
 
-/// Lists the linked worktrees of the repository at `root`. The caller frees
-/// the returned bytes.
+/// Lists the linked worktrees of the repository at `root`. A listing past
+/// `max_git_listing_bytes` keeps the worktrees whose records fit whole and
+/// names the limit. The caller frees the returned bytes.
 ///
 /// ```zig
 /// const bytes = try worktree_git.listPorcelain(init, root);
@@ -243,24 +254,42 @@ pub fn diff(init: std.process.Init, request: DiffRequest) !void {
 /// var listed = worktree_git.listed(bytes);
 /// ```
 pub fn listPorcelain(init: std.process.Init, root: []const u8) ![]u8 {
-    const output = capture(init, &.{ "git", "-C", root, "worktree", "list", "--porcelain" }, .{
-        .stdout = .{ .fail_past = max_git_listing_bytes },
-        .stderr = .{ .keep_tail = kept_diagnostic_bytes },
-    }) catch |err| switch (err) {
-        error.StreamTooLong => {
-            limit_reached.report(.{ .limit = git_listing_limit });
-            return error.GitFailed;
+    const output = try capture(
+        init,
+        &.{ "git", "-C", root, "worktree", "list", "--porcelain" },
+        .{
+            .stdout = .{
+                .keep_head = max_git_listing_bytes,
+            },
+            .stderr = .{
+                .keep_tail = kept_diagnostic_bytes,
+            },
         },
-        else => return err,
-    };
+    );
     defer init.gpa.free(output.stderr.bytes);
+
     if (!output.succeeded()) {
         init.gpa.free(output.stdout.bytes);
         printDiagnostics(output.stderr);
         return error.GitFailed;
     }
 
-    return output.stdout.bytes;
+    if (output.stdout.dropped == 0) {
+        return output.stdout.bytes;
+    }
+
+    limit_reached.report(.{
+        .limit = git_listing_limit,
+        .requested = output.stdout.bytes.len + output.stdout.dropped,
+    });
+    return init.gpa.realloc(output.stdout.bytes, wholeRecords(output.stdout.bytes));
+}
+
+// How many bytes of a porcelain listing cut short hold whole records: each
+// ends at a blank line, so what follows the last one was cut in half.
+fn wholeRecords(bytes: []const u8) usize {
+    const end = std.mem.lastIndexOf(u8, bytes, "\n\n") orelse return 0;
+    return end + 2;
 }
 
 pub fn listed(bytes: []const u8) ListedWorktrees {
@@ -320,8 +349,8 @@ pub fn branchExists(init: std.process.Init, root: []const u8, branch: []const u8
 /// How one Git command runs: what it may print, its deadline and its
 /// environment.
 const GitRun = struct {
-    stdout: ChildOutput.Bound,
-    stderr: ChildOutput.Bound,
+    stdout: Bound,
+    stderr: Bound,
     timeout: core.Limit = git_timeout_limit,
     environ_map: ?*const std.process.Environ.Map = null,
 };
@@ -339,7 +368,10 @@ fn capture(init: std.process.Init, argv: []const []const u8, git: GitRun) !Child
     defer child.kill(init.io);
 
     const deadline: std.Io.Timeout = .{
-        .duration = .{ .clock = .awake, .raw = .fromSeconds(@intCast(git.timeout.value)) },
+        .duration = .{
+            .clock = .awake,
+            .raw = .fromSeconds(@intCast(git.timeout.value)),
+        },
     };
     return ChildOutput.collect(init.gpa, init.io, &child, .{
         .stdout = git.stdout,
@@ -347,7 +379,9 @@ fn capture(init: std.process.Init, argv: []const []const u8, git: GitRun) !Child
         .timeout = deadline,
     }) catch |err| switch (err) {
         error.Timeout => {
-            limit_reached.report(.{ .limit = git.timeout });
+            limit_reached.report(.{
+                .limit = git.timeout,
+            });
             return error.GitFailed;
         },
         error.StreamTooLong => error.StreamTooLong,
@@ -356,7 +390,7 @@ fn capture(init: std.process.Init, argv: []const []const u8, git: GitRun) !Child
 }
 
 // A failed command's diagnostics, the newest bytes when there were more.
-fn printDiagnostics(stderr: ChildOutput.Stream) void {
+fn printDiagnostics(stderr: KeptStream) void {
     if (stderr.dropped != 0) {
         std.debug.print("({d} earlier bytes of Git's output omitted)\n", .{stderr.dropped});
     }
@@ -365,10 +399,18 @@ fn printDiagnostics(stderr: ChildOutput.Stream) void {
 }
 
 fn run(init: std.process.Init, argv: []const []const u8, failure: anyerror) !void {
-    const output = capture(init, argv, .{
-        .stdout = .{ .keep_tail = kept_diagnostic_bytes },
-        .stderr = .{ .keep_tail = kept_diagnostic_bytes },
-    }) catch return failure;
+    const output = capture(
+        init,
+        argv,
+        .{
+            .stdout = .{
+                .keep_tail = kept_diagnostic_bytes,
+            },
+            .stderr = .{
+                .keep_tail = kept_diagnostic_bytes,
+            },
+        },
+    ) catch return failure;
     defer output.deinit(init.gpa);
 
     if (!output.succeeded()) {
@@ -378,12 +420,20 @@ fn run(init: std.process.Init, argv: []const []const u8, failure: anyerror) !voi
 }
 
 fn transferRun(init: std.process.Init, argv: []const []const u8, environ_map: *const std.process.Environ.Map, failure: anyerror) !void {
-    const output = capture(init, argv, .{
-        .stdout = .{ .keep_tail = kept_diagnostic_bytes },
-        .stderr = .{ .keep_tail = kept_diagnostic_bytes },
-        .timeout = transfer_timeout_limit,
-        .environ_map = environ_map,
-    }) catch return failure;
+    const output = capture(
+        init,
+        argv,
+        .{
+            .stdout = .{
+                .keep_tail = kept_diagnostic_bytes,
+            },
+            .stderr = .{
+                .keep_tail = kept_diagnostic_bytes,
+            },
+            .timeout = transfer_timeout_limit,
+            .environ_map = environ_map,
+        },
+    ) catch return failure;
     defer output.deinit(init.gpa);
 
     if (!output.succeeded()) {
@@ -396,15 +446,29 @@ fn transferRun(init: std.process.Init, argv: []const []const u8, environ_map: *c
 // it printed, or null when it failed or printed more than `buffer` holds.
 fn hardenedLine(io: std.Io, repository: gitstatus.Checkout, arguments: []const []const u8, buffer: []u8) ?[]const u8 {
     const timeout: std.Io.Timeout = .{
-        .duration = .{ .clock = .awake, .raw = .fromSeconds(git_timeout_seconds) },
+        .duration = .{
+            .clock = .awake,
+            .raw = .fromSeconds(git_timeout_seconds),
+        },
     };
     const output = gitstatus.untrusted_git.run(io, .{
         .environ = repository.environ,
         .path = repository.path,
         .arguments = arguments,
         .timeout = timeout,
-        .stdout = .{ .fail_past = max_git_output_bytes },
-    }) catch return null;
+        .stdout = .{
+            .fail_past = max_git_output_bytes,
+        },
+    }) catch |err| {
+        // A doubt still asks a person, and the deadline is named.
+        if (err == error.GitTimedOut) {
+            limit_reached.report(.{
+                .limit = git_timeout_limit,
+            });
+        }
+
+        return null;
+    };
     defer output.deinit();
 
     const line = output.line();
@@ -417,10 +481,18 @@ fn hardenedLine(io: std.Io, repository: gitstatus.Checkout, arguments: []const [
 }
 
 fn gitLine(init: std.process.Init, argv: []const []const u8, buffer: []u8) ![]const u8 {
-    const output = capture(init, argv, .{
-        .stdout = .{ .fail_past = max_git_output_bytes },
-        .stderr = .{ .keep_tail = 0 },
-    }) catch return error.NotARepository;
+    const output = capture(
+        init,
+        argv,
+        .{
+            .stdout = .{
+                .fail_past = max_git_output_bytes,
+            },
+            .stderr = .{
+                .keep_tail = 0,
+            },
+        },
+    ) catch return error.NotARepository;
     defer output.deinit(init.gpa);
     if (!output.succeeded()) {
         return error.NotARepository;
@@ -548,7 +620,13 @@ test "changed files are counted however many there are" {
     var name_buffer: [64]u8 = undefined;
     for (0..3000) |index| {
         const name = try std.fmt.bufPrint(&name_buffer, "untracked-file-with-a-long-name-{d}.txt", .{index});
-        try temp.dir.writeFile(io, .{ .sub_path = name, .data = "" });
+        try temp.dir.writeFile(
+            io,
+            .{
+                .sub_path = name,
+                .data = "",
+            },
+        );
     }
 
     try std.testing.expectEqual(@as(usize, 3000), try changedFiles(testInit(), root));
@@ -568,7 +646,13 @@ test "a hook that prints more than any bound still lets a worktree be added" {
 
     // About 200 KiB on each stream, three times the old 64 KiB bound.
     const hook = "#!/bin/sh\ni=0\nwhile [ $i -lt 4000 ]; do echo \"post-checkout says something rather long, line $i\"; echo \"warning: line $i\" >&2; i=$((i+1)); done\n";
-    try temp.dir.writeFile(io, .{ .sub_path = "repo/.git/hooks/post-checkout", .data = hook });
+    try temp.dir.writeFile(
+        io,
+        .{
+            .sub_path = "repo/.git/hooks/post-checkout",
+            .data = hook,
+        },
+    );
     var hook_buffer: [std.fs.max_path_bytes]u8 = undefined;
     try testGit(&.{ "chmod", "+x", try std.fmt.bufPrint(&hook_buffer, "{s}/.git/hooks/post-checkout", .{repo}) });
 
@@ -583,4 +667,14 @@ test "a hook that prints more than any bound still lets a worktree be added" {
 
     const stat = try std.Io.Dir.cwd().statFile(io, directory, .{});
     try std.testing.expectEqual(std.Io.File.Kind.directory, stat.kind);
+}
+
+test "a listing cut short keeps only its whole records" {
+    const cut = "worktree /src\nbranch refs/heads/main\n\nworktree /src/a\nbranch refs/heads/a\n\nworktree /src/b\nbran";
+    const kept = cut[0..wholeRecords(cut)];
+    var worktrees = listed(kept);
+
+    try std.testing.expectEqualStrings("a", worktrees.next().?.branch);
+    try std.testing.expect(worktrees.next() == null);
+    try std.testing.expectEqual(@as(usize, 0), wholeRecords("worktree /src/a\nbran"));
 }

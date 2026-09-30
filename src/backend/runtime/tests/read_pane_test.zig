@@ -145,7 +145,10 @@ test "a read of every row it may ask for holds a long test run whole" {
     // 20 columns.
     const storage = try std.testing.allocator.create([core.max_pane_text_bytes]u8);
     defer std.testing.allocator.destroy(storage);
-    const dump = fixture.pane.dumpText(.{ .rows = core.max_pane_text_rows, .source = .recent }, storage);
+    const dump = fixture.pane.dumpText(.{
+        .rows = core.max_pane_text_rows,
+        .source = .recent,
+    }, storage);
     const text = storage[0..dump.len];
 
     try std.testing.expect(!dump.truncated);

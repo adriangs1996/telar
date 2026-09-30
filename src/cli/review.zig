@@ -154,7 +154,9 @@ fn list(session: *Session, options: Options, context: Context) !void {
 
     // The walk ran out of room, not out of editions.
     if (count == max_listed_editions) {
-        limit_reached.report(.{ .limit = listed_editions_limit });
+        limit_reached.report(.{
+            .limit = listed_editions_limit,
+        });
     }
 }
 

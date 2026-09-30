@@ -9,7 +9,6 @@ const pane_input = @import("../panes/pane_input.zig");
 const tab_snapshot = @import("tab_snapshot.zig");
 const workspace_handoff = @import("workspace_handoff.zig");
 const Client = @import("../execution/Client.zig");
-const pending_operation = @import("pending_operation.zig");
 
 const TabCloseOutcome = enum { applied, ignored, exit };
 
@@ -62,7 +61,7 @@ pub fn tabDetachmentCapacity(model: *const data.ClientModel, location: core.TabL
 }
 
 pub fn requestTabClose(client: *Client) !bool {
-    if (pending_operation.waits(client, .tab_operation)) {
+    if (client.model.request_lifecycle.tracker.has(.tab_operation)) {
         return false;
     }
 

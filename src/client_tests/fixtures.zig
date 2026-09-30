@@ -321,14 +321,3 @@ const TestingPlugin = struct {
     action: data.PluginAction,
     digest: core.Digest,
 };
-
-/// The outbox holds only the limit report of a request that was dropped
-/// because another one still waits.
-///
-/// ```zig
-/// try fixtures.expectOnlyLimitReport(&client.model);
-/// ```
-pub fn expectOnlyLimitReport(model: *const data.ClientModel) !void {
-    try std.testing.expectEqual(@as(usize, 1), model.to_runtime.len);
-    try std.testing.expect(model.to_runtime.items[model.to_runtime.head] == .encoded);
-}

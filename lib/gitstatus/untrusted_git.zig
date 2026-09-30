@@ -22,6 +22,7 @@ const childoutput = @import("childoutput");
 const GitRequest = @import("GitRequest.zig");
 const GitOutput = @import("GitOutput.zig");
 const ChildOutput = childoutput.ChildOutput;
+const Bounds = childoutput.Bounds;
 
 /// Filter drivers the repository may define before it is refused outright.
 pub const max_filter_drivers = 8;
@@ -80,23 +81,28 @@ const filter_keys = [_][]const u8{ "clean", "smudge", "process" };
 
 /// Runs one read-only Git command with every repository-chosen program
 /// turned off and returns what it printed, bounded as `request.stdout`
-/// says. Standard error is read and dropped. `error.GitTimedOut` when Git
-/// ran past `request.timeout`, including while reading the repository's
-/// config; `error.GitFailed` when it failed or the repository cannot be read
-/// safely.
+/// says. Standard error is read and dropped. `request.timeout` is one
+/// deadline for the config read, the version check and the command
+/// together. `error.GitTimedOut` when Git ran past it; `error.GitFailed`
+/// when it failed or the repository cannot be read safely.
 ///
 /// ```zig
 /// const output = untrusted_git.run(io, .{ .environ = environ, .path = path, .arguments = &.{ "status", "--porcelain" }, .timeout = timeout, .stdout = .{ .fail_past = 4096 } }) catch return null;
 /// defer output.deinit();
 /// ```
-pub fn run(io: std.Io, request: GitRequest) RunError!GitOutput {
+pub fn run(io: std.Io, request_in: GitRequest) RunError!GitOutput {
+    var request = request_in;
+    request.timeout = request_in.timeout.toDeadline(io);
+
     var command: HardenedCommand = undefined;
     try command.prepare(io, request);
     defer command.deinit();
 
     const output = try collect(io, command.argvSlice(), &command.environ_map, .{
         .stdout = request.stdout,
-        .stderr = .{ .keep_tail = 0 },
+        .stderr = .{
+            .keep_tail = 0,
+        },
         .timeout = request.timeout,
     });
     if (!output.succeeded()) {
@@ -113,7 +119,7 @@ pub fn run(io: std.Io, request: GitRequest) RunError!GitOutput {
 
 // Runs one Git child to its end within `bounds`, on the page allocator
 // `GitOutput` frees with.
-fn collect(io: std.Io, argv: []const []const u8, environ_map: *const std.process.Environ.Map, bounds: ChildOutput.Bounds) RunError!ChildOutput {
+fn collect(io: std.Io, argv: []const []const u8, environ_map: *const std.process.Environ.Map, bounds: Bounds) RunError!ChildOutput {
     var child = std.process.spawn(io, .{
         .argv = argv,
         .stdin = .ignore,
@@ -243,8 +249,12 @@ fn readRepositoryFacts(io: std.Io, request: GitRequest, environ_map: *const std.
     const pattern = "^(filter\\.|extensions\\.partialclone$|remote\\..*\\.(promisor|partialclonefilter|uploadpack)$)";
     const argv = [_][]const u8{"git"} ++ hardened_options ++ [_][]const u8{ "-C", request.path, "config", "--show-scope", "-z", "--get-regexp", pattern };
     const output = try collect(io, &argv, environ_map, .{
-        .stdout = .{ .fail_past = max_config_bytes },
-        .stderr = .{ .keep_tail = 0 },
+        .stdout = .{
+            .fail_past = max_config_bytes,
+        },
+        .stderr = .{
+            .keep_tail = 0,
+        },
         .timeout = request.timeout,
     });
     defer output.deinit(std.heap.page_allocator);
@@ -334,8 +344,12 @@ fn addDriver(key: []const u8, facts: *RepositoryFacts) ?void {
 /// Whether this Git honours `GIT_NO_LAZY_FETCH`.
 fn lazyFetchSwitchable(io: std.Io, request: GitRequest, environ_map: *const std.process.Environ.Map) RunError!bool {
     const output = collect(io, &.{ "git", "version" }, environ_map, .{
-        .stdout = .{ .fail_past = max_version_bytes },
-        .stderr = .{ .keep_tail = 0 },
+        .stdout = .{
+            .fail_past = max_version_bytes,
+        },
+        .stderr = .{
+            .keep_tail = 0,
+        },
         .timeout = request.timeout,
     }) catch |err| switch (err) {
         error.GitTimedOut => return err,

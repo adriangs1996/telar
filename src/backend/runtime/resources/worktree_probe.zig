@@ -11,8 +11,8 @@ const git_probe = @import("git_probe.zig");
 
 /// A worktree running a command is measured this often.
 pub const active_interval_ms: i64 = 5_000;
-/// A quiet worktree, or a change made outside telar, is measured this often.
-pub const idle_interval_ms: i64 = 15_000;
+/// A quiet worktree is measured this often.
+pub const idle_interval_ms: i64 = 30_000;
 /// After this many failed measurements a worktree waits for the idle interval.
 pub const max_failures = 2;
 /// A Git step of the base measurement past this leaves the diff unknown.
@@ -47,7 +47,9 @@ pub fn probe(job: WorktreeProbeJob) WorktreeProbeCompletion {
         }
 
         if (status.timed_out) {
-            completion.limit = .{ .limit = git_probe.status_timeout_limit };
+            completion.limit = .{
+                .limit = git_probe.status_timeout_limit,
+            };
         }
     }
 
@@ -75,7 +77,9 @@ pub fn probe(job: WorktreeProbeJob) WorktreeProbeCompletion {
         completion.stat = measured;
     } else |err| {
         if (err == error.GitTimedOut) {
-            completion.limit = .{ .limit = base_distance_timeout_limit };
+            completion.limit = .{
+                .limit = base_distance_timeout_limit,
+            };
         }
     }
 

@@ -113,6 +113,9 @@ review_discovery_blocked: bool = false,
 editor_open: EditorOpenState = .{},
 /// The path picker index of each client that opened one.
 path_indexes: PathIndexes = .{},
+/// Where a `pane_text` reply's text is dumped while it is encoded: one
+/// read at a time, on the loop, instead of on the stack of every reply.
+pane_text: [core.max_pane_text_bytes]u8 = undefined,
 input_sequence: u64 = 0,
 cell_timer: pacing.DeadlineScheduler = .{},
 

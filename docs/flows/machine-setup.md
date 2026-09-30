@@ -121,7 +121,11 @@ means no profile change. SSH failing inside a step (ssh not starting, a
 timeout, exit 255) fails that step and no other, and the report always
 comes. How much a script prints never fails it: `remote_shell` keeps the
 newest 256 KiB of its output and 64 KiB of its errors, so an installer's
-warnings cannot turn its success into a failure; a status check or a question about the
+warnings cannot turn its success into a failure. A step that parses what a
+script printed (the probe, the paths a sync asks about, a login record)
+reads it through `ScriptOutput.wholeStdout`, which refuses output whose
+start was dropped and names `machines.remote_shell_stdout_bytes`, so a cut
+path or a hook that seems missing is never taken as the answer; a status check or a question about the
 machine that SSH did not answer is never read as a "no". A login that is
 still waiting is `pending`, not a failure, and the machine is reported as
 waiting for it, not ready; the next setup reports it done. The exit status

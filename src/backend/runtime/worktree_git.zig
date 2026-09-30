@@ -37,8 +37,13 @@ pub fn start(model: *RuntimeModel) void {
 /// worktree_git.finish(model, completion);
 /// ```
 pub fn finish(model: *RuntimeModel, completion: WorktreeProbeCompletion) void {
+    // Only the first failure of a run names its limit; a worktree whose
+    // probes keep timing out waits the idle interval without a notice each.
     if (completion.limit) |reach| {
-        limit_reached.report(model, reach);
+        const slot = model.worktrees.slotOf(completion.worktree);
+        if (slot == null or model.worktrees.probe_failures[slot.?] == 0) {
+            limit_reached.report(model, reach);
+        }
     }
 
     const now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();

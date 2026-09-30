@@ -68,7 +68,7 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event, owner: ?Target) !bool 
     if (pointer.kind == .release) {
         if (drag.finish()) |move| {
             if (try client.tab_move.requestTabMove(
-                gui.app,
+                &gui.app.model,
                 .{
                     .location = move.location,
                     .direction = move.direction,

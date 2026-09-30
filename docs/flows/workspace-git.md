@@ -36,9 +36,12 @@ The runtime `Workspaces` table owns the observed branch (`git_branch`, at most
 probe bookkeeping (`git_checked_at_ms`, `git_probe`). A missing repository stores an empty branch, so a
 directory that stops being a repo clears its badge. Probe failures leave the
 previous projection and simply retry after the interval. A status that runs
-past `gitstatus.probe.status_timeout_ms` (10 s, the config read included)
-leaves the dirty flag unknown and the completion carries the
-`gitstatus.status_timeout` limit, which `finish` reports on the loop.
+past `gitstatus.probe.status_timeout_ms` (10 s in all: one deadline for the
+config read, the version check and the status) leaves the dirty flag
+unknown and the completion carries the `gitstatus.status_timeout` limit.
+`finish` reports it on the loop the first time in a row
+(`Workspaces.git_timed_out`), so a monorepo that always takes longer is
+named once, not every minute.
 Standard error is read and dropped, so a repository that prints many
 warnings still answers.
 

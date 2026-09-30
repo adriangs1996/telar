@@ -175,6 +175,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .runtime_limits = sources.runtime_limits,
             .client_limits = sources.client_limits,
             .refused_limit_reports = sources.refused_limit_reports,
+            .pane_text = sources.pane_text,
         }, entry.response);
         return self.stage(payload, .{ .response = .{
             .offset = entry.offset,
@@ -344,6 +345,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .runtime_limits = sources.runtime_limits,
             .client_limits = sources.client_limits,
             .refused_limit_reports = sources.refused_limit_reports,
+            .pane_text = sources.pane_text,
         }, entry.response);
         return self.stage(payload, .{ .response = .{
             .offset = entry.offset,

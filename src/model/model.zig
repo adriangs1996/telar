@@ -318,7 +318,6 @@ pub const RequestTabCreation = @import("workspace/RequestTabCreation.zig");
 pub const RequestTabMove = @import("workspace/RequestTabMove.zig");
 pub const RequestWorkspaceCreation = @import("workspace/RequestWorkspaceCreation.zig");
 pub const RequestsContinuation = @import("connection/RequestsContinuation.zig").RequestsContinuation;
-pub const RequestsGroup = @import("connection/RequestsGroup.zig").RequestsGroup;
 pub const ResizePaneRequest = @import("state/ResizePaneRequest.zig");
 pub const Resolved = @import("input/Resolved.zig");
 pub const Results = @import("state/Results.zig");

@@ -31,7 +31,6 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
     var tab_storage: [core.max_tabs_per_workspace]core.TabDescriptor = undefined;
     var foreground_storage: [core.max_panes_per_tab]core.PaneForeground = undefined;
     var history_storage: [core.max_history_results]core.HistoryEntry = undefined;
-    var text_storage: [core.max_pane_text_bytes]u8 = undefined;
     return switch (response.*) {
         .request_failed => |failure| try core.encodeRequestFailed(buffer, .{
             .request_id = failure.request_id,
@@ -173,7 +172,8 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
                     .exit_code = panes.exited.exit_code[exited],
                 });
             };
-            const dump = target.dumpText(.{ .rows = read.rows, .source = read.source }, &text_storage);
+            const text_storage = context.pane_text orelse return error.PaneTextStorageMissing;
+            const dump = target.dumpText(.{ .rows = read.rows, .source = read.source }, text_storage);
             break :payload try core.encodePaneText(buffer, .{
                 .request_id = read.request_id,
                 .pane_id = read.pane.id,
@@ -301,4 +301,6 @@ const EncodeContext = struct {
     runtime_limits: *const core.LimitReaches = &core.LimitReaches.none,
     client_limits: *const core.LimitReaches = &core.LimitReaches.none,
     refused_limit_reports: u64 = 0,
+    /// Where a live pane's text is dumped; a `pane_text` reply needs it.
+    pane_text: ?*[core.max_pane_text_bytes]u8 = null,
 };

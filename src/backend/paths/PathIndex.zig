@@ -66,6 +66,19 @@ rebuild: bool = false,
 /// The last answer was taken before the build completed.
 answered_partial: bool = false,
 
+/// Maps `count` items of address space straight from the system, so no
+/// byte of it is resident until a build writes it; `Allocator.alloc` would
+/// fill all of it with `undefined` in safe builds.
+fn reserve(comptime T: type, count: usize) ![]T {
+    const bytes = std.heap.page_allocator.rawAlloc(count * @sizeOf(T), .of(T), @returnAddress()) orelse return error.OutOfMemory;
+    const items: [*]T = @ptrCast(@alignCast(bytes));
+    return items[0..count];
+}
+
+fn release(comptime T: type, items: []T) void {
+    std.heap.page_allocator.rawFree(std.mem.sliceAsBytes(items), .of(T), @returnAddress());
+}
+
 /// Reserves every buffer the build and query workers use.
 ///
 /// ```zig
@@ -73,11 +86,11 @@ answered_partial: bool = false,
 /// defer index.destroy();
 /// ```
 pub fn create(gpa: std.mem.Allocator, client: ClientKey) !*PathIndex {
-    const bytes = try gpa.alloc(u8, max_bytes);
-    errdefer gpa.free(bytes);
+    const bytes = try reserve(u8, max_bytes);
+    errdefer release(u8, bytes);
 
-    const entries = try gpa.alloc(IndexedPath, max_entries);
-    errdefer gpa.free(entries);
+    const entries = try reserve(IndexedPath, max_entries);
+    errdefer release(IndexedPath, entries);
 
     const matrix = try fuzzymatch.Matrix.create(gpa);
     errdefer gpa.destroy(matrix);
@@ -95,8 +108,8 @@ pub fn create(gpa: std.mem.Allocator, client: ClientKey) !*PathIndex {
 
 pub fn destroy(self: *PathIndex) void {
     const gpa = self.gpa;
-    gpa.free(self.bytes);
-    gpa.free(self.entries);
+    release(u8, self.bytes);
+    release(IndexedPath, self.entries);
     gpa.destroy(self.matrix);
     gpa.destroy(self);
 }

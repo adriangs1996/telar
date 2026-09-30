@@ -5,4 +5,5 @@ const Bounds = @This();
 
 stdout: Bound,
 stderr: Bound,
+/// One deadline for the whole read; a duration counts from `collect`.
 timeout: std.Io.Timeout = .none,
