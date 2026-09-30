@@ -113,12 +113,19 @@ first, then the least recently drawn textures the last frame did not use.
 
 The default decoded-memory limits are:
 
-- 64 images and 256 placements per pane.
+- 64 images and 256 placements per pane, half of each per VT screen. Past
+  either count the runtime drops only the excess: the oldest images, then the
+  placements scrolled out of the screen, then those of the oldest images. It
+  reports `graphics.images_per_screen` or `graphics.placements_per_screen`.
 - 256 MiB per pane and 512 MiB per runtime.
 - 128 MiB per VT screen with the default pane quota
   (`min(128 MiB, pane quota / 2)`), so one 6016x3384 RGBA frame fits and
   three fit the pane.
-- 64 KiB per child APC payload and 4096 chunks per image.
+- 64 KiB per child APC payload, and as many chunks per image as a screen's
+  quota takes in the 4096-byte base64 chunks the protocol recommends (43,690).
+  An upload past either bound is dropped whole with an `ENOMEM` reply and
+  reported as `graphics.max_chunks_per_image` or
+  `graphics.max_image_bytes_per_screen`.
 - 64 queued PTY replies, each at most 1024 bytes.
 
 One reservation system accounts before allocation for primary and alternate

@@ -118,6 +118,7 @@ fn focusPane(fixture: *EventFixture) void {
         .focused_pane = fixture.pane.id,
         .fullscreen = false,
         .workspace_active = true,
+        .node_start = 0,
         .node_count = 0,
     };
     record.tab_count = 1;
@@ -143,6 +144,33 @@ test "raw text reaches the PTY unchanged and raw_enter adds the Enter a shell re
     try sendText(&fixture, .raw_enter, "");
     try expectCompleted(&fixture);
     try std.testing.expectEqualStrings("\r", queued(fixture.pane));
+}
+
+test "text that does not fit the pane's input queue fails the request and keeps what was queued" {
+    var fixture: EventFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    holdWrites(fixture.pane);
+    defer releaseWrites(fixture.pane);
+
+    const queue = &fixture.pane.input_queue;
+    const filler: [core.max_input_bytes]u8 = @splat('f');
+    while (queue.fits(filler.len)) {
+        try std.testing.expect(queue.push(&filler));
+    }
+
+    const room = queue.bytes.len - queue.len;
+    const text: [core.max_pane_text_input_bytes]u8 = @splat('t');
+    try std.testing.expect(room < text.len);
+    const queued_before = queue.len;
+    try sendText(&fixture, .raw, &text);
+    const responses = &fixture.request.session.delivery.responses;
+    try std.testing.expect(responses.peek().?.* == .notification);
+    responses.pop();
+    try expectFailure(&fixture, .resource_limit);
+    try std.testing.expectEqual(queued_before, queue.len);
+    try std.testing.expectEqual(@as(u64, text.len), queue.dropped_bytes);
+    try std.testing.expect(fixture.model.limit_reaches.find("panes.input_queue_capacity") != null);
 }
 
 test "Enter follows the kitty keyboard protocol once the child enables it" {

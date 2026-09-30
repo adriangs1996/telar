@@ -900,8 +900,9 @@ test "launch records keep restorable commands and reject the rest" {
     try encoder.writeSized16("-l");
     const encoded = encoder.finish();
     var record: LaunchRecord = .{};
+    defer record.deinit(std.testing.allocator);
 
-    record.capture(.{
+    try record.capture(std.testing.allocator, .{
         .cwd = "/work",
         .argument_count = 2,
         .encoded_arguments = encoded,
@@ -912,7 +913,7 @@ test "launch records keep restorable commands and reject the rest" {
     try std.testing.expect(record.restorable());
     try std.testing.expectEqualStrings("/bin/zsh\x00-l\x00", record.slice());
 
-    record.capture(.{
+    try record.capture(std.testing.allocator, .{
         .cwd = "/work",
         .argument_count = 2,
         .encoded_arguments = encoded,
@@ -921,6 +922,34 @@ test "launch records keep restorable commands and reject the rest" {
         .encoded_environment = "",
     });
     try std.testing.expect(!record.restorable());
+}
+
+test "launch records keep the longest command a launch accepts" {
+    const gpa = std.testing.allocator;
+    const argument_bytes = core.max_argument_bytes / core.max_argument_count - 2;
+    const encoded_buffer = try gpa.alloc(u8, core.max_argument_bytes);
+    defer gpa.free(encoded_buffer);
+    const argument = try gpa.alloc(u8, argument_bytes);
+    defer gpa.free(argument);
+    @memset(argument, 'a');
+    var encoder = bytecodec.Encoder.init(encoded_buffer);
+    for (0..core.max_argument_count) |_| {
+        try encoder.writeSized16(argument);
+    }
+
+    var record: LaunchRecord = .{};
+    defer record.deinit(gpa);
+    try record.capture(gpa, .{
+        .cwd = "/work",
+        .argument_count = core.max_argument_count,
+        .encoded_arguments = encoder.finish(),
+        .environment_mode = .inherit_runtime,
+        .environment_count = 0,
+        .encoded_environment = "",
+    });
+    try std.testing.expect(record.restorable());
+    try std.testing.expectEqual(@as(u16, core.max_argument_count), record.count);
+    try std.testing.expectEqual(core.max_argument_count * (argument_bytes + 1), record.slice().len);
 }
 
 test "restored pane keys are reserved in order and counters only advance" {

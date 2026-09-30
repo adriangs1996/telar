@@ -11,9 +11,12 @@ const PaneExitTransition = @import("PaneExitTransition.zig");
 const ExitedPanes = @import("ExitedPanes.zig");
 const PaneStore = @This();
 
-/// Panes the whole runtime holds. It equals the wire's per-tab bound, so a
-/// tab can hold every pane; it bounds all tabs and workspaces together.
-pub const capacity = core.max_panes_per_tab;
+/// Panes the whole runtime holds across every workspace and tab.
+pub const capacity = core.max_panes;
+pub const panes_limit = core.Limit.declare("panes.max_panes", "panes", capacity);
+/// Panes one tab holds, closing and exited ones included, so every
+/// projection of a tab fits the wire's per-tab bound.
+pub const tab_panes_limit = core.Limit.declare("panes.max_panes_per_tab", "panes in one tab", core.max_panes_per_tab);
 
 items: [capacity]?*Pane = [_]?*Pane{null} ** capacity,
 shell_markers: [capacity]bool = @splat(false),
@@ -142,6 +145,8 @@ pub fn descriptorsAt(self: *const PaneStore, location: core.TabLocation, output:
         {
             continue;
         }
+
+        std.debug.assert(len < output.len);
         output[len] = .{
             .pane_id = pane.id,
             .lifecycle = .running,
@@ -180,6 +185,24 @@ pub fn countAt(self: *const PaneStore, location: core.TabLocation) u16 {
             count += 1;
         }
     }
+    return count;
+}
+
+/// Every pane at one tab, closing and exited ones included: what the tab
+/// holds until they are collected.
+///
+/// ```zig
+/// if (store.occupancyAt(location) == core.max_panes_per_tab) return error.TabPaneLimitReached;
+/// ```
+pub fn occupancyAt(self: *const PaneStore, location: core.TabLocation) usize {
+    var count: usize = 0;
+    for (self.items) |slot| {
+        const pane = slot orelse continue;
+        if (std.meta.eql(pane.location, location)) {
+            count += 1;
+        }
+    }
+
     return count;
 }
 
@@ -238,10 +261,21 @@ pub fn advanceCounters(self: *PaneStore, next_pane_id: u64, next_generation: u64
     self.next_generation = @max(self.next_generation, next_generation);
 }
 
-pub fn allocateKey(self: *PaneStore) !PaneKey {
+/// Reserves the identity of a pane about to join `location`, refusing one
+/// the runtime or that tab has no room for.
+///
+/// ```zig
+/// const key = try store.allocateKey(location);
+/// ```
+pub fn allocateKey(self: *PaneStore, location: core.TabLocation) !PaneKey {
     if (self.count == capacity) {
         return error.PaneLimitReached;
     }
+
+    if (self.occupancyAt(location) == core.max_panes_per_tab) {
+        return error.TabPaneLimitReached;
+    }
+
     const pane_id = try core.pane(self.next_id);
     if (self.next_generation == 0 or self.next_generation == std.math.maxInt(u64)) {
         return error.PaneGenerationExhausted;

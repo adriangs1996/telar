@@ -23,17 +23,22 @@ pub const magic: *const [8]u8 = "TELARCKP";
 /// Version 4 added pane kinds for agent panes; version 5 drops them again.
 /// Version 6 adds worktree records; version 7 adds the machine that
 /// dispatched each worktree; version 8 records whether an agent kept its
-/// session in the pane.
+/// session in the pane; version 9 sizes a pane's launch arguments in 32 bits,
+/// so a launch of up to `max_launch_bytes` fits.
 /// Older labels remain explicit because their naming intent was not recorded.
-pub const version: u16 = 8;
+pub const version: u16 = 9;
 pub const oldest_readable_version: u16 = 1;
 /// The first version whose worktree records end with `dispatched_from`.
 pub const dispatched_from_version: u16 = 7;
 /// The first version whose pane records end with `agent_in_pane`.
 pub const agent_in_pane_version: u16 = 8;
+/// The first version whose pane launch arguments carry a 32-bit length.
+pub const wide_arguments_version: u16 = 9;
 pub const max_file_bytes = 4 * 1024 * 1024;
-pub const max_launch_arguments = 32;
-pub const max_launch_bytes = 1024;
+/// A pane's launch command: whatever a launch request may carry, so every
+/// pane that did not replace its environment is restorable.
+pub const max_launch_arguments = core.max_argument_count;
+pub const max_launch_bytes = core.max_argument_bytes;
 
 pub const Record = union(enum) {
     workspace: WorkspaceRecord,
@@ -160,6 +165,55 @@ test "checkpoint records round trip through the file encoding" {
     try std.testing.expect(try reader.next() == null);
 }
 
+test "the longest workspace name and launch a request accepts round trip" {
+    const gpa = std.testing.allocator;
+    const buffer = try gpa.alloc(u8, max_file_bytes);
+    defer gpa.free(buffer);
+    const name: [core.max_workspace_name_bytes]u8 = @splat('n');
+    const arguments = try gpa.alloc(u8, max_launch_bytes);
+    defer gpa.free(arguments);
+    @memset(arguments, 'a');
+    const argument_bytes = max_launch_bytes / max_launch_arguments;
+    for (0..max_launch_arguments) |index| {
+        arguments[(index + 1) * argument_bytes - 1] = 0;
+    }
+
+    var encoder = try Encoder.init(buffer, .{
+        .next_workspace_id = 2,
+        .next_tab_id = 2,
+        .next_pane_id = 2,
+        .next_pane_generation = 2,
+    });
+    try encoder.workspace(.{ .id = 1, .path = "/work/telar", .name = &name, .first_tab_id = 1, .first_tab_label = "main" });
+    try encoder.pane(.{
+        .pane_id = 1,
+        .workspace_id = 1,
+        .tab_id = 1,
+        .cwd = "/work/telar",
+        .cols = 80,
+        .rows = 24,
+        .arguments = arguments,
+        .argument_count = max_launch_arguments,
+    });
+    const bytes = try encoder.finish();
+
+    var reader = try Reader.init(bytes);
+    try std.testing.expectEqualStrings(&name, (try reader.next()).?.workspace.name);
+    const pane = (try reader.next()).?.pane;
+    try std.testing.expectEqual(@as(u16, max_launch_arguments), pane.argument_count);
+    try std.testing.expectEqualSlices(u8, arguments, pane.arguments);
+    try std.testing.expect(try reader.next() == null);
+
+    const oversized: [core.max_workspace_name_bytes + 1]u8 = @splat('n');
+    var refused = try Encoder.init(buffer, .{
+        .next_workspace_id = 2,
+        .next_tab_id = 2,
+        .next_pane_id = 2,
+        .next_pane_generation = 2,
+    });
+    try std.testing.expectError(error.InvalidCheckpoint, refused.workspace(.{ .id = 1, .path = "/work/telar", .name = &oversized, .first_tab_id = 1, .first_tab_label = "main" }));
+}
+
 test "a full checkpoint keeps the records that fit and drops the rest" {
     var buffer: [128]u8 = undefined;
     var encoder = try Encoder.init(&buffer, .{
@@ -227,14 +281,13 @@ test "checkpoint labels distinguish automatic tabs from explicit former defaults
 }
 
 test "an agent that kept its session in the pane is resumed that way, and older files say it did not" {
-    var buffer: [1024]u8 = undefined;
-    var encoder = try Encoder.init(&buffer, .{
+    const counters: Counters = .{
         .next_workspace_id = 2,
         .next_tab_id = 2,
         .next_pane_id = 2,
         .next_pane_generation = 2,
-    });
-    try encoder.pane(.{
+    };
+    const record: PaneRecord = .{
         .pane_id = 1,
         .workspace_id = 1,
         .tab_id = 1,
@@ -246,18 +299,25 @@ test "an agent that kept its session in the pane is resumed that way, and older 
         .agent_provider = @intFromEnum(core.AgentProvider.codex),
         .agent_session = "019a0000-0000-7000-8000-00000000000a",
         .agent_in_pane = true,
-    });
+    };
+    var buffer: [1024]u8 = undefined;
+    var encoder = try Encoder.init(&buffer, counters);
+    try encoder.pane(record);
     const bytes = try encoder.finish();
 
     var reader = try Reader.init(bytes);
     try std.testing.expect((try reader.next()).?.pane.agent_in_pane);
 
-    // A version 7 record ends at its title source.
+    // A version 7 record sizes its arguments in 16 bits and ends at its
+    // title source.
     var legacy_buffer: [1024]u8 = undefined;
-    @memcpy(legacy_buffer[0 .. bytes.len - 2], bytes[0 .. bytes.len - 2]);
-    legacy_buffer[bytes.len - 2] = bytes[bytes.len - 1];
+    var legacy_encoder = try Encoder.init(&legacy_buffer, counters);
+    legacy_encoder.wide_arguments = false;
+    try legacy_encoder.pane(record);
+    const legacy_bytes = try legacy_encoder.finish();
+    legacy_buffer[legacy_bytes.len - 2] = legacy_bytes[legacy_bytes.len - 1];
     std.mem.writeInt(u16, legacy_buffer[magic.len..][0..2], agent_in_pane_version - 1, .little);
-    var legacy = try Reader.init(legacy_buffer[0 .. bytes.len - 1]);
+    var legacy = try Reader.init(legacy_buffer[0 .. legacy_bytes.len - 1]);
     try std.testing.expect(!(try legacy.next()).?.pane.agent_in_pane);
 }
 
@@ -382,6 +442,7 @@ fn legacyPane(encoder: *Encoder, record: PaneRecord) !void {
 test "version 4 agent pane records are skipped while terminal records restore" {
     var buffer: [1024]u8 = undefined;
     var encoder = try Encoder.init(&buffer, .{ .next_workspace_id = 2, .next_tab_id = 2, .next_pane_id = 3, .next_pane_generation = 2 });
+    encoder.wide_arguments = false;
     std.mem.writeInt(u16, buffer[magic.len..][0..2], pane_kind_version, .little);
     const terminal: PaneRecord = .{
         .pane_id = 2,
@@ -411,6 +472,7 @@ test "version 4 agent pane records are skipped while terminal records restore" {
 test "version 3 pane records restore without a kind byte" {
     var buffer: [512]u8 = undefined;
     var encoder = try Encoder.init(&buffer, .{ .next_workspace_id = 2, .next_tab_id = 2, .next_pane_id = 2, .next_pane_generation = 2 });
+    encoder.wide_arguments = false;
     try legacyPane(&encoder, .{
         .pane_id = 1,
         .workspace_id = 1,

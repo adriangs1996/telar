@@ -10,6 +10,8 @@ const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const Pane = @import("../pane/Pane.zig");
+const PaneInputQueue = @import("../pane/PaneInputQueue.zig");
+const limit_reached = @import("limit_reached.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const pane_namespace = @import("../pane/pane_namespace.zig");
 const client_request = @import("client_request.zig");
@@ -41,7 +43,7 @@ pub fn send(model: *RuntimeModel, session: *Session, input: core.PaneInput) !voi
         return;
     }
 
-    try forward(model, pane, input.bytes);
+    _ = try forward(model, pane, input.bytes);
     recordOrigin(model, session, input.pane_id);
 }
 
@@ -104,7 +106,10 @@ pub fn sendText(model: *RuntimeModel, session: *Session, request: core.SendPaneT
         },
     };
 
-    try forward(model, pane, bytes);
+    if (!try forward(model, pane, bytes)) {
+        return client_request.fail(session, request.request_id, .resource_limit, input_queue_full);
+    }
+
     if (request.mode != .raw or std.mem.indexOfScalar(u8, bytes, '\r') != null) {
         pane.noteInjectedSubmission();
     }
@@ -131,7 +136,7 @@ pub fn press(model: *RuntimeModel, pane: *Pane, keys: []const keyinput.Key) !voi
         len += bytes.len;
     }
 
-    try forward(model, pane, encoded[0..len]);
+    _ = try forward(model, pane, encoded[0..len]);
 }
 
 /// Queues bytes for a restored pane's child and starts the input write.
@@ -141,11 +146,15 @@ pub fn press(model: *RuntimeModel, pane: *Pane, keys: []const keyinput.Key) !voi
 /// try pane_input.sendRestored(model, pane, "claude --resume <id>\r");
 /// ```
 pub fn sendRestored(model: *RuntimeModel, pane: *Pane, bytes: []const u8) !void {
+    if (!pane.queuePtyInput(bytes)) {
+        reportFullQueue(model, pane, bytes.len);
+        return;
+    }
+
     if (std.mem.indexOfScalar(u8, bytes, '\r') != null) {
         pane.noteInjectedSubmission();
     }
 
-    _ = pane.queuePtyInput(bytes);
     try startInputWrite(model, pane);
 }
 
@@ -225,7 +234,20 @@ pub fn startResponseWrite(model: *RuntimeModel, pane: *Pane) !void {
     };
 }
 
-fn forward(model: *RuntimeModel, pane: *Pane, bytes: []const u8) !void {
+/// What a control client reads when the pane's input queue has no room:
+/// its child has stopped reading what it was sent.
+pub const input_queue_full = std.fmt.comptimePrint("the pane's input queue holds its limit of {d} bytes; the program in it is not reading input", .{PaneInputQueue.capacity});
+
+/// Queues `bytes` for the child whole, or nothing when they do not fit, in
+/// which case the queue's limit is reported and neither history nor agent
+/// observation sees bytes the child never gets.
+fn forward(model: *RuntimeModel, pane: *Pane, bytes: []const u8) !bool {
+    if (!pane.input_queue.fits(bytes.len)) {
+        pane.input_queue.dropped_bytes +|= bytes.len;
+        reportFullQueue(model, pane, bytes.len);
+        return false;
+    }
+
     core.mark(model.io, .input_forward);
     if (comptime core.enabled) {
         model.metrics.input_events += 1;
@@ -253,6 +275,14 @@ fn forward(model: *RuntimeModel, pane: *Pane, bytes: []const u8) !void {
     }
 
     try startInputWrite(model, pane);
+    return true;
+}
+
+fn reportFullQueue(model: *RuntimeModel, pane: *const Pane, len: usize) void {
+    limit_reached.report(model, .{
+        .limit = PaneInputQueue.limit,
+        .requested = pane.input_queue.len + len,
+    });
 }
 
 fn recordOrigin(model: *RuntimeModel, session: *Session, pane_id: core.PaneId) void {

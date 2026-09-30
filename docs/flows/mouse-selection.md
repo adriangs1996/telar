@@ -59,8 +59,9 @@ This is interactive client state. Begin, drag, release and projection allocate
 nothing and add no queue. Character movement is constant-time; word expansion
 scans at most one bounded pane row. Click counts saturate at three. The window
 draws the highlight from the copy projection on its paced frame. Clipboard
-requests contain coordinates; runtime extraction retains its existing 64 KiB
-payload limit.
+requests contain coordinates; runtime extraction copies at most
+`max_clipboard_bytes` (1 MiB) through a heap scratch buffer. A larger selection
+copies nothing and reports `panes.max_clipboard_bytes`.
 
 The range uses absolute retained-history rows. Frame reconciliation adjusts the
 range and captured word boundaries when retained history is pruned. A changed

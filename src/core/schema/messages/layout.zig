@@ -208,7 +208,7 @@ pub fn decodeClientTabLayout(decoder: *Decoder) !ClientTabLayoutView {
     const fullscreen = try decoder.readBool();
     const workspace_active = try decoder.readBool();
     const node_count = try decoder.readInt(u16);
-    if (node_count == 0 or node_count > types.max_client_layout_nodes) {
+    if (node_count == 0 or node_count > types.max_client_layout_tab_nodes) {
         return error.InvalidClientLayoutNodeCount;
     }
 
@@ -227,7 +227,7 @@ pub fn decodeClientTabLayout(decoder: *Decoder) !ClientTabLayoutView {
 }
 
 fn validateClientTabLayout(layout: ClientTabLayout) !void {
-    if (layout.nodes.len == 0 or layout.nodes.len > types.max_client_layout_nodes) {
+    if (layout.nodes.len == 0 or layout.nodes.len > types.max_client_layout_tab_nodes) {
         return error.InvalidClientLayoutNodeCount;
     }
 
@@ -401,3 +401,55 @@ const ClientLayoutCollection = struct {
         node_count: usize,
     };
 };
+
+test "the largest layout message fits its wire bound" {
+    const full_tabs = (types.max_client_layout_nodes - types.max_client_layout_tabs) / (types.max_client_layout_tab_nodes - 1);
+    var full_tree: [types.max_client_layout_tab_nodes]types.ClientLayoutNode = undefined;
+    for (full_tree[0 .. types.max_panes_per_tab - 1]) |*node| {
+        node.* = .{ .split = .{
+            .axis = .vertical,
+            .ratio = types.client_layout_ratio_scale / 2,
+        } };
+    }
+
+    for (full_tree[types.max_panes_per_tab - 1 ..], 1..) |*node, pane| {
+        node.* = .{ .pane = .{ .id = @enumFromInt(pane) } };
+    }
+
+    const leaf = [_]types.ClientLayoutNode{.{ .pane = .{ .id = @enumFromInt(1) } }};
+    const workspace: types.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    var tabs: [types.max_client_layout_tabs]ClientTabLayout = undefined;
+    for (&tabs, 1..) |*tab, tab_id| {
+        tab.* = .{
+            .location = .{
+                .workspace = workspace,
+                .tab_id = @enumFromInt(tab_id),
+            },
+            .focused_pane = @enumFromInt(1),
+            .fullscreen = false,
+            .workspace_active = tab_id == 1,
+            .nodes = if (tab_id <= full_tabs) &full_tree else &leaf,
+        };
+    }
+
+    var buffer: [types.max_client_layout_wire_bytes]u8 = undefined;
+    const snapshot = try encodeClientLayoutSnapshot(&buffer, .{
+        .restored = true,
+        .sidebar_visible = true,
+        .sidebar_width = std.math.maxInt(u16),
+        .workspace_list_collapsed = false,
+        .active_tab = tabs[0].location,
+        .tabs = &tabs,
+    });
+
+    var decoder = Decoder.init(snapshot[1..]);
+    const view = try decodeClientLayoutSnapshot(&decoder);
+    try std.testing.expectEqual(@as(u16, types.max_client_layout_tabs), view.tab_count);
+    _ = try encodeClientLayoutUpdate(&buffer, .{
+        .sidebar_visible = true,
+        .sidebar_width = std.math.maxInt(u16),
+        .workspace_list_collapsed = false,
+        .active_tab = tabs[0].location,
+        .tabs = &tabs,
+    });
+}

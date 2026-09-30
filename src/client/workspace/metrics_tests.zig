@@ -11,7 +11,7 @@ test "presentation measurements change geometry without changing the split tree"
     var tree: data.WorkspaceLayout = .{};
     try tree.addRoot(first);
     try tree.splitFocused(second, .horizontal);
-    var before_nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
+    var before_nodes: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
     const before = tree.clientLayoutNodes(&before_nodes);
     var terminal: data.LayoutSnapshot = .{};
     tree.snapshot(area, &terminal);
@@ -19,7 +19,7 @@ test "presentation measurements change geometry without changing the split tree"
     try std.testing.expect(tree.setMetrics(.{ .border = 0, .gap = 0 }));
     var native: data.LayoutSnapshot = .{};
     tree.snapshot(area, &native);
-    var after_nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
+    var after_nodes: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
     try std.testing.expectEqualDeep(before, tree.clientLayoutNodes(&after_nodes));
     try std.testing.expectEqual(area.w / 2, native.find(first).?.content.w);
     try std.testing.expectEqualDeep(native.find(first).?.outer, native.find(first).?.content);

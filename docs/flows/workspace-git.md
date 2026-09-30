@@ -11,7 +11,9 @@ workspace names and does not mark dirty workspaces.
 agent maintenance tick (1 s)
         |
 workspace_git.start: one stalest workspace, ≥ 5 s since its last probe,
-                  at most one probe in flight runtime-wide
+                  at most one probe in flight runtime-wide; each finish
+                  starts the next due probe, so many workspaces still
+                  refresh every 5 s instead of one a tick
         |
 model.select.concurrent(.git_status, git_probe.probe)   -- worker thread
         |
@@ -30,7 +32,7 @@ client workspace_list_snapshot.apply -> model.workspace_list_snapshot
 ## Ownership and bounds
 
 The runtime `Workspaces` table owns the observed branch (`git_branch`, at most
-`core.max_git_branch_bytes`, 64 bytes), the dirty flag (`git_dirty`) and its
+`core.max_git_branch_bytes`, 200 bytes), the dirty flag (`git_dirty`) and its
 probe bookkeeping (`git_checked_at_ms`, `git_probe`). A missing repository stores an empty branch, so a
 directory that stops being a repo clears its badge. Probe failures leave the
 previous projection and simply retry after the interval.

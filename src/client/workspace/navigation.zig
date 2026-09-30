@@ -23,7 +23,7 @@ test "workspace bookmarks replace the last focused tab and pane" {
     try std.testing.expect(history.find(workspace) == null);
 }
 
-test "live layout retention stays bounded and replaces existing tabs before eviction" {
+test "live layout retention stays bounded and the oldest tab makes room" {
     var layouts: data.SavedLayouts = .{};
     var layout: data.WorkspaceLayout = .{};
     const pane: core.PaneId = @enumFromInt(5);
@@ -33,7 +33,7 @@ test "live layout retention stays bounded and replaces existing tabs before evic
         .tab_id = @enumFromInt(1),
     };
     var saved: data.SavedLayout = .{ .location = location, .pane_id = pane, .workspace_active = true, .layout = layout };
-    for (0..core.max_client_layout_tabs) |index| {
+    for (0..data.SavedLayouts.capacity) |index| {
         saved.location.tab_id = @enumFromInt(index + 1);
         layouts.retain(saved);
     }
@@ -42,17 +42,19 @@ test "live layout retention stays bounded and replaces existing tabs before evic
     try std.testing.expect(saved.layout.toggleFullscreen());
     layouts.retain(saved);
     try std.testing.expect(layouts.find(location).?.layout.isFullscreen());
-    try std.testing.expectEqual(@as(usize, 0), layouts.eviction_index);
+    try std.testing.expectEqual(data.SavedLayouts.capacity, layouts.count);
+
+    var oldest = location;
+    oldest.tab_id = @enumFromInt(2);
     saved.location.workspace = .{ .workspace = @enumFromInt(4) };
     try std.testing.expectError(error.TooManySavedLayouts, layouts.remember(saved));
     layouts.retain(saved);
-    try std.testing.expectEqual(@as(usize, 1), layouts.eviction_index);
-    try std.testing.expect(layouts.find(location) == null);
+    try std.testing.expect(layouts.find(oldest) == null);
+    try std.testing.expect(layouts.find(location) != null);
     try std.testing.expect(layouts.find(saved.location).?.layout.isFullscreen());
     layouts.forget(saved.location);
-    layouts.retain(saved);
-    try std.testing.expectEqual(@as(usize, 1), layouts.eviction_index);
-    try std.testing.expect(layouts.find(saved.location) != null);
+    try std.testing.expect(layouts.find(saved.location) == null);
+    try std.testing.expectEqual(data.SavedLayouts.capacity - 1, layouts.count);
 }
 
 test "saved layouts are keyed by complete tab identity" {

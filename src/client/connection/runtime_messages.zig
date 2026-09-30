@@ -70,7 +70,8 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
         },
         .tab_moved => |moved| _ = try tab_move.completeTabMove(&client.model, moved),
         .pane_frame => |frame| _ = try pane_frames.receivePaneFrame(client, frame),
-        .pane_cwd => |cwd| _ = try data.pane_metadata.update(&client.model, 
+        .pane_cwd => |cwd| _ = try data.pane_metadata.update(
+            &client.model,
             .{
                 .cwd = .{
                     .pane_id = cwd.pane_id,
@@ -78,7 +79,8 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
                 },
             },
         ),
-        .pane_foreground => |foreground| _ = try data.pane_metadata.update(&client.model, 
+        .pane_foreground => |foreground| _ = try data.pane_metadata.update(
+            &client.model,
             .{
                 .foreground = .{
                     .pane_id = foreground.pane_id,
@@ -86,7 +88,8 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
                 },
             },
         ),
-        .pane_title => |title| _ = try data.pane_metadata.update(&client.model, 
+        .pane_title => |title| _ = try data.pane_metadata.update(
+            &client.model,
             .{
                 .title = .{
                     .pane_id = title.pane_id,
@@ -132,7 +135,8 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
             _ = try agent_snapshot.applyAgentSnapshot(client, snapshot);
             try agent_peek.requestScreen(&client.model);
         },
-        .system_metrics => |metrics| _ = try data.system_metrics.reconcile(&client.model, 
+        .system_metrics => |metrics| _ = try data.system_metrics.reconcile(
+            &client.model,
             .{
                 .runtime_revision = metrics.revision,
                 .cpu_percent = metrics.cpu_percent,
@@ -142,7 +146,7 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
                 .memory_total_decigib = metrics.memory_total_decigib,
             },
         ),
-        .workspace_list => |list| _ = try data.workspace_list_snapshot.apply(&client.model, list),
+        .workspace_list => |list| try workspace_list_snapshot.applyWorkspaceList(client, list),
         .graphics_snapshot => |snapshot| {
             const outcome = try pane_graphics.applyPaneGraphics(
                 client,

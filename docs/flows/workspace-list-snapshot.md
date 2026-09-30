@@ -18,9 +18,12 @@ historical lists. Wire validation rejects revision zero, excess entries,
 duplicate identities, oversized names/paths and invalid tab counts.
 
 The model owns the only client replica, `model.workspace_list_snapshot`. It holds at most 64 entries,
-UTF-8-safe display names up to 48 bytes and complete paths in a shared 16 KiB
-pool. Reconciliation builds a candidate before replacement; it allocates
-nothing. A validation or aggregate-path capacity failure preserves the last
+whole names up to `max_workspace_name_bytes` (256, the bound of every layer;
+views clip them to their room) and complete paths in a shared 32 KiB pool.
+Reconciliation builds a candidate before replacement; it allocates nothing. A
+list whose paths overflow the pool keeps the entries before the first that does
+not fit, counts the rest in `dropped` and the client reports
+`workspace_list.path_pool_size`. A validation failure preserves the last
 snapshot. The operation classifies bounded validation errors as rejected and
 propagates unclassified failures.
 

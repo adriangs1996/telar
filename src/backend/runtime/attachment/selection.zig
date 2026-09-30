@@ -7,6 +7,7 @@ const std = @import("std");
 const vt = @import("ghostty-vt");
 
 pub const scratch_bytes = 2 * core.max_clipboard_bytes + 1;
+pub const clipboard_limit = core.Limit.declare("panes.max_clipboard_bytes", "bytes", core.max_clipboard_bytes);
 
 pub const Result = union(enum) {
     copied: []const u8,
