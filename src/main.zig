@@ -273,7 +273,6 @@ test {
     _ = @import("cli/LoginRequest.zig");
     _ = @import("cli/config_allowlist.zig");
     _ = @import("cli/ConfigEntry.zig");
-    _ = @import("cli/ConfigRoot.zig");
     _ = @import("cli/config_filter.zig");
     _ = @import("cli/config_secrets.zig");
     _ = @import("cli/config_receive.zig");

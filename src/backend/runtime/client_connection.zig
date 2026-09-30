@@ -142,9 +142,26 @@ pub fn receive(model: *RuntimeModel, event: ClientMessage) void {
         return;
     };
 
-    if (!model.shutdown.isRequested()) {
-        startRead(model, session) catch drop(model, event.client);
+    // A parked report borrows the receive buffer; reading resumes once it
+    // is answered.
+    if (session.parked != null) {
+        return;
     }
+
+    resumeRead(model, session);
+}
+
+/// Starts the connection's next read unless shutdown has begun.
+///
+/// ```zig
+/// client_connection.resumeRead(model, session);
+/// ```
+pub fn resumeRead(model: *RuntimeModel, session: *Session) void {
+    if (model.shutdown.isRequested()) {
+        return;
+    }
+
+    startRead(model, session) catch drop(model, session.key);
 }
 
 /// Retires one write. The update's flush starts the session's next one.

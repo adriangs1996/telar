@@ -343,7 +343,12 @@ pub fn mapClaudeTitle(buffer: *[core.max_agent_session_title_bytes]u8, input: Cl
 /// Codex's state directory: `CODEX_HOME`, else `~/.codex`.
 fn codexHome(environ: std.process.Environ, buffer: *[std.fs.max_path_bytes]u8) ?[]const u8 {
     const settings = core.HookSettings.codex;
-    return settings.directory(std.process.Environ.getPosix(environ, settings.environment.?), std.process.Environ.getPosix(environ, "HOME"), buffer);
+    const override = if (settings.environment()) |name| std.process.Environ.getPosix(environ, name) else null;
+    return settings.directory(
+        override,
+        std.process.Environ.getPosix(environ, "HOME"),
+        buffer,
+    );
 }
 
 /// Finds the current Codex state database, `state_<n>.sqlite` with the
@@ -703,30 +708,6 @@ fn hookProvider(agent: HookOptions.Agent) core.AgentProvider {
     };
 }
 
-/// How long one hook waits, over all its reports, while the runtime
-/// identifies a pane last seen running another agent again: an agent that
-/// just replaced the previous one is recognised by the pane's next
-/// observation, which the refusal starts. Once that observation ran, the
-/// runtime answers for good and the hook stops waiting.
-const mismatch_budget_ms: u32 = 1_000;
-const mismatch_retry_ms: u32 = 100;
-
-fn sendRetrying(session: *Session, budget_ms: *u32, comptime send: anytype, arguments: anytype) !void {
-    while (true) {
-        @call(.auto, send, .{session} ++ arguments) catch |err| {
-            if (err != error.AgentMismatch or budget_ms.* < mismatch_retry_ms) {
-                return err;
-            }
-
-            budget_ms.* -= mismatch_retry_ms;
-            session.sleepMs(mismatch_retry_ms);
-            continue;
-        };
-
-        return;
-    }
-}
-
 fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     if (reports.lifecycle == null and reports.command == null and reports.title == null and reports.review == null and reports.progress == null) {
         return;
@@ -738,7 +719,6 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     defer session.close();
     const pane = target.pane;
     session.verifyDescent(pane) catch return;
-    var budget_ms = mismatch_budget_ms;
 
     // Progress goes first: a final answer is stored before the lifecycle
     // report marks the turn finished, so a waiter never reads a stale one.
@@ -747,7 +727,7 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
         report.pane_id = core.pane(pane.pane_id) catch return;
         report.pane_generation = pane.pane_generation;
         report.provider = target.provider;
-        sendRetrying(&session, &budget_ms, Session.reportProgress, .{report}) catch {};
+        session.reportProgress(report) catch {};
     }
     if (reports.lifecycle) |lifecycle| {
         const report: Session.AgentReport = .{
@@ -759,13 +739,13 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
             .session_file = lifecycle.session_file,
             .session_file_kind = lifecycle.session_file_kind,
         };
-        sendRetrying(&session, &budget_ms, Session.reportAgent, .{ pane, report }) catch return;
+        session.reportAgent(pane, report) catch return;
     }
     if (reports.review) |review| {
         hook_review.capture(&session, pane, review);
     }
     if (reports.title) |title| {
-        sendRetrying(&session, &budget_ms, Session.reportAgentTitle, .{ pane, target.provider, title }) catch return;
+        session.reportAgentTitle(pane, target.provider, title) catch return;
     }
     if (reports.command) |tool| {
         const command: AgentCommandReport = .{
@@ -777,7 +757,7 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
             .session = tool.session,
             .exit_code = tool.exit_code,
         };
-        sendRetrying(&session, &budget_ms, Session.reportAgentCommand, .{ pane, command }) catch return;
+        session.reportAgentCommand(pane, command) catch return;
     }
     if (reports.review) |review| {
         hook_review.feedback(&session, pane, review) catch {};

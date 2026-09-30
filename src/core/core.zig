@@ -227,6 +227,7 @@ pub const TabRenamed = @import("schema/messages/TabRenamed.zig");
 pub const TabSnapshotView = @import("schema/messages/TabSnapshotView.zig");
 pub const Table = @import("Table.zig");
 pub const HookSettings = @import("HookSettings.zig");
+pub const AgentConfigRoot = @import("AgentConfigRoot.zig");
 pub const TerminalColors = @import("schema/TerminalColors.zig");
 pub const TerminalSize = @import("schema/TerminalSize.zig");
 pub const Timing = @import("Timing.zig");
@@ -465,6 +466,7 @@ test {
     _ = ProfileHistogram;
     _ = @import("agent_manifest.zig");
     _ = HookSettings;
+    _ = AgentConfigRoot;
     _ = @import("DiagnosticLogName.zig");
     _ = @import("diagnostics.zig");
     _ = @import("Sink.zig");

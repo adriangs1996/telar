@@ -645,9 +645,9 @@ fn loggedIn(init: std.process.Init, destination: []const u8, agent: Agent, path:
 fn localProvider(arena: std.mem.Allocator, io: std.Io, environ: std.process.Environ, agent: Agent) !?[]const u8 {
     const home = std.process.Environ.getPosix(environ, "HOME") orelse return null;
     const root = config_allowlist.rootFor(agent);
-    const directory = if (root.environment) |name| std.process.Environ.getPosix(environ, name) else null;
-    const base = if (directory) |value| if (value.len != 0) try std.fmt.allocPrint(arena, "{s}{s}", .{ value, root.environment_suffix }) else null else null;
-    const root_path = base orelse try std.fmt.allocPrint(arena, "{s}/{s}", .{ home, root.directory });
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const override = if (root.environment) |name| std.process.Environ.getPosix(environ, name) else null;
+    const root_path = root.resolve(override, home, &root_buffer) orelse return null;
     return switch (agent) {
         .pi => settingString(arena, io, try std.fmt.allocPrint(arena, "{s}/settings.json", .{root_path}), "defaultProvider"),
         .opencode => provider: {

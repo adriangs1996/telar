@@ -3,6 +3,7 @@
 //! one worktree detection, one session-name probe, the idle engine check
 //! and capture expiry.
 const client_connection = @import("client_connection.zig");
+const agent_hooks = @import("agent_hooks.zig");
 const agent_status = @import("agent_status.zig");
 
 const std = @import("std");
@@ -29,6 +30,7 @@ pub fn tick(model: *RuntimeModel, result: anyerror!void) !void {
 
     try session_checkpoint.start(model);
     client_connection.expireHandshakes(model);
+    agent_hooks.expireParked(model);
     workspace_git.start(model);
     worktree_git.start(model);
     worktree_detection.start(model);

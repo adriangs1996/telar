@@ -169,6 +169,21 @@ pub fn acceptsReporter(model: *const RuntimeModel, key: PaneKey, reporter: core.
     return agent.acceptsReporter(reporter);
 }
 
+/// The process group of the agent process evidence names for one exact pane
+/// generation, if any.
+///
+/// ```zig
+/// const group = agent_status.processGroup(model, key) orelse return;
+/// ```
+pub fn processGroup(model: *const RuntimeModel, key: PaneKey) ?u32 {
+    const agent = model.agents.findConst(key) orelse return null;
+    if (agent.process == null) {
+        return null;
+    }
+
+    return agent.agent_process_id;
+}
+
 /// Returns the provider currently projected for one exact pane generation.
 ///
 /// ```zig

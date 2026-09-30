@@ -476,7 +476,7 @@ fn hookSetFor(integration: Integration, command: []const u8) HookSet {
 
 fn defaultSettingsPath(environ: std.process.Environ, integration: Integration, buffer: *[std.fs.max_path_bytes]u8) ![]const u8 {
     const settings = integration.settings;
-    const override = if (settings.environment) |name| std.process.Environ.getPosix(environ, name) else null;
+    const override = if (settings.environment()) |name| std.process.Environ.getPosix(environ, name) else null;
     return settings.path(override, std.process.Environ.getPosix(environ, "HOME"), buffer) orelse error.HomeUnavailable;
 }
 

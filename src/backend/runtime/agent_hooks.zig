@@ -30,11 +30,6 @@ pub const TitleReport = enum { recorded, unchanged, pane_not_found, invalid_titl
 
 const foreign_message = "the report does not come from a process inside the pane";
 
-/// Parents walked from a peer process before its descent is refused: an
-/// agent, its launcher and a few shells between the pane's root process and
-/// the hook fit well within it.
-const max_descent_ancestors = 32;
-
 /// What an observation worker needs to walk one peer's parents.
 const DescentWork = struct {
     client: ClientKey,
@@ -89,6 +84,7 @@ pub fn receive(model: *RuntimeModel, session: *Session, report: core.ReportAgent
     if (try refuseReporter(model, session, report.request_id, .{
         .key = pane.key(),
         .provider = report.provider,
+        .message = .{ .report_agent = report },
     })) {
         return;
     }
@@ -157,6 +153,7 @@ pub fn receiveProgress(model: *RuntimeModel, session: *Session, report: core.Rep
     if (try refuseReporter(model, session, report.request_id, .{
         .key = pane.key(),
         .provider = report.provider,
+        .message = .{ .report_agent_progress = report },
     })) {
         return;
     }
@@ -242,6 +239,7 @@ pub fn receiveCommand(model: *RuntimeModel, session: *Session, report: core.Repo
     if (try refuseReporter(model, session, report.request_id, .{
         .key = pane.key(),
         .provider = reporter,
+        .message = .{ .report_agent_command = report },
     })) {
         return;
     }
@@ -282,6 +280,7 @@ pub fn receiveTitle(model: *RuntimeModel, session: *Session, report: core.Report
     if (try refuseReporter(model, session, report.request_id, .{
         .key = key,
         .provider = report.provider,
+        .message = .{ .report_agent_title = report },
     })) {
         return;
     }
@@ -376,6 +375,8 @@ pub fn finishDescent(model: *RuntimeModel, completion: DescentCompletion) !void 
     }
 
     session.hook_pane = completion.pane;
+    session.hook_lineage_len = completion.ancestor_count;
+    @memcpy(session.hook_lineage[0..completion.ancestor_count], completion.lineage());
     try client_request.complete(session, completion.request_id);
 }
 
@@ -385,28 +386,38 @@ fn walkDescent(work: DescentWork) DescentCompletion {
     const path = core.enter(.observation);
     defer path.restore();
 
-    var lineage: [max_descent_ancestors]u32 = undefined;
-    const ancestors = proclineage.ancestors(work.peer, &lineage);
-    return .{
+    var completion: DescentCompletion = .{
         .client = work.client,
         .request_id = work.request_id,
         .pane = work.pane,
-        .descends = work.peer == work.root or std.mem.indexOfScalar(u32, ancestors, work.root) != null,
+        .descends = false,
     };
+    const ancestors = proclineage.ancestors(work.peer, &completion.ancestors);
+    completion.ancestor_count = @intCast(ancestors.len);
+    completion.descends = work.peer == work.root or std.mem.indexOfScalar(u32, ancestors, work.root) != null;
+    return completion;
 }
 
-/// The pane and agent a report names.
+/// The pane and agent a report names, and the report itself should it wait
+/// for the pane's process to be identified again.
 const Reporter = struct {
     key: PaneKey,
     provider: core.AgentProvider,
+    message: core.ClientMessage,
 };
+
+/// How long a parked report waits for its recheck before the pane's
+/// current agent answers it.
+const parked_deadline_ms: i64 = 2_000;
 
 // A report that names its agent comes from a hook, which must have had this
 // connection confirmed as descending from the pane; the pane must run that
 // agent too. One that names no agent is the user's own, sent by hand. A
 // confirmed hook of another agent may mean the pane's process replaced
-// itself since the last probe, so the next observation identifies it again
-// and the hook may retry. Returns whether the report was refused.
+// itself since the last probe: the report is parked until an observation
+// that starts after it identifies the process again, then answered. A
+// process refused that way before is refused at once while it lives.
+// Returns whether the report was refused or parked.
 fn refuseReporter(model: *RuntimeModel, session: *Session, request_id: core.RequestId, reporter: Reporter) !bool {
     if (reporter.provider == .unknown) {
         return false;
@@ -426,21 +437,121 @@ fn refuseReporter(model: *RuntimeModel, session: *Session, request_id: core.Requ
         return refuseForeign(session, request_id);
     }
 
-    if (session.recheck_mark) |mark| {
-        // The pane was identified again since this hook asked: it still
-        // runs another agent, such as the one that ran this hook as a tool.
-        if (pane.agent_rechecks != mark) {
-            try client_request.fail(session, request_id, .foreign_process, "the pane runs another agent");
-            return true;
+    const nested = nestedProcess(model, session, reporter.key);
+    if (session.answering_parked) {
+        // Identified again after this report arrived: the pane still runs
+        // another agent, such as the one that ran this hook as a tool.
+        if (nested) |process| {
+            pane.rejected_group = process.group;
+            pane.rejected_process = process.pid;
         }
-    } else {
-        session.recheck_mark = pane.agent_rechecks;
-        pane.agent_recheck_requested = true;
-        try pane_observation.start(model, pane);
+
+        return refuseForeign(session, request_id);
     }
 
-    try client_request.fail(session, request_id, .agent_mismatch, "the pane was last seen running another agent; it is checked again");
+    if (nested) |process| {
+        if (pane.rejected_group == process.group and pane.rejected_process == process.pid) {
+            return refuseForeign(session, request_id);
+        }
+    }
+
+    // A recheck already running may have read the process before this
+    // report's agent replaced it; the one after it answers.
+    session.parked_pane = reporter.key;
+    session.parked_recheck = pane.agent_rechecks +% @as(u32, if (pane.agent_recheck_running) 2 else 1);
+    session.parked_at_ms = std.Io.Timestamp.now(model.io, .awake).toMilliseconds();
+    pane.agent_recheck_requested = true;
+    pane_observation.start(model, pane) catch {
+        try client_request.fail(session, request_id, .resource_limit, "the pane's process cannot be identified again now");
+        return true;
+    };
+
+    session.parked = reporter.message;
     return true;
+}
+
+/// The process a hook ran under that is a child of the pane's identified
+/// agent, as the connection's descent check found it, and that agent's
+/// process group.
+const NestedProcess = struct {
+    group: u32,
+    pid: u32,
+};
+
+fn nestedProcess(model: *const RuntimeModel, session: *const Session, key: PaneKey) ?NestedProcess {
+    const group = agent_status.processGroup(model, key) orelse return null;
+    const lineage = session.hook_lineage[0..session.hook_lineage_len];
+    const index = std.mem.indexOfScalar(u32, lineage, group) orelse return null;
+    if (index == 0) {
+        return null;
+    }
+
+    return .{
+        .group = group,
+        .pid = lineage[index - 1],
+    };
+}
+
+/// Answers the reports parked on `key` whose recheck has completed, by
+/// dispatching them again. Runs after each observation of the pane.
+///
+/// ```zig
+/// agent_hooks.answerParked(model, pane.key());
+/// ```
+pub fn answerParked(model: *RuntimeModel, key: PaneKey) void {
+    const rechecks = if (model.panes.resolveConst(key)) |pane| pane.agent_rechecks else return;
+    for (model.clients.items) |slot| {
+        const session = slot orelse continue;
+        if (session.parked == null or session.parked_pane.id != key.id or session.parked_pane.generation != key.generation) {
+            continue;
+        }
+
+        // Wrapping counters: the answer is due once the count reached it.
+        if (@as(i32, @bitCast(rechecks -% session.parked_recheck)) >= 0) {
+            answer(model, session);
+        }
+    }
+}
+
+/// Answers every parked report whose pane is gone or whose recheck did not
+/// complete in time, with the pane's current agent. Runs on the maintenance
+/// tick.
+///
+/// ```zig
+/// agent_hooks.expireParked(model);
+/// ```
+pub fn expireParked(model: *RuntimeModel) void {
+    const now_ms = std.Io.Timestamp.now(model.io, .awake).toMilliseconds();
+    for (model.clients.items) |slot| {
+        const session = slot orelse continue;
+        if (session.parked == null) {
+            continue;
+        }
+
+        const pane = model.panes.resolveConst(session.parked_pane);
+        const gone = pane == null or pane.?.exit != null;
+        if (gone or now_ms - session.parked_at_ms >= parked_deadline_ms) {
+            answer(model, session);
+        }
+    }
+}
+
+fn answer(model: *RuntimeModel, session: *Session) void {
+    const message = session.parked.?;
+    session.parked = null;
+    if (session.closing) {
+        client_connection.finalize(model, session.key);
+        return;
+    }
+
+    session.answering_parked = true;
+    defer session.answering_parked = false;
+    client_request.receive(model, session, message) catch {
+        client_connection.drop(model, session.key);
+        return;
+    };
+
+    client_connection.resumeRead(model, session);
 }
 
 fn refuseForeign(session: *Session, request_id: core.RequestId) !bool {

@@ -3,26 +3,25 @@
 //! runtime reads it to know whether the hooks are installed.
 
 const std = @import("std");
+const AgentConfigRoot = @import("AgentConfigRoot.zig");
 const HookSettings = @This();
 
-/// Variable that names the agent's configuration directory, when the agent
-/// honours one.
-environment: ?[]const u8 = null,
-/// The configuration directory under the home directory otherwise.
-home_directory: []const u8,
+root: AgentConfigRoot,
+/// Whether the agent reads its hooks from the directory its variable
+/// names; one that does not reads them under the home directory always.
+follows_environment: bool = true,
 file: []const u8,
 /// The end of every command telar installs, `... hook <agent>`.
 marker: []const u8,
 
 pub const claude: HookSettings = .{
-    .home_directory = ".claude",
+    .root = AgentConfigRoot.claude,
     .file = "settings.json",
     .marker = " hook claude",
 };
 
 pub const codex: HookSettings = .{
-    .environment = "CODEX_HOME",
-    .home_directory = ".codex",
+    .root = AgentConfigRoot.codex,
     .file = "hooks.json",
     .marker = " hook codex",
 };
@@ -30,32 +29,28 @@ pub const codex: HookSettings = .{
 /// Cursor reads user hooks from the home directory whatever
 /// `CURSOR_CONFIG_DIR` says.
 pub const cursor: HookSettings = .{
-    .home_directory = ".cursor",
+    .root = AgentConfigRoot.cursor,
+    .follows_environment = false,
     .file = "hooks.json",
     .marker = " hook cursor",
 };
 
-/// The agent's configuration directory: the value of `environment` when it
-/// is set, else `home_directory` under `home`. Null without either.
+/// The variable whose value `directory` and `path` take as `override`.
+///
+/// ```zig
+/// const override = if (settings.environment()) |name| environ.getPosix(name) else null;
+/// ```
+pub fn environment(self: HookSettings) ?[]const u8 {
+    return if (self.follows_environment) self.root.environment else null;
+}
+
+/// The directory the agent reads its hooks from. Null without a home.
 ///
 /// ```zig
 /// const directory = HookSettings.codex.directory(codex_home, home, &buffer) orelse return;
 /// ```
 pub fn directory(self: HookSettings, override: ?[]const u8, home: ?[]const u8, buffer: []u8) ?[]const u8 {
-    if (self.environment != null) {
-        if (override) |value| {
-            if (value.len != 0) {
-                return std.fmt.bufPrint(buffer, "{s}", .{value}) catch null;
-            }
-        }
-    }
-
-    const base = home orelse return null;
-    if (base.len == 0) {
-        return null;
-    }
-
-    return std.fmt.bufPrint(buffer, "{s}/{s}", .{ base, self.home_directory }) catch null;
+    return self.root.resolve(if (self.follows_environment) override else null, home, buffer);
 }
 
 /// The settings file inside `directory`.
@@ -69,12 +64,13 @@ pub fn path(self: HookSettings, override: ?[]const u8, home: ?[]const u8, buffer
     return std.fmt.bufPrint(buffer, "{s}/{s}", .{ base, self.file }) catch null;
 }
 
-test "settings live under the agent's variable, else under the home directory" {
+test "hooks live under the agent's variable when it reads them there, else under the home directory" {
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
 
     try std.testing.expectEqualStrings("/srv/codex/hooks.json", codex.path("/srv/codex", "/home/me", &buffer).?);
     try std.testing.expectEqualStrings("/home/me/.codex/hooks.json", codex.path("", "/home/me", &buffer).?);
-    try std.testing.expectEqualStrings("/home/me/.codex", codex.directory(null, "/home/me", &buffer).?);
-    try std.testing.expectEqualStrings("/home/me/.claude/settings.json", claude.path("/ignored", "/home/me", &buffer).?);
+    try std.testing.expectEqualStrings("/srv/claude/settings.json", claude.path("/srv/claude", "/home/me", &buffer).?);
+    try std.testing.expectEqualStrings("/home/me/.cursor/hooks.json", cursor.path("/srv/cursor", "/home/me", &buffer).?);
+    try std.testing.expect(cursor.environment() == null);
     try std.testing.expect(cursor.path(null, null, &buffer) == null);
 }

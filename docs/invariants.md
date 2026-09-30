@@ -157,7 +157,11 @@ analytics.
   exception breaks this rule: the **interrupted draft** below, where a screen
   reading decides one key press.
 - Process detection starts from `tcgetpgrp` or an equivalent constant-cost
-  signal and inspects processes only after a relevant change.
+  signal and inspects processes only after a relevant change. A hook of
+  another agent reporting from inside the pane counts as one: it may mean
+  the agent replaced itself. The answer is kept per pane for the process
+  nested under the pane's agent, which is refused without another
+  inspection while it lives.
 - Detection and Git status run in observation workers, never in a request,
   render or input handler.
 - Git the runtime runs on its own goes through `gitstatus.untrusted_git`: a

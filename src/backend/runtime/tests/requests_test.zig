@@ -8,6 +8,7 @@ const agent_control = @import("../agent_control.zig");
 const agent_identity = @import("../agent_identity.zig");
 const agent_status = @import("../agent_status.zig");
 const agent_hooks = @import("../agent_hooks.zig");
+const DescentCompletion = @import("../events/DescentCompletion.zig");
 const SessionReference = @import("../../agent/SessionReference.zig");
 
 const missing_pane: core.PaneId = @enumFromInt(99);
@@ -380,12 +381,19 @@ test "a hook reports for a pane only on a connection confirmed inside it and onl
     try fixture.send(claude_report);
     try expectFailure(&fixture, .foreign_process);
 
-    try agent_hooks.finishDescent(model, .{
+    // The hook runs under a nested process (the tool Claude ran) under
+    // Claude, the pane's root process.
+    const nested: u32 = 999_001;
+    var confirmed: DescentCompletion = .{
         .client = fixture.session.key,
         .request_id = @enumFromInt(41),
         .pane = pane.key(),
         .descends = true,
-    });
+    };
+    confirmed.ancestors[0] = nested;
+    confirmed.ancestors[1] = root;
+    confirmed.ancestor_count = 2;
+    try agent_hooks.finishDescent(model, confirmed);
     try std.testing.expect(fixture.response().?.* == .request_completed);
     fixture.clearResponses();
 
@@ -424,39 +432,42 @@ test "a hook reports for a pane only on a connection confirmed inside it and onl
         } },
     };
 
-    // An observation is already running, so the recheck waits for it.
+    // An observation is already running, so the report waits for the
+    // recheck after it: its reads pause and no answer is sent yet.
     try std.testing.expect(pane.history_observer.sealForProbe());
-    defer pane.history_observer.finishSealed();
-
-    // A confirmed hook of another agent: the pane is checked again, once
-    // per connection, and the report refused until the check answers.
+    pane.agent_recheck_running = true;
     try fixture.send(codex_reports[0]);
-    try expectFailure(&fixture, .agent_mismatch);
+    try std.testing.expect(fixture.response() == null);
+    try std.testing.expect(fixture.session.parked != null);
     try std.testing.expect(pane.agent_recheck_requested);
-    pane.agent_recheck_requested = false;
-    try fixture.send(codex_reports[1]);
-    try expectFailure(&fixture, .agent_mismatch);
-    try std.testing.expect(!pane.agent_recheck_requested);
+    try std.testing.expectEqual(pane.agent_rechecks +% 2, fixture.session.parked_recheck);
 
-    // The check ran and still found Claude: the refusal is final, so the
-    // hook stops waiting.
+    // The running recheck completes: it may have read the process before
+    // the report's agent replaced it, so the report keeps waiting.
+    pane.agent_recheck_running = false;
     pane.agent_rechecks +%= 1;
+    agent_hooks.answerParked(model, pane.key());
+    try std.testing.expect(fixture.response() == null);
+
+    // The next one still finds Claude: the report is refused, and the
+    // nested process is remembered.
+    pane.history_observer.finishSealed();
+    pane.agent_recheck_requested = false;
+    pane.agent_rechecks +%= 1;
+    agent_hooks.answerParked(model, pane.key());
+    try std.testing.expect(fixture.session.parked == null);
+    try expectFailure(&fixture, .foreign_process);
+    try std.testing.expectEqual(nested, pane.rejected_process);
+
+    // Later reports of that process are refused at once, without
+    // identifying the pane again.
     for (codex_reports) |message| {
         try fixture.send(message);
         try expectFailure(&fixture, .foreign_process);
+        try std.testing.expect(fixture.session.parked == null);
+        try std.testing.expect(!pane.agent_recheck_requested);
     }
     try std.testing.expect(agent_status.sessionReference(model, pane.key()) == null);
-
-    try fixture.send(claude_report);
-    try std.testing.expect(fixture.response().?.* == .request_completed);
-    fixture.clearResponses();
-    try std.testing.expectEqualStrings("019a0000-0000-7000-8000-00000000000a", agent_status.sessionReference(model, pane.key()).?.slice());
-
-    // The confirmation names one generation; a report for another is refused.
-    var stale = claude_report;
-    stale.report_agent.pane_generation = pane.generation + 1;
-    try fixture.send(stale);
-    try expectFailure(&fixture, .pane_not_found);
 
     // The check found that Codex replaced Claude in the same process group.
     try std.testing.expect(agent_status.observeProcess(model, .{
@@ -615,4 +626,61 @@ test "attributing a worktree or sending review evidence for a pane takes a conne
     fixture.clearResponses();
     try fixture.send(registration);
     try std.testing.expect(fixture.response().?.* == .worktree_registered);
+}
+
+test "a report of another agent waits for the pane's process to be identified again and is then answered" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const model = &fixture.runtime.model;
+    const root = agent_identity.fromPane(pane).process_id;
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = agent_identity.fromPane(pane),
+        .provider = .claude,
+        .process_id = root,
+        .observed_at_ms = 1,
+    }));
+    try agent_hooks.finishDescent(model, .{
+        .client = fixture.session.key,
+        .request_id = @enumFromInt(41),
+        .pane = pane.key(),
+        .descends = true,
+    });
+    fixture.clearResponses();
+
+    // Codex took the pane without an exit the probe saw.
+    try fixture.send(.{ .report_agent = .{
+        .request_id = @enumFromInt(41),
+        .pane_id = pane.id,
+        .pane_generation = pane.generation,
+        .provider = .codex,
+        .state = .ready,
+        .session = "019a0000-0000-7000-8000-00000000000b",
+    } });
+    try std.testing.expect(fixture.session.parked != null);
+    try std.testing.expect(pane.agent_recheck_running);
+    try std.testing.expect(fixture.response() == null);
+    const rechecks = pane.agent_rechecks;
+
+    // The observation the refusal started runs with no output to replay.
+    // The pane's root process is not an agent, so the pane has none, and
+    // the parked report is taken.
+    var answered = false;
+    for (0..64) |_| {
+        const event = try fixture.runtime.loop.next();
+        const observed = event == .pane_observed;
+        _ = try fixture.runtime.update(event);
+        if (observed) {
+            answered = true;
+            break;
+        }
+    }
+
+    try std.testing.expect(answered);
+    try std.testing.expect(!pane.agent_recheck_running);
+    try std.testing.expectEqual(rechecks +% 1, pane.agent_rechecks);
+    try std.testing.expect(fixture.session.parked == null);
+    try std.testing.expect(fixture.response().?.* == .request_completed);
+    try std.testing.expectEqualStrings("019a0000-0000-7000-8000-00000000000b", agent_status.sessionReference(model, pane.key()).?.slice());
 }

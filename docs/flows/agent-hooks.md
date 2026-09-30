@@ -11,7 +11,7 @@ every other evidence so a silent hook hands control back.
 ```text
 telar integration install claude|codex|cursor
         |
-~/.claude/settings.json, ~/.codex/hooks.json or ~/.cursor/hooks.json
+~/.claude/settings.json, ~/.codex/hooks.json or ~/.cursor/hooks.json (see core.HookSettings)
         hooks.<owned event> += { type = command, command = "<pane guard>; exec '<telar>' hook <agent>", timeout = bounded }
         (Cursor lists { command, timeout } directly under the event, beside version: 1)
 
@@ -99,20 +99,31 @@ Two checks keep a pane's card to its own agent:
 2. **Agent.** A report names its agent. A pane whose process was last seen
    running another agent refuses it before any effect: lifecycle state,
    session, title, progress (and the external worktree a progress report
-   registers) and command history. The refusal is `agent_mismatch`: the
-   agent may have replaced the previous one without an exit the probe saw,
-   by `exec` or by quitting and starting again between two probes. The
-   first such report of a connection starts an observation of the pane at
-   once, even without output to replay (`Observer.sealForProbe`), that
-   identifies the foreground process again even if its group did not
-   change (`Cache.recheck`). Once that observation completed
-   (`Pane.agent_rechecks` moved past the connection's `recheck_mark`), a
-   report the pane still refuses gets `foreign_process`, final. The hook
-   retries `agent_mismatch` within one budget of one second for all its
-   reports, 100 ms apart, and stops at the final answer. A new agent's
-   `SessionStart` state and title are kept; a process of another agent,
-   such as `codex exec` run by Claude Code as a tool, is refused after one
-   observation, and its hook waits at most that long. A hook can fire before the runtime
+   registers) and command history. The agent may have replaced the previous
+   one without an exit the probe saw, by `exec` or by quitting and starting
+   again between two probes, so the runtime does not refuse at once: it
+   parks the report on its connection (`Session.parked`, reads paused so
+   the report's bytes stay in the receive buffer) and starts an observation
+   of the pane, even without output to replay (`Observer.sealForProbe`),
+   that identifies the foreground process again even if its group did not
+   change (`Cache.recheck`). The report is answered after a recheck that
+   started once it arrived: one already running when it arrives may have
+   read the process before the new agent replaced it, so it waits for the
+   next. It is dispatched again then, accepted if the pane now runs its
+   agent and refused with `foreign_process` otherwise; a parked report
+   whose pane is gone, or whose recheck has not completed in two seconds,
+   is answered on the maintenance tick. The hook only waits for the reply.
+   A process of another agent nested under the pane's agent, such as `codex
+   exec` run by Claude Code as a tool, is remembered once refused
+   (`Pane.rejected_group`, `rejected_process`: the pane agent's process
+   group and the process under it in the hook's parent chain, which the
+   descent check keeps), and its later hooks are refused at once, without
+   another identification, while that process lives. A recheck keeps the
+   agent it had identified while that agent still runs in the group, even
+   if another agent runs there beside it; the group's leader wins when it
+   is an agent itself. Claude Code runs its tools in process groups of
+   their own (measured on 2.1.285: the tool shell had its own group and no
+   controlling terminal), so a nested agent is not in its group anyway. A hook can fire before the runtime
    has identified the pane's process, as `SessionStart` can. Until then, the
    first agent that reports holds the pane (`Agent.reporter`). Process
    evidence of another agent then discards its report, session, session file
@@ -596,9 +607,13 @@ adds an entry once per event, rewrites a telar entry whose command is stale
 whose command ends in ` hook claude`, ` hook codex` or ` hook cursor`, and
 rewrites the file
 atomically with
-two-space indentation. Other settings and hooks are untouched. Codex uses
+two-space indentation. Other settings and hooks are untouched. Where each
+file lives is `core.HookSettings`, built on the configuration roots
+`telar machine setup` uses too (`core.AgentConfigRoot`). Codex uses
 `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set and `~/.codex/hooks.json`
-otherwise. Codex asks the user to trust the new hook definitions; telar does
+otherwise; Claude Code uses `$CLAUDE_CONFIG_DIR/settings.json` when
+`CLAUDE_CONFIG_DIR` is set, where Claude Code reads its user settings, and
+`~/.claude/settings.json` otherwise. Codex asks the user to trust the new hook definitions; telar does
 not write Codex's trust state or bypass that check. Cursor always reads user hooks from `~/.cursor/hooks.json`, whatever
 `CURSOR_CONFIG_DIR` says; install adds `"version": 1` when the file lacks it,
 and Cursor's own JSONC comments make the file unreadable to install, which

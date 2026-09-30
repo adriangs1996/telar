@@ -22,6 +22,7 @@ const session_checkpoint = @import("session_checkpoint.zig");
 const sound = @import("../agent/sound.zig");
 const providers = @import("../agent/providers/providers.zig");
 const hook_integration = @import("../agent/hook_integration.zig");
+const agent_hooks = @import("agent_hooks.zig");
 
 /// Starts the pane's single observation actor when it may run.
 ///
@@ -82,6 +83,7 @@ pub fn finish(model: *RuntimeModel, completion: ObservationCompletion) !void {
     reconcileScreen(model, pane, completion.stats, transition.shell_foreground);
 
     agent_description.start(model);
+    agent_hooks.answerParked(model, completion.pane);
     try start(model, pane);
 }
 
@@ -111,7 +113,7 @@ fn hooksInstalled(cache: Cache) bool {
     }
 
     const settings = providers.of(cache.provider).hook_settings orelse return false;
-    const override = if (settings.environment) |name| environmentValue(name) else null;
+    const override = if (settings.environment()) |name| environmentValue(name) else null;
     return hook_integration.installed(settings, override, environmentValue("HOME"));
 }
 

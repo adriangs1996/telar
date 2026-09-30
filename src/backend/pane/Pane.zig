@@ -114,9 +114,13 @@ agent_process_cache: Cache = .{},
 agent_recheck_requested: bool = false,
 /// The running observation carries a requested recheck.
 agent_recheck_running: bool = false,
-/// Rechecks completed, so a hook that asked for one can tell when its
-/// answer is final.
+/// Rechecks completed, so a report parked for one is answered when it ran.
 agent_rechecks: u32 = 0,
+/// A process a recheck found running another agent than the pane's, nested
+/// under the pane's agent (`rejected_group`): its hooks are refused at once
+/// while it lives, without identifying the pane again.
+rejected_group: u32 = 0,
+rejected_process: u32 = 0,
 foreground_revision: u64 = 1,
 progress_state: core.PaneProgressState = .remove,
 progress_percent: ?u8 = null,
@@ -1088,6 +1092,7 @@ pub fn beginHistoryObservation(self: *Pane) ?HistoryObservationBorrow {
 pub fn completeHistoryObservation(self: *Pane, process_cache: Cache) HistoryObservationCompletion {
     self.actorFinished();
     self.history_observer.finishSealed();
+
     if (self.agent_recheck_running) {
         self.agent_recheck_running = false;
         self.agent_rechecks +%= 1;
@@ -1116,6 +1121,7 @@ pub fn completeHistoryObservation(self: *Pane, process_cache: Cache) HistoryObse
 pub fn cancelHistoryObservation(self: *Pane) void {
     self.actorFinished();
     self.history_observer.finishSealed();
+
     if (self.agent_recheck_running) {
         self.agent_recheck_running = false;
         self.agent_recheck_requested = true;

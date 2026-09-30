@@ -67,7 +67,6 @@ pub const ControlError = error{
     AgentNotWorking,
     InterruptUnsupported,
     ForeignProcess,
-    AgentMismatch,
 };
 
 pub fn failureError(failure: core.RequestFailed) ControlError {
@@ -83,7 +82,6 @@ pub fn failureError(failure: core.RequestFailed) ControlError {
         .agent_not_working => error.AgentNotWorking,
         .interrupt_unsupported => error.InterruptUnsupported,
         .foreign_process => error.ForeignProcess,
-        .agent_mismatch => error.AgentMismatch,
         else => error.RuntimeRefused,
     };
 }
@@ -112,7 +110,6 @@ pub fn describe(err: anyerror) []const u8 {
         error.AgentNotWorking => "the agent is not working; nothing to interrupt",
         error.InterruptUnsupported => "that agent declares no interrupt key",
         error.ForeignProcess => "only a process inside that pane may report for its agent",
-        error.AgentMismatch => "that pane was last seen running another agent; it is checked again, retry shortly",
         error.AmbiguousWorktree => "more than one worktree has that branch or title; name it by the other",
         error.WorktreeHasNoAgent => "no agent runs in that worktree",
         error.InvalidSendText => std.fmt.comptimePrint("send-keys needs text of 1 to {d} bytes, or --stdin", .{core.max_pane_text_input_bytes}),

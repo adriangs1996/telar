@@ -12,7 +12,7 @@ const MachinePlatform = @import("MachinePlatform.zig");
 const SetupReport = @import("SetupReport.zig");
 const config_allowlist = @import("config_allowlist.zig");
 const ConfigEntry = @import("ConfigEntry.zig");
-const ConfigRoot = @import("ConfigRoot.zig");
+const core = @import("telar-core");
 const config_filter = @import("config_filter.zig");
 const config_receive = @import("config_receive.zig");
 const config_secrets = @import("config_secrets.zig");
@@ -327,16 +327,11 @@ fn collect(staging: *Staging, environ: std.process.Environ, wanted: std.EnumSet(
     }
 }
 
-fn localRoot(staging: *Staging, environ: std.process.Environ, root: ConfigRoot) ![]const u8 {
-    if (root.environment) |name| {
-        if (std.process.Environ.getPosix(environ, name)) |value| {
-            if (value.len != 0) {
-                return std.fmt.allocPrint(staging.arena, "{s}{s}", .{ value, root.environment_suffix });
-            }
-        }
-    }
-
-    return std.fmt.allocPrint(staging.arena, "{s}/{s}", .{ staging.local_home, root.directory });
+fn localRoot(staging: *Staging, environ: std.process.Environ, root: core.AgentConfigRoot) ![]const u8 {
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const override = if (root.environment) |name| std.process.Environ.getPosix(environ, name) else null;
+    const resolved = root.resolve(override, staging.local_home, &buffer) orelse return error.HomeUnavailable;
+    return staging.arena.dupe(u8, resolved);
 }
 
 // Filters and rewrites every staged file, and holds back a text file that
