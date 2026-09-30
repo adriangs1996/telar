@@ -23,20 +23,21 @@ fn requestSuggestion(model: *data.ClientModel, text: []const u8) !void {
         return;
     };
 
+    comptime {
+        // The prompt holds no more than a request carries, so the request
+        // always carries everything the user typed.
+        std.debug.assert(data.name_prompt.max_field_bytes <= core.max_suggestion_request_bytes);
+    }
+
+    // The request is encoded into its outbox slot, which has room for the
+    // whole text, instead of widening every queued message.
     const request_id = try model.request_lifecycle.nextId();
-    var owned: data.OwnedSuggestion = .{
+    try model.to_runtime.pushEncoded(core.encodeSuggestCommand, core.SuggestCommand{
         .request_id = request_id,
         .pane_id = pane_id,
-        .text_len = @intCast(@min(text.len, data.OwnedSuggestion.max_text_bytes)),
-    };
-    @memcpy(owned.text[0..owned.text_len], text[0..owned.text_len]);
-
+        .text = text,
+    });
     model.suggestion.expect(core.raw(request_id));
-    try model.to_runtime.push(
-        .{
-            .suggest_command = owned,
-        },
-    );
 }
 
 /// Pastes the landed suggestion into the focused pane. Runs after the

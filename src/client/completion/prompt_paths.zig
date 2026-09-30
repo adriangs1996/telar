@@ -5,6 +5,7 @@ const std = @import("std");
 const path_queries = @import("../input/path_completions.zig");
 const path_expansion = @import("path_expansion.zig");
 const Client = @import("../execution/Client.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 
 /// Lands one worker result. A result for another execution, or for a query
 /// the form already moved past, is released without touching the model.
@@ -21,6 +22,13 @@ pub fn completePathCompletion(client: *Client, completion: data.PathCompletionCo
         return;
     }
     if (result) |owned| {
+        if (owned.cut()) {
+            limit_reached.report(client, .{
+                .limit = data.PathCompletionResult.entries_limit,
+                .requested = owned.matched,
+            });
+        }
+
         completion_state.land(.{
             .query = completion_state.inflightSlice(),
             .result = owned,

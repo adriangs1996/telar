@@ -16,7 +16,7 @@ Enter with text -> name_prompt.submitPrompt(.suggest) -> submitSuggestion -> req
         |
 model.suggestion.expect(request id)  (phase waiting, prompt stays open)
         |
-model.to_runtime suggest_command { request_id, focused pane, text ≤ 512 bytes }
+model.to_runtime encoded suggest_command { request_id, focused pane, text ≤ 512 bytes }
         |
 runtime client_request -> suggest_command.start (ui request class)
         |

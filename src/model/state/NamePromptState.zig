@@ -5,11 +5,15 @@ const std = @import("std");
 const History = @import("History.zig");
 const FieldPosition = @import("FieldPosition.zig");
 const Submission = @import("Submission.zig");
+const bar_text = @import("../bars/bar_text.zig");
 const State = @This();
 
 value: ?Prompt = null,
 revision: u64 = 0,
 generation: u64 = 0,
+/// The last limit the prompt's text stopped at, until the client reports
+/// it (`takeClipped`).
+clipped: ?core.LimitReach = null,
 
 /// Reconciles search scope, selection and scroll after a history transition.
 /// Example: `state.updateHistory(.{ .selection = 0, .reset_scroll = true });`.
@@ -82,7 +86,7 @@ pub fn begin(self: *State, command: name_prompt.Begin) void {
     self.value = switch (command) {
         .rename_tab => |rename| .{
             .mode = .{ .rename_tab = rename.tab_id },
-            .field = .init(rename.label),
+            .field = .init(self.fitted(rename.label, name_prompt.limit(.{ .rename_tab = rename.tab_id }))),
         },
         .create_workspace => .{
             .mode = .{ .create_workspace = .{} },
@@ -90,7 +94,7 @@ pub fn begin(self: *State, command: name_prompt.Begin) void {
         },
         .rename_workspace => |rename| .{
             .mode = .{ .rename_workspace = rename.workspace },
-            .field = .init(if (rename.name.len <= core.max_tab_label_bytes) rename.name else ""),
+            .field = .init(self.fitted(rename.name, name_prompt.limit(.{ .rename_workspace = rename.workspace }))),
         },
         .copy_search => |direction| .{
             .mode = .{ .copy_search = direction },
@@ -118,7 +122,7 @@ pub fn begin(self: *State, command: name_prompt.Begin) void {
         },
         .rename_machine => |rename| .{
             .mode = .{ .machine = .{ .rename = rename.slot } },
-            .field = .init(rename.label),
+            .field = .init(self.fitted(rename.label, name_prompt.limit(.{ .machine = .{ .rename = rename.slot } }))),
         },
         .add_machine => .{
             .mode = .{ .machine = .add_label },
@@ -184,6 +188,18 @@ pub fn version(self: *const State) u64 {
     return self.revision;
 }
 
+/// The limit the prompt's text last stopped at, once; the client reports
+/// it, since the model cannot.
+///
+/// ```zig
+/// if (model.name_prompt.takeClipped()) |reach| limit_reached.report(client, reach);
+/// ```
+pub fn takeClipped(self: *State) ?core.LimitReach {
+    const reach = self.clipped;
+    self.clipped = null;
+    return reach;
+}
+
 /// Applies one semantic editor command. Visible changes advance the
 /// revision; paste routing changes do not request a frame.
 ///
@@ -203,7 +219,10 @@ pub fn apply(self: *State, command: name_prompt.Command) PromptTransition {
             return .changed;
         },
         .replace_range => |replacement| {
-            const changed = if (directoryFocused(prompt)) prompt.directory.replace(replacement.range, replacement.text) else prompt.field.replace(replacement.range, replacement.text);
+            const changed = if (directoryFocused(prompt))
+                self.replaceFitting(&prompt.directory, replacement, name_prompt.directory_limit)
+            else
+                self.replaceFitting(&prompt.field, replacement, name_prompt.limit(prompt.target()));
             if (!changed) {
                 return .unchanged;
             }
@@ -554,7 +573,8 @@ fn editField(self: *State, command: name_prompt.Command) PromptTransition {
     }
 
     const before: FieldPosition = .capture(&prompt.field);
-    applyEdit(&prompt.field, prompt.pasting, command);
+    const bound = name_prompt.limit(prompt.target());
+    self.clip(bound, prompt.field.len, applyEdit(&prompt.field, prompt.pasting, command, bound.value));
     if (!before.changed(&prompt.field)) {
         return .unchanged;
     }
@@ -569,7 +589,8 @@ fn editField(self: *State, command: name_prompt.Command) PromptTransition {
 fn editDirectory(self: *State, command: name_prompt.Command) PromptTransition {
     const prompt = self.mutable() orelse return .unchanged;
     const before: FieldPosition = .capture(&prompt.directory);
-    applyEdit(&prompt.directory, prompt.pasting, command);
+    const bound = name_prompt.directory_limit;
+    self.clip(bound, prompt.directory.len, applyEdit(&prompt.directory, prompt.pasting, command, bound.value));
     if (!before.changed(&prompt.directory)) {
         return .unchanged;
     }
@@ -581,9 +602,10 @@ fn editDirectory(self: *State, command: name_prompt.Command) PromptTransition {
     return .changed;
 }
 
-fn applyEdit(field: anytype, pasting: bool, command: name_prompt.Command) void {
+/// Applies one edit; returns the inserted bytes past `capacity` it left out.
+fn applyEdit(field: anytype, pasting: bool, command: name_prompt.Command, capacity: u64) usize {
     switch (command) {
-        .insert => |bytes| if (pasting) insertPasted(field, bytes) else field.insert(bytes),
+        .insert => |bytes| return if (pasting) insertPasted(field, bytes, capacity) else insertFitting(field, bytes, capacity),
         .backspace => field.backspace(),
         .delete => field.delete(),
         .move_left => |extend| field.moveLeft(extend),
@@ -594,11 +616,15 @@ fn applyEdit(field: anytype, pasting: bool, command: name_prompt.Command) void {
         .select_all => field.selectAll(),
         .focus_field, .replace_range, .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .tab, .back_tab, .select_scope, .select_author, .toggle_failed, .remove_entry, .rename_entry, .copy_entry, .visit_pane, .toggle_inspection, .page_up, .page_down => unreachable,
     }
+
+    return 0;
 }
 
 /// Pasted line breaks are text, not submissions: each CR, LF or CRLF becomes
-/// one space. Typed input never reaches this path.
-fn insertPasted(field: anytype, bytes: []const u8) void {
+/// one space. Typed input never reaches this path. Returns the bytes past
+/// `capacity` it left out.
+fn insertPasted(field: anytype, bytes: []const u8, capacity: u64) usize {
+    var dropped: usize = 0;
     var start: usize = 0;
     var index: usize = 0;
     while (index < bytes.len) : (index += 1) {
@@ -607,8 +633,8 @@ fn insertPasted(field: anytype, bytes: []const u8) void {
             continue;
         }
 
-        field.insert(bytes[start..index]);
-        field.insert(" ");
+        dropped += insertFitting(field, bytes[start..index], capacity);
+        dropped += insertFitting(field, " ", capacity);
         if (byte == '\r' and index + 1 < bytes.len and bytes[index + 1] == '\n') {
             index += 1;
         }
@@ -616,7 +642,86 @@ fn insertPasted(field: anytype, bytes: []const u8) void {
         start = index + 1;
     }
 
-    field.insert(bytes[start..]);
+    return dropped + insertFitting(field, bytes[start..], capacity);
+}
+
+/// Inserts the longest start of `bytes`, cut at a character, that keeps the
+/// field within `capacity`; returns how many bytes it left out.
+fn insertFitting(field: anytype, bytes: []const u8, capacity: u64) usize {
+    const selected = @max(field.head, field.anchor) - @min(field.head, field.anchor);
+    const room = capacity -| (field.len - selected);
+    const kept = bar_text.prefix(bytes, @intCast(room));
+    field.insert(kept);
+    return bytes.len - kept.len;
+}
+
+/// Replaces a range with the longest start of its text that keeps the field
+/// within `bound`, and records the limit when it leaves some out.
+fn replaceFitting(self: *State, field: anytype, replacement: @FieldType(name_prompt.Command, "replace_range"), bound: core.Limit) bool {
+    const range_start: usize = replacement.range[0];
+    const range_end: usize = replacement.range[1];
+    const replaced = if (range_end >= range_start and range_end <= field.len) range_end - range_start else 0;
+    const room = bound.value -| (field.len - replaced);
+    const kept = bar_text.prefix(replacement.text, @intCast(room));
+    const changed = field.replace(replacement.range, kept);
+    self.clip(bound, field.len, replacement.text.len - kept.len);
+    return changed;
+}
+
+/// The longest start of an initial text, cut at a character, that `bound`
+/// allows; records the limit when it leaves some out.
+fn fitted(self: *State, text: []const u8, bound: core.Limit) []const u8 {
+    const kept = bar_text.prefix(text, @intCast(bound.value));
+    self.clip(bound, kept.len, text.len - kept.len);
+    return kept;
+}
+
+/// Records that the prompt's text stopped at `bound` with `dropped` bytes
+/// left out of the `kept` it holds.
+fn clip(self: *State, bound: core.Limit, kept: usize, dropped: usize) void {
+    if (dropped == 0) {
+        return;
+    }
+
+    self.clipped = .{
+        .limit = bound,
+        .requested = kept + dropped,
+    };
+}
+
+test "a keystroke or paste past a prompt's bound keeps what fits and records the limit" {
+    var state: State = .{};
+    state.begin(.suggest_palette);
+
+    const room = name_prompt.max_field_bytes;
+    try std.testing.expectEqual(PromptTransition.changed, state.apply(.{ .insert = "a" ** (room - 1) }));
+    try std.testing.expect(state.takeClipped() == null);
+    // A two-byte character does not fit one free byte and is never split.
+    try std.testing.expectEqual(PromptTransition.unchanged, state.apply(.{ .insert = "é" }));
+    try std.testing.expectEqual(room - 1, state.currentConst().?.field.len);
+    try std.testing.expectEqual(@as(?u64, room + 1), state.takeClipped().?.requested);
+
+    try std.testing.expectEqual(PromptTransition.changed, state.apply(.{ .insert = "b" }));
+    try std.testing.expect(state.takeClipped() == null);
+    try std.testing.expectEqual(PromptTransition.unchanged, state.apply(.{ .insert = "c" }));
+    const reach = state.takeClipped().?;
+    try std.testing.expectEqualStrings("prompt.field_bytes", reach.limit.name);
+    try std.testing.expectEqual(@as(?u64, room + 1), reach.requested);
+
+    state.begin(.{ .rename_tab = .{ .tab_id = @enumFromInt(1), .label = "" } });
+    _ = state.apply(.paste_start);
+    try std.testing.expectEqual(PromptTransition.changed, state.apply(.{ .insert = "x\n" ++ "y" ** core.max_tab_label_bytes }));
+    try std.testing.expectEqual(core.max_tab_label_bytes, state.currentConst().?.field.len);
+    try std.testing.expectEqualStrings("prompt.tab_label_bytes", state.takeClipped().?.limit.name);
+}
+
+test "renaming a workspace whose name passes the field opens with the start that fits" {
+    var state: State = .{};
+    const name = "w" ** (name_prompt.max_field_bytes + 10);
+    state.begin(.{ .rename_workspace = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .name = name } });
+
+    try std.testing.expectEqualStrings(name[0..name_prompt.max_field_bytes], state.currentConst().?.field.text());
+    try std.testing.expectEqual(@as(?u64, name.len), state.takeClipped().?.requested);
 }
 
 test "pasted line breaks become spaces while typed text is inserted verbatim" {
