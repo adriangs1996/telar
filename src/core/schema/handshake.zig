@@ -36,6 +36,9 @@ pub const Tag = enum(u8) {
 
 pub const RejectReason = enum(u8) {
     incompatible_schema = 1,
+    /// The runtime holds all the client sessions it can; the connection is
+    /// refused so the client can say so instead of seeing a closed socket.
+    client_limit_reached = 2,
 };
 
 pub const ServerResponse = union(enum) {
@@ -127,10 +130,7 @@ fn decodeServerReject(payload: []const u8) DecodeError!ServerReject {
     if (payload.len != server_reject_size) {
         return error.InvalidLength;
     }
-    const reason: RejectReason = switch (payload[header_size]) {
-        @intFromEnum(RejectReason.incompatible_schema) => .incompatible_schema,
-        else => return error.UnknownRejectReason,
-    };
+    const reason = std.enums.fromInt(RejectReason, payload[header_size]) orelse return error.UnknownRejectReason;
     return .{
         .reason = reason,
         .expected_schema = payload[header_size + 1 .. server_reject_size][0..schema_id.len].*,
@@ -186,6 +186,7 @@ test "server responses round trip" {
     const responses = [_]ServerResponse{
         .{ .accepted = .{ .schema = schema_id } },
         .{ .rejected = .{ .reason = .incompatible_schema, .expected_schema = incompatible } },
+        .{ .rejected = .{ .reason = .client_limit_reached, .expected_schema = schema_id } },
     };
     for (responses) |response| {
         var buffer: [max_message_size]u8 = undefined;

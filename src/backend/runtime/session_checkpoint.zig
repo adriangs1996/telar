@@ -36,7 +36,10 @@ const limit_reached = @import("limit_reached.zig");
 const log = std.log.scoped(.checkpoint);
 
 pub const debounce_ns: u64 = 500 * std.time.ns_per_ms;
-pub const snapshot_bytes = 1024 * 1024;
+/// The buffer one checkpoint is encoded into, allocated for each write: as
+/// large as the file a restore reads, so a session the reader accepts always
+/// fits and only a larger one is cut to the records that fit.
+pub const snapshot_bytes = checkpoint.max_file_bytes;
 
 /// Writes `job.bytes()` to a temp file next to the target and renames it over
 /// the previous checkpoint. Runs on a worker; never touches runtime state.
@@ -69,7 +72,25 @@ pub fn writeFile(job: WriteJob) anyerror!void {
     };
 }
 
-pub const max_resume_command_bytes = 32 + core.max_agent_session_reference_bytes;
+/// The longest resume line: a provider's prefix, its in-pane argument and a
+/// space, the session reference and the carriage return that submits it.
+pub const max_resume_command_bytes = longestResumePrefix() + core.max_agent_session_reference_bytes + 1;
+/// A direct resume launch after its executable: every word of the resume
+/// line costs its bytes and a two-byte length, and a word has one byte at
+/// least.
+const direct_resume_bytes = 3 * max_resume_command_bytes;
+
+fn longestResumePrefix() usize {
+    var longest: usize = 0;
+    for (std.enums.values(core.AgentProvider)) |provider| {
+        const capabilities = providers.of(provider);
+        const prefix = capabilities.resume_prefix orelse continue;
+        const argument = capabilities.pane_session_argument orelse "";
+        longest = @max(longest, prefix.len + argument.len + 1);
+    }
+
+    return longest;
+}
 
 /// Builds the shell line that resumes a built-in agent's session, typed into
 /// the restored pane's shell. Only the built-in capability table
@@ -399,8 +420,10 @@ fn restorePane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !vo
     }
     const workspace_path = reader.workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
 
-    var argument_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
-    var encoder = bytecodec.Encoder.init(&argument_buffer);
+    // Each argument trades its NUL for a two-byte length on the wire.
+    const argument_buffer = try model.gpa.alloc(u8, record.arguments.len + record.argument_count);
+    defer model.gpa.free(argument_buffer);
+    var encoder = bytecodec.Encoder.init(argument_buffer);
     const resumable = resumeForPane(model, record);
     var arguments = ArgumentIterator.init(record.arguments);
     const executable = arguments.next() orelse return error.InvalidLaunch;
@@ -417,8 +440,9 @@ fn restorePane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !vo
         .environment_count = 0,
         .encoded_environment = "",
     };
-    var direct_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
-    var direct_encoder = bytecodec.Encoder.init(&direct_buffer);
+    const direct_buffer = try model.gpa.alloc(u8, executable.len + direct_resume_bytes);
+    defer model.gpa.free(direct_buffer);
+    var direct_encoder = bytecodec.Encoder.init(direct_buffer);
     const direct_count = if (resumable) |session|
         try directResumeArguments(&direct_encoder, executable, session)
     else
@@ -443,14 +467,15 @@ fn restorePane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !vo
         .launch_cwd = record.cwd,
         .workspace_path = workspace_path,
     });
-    pane.launch_record.capture(original_launch);
+    try pane.launch_record.capture(model.gpa, original_launch);
     model.checkpoint.restored_panes +|= 1;
 
     if (resumable) |session| {
         if (direct_count == null) {
             var command_buffer: [max_resume_command_bytes]u8 = undefined;
-            const command = resumeCommand(&command_buffer, session.provider, session.reference.slice(), session.in_pane).?;
-            try pane_input.sendRestored(model, pane, command);
+            if (resumeCommand(&command_buffer, session.provider, session.reference.slice(), session.in_pane)) |command| {
+                try pane_input.sendRestored(model, pane, command);
+            }
         }
 
         if (!agent_status.restoreSession(model, pane.key(), session)) {

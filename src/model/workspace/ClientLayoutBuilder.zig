@@ -4,14 +4,20 @@ const layout_support = @import("layout_support.zig");
 const ClientLayoutBuilder = @This();
 
 layout: Layout = .{},
-iterator: *core.ClientLayoutNodeIterator,
+/// The tree in pre-order, as the protocol carries it.
+nodes: []const core.ClientLayoutNode,
 next_index: usize = 0,
 
 pub fn build(self: *ClientLayoutBuilder, parent: ?layout_support.NodeIndex) !layout_support.NodeIndex {
-    const encoded = try self.iterator.next() orelse return error.InvalidClientLayoutTree;
+    if (self.next_index == self.nodes.len) {
+        return error.InvalidClientLayoutTree;
+    }
+
     if (self.next_index == layout_support.max_nodes) {
         return error.NodeLimitReached;
     }
+
+    const encoded = self.nodes[self.next_index];
 
     const index: layout_support.NodeIndex = @intCast(self.next_index);
     self.next_index += 1;

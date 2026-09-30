@@ -299,6 +299,7 @@ test "a tab launched in the background keeps every focus where it was and takes 
         .focused_pane = focused.id,
         .fullscreen = false,
         .workspace_active = true,
+        .node_start = 0,
         .node_count = 0,
     };
     record.tab_count = 1;

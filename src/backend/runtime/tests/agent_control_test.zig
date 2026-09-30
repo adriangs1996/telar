@@ -118,6 +118,7 @@ fn focusPane(fixture: *EventFixture) void {
         .focused_pane = fixture.pane.id,
         .fullscreen = false,
         .workspace_active = true,
+        .node_start = 0,
         .node_count = 0,
     };
     record.tab_count = 1;

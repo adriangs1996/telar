@@ -128,6 +128,7 @@ pub const LimitError = error{
     SurfaceTooLarge,
     SyntaxLimit,
     TabLimitReached,
+    TabPaneLimitReached,
     TextMetadataQuotaExceeded,
     TextMetadataTooLarge,
     TextTooLong,
@@ -185,7 +186,6 @@ pub const LimitError = error{
     WindowTitleTooLong,
     WorkspaceCommandTooLong,
     WorkspaceLimitReached,
-    WorkspaceListTooLarge,
     WorkspacePathTooLong,
     WorktreeLimitReached,
 };

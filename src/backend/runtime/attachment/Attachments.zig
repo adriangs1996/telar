@@ -2,7 +2,6 @@ const core = @import("telar-core");
 const std = @import("std");
 const Attachment = @import("Attachment.zig");
 const Pane = @import("../../pane/Pane.zig");
-const PaneStore = @import("../../pane/PaneStore.zig");
 const store_support = @import("../client/store_support.zig");
 /// Every client's rendering state for the panes it attaches: one row per
 /// client slot, one heap record per attached pane. A record holds two cell
@@ -10,8 +9,9 @@ const store_support = @import("../client/store_support.zig");
 /// `Pane.observers` is the table's reverse index; `add` and `remove` keep it.
 const Attachments = @This();
 
-/// One client attaches to at most every pane the runtime holds.
-pub const capacity = PaneStore.capacity;
+/// A client attaches to the panes of the tab it shows and detaches one tab
+/// before it attaches the next, so it never holds more than a tab's panes.
+pub const capacity = core.max_panes_per_tab;
 pub const clients = store_support.max_clients;
 
 record: [clients][capacity]?*Attachment = @splat(@splat(null)),
@@ -97,7 +97,7 @@ pub fn clear(self: *Attachments, gpa: std.mem.Allocator, client: usize) void {
 /// var observers = pane.observers;
 /// while (model.attachments.nextObserver(pane.id, &observers)) |attachment| { ... }
 /// ```
-pub fn nextObserver(self: *Attachments, pane_id: core.PaneId, observers: *u8) ?*Attachment {
+pub fn nextObserver(self: *Attachments, pane_id: core.PaneId, observers: *store_support.Observers) ?*Attachment {
     while (observers.* != 0) {
         const client = @ctz(observers.*);
         observers.* &= observers.* - 1;
@@ -160,8 +160,8 @@ pub fn deinit(self: *Attachments, gpa: std.mem.Allocator) void {
 /// ```zig
 /// if (pane.observers & Attachments.observer(session.slot) != 0) { ... }
 /// ```
-pub fn observer(client: usize) u8 {
-    return @as(u8, 1) << @intCast(client);
+pub fn observer(client: usize) store_support.Observers {
+    return @as(store_support.Observers, 1) << @intCast(client);
 }
 
 fn release(self: *Attachments, gpa: std.mem.Allocator, client: usize, slot: usize) void {
@@ -192,14 +192,14 @@ test "attachments keep their client's bit in the pane observer mask" {
 
     _ = try attachments.add(gpa, 1, pane);
     _ = try attachments.add(gpa, 3, pane);
-    try std.testing.expectEqual(@as(u8, 0b1011), pane.observers);
+    try std.testing.expectEqual(@as(store_support.Observers, 0b1011), pane.observers);
 
     try std.testing.expect(attachments.remove(gpa, 1, pane.id));
     try std.testing.expect(!attachments.remove(gpa, 1, pane.id));
-    try std.testing.expectEqual(@as(u8, 0b1001), pane.observers);
+    try std.testing.expectEqual(@as(store_support.Observers, 0b1001), pane.observers);
 
     attachments.clear(gpa, 3);
-    try std.testing.expectEqual(@as(u8, 0b0001), pane.observers);
+    try std.testing.expectEqual(@as(store_support.Observers, 0b0001), pane.observers);
     try std.testing.expectEqual(@as(usize, 0), attachments.len(3));
 }
 

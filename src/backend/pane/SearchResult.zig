@@ -1,4 +1,4 @@
 const SearchResult = @This();
 
-count: u8,
+count: u16,
 truncated: bool,

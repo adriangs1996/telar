@@ -23,8 +23,8 @@ matches: [core.max_search_matches]core.SearchMatch = @splat(.{
     .y = 0,
     .len = 0,
 }),
-match_count: u8 = 0,
-match_index: u8 = 0,
+match_count: u16 = 0,
+match_index: u16 = 0,
 
 pub fn init(pane_id: core.PaneId, cursor: Point, viewport_offset: u32) State {
     return .{
@@ -158,7 +158,7 @@ pub fn applyMatches(self: *State, results: []const core.SearchMatch, viewport: V
         return;
     }
 
-    var selected: ?u8 = null;
+    var selected: ?u16 = null;
     switch (self.search_direction) {
         .forward => {
             for (self.matchSlice(), 0..) |match, index| {
@@ -209,8 +209,8 @@ pub fn cycleMatch(self: *State, delta: i2, viewport: Viewport) void {
         return;
     }
 
-    const count: i16 = self.match_count;
-    var index: i16 = self.match_index;
+    const count: i32 = self.match_count;
+    var index: i32 = self.match_index;
     index = @mod(index + delta, count);
     self.gotoMatch(@intCast(index), viewport);
 }
@@ -219,7 +219,7 @@ pub fn matchSlice(self: *const State) []const core.SearchMatch {
     return self.matches[0..self.match_count];
 }
 
-fn gotoMatch(self: *State, index: u8, viewport: Viewport) void {
+fn gotoMatch(self: *State, index: u16, viewport: Viewport) void {
     const match = self.matches[index];
     self.match_index = index;
     self.anchor = .{

@@ -8,7 +8,9 @@ const PaneStore = @import("../pane/PaneStore.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const Pane = @import("../pane/Pane.zig");
 const core = @import("telar-core");
-const Cursor = @import("../pane/text_search.zig").Search;
+const text_search = @import("../pane/text_search.zig");
+const Cursor = text_search.Search;
+const limit_reached = @import("limit_reached.zig");
 const std = @import("std");
 const client_request = @import("client_request.zig");
 const Wake = @import("events/Wake.zig");
@@ -28,7 +30,7 @@ pub fn start(model: *RuntimeModel, session: *Session, request: core.SearchPane) 
         .request_id = request.request_id,
         .pane = pane,
         .cursor = Cursor.init(request.needle),
-        .deadline_ns = std.Io.Clock.awake.now(model.io).nanoseconds + 250 * std.time.ns_per_ms,
+        .deadline_ns = std.Io.Clock.awake.now(model.io).nanoseconds + text_search.deadline_ns,
     };
     if (session.search_scheduled) {
         return;
@@ -75,31 +77,45 @@ pub fn advance(model: *RuntimeModel, completion: Wake) !void {
         return;
     }
 
-    if (std.Io.Clock.awake.now(model.io).nanoseconds >= pending.deadline_ns) {
-        session.pending_search = null;
-        try fail(session, wake.request_id, "Pane search deadline exceeded; retry");
-        return;
-    }
-
-    const complete = pending.cursor.advance(pane) catch {
+    const expired = std.Io.Clock.awake.now(model.io).nanoseconds >= pending.deadline_ns;
+    const complete = expired or pending.cursor.advance(pane) catch {
         session.pending_search = null;
         try fail(session, wake.request_id, "Pane changed during search; retry");
         return;
     };
-    if (complete) {
-        const matches: Matches = .{
-            .items = pending.cursor.matches,
-            .count = pending.cursor.count,
-            .truncated = pending.cursor.truncated,
-        };
-        session.pending_search = null;
-        try session.delivery.responses.push(.{ .pane_matches = .{
-            .request_id = wake.request_id,
-            .pane_id = pane.id,
-            .matches = matches,
-        } });
-    } else {
-        try schedule(model, wake, pane.ingest_pending);
+    if (!complete) {
+        return schedule(model, wake, pane.ingest_pending);
+    }
+
+    // A search out of time answers with the newest matches it reached.
+    var matches: Matches = .{
+        .truncated = pending.cursor.truncated or expired,
+    };
+    matches.count = @intCast(pending.cursor.ordered(&matches.items).len);
+    reportLimits(model, &pending.cursor, expired);
+    session.pending_search = null;
+    try session.delivery.responses.push(.{ .pane_matches = .{
+        .request_id = wake.request_id,
+        .pane_id = pane.id,
+        .matches = matches,
+    } });
+}
+
+fn reportLimits(model: *RuntimeModel, cursor: *const Cursor, expired: bool) void {
+    if (cursor.matches_cut) {
+        limit_reached.report(model, .{ .limit = text_search.matches_limit });
+    }
+
+    if (cursor.rows_cut and !cursor.matches_cut) {
+        limit_reached.report(model, .{ .limit = text_search.rows_limit });
+    }
+
+    if (cursor.columns_cut) {
+        limit_reached.report(model, .{ .limit = text_search.columns_limit });
+    }
+
+    if (expired) {
+        limit_reached.report(model, .{ .limit = text_search.deadline_limit });
     }
 }
 

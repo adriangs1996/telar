@@ -8,6 +8,8 @@ const session_checkpoint = @import("session_checkpoint.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
+const limit_reached = @import("limit_reached.zig");
+const PaneStore = @import("../pane/PaneStore.zig");
 const pty = @import("pty");
 const command_support = pty.command_support;
 const proxy_mod = @import("../proxy/proxy_namespace.zig");
@@ -41,7 +43,10 @@ const Failure = struct {
 /// const pane = try pane_launch.launch(model, .{ .location = location, .size = size, .launch = view, .launch_cwd = cwd, .workspace_path = path });
 /// ```
 pub fn launch(model: *RuntimeModel, request: LaunchRequest) !*Pane {
-    const fresh = try launchTerminal(model, request);
+    const fresh = launchTerminal(model, request) catch |err| {
+        reportLimit(model, request.location, err);
+        return err;
+    };
 
     session_checkpoint.noteChange(model);
     return fresh;
@@ -54,6 +59,24 @@ pub const program_not_executable = "could not start the command: the program is 
 pub const directory_unusable = "could not start the command: its working directory does not exist or cannot be entered";
 pub const spawn_failed = "could not start the command";
 
+/// What a client reads when the runtime or the tab holds all the panes it can.
+pub const pane_limit = std.fmt.comptimePrint("the runtime holds its limit of {d} panes; close a pane first", .{PaneStore.capacity});
+pub const tab_pane_limit = std.fmt.comptimePrint("this tab holds its limit of {d} panes; open a new tab", .{core.max_panes_per_tab});
+
+/// The reason a request that stopped at a pane limit fails with, or null
+/// when `launch_error` is not a pane limit.
+///
+/// ```zig
+/// error.PaneLimitReached, error.TabPaneLimitReached => client_request.fail(session, id, .resource_limit, pane_launch.limitFailure(err).?),
+/// ```
+pub fn limitFailure(launch_error: anyerror) ?[]const u8 {
+    return switch (launch_error) {
+        error.PaneLimitReached => pane_limit,
+        error.TabPaneLimitReached => tab_pane_limit,
+        else => null,
+    };
+}
+
 /// Narrows a launch failure to the errors requests report to clients.
 ///
 /// ```zig
@@ -62,6 +85,7 @@ pub const spawn_failed = "could not start the command";
 pub fn requestError(launch_error: anyerror) anyerror {
     return switch (launch_error) {
         error.PaneLimitReached,
+        error.TabPaneLimitReached,
         error.UnsupportedEnvironment,
         error.ExecutableNotFound,
         error.ExecutableAccessDenied,
@@ -103,9 +127,23 @@ pub fn waitPane(pane: *Pane) ExitCompletion {
     return .{ .pane = pane.key(), .result = pane.session.wait() };
 }
 
+fn reportLimit(model: *RuntimeModel, location: core.TabLocation, launch_error: anyerror) void {
+    switch (launch_error) {
+        error.PaneLimitReached => limit_reached.report(model, .{
+            .limit = PaneStore.panes_limit,
+            .requested = model.panes.count + 1,
+        }),
+        error.TabPaneLimitReached => limit_reached.report(model, .{
+            .limit = PaneStore.tab_panes_limit,
+            .requested = model.panes.occupancyAt(location) + 1,
+        }),
+        else => {},
+    }
+}
+
 fn launchTerminal(model: *RuntimeModel, request: LaunchRequest) !*Pane {
     const proxy = model.resources.proxy.capability();
-    const pane_key = try model.panes.allocateKey();
+    const pane_key = try model.panes.allocateKey(request.location);
     var pane_overrides: PaneOverrides = .{};
     const identity_overrides = pane_overrides.build(pane_key, request.location, model.socket_path, model.executable_path[0..model.executable_path_len]);
     var proxy_environment: ?PaneEnvironment = null;
@@ -149,7 +187,12 @@ fn launchTerminal(model: *RuntimeModel, request: LaunchRequest) !*Pane {
         .terminal_colors = terminal_colors.ofWorkspace(model, request.location.workspace),
     });
 
-    fresh.launch_record.capture(request.launch);
+    fresh.launch_record.capture(model.gpa, request.launch) catch |err| {
+        recordFailure(model, fresh, .{ .shell = shell, .phase = .pane_registration, .cause = err });
+        fresh.abortLaunch();
+        fresh.destroy();
+        return err;
+    };
     model.panes.insert(fresh) catch |err| {
         recordFailure(model, fresh, .{ .shell = shell, .phase = .pane_registration, .cause = err });
         fresh.abortLaunch();

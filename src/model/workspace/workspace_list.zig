@@ -12,29 +12,14 @@ const WorkspaceListSnapshot = @import("WorkspaceListSnapshot.zig");
 const EntryInput = @import("EntryInput.zig");
 const std = @import("std");
 
-/// Display cap; truncation never ends inside a UTF-8 continuation sequence.
-pub const max_name_bytes = 48;
-/// One shared pool for every stored path. Paths stay whole so the replica
-/// never exposes a fabricated location. A snapshot that cannot fit is rejected.
-pub const path_pool_size = 16 * 1024;
-
-/// Truncates one display name without ending inside a continuation sequence.
-///
-/// ```zig
-/// const label = truncateName(long_name);
-/// ```
-pub fn truncateName(name: []const u8) []const u8 {
-    if (name.len <= max_name_bytes) {
-        return name;
-    }
-
-    var end: usize = max_name_bytes;
-    while (end > 0 and name[end] & 0b1100_0000 == 0b1000_0000) {
-        end -= 1;
-    }
-
-    return name[0..end];
-}
+/// Names arrive whole; views clip them to the room they have.
+pub const max_name_bytes = core.max_workspace_name_bytes;
+/// One shared pool for every stored path, half a KiB a workspace on
+/// average. Paths stay whole so the replica never exposes a fabricated
+/// location: a list whose paths do not all fit keeps the entries before the
+/// first that does not and counts the rest in `dropped`.
+pub const path_pool_size = core.max_workspace_list_entries * 512;
+pub const path_pool_limit = core.Limit.declare("workspace_list.path_pool_size", "path bytes", path_pool_size);
 
 test "replacement rejects stale revisions and copies into fixed storage" {
     var snapshot: WorkspaceListSnapshot = .{};
@@ -57,30 +42,23 @@ test "replacement rejects stale revisions and copies into fixed storage" {
     try std.testing.expect(snapshot.indexOf(@enumFromInt(9)) == null);
 }
 
-test "failed replacement preserves the last usable snapshot" {
+test "a list whose paths overflow the pool keeps the entries that fit" {
     var snapshot: WorkspaceListSnapshot = .{};
-    const original = [_]EntryInput{
-        .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/work/telar", .tab_count = 2 },
-    };
-    try std.testing.expect(try snapshot.replace(.{ .revision = 1, .entries = &original }));
-
     const large_path: [core.max_cwd_bytes]u8 = @splat('x');
-    const oversized = [_]EntryInput{
-        .{ .workspace = @enumFromInt(1), .name = "one", .path = &large_path, .tab_count = 1 },
-        .{ .workspace = @enumFromInt(2), .name = "two", .path = &large_path, .tab_count = 1 },
-        .{ .workspace = @enumFromInt(3), .name = "three", .path = &large_path, .tab_count = 1 },
-        .{ .workspace = @enumFromInt(4), .name = "four", .path = &large_path, .tab_count = 1 },
-        .{ .workspace = @enumFromInt(5), .name = "five", .path = &large_path, .tab_count = 1 },
-    };
+    const fitting = path_pool_size / large_path.len;
+    var oversized: [fitting + 2]EntryInput = undefined;
+    for (&oversized, 1..) |*entry, workspace| {
+        entry.* = .{ .workspace = @enumFromInt(workspace), .name = "long", .path = &large_path, .tab_count = 1 };
+    }
 
-    try std.testing.expectError(error.WorkspaceListTooLarge, snapshot.replace(.{
+    try std.testing.expect(try snapshot.replace(.{
         .revision = 2,
         .entries = &oversized,
     }));
-    try std.testing.expectEqual(@as(u64, 1), snapshot.revision);
-    try std.testing.expectEqual(@as(usize, 1), snapshot.count);
-    try std.testing.expectEqualStrings("telar", snapshot.nameAt(0));
-    try std.testing.expectEqualStrings("/work/telar", snapshot.pathAt(0));
+    try std.testing.expectEqual(@as(u64, 2), snapshot.revision);
+    try std.testing.expectEqual(fitting, snapshot.count);
+    try std.testing.expectEqual(@as(usize, 2), snapshot.dropped);
+    try std.testing.expectEqualStrings(&large_path, snapshot.pathAt(fitting - 1));
 }
 
 test "duplicate workspace ids are rejected" {
@@ -96,12 +74,15 @@ test "duplicate workspace ids are rejected" {
     );
 }
 
-test "long names truncate on a codepoint boundary" {
-    const name = "ñ" ** 30;
-    const truncated = truncateName(name);
+test "names are stored whole up to the wire bound" {
+    var snapshot: WorkspaceListSnapshot = .{};
+    const name: [core.max_workspace_name_bytes]u8 = @splat('n');
+    const entries = [_]EntryInput{
+        .{ .workspace = @enumFromInt(1), .name = &name, .path = "/work", .tab_count = 1 },
+    };
 
-    try std.testing.expectEqual(@as(usize, 48), truncated.len);
-    try std.testing.expect(std.unicode.utf8ValidateSlice(truncated));
+    try std.testing.expect(try snapshot.replace(.{ .revision = 1, .entries = &entries }));
+    try std.testing.expectEqualStrings(&name, snapshot.nameAt(0));
 }
 
 /// Commits an explicit workspace-list collapse preference. Repeated

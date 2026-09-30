@@ -32,8 +32,10 @@ pub const dispatched_from_version: u16 = 7;
 /// The first version whose pane records end with `agent_in_pane`.
 pub const agent_in_pane_version: u16 = 8;
 pub const max_file_bytes = 4 * 1024 * 1024;
-pub const max_launch_arguments = 32;
-pub const max_launch_bytes = 1024;
+/// A pane's launch command: whatever a launch request may carry, so every
+/// pane that did not replace its environment is restorable.
+pub const max_launch_arguments = core.max_argument_count;
+pub const max_launch_bytes = core.max_argument_bytes;
 
 pub const Record = union(enum) {
     workspace: WorkspaceRecord,

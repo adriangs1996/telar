@@ -47,6 +47,9 @@ const cwd_module = @import("../process/cwd.zig");
 const ReviewAvailability = @import("../change_review/Availability.zig");
 pub const Pane = @This();
 
+/// A set of client slots, one bit each.
+pub const Observers = std.meta.Int(.unsigned, core.ClientList.capacity);
+
 pub const CreationResources = @import("CreationResources.zig");
 
 pub const CreationRequest = @import("CreationRequest.zig");
@@ -59,7 +62,7 @@ session: Session,
 review_availability: ReviewAvailability = .{},
 /// One bit per client slot that holds an attachment to this pane. Delivery,
 /// damage settling and collection visit only these clients.
-observers: u8 = 0,
+observers: Observers = 0,
 terminal: vt.Terminal,
 stream: vt.TerminalStream,
 media: Pipeline,
@@ -540,9 +543,8 @@ pub fn searchText(self: *const Pane, needle: []const u8, storage: []core.SearchM
     std.debug.assert(!self.ingest_pending);
     var cursor = PaneCursor.init(needle);
     while (!(cursor.advance(self) catch unreachable)) {}
-    const count = @min(storage.len, cursor.count);
-    @memcpy(storage[0..count], cursor.matches[0..count]);
-    return .{ .count = @intCast(count), .truncated = cursor.truncated or cursor.count > count };
+    const found = cursor.ordered(storage);
+    return .{ .count = @intCast(found.len), .truncated = cursor.truncated or cursor.count > found.len };
 }
 
 pub fn key(self: *const Pane) PaneKey {
@@ -639,6 +641,7 @@ pub fn destroy(self: *Pane) void {
     const gpa = self.gpa;
     self.finishHistory();
     gpa.free(self.workspace_path);
+    self.launch_record.deinit(gpa);
     gpa.free(self.damaged_rows);
     self.text_metadata.deinit(gpa);
     self.screen.deinit();
