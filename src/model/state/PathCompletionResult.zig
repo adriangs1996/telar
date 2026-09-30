@@ -41,7 +41,7 @@ pub fn append(self: *Result, name: []const u8) !void {
         return error.TooManyEntries;
     }
     if (name.len == 0 or name.len > max_name_bytes or self.base_len + 1 + name.len > max_path_bytes) {
-        return error.NameTooLong;
+        return error.PathEntryTooLong;
     }
 
     var entry: Entry = .{ .len = @intCast(name.len) };
@@ -90,8 +90,8 @@ test "results bound entries and every joined path" {
     try result.setBase("/home/me");
     try std.testing.expectEqualStrings("/home/me/a", result.join(0, &buffer));
     const long = [_]u8{'x'} ** (max_path_bytes - "/home/me".len);
-    try std.testing.expectError(error.NameTooLong, result.append(&long));
-    try std.testing.expectError(error.NameTooLong, result.append(""));
+    try std.testing.expectError(error.PathEntryTooLong, result.append(&long));
+    try std.testing.expectError(error.PathEntryTooLong, result.append(""));
 
     var full: Result = .{};
     for (0..max_entries) |_| {

@@ -40,8 +40,9 @@ pub fn start(model: *RuntimeModel) void {
 /// ```
 pub fn finish(model: *RuntimeModel, completion: WorktreeDetectionCompletion) !void {
     model.worktree_detection_in_flight = false;
-    try track(model, completion);
+    const tracked = track(model, completion);
     start(model);
+    try tracked;
 }
 
 fn track(model: *RuntimeModel, completion: WorktreeDetectionCompletion) !void {

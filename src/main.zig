@@ -57,12 +57,22 @@ test "the executable preserves diagnostic and trace root contracts" {
     try std.testing.expectEqual(build_options.echo_trace_cpu, telar_echo_trace_cpu);
 }
 
-// Library warnings cannot be written over a live frame. A later runtime can
-// route them to its log; the bootstrap keeps stderr out of the drawing path.
-// GUI reload diagnostics have no terminal frame to corrupt and remain visible.
+// Library warnings cannot be written over a live frame; the bootstrap keeps
+// stderr out of the drawing path. GUI reload diagnostics have no terminal
+// frame to corrupt and remain visible, and so do reached limits: the
+// daemonized runtime's stderr is its log file (`ServerLaunch.launchDaemon`).
 pub const std_options: std.Options = .{
     .log_level = .err,
-    .log_scope_levels = &.{.{ .scope = .gui_config, .level = .warn }},
+    .log_scope_levels = &.{
+        .{
+            .scope = .gui_config,
+            .level = .warn,
+        },
+        .{
+            .scope = .limits,
+            .level = .warn,
+        },
+    },
 };
 
 // These names are root-level opt-in contracts read by core through @hasDecl.
@@ -290,6 +300,7 @@ test {
     _ = @import("cli/runtime.zig");
     _ = @import("cli/DiagnosticLog.zig");
     _ = @import("cli/arguments/DiagnosticsOptions.zig");
+    _ = @import("cli/diagnostics.zig");
     _ = @import("cli/arguments/RuntimeOptions.zig");
     _ = @import("cli/agent.zig");
     _ = @import("cli/api.zig");

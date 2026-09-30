@@ -13,6 +13,8 @@ const config = @import("config.zig");
 const server = @import("server.zig");
 const proxy_cli = @import("proxy.zig");
 const plugin_cli = @import("plugin.zig");
+const privatefile = @import("privatefile");
+const Inode = privatefile.Inode;
 const Launch = @This();
 
 process: std.process.Init,
@@ -265,6 +267,7 @@ pub fn runtimeInitialization(self: *const Launch) backend.Initialization {
         },
         .options = .{
             .endpoint = self.connector.endpointPath(),
+            .own_log = self.options.mode == .daemonized,
             .graphics = self.options.graphics,
             .environment = self.process.minimal.environ,
             .history_path = self.history_path.path,
@@ -327,14 +330,63 @@ pub fn launchDaemon(self: *const Launch) !void {
         argc += 2;
     }
 
+    // Until it holds the listener and opens its own log, the runtime's
+    // standard error is this launch's start log: a runtime that never
+    // starts leaves its reason there.
+    const start_log = openStartLog(self.process.io, self.connector.endpointPath()) catch null;
+    defer if (start_log) |file| {
+        file.close(self.process.io);
+    };
+
     const daemon = try std.process.spawn(self.process.io, .{
         .argv = argv[0..argc],
         .cwd = .{ .path = "/" },
         .stdin = .ignore,
         .stdout = .ignore,
-        .stderr = .ignore,
+        .stderr = if (start_log) |file| .{ .file = file } else .ignore,
     });
     _ = daemon;
+}
+
+/// Opens `<endpoint>.runtime.start.log` for this launch and empties it:
+/// never through a symlink, only a regular file the user owns with one
+/// link, owner-only, and in append mode so two launches writing at once
+/// leave no gaps. It opens without blocking, so a FIFO planted there cannot
+/// stall the launch. A socket in a shared directory cannot hand the runtime
+/// someone else's file.
+fn openStartLog(io: std.Io, endpoint: []const u8) !std.Io.File {
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrintZ(&path_buffer, "{s}{s}", .{ endpoint, core.DiagnosticLogName.runtime_start_log_suffix });
+
+    const flags: std.c.O = .{
+        .ACCMODE = .WRONLY,
+        .CREAT = true,
+        .APPEND = true,
+        .NOFOLLOW = true,
+        .CLOEXEC = true,
+        .NONBLOCK = true,
+    };
+    const fd = std.c.open(path.ptr, flags, @as(std.c.mode_t, 0o600));
+    if (fd < 0) {
+        return error.StartLogUnavailable;
+    }
+
+    const file: std.Io.File = .{
+        .handle = fd,
+        .flags = .{ .nonblocking = false },
+    };
+    errdefer file.close(io);
+
+    const inode = Inode.fromDescriptor(fd) catch return error.StartLogUnavailable;
+    if (inode.kind() != .regular or inode.owner != std.c.getuid() or inode.links != 1) {
+        return error.StartLogUnavailable;
+    }
+
+    if (std.c.fchmod(fd, 0o600) != 0 or std.c.ftruncate(fd, 0) != 0) {
+        return error.StartLogUnavailable;
+    }
+
+    return file;
 }
 
 pub fn deinit(self: *Launch) void {

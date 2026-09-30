@@ -16,7 +16,8 @@ pub fn sync(self: *State, sink: Sink, input: SyncInput) !bool {
     }
 
     var buffer: [window_title.max_title_bytes]u8 = undefined;
-    const title = window_title.render(&buffer, input.template, input.tokens);
+    const rendered = window_title.render(&buffer, input.template, input.tokens);
+    const title = window_title.appendSuffix(&buffer, rendered.len, input.suffix);
 
     if (self.ever_sent and std.mem.eql(u8, self.sent[0..self.sent_len], title)) {
         return false;

@@ -5,6 +5,14 @@ const DiagnosticLogName = @This();
 
 /// Suffix of the previous generation of a rotated log.
 pub const rotated_suffix = ".1";
+/// Suffix of the background runtime's own log, `<endpoint>.runtime.log`:
+/// its standard error, in every build. It names no process, so cleanup of
+/// ended processes' logs keeps it and a crash stays readable.
+pub const runtime_log_suffix = ".runtime.log";
+/// Suffix of what a background runtime wrote before it held the listener,
+/// `<endpoint>.runtime.start.log`: why a runtime did not start. Each launch
+/// replaces it.
+pub const runtime_start_log_suffix = ".runtime.start.log";
 
 pub const Role = enum { runtime, client };
 
@@ -61,4 +69,7 @@ test "log names give the endpoint, role and pid of their writer" {
     try std.testing.expect(parse("notes.log") == null);
     try std.testing.expect(parse("x.sock.server-4.log") == null);
     try std.testing.expect(parse("x.sock.runtime-4.log.2") == null);
+    try std.testing.expect(parse("runtime.sock" ++ runtime_log_suffix) == null);
+    try std.testing.expect(parse("my-runtime.sock" ++ runtime_log_suffix) == null);
+    try std.testing.expect(parse("runtime.sock" ++ runtime_start_log_suffix) == null);
 }

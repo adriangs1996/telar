@@ -18,7 +18,7 @@ dependency_count: u8 = 0,
 pub fn init(vm: *lua.Vm, path: []const u8) !State {
     var modules: State = .{ .vm = vm };
     if (path.len > modules.config_dir.len) {
-        return error.NameTooLong;
+        return error.ConfigPathTooLong;
     }
 
     @memcpy(modules.config_dir[0..path.len], path);

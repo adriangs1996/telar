@@ -6,6 +6,10 @@ validates its bounds and broadcasts it, and each connected UI client copies it
 into disposable toast state. Notifications are not persisted and never become
 runtime lifecycle state.
 
+The runtime also publishes a warning notice when one of its own limits is
+reached, at most once a minute per limit ([Limit reached](flows/limit-reached.md)).
+A client shows the notices for its own limits locally.
+
 Routine lifecycle changes are intentionally silent. Creating, renaming, or
 closing panes, tabs, and workspaces does not create a toast, and neither does a
 pane process exiting. The UI state itself confirms those changes. Request

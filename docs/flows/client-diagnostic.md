@@ -27,6 +27,14 @@ Configuration and plugin operations commit the banner before publishing a
 notification. Notification failure preserves it. Lua failures publish the banner
 without a second notification. The model owns no drawing or timer scheduling.
 
+The window draws the banner as a red chip at the right of the status bar,
+cut to fit half the row, and the headless dump writes it as `diagnostic`.
+Bars, panels and picks set it too. A bar slot whose render fails records the
+diagnostic revision it left in `BarUpdatesState`, and that slot's next
+successful render clears the banner unless something replaced it since; a
+panel does the same. A failed panel keeps its reason in `Panel.reason` and
+shows "Could not update: <reason>".
+
 Validation lives in the model's configuration tests,
 `src/client/config/client_diagnostic.zig`, and the real
 configuration/Lua/plugin flows in `src/client_tests/configuration.zig`.

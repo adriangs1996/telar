@@ -16,4 +16,7 @@ pub const Rule = enum {
     dedicated_layout_file,
     receiver_name,
     inline_import,
+    limit_error_set,
+    limit_error_reason,
+    limit_error_unraised,
 };

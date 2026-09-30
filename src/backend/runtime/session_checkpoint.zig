@@ -31,6 +31,9 @@ const SessionReference = @import("../agent/SessionReference.zig");
 const providers = @import("../agent/providers/providers.zig");
 const pane_input = @import("pane_input.zig");
 const pane_launch = @import("pane_launch.zig");
+const limit_reached = @import("limit_reached.zig");
+
+const log = std.log.scoped(.checkpoint);
 
 pub const debounce_ns: u64 = 500 * std.time.ns_per_ms;
 pub const snapshot_bytes = 1024 * 1024;
@@ -136,22 +139,49 @@ pub fn noteChange(model: *RuntimeModel) void {
 /// Starts one write when the checkpoint is due. Called from the
 /// maintenance tick.
 ///
+/// It never fails: the maintenance tick that calls it has more to do. A
+/// write that cannot start is logged, counted and retried after the next
+/// change.
+///
 /// ```zig
-/// try session_checkpoint.start(model);
+/// session_checkpoint.start(model);
 /// ```
-pub fn start(model: *RuntimeModel) !void {
+pub fn start(model: *RuntimeModel) void {
     if (!model.checkpoint.due(nowNs(model))) {
         return;
     }
-    const path = model.checkpoint.path.?;
 
-    const job: WriteJob = prepared: {
-        const buffer = try model.gpa.alloc(u8, snapshot_bytes);
-        errdefer model.gpa.free(buffer);
-        const len = try encode(model, buffer);
-        break :prepared .{ .io = model.io, .path = path, .buffer = buffer, .len = len };
+    const path = model.checkpoint.path.?;
+    const buffer = model.gpa.alloc(u8, model.checkpoint.snapshot_bytes) catch |err| return skip(model, err);
+    const encoded = encode(model, buffer) catch |err| {
+        model.gpa.free(buffer);
+        return skip(model, err);
     };
-    try model.checkpoint.startWrite(.{ .allocator = model.gpa, .job = job }, model.select);
+    if (encoded.dropped != 0) {
+        reportOverflow(model);
+    }
+
+    const job: WriteJob = .{
+        .io = model.io,
+        .path = path,
+        .buffer = buffer,
+        .len = encoded.len,
+    };
+    const owned: OwnedWrite = .{
+        .allocator = model.gpa,
+        .job = job,
+    };
+    // A scheduler that refuses the write completes it as failed, which
+    // keeps the checkpoint dirty for the next tick.
+    model.checkpoint.startWrite(owned, model.select) catch |err| log.err("session checkpoint not started: {s}", .{@errorName(err)});
+}
+
+/// A checkpoint that could not be encoded waits for the next change rather
+/// than failing the same way every tick.
+fn skip(model: *RuntimeModel, err: anyerror) void {
+    log.err("session checkpoint skipped: {s}", .{@errorName(err)});
+    model.checkpoint.failures += 1;
+    model.checkpoint.dirty = false;
 }
 
 /// Completes the in-flight write and releases its buffer.
@@ -174,10 +204,20 @@ pub fn writeNow(model: *RuntimeModel) void {
     if (model.checkpoint.pending != null) {
         return;
     }
-    const buffer = model.gpa.alloc(u8, snapshot_bytes) catch return;
+    const buffer = model.gpa.alloc(u8, model.checkpoint.snapshot_bytes) catch return;
     defer model.gpa.free(buffer);
-    const len = encode(model, buffer) catch return;
-    writeFile(.{ .io = model.io, .path = path, .buffer = buffer, .len = len }) catch {
+    const encoded = encode(model, buffer) catch return;
+    if (encoded.dropped != 0) {
+        reportOverflow(model);
+    }
+
+    const job: WriteJob = .{
+        .io = model.io,
+        .path = path,
+        .buffer = buffer,
+        .len = encoded.len,
+    };
+    writeFile(job) catch {
         model.checkpoint.failures += 1;
         return;
     };
@@ -468,9 +508,9 @@ fn quarantine(io: std.Io, path: []const u8) void {
 /// Encodes the restorable model shape into `buffer`.
 ///
 /// ```zig
-/// const len = try session_checkpoint.encode(model, buffer);
+/// const encoded = try session_checkpoint.encode(model, buffer);
 /// ```
-pub fn encode(model: *RuntimeModel, buffer: []u8) !usize {
+pub fn encode(model: *RuntimeModel, buffer: []u8) !EncodedCheckpoint {
     const reader = &model.workspaces;
     const panes = &model.panes;
     var encoder = try PersistenceEncoder.init(buffer, .{
@@ -562,8 +602,28 @@ pub fn encode(model: *RuntimeModel, buffer: []u8) !usize {
         });
     }
 
-    return (try encoder.finish()).len;
+    return .{
+        .len = (try encoder.finish()).len,
+        .dropped = encoder.dropped,
+    };
 }
+
+/// A session larger than one checkpoint keeps the records that fit; the
+/// rest is reported as `session_checkpoint.snapshot_bytes`.
+fn reportOverflow(model: *RuntimeModel) void {
+    limit_reached.report(
+        model,
+        .{
+            .limit = core.Limit.declare("session_checkpoint.snapshot_bytes", "bytes", model.checkpoint.snapshot_bytes),
+        },
+    );
+}
+
+/// The bytes of one encoded checkpoint and how many records did not fit.
+const EncodedCheckpoint = struct {
+    len: usize,
+    dropped: u32,
+};
 
 fn nowNs(model: *RuntimeModel) u64 {
     return @intCast(std.Io.Timestamp.now(model.io, .awake).toNanoseconds());
@@ -649,7 +709,7 @@ test "checkpoint state debounces, coalesces and retries after failure" {
     try std.testing.expectEqual(@as(u64, 1), state.writes);
 
     try state.startWrite(try testingWrite(), &scheduler);
-    state.completeWrite(error.DiskFull);
+    state.completeWrite(error.NoSpaceLeft);
     try std.testing.expect(state.dirty);
     try std.testing.expectEqual(@as(u64, 1), state.failures);
     try std.testing.expect(state.due(2_000 + debounce_ns));

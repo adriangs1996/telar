@@ -20,7 +20,7 @@ const client_tests = @import("../execution/client_tests.zig");
 const first_retry_ms = 500;
 const longest_retry_ms = 30 * std.time.ms_per_s;
 /// A link that stayed up this long earns fast retries again.
-const healthy_after_ns = 60 * std.time.ns_per_s;
+pub const healthy_after_ns = 60 * std.time.ns_per_s;
 /// Doublings after which the wait stops growing.
 const max_backoff_doublings = 16;
 
@@ -147,8 +147,37 @@ pub fn lose(client: *Client, err: anyerror) !void {
         report.len = writer.end;
     }
 
-    link.phase = .lost;
-    link.fail(if (report.len != 0) report.text() else @errorName(err));
+    try close(client, .lost, if (report.len != 0) report.text() else @errorName(err));
+    try scheduleRetry(client);
+}
+
+/// Gives the link up for a reason no new session fixes, such as a runtime
+/// message that keeps stopping at the same limit: the socket closes as
+/// `lose` closes it, the chrome shows `reason`, and no retry follows until
+/// the person asks (`retryNow`). A client handed its socket cannot
+/// reconnect, so this ends it.
+///
+/// ```zig
+/// try runtime_link.abandon(client, "limit reached: TooManyTabs");
+/// ```
+pub fn abandon(client: *Client, reason: []const u8) !void {
+    if (client.options.machine == null) {
+        return error.RuntimeLinkAbandoned;
+    }
+
+    if (client.model.runtime_link.phase != .connected) {
+        return closeWhenIdle(client);
+    }
+
+    try close(client, .failed, reason);
+}
+
+/// Shows why the link ended, drops what was queued and closes the socket
+/// once no read or write uses it.
+fn close(client: *Client, phase: data.RuntimeLink.Phase, reason: []const u8) !void {
+    const link = &client.model.runtime_link;
+    link.phase = phase;
+    link.fail(reason);
     client.model.link_revision +%= 1;
     client.model.to_runtime.discardQueued();
 
@@ -164,7 +193,6 @@ pub fn lose(client: *Client, err: anyerror) !void {
     }
 
     try closeWhenIdle(client);
-    try scheduleRetry(client);
 }
 
 /// Stops keeping the machine connected: the socket shuts down and closes
@@ -265,6 +293,9 @@ pub fn retryNow(client: *Client) !void {
 
     link.phase = .connecting;
     link.attempt = 0;
+    // The person asked again: limits that gave the link up start counting
+    // anew.
+    link.limit_resyncs = 0;
     client.model.link_revision +%= 1;
     try queueConnect(client, client.options.machine.?);
 }

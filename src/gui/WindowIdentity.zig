@@ -44,7 +44,7 @@ pub fn acquire(io: std.Io, endpoint: []const u8) !Identity {
 
     for (0..max_windows) |slot| {
         var name_storage: [std.fs.max_name_bytes]u8 = undefined;
-        const name = std.fmt.bufPrintZ(&name_storage, "{s}.gui-{d}.lock", .{ basename, slot }) catch return error.NameTooLong;
+        const name = std.fmt.bufPrintZ(&name_storage, "{s}.gui-{d}.lock", .{ basename, slot }) catch return error.LockNameTooLong;
         const fd = std.c.openat(directory.handle, name, .{ .ACCMODE = .RDWR, .CREAT = true, .NOFOLLOW = true, .CLOEXEC = true, .NONBLOCK = true }, @as(std.c.mode_t, 0o600));
         if (fd < 0) {
             return switch (std.posix.errno(fd)) {

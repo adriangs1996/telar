@@ -47,6 +47,8 @@ pub const PendingResponse = union(enum) {
     pane_focus_result: core.PaneFocusResult,
     command_suggestion: PendingSuggestion,
     path_results: *PathQuery,
+    /// Encoded from the runtime's limit registry when it is sent.
+    limit_list: core.RequestId,
 };
 
 test "management responses overtake observation work" {

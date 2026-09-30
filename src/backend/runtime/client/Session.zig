@@ -70,6 +70,10 @@ answering_parked: bool = false,
 /// long, so a refusal is remembered.
 parked_rechecked: bool = false,
 cell_deadline_ns: ?u64 = null,
+/// The second this connection's `report_limit` messages are counted in,
+/// in monotonic milliseconds, and how many arrived in it.
+limit_report_window_ms: i64 = 0,
+limit_reports: u8 = 0,
 
 /// Example: `if (session.setTerminalColors(colors)) { updateOwnedPanes(); }`.
 pub fn setTerminalColors(self: *Session, colors: core.TerminalColors) bool {

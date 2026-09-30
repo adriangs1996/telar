@@ -62,10 +62,12 @@ pub fn receive(model: *RuntimeModel, completion: OutputCompletion) !void {
         .shell_foreground = if (model.panes.shell_markers[slot]) null else shell_foreground,
         .clock = pane_namespace.historyClock(model.io),
     });
-    try pane_observation.start(model, pane);
+    // Only the ingest re-arms the read, so these errors wait until it has
+    // started: a pane never stops reading because a worker did not start.
+    const observation = pane_observation.start(model, pane);
 
     pane.queueMediaOutput(bytes);
-    try pane_graphics.startMedia(model, pane);
+    const media = pane_graphics.startMedia(model, pane);
 
     const ingest: OutputIngest = .{
         .io = model.io,
@@ -75,13 +77,18 @@ pub fn receive(model: *RuntimeModel, completion: OutputCompletion) !void {
     core.mark(ingest.io, .vt_queued);
 
     if (model.ingest_gate == null and pane.canInlineOutput(ingest.bytes)) {
-        return finishIngest(model, ingestPane(ingest, null));
+        const ingested = finishIngest(model, ingestPane(ingest, null));
+        try observation;
+        try media;
+        return ingested;
     }
 
     model.select.concurrent(.pane_ingested, ingestPane, .{ ingest, model.ingest_gate }) catch |err| {
         pane.cancelOutputIngest();
         return err;
     };
+    try observation;
+    try media;
 }
 
 /// Commits one ingest: applies a deferred resize, schedules observation,

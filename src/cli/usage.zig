@@ -57,6 +57,7 @@ pub const text =
     \\         telar plugin disable ID|PATH --client ID [--json] [--socket PATH]
     \\         telar plugin run ID|PATH ACTION --client ID [--json] [--socket PATH]
     \\         telar diagnostics logs [--component all|runtime|client] [--pid N] [--lines N] [--json] [--socket PATH]
+    \\         telar diagnostics limits [--json] [--socket PATH]
     \\         telar workspace select ID --client ID [--json] [--socket PATH]
     \\         telar client detach ID [--json] [--socket PATH]
     \\         telar command suggest <pane|--current> TEXT [--json] [--socket PATH]

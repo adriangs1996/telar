@@ -48,7 +48,16 @@ pub fn advance(model: *RuntimeModel, completion: Wake) !void {
         return;
     }
 
-    try completion.result;
+    // A wake that failed still owes its search an answer.
+    completion.result catch |err| {
+        if (session.pending_search) |pending| {
+            session.pending_search = null;
+            fail(session, pending.request_id, "Pane search stopped; retry") catch {};
+        }
+
+        return err;
+    };
+
     if (!session.active()) {
         return;
     }

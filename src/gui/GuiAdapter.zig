@@ -57,6 +57,8 @@ const CursorClock = @import("CursorClock.zig");
 const animate = @import("animate");
 const FrameClock = animate.FrameClock;
 const native_callbacks = @import("native/window_callbacks.zig");
+const limit_reached = @import("limit_reached.zig");
+const LimitedFrame = @import("LimitedFrame.zig");
 const window_machines = @import("window_machines.zig");
 const clipboard_image = @import("clipboard_image.zig");
 const ImagePreviews = @import("ImagePreviews.zig");
@@ -67,6 +69,8 @@ const GuiAdapter = @This();
 
 /// Clients one window can hold: the local machine and every saved one.
 pub const machine_slots = core.MachineProfiles.capacity + 1;
+/// The window's title when no template is configured.
+pub const default_title = "Telar";
 /// Both backends upload and draw Kitty graphics images, so no pane keeps
 /// the cell fallback for them.
 const image_support: data.environment.Support = .supported;
@@ -109,6 +113,11 @@ profiles_seen: u64 = 0,
 driver: NativeLoop,
 renderer: Renderer,
 failure: ?anyerror = null,
+/// The frame that stopped at a limit; it is not drawn again.
+limited: ?LimitedFrame = null,
+/// The limit error the last update stopped at, so the same one again does
+/// not ask for another draw.
+update_limited: ?anyerror = null,
 exit_status: ?u8 = null,
 started: bool = false,
 needs_draw: bool = false,
@@ -375,6 +384,11 @@ pub fn draw(self: *GuiAdapter, viewport: native.Viewport) !u64 {
     if (try self.driver.configuration.apply(self, &self.renderer)) {
         self.cursor_clock.config = self.renderer.config.cursor;
         self.cursor_clock.reset(self.now());
+        self.limited = null;
+    }
+
+    if (limit_reached.holdsFrame(self, viewport)) {
+        return 0;
     }
 
     _ = self.resizeViewport(viewport) catch |err| switch (err) {
@@ -387,6 +401,11 @@ pub fn draw(self: *GuiAdapter, viewport: native.Viewport) !u64 {
     self.renderer.cursor_on = self.cursor_clock.shown(now_ns);
     self.renderer.focused = self.cursor_clock.focused;
     const token = try self.prepare(&self.renderer);
+    if (self.limited != null) {
+        self.limited = null;
+        // A pump refreshes the title, which no longer names the limit.
+        self.wake();
+    }
 
     if (token != 0) {
         self.driver.frame_pacer.record(self.app.presentation.active.?.delivery.commit.slice(), now_ns);
@@ -432,7 +451,13 @@ pub fn fail(self: *GuiAdapter, err: anyerror) void {
         self.failure = err;
     }
 
-    native.telar_gui_wake(self.driver.fds[1]);
+    self.wake();
+}
+
+/// Wakes the native loop for one more pump.
+/// Example: `gui.wake();`
+pub fn wake(self: *GuiAdapter) void {
+    native.telar_gui_wake(self.driver.fds[@intFromEnum(PipeEnd.write)]);
 }
 
 fn now(self: *const GuiAdapter) u64 {
@@ -483,19 +508,22 @@ pub fn windowTitle(self: *GuiAdapter, out: *native.WindowTitle) !bool {
     out.* = .{};
     const model = &self.app.model;
     const tab_label = if (model.tabs.activeSlot()) |tab| shared_model.tab_label.text(model, tab) else "";
+    var suffix_buffer: [limit_reached.title_suffix_bytes]u8 = undefined;
     return self.window_title.sync(
         .{
             .context = out,
             .set = copyWindowTitle,
         },
         .{
-            .template = data.config_reload.windowTitleTemplate(model),
+            // Without a template the window still names a held limit.
+            .template = if (data.config_reload.windowTitleTemplate(model).len != 0) data.config_reload.windowTitleTemplate(model) else default_title,
             .tokens = .{
                 .workspace = model.workspaceName(),
                 .tab = tab_label,
                 .pane_title = data.pane_title.focusedTitle(model),
                 .hostname = if (self.machines.count() != 0) self.machines.label(self.machines.active) else self.hostname[0..self.hostname_len],
             },
+            .suffix = limit_reached.titleSuffix(self, &suffix_buffer),
         },
     );
 }
@@ -593,23 +621,28 @@ pub fn update(self: *GuiAdapter) !?u8 {
         var batch = try loop.inbox.begin();
         defer loop.inbox.end();
 
+        // A limit reached by one event skips that event; the rest of the
+        // batch and of the turn still run.
         while (try loop.inbox.next(&batch)) |event| {
             const path = core.enter(pathFor(event));
             defer path.restore();
 
-            const exit_status = try self.dispatch(event);
-            try self.deliverHostEffects();
+            const exit_status = self.dispatch(event) catch |err| skipped: {
+                try self.absorbUpdate(err);
+                break :skipped null;
+            };
+            self.deliverHostEffects() catch |err| try self.absorbUpdate(err);
             if (exit_status) |value| {
                 break :turn value;
             }
         }
 
         if (batch.processed != 0) {
-            try client.client_layout.synchronizeClientLayout(&self.app.model);
+            client.client_layout.synchronizeClientLayout(&self.app.model) catch |err| try self.absorbUpdate(err);
         }
 
-        try loop.configuration.poll(window_machines.window(self));
-        try self.deliverHostEffects();
+        loop.configuration.poll(window_machines.window(self)) catch |err| try self.absorbUpdate(err);
+        self.deliverHostEffects() catch |err| try self.absorbUpdate(err);
 
         break :turn null;
     };
@@ -632,7 +665,7 @@ pub fn update(self: *GuiAdapter) !?u8 {
 
     if (self.app.presentation.active == null) {
         const animation_due = self.chrome.animation.requestPreparation(now_ns);
-        self.needs_draw = self.app.presentation.needsPreparation() or animation_due or
+        self.needs_draw = (self.app.presentation.needsPreparation() and !limit_reached.holds(self)) or animation_due or
             self.driver.configuration.pending or
             self.renderer.cursor_on != self.cursor_clock.shown(now_ns) or
             self.renderer.focused != self.cursor_clock.focused or
@@ -640,6 +673,13 @@ pub fn update(self: *GuiAdapter) !?u8 {
     }
 
     return status;
+}
+
+/// Keeps the turn going past a limit error; any other error ends it.
+fn absorbUpdate(self: *GuiAdapter, err: anyerror) !void {
+    if (!limit_reached.absorb(self, .window_update, err)) {
+        return err;
+    }
 }
 
 fn dispatch(self: *GuiAdapter, event: gui_event.Message) !?u8 {

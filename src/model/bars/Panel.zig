@@ -5,12 +5,15 @@ const BarComponent = @import("BarComponent.zig");
 const PanelStatus = @import("PanelStatus.zig").PanelStatus;
 const PanelTarget = @import("PanelTarget.zig").PanelTarget;
 const model = @import("model.zig");
+const Diagnostic = @import("../config/Diagnostic.zig");
 const Panel = @This();
 
 target: PanelTarget = .none,
 anchor: ?BarComponent = null,
 content: model.PanelContent = .{},
 status: PanelStatus = .loading,
+/// Why the last render failed; shown while `status` is `.failed`.
+reason: Diagnostic = .{},
 /// Local time of the last render that produced content.
 updated: ?LocalTime = null,
 /// Advances on every opening, so a render started for an earlier opening

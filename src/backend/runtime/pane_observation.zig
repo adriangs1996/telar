@@ -79,12 +79,16 @@ pub fn finish(model: *RuntimeModel, completion: ObservationCompletion) !void {
     recordHistoryMetrics(model, completion.stats);
     // Before the screen can settle an interrupt: a composer that reads as
     // ready may still hold the prompt the agent put back.
-    try agent_control.clearRestoredDraft(model, pane);
+    // Its error waits until the observation is re-armed, so a key that
+    // could not be encoded never leaves the pane unobserved.
+    const draft = agent_control.clearRestoredDraft(model, pane);
     reconcileScreen(model, pane, completion.stats, transition.shell_foreground);
 
     agent_description.start(model);
     agent_hooks.answerParked(model, completion.pane);
-    try start(model, pane);
+    const next = start(model, pane);
+    try draft;
+    try next;
 }
 
 fn observe(work: ObservationWork) ObservationCompletion {

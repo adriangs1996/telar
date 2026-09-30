@@ -25,6 +25,7 @@ const proxy_capture = @import("proxy_capture.zig");
 const proxy_tap = @import("proxy_tap.zig");
 const runtime_telemetry = @import("runtime_telemetry.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
+const limit_reached = @import("limit_reached.zig");
 const suggest_command = @import("suggest_command.zig");
 const system_metrics = @import("system_metrics.zig");
 const workspace_git = @import("workspace_git.zig");
@@ -156,8 +157,24 @@ pub fn deinit(self: *Runtime) void {
 /// Example: `const stopped = try runtime.update(event);`.
 pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
     const model = &self.model;
+    if (event == .stopped) {
+        return self.loop.completeStop(event.stopped);
+    }
+
+    // A limit reached in one event skips that event, never the runtime.
+    self.dispatch(event) catch |err| try limit_reached.absorb(model, @tagName(event), err);
+    client_delivery.flush(model) catch |err| try limit_reached.absorb(model, "client_delivery", err);
+
+    return switch (event) {
+        .client_message, .client_sent => client_delivery.shutdownDelivered(model),
+        else => false,
+    };
+}
+
+fn dispatch(self: *Runtime, event: runtime_event.Event) !void {
+    const model = &self.model;
     switch (event) {
-        .stopped => |result| return self.loop.completeStop(result),
+        .stopped => unreachable,
         .accepted => |result| try client_connection.accept(model, result, &self.resources.listener),
         .handshaken => |completion| client_connection.finishHandshake(model, completion),
         .client_message => |message| client_connection.receive(model, message),
@@ -169,8 +186,8 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
         .pane_response_written => |completion| try pane_input.finishResponseWrite(model, completion),
         .pane_observed => |completion| try pane_observation.finish(model, completion),
         .pane_media => |completion| try pane_graphics.finishMedia(model, completion),
-        .pane_search => |wake| try pane_search.advance(model, wake),
-        .pane_descent => |completion| try agent_hooks.finishDescent(model, completion),
+        .pane_search => |wake| try client_connection.dropUnanswered(model, wake.client, pane_search.advance(model, wake)),
+        .pane_descent => |completion| try client_connection.dropUnanswered(model, completion.client, agent_hooks.finishDescent(model, completion)),
         .pane_exit => |completion| try pane_closure.finishExit(model, completion),
         .agent_description => |result| agent_description.finish(model, result),
         .agent_tick => |result| try agent_maintenance.tick(model, result),
@@ -192,10 +209,4 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
         .telemetry_tick => |result| runtime_telemetry.tick(model, &self.resources.telemetry, result),
         .telemetry_written => |result| runtime_telemetry.finish(model, &self.resources.telemetry, result),
     }
-
-    try client_delivery.flush(model);
-    return switch (event) {
-        .client_message, .client_sent => client_delivery.shutdownDelivered(model),
-        else => false,
-    };
 }

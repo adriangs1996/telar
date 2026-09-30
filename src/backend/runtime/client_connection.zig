@@ -15,6 +15,7 @@ const Sources = @import("Sources.zig");
 const client_control = @import("client_control.zig");
 const path_picker = @import("path_picker.zig");
 const client_request = @import("client_request.zig");
+const limit_reached = @import("limit_reached.zig");
 const geometry_lease = @import("geometry_lease.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const handshake = @import("../transport/handshake.zig");
@@ -137,9 +138,12 @@ pub fn receive(model: *RuntimeModel, event: ClientMessage) void {
         };
     }
 
-    client_request.receive(model, session, message) catch {
-        drop(model, event.client);
-        return;
+    client_request.receive(model, session, message) catch |err| {
+        // A request that reached a limit is refused; its connection stays.
+        limit_reached.refuse(model, session, message, err) catch {
+            drop(model, event.client);
+            return;
+        };
     };
 
     // A parked report borrows the receive buffer; reading resumes once it
@@ -214,6 +218,23 @@ pub fn startSend(model: *RuntimeModel, session: *Session, payload: []const u8) !
     }}) catch |err| {
         session.send_pending = false;
         return err;
+    };
+}
+
+/// Applies the slow-client policy to a reply an event owes: one that does
+/// not fit the client's response queue drops that client, as a request's
+/// would; any other error returns.
+///
+/// ```zig
+/// try client_connection.dropUnanswered(model, wake.client, pane_search.advance(model, wake));
+/// ```
+pub fn dropUnanswered(model: *RuntimeModel, key: ClientKey, result: anyerror!void) !void {
+    result catch |err| {
+        if (err != error.ResponseQueueFull) {
+            return err;
+        }
+
+        drop(model, key);
     };
 }
 

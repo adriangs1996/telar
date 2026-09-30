@@ -5,6 +5,8 @@ const ReporterType = @import("Reporter.zig");
 const SourceFileType = @import("SourceFile.zig");
 const fixer_support = @import("fixes.zig");
 const analyzer_support = @import("analysis.zig");
+const limit_errors = @import("limit_errors.zig");
+const LimitErrorNames = @import("LimitErrorNames.zig");
 
 /// Runs codestyle over the configured source roots and returns its process status.
 ///
@@ -16,19 +18,58 @@ pub fn run(init: std.process.Init, config: ConfigType, writer: *std.Io.Writer) !
     defer paths.free(init.gpa, files);
 
     var reporter: ReporterType = .{ .writer = writer };
+
+    // The limit error sets, read once when the checked roots include them.
+    var names: LimitErrorNames = .{};
+    defer names.deinit(init.gpa);
+    var sets_file: ?SourceFileType = null;
+    defer if (sets_file) |*file| {
+        file.deinit();
+    };
+    for (files) |path| {
+        if (!std.mem.endsWith(u8, path, limit_errors.sets_path_suffix)) {
+            continue;
+        }
+
+        sets_file = try SourceFileType.open(init.gpa, init.io, path);
+        const missing = try limit_errors.collect(init.gpa, sets_file.?.source, &names);
+        defer init.gpa.free(missing);
+        try reporter.report(path, missing);
+    }
+
     const processor: Processor = .{
         .allocator = init.gpa,
         .io = init.io,
         .fix = config.fix,
         .reporter = &reporter,
+        .limit_names = if (sets_file != null) &names else null,
     };
 
     for (files) |path| {
         try processor.process(path);
     }
 
+    // Only a run over the whole tree knows whether nothing raises a member.
+    if (sets_file != null and coversTree(config.paths)) {
+        const file = &sets_file.?;
+        const unraised = try limit_errors.unraised(init.gpa, file.source, &names);
+        defer init.gpa.free(unraised);
+        try reporter.report(file.path, unraised);
+    }
+
     try reporter.finish();
     return reporter.exitCode();
+}
+
+fn coversTree(roots: []const []const u8) bool {
+    var src = false;
+    var lib = false;
+    for (roots) |root| {
+        src = src or std.mem.eql(u8, root, "src");
+        lib = lib or std.mem.eql(u8, root, "lib");
+    }
+
+    return src and lib;
 }
 
 const Processor = struct {
@@ -36,6 +77,7 @@ const Processor = struct {
     io: std.Io,
     fix: bool,
     reporter: *ReporterType,
+    limit_names: ?*LimitErrorNames,
 
     /// Checks one file, optionally applying safe formatting fixes first.
     /// Example: `try processor.process("src/client/panes/Pane.zig");`.
@@ -63,5 +105,11 @@ const Processor = struct {
         defer self.allocator.free(violations);
 
         try self.reporter.report(path, violations);
+
+        const names = self.limit_names orelse return;
+        const limit_violations = try limit_errors.lint(self.allocator, path, source, names);
+        defer self.allocator.free(limit_violations);
+
+        try self.reporter.report(path, limit_violations);
     }
 };

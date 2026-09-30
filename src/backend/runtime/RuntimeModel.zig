@@ -81,6 +81,13 @@ client_layouts: ClientLayouts = .{},
 system_metrics: Sampler = .{},
 system_metrics_pending: bool = false,
 metrics: RuntimeMetrics,
+/// The limits the runtime reached; `limit_reached.report` writes it.
+limit_reaches: core.LimitReaches = .{},
+/// The limits clients reported, apart so a client never evicts, silences
+/// or renames a runtime row.
+client_limit_reaches: core.LimitReaches = .{},
+/// Client reports refused because a connection sent too many in a second.
+refused_limit_reports: u64 = 0,
 checkpoint: CheckpointWriter = .{},
 session_name_probe_in_flight: bool = false,
 /// Whether a worker is looking for the linked worktree of a pane's directory.

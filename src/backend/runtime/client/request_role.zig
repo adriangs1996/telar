@@ -39,6 +39,7 @@ pub fn classify(tag: Tag) RequestClass {
         .interrupt_agent,
         .report_agent_progress,
         .verify_pane_descent,
+        .query_limits,
         => .control,
         else => .ui,
     };

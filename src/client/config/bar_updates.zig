@@ -230,12 +230,24 @@ fn renderPanel(client: *Client, request: PanelRender) !void {
 }
 
 fn receivePanel(client: *Client, request: PanelRender, content: data.PanelContent) !void {
-    _ = data.bar_panels.receive(&client.model, .{
+    const receipt = data.bar_panels.receive(&client.model, .{
         .generation = request.generation,
         .run = request.run,
         .content = content,
         .time = local_time.now(),
     });
+    if (receipt == .stale) {
+        return;
+    }
+
+    const state = &client.model.bar_updates;
+    if (state.panel_failed_revision) |revision| {
+        if (client.model.diagnostic_revision == revision) {
+            _ = data.client_diagnostic.clear(&client.model);
+        }
+
+        state.panel_failed_revision = null;
+    }
 }
 
 fn failPanel(client: *Client, failure: PanelFailure) !void {
@@ -250,6 +262,8 @@ fn failPanel(client: *Client, failure: PanelFailure) !void {
             .{@errorName(failure.reason)},
         ),
     });
+    client.model.bars.panel.reason = client.model.client_diagnostic;
+    client.model.bar_updates.panel_failed_revision = client.model.diagnostic_revision;
 }
 
 fn invokeCallback(client: *Client, request: CallbackRequest) !bar_update.Outcome {
@@ -453,6 +467,15 @@ fn commitContent(model: *data.ClientModel, command: BarUpdateCommand, content: d
         error.StaleBarUpdate, error.InvalidBarUpdateTarget => return .stale,
     };
 
+    const state = &model.bar_updates;
+    if (state.failed_position == command.position) {
+        if (model.diagnostic_revision == state.failed_revision) {
+            _ = data.client_diagnostic.clear(model);
+        }
+
+        state.failed_position = null;
+    }
+
     return if (update_commit) |value| .{ .updated = value } else .unchanged;
 }
 
@@ -472,6 +495,8 @@ fn commitFailure(model: *data.ClientModel, command: BarUpdateCommand, failure: B
             .{@errorName(failure.reason)},
         ),
     });
+    model.bar_updates.failed_position = command.position;
+    model.bar_updates.failed_revision = model.diagnostic_revision;
 
     return .{ .failed = failure.reason };
 }

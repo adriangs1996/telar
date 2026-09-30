@@ -185,6 +185,12 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
         .client_command => |command| try core.encodeClientCommand(buffer, command),
         .client_command_result => |command| try core.encodeClientCommandResult(buffer, command),
         .client_list => |list| try core.encodeClientList(buffer, list),
+        .limit_list => |request_id| try core.encodeLimitList(buffer, .{
+            .request_id = request_id,
+            .runtime = context.runtime_limits,
+            .clients = context.client_limits,
+            .refused_reports = context.refused_limit_reports,
+        }),
         .pane_focus_command => |command| try core.encodePaneFocusCommand(buffer, command),
         .editor_opened => |result| try core.encodeEditorOpened(buffer, result),
         .pane_focus_result => |result| try core.encodePaneFocusResult(buffer, result),
@@ -292,4 +298,7 @@ const EncodeContext = struct {
     history_stats: *?*StatsResult,
     change_review: ?*?*ReviewResult = null,
     path_results: ?*?*PathQuery = null,
+    runtime_limits: *const core.LimitReaches = &core.LimitReaches.none,
+    client_limits: *const core.LimitReaches = &core.LimitReaches.none,
+    refused_limit_reports: u64 = 0,
 };

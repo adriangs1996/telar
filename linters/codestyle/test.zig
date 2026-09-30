@@ -15,4 +15,5 @@ test {
     _ = @import("layout_naming.zig");
     _ = @import("receivers.zig");
     _ = @import("imports.zig");
+    _ = @import("limit_errors.zig");
 }

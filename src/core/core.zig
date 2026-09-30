@@ -33,6 +33,7 @@ const clients = @import("schema/messages/clients.zig");
 const client_actions = @import("schema/messages/client_actions.zig");
 const client_commands = @import("schema/messages/client_commands.zig");
 const change_review_module = @import("schema/messages/change_review.zig");
+const limits_module = @import("schema/messages/limits.zig");
 
 pub const AcknowledgeAgent = @import("schema/messages/AcknowledgeAgent.zig");
 pub const AgentAttachmentMarkers = types.AgentAttachmentMarkers;
@@ -430,6 +431,7 @@ pub const max_search_matches = types.max_search_matches;
 pub const max_search_needle_bytes = types.max_search_needle_bytes;
 pub const max_shm_name_bytes = graphics.max_shm_name_bytes;
 pub const max_span_count = frame_support.max_span_count;
+pub const max_cell_count = frame_support.max_cell_count;
 pub const max_suggestion_bytes = types.max_suggestion_bytes;
 pub const max_suggestion_request_bytes = types.max_suggestion_request_bytes;
 pub const max_tab_label_bytes = types.max_tab_label_bytes;
@@ -492,6 +494,11 @@ test {
     _ = @import("ssh_destination.zig");
     _ = @import("remote_telar.zig");
     _ = @import("schema/notification_link.zig");
+    _ = @import("Limit.zig");
+    _ = @import("LimitReach.zig");
+    _ = @import("LimitReaches.zig");
+    _ = @import("limit_reached.zig");
+    _ = @import("schema/messages/limits.zig");
 }
 
 pub const TextMetadata = @import("text_metadata/Storage.zig");
@@ -507,6 +514,22 @@ pub const ClientList = @import("ClientList.zig");
 pub const QueryClients = @import("schema/messages/QueryClients.zig");
 pub const encodeQueryClients = clients.encodeQueryClients;
 pub const encodeClientList = clients.encodeClientList;
+
+pub const Limit = @import("Limit.zig");
+pub const LimitReach = @import("LimitReach.zig");
+pub const LimitReaches = @import("LimitReaches.zig");
+pub const RecordedReach = @import("RecordedReach.zig");
+pub const ReachTime = @import("ReachTime.zig");
+pub const LimitList = @import("schema/messages/LimitList.zig");
+pub const LimitOrigin = @import("LimitOrigin.zig").LimitOrigin;
+pub const limit_reached = @import("limit_reached.zig");
+pub const ReportLimit = @import("schema/messages/ReportLimit.zig");
+pub const QueryLimits = @import("schema/messages/QueryLimits.zig");
+pub const LimitListEntry = @import("schema/messages/LimitListEntry.zig");
+pub const LimitListView = @import("schema/messages/LimitListView.zig");
+pub const encodeReportLimit = limits_module.encodeReportLimit;
+pub const encodeQueryLimits = limits_module.encodeQueryLimits;
+pub const encodeLimitList = limits_module.encodeLimitList;
 
 pub const DetachClient = @import("schema/messages/DetachClient.zig");
 pub const encodeDetachClient = clients.encodeDetachClient;

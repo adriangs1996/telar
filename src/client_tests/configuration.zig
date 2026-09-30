@@ -227,6 +227,98 @@ test "dynamic bar ticks commit current Lua content before paced presentation" {
     try std.testing.expectEqual(client.model.version().bars, client.presentation.prepared.model.bars);
 }
 
+test "a bar with five click actions says why it failed and its next render clears that" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const adoption = try fixtures.testingConfigAdoptionSource(1,
+        \\local telar = require("telar")
+        \\local ui = telar.ui
+        \\local ticks = 0
+        \\return { api_version = 2, client = { bars = {
+        \\  bottom = {
+        \\    left = telar.bar.dynamic({ every_ms = 100, render = function()
+        \\      ticks = ticks + 1
+        \\      local items = {}
+        \\      for index = 1, ticks == 1 and 5 or 1 do
+        \\        items[#items + 1] = ui.group({ on_click = telar.action.toggle_sidebar(), ui.label("b" .. index) })
+        \\      end
+        \\      return items
+        \\    end }),
+        \\    right = telar.bar.tabs(),
+        \\  },
+        \\} } }
+    );
+    _ = try fixtures.reloadConfiguration(&harness, adoption);
+
+    switch (try harness.receiveClient()) {
+        .bar_tick => |result| try client_module.bar_updates.handleTick(client, result),
+        else => return error.UnexpectedEvent,
+    }
+    try std.testing.expectEqualStrings("invalid telar.ui.group: TooManyBarActions", data.client_diagnostic.shown(&client.model).?);
+    try std.testing.expectEqual(data.bar_values.Position.bottom_left, client.model.bar_updates.failed_position.?);
+
+    switch (try harness.receiveClient()) {
+        .bar_tick => |result| try client_module.bar_updates.handleTick(client, result),
+        else => return error.UnexpectedEvent,
+    }
+    try std.testing.expect(data.client_diagnostic.shown(&client.model) == null);
+    try std.testing.expect(client.model.bar_updates.failed_position == null);
+}
+
+test "a failed panel keeps its reason and a later render clears the diagnostic it left" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const adoption = try fixtures.testingConfigAdoptionSource(1,
+        \\local telar = require("telar")
+        \\local ui = telar.ui
+        \\local renders = 0
+        \\return { api_version = 2, client = {
+        \\  panels = {
+        \\    usage = telar.panel({ title = "Usage", render = function()
+        \\      renders = renders + 1
+        \\      if renders == 1 then error("usage file missing") end
+        \\      return ui.heading("On track")
+        \\    end }),
+        \\  },
+        \\  bars = { bottom = {
+        \\    left = telar.bar.static({ ui.group({ on_click = telar.action.open_panel("usage"), ui.label("usage") }) }),
+        \\    right = telar.bar.tabs(),
+        \\  } },
+        \\} }
+    );
+    _ = try fixtures.reloadConfiguration(&harness, adoption);
+    try harness.settleModelPresentation();
+
+    const component: data.BarComponent = .{ .position = .bottom_left, .node = 0 };
+    _ = try client_module.view_interactions.apply(client, client.model.tabs.active, .{
+        .intent = .{ .bar_component = component },
+        .consumed = true,
+    });
+    switch (try harness.receiveClient()) {
+        .bar_tick => |result| try client_module.bar_updates.handleTick(client, result),
+        else => return error.UnexpectedEvent,
+    }
+    const panel = &client.model.bars.panel;
+    try std.testing.expectEqual(data.PanelStatus.failed, panel.status);
+    try std.testing.expect(std.mem.indexOf(u8, panel.reason.message(), "usage file missing") != null);
+    try std.testing.expectEqualStrings(panel.reason.message(), data.client_diagnostic.shown(&client.model).?);
+
+    try client_module.bar_updates.refreshPanel(client);
+    switch (try harness.receiveClient()) {
+        .bar_tick => |result| try client_module.bar_updates.handleTick(client, result),
+        else => return error.UnexpectedEvent,
+    }
+    try std.testing.expectEqual(data.PanelStatus.ready, panel.status);
+    try std.testing.expect(data.client_diagnostic.shown(&client.model) == null);
+    try std.testing.expect(client.model.bar_updates.panel_failed_revision == null);
+}
+
 test "command completion from a replaced bar generation is discarded" {
     var harness: ClientHarness = undefined;
     try harness.init();

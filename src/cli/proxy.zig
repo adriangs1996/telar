@@ -495,7 +495,7 @@ fn validateDirectoryOwner(io: std.Io, directory: []const u8) !void {
     }
 
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{directory}) catch return error.NameTooLong;
+    const path_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{directory}) catch return error.ProxyPathTooLong;
     const inode = Inode.fromPath(path_z, .no_follow) catch return error.InvalidProxyDirectory;
     if (inode.owner != std.c.getuid()) {
         return error.WrongOwner;

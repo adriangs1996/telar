@@ -20,6 +20,7 @@ pub const TextInput = @import("input/TextInput.zig");
 test {
     _ = @import("tests/machines.zig");
     _ = @import("window_machines.zig");
+    _ = @import("tests/limit_reached.zig");
     _ = @import("widgets/LinkStatus.zig");
     _ = @import("tests/cache_trace.zig");
     _ = @import("tests/change_review.zig");

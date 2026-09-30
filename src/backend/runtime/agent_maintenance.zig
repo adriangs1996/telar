@@ -28,7 +28,8 @@ pub fn tick(model: *RuntimeModel, result: anyerror!void) !void {
         _ = agent_status.expire(model, std.Io.Timestamp.now(model.io, .real).toMilliseconds());
     } else |_| {}
 
-    try session_checkpoint.start(model);
+    session_checkpoint.start(model);
+    model.resources.log.trim(model.io);
     client_connection.expireHandshakes(model);
     agent_hooks.expireParked(model);
     workspace_git.start(model);

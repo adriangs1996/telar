@@ -220,6 +220,7 @@ test {
     _ = @import("links/editor_file_links.zig");
     _ = @import("links/link_opening.zig");
     _ = @import("notifications/notifications.zig");
+    _ = @import("notifications/limit_reached.zig");
     _ = @import("panes/pane_attachment.zig");
     _ = @import("panes/pane_closure.zig");
     _ = @import("panes/pane_focus.zig");
@@ -306,6 +307,7 @@ pub const pane_mouse_input = @import("input/pane_mouse_inputs.zig");
 pub const editor_file_links = @import("links/editor_file_links.zig");
 pub const link_opening = @import("links/link_opening.zig");
 pub const notifications = @import("notifications/notifications.zig");
+pub const limit_reached = @import("notifications/limit_reached.zig");
 pub const sidebar_animation = @import("notifications/sidebar_animation.zig");
 pub const pane_attachment = @import("panes/pane_attachment.zig");
 pub const pane_focus = @import("panes/pane_focus.zig");

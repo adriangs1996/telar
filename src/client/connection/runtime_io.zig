@@ -4,6 +4,7 @@ const data = @import("model");
 const core = @import("telar-core");
 const runtime_messages = @import("runtime_messages.zig");
 const runtime_link = @import("runtime_link.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 const Client = @import("../execution/Client.zig");
 
 /// Copies bounded pane input into the outbox; `flush` writes it.
@@ -61,14 +62,34 @@ pub fn receiveRuntime(client: *Client, result: anyerror!*const data.RuntimeMessa
         return null;
     };
     client.telemetry.recordMessage(received);
-    const status = try runtime_messages.receiveServerMessage(client, &received.message);
+    const status = runtime_messages.receiveServerMessage(client, &received.message) catch |err| {
+        if (!core.limit_reached.isLimitError(err)) {
+            return err;
+        }
+
+        // The read is re-armed before anything can fail, so the link keeps
+        // reading whatever the recovery does; the resync is read from the
+        // message before the next read reuses its buffer.
+        const resync = limit_reached.plan(&received.message);
+        startRuntimeRead(client) catch |failed| return lose(client, failed);
+        try limit_reached.recover(client, resync, err);
+        return null;
+    };
 
     if (status) |exit_status| {
         return exit_status;
     }
 
-    try startRuntimeRead(client);
+    limit_reached.resumeGraphics(client);
+    startRuntimeRead(client) catch |failed| return lose(client, failed);
 
+    return null;
+}
+
+/// A read that cannot be re-armed loses the link, so it never shows
+/// connected without reading.
+fn lose(client: *Client, err: anyerror) !?u8 {
+    try runtime_link.lose(client, err);
     return null;
 }
 

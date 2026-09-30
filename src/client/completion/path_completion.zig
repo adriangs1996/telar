@@ -51,7 +51,7 @@ pub fn list(io: std.Io, query: []const u8, result: *data.PathCompletionResult) !
 
         result.append(entry.name) catch |err| switch (err) {
             error.TooManyEntries => break,
-            error.NameTooLong => continue,
+            error.PathEntryTooLong => continue,
         };
     }
 

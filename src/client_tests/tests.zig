@@ -6,6 +6,7 @@ test {
     _ = @import("pane_splits.zig");
     _ = @import("notifications_and_agents.zig");
     _ = @import("renaming_and_telemetry.zig");
+    _ = @import("limit_reached.zig");
     _ = @import("history_browser.zig");
     _ = @import("path_picker.zig");
     _ = @import("pick_list.zig");

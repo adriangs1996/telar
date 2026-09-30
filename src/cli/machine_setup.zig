@@ -264,7 +264,7 @@ fn resolve(io: std.Io, profiles: *const core.MachineProfiles, name: []const u8, 
 
 fn copyInto(buffer: []u8, len: *u8, text: []const u8) !void {
     if (text.len > buffer.len) {
-        return error.NameTooLong;
+        return error.MachineLabelTooLong;
     }
 
     @memcpy(buffer[0..text.len], text);
