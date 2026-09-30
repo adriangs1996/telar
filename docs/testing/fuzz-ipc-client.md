@@ -67,39 +67,76 @@ For every accepted payload:
 - every iterator of a view (launch arguments and environment, import entries,
   layout tabs and their nodes) yields exactly the declared count, borrows only
   the view's encoded bytes, consumes all of them and stays within the schema's
-  budgets. A launch or import iterator may reject an item's content, which the
-  decoder leaves to it, but it may never run out of bytes the decoder walked.
-  A layout iterator never fails, since the decoder validated every tree;
+  budgets. A layout iterator never fails, since the decoder validated every
+  tree;
+- a launch or import iterator may reject an item's content, which the decoder
+  leaves to it, only with an error that item's own bytes justify. The test
+  reads the rejected item again from where the iterator started it and
+  accepts exactly these:
+
+  | Iterator | Error | Only when |
+  | --- | --- | --- |
+  | arguments | `InvalidByteString` | the argument is empty and it is the first |
+  | arguments | `EmbeddedNul` | the argument holds a NUL |
+  | environment | `InvalidByteString` | the name is empty |
+  | environment | `EmbeddedNul` | the name or the value holds a NUL |
+  | environment | `InvalidEnvironmentName` | the name holds `=` |
+  | import entries | `InvalidByteString` | the command is empty |
+
+  Any other error, `Truncated` included, fails. The table checks that a
+  rejection names a real defect of the item; it does not check which error a
+  decoder with several defects reports first;
 - when every item passes its iterator, the production encoder accepts the
   decoded message, `decodeClient` accepts what it wrote and returns an equal
   message, and encoding that again gives the same bytes. The check is
   semantic equality plus a stable re-encoding; it does not require the
   original bytes back.
 
+When an iterator rejects an item, the round trip is skipped for the whole
+message: the encoder is not called, and no field of that message, the items
+before the rejected one included, is compared after re-encoding. The variant,
+borrowing, framing, the items read before the rejection and the rejection's
+justification are still checked. No field is normalized to force a round
+trip.
+
 A broken property panics with the error name and the payload in hex. The
-fuzzer keeps an input only when the test aborts.
+fuzzer keeps the input for any abnormal exit of the test process; the panic
+adds the error and the payload to the output.
 
 ## Known divergences
 
-Two findings of this target are open in production. The decoder accepts these
-messages and their encoder refuses them:
+Two findings of this target, in three messages, are open in production. The
+decoder accepts these messages and their encoder refuses them:
 
-| Message | Payload | Encoder error |
+| Message | Condition on the decoded message | Encoder error |
 | --- | --- | --- |
-| `read_history_output` with history id 0 | tag, request id, `id = 0` | `InvalidHistoryId` |
-| `delete_history` with history id 0 | tag, request id, `id = 0` | `InvalidHistoryId` |
-| `import_history` with a NUL byte in a command | one entry whose command is `a\0b` | `EmbeddedNul` |
+| `read_history_output` | `id == 0` | `InvalidHistoryId` |
+| `delete_history` | `id == 0` | `InvalidHistoryId` |
+| `import_history` | `source` non-empty, within `max_import_source_bytes`, without a NUL; and at least one command holding a NUL | `EmbeddedNul` |
 
-The fuzzer found `read_history_output` after about 19,700 runs; the same
-derived decoder serves `delete_history`, which its regression payload
-confirms. A directed
-seed found the import case. `ImportEntryIterator` rejects an empty command but
-not a NUL, and `encodeImportHistory` rejects both.
+The first finding is history id 0. The fuzzer found it in
+`read_history_output` after about 19,700 runs; `delete_history` shares the
+same derived decoder, which its regression payload confirms. The second is a
+NUL in an imported command, found by a directed seed: `ImportEntryIterator`
+rejects an empty command but not a NUL, and `encodeImportHistory` rejects
+both.
 
-`known_divergences` lists each one as an exact pair of tag and encoder error.
-The round trip stops only for that pair; every other property still applies
-to those messages. The test "every known divergence still holds for its
-payload" decodes each minimal payload and expects the recorded encoder error,
+`known_divergences` lists each one as the tag, the encoder error and the
+condition above, checked on the decoded message by the entry's `holds`
+function. All three must match to excuse an encoder error. The same error for
+any other reason still fails: an `EmbeddedNul` caused by a NUL in `source` is
+not excused, which the test "an import whose source holds a NUL never counts
+as the known divergence" shows, and the seed "import_history with a NUL in
+source" pins the decoder's own rejection of it.
+
+When an entry excuses a message, the round trip is skipped for that whole
+message, exactly as for an iterator rejection: the other fields of that
+message (the request id, and for an import the source, the base sequence and
+every entry) are not compared after re-encoding. Variant, borrowing, framing
+and iterator checks still run.
+
+The test "every known divergence still holds for its payload" decodes each
+minimal payload, checks its condition and expects the recorded encoder error,
 so it fails once production settles an entry. Then the entry goes and its
 payload joins the seeds.
 
@@ -109,8 +146,8 @@ round trip, every campaign stopped on the first one within about 20,000 runs.
 ## Corpus
 
 The seeds are built at runtime with the production encoders, plus a raw
-writer for payloads the encoders refuse. There are 124 of them, all with
-fictitious data: 78 the decoder accepts and 46 it rejects, each with the exact
+writer for payloads the encoders refuse. There are 127 of them, all with
+fictitious data: 80 the decoder accepts and 47 it rejects, each with the exact
 outcome the seed test checks. A seed is stored in the form
 `std.testing.Smith.slice` reads, a little-endian `u32` length and the payload,
 which is also the form a saved input takes.
@@ -126,9 +163,12 @@ Beyond one message per tag, the seeds cover:
 
 - every `open_pane` target, launches with 64 arguments and with 256
   environment entries, and launches whose items the iterators reject: an
-  argument holding a NUL, an empty program, an environment name holding `=`;
+  argument holding a NUL, an empty program, an environment name holding `=`,
+  an empty environment name and an environment value holding a NUL, one per
+  tolerated iterator error;
 - `query_history` in the global, cwd and pane scopes, an import batch at 64
-  entries, an import entry with an empty command;
+  entries, an import entry with an empty command, and an import whose source
+  holds a NUL, which the decoder rejects;
 - a layout update with 127 nodes in one tab and one with two tabs;
 - `send_pane_text` without text in `raw_enter` mode and with a sender,
   `move_tab` relative to another tab, colors with and without a palette.
@@ -203,7 +243,11 @@ decoder or the property changes.
 - The fuzzer mutates whole payloads. It reaches a deep field only by mutating
   a seed that already gets there, which is why the seeds carry every optional
   part and collection. A NUL inside an import command was not found in
-  200,000 runs; a seed found it.
+  200,000 runs; a seed found it. Likewise, with the decoder's source check
+  removed in a scratch copy and the seed "import_history with a NUL in
+  source" taken out, 6,009,254 runs did not produce a rejected source; with
+  the seed in place the replay fails at once. Some contracts are held by the
+  seeds, not by fuzzing.
 - Prefix checks try three cut points per accepted payload, not every one.
 - Text contents are checked only as far as the round trip reaches them: a
   value both the decoder and the encoder accept passes, whatever it means to

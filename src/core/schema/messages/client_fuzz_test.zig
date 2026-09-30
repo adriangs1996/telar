@@ -19,10 +19,14 @@
 //!   borrows only the view's encoded bytes and consumes all of them, within
 //!   the schema's budgets; a client layout never fails to iterate, since the
 //!   decoder validated every tree before accepting it;
+//! - a launch or import iterator rejects an item only with an error that
+//!   item's bytes justify, from a closed list per iterator;
 //! - an accepted message whose items all pass their iterators is accepted by
 //!   its production encoder, decodes back to an equal message, and encodes
-//!   again to the same bytes, except for the exact divergences listed in
-//!   `known_divergences`, each pinned by a regression test.
+//!   again to the same bytes, except for the divergences in
+//!   `known_divergences`, each an exact tag, encoder error and condition on
+//!   the message, pinned by a regression test. When an item is rejected or a
+//!   divergence excused, the round trip is skipped for the whole message.
 
 const std = @import("std");
 const bytecodec = @import("bytecodec");
@@ -32,6 +36,7 @@ const schema = core.root;
 const ClientTag = schema.ClientTag;
 const ClientMessage = schema.ClientMessage;
 const Encoder = bytecodec.Encoder;
+const Decoder = bytecodec.Decoder;
 
 /// The errors `decodeClient` may answer.
 const ClientDecodeError = @typeInfo(@typeInfo(@TypeOf(schema.decodeClient)).@"fn".return_type.?).error_union.error_set;
@@ -152,31 +157,38 @@ const KnownDivergence = struct {
     name: []const u8,
     tag: ClientTag,
     encoder_error: anyerror,
+    /// Whether a decoded message shows exactly this divergence; the same
+    /// encoder error for any other reason is not excused.
+    holds: *const fn (message: ClientMessage) bool,
     /// The smallest synthetic payload that shows it.
     payload: []const u8,
 };
 
-/// The only exceptions to the round-trip property, each an exact tag and
-/// encoder error. The test "every known divergence still holds for its
-/// payload" fails once an entry stops diverging, so an entry cannot outlive
-/// the divergence it records; its payload then belongs in the seed corpus.
+/// The only exceptions to the round-trip property, each an exact tag,
+/// encoder error and condition on the decoded message. The test "every known
+/// divergence still holds for its payload" fails once an entry stops
+/// diverging, so an entry cannot outlive the divergence it records; its
+/// payload then belongs in the seed corpus.
 const known_divergences = [_]KnownDivergence{
     .{
         .name = "read_history_output of history id 0",
         .tag = .read_history_output,
         .encoder_error = error.InvalidHistoryId,
+        .holds = &namesHistoryIdZero,
         .payload = &([_]u8{@intFromEnum(ClientTag.read_history_output)} ++ wireInt(u64, 37) ++ wireInt(u64, 0)),
     },
     .{
         .name = "delete_history of history id 0",
         .tag = .delete_history,
         .encoder_error = error.InvalidHistoryId,
+        .holds = &namesHistoryIdZero,
         .payload = &([_]u8{@intFromEnum(ClientTag.delete_history)} ++ wireInt(u64, 35) ++ wireInt(u64, 0)),
     },
     .{
         .name = "import_history of a command holding a NUL",
         .tag = .import_history,
         .encoder_error = error.EmbeddedNul,
+        .holds = &importsCommandHoldingNul,
         .payload = &([_]u8{@intFromEnum(ClientTag.import_history)} ++ wireInt(u64, 34) ++ wireSized16("zsh:h") ++
             wireInt(u64, 100) ++ wireInt(u16, 1) ++ wireInt(i64, 1700000002000) ++ wireSized16("a\x00b")),
     },
@@ -197,9 +209,48 @@ fn wireSized16(comptime bytes: []const u8) [@sizeOf(u16) + bytes.len]u8 {
     return wireInt(u16, bytes.len) ++ bytes[0..bytes.len].*;
 }
 
-fn isKnownDivergence(tag: ClientTag, err: anyerror) bool {
+/// A history id of 0 in the two messages whose shared derived decoder
+/// accepts it.
+fn namesHistoryIdZero(message: ClientMessage) bool {
+    return switch (message) {
+        .read_history_output => |value| value.id == 0,
+        .delete_history => |value| value.id == 0,
+        else => false,
+    };
+}
+
+/// A source the encoder accepts (non-empty, within
+/// `max_import_source_bytes`, no NUL) and at least one command holding a
+/// NUL, which `ImportEntryIterator` passes and `encodeImportHistory` refuses.
+fn importsCommandHoldingNul(message: ClientMessage) bool {
+    const view = switch (message) {
+        .import_history => |value| value,
+        else => return false,
+    };
+    if (view.source.len == 0 or view.source.len > schema.max_import_source_bytes) {
+        return false;
+    }
+
+    if (holdsByte(view.source, 0)) {
+        return false;
+    }
+
+    var entries = view.entries();
+    var holds_nul = false;
+    while (entries.next() catch return false) |entry| {
+        holds_nul = holds_nul or holdsByte(entry.command, 0);
+    }
+
+    return holds_nul;
+}
+
+fn holdsByte(bytes: []const u8, byte: u8) bool {
+    return std.mem.findScalar(u8, bytes, byte) != null;
+}
+
+fn isKnownDivergence(tag: ClientTag, message: ClientMessage, err: anyerror) bool {
     for (known_divergences) |divergence| {
-        if (divergence.tag == tag and divergence.encoder_error == err) {
+        if (divergence.tag == tag and divergence.encoder_error == err and divergence.holds(message)) {
             return true;
         }
     }
@@ -1062,6 +1113,36 @@ fn addLaunchSeeds(seeds: *ClientSeeds) !void {
         },
     );
     seeds.accept("open_pane whose environment name holds '='", encoder.finish());
+
+    encoder = seeds.begin(.open_pane);
+    try writeOpenPaneHeader(&encoder);
+    try writeRawLaunch(
+        &encoder,
+        .{
+            .cwd = "/work",
+            .arguments = &shell_arguments,
+            .environment = &.{.{
+                .name = "K",
+                .value = "a\x00b",
+            }},
+        },
+    );
+    seeds.accept("open_pane whose environment value holds a NUL", encoder.finish());
+
+    encoder = seeds.begin(.open_pane);
+    try writeOpenPaneHeader(&encoder);
+    try writeRawLaunch(
+        &encoder,
+        .{
+            .cwd = "/work",
+            .arguments = &shell_arguments,
+            .environment = &.{.{
+                .name = "",
+                .value = "1",
+            }},
+        },
+    );
+    seeds.accept("open_pane whose environment name is empty", encoder.finish());
 }
 
 fn addTabAndWorkspaceSeeds(seeds: *ClientSeeds) !void {
@@ -1442,6 +1523,19 @@ fn addHistorySeeds(seeds: *ClientSeeds) !void {
     try encoder.writeInt(i64, 1700000002000);
     try encoder.writeSized16("");
     seeds.accept("import_history with an empty command", encoder.finish());
+
+    encoder = seeds.begin(.import_history);
+    try encoder.writeInt(u64, 34);
+    try encoder.writeSized16("zsh:\x00h");
+    try encoder.writeInt(u64, 100);
+    try encoder.writeInt(u16, 1);
+    try encoder.writeInt(i64, 1700000002000);
+    try encoder.writeSized16("ls");
+    seeds.reject(
+        "import_history with a NUL in source",
+        encoder.finish(),
+        error.EmbeddedNul,
+    );
 }
 
 fn addLayoutSeeds(seeds: *ClientSeeds) !void {
@@ -2058,7 +2152,11 @@ fn expectAccepted(payload: []const u8, message: ClientMessage) !void {
     try expectFraming(payload, tag);
 
     const reencoded = (encodeAccepted(message, &property_scratch.first) catch |err| {
-        if (isKnownDivergence(tag, err)) {
+        if (isKnownDivergence(
+            tag,
+            message,
+            err,
+        )) {
             return;
         }
 
@@ -2150,12 +2248,47 @@ fn expectBorrowedSlice(bytes: []const u8, slice: []const u8) !void {
     }
 }
 
-/// The decoder checks a launch's structure and leaves the content of each
-/// argument and environment entry to the iterators. An iterator may reject
-/// an item's content, but never run out of bytes the decoder walked.
-fn expectContentRejection(err: anyerror) !void {
-    if (err == error.Truncated) {
-        return error.IteratorDisagreesWithDecoder;
+/// The decoder checks a launch's and an import batch's structure and leaves
+/// the content of each item to the iterators. An iterator may reject an
+/// item only with an error that item's own bytes justify, read again from
+/// where the iterator started it; running out of bytes the decoder walked,
+/// or any other error, fails.
+fn expectArgumentRejection(err: anyerror, item_bytes: []const u8, index: usize) !void {
+    var item = Decoder.init(item_bytes);
+    const argument = item.readSized16() catch return error.IteratorDisagreesWithDecoder;
+    const justified = switch (err) {
+        error.InvalidByteString => argument.len == 0 and index == 0,
+        error.EmbeddedNul => holdsByte(argument, 0),
+        else => false,
+    };
+    if (!justified) {
+        return error.UnjustifiedItemRejection;
+    }
+}
+
+fn expectEnvironmentRejection(err: anyerror, item_bytes: []const u8) !void {
+    var item = Decoder.init(item_bytes);
+    const name = item.readSized16() catch return error.IteratorDisagreesWithDecoder;
+    const value = item.readSized32() catch return error.IteratorDisagreesWithDecoder;
+    const justified = switch (err) {
+        error.InvalidByteString => name.len == 0,
+        error.EmbeddedNul => holdsByte(name, 0) or holdsByte(value, 0),
+        error.InvalidEnvironmentName => holdsByte(name, '='),
+        else => false,
+    };
+    if (!justified) {
+        return error.UnjustifiedItemRejection;
+    }
+}
+
+/// The decoder already bounds a command's length, so the only rejection
+/// left to the iterator is an empty command.
+fn expectImportRejection(err: anyerror, item_bytes: []const u8) !void {
+    var item = Decoder.init(item_bytes);
+    _ = item.readInt(i64) catch return error.IteratorDisagreesWithDecoder;
+    const command = item.readSized16() catch return error.IteratorDisagreesWithDecoder;
+    if (err != error.InvalidByteString or command.len != 0) {
+        return error.UnjustifiedItemRejection;
     }
 }
 
@@ -2176,9 +2309,14 @@ fn gatherLaunch(launch: schema.LaunchView, reencoding: *Reencoding) !?schema.Lau
 
     var arguments = launch.arguments();
     var argument_bytes: usize = 0;
-    for (reencoding.arguments[0..launch.argument_count]) |*argument| {
+    for (reencoding.arguments[0..launch.argument_count], 0..) |*argument, index| {
+        const item_start = arguments.decoder.index;
         const next = arguments.next() catch |err| {
-            try expectContentRejection(err);
+            try expectArgumentRejection(
+                err,
+                launch.encoded_arguments[item_start..],
+                index,
+            );
             return null;
         };
 
@@ -2198,8 +2336,9 @@ fn gatherLaunch(launch: schema.LaunchView, reencoding: *Reencoding) !?schema.Lau
     var environment = launch.environment();
     var environment_bytes: usize = 0;
     for (reencoding.environment[0..launch.environment_count]) |*entry| {
+        const item_start = environment.decoder.index;
         const next = environment.next() catch |err| {
-            try expectContentRejection(err);
+            try expectEnvironmentRejection(err, launch.encoded_environment[item_start..]);
             return null;
         };
 
@@ -2235,8 +2374,9 @@ fn gatherImports(view: schema.ImportHistoryView, reencoding: *Reencoding) !?sche
 
     var entries = view.entries();
     for (reencoding.imports[0..view.entry_count]) |*entry| {
+        const item_start = entries.decoder.index;
         const next = entries.next() catch |err| {
-            try expectContentRejection(err);
+            try expectImportRejection(err, view.encoded_entries[item_start..]);
             return null;
         };
 
@@ -2556,8 +2696,95 @@ test "every known divergence still holds for its payload" {
         try std.testing.expectEqual(divergence.tag, std.enums.fromInt(ClientTag, divergence.payload[0]).?);
         try expectBorrowedWithin(divergence.payload[1..], message);
         try expectFraming(divergence.payload, divergence.tag);
+        try std.testing.expect(divergence.holds(message));
         try std.testing.expectError(divergence.encoder_error, encodeAccepted(message, &property_scratch.first));
+        try std.testing.expect(isKnownDivergence(
+            divergence.tag,
+            message,
+            divergence.encoder_error,
+        ));
     }
+}
+
+test "an import whose source holds a NUL never counts as the known divergence" {
+    const message = try schema.decodeClient(known_divergences[2].payload);
+    try std.testing.expect(isKnownDivergence(
+        .import_history,
+        message,
+        error.EmbeddedNul,
+    ));
+
+    // The decoder refuses a NUL in a source (the seed "import_history with a
+    // NUL in source"); a decoder that stopped would hand the encoder this
+    // message, whose EmbeddedNul the old tag and error pair excused.
+    var nul_source = message;
+    nul_source.import_history.source = "zsh\x00h";
+    try std.testing.expectError(error.EmbeddedNul, encodeAccepted(nul_source, &property_scratch.first));
+    try std.testing.expect(!isKnownDivergence(
+        .import_history,
+        nul_source,
+        error.EmbeddedNul,
+    ));
+
+    const clean = try schema.decodeClient(&([_]u8{@intFromEnum(ClientTag.import_history)} ++ wireInt(u64, 34) ++
+        wireSized16("zsh:h") ++ wireInt(u64, 100) ++ wireInt(u16, 1) ++ wireInt(i64, 1700000002000) ++ wireSized16("ab")));
+    try std.testing.expect(!isKnownDivergence(
+        .import_history,
+        clean,
+        error.EmbeddedNul,
+    ));
+    try std.testing.expect(!isKnownDivergence(
+        .import_history,
+        message,
+        error.InvalidByteString,
+    ));
+}
+
+test "an iterator rejection must be justified by the item it rejects" {
+    try expectArgumentRejection(
+        error.EmbeddedNul,
+        &wireSized16("a\x00b"),
+        1,
+    );
+    try expectArgumentRejection(
+        error.InvalidByteString,
+        &wireSized16(""),
+        0,
+    );
+    try std.testing.expectError(error.UnjustifiedItemRejection, expectArgumentRejection(
+        error.InvalidByteString,
+        &wireSized16(""),
+        1,
+    ));
+    try std.testing.expectError(error.UnjustifiedItemRejection, expectArgumentRejection(
+        error.EmbeddedNul,
+        &wireSized16("ab"),
+        1,
+    ));
+    try std.testing.expectError(error.UnjustifiedItemRejection, expectArgumentRejection(
+        error.OutOfMemory,
+        &wireSized16("ab"),
+        1,
+    ));
+    try std.testing.expectError(error.IteratorDisagreesWithDecoder, expectArgumentRejection(
+        error.Truncated,
+        wireSized16("ab")[0..3],
+        1,
+    ));
+
+    try expectEnvironmentRejection(error.InvalidEnvironmentName, &(wireSized16("A=B") ++ wireInt(u32, 0)));
+    try expectEnvironmentRejection(error.EmbeddedNul, &(wireSized16("A") ++ wireInt(u32, 1) ++ [_]u8{0}));
+    try expectEnvironmentRejection(error.InvalidByteString, &(wireSized16("") ++ wireInt(u32, 0)));
+    try std.testing.expectError(
+        error.UnjustifiedItemRejection,
+        expectEnvironmentRejection(error.InvalidEnvironmentName, &(wireSized16("AB") ++ wireInt(u32, 0))),
+    );
+
+    try expectImportRejection(error.InvalidByteString, &(wireInt(i64, 1) ++ wireSized16("")));
+    try std.testing.expectError(
+        error.UnjustifiedItemRejection,
+        expectImportRejection(error.InvalidByteString, &(wireInt(i64, 1) ++ wireSized16("ls"))),
+    );
 }
 
 test "launch argument bytes stop at their budget" {
