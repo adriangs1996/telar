@@ -534,9 +534,10 @@ fn expectGeneratedCellRun(smith: *Smith) anyerror!void {
     try std.testing.expectError(expected, cellcodec.encode(&checked, run, count * cellcodec.max_cell_size - 1));
 }
 
-/// Encodes a valid run after a prefix, through the reserved path, the
-/// checked path in a buffer of exactly its size and a limit of exactly its
-/// size, which must write the same bytes and `referenceRunSize` of them.
+/// Encodes a valid run after a prefix with spare capacity, an exact-size
+/// buffer and an exact limit. Every encoding must write the same bytes and
+/// `referenceRunSize` of them. Exact-size cases take the checked path unless
+/// the run fills its worst-case size.
 /// One byte less of buffer or limit is an error, and every encoding reads
 /// back as the cells' decoded form.
 fn expectEncodedRun(smith: *Smith, run: []const Cell) anyerror!void {

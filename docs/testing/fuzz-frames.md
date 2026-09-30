@@ -10,16 +10,8 @@ This is local robustness QA for our own codecs. It is not a security audit.
 
 ## Wiring
 
-`build/fuzz_frames.zig` registers the steps, but nothing calls it yet. The
-steps exist only after the registry is connected in `build/tests.zig`:
-
-```sh
-git apply /tmp/dispatch-claude/robustness-fuzz-frames-integration.patch
-```
-
-The patch adds one import and one call, `fuzz_frames.add(b, app.modules);`,
-next to the handshake target. It will be reviewed together with the other
-fuzz sessions before it is committed.
+`build/tests.zig` registers the steps through `build/fuzz_frames.zig` with
+`fuzz_frames.add(b, app.modules);`. No external wiring patch is needed.
 
 ## Steps
 
@@ -96,8 +88,8 @@ that a consumer rejects. The targets allow that case.
   and in the `Frame` value when it can hold the fault. Decoding the broken bytes, and encoding the
   broken value, must then fail with that rule's error. The faults cover
   truncation, zero pane and frame ids, a stale base, the cursor (hidden off
-  the origin, visible outside the screen, on either axis), each enum and
-  boolean byte, the scroll, too many spans, oversized or missing snapshot
+  the origin, visible outside the screen, on either axis), the enum fields
+  and four boolean bytes, the scroll, too many spans, oversized or missing snapshot
   metadata, empty, overlapping and off-screen spans, a partial snapshot, and
   a span shorter than its cell count.
 - **Directed maxima:**
@@ -131,11 +123,12 @@ of its corpus entry.
   never compared. The same run is encoded several ways after a prefix of up
   to 12 bytes:
   - through the reserved path;
-  - through the checked path in a buffer of exactly its size;
+  - into a buffer of exactly its encoded size;
   - with a limit of exactly its size.
 
-  All three must write the same bytes, and their count must equal
-  `encodedCellsSize`. That count must also equal a reference size, including
+  The exact-size buffer and limit take the checked path unless the run
+  fills its worst-case size. All three must write the same bytes, and their
+  count must equal `encodedCellsSize`. That count must also equal a reference size, including
   when the run is appended after another style. One byte less of buffer gives
   `BufferTooSmall`, and one byte less of limit gives `LimitExceeded` without
   passing the limit. Every encoding must read back as the cells' canonical
@@ -194,6 +187,11 @@ the payload sizes, the screen sizes and the counts of links, runs, spans and
 cells. The largest cases do not come from fuzzing: they are the directed tests
 and seeds above, and the maxima that `src/core/text_metadata/tests.zig`
 already covers.
+
+The metadata decoding target caps payloads at 8192 bytes, below the total
+encoded-size limit even for zero rows. It does not fuzz that size rejection;
+`src/core/text_metadata/tests.zig` tests it with a buffer one byte over the
+limit. The frame target separately tests its metadata-length admission bound.
 
 ## Reading results
 
