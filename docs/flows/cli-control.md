@@ -338,15 +338,18 @@ its standard error in every build, and the `{socket}.runtime-{pid}.log` and
 `{socket}.client-{pid}.log` telemetry files. It never starts or contacts the
 runtime. Telemetry exists only in Debug or diagnostics-enabled builds, which
 is why a release install used to find nothing; missing logs return exit 2
-with that explanation.
-
-`diagnostics limits [--json]` asks a running runtime, without starting one,
-for every limit it and its windows reached: name, last amount, limit, where,
-how many times and when last ([Limit reached](limit-reached.md)). Output is the last 100 lines per file by default,
+with that explanation. Output is the last 100 lines per file by default,
 bounded to 64 KiB per file and 64 files, sorted by filename. JSON preserves
 path, component, PID, truncation and text. Symlinks and nonregular directory
 entries are skipped; opened files are checked again for type and ownership.
-These are telemetry logs, not terminal content or captured stderr.
+The runtime log holds what the runtime wrote to standard error, reached
+limits and a fatal error; the telemetry logs hold metrics. Neither holds
+terminal content.
+
+`diagnostics limits [--json]` asks a running runtime, without starting one,
+for every limit it and its windows reached: name, last amount, limit, where,
+the net that caught it, how many times and when last, and how many rows were
+replaced or reports refused ([Limit reached](limit-reached.md)).
 
 ## Final validation
 

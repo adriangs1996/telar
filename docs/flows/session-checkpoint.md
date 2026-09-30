@@ -77,7 +77,9 @@ writes the records that fit and drops the rest from the first one that does
 not. Records only point back to earlier ones, so the prefix restores. The
 runtime reports `session_checkpoint.snapshot_bytes` through
 [Limit reached](limit-reached.md) and goes on; it used to stop and kill every
-pane.
+pane. `session_checkpoint.start` never fails, so the rest of the maintenance
+tick always runs: a checkpoint it cannot allocate or encode is logged,
+counted in `failures` and tried again after the next change.
 
 The interactive path allocates nothing for this: `noteChange` stores a flag
 and a timestamp. Encoding runs on the observation-budget tick into a buffer

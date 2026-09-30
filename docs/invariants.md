@@ -15,17 +15,24 @@ detach, reconnect, destroy), its recovery and the test that proves it.
 - A limit never takes telar down. Reaching one keeps what fits, drops only
   the excess and reports it with the limit notice, `limit_reached.report`,
   which names the limit, its value and what was asked for. The runtime keeps
-  running, the window keeps its last frame, and a request that stopped at a
-  limit gets `resource_limit` as its answer.
+  running, the window keeps its last frame and names the limit in its title,
+  and a request that stopped at a limit gets `resource_limit` as its answer.
 - Reporting is one probe into a fixed table at the place that enforces the
   limit. It allocates nothing and never fails, so it may sit on the
   interactive path. The notice appears at most once a minute per limit.
-- A safety net catches only capacity errors, whose names contain `TooMany`
-  or end in `Full`, `Exceeded`, `TooLarge` or `TooLong`, plus
-  `BufferTooSmall` and `OutOfMemory`. It logs the route and the error so it
-  hides no bug. Every other error keeps its old path. A flow that knows its
-  limit reports it by name where it enforces it and does not leave it to the
-  net.
+- Only the thread that owns the process model reports: the runtime's event
+  loop or the client adapter's loop. A worker returns the reach in its
+  completion and its `finish` reports it. A CLI command prints the notice to
+  standard error and exits nonzero; a library returns its error for the
+  caller to map to its limit.
+- A safety net catches only `LimitError`, the errors telar raises when its
+  own limits run out, and records the route that caught each one. Host
+  errors (`SystemError`: memory from a real allocator, a full disk,
+  descriptor quotas) are logged as errors and keep their path, like any
+  other error, so a net hides no bug.
+- A handler re-arms its source, clears its in-flight flag and releases its
+  slot before any step that can fail, or keeps that step's error for the
+  end, so a net that skips the rest of it never leaves the source dead.
 
 ## Ownership
 
