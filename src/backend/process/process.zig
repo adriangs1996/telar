@@ -53,6 +53,7 @@ fn probeWith(input: ProbeInput, comptime identify: fn (*const core.Table, u32, c
         .process_group_id = pgid,
         .provider = identification.provider,
         .session_host = identification.session_host,
+        .agent_process_id = identification.process_id,
         .attempts = if (identification.provider == .unknown)
             if (previous.process_group_id == pgid)
                 previous.attempts +| 1
@@ -80,6 +81,7 @@ fn sameIdentity(left: Cache, right: Cache) bool {
     return left.process_group_id == right.process_group_id and
         left.provider == right.provider and
         left.session_host == right.session_host and
+        left.agent_process_id == right.agent_process_id and
         std.mem.eql(u8, left.name(), right.name());
 }
 
@@ -198,7 +200,9 @@ fn identifyMacosProcess(table: *const core.Table, pid: u32) Identification {
     var args_buffer: [max_process_args_bytes]u8 = undefined;
     const argv = readMacosArgv(pid, &args_buffer) orelse &.{};
     const command = comm_bytes[0..comm_end];
-    return identifyArguments(table, command, argv);
+    var identified = identifyArguments(table, command, argv);
+    identified.process_id = pid;
+    return identified;
 }
 
 fn readMacosArgv(pid: u32, buffer: []u8) ?[]const u8 {
@@ -239,7 +243,10 @@ fn identifyLinuxProcessGroup(table: *const core.Table, process_group_id: u32, pr
     var index: usize = 0;
     pending[0] = process_group_id;
 
-    var choice: GroupChoice = .{ .prefer = prefer };
+    var choice: GroupChoice = .{
+        .prefer = prefer,
+    };
+
     while (index < count) : (index += 1) {
         const pid = pending[index];
         if (linuxProcessGroup(pid) != process_group_id) {
@@ -274,7 +281,9 @@ fn identifyLinuxProcess(table: *const core.Table, pid: u32) Identification {
     const args_path = std.fmt.bufPrint(&path_buffer, "/proc/{d}/cmdline", .{pid}) catch return .{};
     const argv = readSmallFile(args_path, &args_buffer) orelse &.{};
     const command = std.mem.trim(u8, comm, " \r\n\t");
-    return identifyArguments(table, command, argv);
+    var identified = identifyArguments(table, command, argv);
+    identified.process_id = pid;
+    return identified;
 }
 
 fn linuxProcessGroup(pid: u32) ?u32 {
@@ -654,22 +663,30 @@ test "a group keeps the agent identified before while it runs there, whatever el
     const codex: Identification = .init(table, .codex, "codex");
     const claude: Identification = .init(table, .claude, "claude");
 
-    var kept: GroupChoice = .{ .prefer = .claude };
+    var kept: GroupChoice = .{
+        .prefer = .claude,
+    };
     try std.testing.expect(!kept.offer(shell));
     try std.testing.expect(!kept.offer(codex));
     try std.testing.expect(kept.offer(claude));
     try std.testing.expectEqual(core.AgentProvider.claude, kept.result().provider);
 
-    var gone: GroupChoice = .{ .prefer = .claude };
+    var gone: GroupChoice = .{
+        .prefer = .claude,
+    };
     _ = gone.offer(shell);
     _ = gone.offer(codex);
     try std.testing.expectEqual(core.AgentProvider.codex, gone.result().provider);
 
-    var first: GroupChoice = .{ .prefer = .unknown };
+    var first: GroupChoice = .{
+        .prefer = .unknown,
+    };
     try std.testing.expect(first.offer(codex));
     try std.testing.expectEqual(core.AgentProvider.codex, first.result().provider);
 
-    var none: GroupChoice = .{ .prefer = .claude };
+    var none: GroupChoice = .{
+        .prefer = .claude,
+    };
     _ = none.offer(shell);
     try std.testing.expectEqualStrings("zsh", none.result().slice());
 }

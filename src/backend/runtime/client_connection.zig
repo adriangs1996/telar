@@ -151,13 +151,14 @@ pub fn receive(model: *RuntimeModel, event: ClientMessage) void {
     resumeRead(model, session);
 }
 
-/// Starts the connection's next read unless shutdown has begun.
+/// Starts the connection's next read unless one is running or shutdown
+/// has begun.
 ///
 /// ```zig
 /// client_connection.resumeRead(model, session);
 /// ```
 pub fn resumeRead(model: *RuntimeModel, session: *Session) void {
-    if (model.shutdown.isRequested()) {
+    if (model.shutdown.isRequested() or session.read_pending) {
         return;
     }
 

@@ -9,6 +9,10 @@ const agent_identity = @import("../agent_identity.zig");
 const agent_status = @import("../agent_status.zig");
 const agent_hooks = @import("../agent_hooks.zig");
 const DescentCompletion = @import("../events/DescentCompletion.zig");
+const Session = @import("../client/Session.zig");
+const Pane = @import("../../pane/Pane.zig");
+const client_connection = @import("../client_connection.zig");
+const runtime_event = @import("../event.zig");
 const SessionReference = @import("../../agent/SessionReference.zig");
 
 const missing_pane: core.PaneId = @enumFromInt(99);
@@ -457,7 +461,7 @@ test "a hook reports for a pane only on a connection confirmed inside it and onl
     agent_hooks.answerParked(model, pane.key());
     try std.testing.expect(fixture.session.parked == null);
     try expectFailure(&fixture, .foreign_process);
-    try std.testing.expectEqual(nested, pane.rejected_process);
+    try std.testing.expectEqual(nested, pane.rejected_reporter.?.process);
 
     // Later reports of that process are refused at once, without
     // identifying the pane again.
@@ -468,6 +472,18 @@ test "a hook reports for a pane only on a connection confirmed inside it and onl
         try std.testing.expect(!pane.agent_recheck_requested);
     }
     try std.testing.expect(agent_status.sessionReference(model, pane.key()) == null);
+
+    // The pane's own agent still reports.
+    try fixture.send(claude_report);
+    try std.testing.expect(fixture.response().?.* == .request_completed);
+    fixture.clearResponses();
+    try std.testing.expectEqualStrings("019a0000-0000-7000-8000-00000000000a", agent_status.sessionReference(model, pane.key()).?.slice());
+
+    // The confirmation names one generation; a report for another is refused.
+    var stale = claude_report;
+    stale.report_agent.pane_generation = pane.generation + 1;
+    try fixture.send(stale);
+    try expectFailure(&fixture, .pane_not_found);
 
     // The check found that Codex replaced Claude in the same process group.
     try std.testing.expect(agent_status.observeProcess(model, .{
@@ -683,4 +699,253 @@ test "a report of another agent waits for the pane's process to be identified ag
     try std.testing.expect(fixture.session.parked == null);
     try std.testing.expect(fixture.response().?.* == .request_completed);
     try std.testing.expectEqualStrings("019a0000-0000-7000-8000-00000000000b", agent_status.sessionReference(model, pane.key()).?.slice());
+}
+
+// A pane running Claude and a connection confirmed inside it whose hook ran
+// under `lineage`, nearest first.
+fn confirmUnder(fixture: *RequestFixture, session: *Session, pane: *Pane, lineage: []const u32) !void {
+    var confirmed: DescentCompletion = .{
+        .client = session.key,
+        .request_id = @enumFromInt(41),
+        .pane = pane.key(),
+        .descends = true,
+    };
+    @memcpy(confirmed.ancestors[0..lineage.len], lineage);
+    confirmed.ancestor_count = @intCast(lineage.len);
+    try agent_hooks.finishDescent(&fixture.runtime.model, confirmed);
+    session.delivery.responses.clear();
+}
+
+fn observeClaude(fixture: *RequestFixture, pane: *Pane, agent_pid: u32) !void {
+    const identity = agent_identity.fromPane(pane);
+    try std.testing.expect(agent_status.observeProcess(&fixture.runtime.model, .{
+        .identity = identity,
+        .provider = .claude,
+        .process_id = identity.process_id,
+        .observed_at_ms = 1,
+        .agent_pid = agent_pid,
+    }));
+}
+
+fn codexReport(pane: *const Pane, state: core.AgentReportState) core.ClientMessage {
+    return .{ .report_agent = .{
+        .request_id = @enumFromInt(41),
+        .pane_id = pane.id,
+        .pane_generation = pane.generation,
+        .provider = .codex,
+        .state = state,
+        .session = "019a0000-0000-7000-8000-00000000000b",
+    } };
+}
+
+// Holds the pane's observer as a running observation does, so a parked
+// report's recheck does not start in these tests.
+fn holdObservation(pane: *Pane) !void {
+    try std.testing.expect(pane.history_observer.sealForProbe());
+}
+
+test "a parked report pauses its connection's reads and they resume once it is answered" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const root = agent_identity.fromPane(pane).process_id;
+    try observeClaude(&fixture, pane, root);
+    try confirmUnder(&fixture, fixture.session, pane, &.{ 999_001, root });
+    try holdObservation(pane);
+    defer pane.history_observer.finishSealed();
+
+    const session = fixture.session;
+    const message = codexReport(pane, .working);
+    const payload = try core.encodeReportAgent(session.receive_buffer, message.report_agent);
+    session.read_pending = true;
+    client_connection.receive(&fixture.runtime.model, .{
+        .client = session.key,
+        .result = @constCast(payload),
+    });
+    try std.testing.expect(session.parked != null);
+    try std.testing.expect(!session.read_pending);
+    try std.testing.expect(fixture.response() == null);
+
+    pane.agent_rechecks +%= 1;
+    agent_hooks.answerParked(&fixture.runtime.model, pane.key());
+    try std.testing.expect(session.parked == null);
+    try std.testing.expect(session.read_pending);
+    try expectFailure(&fixture, .foreign_process);
+}
+
+test "parked reports are answered in the order they arrived, with the time they arrived" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const model = &fixture.runtime.model;
+    const root = agent_identity.fromPane(pane).process_id;
+    try observeClaude(&fixture, pane, root);
+    const first = try fixture.addClient();
+    const second = fixture.session;
+    try confirmUnder(&fixture, first, pane, &.{root});
+    try confirmUnder(&fixture, second, pane, &.{root});
+    try holdObservation(pane);
+    defer pane.history_observer.finishSealed();
+
+    // The working report arrives first, on the connection in the later
+    // slot; the settled one after it.
+    try fixture.sendTo(first, codexReport(pane, .working));
+    const working_at = first.parked_real_ms;
+    try fixture.sendTo(second, codexReport(pane, .ready));
+    try std.testing.expect(first.parked != null and second.parked != null);
+
+    // The check found that Codex replaced Claude.
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = agent_identity.fromPane(pane),
+        .provider = .codex,
+        .process_id = root,
+        .observed_at_ms = working_at + 1_000,
+    }));
+    pane.agent_rechecks +%= 1;
+    agent_hooks.answerParked(model, pane.key());
+
+    try std.testing.expect(first.delivery.responses.peek().?.* == .request_completed);
+    try std.testing.expect(second.delivery.responses.peek().?.* == .request_completed);
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+    const entry = agent_status.snapshot(&model.agents, &entries, working_at + 2_000)[0];
+    try std.testing.expect(entry.status == .ready or entry.status == .done);
+    try std.testing.expect(entry.observed_at_ms < working_at + 1_000);
+}
+
+test "a parked report whose pane is gone or whose recheck is late is answered on the tick" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const model = &fixture.runtime.model;
+    const root = agent_identity.fromPane(pane).process_id;
+    try observeClaude(&fixture, pane, root);
+    try confirmUnder(&fixture, fixture.session, pane, &.{root});
+    try holdObservation(pane);
+    defer pane.history_observer.finishSealed();
+
+    try fixture.send(codexReport(pane, .working));
+    agent_hooks.expireParked(model);
+    try std.testing.expect(fixture.session.parked != null);
+
+    fixture.session.parked_at_ms -= 2_000;
+    agent_hooks.expireParked(model);
+    try std.testing.expect(fixture.session.parked == null);
+    try expectFailure(&fixture, .foreign_process);
+
+    try fixture.send(codexReport(pane, .working));
+    try std.testing.expect(fixture.session.parked != null);
+    pane.exit = .{ .exited = 0 };
+    defer pane.exit = null;
+    agent_hooks.expireParked(model);
+    try std.testing.expect(fixture.session.parked == null);
+    try expectFailure(&fixture, .pane_not_found);
+}
+
+test "a connection that closes while its report is parked is released at once" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const model = &fixture.runtime.model;
+    const root = agent_identity.fromPane(pane).process_id;
+    try observeClaude(&fixture, pane, root);
+    const hook = try fixture.addClient();
+    hook.send_pending = false;
+    try confirmUnder(&fixture, hook, pane, &.{root});
+    try holdObservation(pane);
+    defer pane.history_observer.finishSealed();
+
+    try fixture.sendTo(hook, codexReport(pane, .working));
+    const key = hook.key;
+    try std.testing.expect(hook.parked != null);
+
+    // A parked connection reads and writes nothing, so it goes at once,
+    // and its report with it.
+    client_connection.drop(model, key);
+    try std.testing.expect(model.clients.resolve(key) == null);
+
+    pane.agent_rechecks +%= 1;
+    agent_hooks.answerParked(model, pane.key());
+    agent_hooks.expireParked(model);
+    try std.testing.expect(fixture.response() == null);
+}
+
+test "a report that cannot start its recheck is refused for lack of resources, and the connection stays" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const model = &fixture.runtime.model;
+    const root = agent_identity.fromPane(pane).process_id;
+    try observeClaude(&fixture, pane, root);
+    try confirmUnder(&fixture, fixture.session, pane, &.{root});
+
+    var storage: [1]runtime_event.Event = undefined;
+    var unavailable: std.Io.Select(runtime_event.Event) = .init(std.Io.failing, &storage);
+    const select = model.select;
+    model.select = &unavailable;
+    defer model.select = select;
+
+    try fixture.send(codexReport(pane, .working));
+    try std.testing.expect(fixture.session.parked == null);
+    try expectFailure(&fixture, .resource_limit);
+    try std.testing.expect(model.clients.resolve(fixture.session.key) != null);
+}
+
+test "a refused reporter is remembered by the process under the pane's agent, or under its root, never by the agent itself" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const model = &fixture.runtime.model;
+    const root = agent_identity.fromPane(pane).process_id;
+    // A wrapper leads the pane's group and runs Claude as its child.
+    const claude: u32 = 999_010;
+    try observeClaude(&fixture, pane, claude);
+    try holdObservation(pane);
+    defer pane.history_observer.finishSealed();
+
+    const cases = [_]struct {
+        lineage: []const u32,
+        remembered: ?u32,
+    }{
+        // A tool Claude ran.
+        .{
+            .lineage = &.{ 999_020, 999_021, claude, root },
+            .remembered = 999_021,
+        },
+        // An agent in the background of the pane's shell.
+        .{
+            .lineage = &.{ 999_030, 999_031, root },
+            .remembered = 999_031,
+        },
+        // Claude itself, which may have replaced itself by exec.
+        .{
+            .lineage = &.{ claude, root },
+            .remembered = null,
+        },
+    };
+
+    for (cases) |case| {
+        pane.rejected_reporter = null;
+        try confirmUnder(&fixture, fixture.session, pane, case.lineage);
+        try fixture.send(codexReport(pane, .working));
+        try std.testing.expect(fixture.session.parked != null);
+        pane.agent_rechecks +%= 1;
+        agent_hooks.answerParked(model, pane.key());
+        try expectFailure(&fixture, .foreign_process);
+
+        if (case.remembered) |process| {
+            try std.testing.expectEqual(process, pane.rejected_reporter.?.process);
+            try std.testing.expectEqual(claude, pane.rejected_reporter.?.agent);
+            try fixture.send(codexReport(pane, .working));
+            try std.testing.expect(fixture.session.parked == null);
+            try expectFailure(&fixture, .foreign_process);
+        } else {
+            try std.testing.expect(pane.rejected_reporter == null);
+        }
+    }
 }

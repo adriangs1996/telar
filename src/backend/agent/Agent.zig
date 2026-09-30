@@ -57,6 +57,9 @@ pub const TitlePhase = enum {
 key: PaneKey,
 process_id: u32,
 agent_process_id: ?u32 = null,
+/// The agent's own process inside the group `agent_process_id` names, when
+/// the probe found which one it is.
+agent_pid: u32 = 0,
 session_id: [16]u8,
 authority: core.AgentAuthority = .candidate,
 process: ?Evidence = null,
@@ -189,6 +192,7 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
             const changed = self.session_host != observation.session_host or self.hooks_installed != observation.hooks_installed;
             self.session_host = observation.session_host;
             self.hooks_installed = observation.hooks_installed;
+            self.agent_pid = observation.agent_pid;
             return changed;
         }
 
@@ -209,6 +213,7 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
     }
 
     self.agent_process_id = observation.process_id;
+    self.agent_pid = observation.agent_pid;
     self.session_host = observation.session_host;
     self.hooks_installed = observation.hooks_installed;
     self.process = Evidence.fromProcess(&observation);

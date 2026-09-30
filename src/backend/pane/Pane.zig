@@ -1,4 +1,5 @@
 const vtgrid = @import("vtgrid");
+const RejectedReporter = @import("RejectedReporter.zig");
 const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const revisions = @import("../revisions.zig");
@@ -116,11 +117,10 @@ agent_recheck_requested: bool = false,
 agent_recheck_running: bool = false,
 /// Rechecks completed, so a report parked for one is answered when it ran.
 agent_rechecks: u32 = 0,
-/// A process a recheck found running another agent than the pane's, nested
-/// under the pane's agent (`rejected_group`): its hooks are refused at once
-/// while it lives, without identifying the pane again.
-rejected_group: u32 = 0,
-rejected_process: u32 = 0,
+/// A process a recheck found reporting for another agent than the pane's:
+/// its hooks are refused at once, without identifying the pane again,
+/// while the same agent runs the pane.
+rejected_reporter: ?RejectedReporter = null,
 foreground_revision: u64 = 1,
 progress_state: core.PaneProgressState = .remove,
 progress_percent: ?u8 = null,

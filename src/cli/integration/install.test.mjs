@@ -1,5 +1,7 @@
-// `telar integration install|uninstall|status pi|opencode` against a built
-// telar, in a throwaway home: `node install.test.mjs /path/to/telar`.
+// `telar integration install|uninstall|status` against a built telar, in a
+// throwaway home: the Pi and OpenCode files, the agents' directory
+// variables, and Claude Code hooks left where CLAUDE_CONFIG_DIR no longer
+// reads them. `node install.test.mjs /path/to/telar`.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -110,4 +112,46 @@ test("opencode: without XDG_CONFIG_HOME the plugin goes to ~/.config/opencode/pl
   if (result.error) throw result.error;
   assert.equal(result.status, 0, result.stderr);
   assert.ok(existsSync(join(s.home, ".config/opencode/plugins/telar.ts")));
+});
+
+test("pi: PI_CODING_AGENT_DIR moves the extension", (t) => {
+  const s = sandbox(t);
+  const directory = join(s.root, "pi-agent");
+  const result = spawnSync(telar, ["integration", "install", "pi"], { cwd: s.root, env: { HOME: s.home, PI_CODING_AGENT_DIR: directory }, encoding: "utf8" });
+  if (result.error) throw result.error;
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(existsSync(join(directory, "extensions/telar.ts")));
+  assert.ok(!existsSync(join(s.home, ".pi")));
+});
+
+test("claude: CLAUDE_CONFIG_DIR holds the hooks, and hooks left in ~/.claude are reported and removed", (t) => {
+  const s = sandbox(t);
+  const directory = join(s.root, "claude-config");
+  const legacy = join(s.home, ".claude/settings.json");
+  const run = (...args) => {
+    const result = spawnSync(telar, ["integration", ...args], { cwd: s.root, env: { HOME: s.home, CLAUDE_CONFIG_DIR: directory }, encoding: "utf8" });
+    if (result.error) throw result.error;
+    return result;
+  };
+
+  // Hooks installed before telar followed CLAUDE_CONFIG_DIR.
+  const before = spawnSync(telar, ["integration", "install", "claude"], { cwd: s.root, env: { HOME: s.home }, encoding: "utf8" });
+  assert.equal(before.status, 0, before.stderr);
+  assert.ok(readFileSync(legacy, "utf8").includes(" hook claude"));
+
+  const installed = run("install", "claude");
+  assert.equal(installed.status, 0, installed.stderr);
+  assert.ok(readFileSync(join(directory, "settings.json"), "utf8").includes(" hook claude"));
+
+  const status = run("status", "claude");
+  assert.equal(status.status, 0, status.stderr);
+  assert.match(status.stdout, /SessionStart: installed/);
+  assert.ok(status.stdout.includes(`hooks remain in ${legacy}`));
+
+  const uninstalled = run("uninstall", "claude");
+  assert.equal(uninstalled.status, 0, uninstalled.stderr);
+  assert.ok(uninstalled.stdout.includes(`hooks removed from ${legacy} too`));
+  assert.ok(!readFileSync(join(directory, "settings.json"), "utf8").includes(" hook claude"));
+  assert.ok(!readFileSync(legacy, "utf8").includes(" hook claude"));
+  assert.ok(!run("status", "claude").stdout.includes("hooks remain"));
 });

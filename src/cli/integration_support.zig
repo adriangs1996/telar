@@ -57,6 +57,10 @@ const executable_placeholder = "\"__TELAR_EXECUTABLE__\"";
 /// instead of hooks in a settings file.
 const Extension = struct {
     agent: []const u8,
+    /// The agent's configuration directory and the directory in it that
+    /// the agent loads such files from.
+    root: core.AgentConfigRoot,
+    directory: []const u8,
     /// What the agent calls such a file: `extension` or `plugin`.
     noun: []const u8,
     marker: []const u8,
@@ -116,6 +120,14 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
             for (integration.worktree_events) |event| {
                 try writer.print("{s}: {s}\n", .{ event, if (hasHook(parsed.value, event, worktree_hooks)) "installed" else "absent" });
             }
+
+            if (options.settings == null) {
+                var legacy_buffer: [std.fs.max_path_bytes]u8 = undefined;
+                if (legacySettingsPath(init.minimal.environ, integration, &legacy_buffer)) |legacy| {
+                    try reportLegacyHooks(init, legacy, hook_set, writer);
+                }
+            }
+
             return 0;
         },
         .install => {
@@ -144,9 +156,84 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
             }
             try writer.print("telar integration: {s} hooks {s} in {s}\n", .{ integration.name, if (changed) "removed" else "not present", path });
             removeSkill(init.io, path);
+
+            if (options.settings == null) {
+                var legacy_buffer: [std.fs.max_path_bytes]u8 = undefined;
+                if (legacySettingsPath(init.minimal.environ, integration, &legacy_buffer)) |legacy| {
+                    try removeLegacyHooks(init, legacy, .{ hook_set, worktree_hooks }, writer);
+                }
+            }
+
             return 0;
         },
     }
+}
+
+// Where an agent's settings lived before telar followed its directory
+// variable: under the home directory. Only while that variable is set does
+// that file differ from the current one; the agent then no longer reads it.
+fn legacySettingsPath(environ: std.process.Environ, integration: Integration, buffer: *[std.fs.max_path_bytes]u8) ?[]const u8 {
+    const settings = integration.settings;
+    const name = settings.environment() orelse return null;
+    const value = std.process.Environ.getPosix(environ, name) orelse return null;
+    if (value.len == 0) {
+        return null;
+    }
+
+    const home = std.process.Environ.getPosix(environ, "HOME");
+    var current_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const current = settings.path(value, home, &current_buffer) orelse return null;
+    const legacy = settings.path(null, home, buffer) orelse return null;
+    return if (std.mem.eql(u8, current, legacy)) null else legacy;
+}
+
+fn readSettings(init: std.process.Init, path: []const u8) !?std.json.Parsed(std.json.Value) {
+    const source = std.Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .limited(max_settings_bytes)) catch |err| switch (err) {
+        error.FileNotFound => return null,
+        else => return err,
+    };
+    defer init.gpa.free(source);
+
+    const parsed = std.json.parseFromSlice(std.json.Value, init.gpa, source, .{}) catch return null;
+    if (parsed.value != .object) {
+        parsed.deinit();
+        return null;
+    }
+
+    return parsed;
+}
+
+// Says that telar's hooks remain in a file the agent no longer reads.
+fn reportLegacyHooks(init: std.process.Init, path: []const u8, hook_set: HookSet, writer: *std.Io.Writer) !void {
+    var parsed = try readSettings(init, path) orelse return;
+    defer parsed.deinit();
+
+    for (hook_set.events) |event| {
+        if (hasHook(parsed.value, event, hook_set)) {
+            try writer.print("telar integration: hooks remain in {s}, which is not read while its directory variable is set; uninstall removes them\n", .{path});
+            return;
+        }
+    }
+}
+
+// Removes telar's hooks, and the coordinator skill beside them, from a
+// file the agent no longer reads.
+fn removeLegacyHooks(init: std.process.Init, path: []const u8, hook_sets: [2]HookSet, writer: *std.Io.Writer) !void {
+    var parsed = try readSettings(init, path) orelse return;
+    defer parsed.deinit();
+
+    var changed = false;
+    for (hook_sets) |hook_set| {
+        changed = uninstallHooks(&parsed.value, hook_set) or changed;
+    }
+
+    removeSkill(init.io, path);
+    if (!changed) {
+        return;
+    }
+
+    try writeSettings(init.io, path, parsed.value);
+    try writer.print("telar integration: hooks removed from {s} too\n", .{path});
 }
 
 fn integrationFor(agent: values.HookAgent) Integration {
@@ -298,12 +385,16 @@ fn extensionFor(agent: values.HookAgent) Extension {
     return switch (agent) {
         .pi => .{
             .agent = "pi",
+            .root = core.AgentConfigRoot.pi,
+            .directory = "extensions",
             .noun = "extension",
             .marker = pi_marker,
             .template = pi_extension_template,
         },
         .opencode => .{
             .agent = "opencode",
+            .root = core.AgentConfigRoot.opencode,
+            .directory = "plugins",
             .noun = "plugin",
             .marker = opencode_marker,
             .template = opencode_plugin_template,
@@ -313,21 +404,16 @@ fn extensionFor(agent: values.HookAgent) Extension {
     };
 }
 
-// Pi reads `~/.pi/agent/extensions`. OpenCode scans `plugins/` in its global
-// configuration directory, `$XDG_CONFIG_HOME/opencode` or `~/.config/opencode`.
+// Pi reads `extensions/` in its agent directory, `$PI_CODING_AGENT_DIR` or
+// `~/.pi/agent`. OpenCode scans `plugins/` in its global configuration
+// directory, `$XDG_CONFIG_HOME/opencode` or `~/.config/opencode`.
 fn extensionPath(environ: std.process.Environ, agent: values.HookAgent, buffer: *[std.fs.max_path_bytes]u8) ![]const u8 {
-    const home = std.process.Environ.getPosix(environ, "HOME") orelse return error.HomeUnavailable;
-    if (agent == .pi) {
-        return std.fmt.bufPrint(buffer, "{s}/.pi/agent/extensions/telar.ts", .{home});
-    }
-
-    if (std.process.Environ.getPosix(environ, "XDG_CONFIG_HOME")) |config| {
-        if (config.len != 0) {
-            return std.fmt.bufPrint(buffer, "{s}/opencode/plugins/telar.ts", .{config});
-        }
-    }
-
-    return std.fmt.bufPrint(buffer, "{s}/.config/opencode/plugins/telar.ts", .{home});
+    const extension = extensionFor(agent);
+    const root = extension.root;
+    const override = if (root.environment) |name| std.process.Environ.getPosix(environ, name) else null;
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory = root.resolve(override, std.process.Environ.getPosix(environ, "HOME"), &root_buffer) orelse return error.HomeUnavailable;
+    return std.fmt.bufPrint(buffer, "{s}/{s}/telar.ts", .{ directory, extension.directory });
 }
 
 /// Fills the Telar executable path into a bundled extension template. The
@@ -839,7 +925,7 @@ test "Cursor install starts an absent hooks file at schema version 1 and rewrite
     try std.testing.expect(!hasHook(parsed.value, "stop", hookSetFor(integrationFor(.claude), "/opt/telar hook cursor")));
 }
 
-test "Codex settings prefer CODEX_HOME while Claude uses HOME" {
+test "settings and extensions follow each agent's directory variable, else the home directory" {
     var environment = std.process.Environ.Map.init(std.testing.allocator);
     defer environment.deinit();
     try environment.put("HOME", "/home/adrian");
@@ -861,6 +947,19 @@ test "Codex settings prefer CODEX_HOME while Claude uses HOME" {
     const xdg_environ: std.process.Environ = .{ .block = xdg_block };
     try std.testing.expectEqualStrings("/state/config/opencode/plugins/telar.ts", try extensionPath(xdg_environ, .opencode, &buffer));
     try std.testing.expectEqualStrings("/home/adrian/.pi/agent/extensions/telar.ts", try extensionPath(xdg_environ, .pi, &buffer));
+    try std.testing.expect(legacySettingsPath(xdg_environ, integrationFor(.claude), &buffer) == null);
+
+    try environment.put("CLAUDE_CONFIG_DIR", "/state/claude");
+    try environment.put("PI_CODING_AGENT_DIR", "/state/pi");
+    try environment.put("CURSOR_CONFIG_DIR", "/state/cursor");
+    const directories_block = try environment.createPosixBlock(std.testing.allocator, .{});
+    defer directories_block.deinit(std.testing.allocator);
+    const directories: std.process.Environ = .{ .block = directories_block };
+    try std.testing.expectEqualStrings("/state/claude/settings.json", try defaultSettingsPath(directories, integrationFor(.claude), &buffer));
+    try std.testing.expectEqualStrings("/home/adrian/.claude/settings.json", legacySettingsPath(directories, integrationFor(.claude), &buffer).?);
+    try std.testing.expectEqualStrings("/home/adrian/.cursor/hooks.json", try defaultSettingsPath(directories, integrationFor(.cursor), &buffer));
+    try std.testing.expect(legacySettingsPath(directories, integrationFor(.cursor), &buffer) == null);
+    try std.testing.expectEqualStrings("/state/pi/extensions/telar.ts", try extensionPath(directories, .pi, &buffer));
 }
 
 test "the Pi extension is rendered with the executable path as a string literal" {

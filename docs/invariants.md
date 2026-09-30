@@ -115,9 +115,10 @@ analytics.
   bounded snapshot.
 - Clients that connect together negotiate independently, each in its own
   bounded admission slot, and a handshake in flight counts against client
-  capacity. A connection that finds no slot is closed alone; a handshake
-  unfinished after two seconds is interrupted at the next maintenance tick,
-  so a client that never finishes cannot hold admission.
+  capacity. A connection that finds no slot is closed alone; the
+  maintenance tick, once a second, interrupts a handshake that has run for
+  two seconds, so none holds its slot past three and a client that never
+  finishes cannot hold admission.
 - Every wire frame has a checked byte limit before allocation or decoding.
 - The handshake accepts one exact schema fingerprint. Change it whenever an
   encoding changes.

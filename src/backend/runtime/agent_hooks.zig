@@ -24,6 +24,8 @@ const client_connection = @import("client_connection.zig");
 const DescentCompletion = @import("events/DescentCompletion.zig");
 const ClientKey = @import("../history/ClientKey.zig");
 const proclineage = @import("proclineage");
+const store_support = @import("client/store_support.zig");
+const RejectedReporter = @import("../pane/RejectedReporter.zig");
 const pane_observation = @import("pane_observation.zig");
 
 pub const TitleReport = enum { recorded, unchanged, pane_not_found, invalid_title };
@@ -71,8 +73,9 @@ pub fn receiveSession(model: *RuntimeModel, session: *Session, report: core.Repo
 /// try agent_hooks.receive(model, session, report);
 /// ```
 pub fn receive(model: *RuntimeModel, session: *Session, report: core.ReportAgent) !void {
-    const now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
-    const now_ns: i64 = @intCast(std.Io.Timestamp.now(model.io, .awake).toNanoseconds());
+    const time = reportTime(model, session);
+    const now_ms = time.real_ms;
+    const now_ns = time.awake_ns;
     const pane = model.panes.resolveConst(.{ .id = report.pane_id, .generation = report.pane_generation }) orelse {
         return client_request.fail(session, report.request_id, .pane_not_found, "pane not found");
     };
@@ -226,7 +229,7 @@ fn workspaceOf(pane: *const Pane) ?core.WorkspaceId {
 /// try agent_hooks.receiveCommand(model, session, report);
 /// ```
 pub fn receiveCommand(model: *RuntimeModel, session: *Session, report: core.ReportAgentCommand) !void {
-    const now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
+    const now_ms = reportTime(model, session).real_ms;
     const pane = model.panes.resolve(.{ .id = report.pane_id, .generation = report.pane_generation }) orelse {
         return client_request.fail(session, report.request_id, .pane_not_found, "pane not found");
     };
@@ -407,8 +410,15 @@ const Reporter = struct {
 };
 
 /// How long a parked report waits for its recheck before the pane's
-/// current agent answers it.
+/// current agent answers it. The maintenance tick checks it once a second,
+/// so a report waits between two and three seconds at most.
 const parked_deadline_ms: i64 = 2_000;
+
+/// A parked report is answered by the first recheck that starts after it
+/// arrived: the next one, or the one after a recheck already running,
+/// which may have read the process before the report's agent replaced it.
+const next_recheck: u32 = 1;
+const recheck_after_running: u32 = 2;
 
 // A report that names its agent comes from a hook, which must have had this
 // connection confirmed as descending from the pane; the pane must run that
@@ -416,8 +426,8 @@ const parked_deadline_ms: i64 = 2_000;
 // confirmed hook of another agent may mean the pane's process replaced
 // itself since the last probe: the report is parked until an observation
 // that starts after it identifies the process again, then answered. A
-// process refused that way before is refused at once while it lives.
-// Returns whether the report was refused or parked.
+// process refused that way before is refused at once while the pane's
+// agent is the same. Returns whether the report was refused or parked.
 fn refuseReporter(model: *RuntimeModel, session: *Session, request_id: core.RequestId, reporter: Reporter) !bool {
     if (reporter.provider == .unknown) {
         return false;
@@ -437,69 +447,87 @@ fn refuseReporter(model: *RuntimeModel, session: *Session, request_id: core.Requ
         return refuseForeign(session, request_id);
     }
 
-    const nested = nestedProcess(model, session, reporter.key);
+    const rejection = reportingRejection(model, session, pane);
     if (session.answering_parked) {
         // Identified again after this report arrived: the pane still runs
         // another agent, such as the one that ran this hook as a tool.
-        if (nested) |process| {
-            pane.rejected_group = process.group;
-            pane.rejected_process = process.pid;
+        if (rejection) |value| {
+            pane.rejected_reporter = value;
         }
 
         return refuseForeign(session, request_id);
     }
 
-    if (nested) |process| {
-        if (pane.rejected_group == process.group and pane.rejected_process == process.pid) {
-            return refuseForeign(session, request_id);
+    if (rejection) |value| {
+        if (pane.rejected_reporter) |rejected| {
+            if (std.meta.eql(rejected, value)) {
+                return refuseForeign(session, request_id);
+            }
         }
     }
 
-    // A recheck already running may have read the process before this
-    // report's agent replaced it; the one after it answers.
     session.parked_pane = reporter.key;
-    session.parked_recheck = pane.agent_rechecks +% @as(u32, if (pane.agent_recheck_running) 2 else 1);
+    session.parked_recheck = pane.agent_rechecks +% if (pane.agent_recheck_running) recheck_after_running else next_recheck;
     session.parked_at_ms = std.Io.Timestamp.now(model.io, .awake).toMilliseconds();
+    session.parked_real_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds();
+    session.parked_awake_ns = @intCast(std.Io.Timestamp.now(model.io, .awake).toNanoseconds());
     pane.agent_recheck_requested = true;
     pane_observation.start(model, pane) catch {
         try client_request.fail(session, request_id, .resource_limit, "the pane's process cannot be identified again now");
         return true;
     };
 
+    model.parked_reports +%= 1;
+    session.parked_sequence = model.parked_reports;
     session.parked = reporter.message;
     return true;
 }
 
-/// The process a hook ran under that is a child of the pane's identified
-/// agent, as the connection's descent check found it, and that agent's
-/// process group.
-const NestedProcess = struct {
-    group: u32,
-    pid: u32,
-};
-
-fn nestedProcess(model: *const RuntimeModel, session: *const Session, key: PaneKey) ?NestedProcess {
-    const group = agent_status.processGroup(model, key) orelse return null;
+// Which process a hook reports for, keyed to the pane's agent: the process
+// right under that agent in the hook's parent chain, or right under the
+// pane's root process when the hook does not descend from the agent. Never
+// the agent itself, which may have replaced itself with the reporting
+// agent by exec, so a report through it is always identified again.
+fn reportingRejection(model: *const RuntimeModel, session: *const Session, pane: *const Pane) ?RejectedReporter {
+    const agent = agent_status.agentProcess(model, pane.key()) orelse return null;
+    const root = agent_identity.fromPane(pane).process_id;
     const lineage = session.hook_lineage[0..session.hook_lineage_len];
-    const index = std.mem.indexOfScalar(u32, lineage, group) orelse return null;
-    if (index == 0) {
-        return null;
+
+    for (lineage, 0..) |pid, index| {
+        if (pid != agent.pid and pid != agent.group and pid != root) {
+            continue;
+        }
+
+        if (index == 0) {
+            return null;
+        }
+
+        const process = lineage[index - 1];
+        if (process == agent.pid or process == agent.group) {
+            return null;
+        }
+
+        return .{
+            .group = agent.group,
+            .agent = agent.pid,
+            .process = process,
+        };
     }
 
-    return .{
-        .group = group,
-        .pid = lineage[index - 1],
-    };
+    return null;
 }
 
-/// Answers the reports parked on `key` whose recheck has completed, by
-/// dispatching them again. Runs after each observation of the pane.
+/// Answers the reports parked on `key` whose recheck has completed, in
+/// the order they arrived, by dispatching them again. Runs after each
+/// observation of the pane.
 ///
 /// ```zig
 /// agent_hooks.answerParked(model, pane.key());
 /// ```
 pub fn answerParked(model: *RuntimeModel, key: PaneKey) void {
-    const rechecks = if (model.panes.resolveConst(key)) |pane| pane.agent_rechecks else return;
+    const pane = model.panes.resolveConst(key) orelse return;
+    var due: ParkedReports = .{};
+
     for (model.clients.items) |slot| {
         const session = slot orelse continue;
         if (session.parked == null or session.parked_pane.id != key.id or session.parked_pane.generation != key.generation) {
@@ -507,21 +535,25 @@ pub fn answerParked(model: *RuntimeModel, key: PaneKey) void {
         }
 
         // Wrapping counters: the answer is due once the count reached it.
-        if (@as(i32, @bitCast(rechecks -% session.parked_recheck)) >= 0) {
-            answer(model, session);
+        if (@as(i32, @bitCast(pane.agent_rechecks -% session.parked_recheck)) >= 0) {
+            due.add(session);
         }
     }
+
+    due.answerInOrder(model);
 }
 
 /// Answers every parked report whose pane is gone or whose recheck did not
-/// complete in time, with the pane's current agent. Runs on the maintenance
-/// tick.
+/// complete in time, with the pane's current agent, in the order they
+/// arrived. Runs on the maintenance tick.
 ///
 /// ```zig
 /// agent_hooks.expireParked(model);
 /// ```
 pub fn expireParked(model: *RuntimeModel) void {
     const now_ms = std.Io.Timestamp.now(model.io, .awake).toMilliseconds();
+    var due: ParkedReports = .{};
+
     for (model.clients.items) |slot| {
         const session = slot orelse continue;
         if (session.parked == null) {
@@ -531,14 +563,41 @@ pub fn expireParked(model: *RuntimeModel) void {
         const pane = model.panes.resolveConst(session.parked_pane);
         const gone = pane == null or pane.?.exit != null;
         if (gone or now_ms - session.parked_at_ms >= parked_deadline_ms) {
+            due.add(session);
+        }
+    }
+
+    due.answerInOrder(model);
+}
+
+/// Sessions whose parked reports are due, answered by arrival.
+const ParkedReports = struct {
+    sessions: [store_support.max_clients]*Session = undefined,
+    len: usize = 0,
+
+    fn add(self: *ParkedReports, session: *Session) void {
+        self.sessions[self.len] = session;
+        self.len += 1;
+    }
+
+    fn answerInOrder(self: *ParkedReports, model: *RuntimeModel) void {
+        const due = self.sessions[0..self.len];
+        std.mem.sort(*Session, due, {}, arrivedBefore);
+
+        for (due) |session| {
             answer(model, session);
         }
     }
-}
+
+    fn arrivedBefore(_: void, left: *Session, right: *Session) bool {
+        return @as(i64, @bitCast(left.parked_sequence -% right.parked_sequence)) < 0;
+    }
+};
 
 fn answer(model: *RuntimeModel, session: *Session) void {
     const message = session.parked.?;
     session.parked = null;
+
     if (session.closing) {
         client_connection.finalize(model, session.key);
         return;
@@ -546,12 +605,34 @@ fn answer(model: *RuntimeModel, session: *Session) void {
 
     session.answering_parked = true;
     defer session.answering_parked = false;
+
     client_request.receive(model, session, message) catch {
         client_connection.drop(model, session.key);
         return;
     };
 
     client_connection.resumeRead(model, session);
+}
+
+/// When a report was observed: now, or when it arrived for one answered
+/// after a recheck, so it keeps its place among the pane's evidence.
+const ReportTime = struct {
+    real_ms: i64,
+    awake_ns: i64,
+};
+
+fn reportTime(model: *const RuntimeModel, session: *const Session) ReportTime {
+    if (session.answering_parked) {
+        return .{
+            .real_ms = session.parked_real_ms,
+            .awake_ns = session.parked_awake_ns,
+        };
+    }
+
+    return .{
+        .real_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
+        .awake_ns = @intCast(std.Io.Timestamp.now(model.io, .awake).toNanoseconds()),
+    };
 }
 
 fn refuseForeign(session: *Session, request_id: core.RequestId) !bool {

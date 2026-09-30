@@ -110,15 +110,26 @@ Two checks keep a pane's card to its own agent:
    started once it arrived: one already running when it arrives may have
    read the process before the new agent replaced it, so it waits for the
    next. It is dispatched again then, accepted if the pane now runs its
-   agent and refused with `foreign_process` otherwise; a parked report
-   whose pane is gone, or whose recheck has not completed in two seconds,
-   is answered on the maintenance tick. The hook only waits for the reply.
+   agent and refused with `foreign_process` otherwise. Reports parked on one
+   recheck are answered in the order they arrived, each with the time it
+   arrived, so a late answer neither reorders a turn nor outranks screen
+   evidence seen while it waited. The maintenance tick, once a second,
+   answers a parked report whose pane is gone or that waited two seconds:
+   the hook waits three seconds at most, its reply included. A parked hook
+   holds one of the runtime's eight client slots meanwhile; the handshake
+   carries only the schema, so the runtime cannot tell a window from a hook
+   when it admits one and reserves no slot for either.
    A process of another agent nested under the pane's agent, such as `codex
    exec` run by Claude Code as a tool, is remembered once refused
-   (`Pane.rejected_group`, `rejected_process`: the pane agent's process
-   group and the process under it in the hook's parent chain, which the
-   descent check keeps), and its later hooks are refused at once, without
-   another identification, while that process lives. A recheck keeps the
+   (`Pane.rejected_reporter`: the pane agent's process group, its own
+   process, and the process right under that agent in the hook's parent
+   chain, which the descent check keeps, or right under the pane's root
+   process when the hook does not descend from the agent, as for an agent
+   run in the background), and its later hooks are refused at once, without
+   another identification, while the same agent runs the pane. The agent's
+   own process is never remembered: it may have replaced itself with the
+   reporting agent by `exec`. A probe that identifies another process
+   forgets the rejection. A recheck keeps the
    agent it had identified while that agent still runs in the group, even
    if another agent runs there beside it; the group's leader wins when it
    is an agent itself. Claude Code runs its tools in process groups of
@@ -613,7 +624,12 @@ file lives is `core.HookSettings`, built on the configuration roots
 `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set and `~/.codex/hooks.json`
 otherwise; Claude Code uses `$CLAUDE_CONFIG_DIR/settings.json` when
 `CLAUDE_CONFIG_DIR` is set, where Claude Code reads its user settings, and
-`~/.claude/settings.json` otherwise. Codex asks the user to trust the new hook definitions; telar does
+`~/.claude/settings.json` otherwise. Hooks installed there before telar
+followed `CLAUDE_CONFIG_DIR` stay where Claude Code no longer reads them:
+`status` says so and `uninstall` removes them and the skill beside them.
+The Pi extension goes to `extensions/` under `$PI_CODING_AGENT_DIR`, else
+`~/.pi/agent`, and the OpenCode plugin to `plugins/` under
+`$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`. Codex asks the user to trust the new hook definitions; telar does
 not write Codex's trust state or bypass that check. Cursor always reads user hooks from `~/.cursor/hooks.json`, whatever
 `CURSOR_CONFIG_DIR` says; install adds `"version": 1` when the file lacks it,
 and Cursor's own JSONC comments make the file unreadable to install, which
@@ -659,7 +675,13 @@ for `SessionEnd` and `Interrupt`.
   agent's report is refused with a recheck and accepted once the probe names
   that agent, that worktree attribution and review evidence need the
   confirmation too, one descent check per connection, and a descent check
-  through the real peer lookup and worker; `agent_hooks.zig` proves the
+  through the real peer lookup and worker; that a parked report pauses its
+  connection's reads until answered, waits for a recheck that starts after
+  it, is answered in arrival order with its arrival time, on the tick when
+  its pane is gone or its recheck late, goes with a connection that closes,
+  and is refused for lack of resources when its recheck cannot start; the
+  whole chain through a real observation; and which process a rejection
+  remembers, never the pane's agent; `agent_hooks.zig` proves the
   parent walk; `agent_status_test.zig` proves the identification window, a
   pane whose agent is replaced, the resume mode and when the shared-server
   line shows; `process.zig` proves `SessionHost` and the recheck;

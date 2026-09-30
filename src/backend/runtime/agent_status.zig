@@ -25,6 +25,7 @@ const Completion = @import("../agent/Completion.zig");
 const Agent = @import("../agent/Agent.zig");
 const description = @import("../agent/description.zig");
 const ProgressObservation = @import("../agent/ProgressObservation.zig");
+const AgentProcess = @import("../agent/AgentProcess.zig");
 
 pub const AcknowledgeResult = enum {
     unknown_agent,
@@ -169,19 +170,23 @@ pub fn acceptsReporter(model: *const RuntimeModel, key: PaneKey, reporter: core.
     return agent.acceptsReporter(reporter);
 }
 
-/// The process group of the agent process evidence names for one exact pane
-/// generation, if any.
+/// The agent process evidence names for one exact pane generation: its
+/// process group and, when the probe found it, its own process.
 ///
 /// ```zig
-/// const group = agent_status.processGroup(model, key) orelse return;
+/// const process = agent_status.agentProcess(model, key) orelse return;
 /// ```
-pub fn processGroup(model: *const RuntimeModel, key: PaneKey) ?u32 {
+pub fn agentProcess(model: *const RuntimeModel, key: PaneKey) ?AgentProcess {
     const agent = model.agents.findConst(key) orelse return null;
     if (agent.process == null) {
         return null;
     }
 
-    return agent.agent_process_id;
+    const group = agent.agent_process_id orelse return null;
+    return .{
+        .group = group,
+        .pid = if (agent.agent_pid != 0) agent.agent_pid else group,
+    };
 }
 
 /// Returns the provider currently projected for one exact pane generation.

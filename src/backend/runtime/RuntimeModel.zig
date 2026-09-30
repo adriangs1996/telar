@@ -54,6 +54,8 @@ launch_fault: ?*LaunchTestFault = null,
 /// Test seam: holds a pane's ingest actor open.
 ingest_gate: ?*IngestTestGate = null,
 clients: Store = .{},
+/// Hook reports parked so far, which orders their answers.
+parked_reports: u64 = 0,
 /// Accepted connections whose handshake actors are in flight.
 client_admission: GenericHandshakes(localsocket.SocketChannel, store_support.max_pending_handshakes) = .{},
 shutdown: LifecycleState = .{},

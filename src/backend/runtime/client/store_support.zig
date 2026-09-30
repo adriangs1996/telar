@@ -9,7 +9,8 @@ pub const max_clients = core.ClientList.capacity;
 /// together; a connection that arrives with every slot taken is closed.
 pub const max_pending_handshakes = 8;
 /// A handshake still unfinished this long is interrupted at the next
-/// maintenance tick, so a client that never finishes cannot hold a slot.
+/// maintenance tick, once a second, so a client that never finishes holds a
+/// slot three seconds at most.
 pub const handshake_deadline_ms: i64 = 2_000;
 
 test "Store rejects exhausted identities before allocating a session" {

@@ -56,7 +56,13 @@ parked: ?core.ClientMessage = null,
 /// rechecks that answers it: one started after the report arrived.
 parked_pane: PaneKey = undefined,
 parked_recheck: u32 = 0,
+/// Monotonic arrival, for the deadline.
 parked_at_ms: i64 = 0,
+/// When the report arrived, which it keeps when answered later.
+parked_real_ms: i64 = 0,
+parked_awake_ns: i64 = 0,
+/// Arrival order among parked reports.
+parked_sequence: u64 = 0,
 /// The parked report is being dispatched again after its recheck; another
 /// agent then is the pane's final answer.
 answering_parked: bool = false,
