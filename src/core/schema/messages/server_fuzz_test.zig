@@ -17,14 +17,18 @@
 //! - An accepted message's views iterate exactly their declared counts,
 //!   consume exactly the bytes the decoder delimited and borrow only the
 //!   payload. Views the decoder validated in full never fail; history
-//!   entries and stats rows may fail validation but never run out of bytes;
-//!   cells may fail any way, as `CellReader`'s own rejection.
+//!   entries and stats rows fail only with the content errors their
+//!   iterators check; cells may fail any way, as `CellReader`'s own
+//!   rejection.
+//! - An accepted payload's first byte is a known server tag, and the
+//!   decoded variant is the one it names.
 //! - Every proper prefix of an accepted message fails with `Truncated` and
 //!   one byte more fails with `TrailingBytes`, except past the fixed head of
 //!   `request_failed`, whose text runs to the end of the payload.
 //! - A fully iterable message re-encodes through its tag's encoder to exactly
-//!   the payload, except the encoder refusals `encoder_rejections` lists and
-//!   pane frames, which this target does not re-encode.
+//!   the payload, except pane frames, which this target does not re-encode,
+//!   and the two NUL refusals `isEncoderRejection` names. The round trip is
+//!   not checked after a consumer or encoder refusal.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -66,49 +70,57 @@ const Verdict = union(enum) {
     rejected: DecodeError,
     /// Accepted; its views iterate and it re-encodes to exactly the payload.
     accepted: MessageTag,
-    /// Accepted; a view that validates as it is consumed refused an item.
-    consumer_rejected: MessageTag,
-    /// Accepted and iterable; the tag's encoder refuses the decoded value as
-    /// `encoder_rejections` records.
+    /// Accepted; a view that validates as it is consumed refused an item
+    /// with this error. The round trip is not checked.
+    consumer_rejected: ConsumerRejection,
+    /// Accepted and iterable; the tag's encoder refuses the decoded value, a
+    /// refusal `isEncoderRejection` allows. The round trip is not checked.
     encoder_rejected: MessageTag,
     /// Accepted and iterable; this target does not re-encode the tag.
     not_reencoded: MessageTag,
+};
+
+/// The variant a consumer refused, and its error.
+const ConsumerRejection = struct {
+    tag: MessageTag,
+    err: anyerror,
 };
 
 /// How a view's iterator may refuse items of a message the decoder accepted.
 const Lateness = enum {
     /// The decoder validated every item: iteration never fails.
     eager,
-    /// The decoder walked item boundaries only: an item may fail validation
-    /// but never `Truncated`.
-    validates_fields,
-    /// The decoder checked sizes only (cells): any error is the consumer's.
-    validates_bytes,
+    /// `skipHistoryEntry` walked the entry's boundaries, lengths and flags;
+    /// `decodeHistoryEntry` may refuse only its content,
+    /// `history_entry_rejections`.
+    history_entries,
+    /// The decoder bounded each stats row's command length; the iterator
+    /// refuses only an empty one, `stats_row_rejections`.
+    stats_rows,
+    /// The decoder checked sizes only: any error is `CellReader`'s own.
+    cells,
 };
 
-const Walk = enum { complete, consumer_rejected };
-
-/// A decoded message its tag's encoder refuses. Each one is a decoder that
-/// accepts what the encoder never produces, reported in
-/// `docs/testing/fuzz-ipc-server.md`.
-const EncoderRejection = struct {
-    tag: MessageTag,
-    err: anyerror,
+/// The content checks of `decodeHistoryEntry` past the boundaries
+/// `skipHistoryEntry` already walked: the id, pane, status, author and
+/// origin, and the command, cwd, workspace and provider byte strings.
+const history_entry_rejections = [_]anyerror{
+    error.InvalidHistoryId,
+    error.InvalidPaneId,
+    error.InvalidHistoryStatus,
+    error.InvalidHistoryAuthor,
+    error.InvalidHistoryOrigin,
+    error.InvalidByteString,
+    error.EmbeddedNul,
 };
 
-const encoder_rejections = [_]EncoderRejection{
-    // `decodeHistoryOutput` checks only the content length; the encoder also
-    // refuses a NUL byte.
-    .{
-        .tag = .history_output,
-        .err = error.EmbeddedNul,
-    },
-    // `decodeHistoryStats` and `HistoryStatsTopIterator` check only the
-    // command length; the encoder also refuses a NUL byte.
-    .{
-        .tag = .history_stats_result,
-        .err = error.EmbeddedNul,
-    },
+/// `HistoryStatsTopIterator` refuses an empty command; its length bound is
+/// the decoder's.
+const stats_row_rejections = [_]anyerror{error.InvalidByteString};
+
+const Walk = union(enum) {
+    complete,
+    consumer_rejected: anyerror,
 };
 
 const Seed = struct {
@@ -242,17 +254,22 @@ fn checkServerPayload(payload: []const u8) !Verdict {
     );
 
     const tag = std.meta.activeTag(decoded);
+    try expectVariantOfTag(payload, tag);
     try expectPrefixesTruncated(tag, payload);
     try expectExtensionRejected(tag, payload);
 
-    if (try walkMessage(
+    switch (try walkMessage(
         &decoded,
         &destination,
         payload,
-    ) == .consumer_rejected) {
-        return .{
-            .consumer_rejected = tag,
-        };
+    )) {
+        .complete => {},
+        .consumer_rejected => |err| return .{
+            .consumer_rejected = .{
+                .tag = tag,
+                .err = err,
+            },
+        },
     }
 
     if (tag == .pane_frame) {
@@ -262,7 +279,7 @@ fn checkServerPayload(payload: []const u8) !Verdict {
     }
 
     const bytes = reencode(&decoded, &reencoded) catch |err| {
-        if (!isEncoderRejection(tag, err)) {
+        if (!isEncoderRejection(&decoded, err)) {
             return err;
         }
 
@@ -335,9 +352,52 @@ fn expectExtensionRejected(tag: MessageTag, payload: []const u8) !void {
     }
 }
 
-fn isEncoderRejection(tag: MessageTag, err: anyerror) bool {
-    for (encoder_rejections) |rejection| {
-        if (rejection.tag == tag and rejection.err == err) {
+/// An accepted payload names its variant by its first byte: a known server
+/// tag whose name is the variant's.
+fn expectVariantOfTag(payload: []const u8, tag: MessageTag) !void {
+    if (payload.len == 0) {
+        return error.EmptyPayloadAccepted;
+    }
+
+    const wire = std.enums.fromInt(ServerTag, payload[0]) orelse return error.UnknownTagAccepted;
+    if (!std.mem.eql(
+        u8,
+        @tagName(wire),
+        @tagName(tag),
+    )) {
+        return error.VariantDiffersFromTag;
+    }
+}
+
+/// The encoder refusals of a decoded message this target allows, each for
+/// the data that causes it and nothing else: `EmbeddedNul` for a history
+/// output whose content holds a NUL, and for history stats with a NUL in
+/// some row's command. Both decoders check only lengths there, which
+/// `docs/testing/fuzz-ipc-server.md` reports.
+fn isEncoderRejection(message: *const ServerMessage, err: anyerror) bool {
+    if (err != error.EmbeddedNul) {
+        return false;
+    }
+
+    return switch (message.*) {
+        .history_output => |output| std.mem.findScalar(
+            u8,
+            output.content,
+            0,
+        ) != null,
+        .history_stats_result => |view| statsCommandHoldsNul(view),
+        else => false,
+    };
+}
+
+fn statsCommandHoldsNul(view: HistoryStatsView) bool {
+    var top = view.top();
+    while (top.next() catch return false) |row| {
+        if (std.mem.findScalar(
+            u8,
+            row.command,
+            0,
+        ) != null) {
             return true;
         }
     }
@@ -635,7 +695,7 @@ fn walkMessage(expected: *const ServerMessage, actual: *const ServerMessage, pay
                 &second,
                 payload,
                 view.entry_count,
-                .validates_fields,
+                .history_entries,
             );
         },
         .workspace_snapshot => |view| {
@@ -711,7 +771,7 @@ fn walkMessage(expected: *const ServerMessage, actual: *const ServerMessage, pay
                 &second,
                 payload,
                 view.top_count,
-                .validates_fields,
+                .stats_rows,
             );
         },
         .path_results => |view| {
@@ -764,7 +824,9 @@ fn walkItems(first: anytype, second: anytype, payload: []const u8, count: usize,
             }
 
             try expectLateRejection(err, lateness);
-            return .consumer_rejected;
+            return .{
+                .consumer_rejected = err,
+            };
         };
 
         const actual = second.next() catch return error.IteratorMismatch;
@@ -797,12 +859,13 @@ fn walkItems(first: anytype, second: anytype, payload: []const u8, count: usize,
             item,
             payload,
         );
-        if (try walkNested(
+        const nested = try walkNested(
             item,
             other,
             payload,
-        ) == .consumer_rejected) {
-            return .consumer_rejected;
+        );
+        if (nested == .consumer_rejected) {
+            return nested;
         }
     }
 }
@@ -843,22 +906,28 @@ fn walkNested(expected: anytype, actual: @TypeOf(expected), payload: []const u8)
             &second,
             payload,
             expected.cell_count,
-            .validates_bytes,
+            .cells,
         );
     }
 
     return .complete;
 }
 
+/// Whether an iterator of `lateness` may refuse an item with `err`.
 fn expectLateRejection(err: anyerror, lateness: Lateness) !void {
-    switch (lateness) {
+    const allowed: []const anyerror = switch (lateness) {
         .eager => return error.ValidatedViewRejected,
-        .validates_fields => {
-            if (err == error.Truncated) {
-                return error.WalkedViewTruncated;
-            }
-        },
-        .validates_bytes => {},
+        .history_entries => &history_entry_rejections,
+        .stats_rows => &stats_row_rejections,
+        .cells => return,
+    };
+
+    if (std.mem.findScalar(
+        anyerror,
+        allowed,
+        err,
+    ) == null) {
+        return error.LateRejectionNotAllowed;
     }
 }
 
@@ -2380,7 +2449,25 @@ fn addMutatedSeeds(corpus: *SeedCorpus) !void {
         history_status_offset,
         9,
     ), .{
-        .consumer_rejected = .history_results,
+        .consumer_rejected = .{
+            .tag = .history_results,
+            .err = error.InvalidHistoryStatus,
+        },
+    });
+
+    // The same entry's command, after its provider "claude" and the command
+    // length: a NUL passes the boundary walk and fails the iterator's byte
+    // string check.
+    const history_command_offset = history_status_offset + 3 + 2 + "claude".len + 4;
+    corpus.add("history_results_nul_command", withByte(
+        corpus.copy(seedNamed(corpus, "history_results_one")),
+        history_command_offset,
+        0,
+    ), .{
+        .consumer_rejected = .{
+            .tag = .history_results,
+            .err = error.EmbeddedNul,
+        },
     });
 
     // client_list: tag, request id, then the count.
@@ -2457,7 +2544,10 @@ fn addMutatedSeeds(corpus: *SeedCorpus) !void {
         first_cell_offset,
         0x01,
     ), .{
-        .consumer_rejected = .pane_frame,
+        .consumer_rejected = .{
+            .tag = .pane_frame,
+            .err = error.InvalidCell,
+        },
     });
 
     const moved = seedNamed(corpus, "tab_moved");
@@ -2484,7 +2574,10 @@ fn addMutatedSeeds(corpus: *SeedCorpus) !void {
         0,
     );
     corpus.add("history_stats_empty_command", bytes, .{
-        .consumer_rejected = .history_stats_result,
+        .consumer_rejected = .{
+            .tag = .history_stats_result,
+            .err = error.InvalidByteString,
+        },
     });
 
     // A NUL inside a stats command or history output passes the decoder and
@@ -2737,6 +2830,95 @@ test "every saved fuzz input keeps the properties" {
         };
         try decodeFuzzedServerMessage({}, &smith);
     }
+}
+
+test "encoder refusals are allowed only for the NUL that causes them" {
+    const output: core.HistoryOutput = .{
+        .request_id = @enumFromInt(1),
+        .id = 11,
+        .truncated = false,
+        .observed_bytes = 2,
+        .content = "a\x00",
+    };
+    var message: ServerMessage = .{
+        .history_output = output,
+    };
+    try std.testing.expect(isEncoderRejection(&message, error.EmbeddedNul));
+    try std.testing.expect(!isEncoderRejection(&message, error.InvalidByteString));
+
+    message.history_output.content = "ab";
+    try std.testing.expect(!isEncoderRejection(&message, error.EmbeddedNul));
+
+    message = .{
+        .pane_title = .{
+            .pane_id = @enumFromInt(4),
+            .title = "a\x00",
+        },
+    };
+    try std.testing.expect(!isEncoderRejection(&message, error.EmbeddedNul));
+
+    _ = try buildCorpus();
+    message = try core.decodeServer(seedNamed(&seed_corpus, "history_stats_nul_command"));
+    try std.testing.expect(isEncoderRejection(&message, error.EmbeddedNul));
+
+    message = try core.decodeServer(seedNamed(&seed_corpus, "history_stats_one"));
+    try std.testing.expect(!isEncoderRejection(&message, error.EmbeddedNul));
+}
+
+test "late view rejections are limited to their iterator's content checks" {
+    for (history_entry_rejections) |err| {
+        try expectLateRejection(err, .history_entries);
+    }
+
+    try expectLateRejection(error.InvalidByteString, .stats_rows);
+    try expectLateRejection(error.InvalidCell, .cells);
+    try expectLateRejection(error.Truncated, .cells);
+
+    const refused = [_]struct {
+        err: anyerror,
+        lateness: Lateness,
+    }{
+        .{
+            .err = error.Truncated,
+            .lateness = .history_entries,
+        },
+        .{
+            .err = error.InvalidBoolean,
+            .lateness = .history_entries,
+        },
+        .{
+            .err = error.Truncated,
+            .lateness = .stats_rows,
+        },
+        .{
+            .err = error.EmbeddedNul,
+            .lateness = .stats_rows,
+        },
+        .{
+            .err = error.InvalidHistoryStatus,
+            .lateness = .stats_rows,
+        },
+        .{
+            .err = error.InvalidByteString,
+            .lateness = .eager,
+        },
+    };
+    for (refused) |case| {
+        if (expectLateRejection(case.err, case.lateness)) |_| {
+            return error.LateRejectionAllowed;
+        } else |_| {}
+    }
+}
+
+test "an accepted variant is the one its wire tag names" {
+    for (std.enums.values(ServerTag)) |wire| {
+        const tag = std.meta.stringToEnum(MessageTag, @tagName(wire)) orelse return error.TagWithoutVariant;
+        try expectVariantOfTag(&.{@intFromEnum(wire)}, tag);
+    }
+
+    try std.testing.expectError(error.VariantDiffersFromTag, expectVariantOfTag(&.{@intFromEnum(ServerTag.tab_closed)}, .tab_moved));
+    try std.testing.expectError(error.UnknownTagAccepted, expectVariantOfTag(&.{0x00}, .tab_moved));
+    try std.testing.expectError(error.EmptyPayloadAccepted, expectVariantOfTag("", .tab_moved));
 }
 
 test "fuzz server message decoding" {

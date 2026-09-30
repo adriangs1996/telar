@@ -53,21 +53,35 @@ panics on the first one that fails, so the fuzzer keeps the input.
    - validated in full (tab snapshots, workspace snapshots, agent snapshots,
      workspace lists, layouts, search matches, path matches, frame spans):
      never;
-   - boundaries only (history entries, history stats rows): validation
-     errors, never `Truncated`;
+   - boundaries only, history entries: `skipHistoryEntry` already walked
+     lengths and flags, so `decodeHistoryEntry` may refuse only content:
+     `InvalidHistoryId`, `InvalidPaneId`, `InvalidHistoryStatus`,
+     `InvalidHistoryAuthor`, `InvalidHistoryOrigin`, `InvalidByteString`,
+     `EmbeddedNul`;
+   - boundaries only, history stats rows: the decoder bounded each command's
+     length, so the iterator may refuse only an empty one,
+     `InvalidByteString`;
    - sizes only (cells, read by `CellReader`): any error, as the consumer's
      own rejection.
-3. **Truncation and trailing bytes.** Every proper prefix of an accepted
+
+   A seed pins the error each late refusal must be.
+3. **Tag and variant.** An accepted payload's first byte is a known
+   `ServerTag` and the decoded variant has its name, pane frames included.
+4. **Truncation and trailing bytes.** Every proper prefix of an accepted
    payload fails with exactly `Truncated`, and the payload with one more byte
    fails with exactly `TrailingBytes`. Decoders read fields in an order the
    bytes already read decide, and `decodeServer` checks the end after the
    message, so this holds for every tag but `request_failed`, whose text runs
    to the end of the payload; for it only prefixes shorter than its fixed
    head are checked.
-4. **Round trip.** A message whose views iterate completely goes back
+5. **Round trip.** A message whose views iterate completely goes back
    through its tag's encoder (views are collected into fixed arrays first) and
-   must produce exactly the payload. The encoder may refuse only what
-   `encoder_rejections` lists.
+   must produce exactly the payload. The encoder may refuse only the two
+   refusals `isEncoderRejection` allows, each for the data that causes it:
+   `EmbeddedNul` when a history output's content holds a NUL, or when some
+   history stats row's command does. The round trip is not checked after a
+   consumer refusal (property 2) or an allowed encoder refusal; pane frames
+   are never re-encoded.
 
 The oracles are the other API, the encoders, the byte structure and the
 views' own iterators, not a copy of the decoders.
@@ -75,8 +89,8 @@ views' own iterators, not a copy of the decoders.
 ## Findings
 
 Two decoders accept values their encoder refuses. Neither is a crash; both
-are listed in `encoder_rejections` and pinned by seeds, so a change on either
-side shows up:
+are allowed by `isEncoderRejection` only for a NUL in the field that causes
+them, and pinned by seeds, so a change on either side shows up:
 
 - `history_output`: `decodeHistoryOutput` checks only the content length;
   `encodeHistoryOutput` also refuses a NUL byte (`EmbeddedNul`). Minimal
@@ -120,9 +134,11 @@ tag gains no accepted seed.
   entries; too many review comments; an unrestored layout with a width; a set
   progress without percent; an image whose length does not match its size;
   a trailing byte.
-- **Accepted, then refused by a late consumer:** a history entry with an
-  unknown status, a stats row with an empty command, a frame whose first cell
-  needs a previous style.
+- **Accepted, then refused by a late consumer, with the exact error:** a
+  history entry with an unknown status (`InvalidHistoryStatus`) or a NUL in
+  its command (`EmbeddedNul`), a stats row with an empty command
+  (`InvalidByteString`), a frame whose first cell needs a previous style
+  (`InvalidCell`).
 - **Accepted, then refused by the encoder:** the two findings above.
 
 Seeds larger than the fuzzed payload (the 100-entry history results, the
