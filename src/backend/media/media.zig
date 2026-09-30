@@ -27,6 +27,7 @@ const Batch = @import("Batch.zig");
 
 test {
     _ = png_test;
+    _ = Batch;
 }
 
 pub const batch_bytes = 4 * 16 * 1024;

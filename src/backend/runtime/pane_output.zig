@@ -111,18 +111,24 @@ pub fn finishIngest(model: *RuntimeModel, completion: IngestCompletion) !void {
     pane.applyPendingResize() catch {
         _ = pane_closure.requestClose(model, pane);
     };
-    try pane_observation.start(model, pane);
-    try pane_graphics.startMedia(model, pane);
-    refreshAttachments(model, pane);
-    try pane_input.startResponseWrite(model, pane);
 
+    // The next read is armed, or held for the media actor, before anything
+    // that can fail, so no failure below leaves the pane without one. An
+    // idle actor never holds it; a busy one resumes it in `finishMedia`.
     if (pane.media.holdsRead(pane.output_buffer.len)) {
         pane.output_held = true;
         pane.media.held_reads +|= 1;
-        return;
+    } else {
+        try startRead(model, pane);
     }
 
-    try startRead(model, pane);
+    const observation = pane_observation.start(model, pane);
+    const media = pane_graphics.startMedia(model, pane);
+    refreshAttachments(model, pane);
+    const response = pane_input.startResponseWrite(model, pane);
+    try observation;
+    try media;
+    try response;
 }
 
 /// Starts the read `finishIngest` held back once the media actor made room.
@@ -133,7 +139,11 @@ pub fn resumeRead(model: *RuntimeModel, pane: *Pane) !void {
     }
 
     pane.output_held = false;
-    try startRead(model, pane);
+    startRead(model, pane) catch |err| {
+        // Held again, so a later media turn can retry it.
+        pane.output_held = true;
+        return err;
+    };
 }
 
 fn startRead(model: *RuntimeModel, pane: *Pane) !void {

@@ -239,6 +239,36 @@ test "runtime media completion releases its actor before publishing bounded metr
     try std.testing.expectEqual(if (core.enabled) @as(u64, 1) else 0, fixture.metrics.media_resets);
 }
 
+test "a read held for a graphics command resumes when its media turn finishes" {
+    var fixture: EventFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = fixture.pane;
+    pane.queueMediaOutput("\x1b_Ga=T;AAAA");
+    _ = pane.beginMediaProcessing().?;
+    pane.output_held = true;
+    _ = try fixture.request.runtime.update(.{ .pane_media = .{ .pane = pane.key(), .stats = .{} } });
+    try std.testing.expect(!pane.output_held);
+    try std.testing.expect(pane.output_pending);
+}
+
+test "a held read that cannot be scheduled stays held and leaks no actor" {
+    var fixture: EventFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = fixture.pane;
+    pane.queueMediaOutput("\x1b_Ga=T;AAAA");
+    _ = pane.beginMediaProcessing().?;
+    pane.output_held = true;
+    try std.testing.expect(pane.pty_responses.push("queued"));
+    fixture.failScheduling();
+    try std.testing.expectError(error.ConcurrencyUnavailable, fixture.request.runtime.update(.{ .pane_media = .{ .pane = pane.key(), .stats = .{} } }));
+    // The read was tried first; a later media turn can retry it.
+    try std.testing.expect(pane.output_held);
+    try std.testing.expect(!pane.output_pending);
+    try std.testing.expectEqual(@as(u8, 0), pane.actor_count);
+}
+
 test {
     _ = @import("observation_events_test.zig");
     _ = @import("agent_events_test.zig");

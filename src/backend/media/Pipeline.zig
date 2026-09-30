@@ -116,7 +116,10 @@ pub fn queueOutput(self: *Pipeline, bytes: []const u8) void {
 pub fn holdsRead(self: *const Pipeline, read_len: usize) bool {
     const worker = self.worker orelse return false;
     const batch = &self.batches[self.active];
-    if (batch.len + read_len <= media.batch_bytes and batch.event_count < media.batch_events) {
+    // Room for the read and for the resize that may arrive before it; the
+    // batch folds consecutive resizes into one event.
+    const reserved_events = 2;
+    if (batch.len + read_len <= media.batch_bytes and batch.event_count + reserved_events <= media.batch_events) {
         return false;
     }
 

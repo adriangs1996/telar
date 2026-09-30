@@ -98,6 +98,12 @@ pub fn finishMedia(model: *RuntimeModel, completion: MediaCompletion) !void {
     };
 
     pane.completeMediaProcessing();
+    // A read held for a graphics command resumes first, while the actor is
+    // idle and cannot hold it again: nothing that fails below can leave the
+    // pane without a read. The flush that ends this update starts the next
+    // turn, after `synchronize` read the idle storage; if it cannot, that
+    // read falls back to the queue's drop-and-reset policy.
+    const resumed = pane_output.resumeRead(model, pane);
     recordMediaMetrics(model, completion.stats);
     attachment_namespace.enforceGraphicsQuotas(model.io, pane);
     pane.refreshGraphicsProjection();
@@ -107,14 +113,9 @@ pub fn finishMedia(model: *RuntimeModel, completion: MediaCompletion) !void {
         model.metrics.graphics_transfers_staged +|= projection.staged;
     }
 
-    try pane_input.startResponseWrite(model, pane);
-
-    // A read held for a graphics command resumes once the full batch is on
-    // its way to the actor.
-    if (pane.output_held) {
-        try startMedia(model, pane);
-        try pane_output.resumeRead(model, pane);
-    }
+    const response = pane_input.startResponseWrite(model, pane);
+    try resumed;
+    try response;
 }
 
 /// Invalidates reset projections first, then freezes at most one transfer per
