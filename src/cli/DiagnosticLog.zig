@@ -2,7 +2,9 @@ const DiagnosticsOptions = @import("arguments/DiagnosticsOptions.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const Log = @This();
-pub const max_tail_bytes = 64 * 1024;
+/// The newest bytes of a log read: the runtime rotates its log past 1 MiB,
+/// so this holds all of it and `--lines 10000` of ordinary lines.
+pub const max_tail_bytes = 1024 * 1024;
 name: []const u8,
 component: DiagnosticsOptions.Component,
 pid: u32,

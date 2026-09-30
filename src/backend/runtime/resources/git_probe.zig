@@ -5,11 +5,14 @@
 //! for the branch and cleanliness, and the completion updates the aggregate
 //! and the workspace-list revision.
 
+const core = @import("telar-core");
 const gitstatus = @import("gitstatus");
 const Job = @import("Job.zig");
 const Completion = @import("Completion.zig");
 
 pub const probe_interval_ms: i64 = 5_000;
+/// `git status` past this leaves a tree's changes unknown.
+pub const status_timeout_limit = core.Limit.declare("gitstatus.status_timeout", "milliseconds", gitstatus.probe.status_timeout_ms);
 
 /// Runs on a worker: never touches runtime state.
 ///
@@ -25,5 +28,11 @@ pub fn probe(job: Job) Completion {
     @memcpy(completion.branch[0..completion.branch_len], status.branch[0..completion.branch_len]);
     // Unknown when Git failed; the workspace keeps what it showed before.
     completion.dirty = status.dirty;
+    if (status.timed_out) {
+        completion.limit = .{
+            .limit = status_timeout_limit,
+        };
+    }
+
     return completion;
 }
