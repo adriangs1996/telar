@@ -20,6 +20,9 @@ const agent_process = @import("../process/process.zig");
 const agent_sound = @import("agent_sound.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
 const sound = @import("../agent/sound.zig");
+const providers = @import("../agent/providers/providers.zig");
+const hook_integration = @import("../agent/hook_integration.zig");
+const agent_hooks = @import("agent_hooks.zig");
 
 /// Starts the pane's single observation actor when it may run.
 ///
@@ -80,6 +83,7 @@ pub fn finish(model: *RuntimeModel, completion: ObservationCompletion) !void {
     reconcileScreen(model, pane, completion.stats, transition.shell_foreground);
 
     agent_description.start(model);
+    agent_hooks.answerParked(model, completion.pane);
     try start(model, pane);
 }
 
@@ -88,13 +92,40 @@ fn observe(work: ObservationWork) ObservationCompletion {
     defer path.restore();
 
     var stats: HistoryStats = .{};
-    const process_probe = agent_process.probe(.{
+    var process_probe = agent_process.probe(.{
         .process_group_id = work.pane.session.foregroundProcessGroup(),
         .previous = work.process_cache,
         .manifests = work.pane.manifests,
     });
+    if (process_probe.inspected) {
+        process_probe.cache.hooks_installed = hooksInstalled(process_probe.cache);
+    }
+
     work.pane.processHistoryObservation(.{ .size = work.current_size, .provider = process_probe.cache.provider }, &stats);
     return .{ .pane = work.pane.key(), .stats = stats, .process_probe = process_probe };
+}
+
+// Only a session that may run on a shared server needs to know: the card
+// suggests how to start it only to someone who installed telar's hooks.
+fn hooksInstalled(cache: Cache) bool {
+    if (cache.session_host != .shared_server) {
+        return false;
+    }
+
+    const settings = providers.of(cache.provider).hook_settings orelse return false;
+    const override = if (settings.environment()) |name| environmentValue(name) else null;
+    return hook_integration.installed(settings, override, environmentValue("HOME"));
+}
+
+/// Longest environment variable name a hook setting names.
+const max_variable_name_bytes = 64;
+
+// The runtime's own environment, which a worker only reads.
+fn environmentValue(name: []const u8) ?[]const u8 {
+    var name_buffer: [max_variable_name_bytes]u8 = undefined;
+    const terminated = std.fmt.bufPrintZ(&name_buffer, "{s}", .{name}) catch return null;
+    const value = std.c.getenv(terminated) orelse return null;
+    return std.mem.span(value);
 }
 
 fn recordProcessMetrics(model: *RuntimeModel, probe: Probe) void {
@@ -117,11 +148,17 @@ fn reconcileProcess(model: *RuntimeModel, pane: *Pane, probe: Probe, transition:
         return;
     }
 
+    // A reporter refused for the previous process may be the new one.
+    pane.rejected_reporter = null;
+
     if (probe.cache.provider != .unknown) {
         _ = agent_status.observeProcess(model, .{
             .identity = agent_identity.fromPane(pane),
             .provider = probe.cache.provider,
             .process_id = probe.cache.process_group_id.?,
+            .session_host = probe.cache.session_host,
+            .hooks_installed = probe.cache.hooks_installed,
+            .agent_pid = probe.cache.agent_pid,
             .observed_at_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
         });
         return;

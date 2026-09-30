@@ -359,6 +359,7 @@ pub fn reportAgent(self: *Session, pane: PaneRef, report: AgentReport) !void {
         .request_id = self.requestId(),
         .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
+        .provider = report.provider,
         .state = report.state,
         .blocked_reason = report.blocked_reason,
         .event = report.event,
@@ -404,16 +405,18 @@ pub fn reportAgentCommand(self: *Session, pane: PaneRef, command: AgentCommandRe
 }
 
 /// Sends the name the agent's own session carries; empty clears it.
+/// `provider` names the agent whose hook reports, `unknown` the user.
 ///
 /// ```zig
-/// try session.reportAgentTitle(pane, "Fix proxy");
+/// try session.reportAgentTitle(pane, .claude, "Fix proxy");
 /// ```
-pub fn reportAgentTitle(self: *Session, pane: PaneRef, title: []const u8) !void {
+pub fn reportAgentTitle(self: *Session, pane: PaneRef, provider: core.AgentProvider, title: []const u8) !void {
     var send_buffer: [core.max_agent_session_title_bytes + 64]u8 = undefined;
     try self.connection.send(self.io, try core.encodeReportAgentTitle(&send_buffer, .{
         .request_id = self.requestId(),
         .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
+        .provider = provider,
         .title = title,
     }));
 
@@ -542,6 +545,27 @@ pub fn interruptAgent(self: *Session, pane: PaneRef) !void {
         .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
     });
+    return switch (response) {
+        .request_completed => {},
+        .request_failed => |failure| self.refuse(failure),
+        else => error.UnexpectedRuntimeResponse,
+    };
+}
+
+/// Has the runtime confirm that this process runs inside `pane`: it reads
+/// the process from the socket and walks its parents. Once confirmed, this
+/// connection may report for the pane in the name of an agent.
+///
+/// ```zig
+/// try session.verifyDescent(pane);
+/// ```
+pub fn verifyDescent(self: *Session, pane: PaneRef) !void {
+    const response = try self.exchange(core.encodeVerifyPaneDescent, core.VerifyPaneDescent{
+        .request_id = .none,
+        .pane_id = try core.pane(pane.pane_id),
+        .pane_generation = pane.pane_generation,
+    });
+
     return switch (response) {
         .request_completed => {},
         .request_failed => |failure| self.refuse(failure),

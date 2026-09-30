@@ -5,6 +5,8 @@ const SessionFile = @import("SessionFile.zig");
 const ReportObservation = @This();
 
 identity: Identity,
+/// The agent whose hook reported; `unknown` for a report the user sent.
+provider: core.AgentProvider = .unknown,
 state: core.AgentReportState,
 /// Why the agent is blocked, when the hook names it; `none` otherwise.
 blocked_reason: core.AgentBlockedReason = .none,

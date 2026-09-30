@@ -72,23 +72,27 @@ pub const max_resume_command_bytes = 32 + core.max_agent_session_reference_bytes
 /// the restored pane's shell. Only the built-in capability table
 /// (`agent.providers`) can produce a command, and only for a reference shaped
 /// like a UUID, so a stored reference can never smuggle options or shell
-/// syntax.
+/// syntax. A session that ran in the pane (`in_pane`) resumes with the
+/// agent's `pane_session_argument` too.
 ///
 /// ```zig
-/// const line = resumeCommand(&buffer, .claude, session) orelse return;
+/// const line = resumeCommand(&buffer, .codex, session, true) orelse return;
 /// ```
-pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: core.AgentProvider, session: []const u8) ?[]const u8 {
+pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: core.AgentProvider, session: []const u8, in_pane: bool) ?[]const u8 {
     const reference = SessionReference.init(session, 0) catch return null;
     _ = ResumeSession.init(provider, reference) catch return null;
-    const template = providers.of(provider).resume_prefix orelse return null;
-    const len = template.len + session.len + 1;
-    if (len > buffer.len) {
-        return null;
-    }
-    @memcpy(buffer[0..template.len], template);
-    @memcpy(buffer[template.len .. template.len + session.len], session);
-    buffer[len - 1] = '\r';
-    return buffer[0..len];
+    const capabilities = providers.of(provider);
+    const template = capabilities.resume_prefix orelse return null;
+    const argument = if (in_pane) capabilities.pane_session_argument orelse "" else "";
+    var writer = std.Io.Writer.fixed(buffer);
+    writer.print("{s}{s}{s}{s}\r", .{
+        template,
+        argument,
+        if (argument.len != 0) " " else "",
+        session,
+    }) catch return null;
+
+    return writer.buffered();
 }
 
 /// Rebuilds fixed resume argv only when the original executable is the same
@@ -107,6 +111,13 @@ pub fn directResumeArguments(encoder: *bytecodec.Encoder, executable: []const u8
     while (words.next()) |word| {
         try encoder.writeSized16(word);
         count += 1;
+    }
+
+    if (session.in_pane) {
+        if (providers.of(session.provider).pane_session_argument) |argument| {
+            try encoder.writeSized16(argument);
+            count += 1;
+        }
     }
 
     try encoder.writeSized16(session.reference.slice());
@@ -398,7 +409,7 @@ fn restorePane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !vo
     if (resumable) |session| {
         if (direct_count == null) {
             var command_buffer: [max_resume_command_bytes]u8 = undefined;
-            const command = resumeCommand(&command_buffer, session.provider, session.reference.slice()).?;
+            const command = resumeCommand(&command_buffer, session.provider, session.reference.slice(), session.in_pane).?;
             try pane_input.sendRestored(model, pane, command);
         }
 
@@ -419,7 +430,8 @@ fn resumeForPane(model: *RuntimeModel, record: PaneRecord) ?ResumeSession {
     }
 
     const reference = SessionReference.init(record.agent_session, 0) catch return null;
-    const session = ResumeSession.init(@enumFromInt(record.agent_provider), reference) catch return null;
+    var session = ResumeSession.init(@enumFromInt(record.agent_provider), reference) catch return null;
+    session.in_pane = record.agent_in_pane;
     if (agent_status.hasRestoredSession(model, session)) {
         return null;
     }
@@ -534,6 +546,7 @@ pub fn encode(model: *RuntimeModel, buffer: []u8) !usize {
             .agent_session = if (resumable) |session| session.reference.slice() else "",
             .agent_title = if (title) |value| value.slice() else "",
             .agent_title_source = if (title) |value| @intFromEnum(value.source) else 0,
+            .agent_in_pane = if (resumable) |session| session.in_pane else false,
         });
     }
 
@@ -580,17 +593,43 @@ test "resume commands exist only for built-in providers and references in their 
     var buffer: [max_resume_command_bytes]u8 = undefined;
     const session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000";
 
-    try std.testing.expectEqualStrings("claude --resume " ++ session ++ "\r", resumeCommand(&buffer, .claude, session).?);
-    try std.testing.expectEqualStrings("codex resume " ++ session ++ "\r", resumeCommand(&buffer, .codex, session).?);
-    try std.testing.expectEqualStrings("pi --session " ++ session ++ "\r", resumeCommand(&buffer, .pi, session).?);
-    try std.testing.expectEqualStrings("cursor-agent --resume " ++ session ++ "\r", resumeCommand(&buffer, .cursor, session).?);
+    try std.testing.expectEqualStrings("claude --resume " ++ session ++ "\r", resumeCommand(&buffer, .claude, session, false).?);
+    try std.testing.expectEqualStrings("codex resume " ++ session ++ "\r", resumeCommand(&buffer, .codex, session, false).?);
+    try std.testing.expectEqualStrings("codex resume --no-daemon " ++ session ++ "\r", resumeCommand(&buffer, .codex, session, true).?);
+    try std.testing.expectEqualStrings("claude --resume " ++ session ++ "\r", resumeCommand(&buffer, .claude, session, true).?);
+    try std.testing.expectEqualStrings("pi --session " ++ session ++ "\r", resumeCommand(&buffer, .pi, session, false).?);
+    try std.testing.expectEqualStrings("cursor-agent --resume " ++ session ++ "\r", resumeCommand(&buffer, .cursor, session, false).?);
     const opencode_session = "ses_f212d4cc3ffeR3t3CA08EwN5Ap";
-    try std.testing.expectEqualStrings("opencode --session " ++ opencode_session ++ "\r", resumeCommand(&buffer, .opencode, opencode_session).?);
-    try std.testing.expect(resumeCommand(&buffer, .opencode, session) == null);
-    try std.testing.expect(resumeCommand(&buffer, .claude, opencode_session) == null);
-    try std.testing.expect(resumeCommand(&buffer, @enumFromInt(core.first_custom_agent_provider), session) == null);
-    try std.testing.expect(resumeCommand(&buffer, .claude, "not-a-uuid") == null);
-    try std.testing.expect(resumeCommand(&buffer, .claude, "0192aaaa-bbbb-cccc-dddd-eeeeffff000g") == null);
+    try std.testing.expectEqualStrings("opencode --session " ++ opencode_session ++ "\r", resumeCommand(&buffer, .opencode, opencode_session, false).?);
+    try std.testing.expect(resumeCommand(&buffer, .opencode, session, false) == null);
+    try std.testing.expect(resumeCommand(&buffer, .claude, opencode_session, false) == null);
+    try std.testing.expect(resumeCommand(&buffer, @enumFromInt(core.first_custom_agent_provider), session, false) == null);
+    try std.testing.expect(resumeCommand(&buffer, .claude, "not-a-uuid", false) == null);
+    try std.testing.expect(resumeCommand(&buffer, .claude, "0192aaaa-bbbb-cccc-dddd-eeeeffff000g", false) == null);
+}
+
+test "a pane that launched Codex itself resumes it with a fixed argv in the mode its session ran" {
+    var buffer: [256]u8 = undefined;
+    const reference = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 0);
+    var session = try ResumeSession.init(.codex, reference);
+
+    var shared = bytecodec.Encoder.init(&buffer);
+    try std.testing.expectEqual(@as(?u16, 3), try directResumeArguments(&shared, "/opt/bin/codex", session));
+    var shared_words = bytecodec.Decoder.init(shared.finish());
+    for ([_][]const u8{ "/opt/bin/codex", "resume", reference.slice() }) |expected| {
+        try std.testing.expectEqualStrings(expected, try shared_words.readSized16());
+    }
+
+    session.in_pane = true;
+    var in_pane = bytecodec.Encoder.init(&buffer);
+    try std.testing.expectEqual(@as(?u16, 4), try directResumeArguments(&in_pane, "/opt/bin/codex", session));
+    var in_pane_words = bytecodec.Decoder.init(in_pane.finish());
+    for ([_][]const u8{ "/opt/bin/codex", "resume", "--no-daemon", reference.slice() }) |expected| {
+        try std.testing.expectEqualStrings(expected, try in_pane_words.readSized16());
+    }
+
+    var other = bytecodec.Encoder.init(&buffer);
+    try std.testing.expect(try directResumeArguments(&other, "/bin/zsh", session) == null);
 }
 
 test "checkpoint state debounces, coalesces and retries after failure" {

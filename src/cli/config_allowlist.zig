@@ -9,17 +9,17 @@
 const std = @import("std");
 const values = @import("arguments/values.zig");
 const ConfigEntry = @import("ConfigEntry.zig");
-const ConfigRoot = @import("ConfigRoot.zig");
+const core = @import("telar-core");
 
 pub const Agent = values.HookAgent;
 
-pub fn rootFor(agent: Agent) ConfigRoot {
+pub fn rootFor(agent: Agent) core.AgentConfigRoot {
     return switch (agent) {
-        .claude => .{ .environment = "CLAUDE_CONFIG_DIR", .directory = ".claude" },
-        .codex => .{ .environment = "CODEX_HOME", .directory = ".codex" },
-        .pi => .{ .environment = "PI_CODING_AGENT_DIR", .directory = ".pi/agent" },
-        .opencode => .{ .environment = "XDG_CONFIG_HOME", .environment_suffix = "/opencode", .directory = ".config/opencode" },
-        .cursor => .{ .environment = "CURSOR_CONFIG_DIR", .directory = ".cursor" },
+        .claude => core.AgentConfigRoot.claude,
+        .codex => core.AgentConfigRoot.codex,
+        .pi => core.AgentConfigRoot.pi,
+        .opencode => core.AgentConfigRoot.opencode,
+        .cursor => core.AgentConfigRoot.cursor,
     };
 }
 

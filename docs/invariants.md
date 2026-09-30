@@ -113,6 +113,12 @@ analytics.
   graphics state. A slow client never delays PTYs, other clients or
   persistence; when it falls behind, drop intermediate patches and send a
   bounded snapshot.
+- Clients that connect together negotiate independently, each in its own
+  bounded admission slot, and a handshake in flight counts against client
+  capacity. A connection that finds no slot is closed alone; the
+  maintenance tick, once a second, interrupts a handshake that has run for
+  two seconds, so none holds its slot past three and a client that never
+  finishes cannot hold admission.
 - Every wire frame has a checked byte limit before allocation or decoding.
 - The handshake accepts one exact schema fingerprint. Change it whenever an
   encoding changes.
@@ -152,7 +158,11 @@ analytics.
   exception breaks this rule: the **interrupted draft** below, where a screen
   reading decides one key press.
 - Process detection starts from `tcgetpgrp` or an equivalent constant-cost
-  signal and inspects processes only after a relevant change.
+  signal and inspects processes only after a relevant change. A hook of
+  another agent reporting from inside the pane counts as one: it may mean
+  the agent replaced itself. The answer is kept per pane for the process
+  nested under the pane's agent, which is refused without another
+  inspection while it lives.
 - Detection and Git status run in observation workers, never in a request,
   render or input handler.
 - Git the runtime runs on its own goes through `gitstatus.untrusted_git`: a
@@ -161,9 +171,19 @@ analytics.
   runtime's environment points it at another repository. Files beside a
   checkout are read only when they are regular files, opened without
   blocking.
+- An inherited environment variable does not identify a process. A process
+  that left its pane, such as a shared server started there, keeps
+  `TELAR_PANE_ID`. A report that names its agent is accepted only on a
+  connection whose peer process, read from the socket, the runtime found to
+  descend from the pane, walking its parents in an observation worker; and
+  only for the agent the pane runs. Before identification, the first agent to
+  report holds the pane, and a process of another agent discards what it
+  reported. This separates agents, not users: a same-user process can still
+  start a process inside a pane.
 - Persist typed session references, never resume commands. Restore validates
   an official allowlist and rebuilds a fixed argv; reject malformed,
-  option-looking, duplicated, stale or wrong-owner references.
+  option-looking, duplicated, stale or wrong-owner references. A reference
+  resumes only with the agent that reported it.
 - The runtime decides audible transitions; only clients touch host audio.
 
 ## History and proxy

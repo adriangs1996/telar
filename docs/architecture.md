@@ -225,9 +225,10 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `vtscan` | byte-at-a-time scanners for OSC strings, typed input and Kitty graphics framing |
 | `sqlite` | the one SQLite binding, statement helpers, additive migrations, FTS5 quoting |
 | `imaging` | PNG through Wuffs with limits checked first, ICO frames, box-filter and bilinear resampling |
+| `proclineage` | the chain of parent processes above one process, read from the kernel |
 | `hostmetrics` | cpu, memory and battery of the host; nothing is kept between samples |
 | `gitstatus` | a working tree's branch and whether it has changes, the linked worktree a directory belongs to, and a worktree's diffstat and commits ahead of its base, with Git run so no program a repository's config names ever runs |
-| `localsocket` | same-user Unix sockets and length-prefixed framing |
+| `localsocket` | same-user Unix sockets, the process at the other end and length-prefixed framing |
 | `bytecodec` | bounds-checked little-endian encoding into caller buffers and decoding from borrowed bytes |
 | `urlscan` | classifying a URI by scheme, finding the URI or the local file path under an offset in a line, and the line and column a link points at |
 | `keyinput` | keys, characters, modifiers and mouse events as values, chord parsing, binding order, bounded bindings and physical-key leases |

@@ -62,7 +62,17 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 122;
+const corpus_len = 124;
+
+const failure_codes = std.enums.values(types.FailureCode);
+const failure_code_listing = listing: {
+    var text: []const u8 = "";
+    for (failure_codes) |code| {
+        text = text ++ std.fmt.comptimePrint("{s}={d} ", .{ @tagName(code), @intFromEnum(code) });
+    }
+
+    break :listing text;
+};
 const corpus_storage_size = 12 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -455,6 +465,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
+            .provider = .codex,
             .state = .blocked,
             .session = "abc",
             .blocked_reason = .permission,
@@ -521,6 +532,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
+            .provider = .claude,
             .title = "Fix proxy",
         }),
     ));
@@ -650,6 +662,16 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(5),
             .code = .pane_not_found,
             .message = "pane 12 does not exist",
+        }),
+    ));
+    // Failure codes travel as numbers in any request_failed, so this entry
+    // lists every one with its number: adding, renaming or renumbering a
+    // code changes the fingerprint.
+    helper.addTailTolerant(.{ .name = "request_failed_codes", .direction = .server, .golden_hex = golden.request_failed_codes }, helper.commit(
+        try runtime.encodeRequestFailed(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .code = failure_codes[failure_codes.len - 1],
+            .message = failure_code_listing,
         }),
     ));
     helper.add(.{ .name = "runtime_stopping", .direction = .server, .golden_hex = golden.runtime_stopping }, helper.commit(
@@ -1169,11 +1191,19 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .pane_generation = 3,
         }),
     ));
+    helper.add(.{ .name = "verify_pane_descent", .direction = .client, .golden_hex = golden.verify_pane_descent }, helper.commit(
+        try agent_module.encodeVerifyPaneDescent(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+        }),
+    ));
     helper.add(.{ .name = "report_agent_progress", .direction = .client, .golden_hex = golden.report_agent_progress }, helper.commit(
         try agent_module.encodeReportAgentProgress(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
+            .provider = .claude,
             .cwd = "/work/telar-worktrees/fix/src",
             .work_tree_path = "/work/telar-worktrees/fix",
             .work_tree_branch = "fix",
@@ -2302,6 +2332,35 @@ test "agent snapshot attention fields are bounded and tied to the blocked status
     const reason_offset = std.mem.indexOf(u8, valid, "marker").? - 3;
     buffer[reason_offset] = 9;
     try std.testing.expectError(error.InvalidAgentBlockedReason, root.decodeServer(valid));
+}
+
+test "hook reports name their agent and descent requests name one pane generation" {
+    var buffer: [512]u8 = undefined;
+    const report = try agent_module.encodeReportAgent(&buffer, .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+        .provider = .codex,
+        .state = .working,
+    });
+    try std.testing.expectEqual(types.AgentProvider.codex, (try root.decodeClient(report)).report_agent.provider);
+
+    const title = try agent_module.encodeReportAgentTitle(&buffer, .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+        .provider = .claude,
+        .title = "Fix proxy",
+    });
+    try std.testing.expectEqual(types.AgentProvider.claude, (try root.decodeClient(title)).report_agent_title.provider);
+
+    const descent = try agent_module.encodeVerifyPaneDescent(&buffer, .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+    });
+    try std.testing.expectEqual(@as(u64, 3), (try root.decodeClient(descent)).verify_pane_descent.pane_generation);
+    try std.testing.expectError(error.Truncated, root.decodeClient(descent[0 .. descent.len - 1]));
 }
 
 test "agent reports carry a bounded event and a reason only while blocked" {

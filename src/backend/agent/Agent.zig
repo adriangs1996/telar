@@ -10,6 +10,7 @@ const Evidence = @import("Evidence.zig");
 const Title = @import("Title.zig");
 const SessionReference = @import("SessionReference.zig");
 const Identity = @import("Identity.zig");
+const SessionHost = @import("SessionHost.zig").SessionHost;
 const ProcessObservation = @import("ProcessObservation.zig");
 const providers = @import("providers/providers.zig");
 const ReportObservation = @import("ReportObservation.zig");
@@ -39,6 +40,11 @@ pub const DescriptionJobResult = union(enum) {
     started: Job,
 };
 
+/// How long the screen must show a session working, with telar's hooks
+/// installed and none of them reaching the pane, before the card suggests
+/// how to start it: a turn's first hook arrives well within it.
+const unreported_work_grace_ms: i64 = 5_000;
+
 pub const TitlePhase = enum {
     waiting_query,
     waiting_work,
@@ -50,7 +56,11 @@ pub const TitlePhase = enum {
 
 key: PaneKey,
 process_id: u32,
-agent_process_id: ?u32 = null,
+/// The foreground process group process evidence named.
+agent_process_group: ?u32 = null,
+/// The agent's own process inside that group, when the probe found which
+/// member it is.
+agent_pid: ?u32 = null,
 session_id: [16]u8,
 authority: core.AgentAuthority = .candidate,
 process: ?Evidence = null,
@@ -82,6 +92,25 @@ interrupt_idle_at_ms: ?i64 = null,
 /// When the runtime last pressed a key for the pending interrupt.
 interrupt_pressed_at_ms: i64 = 0,
 session_reference: ?SessionReference = null,
+/// The agent `session_reference` belongs to; restore resumes it only with
+/// that agent.
+session_provider: core.AgentProvider = .unknown,
+/// The agent whose hooks reported before process evidence named the pane's
+/// agent. It claims the pane until then; process evidence of another agent
+/// discards what it reported, because its hooks never ran in this pane.
+reporter: core.AgentProvider = .unknown,
+/// Where the process's interactive session, and so its hooks, runs; a
+/// restore resumes it the same way.
+session_host: SessionHost = .unknown,
+/// A hook report of this process reached the pane, which proves its hooks
+/// run inside it whatever its arguments say.
+hooks_seen: bool = false,
+/// telar's hooks for this agent are installed, so their silence means
+/// something.
+hooks_installed: bool = false,
+/// Since when the screen has shown this process working without a break
+/// while none of its hooks had reached the pane.
+unreported_work_at_ms: ?i64 = null,
 /// The tracked worktree the agent reported working in.
 work_tree: core.WorktreeId = .invalid,
 progress: Progress = .{},
@@ -149,9 +178,29 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
 
     const replaced_process = self.process != null;
 
+    if (!replaced_process and self.reporter != .unknown and self.reporter != observation.provider) {
+        self.forgetReports();
+    }
+
+    self.reporter = .unknown;
+
+    if (self.session_reference != null and self.session_provider == .unknown) {
+        self.session_provider = observation.provider;
+    }
+
     if (self.process) |evidence| {
-        if (evidence.provider == observation.provider and self.agent_process_id == observation.process_id) {
-            return false;
+        if (evidence.provider == observation.provider and self.agent_process_group == observation.process_id) {
+            const changed = self.session_host != observation.session_host or self.hooks_installed != observation.hooks_installed;
+            self.session_host = observation.session_host;
+            self.hooks_installed = observation.hooks_installed;
+            self.agent_pid = observation.agent_pid;
+            return changed;
+        }
+
+        // Another agent took the pane: what the previous one reported does
+        // not belong to it.
+        if (evidence.provider != observation.provider) {
+            self.forgetReports();
         }
 
         self.screen = null;
@@ -159,7 +208,15 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
         self.work = null;
     }
 
-    self.agent_process_id = observation.process_id;
+    if (replaced_process) {
+        self.hooks_seen = false;
+        self.unreported_work_at_ms = null;
+    }
+
+    self.agent_process_group = observation.process_id;
+    self.agent_pid = observation.agent_pid;
+    self.session_host = observation.session_host;
+    self.hooks_installed = observation.hooks_installed;
     self.process = Evidence.fromProcess(&observation);
     self.authority = if (replaced_process) .active else switch (self.authority) {
         .candidate, .stale, .exited => .active,
@@ -167,6 +224,30 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
     };
 
     return true;
+}
+
+/// Whether hooks of `provider` may report for this pane: the pane's agent,
+/// or the first agent to report before any process was identified. A report
+/// that names no agent is the user's own and always may.
+///
+/// ```zig
+/// if (!agent.acceptsReporter(.codex)) return error.ForeignProcess;
+/// ```
+pub fn acceptsReporter(self: *const Agent, reporter: core.AgentProvider) bool {
+    const running = if (self.process) |evidence| evidence.provider else self.reporter;
+    return reporter == .unknown or running == .unknown or running == reporter;
+}
+
+/// Records which agent's hooks report while no process evidence names the
+/// pane's agent yet, so that evidence can refute it later.
+///
+/// ```zig
+/// agent.claimReporter(observation.provider);
+/// ```
+pub fn claimReporter(self: *Agent, reporter: core.AgentProvider) void {
+    if (self.process == null and reporter != .unknown) {
+        self.reporter = reporter;
+    }
 }
 
 /// Applies one official lifecycle report. `exited` withdraws the report so
@@ -182,6 +263,22 @@ pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
 /// }
 /// ```
 pub fn applyReport(self: *Agent, observation: ReportObservation) bool {
+    if (observation.provider != .unknown) {
+        self.hooks_seen = true;
+    }
+
+    // A report that waited for its pane to be identified again keeps the
+    // time it arrived, and never replaces one that arrived after it.
+    if (self.report) |current| {
+        if (observation.observed_at_ns) |arrived| {
+            if (current.observed_at_ns) |current_arrived| {
+                if (arrived < current_arrived) {
+                    return false;
+                }
+            }
+        }
+    }
+
     if (observation.state == .continuing) {
         const report = if (self.report) |*value| value else return false;
         if (!report.isWorking() or self.report_detail.state == .settling or report.isExpired(observation.observed_at_ms)) {
@@ -227,7 +324,8 @@ pub fn applyReport(self: *Agent, observation: ReportObservation) bool {
         }
     }
 
-    self.report = Evidence.fromReport(self.provider(), &observation);
+    const reported_provider = if (self.provider() != .unknown) self.provider() else observation.provider;
+    self.report = Evidence.fromReport(reported_provider, &observation);
     if (observation.state == .working or observation.state == .waiting) {
         self.work = self.report;
     }
@@ -315,6 +413,12 @@ pub fn applyScreen(self: *Agent, observation: ScreenObservation) bool {
     }
 
     self.screen = Evidence.fromScreen(known_provider, &observation);
+    // Only work that lasts counts: any other screen starts it over.
+    if (signal.status != .working) {
+        self.unreported_work_at_ms = null;
+    } else if (!self.hooks_seen and self.unreported_work_at_ms == null) {
+        self.unreported_work_at_ms = observation.observed_at_ms;
+    }
 
     if (signal.status == .blocked) {
         self.authority = .obscured;
@@ -397,7 +501,7 @@ pub fn reproject(self: *Agent, context: ProjectionContext) ProjectionResult {
     self.projected = .{
         .pane_id = self.key.id,
         .pane_generation = self.key.generation,
-        .process_id = self.agent_process_id orelse self.process_id,
+        .process_id = self.agent_process_group orelse self.process_id,
         .session_id = self.session_id,
         .provider = provider_value,
         .status = self.visibleStatus(previous.status, evidence.status),
@@ -415,7 +519,7 @@ pub fn reproject(self: *Agent, context: ProjectionContext) ProjectionResult {
     }
 
     const title_changed = self.advanceTitle(evidence.status, context.can_queue_description);
-    const event_changed = self.refreshEvent(evidence);
+    const event_changed = self.refreshEvent(evidence, context.now_ms);
 
     if (sameProjection(previous, self.projected)) {
         self.projected.sequence = previous.sequence;
@@ -470,21 +574,41 @@ pub fn projectedStatus(self: *const Agent) core.AgentStatus {
     return self.projected.status;
 }
 
-/// Stores the agent's own session reference. A later report replaces an
-/// earlier one; an identical report changes nothing.
+/// Stores the agent's own session reference and the agent it belongs to;
+/// `unknown` attributes it to the pane's agent, now or once identified. A
+/// later report replaces an earlier one; an identical report changes nothing.
 ///
 /// ```zig
-/// if (agent.applySessionReference(reference)) persist();
+/// if (agent.applySessionReference(reference, .codex)) persist();
 /// ```
-pub fn applySessionReference(self: *Agent, reference: SessionReference) bool {
+pub fn applySessionReference(self: *Agent, reference: SessionReference, owner: core.AgentProvider) bool {
+    const attributed = if (owner != .unknown) owner else if (self.process) |evidence| evidence.provider else self.reporter;
+
     if (self.session_reference) |existing| {
-        if (std.mem.eql(u8, existing.slice(), reference.slice())) {
+        if (std.mem.eql(u8, existing.slice(), reference.slice()) and self.session_provider == attributed) {
             return false;
         }
     }
 
     self.session_reference = reference;
+    self.session_provider = attributed;
     return true;
+}
+
+/// The session a restore may resume: the reference, when it belongs to the
+/// agent whose process runs in the pane.
+///
+/// ```zig
+/// const reference = agent.resumableSession() orelse return null;
+/// ```
+pub fn resumableSession(self: *const Agent) ?SessionReference {
+    const process = self.process orelse return null;
+    const reference = self.session_reference orelse return null;
+    if (self.session_provider != process.provider) {
+        return null;
+    }
+
+    return reference;
 }
 
 /// Marks an unseen completion as seen. The caller reprojects so `done`
@@ -717,10 +841,19 @@ fn blockedReason(self: *const Agent, evidence: Evidence) core.AgentBlockedReason
     return .other;
 }
 
-// The event line follows the report that decides the projection; any other
-// evidence carries no line. Returns whether the shown line changed.
-fn refreshEvent(self: *Agent, evidence: Evidence) bool {
-    const next: EventLine = if (evidence.source == .lifecycle_report) self.report_detail.event else .{};
+// The event line follows the report that decides the projection. Other
+// evidence carries no line, unless telar's hooks are installed, an
+// interactive session was started without the argument that keeps them in
+// the pane, and the screen showed it working for a while without any of
+// them reaching the pane: the line says how to start it so they can.
+// Returns whether the shown line changed.
+fn refreshEvent(self: *Agent, evidence: Evidence, now_ms: i64) bool {
+    const next: EventLine = if (evidence.source == .lifecycle_report)
+        self.report_detail.event
+    else if (self.hooksMissing(now_ms))
+        sharedServerLine(evidence.provider)
+    else
+        .{};
     if (self.event.eql(&next)) {
         return false;
     }
@@ -779,6 +912,39 @@ fn settleInterrupt(self: *Agent, now_ms: i64) void {
 fn awaitsHelpers(self: *const Agent, now_ms: i64) bool {
     const report = self.report orelse return false;
     return self.report_detail.state == .waiting and !report.isExpired(now_ms);
+}
+
+fn hooksMissing(self: *const Agent, now_ms: i64) bool {
+    if (self.session_host != .shared_server or !self.hooks_installed or self.hooks_seen) {
+        return false;
+    }
+
+    const since = self.unreported_work_at_ms orelse return false;
+    return now_ms - since >= unreported_work_grace_ms;
+}
+
+fn sharedServerLine(agent_provider: core.AgentProvider) EventLine {
+    const argument = providers.of(agent_provider).pane_session_argument orelse return .{};
+    var buffer: [core.max_agent_last_event_bytes]u8 = undefined;
+    const line = std.fmt.bufPrint(&buffer, "no hooks from this pane: if it runs on a shared server, start it with {s}", .{argument}) catch return .{};
+    return EventLine.init(line);
+}
+
+// Drops what another agent's hooks reported for this pane: its lifecycle
+// report, session, title and progress.
+fn forgetReports(self: *Agent) void {
+    self.report = null;
+    self.report_detail = .{};
+    self.work = null;
+    self.session_reference = null;
+    self.session_provider = .unknown;
+    self.hooks_seen = false;
+    self.unreported_work_at_ms = null;
+    self.work_tree = .invalid;
+    self.progress = .{};
+    if (self.title.source == .agent) {
+        self.title = .{};
+    }
 }
 
 fn provider(self: *const Agent) core.AgentProvider {

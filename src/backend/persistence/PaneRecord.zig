@@ -17,3 +17,6 @@ agent_session: []const u8 = "",
 /// keeping. `agent_title_source` is the `AgentTitleSource` that made it.
 agent_title: []const u8 = "",
 agent_title_source: u8 = 0,
+/// The agent kept its session in its own process, started with its
+/// `pane_session_argument`, so the resume adds that argument.
+agent_in_pane: bool = false,

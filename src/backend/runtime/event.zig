@@ -15,6 +15,8 @@ const ObservationCompletion = @import("events/ObservationCompletion.zig");
 const MediaCompletion = @import("events/MediaCompletion.zig");
 const ExitCompletion = @import("events/ExitCompletion.zig");
 const Wake = @import("events/Wake.zig");
+const DescentCompletion = @import("events/DescentCompletion.zig");
+const HandshakeCompletion = @import("events/HandshakeCompletion.zig");
 const Half = owned.Half;
 const Result = @import("../plugins/Result.zig");
 const AgentResult = @import("../agent/Result.zig");
@@ -33,7 +35,7 @@ const PathQuery = @import("../paths/PathQuery.zig");
 
 pub const Event = union(enum) {
     accepted: anyerror!localsocket.SocketChannel,
-    handshaken: anyerror!void,
+    handshaken: HandshakeCompletion,
     client_message: ClientMessage,
     client_sent: ClientSent,
     cell_publication_due: anyerror!void,
@@ -46,6 +48,7 @@ pub const Event = union(enum) {
     pane_media: MediaCompletion,
     pane_exit: ExitCompletion,
     pane_search: Wake,
+    pane_descent: DescentCompletion,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     proxy_capture: anyerror!*Half,
@@ -106,6 +109,7 @@ pub fn discard(completed: Event, io: std.Io) void {
         .pane_media,
         .pane_exit,
         .pane_search,
+        .pane_descent,
         .telemetry_tick,
         .telemetry_written,
         .agent_tick,
@@ -145,6 +149,7 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) core.Path {
         => .interactive,
         .pane_media => .media,
         .pane_search,
+        .pane_descent,
         .pane_observed,
         .history_response,
         .proxy_capture,

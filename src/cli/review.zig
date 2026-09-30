@@ -75,6 +75,12 @@ fn execute(session: *Session, options: Options, context: Context) !void {
         command.session = current.session;
     }
 
+    // Feedback goes to the agent only through a connection confirmed inside
+    // its pane; elsewhere the runtime refuses it.
+    if (options.action == .feedback or options.action == .ack) {
+        session.verifyDescent(pane) catch {};
+    }
+
     const result = try session.commandReview(command);
     if (options.action == .feedback) {
         try writeFeedback(context.writer, &result, options.json);

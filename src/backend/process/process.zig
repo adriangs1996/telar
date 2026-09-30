@@ -11,6 +11,8 @@ const Identification = @import("Identification.zig");
 const std = @import("std");
 const Cache = @import("Cache.zig");
 const darwin = @import("darwin.zig");
+const providers = @import("../agent/providers/providers.zig");
+const SessionHost = @import("../agent/SessionHost.zig").SessionHost;
 
 const Native = if (builtin.os.tag == .macos) darwin else void;
 
@@ -29,23 +31,29 @@ pub fn probe(input: ProbeInput) Probe {
     return probeWith(input, identifyProcessGroup);
 }
 
-fn probeWith(input: ProbeInput, comptime identify: fn (*const core.Table, u32) Identification) Probe {
+fn probeWith(input: ProbeInput, comptime identify: fn (*const core.Table, u32, core.AgentProvider) Identification) Probe {
     const process_group_id = input.process_group_id;
     const previous = input.previous;
 
     const native_pgid = process_group_id orelse return .{ .cache = previous };
     const pgid = std.math.cast(u32, native_pgid) orelse return .{ .cache = previous };
 
-    if (previous.process_group_id == pgid and
+    if (!previous.recheck and previous.process_group_id == pgid and
         (previous.provider != .unknown or previous.attempts >= max_acquisition_attempts))
     {
         return .{ .cache = previous };
     }
 
-    const identification = identify(input.manifests, pgid);
+    // A recheck keeps the agent already identified while it still runs in
+    // the group, even when another one, such as a tool it started, runs
+    // there too.
+    const prefer = if (previous.process_group_id == pgid) previous.provider else .unknown;
+    const identification = identify(input.manifests, pgid, prefer);
     var next: Cache = .{
         .process_group_id = pgid,
         .provider = identification.provider,
+        .session_host = identification.session_host,
+        .agent_pid = identification.pid,
         .attempts = if (identification.provider == .unknown)
             if (previous.process_group_id == pgid)
                 previous.attempts +| 1
@@ -72,18 +80,55 @@ pub fn shellForeground(cache: Cache, shell_pid: std.c.pid_t) bool {
 fn sameIdentity(left: Cache, right: Cache) bool {
     return left.process_group_id == right.process_group_id and
         left.provider == right.provider and
+        left.session_host == right.session_host and
+        left.agent_pid == right.agent_pid and
         std.mem.eql(u8, left.name(), right.name());
 }
 
-fn identifyProcessGroup(table: *const core.Table, process_group_id: u32) Identification {
+fn identifyProcessGroup(table: *const core.Table, process_group_id: u32, prefer: core.AgentProvider) Identification {
     return switch (builtin.os.tag) {
-        .macos => identifyMacosProcessGroup(table, process_group_id),
-        .linux => identifyLinuxProcessGroup(table, process_group_id),
+        .macos => identifyMacosProcessGroup(table, process_group_id, prefer),
+        .linux => identifyLinuxProcessGroup(table, process_group_id, prefer),
         else => .{},
     };
 }
 
-fn identifyMacosProcessGroup(table: *const core.Table, process_group_id: u32) Identification {
+// Chooses the agent a process group runs among its members other than the
+// leader: the agent identified before while it still runs there, else the
+// first agent found, else the first named process.
+const GroupChoice = struct {
+    prefer: core.AgentProvider,
+    chosen: ?Identification = null,
+    fallback: Identification = .{},
+
+    // Offers one member; true once the choice cannot change.
+    fn offer(self: *GroupChoice, candidate: Identification) bool {
+        if (candidate.provider == .unknown) {
+            if (self.fallback.name_len == 0 and candidate.name_len != 0) {
+                self.fallback = candidate;
+            }
+
+            return false;
+        }
+
+        if (self.prefer == .unknown or candidate.provider == self.prefer) {
+            self.chosen = candidate;
+            return true;
+        }
+
+        if (self.chosen == null) {
+            self.chosen = candidate;
+        }
+
+        return false;
+    }
+
+    fn result(self: *const GroupChoice) Identification {
+        return self.chosen orelse self.fallback;
+    }
+};
+
+fn identifyMacosProcessGroup(table: *const core.Table, process_group_id: u32, prefer: core.AgentProvider) Identification {
     if (comptime builtin.os.tag != .macos) {
         return .{};
     }
@@ -112,21 +157,22 @@ fn identifyMacosProcessGroup(table: *const core.Table, process_group_id: u32) Id
     if (leader.provider != .unknown) {
         return leader;
     }
-    var fallback = leader;
+    var choice: GroupChoice = .{
+        .prefer = prefer,
+        .fallback = leader,
+    };
     for (pids[0..count]) |pid| {
         const candidate = std.math.cast(u32, pid) orelse continue;
         if (candidate == process_group_id) {
             continue;
         }
-        const identified = identifyMacosProcess(table, candidate);
-        if (identified.provider != .unknown) {
-            return identified;
-        }
-        if (fallback.name_len == 0 and identified.name_len != 0) {
-            fallback = identified;
+
+        if (choice.offer(identifyMacosProcess(table, candidate))) {
+            break;
         }
     }
-    return fallback;
+
+    return choice.result();
 }
 
 fn identifyMacosProcess(table: *const core.Table, pid: u32) Identification {
@@ -154,7 +200,9 @@ fn identifyMacosProcess(table: *const core.Table, pid: u32) Identification {
     var args_buffer: [max_process_args_bytes]u8 = undefined;
     const argv = readMacosArgv(pid, &args_buffer) orelse &.{};
     const command = comm_bytes[0..comm_end];
-    return .init(table, identifyCommand(table, command, argv), command);
+    var identified = identifyArguments(table, command, argv);
+    identified.pid = pid;
+    return identified;
 }
 
 fn readMacosArgv(pid: u32, buffer: []u8) ?[]const u8 {
@@ -186,7 +234,7 @@ fn readMacosArgv(pid: u32, buffer: []u8) ?[]const u8 {
     return rest[offset..];
 }
 
-fn identifyLinuxProcessGroup(table: *const core.Table, process_group_id: u32) Identification {
+fn identifyLinuxProcessGroup(table: *const core.Table, process_group_id: u32, prefer: core.AgentProvider) Identification {
     if (comptime builtin.os.tag != .linux) {
         return .{};
     }
@@ -195,22 +243,30 @@ fn identifyLinuxProcessGroup(table: *const core.Table, process_group_id: u32) Id
     var index: usize = 0;
     pending[0] = process_group_id;
 
-    var fallback: Identification = .{};
+    var choice: GroupChoice = .{
+        .prefer = prefer,
+    };
+
     while (index < count) : (index += 1) {
         const pid = pending[index];
         if (linuxProcessGroup(pid) != process_group_id) {
             continue;
         }
+
         const identified = identifyLinuxProcess(table, pid);
-        if (identified.provider != .unknown) {
+        // The group leader is the most useful candidate.
+        if (index == 0 and identified.provider != .unknown) {
             return identified;
         }
-        if (fallback.name_len == 0 and identified.name_len != 0) {
-            fallback = identified;
+
+        if (choice.offer(identified)) {
+            break;
         }
+
         appendLinuxChildren(pid, &pending, &count);
     }
-    return fallback;
+
+    return choice.result();
 }
 
 fn identifyLinuxProcess(table: *const core.Table, pid: u32) Identification {
@@ -225,7 +281,9 @@ fn identifyLinuxProcess(table: *const core.Table, pid: u32) Identification {
     const args_path = std.fmt.bufPrint(&path_buffer, "/proc/{d}/cmdline", .{pid}) catch return .{};
     const argv = readSmallFile(args_path, &args_buffer) orelse &.{};
     const command = std.mem.trim(u8, comm, " \r\n\t");
-    return .init(table, identifyCommand(table, command, argv), command);
+    var identified = identifyArguments(table, command, argv);
+    identified.pid = pid;
+    return identified;
 }
 
 fn linuxProcessGroup(pid: u32) ?u32 {
@@ -282,6 +340,39 @@ fn readSmallFile(path: []const u8, buffer: []u8) ?[]const u8 {
 
     const len = std.posix.read(file, buffer) catch return null;
     return buffer[0..len];
+}
+
+fn identifyArguments(table: *const core.Table, command: []const u8, argv: []const u8) Identification {
+    var identification: Identification = .init(table, identifyCommand(table, command, argv), command);
+    identification.session_host = sessionHost(identification.provider, argv);
+    return identification;
+}
+
+// Where an agent that keeps its interactive session in the pane only when
+// started with an argument runs it. A subcommand that runs no interactive
+// session, and arguments not read, claim nothing.
+fn sessionHost(provider: core.AgentProvider, argv: []const u8) SessionHost {
+    const capabilities = providers.of(provider);
+    const argument = capabilities.pane_session_argument orelse return .unknown;
+    if (argv.len == 0) {
+        return .unknown;
+    }
+
+    var host: SessionHost = .shared_server;
+    var args = std.mem.tokenizeScalar(u8, argv, 0);
+    while (args.next()) |arg| {
+        for (capabilities.batch_arguments) |batch| {
+            if (std.mem.eql(u8, arg, batch)) {
+                return .unknown;
+            }
+        }
+
+        if (std.mem.eql(u8, arg, argument)) {
+            host = .pane;
+        }
+    }
+
+    return host;
 }
 
 fn identifyCommand(table: *const core.Table, comm: []const u8, argv: []const u8) core.AgentProvider {
@@ -407,6 +498,70 @@ test "process file reads are bounded and missing files return null" {
     try std.testing.expectEqual(@as(?[]const u8, null), readSmallFile(path, &buffer));
 }
 
+test "only an interactive Codex session started without --no-daemon may run in the shared server" {
+    const table = &core.builtin_table;
+    const Case = struct {
+        argv: []const u8,
+        host: SessionHost,
+    };
+    const cases = [_]Case{
+        .{
+            .argv = "codex\x00",
+            .host = .shared_server,
+        },
+        .{
+            .argv = "codex\x00resume\x00",
+            .host = .shared_server,
+        },
+        .{
+            .argv = "codex\x00fix the tests\x00",
+            .host = .shared_server,
+        },
+        .{
+            .argv = "node\x00/usr/lib/node_modules/@openai/codex/bin/codex.js\x00--yolo\x00",
+            .host = .shared_server,
+        },
+        .{
+            .argv = "codex\x00resume\x00--no-daemon\x00019a0000-0000-7000-8000-00000000000a\x00",
+            .host = .pane,
+        },
+        .{
+            .argv = "codex\x00--no-daemon\x00",
+            .host = .pane,
+        },
+        .{
+            .argv = "codex\x00exec\x00fix the tests\x00",
+            .host = .unknown,
+        },
+        .{
+            .argv = "codex\x00review\x00",
+            .host = .unknown,
+        },
+        .{
+            .argv = "codex\x00login\x00",
+            .host = .unknown,
+        },
+        .{
+            .argv = "codex\x00app-server\x00--listen\x00unix://\x00",
+            .host = .unknown,
+        },
+        .{
+            .argv = "codex\x00--version\x00",
+            .host = .unknown,
+        },
+        .{
+            .argv = "",
+            .host = .unknown,
+        },
+    };
+
+    for (cases) |case| {
+        try std.testing.expectEqual(case.host, identifyArguments(table, "codex", case.argv).session_host);
+    }
+
+    try std.testing.expectEqual(SessionHost.unknown, identifyArguments(table, "claude", "claude\x00").session_host);
+}
+
 test "identifies direct agent executables" {
     try std.testing.expectEqual(core.AgentProvider.claude, identifyCommand(&core.builtin_table, "claude", "claude\x00"));
     try std.testing.expectEqual(core.AgentProvider.claude, identifyCommand(&core.builtin_table, "node", "/usr/bin/node\x00/opt/claude-code/claude-code\x00"));
@@ -437,11 +592,11 @@ test "does not infer an agent from arbitrary runtime arguments" {
 
 test "process acquisition is bounded and cached" {
     const Fake = struct {
-        fn claude(table: *const core.Table, _: u32) Identification {
+        fn claude(table: *const core.Table, _: u32, _: core.AgentProvider) Identification {
             return .init(table, .claude, "claude");
         }
 
-        fn unknown(table: *const core.Table, _: u32) Identification {
+        fn unknown(table: *const core.Table, _: u32, _: core.AgentProvider) Identification {
             return .init(table, .unknown, "node");
         }
     };
@@ -474,6 +629,68 @@ test "process acquisition is bounded and cached" {
     try std.testing.expect(!stable.inspected);
 }
 
+test "a recheck identifies a known process group again, as when an agent execs another" {
+    const Fake = struct {
+        fn claude(table: *const core.Table, _: u32, _: core.AgentProvider) Identification {
+            return .init(table, .claude, "claude");
+        }
+
+        fn codex(table: *const core.Table, _: u32, _: core.AgentProvider) Identification {
+            return .init(table, .codex, "codex");
+        }
+    };
+
+    const identified = probeWith(.{
+        .process_group_id = 20,
+        .previous = .{},
+    }, Fake.claude);
+    var recheck = identified.cache;
+    recheck.recheck = true;
+
+    const replaced = probeWith(.{
+        .process_group_id = 20,
+        .previous = recheck,
+    }, Fake.codex);
+    try std.testing.expect(replaced.inspected);
+    try std.testing.expect(replaced.changed);
+    try std.testing.expectEqual(core.AgentProvider.codex, replaced.cache.provider);
+    try std.testing.expect(!replaced.cache.recheck);
+}
+
+test "a group keeps the agent identified before while it runs there, whatever else runs beside it" {
+    const table = &core.builtin_table;
+    const shell: Identification = .init(table, .unknown, "zsh");
+    const codex: Identification = .init(table, .codex, "codex");
+    const claude: Identification = .init(table, .claude, "claude");
+
+    var kept: GroupChoice = .{
+        .prefer = .claude,
+    };
+    try std.testing.expect(!kept.offer(shell));
+    try std.testing.expect(!kept.offer(codex));
+    try std.testing.expect(kept.offer(claude));
+    try std.testing.expectEqual(core.AgentProvider.claude, kept.result().provider);
+
+    var gone: GroupChoice = .{
+        .prefer = .claude,
+    };
+    _ = gone.offer(shell);
+    _ = gone.offer(codex);
+    try std.testing.expectEqual(core.AgentProvider.codex, gone.result().provider);
+
+    var first: GroupChoice = .{
+        .prefer = .unknown,
+    };
+    try std.testing.expect(first.offer(codex));
+    try std.testing.expectEqual(core.AgentProvider.codex, first.result().provider);
+
+    var none: GroupChoice = .{
+        .prefer = .claude,
+    };
+    _ = none.offer(shell);
+    try std.testing.expectEqualStrings("zsh", none.result().slice());
+}
+
 test "foreground names are bounded application labels" {
     try std.testing.expectEqualStrings("Claude Code", applicationName(&core.builtin_table, .claude, "claude"));
     try std.testing.expectEqualStrings("Pi", applicationName(&core.builtin_table, .pi, "node"));
@@ -483,7 +700,7 @@ test "foreground names are bounded application labels" {
 
 test "direct pane-root agents retain provider evidence instead of becoming shells" {
     const Fake = struct {
-        fn identify(table: *const core.Table, pid: u32) Identification {
+        fn identify(table: *const core.Table, pid: u32, _: core.AgentProvider) Identification {
             const provider: core.AgentProvider = switch (pid) {
                 10 => .claude,
                 11 => .codex,
@@ -492,7 +709,7 @@ test "direct pane-root agents retain provider evidence instead of becoming shell
             return .init(table, provider, "node");
         }
 
-        fn unexpected(_: *const core.Table, _: u32) Identification {
+        fn unexpected(_: *const core.Table, _: u32, _: core.AgentProvider) Identification {
             unreachable;
         }
     };
@@ -512,11 +729,11 @@ test "direct pane-root agents retain provider evidence instead of becoming shell
 
 test "pane-root acquisition can recognize an agent after exec in the same process group" {
     const Fake = struct {
-        fn starting(table: *const core.Table, _: u32) Identification {
+        fn starting(table: *const core.Table, _: u32, _: core.AgentProvider) Identification {
             return .init(table, .unknown, "node");
         }
 
-        fn ready(table: *const core.Table, _: u32) Identification {
+        fn ready(table: *const core.Table, _: u32, _: core.AgentProvider) Identification {
             return .init(table, .codex, "codex");
         }
     };

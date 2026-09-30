@@ -125,6 +125,8 @@ test {
     _ = @import("runtime/attachment/cell.zig");
     _ = @import("runtime/attachment/selection.zig");
     _ = @import("runtime/tests/client_events_test.zig");
+    _ = @import("runtime/client/GenericHandshakes.zig");
+    _ = @import("agent/hook_integration.zig");
     _ = @import("runtime/tests/teardown_test.zig");
     _ = @import("runtime/client/request_role.zig");
     _ = @import("runtime/client/session_support.zig");

@@ -11,13 +11,18 @@ session: *Session,
 options: AgentOptions,
 output: ExecutionContext,
 
-/// Reports even before a current pane has an observed agent. Example: `try reports.run();`
+/// Reports even before a current pane has an observed agent. A report run
+/// inside its pane has its descent confirmed first, which a report naming
+/// an agent needs; elsewhere it names none and is taken as the user's word.
+/// Example: `try reports.run();`
 pub fn run(self: *AgentReports) !void {
     const pane = try self.resolve();
+    self.session.verifyDescent(pane) catch {};
+
     switch (self.options.action) {
         .report_command => try self.session.reportAgentCommand(pane, self.options.command_report.?),
         .report_state => try self.session.reportAgent(pane, self.options.report.?),
-        .report_title => try self.session.reportAgentTitle(pane, std.mem.span(self.options.text.?)),
+        .report_title => try self.session.reportAgentTitle(pane, .unknown, std.mem.span(self.options.text.?)),
         else => return error.InvalidAgentReport,
     }
 

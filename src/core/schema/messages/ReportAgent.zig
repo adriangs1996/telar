@@ -8,6 +8,8 @@ const ReportAgent = @This();
 request_id: id.RequestId,
 pane_id: id.PaneId,
 pane_generation: u64,
+/// The agent whose hook reports; a pane running another agent refuses it.
+provider: types.AgentProvider = .unknown,
 state: types.AgentReportState,
 session: []const u8 = "",
 session_file: []const u8 = "",

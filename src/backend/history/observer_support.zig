@@ -401,3 +401,40 @@ const Output = struct {
     shell_foreground: ?bool,
     clock: Clock,
 };
+
+test "a probe seals an empty batch but never one a worker still holds" {
+    var observer: Observer = undefined;
+    const size: core.TerminalSize = .{
+        .cols = 40,
+        .rows = 8,
+        .cell_width_px = 0,
+        .cell_height_px = 0,
+    };
+    try observer.init(.{
+        .io = std.testing.io,
+        .gpa = std.testing.allocator,
+        .cwd = "/work",
+        .size = size,
+    });
+    defer observer.deinit();
+
+    const Collector = struct {
+        pub fn emit(_: *@This(), _: Command) void {}
+    };
+    var collector: Collector = .{};
+
+    try std.testing.expect(!observer.seal());
+    try std.testing.expect(observer.sealForProbe());
+    try std.testing.expect(!observer.sealForProbe());
+    var stats: Stats = .{};
+    observer.processSealed(.{
+        .cwd = null,
+        .current_size = size,
+        .stats = &stats,
+    }, &collector);
+    observer.finishSealed();
+
+    try std.testing.expect(stats.agent_observation == null);
+    try std.testing.expect(observer.sealForProbe());
+    observer.finishSealed();
+}

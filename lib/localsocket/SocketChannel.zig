@@ -1,5 +1,6 @@
 const std = @import("std");
 const transport = @import("transport.zig");
+const listen = @import("listen.zig");
 /// Owns a connected raw socket. A channel supports one concurrent reader and
 /// one concurrent writer. It must not be copied after ownership is handed to
 /// another component.
@@ -54,6 +55,16 @@ fn boundReader(self: *SocketChannel, io: std.Io) *std.Io.Reader {
 
     self.reader = self.stream.reader(io, self.read_buffer);
     return &self.reader.?.interface;
+}
+
+/// The process at the other end of the connection, as the kernel reports
+/// it.
+///
+/// ```zig
+/// const pid = try session.connection.peerProcess();
+/// ```
+pub fn peerProcess(self: *const SocketChannel) !u32 {
+    return listen.peerProcess(self.stream.socket.handle);
 }
 
 pub fn isActive(self: *const SocketChannel) bool {

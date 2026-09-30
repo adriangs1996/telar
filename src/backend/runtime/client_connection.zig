@@ -19,9 +19,15 @@ const geometry_lease = @import("geometry_lease.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const handshake = @import("../transport/handshake.zig");
 const request_role = @import("client/request_role.zig");
+const HandshakeCompletion = @import("events/HandshakeCompletion.zig");
+const store_support = @import("client/store_support.zig");
 
-/// Rearms admission and moves an accepted connection into the single
-/// handshake slot when capacity and lifecycle allow it.
+/// Rearms admission and moves an accepted connection into a free handshake
+/// slot when capacity and lifecycle allow it, so clients that connect
+/// together negotiate independently. Handshakes in flight count against
+/// client capacity, so every one that finishes has a place; a connection
+/// that finds no slot or no capacity is closed. `expireHandshakes`
+/// interrupts one that never finishes.
 ///
 /// ```zig
 /// try client_connection.accept(model, result, &resources.listener);
@@ -43,19 +49,21 @@ pub fn accept(model: *RuntimeModel, result: anyerror!localsocket.SocketChannel, 
 
     try sources.acceptClient(listener);
 
-    if (model.client_admission.pendingConnection()) |pending| {
-        pending.shutdown(model.io);
+    if (!model.clients.hasCapacityAfter(model.client_admission.count())) {
         return;
     }
 
-    if (!model.clients.hasCapacity()) {
-        return;
-    }
-
-    model.client_admission.begin(accepted);
+    const now_ms = std.Io.Timestamp.now(model.io, .awake).toMilliseconds();
+    const slot = model.client_admission.begin(accepted, now_ms) orelse return;
     accepted_owned = false;
-    model.select.concurrent(.handshaken, negotiate, .{ model.io, model.client_admission.pendingConnection().? }) catch {
-        var unstarted = model.client_admission.takePending();
+    const negotiation: Negotiation = .{
+        .io = model.io,
+        .slot = slot,
+        .connection = model.client_admission.pendingConnection(slot).?,
+    };
+
+    model.select.concurrent(.handshaken, negotiate, .{negotiation}) catch {
+        var unstarted = model.client_admission.take(slot);
         unstarted.deinit(model.io);
     };
 }
@@ -66,14 +74,14 @@ pub fn accept(model: *RuntimeModel, result: anyerror!localsocket.SocketChannel, 
 /// ```zig
 /// client_connection.finishHandshake(model, result);
 /// ```
-pub fn finishHandshake(model: *RuntimeModel, result: anyerror!void) void {
-    var negotiated = model.client_admission.takePending();
+pub fn finishHandshake(model: *RuntimeModel, completion: HandshakeCompletion) void {
+    var negotiated = model.client_admission.take(completion.slot);
     var connection_owned = true;
     defer if (connection_owned) {
         negotiated.deinit(model.io);
     };
 
-    result catch return;
+    completion.result catch return;
 
     if (model.shutdown.isRequested()) {
         return;
@@ -134,9 +142,27 @@ pub fn receive(model: *RuntimeModel, event: ClientMessage) void {
         return;
     };
 
-    if (!model.shutdown.isRequested()) {
-        startRead(model, session) catch drop(model, event.client);
+    // A parked report borrows the receive buffer; reading resumes once it
+    // is answered.
+    if (session.parked != null) {
+        return;
     }
+
+    resumeRead(model, session);
+}
+
+/// Starts the connection's next read unless one is running or shutdown
+/// has begun.
+///
+/// ```zig
+/// client_connection.resumeRead(model, session);
+/// ```
+pub fn resumeRead(model: *RuntimeModel, session: *Session) void {
+    if (model.shutdown.isRequested() or session.read_pending) {
+        return;
+    }
+
+    startRead(model, session) catch drop(model, session.key);
 }
 
 /// Retires one write. The update's flush starts the session's next one.
@@ -220,11 +246,26 @@ pub fn drop(model: *RuntimeModel, key: ClientKey) void {
 pub fn finalize(model: *RuntimeModel, key: ClientKey) void {
     const session = model.clients.resolve(key) orelse return;
 
-    if (!session.closing or session.read_pending or session.send_pending or session.search_scheduled) {
+    if (!session.closing or session.read_pending or session.send_pending or session.search_scheduled or session.descent_pending) {
         return;
     }
 
     _ = model.clients.remove(.{ .io = model.io, .gpa = model.gpa }, key);
+}
+
+/// Interrupts every handshake unfinished after `handshake_deadline_ms`; its
+/// actor then fails and its completion frees the slot. Runs on the
+/// maintenance tick.
+///
+/// ```zig
+/// client_connection.expireHandshakes(model);
+/// ```
+pub fn expireHandshakes(model: *RuntimeModel) void {
+    const now_ms = std.Io.Timestamp.now(model.io, .awake).toMilliseconds();
+    var from: usize = 0;
+    while (model.client_admission.expired(now_ms, store_support.handshake_deadline_ms, from)) |slot| : (from = slot + 1) {
+        model.client_admission.pendingConnection(slot).?.shutdown(model.io);
+    }
 }
 
 /// Unblocks client actors without releasing the connections they borrow.
@@ -236,17 +277,21 @@ pub fn shutdownAll(model: *RuntimeModel) void {
         }
     }
 
-    if (model.client_admission.pendingConnection()) |pending| {
-        pending.shutdown(model.io);
+    for (0..store_support.max_pending_handshakes) |slot| {
+        if (model.client_admission.pendingConnection(slot)) |pending| {
+            pending.shutdown(model.io);
+        }
     }
 }
 
 /// Releases connection storage after every client actor has joined.
 /// Example: `runtime.loop.cancel(); client_connection.releaseAll(model);`.
 pub fn releaseAll(model: *RuntimeModel) void {
-    if (model.client_admission.isPending()) {
-        var pending = model.client_admission.takePending();
-        pending.deinit(model.io);
+    for (0..store_support.max_pending_handshakes) |slot| {
+        if (model.client_admission.pendingConnection(slot) != null) {
+            var pending = model.client_admission.take(slot);
+            pending.deinit(model.io);
+        }
     }
 
     for (model.clients.items) |slot| {
@@ -254,6 +299,7 @@ pub fn releaseAll(model: *RuntimeModel) void {
             session.read_pending = false;
             session.send_pending = false;
             session.search_scheduled = false;
+            session.descent_pending = false;
         }
     }
 
@@ -274,7 +320,20 @@ fn startRead(model: *RuntimeModel, session: *Session) !void {
     };
 }
 
-fn negotiate(io: std.Io, connection: *localsocket.SocketChannel) anyerror!void {
+const Negotiation = struct {
+    io: std.Io,
+    slot: usize,
+    connection: *localsocket.SocketChannel,
+};
+
+fn negotiate(negotiation: Negotiation) HandshakeCompletion {
+    return .{
+        .slot = negotiation.slot,
+        .result = negotiateSchema(negotiation.io, negotiation.connection),
+    };
+}
+
+fn negotiateSchema(io: std.Io, connection: *localsocket.SocketChannel) anyerror!void {
     const response = try handshake.perform(io, connection);
 
     if (response == .rejected) {

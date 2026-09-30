@@ -11,7 +11,7 @@ every other evidence so a silent hook hands control back.
 ```text
 telar integration install claude|codex|cursor
         |
-~/.claude/settings.json, ~/.codex/hooks.json or ~/.cursor/hooks.json
+~/.claude/settings.json, ~/.codex/hooks.json or ~/.cursor/hooks.json (see core.HookSettings)
         hooks.<owned event> += { type = command, command = "<pane guard>; exec '<telar>' hook <agent>", timeout = bounded }
         (Cursor lists { command, timeout } directly under the event, beside version: 1)
 
@@ -23,6 +23,12 @@ Claude Code, Codex or Cursor Agent fires a hook (sh -c)
 telar hook <agent>   (stdin JSON; TELAR_PANE_ID + TELAR_PANE_GENERATION from the env)
         |
 parse the harness payload once
+        |
+schema.verify_pane_descent -> agent_hooks.receiveDescent
+        -> peer process from the socket -> observation worker walks its parents
+        -> agent_hooks.finishDescent: the pane's root process is among them?
+        |   yes: the connection is bound to the pane (Session.hook_pane)
+        |   no: exit 0, report nothing (a process that left the pane)
         |
         +-> lifecycle mapping -> schema.report_agent
         |                         -> client_request.receive -> agent_hooks.receive
@@ -45,6 +51,12 @@ one (`Session.attach` in `src/cli/Session.zig`). The pane environment outlives t
 that injected it, so an orphaned agent must not resurrect a stopped runtime
 from its hooks. Without a runtime the hook exits 0 and reports nothing.
 
+Every report names the agent whose hook sent it (`provider` on
+`report_agent`, `report_agent_title` and `report_agent_progress`, the
+manifest name on `report_agent_command`), and `agent_status.acceptsReporter`
+refuses one for a pane that runs another agent with `foreign_process`; see
+[pane identity](#pane-identity).
+
 The hook keeps the parsed JSON arena alive until both requests have been sent.
 A lifecycle request updates the agent projection and session reference. A
 title request carries the name the user gave the session inside the agent
@@ -54,6 +66,146 @@ title clears it back to the placeholder. The agent never clears a manual
 title. A command request runs only for a configured shell-tool mapping. `PreToolUse`
 opens a `running` history row keyed by the tool call id; `PostToolUse` updates
 that row in place. A finish without an open row inserts a completed row.
+
+## Pane identity
+
+`TELAR_PANE_ID` names the pane a process was started in; it does not prove
+the process still runs there. A process that leaves the pane keeps the
+variable: a server started from the pane that detaches into a session of its
+own, or anything it starts. Codex's CLI hands every session to one shared
+`codex app-server --managed-daemon` unless it runs with `--no-daemon` (Codex
+0.159). The daemon runs the hooks of every session it serves with the
+environment it inherited from wherever it was started, so its reports once
+named that pane for sessions running in others. Measured on 2026-09-30: the
+daemon's parent was `launchd`, the Codex CLI in the pane held only a socket
+to it, and the tools and MCP servers ran as the daemon's children.
+
+Two checks keep a pane's card to its own agent:
+
+1. **Descent.** Before any report, `telar hook` sends `verify_pane_descent`
+   for the pane its environment names. The runtime asks the kernel for the
+   process at the other end of the connection (`LOCAL_PEERPID` on macOS,
+   `SO_PEERCRED` on Linux; the hook opens the connection itself and shares it
+   with no one) and an observation worker walks that process's
+   parents (`proclineage.ancestors`, at most 32 steps, `proc_pidinfo` or
+   `/proc/<pid>/stat`, no allocation). Only when the pane generation's root
+   process is the peer or one of its parents does the runtime bind that pane
+   to the connection (`Session.hook_pane`) and complete the request; the
+   hook reports nothing otherwise. A report that names its agent is accepted
+   only on a connection bound to its pane, so a process cannot skip the
+   check or vouch for itself. The request handler reads one socket option and
+   starts the worker; one check runs per connection, and a closing
+   connection waits for it.
+2. **Agent.** A report names its agent. A pane whose process was last seen
+   running another agent refuses it before any effect: lifecycle state,
+   session, title, progress (and the external worktree a progress report
+   registers) and command history. The agent may have replaced the previous
+   one without an exit the probe saw, by `exec` or by quitting and starting
+   again between two probes, so the runtime does not refuse at once: it
+   parks the report on its connection (`Session.parked`, reads paused so
+   the report's bytes stay in the receive buffer) and starts an observation
+   of the pane, even without output to replay (`Observer.sealForProbe`),
+   that identifies the foreground process again even if its group did not
+   change (`Cache.recheck`). The report is answered after a recheck that
+   started once it arrived: one already running when it arrives may have
+   read the process before the new agent replaced it, so it waits for the
+   next. It is dispatched again then, accepted if the pane now runs its
+   agent and refused with `foreign_process` otherwise. A report still
+   parked for a later recheck is answered as soon as the pane runs its
+   agent, so the agent's later reports, taken directly, never go before
+   it. Reports are answered in the order they arrived, each with the time
+   it arrived, and a report never replaces one that arrived after it
+   (`Agent.applyReport`), so a late answer neither reorders a turn nor
+   outranks evidence seen while it waited. The maintenance tick, once a second,
+   answers a parked report whose pane is gone or that waited two seconds:
+   the hook waits three seconds at most, its reply included. A parked hook
+   holds one of the runtime's eight client slots meanwhile; the handshake
+   carries only the schema, so the runtime cannot tell a window from a hook
+   when it admits one and reserves no slot for either.
+   A process of another agent nested under the pane's agent, such as `codex
+   exec` run by Claude Code as a tool, is remembered once refused
+   (`Pane.rejected_reporter`: the pane agent's process group, its own
+   process, and the process right under that agent in the hook's parent
+   chain, which the descent check keeps, or right under the pane's root
+   process when the hook does not descend from the agent, as for an agent
+   run in the background), and its later hooks are refused at once, without
+   another identification, while the same agent runs the pane. Only a
+   refusal after a recheck is remembered, not one answered because its
+   recheck was late. The agent's own process is never remembered: it may
+   have replaced itself with the reporting agent by `exec`. A probe that
+   identifies another process forgets the rejection. A recheck keeps the
+   agent it had identified while that agent still runs in the group, even
+   if another agent runs there beside it; the group's leader wins when it
+   is an agent itself. Claude Code runs its tools in process groups of
+   their own (measured on 2.1.285: the tool shell had its own group and no
+   controlling terminal), so a nested agent is not in its group anyway. A hook can fire before the runtime
+   has identified the pane's process, as `SessionStart` can. Until then, the
+   first agent that reports holds the pane (`Agent.reporter`). Process
+   evidence of another agent then discards its report, session, session file
+   watch, agent title and progress, and so does another agent taking a pane
+   whose agent was already identified. A worktree registered or a command
+   recorded in that window stays: it came from a process inside the pane.
+
+A report that names no agent, as `telar agent report-state` and
+`report-title` send, is the user's own and needs no descent. `telar agent`
+reports and Claude Code's `WorktreeCreate` hook ask for descent too; outside
+the pane, a report that names an agent (`report-command`) is refused. The
+runtime also requires a connection confirmed inside the pane to attribute a
+worktree to it (`register_worktree` with `created_by`; `telar worktree
+create` registers without attribution when it cannot confirm), and to take
+the pane's file evidence (`report_change_review_sample`) or hand its agent
+review feedback (`feedback`, `ack_feedback`). These
+checks separate agents, not users: same-user processes are not isolated from
+each other (see [invariants](../invariants.md#local-authority)), and any of
+them can start a process inside a pane.
+
+A session reference also keeps the agent it belongs to, and a restore
+resumes it only with that agent (`Agent.resumableSession`).
+
+With the daemon, no process in the pane runs the hooks, so they reach no
+card. Launch Codex with `--no-daemon` to keep its session in the pane, for
+instance with a shell alias; `codex resume` and `codex fork` accept the flag
+too, and `telar integration install codex` says so after installing. Telar
+installs no wrapper: a directory Telar put first in the pane's `PATH` loses to
+shell configuration that prepends its own, as `mise` and `pnpm` do.
+
+The process probe reads Codex's arguments into a `SessionHost`
+(`Capabilities.pane_session_argument` and `batch_arguments`): `pane` with
+`--no-daemon`, `shared_server` for an interactive session without it (no
+subcommand, `resume` or `fork`), `unknown` for a subcommand that runs no
+interactive session, such as `exec`, `review`, `login` or `app-server`.
+The card says `no hooks from this pane: if it runs on a shared server,
+start it with --no-daemon` only when all of these hold: the session is
+`shared_server`; telar's Codex hooks are installed (the observation worker
+reads the file `telar integration install` writes, `core.HookSettings.codex`,
+for its marker, once per identified process, at most 32 KiB); the screen
+has shown it working for five seconds without a break; and no hook report
+of that process has reached the pane. A turn's first hook arrives well within those seconds, so
+a Codex older than the daemon, or one with the daemon turned off, never
+shows the line. Without the integration the line never shows: there are no
+hooks to miss. A restore resumes the way
+the session ran: `codex resume --no-daemon <id>` only for a `pane` session,
+since a Codex without the flag refuses it, and `codex resume <id>` otherwise.
+
+The same check stops agents whose process is not a descendant of the pane's
+root process, whatever runs them:
+
+- an agent inside tmux, screen, zellij, dtach or abduco running in a telar
+  pane: the multiplexer's server is its parent, and the server left the pane;
+- one started with `setsid` or `nohup ... &` that outlived its shell and was
+  adopted by `launchd` or `init`;
+- one run through `ssh localhost` or `mosh`, whose remote shell descends from
+  the SSH or mosh server, not from the pane;
+- one in a container reached with `docker exec`, `podman exec` or a
+  devcontainer, whose processes descend from the container runtime.
+
+Their hooks reach no card, and the process and screen evidence of the pane
+decide alone.
+
+One case passes both checks: a shared server that stays a descendant of
+any process in one pane, not only of its agent, and runs the hooks of an
+agent of the same kind in another pane. Codex 0.159 detaches its daemon, so
+it does not arise today.
 
 ## Mapping
 
@@ -354,8 +506,9 @@ hooks attach to an existing runtime and never start an orphaned one.
 
 ## Ownership
 
-`telar hook` never fails loudly: outside a pane, with a malformed payload or
-an unreachable runtime it exits 0, so the agent is unaffected. Lifecycle,
+`telar hook` never fails loudly: outside a pane, from a process that left it,
+for a pane that runs another agent, with a malformed payload or an
+unreachable runtime it exits 0, so the agent is unaffected. Lifecycle,
 command and title reports remain bounded; supported file tools add at most
 32 file samples, and cooperative feedback adds one read and acknowledgement.
 
@@ -465,13 +618,30 @@ project directory otherwise.
 
 `telar integration` edits only the event arrays owned by the selected agent,
 adds an entry once per event, rewrites a telar entry whose command is stale
-(an older unguarded form or another executable path), removes only entries
-whose command ends in ` hook claude`, ` hook codex` or ` hook cursor`, and
-rewrites the file
-atomically with
-two-space indentation. Other settings and hooks are untouched. Codex uses
+(an older unguarded form or another executable path), removes only the
+commands that end in ` hook claude`, ` hook codex` or ` hook cursor`,
+leaving the user's hooks in the same group (a group goes only once empty,
+an event once it has no group), and rewrites the file atomically with
+two-space indentation. A settings file that is a symlink is written
+through to the file it names, and an existing file keeps its mode. The
+coordinator skill beside the settings is removed only when it starts with
+telar's header. Other settings and hooks are untouched. Where each
+file lives is `core.HookSettings`, built on the configuration roots
+`telar machine setup` uses too (`core.AgentConfigRoot`). Codex uses
 `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set and `~/.codex/hooks.json`
-otherwise. Codex asks the user to trust the new hook definitions; telar does
+otherwise; Claude Code uses `$CLAUDE_CONFIG_DIR/settings.json` when
+`CLAUDE_CONFIG_DIR` is set, where Claude Code reads its user settings, and
+`~/.claude/settings.json` otherwise. Hooks installed there before telar
+followed `CLAUDE_CONFIG_DIR` stay where Claude Code, run with the
+variable, no longer reads them; a shell without it still does, so
+`uninstall` leaves that file alone. `status` names it and the command that
+cleans it, `telar integration uninstall claude --legacy`, which touches
+only that file. The two paths are compared as the files they resolve to,
+so a trailing slash or a symlink to the same directory names no other
+file.
+The Pi extension goes to `extensions/` under `$PI_CODING_AGENT_DIR`, else
+`~/.pi/agent`, and the OpenCode plugin to `plugins/` under
+`$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`. Codex asks the user to trust the new hook definitions; telar does
 not write Codex's trust state or bypass that check. Cursor always reads user hooks from `~/.cursor/hooks.json`, whatever
 `CURSOR_CONFIG_DIR` says; install adds `"version": 1` when the file lacks it,
 and Cursor's own JSONC comments make the file unreadable to install, which
@@ -504,10 +674,41 @@ for `SessionEnd` and `Interrupt`.
 - `zig build test-integrations`, part of `zig build test`, runs both with
   Node (22.13 or newer, for `module.stripTypeScriptTypes`) along with
   `pi.test.mjs`.
+- `src/cli/integration/hook_identity.test.mjs` drives a built telar in a
+  runtime of its own: two Codex sessions with `--no-daemon` in two panes of
+  one directory report only to their own cards, a server started from one
+  pane that leaves it reaches no card, each rename reaches only its own card
+  and a restart resumes each session in its pane with `--no-daemon`; a Codex
+  without the flag says so on its card, and one whose hooks reach its pane
+  without it shows no line and resumes without the flag.
+- `src/backend/runtime/tests/requests_test.zig` proves that a report naming
+  an agent needs a connection bound to its pane and generation, that a
+  connection confirmed in one pane cannot report for another, that another
+  agent's report is refused with a recheck and accepted once the probe names
+  that agent, that worktree attribution and review evidence need the
+  confirmation too, one descent check per connection, and a descent check
+  through the real peer lookup and worker; that a parked report pauses its
+  connection's reads until answered, waits for a recheck that starts after
+  it, is answered in arrival order with its arrival time, on the tick when
+  its pane is gone or its recheck late, goes with a connection that closes,
+  and is refused for lack of resources when its recheck cannot start; the
+  whole chain through a real observation; and which process a rejection
+  remembers, never the pane's agent; `agent_hooks.zig` proves the
+  parent walk; `agent_status_test.zig` proves the identification window, a
+  pane whose agent is replaced, the resume mode and when the shared-server
+  line shows; `process.zig` proves `SessionHost` and the recheck;
+  `hook_integration.zig` proves the installed-hooks check; `lib/proclineage`
+  and `lib/localsocket` prove the parent chain and the peer process.
+- `src/backend/runtime/tests/client_events_test.zig` proves that a client
+  negotiates while another connection's handshake stalls, that a connection
+  finding every slot taken is closed alone, that the maintenance tick
+  interrupts a handshake past its deadline, and that handshakes in flight
+  count against client capacity.
 - `src/cli/TempFile.zig` proves that installation writes through an
   exclusive owner-only temporary and never through a planted symlink.
 - `src/backend/history/persistence/history_sql.zig` proves that native start/finish
   updates one row and a later plugin observation with the same tool call id is
   deduplicated.
 - `src/core/schema_contract_test.zig` pins the `report_agent`,
-  `report_agent_command` and `report_agent_title` bytes.
+  `report_agent_command`, `report_agent_title` and `verify_pane_descent`
+  bytes.

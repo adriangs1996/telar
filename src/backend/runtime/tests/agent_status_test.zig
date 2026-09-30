@@ -683,20 +683,20 @@ test "an agent title outranks generated titles, never clears a manual one and is
     defer std.testing.allocator.destroy(model);
     const identity = try testIdentity();
 
-    try std.testing.expect(try agent_status.reportTitle(model, identity, "Fix proxy"));
-    try std.testing.expect(!try agent_status.reportTitle(model, identity, "Fix proxy"));
+    try std.testing.expect(try agent_status.reportTitle(model, identity, .unknown, "Fix proxy"));
+    try std.testing.expect(!try agent_status.reportTitle(model, identity, .unknown, "Fix proxy"));
     try std.testing.expectEqual(core.AgentTitleSource.agent, agent_status.durableTitle(model, identity.key).?.source);
     try std.testing.expectEqualStrings("Fix proxy", agent_status.durableTitle(model, identity.key).?.slice());
-    try std.testing.expectError(error.InvalidAgentTitle, agent_status.reportTitle(model, identity, "bad\x1btitle"));
+    try std.testing.expectError(error.InvalidAgentTitle, agent_status.reportTitle(model, identity, .unknown, "bad\x1btitle"));
 
-    try std.testing.expect(try agent_status.reportTitle(model, identity, ""));
+    try std.testing.expect(try agent_status.reportTitle(model, identity, .unknown, ""));
     try std.testing.expect(agent_status.durableTitle(model, identity.key) == null);
-    try std.testing.expect(!try agent_status.reportTitle(model, identity, ""));
+    try std.testing.expect(!try agent_status.reportTitle(model, identity, .unknown, ""));
 
     try std.testing.expect(try agent_status.setManualTitle(model, identity.key, "Release audit"));
-    try std.testing.expect(!try agent_status.reportTitle(model, identity, ""));
+    try std.testing.expect(!try agent_status.reportTitle(model, identity, .unknown, ""));
     try std.testing.expectEqualStrings("Release audit", agent_status.durableTitle(model, identity.key).?.slice());
-    try std.testing.expect(try agent_status.reportTitle(model, identity, "Fix proxy again"));
+    try std.testing.expect(try agent_status.reportTitle(model, identity, .unknown, "Fix proxy again"));
     try std.testing.expectEqual(core.AgentTitleSource.agent, agent_status.durableTitle(model, identity.key).?.source);
 }
 
@@ -1134,3 +1134,330 @@ const TestReadyPrompt = struct {
     provider: core.AgentProvider,
     observed_at_ms: i64,
 };
+
+test "a pane accepts hook reports only from the agent its process runs" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+
+    try std.testing.expect(agent_status.acceptsReporter(model, identity.key, .codex));
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .claude,
+        .process_id = 43,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(agent_status.acceptsReporter(model, identity.key, .claude));
+    try std.testing.expect(agent_status.acceptsReporter(model, identity.key, .unknown));
+    try std.testing.expect(!agent_status.acceptsReporter(model, identity.key, .codex));
+}
+
+test "before its process is identified a pane belongs to the first agent that reports and another process discards it" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    const reference = try SessionReference.init("019a0000-0000-7000-8000-00000000000b", 10);
+
+    try std.testing.expect(agent_status.observeReport(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .state = .working,
+        .event = "» Bash echo leak",
+        .observed_at_ms = 100,
+        .session = reference,
+        .session_file = .{
+            .kind = .codex_state,
+            .path = "/home/me/.codex/state_5.sqlite",
+        },
+    }));
+    try std.testing.expect(try agent_status.reportTitle(model, identity, .codex, "codex task"));
+    try std.testing.expectEqual(@as(usize, 1), model.agent_watches.count());
+    try std.testing.expect(!agent_status.acceptsReporter(model, identity.key, .claude));
+
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .claude,
+        .process_id = 43,
+        .observed_at_ms = 200,
+    }));
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+    const entry = agent_status.snapshot(&model.agents, &entries, 200)[0];
+    try std.testing.expectEqual(core.AgentProvider.claude, entry.provider);
+    try std.testing.expectEqualStrings("", entry.last_event);
+    try std.testing.expect(!std.mem.eql(u8, "codex task", entry.session_title));
+    try std.testing.expect(agent_status.sessionReference(model, identity.key) == null);
+    try std.testing.expect(agent_status.resumeSession(model, identity.key) == null);
+    try std.testing.expectEqual(@as(usize, 0), model.agent_watches.count());
+    try std.testing.expect(agent_status.acceptsReporter(model, identity.key, .claude));
+    try std.testing.expect(!agent_status.acceptsReporter(model, identity.key, .codex));
+}
+
+test "the agent that reported before identification keeps its session once its process is seen" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    const reference = try SessionReference.init("019a0000-0000-7000-8000-00000000000a", 10);
+
+    try std.testing.expect(agent_status.observeReport(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .state = .ready,
+        .observed_at_ms = 100,
+        .session = reference,
+    }));
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 43,
+        .observed_at_ms = 200,
+    }));
+
+    const session = agent_status.resumeSession(model, identity.key).?;
+    try std.testing.expectEqual(core.AgentProvider.codex, session.provider);
+    try std.testing.expectEqualStrings(reference.slice(), session.reference.slice());
+}
+
+test "restore resumes a session only with the agent it belongs to" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    const foreign = try SessionReference.init("019a0000-0000-7000-8000-00000000000b", 10);
+    const own = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 20);
+
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .claude,
+        .process_id = 43,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(agent_status.observeReport(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .state = .ready,
+        .observed_at_ms = 110,
+        .session = foreign,
+    }));
+    try std.testing.expect(agent_status.resumeSession(model, identity.key) == null);
+
+    try std.testing.expect(agent_status.observeSessionReference(model, identity, own));
+    const session = agent_status.resumeSession(model, identity.key).?;
+    try std.testing.expectEqual(core.AgentProvider.claude, session.provider);
+    try std.testing.expectEqualStrings(own.slice(), session.reference.slice());
+}
+
+fn observeCodexWorking(model: *RuntimeModel, identity: Identity, observed_at_ms: i64) bool {
+    return agent_status.observeScreen(model, .{
+        .identity = identity,
+        .signal = .{
+            .provider = .codex,
+            .status = .working,
+            .confidence = 90,
+            .identity_confirmed = true,
+        },
+        .observed_at_ms = observed_at_ms,
+    });
+}
+
+test "a session that may run on a shared server says so once it worked a while and none of its installed hooks reached the pane" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    const note = "no hooks from this pane: if it runs on a shared server, start it with --no-daemon";
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 43,
+        .observed_at_ms = 100,
+        .session_host = .shared_server,
+        .hooks_installed = true,
+    }));
+    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 100)[0].last_event);
+
+    // A turn's first hook arrives well within the grace.
+    try std.testing.expect(observeCodexWorking(model, identity, 1_000));
+    _ = agent_status.expire(model, 5_999);
+    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 5_999)[0].last_event);
+    _ = agent_status.expire(model, 6_000);
+    try std.testing.expectEqualStrings(note, agent_status.snapshot(&model.agents, &entries, 6_000)[0].last_event);
+
+    try std.testing.expect(agent_status.observeReport(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .state = .working,
+        .event = "\u{bb} Bash zig build",
+        .observed_at_ms = 6_100,
+    }));
+    try std.testing.expectEqualStrings("\u{bb} Bash zig build", agent_status.snapshot(&model.agents, &entries, 6_100)[0].last_event);
+
+    // Its hooks reached the pane, so the line does not come back when the
+    // report is withdrawn.
+    try std.testing.expect(agent_status.observeReport(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .state = .exited,
+        .observed_at_ms = 6_200,
+    }));
+    _ = agent_status.expire(model, 20_000);
+    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 20_000)[0].last_event);
+
+    // A new process of the same agent has proved nothing yet.
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 44,
+        .observed_at_ms = 21_000,
+        .session_host = .shared_server,
+        .hooks_installed = true,
+    }));
+    try std.testing.expect(observeCodexWorking(model, identity, 21_100));
+    _ = agent_status.expire(model, 27_000);
+    try std.testing.expectEqualStrings(note, agent_status.snapshot(&model.agents, &entries, 27_000)[0].last_event);
+}
+
+test "a short burst of work does not count as work without hooks" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 43,
+        .observed_at_ms = 100,
+        .session_host = .shared_server,
+        .hooks_installed = true,
+    }));
+    try std.testing.expect(observeCodexWorking(model, identity, 1_000));
+    try std.testing.expect(observeTestReadyPrompt(model, identity, testReadyPrompt(.codex, 2_000)));
+    _ = agent_status.expire(model, 7_000);
+    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 7_000)[0].last_event);
+}
+
+test "without telar's hooks installed the card suggests nothing" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 43,
+        .observed_at_ms = 100,
+        .session_host = .shared_server,
+    }));
+    try std.testing.expect(observeCodexWorking(model, identity, 1_000));
+    _ = agent_status.expire(model, 60_000);
+    try std.testing.expectEqualStrings("", agent_status.snapshot(&model.agents, &entries, 60_000)[0].last_event);
+}
+
+test "a pane whose agent is replaced by another keeps nothing the previous one reported" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    const reference = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 10);
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .claude,
+        .process_id = 43,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(agent_status.observeReport(model, .{
+        .identity = identity,
+        .provider = .claude,
+        .state = .working,
+        .observed_at_ms = 110,
+        .session = reference,
+        .session_file = .{
+            .kind = .claude_transcript,
+            .path = "/home/me/.claude/projects/p/s.jsonl",
+        },
+    }));
+    try std.testing.expect(try agent_status.reportTitle(model, identity, .claude, "claude task"));
+    try std.testing.expectEqual(@as(usize, 1), model.agent_watches.count());
+
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 44,
+        .observed_at_ms = 200,
+    }));
+    const entry = agent_status.snapshot(&model.agents, &entries, 200)[0];
+    try std.testing.expectEqual(core.AgentProvider.codex, entry.provider);
+    try std.testing.expect(!std.mem.eql(u8, "claude task", entry.session_title));
+    try std.testing.expect(agent_status.sessionReference(model, identity.key) == null);
+    try std.testing.expect(agent_status.resumeSession(model, identity.key) == null);
+    try std.testing.expectEqual(@as(usize, 0), model.agent_watches.count());
+
+    // The replaced process's hooks, still running, may no longer report.
+    try std.testing.expect(!agent_status.acceptsReporter(model, identity.key, .claude));
+    try std.testing.expect(agent_status.acceptsReporter(model, identity.key, .codex));
+}
+
+test "restore resumes a session the way it ran" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    const reference = try SessionReference.init("019a0000-0000-7000-8000-00000000000a", 10);
+
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 43,
+        .observed_at_ms = 100,
+        .session_host = .pane,
+    }));
+    try std.testing.expect(agent_status.observeReport(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .state = .ready,
+        .observed_at_ms = 110,
+        .session = reference,
+    }));
+    try std.testing.expect(agent_status.resumeSession(model, identity.key).?.in_pane);
+
+    // The same process seen again with arguments that do not say; the
+    // projection does not change, so nothing is republished.
+    _ = agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 43,
+        .observed_at_ms = 120,
+        .session_host = .unknown,
+    });
+    try std.testing.expect(!agent_status.resumeSession(model, identity.key).?.in_pane);
+}
+
+test "a report that arrived before the one in force does not replace it" {
+    const model = try testModel();
+    defer std.testing.allocator.destroy(model);
+    const identity = try testIdentity();
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
+
+    try std.testing.expect(agent_status.observeProcess(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 43,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(agent_status.observeReport(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .state = .ready,
+        .observed_at_ms = 300,
+        .observed_at_ns = 300,
+    }));
+    try std.testing.expect(!agent_status.observeReport(model, .{
+        .identity = identity,
+        .provider = .codex,
+        .state = .working,
+        .observed_at_ms = 200,
+        .observed_at_ns = 200,
+    }));
+    try std.testing.expect(agent_status.snapshot(&model.agents, &entries, 300)[0].status != .working);
+}

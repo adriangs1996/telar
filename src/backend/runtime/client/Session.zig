@@ -10,6 +10,10 @@ const std = @import("std");
 const PendingClientCommand = @import("PendingClientCommand.zig");
 const Session = @This();
 
+/// Parent processes kept from a descent check: an agent, its launcher and a
+/// few shells between the pane's root process and the hook fit well within.
+pub const max_hook_lineage = 32;
+
 key: ClientKey,
 connection: localsocket.SocketChannel,
 receive_buffer: []u8,
@@ -34,6 +38,37 @@ pending_pane_focus: ?PendingPaneFocus = null,
 terminal_colors: core.TerminalColors = .{},
 pending_search: ?PendingSearch = null,
 search_scheduled: bool = false,
+/// The pane generation the process at the other end of this connection
+/// descends from, as the runtime confirmed. Only then may the connection
+/// report for that pane in the name of an agent.
+hook_pane: ?PaneKey = null,
+/// A worker is walking the peer process's parents for `verify_pane_descent`.
+descent_pending: bool = false,
+/// The confirmed peer's parent processes, nearest first, as the descent
+/// check walked them.
+hook_lineage: [max_hook_lineage]u32 = undefined,
+hook_lineage_len: u8 = 0,
+/// A hook report held while the pane's process is identified again. The
+/// connection reads nothing more until it is answered, so the report's
+/// bytes stay in the receive buffer.
+parked: ?core.ClientMessage = null,
+/// The pane the parked report names and the count of its completed
+/// rechecks that answers it: one started after the report arrived.
+parked_pane: PaneKey = undefined,
+parked_recheck: u32 = 0,
+/// Monotonic arrival, for the deadline.
+parked_at_ms: i64 = 0,
+/// When the report arrived, which it keeps when answered later.
+parked_real_ms: i64 = 0,
+parked_awake_ns: i64 = 0,
+/// Arrival order among parked reports.
+parked_sequence: u64 = 0,
+/// The parked report is being dispatched again; another agent then is the
+/// pane's final answer.
+answering_parked: bool = false,
+/// It is dispatched because its recheck ran, not because it waited too
+/// long, so a refusal is remembered.
+parked_rechecked: bool = false,
 cell_deadline_ns: ?u64 = null,
 
 /// Example: `if (session.setTerminalColors(colors)) { updateOwnedPanes(); }`.

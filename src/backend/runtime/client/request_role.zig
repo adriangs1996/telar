@@ -38,6 +38,7 @@ pub fn classify(tag: Tag) RequestClass {
         .forget_worktree,
         .interrupt_agent,
         .report_agent_progress,
+        .verify_pane_descent,
         => .control,
         else => .ui,
     };

@@ -23,6 +23,16 @@ pub fn hasCapacity(self: *const Store) bool {
     return self.count < self.items.len;
 }
 
+/// Whether one more client fits after `reserved` others, such as
+/// connections still negotiating, have joined.
+///
+/// ```zig
+/// if (!store.hasCapacityAfter(handshakes.count())) return;
+/// ```
+pub fn hasCapacityAfter(self: *const Store, reserved: usize) bool {
+    return self.count + reserved < self.items.len;
+}
+
 /// Creates and retains a session under a fresh identity. The connection
 /// remains caller-owned when creation fails.
 ///

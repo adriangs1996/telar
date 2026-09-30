@@ -172,6 +172,11 @@ const specs = [_]Spec{
         .name = "gitstatus",
     },
     .{
+        .name = "proclineage",
+        .libc = true,
+        .posix = true,
+    },
+    .{
         .name = "hostmetrics",
         .libc = true,
         .macos_frameworks = &.{ "IOKit", "CoreFoundation" },

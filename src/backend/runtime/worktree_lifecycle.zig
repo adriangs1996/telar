@@ -17,7 +17,8 @@ const session_checkpoint = @import("session_checkpoint.zig");
 const tab_creation = @import("tab_creation.zig");
 const tab_removal = @import("tab_removal.zig");
 
-/// Tracks the worktree a CLI created and answers with its identity.
+/// Tracks the worktree a CLI created and answers with its identity. A
+/// worktree attributed to a pane needs the connection confirmed inside it.
 ///
 /// ```zig
 /// try worktree_lifecycle.register(model, session, request);
@@ -25,6 +26,17 @@ const tab_removal = @import("tab_removal.zig");
 pub fn register(model: *RuntimeModel, session: *Session, request: core.RegisterWorktree) !void {
     if (!model.workspaces.containsWorkspace(.{ .workspace = request.source })) {
         return client_request.fail(session, request.request_id, .workspace_not_found, "source workspace not found");
+    }
+
+    // Attributing a worktree to a pane takes a connection confirmed inside it.
+    if (request.created_by) |pane_id| {
+        const verified = session.hook_pane orelse {
+            return client_request.fail(session, request.request_id, .foreign_process, "only a process inside that pane may register for it");
+        };
+
+        if (verified.id != pane_id) {
+            return client_request.fail(session, request.request_id, .foreign_process, "only a process inside that pane may register for it");
+        }
     }
 
     const registered = model.worktrees.register(model.gpa, .{

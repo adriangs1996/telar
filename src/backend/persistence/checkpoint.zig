@@ -22,12 +22,15 @@ pub const magic: *const [8]u8 = "TELARCKP";
 /// Version 2 added pane titles; version 3 permits automatic tab labels.
 /// Version 4 added pane kinds for agent panes; version 5 drops them again.
 /// Version 6 adds worktree records; version 7 adds the machine that
-/// dispatched each worktree.
+/// dispatched each worktree; version 8 records whether an agent kept its
+/// session in the pane.
 /// Older labels remain explicit because their naming intent was not recorded.
-pub const version: u16 = 7;
+pub const version: u16 = 8;
 pub const oldest_readable_version: u16 = 1;
 /// The first version whose worktree records end with `dispatched_from`.
 pub const dispatched_from_version: u16 = 7;
+/// The first version whose pane records end with `agent_in_pane`.
+pub const agent_in_pane_version: u16 = 8;
 pub const max_file_bytes = 4 * 1024 * 1024;
 pub const max_launch_arguments = 32;
 pub const max_launch_bytes = 1024;
@@ -178,6 +181,41 @@ test "checkpoint labels distinguish automatic tabs from explicit former defaults
     try std.testing.expect(try reader.next() == null);
 }
 
+test "an agent that kept its session in the pane is resumed that way, and older files say it did not" {
+    var buffer: [1024]u8 = undefined;
+    var encoder = try Encoder.init(&buffer, .{
+        .next_workspace_id = 2,
+        .next_tab_id = 2,
+        .next_pane_id = 2,
+        .next_pane_generation = 2,
+    });
+    try encoder.pane(.{
+        .pane_id = 1,
+        .workspace_id = 1,
+        .tab_id = 1,
+        .cwd = "/work",
+        .cols = 80,
+        .rows = 24,
+        .arguments = "/bin/sh\x00",
+        .argument_count = 1,
+        .agent_provider = @intFromEnum(core.AgentProvider.codex),
+        .agent_session = "019a0000-0000-7000-8000-00000000000a",
+        .agent_in_pane = true,
+    });
+    const bytes = try encoder.finish();
+
+    var reader = try Reader.init(bytes);
+    try std.testing.expect((try reader.next()).?.pane.agent_in_pane);
+
+    // A version 7 record ends at its title source.
+    var legacy_buffer: [1024]u8 = undefined;
+    @memcpy(legacy_buffer[0 .. bytes.len - 2], bytes[0 .. bytes.len - 2]);
+    legacy_buffer[bytes.len - 2] = bytes[bytes.len - 1];
+    std.mem.writeInt(u16, legacy_buffer[magic.len..][0..2], agent_in_pane_version - 1, .little);
+    var legacy = try Reader.init(legacy_buffer[0 .. bytes.len - 1]);
+    try std.testing.expect(!(try legacy.next()).?.pane.agent_in_pane);
+}
+
 test "version 2 checkpoints retain former default labels as explicit" {
     var buffer: [512]u8 = undefined;
     var encoder = try Encoder.init(&buffer, .{
@@ -290,6 +328,12 @@ test "corrupt, truncated and foreign checkpoints are rejected" {
     try std.testing.expectError(error.UnsupportedCheckpointVersion, Reader.init(flipped[0..bytes.len]));
 }
 
+// A pane record as versions before `agent_in_pane_version` wrote it.
+fn legacyPane(encoder: *Encoder, record: PaneRecord) !void {
+    try encoder.pane(record);
+    encoder.inner.index -= 1;
+}
+
 test "version 4 agent pane records are skipped while terminal records restore" {
     var buffer: [1024]u8 = undefined;
     var encoder = try Encoder.init(&buffer, .{ .next_workspace_id = 2, .next_tab_id = 2, .next_pane_id = 3, .next_pane_generation = 2 });
@@ -306,9 +350,9 @@ test "version 4 agent pane records are skipped while terminal records restore" {
     };
     var agent = terminal;
     agent.pane_id = 1;
-    try encoder.pane(agent);
+    try legacyPane(&encoder, agent);
     try encoder.inner.writeByte(@intFromEnum(LegacyPaneKind.agent));
-    try encoder.pane(terminal);
+    try legacyPane(&encoder, terminal);
     try encoder.inner.writeByte(@intFromEnum(LegacyPaneKind.terminal));
     const bytes = try encoder.finish();
 
@@ -322,7 +366,7 @@ test "version 4 agent pane records are skipped while terminal records restore" {
 test "version 3 pane records restore without a kind byte" {
     var buffer: [512]u8 = undefined;
     var encoder = try Encoder.init(&buffer, .{ .next_workspace_id = 2, .next_tab_id = 2, .next_pane_id = 2, .next_pane_generation = 2 });
-    try encoder.pane(.{
+    try legacyPane(&encoder, .{
         .pane_id = 1,
         .workspace_id = 1,
         .tab_id = 1,

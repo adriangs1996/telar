@@ -160,6 +160,9 @@ pub const FailureCode = enum(u16) {
     agent_not_working = 14,
     /// The agent's manifest declares no interrupt keys.
     interrupt_unsupported = 15,
+    /// The request came from a process that does not descend from the pane
+    /// it names, or reports for an agent the pane does not run.
+    foreign_process = 16,
 };
 
 /// Who asked the runtime to track a worktree: `telar` for worktrees made

@@ -1,4 +1,5 @@
 const vtgrid = @import("vtgrid");
+const RejectedReporter = @import("RejectedReporter.zig");
 const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const revisions = @import("../revisions.zig");
@@ -109,6 +110,17 @@ exit: ?exit_module.Exit = null,
 history_service: *Service,
 history_observer: Observer,
 agent_process_cache: Cache = .{},
+/// The next observation identifies the foreground process again, even if
+/// its group did not change, and runs without output to replay.
+agent_recheck_requested: bool = false,
+/// The running observation carries a requested recheck.
+agent_recheck_running: bool = false,
+/// Rechecks completed, so a report parked for one is answered when it ran.
+agent_rechecks: u32 = 0,
+/// A process a recheck found reporting for another agent than the pane's:
+/// its hooks are refused at once, without identifying the pane again,
+/// while the same agent runs the pane.
+rejected_reporter: ?RejectedReporter = null,
 foreground_revision: u64 = 1,
 progress_state: core.PaneProgressState = .remove,
 progress_percent: ?u8 = null,
@@ -1054,14 +1066,20 @@ pub fn queueHistoryOutput(self: *Pane, observation: ObserverOutputObservation) v
 /// const observation = pane.beginHistoryObservation() orelse return;
 /// ```
 pub fn beginHistoryObservation(self: *Pane) ?HistoryObservationBorrow {
-    if (!self.history_observer.seal()) {
+    const recheck = self.agent_recheck_requested;
+    const sealed = if (recheck) self.history_observer.sealForProbe() else self.history_observer.seal();
+    if (!sealed) {
         return null;
     }
 
     self.actorStarted();
+    var process_cache = self.agent_process_cache;
+    process_cache.recheck = recheck;
+    self.agent_recheck_requested = false;
+    self.agent_recheck_running = recheck;
     return .{
         .current_size = self.size,
-        .process_cache = self.agent_process_cache,
+        .process_cache = process_cache,
     };
 }
 
@@ -1074,6 +1092,11 @@ pub fn beginHistoryObservation(self: *Pane) ?HistoryObservationBorrow {
 pub fn completeHistoryObservation(self: *Pane, process_cache: Cache) HistoryObservationCompletion {
     self.actorFinished();
     self.history_observer.finishSealed();
+
+    if (self.agent_recheck_running) {
+        self.agent_recheck_running = false;
+        self.agent_rechecks +%= 1;
+    }
 
     const cwd_changed = self.updateObservedCwd();
     const previous_process = self.agent_process_cache;
@@ -1098,6 +1121,11 @@ pub fn completeHistoryObservation(self: *Pane, process_cache: Cache) HistoryObse
 pub fn cancelHistoryObservation(self: *Pane) void {
     self.actorFinished();
     self.history_observer.finishSealed();
+
+    if (self.agent_recheck_running) {
+        self.agent_recheck_running = false;
+        self.agent_recheck_requested = true;
+    }
 }
 
 /// Replays the pane's sealed observation batch and records completed

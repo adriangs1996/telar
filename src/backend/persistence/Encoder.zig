@@ -71,6 +71,7 @@ pub fn pane(self: *Encoder, record: PaneRecord) !void {
     try checkpoint.validateTitle(record.agent_title, record.agent_title_source);
     try self.inner.writeSized16(record.agent_title);
     try self.inner.writeByte(record.agent_title_source);
+    try self.inner.writeByte(@intFromBool(record.agent_in_pane));
 }
 
 pub fn worktree(self: *Encoder, record: WorktreeRecord) !void {
