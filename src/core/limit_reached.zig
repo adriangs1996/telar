@@ -22,6 +22,12 @@ pub const report_interval_ms: i64 = std.time.ms_per_s;
 /// `NoSpaceLeft` or `WriteFailed`, the same errors a full disk returns, so
 /// a flow that can overflow one maps that to a named limit error.
 pub const LimitError = error{
+    ExecutionLimitReached,
+    FileTransferLimit,
+    SetupOutputRetentionExceeded,
+    RepositoryDiscoveryLimit,
+    RepositoryBundleLimit,
+    RepositoryGitOutputLimit,
     AgentCapacityExceeded,
     AgentLabelTooLong,
     AgentTitleTooLong,
@@ -210,6 +216,8 @@ pub const SystemError = error{
 /// requires every error named like a limit to be in a set, and each member
 /// here to say why it is not a limit.
 pub const NotLimitError = error{
+    /// Temporary pipe contention/flow control; callers retry without data loss.
+    ExecutionBusy,
     /// A test fixture's own bound, not telar's.
     AckCapacityExceeded,
     /// One command in flight per client by design; the caller answers busy.

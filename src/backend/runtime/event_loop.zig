@@ -1,5 +1,6 @@
 //! Bounded space for every admitted actor to publish while cancellation joins.
 
+const Executions = @import("../execution/Executions.zig");
 const client_store = @import("client/store_support.zig");
 const PaneStore = @import("../pane/PaneStore.zig");
 const event = @import("event.zig");
@@ -22,6 +23,7 @@ pub const event_capacity = capacity: {
 
 fn producerSlots(tag: Tag) usize {
     return switch (tag) {
+        .execution_finished => Executions.capacity,
         .client_message, .client_sent, .pane_search, .pane_descent => client_store.max_clients,
         .pane_input_written,
         .pane_response_written,

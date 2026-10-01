@@ -5,6 +5,7 @@
 //! Git traffic starts here, over telar's managed SSH connection, so no
 //! machine ever needs SSH back to this one.
 
+const repository_prepare = @import("repository_prepare.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -23,7 +24,7 @@ const max_url_bytes = url_scheme.len + core.ssh_destination.max_bytes + std.fs.m
 /// pushed commit is shorter than a branch.
 const max_refspec_bytes = "+refs/heads/:refs/remotes//".len + 2 * workspace_grammar.max_worktree_branch_bytes + core.MachineProfile.max_label_bytes;
 /// Most words a forwarded `worktree create` carries besides the command.
-const max_create_words = 18;
+const max_create_words = 19;
 /// `telar worktree resolve --repository ID --json [--workspace PATH]`.
 const max_resolve_words = 8;
 
@@ -48,21 +49,18 @@ pub fn create(init: std.process.Init, options: WorktreeOptions, profile: core.Ma
     const branch = std.mem.span(options.branch.?);
     var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const root = try localRoot(init, &root_buffer);
-    const clone = try findClone(init, .{
-        .arena = arena,
-        .root = root,
-        .profile = profile,
-        .workspace = options.workspace,
-    });
-
     const continued = worktree_git.branchExists(init, root, branch);
     const source = if (continued) branch else if (options.from) |from| std.mem.span(from) else "HEAD";
     var commit_buffer: [worktree_git.max_commit_bytes]u8 = undefined;
     const commit = try worktree_git.commitOf(init, root, source, &commit_buffer);
-    const left = worktree_git.changedFiles(init, root) catch 0;
-    if (left != 0) {
-        std.debug.print("telar worktree: {d} uncommitted files stay on this machine; only commits travel\n", .{left});
-    }
+    const clone: RemoteClone = .{
+        .profile = profile,
+        .path = (try repository_prepare.prepare(init, .{
+            .action = .prepare,
+            .from = commit,
+            .workspace = options.workspace,
+        }, profile)).path,
+    };
 
     var refspec_buffer: [max_refspec_bytes]u8 = undefined;
     const refspec = try std.fmt.bufPrint(&refspec_buffer, "{s}:refs/heads/{s}", .{ commit, branch });
@@ -267,6 +265,11 @@ fn createArgv(request: CreateWords, words: [][*:0]const u8) []const [*:0]const u
         }
     }
 
+    if (options.setup) {
+        words[len] = "--setup";
+        len += 1;
+    }
+
     if (options.json) {
         words[len] = "--json";
         len += 1;
@@ -319,4 +322,22 @@ test "a forwarded dispatch carries the exact coordinator separately from the mac
     try std.testing.expectEqualStrings("--coordinator", std.mem.span(argv[8]));
     try std.testing.expectEqualStrings(reference, std.mem.span(argv[9]));
     try std.testing.expectError(error.InvalidCoordinatorReference, WorktreeOptions.parse(&.{ "create", "fix", "--coordinator", "bad" }));
+}
+
+test "a forwarded dispatch fits setup and coordinator with the maximum command" {
+    var options = try WorktreeOptions.parse(&.{ "create", "fix", "--title", "Fix tabs", "--label", "Agent", "--setup", "--json" });
+    options.command = @splat("argument");
+    options.command_len = WorktreeOptions.max_command_arguments;
+    var words: [max_create_words + WorktreeOptions.max_command_arguments][*:0]const u8 = undefined;
+    const argv = createArgv(.{
+        .options = &options,
+        .path = "/repo",
+        .dispatched_from = "laptop",
+        .base = "0123abc",
+        .coordinator = "01010101010101010101010101010101:7:9",
+    }, &words);
+    try std.testing.expectEqual(words.len, argv.len);
+    try std.testing.expectEqualStrings("--setup", std.mem.span(argv[max_create_words - 3]));
+    try std.testing.expectEqualStrings("--json", std.mem.span(argv[max_create_words - 2]));
+    try std.testing.expectEqualStrings("--", std.mem.span(argv[max_create_words - 1]));
 }

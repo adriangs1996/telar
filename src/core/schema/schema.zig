@@ -445,3 +445,9 @@ pub const PathMatchIterator = @import("messages/PathMatchIterator.zig");
 const paths_codec = @import("messages/paths.zig");
 pub const encodeFindPaths = paths_codec.encodeFindPaths;
 pub const encodePathResults = paths_codec.encodePathResults;
+
+pub const ExecutionRequest = @import("messages/ExecutionRequest.zig");
+pub const ExecutionReply = @import("messages/ExecutionReply.zig");
+const execution_codec = @import("messages/execution.zig");
+pub const encodeExecutionRequest = execution_codec.encodeExecutionRequest;
+pub const encodeExecutionReply = execution_codec.encodeExecutionReply;

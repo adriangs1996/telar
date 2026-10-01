@@ -1,3 +1,4 @@
+const Executions = @import("../execution/Executions.zig");
 const localsocket = @import("localsocket");
 const pacing = @import("pacing");
 const EngineRuntime = @import("resources/EngineRuntime.zig");
@@ -62,6 +63,8 @@ parked_reports: u64 = 0,
 client_admission: GenericHandshakes(localsocket.SocketChannel, store_support.max_pending_handshakes) = .{},
 shutdown: LifecycleState = .{},
 workspaces: Workspaces = .{},
+executions: Executions = .{},
+administration_workspace: core.WorkspaceId = .invalid,
 worktrees: Worktrees = .{},
 panes: PaneStore,
 attachments: Attachments = .{},
@@ -167,6 +170,12 @@ pub fn init(model: *RuntimeModel, resources: *Resources, select: *std.Io.Select(
 /// joined.
 /// Example: `runtime.loop.cancel(); client_connection.releaseAll(model); model.deinit();`.
 pub fn deinit(model: *RuntimeModel) void {
+    for (model.executions.id, 0..) |id, slot| {
+        if (id != 0) {
+            model.executions.remove(model.gpa, slot);
+        }
+    }
+
     model.attachments.deinit(model.gpa);
     model.panes.deinit();
     model.review_jobs.deinitJoined();

@@ -68,7 +68,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 128;
+const corpus_len = 130;
 
 const failure_codes = std.enums.values(types.FailureCode);
 const failure_code_listing = listing: {
@@ -1650,6 +1650,25 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
 
+    var execution_arguments: [schema.ExecutionRequest.max_arguments][]const u8 = @splat("");
+    execution_arguments[0] = "true";
+    helper.add(.{ .name = "execution_request", .direction = .client, .golden_hex = golden.execution_request }, helper.commit(
+        try schema.encodeExecutionRequest(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .action = .start,
+            .execution_id = 7,
+            .cwd = "/tmp",
+            .argument_count = 1,
+            .arguments = execution_arguments,
+        }),
+    ));
+    helper.add(.{ .name = "execution_reply", .direction = .server, .golden_hex = golden.execution_reply }, helper.commit(
+        try schema.encodeExecutionReply(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .execution_id = 7,
+            .state = .exited,
+        }),
+    ));
     std.debug.assert(index == corpus_len);
     return entries;
 }
@@ -3150,4 +3169,42 @@ test "only raw_enter carries empty text: the Enter key alone" {
         empty.mode = mode;
         try std.testing.expectError(error.InvalidByteString, pane_module.encodeSendPaneText(&storage, empty));
     }
+}
+
+test "execution operations bound argv and preserve binary input and output independently" {
+    var storage: [schema.ExecutionRequest.max_launch_bytes + 8192]u8 = undefined;
+    var request: schema.ExecutionRequest = .{
+        .request_id = @enumFromInt(5),
+        .execution_id = 7,
+        .action = .input,
+        .input_offset = 12,
+        .bytes = "\x00\xff\r\n",
+    };
+    const input = (try schema.decodeClient(try schema.encodeExecutionRequest(&storage, request))).execution_request;
+    try std.testing.expectEqualStrings(request.bytes, input.bytes);
+    try std.testing.expectEqual(@as(u64, 12), input.input_offset);
+    request.bytes = "x" ** (schema.ExecutionRequest.max_chunk + 1);
+    try std.testing.expectError(error.InvalidExecutionRequest, schema.encodeExecutionRequest(&storage, request));
+    request.bytes = "";
+    request.action = .start;
+    request.argument_count = 1;
+    request.arguments[0] = "program\x00suffix";
+    try std.testing.expectError(error.InvalidExecutionArguments, schema.encodeExecutionRequest(&storage, request));
+    request.arguments[0] = "x" ** (schema.ExecutionRequest.max_launch_bytes + 1);
+    try std.testing.expectError(error.InvalidExecutionArguments, schema.encodeExecutionRequest(&storage, request));
+    request.arguments[0] = "program";
+    request.cwd = "relative";
+    try std.testing.expectError(error.InvalidExecutionCwd, schema.encodeExecutionRequest(&storage, request));
+
+    var reply: schema.ExecutionReply = .{
+        .request_id = @enumFromInt(5),
+        .execution_id = 7,
+        .stdout_len = schema.ExecutionRequest.max_chunk,
+        .stderr_len = 3,
+    };
+    @memset(&reply.stdout, 0xff);
+    @memcpy(reply.stderr[0..3], "\x00e\n");
+    const decoded = (try schema.decodeServer(try schema.encodeExecutionReply(&storage, reply))).execution_reply;
+    try std.testing.expectEqualSlices(u8, &reply.stdout, &decoded.stdout);
+    try std.testing.expectEqualStrings("\x00e\n", decoded.stderr[0..decoded.stderr_len]);
 }

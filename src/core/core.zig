@@ -594,3 +594,9 @@ pub const PathMatchIterator = @import("schema/messages/PathMatchIterator.zig");
 const paths_codec = @import("schema/messages/paths.zig");
 pub const encodeFindPaths = paths_codec.encodeFindPaths;
 pub const encodePathResults = paths_codec.encodePathResults;
+
+pub const ExecutionRequest = @import("schema/messages/ExecutionRequest.zig");
+pub const ExecutionReply = @import("schema/messages/ExecutionReply.zig");
+const execution_codec = @import("schema/messages/execution.zig");
+pub const encodeExecutionRequest = execution_codec.encodeExecutionRequest;
+pub const encodeExecutionReply = execution_codec.encodeExecutionReply;

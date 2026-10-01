@@ -84,7 +84,15 @@ pub const text =
     \\         telar pane list [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\         telar pane get <id|--current> [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\       telar pane focus --current --direction left|right|up|down [--json]
-    \\       telar worktree create BRANCH [--title TITLE] [--from BASE] [--directory DIR] [--label L] [--workspace ID] [--machine LABEL] [-- COMMAND...]
+    \\       telar exec [--id N] [--workspace ID] [--cwd ABS] [--detach --json] [--no-stdin] [--timeout SECONDS] [--socket PATH] -- PROGRAM ARGUMENTS...
+    \\       telar exec list [--json] [--socket PATH]
+    \\       telar exec status|cancel|forget ID [--json] [--socket PATH]
+    \\       telar exec output ID [--stdout-offset N] [--stderr-offset N] [--socket PATH]
+    \\       telar repository prepare --machine LABEL [--from REF] [--workspace PATH|ID] [--json]
+    \\       telar project setup --cwd ABS [--detach] [--json]
+    \\       telar file put ABS_PATH --bytes N
+    \\       telar file get ABS_PATH
+    \\       telar worktree create BRANCH [--title TITLE] [--from BASE] [--directory DIR] [--label L] [--workspace ID] [--machine LABEL] [--setup] [-- COMMAND...]
     \\       telar worktree fetch BRANCH --machine LABEL [--json]
     \\       telar worktree resolve --repository IDENTITY [--workspace PATH] [--json]
     \\       telar worktree exec BRANCH|TITLE [--label L] [--wait [--timeout S]] -- COMMAND...

@@ -61,6 +61,17 @@ across calls or messages uses `core.TabId`. A pane's record stays on the heap
 because its cell buffers are large and its address must survive tab moves;
 lookups go through the index, never through the tab.
 
+Runtime-owned raw commands live in `RuntimeModel.executions`, a bounded table
+of IDs, workspace relations, launch identities and results with its own slot
+index. Pipe buffers and child handles belong to joined workers; they do not form
+another process model. `runtime/execution.zig` applies control requests and
+completion events. `administration_workspace` records ownership independently of
+its display name. These commands survive client death and preserve results after
+an empty administration workspace disappears. See [execution](flows/execution.md)
+for stream bounds and lifetime guarantees. Repository preparation and project
+setup use this same execution path and the existing worktree/catalog/history
+flows; the dispatching CLI does not add fleet state to the runtime.
+
 ## Procedures
 
 Behavior is plain functions that take the model, grouped by flow in snake_case

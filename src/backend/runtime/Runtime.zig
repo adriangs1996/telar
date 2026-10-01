@@ -1,3 +1,4 @@
+const execution = @import("execution.zig");
 const core = @import("telar-core");
 const Resources = @import("resources/Resources.zig");
 const Loop = @import("Loop.zig");
@@ -175,6 +176,7 @@ fn dispatch(self: *Runtime, event: runtime_event.Event) !void {
     const model = &self.model;
     switch (event) {
         .stopped => unreachable,
+        .execution_finished => |completion| execution.finish(model, completion),
         .accepted => |result| try client_connection.accept(model, result, &self.resources.listener),
         .handshaken => |completion| client_connection.finishHandshake(model, completion),
         .client_message => |message| client_connection.receive(model, message),

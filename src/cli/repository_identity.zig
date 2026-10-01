@@ -8,7 +8,7 @@ const std = @import("std");
 const scheme_separator = "://";
 const git_suffix = ".git";
 
-/// Reduces a remote URL to `host/path`: the user, the port, a trailing
+/// Reduces a remote URL to `host/path`: the user, a scheme-default port, a trailing
 /// `.git` and slashes are dropped and the host is lowercased. A local path
 /// or a `file://` URL names no project another machine can have.
 ///
@@ -19,7 +19,7 @@ const git_suffix = ".git";
 pub fn normalize(url: []const u8, buffer: []u8) ![]const u8 {
     const trimmed = std.mem.trim(u8, url, " \t\r\n");
     const location = try split(trimmed);
-    const host = hostOf(location.authority);
+    const host = hostOf(location.authority, location.scheme);
     var path = std.mem.trim(u8, location.path, "/");
     if (std.mem.endsWith(u8, path, git_suffix)) {
         path = std.mem.trimEnd(u8, path[0 .. path.len - git_suffix.len], "/");
@@ -43,6 +43,7 @@ pub fn normalize(url: []const u8, buffer: []u8) ![]const u8 {
 }
 
 const Location = struct {
+    scheme: []const u8 = "ssh",
     authority: []const u8,
     path: []const u8,
 };
@@ -59,6 +60,7 @@ fn split(url: []const u8) !Location {
         const rest = url[separator + scheme_separator.len ..];
         const slash = std.mem.indexOfScalar(u8, rest, '/') orelse return error.UnsupportedOrigin;
         return .{
+            .scheme = scheme,
             .authority = rest[0..slash],
             .path = rest[slash..],
         };
@@ -76,16 +78,26 @@ fn split(url: []const u8) !Location {
 }
 
 /// The host of `user@host:port`, or of `[v6]:port`.
-fn hostOf(authority: []const u8) []const u8 {
+fn hostOf(authority: []const u8, scheme: []const u8) []const u8 {
     const at = if (std.mem.lastIndexOfScalar(u8, authority, '@')) |index| index + 1 else 0;
     const host = authority[at..];
-    if (std.mem.startsWith(u8, host, "[")) {
+    const colon = if (std.mem.startsWith(u8, host, "[")) blk: {
         const close = std.mem.indexOfScalar(u8, host, ']') orelse return "";
-        return host[1..close];
+        if (close + 1 == host.len) {
+            return host[1..close];
+        }
+
+        break :blk close + 1;
+    } else std.mem.indexOfScalar(u8, host, ':') orelse return host;
+    const port = host[colon + 1 ..];
+    const default = (std.ascii.eqlIgnoreCase(scheme, "ssh") and std.mem.eql(u8, port, "22")) or
+        (std.ascii.eqlIgnoreCase(scheme, "https") and std.mem.eql(u8, port, "443")) or
+        (std.ascii.eqlIgnoreCase(scheme, "http") and std.mem.eql(u8, port, "80"));
+    if (!default) {
+        return host;
     }
 
-    const colon = std.mem.indexOfScalar(u8, host, ':') orelse return host;
-    return host[0..colon];
+    return if (host[0] == '[') host[1 .. colon - 1] else host[0..colon];
 }
 
 test "the clones of one project agree on their identity whatever the transport" {
@@ -111,4 +123,11 @@ test "local origins name no project another machine can have" {
 
     var small: [8]u8 = undefined;
     try std.testing.expectError(error.OriginTooLong, normalize("git@github.com:o/telar.git", &small));
+}
+
+test "nondefault ports are distinct while scheme defaults match" {
+    var buffer: [256]u8 = undefined;
+    try std.testing.expectEqualStrings("host:2222/team/repo", try normalize("ssh://git@Host:2222/team/repo.git", &buffer));
+    try std.testing.expectEqualStrings("host/team/repo", try normalize("https://token@Host:443/team/repo.git", &buffer));
+    try std.testing.expectEqualStrings("host:8443/team/repo", try normalize("https://Host:8443/team/repo.git", &buffer));
 }

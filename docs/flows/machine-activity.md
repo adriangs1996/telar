@@ -53,7 +53,7 @@ unparented across machines; a machine label cannot identify a coordinator.
 Checkpoint version 10 persists this attribution and reads older checkpoints
 without it. Session identities change when panes are restored after a runtime
 restart, so references to a former session become unmatched rather than
-binding to a reused pane number. The IPC change uses schema 84; the client,
+binding to a reused pane number. The combined fleet IPC uses schema 85; the client,
 CLI and every connected runtime must run the same build.
 
 Validate the real CLI/runtime path with `python3 tools/machine_activity_smoke.py`

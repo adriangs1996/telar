@@ -12,6 +12,8 @@ active: bool = true,
 pub fn listen(io: std.Io, path: []const u8) !LocalListener {
     const address = try local.localAddress(path);
     try local.validateEndpointDirectory(path);
+    const startup = try local.lockEndpoint(io, path);
+    defer startup.close(io);
     try local.reclaimStaleEndpoint(io, path);
     var listener = try address.listen(io, .{});
     errdefer listener.deinit(io);

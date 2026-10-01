@@ -129,7 +129,7 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
         .command_suggestion => |suggested| _ = client.model.suggestion.apply(suggested),
         .pane_text => |text| try agent_peek.receiveScreen(client, text),
         .path_results => |results| try path_picker.receive(client, results),
-        .client_command_result, .client_list, .history_stats_result, .pane_focus_result, .limit_list => return error.UnexpectedControlReply,
+        .client_command_result, .client_list, .history_stats_result, .pane_focus_result, .limit_list, .execution_reply => return error.UnexpectedControlReply,
         .proxy_status => |status| _ = try proxy_status.applyProxyStatus(client, status),
         .agent_snapshot => |snapshot| {
             _ = try agent_snapshot.applyAgentSnapshot(client, snapshot);

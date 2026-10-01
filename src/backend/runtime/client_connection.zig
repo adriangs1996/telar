@@ -2,6 +2,7 @@
 //! written one delivery at a time, and dropped. Each connection keeps at
 //! most one read and one write actor.
 
+const execution = @import("execution.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -262,6 +263,7 @@ pub fn dropUnanswered(model: *RuntimeModel, key: ClientKey, result: anyerror!voi
 /// client_connection.drop(model, session.key);
 /// ```
 pub fn drop(model: *RuntimeModel, key: ClientKey) void {
+    execution.disconnect(model, key);
     const session = model.clients.resolve(key) orelse return;
     if (!session.closing) {
         client_control.abandon(model, key);
