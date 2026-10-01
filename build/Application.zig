@@ -1,16 +1,12 @@
 const std = @import("std");
 const Coverage = @import("Coverage.zig");
 const Modules = @import("Modules.zig");
-const Libraries = @import("Libraries.zig");
-const lua_build = @import("lua.zig");
-const freetype_build = @import("freetype.zig");
+const ModuleGraph = @import("ModuleGraph.zig");
+const BinaryFlags = @import("BinaryFlags.zig");
 const native_libraries = @import("native_libraries.zig");
 /// Its `version` is the one a release publishes; tags must match it.
 const manifest = @import("../build.zig.zon");
 const assets_build = @import("assets.zig");
-const model_build = @import("model.zig");
-const client_build = @import("client.zig");
-const c_flags = @import("c_flags.zig");
 
 modules: Modules,
 coverage: Coverage,
@@ -22,134 +18,20 @@ pub fn init(b: *std.Build) ?@This() {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const coverage = Coverage.init(b);
-
-    // Parsing PTY output is the hottest part of the interactive path. Keep the
-    // application debuggable, but build the third-party emulator as optimized
-    // code just as herdr does; a Debug libghostty-vt makes terminal latency
-    // dominate before telar's own renderer even sees a frame.
-    const vt_optimize: std.builtin.OptimizeMode = if (optimize == .Debug)
-        .ReleaseFast
-    else
-        optimize;
-
-    const ghostty_dep = b.dependency("ghostty_vt", .{
-        .target = target,
-        .optimize = vt_optimize,
-    });
-    const ghostty_vt = ghostty_dep.module("ghostty-vt");
-    const wuffs_dep = ghostty_dep.builder.lazyDependency("wuffs", .{
-        .target = target,
-        .optimize = vt_optimize,
-    }) orelse return null;
-    const wuffs = wuffs_dep.module("wuffs");
-    coverage.excludeCSourceCoverage(b, ghostty_vt);
-    coverage.excludeCSourceCoverage(b, wuffs);
-
-    const lua_api = lua_build.add(b, .{ .target = target, .optimize = optimize, .name = "lua" });
-    coverage.instrumentModule(lua_api);
-    const telar_lua = b.addModule("telar-lua", .{
-        .root_source_file = b.path("src/lua/lua.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    telar_lua.addImport("lua-api", lua_api);
-    coverage.instrumentModule(telar_lua);
-    const tls = b.dependency("tls", .{
-        .target = target,
-        .optimize = optimize,
-    }).module("tls");
     // Third-party C, like the emulator, stays optimized in Debug builds.
-    const natives = native_libraries.create(b, target, vt_optimize);
-
-    // The width tables come from the emulator that renders the panes; the
-    // drawing layer only names the `unicode` library, never its provider.
-    const freetype = freetype_build.add(b, .{ .target = target, .optimize = optimize, .disable_coverage = coverage.enabled });
-    const libraries = Libraries.create(b, target, optimize, &.{
-        .{
-            .name = "ghostty-vt",
-            .module = ghostty_vt,
-        },
-        .{
-            .name = "freetype",
-            .module = freetype,
-        },
-        .{
-            .name = "wuffs",
-            .module = wuffs,
-        },
-        .{
-            .name = "tls",
-            .module = tls,
-        },
-    }, natives);
-    for (libraries.modules) |library| {
-        coverage.instrumentModule(library.?);
+    const natives = native_libraries.create(b, target, if (optimize == .Debug) .ReleaseFast else optimize);
+    const graph = ModuleGraph.create(b, target, optimize, natives, coverage) orelse return null;
+    // Dependents of this package import the shipped graph by name.
+    for ([_]struct { []const u8, *std.Build.Module }{
+        .{ "telar-core", graph.core },
+        .{ "telar-lua", graph.telar_lua },
+        .{ "telar-backend", graph.backend },
+        .{ "model", graph.data },
+    }) |exported| {
+        b.modules.put(b.allocator, b.dupe(exported[0]), exported[1]) catch @panic("out of memory");
     }
 
-    // Runtime and client share values through core; neither common package
-    // imports an adapter.
-    const core = b.addModule("telar-core", .{
-        .root_source_file = b.path("src/core/core.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    libraries.addImports(core);
-    libraries.addImports(telar_lua);
-    coverage.instrumentModule(core);
-    const data = model_build.create(b, core, libraries);
-    b.modules.put(
-        b.allocator,
-        b.dupe("model"),
-        data,
-    ) catch @panic("out of memory");
-    coverage.instrumentModule(data);
-    const client = client_build.add(
-        b,
-        .{
-            .core = core,
-            .data = data,
-            .lua = .{
-                .api = lua_api,
-                .telar = telar_lua,
-            },
-            .libraries = libraries,
-        },
-    );
-    coverage.instrumentModule(client);
-
-    const backend = b.addModule("telar-backend", .{
-        .root_source_file = b.path("src/backend/backend.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    backend.addImport("telar-core", core);
-    backend.addImport("telar-lua", telar_lua);
-    backend.addImport("lua-api", lua_api);
-    backend.addImport("ghostty-vt", ghostty_vt);
-    backend.addImport("tls", tls);
-    libraries.addImports(backend);
-    coverage.instrumentModule(backend);
-
     const assets = assets_build.add(b, target, optimize);
-    // One shipped binary contains both the client and runtime entry points.
-    const exe = b.addExecutable(.{
-        .name = "telar",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-            .strip = b.option(bool, "strip", "Leave debug information out of the telar executable"),
-        }),
-    });
-    exe.root_module.addImport("telar-backend", backend);
-    exe.root_module.addImport("telar-client", client);
-    exe.root_module.addImport("model", data);
-    exe.root_module.addImport("telar-core", core);
-    exe.root_module.addImport("ghostty-vt", ghostty_vt);
-    libraries.addImports(exe.root_module);
     const diagnostics_enabled = b.option(
         bool,
         "diagnostics",
@@ -159,16 +41,20 @@ pub fn init(b: *std.Build) ?@This() {
     // library, so the same runtime installs on a server without them.
     const native_client = (b.option(bool, "gui", "Build the native client behind `telar gui` (default: true on macOS and Linux)") orelse true) and
         (target.result.os.tag == .macos or target.result.os.tag == .linux);
-    const exe_options = b.addOptions();
-    exe_options.addOption([]const u8, "version", manifest.version);
-    exe_options.addOption(bool, "native_client", native_client);
-    exe_options.addOption(bool, "diagnostics", diagnostics_enabled);
-    exe_options.addOption(bool, "echo_trace", b.option(bool, "echo-trace", "Record bounded echo phase timestamps until shutdown") orelse false);
-    exe_options.addOption(bool, "echo_trace_cpu", b.option(bool, "echo-trace-cpu", "Include thread CPU clocks in diagnostic echo traces") orelse false);
-    exe_options.addOption(bool, "profile_counts", b.option(bool, "profile-counts", "Collect bounded per-thread data-access counters") orelse false);
-    exe_options.addOption(bool, "profile_timing", b.option(bool, "profile-timing", "Collect bounded synchronous phase histograms") orelse false);
-    exe.root_module.addOptions("build_options", exe_options);
-    Modules.addInstaller(b, exe.root_module);
+    const exe_options = binaryOptions(b, .{
+        .native_client = native_client,
+        .diagnostics = diagnostics_enabled,
+        .echo_trace = b.option(bool, "echo-trace", "Record bounded echo phase timestamps until shutdown") orelse false,
+        .echo_trace_cpu = b.option(bool, "echo-trace-cpu", "Include thread CPU clocks in diagnostic echo traces") orelse false,
+        .profile_counts = b.option(bool, "profile-counts", "Collect bounded per-thread data-access counters") orelse false,
+        .profile_timing = b.option(bool, "profile-timing", "Collect bounded synchronous phase histograms") orelse false,
+    });
+    const modules = graph.modules(assets, exe_options, native_client);
+    // One shipped binary contains both the client and runtime entry points.
+    const exe = b.addExecutable(.{
+        .name = "telar",
+        .root_module = mainModule(b, modules, b.option(bool, "strip", "Leave debug information out of the telar executable")),
+    });
     // `zig build` installs only the shipped binary. Examples and probes get
     // their own steps so the default build and `run` never wait on them.
     const install_exe = b.addInstallArtifact(exe, .{});
@@ -187,25 +73,47 @@ pub fn init(b: *std.Build) ?@This() {
     }
     b.step("run", "Run telar").dependOn(&run_exe.step);
 
-    const modules: Modules = .{
-        .libraries = libraries,
-        .data = data,
-        .core = core,
-        .backend = backend,
-        .client = client,
-        .lua_api = lua_api,
-        .telar_lua = telar_lua,
-        .tls = tls,
-        .freetype = freetype,
-        .assets = assets,
-        .gui = null,
-        .ghostty_vt = ghostty_vt,
-        .wuffs = wuffs,
-        .natives = natives,
-        .native_client = native_client,
-        .target = target,
-        .optimize = optimize,
-        .build_options = exe_options,
-    };
     return .{ .modules = modules, .coverage = coverage, .exe = exe, .install = install_exe };
+}
+
+/// The `build_options` of one telar executable, with the published version.
+///
+/// ```zig
+/// const options = Application.binaryOptions(b, .{ .native_client = true });
+/// ```
+pub fn binaryOptions(b: *std.Build, flags: BinaryFlags) *std.Build.Step.Options {
+    const options = b.addOptions();
+    options.addOption([]const u8, "version", manifest.version);
+    options.addOption(bool, "native_client", flags.native_client);
+    options.addOption(bool, "diagnostics", flags.diagnostics);
+    options.addOption(bool, "echo_trace", flags.echo_trace);
+    options.addOption(bool, "echo_trace_cpu", flags.echo_trace_cpu);
+    options.addOption(bool, "profile_counts", flags.profile_counts);
+    options.addOption(bool, "profile_timing", flags.profile_timing);
+    return options;
+}
+
+/// The root module of the telar executable, the client and runtime entry
+/// points with every import but the native client's, which `gui.add` adds.
+///
+/// ```zig
+/// const exe = b.addExecutable(.{ .name = "telar", .root_module = Application.mainModule(b, modules, null) });
+/// ```
+pub fn mainModule(b: *std.Build, modules: Modules, strip: ?bool) *std.Build.Module {
+    const main = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = modules.target,
+        .optimize = modules.optimize,
+        .link_libc = true,
+        .strip = strip,
+    });
+    main.addImport("telar-backend", modules.backend);
+    main.addImport("telar-client", modules.client);
+    main.addImport("model", modules.data);
+    main.addImport("telar-core", modules.core);
+    main.addImport("ghostty-vt", modules.ghostty_vt);
+    modules.libraries.addImports(main);
+    main.addOptions("build_options", modules.build_options);
+    Modules.addInstaller(b, main);
+    return main;
 }

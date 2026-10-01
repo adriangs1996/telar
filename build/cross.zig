@@ -1,7 +1,12 @@
 const std = @import("std");
 const freetype_build = @import("freetype.zig");
 const model_build = @import("model.zig");
+const assets_build = @import("assets.zig");
+const gui_build = @import("gui.zig");
+const Application = @import("Application.zig");
+const Coverage = @import("Coverage.zig");
 const Libraries = @import("Libraries.zig");
+const ModuleGraph = @import("ModuleGraph.zig");
 const native_libraries = @import("native_libraries.zig");
 
 /// Register portability checks: `cross.add(b)`.
@@ -18,30 +23,45 @@ pub fn add(b: *std.Build) *std.Build.Step {
         .{ .os_tag = .linux, .cpu_arch = .aarch64, .abi = .gnu },
     }) |query| {
         const cross_target = b.resolveTargetQuery(query);
-        // No emulator is built for these targets; the fake width table
-        // stands in for the `unicode` library.
-        const cross_unicode = b.createModule(.{
-            .root_source_file = b.path("lib/unicode/fake.zig"),
-            .target = cross_target,
-            .optimize = .Debug,
-        });
-        const cross_core = b.createModule(.{
-            .root_source_file = b.path("src/core/core.zig"),
-            .target = cross_target,
-            .optimize = .Debug,
-        });
-        const cross_libraries = Libraries.create(b, cross_target, .Debug, &.{
-            .{
-                .name = "unicode",
-                .module = cross_unicode,
-            },
-            .{
-                .name = "freetype",
-                .module = freetype_build.add(b, .{ .target = cross_target, .optimize = .Debug, .disable_coverage = false }),
-            },
-        }, native_libraries.portable(b, cross_target, .Debug));
-        cross_libraries.addImports(cross_core);
-        const cross_data = model_build.create(b, cross_core, cross_libraries);
+        const natives = native_libraries.portable(b, cross_target, .Debug);
+        var cross_core: *std.Build.Module = undefined;
+        var cross_data: *std.Build.Module = undefined;
+        var cross_libraries: Libraries = undefined;
+        if (query.os_tag.? == .linux) {
+            // Linux ships the whole binary, so the check builds the graph a
+            // release builds, emulator included.
+            const graph = ModuleGraph.create(b, cross_target, .Debug, natives, unmeasured) orelse return cross_step;
+            addBinaryCheck(b, cross_step, graph);
+            cross_core = graph.core;
+            cross_data = graph.data;
+            cross_libraries = graph.libraries;
+        } else {
+            // No emulator is built for this target; the fake width table
+            // stands in for the `unicode` library.
+            const cross_unicode = b.createModule(.{
+                .root_source_file = b.path("lib/unicode/fake.zig"),
+                .target = cross_target,
+                .optimize = .Debug,
+            });
+            cross_core = b.createModule(.{
+                .root_source_file = b.path("src/core/core.zig"),
+                .target = cross_target,
+                .optimize = .Debug,
+            });
+            cross_libraries = Libraries.create(b, cross_target, .Debug, &.{
+                .{
+                    .name = "unicode",
+                    .module = cross_unicode,
+                },
+                .{
+                    .name = "freetype",
+                    .module = freetype_build.add(b, .{ .target = cross_target, .optimize = .Debug, .disable_coverage = false }),
+                },
+            }, natives);
+            cross_libraries.addImports(cross_core);
+            cross_data = model_build.create(b, cross_core, cross_libraries);
+        }
+
         cross_libraries.addChecks(b, cross_step, cross_target);
         // Host services the client runs on every platform: sound, system
         // notices and the local clock.
@@ -68,4 +88,35 @@ pub fn add(b: *std.Build) *std.Build.Step {
         }
     }
     return cross_step;
+}
+
+/// Cross checks instrument nothing.
+const unmeasured: Coverage = .{
+    .enabled = false,
+    .runtime_path = null,
+};
+
+/// Type-checks the whole telar executable for `graph`'s target: the runtime,
+/// the client, the CLI and the native client's Zig code. Nothing is emitted
+/// or linked, so the window's C sources and the system headers they need
+/// (Wayland, Vulkan, Fontconfig) stay out; the Zig that calls them does not.
+/// A runtime that stops compiling on Linux then fails `zig build cross` on
+/// any machine.
+fn addBinaryCheck(b: *std.Build, step: *std.Build.Step, graph: ModuleGraph) void {
+    const modules = graph.modules(
+        assets_build.add(b, graph.target, graph.optimize),
+        Application.binaryOptions(b, .{
+            .native_client = true,
+        }),
+        true,
+    );
+    const main = Application.mainModule(b, modules, null);
+    // The Mermaid helper is a Rust build for the host; only its path is
+    // compiled in.
+    main.addImport("telar-gui", gui_build.zigModule(b, modules, b.path("tools/diagram-renderer")));
+    const binary = b.addExecutable(.{
+        .name = b.fmt("telar-{s}", .{@tagName(graph.target.result.cpu.arch)}),
+        .root_module = main,
+    });
+    step.dependOn(&binary.step);
 }
