@@ -57,6 +57,7 @@ pub const LimitError = error{
     ErrorMessageTooLarge,
     FontCollectionTooLarge,
     FontSetIdentityExhausted,
+    FilterPatternTooLong,
     FrameTooLarge,
     GlyphTooLarge,
     GraphicsChunkLimitExceeded,
@@ -85,6 +86,7 @@ pub const LimitError = error{
     NativeCellBudgetExceeded,
     NativeInputFull,
     NodeLimitReached,
+    NotificationTextTooLong,
     NotificationTooLarge,
     OriginTooLong,
     OutputFull,
@@ -113,9 +115,17 @@ pub const LimitError = error{
     RemoteTelarPathTooLong,
     RequestIdExhausted,
     ResponseQueueFull,
-    ReviewCapacity,
-    ReviewFileLimit,
-    ReviewLineLimit,
+    ReviewArchiveFull,
+    ReviewCommentCapacity,
+    ReviewConversationStorageFull,
+    ReviewEditionsFull,
+    ReviewFileTooLarge,
+    ReviewGlobalStorageFull,
+    ReviewGroupsFull,
+    ReviewPatchTooLarge,
+    ReviewPendingSampleBytesFull,
+    ReviewPendingSamplesFull,
+    ReviewStorageFilesExceeded,
     RingFull,
     ScopeTooLong,
     ScreenTooLarge,
@@ -164,7 +174,6 @@ pub const LimitError = error{
     TooManyPluginOverrides,
     TooManyPlugins,
     TooManyProxyInterceptHosts,
-    TooManyReviewFiles,
     TooManySavedLayouts,
     TooManySearchMatches,
     TooManySpans,
@@ -417,7 +426,7 @@ test "limit errors are told apart from host errors and bugs" {
     try std.testing.expect(isLimitError(error.AtlasFull));
     try std.testing.expect(isLimitError(error.PaneLimitReached));
     try std.testing.expect(isLimitError(error.WidgetIdentityExhausted));
-    try std.testing.expect(isLimitError(error.ReviewLineLimit));
+    try std.testing.expect(isLimitError(error.ReviewPatchTooLarge));
     try std.testing.expect(!isLimitError(error.NoSpaceLeft));
     try std.testing.expect(!isLimitError(error.WriteFailed));
     try std.testing.expect(!isLimitError(error.OutOfMemory));

@@ -12,6 +12,7 @@ const ImportParser = @import("ImportParser.zig");
 const ResolvedImport = @import("ResolvedImport.zig");
 const history = @import("arguments/history.zig");
 const ImportedEntry = @import("ImportedEntry.zig");
+const Session = @import("Session.zig");
 const limit_reached = @import("limit_reached.zig");
 
 const request_buffer_size = core.max_history_query_bytes + core.max_cwd_bytes + 64;
@@ -194,7 +195,9 @@ test "history fields preserve printable UTF-8" {
 const max_histfile_bytes = 32 * 1024 * 1024;
 const histfile_limit = core.Limit.declare("history.max_histfile_bytes", "bytes", max_histfile_bytes);
 
-pub const max_batch_payload = 48 * 1024;
+/// Command bytes one import batch carries: room for the longest command
+/// the wire accepts several times over, far below a frame.
+pub const max_batch_payload = 4 * core.max_import_command_bytes;
 
 /// Streams one shell histfile to the runtime in bounded idempotent batches.
 /// The source label pins the deterministic import session, so re-running the
@@ -206,9 +209,8 @@ fn runImport(init: std.process.Init, options: HistoryOptions) !void {
     defer init.gpa.free(histfile.buffer);
     const source_data = histfile.lines;
 
-    const connector = try RuntimeConnector.init(init.io, init.minimal.environ, options.socket);
-    var connection = try connector.connectOrStart(.{});
-    defer connection.deinit(init.io);
+    var session = try Session.open(init, options.socket);
+    defer session.close();
 
     var source_buffer: [core.max_import_source_bytes]u8 = undefined;
     const source = try std.fmt.bufPrint(&source_buffer, "{s}:{s}", .{ @tagName(resolved.kind), resolved.path });
@@ -216,7 +218,7 @@ fn runImport(init: std.process.Init, options: HistoryOptions) !void {
     var sender: BatchSender = .{
         .io = init.io,
         .gpa = init.gpa,
-        .connection = &connection,
+        .connection = &session.connection,
         .source = source,
     };
     var parser_state: ImportParser = .{ .kind = resolved.kind };
@@ -236,9 +238,16 @@ fn runImport(init: std.process.Init, options: HistoryOptions) !void {
     try output.interface.print("imported {d} commands from {s}\n", .{ sender.total, resolved.path });
     try output.interface.flush();
 
-    // The older commands were left out: the import did not do all it was
-    // asked, and a script must not read it as complete.
-    if (histfile.truncated) {
+    if (parser_state.skipped != 0) {
+        limit_reached.reportThrough(&session, .{
+            .limit = core.import_command_limit,
+            .requested = parser_state.largest_skipped,
+        });
+    }
+
+    // Older or longer commands were left out: the import did not do all it
+    // was asked, and a script must not read it as complete.
+    if (histfile.truncated or parser_state.skipped != 0) {
         std.process.exit(limit_reached.exit_status);
     }
 }
@@ -355,6 +364,35 @@ test "bash timestamp comments attach to the following command" {
     const second = state.feed("ls").?;
     try std.testing.expectEqualStrings("ls", second.command);
     try std.testing.expect(state.flush() == null);
+}
+
+test "an imported command past the limit is skipped whole and the rest import" {
+    const state = try std.testing.allocator.create(ImportParser);
+    defer std.testing.allocator.destroy(state);
+    state.* = .{
+        .kind = .bash,
+    };
+
+    const longest = try std.testing.allocator.alloc(u8, core.max_import_command_bytes + 1);
+    defer std.testing.allocator.free(longest);
+    @memset(longest, 'x');
+
+    const kept = state.feed(longest[0..core.max_import_command_bytes]).?;
+    try std.testing.expectEqual(@as(usize, core.max_import_command_bytes), kept.command.len);
+    try std.testing.expect(state.feed(longest) == null);
+    try std.testing.expectEqualStrings("ls", state.feed("ls").?.command);
+    try std.testing.expect(state.flush() == null);
+    try std.testing.expectEqual(@as(usize, 1), state.skipped);
+    try std.testing.expectEqual(@as(usize, core.max_import_command_bytes + 1), state.largest_skipped);
+
+    state.* = .{
+        .kind = .zsh,
+    };
+    longest[longest.len - 1] = '\\';
+    try std.testing.expect(state.feed(longest) == null);
+    try std.testing.expect(state.feed("tail") == null);
+    try std.testing.expectEqualStrings("pwd", state.feed("pwd").?.command);
+    try std.testing.expectEqual(@as(usize, 1), state.skipped);
 }
 
 test "fish history pairs cmd and when lines" {

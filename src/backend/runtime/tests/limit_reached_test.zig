@@ -8,6 +8,10 @@ const Session = @import("../client/Session.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
+const observer_support = @import("../../history/observer_support.zig");
+const pane_observation = @import("../pane_observation.zig");
+const cmdcapture = @import("cmdcapture");
+const Clock = cmdcapture.Clock;
 
 const checkpoint_limit: core.LimitReach = .{
     .limit = core.Limit.declare("session_checkpoint.snapshot_bytes", "bytes", 1024),
@@ -120,6 +124,81 @@ test "a client reporting a runtime limit's name neither silences nor evicts it" 
     try std.testing.expectEqual(@as(u64, 1), model.limit_reaches.hits[model.limit_reaches.find("session_checkpoint.snapshot_bytes").?]);
     try std.testing.expect(model.client_limit_reaches.evicted >= 2);
     try std.testing.expectEqual(@as(u64, 0), model.limit_reaches.evicted);
+}
+
+test "a command-line report shows its notice once per interval and keeps the runtime's rows" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+
+    const model = &fixture.runtime.model;
+    const hook = try fixture.addClient();
+    hook.role = .control;
+    const reach: core.LimitReach = .{
+        .limit = core.Limit.declare("hooks.max_input_bytes", "bytes", 16),
+        .requested = 17,
+    };
+
+    try fixture.sendTo(hook, .{ .report_limit = .{
+        .reach = reach,
+        .hits = 1,
+    } });
+    try fixture.sendTo(hook, .{ .report_limit = .{
+        .reach = reach,
+        .hits = 1,
+    } });
+
+    try std.testing.expectEqual(@as(usize, 1), countNotices(fixture.session));
+    try std.testing.expectEqual(@as(usize, 0), countNotices(hook));
+    try std.testing.expectEqualStrings("hooks.max_input_bytes: 17 bytes; limit 16", fixture.response().?.notification.view().message);
+    try std.testing.expect(model.limit_reaches.find("hooks.max_input_bytes") == null);
+
+    const slot = model.client_limit_reaches.find("hooks.max_input_bytes").?;
+    try std.testing.expectEqual(@as(u64, 2), model.client_limit_reaches.hits[slot]);
+}
+
+test "a history batch drop and a refused command report their limits and keep the pane observed" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+
+    const model = &fixture.runtime.model;
+    const pane = try fixture.openPane();
+    const burst = try std.testing.allocator.alloc(u8, observer_support.batch_bytes + 1);
+    defer std.testing.allocator.free(burst);
+    @memset(burst, 'x');
+
+    const clock: Clock = .{
+        .real_ms = 1,
+        .awake_ns = 1,
+    };
+    pane.queueHistoryOutput(.{
+        .bytes = burst,
+        .shell_foreground = true,
+        .clock = clock,
+    });
+    pane.queueHistoryOutput(.{
+        .bytes = "kept",
+        .shell_foreground = true,
+        .clock = clock,
+    });
+    const borrow = pane.beginHistoryObservation().?;
+
+    try pane_observation.finish(model, .{
+        .pane = pane.key(),
+        .stats = .{
+            .refused = 1,
+        },
+        .process_probe = .{
+            .cache = borrow.process_cache,
+        },
+    });
+
+    const batch = model.limit_reaches.find("history.observer_batch_bytes").?;
+    try std.testing.expectEqual(@as(?u64, observer_support.batch_bytes + 1), model.limit_reaches.requested[batch]);
+    try std.testing.expect(model.limit_reaches.find("history.request_queue") != null);
+    try std.testing.expect(model.panes.find(pane.id) != null);
+    try std.testing.expect(pane.history_observer.takeDrop() == null);
 }
 
 test "a connection sending too many reports a second is refused and counted" {

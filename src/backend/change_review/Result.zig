@@ -1,10 +1,14 @@
 const std = @import("std");
 const core = @import("telar-core");
-pub const capacity = 320 * 1024;
+/// Bytes of the largest reply: a whole snapshot.
+pub const capacity = core.change_review.max_snapshot_message_bytes;
 gpa: std.mem.Allocator,
 bytes: []u8,
 len: usize = 0,
 changed_edition: u64 = 0,
+/// A limit the operation reached while keeping what fit, such as a diff cut
+/// at `max_patch_bytes`; the runtime reports it when the job finishes.
+limit: ?core.LimitReach = null,
 
 pub fn init(gpa: std.mem.Allocator) !*@This() {
     const result = try gpa.create(@This());

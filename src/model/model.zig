@@ -415,7 +415,6 @@ test {
     _ = @import("connection/OwnedCreateWorkspace.zig");
     _ = @import("connection/OwnedInput.zig");
     _ = @import("connection/OwnedLaunchCwd.zig");
-    _ = @import("connection/OwnedNotification.zig");
     _ = @import("connection/OwnedRename.zig");
     _ = @import("connection/OwnedWorkspaceRename.zig");
     _ = @import("connection/Registration.zig");

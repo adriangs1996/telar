@@ -118,6 +118,24 @@ pub fn send(session: *Session, event: event_module.Event) !void {
     try input_support.pump(session.gui);
 }
 
+test "an edition past the view's file limit shows its first files and reports the limit" {
+    const view_files = @typeInfo(@FieldType(client.ChangeReviewRevision, "files")).array.len;
+    const file = "Added overflow.zig\n@@ -0,0 +1 @@\n+new\n";
+    const session = try base();
+    defer session.deinit();
+    try session.gui.openChangeReview(Session.pane_id);
+
+    var snapshot = response(session, 1);
+    snapshot.patch = file ** (view_files + 2);
+    try reply(session, snapshot);
+    try adopt(session);
+
+    const panel = session.gui.review;
+    try std.testing.expectEqual(@as(usize, view_files), panel.widget.model.current().file_count);
+    try std.testing.expect(!panel.widget.read_only);
+    try std.testing.expect(session.gui.app.model.limit_reaches.find("change_review.view_files") != null);
+}
+
 test "runtime review autosave acknowledges only submitted text while later typing stays queued" {
     const session = try ready();
     defer session.deinit();
@@ -246,7 +264,7 @@ test "runtime review failed preparation keeps the old edition read only and retr
     const index = 1 - panel.visible_slot;
     panel.slots[index].generation = gui.app.model.change_review.generation;
     panel.slots[index].edition = 2;
-    panel.slots[index].failure = error.ReviewLineLimit;
+    panel.slots[index].failure = error.ReviewFileWithoutLines;
     panel.job = index;
     panel.notify();
     try panel.synchronize(gui.app);
@@ -254,7 +272,7 @@ test "runtime review failed preparation keeps the old edition read only and retr
     try std.testing.expectEqualStrings(patch, panel.widget.model.current().source);
     try std.testing.expect(panel.widget.read_only);
     try std.testing.expect(!panel.widget.loading);
-    try std.testing.expect(std.mem.indexOf(u8, panel.widget.model.status, "file or line limit") != null);
+    try std.testing.expect(std.mem.indexOf(u8, panel.widget.model.status, "could not be prepared") != null);
     panel.widget.command = .refresh;
     try panel.synchronize(gui.app);
     try std.testing.expectEqual(@as(u64, 2), (try core.decodeClient(try session.sent())).query_change_review.edition_id);

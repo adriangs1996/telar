@@ -951,7 +951,7 @@ test "a sound the host cannot start releases its token and does not poison a lat
     try std.testing.expect(client.model.sound_playback.snapshot().active);
 }
 
-test "agent snapshot limits alert publication while retaining every canonical status change" {
+test "agent snapshot folds alerts past the center into one summary while retaining every status change" {
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();
@@ -979,16 +979,29 @@ test "agent snapshot limits alert publication while retaining every canonical st
     var payload: [8192]u8 = undefined;
     const initial = try core.encodeAgentSnapshot(&payload, .{ .revision = 1, .entries = &entries });
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(initial));
-    for (&entries) |*entry| {
-        entry.status = .blocked;
+    const statuses = [_]core.AgentStatus{ .blocked, .done, .failed };
+    for (&entries, 0..) |*entry, index| {
+        entry.status = statuses[index % statuses.len];
         entry.sequence = 2;
     }
     const changed = try core.encodeAgentSnapshot(&payload, .{ .revision = 2, .entries = &entries });
 
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(changed));
 
+    // Three alerts by themselves and one summary of the other three: the
+    // batch fills the center without evicting any of its own alerts.
     try std.testing.expectEqual(@as(u64, data.notifications.max_items), client.model.version().notifications);
     try std.testing.expectEqual(data.notifications.max_items, client.model.notification_center.count);
+    var summary: ?*const data.NotificationItem = null;
+    for (0..client.model.notification_center.count) |index| {
+        const item = client.model.notification_center.itemAt(index).?;
+        if (std.mem.eql(u8, item.title(), "More agents changed")) {
+            summary = item;
+        }
+    }
+
+    try std.testing.expectEqualStrings("3 more agents: 1 waiting for input, 1 done, 1 failed", summary.?.message());
+    try std.testing.expectEqual(data.NotificationLevel.failure, summary.?.level);
     try std.testing.expectEqual(entries.len, client.model.agent_snapshot.count);
     for (entries) |entry| {
         try std.testing.expectEqual(entry.status, client.model.agent_snapshot.find(.{ .pane_id = entry.pane_id, .pane_generation = entry.pane_generation }).?.status);

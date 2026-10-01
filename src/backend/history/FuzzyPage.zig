@@ -2,7 +2,11 @@ const core = @import("telar-core");
 const Query = @import("Query.zig");
 const FuzzyPage = @This();
 
-pub const max_candidates = 1000;
+/// Newest executions a fuzzy query scores; older ones never match it. It
+/// bounds one keystroke's work, so reaching it is no loss and raises no
+/// notice. `best` lives on the history worker's stack: 16 bytes per
+/// candidate.
+pub const max_candidates = 10_000;
 
 best: [max_candidates]Scored = undefined,
 count: usize = 0,

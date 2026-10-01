@@ -1,12 +1,17 @@
 //! Bounded ownership transfer between history producers and the worker.
 
 const std = @import("std");
+const core = @import("telar-core");
 const Channel = @import("Channel.zig");
 const Counters = @import("Counters.zig");
 const SessionFinished = @import("SessionFinished.zig");
 const Pruned = @import("Pruned.zig");
 
+/// Requests waiting for the history worker. A full queue refuses without
+/// blocking: a query is answered `resource_limit`, a recorded command is
+/// lost, and both report this limit.
 pub const request_capacity = 64;
+pub const requests_limit = core.Limit.declare("history.request_queue", "requests", request_capacity);
 pub const response_capacity = 4;
 
 test "accepted requests transfer to the worker and release their queue depth" {

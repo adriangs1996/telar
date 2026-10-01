@@ -6,7 +6,9 @@ const Agent = @import("Agent.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const Agents = @This();
 
+/// Agents the runtime tracks at once: every one the snapshot can carry.
 pub const capacity = core.max_agent_snapshot_entries;
+pub const capacity_limit = core.Limit.declare("agents.capacity", "agents", capacity);
 const Occupancy = std.bit_set.IntegerBitSet(capacity);
 
 /// Aggregates are several KiB each. Lookups run on every PTY ingest, so they
@@ -46,6 +48,16 @@ pub fn insert(self: *Agents, candidate: Agent) ?*Agent {
     }
 
     return null;
+}
+
+/// Whether every slot holds an aggregate, so an insert of a new pane fails
+/// for capacity.
+///
+/// ```zig
+/// if (repository.full()) limit_reached.report(model, .{ .limit = Agents.capacity_limit });
+/// ```
+pub fn full(self: *const Agents) bool {
+    return self.occupied.count() == capacity;
 }
 
 /// Finds the mutable aggregate for one exact pane generation.

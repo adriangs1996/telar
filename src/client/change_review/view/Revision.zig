@@ -10,8 +10,16 @@ files: [limits.files]File = undefined,
 file_count: usize = 0,
 rows: [limits.lines]Row = undefined,
 row_count: usize = 0,
+/// Files and rows of the edition past `limits.files` or `limits.lines`,
+/// which the view leaves out; `source` then ends where they begin.
+omitted_files: usize = 0,
+omitted_rows: usize = 0,
+/// Which of the two limits cut the edition, when one did.
+cut: ?core.Limit = null,
 
 /// Replaces the index while borrowing immutable source retained by its owner.
+/// An edition past the view's limits keeps its first files and rows, and
+/// `reach` says which limit cut it.
 /// Example: `try revision.load(source);`
 pub fn load(self: *Self, source: []const u8) !void {
     self.* = .{ .source = source };
@@ -23,7 +31,9 @@ pub fn load(self: *Self, source: []const u8) !void {
         const line = lines.next() orelse break;
         if (line.kind == .file) {
             if (self.file_count == limits.files) {
-                return error.ReviewFileLimit;
+                self.leaveOut(&lines, start, limits.files_limit);
+                self.omitted_files += 1;
+                break;
             }
 
             if (self.file_count > 0) {
@@ -37,12 +47,54 @@ pub fn load(self: *Self, source: []const u8) !void {
             hunk += 1;
         } else if (self.file_count > 0 and (line.old != null or line.new != null)) {
             if (self.row_count == limits.lines) {
-                return error.ReviewLineLimit;
+                self.leaveOut(&lines, start, limits.lines_limit);
+                self.omitted_rows += 1;
+                break;
             }
 
             self.rows[self.row_count] = .{ .value = line, .offset = @intFromPtr(line.text.ptr) - @intFromPtr(source.ptr), .file = self.file_count - 1, .hunk = hunk };
             self.row_count += 1;
             self.files[self.file_count - 1].last = self.row_count;
+        }
+    }
+}
+
+/// The limit that cut this edition, with how many files or rows it has.
+///
+/// ```zig
+/// if (revision.reach()) |reach| limit_reached.report(client, reach);
+/// ```
+pub fn reach(self: *const Self) ?core.LimitReach {
+    const limit = self.cut orelse return null;
+    const files_cut = std.mem.eql(u8, limit.name, limits.files_limit.name);
+    const total = if (files_cut) self.file_count + self.omitted_files else self.row_count + self.omitted_rows;
+    return .{
+        .limit = limit,
+        .requested = total,
+    };
+}
+
+/// Ends the view at `start`, the line past a limit, and counts the files
+/// and numbered rows after it. A last file the cut left without rows goes
+/// too, since a file the view shows needs a row to select.
+fn leaveOut(self: *Self, lines: *core.ChangeReviewDiffLines, start: usize, limit: core.Limit) void {
+    self.cut = limit;
+    self.source = self.source[0..start];
+    if (self.file_count > 0) {
+        self.files[self.file_count - 1].end = start;
+    }
+
+    if (self.file_count > 1 and self.files[self.file_count - 1].first == self.files[self.file_count - 1].last) {
+        self.file_count -= 1;
+        self.omitted_files += 1;
+        self.source = self.source[0..self.files[self.file_count].start];
+    }
+
+    while (lines.next()) |line| {
+        if (line.kind == .file) {
+            self.omitted_files += 1;
+        } else if (line.kind != .hunk and (line.old != null or line.new != null)) {
+            self.omitted_rows += 1;
         }
     }
 }
@@ -130,11 +182,64 @@ test "review prototype revision reload replaces every indexed file and row" {
     try std.testing.expectEqual(@as(usize, 1), revision.files[0].last);
     try std.testing.expectEqual(@as(?usize, null), revision.findFile("old.zig"));
     try std.testing.expectEqual(@as(?usize, 0), revision.findFile("new.rs"));
+}
 
-    try std.testing.expectError(error.ReviewFileLimit, revision.load("Added overflow.zig\n@@ -0,0 +1 @@\n+new\n" ** (limits.files + 1)));
-    try std.testing.expectEqual(@as(usize, 0), revision.file_count);
-    try std.testing.expectEqual(@as(usize, 0), revision.row_count);
-    try std.testing.expectEqualStrings("", revision.source);
+test "an edition past the view's file limit keeps its first files and names the limit" {
+    const file = "Added overflow.zig\n@@ -0,0 +1 @@\n+new\n";
+    var revision: Self = .{};
+    try revision.load(file ** limits.files);
+    try std.testing.expectEqual(@as(usize, limits.files), revision.file_count);
+    try std.testing.expect(revision.reach() == null);
+
+    const source = file ** (limits.files + 2);
+    try revision.load(source);
+    try revision.ensureReviewable();
+    try std.testing.expectEqual(@as(usize, limits.files), revision.file_count);
+    try std.testing.expectEqual(@as(usize, limits.files), revision.row_count);
+    try std.testing.expectEqual(@as(usize, 2), revision.omitted_files);
+    try std.testing.expectEqualStrings(source[0 .. file.len * limits.files], revision.source);
+    try std.testing.expectEqualStrings(file, revision.text(limits.files - 1));
+
+    const cut = revision.reach().?;
+    try std.testing.expectEqualStrings("change_review.view_files", cut.limit.name);
+    try std.testing.expectEqual(@as(?u64, limits.files + 2), cut.requested);
+}
+
+test "an edition past the view's row limit keeps its first rows and names the limit" {
+    const rows = limits.lines + 3;
+    const header = std.fmt.comptimePrint("Added long.zig\n@@ -0,0 +1,{d} @@\n", .{rows});
+    const row = "+x\n";
+    const source = header ++ row ** rows ++ "Added next.zig\n@@ -0,0 +1 @@\n+y\n";
+    var revision: Self = .{};
+    try revision.load(source);
+    try revision.ensureReviewable();
+    try std.testing.expectEqual(@as(usize, limits.lines), revision.row_count);
+    try std.testing.expectEqual(@as(usize, 1), revision.file_count);
+    try std.testing.expectEqual(@as(usize, 4), revision.omitted_rows);
+    try std.testing.expectEqual(@as(usize, 1), revision.omitted_files);
+    try std.testing.expectEqual(header.len + row.len * limits.lines, revision.source.len);
+    try std.testing.expectEqual(revision.source.len, revision.files[0].end);
+
+    const cut = revision.reach().?;
+    try std.testing.expectEqualStrings("change_review.view_lines", cut.limit.name);
+    try std.testing.expectEqual(@as(?u64, rows + 1), cut.requested);
+}
+
+test "a row limit at the first row of a file leaves that file out and keeps the files before it" {
+    const header = std.fmt.comptimePrint("Added full.zig\n@@ -0,0 +1,{d} @@\n", .{limits.lines});
+    const row = "+x\n";
+    const first = header ++ row ** limits.lines;
+    const source = first ++ "Added next.zig\n@@ -0,0 +1,2 @@\n+y\n+z\n";
+    var revision: Self = .{};
+    try revision.load(source);
+    try revision.ensureReviewable();
+    try std.testing.expectEqual(@as(usize, 1), revision.file_count);
+    try std.testing.expectEqual(@as(usize, limits.lines), revision.row_count);
+    try std.testing.expectEqual(@as(usize, 1), revision.omitted_files);
+    try std.testing.expectEqual(@as(usize, 2), revision.omitted_rows);
+    try std.testing.expectEqualStrings(first, revision.source);
+    try std.testing.expectEqual(first.len, revision.files[0].end);
+    try std.testing.expectEqualStrings("change_review.view_lines", revision.reach().?.limit.name);
 }
 
 test "review prototype live editions require a path and numbered rows in every file" {

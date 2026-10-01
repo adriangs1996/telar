@@ -58,10 +58,15 @@ milliseconds. `--pane ID`, `--tab ID`, and `--workspace ID` are mutually
 exclusive click targets. `--link URL` makes a click open an https URL of at
 most 1024 bytes in the browser, through the same policy as a link clicked in
 a pane; `telar machine setup` uses it to bring an agent's login page from
-another machine to this window. The body holds 192 bytes, too few for an
-OAuth URL, so the link travels in its own field. Only the CLI sends one: a
-client's own notification requests never carry a link, which keeps the
-client's outbox slots small.
+another machine to this window. The body holds 512 bytes, too few for some
+OAuth URLs, so the link travels in its own field. Only the CLI sends one: a
+client's own notification requests never carry a link.
+
+A title longer than 96 bytes or a body longer than 512 is cut on a UTF-8
+boundary and shown; the command then prints the limit notice
+(`notifications.max_title_bytes` or `notifications.max_message_bytes`) on
+standard error, reports it so the windows show it and
+`telar diagnostics limits` lists it, and exits with status 1.
 
 Any process that can reach a runtime can send a link, so the link is held
 to what a card can show honestly (`core.notification_link`): its authority
@@ -121,10 +126,18 @@ only after the whole effect batch passes validation.
 
 ## Bounds and interaction
 
-Titles are limited to 48 UTF-8 bytes, bodies to 192 bytes (a configured
-notification action with longer text is cut at a character and reports
-`notification.max_title_bytes` or `notification.max_message_bytes`), and each client
-keeps at most four notifications. A fifth replaces the oldest. The native GUI
+Titles are limited to 96 UTF-8 bytes, bodies to 512 bytes, and each client
+keeps at most four notifications. A fifth replaces the oldest. When one
+agent snapshot turns more agents blocked, done or failed than the four fit,
+the first three alert by themselves and the rest fold into one "More agents
+changed" alert that counts them by status, so the batch never evicts its own
+alerts and no agent goes unannounced. A notification action in the
+configuration or returned by a Lua callback with longer text is cut at a
+character and reports `notification.max_title_bytes` or
+`notification.max_message_bytes`; plugin notifications past the bounds are
+refused whole when their effects are validated, like any other invalid
+effect. A card's accessible label keeps the start of the body when title and
+body do not fit its 128 bytes. The native GUI
 shows at most two cards at a time, newest first, and suppresses a card whose
 target pane is already visible in the active tab. Items outside the visible
 set retain their original expiry time. Cards can be dismissed explicitly;

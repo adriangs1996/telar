@@ -9,6 +9,20 @@ import { spawn } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const TELAR = "__TELAR_EXECUTABLE__";
+// Bytes of one pending payload; 32 of them wait at most.
+const MAX_PAYLOAD_BYTES = 64 * 1024;
+// Characters of a tool input string an oversized payload still carries: the
+// hook reads only short arguments from it.
+const MAX_BRIEF_STRING = 4096;
+
+const brief = (input: unknown) => {
+  if (typeof input !== "object" || input === null) return undefined;
+  const kept: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (typeof value === "string" && value.length <= MAX_BRIEF_STRING) kept[key] = value;
+  }
+  return kept;
+};
 
 type Event =
   | "session_start"
@@ -56,14 +70,19 @@ export default function (pi: ExtensionAPI) {
       finish();
     }
   };
+  // A pending payload holds at most MAX_PAYLOAD_BYTES. One past it keeps its
+  // event with only the tool input's short strings, or with no tool input,
+  // so the state still reaches the runtime.
   const send = (payload: Record<string, unknown>) => {
     let bytes: string;
     try {
       bytes = JSON.stringify(payload);
+      if (Buffer.byteLength(bytes) > MAX_PAYLOAD_BYTES) bytes = JSON.stringify({ ...payload, tool_input: brief(payload.tool_input) });
+      if (Buffer.byteLength(bytes) > MAX_PAYLOAD_BYTES) bytes = JSON.stringify({ ...payload, tool_input: undefined });
     } catch {
       return;
     }
-    if (Buffer.byteLength(bytes) > 64 * 1024) return;
+    if (Buffer.byteLength(bytes) > MAX_PAYLOAD_BYTES) return;
     if (queue.length === 32) queue.shift();
     queue.push(bytes);
     drain();
