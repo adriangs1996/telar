@@ -8,6 +8,7 @@ const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const AgentCard = @import("AgentCard.zig");
 const client = @import("telar-client");
+const CommandCard = @import("CommandCard.zig");
 const TaskCard = @import("TaskCard.zig");
 const CardGeometry = @import("CardGeometry.zig");
 const SidebarList = @import("SidebarList.zig");
@@ -16,6 +17,7 @@ const WorkspaceList = @import("WorkspaceList.zig");
 const SidebarRegions = @import("SidebarRegions.zig");
 const MachineSwitcher = @import("MachineSwitcher.zig");
 const MachineSegment = @import("MachineSegment.zig");
+const PixelScroll = @import("PixelScroll.zig");
 const Sidebar = @This();
 
 pub const margin = SidebarRegions.margin;
@@ -47,9 +49,13 @@ pub fn draw(self: Sidebar, canvas: *Canvas) !void {
     try (MachineSwitcher{ .context = context, .area = regions.machines }).draw(canvas);
     try drawHeader(canvas, regions.projects_header, "projects");
     try (WorkspaceList{ .state = self.state, .context = context, .bounds = regions.projects }).draw(canvas);
-    try drawHeader(canvas, regions.agents_header, "agents");
+    try drawHeader(canvas, regions.agents_header, if (context.projection.activity_sources.len != 0) "activity" else "agents");
     if (regions.agents.height > 0) {
-        try self.drawList(canvas, .{ .bounds = regions.agents });
+        if (context.projection.activity_sources.len != 0) {
+            try self.drawActivity(canvas, .{ .bounds = regions.agents });
+        } else {
+            try self.drawList(canvas, .{ .bounds = regions.agents });
+        }
     } else {
         self.state.agents.hide();
     }
@@ -70,7 +76,7 @@ fn drawHeader(canvas: *Canvas, header: Rect, text: []const u8) !void {
     const title: Label = .{ .text = text, .color = palette.text, .bold = true, .face = .sans, .size = .body };
     const label_area: Rect = .{ .x = header.x + inset, .y = header.y, .width = @max(0, header.width - 2 * inset), .height = header.height };
     _ = try canvas.textAt(label_area, title);
-    if (std.mem.eql(u8, text, "agents")) {
+    if (std.mem.eql(u8, text, "agents") or std.mem.eql(u8, text, "activity")) {
         const left = label_area.x + @min(label_area.width, try canvas.measure(title)) + canvas.chrome.px(10);
         try canvas.fillAt(.{ .x = left, .y = @floor(header.y + header.height / 2), .width = @max(0, label_area.x + label_area.width - left), .height = 1 }, palette.surface1);
     }
@@ -166,16 +172,12 @@ fn drawList(self: Sidebar, canvas: *Canvas, list: SidebarList) !void {
         });
     }
 
-    if (scroll.maximum_scroll != 0) {
-        const thumb = @min(list.bounds.height, @max(geometry.small_row, list.bounds.height * list.bounds.height / total));
-        const thumb_offset = @as(f32, @floatFromInt(scroll.scroll)) * (list.bounds.height - thumb) / @as(f32, @floatFromInt(scroll.maximum_scroll));
-        try canvas.fillAt(.{ .x = list.bounds.x + list.bounds.width - scrollbar, .y = list.bounds.y + thumb_offset, .width = scrollbar, .height = thumb }, palette.overlay0);
-    }
+    try drawScrollbar(canvas, list, scroll, total, geometry);
 }
 
 /// Height of the whole fleet list: every entry, the spacing between them and
 /// the gap before each project group after the first.
-fn fleetHeight(entries: []const client.FleetEntry, geometry: CardGeometry) f32 {
+fn fleetHeight(entries: anytype, geometry: CardGeometry) f32 {
     if (entries.len == 0) {
         return 0;
     }
@@ -190,4 +192,125 @@ fn fleetHeight(entries: []const client.FleetEntry, geometry: CardGeometry) f32 {
     }
 
     return total - geometry.px(CardGeometry.spacing);
+}
+
+fn drawActivity(self: Sidebar, canvas: *Canvas, list: SidebarList) !void {
+    const context = self.context;
+    const entries = self.state.activity[0..self.state.activity_len];
+    const sources = context.projection.activity_sources;
+    const geometry = CardGeometry.derive(canvas.chrome, canvas.metrics);
+    const total = fleetHeight(entries, geometry);
+    const scroll = &self.state.agents;
+    scroll.setBounds(geometry.pitch(), total - list.bounds.height);
+    if (entries.len == 0) {
+        _ = try canvas.textAt(list.bounds, .{ .text = "No activity", .color = canvas.theme.palette.subtext0, .face = .sans, .size = .body });
+        return;
+    }
+
+    const scrollbar = canvas.chrome.px(scrollbar_width);
+    const card_width = @max(0, list.bounds.width - scrollbar - geometry.px(CardGeometry.spacing));
+    var offset: f32 = 0;
+    for (entries, 0..) |entry, position| {
+        if (entry.first_in_project and position != 0) {
+            offset += geometry.px(CardGeometry.group_gap);
+        }
+
+        const height = geometry.entryHeight(entry.card);
+        const top = list.bounds.y + offset - @as(f32, @floatFromInt(scroll.scroll));
+        offset += height + geometry.px(CardGeometry.spacing);
+        if (top + height <= list.bounds.y) {
+            continue;
+        }
+
+        if (top >= list.bounds.y + list.bounds.height) {
+            break;
+        }
+
+        const source = sources[entry.source];
+        var projection = client.capture(source.model, .{ .geometry = context.projection.geometry });
+        if (context.projection.machines.?.active != source.slot) {
+            projection.tab = null;
+            projection.layout = null;
+        }
+
+        var own_context = context.*;
+        own_context.projection = &projection;
+        own_context.ages = if (context.machine_ages) |ages| &ages[source.slot] else null;
+        own_context.favicons = if (context.projection.machines.?.active == source.slot) context.favicons else null;
+        // Bound the indentation while preserving the full tree in the order.
+        const indent = @min(card_width / 3, @as(f32, @floatFromInt(entry.depth)) * geometry.px(CardGeometry.task_indent));
+        const bounds: Rect = .{ .x = list.bounds.x + indent, .y = top, .width = @max(0, card_width - indent), .height = height };
+        const first = canvas.quads.items().len;
+        var navigation: ?client.Intent = null;
+        if (entry.agent) |index| {
+            const agent = &projection.agents.slice()[index];
+            const target: client.MachineAgent = .{ .slot = source.slot, .key = agent.key, .session_id = agent.session_id };
+            navigation = if (source.connected) .{ .focus_machine_agent = target } else null;
+            if (entry.worktree) |worktree_index| {
+                const task = &projection.workspaces.worktrees[worktree_index];
+                try (TaskCard{
+                    .context = &own_context,
+                    .bounds = bounds,
+                    .agent = agent,
+                    .task = task,
+                    .card = entry.card,
+                    .nested = entry.depth != 0,
+                    .geometry = geometry,
+                    .age_s = own_context.statusAgeAt(index),
+                    .navigation = navigation,
+                    .machine_label = source.label,
+                    .connected = source.connected,
+                }).draw(canvas);
+            } else {
+                try (AgentCard{
+                    .context = &own_context,
+                    .bounds = bounds,
+                    .agent = agent,
+                    .geometry = geometry,
+                    .age_s = own_context.statusAgeAt(index),
+                    .navigation = navigation,
+                    .machine_label = source.label,
+                    .connected = source.connected,
+                    .coordinator = entry.coordinator,
+                    .project_icon = if (own_context.favicons) |favicons| favicons.sprite(agent.location.workspace, .small) else null,
+                }).draw(canvas);
+            }
+        } else {
+            const task = &projection.workspaces.worktrees[entry.worktree.?];
+            if (source.connected) {
+                if (task.workspace) |workspace| {
+                    navigation = .{ .open_machine_worktree = .{ .slot = source.slot, .machine_generation = context.projection.machines.?.generation[source.slot], .worktree = task.worktree, .workspace = workspace } };
+                }
+            }
+
+            try (CommandCard{
+                .context = &own_context,
+                .bounds = bounds,
+                .task = task,
+                .machine_label = source.label,
+                .connected = source.connected,
+                .geometry = geometry,
+                .nested = entry.depth != 0,
+                .navigation = navigation,
+            }).draw(canvas);
+        }
+
+        canvas.quads.clipFrom(first, list.bounds);
+        if (navigation) |intent| {
+            context.bands.add(.{ .area = list.hitArea(bounds), .action = .{ .intent = intent } });
+        }
+    }
+
+    try drawScrollbar(canvas, list, scroll, total, geometry);
+}
+
+fn drawScrollbar(canvas: *Canvas, list: SidebarList, scroll: *const PixelScroll, total: f32, geometry: CardGeometry) !void {
+    if (scroll.maximum_scroll == 0) {
+        return;
+    }
+
+    const scrollbar = canvas.chrome.px(scrollbar_width);
+    const thumb = @min(list.bounds.height, @max(geometry.small_row, list.bounds.height * list.bounds.height / total));
+    const thumb_offset = @as(f32, @floatFromInt(scroll.scroll)) * (list.bounds.height - thumb) / @as(f32, @floatFromInt(scroll.maximum_scroll));
+    try canvas.fillAt(.{ .x = list.bounds.x + list.bounds.width - scrollbar, .y = list.bounds.y + thumb_offset, .width = scrollbar, .height = thumb }, canvas.theme.palette.overlay0);
 }

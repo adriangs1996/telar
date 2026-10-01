@@ -62,7 +62,22 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
 
                 break :blk "Workspace";
             },
-            .peek_agent => "Peek at agent",
+            .focus_machine_agent => |target| blk: {
+                for (projection.activity_sources) |source| {
+                    if (source.slot == target.slot) {
+                        const agent = target.resolve(source.model) orelse break :blk "Agent";
+                        if (client.fleet_order.taskRow(&source.model.workspace_list_snapshot, agent)) |task| {
+                            break :blk task.displayName();
+                        }
+
+                        break :blk agent.displayName();
+                    }
+                }
+
+                break :blk "Agent";
+            },
+            .open_machine_worktree => "Open command workspace",
+            .peek_agent, .peek_machine_agent => "Peek at agent",
             .focus_agent => |key| blk: {
                 for (projection.agents.slice()) |*agent| {
                     if (!std.meta.eql(agent.key, key)) {

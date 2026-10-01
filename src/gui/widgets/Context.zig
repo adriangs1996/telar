@@ -25,6 +25,7 @@ hovered_placement: BandPlacement = .primary,
 presented_workspace: ?core.WorkspaceId = null,
 sidebar_regions: ?*const SidebarRegions = null,
 ages: ?*const AgentAges = null,
+machine_ages: ?*const [client.Machines.capacity]AgentAges = null,
 /// Placed workspace favicons; `null` in fixtures without a registry.
 favicons: ?*const Favicons = null,
 progress: ?*ProgressMotions = null,

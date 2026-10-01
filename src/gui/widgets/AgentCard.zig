@@ -16,6 +16,7 @@ const Label = @import("Label.zig");
 const age_label = @import("age_label.zig");
 const status_glyph = @import("status_glyph.zig");
 const Sprite = @import("../image/Sprite.zig");
+const client = @import("telar-client");
 const AgentCard = @This();
 
 pub const project_glyph = "\u{f07b}";
@@ -30,6 +31,10 @@ age_s: u32,
 /// The workspace favicon in the sprite page once the favicon worker has
 /// resolved it; `null` draws `project_glyph`.
 project_icon: ?Sprite = null,
+navigation: ?client.Intent = null,
+machine_label: []const u8 = "",
+connected: bool = true,
+coordinator: bool = false,
 
 /// Draws the card at its composed bounds. Selection follows the focused pane;
 /// hover comes from the context. Example: `try card.draw(canvas);`
@@ -53,7 +58,7 @@ pub fn draw(self: AgentCard, canvas: *Canvas) !void {
 /// The action a click on the card performs.
 /// Example: `hits.add(.{ .area = cells, .action = card.action() });`
 pub fn action(self: AgentCard) action_module.Action {
-    return .{ .intent = .{ .focus_agent = self.agent.key } };
+    return .{ .intent = self.navigation orelse .{ .focus_agent = self.agent.key } };
 }
 
 /// Borrows the live event or the branch of this agent's own workspace.
@@ -76,6 +81,10 @@ pub fn detailText(self: AgentCard) []const u8 {
 /// Whether the focused pane of the active tab is this agent's pane.
 /// Example: `if (card.selected()) drawRing();`
 pub fn selected(self: AgentCard) bool {
+    if (!self.connected) {
+        return false;
+    }
+
     const projection = self.context.projection;
     const tab = projection.tab orelse return false;
     if (projection.model.tabs.layout[tab].focused() != self.agent.key.pane_id) {
@@ -107,9 +116,12 @@ fn drawProject(self: AgentCard, canvas: *Canvas, row: Rect) !void {
     const label_width = @max(0, project_width - slot - gap);
     var buffer: [TextFit.max_bytes]u8 = undefined;
     const fit: TextFit = .{ .canvas = canvas, .width = label_width };
-    var label_buffer: [core.max_agent_workspace_label_bytes + 16]u8 = undefined;
-    const label_text = if (self.context.projection.workspaces.delegates(self.agent.key.pane_id))
-        std.fmt.bufPrint(&label_buffer, "{s} \u{00b7} coordinator", .{self.agent.workspaceLabel()}) catch self.agent.workspaceLabel()
+    var label_buffer: [core.max_agent_workspace_label_bytes + client.Machines.max_label_bytes + 32]u8 = undefined;
+    const is_coordinator = if (self.machine_label.len != 0) self.coordinator else self.context.projection.workspaces.delegates(self.agent.key.pane_id);
+    const label_text = if (self.machine_label.len != 0)
+        std.fmt.bufPrint(&label_buffer, "{s} · {s}{s}", .{ self.machine_label, self.agent.workspaceLabel(), if (is_coordinator) " · coordinator" else "" }) catch self.machine_label
+    else if (is_coordinator)
+        std.fmt.bufPrint(&label_buffer, "{s} · coordinator", .{self.agent.workspaceLabel()}) catch self.agent.workspaceLabel()
     else
         self.agent.workspaceLabel();
     const label: Label = .{ .text = label_text, .color = palette.subtext0, .face = .sans, .size = .small };
@@ -123,10 +135,10 @@ fn drawProject(self: AgentCard, canvas: *Canvas, row: Rect) !void {
 /// Draws the status glyph, word and age at the right of `row`; returns the width used.
 /// Example: `const used = try card.drawStatus(canvas, row);`
 pub fn drawStatus(self: AgentCard, canvas: *Canvas, row: Rect) !f32 {
-    const state = self.agent.status;
+    const state = if (self.connected) self.agent.status else .unknown;
     const ink = status_glyph.color(canvas.theme.palette, state);
     const gap = self.geometry.px(6);
-    const word = status_glyph.label(state, self.agent.blockedReason());
+    const word = if (self.connected) status_glyph.label(state, self.agent.blockedReason()) else "offline";
     var age_buffer: [age_label.max_bytes]u8 = undefined;
     var text_buffer: [32]u8 = undefined;
     const text = switch (state) {
@@ -154,6 +166,10 @@ pub fn drawStatus(self: AgentCard, canvas: *Canvas, row: Rect) !f32 {
     if (state == .working) {
         const frame: u8 = if (canvas.animation) |clock| @truncate(clock.step(120 * std.time.ns_per_ms)) else self.context.projection.sidebar_animation_frame;
         glyph.alpha = status_glyph.pulse(frame);
+    } else if (state == .ready) {
+        if (canvas.animation) |clock| {
+            _ = clock.step(std.time.ns_per_s);
+        }
     }
 
     if (glyph_width > 0) {

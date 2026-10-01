@@ -672,3 +672,163 @@ test "the machine list adds, disables, renames and removes machines through mach
     try window_machines.reconcile(gui);
     try std.testing.expectEqual(@as(?u8, null), gui.machines.findLabel("gpu"));
 }
+
+test "global activity draws a hidden task under its coordinator and disables stale navigation" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.showSidebar(true);
+    const gui = fixture.session.gui;
+    var box = try socketPair();
+    defer box.channel.deinit(std.testing.io);
+    defer box.peer.deinit(std.testing.io);
+    const slot = try openMachine(fixture.session, &box.channel);
+    const own = window_machines.window(gui);
+    const remote = &gui.clients[slot];
+    const key: data.AgentKey = .{ .pane_id = Session.pane_id, .pane_generation = 1 };
+    _ = try own.model.agent_snapshot.replace(.{ .revision = 1, .agents = &.{.{
+        .key = key,
+        .session_id = .{1} ** 16,
+        .location = Session.location,
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .working,
+    }} });
+    _ = try remote.model.agent_snapshot.replace(.{ .revision = 1, .agents = &.{.{
+        .key = key,
+        .session_id = .{2} ** 16,
+        .location = .{ .workspace = .{ .workspace = @enumFromInt(2) }, .tab_id = @enumFromInt(2) },
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .blocked,
+    }} });
+    _ = try remote.model.workspace_list_snapshot.replace(.{
+        .revision = 1,
+        .entries = &.{},
+        .worktrees = &.{.{
+            .worktree = @enumFromInt(1),
+            .source = @enumFromInt(1),
+            .workspace = @enumFromInt(2),
+            .branch = "fix",
+            .coordinator = .{ .session_id = .{1} ** 16, .pane_id = key.pane_id, .pane_generation = key.pane_generation },
+        }},
+    });
+    remote.model.runtime_link.phase = .connected;
+    _ = gui.machines.summarize(slot, &remote.model, std.testing.io);
+    try fixture.paint(gui.projection());
+    const parent: client.Intent = .{ .focus_machine_agent = .{ .slot = 0, .key = key, .session_id = .{1} ** 16 } };
+    const child: client.Intent = .{ .focus_machine_agent = .{ .slot = slot, .key = key, .session_id = .{2} ** 16 } };
+    const parent_bounds = fixture.bandTarget(parent).?;
+    const child_bounds = fixture.bandTarget(child).?;
+    try std.testing.expect(child_bounds.x > parent_bounds.x);
+    try std.testing.expect(child_bounds.y > parent_bounds.y);
+    try std.testing.expectEqualDeep(child, fixture.clickBand(child_bounds, 0).intent);
+    try std.testing.expect(gui.app == own);
+
+    remote.model.runtime_link.phase = .lost;
+    _ = gui.machines.summarize(slot, &remote.model, std.testing.io);
+    try fixture.paint(gui.projection());
+    try std.testing.expectEqual(@as(usize, 2), fixture.chrome.sidebar.activity_len);
+    try std.testing.expect(fixture.bandTarget(child) == null);
+    try window_machines.openActivity(gui, child);
+    try std.testing.expect(gui.app == own);
+}
+
+test "hidden ready activity keeps its age advancing without a working agent" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.showSidebar(true);
+    const gui = fixture.session.gui;
+    var box = try socketPair();
+    defer box.channel.deinit(std.testing.io);
+    defer box.peer.deinit(std.testing.io);
+    const slot = try openMachine(fixture.session, &box.channel);
+    const remote = &gui.clients[slot];
+    _ = try remote.model.agent_snapshot.replace(.{ .revision = 1, .agents = &.{.{
+        .key = .{ .pane_id = Session.pane_id, .pane_generation = 1 },
+        .session_id = .{2} ** 16,
+        .location = .{ .workspace = .{ .workspace = @enumFromInt(2) }, .tab_id = @enumFromInt(2) },
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .ready,
+        .status_age_s = 59,
+    }} });
+    remote.model.runtime_link.phase = .connected;
+    fixture.chrome.now_ns = 10 * std.time.ns_per_s;
+    try fixture.paint(gui.projection());
+    const delay = fixture.chrome.animation.wakeupAfter(fixture.chrome.now_ns);
+    try std.testing.expect(delay > 0 and delay <= 1000);
+    fixture.chrome.now_ns += std.time.ns_per_s;
+    try fixture.paint(gui.projection());
+    try std.testing.expectEqual(@as(u32, 60), fixture.chrome.machine_ages[slot].secondsAt(0));
+    remote.model.runtime_link.phase = .lost;
+    try fixture.paint(gui.projection());
+    try std.testing.expectEqual(@as(u32, 0), fixture.chrome.animation.wakeupAfter(fixture.chrome.now_ns));
+}
+
+test "activity navigation waits for a frame and rejects a reused remote session" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+    var box = try socketPair();
+    defer box.channel.deinit(std.testing.io);
+    defer box.peer.deinit(std.testing.io);
+    const slot = try openMachine(session, &box.channel);
+    const remote = &gui.clients[slot];
+    const key: data.AgentKey = .{ .pane_id = Session.pane_id, .pane_generation = 1 };
+    _ = try remote.model.agent_snapshot.replace(.{ .revision = 1, .agents = &.{.{
+        .key = key,
+        .session_id = .{1} ** 16,
+        .location = .{ .workspace = .{ .workspace = @enumFromInt(2) }, .tab_id = @enumFromInt(2) },
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .working,
+    }} });
+    const target: client.Intent = .{ .focus_machine_agent = .{ .slot = slot, .key = key, .session_id = .{1} ** 16 } };
+    remote.model.runtime_link.phase = .connected;
+    const token = try session.draw();
+    try window_machines.openActivity(gui, target);
+    try std.testing.expectEqual(@as(?u8, slot), gui.pending_machine);
+    try std.testing.expectEqualDeep(@as(?client.Intent, target), gui.pending_activity);
+    try std.testing.expect(gui.app == window_machines.window(gui));
+    remote.model.agent_snapshot.items[0].session_id = .{2} ** 16;
+    try input_support.presented(gui, token, true);
+    try std.testing.expect(gui.pending_activity == null);
+    try std.testing.expect(gui.pending_machine == null);
+    try std.testing.expect(gui.app == window_machines.window(gui));
+}
+
+test "opening remote activity queues the pane attachment only on its owning client" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+    var box = try socketPair();
+    defer box.channel.deinit(std.testing.io);
+    defer box.peer.deinit(std.testing.io);
+    const slot = try openMachine(session, &box.channel);
+    const remote = &gui.clients[slot];
+    const key: data.AgentKey = .{ .pane_id = Session.pane_id, .pane_generation = 1 };
+    _ = try remote.model.agent_snapshot.replace(.{ .revision = 1, .agents = &.{.{
+        .key = key,
+        .session_id = .{2} ** 16,
+        .location = .{ .workspace = .{ .workspace = @enumFromInt(2) }, .tab_id = @enumFromInt(2) },
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .working,
+    }} });
+    remote.model.runtime_link.phase = .connected;
+    const own = window_machines.window(gui);
+    const own_outbox = own.model.to_runtime.len;
+    try window_machines.openActivity(gui, .{ .focus_machine_agent = .{ .slot = slot, .key = key, .session_id = .{2} ** 16 } });
+    try std.testing.expect(gui.app == remote);
+    try std.testing.expect(gui.pending_activity == null);
+    try std.testing.expect(remote.model.to_runtime.len > 0);
+    const message = remote.model.to_runtime.items[remote.model.to_runtime.head];
+    try std.testing.expect(message == .open_pane);
+    try std.testing.expectEqual(Session.pane_id, message.open_pane.target.pane);
+    try std.testing.expectEqual(own_outbox, own.model.to_runtime.len);
+    // The local pane with the same numeric id is still the local focus.
+    const local_tab = own.model.tabs.activeSlot().?;
+    try std.testing.expectEqual(Session.pane_id, own.model.tabs.layout[local_tab].focused().?);
+}

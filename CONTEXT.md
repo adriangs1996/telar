@@ -311,6 +311,19 @@ An agent in a project's own checkout that delegates tasks to agents in
 worktrees and follows them through `telar agent` and `telar worktree`.
 _Avoid_: Orchestrator, Manager agent
 
+**Coordinator reference**:
+An optional attribution on a task, naming the delegating agent by its
+runtime-generated 128-bit pane session id and exact pane id/generation.
+It matches across machines without depending on a mutable machine label and
+never authorizes an operation. A missing coordinator does not hide its tasks.
+_Avoid_: Parent PID, machine name
+
+**Machine activity**:
+The window's global presentation of runtime-owned agents and tracked commands
+from its connected machines. It borrows each machine's own replica, qualifies
+navigation by machine and keeps disconnected activity visibly stale.
+_Avoid_: Global runtime, fleet hub
+
 **Task**:
 The work delegated to one worktree, named by its required title. It is what
 the user and the coordinator refer to.

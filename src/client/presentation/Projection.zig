@@ -4,6 +4,7 @@ const PresentationIngress = @import("PresentationIngress.zig");
 const hints_support = @import("../input/hints_support.zig");
 const CopyProjection = @import("../workspace/CopyProjection.zig");
 const Machines = @import("../machines/Machines.zig");
+const MachineActivity = @import("../machines/MachineActivity.zig");
 const Projection = @This();
 
 version: data.Version,
@@ -32,6 +33,7 @@ system_metrics: ?data.SystemMetrics,
 /// The window's machines, for the chrome that switches them; null in a
 /// host that holds one machine.
 machines: ?*const Machines = null,
+activity_sources: []const MachineActivity = &.{},
 bar_state: *const data.BarsState,
 status_mode: hints_support.Mode,
 diagnostic: ?[]const u8,

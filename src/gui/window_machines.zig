@@ -230,6 +230,8 @@ pub fn select(gui: *GuiAdapter, slot: u8) !void {
 /// ```
 pub fn choose(gui: *GuiAdapter, request: data.MachineRequest) !void {
     const machines = &gui.machines;
+    gui.pending_activity = null;
+    gui.pending_machine = null;
     switch (request) {
         .slot => |slot| {
             // Choosing an unreachable machine also tries it again now.
@@ -296,6 +298,7 @@ pub fn handle(gui: *GuiAdapter, slot: u8, message: client.Message) !?u8 {
     const status = try app.update(message);
     _ = gui.machines.summarize(slot, &app.model, app.io);
     try client.machine_presentation.settle(app);
+    try settleActivity(gui);
 
     if (slot != gui.machines.active) {
         dropHostEffects(app);
@@ -586,4 +589,94 @@ test "one window slot gets a distinct identity on each machine" {
     try std.testing.expect(machineIdentity(window_identity, "dev@box") != machineIdentity(window_identity, "dev@gpu"));
     try std.testing.expectEqual(machineIdentity(window_identity, "dev@box"), machineIdentity(window_identity, "dev@box"));
     try std.testing.expect(machineIdentity(window_identity, "dev@box") != window_identity);
+}
+
+/// Opens a machine-qualified activity only after revalidating its delivered
+/// identity. A frame or workspace handoff in flight finishes first.
+/// Example: `try window_machines.openActivity(gui, .{ .focus_machine_agent = target });`
+pub fn openActivity(gui: *GuiAdapter, intent: client.Intent) !void {
+    gui.pending_activity = intent;
+    try settleActivity(gui);
+}
+
+/// Completes pending activity navigation on the owning client. Stale targets
+/// are discarded rather than reinterpreted in the currently shown machine.
+/// Example: `try window_machines.settleActivity(gui);`
+pub fn settleActivity(gui: *GuiAdapter) !void {
+    const intent = gui.pending_activity orelse return;
+    const slot = switch (intent) {
+        .focus_machine_agent, .peek_machine_agent => |target| target.slot,
+        .open_machine_worktree => |target| target.slot,
+        else => {
+            clearActivity(gui);
+            return;
+        },
+    };
+    if (slot >= Machines.capacity or !gui.machines.shown(slot) or !gui.machines.live[slot]) {
+        clearActivity(gui);
+        return;
+    }
+
+    const app = &gui.clients[slot];
+    if (app.model.runtime_link.phase != .connected) {
+        clearActivity(gui);
+        return;
+    }
+
+    switch (intent) {
+        .focus_machine_agent, .peek_machine_agent => |target| if (target.resolve(&app.model) == null) {
+            clearActivity(gui);
+            return;
+        },
+        .open_machine_worktree => |target| {
+            if (gui.machines.generation[slot] != target.machine_generation) {
+                clearActivity(gui);
+                return;
+            }
+
+            const row = app.model.workspace_list_snapshot.worktree(target.worktree) orelse {
+                clearActivity(gui);
+                return;
+            };
+            if (row.workspace != target.workspace) {
+                clearActivity(gui);
+                return;
+            }
+        },
+        else => unreachable,
+    }
+
+    if (gui.app.presentation.active != null) {
+        gui.pending_machine = if (slot == gui.machines.active) null else slot;
+        return;
+    }
+
+    try select(gui, slot);
+    if (!app.model.request_lifecycle.tracker.isEmpty()) {
+        return;
+    }
+
+    switch (intent) {
+        .focus_machine_agent => |target| _ = try client.agent_navigation.navigateAgent(app, target.key),
+        .peek_machine_agent => |target| _ = try client.agent_peek.open(app, target.key),
+        .open_machine_worktree => |target| _ = try client.workspace_handoff.selectWorkspace(app, .{ .workspace = target.workspace }),
+        else => unreachable,
+    }
+
+    clearActivity(gui);
+}
+
+fn clearActivity(gui: *GuiAdapter) void {
+    if (gui.pending_activity) |intent| {
+        const slot: ?u8 = switch (intent) {
+            .focus_machine_agent, .peek_machine_agent => |target| target.slot,
+            .open_machine_worktree => |target| target.slot,
+            else => null,
+        };
+        if (slot != null and gui.pending_machine == slot) {
+            gui.pending_machine = null;
+        }
+    }
+
+    gui.pending_activity = null;
 }

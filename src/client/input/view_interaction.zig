@@ -1,6 +1,8 @@
 //! Application policy for dispatching one semantic view interaction.
 const core = @import("telar-core");
 const model_data = @import("model");
+const MachineAgent = @import("../machines/MachineAgent.zig");
+const MachineWorktree = @import("../machines/MachineWorktree.zig");
 const TabMoveIntent = @import("../workspace/TabMoveIntent.zig");
 
 pub const Intent = union(enum) {
@@ -40,6 +42,9 @@ pub const Intent = union(enum) {
     machine_picker,
     /// One machine of the sidebar's switcher, by its slot.
     select_machine: u8,
+    focus_machine_agent: MachineAgent,
+    peek_machine_agent: MachineAgent,
+    open_machine_worktree: MachineWorktree,
 };
 
 /// What a secondary (right) press on a target does: rename a tab, peek at an
@@ -52,13 +57,14 @@ pub fn secondary(intent: Intent) Intent {
     return switch (intent) {
         .select_tab => |tab_id| .{ .rename_tab = tab_id },
         .focus_agent => |key| .{ .peek_agent = key },
+        .focus_machine_agent => |target| .{ .peek_machine_agent = target },
         else => .none,
     };
 }
 
 pub fn capturesPaneInput(intent: Intent) bool {
     return switch (intent) {
-        .select_tab, .focus_agent, .peek_agent => true,
+        .select_tab, .focus_agent, .peek_agent, .focus_machine_agent, .peek_machine_agent, .open_machine_worktree => true,
         else => false,
     };
 }

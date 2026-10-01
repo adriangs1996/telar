@@ -22,6 +22,9 @@ pub const max_color_bytes = core.MachineProfile.max_color_bytes;
 pub const max_telar_path_bytes = core.remote_telar.max_path_bytes;
 
 used: [capacity]bool = @splat(false),
+/// Window-local admission generation; a reused slot is a different machine.
+generation: [capacity]u64 = @splat(0),
+next_generation: u64 = 1,
 /// The profile's id; `.invalid` for this machine and a temporary row.
 id: [capacity]core.MachineId = @splat(.invalid),
 label_bytes: [capacity][max_label_bytes]u8 = undefined,
@@ -57,6 +60,7 @@ sampled_ns: [capacity]u64 = @splat(0),
 /// that changed neither costs two comparisons.
 metrics_revision: [capacity]u64 = @splat(0),
 agent_revision: [capacity]u64 = @splat(0),
+workspace_revision: [capacity]u64 = @splat(0),
 /// The slot the window presents.
 active: u8 = local_slot,
 /// Advances when any column a surface draws changes.
@@ -71,6 +75,8 @@ pub fn add(self: *Machines, row: MachineRow, wanted: ?u8) !u8 {
     const slot = wanted orelse self.freeSlot() orelse return error.TooManyMachines;
     std.debug.assert(!self.used[slot]);
     self.used[slot] = true;
+    self.generation[slot] = self.next_generation;
+    self.next_generation += 1;
     self.write(slot, row);
     self.pinned[slot] = false;
     self.phase[slot] = .connecting;
@@ -83,6 +89,7 @@ pub fn add(self: *Machines, row: MachineRow, wanted: ?u8) !u8 {
     self.sampled_ns[slot] = 0;
     self.metrics_revision[slot] = 0;
     self.agent_revision[slot] = 0;
+    self.workspace_revision[slot] = 0;
     self.revision +%= 1;
     return slot;
 }
@@ -94,6 +101,11 @@ pub fn add(self: *Machines, row: MachineRow, wanted: ?u8) !u8 {
 /// ```
 pub fn update(self: *Machines, slot: u8, row: MachineRow) void {
     std.debug.assert(self.used[slot]);
+    if (!std.mem.eql(u8, self.destination(slot), row.destination)) {
+        self.generation[slot] = self.next_generation;
+        self.next_generation += 1;
+    }
+
     self.write(slot, row);
     self.revision +%= 1;
 }
@@ -184,7 +196,8 @@ pub fn summarize(self: *Machines, slot: u8, model: *const data.ClientModel, io: 
     const needs_setup = phase == .failed and model.runtime_link.setup_repairs;
     const metrics_changed = model.system_metrics_revision != self.metrics_revision[slot];
     const agents_changed = model.agent_revision != self.agent_revision[slot];
-    if (self.phase[slot] == phase and self.needs_setup[slot] == needs_setup and !metrics_changed and !agents_changed) {
+    const workspaces_changed = model.workspace_list_snapshot.revision != self.workspace_revision[slot];
+    if (self.phase[slot] == phase and self.needs_setup[slot] == needs_setup and !metrics_changed and !agents_changed and !workspaces_changed) {
         return false;
     }
 
@@ -204,8 +217,10 @@ pub fn summarize(self: *Machines, slot: u8, model: *const data.ClientModel, io: 
         attention_now = needsAttention(model);
     }
 
+    self.workspace_revision[slot] = model.workspace_list_snapshot.revision;
+
     const cpu: ?u8 = if (model.system_metrics) |metrics| metrics.cpu_percent else null;
-    if (self.phase[slot] == phase and self.needs_setup[slot] == needs_setup and self.attention[slot] == attention_now and std.meta.eql(self.cpu_percent[slot], cpu)) {
+    if (self.phase[slot] == phase and self.needs_setup[slot] == needs_setup and self.attention[slot] == attention_now and std.meta.eql(self.cpu_percent[slot], cpu) and !agents_changed and !workspaces_changed) {
         return false;
     }
 
@@ -372,4 +387,30 @@ test "only a new agent snapshot changes a row's attention" {
     });
     try std.testing.expect(machines.summarize(slot, &model, std.testing.io));
     try std.testing.expect(!machines.attention[slot]);
+}
+
+test "hidden activity invalidates the window even when attention remains unchanged" {
+    var machines: Machines = .{};
+    const slot = try machines.add(.{ .label = "box" }, null);
+    var model = data.ClientModel.init(std.testing.allocator, true);
+    defer model.deinit();
+    model.runtime_link.phase = .connected;
+    _ = machines.summarize(slot, &model, std.testing.io);
+    const previous = machines.revision;
+    model.agent_revision += 1;
+    try std.testing.expect(machines.summarize(slot, &model, std.testing.io));
+    try std.testing.expect(machines.revision > previous);
+    model.workspace_list_snapshot.revision += 1;
+    try std.testing.expect(machines.summarize(slot, &model, std.testing.io));
+    try std.testing.expect(!machines.summarize(slot, &model, std.testing.io));
+}
+
+test "renaming a machine retains its admission but a changed destination invalidates it" {
+    var machines: Machines = .{};
+    const slot = try machines.add(.{ .label = "box", .destination = "dev@box" }, null);
+    const generation = machines.generation[slot];
+    machines.update(slot, .{ .label = "builder", .destination = "dev@box" });
+    try std.testing.expectEqual(generation, machines.generation[slot]);
+    machines.update(slot, .{ .label = "builder", .destination = "dev@other" });
+    try std.testing.expect(machines.generation[slot] != generation);
 }

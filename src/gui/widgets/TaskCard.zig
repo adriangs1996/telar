@@ -34,6 +34,9 @@ card: FleetCard,
 nested: bool = false,
 geometry: CardGeometry,
 age_s: u32,
+navigation: ?client.Intent = null,
+machine_label: []const u8 = "",
+connected: bool = true,
 
 /// Draws the card at its composed bounds. Example: `try card.draw(canvas);`
 pub fn draw(self: TaskCard, canvas: *Canvas) !void {
@@ -60,7 +63,7 @@ pub fn draw(self: TaskCard, canvas: *Canvas) !void {
 /// A click focuses the agent's pane, which opens the worktree's tab.
 /// Example: `hits.add(.{ .area = cells, .action = card.action() });`
 pub fn action(self: TaskCard) action_module.Action {
-    return .{ .intent = .{ .focus_agent = self.agent.key } };
+    return .{ .intent = self.navigation orelse .{ .focus_agent = self.agent.key } };
 }
 
 fn base(self: TaskCard) AgentCard {
@@ -70,6 +73,9 @@ fn base(self: TaskCard) AgentCard {
         .agent = self.agent,
         .geometry = self.geometry,
         .age_s = self.age_s,
+        .navigation = self.navigation,
+        .machine_label = self.machine_label,
+        .connected = self.connected,
     };
 }
 
@@ -91,19 +97,23 @@ fn drawCompact(self: TaskCard, canvas: *Canvas) !void {
         .width = @max(0, self.bounds.width - 2 * inset),
         .height = self.geometry.title_row,
     };
-    const status = self.agent.status;
+    const status = if (self.connected) self.agent.status else .unknown;
     var glyph: Label = .{ .text = status_glyph.glyph(status, self.agent.blockedReason()), .color = status_glyph.color(palette, status), .face = .sans, .size = .small };
     if (status == .working) {
         const frame: u8 = if (canvas.animation) |clock| @truncate(clock.step(120 * std.time.ns_per_ms)) else self.context.projection.sidebar_animation_frame;
         glyph.alpha = status_glyph.pulse(frame);
+    } else if (self.connected) {
+        if (canvas.animation) |clock| {
+            _ = clock.step(std.time.ns_per_s);
+        }
     }
 
     const glyph_width = canvas.iconSize(glyph);
     try canvas.iconAt(.{ .x = row.x, .y = row.y, .width = glyph_width, .height = row.height }, glyph);
 
     var age_buffer: [age_label.max_bytes]u8 = undefined;
-    var right_buffer: [core.max_git_branch_bytes + age_label.max_bytes + 8]u8 = undefined;
-    const right_text = std.fmt.bufPrint(&right_buffer, "\u{2387} {s}  {s}", .{ self.task.handle(), age_label.format(self.age_s, &age_buffer) }) catch self.task.handle();
+    var right_buffer: [core.max_git_branch_bytes + client.Machines.max_label_bytes + age_label.max_bytes + 16]u8 = undefined;
+    const right_text = if (!self.connected) std.fmt.bufPrint(&right_buffer, "{s} · offline", .{self.machine_label}) catch "offline" else if (self.machine_label.len != 0) std.fmt.bufPrint(&right_buffer, "{s} · {s}", .{ self.machine_label, age_label.format(self.age_s, &age_buffer) }) catch self.machine_label else std.fmt.bufPrint(&right_buffer, "\u{2387} {s}  {s}", .{ self.task.handle(), age_label.format(self.age_s, &age_buffer) }) catch self.task.handle();
     const right: Label = .{ .text = right_text, .color = palette.overlay1, .face = .sans, .size = .small };
     const right_width = @min(row.width / 2, try canvas.measure(right));
     try fitted(canvas, .{ .x = row.x + row.width - right_width, .y = row.y, .width = right_width, .height = row.height }, right);
@@ -120,6 +130,10 @@ fn drawFacts(self: TaskCard, canvas: *Canvas, row: Rect) !void {
     const palette = canvas.theme.palette;
     var buffer: [TextFit.max_bytes]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
+    if (self.machine_label.len != 0) {
+        writer.print("{s} · ", .{self.machine_label}) catch {};
+    }
+
     writer.print("\u{2387} {s}", .{self.task.handle()}) catch {};
     if (self.task.diff_files != 0) {
         writer.print("  +{d} \u{2212}{d} \u{00b7} {d}", .{ self.task.diff_added, self.task.diff_removed, self.task.diff_files }) catch {};

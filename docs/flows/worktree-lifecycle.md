@@ -27,7 +27,7 @@ cli.worktree.create
         |        it prints, so a noisy post-checkout hook never fails an add
         |        Git finished; Claude Code's worktree hooks get 360 s
         |
-schema.register_worktree{source, created_by, path, branch, base, title, brief}
+schema.register_worktree{source, created_by, coordinator, path, branch, base, title, brief}
         |
 client_request.receive (control) -> worktree_lifecycle.register
         |  Worktrees.register (slotOfPath: the same path answers the same id;
@@ -202,3 +202,10 @@ inside a telar pane, and prints the path Claude Code must use.
   branch bound, references by title and ambiguous branches.
 - `src/model/workspace/worktree_lifecycle.zig`: only gone rows are forgotten.
 - Porcelain parsing, branch naming and the schema corpus.
+
+A create from an agent pane also records an optional coordinator reference:
+the pane's random session identity and exact pane generation, verified by the
+source runtime. Remote forwarding retains it as attribution; it grants no
+execution authority. Re-registering a tracked path can add an explicit
+reference without changing the worktree id, and an unattributed registration
+never erases one. See [Machine activity](machine-activity.md).

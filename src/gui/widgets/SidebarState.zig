@@ -5,6 +5,13 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const SnapshotMark = @import("SnapshotMark.zig");
 const PixelScroll = @import("PixelScroll.zig");
+const ActivityMark = struct {
+    slot: u8,
+    generation: u64,
+    agents: SnapshotMark,
+    workspaces: u64,
+    link: u64,
+};
 const SidebarState = @This();
 
 agents: PixelScroll = .{},
@@ -19,11 +26,42 @@ fleet: [core.max_agent_snapshot_entries]client.FleetEntry = undefined,
 ordered: SnapshotMark = .{},
 ordered_workspaces: u64 = 0,
 ordered_focus: ?core.PaneId = null,
+activity: [client.machine_activity.max_entries]client.MachineActivityEntry = undefined,
+activity_len: usize = 0,
+activity_marks: [client.Machines.capacity]ActivityMark = undefined,
+activity_source_count: usize = 0,
+activity_active: ?u8 = null,
 
 /// Orders the fleet only when the agents, the workspace list or the focused
 /// pane changed, retaining indices rather than borrowed agents.
 /// Example: `state.observe(projection);`
 pub fn observe(self: *SidebarState, projection: *const client.Projection) void {
+    if (projection.activity_sources.len != 0) {
+        const machines = projection.machines orelse return;
+        const focused = focusedPane(projection);
+        var changed = self.activity_source_count != projection.activity_sources.len or self.activity_active != machines.active or self.ordered_focus != focused;
+        for (projection.activity_sources, 0..) |source, index| {
+            const mark: ActivityMark = .{
+                .slot = source.slot,
+                .generation = machines.generation[source.slot],
+                .agents = SnapshotMark.of(&source.model.agent_snapshot),
+                .workspaces = source.model.workspace_list_snapshot.revision,
+                .link = source.model.link_revision,
+            };
+            changed = changed or index >= self.activity_source_count or !std.meta.eql(mark, self.activity_marks[index]);
+            self.activity_marks[index] = mark;
+        }
+
+        if (changed) {
+            self.activity_len = client.machine_activity.order(projection.activity_sources, machines.active, &self.activity).len;
+            self.activity_source_count = projection.activity_sources.len;
+            self.activity_active = machines.active;
+            self.ordered_focus = focused;
+        }
+
+        return;
+    }
+
     const snapshot = projection.agents;
     const mark = SnapshotMark.of(snapshot);
     const focused = focusedPane(projection);
@@ -94,4 +132,3 @@ pub fn revealWorkspace(self: *SidebarState, projection: *const client.Projection
 pub fn ordering(self: *const SidebarState) []const u8 {
     return self.order[0..self.order_len];
 }
-

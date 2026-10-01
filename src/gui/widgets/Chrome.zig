@@ -28,6 +28,9 @@ const Chrome = @This();
 maps: GenericPresentedState(HitState) = .{},
 sidebar: SidebarState = .{},
 ages: AgentAges = .{},
+machine_ages: [client.Machines.capacity]AgentAges = @splat(.{}),
+machine_link_revision: [client.Machines.capacity]u64 = @splat(0),
+machine_generation: [client.Machines.capacity]u64 = @splat(0),
 rings: RingFades = .{},
 progress: ProgressMotions = .{},
 favicons: Favicons = .{},
@@ -58,8 +61,19 @@ pub fn begin(self: *Chrome, canvas: *Canvas, projection: *const client.Projectio
     pending.sidebar_regions = if (canvas.sidebar.expanded()) try SidebarRegions.resolve(canvas, pending.bands.sidebar, projection.workspaces.project_count, machinesShown(projection)) else .{};
     pending.tab_strip = .{ .x = 0, .y = 0, .width = 0, .height = 0 };
     self.ages.observe(projection.agents, self.now_ns);
+    for (projection.activity_sources) |source| {
+        const generation = projection.machines.?.generation[source.slot];
+        if (self.machine_link_revision[source.slot] != source.model.link_revision or self.machine_generation[source.slot] != generation) {
+            self.machine_ages[source.slot] = .{};
+            self.machine_link_revision[source.slot] = source.model.link_revision;
+            self.machine_generation[source.slot] = generation;
+        }
+
+        self.machine_ages[source.slot].observe(&source.model.agent_snapshot, self.now_ns);
+    }
+
     self.progress.begin();
-    const context: Context = .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = self.hovered, .hovered_placement = self.hovered_placement, .presented_workspace = self.presented().workspace, .ages = &self.ages, .favicons = &self.favicons, .progress = &self.progress, .sidebar_regions = &pending.sidebar_regions, .tab_strip = &pending.tab_strip, .pointer_in_tabs = self.pointer_in_tabs, .tab_anchor = &self.tab_anchor, .bar_panel = &pending.bar_panel, .bar_overflow = &pending.bar_overflow };
+    const context: Context = .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = self.hovered, .hovered_placement = self.hovered_placement, .presented_workspace = self.presented().workspace, .ages = &self.ages, .machine_ages = &self.machine_ages, .favicons = &self.favicons, .progress = &self.progress, .sidebar_regions = &pending.sidebar_regions, .tab_strip = &pending.tab_strip, .pointer_in_tabs = self.pointer_in_tabs, .tab_anchor = &self.tab_anchor, .bar_panel = &pending.bar_panel, .bar_overflow = &pending.bar_overflow };
     pending.workspace = context.workspaceId();
     return context;
 }

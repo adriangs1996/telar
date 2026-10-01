@@ -216,3 +216,9 @@ limits.
   window to this machine. `telar gui --machine box` shows box first.
 - Not verified here: the drawn segment, tabs and chips, because this session
   cannot capture the window (macOS screen recording permission).
+
+The sidebar activity list borrows every live machine's agent and worktree
+replicas while projects and terminals still belong to the selected machine.
+Hidden metadata changes advance the window's machine revision even if its
+attention indicator stays the same. See [Machine activity](machine-activity.md)
+for coordinator attribution, stale cards and qualified navigation.

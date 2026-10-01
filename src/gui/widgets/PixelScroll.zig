@@ -1,17 +1,18 @@
 //! Bounded, disposable scrolling for a native list in device pixels.
+const std = @import("std");
 const keyinput = @import("keyinput");
 const PixelScroll = @This();
 
-scroll: u16 = 0,
-maximum_scroll: u16 = 0,
+scroll: u32 = 0,
+maximum_scroll: u32 = 0,
 step: u16 = 0,
 remainder: f64 = 0,
 
 /// Constrains the offset to the current list geometry.
 /// Example: `scroll.setBounds(pitch, total - viewport.height);`
 pub fn setBounds(self: *PixelScroll, step: f32, maximum: f32) void {
-    self.step = @intFromFloat(@min(65535, @max(0, step)));
-    self.maximum_scroll = @intFromFloat(@min(65535, @ceil(@max(0, maximum))));
+    self.step = @intFromFloat(@min(std.math.maxInt(u16), @max(0, step)));
+    self.maximum_scroll = @intFromFloat(@min(@as(f64, @floatFromInt(std.math.maxInt(u32))), @ceil(@max(0, @as(f64, maximum)))));
     self.scroll = @min(self.scroll, self.maximum_scroll);
 }
 
@@ -44,7 +45,7 @@ pub fn scrollBy(self: *PixelScroll, delta: f64) bool {
     self.remainder += delta;
     const movement = @trunc(self.remainder);
     self.remainder -= movement;
-    const next: u16 = @intFromFloat(@max(0, @min(@as(f64, @floatFromInt(self.maximum_scroll)), @as(f64, @floatFromInt(self.scroll)) + movement)));
+    const next: u32 = @intFromFloat(@max(0, @min(@as(f64, @floatFromInt(self.maximum_scroll)), @as(f64, @floatFromInt(self.scroll)) + movement)));
     if (next == self.scroll) {
         return false;
     }
@@ -58,5 +59,13 @@ pub fn scrollBy(self: *PixelScroll, delta: f64) bool {
 pub fn reveal(self: *PixelScroll, item: [2]f32, height: f32) void {
     const offset: f32 = @floatFromInt(self.scroll);
     const next = if (item[0] < offset or item[1] - item[0] > height) item[0] else if (item[1] > offset + height) item[1] - height else offset;
-    self.scroll = @intFromFloat(@max(0, @min(@as(f32, @floatFromInt(self.maximum_scroll)), @ceil(next))));
+    self.scroll = @intFromFloat(@max(0, @min(@as(f64, @floatFromInt(self.maximum_scroll)), @ceil(@as(f64, next)))));
+}
+
+test "a global activity list can reveal cards beyond the old 16-bit pixel limit" {
+    var scroll: PixelScroll = .{};
+    scroll.setBounds(100, 200000);
+    scroll.reveal(.{ 190000, 190100 }, 500);
+    try std.testing.expect(scroll.scroll > std.math.maxInt(u16));
+    try std.testing.expect(scroll.scroll <= scroll.maximum_scroll);
 }

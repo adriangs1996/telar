@@ -30,7 +30,7 @@ const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 pub fn apply(client: *Client, tab: usize, interaction: ViewInteractionCommand) !ViewInteractionOutcome {
     var layout_changed = interaction.layout_changed;
     switch (interaction.intent) {
-        .none => {},
+        .none, .focus_machine_agent, .peek_machine_agent, .open_machine_worktree => {},
         else => {
             const applied = try applyIntent(client, interaction.intent);
             layout_changed = layout_changed or applied.layout_changed;
@@ -56,7 +56,7 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
     }
 
     switch (intent) {
-        .none => {},
+        .none, .focus_machine_agent, .peek_machine_agent, .open_machine_worktree => {},
         .toggle_sidebar => {
             _ = try sidebar_toggle.toggleSidebar(client);
         },

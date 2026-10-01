@@ -108,6 +108,8 @@ app: *client.Client,
 machines: client.Machines = .{},
 /// A machine chosen while a frame was in flight, shown when it completes.
 pending_machine: ?u8 = null,
+pending_activity: ?client.Intent = null,
+activity_sources: [client.Machines.capacity]client.MachineActivity = undefined,
 /// Where `machines.json` lives, empty when it cannot be resolved, and the
 /// fingerprint the window last applied.
 profiles_path: [std.fs.max_path_bytes]u8 = undefined,
@@ -190,6 +192,7 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.app = &gui.clients[client.Machines.local_slot];
     gui.machines = .{};
     gui.pending_machine = null;
+    gui.pending_activity = null;
     gui.profiles_path_len = 0;
     gui.profiles_seen = 0;
 
@@ -1521,6 +1524,14 @@ fn dispatchBandPointer(self: *GuiAdapter, event: PointerEvent) !void {
         return;
     }
 
+    switch (command.interaction.intent) {
+        .focus_machine_agent, .peek_machine_agent, .open_machine_worktree => {
+            try window_machines.openActivity(self, command.interaction.intent);
+            return;
+        },
+        else => {},
+    }
+
     const tab = app.model.tabs.activeSlot() orelse return;
     _ = try client.view_interactions.apply(
         app,
@@ -2034,7 +2045,9 @@ fn complete(self: *GuiAdapter, token: u64, delivered: bool) !void {
     }
 
     try client.presentation_delivery.apply(&self.app.model, delivery.commit);
+    try window_machines.settleActivity(self);
     if (self.pending_machine) |slot| {
+        self.pending_machine = null;
         try window_machines.select(self, slot);
     }
 }
@@ -2244,6 +2257,23 @@ pub fn projection(self: *GuiAdapter) client.Projection {
     // Bars belong to the window, whichever machine it shows.
     projected.bar_state = &window_machines.window(self).model.bars;
     projected.machines = &self.machines;
+    var count: usize = 0;
+    for (self.machines.used, self.machines.live, 0..) |used, live, index| {
+        if (!used or !live) {
+            continue;
+        }
+
+        const slot: u8 = @intCast(index);
+        self.activity_sources[count] = .{
+            .slot = slot,
+            .label = self.machines.label(slot),
+            .model = &self.clients[slot].model,
+            .connected = self.machines.enabled[slot] and self.clients[slot].model.runtime_link.phase == .connected,
+        };
+        count += 1;
+    }
+
+    projected.activity_sources = self.activity_sources[0..count];
     return projected;
 }
 
