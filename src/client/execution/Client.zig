@@ -43,7 +43,6 @@ const config_adoption = @import("../config/config_adoption.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
 const link_opening = @import("../links/link_opening.zig");
 const notifications = @import("../notifications/notifications.zig");
-const limit_reached = @import("../notifications/limit_reached.zig");
 const plugin_actions = @import("../plugins/plugin_actions.zig");
 const client_telemetry = @import("../resources/client_telemetry.zig");
 const retired_config = @import("../config/retired_config.zig");

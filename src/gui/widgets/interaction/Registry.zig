@@ -7,8 +7,9 @@ const BandHitMap = @import("../BandHitMap.zig");
 const Registry = @This();
 
 /// Room for every chrome band target (`BandHitMap.capacity`), the open
-/// overlay's rows and editors, and a change review's visible rows.
-pub const capacity = 1024;
+/// overlay's rows and editors, and a change review's visible rows; it
+/// follows the band when the bar and panel limits grow it.
+pub const capacity = @max(1024, 2 * BandHitMap.capacity);
 pub const limit = core.Limit.declare("gui.widgets.registry_capacity", "widget targets", capacity);
 
 comptime {
