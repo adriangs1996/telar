@@ -574,8 +574,10 @@ fn showPreview(gui: *GuiAdapter, action: Target.PreviewAction) void {
 }
 
 fn dispatchIntent(gui: *GuiAdapter, intent: client.Intent) !void {
-    const tab = gui.app.model.tabs.activeSlot() orelse return;
-    _ = try client.view_interactions.apply(gui.app, tab, .{ .intent = intent, .consumed = true });
+    try gui.applyViewInteraction(.{
+        .intent = intent,
+        .consumed = true,
+    });
     _ = gui.widgets.dispatcher.focus(null);
 }
 

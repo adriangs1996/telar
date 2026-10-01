@@ -1061,6 +1061,7 @@ fn drainInput(self: *GuiAdapter) !void {
     }
 
     try self.finishInput(pending);
+    try window_machines.settleActivity(self);
 }
 
 /// Delivers one committed scalar to the focused widget or, failing that, to
@@ -1524,19 +1525,25 @@ fn dispatchBandPointer(self: *GuiAdapter, event: PointerEvent) !void {
         return;
     }
 
-    switch (command.interaction.intent) {
+    try self.applyViewInteraction(command.interaction);
+}
+
+/// Routes delivered widget and band actions through the same owning client.
+/// Example: `try gui.applyViewInteraction(.{ .intent = intent, .consumed = true });`
+pub fn applyViewInteraction(self: *GuiAdapter, interaction: client.ViewInteractionCommand) !void {
+    switch (interaction.intent) {
         .focus_machine_agent, .peek_machine_agent, .open_machine_worktree => {
-            try window_machines.openActivity(self, command.interaction.intent);
+            try window_machines.openActivity(self, interaction.intent);
             return;
         },
         else => {},
     }
 
-    const tab = app.model.tabs.activeSlot() orelse return;
+    const tab = self.app.model.tabs.activeSlot() orelse return;
     _ = try client.view_interactions.apply(
-        app,
+        self.app,
         tab,
-        command.interaction,
+        interaction,
     );
 }
 

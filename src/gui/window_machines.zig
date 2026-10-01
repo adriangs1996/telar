@@ -646,13 +646,23 @@ pub fn settleActivity(gui: *GuiAdapter) !void {
         else => unreachable,
     }
 
+    // A machine switch cancels the old view's input. Finish consuming the
+    // borrowed widget event before that cancellation can drain the queue.
+    if (gui.input_queue.len != 0) {
+        return;
+    }
+
     if (gui.app.presentation.active != null) {
         gui.pending_machine = if (slot == gui.machines.active) null else slot;
         return;
     }
 
+    // Selection can drain gesture recovery synchronously. Do not replay
+    // this same navigation while that recovery finishes.
+    clearActivity(gui);
     try select(gui, slot);
     if (!app.model.request_lifecycle.tracker.isEmpty()) {
+        gui.pending_activity = intent;
         return;
     }
 

@@ -832,3 +832,191 @@ test "opening remote activity queues the pane attachment only on its owning clie
     const local_tab = own.model.tabs.activeSlot().?;
     try std.testing.expectEqual(Session.pane_id, own.model.tabs.layout[local_tab].focused().?);
 }
+
+test "delivered local activity cards focus their pane through pointer keyboard and accessibility input" {
+    const Activation = enum { pointer, keyboard, accessibility };
+    for ([_]Activation{ .pointer, .keyboard, .accessibility }) |activation| {
+        var fixture = try Fixture.init();
+        defer fixture.deinit();
+        try fixture.showSidebar(true);
+        try settleActivitySnapshots(fixture.session);
+        const gui = fixture.session.gui;
+        const app = gui.app;
+        _ = try gui.machines.add(.{ .label = "laptop" }, Machines.local_slot);
+        gui.machines.live[Machines.local_slot] = true;
+        const second: core.PaneId = @enumFromInt(11);
+        try data.pane_split.split(&app.model, app.model.tabs.active, .{
+            .existing_pane = Session.pane_id,
+            .new_pane = second,
+            .location = Session.location,
+            .axis = .horizontal,
+            .area = app.geometry().area,
+        });
+        const key: data.AgentKey = .{ .pane_id = Session.pane_id, .pane_generation = 1 };
+        _ = try app.model.agent_snapshot.replace(.{
+            .revision = 1,
+            .agents = &.{.{
+                .key = key,
+                .session_id = .{1} ** 16,
+                .location = Session.location,
+                .pane_index = 1,
+                .provider = .codex,
+                .status = .working,
+            }},
+        });
+        try fixture.session.settle();
+        try input_support.presented(gui, try fixture.session.draw(), true);
+        const target = try activityTarget(gui, .{ .focus_machine_agent = .{
+            .slot = Machines.local_slot,
+            .key = key,
+            .session_id = .{1} ** 16,
+        } });
+        try std.testing.expectEqual(second, app.model.tabs.layout[app.model.tabs.active].focused().?);
+        switch (activation) {
+            .pointer => {
+                try pointAt(gui, .press, target);
+                try pointAt(gui, .release, target);
+            },
+            .keyboard => {
+                try std.testing.expect(gui.widgets.dispatcher.focus(target.id));
+                try input_support.accept(gui, .{ .key = .{ .code = .enter } });
+                try input_support.pump(gui);
+            },
+            .accessibility => {
+                try input_support.accept(gui, .{ .accessibility = .{
+                    .target_id = target.id.target_id,
+                    .generation = target.id.generation,
+                    .action = .press,
+                } });
+                try input_support.pump(gui);
+            },
+        }
+
+        try std.testing.expectEqual(Session.pane_id, app.model.tabs.layout[app.model.tabs.active].focused().?);
+        try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
+    }
+}
+
+test "a delivered remote activity card switches machines and attaches its agent on pointer input" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.showSidebar(true);
+    try settleActivitySnapshots(fixture.session);
+    const gui = fixture.session.gui;
+    var box = try socketPair();
+    defer box.channel.deinit(std.testing.io);
+    defer box.peer.deinit(std.testing.io);
+    const slot = try openMachine(fixture.session, &box.channel);
+    const remote = &gui.clients[slot];
+    const own = gui.app;
+    const key: data.AgentKey = .{ .pane_id = Session.pane_id, .pane_generation = 1 };
+    _ = try remote.model.agent_snapshot.replace(.{
+        .revision = 1,
+        .agents = &.{.{
+            .key = key,
+            .session_id = .{2} ** 16,
+            .location = Session.location,
+            .pane_index = 1,
+            .provider = .codex,
+            .status = .working,
+        }},
+    });
+    try input_support.presented(gui, try fixture.session.draw(), true);
+    const target = try activityTarget(gui, .{ .focus_machine_agent = .{
+        .slot = slot,
+        .key = key,
+        .session_id = .{2} ** 16,
+    } });
+    try pointAt(gui, .press, target);
+    try pointAt(gui, .release, target);
+    try std.testing.expect(gui.app == remote);
+    try std.testing.expect(gui.pending_activity == null);
+    const message = remote.model.to_runtime.items[remote.model.to_runtime.head];
+    try std.testing.expect(message == .open_pane);
+    try std.testing.expectEqual(Session.pane_id, message.open_pane.target.pane);
+    try std.testing.expectEqual(Session.pane_id, own.model.tabs.layout[own.model.tabs.active].focused().?);
+}
+
+test "a secondary pointer press on a delivered machine activity card opens its agent peek" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.showSidebar(true);
+    try settleActivitySnapshots(fixture.session);
+    const gui = fixture.session.gui;
+    const app = gui.app;
+    _ = try gui.machines.add(.{ .label = "laptop" }, Machines.local_slot);
+    gui.machines.live[Machines.local_slot] = true;
+    const key: data.AgentKey = .{ .pane_id = Session.pane_id, .pane_generation = 1 };
+    _ = try app.model.agent_snapshot.replace(.{
+        .revision = 1,
+        .agents = &.{.{
+            .key = key,
+            .session_id = .{1} ** 16,
+            .location = Session.location,
+            .pane_index = 1,
+            .provider = .codex,
+            .status = .working,
+        }},
+    });
+    try input_support.presented(gui, try fixture.session.draw(), true);
+    const target = try activityTarget(gui, .{ .focus_machine_agent = .{
+        .slot = Machines.local_slot,
+        .key = key,
+        .session_id = .{1} ** 16,
+    } });
+    try input_support.accept(gui, .{ .pointer = .{
+        .kind = .press,
+        .button = .right,
+        .x = target.bounds.x + 1,
+        .y = target.bounds.y + 1,
+    } });
+    try input_support.pump(gui);
+    const prompt = app.model.name_prompt.currentConst() orelse return error.MissingAgentPeek;
+    try std.testing.expectEqualDeep(key, prompt.target().peek);
+    try std.testing.expect(app.model.peek_screen.reading);
+    try std.testing.expectEqual(Session.pane_id, app.model.tabs.layout[app.model.tabs.active].focused().?);
+}
+
+fn activityTarget(gui: *GuiAdapter, intent: client.Intent) !Target {
+    const registry = gui.widgets.dispatcher.maps.presented();
+    for (registry.targets[0..registry.len]) |target| {
+        if (target.action == .intent and std.meta.eql(target.action.intent, intent)) {
+            return target;
+        }
+    }
+
+    return error.MissingActivityCard;
+}
+
+// Reply to the initial snapshots before exercising navigation, so the
+// production handoff guard has no fixture requests left waiting forever.
+fn settleActivitySnapshots(session: *Session) !void {
+    const app = session.gui.app;
+    var buffer: [4096]u8 = undefined;
+    for (app.model.request_lifecycle.tracker.entries) |entry| {
+        const request = entry orelse continue;
+        const bytes = switch (request.continuation) {
+            .workspace_snapshot => |workspace| try core.encodeWorkspaceSnapshot(&buffer, .{
+                .request_id = request.request_id,
+                .workspace = workspace,
+                .name = "project",
+                .tabs = &.{.{
+                    .tab_id = Session.location.tab_id,
+                    .position = 0,
+                    .pane_count = 1,
+                    .label = "",
+                }},
+            }),
+            .tab_snapshot => |location| try core.encodeTabSnapshot(&buffer, .{
+                .request_id = request.request_id,
+                .location = location,
+                .panes = &.{.{ .pane_id = Session.pane_id, .lifecycle = .running, .pane_generation = 1 }},
+            }),
+            else => return error.UnexpectedBootstrapRequest,
+        };
+        _ = try client.runtime_messages.handleServerMessage(app, try core.decodeServer(bytes));
+    }
+
+    try session.settle();
+    try std.testing.expect(app.model.request_lifecycle.tracker.isEmpty());
+}
