@@ -104,3 +104,25 @@ telar agent prompt 7 "Run the test suite and summarize failures" --wait
 telar agent read 7 --lines 60
 telar agent wait 9 --until blocked --timeout 120s && telar pane send-keys 9 y --enter
 ```
+
+## Raw execution and preparation
+
+Use `telar exec -- PROGRAM ARGS...` for runtime-owned work without a terminal.
+Stdin/stdout/stderr preserve bytes separately; argv is literal. Default cwd is
+this destination's HOME, independent of GUI focus. `--cwd ABS` and `--workspace ID`
+are explicit destination-local selections. `--detach --json` returns an execution
+ID. `exec list`, `exec status ID`, `exec output ID`, `exec cancel ID` and
+`exec forget ID` observe and release results. Disconnect/timeout closes stdin
+without cancelling. Results last for one runtime lifetime; 32 results and a
+1 MiB tail per stream are retained. Lost output is reported, never presented as
+complete. Foreground child streams contain no metadata; discover IDs with list.
+
+For another saved machine prefix commands with `telar --machine LABEL`.
+`repository prepare --machine LABEL --from HEAD --json` transfers committed Git
+history from here, without copying provider credentials. Remote worktree create
+calls preparation automatically. A declared `.telar/setup.json` recipe needs
+`--setup` on create, or explicit `project setup --cwd ABS`; failure starts no
+agent. `file put ABS --bytes N` reads an artifact from stdin and publishes without
+overwrite; `file get ABS` writes its bytes. Use raw exec for runtime-owned transfer,
+never terminal screen text. Read `telar --skill coordinator` for the complete
+prepare/setup/brief/agent/fetch flow. Codex examples use `codex --no-daemon`.

@@ -17,7 +17,7 @@ telar worktree create <branch> --title "<task title>" --json -- <agent> "<brief>
 - `<branch>`: short, kebab-case, derived from the task (`fix-tab-order`).
 - `--title`: the words the user uses for the task; you and the user find it by
   this title later.
-- `<agent>` is `claude` or `codex`. The last argument is the agent's full brief:
+- `<agent>` is `claude` or `codex --no-daemon`. Always include `--no-daemon` for Codex. The last argument is the agent's full brief:
   goal, acceptance criteria, files to look at, how to verify. The agent sees
   nothing else of this conversation.
 
@@ -42,6 +42,56 @@ you picked and why.
 From then on, every command about that task goes to its machine: prefix it
 with `telar --machine <label>`. Keep a note of which task runs where; `worktree
 list` on each machine shows `dispatched_from` for tasks you sent.
+
+## Prepare and send inputs
+
+Remote worktree creation automatically prepares a missing repository through
+source-mediated Git transfer. The destination needs no provider credentials.
+Only committed history travels; commit required inputs first and heed the dirty
+file report. For explicit inspection run:
+
+```sh
+telar repository prepare --machine <label> --from HEAD --json
+```
+
+Existing clones are reused, including those recorded by closed workspaces.
+Multiple matches need `--workspace <destination-path-or-id>`. Shallow/partial
+clones, submodules and LFS are refused; do not claim they are ready or fall back
+to manual SSH/provider cloning. Never send keys, tokens or configuration trees.
+
+A committed `.telar/setup.json` declares `{ "version": 1, "argv": ["program", "arg"] }`.
+Inspect the recipe and obtain authorization within the user's task scope; then
+pass `--setup` to worktree create. A declaration without that flag refuses launch.
+Setup failure retains the worktree and its execution logs and starts no agent.
+Supply missing tools/access on the destination, explicitly retry
+`telar --machine <label> project setup --cwd <worktree-path> --json`, then launch
+with `worktree exec`. Each invocation repeats setup. No recipe means
+`not_declared`, not a prepared dependency environment.
+
+For a brief that does not belong in Git, transfer the single file with its actual
+byte count, to a new absolute owned path on the destination:
+
+```sh
+telar --machine <label> exec -- telar file put <absolute-brief-path> --bytes <count> < brief.md
+telar worktree create <branch> --machine <label> --setup --title "<task>" --json -- codex --no-daemon "Read <absolute-brief-path>; implement, verify and commit."
+```
+
+Use the profile's destination executable path inside exec if `telar` is absent
+from PATH. File publication is atomic and refuses overwrite. Do not reconstruct
+artifacts from `pane read`. Retrieve large results with `telar --machine <label>
+file get <absolute-path> > artifact` and check its exit status. `file get` emits
+binary bytes; through exec, falling
+behind its 1 MiB output retention is an explicit failure, not a complete artifact.
+
+For general work without a repository use `telar --machine <label> exec
+[--cwd <absolute-path>] -- PROGRAM ARGS...`. Arguments are literal, and a shell
+must be explicit. Omit `--workspace` unless selecting a destination-owned ID;
+never copy this machine's numeric ID or focus. `--detach --json` returns an
+execution ID; use `exec list` to discover retained IDs, `exec status`, `exec output`, `exec cancel`, then `exec forget`.
+Timeout or client disconnect leaves work running, closing stdin. A launch whose
+response was lost must be queried by ID before retrying. Results last for the
+runtime lifetime and output retention is bounded. Choose `workspace create` or
+`worktree exec` explicitly when the command needs a terminal.
 
 ## Steer
 

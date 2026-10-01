@@ -5,6 +5,7 @@
 //! Git traffic starts here, over telar's managed SSH connection, so no
 //! machine ever needs SSH back to this one.
 
+const repository_prepare = @import("repository_prepare.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -22,7 +23,7 @@ const max_url_bytes = url_scheme.len + core.ssh_destination.max_bytes + std.fs.m
 /// pushed commit is shorter than a branch.
 const max_refspec_bytes = "+refs/heads/:refs/remotes//".len + 2 * workspace_grammar.max_worktree_branch_bytes + core.MachineProfile.max_label_bytes;
 /// Most words a forwarded `worktree create` carries besides the command.
-const max_create_words = 16;
+const max_create_words = 17;
 /// `telar worktree resolve --repository ID --json [--workspace PATH]`.
 const max_resolve_words = 8;
 
@@ -47,21 +48,18 @@ pub fn create(init: std.process.Init, options: WorktreeOptions, profile: core.Ma
     const branch = std.mem.span(options.branch.?);
     var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const root = try localRoot(init, &root_buffer);
-    const clone = try findClone(init, .{
-        .arena = arena,
-        .root = root,
-        .profile = profile,
-        .workspace = options.workspace,
-    });
-
     const continued = worktree_git.branchExists(init, root, branch);
     const source = if (continued) branch else if (options.from) |from| std.mem.span(from) else "HEAD";
     var commit_buffer: [worktree_git.max_commit_bytes]u8 = undefined;
     const commit = try worktree_git.commitOf(init, root, source, &commit_buffer);
-    const left = worktree_git.changedFiles(init, root) catch 0;
-    if (left != 0) {
-        std.debug.print("telar worktree: {d} uncommitted files stay on this machine; only commits travel\n", .{left});
-    }
+    const clone: RemoteClone = .{
+        .profile = profile,
+        .path = (try repository_prepare.prepare(init, .{
+            .action = .prepare,
+            .from = commit,
+            .workspace = options.workspace,
+        }, profile)).path,
+    };
 
     var refspec_buffer: [max_refspec_bytes]u8 = undefined;
     const refspec = try std.fmt.bufPrint(&refspec_buffer, "{s}:refs/heads/{s}", .{ commit, branch });
@@ -258,6 +256,11 @@ fn createArgv(request: CreateWords, words: [][*:0]const u8) []const [*:0]const u
             words[len + 1] = value;
             len += 2;
         }
+    }
+
+    if (options.setup) {
+        words[len] = "--setup";
+        len += 1;
     }
 
     if (options.json) {

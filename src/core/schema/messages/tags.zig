@@ -3,6 +3,7 @@
 //! from the wrong side never decodes as a valid message.
 
 pub const ClientTag = enum(u8) {
+    execution_request = 0x46,
     query_clients = 0x33,
     detach_client = 0x34,
     request_client_command = 0x35,
@@ -69,6 +70,7 @@ pub const ClientTag = enum(u8) {
 };
 
 pub const ServerTag = enum(u8) {
+    execution_reply = 0xb6,
     client_list = 0xad,
     client_command = 0xae,
     client_command_result = 0xaf,

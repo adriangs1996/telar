@@ -6,6 +6,9 @@
 //! and the trailing-bytes check, so a payload is never accepted with data
 //! after its message.
 
+const execution = @import("execution.zig");
+const ExecutionRequest = @import("ExecutionRequest.zig");
+const ExecutionReply = @import("ExecutionReply.zig");
 const bytecodec = @import("bytecodec");
 const OpenEditor = @import("OpenEditor.zig");
 const EditorOpened = @import("EditorOpened.zig");
@@ -135,6 +138,7 @@ const LimitListView = @import("LimitListView.zig");
 const std = @import("std");
 
 pub const ClientMessage = union(enum) {
+    execution_request: ExecutionRequest,
     query_clients: QueryClients,
     detach_client: DetachClient,
     request_client_command: ClientCommand,
@@ -209,6 +213,7 @@ const ReportChangeReviewSample = @import("ReportChangeReviewSample.zig");
 const ChangeReviewSnapshotView = @import("ChangeReviewSnapshotView.zig");
 
 pub const ServerMessage = union(enum) {
+    execution_reply: ExecutionReply,
     client_list: ClientList,
     client_command: ClientCommand,
     client_command_result: ClientCommand,
@@ -340,6 +345,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .request_pane_focus => .{ .request_pane_focus = try focus.decodeRequestPaneFocus(&decoder) },
         .complete_pane_focus => .{ .complete_pane_focus = try focus.decodeCompletePaneFocus(&decoder) },
         .register_worktree => .{ .register_worktree = try worktree.decodeRegisterWorktree(&decoder) },
+        .execution_request => .{ .execution_request = try execution.decodeExecutionRequest(&decoder) },
         .launch_worktree => .{ .launch_worktree = try worktree.decodeLaunchWorktree(&decoder) },
         .forget_worktree => .{ .forget_worktree = try GenericDerived(ForgetWorktree).decode(&decoder) },
         .interrupt_agent => .{ .interrupt_agent = try GenericDerived(InterruptAgent).decode(&decoder) },
@@ -425,6 +431,7 @@ pub fn decodeServerInto(message: *ServerMessage, payload: []const u8) !void {
         .path_results => .{ .path_results = try paths.decodePathResults(&decoder) },
         .pane_focus_result => .{ .pane_focus_result = try focus.decodePaneFocusResult(&decoder) },
         .pane_progress => .{ .pane_progress = try pane.decodePaneProgress(&decoder) },
+        .execution_reply => .{ .execution_reply = try execution.decodeExecutionReply(&decoder) },
         .worktree_registered => .{ .worktree_registered = try GenericDerived(WorktreeRegistered).decode(&decoder) },
         .limit_list => .{ .limit_list = try limits.decodeLimitList(&decoder) },
     };

@@ -1,6 +1,7 @@
 //! One decoded client message reaches the procedure of its flow. Replies
 //! queue on the sender's delivery; the update's flush sends them.
 
+const execution = @import("execution.zig");
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
@@ -110,6 +111,7 @@ pub fn receive(model: *RuntimeModel, session: *Session, message: core.ClientMess
         .request_pane_focus => |request| client_control.requestFocus(model, session, request),
         .complete_pane_focus => |request| client_control.finishFocus(model, session, request),
         .register_worktree => |request| worktree_lifecycle.register(model, session, request),
+        .execution_request => |operation| execution.request(model, session, operation),
         .launch_worktree => |request| worktree_lifecycle.launch(model, session, request),
         .launch_tab => |request| tab_creation.launch(model, session, request),
         .forget_worktree => |request| worktree_lifecycle.forget(model, session, request),

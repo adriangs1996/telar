@@ -31,6 +31,7 @@ dispatched_from: ?[*:0]const u8 = null,
 repository: ?[*:0]const u8 = null,
 socket: ?[*:0]const u8 = null,
 json: bool = false,
+setup: bool = false,
 uncommitted: bool = false,
 stat: bool = false,
 force: bool = false,
@@ -70,6 +71,8 @@ pub fn parse(args: []const [*:0]const u8) !WorktreeOptions {
         if (std.mem.eql(u8, arg, "--")) {
             try options.takeCommand(cursor.remaining);
             break;
+        } else if (std.mem.eql(u8, arg, "--setup") and action == .create) {
+            options.setup = true;
         } else if (std.mem.eql(u8, arg, "--title") and action == .create) {
             options.title = try single(options.title, try cursor.require(error.MissingWorktreeTitle));
             try validateText(std.mem.span(options.title.?), core.max_worktree_title_bytes);

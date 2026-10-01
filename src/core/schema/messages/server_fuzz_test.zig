@@ -46,10 +46,10 @@ const HistoryStatsView = @FieldType(ServerMessage, "history_stats_result");
 const payload_capacity = 2048;
 
 /// Room for the largest directed seed, a snapshot of every agent a tab holds.
-const directed_capacity = 16 * 1024;
+const directed_capacity = 128 * 1024;
 
 /// Every seed payload, fuzzed and directed, laid end to end.
-const seed_bytes_capacity = 96 * 1024;
+const seed_bytes_capacity = 512 * 1024;
 
 const max_seeds = 192;
 
@@ -1020,6 +1020,8 @@ fn reencode(message: *const ServerMessage, buffer: []u8) anyerror![]const u8 {
         .editor_opened => |value| core.encodeEditorOpened(buffer, value),
         .path_results => |view| reencodePathResults(view, buffer),
         .pane_progress => |value| core.encodePaneProgress(buffer, value),
+        .limit_list => |value| try reencodeLimits(value, buffer),
+        .execution_reply => |value| core.encodeExecutionReply(buffer, value),
         .worktree_registered => |value| core.encodeWorktreeRegistered(buffer, value),
     };
 }
@@ -1894,6 +1896,18 @@ fn addRuntimeSeeds(corpus: *SeedCorpus) !void {
         accepted(.editor_opened),
     );
 
+    corpus.add("limit_list", try core.encodeLimitList(corpus.space(), .{
+        .request_id = @enumFromInt(5),
+        .runtime = &core.LimitReaches.none,
+        .clients = &core.LimitReaches.none,
+        .refused_reports = 0,
+    }), accepted(.limit_list));
+    corpus.add("execution_reply", try core.encodeExecutionReply(corpus.space(), .{
+        .request_id = @enumFromInt(5),
+        .execution_id = 7,
+        .state = .exited,
+    }), accepted(.execution_reply));
+
     const registered: core.WorktreeRegistered = .{
         .request_id = @enumFromInt(1),
         .worktree = @enumFromInt(2),
@@ -2297,7 +2311,7 @@ fn addMutatedSeeds(corpus: *SeedCorpus) !void {
         rejected(error.Truncated),
     );
 
-    const unknown_tags = [_]u8{ 0x00, 0x01, 0x42, 0x80, 0xb5, 0xff };
+    const unknown_tags = [_]u8{ 0x00, 0x01, 0x42, 0x80, 0xb7, 0xff };
     for (unknown_tags) |tag| {
         const bytes = corpus.space()[0..1];
         bytes[0] = tag;
@@ -2925,4 +2939,19 @@ test "fuzz server message decoding" {
     try std.testing.fuzz({}, decodeFuzzedServerMessage, .{
         .corpus = try buildCorpus(),
     });
+}
+
+fn reencodeLimits(view: core.LimitListView, buffer: []u8) ![]const u8 {
+    var entries = view.entries();
+    while (try entries.next()) |_| {}
+
+    var writer: std.Io.Writer = .fixed(buffer);
+    try writer.writeByte(@intFromEnum(core.ServerTag.limit_list));
+    try writer.writeInt(u64, core.raw(view.request_id), .little);
+    try writer.writeInt(u64, view.runtime_evicted, .little);
+    try writer.writeInt(u64, view.client_evicted, .little);
+    try writer.writeInt(u64, view.refused_reports, .little);
+    try writer.writeInt(u16, view.entry_count, .little);
+    try writer.writeAll(view.encoded_entries);
+    return writer.buffered();
 }

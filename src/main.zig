@@ -1,3 +1,7 @@
+const repository_prepare = @import("cli/repository_prepare.zig");
+const file_transfer = @import("cli/file_transfer.zig");
+const project_setup = @import("cli/project_setup.zig");
+const execution = @import("cli/execution.zig");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
 const std = @import("std");
@@ -167,6 +171,10 @@ fn runMain(init: std.process.Init) !void {
 // arrives from.
 fn dispatch(init: std.process.Init, args: []const [*:0]const u8) anyerror!void {
     switch (parseCommand(init, args)) {
+        .repository => |options| std.process.exit(repository_prepare.run(init, options)),
+        .file => |options| std.process.exit(file_transfer.run(init, options)),
+        .project => |options| std.process.exit(project_setup.run(init, options)),
+        .exec => |options| std.process.exit(execution.run(init, options)),
         .help => try std.Io.File.stdout().writeStreamingAll(init.io, usage_module.text),
         .version => try std.Io.File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
         .server => |options| try server_module.run(init, options),

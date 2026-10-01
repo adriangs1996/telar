@@ -87,6 +87,9 @@ const SeedCoverage = enum {
 /// the corpus, so the claim cannot drift from the seeds.
 fn claimedCoverage(tag: ClientTag) SeedCoverage {
     return switch (tag) {
+        .execution_request,
+        .report_limit,
+        .query_limits,
         .query_clients,
         .detach_client,
         .request_client_command,
@@ -892,7 +895,7 @@ fn addPaneSeeds(seeds: *ClientSeeds) !void {
     try encoder.writeInt(u64, 5);
     try encoder.writeInt(u64, 3);
     try encoder.writeByte(@intFromEnum(schema.PaneTextMode.prompt));
-    try encoder.writeSized16("");
+    try encoder.writeSized32("");
     seeds.reject(
         "send_pane_text prompt without text",
         encoder.finish(),
@@ -1282,6 +1285,16 @@ fn addTabAndWorkspaceSeeds(seeds: *ClientSeeds) !void {
             },
         ),
     );
+    seeds.accept("report_limit", try schema.encodeReportLimit(seeds.space(), .{
+        .reach = .{ .limit = .{ .name = "test.limit", .noun = "items", .value = 4 }, .requested = 5 },
+        .hits = 1,
+    }));
+    seeds.accept("query_limits", try schema.encodeQueryLimits(seeds.space(), .{ .request_id = @enumFromInt(5) }));
+    seeds.accept("execution_request", try schema.encodeExecutionRequest(seeds.space(), .{
+        .request_id = @enumFromInt(5),
+        .action = .status,
+        .execution_id = 7,
+    }));
     seeds.accept(
         "launch_worktree",
         try schema.encodeLaunchWorktree(
@@ -2537,6 +2550,9 @@ fn encodeAccepted(message: ClientMessage, reencoding: *Reencoding) !?[]const u8 
             );
             return try schema.encodeCreateWorkspace(buffer, owned);
         },
+        .report_limit => |value| try schema.encodeReportLimit(buffer, value),
+        .query_limits => |value| try schema.encodeQueryLimits(buffer, value),
+        .execution_request => |value| try schema.encodeExecutionRequest(buffer, value),
         .launch_worktree => |view| {
             const launch = (try gatherLaunch(view.launch, reencoding)) orelse return null;
             const owned = launchMessage(
@@ -2889,6 +2905,11 @@ test "imported commands stop at their budget" {
         try encoder.writeInt(u64, 100);
         try encoder.writeInt(u16, 1);
         try encoder.writeInt(i64, 1700000002000);
+        if (schema.max_import_command_bytes + excess > std.math.maxInt(u16)) {
+            try std.testing.expectError(error.LengthOverflow, encoder.writeSized16(command[0 .. schema.max_import_command_bytes + excess]));
+            continue;
+        }
+
         try encoder.writeSized16(command[0 .. schema.max_import_command_bytes + excess]);
 
         const expected: ?ClientDecodeError = if (excess == 0) null else error.InvalidByteString;

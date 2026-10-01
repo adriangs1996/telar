@@ -376,8 +376,10 @@ failure there never falls back to the local machine.
 _Avoid_: Remote exec, offload
 
 **Repository identity**:
-The normalized URL of a repository's `origin` remote. It finds the clone of
-one project on another machine; it never decides where work runs.
+The normalized URL of a repository's `origin` remote: host/path with userinfo
+and default ports removed, nondefault ports retained. It finds the clone of
+one project on another machine; it never decides where work runs. A separately
+sanitized transport URL preserves non-secret origin details.
 _Avoid_: Repo id, project key
 
 ## Change review
@@ -440,3 +442,22 @@ A designated space for a directed session's disposable utilities and
 experiments outside the project changes under review. Incorporating its
 contents into the project requires a change proposal.
 _Avoid_: Untracked files
+
+## Fleet operations
+
+**Execution**:
+A runtime-owned pipe-backed command, addressed by a caller-chosen random id for
+one runtime lifetime. Its result and bounded byte streams outlive its workspace
+and requesting client. It is distinct from a terminal pane.
+
+**Administration workspace**:
+The destination-owned workspace lazily used by executions without an explicit
+workspace. Its ownership is recorded by identity, never inferred from its name.
+
+**Repository preparation**:
+Receiving selected committed history from a dispatching clone and publishing a
+verified local clone, independently of project setup.
+
+**Project setup**:
+An explicitly authorized command that prepares a worktree environment before
+its task starts. Its execution outcome is distinct from Git readiness.

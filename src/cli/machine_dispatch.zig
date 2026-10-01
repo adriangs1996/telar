@@ -252,3 +252,29 @@ test "a saved telar path replaces the PATH lookup" {
     try std.testing.expect(std.mem.startsWith(u8, command, "/home/dev/.local/share/telar/0.3.0/telar dispatch-argv a"));
     try std.testing.expectError(error.InvalidRemoteTelarPath, encodeCommand("/home/dev/$(id)", &.{"version"}, &buffer));
 }
+
+/// Streams an already opened file over managed dispatch and captures its bounded reply.
+/// Example: `const reply = try machine_dispatch.captureFile(init, &profile, argv, bundle);`.
+pub fn captureFile(init: std.process.Init, profile: *const core.MachineProfile, argv: []const [*:0]const u8, input: std.Io.File) ![]u8 {
+    const command = try init.gpa.alloc(u8, max_command_bytes);
+    defer init.gpa.free(command);
+    const remote_command = try encodeCommand(profile.telarPath(), argv[1..], command);
+    const options = try SshOptions.prepare(init.io, init.minimal.environ, profile.destination());
+    var child = try std.process.spawn(init.io, .{
+        .argv = &sshArgv(&options, profile, remote_command),
+        .stdin = .{ .file = input },
+        .stdout = .pipe,
+        .stderr = .inherit,
+    });
+    defer child.kill(init.io);
+    var buffer: [4096]u8 = undefined;
+    var reader = child.stdout.?.readerStreaming(init.io, &buffer);
+    const output = try reader.interface.allocRemaining(init.gpa, .limited(max_captured_bytes));
+    errdefer init.gpa.free(output);
+    const term = try child.wait(init.io);
+    if (term != .exited or term.exited != 0) {
+        return error.RepositoryTransferFailed;
+    }
+
+    return output;
+}

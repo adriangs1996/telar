@@ -1,5 +1,9 @@
 //! CLI command selection; each grammar owns its options and validation.
 
+const RepositoryOptions = @import("arguments/RepositoryOptions.zig");
+const FileOptions = @import("arguments/FileOptions.zig");
+const ProjectOptions = @import("arguments/ProjectOptions.zig");
+const ExecOptions = @import("arguments/ExecOptions.zig");
 const data = @import("model");
 const core = @import("telar-core");
 const DiagnosticsOptions = @import("arguments/DiagnosticsOptions.zig");
@@ -41,6 +45,10 @@ const integration_module = @import("arguments/integration.zig");
 const proxy_module = @import("arguments/proxy.zig");
 
 pub const Cli = union(enum) {
+    exec: ExecOptions,
+    project: ProjectOptions,
+    file: FileOptions,
+    repository: RepositoryOptions,
     help,
     version,
     server: ServerOptions,
@@ -99,6 +107,22 @@ pub const Cli = union(enum) {
         }
 
         const first = std.mem.span(args[1]);
+        if (std.mem.eql(u8, first, "repository")) {
+            return .{ .repository = try RepositoryOptions.parse(args[2..]) };
+        }
+
+        if (std.mem.eql(u8, first, "file")) {
+            return .{ .file = try FileOptions.parse(args[2..]) };
+        }
+
+        if (std.mem.eql(u8, first, "project")) {
+            return .{ .project = try ProjectOptions.parse(args[2..]) };
+        }
+
+        if (std.mem.eql(u8, first, "exec")) {
+            return .{ .exec = try ExecOptions.parse(args[2..]) };
+        }
+
         if (std.mem.eql(u8, first, "client")) {
             return .{ .client_control = try ClientOptions.parse(args[2..]) };
         }

@@ -26,6 +26,7 @@ const std = @import("std");
 pub const capacity = core.max_panes_per_tab * 2;
 
 pub const PendingResponse = union(enum) {
+    execution_reply: core.ExecutionReply,
     client_command: core.ClientCommand,
     client_command_result: core.ClientCommand,
     client_list: core.ClientList,

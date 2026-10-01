@@ -10,6 +10,7 @@ pub const RequestClass = enum { ui, control };
 pub fn classify(tag: Tag) RequestClass {
     return switch (tag) {
         .runtime_stop,
+        .execution_request,
         .query_history,
         .import_history,
         .delete_history,

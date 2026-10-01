@@ -1,4 +1,5 @@
 //! Events delivered to the runtime loop and their execution-budget class.
+const ExecutionCompletion = @import("../execution/ExecutionCompletion.zig");
 const owned = @import("../proxy/capture/owned.zig");
 const localsocket = @import("localsocket");
 const core = @import("telar-core");
@@ -32,6 +33,7 @@ const PathIndex = @import("../paths/PathIndex.zig");
 const PathQuery = @import("../paths/PathQuery.zig");
 
 pub const Event = union(enum) {
+    execution_finished: ExecutionCompletion,
     accepted: anyerror!localsocket.SocketChannel,
     handshaken: HandshakeCompletion,
     client_message: ClientMessage,
@@ -121,6 +123,7 @@ pub fn discard(completed: Event, io: std.Io) void {
         .worktree_git,
         .worktree_detected,
         .session_name,
+        .execution_finished,
         .stopped,
         => {},
     }
@@ -167,6 +170,7 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) core.Path {
         .worktree_detected,
         .editor_opened,
         .session_name,
+        .execution_finished,
         .path_index_built,
         .paths_found,
         => .observation,

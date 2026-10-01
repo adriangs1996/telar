@@ -32,6 +32,7 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
     var foreground_storage: [core.max_panes]core.PaneForeground = undefined;
     var history_storage: [core.max_history_results]core.HistoryEntry = undefined;
     return switch (response.*) {
+        .execution_reply => |reply| try core.encodeExecutionReply(buffer, reply),
         .request_failed => |failure| try core.encodeRequestFailed(buffer, .{
             .request_id = failure.request_id,
             .code = failure.code,

@@ -3,6 +3,8 @@
 //! open a worktree in a UI, show its diff and remove it. Git runs here, in
 //! the CLI process; the runtime tracks worktrees and owns their panes.
 
+const project_setup = @import("project_setup.zig");
+const repository_discovery = @import("repository_discovery.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const pty = @import("pty");
@@ -167,6 +169,8 @@ fn create(init: std.process.Init, command: Command) !u8 {
         .dispatched_from = if (options.dispatched_from) |label| std.mem.span(label) else "",
     });
 
+    const setup_id = try project_setup.prepare(init, checkout, options.setup, false, options.socket);
+
     const shell = [_][]const u8{login_shell.loginShell(init.minimal.environ)};
     var launch_storage: [max_launch_arguments][]const u8 = undefined;
     const opened = try launch(command.session, .{
@@ -178,6 +182,7 @@ fn create(init: std.process.Init, command: Command) !u8 {
 
     try writeLaunch(command.writer, .{
         .worktree = registered.worktree,
+        .setup_execution_id = setup_id,
         .path = checkout,
         .branch = branch,
         .base = base,
@@ -519,29 +524,7 @@ fn remove(init: std.process.Init, command: Command) !u8 {
 /// identity. Another machine asks this before it pushes a branch here.
 fn resolve(init: std.process.Init, command: Command) !u8 {
     const wanted = std.mem.span(command.options.repository.?);
-    var found_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var found: ?[]const u8 = null;
-    if (command.options.workspace != null) {
-        var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const directory = try originDirectory(init, command, &directory_buffer);
-        found = try matchingRoot(init, directory, wanted, &found_buffer) orelse return error.RepositoryNotInWorkspace;
-    } else {
-        for (command.catalog.workspaces.items) |*workspace| {
-            var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-            const root = matchingRoot(init, workspace.path, wanted, &root_buffer) catch null orelse continue;
-            if (found) |previous| {
-                if (!std.mem.eql(u8, previous, root)) {
-                    return error.AmbiguousRepository;
-                }
-
-                continue;
-            }
-
-            found = try copyInto(&found_buffer, root);
-        }
-    }
-
-    const path = found orelse return error.RepositoryNotFound;
+    const path = try repository_discovery.find(init, wanted, command.options.workspace, command.options.socket) orelse return error.RepositoryNotFound;
     if (command.options.json) {
         try std.json.Stringify.value(.{
             .repository = wanted,
@@ -553,15 +536,6 @@ fn resolve(init: std.process.Init, command: Command) !u8 {
     }
 
     return agent.exit_ok;
-}
-
-/// The main checkout `directory` belongs to, when its origin has the
-/// identity `wanted`.
-fn matchingRoot(init: std.process.Init, directory: []const u8, wanted: []const u8, buffer: []u8) !?[]const u8 {
-    const root = try worktree_git.mainRoot(init, directory, buffer);
-    var identity_buffer: [WorktreeOptions.max_repository_bytes]u8 = undefined;
-    const identity = try worktree_git.originIdentity(init, root, &identity_buffer);
-    return if (std.mem.eql(u8, identity, wanted)) root else null;
 }
 
 /// The directory whose repository a new worktree comes from: `--workspace`
@@ -654,6 +628,7 @@ fn launch(session: *Session, request: LaunchRequest) !core.PaneOpened {
 }
 
 const Launched = struct {
+    setup_execution_id: ?u64 = null,
     worktree: core.WorktreeId,
     path: []const u8,
     branch: []const u8,
@@ -666,6 +641,8 @@ fn writeLaunch(writer: *std.Io.Writer, launched: Launched, json: bool) !void {
     if (json) {
         try std.json.Stringify.value(.{
             .worktree_id = core.raw(launched.worktree),
+            .setup_execution_id = launched.setup_execution_id,
+            .environment = if (launched.setup_execution_id != null) "ready" else "not_declared",
             .branch = launched.branch,
             .base = launched.base,
             .path = launched.path,
