@@ -15,9 +15,10 @@ const Persisted = @import("Persisted.zig");
 const StoredEdition = @import("StoredEdition.zig");
 const ArchiveRecord = @import("ArchiveRecord.zig");
 const Context = @import("Context.zig");
-pub const max_file_bytes = 8 * 1024 * 1024;
+pub const max_file_bytes = StorageInput.max_conversation_bytes;
 pub const max_global_bytes = StorageInput.max_global_bytes;
 pub const max_storage_files = 131104;
+pub const files_limit = core.Limit.declare("review.max_storage_files", "files", max_storage_files);
 
 pub fn ensure(io: std.Io, path: []const u8) !void {
     std.Io.Dir.cwd().createDir(io, path, .fromMode(0o700)) catch |err| {
@@ -50,14 +51,23 @@ pub fn save(input: StorageInput, group: *const Group) !u32 {
     var values: [Group.capacity]StoredEdition = undefined;
     for (group.editions[0..group.count], 0..) |item, index| {
         const edition = item.?;
-        values[index] = .{ .identity = edition.identity, .next_comment = edition.next_comment, .snapshot = edition.view(.{ .request_id = @enumFromInt(1), .pane_id = group.context.pane.id, .pane_generation = group.context.pane.generation }) };
+        values[index] = .{
+            .identity = edition.identity,
+            .next_comment = edition.next_comment,
+            .omitted_patch_bytes = edition.omitted_patch_bytes,
+            .snapshot = edition.view(.{
+                .request_id = @enumFromInt(1),
+                .pane_id = group.context.pane.id,
+                .pane_generation = group.context.pane.generation,
+            }),
+        };
     }
     const records = if (input.archive_id == 0) group.records[0..group.total] else &.{};
     const bytes = try std.json.Stringify.valueAlloc(input.gpa, Persisted{ .version = 2, .records = records, .editions = values[0..group.count] }, .{});
     defer input.gpa.free(bytes);
     const archived_bytes = if (input.archive_id == 0) group.archivedBytes() else 0;
     if (bytes.len > max_file_bytes or bytes.len > input.byte_limit or archived_bytes > max_file_bytes - bytes.len) {
-        return error.ReviewCapacity;
+        return error.ReviewConversationStorageFull;
     }
     var target_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const target = try filename(input, group.key, &target_buffer);
@@ -70,7 +80,7 @@ pub fn save(input: StorageInput, group: *const Group) !u32 {
 
         const retained = global.* - previous_bytes;
         if (retained > input.global_limit or bytes.len > input.global_limit - retained) {
-            return error.ReviewCapacity;
+            return error.ReviewGlobalStorageFull;
         }
 
         global_after = retained + bytes.len;
@@ -137,6 +147,7 @@ pub fn load(input: StorageInput, group: *Group) !void {
         errdefer input.gpa.destroy(edition);
         edition.* = .{ .id = value.edition_id, .revision = value.revision, .identity = stored.identity, .next_comment = stored.next_comment, .source = value.source, .reviewed = value.reviewed, .delivery = value.delivery, .feedback_id = value.feedback_id };
         try edition.setPatch(value.patch);
+        edition.omitted_patch_bytes = stored.omitted_patch_bytes;
         if (value.feedback.len > core.change_review.max_feedback_bytes) {
             return error.InvalidReviewStorage;
         }
@@ -177,7 +188,7 @@ pub fn diskUsage(io: std.Io, directory: []const u8) !usize {
     var bytes: usize = 0;
     while (try iterator.next(io)) |entry| {
         if (files == max_storage_files) {
-            return error.ReviewCapacity;
+            return error.ReviewStorageFilesExceeded;
         }
 
         files += 1;
@@ -185,7 +196,7 @@ pub fn diskUsage(io: std.Io, directory: []const u8) !usize {
         const path = try std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ directory, entry.name });
         const size = try ownedSize(io, path);
         if (size > max_global_bytes - bytes) {
-            return error.ReviewCapacity;
+            return error.ReviewGlobalStorageFull;
         }
 
         bytes += size;
@@ -311,7 +322,7 @@ test "review archive roundtrip keeps bounded atomic private files separate from 
     archive_input.archive_id = 1;
     const archive_bytes = try save(archive_input, &group);
     archive_input.byte_limit = 1;
-    try std.testing.expectError(error.ReviewCapacity, save(archive_input, &group));
+    try std.testing.expectError(error.ReviewConversationStorageFull, save(archive_input, &group));
     archive_input.byte_limit = max_file_bytes;
     var archived: Group = .{ .key = group.key, .context = context };
     defer archived.deinit(gpa);
@@ -336,7 +347,7 @@ test "review archive roundtrip keeps bounded atomic private files separate from 
     bounded.global_limit = global_bytes;
     _ = try save(bounded, &group);
     try edition.setPatch("--- a/source.zig\n+++ b/source.zig\n@@ -1 +1 @@\n-old\n+new and longer\n");
-    try std.testing.expectError(error.ReviewCapacity, save(bounded, &group));
+    try std.testing.expectError(error.ReviewGlobalStorageFull, save(bounded, &group));
     try std.testing.expectEqual(global_bytes, try diskUsage(io, directory));
     const leftover = try temp.dir.createFile(io, "crash.tmp", .{ .permissions = .fromMode(0o600), .exclusive = true });
     try leftover.writeStreamingAll(io, "remaining");

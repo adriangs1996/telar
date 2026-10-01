@@ -4,7 +4,12 @@ const SessionTitle = @import("SessionTitle.zig");
 const ResumeSession = @import("ResumeSession.zig");
 const RestoredAgents = @This();
 
-slots: [core.max_agent_snapshot_entries]?RestoredAgent = .{null} ** core.max_agent_snapshot_entries,
+/// Restored panes whose agent is not observed yet, one per agent the
+/// snapshot carries.
+pub const capacity = core.max_agent_snapshot_entries;
+pub const capacity_limit = core.Limit.declare("agents.restored_agents", "restored agents", capacity);
+
+slots: [capacity]?RestoredAgent = .{null} ** capacity,
 
 /// Stores one title for a pane generation, replacing an earlier one for the
 /// same generation. Returns `false` when every slot is taken.

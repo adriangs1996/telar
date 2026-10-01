@@ -86,8 +86,9 @@ const drain = () => {
 
 // The hook reads only short strings from a tool input: the argument its
 // event line shows, a shell command and the first question. An edit's diff
-// or a write's content has no bound, so a payload past the hook's limit
-// keeps just those instead of being dropped.
+// or a write's content has no bound, so a payload past the 64 KiB a pending
+// payload may hold keeps just those, or no tool input, instead of being
+// dropped.
 const brief = (input: unknown) => {
   if (typeof input !== "object" || input === null) return undefined;
   const kept: Record<string, unknown> = {};
@@ -105,6 +106,7 @@ const send = (report: Report) => {
   try {
     bytes = JSON.stringify(report);
     if (Buffer.byteLength(bytes) > 64 * 1024) bytes = JSON.stringify({ ...report, tool_input: brief(report.tool_input) });
+    if (Buffer.byteLength(bytes) > 64 * 1024) bytes = JSON.stringify({ ...report, tool_input: undefined });
   } catch {
     return false;
   }

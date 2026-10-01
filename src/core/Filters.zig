@@ -65,22 +65,29 @@ const Input = struct {
 const PatternList = struct {
     /// Bounded list of case-sensitive substring patterns from configuration.
     storage: [history_filter.max_patterns][history_filter.max_pattern_bytes]u8 = undefined,
-    lens: [history_filter.max_patterns]u8 = .{0} ** history_filter.max_patterns,
+    lens: [history_filter.max_patterns]u16 = .{0} ** history_filter.max_patterns,
     count: u8 = 0,
 
-    /// Adds one pattern; empty, oversized or NUL-carrying patterns are
-    /// rejected so a list always holds usable matchers.
+    /// Adds one pattern; empty or NUL-carrying patterns are invalid, and a
+    /// pattern or list past its limit is refused whole, so a list always
+    /// holds usable matchers.
     ///
     /// ```zig
     /// try list.add("vault kv get");
     /// ```
     pub fn add(self: *PatternList, pattern: []const u8) !void {
-        if (pattern.len == 0 or pattern.len > history_filter.max_pattern_bytes) {
+        if (pattern.len == 0) {
             return error.InvalidFilterPattern;
         }
+
+        if (pattern.len > history_filter.max_pattern_bytes) {
+            return error.FilterPatternTooLong;
+        }
+
         if (std.mem.indexOfScalar(u8, pattern, 0) != null) {
             return error.InvalidFilterPattern;
         }
+
         if (self.count == history_filter.max_patterns) {
             return error.TooManyFilterPatterns;
         }
@@ -104,3 +111,22 @@ const PatternList = struct {
         return false;
     }
 };
+
+test "a filter list holds its limits exactly and refuses one more" {
+    var filters: Filters = .{};
+    var pattern: [history_filter.max_pattern_bytes + 1]u8 = @splat('p');
+    try filters.commands.add(pattern[0..history_filter.max_pattern_bytes]);
+    try std.testing.expectError(error.FilterPatternTooLong, filters.commands.add(&pattern));
+    try std.testing.expectError(error.InvalidFilterPattern, filters.commands.add(""));
+
+    var number_buffer: [8]u8 = undefined;
+    for (1..history_filter.max_patterns) |number| {
+        try filters.commands.add(try std.fmt.bufPrint(&number_buffer, "n{d}", .{number}));
+    }
+
+    try std.testing.expectError(error.TooManyFilterPatterns, filters.commands.add("one more"));
+    try std.testing.expect(!filters.shouldRecord(.{
+        .command = "echo n63",
+        .cwd = "/",
+    }));
+}

@@ -22,6 +22,7 @@ const WorktreeListEntry = @import("schema/messages/WorktreeListEntry.zig");
 const runtime = @import("schema/messages/runtime.zig");
 const tab_module = @import("schema/messages/tab.zig");
 const history = @import("schema/messages/history.zig");
+const change_review = @import("change_review.zig");
 const ImportEntry = @import("schema/messages/ImportEntry.zig");
 const graphics = @import("schema/messages/graphics.zig");
 const notification_support = @import("schema/messages/notification_support.zig");
@@ -95,6 +96,58 @@ const wire_bounds = [_]WireBound{
     .{
         .name = "max_clipboard_bytes",
         .value = pane_module.max_clipboard_bytes,
+    },
+    .{
+        .name = "max_import_entries",
+        .value = history.max_import_entries,
+    },
+    .{
+        .name = "max_import_source_bytes",
+        .value = history.max_import_source_bytes,
+    },
+    .{
+        .name = "max_import_command_bytes",
+        .value = history.max_import_command_bytes,
+    },
+    .{
+        .name = "max_history_output_bytes",
+        .value = history.max_history_output_bytes,
+    },
+    .{
+        .name = "max_history_stats_top",
+        .value = history.max_history_stats_top,
+    },
+    .{
+        .name = "change_review.max_patch_bytes",
+        .value = change_review.max_patch_bytes,
+    },
+    .{
+        .name = "change_review.max_sample_bytes",
+        .value = change_review.max_sample_bytes,
+    },
+    .{
+        .name = "change_review.max_comments",
+        .value = change_review.max_comments,
+    },
+    .{
+        .name = "change_review.max_comment_bytes",
+        .value = change_review.max_comment_bytes,
+    },
+    .{
+        .name = "change_review.max_path_bytes",
+        .value = change_review.max_path_bytes,
+    },
+    .{
+        .name = "change_review.max_identity_bytes",
+        .value = change_review.max_identity_bytes,
+    },
+    .{
+        .name = "change_review.max_feedback_bytes",
+        .value = change_review.max_feedback_bytes,
+    },
+    .{
+        .name = "change_review.max_status_bytes",
+        .value = change_review.max_status_bytes,
     },
     .{
         .name = "client_list_capacity",
@@ -2036,7 +2089,21 @@ test "default pane open round trips launch data without allocation" {
 }
 
 test "notifications enforce text and duration bounds before crossing IPC" {
-    var buffer: [512]u8 = undefined;
+    var buffer: [1024]u8 = undefined;
+    const title: [types.max_notification_title_bytes]u8 = @splat('x');
+    const message: [types.max_notification_message_bytes]u8 = @splat('m');
+    _ = try notification_support.encodeNotification(&buffer, .{
+        .title = &title,
+        .message = &message,
+    });
+    const long_message: [types.max_notification_message_bytes + 1]u8 = @splat('m');
+    try std.testing.expectError(
+        error.InvalidByteString,
+        notification_support.encodeNotification(&buffer, .{
+            .title = &title,
+            .message = &long_message,
+        }),
+    );
     const long_title: [types.max_notification_title_bytes + 1]u8 = @splat('x');
     try std.testing.expectError(
         error.InvalidByteString,

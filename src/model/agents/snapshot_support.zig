@@ -145,3 +145,26 @@ test "working state is queried without mutating the replica" {
     _ = try snapshot.replace(.{ .revision = 2, .agents = &.{agent} });
     try std.testing.expect(!snapshot.hasWorkingAgent());
 }
+
+test "snapshot keeps the whole final answer the wire carries" {
+    var snapshot: Snapshot = .{};
+    var answer: [core.max_agent_final_message_bytes + 1]u8 = @splat('a');
+    var agent = testingAgent();
+    agent.final_message = answer[0..core.max_agent_final_message_bytes];
+
+    _ = try snapshot.replace(.{
+        .revision = 1,
+        .agents = &.{agent},
+    });
+    try std.testing.expectEqual(@as(usize, core.max_agent_final_message_bytes), snapshot.slice()[0].finalMessage().len);
+
+    // A multibyte character straddling the bound is dropped whole.
+    answer[core.max_agent_final_message_bytes - 1] = 0xc3;
+    answer[core.max_agent_final_message_bytes] = 0xa9;
+    agent.final_message = &answer;
+    _ = try snapshot.replace(.{
+        .revision = 2,
+        .agents = &.{agent},
+    });
+    try std.testing.expectEqual(@as(usize, core.max_agent_final_message_bytes - 1), snapshot.slice()[0].finalMessage().len);
+}

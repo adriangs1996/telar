@@ -11,6 +11,7 @@ const TextFit = @import("../TextFit.zig");
 const Target = @import("../interaction/Target.zig");
 const Hits = @import("NotificationHits.zig");
 const Text = @import("NotificationText.zig");
+
 const Card = @This();
 
 /// Room for "Open …HOST ↗"; a host is at most a link's length.

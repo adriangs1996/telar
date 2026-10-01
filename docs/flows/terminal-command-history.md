@@ -5,6 +5,25 @@ into its own disposable terminal. `TerminalTracker` uses that terminal to recove
 shell edits, capture submitted commands and observe their completion. This work
 runs on the observation path; it does not read or mutate the live pane's VT state.
 
+Each pane alternates two batches of 128 KiB and 512 events
+(`history.observer_batch_bytes`, `history.observer_batch_events`). A burst
+that does not fit before the next observation pass drops the batch and resets
+the disposable terminal, so a command in flight during that burst is not
+recorded; the pane's own screen is untouched. A captured command the full
+history queue (`history.request_queue`, 64 requests) refuses is lost the same
+way. `pane_observation.finish` reports either limit on the event loop with
+the limit notice.
+
+`telar history import` sends commands of up to 64 KiB less one byte
+(`history.import_command_bytes`), what the wire's sized16 field carries. A
+longer command is skipped whole, never cut; the rest are imported, and the
+command prints the limit notice, reports it to the runtime and exits 1.
+
+Configured `command_filters` and `cwd_filters` hold 64 patterns of 256 bytes
+each (`history_filter.max_patterns`, `history_filter.max_pattern_bytes`). A
+list or pattern past its limit refuses the configuration with the limit's
+name, since dropping a filter would record the commands it hides.
+
 The edit anchor and right-prompt boundary are tracked pins owned by the primary
 screen's page list. Creation, cursor copies, selections and release must use that
 same page list, including when the active screen is alternate during shutdown.

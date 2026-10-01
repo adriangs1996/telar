@@ -39,9 +39,13 @@ pub fn report(model: *RuntimeModel, reach: core.LimitReach) void {
     _ = notice(model, reach);
 }
 
-/// Counts what a client reported, apart from the runtime's own limits. The
-/// client already showed and logged its notice, so the runtime only counts;
-/// a connection past `max_reports_per_second` is refused and counted.
+/// Counts what a client reported, apart from the runtime's own limits. A
+/// window already showed and logged its notice, so the runtime only counts.
+/// A command-line connection (`telar hook`, `telar history import`) has no
+/// window, so the runtime shows its notice once per interval of its row,
+/// the way `telar notification show` could; it still never touches a
+/// runtime row. A connection past `max_reports_per_second` is refused and
+/// counted.
 ///
 /// ```zig
 /// limit_reached.receive(model, session, report);
@@ -52,7 +56,14 @@ pub fn receive(model: *RuntimeModel, session: *Session, reported: core.ReportLim
         return;
     }
 
-    _ = core.limit_reached.record(&model.client_limit_reaches, reported.reach, at, reported.hits);
+    const reaches = &model.client_limit_reaches;
+    const recorded = core.limit_reached.record(reaches, reported.reach, at, reported.hits);
+    if (session.role != .control or !recorded.show) {
+        return;
+    }
+
+    var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
+    show(model, reaches.reachAt(recorded.slot).describe(&buffer, reaches.hits[recorded.slot]));
 }
 
 /// Whether one more report from this connection fits its second; one that

@@ -397,7 +397,8 @@ show it, and which client capability it supports. Telar ships manifests for
 `claude`, `codex`, `pi`, `cursor` and `opencode`. Naming one of them extends or overrides the
 shipped manifest; any other name creates a new agent that the sidebar, the
 `telar agent` command, notifications and the image shelf treat exactly like a
-built-in one. At most 16 agents can be configured.
+built-in one. The table holds 32 agents, the five shipped ones included, so
+a configuration can add 27 new agents.
 
 ```lua
 runtime = {
@@ -1218,7 +1219,11 @@ frame. The ownership and failure order is mapped in
 The runtime evaluates the same file in a disposable VM and retains only typed,
 validated values. No Lua state or closure enters the runtime process.
 `runtime.history.path` is resolved relative to the directory containing
-`config.lua`; its parent directory must already exist. `runtime.proxy` accepts
+`config.lua`; its parent directory must already exist.
+`runtime.history.command_filters` and `cwd_filters` each accept at most 64
+substring patterns of up to 256 bytes; a list or pattern past that refuses
+the configuration and names the limit, because dropping a filter would record
+what it hides. `runtime.proxy` accepts
 `enabled`, `ca_dir`, `capture`, and `intercept_hosts`. ProxyTLS and exchange
 capture are disabled by default. A
 relative `ca_dir` is also resolved beside `config.lua`; Telar creates it

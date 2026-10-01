@@ -6,7 +6,10 @@ const PlanChange = @import("PlanChange.zig");
 /// tasks from one in creation order within a session.
 const Progress = @This();
 
-pub const max_tasks = 32;
+/// Tasks of one plan the runtime tracks; Claude Code numbers tasks per
+/// session, so a long session adds many.
+pub const max_tasks = 128;
+pub const tasks_limit = core.Limit.declare("agents.max_tasks", "tasks", max_tasks);
 
 task_subject: [max_tasks][core.max_agent_plan_step_bytes]u8 = undefined,
 task_subject_len: [max_tasks]u8 = @splat(0),
@@ -21,6 +24,16 @@ uses_tasks: bool = false,
 final_message: [core.max_agent_final_message_bytes]u8 = undefined,
 final_message_len: u16 = 0,
 
+/// Whether `change` adds a task past `max_tasks`: the plan keeps the tasks
+/// it has, the new one is dropped and the caller reports the limit.
+///
+/// ```zig
+/// if (progress.refusesTask(change)) limit_reached.report(model, .{ .limit = Progress.tasks_limit });
+/// ```
+pub fn refusesTask(self: *const Progress, change: PlanChange) bool {
+    return change.op == .add and self.task_count == max_tasks;
+}
+
 /// Applies one plan change and returns whether the visible plan changed.
 ///
 /// ```zig
@@ -30,7 +43,7 @@ pub fn applyPlan(self: *Progress, change: PlanChange) bool {
     switch (change.op) {
         .none => return false,
         .add => {
-            if (self.task_count == max_tasks) {
+            if (self.refusesTask(change)) {
                 return false;
             }
 
@@ -187,4 +200,36 @@ test "the final message is bounded and unchanged values report no change" {
     _ = progress.setFinalMessage(long);
     try std.testing.expect(progress.finalMessage().len <= core.max_agent_final_message_bytes);
     try std.testing.expect(std.unicode.utf8ValidateSlice(progress.finalMessage()));
+}
+
+test "the plan keeps its first max_tasks tasks and refuses the next" {
+    var progress: Progress = .{};
+    for (0..max_tasks) |_| {
+        try std.testing.expect(!progress.refusesTask(.{
+            .op = .add,
+            .text = "task",
+        }));
+        try std.testing.expect(progress.applyPlan(.{
+            .op = .add,
+            .text = "task",
+        }));
+    }
+
+    try std.testing.expectEqual(@as(u16, max_tasks), progress.total());
+    try std.testing.expect(progress.refusesTask(.{
+        .op = .add,
+        .text = "one more",
+    }));
+    try std.testing.expect(!progress.applyPlan(.{
+        .op = .add,
+        .text = "one more",
+    }));
+    try std.testing.expectEqual(@as(u16, max_tasks), progress.total());
+
+    try std.testing.expect(progress.applyPlan(.{
+        .op = .mark,
+        .index = max_tasks - 1,
+        .status = .completed,
+    }));
+    try std.testing.expectEqual(@as(u16, 1), progress.done());
 }

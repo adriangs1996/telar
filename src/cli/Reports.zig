@@ -14,3 +14,5 @@ review: ?ReviewHookReport = null,
 /// Working directory, plan change and final answer; request and pane
 /// fields are filled when sent.
 progress: ?core.ReportAgentProgress = null,
+/// A limit the hook input reached: the reports above hold what fit.
+limit: ?core.LimitReach = null,

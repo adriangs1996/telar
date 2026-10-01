@@ -26,6 +26,10 @@ const Agent = @import("../agent/Agent.zig");
 const description = @import("../agent/description.zig");
 const ProgressObservation = @import("../agent/ProgressObservation.zig");
 const AgentProcess = @import("../agent/AgentProcess.zig");
+const Progress = @import("../agent/Progress.zig");
+const Watches = @import("../agent/Watches.zig");
+const RestoredAgents = @import("../agent/RestoredAgents.zig");
+const limit_reached = @import("limit_reached.zig");
 
 pub const AcknowledgeResult = enum {
     unknown_agent,
@@ -65,12 +69,17 @@ pub fn observeReport(model: *RuntimeModel, observation: ReportObservation) bool 
 
     if (observation.session_file.path.len != 0) {
         if (agent.session_reference) |reference| {
-            _ = model.agent_watches.put(.{
+            const watched = model.agent_watches.put(.{
                 .key = agent.key,
                 .session = reference,
                 .kind = observation.session_file.kind,
                 .path = observation.session_file.path,
             });
+            if (!watched and model.agent_watches.full()) {
+                limit_reached.report(model, .{
+                    .limit = Watches.capacity_limit,
+                });
+            }
         }
     }
 
@@ -94,6 +103,13 @@ pub fn observeProgress(model: *RuntimeModel, observation: ProgressObservation) b
     if (observation.work_tree) |work_tree| {
         changed = agent.work_tree != work_tree;
         agent.work_tree = work_tree;
+    }
+
+    if (agent.progress.refusesTask(observation.plan)) {
+        limit_reached.report(model, .{
+            .limit = Progress.tasks_limit,
+            .requested = Progress.max_tasks + 1,
+        });
     }
 
     changed = agent.progress.applyPlan(observation.plan) or changed;
@@ -142,7 +158,7 @@ pub fn resumeSession(model: *const RuntimeModel, key: PaneKey) ?ResumeSession {
 /// Retains a validated resume until matching process evidence arrives.
 /// Example: `_ = agent_status.restoreSession(model, key, session);`.
 pub fn restoreSession(model: *RuntimeModel, key: PaneKey, session: ResumeSession) bool {
-    return model.restored_agents.putSession(key, session);
+    return kept(model, model.restored_agents.putSession(key, session));
 }
 
 /// Detects duplicate resume attempts during the startup restore pass.
@@ -243,7 +259,7 @@ pub fn checkpointTitle(model: *const RuntimeModel, key: PaneKey) ?SessionTitle {
 pub fn restoreTitle(model: *RuntimeModel, key: PaneKey, title: SessionTitle) bool {
     if (model.restored_agents.get(key)) |pending| {
         if (pending.session != null) {
-            return model.restored_agents.putTitle(key, title);
+            return kept(model, model.restored_agents.putTitle(key, title));
         }
     }
 
@@ -253,7 +269,19 @@ pub fn restoreTitle(model: *RuntimeModel, key: PaneKey, title: SessionTitle) boo
         return true;
     }
 
-    return model.restored_agents.putTitle(key, title);
+    return kept(model, model.restored_agents.putTitle(key, title));
+}
+
+/// Reports the restored agents' limit when a pane's restored metadata
+/// found no slot; `stored` passes through.
+fn kept(model: *RuntimeModel, stored: bool) bool {
+    if (!stored) {
+        limit_reached.report(model, .{
+            .limit = RestoredAgents.capacity_limit,
+        });
+    }
+
+    return stored;
 }
 
 /// Marks one exact agent generation as seen and republishes a `done`
@@ -464,6 +492,7 @@ pub fn nextDescriptionJob(model: *RuntimeModel) ?Job {
         }
     }
 
+    queueWaitingDescriptions(model);
     var queued = model.agents.iterator();
 
     while (queued.next()) |agent| {
@@ -475,6 +504,21 @@ pub fn nextDescriptionJob(model: *RuntimeModel) ?Job {
     }
 
     return null;
+}
+
+/// Queues the descriptions of agents that began work while the queue was
+/// full, as far as its free slots go.
+fn queueWaitingDescriptions(model: *RuntimeModel) void {
+    var pending = pendingDescriptionCount(model);
+    var agents = model.agents.iterator();
+
+    while (pending < description.max_pending_jobs) {
+        const agent = agents.next() orelse return;
+        if (agent.queueWaitingDescription()) {
+            pending += 1;
+            bumpRevision(model);
+        }
+    }
 }
 
 /// A completion applies only to the exact session which launched it. The
@@ -576,7 +620,15 @@ fn ensure(model: *RuntimeModel, identity: Identity) ?*Agent {
         return agent;
     }
 
-    const agent = model.agents.insert(Agent.init(identity)) orelse return null;
+    const agent = model.agents.insert(Agent.init(identity)) orelse {
+        if (model.agents.full()) {
+            limit_reached.report(model, .{
+                .limit = Agents.capacity_limit,
+            });
+        }
+
+        return null;
+    };
     if (model.restored_agents.get(identity.key)) |pending| {
         if (pending.session == null) {
             if (pending.title) |title| {

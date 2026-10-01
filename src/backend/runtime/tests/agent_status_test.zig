@@ -14,6 +14,10 @@ const SessionReference = @import("../../agent/SessionReference.zig");
 const SessionTitle = @import("../../agent/SessionTitle.zig");
 const SessionFile = @import("../../agent/SessionFile.zig");
 const Completion = @import("../../agent/Completion.zig");
+const Progress = @import("../../agent/Progress.zig");
+const Agents = @import("../../agent/Agents.zig");
+const RestoredAgents = @import("../../agent/RestoredAgents.zig");
+const RequestFixture = @import("RequestFixture.zig");
 fn testIdentity() !Identity {
     return .{
         .key = .{ .id = try core.pane(7), .generation = 3 },
@@ -60,6 +64,11 @@ fn observeTestReadyPrompt(model: *RuntimeModel, identity: Identity, prompt: Test
 /// nothing else in it.
 fn testModel() !*RuntimeModel {
     const model = try std.testing.allocator.create(RuntimeModel);
+    // What a limit report reads: the clock, the limits table and the
+    // clients its notice goes to.
+    model.io = std.testing.io;
+    model.clients = .{};
+    model.limit_reaches = .{};
     model.agents = .{};
     model.restored_agents = .{};
     model.agent_watches = .{};
@@ -397,7 +406,7 @@ test "manual title wins over a late generated result" {
     try std.testing.expectEqual(core.AgentTitleSource.manual, snapshot[0].title_source);
 }
 
-test "description backpressure fails the ninth queued request without retry" {
+test "description backpressure keeps the ninth request waiting until a slot frees" {
     const model = try testModel();
     defer std.testing.allocator.destroy(model);
     for (0..description.max_pending_jobs + 1) |index| {
@@ -426,7 +435,27 @@ test "description backpressure fails the ninth queued request without retry" {
         else => {},
     };
     try std.testing.expectEqual(description.max_pending_jobs, pending);
-    try std.testing.expectEqual(@as(usize, 1), failed);
+    try std.testing.expectEqual(@as(usize, 0), failed);
+
+    // The first job runs and finishes; the next start queues the ninth.
+    var job = agent_status.nextDescriptionJob(model).?;
+    defer std.crypto.secureZero(u8, &job.query);
+    const result: Result = .{
+        .pane = job.pane,
+        .session_id = job.session_id,
+        .status = .failed,
+    };
+    _ = agent_status.finishDescription(model, &result);
+    var next = agent_status.nextDescriptionJob(model).?;
+    defer std.crypto.secureZero(u8, &next.query);
+
+    const ninth: core.PaneId = try core.pane(description.max_pending_jobs + 1);
+    const after = agent_status.snapshot(&model.agents, &entries, 0);
+    for (after) |entry| {
+        if (entry.pane_id == ninth) {
+            try std.testing.expectEqual(core.AgentTitleState.pending, entry.title_state);
+        }
+    }
 }
 
 test "process identity rejects contradictory screen branding" {
@@ -1460,4 +1489,84 @@ test "a report that arrived before the one in force does not replace it" {
         .observed_at_ns = 200,
     }));
     try std.testing.expect(agent_status.snapshot(&model.agents, &entries, 300)[0].status != .working);
+}
+
+test "a task past the plan's limit is dropped and reported while the plan keeps counting" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+
+    const model = &fixture.runtime.model;
+    const identity = try testIdentity();
+    for (0..Progress.max_tasks) |_| {
+        try std.testing.expect(agent_status.observeProgress(model, .{
+            .identity = identity,
+            .plan = .{
+                .op = .add,
+                .text = "task",
+            },
+        }));
+    }
+
+    try std.testing.expect(model.limit_reaches.find("agents.max_tasks") == null);
+    try std.testing.expect(!agent_status.observeProgress(model, .{
+        .identity = identity,
+        .plan = .{
+            .op = .add,
+            .text = "one more",
+        },
+    }));
+
+    const slot = model.limit_reaches.find("agents.max_tasks").?;
+    try std.testing.expectEqual(@as(u64, 1), model.limit_reaches.hits[slot]);
+    try std.testing.expectEqual(@as(?u64, Progress.max_tasks + 1), model.limit_reaches.requested[slot]);
+
+    try std.testing.expect(agent_status.observeProgress(model, .{
+        .identity = identity,
+        .plan = .{
+            .op = .mark,
+            .index = Progress.max_tasks - 1,
+            .status = .completed,
+        },
+    }));
+    try std.testing.expectEqual(@as(u16, 1), model.agents.find(identity.key).?.progress.done());
+}
+
+test "an agent past the table's capacity is reported and the tracked ones stay" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+
+    const model = &fixture.runtime.model;
+    for (0..Agents.capacity) |index| {
+        try std.testing.expect(agent_status.observeProgress(model, .{
+            .identity = try testIdentityAt(@intCast(index + 1), 1),
+            .final_message = "done",
+        }));
+    }
+
+    try std.testing.expect(model.limit_reaches.find("agents.capacity") == null);
+    try std.testing.expect(!agent_status.observeProgress(model, .{
+        .identity = try testIdentityAt(Agents.capacity + 1, 1),
+        .final_message = "done",
+    }));
+
+    try std.testing.expect(model.limit_reaches.find("agents.capacity") != null);
+    try std.testing.expect(model.agents.full());
+    try std.testing.expect(model.agents.find((try testIdentityAt(1, 1)).key) != null);
+}
+
+test "restored agents past their capacity are reported" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+
+    const model = &fixture.runtime.model;
+    const title: SessionTitle = try .init("Restored", .agent);
+    for (0..RestoredAgents.capacity) |index| {
+        try std.testing.expect(agent_status.restoreTitle(model, (try testIdentityAt(@intCast(index + 1), 1)).key, title));
+    }
+
+    try std.testing.expect(!agent_status.restoreTitle(model, (try testIdentityAt(RestoredAgents.capacity + 1, 1)).key, title));
+    try std.testing.expect(model.limit_reaches.find("agents.restored_agents") != null);
 }

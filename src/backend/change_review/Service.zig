@@ -19,13 +19,22 @@ const Activation = @import("Activation.zig");
 const ArchivedQuery = @import("ArchivedQuery.zig");
 
 pub const group_capacity = 32;
+pub const groups_limit = core.Limit.declare("review.group_capacity", "conversations", group_capacity);
 pub const sample_expiry_ms = 10 * 60 * 1000;
+/// Bytes every conversation's pending before-samples hold together. A
+/// group holds 128 of up to 128 KiB each, so without this bound 32 groups
+/// could keep half a gigabyte for the ten minutes a sample waits.
+pub const max_pending_sample_bytes = 64 * 1024 * 1024;
+pub const pending_sample_bytes_limit = core.Limit.declare("review.pending_sample_bytes", "bytes", max_pending_sample_bytes);
+const bytes_per_kib = 1024;
 gpa: std.mem.Allocator,
 directory: []const u8,
 disk_bytes: usize = 0,
 disk_initialized: bool = false,
 mutex: std.Io.Mutex = .init,
 groups: [group_capacity]?*Group = @splat(null),
+/// What the pending samples of every group hold (`Sample.heldBytes`).
+pending_sample_bytes: usize = 0,
 dropped: std.atomic.Value(u64) = .init(0),
 
 pub fn init(gpa: std.mem.Allocator, directory: []const u8) !*Service {
@@ -63,6 +72,10 @@ pub fn execute(self: *Service, io: std.Io, input: Input) !*Result {
         const result = try Result.init(self.gpa);
         errdefer result.deinit();
         result.changed_edition = if (group.total > prior_count) group.total else 0;
+        if (result.changed_edition != 0) {
+            result.limit = patchReach(group.editions[group.count - 1].?);
+        }
+
         result.len = (try core.encodeRequestCompleted(result.bytes, .{ .request_id = operation.sample.request_id })).len;
         return result;
     }
@@ -137,7 +150,32 @@ pub fn execute(self: *Service, io: std.Io, input: Input) !*Result {
         };
         self.gpa.destroy(prior);
     }
-    return self.encodeResult(.{ .group = group, .edition = group.editions[at].?, .query = query });
+
+    const edition = group.editions[at].?;
+    const result = try self.encodeResult(.{
+        .group = group,
+        .edition = edition,
+        .query = query,
+    });
+    if (operation == .command and operation.command.action == .submit and edition.omitted_feedback_comments != 0) {
+        result.limit = .{
+            .limit = core.change_review.feedback_limit,
+        };
+    }
+
+    return result;
+}
+
+/// The reach of an edition that kept only a prefix of its diff.
+fn patchReach(edition: *const Edition) ?core.LimitReach {
+    if (edition.omitted_patch_bytes == 0) {
+        return null;
+    }
+
+    return .{
+        .limit = core.change_review.patch_limit,
+        .requested = @as(u64, edition.patch_len) + edition.omitted_patch_bytes,
+    };
 }
 
 /// Loads the durable discovery marker on an observation worker, without encoding a diff.
@@ -170,7 +208,7 @@ pub fn recordProvider(self: *Service, io: std.Io, record: ProviderPatch) !u64 {
         if (std.mem.eql(u8, &existing.identity, &identity)) {
             const id: u64 = index + 1;
             for (group.editions[0..group.count]) |entry| {
-                if (entry.?.id == id and !std.mem.eql(u8, entry.?.text(), record.patch)) {
+                if (entry.?.id == id and entry.?.omitted_patch_bytes == 0 and !std.mem.eql(u8, entry.?.text(), record.patch)) {
                     return error.ProviderPatchChanged;
                 }
             }
@@ -193,7 +231,7 @@ fn loadGroup(self: *Service, io: std.Io, context: Context) !*Group {
                 if (!std.meta.eql(existing.context.pane, context.pane)) {
                     for (&existing.samples) |*pending| {
                         if (pending.*) |value| {
-                            self.gpa.destroy(value);
+                            self.releaseSample(value);
                             pending.* = null;
                         }
                     }
@@ -213,7 +251,7 @@ fn loadGroup(self: *Service, io: std.Io, context: Context) !*Group {
             for (&candidate.samples) |*sample_value| {
                 if (sample_value.*) |value| {
                     if (now - value.created_ms >= sample_expiry_ms) {
-                        self.gpa.destroy(value);
+                        self.releaseSample(value);
                         sample_value.* = null;
                     } else {
                         pending = true;
@@ -229,7 +267,7 @@ fn loadGroup(self: *Service, io: std.Io, context: Context) !*Group {
             }
         }
     }
-    const slot = free orelse return error.ReviewCapacity;
+    const slot = free orelse return error.ReviewGroupsFull;
     try storage.ensure(io, self.directory);
     if (!self.disk_initialized) {
         self.disk_bytes = try storage.diskUsage(io, self.directory);
@@ -263,7 +301,7 @@ fn sample(self: *Service, io: std.Io, input: SampleInput) !void {
     for (&group_value.samples, 0..) |*entry, index| {
         if (entry.*) |pending| {
             if (now - pending.created_ms >= sample_expiry_ms) {
-                self.gpa.destroy(pending);
+                self.releaseSample(pending);
                 entry.* = null;
             } else if (std.mem.eql(u8, &pending.identity, &identity)) {
                 found = index;
@@ -277,19 +315,23 @@ fn sample(self: *Service, io: std.Io, input: SampleInput) !void {
         if (found != null) {
             return;
         }
-        const at = vacant orelse return error.ReviewCapacity;
-        const owned = try self.gpa.create(Sample);
-        owned.* = Sample.init(value, identity, now);
-        group_value.samples[at] = owned;
+        const at = vacant orelse return error.ReviewPendingSamplesFull;
+        const held = Sample.heldBytes(value.content.len);
+        if (held > max_pending_sample_bytes - self.pending_sample_bytes) {
+            return error.ReviewPendingSampleBytesFull;
+        }
+
+        group_value.samples[at] = try Sample.create(self.gpa, value, identity, now);
+        self.pending_sample_bytes += held;
         return;
     }
     const at = found orelse return error.MissingReviewBaseline;
     const before = group_value.samples[at].?;
     defer {
         group_value.samples[at] = null;
-        self.gpa.destroy(before);
+        self.releaseSample(before);
     }
-    if (before.exists == value.exists and std.mem.eql(u8, before.content[0..before.content_len], value.content)) {
+    if (before.exists == value.exists and std.mem.eql(u8, before.content, value.content)) {
         return;
     }
     const patch = try sample_diff.create(.{ .io = io, .gpa = self.gpa, .directory = self.directory }, .{ .before = before, .after = value });
@@ -297,15 +339,20 @@ fn sample(self: *Service, io: std.Io, input: SampleInput) !void {
     _ = try self.append(io, .{ .group = group_value, .identity = identity, .source = .observed_snapshot, .patch = patch });
 }
 
+fn releaseSample(self: *Service, pending: *Sample) void {
+    self.pending_sample_bytes -= Sample.heldBytes(pending.content.len);
+    pending.destroy(self.gpa);
+}
+
 fn append(self: *Service, io: std.Io, input: Append) !u64 {
     const group_value = input.group;
     if (group_value.total == Group.archive_capacity) {
-        return error.ReviewCapacity;
+        return error.ReviewArchiveFull;
     }
     const edition = try self.gpa.create(Edition);
     errdefer self.gpa.destroy(edition);
     edition.* = .{ .id = @as(u64, group_value.total) + 1, .identity = input.identity, .source = input.source };
-    try edition.setPatch(input.patch);
+    _ = try edition.setFittingPatch(input.patch);
     if (group_value.count == Group.capacity) {
         try self.evict(io, group_value);
     }
@@ -333,7 +380,7 @@ fn evict(self: *Service, io: std.Io, group_value: *Group) !void {
             index = at;
         }
     }
-    const at = index orelse return error.ReviewCapacity;
+    const at = index orelse return error.ReviewEditionsFull;
     const edition = group_value.editions[at].?;
     const archive = try self.gpa.create(Group);
     defer self.gpa.destroy(archive);
@@ -394,6 +441,16 @@ fn encodeResult(self: *Service, input: QueryInput) !*Result {
         .pending => "Awaiting delivery to the agent.",
         .delivered => "Review delivered to the agent.",
     };
+
+    var status_buffer: [core.change_review.max_status_bytes]u8 = undefined;
+    if (input.edition.omitted_patch_bytes != 0) {
+        value.status = std.fmt.bufPrint(&status_buffer, "Shows the first {d} KiB of this edit's diff; {d} later bytes passed the review limit. {s}", .{
+            core.change_review.max_patch_bytes / bytes_per_kib,
+            input.edition.omitted_patch_bytes,
+            value.status,
+        }) catch value.status;
+    }
+
     const result_value = try Result.init(self.gpa);
     errdefer result_value.deinit();
     result_value.len = (try core.encodeChangeReviewSnapshot(result_value.bytes, value)).len;
@@ -560,4 +617,208 @@ test "review generation changes discard unmatched evidence while retained editio
     const current_after = try service.execute(io, .{ .context = context, .operation = .{ .sample = sample_value } });
     current_after.deinit();
     try std.testing.expectEqual(@as(u64, 1), try service.latestEdition(io, context));
+}
+
+test "a conversation holds pending samples up to its limit and refuses the next one by name" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/reviews", .{root});
+    const service = try Service.init(gpa, path);
+    defer service.deinit();
+
+    const context = try Context.init(
+        .{
+            .id = @enumFromInt(2),
+            .generation = 3,
+        },
+        .codex,
+        "thread",
+    );
+    var sample_value: core.ReportChangeReviewSample = .{
+        .request_id = @enumFromInt(1),
+        .pane_id = context.pane.id,
+        .pane_generation = context.pane.generation,
+        .provider = .codex,
+        .session = "thread",
+        .tool_call_id = "",
+        .phase = .before,
+        .path = "/file.zig",
+        .exists = true,
+        .content = "old\n",
+    };
+    var id_buffer: [32]u8 = undefined;
+    for (0..Group.sample_capacity) |index| {
+        sample_value.tool_call_id = try std.fmt.bufPrint(&id_buffer, "edit-{d}", .{index});
+        const result = try service.execute(io, .{
+            .context = context,
+            .operation = .{
+                .sample = sample_value,
+            },
+        });
+        result.deinit();
+    }
+
+    sample_value.tool_call_id = "one-more";
+    try std.testing.expectError(error.ReviewPendingSamplesFull, service.execute(io, .{
+        .context = context,
+        .operation = .{
+            .sample = sample_value,
+        },
+    }));
+}
+
+test "pending samples share one byte budget, refused by name past it and given back when paired" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/reviews", .{root});
+    const service = try Service.init(gpa, path);
+    defer service.deinit();
+
+    const context = try Context.init(
+        .{
+            .id = @enumFromInt(2),
+            .generation = 3,
+        },
+        .codex,
+        "thread",
+    );
+    var sample_value: core.ReportChangeReviewSample = .{
+        .request_id = @enumFromInt(1),
+        .pane_id = context.pane.id,
+        .pane_generation = context.pane.generation,
+        .provider = .codex,
+        .session = "thread",
+        .tool_call_id = "fits",
+        .phase = .before,
+        .path = "/file.zig",
+        .exists = true,
+        .content = "old\n",
+    };
+
+    // Other conversations already hold all but this sample's bytes.
+    const held = Sample.heldBytes(sample_value.content.len);
+    const others = max_pending_sample_bytes - held;
+    service.pending_sample_bytes = others;
+    const kept = try service.execute(io, .{
+        .context = context,
+        .operation = .{
+            .sample = sample_value,
+        },
+    });
+    kept.deinit();
+    try std.testing.expectEqual(@as(usize, max_pending_sample_bytes), service.pending_sample_bytes);
+
+    sample_value.tool_call_id = "one-more";
+    try std.testing.expectError(error.ReviewPendingSampleBytesFull, service.execute(io, .{
+        .context = context,
+        .operation = .{
+            .sample = sample_value,
+        },
+    }));
+
+    sample_value.tool_call_id = "fits";
+    sample_value.phase = .after;
+    sample_value.content = "new\n";
+    const paired = try service.execute(io, .{
+        .context = context,
+        .operation = .{
+            .sample = sample_value,
+        },
+    });
+    paired.deinit();
+    try std.testing.expectEqual(others, service.pending_sample_bytes);
+    service.pending_sample_bytes = 0;
+}
+
+test "a sampled edit whose diff passes the patch limit keeps its first hunks and says so" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/reviews", .{root});
+    var service = try Service.init(gpa, path);
+    defer service.deinit();
+
+    const lines = core.change_review.max_sample_bytes / "old\n".len;
+    const before = try gpa.alloc(u8, lines * "old\n".len);
+    defer gpa.free(before);
+    const after = try gpa.alloc(u8, before.len);
+    defer gpa.free(after);
+    for (0..lines) |index| {
+        @memcpy(before[index * "old\n".len ..][0.."old\n".len], "old\n");
+        @memcpy(after[index * "new\n".len ..][0.."new\n".len], "new\n");
+    }
+
+    const context = try Context.init(
+        .{
+            .id = @enumFromInt(2),
+            .generation = 3,
+        },
+        .claude,
+        "thread",
+    );
+    var sample_value: core.ReportChangeReviewSample = .{
+        .request_id = @enumFromInt(1),
+        .pane_id = context.pane.id,
+        .pane_generation = context.pane.generation,
+        .provider = .claude,
+        .session = "thread",
+        .tool_call_id = "rewrite",
+        .phase = .before,
+        .path = "/rewritten.txt",
+        .exists = true,
+        .content = before,
+    };
+    const first = try service.execute(io, .{
+        .context = context,
+        .operation = .{
+            .sample = sample_value,
+        },
+    });
+    first.deinit();
+    sample_value.phase = .after;
+    sample_value.content = after;
+    const second = try service.execute(io, .{
+        .context = context,
+        .operation = .{
+            .sample = sample_value,
+        },
+    });
+    defer second.deinit();
+
+    const reach = second.limit.?;
+    try std.testing.expectEqualStrings("review.max_patch_bytes", reach.limit.name);
+    try std.testing.expect(reach.requested.? > core.change_review.max_patch_bytes);
+
+    service.deinit();
+    service = try Service.init(gpa, path);
+    const query: core.QueryChangeReview = .{
+        .request_id = @enumFromInt(1),
+        .pane_id = context.pane.id,
+        .pane_generation = context.pane.generation,
+    };
+    const result = try service.execute(io, .{
+        .context = context,
+        .operation = .{
+            .query = query,
+        },
+    });
+    defer result.deinit();
+    const view = try result.snapshot();
+    try std.testing.expect(view.patch.len <= core.change_review.max_patch_bytes);
+    try std.testing.expect(std.mem.startsWith(u8, view.patch, "Updated /rewritten.txt\n@@ -1,"));
+    try std.testing.expect(std.mem.startsWith(u8, view.status, "Shows the first 128 KiB of this edit's diff"));
 }

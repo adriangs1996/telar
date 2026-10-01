@@ -327,7 +327,9 @@ schema.report_agent or schema.report_agent_command
 | `session_shutdown` | `exited` |
 
 Pi delivery is serialized through one child at a time, with a two-second child
-limit and 32 pending payloads of at most 64 KiB each. Saturation drops the oldest
+limit and 32 pending payloads of at most 64 KiB each. A payload past 64 KiB
+keeps only the tool input's string fields up to 4096 characters, or no tool
+input, so its event is still delivered. Saturation drops the oldest
 pending observation; renewal repairs missed state. There is no idle timer:
 settlement and shutdown cancel it. Long runs and nested extension dialogs renew
 their reports before expiry. Reinstall the extension after updating Telar and
@@ -418,7 +420,7 @@ ran the four others while the `bash` permission waited. The edit, write and
 apply_patch tools ask as `edit` with the path in `metadata.filepath` and the
 whole diff in `metadata.diff`, which has no bound. A payload past 64 KiB keeps
 only the tool input's string fields up to 4096 characters and its first
-question, so the prompt still reaches the runtime at once.
+question, or no tool input, so the prompt still reaches the runtime at once.
 
 OpenCode's `dispose` hook runs for every instance before the process exits,
 and OpenCode waits for it; the last instance reports `exited` and waits up to
@@ -463,13 +465,18 @@ apply the patch or parse source languages. These shapes follow the
 [Claude hook reference](https://code.claude.com/docs/en/hooks) and
 [Codex hook reference](https://developers.openai.com/es-419/docs/hooks).
 
-Each tool can declare at most 32 distinct paths, and each file sample is capped
-at 24 KiB. Every path component rejects symlinks. Files must be regular UTF-8
-text, with stable size and modification metadata during the read. Empty files
-and absent files are distinct. Binary, oversized, inaccessible and unstable
-files are omitted rather than truncated. Traversal components and malformed or
-oversized path lists are rejected. An unmatched after sample supplies no base
-from which Telar can claim a diff.
+Each tool call samples at most 128 distinct paths, and each file sample is
+capped at 128 KiB. A tool call that declares more paths samples the first 128,
+and a file larger than the cap is skipped; either way `telar hook` prints the
+limit notice on standard error and reports `review.hook_files` or
+`review.max_sample_bytes` to the runtime, which shows it, and the hook still
+exits 0. A file the runtime refuses leaves the other files' samples in place.
+Every path component rejects symlinks. Files must be regular UTF-8 text, with
+stable size and modification metadata during the read. Empty files and absent
+files are distinct. Binary, oversized, inaccessible and unstable files are
+omitted rather than truncated. Traversal components and malformed path lists
+are rejected. An unmatched after sample supplies no base from which Telar can
+claim a diff.
 
 These editions are labeled `observed_snapshot`: they capture the transition
 around the named tool, but another process might write the same file between
@@ -510,7 +517,21 @@ hooks attach to an existing runtime and never start an orphaned one.
 for a pane that runs another agent, with a malformed payload or an
 unreachable runtime it exits 0, so the agent is unaffected. Lifecycle,
 command and title reports remain bounded; supported file tools add at most
-32 file samples, and cooperative feedback adds one read and acknowledgement.
+128 file samples, and cooperative feedback adds one read and acknowledgement.
+Each report is sent on its own, so one the runtime refuses never costs the
+others.
+
+The hook reads at most 16 MiB of input (`hooks.max_input_bytes` in
+`src/cli/HookStdin.zig`), enough for a `Write` of a file of several
+megabytes, which arrives in `tool_input` and again in `tool_response`. It
+reads and discards the rest, so the agent never blocks on the pipe, and
+keeps the top-level members that arrived whole before the limit: the event
+name, session and tool call come before the bulk in every harness, so the
+state, title and usually the command still reach the runtime while what
+needed the lost members is dropped. The hook still exits 0; it prints the
+limit notice on standard error and sends it as `report_limit`, which the
+runtime shows to every window because a command has none of its own
+([limit reached](limit-reached.md)).
 
 The runtime keeps the report as `Agent.report`, the first evidence
 `chooseEvidence` consults while it is valid. Its reason and event line are

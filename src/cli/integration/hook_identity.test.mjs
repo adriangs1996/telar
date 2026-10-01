@@ -44,6 +44,11 @@ if (args.includes("--no-daemon") || process.env.FAKE_CODEX_NO_SERVER) {
   hook({ hook_event_name: "SessionStart", source: "startup" });
   hook({ hook_event_name: "UserPromptSubmit", prompt: "go" });
   hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "call-" + thread, tool_input: { command: "echo own-" + thread } });
+  // A payload past the hook's input limit (FAKE_CODEX_OVERSIZED), whose
+  // tool input arrives before the bulk.
+  if (process.env.FAKE_CODEX_OVERSIZED) {
+    hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "call-big", tool_input: { command: "echo oversized" }, tool_response: "x".repeat(17 * 1024 * 1024) });
+  }
 }
 // The runtime inspects the foreground process when the pane draws; with
 // FAKE_CODEX_WORKING the pane shows Codex's status clock over its composer.
@@ -251,4 +256,19 @@ test("a Codex whose hooks reach its pane without --no-daemon shows no note and r
   await s.start();
   await until("the session resumes", () => s.launches().length > launched);
   assert.deepEqual(s.launches()[launched].args, ["resume", threads.beta]);
+});
+
+test("a hook payload past the input limit still reports its event and names the limit", async (t) => {
+  const s = sandbox(t);
+  await s.start();
+
+  const pane = s.json("workspace", "create", "--directory", s.work).pane_id;
+  s.type(pane, `FAKE_CODEX_OVERSIZED=1 FAKE_CODEX_THREAD=${threads.alpha} codex --no-daemon`);
+  await until("the oversized tool call reaches the card", () => agentIn(s.agents(), pane)?.last_event.includes("oversized"), 20_000);
+
+  const entry = s.json("diagnostics", "limits").limits.find((limit) => limit.name === "hooks.max_input_bytes");
+  assert.ok(entry, "the hook reported its input limit");
+  assert.equal(entry.origin, "client");
+  assert.equal(entry.value, 16 * 1024 * 1024);
+  assert.ok(entry.requested > entry.value);
 });

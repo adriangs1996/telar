@@ -3,7 +3,12 @@ const AgentManifest = @import("AgentManifest.zig");
 const agent_manifest = @import("agent_manifest.zig");
 const std = @import("std");
 const Signal = @import("Signal.zig");
+const Limit = @import("Limit.zig");
 const Table = @This();
+
+/// The limit a configuration reaches when it names more agents than the
+/// table holds, built-in ones included.
+pub const capacity_limit = Limit.declare("config.max_agent_manifests", "agents", types.max_agent_manifests);
 
 items: [types.max_agent_manifests]AgentManifest = undefined,
 count: u8 = 0,

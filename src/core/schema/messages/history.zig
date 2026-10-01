@@ -23,10 +23,14 @@ const HistoryStatsQuery = @import("HistoryStatsQuery.zig");
 const HistoryStats = @import("HistoryStats.zig");
 const HistoryStatsView = @import("HistoryStatsView.zig");
 const HistoryEntry = @import("../HistoryEntry.zig");
+const Limit = @import("../../Limit.zig");
 
 pub const max_import_entries = 64;
 pub const max_import_source_bytes = 256;
-pub const max_import_command_bytes = 4096;
+/// An imported command may be as long as a captured one, up to what its
+/// sized16 field carries (64 KiB less one byte).
+pub const max_import_command_bytes = @min(types.max_history_command_bytes, std.math.maxInt(u16));
+pub const import_command_limit = Limit.declare("history.import_command_bytes", "bytes", max_import_command_bytes);
 pub const max_history_output_bytes = 64 * 1024;
 pub const max_history_stats_top = 10;
 

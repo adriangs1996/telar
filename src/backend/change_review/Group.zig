@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 const Edition = @import("Edition.zig");
 const Sample = @import("Sample.zig");
 const Context = @import("Context.zig");
@@ -6,7 +7,14 @@ const std = @import("std");
 
 pub const capacity = 16;
 pub const archive_capacity = 4096;
-pub const sample_capacity = 32;
+/// Before-samples one conversation may hold while their tools run; a hook
+/// samples at most `ReviewHookFiles.capacity` files per tool call.
+pub const sample_capacity = 128;
+
+pub const editions_limit = core.Limit.declare("review.editions_in_memory", "editions with unsent comments", capacity);
+pub const archive_limit = core.Limit.declare("review.archive_capacity", "editions", archive_capacity);
+pub const samples_limit = core.Limit.declare("review.pending_samples", "pending samples", sample_capacity);
+
 key: [64]u8,
 context: Context,
 editions: [capacity]?*Edition = @splat(null),
@@ -29,9 +37,10 @@ pub fn deinit(self: *@This(), gpa: std.mem.Allocator) void {
     for (self.editions[0..self.count]) |edition| {
         gpa.destroy(edition.?);
     }
+
     for (self.samples) |sample| {
         if (sample) |value| {
-            gpa.destroy(value);
+            value.destroy(gpa);
         }
     }
 }

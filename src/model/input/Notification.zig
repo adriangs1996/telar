@@ -7,9 +7,9 @@ level: core.NotificationLevel = .info,
 duration_ms: u32 = core.default_notification_duration_ms,
 target: core.NotificationTarget = .none,
 title_bytes: [core.max_notification_title_bytes]u8 = @splat(0),
-title_len: u8,
+title_len: u16,
 message_bytes: [core.max_notification_message_bytes]u8 = @splat(0),
-message_len: u8,
+message_len: u16,
 
 /// Copies a validated notification into bounded inline storage.
 /// For example: `const notification = try Notification.init(.{ .title = "Ready", .message = "Open result" });`.
