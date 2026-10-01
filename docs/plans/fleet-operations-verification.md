@@ -5,7 +5,8 @@ destination homes, runtimes and fake SSH. The stub accepts only `fixture@fake`
 and executes locally; it cannot select a real fleet destination. The synthetic
 agent checks `--no-daemon`, consumes the transferred brief and creates a Git
 commit without inference. Teardown stops only the fixture runtimes, waits for
-their socket removal, and deletes their temporary directories.
+their socket removal, accounts for any remaining process naming the exact
+fixture root, and deletes their temporary directories.
 
 ## Reproduction
 
@@ -14,6 +15,8 @@ Use Zig 0.16.0, as required by `build.zig.zon`, and build with `-j2`:
 ```sh
 zig build install headless -Dgui=false -j2
 zig build test-schema test-fuzz-ipc-client test-fuzz-ipc-server test-cli test-runtime test-client test-headless check-library-reexports codestyle -Dgui=false -j2 --summary all
+zig test -lc --dep privatefile -Mroot=lib/localsocket/root.zig -Mprivatefile=lib/privatefile/root.zig
+zig test -lc lib/privatefile/root.zig
 python3 tools/test_fleet_operations.py -v
 python3 tools/test_machine_setup.py
 python3 tools/remote_login_smoke.py
@@ -27,7 +30,9 @@ configuration selects the installed MacOSX15.4 SDK; pass it using `--libc`.
 No product source workaround, global compiler installation change or default
 SDK change is used for these toolchain failures.
 
-The 19 fleet acceptance tests and both remote-login smoke cases pass.
+The 19 fleet acceptance tests and both remote-login smoke cases pass. The native
+socket suite passes 23 tests, including the bind-before-listen startup race and
+unsafe startup-lock refusal. The private-file suite passes all 11 tests.
 The broad check passes 1,680 tests, including the exact-schema corpus, both
 IPC fuzz seed suites, CLI, runtime, shared client and headless client. The
 model/client boundary checks and library re-export checks pass. Codestyle passes.
@@ -52,7 +57,7 @@ complete; GUI rendering and Linux execution are not claimed as tested here.
 | Child failure and teardown | Missing executable has a failed result; orderly runtime shutdown terminates and reaps its owned child |
 | Schema compatibility | Generation 84, golden fingerprint `b0ef14`, decoder/encoder round trips and malformed/boundary inputs; existing handshake mismatch tests |
 | Missing/recorded/existing/ambiguous clones | Automatic create with no clone; explicit prepare; closed-workspace discovery; two clones require selection; unrelated paths survive refusal |
-| Concurrent/interrupted preparation | Two callers publish/reuse one clone; truncated bundle publishes nothing; owned stages recover; unowned stages remain untouched; symlink locks and shared writable clones are refused |
+| Concurrent/interrupted preparation | Two cold-start callers leave one runtime and publish/reuse one clone; truncated bundle publishes nothing; owned stages recover; unowned stages remain untouched; symlink locks and shared writable clones are refused |
 | Git safety/readiness | Sanitized credential-bearing source origin, dirty-file report, no provider credential copy, non-force divergence refusal, explicit shallow/partial/submodule/LFS refusal |
 | Setup authorization and truthfulness | Unapproved declaration and failing private-dependency fixture start no agent; success, explicit retry and cancellation are observed executions |
 | File safety | Atomic binary round trip, no overwrite, EOF length mismatch, symlink traversal, FIFO, hardlink, path traversal and oversized input refusal |

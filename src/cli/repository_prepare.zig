@@ -272,19 +272,8 @@ fn publishDirectory(stage: [:0]const u8, destination: [:0]const u8) !void {
 fn lockRepository(io: std.Io, parent: std.Io.Dir, name: []const u8) !std.Io.File {
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
     const lock_name = try std.fmt.bufPrint(&buffer, "{s}.lock", .{name});
-    const file = parent.createFile(io, lock_name, .{ .exclusive = true, .read = true, .permissions = .fromMode(0o600) }) catch |err| blk: {
-        if (err != error.PathAlreadyExists) {
-            return err;
-        }
-
-        break :blk file_transfer.openRegular(parent, lock_name) catch return error.UnsafeRepositoryLock;
+    return privatefile.lockAt(io, parent, lock_name) catch |err| switch (err) {
+        error.InsecureFile => error.UnsafeRepositoryLock,
+        else => err,
     };
-    errdefer file.close(io);
-    const inode = try privatefile.Inode.fromDescriptor(file.handle);
-    if (inode.kind() != .regular or inode.owner != std.c.getuid() or inode.links != 1 or inode.mode & 0o077 != 0) {
-        return error.UnsafeRepositoryLock;
-    }
-
-    try file.lock(io, .exclusive);
-    return file;
 }

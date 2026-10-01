@@ -80,3 +80,10 @@ See `tools/test_fleet_operations.py` for binary output, literal argv, disconnect
 EOF, timeout, cancellation ownership, replay, bounded output and workspace tests.
 EOF and runtime shutdown operate through the same atomic flags and worker join
 path as cancellation; no callback retains a removed table row.
+
+Concurrent cold starts serialize endpoint stale probing, binding and listening
+under an owned `runtime.sock.lock` file. A socket that has just been bound cannot
+be mistaken for an abandoned endpoint before its creator starts listening. A
+losing runtime sees the live endpoint and exits. The startup lock is released
+before runtime event processing and never serializes interactive traffic. Native
+socket tests cover this window and refuse a symlink substituted for the lock.

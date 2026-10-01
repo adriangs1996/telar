@@ -4,6 +4,7 @@ Run after building: python3 tools/test_fleet_operations.py
 """
 import json
 import os
+import signal
 from pathlib import Path
 import subprocess
 import sys
@@ -47,7 +48,47 @@ class FleetOperationsTest(unittest.TestCase):
         deadline = time.monotonic() + 20
         while (list((self.root / 'lt').glob('telar-*/*.sock')) or list((self.root / 'rt').glob('telar-*/*.sock'))) and time.monotonic() < deadline:
             time.sleep(.05)
+        deadline = time.monotonic() + 5
+        while self.runtime_pids() and time.monotonic() < deadline:
+            time.sleep(.05)
+        # A failed fixture can leave a daemon after its socket disappears.
+        # Only processes naming this exact disposable root may be terminated.
+        owned = []
+        for pid in self.runtime_pids():
+            try:
+                os.kill(pid, signal.SIGTERM)
+                owned.append(pid)
+            except ProcessLookupError:
+                pass
+        deadline = time.monotonic() + 5
+        while owned and time.monotonic() < deadline:
+            remaining = []
+            for pid in owned:
+                try:
+                    os.kill(pid, 0)
+                    remaining.append(pid)
+                except ProcessLookupError:
+                    pass
+            owned = remaining
+            if owned:
+                time.sleep(.05)
+        current = set(self.runtime_pids())
+        for pid in owned:
+            if pid in current:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
         self.temporary.cleanup()
+
+    def runtime_pids(self):
+        processes = subprocess.run(['ps', '-axo', 'pid=,command='], capture_output=True, text=True, check=True).stdout
+        owned = []
+        for line in processes.splitlines():
+            fields = line.strip().split(None, 1)
+            if len(fields) == 2 and fields[1].startswith(str(BINARY) + ' server ') and '--socket ' + str(self.root) + '/' in fields[1]:
+                owned.append(int(fields[0]))
+        return owned
 
     def cli(self, *args, remote=False, check=True, data=None, timeout=30):
         result = subprocess.run([str(BINARY), *map(str, args)], env=self.remote if remote else self.local,
@@ -210,6 +251,10 @@ class FleetOperationsTest(unittest.TestCase):
         for status, stdout, stderr in results:
             self.assertEqual(0, status, stderr)
             paths.append(json.loads(stdout)['path'])
+        deadline = time.monotonic() + 5
+        while len(self.runtime_pids()) != 1 and time.monotonic() < deadline:
+            time.sleep(.05)
+        self.assertEqual(1, len(self.runtime_pids()), 'concurrent cold start left another runtime')
         self.assertEqual(paths[0], paths[1])
         clone = Path(paths[0])
         self.assertEqual([clone], [p for p in clone.parent.iterdir() if p.is_dir()])

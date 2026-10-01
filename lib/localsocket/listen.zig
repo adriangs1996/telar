@@ -161,6 +161,16 @@ pub fn localAddress(path: []const u8) !std.Io.net.UnixAddress {
     return std.Io.net.UnixAddress.init(path);
 }
 
+/// Serializes stale probing, bind and listen so a bound socket is never reclaimed
+/// before its creating runtime calls listen. Example: `const held = try lockEndpoint(io, path);`.
+pub fn lockEndpoint(io: std.Io, path: []const u8) !std.Io.File {
+    var directory = try std.Io.Dir.cwd().openDir(io, std.fs.path.dirname(path) orelse return error.RelativePath, .{ .follow_symlinks = false });
+    defer directory.close(io);
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const name = try std.fmt.bufPrint(&buffer, "{s}.lock", .{std.fs.path.basename(path)});
+    return privatefile.lockAt(io, directory, name);
+}
+
 /// A filesystem socket survives a process crash. Probe it before unlinking and
 /// remove it only when connect reports that no listener exists and the inode
 /// still matches the one inspected before the probe.
@@ -309,4 +319,67 @@ test "the peer of a socket pair is the process that made it" {
     defer _ = std.c.close(sockets[1]);
 
     try std.testing.expectEqual(@as(u32, @intCast(std.c.getpid())), try peerProcess(sockets[0]));
+}
+
+fn competingListener(io: std.Io, path: []const u8, entered: *std.atomic.Value(bool)) !LocalListener {
+    entered.store(true, .release);
+    return LocalListener.listen(io, path);
+}
+
+test "a competing startup cannot reclaim the bind before listen window" {
+    const io = std.testing.io;
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try temp.endpoint(&buffer, "runtime.sock");
+    const held = try lockEndpoint(io, path);
+    var locked = true;
+    defer if (locked) held.close(io);
+    const socket = std.c.socket(std.c.AF.UNIX, std.c.SOCK.STREAM, 0);
+    try std.testing.expect(socket >= 0);
+    defer _ = std.c.close(socket);
+    var address: std.c.sockaddr.un = .{ .path = undefined };
+    @memset(&address.path, 0);
+    @memcpy(address.path[0..path.len], path);
+    try std.testing.expectEqual(@as(c_int, 0), std.c.bind(socket, @ptrCast(&address), @sizeOf(std.c.sockaddr.un)));
+    const bound = try temp.dir.statFile(io, "runtime.sock", .{ .follow_symlinks = false });
+
+    var entered: std.atomic.Value(bool) = .init(false);
+    var contender = try std.Io.concurrent(io, competingListener, .{ io, path, &entered });
+    defer {
+        if (locked) {
+            held.close(io);
+            locked = false;
+        }
+
+        if (contender.cancel(io)) |value| {
+            var unexpected = value;
+            unexpected.deinit(io);
+        } else |_| {}
+    }
+
+    while (!entered.load(.acquire)) {
+        try io.sleep(.fromMilliseconds(1), .awake);
+    }
+
+    try io.sleep(.fromMilliseconds(20), .awake);
+    const still_bound = try temp.dir.statFile(io, "runtime.sock", .{ .follow_symlinks = false });
+    try std.testing.expectEqual(bound.inode, still_bound.inode);
+    try std.testing.expectEqual(@as(c_int, 0), std.c.listen(socket, 1));
+    held.close(io);
+    locked = false;
+    try std.testing.expectError(error.AddressInUse, contender.await(io));
+}
+
+test "a listener refuses a linked startup lock without touching its target" {
+    const io = std.testing.io;
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
+    try temp.dir.writeFile(io, .{ .sub_path = "precious", .data = "keep" });
+    try temp.dir.symLink(io, "precious", "runtime.sock.lock", .{});
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try temp.endpoint(&buffer, "runtime.sock");
+    try std.testing.expectError(error.InsecureFile, LocalListener.listen(io, path));
+    const stat = try temp.dir.statFile(io, "precious", .{});
+    try std.testing.expectEqual(@as(u64, 4), stat.size);
 }

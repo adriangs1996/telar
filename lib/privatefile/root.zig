@@ -11,6 +11,7 @@ pub const Mode = private_file.Mode;
 pub const read = private_file.read;
 pub const replace = private_file.replace;
 pub const lock = private_file.lock;
+pub const lockAt = private_file.lockAt;
 pub const fingerprint = private_file.fingerprint;
 pub const prepareDirectory = private_file.prepareDirectory;
 

@@ -118,6 +118,42 @@ pub fn lock(io: std.Io, path: []const u8) !std.Io.File {
     return file;
 }
 
+/// Locks one private regular file in an already owned directory without following links.
+/// The inode stays after release so competing callers always lock the same file.
+/// Example: `const held = try lockAt(io, directory, "runtime.sock.lock");`.
+pub fn lockAt(io: std.Io, directory: std.Io.Dir, name: []const u8) !std.Io.File {
+    if (name.len == 0 or std.mem.indexOfScalar(u8, name, '/') != null or std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) {
+        return error.InvalidPrivatePath;
+    }
+
+    const parent = try Inode.fromDescriptor(directory.handle);
+    if (parent.kind() != .directory or parent.owner != std.c.getuid() or parent.mode & 0o022 != 0) {
+        return error.InsecureDirectory;
+    }
+
+    const file = directory.createFile(io, name, .{ .exclusive = true, .read = true, .permissions = .fromMode(@intFromEnum(Mode.file)) }) catch |err| blk: {
+        if (err != error.PathAlreadyExists) {
+            return err;
+        }
+
+        var buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const name_z = try std.fmt.bufPrintZ(&buffer, "{s}", .{name});
+        const fd = std.posix.openatZ(directory.handle, name_z, .{ .ACCMODE = .RDONLY, .CLOEXEC = true, .NOFOLLOW = true, .NONBLOCK = true }, 0) catch |failure| switch (failure) {
+            error.SymLinkLoop => return error.InsecureFile,
+            else => return failure,
+        };
+        break :blk std.Io.File{ .handle = fd, .flags = .{ .nonblocking = true } };
+    };
+    errdefer file.close(io);
+    const inode = try Inode.fromDescriptor(file.handle);
+    if (inode.kind() != .regular or inode.owner != std.c.getuid() or inode.links != 1 or inode.mode & @intFromEnum(Mode.shared) != 0) {
+        return error.InsecureFile;
+    }
+
+    try file.lock(io, .exclusive);
+    return file;
+}
+
 // Creates the parent of `path` owner-only when missing, and resets its
 // permissions when it exists.
 fn prepareParent(io: std.Io, path: []const u8) !void {
