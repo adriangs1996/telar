@@ -1,8 +1,8 @@
-const syntaxhl = @import("syntaxhl");
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const event_module = @import("../input/event.zig");
 const std = @import("std");
+const core = @import("telar-core");
 const Widget = @import("Widget.zig");
 const Editor = @import("editor.zig");
 const Route = @import("../widgets/interaction/Route.zig");
@@ -345,30 +345,51 @@ fn sourceOffset(w: *Widget, target: Target, x: f64) usize {
     return at;
 }
 
+/// A selection copies rows of one patch, and the clipboard takes at most
+/// `max_text_bytes`: the stack holds the smaller of the two.
+const copy_bytes = @min(event_module.max_text_bytes, core.change_review.max_patch_bytes);
+
+// A longer selection copies the whole rows that fit and returns the
+// clipboard's limit error, which the window's net reports.
 fn copy(w: *Widget) !void {
     const selection = w.copy_range orelse return;
     const first = @min(selection[0], selection[1]);
     const last = @max(selection[0], selection[1]);
-    var buffer: [syntaxhl.limits.source_bytes]u8 = undefined;
+    var buffer: [copy_bytes]u8 = undefined;
     var length: usize = 0;
     var started = false;
+    var truncated = false;
     const revision = w.model.current();
     const file = revision.files[w.model.file];
     for (revision.rows[file.first..file.last]) |row| {
         if (row.offset + row.value.text.len < first or row.offset > last) {
             continue;
         }
+
+        const start = @max(first, row.offset) - row.offset;
+        const end = @min(last, row.offset + row.value.text.len) - row.offset;
+        const text = row.value.text[start..end];
+        const separator: usize = @intFromBool(started);
+        if (text.len + separator > buffer.len - length) {
+            truncated = true;
+            break;
+        }
+
         if (started) {
             buffer[length] = '\n';
             length += 1;
         }
-        const start = @max(first, row.offset) - row.offset;
-        const end = @min(last, row.offset + row.value.text.len) - row.offset;
-        const text = row.value.text[start..end];
+
         @memcpy(buffer[length..][0..text.len], text);
         length += text.len;
         started = true;
     }
+
     _ = try w.services().write(buffer[0..length]);
+    if (truncated) {
+        w.model.status = "Copied the lines that fit the clipboard limit.";
+        return error.ClipboardTooLarge;
+    }
+
     w.model.status = "Code copy requested.";
 }

@@ -11,13 +11,18 @@ pub fn Type(comptime Widget: type, comptime capacity: usize) type {
 
         storage: [capacity]Widget = undefined,
         len: usize = 0,
+        /// Widgets left out because the list was full; the frame draws the
+        /// rest and the adapter reports `chrome.frame_widget_capacity`.
+        dropped: usize = 0,
 
-        /// Copies one widget into the frame, rejecting overflow explicitly.
+        /// Copies one widget into the frame. A full list keeps what it holds
+        /// and counts the widget as dropped instead of losing the frame.
         /// A widget may borrow the projection, but never a shorter-lived local.
-        /// Example: `try widgets.append(.{ .button = button });`
-        pub fn append(self: *List, widget: Widget) !void {
+        /// Example: `widgets.append(.{ .button = button });`
+        pub fn append(self: *List, widget: Widget) void {
             if (self.len == self.storage.len) {
-                return error.WidgetCapacityExceeded;
+                self.dropped += 1;
+                return;
             }
 
             self.storage[self.len] = widget;

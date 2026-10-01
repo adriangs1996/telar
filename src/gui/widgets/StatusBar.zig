@@ -80,7 +80,7 @@ fn diagnostic(self: StatusBar, canvas: *Canvas, row: *Rect) !void {
     }
 
     const chip = try badge(canvas, row, label);
-    try self.context.bands.add(.{
+    self.context.bands.add(.{
         .area = chip,
         .action = .{
             .intent = .diagnostic_dismiss,

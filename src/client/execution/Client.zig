@@ -19,6 +19,7 @@ const ConnectReport = @import("../connection/ConnectReport.zig");
 const Forward = @import("../machines/Forward.zig");
 const RuntimeConnection = @import("../machines/RuntimeConnection.zig");
 const runtime_link = @import("../connection/runtime_link.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 const machine_profiles = @import("../machines/machine_profiles.zig");
 const Machines = @import("../machines/Machines.zig");
 const TelemetryState = @import("../resources/TelemetryState.zig");
@@ -126,6 +127,9 @@ connect_destination: [core.ssh_destination.max_bytes]u8 = undefined,
 connect_telar_path: [core.remote_telar.max_path_bytes]u8 = undefined,
 /// The wait before connecting again to a lost runtime.
 runtime_retry: pacing.DeadlineScheduler = .{},
+/// The wait until the earliest paused pane asks for its graphics again;
+/// armed only while a pane waits.
+graphics_resume: pacing.DeadlineScheduler = .{},
 connected_at_ns: u64 = 0,
 /// A remote machine's home and login shell for the first pane, copied
 /// from its discovery because the forward that holds them can stop.
@@ -316,6 +320,7 @@ pub fn update(self: *Client, message: Message) !?u8 {
         .config_reload => |result| _ = try config_adoption.completeConfigReload(self, result),
         .runtime_connected => |result| try runtime_link.finishConnect(self, result),
         .runtime_retry_tick => |result| try runtime_link.retry(self, result),
+        .graphics_resume_tick => |result| try limit_reached.finishResumeTick(self, result),
         .machine_edited => |result| try machine_profiles.finish(self, result),
         .telemetry_tick => |result| try client_telemetry.finishTick(self, result),
         .telemetry_written => |result| client_telemetry.finishWrite(self, result),

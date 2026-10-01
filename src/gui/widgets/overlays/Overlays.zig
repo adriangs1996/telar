@@ -30,7 +30,7 @@ pub fn compose(self: *Overlays, input: OverlayComposition, widgets: anytype) !vo
     for (cards.storage[0..cards.len]) |value| {
         var card = value;
         card.hits = &pending.notifications;
-        try widgets.append(.{ .notification = card });
+        widgets.append(.{ .notification = card });
     }
 
     var modal_input = input;

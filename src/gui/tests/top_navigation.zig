@@ -106,8 +106,8 @@ test "the rail stacks five projects in one column and reuses landed favicons at 
     defer favicons.deinit(std.testing.allocator);
     for ([_]f32{ 1, 2 }) |scale| {
         try fixture.measure(.{ .width = @intFromFloat(900 * scale), .height = @intFromFloat(700 * scale), .scale = scale });
-        favicons.refresh(std.testing.allocator, &renderer.sprites.?);
-        const want = favicons.next(&model.workspace_list_snapshot).?;
+        try std.testing.expect(favicons.refresh(std.testing.allocator, &renderer.sprites.?, &model.workspace_list_snapshot) == null);
+        const want = favicons.next(&renderer.sprites.?, &model.workspace_list_snapshot).?;
         favicons.started(want.workspace);
         const image = try std.testing.allocator.create(client.FaviconImage);
         image.* = .{ .sides = renderer.sprites.?.cells };
@@ -116,7 +116,7 @@ test "the rail stacks five projects in one column and reuses landed favicons at 
         }
 
         favicons.land(std.testing.allocator, .{ .workspace = want.workspace, .image = image });
-        favicons.refresh(std.testing.allocator, &renderer.sprites.?);
+        try std.testing.expect(favicons.refresh(std.testing.allocator, &renderer.sprites.?, &model.workspace_list_snapshot) == null);
         fixture.chrome.hovered = .{ .intent = .{ .select_workspace = @enumFromInt(9) } };
         try fixture.paint(fixture.projection());
         const rail = fixture.band();

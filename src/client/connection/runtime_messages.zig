@@ -16,6 +16,7 @@ const history_palette = @import("../input/history_palette.zig");
 const path_picker = @import("../input/path_picker.zig");
 const editor_file_links = @import("../links/editor_file_links.zig");
 const notifications = @import("../notifications/notifications.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 const pane_attachment = @import("../panes/pane_attachment.zig");
 const pane_closure = @import("../panes/pane_closure.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
@@ -69,7 +70,8 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
         },
         .tab_moved => |moved| _ = try tab_move.completeTabMove(&client.model, moved),
         .pane_frame => |frame| _ = try pane_frames.receivePaneFrame(client, frame),
-        .pane_cwd => |cwd| _ = try data.pane_metadata.update(&client.model, 
+        .pane_cwd => |cwd| _ = try data.pane_metadata.update(
+            &client.model,
             .{
                 .cwd = .{
                     .pane_id = cwd.pane_id,
@@ -77,7 +79,8 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
                 },
             },
         ),
-        .pane_foreground => |foreground| _ = try data.pane_metadata.update(&client.model, 
+        .pane_foreground => |foreground| _ = try data.pane_metadata.update(
+            &client.model,
             .{
                 .foreground = .{
                     .pane_id = foreground.pane_id,
@@ -85,7 +88,8 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
                 },
             },
         ),
-        .pane_title => |title| _ = try data.pane_metadata.update(&client.model, 
+        .pane_title => |title| _ = try data.pane_metadata.update(
+            &client.model,
             .{
                 .title = .{
                     .pane_id = title.pane_id,
@@ -131,7 +135,8 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
             _ = try agent_snapshot.applyAgentSnapshot(client, snapshot);
             try agent_peek.requestScreen(&client.model);
         },
-        .system_metrics => |metrics| _ = try data.system_metrics.reconcile(&client.model, 
+        .system_metrics => |metrics| _ = try data.system_metrics.reconcile(
+            &client.model,
             .{
                 .runtime_revision = metrics.revision,
                 .cpu_percent = metrics.cpu_percent,
@@ -142,12 +147,18 @@ pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage)
             },
         ),
         .workspace_list => |list| try workspace_list_snapshot.applyWorkspaceList(client, list),
-        .graphics_snapshot => |snapshot| _ = try pane_graphics.applyPaneGraphics(
-            client,
-            .{
-                .snapshot = snapshot,
-            },
-        ),
+        .graphics_snapshot => |snapshot| {
+            const outcome = try pane_graphics.applyPaneGraphics(
+                client,
+                .{
+                    .snapshot = snapshot,
+                },
+            );
+            // A snapshot that asked for another did not resume the pane.
+            if (outcome != .resync_requested) {
+                try limit_reached.receiveGraphicsSnapshot(client, snapshot);
+            }
+        },
         .graphics_image => |image| _ = try pane_graphics.applyPaneGraphics(
             client,
             .{

@@ -55,9 +55,10 @@ is caught at the Rust boundary. Invalid input, cancellation and capacity failure
 return errors; consumers publish only a fully validated successful result.
 
 Calls run on the GUI observation worker, never during painting or input forwarding.
-The source cap is 48 KiB, event nesting is bounded, and cancellation is requested
-after 100 ms per parse. Queries are initialized once and retained. These limits
-do not constitute a hard heap quota for the underlying Rust/C libraries.
+The source cap is 256 KiB, the same as `syntaxhl.limits.source_bytes`; event
+nesting is bounded, and cancellation is requested after 100 ms per parse.
+Queries are initialized once and retained. These limits do not constitute a
+hard heap quota for the underlying Rust/C libraries.
 
 Highlight queries ship with the grammars. TypeScript combines its query with
 JavaScript; JSX/TSX adds the upstream JSX query. Zig's query requires two small

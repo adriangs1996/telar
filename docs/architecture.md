@@ -242,7 +242,7 @@ libraries `build/model.zig` lists, pure values and deadlines.
 | `urlscan` | classifying a URI by scheme, finding the URI or the local file path under an offset in a line, and the line and column a link points at |
 | `keyinput` | keys, characters, modifiers and mouse events as values, chord parsing, binding order, bounded bindings and physical-key leases |
 | `textraster` | text shaped and rasterized into RGBA with FreeType and HarfBuzz in a caller's font, and rounded fills |
-| `syntaxhl` | syntax roles, languages by file path, Tree-sitter captures as roles, and a bounded highlighting cache keyed by content |
+| `syntaxhl` | syntax roles, languages by file path, Tree-sitter captures as roles, and the largest source a caller may highlight |
 | `textfield` | a fixed-capacity single-line text field: byte offsets, grapheme-cluster movement, directed selection and a view scrolled to fit |
 | `kitty_protocol` | Kitty graphics transmission, placement and deletion commands written into a caller buffer, the image format, and received control fields |
 | `cellglyphs` | box drawing, block elements and Braille painted from geometry into a quad list |

@@ -6,6 +6,7 @@
 //! another still reads waits for it.
 const std = @import("std");
 const builtin = @import("builtin");
+const core = @import("telar-core");
 const data = @import("model");
 const client = @import("telar-client");
 const GuiAdapter = @import("GuiAdapter.zig");
@@ -78,17 +79,20 @@ pub fn finish(gui: *GuiAdapter, completion: data.Completion) !void {
 }
 
 fn capture(gpa: std.mem.Allocator, request: data.CaptureRequest, orphan: *?*data.Capture, landing: *?PreviewImage) data.Completion {
+    var limit: ?core.LimitReach = null;
+    const result = captureClipboard(gpa, request, orphan, landing, &limit);
     return .{
         .execution_id = @enumFromInt(request.sequence),
-        .result = captureClipboard(gpa, request, orphan, landing),
+        .result = result,
+        .limit = limit,
     };
 }
 
-fn captureClipboard(gpa: std.mem.Allocator, request: data.CaptureRequest, orphan: *?*data.Capture, landing: *?PreviewImage) !*data.Capture {
+fn captureClipboard(gpa: std.mem.Allocator, request: data.CaptureRequest, orphan: *?*data.Capture, landing: *?PreviewImage, limit: *?core.LimitReach) !*data.Capture {
     try request.target.validate();
     std.debug.assert(orphan.* == null);
     std.debug.assert(landing.* == null);
-    const image = try readClipboardPng(gpa);
+    const image = try readClipboardPng(gpa, limit);
     errdefer {
         std.crypto.secureZero(u8, image.png);
         gpa.free(image.png);
@@ -109,7 +113,9 @@ fn captureClipboard(gpa: std.mem.Allocator, request: data.CaptureRequest, orphan
     return result;
 }
 
-fn readClipboardPng(gpa: std.mem.Allocator) !ClipboardImage {
+// Reads the pasteboard as a bounded PNG; a quota it passes comes back as
+// `ClipboardImageTooLarge` with that quota's limit in `limit`.
+fn readClipboardPng(gpa: std.mem.Allocator, limit: *?core.LimitReach) !ClipboardImage {
     if (comptime builtin.os.tag != .macos) {
         return error.ClipboardImageUnsupported;
     }
@@ -138,7 +144,10 @@ fn readClipboardPng(gpa: std.mem.Allocator) !ClipboardImage {
     switch (@as(ClipboardStatus, @enumFromInt(status))) {
         .ok => {},
         .no_image => return error.NoImageOnClipboard,
-        .too_large => return error.ClipboardImageTooLarge,
+        .too_large, .too_many_pixels, .png_too_large => {
+            limit.* = quotaReach(@enumFromInt(status), len, width, height);
+            return error.ClipboardImageTooLarge;
+        },
         _ => return error.ClipboardReadFailed,
     }
 
@@ -149,6 +158,7 @@ fn readClipboardPng(gpa: std.mem.Allocator) !ClipboardImage {
 
     const pixels = std.math.mul(u64, width, height) catch return error.ClipboardImageTooLarge;
     if (pixels > data.attachment_types.max_pixels) {
+        limit.* = quotaReach(.too_many_pixels, len, width, height);
         return error.ClipboardImageTooLarge;
     }
 
@@ -161,11 +171,31 @@ fn readClipboardPng(gpa: std.mem.Allocator) !ClipboardImage {
     };
 }
 
+// The limit one quota status of the pasteboard read names, with what the
+// image asked for when the read knows it: the PNG's length or its pixels.
+fn quotaReach(status: ClipboardStatus, len: usize, width: u32, height: u32) core.LimitReach {
+    return switch (status) {
+        .png_too_large => .{
+            .limit = data.attachment_types.png_bytes_limit,
+            .requested = if (len != 0) len else null,
+        },
+        .too_many_pixels => .{
+            .limit = data.attachment_types.pixels_limit,
+            .requested = if (width != 0 and height != 0) @as(u64, width) * height else null,
+        },
+        else => .{
+            .limit = data.attachment_types.source_bytes_limit,
+        },
+    };
+}
+
 /// The status codes of `clipboard_image.h`.
 const ClipboardStatus = enum(c_int) {
     ok = 0,
     no_image = 1,
     too_large = 2,
+    too_many_pixels = 4,
+    png_too_large = 5,
     _,
 };
 

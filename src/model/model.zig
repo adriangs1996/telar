@@ -64,6 +64,7 @@ pub const tab_snapshot_reconciliation = @import("workspace/tab_snapshot_reconcil
 pub const workspace_reconciliation = @import("workspace/workspace_reconciliation.zig");
 pub const workspace_handoff = @import("workspace/workspace_handoff.zig");
 pub const runtime_session = @import("connection/runtime_session.zig");
+pub const limit_reached = @import("connection/limit_reached.zig");
 pub const pane_split = @import("workspace/pane_split.zig");
 pub const presentation_delivery = @import("panes/presentation_delivery.zig");
 pub const name_prompt = @import("state/name_prompt.zig");
@@ -384,6 +385,7 @@ test {
     _ = @import("connection/GraphicsPauses.zig");
     _ = @import("bars/color_name.zig");
     _ = @import("connection/runtime_session.zig");
+    _ = @import("connection/limit_reached.zig");
     _ = @import("state/model_invariants.zig");
     _ = @import("layout/GridRegions.zig");
     _ = @import("workspace/workbench.zig");

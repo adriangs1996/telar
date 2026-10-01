@@ -16,6 +16,8 @@ pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath)
             .link_libc = true,
         });
         gui.addCSourceFile(.{ .file = b.path("src/gui/native/wake.c"), .flags = &.{} });
+        // The native headers, so a test checks their constants against Zig's mirrors.
+        gui.addIncludePath(b.path("src/gui/native"));
         gui.addImport("freetype", app.modules.freetype);
         gui.addImport("assets", app.modules.assets);
         gui.addImport("telar-client", app.modules.client);

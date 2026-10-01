@@ -47,7 +47,7 @@ static telar_gui_quad image(float x, float width) {
 }
 
 int telar_test_images(void) {
-    _Static_assert(sizeof(telar_gui_frame) == 328, "frame ABI");
+    _Static_assert(sizeof(telar_gui_frame) == 336, "frame ABI");
     _Static_assert(offsetof(telar_gui_frame, image_uploads) == 280, "frame image ABI");
     _Static_assert(offsetof(telar_gui_frame, image_draw_count) == 320, "frame image draw ABI");
     _Static_assert(sizeof(telar_gui_image_upload) == 24, "image upload ABI");

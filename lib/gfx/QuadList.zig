@@ -14,6 +14,10 @@ const QuadList = @This();
 allocator: std.mem.Allocator,
 quads: std.ArrayList(Quad) = .empty,
 limit: ?usize = null,
+/// Quads pushed past `limit`, which the list left out; `clear` keeps the
+/// count so a caller reusing the list per item still sees every drop. The
+/// caller resets it once per frame.
+dropped: usize = 0,
 
 pub fn init(allocator: std.mem.Allocator) QuadList {
     return .{ .allocator = allocator };
@@ -28,10 +32,14 @@ pub fn clear(self: *QuadList) void {
     self.quads.clearRetainingCapacity();
 }
 
+/// Appends one quad. A list at its `limit` keeps the quads it holds and
+/// counts this one in `dropped`, so a frame draws what fits.
+/// Example: `try list.push(quad);`
 pub fn push(self: *QuadList, item: Quad) !void {
     if (self.limit) |limit| {
         if (self.quads.items.len >= limit) {
-            return error.NativeQuadBudgetExceeded;
+            self.dropped += 1;
+            return;
         }
 
         self.quads.appendAssumeCapacity(item);
@@ -356,4 +364,34 @@ test "a diagram region samples only its part of the texture" {
     try std.testing.expectEqual(@as(f32, 0.25), image.u0);
     try std.testing.expectEqual(@as(f32, 0.5), image.u1);
     try std.testing.expectEqual(@as(f32, 0.5), image.v1);
+}
+
+test "a list at its limit keeps the quads it holds and counts the rest" {
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    try list.reserve(2);
+    try list.pushRect(.{
+        .x = 0,
+        .y = 0,
+        .width = 1,
+        .height = 1,
+    }, Color.white);
+    try list.pushRect(.{
+        .x = 1,
+        .y = 0,
+        .width = 1,
+        .height = 1,
+    }, Color.white);
+    try list.pushRect(.{
+        .x = 2,
+        .y = 0,
+        .width = 1,
+        .height = 1,
+    }, Color.white);
+    try std.testing.expectEqual(@as(usize, 2), list.items().len);
+    try std.testing.expectEqual(@as(usize, 1), list.dropped);
+    try std.testing.expectEqual(@as(f32, 1), list.items()[1].x);
+
+    list.clear();
+    try std.testing.expectEqual(@as(usize, 1), list.dropped);
 }

@@ -8,9 +8,13 @@ const Paint = @import("CellPaint.zig");
 const gfx = @import("gfx");
 const Quad = gfx.Quad.Quad;
 const Row = @import("CellRow.zig");
+const core = @import("telar-core");
 const Grid = @This();
 
-pub const max_cells = 65536;
+/// Every grid the protocol carries: the window measures no more cells than
+/// `core.max_cell_count`, so this bound never binds first. Storage follows
+/// the grid's actual cells, not this bound.
+pub const max_cells = core.max_cell_count;
 
 allocator: std.mem.Allocator,
 entries: std.ArrayList(Metadata) = .empty,
@@ -86,7 +90,7 @@ test "grid budget failures preserve the previous cache" {
     var grid = Grid.init(std.testing.allocator);
     defer grid.deinit();
     try grid.resize(.{ 80, 24 });
-    try std.testing.expectError(error.NativeCellBudgetExceeded, grid.resize(.{ 65535, 2 }));
+    try std.testing.expectError(error.NativeCellBudgetExceeded, grid.resize(.{ 65535, 3 }));
     try std.testing.expectEqual(@as(u16, 80), grid.cols);
     try std.testing.expectEqual(@as(u16, 24), grid.rows);
 }

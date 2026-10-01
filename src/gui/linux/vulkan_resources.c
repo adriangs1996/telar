@@ -178,9 +178,13 @@ static bool ensure_texture(telar_vulkan_resources *self, gpu_texture *texture, t
     return true;
 }
 
+// A texture holding dirty_base uploads only rows top..bottom (half open);
+// top == bottom, or any other held version, uploads the whole texture.
 typedef struct {
     const uint8_t *pixels;
     uint64_t version;
+    uint64_t dirty_base;
+    uint32_t top, bottom;
 } texture_source;
 
 static void upload_texture(telar_vulkan_resources *self, VkCommandBuffer commands, gpu_texture *texture,
@@ -188,7 +192,13 @@ static void upload_texture(telar_vulkan_resources *self, VkCommandBuffer command
     if (texture->uploaded && texture->version == source.version) {
         return;
     }
-    memcpy(texture->staging.mapped, source.pixels, (size_t)texture->width * texture->height * texture->bytes_per_texel);
+    uint32_t top = 0, bottom = texture->height;
+    if (texture->uploaded && texture->version == source.dirty_base && source.top < source.bottom && source.bottom <= texture->height) {
+        top = source.top;
+        bottom = source.bottom;
+    }
+    size_t row_bytes = (size_t)texture->width * texture->bytes_per_texel;
+    memcpy((uint8_t *)texture->staging.mapped + top * row_bytes, source.pixels + top * row_bytes, (bottom - top) * row_bytes);
     VkImageMemoryBarrier2 barrier = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .srcStageMask = texture->uploaded ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_NONE,
@@ -209,8 +219,10 @@ static void upload_texture(telar_vulkan_resources *self, VkCommandBuffer command
     };
     vkCmdPipelineBarrier2(commands, &dependency);
     VkBufferImageCopy region = {
+        .bufferOffset = top * row_bytes,
         .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-        .imageExtent = {texture->width, texture->height, 1},
+        .imageOffset = {0, (int32_t)top, 0},
+        .imageExtent = {texture->width, bottom - top, 1},
     };
     vkCmdCopyBufferToImage(commands, texture->staging.handle, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
                            &region);
@@ -327,14 +339,16 @@ bool telar_vulkan_resources_prepare(telar_vulkan_resources *self, VkCommandBuffe
     }
     // Finish all fallible allocation before recording uploads and committing
     // their versions. An allocation failure must leave a retry uploadable.
-    upload_texture(self, commands, &self->atlas, (texture_source){frame->atlas, frame->atlas_version});
+    upload_texture(self, commands, &self->atlas,
+                   (texture_source){frame->atlas, frame->atlas_version, frame->atlas_dirty_base, frame->atlas_dirty_top,
+                                    frame->atlas_dirty_bottom});
     if (sprites) {
-        upload_texture(self, commands, &self->sprites, (texture_source){frame->sprites, frame->sprites_version});
+        upload_texture(self, commands, &self->sprites, (texture_source){.pixels = frame->sprites, .version = frame->sprites_version});
     }
     for (unsigned i = 0; i < TELAR_GUI_DIAGRAM_SLOTS; i++) {
         const telar_gui_diagram_texture *source = &frame->diagrams[i];
         if (source->pixels) {
-            upload_texture(self, commands, &self->diagrams[i], (texture_source){source->pixels, source->version});
+            upload_texture(self, commands, &self->diagrams[i], (texture_source){.pixels = source->pixels, .version = source->version});
         }
     }
     return true;

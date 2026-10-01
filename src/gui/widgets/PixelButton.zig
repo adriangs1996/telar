@@ -95,7 +95,7 @@ pub fn draw(self: PixelButton, canvas: *Canvas) !void {
         }).draw(canvas);
     }
 
-    try self.context.bands.add(.{
+    self.context.bands.add(.{
         .area = self.area,
         .action = action,
         .placement = self.placement,

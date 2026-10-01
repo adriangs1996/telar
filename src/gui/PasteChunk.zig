@@ -1,4 +1,4 @@
-const capacity = 256;
+pub const capacity = 256;
 
 bytes: [capacity]u8 = undefined,
 len: u16 = 0,

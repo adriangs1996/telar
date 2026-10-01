@@ -113,7 +113,11 @@ test "replacement sidebar widgets retain scrolling and clip their own card contr
     const area: Rect = .{ .x = 0, .y = 0, .width = 284, .height = 160 };
     {
         var widgets: List = .{};
-        try widgets.append(.{ .state = &state, .context = &context, .area = area });
+        widgets.append(.{
+            .state = &state,
+            .context = &context,
+            .area = area,
+        });
         try widgets.draw(&canvas);
     }
 
@@ -124,7 +128,11 @@ test "replacement sidebar widgets retain scrolling and clip their own card contr
     band_hits = .{};
     {
         var widgets: List = .{};
-        try widgets.append(.{ .state = &state, .context = &context, .area = area });
+        widgets.append(.{
+            .state = &state,
+            .context = &context,
+            .area = area,
+        });
         try widgets.draw(&canvas);
     }
 

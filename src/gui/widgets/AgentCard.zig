@@ -51,7 +51,7 @@ pub fn draw(self: AgentCard, canvas: *Canvas) !void {
 }
 
 /// The action a click on the card performs.
-/// Example: `try hits.add(.{ .area = cells, .action = card.action() });`
+/// Example: `hits.add(.{ .area = cells, .action = card.action() });`
 pub fn action(self: AgentCard) action_module.Action {
     return .{ .intent = .{ .focus_agent = self.agent.key } };
 }

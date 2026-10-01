@@ -4,7 +4,10 @@ const FieldView = @import("FieldView.zig");
 const Preedit = @import("Preedit.zig");
 const Display = @This();
 
-field: textfield.GenericField(8192),
+/// Bytes the largest editor holds; its display copy has room for all of it.
+pub const capacity = 8192;
+
+field: textfield.GenericField(capacity),
 provisional: bool = false,
 
 /// Surrounding text remains untouched; only this local display copy changes.

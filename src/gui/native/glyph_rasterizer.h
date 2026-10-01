@@ -2,6 +2,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Largest glyph page side; mirrors `GlyphAtlas.max_side`.
+#define TELAR_GLYPH_ATLAS_MAX_SIDE 2048
+
 typedef struct {
     const uint8_t *font;
     size_t font_len;

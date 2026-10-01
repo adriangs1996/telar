@@ -100,7 +100,7 @@ test "font thickening preserves shaping and cell metrics and cached glyphs alloc
         }
 
         try std.testing.expectEqual(@as(u8, 255), atlas.pixels[0]);
-        try std.testing.expectEqual(@as(u8, 255), atlas.pixels[Atlas.side + 1]);
+        try std.testing.expectEqual(@as(u8, 255), atlas.pixels[atlas.side + 1]);
         if (mode == 0) {
             digest = std.hash.Wyhash.hash(0, atlas.pixels);
         } else if (builtin.os.tag != .macos) {

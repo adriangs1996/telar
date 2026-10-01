@@ -928,6 +928,36 @@ test "clipboard image from a retired agent target is consumed and freed" {
     try std.testing.expectEqualDeep(observed_before, client.presentation.observed);
 }
 
+test "a fifth clipboard image evicts the oldest preview and reports the item limit" {
+    var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator) };
+    defer shelf.catalog.deinit();
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    harness.client.attachments = shelf.port();
+    try harness.bootstrap();
+    const client = harness.client;
+    const target = try fixtures.installTestingAttachmentTarget(client, 1);
+    const reaches = &client.model.limit_reaches;
+    var first: ?data.AttachmentId = null;
+    for (0..data.attachment_types.max_items + 1) |_| {
+        const execution = (try client.model.clipboard.reserve(target)).?;
+        first = first orelse @enumFromInt(@intFromEnum(execution.id));
+        const completed = try fixtures.testingClipboardCapture(client, execution, "private png");
+        try client_module.clipboard_capture.completeClipboardCapture(client, .{
+            .execution_id = execution.id,
+            .result = completed,
+        });
+        try std.testing.expect(client.model.clipboard.orphan == null);
+    }
+
+    try std.testing.expectEqual(data.attachment_types.max_items, shelf.catalog.snapshot().len);
+    try std.testing.expect(shelf.catalog.find(first.?) == null);
+    const row = reaches.find("attachments.max_items").?;
+    try std.testing.expectEqual(@as(u64, 1), reaches.hits[row]);
+    try std.testing.expectEqual(@as(?u64, data.attachment_types.max_items + 1), reaches.requested[row]);
+}
+
 test "clipboard image failures settle lifecycle without direct presentation" {
     var shelf: PreviewShelf = .{ .catalog = .init(std.testing.allocator) };
     defer shelf.catalog.deinit();
@@ -952,17 +982,35 @@ test "clipboard image failures settle lifecycle without direct presentation" {
     try std.testing.expectEqualDeep(version_before_empty, client.model.version());
     try std.testing.expectEqualDeep(observed_before, client.presentation.observed);
 
+    // An image past a limit shows the limit notice under the limit's name.
     const too_large = (try client.model.clipboard.reserve(target)).?;
     const version_before_large = client.model.version();
+    const pixels: u64 = 12_288 * 6_912;
     try client_module.clipboard_capture.completeClipboardCapture(client, .{
         .execution_id = too_large.id,
         .result = error.ClipboardImageTooLarge,
+        .limit = .{
+            .limit = data.attachment_types.pixels_limit,
+            .requested = pixels,
+        },
     });
 
     try std.testing.expect(client.model.clipboard.capture == null);
     try std.testing.expect(client.model.version().notifications > version_before_large.notifications);
     try std.testing.expect(client.model.notification_scheduler.pending);
     try std.testing.expectEqualDeep(observed_before, client.presentation.observed);
+    const reaches = &client.model.limit_reaches;
+    const pixels_row = reaches.find("attachments.max_pixels").?;
+    try std.testing.expectEqual(@as(?u64, pixels), reaches.requested[pixels_row]);
+    try std.testing.expectEqual(data.attachment_types.max_pixels, reaches.value[pixels_row]);
+
+    // One the worker did not name still reports under its error.
+    const unnamed = (try client.model.clipboard.reserve(target)).?;
+    try client_module.clipboard_capture.completeClipboardCapture(client, .{
+        .execution_id = unnamed.id,
+        .result = error.ClipboardImageTooLarge,
+    });
+    try std.testing.expect(reaches.find("ClipboardImageTooLarge") != null);
 
     const invalid = (try client.model.clipboard.reserve(target)).?;
     const completed = try fixtures.testingClipboardCapture(client, invalid, "invalid");

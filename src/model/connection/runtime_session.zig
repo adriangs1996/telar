@@ -1,8 +1,9 @@
 //! A client connects to a runtime again after losing it. The new session
-//! starts as a fresh client would: every replica the lost session filled
-//! and every request it left unanswered is dropped, while what the client
-//! owns itself (configuration, theme, host facts, bars, notifications,
-//! timers and prompts it runs locally) stays. Revisions advance rather than
+//! starts as a fresh client would: every replica the lost session filled,
+//! every graphics pause (they leave with the panes, in
+//! `workspace_handoff.clear`) and every request it left unanswered is
+//! dropped, while what the client owns itself (configuration, theme, host
+//! facts, bars, notifications, timers and prompts it runs locally) stays. Revisions advance rather than
 //! restart, so nothing cached by revision mistakes new state for old.
 const std = @import("std");
 const ClientModel = @import("../state/ClientModel.zig");
@@ -80,6 +81,8 @@ test "forgetting a session drops runtime replicas and keeps client settings" {
     model.startup.phase = .active;
     model.system_metrics = .{ .runtime_revision = 1, .cpu_percent = 10, .memory_used_decigib = 5, .battery_percent = null };
     model.sidebar_visible = false;
+    const paused = model.graphics_pauses.add(@enumFromInt(3), 0);
+    model.graphics_pauses.setWaiting(paused, true);
     const before = model.version();
 
     forget(&model);
@@ -89,6 +92,8 @@ test "forgetting a session drops runtime replicas and keeps client settings" {
     try std.testing.expect(model.workspace == null);
     try std.testing.expect(model.startup.phase == .opening);
     try std.testing.expect(model.system_metrics == null);
+    try std.testing.expectEqual(@as(usize, 0), model.graphics_pauses.count);
+    try std.testing.expectEqual(@as(usize, 0), model.graphics_pauses.waiting_count);
     try std.testing.expect(!model.sidebar_visible);
     try std.testing.expect(model.version().tabs > before.tabs);
     try std.testing.expect(model.version().frame > before.frame);

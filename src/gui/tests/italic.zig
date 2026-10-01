@@ -239,15 +239,16 @@ fn naturalWord(session: *Session, point: [2]u16, text: []const u8) !QuadList {
 }
 
 fn hasInkOutside(renderer: *Renderer, glyph: Quad, rect: Rect) bool {
-    const left: usize = @intFromFloat(@round(glyph.u0 * Atlas.side));
-    const top: usize = @intFromFloat(@round(glyph.v0 * Atlas.side));
-    const width: usize = @intFromFloat(@round((glyph.u1 - glyph.u0) * Atlas.side));
-    const height: usize = @intFromFloat(@round((glyph.v1 - glyph.v0) * Atlas.side));
+    const side: f32 = @floatFromInt(renderer.atlas.?.side);
+    const left: usize = @intFromFloat(@round(glyph.u0 * side));
+    const top: usize = @intFromFloat(@round(glyph.v0 * side));
+    const width: usize = @intFromFloat(@round((glyph.u1 - glyph.u0) * side));
+    const height: usize = @intFromFloat(@round((glyph.v1 - glyph.v0) * side));
     for (0..height) |row| {
         for (0..width) |col| {
             const x = glyph.x + @as(f32, @floatFromInt(col)) + 0.5;
             const y = glyph.y + @as(f32, @floatFromInt(row)) + 0.5;
-            if ((x < rect.x or x >= rect.x + rect.width or y < rect.y or y >= rect.y + rect.height) and renderer.atlas.?.pixels[(top + row) * Atlas.side + left + col] != 0) {
+            if ((x < rect.x or x >= rect.x + rect.width or y < rect.y or y >= rect.y + rect.height) and renderer.atlas.?.pixels[(top + row) * renderer.atlas.?.side + left + col] != 0) {
                 return true;
             }
         }

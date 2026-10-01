@@ -14,22 +14,28 @@ const Bands = @import("Bands.zig");
 const data = @import("model");
 const BandHitMap = @This();
 
-pub const capacity = 1 + core.max_workspace_list_entries + 2 + core.max_tabs_per_workspace + 2 + core.max_agent_snapshot_entries + 1 + 4 + core.max_panes_per_tab + 1 + bar_targets;
+pub const capacity = 1 + core.max_workspace_list_entries + 2 + core.max_tabs_per_workspace + 2 + core.max_agent_snapshot_entries + 1 + 4 + core.max_panes_per_tab + 1 + bar_targets + client.Machines.capacity;
+pub const limit = core.Limit.declare("chrome.band_hit_map_capacity", "chrome targets", capacity);
 /// Bar components with a target, the overflow chip, the panel's close
 /// control and its buttons (or the overflow list's rows).
 const bar_targets = data.BarOverflow.capacity + 1 + 1 + data.bar_values.max_panel_nodes;
 items: [capacity]BandHit = undefined,
 len: usize = 0,
+/// Targets left out because the table was full; their controls still draw
+/// and the window reports `chrome.band_hit_map_capacity`.
+dropped: usize = 0,
 
-/// Rejects overflow rather than publishing a drawn control without a target.
-/// Example: `try bands.add(.{ .area = pill, .action = .{ .intent = .{ .select_workspace = id } } });`
-pub fn add(self: *BandHitMap, hit: BandHit) !void {
+/// Records a pixel target. A full table keeps the targets it holds and
+/// counts the rest as dropped, so the frame still draws.
+/// Example: `bands.add(.{ .area = pill, .action = .{ .intent = .{ .select_workspace = id } } });`
+pub fn add(self: *BandHitMap, hit: BandHit) void {
     if (hit.area.width <= 0 or hit.area.height <= 0) {
         return;
     }
 
     if (self.len == self.items.len) {
-        return error.ChromeHitCapacityExceeded;
+        self.dropped += 1;
+        return;
     }
 
     self.items[self.len] = hit;

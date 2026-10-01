@@ -1,11 +1,9 @@
 //! Composes and draws one widget list during a synchronous semantic-model borrow.
-const syntaxhl = @import("syntaxhl");
 const core = @import("telar-core");
 const data = @import("model");
 const client = @import("telar-client");
 const Canvas = @import("../widgets/Canvas.zig");
 const Composition = @import("../widgets/Composition.zig");
-const SyntaxStore = syntaxhl.Store;
 const ReviewWidget = @import("../change_review/Widget.zig");
 const TerminalRenderer = @import("TerminalRenderer.zig");
 const Chrome = @import("../widgets/Chrome.zig");
@@ -23,9 +21,10 @@ theme: data.ColorTheme,
 link: ?*const LinkHit = null,
 widgets: ?*State = null,
 diagrams: ?*Store = null,
-syntax: ?*SyntaxStore = null,
 review: ?*ReviewWidget = null,
 previews: ?*const ImagePreviews = null,
+/// Frame widgets the last `prepare` left out because the list was full.
+dropped_widgets: usize = 0,
 
 /// Nothing retained by a layer may borrow the projection after this returns.
 /// Example: `const commit = try scene.prepare(projection);`
@@ -44,7 +43,6 @@ pub fn prepare(self: *Scene, projection: client.Projection) !data.PresentationCo
     canvas.animation = &self.chrome.animation;
     canvas.widgets = self.widgets;
     canvas.diagrams = self.diagrams;
-    canvas.syntax = self.syntax;
     if (self.widgets) |widgets| {
         widgets.begin(projection.prompt != null);
         widgets.prompt_generation = if (projection.prompt) |prompt| prompt.generation else 0;
@@ -52,6 +50,7 @@ pub fn prepare(self: *Scene, projection: client.Projection) !data.PresentationCo
     self.overlays.scale = renderer.scale;
     var composition: Composition = .{ .chrome = self.chrome, .overlays = self.overlays, .canvas = &canvas, .link = self.link, .previews = self.previews };
     const widgets = try composition.render(&projection);
+    self.dropped_widgets = widgets.dropped;
     try widgets.draw(&canvas);
 
     if (self.review) |review| {

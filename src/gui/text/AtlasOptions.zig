@@ -4,6 +4,8 @@ const std = @import("std");
 
 font: []const u8,
 pixel_height: u16,
+/// The page's side in texels: `GlyphAtlas.min_side` or `GlyphAtlas.max_side`.
+side: u32 = 1024,
 face_index: i32 = 0,
 postscript: []const u8 = "",
 thicken: bool = false,
