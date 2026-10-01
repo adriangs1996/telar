@@ -17,7 +17,7 @@ revision: u64 = 0,
 edition: u64 = 0,
 previous: u64 = 0,
 next: u64 = 0,
-slots: [2]PreparedEdition = @splat(.{}),
+slots: [2]PreparedEdition,
 visible_slot: usize = 0,
 job: ?usize = null,
 notified: bool = false,
@@ -29,6 +29,33 @@ paste: client.ChangeReviewComment = .{},
 paste_generation: ?u64 = null,
 paste_revision: u64 = 0,
 paste_failed: bool = false,
+
+/// Reserves both edition slots once, when the window starts, so opening,
+/// preparing and painting a review never allocate on the adapter loop. The
+/// panel is large, so it is built where it lives rather than returned.
+///
+/// ```zig
+/// try panel.init(allocator);
+/// defer panel.deinit();
+/// ```
+pub fn init(self: *Self, allocator: std.mem.Allocator) !void {
+    self.* = .{
+        .allocator = allocator,
+        .slots = undefined,
+    };
+    self.slots[0] = try PreparedEdition.init(allocator);
+    errdefer self.slots[0].deinit(allocator);
+
+    self.slots[1] = try PreparedEdition.init(allocator);
+}
+
+/// Call after the inbox joined its workers; a running job writes a slot.
+/// Example: `panel.deinit();`
+pub fn deinit(self: *Self) void {
+    for (&self.slots) |*slot| {
+        slot.deinit(self.allocator);
+    }
+}
 
 /// Keeps one pane's unacknowledged edits alive until its runtime reply arrives.
 /// Example: `try panel.open(app, pane_id);`
@@ -100,13 +127,15 @@ pub fn synchronize(self: *Self, app: *client.Client) !void {
                 self.widget.loading = false;
                 self.widget.read_only = true;
                 self.status(switch (err) {
-                    error.SyntaxLimit, error.SyntaxUnavailable => "Syntax highlighting could not finish. Refresh to retry this edition.",
                     error.ReviewFileLimit, error.ReviewLineLimit => "This edition exceeds the file or line limit of the review view.",
                     else => "This edition could not be prepared for review. Refresh to retry.",
                 });
             } else {
                 self.visible_slot = self.job.?;
                 self.adopt(&state.snapshot);
+                if (prepared.limit) |reach| {
+                    client.limit_reached.report(app, reach);
+                }
             }
         }
         self.job = null;
@@ -255,7 +284,7 @@ fn adopt(self: *Self, snapshot: *const core.ChangeReviewSnapshotView) void {
     self.widget.resetNavigation();
     self.widget.model = .{};
     self.widget.model.revisions[0] = self.slots[self.visible_slot].revision;
-    @memcpy(self.widget.roles[0][0..snapshot.patch.len], self.slots[self.visible_slot].roles[0..snapshot.patch.len]);
+    self.widget.roles[0] = self.slots[self.visible_slot].roles[0..snapshot.patch.len];
     self.widget.model.selectFile(0);
     self.widget.scroll = 0;
     self.widget.sidebar_start = 0;

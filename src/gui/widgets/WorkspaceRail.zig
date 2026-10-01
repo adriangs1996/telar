@@ -136,7 +136,10 @@ fn drawMark(self: WorkspaceRail, canvas: *Canvas, bounds: Rect, index: usize) !v
         try drawDot(canvas, bounds, color);
     }
 
-    try context.bands.add(.{ .area = bounds, .action = .{ .intent = .{ .select_workspace = id } } });
+    context.bands.add(.{
+        .area = bounds,
+        .action = .{ .intent = .{ .select_workspace = id } },
+    });
 }
 
 fn drawCounter(self: WorkspaceRail, canvas: *Canvas, bounds: Rect, range: [2]usize) !void {

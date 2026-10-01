@@ -6,6 +6,7 @@
 //! one another. Texel (0, 0) stays opaque white so solid rectangles are
 //! quads too. Configured and fallback faces share the page.
 const cellglyphs = @import("cellglyphs");
+const core = @import("telar-core");
 const cellgrid = @import("cellgrid");
 const BoxInk = cellglyphs.BoxInk;
 const GlyphRaster = @import("../native/GlyphRaster.zig");
@@ -46,18 +47,70 @@ const GlyphId = @import("GlyphId.zig");
 extern fn FT_GlyphSlot_Embolden(freetype.c.FT_GlyphSlot) void;
 extern fn FT_GlyphSlot_Oblique(freetype.c.FT_GlyphSlot) void;
 
-/// One page, square, in texels. `Quad.solid_uv` assumes this side.
-pub const side: u32 = 1024;
+/// The page's side in texels when it opens. The page is square.
+pub const min_side: u32 = 1024;
+/// The side a page grows to when one frame alone does not fit `min_side`.
+/// `Quad.solid_uv` names texel (0, 0) of a `min_side` page, which is the
+/// corner shared by the reserved texels (0, 0) through (1, 1) of a
+/// `max_side` page, so a solid quad samples white on both.
+pub const max_side: u32 = 2 * min_side;
+pub const side_limit = core.Limit.declare("text.glyph_atlas_side", "texels per side", max_side);
+/// Frames a page may take to fill before its working set is called too
+/// large for it: filling again this soon after opening or emptying is
+/// thrash, rasterizing the same glyphs again, not turnover.
+pub const refill_frames: u32 = 120;
+/// How long a `max_side` page that thrashes waits before it is emptied
+/// again; a still screen draws no frames, so the wait is timed, and the
+/// window wakes when it passes.
+pub const eviction_backoff_ns: u64 = 2 * std.time.ns_per_s;
+/// Frames a `max_side` page must take to fill before it shrinks: well past
+/// `refill_frames`, so a working set near the smaller page does not grow and
+/// shrink back and forth.
+pub const shrink_frames: u32 = 10 * refill_frames;
 
 comptime {
-    std.debug.assert(quad.solid_uv[0] * @as(f32, @floatFromInt(side)) == 0.5);
+    std.debug.assert(quad.solid_uv[0] * @as(f32, @floatFromInt(min_side)) == 0.5);
+    std.debug.assert(quad.solid_uv[0] * @as(f32, @floatFromInt(max_side)) == 1);
 }
 const reserved: u32 = 2;
 const padding: u32 = 1;
 
+/// What `settle` did to the page between two frames.
+pub const Settled = enum {
+    /// The page had room: nothing changed.
+    kept,
+    /// The page filled and was emptied; glyphs rasterize again on demand.
+    emptied,
+    /// The page filled within `refill_frames` below `max_side`: the caller
+    /// opens a page of `max_side` instead.
+    outgrown,
+    /// A `max_side` page filled slowly: the caller opens a page of
+    /// `min_side` again.
+    shrunk,
+    /// A `max_side` page filled within `refill_frames`: glyphs past it draw
+    /// the replacement glyph until it may be emptied, and the caller reports
+    /// `side_limit`.
+    exhausted,
+};
+
 allocator: std.mem.Allocator,
 pixels: []u8,
+/// The page's side in texels: `min_side`, or `max_side` once one frame did
+/// not fit.
+side: u32,
 version: u32 = 1,
+/// A glyph found no room since the page was last settled.
+full: bool = false,
+/// Frames drawn from the page since it was opened or emptied.
+frames_drawn: u32 = 0,
+/// This `max_side` page filled within `refill_frames`: it is emptied again
+/// only once `held_until_ns` passes.
+held: bool = false,
+held_until_ns: u64 = 0,
+/// Rows written since the backend last took them, half open; empty when
+/// the top is not above the bottom.
+dirty: [2]u32 = .{ 0, 0 },
+evictions: usize = 0,
 shelf_x: u32 = reserved + padding,
 shelf_y: u32 = 0,
 shelf_height: u32 = reserved + padding,
@@ -82,12 +135,14 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
         return error.InvalidPixelHeight;
     }
 
+    if (options.side != min_side and options.side != max_side) {
+        return error.InvalidAtlasSide;
+    }
+
+    const side = options.side;
     const pixels = try allocator.alloc(u8, side * side);
     errdefer allocator.free(pixels);
-    @memset(pixels, 0);
-    for (0..reserved) |row| {
-        @memset(pixels[row * side ..][0..reserved], 255);
-    }
+    clearPage(pixels, side);
 
     var library: freetype.c.FT_Library = undefined;
     if (freetype.c.FT_Init_FreeType(&library) != 0) {
@@ -105,6 +160,8 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
     var atlas: GlyphAtlas = .{
         .allocator = allocator,
         .pixels = pixels,
+        .side = side,
+        .dirty = .{ 0, side },
         .library = library,
         .fonts = fonts,
         .shaping_buffer = shaping_buffer,
@@ -360,8 +417,13 @@ fn rasterBox(self: *GlyphAtlas, grid: BoxGrid, curve_index: u3) !GlyphSlot {
     const height: u16 = @intFromFloat(@ceil(grid.height));
     const origin = try self.pack(.{ width, height });
     const curve = BoxCurve.init(grid, curve_index);
-    curve.rasterize(.{ .pixels = self.pixels[origin[1] * side + origin[0] ..], .stride = side, .width = width, .height = height });
-    const scale: f32 = 1.0 / @as(f32, @floatFromInt(side));
+    curve.rasterize(.{
+        .pixels = self.pixels[origin[1] * self.side + origin[0] ..],
+        .stride = self.side,
+        .width = width,
+        .height = height,
+    });
+    const scale: f32 = 1.0 / @as(f32, @floatFromInt(self.side));
     return .{
         .u0 = @as(f32, @floatFromInt(origin[0])) * scale,
         .v0 = @as(f32, @floatFromInt(origin[1])) * scale,
@@ -589,7 +651,7 @@ fn slot(self: *GlyphAtlas, glyph_id: GlyphId, run: TextRun) !GlyphSlot {
         const pitch: usize = @intCast(@abs(bitmap.pitch));
         for (0..bitmap.rows) |row| {
             const source = buffer[row * pitch ..][0..bitmap.width];
-            const destination = self.pixels[(origin[1] + row) * side + origin[0] ..][0..bitmap.width];
+            const destination = self.pixels[(origin[1] + row) * self.side + origin[0] ..][0..bitmap.width];
             @memcpy(destination, source);
         }
 
@@ -600,7 +662,7 @@ fn slot(self: *GlyphAtlas, glyph_id: GlyphId, run: TextRun) !GlyphSlot {
 }
 
 fn remember(self: *GlyphAtlas, key: u64, glyph: GlyphRaster.GlyphRaster) !GlyphSlot {
-    const scale: f32 = 1.0 / @as(f32, @floatFromInt(side));
+    const scale: f32 = 1.0 / @as(f32, @floatFromInt(self.side));
     const placed: GlyphSlot = .{
         .u0 = @as(f32, @floatFromInt(glyph.x)) * scale,
         .v0 = @as(f32, @floatFromInt(glyph.y)) * scale,
@@ -626,7 +688,8 @@ fn packGlyph(self: *GlyphAtlas, key: u64, extent: [2]u32) ![2]u32 {
 }
 
 /// Shelf packing: rows of glyphs, each row as tall as its tallest glyph.
-/// Enough for one face at one size; a full page is an error, not a wrap.
+/// A full page is an error for this glyph, not a wrap: the frame draws the
+/// replacement glyph and `settle` empties the page before the next frame.
 fn pack(self: *GlyphAtlas, extent: [2]u32) ![2]u32 {
     const width = extent[0];
     const height = extent[1];
@@ -634,21 +697,23 @@ fn pack(self: *GlyphAtlas, extent: [2]u32) ![2]u32 {
         return .{ 0, 0 };
     }
 
-    if (width + padding > side or height + padding > side) {
+    if (width + padding > self.side or height + padding > self.side) {
         return error.GlyphTooLarge;
     }
 
-    if (self.shelf_x + width + padding > side) {
+    if (self.shelf_x + width + padding > self.side) {
         self.shelf_y += self.shelf_height;
         self.shelf_x = 0;
         self.shelf_height = 0;
     }
 
-    if (self.shelf_y + height + padding > side) {
+    if (self.shelf_y + height + padding > self.side) {
+        self.full = true;
         return error.AtlasFull;
     }
 
     const origin: [2]u32 = .{ self.shelf_x, self.shelf_y };
+    self.markDirty(origin[1], origin[1] + height);
     self.shelf_x += width + padding;
     self.shelf_height = @max(self.shelf_height, height + padding);
     return origin;
@@ -714,7 +779,7 @@ test "the page reserves an opaque white block at its origin" {
     defer atlas.deinit();
 
     try std.testing.expectEqual(@as(u8, 255), atlas.pixels[0]);
-    try std.testing.expectEqual(@as(u8, 255), atlas.pixels[side + 1]);
+    try std.testing.expectEqual(@as(u8, 255), atlas.pixels[atlas.side + 1]);
     try std.testing.expectEqual(@as(u8, 0), atlas.pixels[reserved]);
 }
 
@@ -791,12 +856,15 @@ test "alternating heights keep both shaping results and every sized face residen
 }
 
 test "a page that cannot hold another glyph fails instead of wrapping" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
     defer atlas.deinit();
 
-    atlas.shelf_y = side - 4;
+    atlas.shelf_y = atlas.side - 4;
     try std.testing.expectError(error.AtlasFull, atlas.pack(.{ 8, 8 }));
-    try std.testing.expectError(error.GlyphTooLarge, atlas.pack(.{ side, 8 }));
+    try std.testing.expectError(error.GlyphTooLarge, atlas.pack(.{ atlas.side, 8 }));
 }
 
 test "full glyphs are remembered without rejecting smaller glyphs or changing retained coordinates" {
@@ -805,12 +873,18 @@ test "full glyphs are remembered without rejecting smaller glyphs or changing re
     try atlas.prepareFallbacks();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
-    const existing: TextRun = .{ .text = "A", .x = 0, .y = 16, .color = .white, .pixel_height = 16 };
+    const existing: TextRun = .{
+        .text = "A",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    };
     _ = try atlas.place(existing, &list);
     const retained = list.items()[0];
     const version = atlas.version;
     atlas.shelf_x = 3;
-    atlas.shelf_y = side - 5;
+    atlas.shelf_y = atlas.side - 5;
     atlas.shelf_height = 0;
     const missing: TextRun = .{ .text = "W", .x = 0, .y = 16, .color = .white, .pixel_height = 16 };
     list.clear();
@@ -842,7 +916,10 @@ test "full glyphs are remembered without rejecting smaller glyphs or changing re
     _ = try atlas.place(existing, &list);
     try std.testing.expectEqualDeep(retained, list.items()[0]);
 
-    var replacement = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
+    var replacement = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
     defer replacement.deinit();
     try replacement.prepareFallbacks();
     list.clear();
@@ -851,23 +928,330 @@ test "full glyphs are remembered without rejecting smaller glyphs or changing re
     try std.testing.expect(replacement.version > 1);
 }
 
+/// Settles the page between two frames. A page that filled after more than
+/// `refill_frames` frames is emptied, so the next frame rasterizes what it
+/// shows instead of the replacement glyph. One that filled sooner holds a
+/// working set too large for it: below `max_side` it asks for the larger
+/// page, and at `max_side` it is emptied at most once every
+/// `eviction_backoff_ns`. A `max_side` page that took more than
+/// `shrink_frames` to fill asks for the smaller page again, which grows
+/// back if the working set needs it.
+/// Never call it while a frame's quads point into the page. Returns what it
+/// did, so the caller drops retained geometry that sampled the old page.
+///
+/// ```zig
+/// switch (try atlas.settle(now_ns)) {
+///     .kept, .exhausted => {},
+///     .emptied => retained.invalidate(),
+///     .outgrown => try reopen(GlyphAtlas.max_side),
+///     .shrunk => try reopen(GlyphAtlas.min_side),
+/// }
+/// ```
+pub fn settle(self: *GlyphAtlas, now_ns: u64) !Settled {
+    if (!self.full) {
+        return .kept;
+    }
+
+    const thrashing = self.frames_drawn <= refill_frames;
+    if (thrashing and self.side < max_side) {
+        return .outgrown;
+    }
+
+    if (thrashing and !self.held) {
+        self.held = true;
+        self.held_until_ns = now_ns +| eviction_backoff_ns;
+    }
+
+    if (self.held and now_ns < self.held_until_ns) {
+        return .exhausted;
+    }
+
+    if (self.side == max_side and !self.held and self.frames_drawn > shrink_frames) {
+        return .shrunk;
+    }
+
+    try self.empty();
+    return .emptied;
+}
+
+/// Whether the next frame settles the page into room: it filled, and is
+/// not held, or its hold has passed.
+/// Example: `if (atlas.settleDue(now_ns)) draw();`
+pub fn settleDue(self: *const GlyphAtlas, now_ns: u64) bool {
+    return self.full and (!self.held or now_ns >= self.held_until_ns);
+}
+
+/// When a held page may be emptied, so a still window wakes then; null
+/// while nothing waits.
+/// Example: `const deadline_ns = atlas.heldUntil();`
+pub fn heldUntil(self: *const GlyphAtlas) ?u64 {
+    return if (self.full and self.held) self.held_until_ns else null;
+}
+
+/// Counts a frame drawn from this page; the renderer calls it as it seals
+/// the frame, so `settle` sees how long the page took to fill.
+/// Example: `atlas.frameDrawn();`
+pub fn frameDrawn(self: *GlyphAtlas) void {
+    self.frames_drawn +|= 1;
+}
+
+/// The rows written since the last call, as a half-open range, and forgets
+/// them; empty when nothing changed. The backend uploads only these rows
+/// when it holds the page's previous version.
+/// Example: `const rows = atlas.takeDirty();`
+pub fn takeDirty(self: *GlyphAtlas) [2]u32 {
+    const rows: [2]u32 = if (self.dirty[0] < self.dirty[1]) self.dirty else .{ 0, 0 };
+    self.dirty = .{ self.side, 0 };
+    return rows;
+}
+
+fn markDirty(self: *GlyphAtlas, top: u32, bottom: u32) void {
+    self.dirty = .{ @min(self.dirty[0], top), @max(self.dirty[1], bottom) };
+}
+
+/// Forgets every glyph, box curve and cached ASCII slot and clears the
+/// page to its reserved texels, then prepares the replacement glyphs and
+/// box fallbacks again. The version advances so the backend uploads it.
+fn empty(self: *GlyphAtlas) !void {
+    clearPage(self.pixels, self.side);
+    self.shelf_x = reserved + padding;
+    self.shelf_y = 0;
+    self.shelf_height = reserved + padding;
+    self.glyphs.clearRetainingCapacity();
+    self.ascii.clear();
+    self.boxes = .{};
+    self.failed_glyphs = .{};
+    self.full = false;
+    self.held = false;
+    self.frames_drawn = 0;
+    self.markDirty(0, self.side);
+    self.evictions += 1;
+    self.version +%= 1;
+    try self.initBoxFallback();
+    try self.prepareFallbacks();
+}
+
+/// Zeroes a page and makes its reserved corner opaque white.
+fn clearPage(pixels: []u8, side: u32) void {
+    @memset(pixels, 0);
+    for (0..reserved) |row| {
+        @memset(pixels[row * side ..][0..reserved], 255);
+    }
+}
+
 /// Reserves fallback glyphs before terminal output fills the atlas.
 /// Example: `try atlas.prepareFallbacks();`
 pub fn prepareFallbacks(self: *GlyphAtlas) !void {
     for (0..4) |style| {
-        _ = try self.slot(.{}, .{ .text = "", .x = 0, .y = 0, .color = .white, .pixel_height = self.pixel_height, .bold = style & 1 != 0, .italic = style & 2 != 0 });
+        _ = try self.slot(.{}, .{
+            .text = "",
+            .x = 0,
+            .y = 0,
+            .color = .white,
+            .pixel_height = self.pixel_height,
+            .bold = style & 1 != 0,
+            .italic = style & 2 != 0,
+        });
     }
 }
 
 test "a full terminal atlas uses its prepared replacement instead of losing the frame" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
     defer atlas.deinit();
     try atlas.prepareFallbacks();
-    atlas.shelf_y = side;
+    atlas.shelf_y = atlas.side;
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
-    _ = try atlas.place(.{ .text = "new", .x = 0, .y = 16, .color = .white, .pixel_height = 16, .bold = true }, &list);
+    _ = try atlas.place(.{
+        .text = "new",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+        .bold = true,
+    }, &list);
     try std.testing.expect(list.items().len > 0);
+}
+
+test "a page that fills over many frames is emptied and draws the glyph that did not fit" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
+    defer atlas.deinit();
+    try atlas.prepareFallbacks();
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    try std.testing.expectEqual(Settled.kept, try atlas.settle(0));
+    atlas.frames_drawn = refill_frames + 1;
+    atlas.shelf_y = atlas.side;
+    _ = try atlas.place(.{
+        .text = "Q",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
+    const replacement = list.items()[0];
+    try std.testing.expect(atlas.full);
+    const version = atlas.version;
+
+    try std.testing.expectEqual(Settled.emptied, try atlas.settle(0));
+    try std.testing.expect(!atlas.full);
+    try std.testing.expect(atlas.version != version);
+    try std.testing.expectEqual(@as(usize, 1), atlas.evictions);
+    try std.testing.expectEqual(@as(u32, 0), atlas.frames_drawn);
+    try std.testing.expectEqual(@as(u8, 255), atlas.pixels[0]);
+    list.clear();
+    _ = try atlas.place(.{
+        .text = "Q",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
+    try std.testing.expect(!std.meta.eql(replacement, list.items()[0]));
+    try std.testing.expect(!atlas.full);
+}
+
+test "the first frame that fills a new page asks for the larger page" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
+    defer atlas.deinit();
+    try atlas.prepareFallbacks();
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    try std.testing.expectEqual(Settled.kept, try atlas.settle(0));
+    atlas.shelf_y = atlas.side;
+    _ = try atlas.place(.{
+        .text = "Q",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
+    atlas.frameDrawn();
+    try std.testing.expectEqual(Settled.outgrown, try atlas.settle(0));
+
+    var larger = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+        .side = max_side,
+    });
+    defer larger.deinit();
+    try larger.prepareFallbacks();
+    try std.testing.expectEqual(max_side, larger.side);
+    try std.testing.expectEqual(@as(u8, 255), larger.pixels[max_side + 1]);
+    list.clear();
+    _ = try larger.place(.{
+        .text = "Q",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
+    try std.testing.expect(!larger.full);
+    try std.testing.expectError(error.InvalidAtlasSide, GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+        .side = 4096,
+    }));
+}
+
+test "a page emptied and filled again within a few frames asks for the larger page" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
+    defer atlas.deinit();
+    try atlas.prepareFallbacks();
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    atlas.frames_drawn = refill_frames + 1;
+    atlas.shelf_y = atlas.side;
+    _ = try atlas.place(.{
+        .text = "Q",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
+    try std.testing.expectEqual(Settled.emptied, try atlas.settle(0));
+
+    // Scrolling a large working set refills the page three frames later.
+    for (0..3) |_| {
+        atlas.frameDrawn();
+    }
+
+    atlas.shelf_y = atlas.side;
+    _ = try atlas.place(.{
+        .text = "R",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
+    try std.testing.expectEqual(Settled.outgrown, try atlas.settle(0));
+}
+
+test "a largest page that thrashes waits before emptying and one that fills slowly shrinks" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16, .side = max_side });
+    defer atlas.deinit();
+    try atlas.prepareFallbacks();
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    atlas.shelf_y = atlas.side;
+    _ = try atlas.place(.{ .text = "Q", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    atlas.frameDrawn();
+    try std.testing.expectEqual(Settled.exhausted, try atlas.settle(10));
+    try std.testing.expect(atlas.held);
+    try std.testing.expect(!atlas.settleDue(10 + eviction_backoff_ns - 1));
+    try std.testing.expectEqual(@as(?u64, 10 + eviction_backoff_ns), atlas.heldUntil());
+
+    // A still window draws no frames; the hold passes with time alone.
+    try std.testing.expectEqual(Settled.exhausted, try atlas.settle(10 + eviction_backoff_ns - 1));
+    try std.testing.expect(atlas.settleDue(10 + eviction_backoff_ns));
+    try std.testing.expectEqual(Settled.emptied, try atlas.settle(10 + eviction_backoff_ns));
+    try std.testing.expect(!atlas.held);
+    try std.testing.expectEqual(@as(usize, 1), atlas.evictions);
+
+    // Filling a little slower than thrash empties it; far slower shrinks it.
+    atlas.frames_drawn = refill_frames + 1;
+    atlas.shelf_y = atlas.side;
+    _ = try atlas.place(.{ .text = "R", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    try std.testing.expectEqual(Settled.emptied, try atlas.settle(0));
+    atlas.frames_drawn = shrink_frames + 1;
+    atlas.shelf_y = atlas.side;
+    _ = try atlas.place(.{ .text = "S", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    try std.testing.expectEqual(Settled.shrunk, try atlas.settle(0));
+}
+
+test "the page reports only the rows written since the backend last took them" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{
+        .font = assets.jetbrains_mono,
+        .pixel_height = 16,
+    });
+    defer atlas.deinit();
+    try std.testing.expectEqual([2]u32{ 0, atlas.side }, atlas.takeDirty());
+    try std.testing.expectEqual([2]u32{ 0, 0 }, atlas.takeDirty());
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    atlas.shelf_y = 100;
+    _ = try atlas.place(.{
+        .text = "Q",
+        .x = 0,
+        .y = 16,
+        .color = .white,
+        .pixel_height = 16,
+    }, &list);
+    const rows = atlas.takeDirty();
+    try std.testing.expect(rows[0] >= 100 and rows[1] > rows[0] and rows[1] <= 100 + 32);
+    try std.testing.expectEqual([2]u32{ 0, 0 }, atlas.takeDirty());
 }
 
 test "shaping reuse preserves Unicode positions and stays independent of paint styling" {

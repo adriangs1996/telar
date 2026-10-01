@@ -18,7 +18,11 @@ const PendingCut = @import("PendingCut.zig");
 const PendingPaste = @import("PendingPaste.zig");
 const ChromeRegistration = @import("ChromeRegistration.zig");
 const Overlays = @import("../overlays/Overlays.zig");
+const AccessibilityTree = @import("../../native/AccessibilityTree.zig");
+const core = @import("telar-core");
 const TabMoveIntent = ?client.TabMoveIntent;
+
+pub const editors_limit = core.Limit.declare("gui.widgets.editors_capacity", "text editors", Editors.capacity);
 
 const State = @This();
 
@@ -43,7 +47,9 @@ directory_scroll_remainder: f64 = 0,
 history_scroll_remainder: f64 = 0,
 history_scroll_generation: u64 = 0,
 history_scroll_inspecting: bool = false,
-native_nodes: [Registry.capacity]native.AccessibilityNode = undefined,
+native_nodes: [AccessibilityTree.capacity]native.AccessibilityNode = undefined,
+/// Targets the last published accessibility tree left out because it was full.
+accessibility_dropped: usize = 0,
 pending_cuts: [4]?PendingCut = @splat(null),
 pending_pastes: [4]?PendingPaste = @splat(null),
 
@@ -141,11 +147,16 @@ const Editors = struct {
     pub const capacity = 16;
     items: [capacity]Geometry = undefined,
     len: usize = 0,
+    /// Editors left out because the table was full; they draw but take no
+    /// text input, and the window reports `gui.widgets.editors_capacity`.
+    dropped: usize = 0,
 
-    /// Example: `try editors.add(geometry);`
-    pub fn add(self: *Editors, geometry: Geometry) !void {
+    /// Records an editor's geometry; a full table counts it as dropped.
+    /// Example: `editors.add(geometry);`
+    pub fn add(self: *Editors, geometry: Geometry) void {
         if (self.len == capacity) {
-            return error.WidgetEditorCapacityExceeded;
+            self.dropped += 1;
+            return;
         }
 
         self.items[self.len] = geometry;

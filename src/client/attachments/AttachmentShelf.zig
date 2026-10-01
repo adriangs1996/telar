@@ -1,6 +1,8 @@
 const model_data = @import("model");
 const MarkerScreen = @import("MarkerScreen.zig");
 const DeletionProbe = @import("DeletionProbe.zig");
+const MarkerRemovalPlan = @import("MarkerRemovalPlan.zig").MarkerRemovalPlan;
+const ShelfAdoption = @import("ShelfAdoption.zig");
 /// The attachment shelf a host that draws image previews owns: the catalog
 /// it instantiates from `GenericCatalog` with its own preview state, marker
 /// plans over that catalog, and the preview modal's input ownership. A host
@@ -8,7 +10,7 @@ const DeletionProbe = @import("DeletionProbe.zig");
 const AttachmentShelf = @This();
 
 context: *anyopaque,
-adopt_fn: *const fn (*anyopaque, *model_data.Capture) anyerror!bool,
+adopt_fn: *const fn (*anyopaque, *model_data.Capture) anyerror!ShelfAdoption,
 reconcile_markers_fn: *const fn (*anyopaque, model_data.AttachmentTarget, MarkerScreen) ?bool,
 sync_target_fn: *const fn (*anyopaque, ?model_data.AttachmentTarget) bool,
 remove_fn: *const fn (*anyopaque, model_data.AttachmentId) ?bool,
@@ -17,14 +19,15 @@ modal_active_fn: *const fn (*anyopaque) bool,
 close_modal_fn: *const fn (*anyopaque) bool,
 reservation_fn: *const fn (*anyopaque) ?model_data.PaneBottomReservation,
 visible_target_fn: *const fn (*anyopaque) ?model_data.AttachmentTarget,
-plan_marker_removal_fn: *const fn (*anyopaque, model_data.AttachmentId, MarkerScreen) ?model_data.MarkerRemoval,
+plan_marker_removal_fn: *const fn (*anyopaque, model_data.AttachmentId, MarkerScreen) MarkerRemovalPlan,
 id_at_marker_deletion_fn: *const fn (*anyopaque, MarkerScreen, model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId,
 pending_marker_at_deletion_fn: *const fn (*anyopaque, MarkerScreen, DeletionProbe) bool,
 expect_marker_deletion_fn: *const fn (*anyopaque, model_data.AttachmentTarget) void,
 
-/// Takes ownership of one capture; reports whether the layout changed.
-/// Example: `const layout_changed = try shelf.adopt(capture);`.
-pub fn adopt(self: AttachmentShelf, capture: *model_data.Capture) !bool {
+/// Takes ownership of one capture; says whether the layout changed and which
+/// limit the previews it evicted to make room reached.
+/// Example: `const adoption = try shelf.adopt(capture);`.
+pub fn adopt(self: AttachmentShelf, capture: *model_data.Capture) !ShelfAdoption {
     return self.adopt_fn(self.context, capture);
 }
 
@@ -63,7 +66,9 @@ pub fn visibleTarget(self: AttachmentShelf) ?model_data.AttachmentTarget {
     return self.visible_target_fn(self.context);
 }
 
-pub fn planMarkerRemoval(self: AttachmentShelf, id: model_data.AttachmentId, screen: MarkerScreen) ?model_data.MarkerRemoval {
+/// The keys that remove a preview's marker from the prompt, or the limit
+/// that stops them. Example: `switch (shelf.planMarkerRemoval(id, screen)) { ... }`.
+pub fn planMarkerRemoval(self: AttachmentShelf, id: model_data.AttachmentId, screen: MarkerScreen) MarkerRemovalPlan {
     return self.plan_marker_removal_fn(self.context, id, screen);
 }
 

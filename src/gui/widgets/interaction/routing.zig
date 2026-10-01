@@ -216,8 +216,9 @@ pub fn endPaste(gui: *GuiAdapter) !void {
     defer gui.widgets.paste_consumed = false;
     const owner = gui.widgets.paste_owner orelse return;
     const target = gui.widgets.dispatcher.maps.presented().find(owner) orelse return;
-    if (field(gui, target) != null and FieldView.revision(gui.app) == gui.widgets.paste_revision) {
-        if (gui.widgets.paste_buffer.text()) |bytes| {
+    if (field(gui, target)) |current| {
+        if (FieldView.revision(gui.app) == gui.widgets.paste_revision) {
+            const bytes = fitPaste(gui, current, gui.widgets.paste_selection, &gui.widgets.paste_buffer);
             try focus(gui, target);
             try command(gui, .{ .replace_range = .{ .range = gui.widgets.paste_selection, .text = bytes } });
         }
@@ -390,9 +391,11 @@ fn editor(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
         .paste => |bytes| {
             var buffer: PasteBuffer = .{};
             buffer.append(bytes);
-            if (buffer.text()) |text| {
-                try command(gui, .{ .replace_range = .{ .range = current.selection(), .text = text } });
-            }
+            const text = fitPaste(gui, current, current.selection(), &buffer);
+            try command(gui, .{ .replace_range = .{
+                .range = current.selection(),
+                .text = text,
+            } });
         },
         .composition => |value| {
             state.preedit.update(target.id, .{ .composition = value, .current = current }) catch return;
@@ -822,9 +825,11 @@ fn finishPaste(gui: *GuiAdapter, result: ClipboardResult) !void {
 
         var buffer: PasteBuffer = .{};
         buffer.append(result.text);
-        if (buffer.text()) |text| {
-            try command(gui, .{ .replace_range = .{ .range = pending.range, .text = text } });
-        }
+        const text = fitPaste(gui, current, pending.range, &buffer);
+        try command(gui, .{ .replace_range = .{
+            .range = pending.range,
+            .text = text,
+        } });
 
         return;
     }
@@ -853,7 +858,30 @@ fn finishCut(gui: *GuiAdapter, result: ClipboardResult) !void {
         }
 
         try focus(gui, target);
-        try command(gui, .{ .replace_range = .{ .range = cut.range, .text = "" } });
+        try command(gui, .{ .replace_range = .{
+            .range = cut.range,
+            .text = "",
+        } });
         return;
     }
+}
+
+/// The part of a paste that fits `range` of the field: the whole paste when
+/// it fits, otherwise its prefix, cut at a UTF-8 boundary and reported.
+fn fitPaste(gui: *GuiAdapter, current: FieldView, range: [2]u32, buffer: *const PasteBuffer) []const u8 {
+    const pasted = buffer.text();
+    const kept = current.fitting(range, pasted);
+    if (buffer.overflow) {
+        client.limit_reached.report(gui.app, .{ .limit = PasteBuffer.limit });
+    } else if (kept.len < pasted.len) {
+        client.limit_reached.report(
+            gui.app,
+            .{
+                .limit = core.Limit.declare("gui.widgets.text_field_bytes", "field bytes", current.capacity),
+                .requested = pasted.len - (range[1] -| range[0]) + current.text.len,
+            },
+        );
+    }
+
+    return kept;
 }

@@ -1,4 +1,5 @@
 const cellgrid = @import("cellgrid");
+const core = @import("telar-core");
 const model_data = @import("model");
 const std = @import("std");
 const data = @import("model");
@@ -9,6 +10,7 @@ const MarkerScreen = @import("MarkerScreen.zig");
 const markers = @import("markers.zig");
 const DeletionProbe = @import("DeletionProbe.zig");
 const MarkerScan = @import("MarkerScan.zig");
+const MarkerRemovalPlan = @import("MarkerRemovalPlan.zig").MarkerRemovalPlan;
 
 /// Creates an attachment catalog with presentation-owned slot resources.
 /// Example: `var catalog = Catalog(Delivery).init(gpa);`.
@@ -169,7 +171,15 @@ pub fn Type(comptime Delivery: type) type {
             return result;
         }
 
-        pub fn adopt(self: *Self, capture: *model_data.Capture) !void {
+        /// Takes ownership of one capture, evicting the oldest previews it
+        /// needs room for, and returns the limit that eviction reached:
+        /// `attachments.max_items` for a fifth preview, or
+        /// `attachments.max_retained_bytes` for PNG bytes past it.
+        ///
+        /// ```zig
+        /// if (try catalog.adopt(capture)) |reach| limit_reached.report(client, reach);
+        /// ```
+        pub fn adopt(self: *Self, capture: *model_data.Capture) !?core.LimitReach {
             if (capture.png.len == 0 or capture.png.len > model_data.attachment_types.max_png_bytes or
                 capture.width == 0 or capture.height == 0)
             {
@@ -180,11 +190,17 @@ pub fn Type(comptime Delivery: type) type {
             if (pixels > model_data.attachment_types.max_pixels) {
                 return error.ClipboardImageTooLarge;
             }
-            while (self.total_bytes + capture.png.len > model_data.attachment_types.max_retained_bytes or
-                self.freeIndex() == null)
-            {
-                self.evictOldest() orelse return error.AttachmentSelfFull;
+
+            // Only a preview still kept counts as evicted: a dismissed one
+            // waiting for its pixels to be released is already gone.
+            var evicted: ?core.LimitReach = null;
+            while (self.evictionReach(capture.png.len)) |reach| {
+                const kept = self.evictOldest() orelse return error.AttachmentSelfFull;
+                if (kept) {
+                    evicted = evicted orelse reach;
+                }
             }
+
             const delivery = try Delivery.createSlot(self);
             const index = self.freeIndex().?;
             const request = capture.request;
@@ -204,6 +220,26 @@ pub fn Type(comptime Delivery: type) type {
             };
             self.total_bytes += png.len;
             self.ingress_version +%= 1;
+            return evicted;
+        }
+
+        // The limit adopting `png_bytes` more needs an eviction for, if any.
+        fn evictionReach(self: *const Self, png_bytes: usize) ?core.LimitReach {
+            if (self.freeIndex() == null) {
+                return .{
+                    .limit = model_data.attachment_types.items_limit,
+                    .requested = model_data.attachment_types.max_items + 1,
+                };
+            }
+
+            if (self.total_bytes + png_bytes > model_data.attachment_types.max_retained_bytes) {
+                return .{
+                    .limit = model_data.attachment_types.retained_bytes_limit,
+                    .requested = self.total_bytes + png_bytes,
+                };
+            }
+
+            return null;
         }
 
         pub fn remove(self: *Self, id: model_data.AttachmentId) bool {
@@ -240,19 +276,35 @@ pub fn Type(comptime Delivery: type) type {
             return removed;
         }
 
-        pub fn planMarkerRemoval(self: *const Self, id: model_data.AttachmentId, screen: MarkerScreen) ?model_data.MarkerRemoval {
+        /// The keys that remove one visible preview's marker, or the limit
+        /// that stops them: navigation steps, a path's cells, or more keys
+        /// than one pane-input transaction carries.
+        ///
+        /// ```zig
+        /// switch (catalog.planMarkerRemoval(id, screen)) { .planned => |removal| send(removal), else => {} }
+        /// ```
+        pub fn planMarkerRemoval(self: *const Self, id: model_data.AttachmentId, screen: MarkerScreen) MarkerRemovalPlan {
             const visible = self.snapshot();
-            const ordinal = snapshotOrdinal(&visible, id) orelse return null;
-            const slot = self.findConst(id) orelse return null;
-            const removal = switch (slot.marker_policy) {
+            const ordinal = snapshotOrdinal(&visible, id) orelse return .unreachable_marker;
+            const slot = self.findConst(id) orelse return .unreachable_marker;
+            const plan = switch (slot.marker_policy) {
                 .ordered, .stable_number => markers.planPlaceholderRemoval(slot.markerNumber(), ordinal, screen),
                 .pasted_path => markers.planPathRemoval(slot.markerPath(), screen),
-            } orelse return null;
+            };
+            const removal = switch (plan) {
+                .planned => |value| value,
+                .unreachable_marker, .limited => return plan,
+            };
             if (removal.keyCount() > model_data.attachment_types.max_removal_keys) {
-                return null;
+                return .{
+                    .limited = .{
+                        .limit = model_data.attachment_types.removal_keys_limit,
+                        .requested = removal.keyCount(),
+                    },
+                };
             }
 
-            return removal;
+            return plan;
         }
 
         pub fn idAtMarkerDeletion(self: *const Self, screen: MarkerScreen, deletion: model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId {
@@ -456,7 +508,9 @@ pub fn Type(comptime Delivery: type) type {
             return null;
         }
 
-        fn evictOldest(self: *Self) ?void {
+        // Frees the oldest releasable slot; true when it held a preview the
+        // person had not dismissed yet, null when no slot can be released.
+        fn evictOldest(self: *Self) ?bool {
             var oldest_index: ?usize = null;
             var oldest: u64 = std.math.maxInt(u64);
             for (self.slots, 0..) |maybe_slot, index| if (maybe_slot) |slot| {
@@ -469,8 +523,10 @@ pub fn Type(comptime Delivery: type) type {
                     oldest_index = index;
                 }
             };
-            self.removeAt(oldest_index orelse return null);
-            return {};
+            const index = oldest_index orelse return null;
+            const kept = !self.slots[index].?.retire_pending;
+            self.removeAt(index);
+            return kept;
         }
 
         fn removeAt(self: *Self, index: usize) void {

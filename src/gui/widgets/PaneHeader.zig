@@ -1,5 +1,6 @@
-//! The band inside a pane's top edge: index in bold, the program name and,
-//! when an agent lives in the pane, a status chip in that agent's colour.
+//! The band inside a pane's top edge: index in bold, the program name, a
+//! quiet "images paused" while a limit paused the pane's graphics and, when
+//! an agent lives in the pane, a status chip in that agent's colour.
 //! The band is the pane's border row, so it is as tall as one cell and never
 //! covers a terminal row; `ChromeMetrics.pane_header` caps the text band
 //! inside it. The cwd no longer appears here; the top bar shows location.
@@ -13,6 +14,7 @@ const Canvas = @import("Canvas.zig");
 const PaneProgress = @import("PaneProgress.zig");
 const ChangeReviewButton = @import("ChangeReviewButton.zig");
 const StatusChip = @import("StatusChip.zig");
+const Label = @import("Label.zig");
 const PaneHeader = @This();
 
 context: *const Context,
@@ -20,6 +22,10 @@ pane: *const data.Pane,
 agent: ?*const data.Agent,
 index: u16,
 area: Rect,
+
+/// Words beside the program name while the pane's images are paused at a
+/// limit (`model.graphics_pauses`).
+pub const paused_label = "images paused";
 
 /// Paints into the pixel rectangle of the border row.
 /// Example: `try header.draw(canvas);`
@@ -62,12 +68,56 @@ pub fn draw(self: PaneHeader, canvas: *Canvas) !void {
         chip_width = 0;
     }
 
-    const name_width = @max(0, end - x - (if (chip_width != 0) chip_width + chrome.px(8) else 0));
-    _ = try canvas.textAt(.{ .x = x, .y = band.y, .width = name_width, .height = band.height }, .{ .text = if (name.len == 0) "shell" else name, .color = palette.subtext0, .face = .sans, .size = .body });
+    const text_end = end - (if (chip_width != 0) chip_width + chrome.px(8) else 0);
+    const paused = self.pausedLabel(canvas);
+    const paused_width = if (paused.text.len != 0) try canvas.measure(paused) + chrome.px(8) else 0;
+    const paused_fits = paused_width != 0 and paused_width <= text_end - x;
+    const name_width = @max(0, text_end - x - (if (paused_fits) paused_width else 0));
+    const name_advance = try canvas.textAt(
+        .{
+            .x = x,
+            .y = band.y,
+            .width = name_width,
+            .height = band.height,
+        },
+        .{
+            .text = if (name.len == 0) "shell" else name,
+            .color = palette.subtext0,
+            .face = .sans,
+            .size = .body,
+        },
+    );
+    x += @min(name_width, name_advance);
+    if (paused_fits) {
+        x += chrome.px(8);
+        _ = try canvas.textAt(
+            .{
+                .x = x,
+                .y = band.y,
+                .width = @max(0, text_end - x),
+                .height = band.height,
+            },
+            paused,
+        );
+    }
+
     if (chip_width == 0) {
         return;
     }
 
     chip.area = .{ .x = end - chip_width, .y = band.y, .width = chip_width, .height = band.height };
     try chip.draw(canvas);
+}
+
+/// The quiet mark of a pane whose images a limit paused, in the warning
+/// colour, or an empty label while they flow. One comparison while no pane
+/// is paused.
+fn pausedLabel(self: PaneHeader, canvas: *const Canvas) Label {
+    const paused = self.context.projection.model.graphics_pauses.contains(self.pane.id);
+    return .{
+        .text = if (paused) paused_label else "",
+        .color = canvas.theme.palette.yellow,
+        .face = .sans,
+        .size = .body,
+    };
 }

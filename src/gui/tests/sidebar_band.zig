@@ -121,7 +121,7 @@ test "dragging the edge sets the exact width and the grid follows on the next me
     try std.testing.expect(after.cols < before.cols);
     // A drag past the bounds stops at them.
     gui.adoptSidebarWidth(2000);
-    try std.testing.expectEqual(@as(f32, 480), gui.sidebar.logical);
+    try std.testing.expectEqual(@as(f32, 800), gui.sidebar.logical);
     gui.adoptSidebarWidth(1);
     try std.testing.expectEqual(@as(f32, 220), gui.sidebar.logical);
 }
@@ -157,7 +157,7 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
     try std.testing.expectEqual(shared, gui.app.model.sidebar_width);
     try fixture.measure(.{ .width = renderer.viewport[0], .height = renderer.viewport[1], .scale = 1 });
     try std.testing.expectEqual(@as(u32, 268), renderer.sidebar.width);
-    for (0..20) |_| {
+    for (0..40) |_| {
         _ = try input_support.action(
             gui,
             .{
@@ -166,7 +166,7 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
         );
     }
 
-    try std.testing.expectEqual(@as(f32, 480), gui.sidebar.logical);
+    try std.testing.expectEqual(@as(f32, 800), gui.sidebar.logical);
 }
 
 test "collapsing the sidebar returns all but the rail to the grid and keeps the toggle in navigation" {

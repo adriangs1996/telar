@@ -11,6 +11,9 @@ const HistoryLine = @import("HistoryLine.zig");
 const HistoryDetails = @This();
 
 const Tone = HistoryLine.Tone;
+/// A pane id, its separators and the longest tab label, so the fact always
+/// formats.
+const pane_fact_bytes = std.fmt.count("{d}  ·  tab ", .{std.math.maxInt(u64)}) + core.max_tab_label_bytes;
 
 history: *const data.HistoryPaletteState,
 selection: u16,
@@ -24,7 +27,7 @@ took_len: usize = 0,
 exit: [32]u8 = undefined,
 exit_len: usize = 0,
 exit_tone: Tone = .text,
-pane: [96]u8 = undefined,
+pane: [pane_fact_bytes]u8 = undefined,
 pane_len: usize = 0,
 by: [128]u8 = undefined,
 by_len: usize = 0,

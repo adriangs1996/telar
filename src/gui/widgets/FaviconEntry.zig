@@ -11,7 +11,8 @@ pub const State = enum {
     resolved,
     /// No usable file: the generic glyph stays.
     missing,
-    /// The sheet had no free favicon cell: the generic glyph stays.
+    /// Every favicon cell of the sheet belonged to a listed workspace: the
+    /// generic glyph stays until a departed workspace releases a cell.
     full,
 };
 

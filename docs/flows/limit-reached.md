@@ -60,12 +60,17 @@ The notice reads `<name>: <requested> <noun>; limit <value>`, or
 `report` writes its process model, which only the thread that owns the
 model may touch: the runtime's event loop, or the client adapter's loop. No
 lock guards the table. A worker never reports. It returns the reach in its
-completion, and the `finish` that runs on the loop reports it. Workers that
-live as long as the runtime and have no completion per piece of work, the
-proxy's tunnels and the tap workers, count each limit in an atomic instead;
-`proxy_limits.report`, on the maintenance tick, reports every limit whose
-count grew since the last tick. This is the shape a worker with a completion
-takes, on worktree detection, whose completion gains a
+completion, and the `finish` that runs on the loop reports it. The window's
+workers do so: change-review highlighting records the reach in
+`PreparedEdition.limit` and `Panel.synchronize` reports it when it adopts
+the edition, the favicon worker returns `FaviconCompletion.limit`, reported
+by `favicons.complete`, and the clipboard capture worker returns
+`Completion.limit`, reported by `clipboard_capture.completeClipboardCapture`.
+Workers that live as long as the runtime and have no completion per piece
+of work, the proxy's tunnels and the tap workers, count each limit in an
+atomic instead; `proxy_limits.report`, on the maintenance tick, reports
+every limit whose count grew since the last tick. This is the shape a worker
+with a completion takes, on worktree detection, whose completion gains a
 `limit: ?core.LimitReach = null` field:
 
 ```zig
@@ -217,7 +222,7 @@ const text = std.fmt.bufPrint(&buffer, "{s}: {s}", .{ label, value }) catch {
 ```
 
 A net reports the limit under the error's name
-(`ChromeHitCapacityExceeded: limit reached`) with the route that caught it.
+(`PresentationIdExhausted: limit reached`) with the route that caught it.
 Once a flow reports its limit by name, the net no longer sees that error.
 
 - `Runtime.update` runs each event through `dispatch`. A limit error skips
@@ -240,28 +245,43 @@ Once a flow reports its limit by name, the net no longer sees that error.
   - a graphics message: the store paused that pane's stream at the limit
     (`awaiting_snapshot`), so the chunks and placements of an image that
     did not fit are dropped instead of failing as unknown, and a graphics
-    snapshot resumes the pane;
+    snapshot resumes the pane, within the pane's own budget
+    ([Paused graphics](#paused-graphics));
   - a pane frame: a snapshot of that pane;
   - anything else: a new session, which rebuilds the replica.
 
   A resync the client cannot ask for, such as a full outbox, loses the link,
   so the replica never stays wrong while the link shows connected. More
-  than three resyncs within a minute stop asking: a pane's graphics stay
-  paused until a later snapshot, and any other resync gives the link up
-  (`runtime_link.abandon`) with the limit's name and no retry, since each
-  would stop at the same limit. Retrying by hand counts anew. An error after
-  the message was applied, in the adapter, never resyncs.
-- The window's `render` callback passes draw errors to the GUI's
+  than three pane snapshots or new sessions within a minute give the link
+  up (`runtime_link.abandon`) with the limit's name and no retry, since each
+  would stop at the same limit. Retrying by hand counts anew. A pane's
+  paused graphics never spend that budget. An error after the message was
+  applied, in the adapter, never resyncs.
+- The window's tables keep what fits instead of failing the frame. The
+  widget target registry (`gui.widgets.registry_capacity`, 1024), the band
+  and cell hit maps, the frame widget list, the editors, the published
+  accessibility tree (256 nodes), the frame's and each cell's quads and the
+  image placements (2048, the ones painted highest kept) each count what
+  they left out; `limit_reached.reportFrame` reports every table that
+  filled once the frame is prepared, and the frame draws without the
+  excess. A glyph page that fills is emptied between frames; one a single
+  frame fills reopens at 2048 texels, and at 2048 it waits 60 frames before
+  emptying again and reports `text.glyph_atlas_side`. A viewport holding
+  more than `core.max_cell_count` cells keeps its columns and the rows that
+  fit and reports `protocol.max_cell_count`; a display scale past 8 draws
+  at 8.
+- The window's `render` callback passes the draw errors left to the GUI's
   `limit_reached.absorbFrame`. Draw returns token 0, and both native
   backends keep the last presented frame. `GuiAdapter.limited` holds the
   observation and viewport that stopped, and the window neither measures nor
   prepares that frame again until one of them changes. Because a frame that
   keeps failing cannot show its own notice, the window title ends with
   " — limit reached: <name>" until a frame draws, and the frame that draws
-  wakes the loop so the title drops it. Errors the window raises
-  itself are named (`render.retained_max_cells`, `protocol.max_cell_count`,
-  `render.frame_quad_budget`, `gui.widgets.registry_capacity`,
-  `text.glyph_atlas_side`).
+  wakes the loop so the title drops it.
+- The `input` callback refuses an event that reaches a limit alone. A focus
+  change or a presentation's completion that finds the inbox full waits in
+  `GuiAdapter.unposted` and the next pump posts it first, so the frame in
+  flight always completes.
 - A session larger than `session_checkpoint.snapshot_bytes` writes the
   prefix of records that fits. Records point back to earlier records, tabs to
   their workspace and panes to their tab, so the prefix restores cleanly.
@@ -287,6 +307,51 @@ try next;
 
 `pane_output.receive`, `worktree_detection.finish` and
 `client_delivery.flush` follow the same rule.
+
+### Paused graphics
+
+A pane whose graphics paused at a limit has one row in
+`model.graphics_pauses` (`GraphicsPauses`), and only while the client
+mirrors the pane: `limit_reached.recover` adds no row for a pane that is not
+in `model.panes`, only counts the reach.
+
+- **Notice.** `core.limit_reached.record` counts every reach, so
+  `telar diagnostics limits` sees each one, but the notice follows the
+  pane, not the limit's once-a-minute interval: a warning titled
+  "Images paused in pane 2: vim", the pane's number and program as its
+  header shows them, appears when the pane's pause starts (a new row), and a
+  click focuses the pane. Further reaches of that pane only count; a second
+  pane that pauses in the same minute gets its own notice.
+- **Where it shows.** The window writes "images paused" in yellow beside the
+  program name in the pane's header while its row lives
+  (`GraphicsPauses.contains`, one comparison while no pane is paused). The
+  headless dump has `images_paused` on each pane. Adding or removing a row
+  advances `pane_graphics_revision`, so the window draws the change.
+- **Budget.** A pane asks for three graphics snapshots within
+  `runtime_link.healthy_after_ns` (a minute); the next reach makes it wait.
+  Each window that ends waiting doubles the next one: 60 s, 120 s, 240 s,
+  480 s, then 16 minutes (`max_pause_doublings`).
+- **Resume.** `limit_reached.resumeGraphics` asks again for every waiting
+  pane whose wait passed. One `graphics_resume` timer (`client.Job`) is armed
+  for the earliest due row and none while no pane waits, so idle clients
+  schedule nothing; each applied runtime message checks too, after its read
+  is re-armed. A pane that gains focus (`pane_focus.synchronizeActivePane`)
+  asks at once when a minute passed since its window started, ignoring the
+  doubling but keeping it, so a person looking at the pane waits no longer
+  than the base window and clicking cannot ask faster than it.
+- **End.** The begin of a graphics snapshot of a paused pane marks it; its
+  end, applied without the pane reaching its limit again in between
+  (`limit_reached.receiveGraphicsSnapshot`), removes the row and with it the
+  backoff. A pane that leaves the model takes its row along: every flow
+  that removes panes (`tab_layout.removePane`, `tab_removal.remove`,
+  `workspace_reconciliation.reconcileTabs`, `workspace_handoff.clear`) calls
+  the model's `limit_reached.forgetClosedPanes`, and a new session drops
+  every row through `workspace_handoff.clear`. `model_invariants.check`
+  fails on a row whose pane is gone.
+- **Capacity.** The table holds as many rows as the client holds panes, so
+  it cannot fill with live panes. If it ever does, it gives up the row whose
+  window started longest ago, and a waiting one asks its snapshot at once,
+  so no pane stays paused without a resume on the way.
 
 ## Client diagnostic
 
@@ -328,16 +393,37 @@ with notice levels and the client's `limits`.
   snapshots, a new session, a resync a full outbox cannot ask for, the
   budget that keeps graphics paused and gives the link up naming the limit,
   and a manual retry that counts anew.
+- The paused graphics, run from the same file: `noticePausedPanes` (one
+  notice per pane naming it and focusing it, further reaches only counted),
+  `resumeWithoutTraffic` (the timer armed for the due row, firing without a
+  runtime message and idling after; focus resuming a waiting pane),
+  `endGraphicsPauses` (a snapshot applied whole ends the pause, one the
+  limit stops again keeps it, a full table asks its evicted pane's
+  snapshot, a new session drops every row) and `backOffPausedPanes` (60 s
+  doubling to 16 minutes, reset when the pause ends).
+- `src/model/connection/GraphicsPauses.zig` and `limit_reached.zig`: row
+  removal, the next due time, and the rows a closed pane, a removed tab and
+  a new workspace drop; `runtime_session.zig`: a new session drops them.
 - `src/client/graphics/tests.zig`: an image or a chunk past its limit pauses
   the pane's stream, whose chunks and placements are then dropped, and a
   snapshot resumes it.
+- `src/gui/tests/visual_chrome.zig`: the header of a paused pane, and only
+  that pane, says its images paused. `src/headless/dump.zig`: the dump's
+  `images_paused`.
 - `src/client_tests/limit_reached.zig` and `configuration.zig`: the client
   notice, folded reports, the adapter net, a real bar of five click actions
   and a failing panel, and the diagnostics their next render clears.
-- `src/gui/tests/limit_reached.zig`: a frame stopped at the cell budget
-  through the native callbacks keeps the window open, names the limit in the
-  title and draws again; an update event at a limit is skipped while the
-  rest of the turn runs.
+- `src/gui/tests/limit_reached.zig`: a frame stopped at a limit through the
+  native callbacks keeps the window open, names the limit in the title and
+  draws again; a viewport past the protocol's cells draws the rows that fit;
+  a full inbox keeps a focus change and a completion for the next pump; a
+  clipboard past its capacity is refused whole; a scale past 8 draws at 8;
+  every table a frame filled is reported; an update event at a limit is
+  skipped while the rest of the turn runs.
+- `src/gui/text/GlyphAtlas.zig`: a page filled over frames is emptied, one a
+  frame fills alone grows, and a full 2048 page backs off.
+- `src/gui/tests/pane_images.zig`: a full frame keeps the placements painted
+  highest.
 - `src/cli/integration/limits.test.mjs`: against a built telar, a client
   reports a limit over the socket, `telar diagnostics limits` lists it and
   the background runtime writes its own log.

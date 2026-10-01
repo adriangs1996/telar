@@ -6,5 +6,6 @@ pub const ImageDraw = extern struct {
     handle: u32,
 };
 
-/// Mirrors `TELAR_GUI_IMAGE_DRAWS`: image quads one frame may draw.
-pub const capacity = 512;
+/// Mirrors `TELAR_GUI_IMAGE_DRAWS`: image quads one frame may draw. Eight
+/// visible panes each at `core.max_placements_per_pane` fit.
+pub const capacity = 2048;

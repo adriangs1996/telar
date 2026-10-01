@@ -7,6 +7,7 @@ const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const std = @import("std");
 const ClientModel = @import("../state/ClientModel.zig");
+const limit_reached = @import("../connection/limit_reached.zig");
 const Pane = @import("../panes/Pane.zig");
 const Spec = @import("../panes/Spec.zig");
 const LayoutSnapshot = @import("LayoutSnapshot.zig");
@@ -179,6 +180,7 @@ pub fn removePane(model: *ClientModel, pane_id: core.PaneId) bool {
     const pane = model.panes.find(pane_id) orelse return false;
     const slot = model.tabs.find(pane.location.tab_id);
     _ = model.panes.remove(pane_id);
+    limit_reached.forgetClosedPanes(model);
     if (slot) |tab| {
         _ = model.tabs.layout[tab].remove(pane_id);
     }

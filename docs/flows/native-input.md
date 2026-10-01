@@ -152,7 +152,7 @@ duplicate releases share one entry. Recovery rejects new presses until these
 releases finish through the existing router and outbox budget. Another key press
 therefore cannot overtake the release of its previous physical lease.
 Whole targeted text, composition and accessibility payloads use eight 4 KiB
-slots. Clipboard results use two 64 KiB slots. An exhausted pool rejects admission
+slots. Clipboard results use two 1 MiB slots. An exhausted pool rejects admission
 before changing the queue; native clipboard helpers retain completion for retry.
 Composition cancellation uses an ordinary value entry independent of payload
 slots, or the reserved recovery slot if the ring is full.

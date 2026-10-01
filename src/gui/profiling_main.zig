@@ -459,7 +459,6 @@ const Probe = struct {
         if (widget.model.revisions[0].row_count != lines) {
             return error.InvalidReviewFixture;
         }
-        @memset(&widget.roles[0], .plain);
         _ = widget.model.search.setQuery("value");
         var renderer = Renderer.init(self.gpa);
         defer renderer.deinit();

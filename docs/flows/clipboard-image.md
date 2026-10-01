@@ -76,10 +76,15 @@ marker scheme the agent's manifest declares (`attachments` in
 
 A card's `×` sends `.attachment_dismiss`. `agent_attachments.dismissAttachment`
 plans a bounded synthetic key sequence (at most
-`attachment_types.max_removal_keys` keys) that moves to the marker, deletes it
-and restores the cursor, sends it through `pane_input.sendPaneKeys` as one
-input transaction, and retires the preview only after that transaction is
-accepted.
+`attachment_types.max_removal_keys`, 256 keys, what one pane-input
+transaction carries) that moves to the marker, deletes it and restores the
+cursor, sends it through `pane_input.sendPaneKeys` as one input transaction,
+and retires the preview only after that transaction is accepted. A plan that
+stops at a limit sends nothing, keeps the preview and reports the limit:
+`attachments.max_marker_navigation_steps` when the cursor is more than 120
+steps from a placeholder, `attachments.path_marker.max_cells` when a Pi path
+is longer than 512 cells, and `attachments.max_removal_keys` when the keys
+pass 256, as a Pi path longer than about 250 cells does.
 
 For input in the other direction, a plain `Backspace` or `Delete` next to a
 known marker retires its preview. Providers that learn marker identities also
@@ -110,10 +115,18 @@ while a cancelled one still reads the pasteboard waits in
 finishes as cancelled. The worker receives copied values and two heap-stable
 slots: `model.clipboard.orphan` for the `Capture` it publishes and
 `ImagePreviews.landing` for the decoded preview. It reads at most 32 MiB of
-pasteboard data into a PNG of at most 16 MiB and 16 million pixels, then
-decodes it (`imaging.png`) and box-filters it into a premultiplied thumbnail
-that fits 256 × 256 pixels and a modal copy of at most 2048 pixels a side and
-2 Mi pixels (`image/preview_decode.zig`). `clipboard_image.finish` completes
+pasteboard data into a PNG of at most 32 MiB and 36 Mi pixels, which a 6K
+screenshot (20.4 Mpx) and 8K UHD (33.2 Mpx) fit, then decodes it
+(`imaging.png`) and box-filters it into a premultiplied thumbnail that fits
+256 × 256 pixels and a modal copy of at most 2048 pixels a side and 2 Mi
+pixels (`image/preview_decode.zig`). The decode is the worker's largest
+transient cost: 4 bytes a pixel of RGBA beside Wuffs's work buffer of 3 to 8
+bytes a pixel, 252 MiB for an 8-bit RGB image at the pixel bound, 288 MiB
+for 8-bit RGBA and 432 MiB at worst (16-bit RGBA), released before the
+worker completes. A quota the read passes returns the attachment limit it
+names (`attachments.max_source_bytes`, `attachments.max_pixels` with the
+image's pixels, `attachments.max_png_bytes` with the PNG's length) in the
+completion. `clipboard_image.finish` completes
 the capture in the window's own client, whichever machine is shown, frees a
 decoded preview adoption did not take, and starts the queued capture.
 
@@ -134,8 +147,13 @@ the pane sizes offered to the runtime, the drawn panes and pointer targeting
 all see the same shortened pane, and the snapshot's `reserved` rectangle is
 where the shelf draws.
 
-Applied, stale, ignored and clipboard-empty results stay quiet. Oversized,
-worker, decoding and adoption failures map to bounded notifications.
+Applied, stale, ignored and clipboard-empty results stay quiet. An image
+past a limit shows the limit notice under that limit's name
+([Limit reached](limit-reached.md)). Worker, decoding and adoption failures
+map to bounded notifications. A capture that evicts a preview still shown
+to make room reports `attachments.max_items` (a fifth preview) or
+`attachments.max_retained_bytes` (PNG bytes past 32 MiB); one dismissed and
+waiting to be released makes room quietly.
 
 ## Presentation and bounds
 
@@ -164,8 +182,11 @@ while the modal owns the keyboard.
 Limits:
 
 - one capture worker per window;
-- 32 MiB of source clipboard data, 16 MiB per PNG, 16 million pixels;
-- four retained previews and 32 MiB of retained PNG bytes;
+- 32 MiB of source clipboard data, 32 MiB per PNG, 36 Mi pixels;
+- four retained previews and 32 MiB of retained PNG bytes, one PNG at its
+  bound;
+- 256 keys to dismiss a marker, 120 steps to reach a placeholder and 512
+  cells of a Pi path;
 - per preview, a 256 × 256 thumbnail and a modal copy of 2 Mi pixels.
 
 Captured PNGs and decoded pixels are zeroed before release.
@@ -180,12 +201,17 @@ Captured PNGs and decoded pixels are zeroed before release.
   pane bottom reservation and rebuilds when it changes.
 - `src/client/input/attachment_prompt.zig` proves marker policies per provider
   and which keys arm a deletion watch.
-- `src/model/attachments/path_marker.zig` proves Pi path parsing.
+- `src/model/attachments/path_marker.zig` proves Pi path parsing and the
+  512-cell bound.
 - `src/client/attachments/catalog_tests.zig` proves sensitive-byte ownership,
-  the four-item eviction bound and initialization failures.
+  the four-item and retained-byte evictions and their reaches, the 8K and
+  36 Mi pixel boundary and initialization failures.
 - The clipboard and marker tests in `src/client_tests/configuration.zig`,
   `input.zig` and `input_operations.zig`, run against a test shelf, prove the
-  shared client's capture, adoption, marker deletion and prompt submission.
+  shared client's capture, adoption, marker deletion and prompt submission,
+  the limit notice for an image past its pixels, the report of a fifth
+  preview, and a dismissal that stops at each marker limit keeping its
+  preview while a 200-cell Pi path is deleted whole.
 - `src/gui/image/preview_decode.zig` proves the preview sizes and
   premultiplied decoding.
 - `src/gui/tests/image_previews.zig` proves sheet cells per slot, that a

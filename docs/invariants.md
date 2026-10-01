@@ -21,7 +21,8 @@ detach, reconnect, destroy), its recovery and the test that proves it.
   four times, and a new limit in a full table scans its 128 rows once for
   the one reached longest ago. It allocates nothing and never fails, so it
   may sit on the interactive path. The notice appears at most once a
-  minute per limit.
+  minute per limit; a graphics limit shows once per pane when that pane's
+  images pause, and its later reaches only count.
 - Only the thread that owns the process model reports: the runtime's event
   loop or the client adapter's loop. A worker returns the reach in its
   completion and its `finish` reports it. A CLI command prints the notice to

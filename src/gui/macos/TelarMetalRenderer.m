@@ -34,6 +34,7 @@ static const NSUInteger image_texture_index = 2 + TELAR_GUI_DIAGRAM_SLOTS;
   uint64_t diagram_versions[TELAR_GUI_DIAGRAM_SLOTS];
   id<MTLBuffer> quads;
   uint32_t atlas_version;
+  BOOL atlas_whole;
   uint32_t sprites_version;
   BOOL in_flight, stopped;
   TelarMetalCompletion completion;
@@ -223,19 +224,29 @@ static const NSUInteger image_texture_index = 2 + TELAR_GUI_DIAGRAM_SLOTS;
     }
 
     atlas_version = 0;
+    atlas_whole = YES;
   }
 
-  if (atlas_version == frame->atlas_version) {
+  if (atlas_version == frame->atlas_version && !atlas_whole) {
     return YES;
   }
 
+  // Holding the version the dirty rows follow, only those rows change.
+  uint32_t top = 0, bottom = frame->atlas_side;
+  if (!atlas_whole && atlas_version == frame->atlas_dirty_base &&
+      frame->atlas_dirty_top < frame->atlas_dirty_bottom && frame->atlas_dirty_bottom <= frame->atlas_side) {
+    top = frame->atlas_dirty_top;
+    bottom = frame->atlas_dirty_bottom;
+  }
+
   [atlas
-      replaceRegion:MTLRegionMake2D(0, 0, frame->atlas_side, frame->atlas_side)
+      replaceRegion:MTLRegionMake2D(0, top, frame->atlas_side, bottom - top)
         mipmapLevel:0
-          withBytes:frame->atlas
+          withBytes:frame->atlas + (size_t)top * frame->atlas_side
         bytesPerRow:frame->atlas_side];
 
   atlas_version = frame->atlas_version;
+  atlas_whole = NO;
   return YES;
 }
 

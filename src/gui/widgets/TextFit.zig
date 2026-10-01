@@ -6,7 +6,9 @@ const Label = @import("Label.zig");
 const TextFit = @This();
 
 pub const ellipsis = "\u{2026}";
-pub const max_bytes = 128;
+/// Bytes a fitted prefix keeps: about sixty CJK or emoji graphemes, enough
+/// for the widest label a window draws.
+pub const max_bytes = 256;
 
 canvas: *Canvas,
 width: f32,

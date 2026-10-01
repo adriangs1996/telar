@@ -74,7 +74,7 @@ void telar_glyph_rasterizer_destroy(telar_glyph_rasterizer *self) {
 
 telar_glyph_rasterizer *telar_glyph_rasterizer_create(const telar_glyph_rasterizer_options *options) {
     if (options->font_len == 0 || options->font_len > 64 * 1024 * 1024 ||
-        options->side < 2 || options->side > 1024 || options->strength > 255) {
+        options->side < 2 || options->side > TELAR_GLYPH_ATLAS_MAX_SIDE || options->strength > 255) {
         return NULL;
     }
     telar_glyph_rasterizer *self = calloc(1, sizeof *self);
