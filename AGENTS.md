@@ -136,6 +136,17 @@ Watch out for memory problems. Take inspiration from Rust for keeping track of m
 - agent means the coding agent a user runs inside a telar's pane. It could include you.
 - client means the window (GUI) or the headless client connected to telar's runtime.
 
+## Behaviors you follow
+
+- Strive to test only what is being changed. Full test suite are expensive,
+  leave them for when a change could affect many flows
+
+- Do not include features that will only work on my local environment. Every
+  feature must be thought in the context of a generic user, not just on my
+  current environment. My current environment can be used as guideline and
+  playground for testing if an approach works, but there should not be any
+  hardcoded functionality that just works on my local environment.
+
 ## Commit style
 
 When writing commit messages, descriptions or PRs:

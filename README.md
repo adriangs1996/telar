@@ -193,43 +193,45 @@ zig-crap src --lcov coverage.lcov --lcov-base .
 
 ## Fuzzing
 
-Telar fuzzes one boundary so far: `decodeClientHello`, the first message a
-runtime decodes from a connecting client. It uses Zig's built-in fuzzer
-(`std.testing.fuzz`) and needs no other tools. The target lives in
-[`src/core/schema/handshake_fuzz_test.zig`](src/core/schema/handshake_fuzz_test.zig)
-and runs only through the `test-handshake` step. Client and server IPC
-decoding and the history escape scanners have no fuzz target yet.
+Telar uses Zig's built-in fuzzer (`std.testing.fuzz`) with 12 target steps:
+handshake, client and server IPC, frame bodies, cell runs, text metadata,
+PNG, ICO, HTTP/1 heads and bodies, and HTTP/2 frame reading and observation.
+The targets use synthetic inputs and do not start a runtime or contact real
+services. Their contracts and limits are described in
+[`docs/testing/`](docs/testing/).
 
-Run the handshake tests and replay the seed corpus, without fuzzing:
-
-```sh
-just fuzz-check   # zig build test-handshake
-```
-
-Fuzz for a bounded number of runs; the argument takes Zig's `K`, `M` and `G`
-suffixes:
+Run every fuzz root's deterministic tests and replay its seed corpus:
 
 ```sh
-just fuzz         # zig build test-handshake --fuzz=10K
-just fuzz 1M
+just fuzz-check
 ```
 
-The run ends with a report of runs, unique runs and covered program counters.
-The coverage counts the whole test executable, including Zig's test runner,
-not only the decoder. `zig build test-handshake --fuzz` without a limit keeps
-fuzzing and serves Zig's web interface; this mode has not been tried on Telar.
+Fuzz every target in sequence, with GUI disabled and one build job. The
+argument takes Zig's `K`, `M` and `G` suffixes and is passed to each target,
+not shared across the whole campaign:
 
-With Zig 0.16.0, a failure found while fuzzing does not change the exit status
-of `zig build`, so read the output instead of trusting it. A failing input is
-reported as `input saved to '.zig-cache/f/crash'`. That file holds the input
-in the form the fuzz test reads it, so to reproduce the failure copy it next
-to the fuzz test and add `@embedFile` of it to the test's corpus; a plain
-`zig build test-handshake` then replays it.
+```sh
+just fuzz         # --fuzz=10K for each target
+just fuzz 1M      # --fuzz=1M for each target
+```
 
-Zig 0.16.0 constrains how the target is built: its test runner does not
-compile a fuzz test in Debug with error return traces, so the fuzz executable
-is built without them (runtime safety stays on), and a broken property panics
-rather than returning an error, because only an abort keeps the saved input.
+Each target prints its report before the next starts. Coverage counts the
+whole executable, including the runner and oracles, not only production
+code. Wuffs C and nghttp2 provide no fuzz coverage feedback. Run these
+commands without `-Dcoverage`.
+
+With Zig 0.16.0, `zig build --fuzz` can exit 0 after a failure. `just fuzz`
+checks each target's output for saved inputs, panics and termination signals
+and stops with a nonzero status if it finds one or the build fails.
+
+A failing input is reported as `input saved to '.zig-cache/f/crash'`. It is
+in Smith input form, not necessarily raw protocol bytes. Zig has sometimes
+written an empty or truncated crash file; the target documents explain how
+to recover the complete input from `.zig-cache/f/in<N>` and replay it.
+
+The fuzz roots stay out of ordinary suites and coverage discovery. Their
+executables use LLVM and disable error return traces only on the root;
+Debug runtime safety stays enabled.
 
 ## Performance benchmarks
 

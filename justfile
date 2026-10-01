@@ -1,5 +1,7 @@
 dev_runtime_dir := justfile_directory() / ".zig-out/dev"
 
+fuzz_targets := "test-handshake test-fuzz-ipc-client test-fuzz-ipc-server test-fuzz-frames-body test-fuzz-frames-cells test-fuzz-frames-metadata test-fuzz-imaging-png test-fuzz-imaging-ico test-fuzz-http1-head test-fuzz-http1-body test-fuzz-http2-reader test-fuzz-http2-observer"
+
 # Show the available commands.
 default:
     @just --list
@@ -72,14 +74,28 @@ test *args:
 coverage *args:
     tools/coverage.sh {{ args }}
 
-# Run the handshake tests and replay the ClientHello fuzz corpus, without fuzzing.
+# Run all fuzz roots' tests and replay their corpora, without fuzzing.
 fuzz-check:
-    zig build test-handshake
+    zig build {{ fuzz_targets }} -Dgui=false -j1
 
-# Fuzz ClientHello decoding for a bounded number of runs, e.g. `just fuzz 1M`.
-# A found failure does not change the exit status: read the output.
+# Fuzz every target sequentially, e.g. `just fuzz 1M`.
 fuzz runs="10K":
-    zig build test-handshake --fuzz={{ runs }}
+    #!/usr/bin/env sh
+    set -eu
+    log=$(mktemp)
+    trap 'rm -f "$log"' EXIT
+    for target in {{ fuzz_targets }}; do
+        printf '\n== %s ==\n' "$target"
+        status=0
+        zig build "$target" -Dgui=false -j1 --fuzz={{ quote(runs) }} >"$log" 2>&1 || status=$?
+        cat "$log"
+        if [ "$status" -ne 0 ]; then
+            exit "$status"
+        fi
+        if grep -Eq 'input saved|panic:|terminated with signal' "$log"; then
+            exit 1
+        fi
+    done
 
 # Run the shared client's tests: its own, over a real socket, and headless.
 test-client:

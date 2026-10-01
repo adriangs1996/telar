@@ -1,10 +1,86 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#1A1A1A"/>
-  <g fill="none" stroke="#7E7E7E" stroke-width="5" stroke-linecap="round">
-    <path d="M17 11 V26 M17 38 V53"></path>
-    <path d="M32 11 V53"></path>
-    <path d="M47 11 V26 M47 38 V53"></path>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="telar-icon-tile" cx="0.5" cy="0.42" r="0.75">
+      <stop offset="0" stop-color="#232323"></stop>
+      <stop offset="0.65" stop-color="#141414"></stop>
+      <stop offset="1" stop-color="#0a0a0a"></stop>
+    </radialGradient>
+    <linearGradient id="telar-icon-gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.09"></stop>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0"></stop>
+    </linearGradient>
+    <linearGradient id="telar-icon-body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#303030"></stop>
+      <stop offset="1" stop-color="#161616"></stop>
+    </linearGradient>
+    <linearGradient id="telar-icon-screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#222222"></stop>
+      <stop offset="1" stop-color="#141414"></stop>
+    </linearGradient>
+    <clipPath id="telar-icon-clip"><rect width="512" height="512" rx="112"></rect></clipPath>
+    <filter id="telar-icon-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="11"></feGaussianBlur>
+    </filter>
+    <filter id="telar-icon-shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.55"></feDropShadow>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#telar-icon-tile)"></rect>
+  <g clip-path="url(#telar-icon-clip)" fill="none" stroke="#343434" stroke-width="3.5">
+    <path d="M256 262 L256 0 M256 262 L512 6 M256 262 L512 262 M256 262 L512 518 M256 262 L256 512 M256 262 L0 518 M256 262 L0 262 M256 262 L0 6"></path>
+    <path d="M256 196 L303 215 L322 262 L303 309 L256 328 L209 309 L190 262 L209 215 Z"></path>
+    <path d="M256 128 L351 167 L390 262 L351 357 L256 396 L161 357 L122 262 L161 167 Z"></path>
+    <path d="M256 60 L399 119 L458 262 L399 405 L256 464 L113 405 L54 262 L113 119 Z"></path>
   </g>
-  <path d="M5 32 H26 M38 32 H47" fill="none" stroke="#FFC799" stroke-width="5" stroke-linecap="round"></path>
-  <path d="M45 32 L53 26 L61 32 L53 38 Z" fill="#FFC799"></path>
+  <g filter="url(#telar-icon-shadow)">
+    <g transform="rotate(-12 124 118)">
+      <rect x="80" y="86" width="88" height="66" rx="16" fill="url(#telar-icon-screen)" stroke="#525252" stroke-width="3"></rect>
+      <path d="M100 108 L114 120 L100 132 M122 134 H146" fill="none" stroke="#737373" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"></path>
+      <path d="M76 100 L172 142 M84 150 L166 92" stroke="#a3a3a3" stroke-opacity="0.55" stroke-width="3"></path>
+    </g>
+    <g transform="rotate(8 132 420)">
+      <rect x="88" y="388" width="88" height="66" rx="16" fill="url(#telar-icon-screen)" stroke="#525252" stroke-width="3"></rect>
+      <path d="M108 410 L122 422 L108 434 M130 436 H154" fill="none" stroke="#737373" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"></path>
+      <path d="M84 402 L180 444 M92 452 L174 394" stroke="#a3a3a3" stroke-opacity="0.55" stroke-width="3"></path>
+    </g>
+  </g>
+  <rect x="330" y="372" width="116" height="96" rx="24" fill="#009fff" opacity="0.38" filter="url(#telar-icon-glow)"></rect>
+  <g transform="rotate(6 388 420)" filter="url(#telar-icon-shadow)">
+    <rect x="338" y="380" width="100" height="80" rx="18" fill="url(#telar-icon-screen)" stroke="#009fff" stroke-width="3"></rect>
+    <path d="M360 404 L376 418 L360 432 M384 436 H410" fill="none" stroke="#009fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"></path>
+  </g>
+  <path d="M256 0 V212" stroke="#009fff" stroke-width="4"></path>
+  <path d="M328 362 L352 388" stroke="#009fff" stroke-width="4" stroke-linecap="round"></path>
+  <g filter="url(#telar-icon-shadow)">
+    <g transform="translate(256 268) scale(0.6) translate(-256 -254)">
+      <g fill="none" stroke="#bdbdbd" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M190 206 L146 164 L110 196"></path>
+        <path d="M182 240 L126 230 L92 262"></path>
+        <path d="M182 280 L126 298 L102 338"></path>
+        <path d="M194 312 L156 350 L146 396"></path>
+        <path d="M322 206 L366 164 L402 196"></path>
+        <path d="M330 240 L386 230 L420 262"></path>
+        <path d="M330 280 L386 298 L410 338"></path>
+        <path d="M318 312 L356 350 L366 396"></path>
+      </g>
+      <g fill="#009fff">
+        <rect x="94" y="196" width="26" height="13" rx="3"></rect>
+        <rect x="76" y="262" width="26" height="13" rx="3"></rect>
+        <rect x="86" y="338" width="26" height="13" rx="3"></rect>
+        <rect x="132" y="396" width="26" height="13" rx="3"></rect>
+        <rect x="392" y="196" width="26" height="13" rx="3"></rect>
+        <rect x="410" y="262" width="26" height="13" rx="3"></rect>
+        <rect x="400" y="338" width="26" height="13" rx="3"></rect>
+        <rect x="354" y="396" width="26" height="13" rx="3"></rect>
+      </g>
+      <rect x="172" y="176" width="168" height="156" rx="50" fill="url(#telar-icon-body)" stroke="#bdbdbd" stroke-width="10"></rect>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="16">
+        <path d="M206 226 L236 250 L206 274" stroke="#e5e5e5"></path>
+        <path d="M252 288 H300" stroke="#009fff"></path>
+      </g>
+    </g>
+  </g>
+  <rect width="512" height="512" rx="112" fill="url(#telar-icon-gloss)"></rect>
+  <rect x="3" y="3" width="506" height="506" rx="109" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="3"></rect>
+  <rect x="8" y="8" width="496" height="496" rx="106" fill="none" stroke="#000000" stroke-opacity="0.45" stroke-width="3"></rect>
 </svg>
