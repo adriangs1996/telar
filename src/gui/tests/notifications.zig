@@ -164,7 +164,7 @@ test "GUI notification lifecycle wakes at semantic boundaries while the host own
     );
     try std.testing.expect(app.model.host.animation_frame_ns == null);
     try std.testing.expectEqual(now + data.notifications.transition_duration_ns, app.model.notification_scheduler.deadline_ns.load(.acquire));
-    try std.testing.expect(Clock.frame_interval_ns < data.notifications.transition_duration_ns);
+    try std.testing.expect(Clock.default_interval_ns < data.notifications.transition_duration_ns);
 }
 
 fn bounds(fixture: *const Fixture, id: data.notifications.Id) Rect {

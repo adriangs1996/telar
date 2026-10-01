@@ -12,6 +12,7 @@ const client_delivery = @import("client_delivery.zig");
 const client_layout_persistence = @import("client_layout_persistence.zig");
 const command_history = @import("command_history.zig");
 const copy_mode = @import("copy_mode.zig");
+const frame_pacing = @import("frame_pacing.zig");
 const link_opening = @import("link_opening.zig");
 const path_picker = @import("path_picker.zig");
 const notifications = @import("notifications.zig");
@@ -73,6 +74,7 @@ pub fn receive(model: *RuntimeModel, session: *Session, message: core.ClientMess
         .graphics_credit => |request| pane_graphics.returnCredit(model, session, request),
         .configure_graphics => |request| pane_graphics.configure(model, session, request),
         .configure_terminal_colors => |request| terminal_colors.configure(model, session, request),
+        .configure_frame_interval => |request| frame_pacing.configure(model, session, request),
         .request_tab_snapshot => |request| tab_snapshot_reconciliation.snapshot(model, session, request),
         .create_tab => |request| tab_creation.create(model, session, request),
         .rename_tab => |request| tab_rename.rename(model, session, request),

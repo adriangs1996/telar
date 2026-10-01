@@ -2,6 +2,7 @@ const std = @import("std");
 const Application = @import("Application.zig");
 const macos_gui = @import("macos_gui.zig");
 const linux_gui = @import("linux_gui.zig");
+const Modules = @import("Modules.zig");
 
 /// Attach the native adapter and its checks: `gui.add(b, app, diagram_helper)`.
 pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath) ?*std.Build.Module {
@@ -9,25 +10,8 @@ pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath)
     // isolated Rust helper.
     var gui_module: ?*std.Build.Module = null;
     if (app.modules.native_client) {
-        const gui = b.createModule(.{
-            .root_source_file = b.path("src/gui/gui.zig"),
-            .target = app.modules.target,
-            .optimize = app.modules.optimize,
-            .link_libc = true,
-        });
-        gui.addCSourceFile(.{ .file = b.path("src/gui/native/wake.c"), .flags = &.{} });
-        // The native headers, so a test checks their constants against Zig's mirrors.
-        gui.addIncludePath(b.path("src/gui/native"));
-        gui.addImport("freetype", app.modules.freetype);
-        gui.addImport("assets", app.modules.assets);
-        gui.addImport("telar-client", app.modules.client);
-        gui.addImport("model", app.modules.data);
-        gui.addImport("telar-core", app.modules.core);
-        app.modules.libraries.addImports(gui);
+        const gui = zigModule(b, app.modules, diagram_helper.?);
         gui.addObjectFile(app.modules.syntax_library.?);
-        const diagram_options = b.addOptions();
-        diagram_options.addOptionPath("helper_path", diagram_helper.?);
-        gui.addOptions("diagram_renderer_options", diagram_options);
         if (app.modules.target.result.os.tag == .macos) {
             macos_gui.add(b, gui, app.coverage.enabled);
         } else {
@@ -118,4 +102,34 @@ pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath)
     }
 
     return gui_module;
+}
+
+/// The native adapter's Zig code with its imports and the portable wake pipe,
+/// before the platform's window sources or the syntax highlighter link in.
+/// The cross check type-checks it for targets whose window headers this
+/// machine lacks.
+///
+/// ```zig
+/// const gui = gui_build.zigModule(b, modules, diagram_helper);
+/// ```
+pub fn zigModule(b: *std.Build, modules: Modules, diagram_helper: std.Build.LazyPath) *std.Build.Module {
+    const gui = b.createModule(.{
+        .root_source_file = b.path("src/gui/gui.zig"),
+        .target = modules.target,
+        .optimize = modules.optimize,
+        .link_libc = true,
+    });
+    gui.addCSourceFile(.{ .file = b.path("src/gui/native/wake.c"), .flags = &.{} });
+    // The native headers, so a test checks their constants against Zig's mirrors.
+    gui.addIncludePath(b.path("src/gui/native"));
+    gui.addImport("freetype", modules.freetype);
+    gui.addImport("assets", modules.assets);
+    gui.addImport("telar-client", modules.client);
+    gui.addImport("model", modules.data);
+    gui.addImport("telar-core", modules.core);
+    modules.libraries.addImports(gui);
+    const diagram_options = b.addOptions();
+    diagram_options.addOptionPath("helper_path", diagram_helper);
+    gui.addOptions("diagram_renderer_options", diagram_options);
+    return gui;
 }

@@ -2,6 +2,8 @@ const pacing = @import("pacing");
 const std = @import("std");
 const core = @import("telar-core");
 const FramePacer = @import("../FramePacer.zig");
+const animate = @import("animate");
+const FrameClock = animate.FrameClock;
 
 const Instant = enum(u64) {
     initial = 100 * std.time.ns_per_ms,
@@ -14,6 +16,12 @@ const Generation = enum(u64) { initial = 1, replacement = 2 };
 const Revision = enum(u64) { initial = 1, pending = 7, echo = 8, following = 9 };
 const QueryCount = enum(usize) { repeated = 32 };
 const Duration = enum(u64) { tick = 1, late_wakeup = std.time.ns_per_ms };
+/// Refresh rates and caps in frames per second.
+const Rate = enum(u16) { thirty = 30, sixty = 60, promotion = 120, external = 144, fastest = 240, faster = 360, cinema = 24 };
+
+fn interval(rate: Rate) u64 {
+    return std.time.ns_per_s / @as(u64, @intFromEnum(rate));
+}
 
 fn now(instant: Instant) u64 {
     return @intFromEnum(instant);
@@ -214,4 +222,38 @@ test "native ordinary frames do not spend input grace" {
 
     candidate.frame_id += 1;
     try std.testing.expectEqual(@as(?u64, ordinaryDeadline() + pacing.pace.default_interval), pacer.waitUntil(&.{candidate}, ordinaryDeadline()));
+}
+
+test "native cadence follows the display under the configured cap and the runtime bounds" {
+    var pacer: FramePacer = .{};
+    var animation: FrameClock = .{};
+    pacer.display_interval_ns = interval(.promotion);
+    try std.testing.expectEqual(interval(.promotion), pacer.pace(null, &animation));
+    try std.testing.expectEqual(interval(.promotion), pacer.pace(@intFromEnum(Rate.fastest), &animation));
+    try std.testing.expectEqual(interval(.sixty), pacer.pace(@intFromEnum(Rate.sixty), &animation));
+
+    pacer.display_interval_ns = interval(.external);
+    try std.testing.expectEqual(interval(.external), pacer.pace(null, &animation));
+    try std.testing.expectEqual(interval(.external), pacer.cadence.interval);
+    try std.testing.expectEqual(interval(.external), animation.interval_ns);
+
+    pacer.display_interval_ns = interval(.faster);
+    try std.testing.expectEqual(core.min_frame_interval_ns, pacer.pace(null, &animation));
+    pacer.display_interval_ns = interval(.cinema);
+    try std.testing.expectEqual(core.max_frame_interval_ns, pacer.pace(null, &animation));
+    pacer.display_interval_ns = interval(.sixty);
+    try std.testing.expectEqual(interval(.thirty), pacer.pace(@intFromEnum(Rate.thirty), &animation));
+}
+
+test "native cadence presents a 120 Hz display's frames one display interval apart" {
+    var pacer: FramePacer = .{};
+    var animation: FrameClock = .{};
+    pacer.display_interval_ns = interval(.promotion);
+    _ = pacer.pace(null, &animation);
+    pacer.record(&.{}, now(.initial));
+    try std.testing.expectEqual(@as(?u64, now(.initial) + interval(.promotion)), pacer.waitUntil(&.{}, now(.echo)));
+
+    const slot = now(.initial) + interval(.promotion);
+    pacer.record(&.{}, slot + @intFromEnum(Duration.tick));
+    try std.testing.expectEqual(@as(?u64, slot + interval(.promotion)), pacer.waitUntil(&.{}, slot + @intFromEnum(Duration.tick)));
 }

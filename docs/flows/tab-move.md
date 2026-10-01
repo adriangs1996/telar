@@ -41,7 +41,7 @@ Failure or cancellation returns the tabs to their confirmed positions.
 
 Tab positions use a 180 ms cubic ease-out transition, retargeted from the
 current position when direction changes. All tabs share the existing frame
-clock and its 60 Hz deadline. Hidden tabs retire their motion state; completed
+clock and its deadline, one frame of the window's display. Hidden tabs retire their motion state; completed
 transitions request no further frames. Keyboard and externally confirmed
 reordering use the same position animation.
 

@@ -7,6 +7,7 @@ const client_module = @import("telar-client");
 const core = @import("telar-core");
 const keys = @import("keys.zig");
 const ClientHarness = @import("ClientHarness.zig");
+const pacing = @import("pacing");
 const std = @import("std");
 const fixtures = @import("fixtures.zig");
 
@@ -198,11 +199,14 @@ test "client startup waits for runtime layout before its initial open" {
     // What an adapter queues once its host is ready, before the runtime
     // has answered anything.
     client.model.startup.phase = .opening;
-    try client.model.to_runtime.pushBootstrap(.{
-        .graphics_shared = client_module.supportsSharedMemory(),
-        .client_identity = client.client_identity,
-        .terminal_colors = colors,
-    });
+    try client.model.to_runtime.pushBootstrap(
+        .{
+            .graphics_shared = client_module.supportsSharedMemory(),
+            .client_identity = client.client_identity,
+            .terminal_colors = colors,
+        },
+        client.model.host.host_capabilities.frame_interval_ns,
+    );
 
     try std.testing.expect(client.model.request_lifecycle.tracker.isEmpty());
     try harness.settle();
@@ -214,6 +218,8 @@ test "client startup waits for runtime layout before its initial open" {
     const configured_colors = try harness.nextClientMessage(&buffer);
     try std.testing.expect(configured_colors == .configure_terminal_colors);
     try std.testing.expectEqualDeep(colors, configured_colors.configure_terminal_colors);
+    const frame_interval = try harness.nextClientMessage(&buffer);
+    try std.testing.expectEqual(pacing.pace.default_interval, frame_interval.configure_frame_interval.interval_ns);
     const runtime_state = try harness.nextClientMessage(&buffer);
     try std.testing.expect(runtime_state == .request_runtime_state);
     try std.testing.expectEqual(client.client_identity, runtime_state.request_runtime_state.client_identity);

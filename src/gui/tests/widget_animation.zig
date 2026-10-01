@@ -118,11 +118,11 @@ test "native indeterminate progress paints each frame without model ticks and fo
     const version = app.model.version();
     fixture.chrome.now_ns = std.time.ns_per_s;
     try fixture.paint(fixture.projection());
-    try std.testing.expectEqual(fixture.chrome.now_ns + FrameClock.frame_interval_ns, fixture.chrome.animation.deadline_ns.?);
+    try std.testing.expectEqual(fixture.chrome.now_ns + FrameClock.default_interval_ns, fixture.chrome.animation.deadline_ns.?);
     const previous = try std.testing.allocator.dupe(Quad, fixture.session.gui.renderer.quads.items());
     defer std.testing.allocator.free(previous);
 
-    fixture.chrome.now_ns += FrameClock.frame_interval_ns;
+    fixture.chrome.now_ns += FrameClock.default_interval_ns;
     try fixture.prepare(fixture.projection());
     const next = fixture.session.gui.renderer.quads.items();
     var changed = previous.len != next.len;
@@ -134,7 +134,7 @@ test "native indeterminate progress paints each frame without model ticks and fo
     fixture.chrome.present(false);
     fixture.chrome.now_ns += 8 * std.time.ns_per_s;
     try fixture.paint(fixture.projection());
-    try std.testing.expectEqual(fixture.chrome.now_ns + FrameClock.frame_interval_ns, fixture.chrome.animation.deadline_ns.?);
+    try std.testing.expectEqual(fixture.chrome.now_ns + FrameClock.default_interval_ns, fixture.chrome.animation.deadline_ns.?);
     try std.testing.expectEqual(version, app.model.version());
     try std.testing.expect(!app.model.sidebar_animation_scheduler.pending);
 }
@@ -150,7 +150,7 @@ test "native paused failed and removed progress stop their frame clock" {
         try std.testing.expect(fixture.chrome.animation.deadline_ns != null);
 
         _ = pane.setProgress(.{ .pane_id = Session.pane_id, .state = state });
-        fixture.chrome.now_ns += FrameClock.frame_interval_ns;
+        fixture.chrome.now_ns += FrameClock.default_interval_ns;
         try fixture.paint(fixture.projection());
         try std.testing.expectEqual(@as(?u64, null), fixture.chrome.animation.deadline_ns);
         try std.testing.expectEqual(@as(u32, 0), fixture.chrome.animation.wakeupAfter(fixture.chrome.now_ns));
@@ -184,7 +184,7 @@ test "hiding native pane progress retires its retained motion and stops repainti
     fixture.chrome.now_ns += std.time.ns_per_s;
     try fixture.paint(fixture.projection());
     try std.testing.expectEqual(@as(usize, 1), fixture.chrome.progress.len);
-    try std.testing.expectEqual(fixture.chrome.now_ns + FrameClock.frame_interval_ns, fixture.chrome.animation.deadline_ns.?);
+    try std.testing.expectEqual(fixture.chrome.now_ns + FrameClock.default_interval_ns, fixture.chrome.animation.deadline_ns.?);
 }
 
 fn attentionOpacity(quads: []const Quad) !f32 {

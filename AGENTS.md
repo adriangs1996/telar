@@ -97,7 +97,9 @@ These paths have different budgets and never wait on one another.
 
 **The interactive path** carries a keystroke to the child and a byte of output
 to a glyph. It is measured in microseconds and it allocates nothing. A frame is
-capped at 60Hz by `pace`, and what does not fit gets folded rather than queued.
+capped by `pace` at the refresh rate of the display the window is on, at most
+240 Hz (or lower under `gui.max_fps`), and what does not fit gets folded rather
+than queued.
 
 **The media path** carries KGP payloads, decoded images, compression and image
 transfer. It is measured in frame deadlines. It may allocate within strict

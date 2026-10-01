@@ -13,6 +13,10 @@ const std = @import("std");
 const core = @import("telar-core");
 const Outbox = @This();
 
+/// Messages one bootstrap queues: graphics, colors, frame interval and the
+/// runtime state request.
+const BootstrapLength = enum(usize) { messages = 4 };
+
 const Payloads = [outbox_support.capacity][data.input_limits.max_encoded_bytes]u8;
 
 items: [outbox_support.capacity]outbox_support.Message = undefined,
@@ -87,19 +91,21 @@ pub fn snapshot(self: *const Outbox) Snapshot {
 }
 
 /// Retains a completion outside the small per-message metadata. Example: `try outbox.pushClientCompletion(reply);`
-/// Queues the ordered bootstrap after host negotiation. Capacity is checked
-/// before any frame is queued.
+/// Queues the ordered bootstrap after host negotiation, with the frame
+/// interval the host presents at now. Capacity is checked before any frame
+/// is queued.
 ///
 /// ```zig
-/// try model.to_runtime.pushBootstrap(.{ .graphics_shared = true, .client_identity = identity });
+/// try model.to_runtime.pushBootstrap(.{ .graphics_shared = true, .client_identity = identity }, model.host.host_capabilities.frame_interval_ns);
 /// ```
-pub fn pushBootstrap(self: *Outbox, request: RuntimeBootstrap) !void {
-    if (self.availableCapacity() < 3) {
+pub fn pushBootstrap(self: *Outbox, request: RuntimeBootstrap, frame_interval_ns: u64) !void {
+    if (self.availableCapacity() < @intFromEnum(BootstrapLength.messages)) {
         return error.ClientOutboxFull;
     }
 
     try self.push(.{ .configure_graphics = .{ .shared = request.graphics_shared } });
     try self.push(.{ .configure_terminal_colors = request.terminal_colors });
+    try self.push(.{ .configure_frame_interval = .{ .interval_ns = frame_interval_ns } });
     try self.push(.{ .request_runtime_state = .{ .client_identity = request.client_identity } });
 }
 
@@ -140,6 +146,7 @@ pub fn push(self: *Outbox, message: outbox_support.Message) !void {
     switch (message) {
         .pane_resize => |resize| return self.pushResize(resize),
         .frame_ack => |ack| return self.pushAck(ack),
+        .configure_frame_interval => |interval| return self.pushFrameInterval(interval),
         .query_history => |query| {
             if (query.offset == 0 and query.snapshot_id == 0 and query.entry_id == 0) {
                 if (self.mutableTailIndex()) |index| {
@@ -468,6 +475,7 @@ fn encodeNext(self: *const Outbox, buffer: []u8) ![]const u8 {
         .graphics_credit => |value| core.encodeGraphicsCredit(buffer, value),
         .configure_graphics => |value| core.encodeConfigureGraphics(buffer, value),
         .configure_terminal_colors => |value| core.encodeConfigureTerminalColors(buffer, value),
+        .configure_frame_interval => |value| core.encodeConfigureFrameInterval(buffer, value),
         .request_runtime_state => |value| core.encodeRequestRuntimeState(buffer, value),
         .create_workspace => |*value| core.encodeCreateWorkspace(
             buffer,
@@ -641,6 +649,26 @@ fn pushResize(self: *Outbox, resize: core.PaneResize) !void {
     try self.append(.{ .pane_resize = resize });
 }
 
+// Only the newest interval means anything to the runtime, and where it sits
+// among other messages does not, so it replaces any unsent one. A window
+// moved between displays with the outbox full then needs no new slot.
+fn pushFrameInterval(self: *Outbox, interval: core.ConfigureFrameInterval) !void {
+    var offset: usize = 0;
+    const mutable_len = self.len - @intFromBool(self.send_pending);
+    while (offset < mutable_len) : (offset += 1) {
+        const index = (@as(usize, self.head) + self.len - 1 - offset) % outbox_support.capacity;
+        switch (self.items[index]) {
+            .configure_frame_interval => |*pending| {
+                pending.* = interval;
+                return;
+            },
+            else => {},
+        }
+    }
+
+    try self.append(.{ .configure_frame_interval = interval });
+}
+
 fn pushAck(self: *Outbox, ack: core.FrameAck) !void {
     var offset: usize = 0;
     const mutable_len = self.len - @intFromBool(self.send_pending);
@@ -668,10 +696,13 @@ test "runtime bootstrap queues colors before subscribing to the initial layout" 
     defer outbox.deinit(std.testing.allocator);
     var buffer: [bootstrap_send_bytes]u8 = undefined;
 
-    try outbox.pushBootstrap(.{
-        .graphics_shared = true,
-        .client_identity = @enumFromInt(9),
-    });
+    try outbox.pushBootstrap(
+        .{
+            .graphics_shared = true,
+            .client_identity = @enumFromInt(9),
+        },
+        std.time.ns_per_s / 120,
+    );
 
     const configure = try core.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expect(configure == .configure_graphics);
@@ -682,7 +713,39 @@ test "runtime bootstrap queues colors before subscribing to the initial layout" 
     try std.testing.expect(colors == .configure_terminal_colors);
     try outbox.finishSend({});
 
+    const interval = try core.decodeClient((try outbox.beginSend(&buffer)).?);
+    try std.testing.expectEqual(@as(u64, std.time.ns_per_s / 120), interval.configure_frame_interval.interval_ns);
+    try outbox.finishSend({});
+
     const runtime_state = try core.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expect(runtime_state == .request_runtime_state);
     try std.testing.expectEqual(@as(core.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
+}
+
+test "a frame interval replaces an unsent one instead of taking a slot" {
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
+    var buffer: [bootstrap_send_bytes]u8 = undefined;
+
+    try outbox.push(.{ .configure_frame_interval = .{ .interval_ns = std.time.ns_per_s / 60 } });
+    try outbox.push(.{ .request_snapshot = .{ .pane_id = @enumFromInt(3), .known_frame_id = 0 } });
+    while (outbox.availableCapacity() != 0) {
+        try outbox.push(.{ .request_snapshot = .{ .pane_id = @enumFromInt(4), .known_frame_id = 0 } });
+    }
+
+    try outbox.push(.{ .configure_frame_interval = .{ .interval_ns = std.time.ns_per_s / 120 } });
+    const first = try core.decodeClient((try outbox.beginSend(&buffer)).?);
+    try std.testing.expectEqual(@as(u64, std.time.ns_per_s / 120), first.configure_frame_interval.interval_ns);
+
+    // One being sent is not replaced; the next one queues behind it.
+    while (outbox.len > 1) {
+        try outbox.finishSend({});
+        _ = try outbox.beginSend(&buffer);
+    }
+
+    try outbox.finishSend({});
+    try outbox.push(.{ .configure_frame_interval = .{ .interval_ns = std.time.ns_per_s / 100 } });
+    _ = try outbox.beginSend(&buffer);
+    try outbox.push(.{ .configure_frame_interval = .{ .interval_ns = std.time.ns_per_s / 144 } });
+    try std.testing.expectEqual(@as(usize, 2), outbox.len);
 }

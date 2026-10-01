@@ -37,7 +37,7 @@ test "history entrance keeps its phase across updates to the same prompt" {
     var clock: FrameClock = .{};
     clock.begin(10 * std.time.ns_per_s);
     try std.testing.expectEqual(@as(f32, 0), motion.sample(7, &clock));
-    try std.testing.expectEqual(clock.now_ns + FrameClock.frame_interval_ns, clock.deadline_ns.?);
+    try std.testing.expectEqual(clock.now_ns + FrameClock.default_interval_ns, clock.deadline_ns.?);
 
     clock.begin(10 * std.time.ns_per_s + duration_ns / 2);
     try std.testing.expectEqual(@as(f32, 0.875), motion.sample(7, &clock));

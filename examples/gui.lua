@@ -29,6 +29,7 @@ return telar.config({
     sidebar = {
       width = 284, -- 220..480 logical px; the grid starts after it and an 8 px gap.
     },
+    -- max_fps = 60, -- 30..240; omit to present at the display's refresh rate.
   },
   profiles = {
     presentation = { gui = { font = { size = 20, line_height = 1.3 } } },

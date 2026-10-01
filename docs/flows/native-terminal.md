@@ -97,10 +97,11 @@ drivers.
   `model.to_runtime` capacity gates input consumption; send completion resumes it.
 - Linux bounds clipboard offers to 16 and keymaps to 4 MiB. Clipboard reads are
   nonblocking. Repeat uses native-loop deadlines; drawing uses Wayland frame
-  callbacks and a 60 Hz budget. A visible blinking cursor adds one deadline
+  callbacks and a budget of the output's refresh rate
+  ([frame pacing](frame-pacing.md)). A visible blinking cursor adds one deadline
   per phase; a steady scene has no animation timer or idle repaint. Config
   watching checks fingerprints once a second off the native thread.
-- On macOS, rendering requests 60 Hz through a demand-driven `CADisplayLink`
+- On macOS, rendering requests the display's refresh rate through a demand-driven `CADisplayLink`
   that paces the Metal 4 renderer, with immediate drawing after idle. Commit feedback
   dispatches delivery to the window thread. The GUI requires macOS 26 and a
   Metal 4-capable GPU. Linux uses Vulkan 1.3, dynamic rendering, Synchronization2

@@ -86,6 +86,8 @@ pub const client_layout_ratio_scale = types.client_layout_ratio_scale;
 pub const min_client_layout_ratio = types.min_client_layout_ratio;
 pub const max_client_layout_ratio = types.max_client_layout_ratio;
 pub const min_notification_duration_ms = types.min_notification_duration_ms;
+pub const min_frame_interval_ns = types.min_frame_interval_ns;
+pub const max_frame_interval_ns = types.max_frame_interval_ns;
 pub const max_notification_duration_ms = types.max_notification_duration_ms;
 pub const default_notification_duration_ms = types.default_notification_duration_ms;
 
@@ -362,6 +364,7 @@ pub const encodeClientLayoutSnapshot = layout_module.encodeClientLayoutSnapshot;
 
 pub const RequestCompleted = @import("messages/RequestCompleted.zig");
 pub const encodeConfigureTerminalColors = runtime_module.encodeConfigureTerminalColors;
+pub const encodeConfigureFrameInterval = runtime_module.encodeConfigureFrameInterval;
 pub const RequestRuntimeState = @import("messages/RequestRuntimeState.zig");
 pub const RequestFailed = @import("messages/RequestFailed.zig");
 pub const ProxyStatus = @import("messages/ProxyStatus.zig");
@@ -376,6 +379,7 @@ pub const encodeSystemMetrics = runtime_module.encodeSystemMetrics;
 
 pub const GraphicsCredit = @import("messages/GraphicsCredit.zig");
 pub const ConfigureGraphics = @import("messages/ConfigureGraphics.zig");
+pub const ConfigureFrameInterval = @import("messages/ConfigureFrameInterval.zig");
 pub const RequestGraphicsSnapshot = @import("messages/RequestGraphicsSnapshot.zig");
 pub const encodeGraphicsCredit = messages_graphics.encodeGraphicsCredit;
 pub const encodeConfigureGraphics = messages_graphics.encodeConfigureGraphics;

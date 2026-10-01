@@ -13,6 +13,12 @@ const id = @import("../id.zig");
 const RequestCompleted = @import("RequestCompleted.zig");
 const ProxyStatus = @import("ProxyStatus.zig");
 const SystemMetrics = @import("SystemMetrics.zig");
+const ConfigureFrameInterval = @import("ConfigureFrameInterval.zig");
+
+/// Example: `const bytes = try encodeConfigureFrameInterval(&buffer, .{ .interval_ns = interval });`.
+pub fn encodeConfigureFrameInterval(buffer: []u8, message: ConfigureFrameInterval) ![]const u8 {
+    return codec.encodeDerived(@intFromEnum(tags.ClientTag.configure_frame_interval), buffer, message);
+}
 
 /// Example: `const bytes = try encodeConfigureTerminalColors(&buffer, colors);`.
 pub fn encodeConfigureTerminalColors(buffer: []u8, colors: TerminalColors) ![]const u8 {

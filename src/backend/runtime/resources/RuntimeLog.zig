@@ -50,8 +50,16 @@ pub fn trim(self: *RuntimeLog, io: std.Io) void {
         return;
     }
 
-    var status: std.c.Stat = undefined;
-    if (std.c.fstat(self.target, &status) != 0 or status.size < max_bytes) {
+    // `std.Io.File.stat` is `fstat` on macOS and `statx` on Linux, where
+    // libc's `fstat` is not declared.
+    const log: std.Io.File = .{
+        .handle = self.target,
+        .flags = .{
+            .nonblocking = false,
+        },
+    };
+    const status = log.stat(io) catch return;
+    if (status.size < max_bytes) {
         return;
     }
 

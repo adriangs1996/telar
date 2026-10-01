@@ -21,6 +21,8 @@ pub fn bind(gui: *GuiAdapter) native.Callbacks {
         .host_request = hostRequest,
         .accessibility = accessibility,
         .frame_delay_ns = frameDelayNs,
+        .display_interval = displayInterval,
+        .frame_interval_ns = frameIntervalNs,
         .window_title = windowTitle,
         .ready = ready,
         .image_ready = imageReady,
@@ -126,6 +128,15 @@ fn wakeupAfter(context: ?*anyopaque) callconv(.c) u32 {
 
 fn frameDelayNs(context: ?*anyopaque) callconv(.c) u64 {
     return from(context).frameDelayNs();
+}
+
+fn displayInterval(context: ?*anyopaque, interval_ns: u64) callconv(.c) void {
+    const gui = from(context);
+    gui.observeDisplay(interval_ns) catch |err| gui.fail(err);
+}
+
+fn frameIntervalNs(context: ?*anyopaque) callconv(.c) u64 {
+    return from(context).driver.frame_pacer.cadence.interval;
 }
 
 fn pointerShape(context: ?*anyopaque) callconv(.c) u32 {

@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const pacing = @import("pacing");
 const LaunchTestFault = @import("../LaunchTestFault.zig");
 const RequestFixture = @import("RequestFixture.zig");
 const agent_control = @import("../agent_control.zig");
@@ -201,6 +202,36 @@ test "runtime dispatch keeps graphics configuration scoped to one connection" {
     try fixture.send(.{ .configure_graphics = .{ .shared = false } });
     try std.testing.expect(!fixture.session.shared_graphics);
     try std.testing.expectEqual(@as(u64, 0), fixture.runtime.model.metrics.stale_client_messages);
+}
+
+test "a client's frame interval paces its cell frames within the runtime's bounds" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const other = try fixture.addClient();
+    const attachment = fixture.runtime.model.attachments.find(fixture.session.slot, pane.id).?;
+    try std.testing.expectEqual(pacing.pace.default_interval, attachment.cell_pacer.interval);
+
+    const display_interval = std.time.ns_per_s / 120;
+    try fixture.send(.{ .configure_frame_interval = .{ .interval_ns = display_interval } });
+    try std.testing.expectEqual(display_interval, attachment.cell_pacer.interval);
+    try std.testing.expectEqual(pacing.pace.default_interval, other.frame_interval_ns);
+
+    try fixture.send(.{ .configure_frame_interval = .{ .interval_ns = 1 } });
+    try std.testing.expectEqual(core.min_frame_interval_ns, attachment.cell_pacer.interval);
+    try fixture.send(.{ .configure_frame_interval = .{ .interval_ns = std.math.maxInt(u64) } });
+    try std.testing.expectEqual(core.max_frame_interval_ns, attachment.cell_pacer.interval);
+
+    try fixture.send(.{ .configure_frame_interval = .{ .interval_ns = std.time.ns_per_s / 144 } });
+    try fixture.sendTo(other, .{ .open_pane = .{
+        .request_id = @enumFromInt(42),
+        .target = .{ .pane = pane.id },
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = null,
+    } });
+    try std.testing.expectEqual(pacing.pace.default_interval, fixture.runtime.model.attachments.find(other.slot, pane.id).?.cell_pacer.interval);
+    try std.testing.expectEqual(@as(u64, std.time.ns_per_s / 144), attachment.cell_pacer.interval);
 }
 
 test "runtime stop records its first initiator and remains idempotent" {

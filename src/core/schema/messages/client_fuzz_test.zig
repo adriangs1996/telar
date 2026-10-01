@@ -135,6 +135,7 @@ fn claimedCoverage(tag: ClientTag) SeedCoverage {
         .report_agent_command,
         .report_agent_title,
         .configure_terminal_colors,
+        .configure_frame_interval,
         .open_editor,
         .find_paths,
         .query_change_review,
@@ -757,6 +758,7 @@ fn addPaneSeeds(seeds: *ClientSeeds) !void {
         ),
     );
     seeds.accept("configure_graphics", try schema.encodeConfigureGraphics(seeds.space(), .{ .shared = true }));
+    seeds.accept("configure_frame_interval", try schema.encodeConfigureFrameInterval(seeds.space(), .{ .interval_ns = schema.min_frame_interval_ns }));
     seeds.accept(
         "request_pane_focus",
         try schema.encodeRequestPaneFocus(
@@ -2573,6 +2575,7 @@ fn encodeAccepted(message: ClientMessage, reencoding: *Reencoding) !?[]const u8 
         .graphics_credit => |value| try schema.encodeGraphicsCredit(buffer, value),
         .configure_graphics => |value| try schema.encodeConfigureGraphics(buffer, value),
         .configure_terminal_colors => |value| try schema.encodeConfigureTerminalColors(buffer, value),
+        .configure_frame_interval => |value| try schema.encodeConfigureFrameInterval(buffer, value),
         .request_runtime_state => |value| try schema.encodeRequestRuntimeState(buffer, value),
         .rename_workspace => |value| try schema.encodeRenameWorkspace(buffer, value),
         .set_pane_viewport => |value| try schema.encodeSetPaneViewport(buffer, value),

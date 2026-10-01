@@ -232,6 +232,13 @@ typedef struct {
   // Optional read-only submission delay. Zero admits a frame; GPU and
   // compositor availability remain native-owned. Querying spends no budget.
   uint64_t (*frame_delay_ns)(void *);
+  // Optional window-thread report of the refresh interval, in nanoseconds,
+  // of the display the window is on. Report it once the window is on a
+  // display and again whenever the display or its rate changes.
+  void (*display_interval)(void *, uint64_t);
+  // Optional read-only interval the window presents frames at: the display's,
+  // or longer under a configured cap. Zero means no answer yet.
+  uint64_t (*frame_interval_ns)(void *);
 
   int (*window_title)(void *, telar_gui_window_title *);
   // Window-thread notification after a surface acquires usable geometry.

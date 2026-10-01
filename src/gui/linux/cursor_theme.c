@@ -5,16 +5,7 @@
 #include <string.h>
 #include <wayland-cursor.h>
 
-#define OUTPUT_LIMIT 32
 #define SCALE_LIMIT 8
-
-struct cursor_output {
-    struct wl_output *handle;
-    struct telar_cursor_theme *owner;
-    uint32_t global;
-    int32_t scale;
-    bool entered;
-};
 
 struct cursor_image {
     struct wl_buffer *buffer;
@@ -26,7 +17,10 @@ struct telar_cursor_theme {
     struct wl_shm *shm;
     struct wl_surface *surface;
     struct wl_cursor_theme *theme;
-    struct cursor_output outputs[OUTPUT_LIMIT];
+    // Borrowed from the window, which outlives the theme.
+    telar_outputs *outputs;
+    // The outputs the cursor surface entered.
+    telar_output_set set;
     struct cursor_image images[TELAR_CURSOR_SHAPES];
     uint32_t compositor_global, shm_global, shape;
     int32_t size, scale, loaded_scale, attempted_scale, preferred_scale;
@@ -41,10 +35,10 @@ static void update_scale(telar_cursor_theme *self) {
     int32_t scale = self->preferred_scale;
     if (scale == 0) {
         scale = 1;
-        for (size_t i = 0; i < OUTPUT_LIMIT; i++) {
-            const struct cursor_output *output = &self->outputs[i];
-            if (output->entered && output->scale > scale) {
-                scale = output->scale;
+        for (size_t i = 0; i < TELAR_OUTPUT_LIMIT; i++) {
+            const telar_output *output = &self->outputs->slots[i];
+            if ((self->set.entered & ((uint32_t)1 << i)) && bounded_scale(output->scale) > scale) {
+                scale = bounded_scale(output->scale);
             }
         }
     }
@@ -56,49 +50,24 @@ static void update_scale(telar_cursor_theme *self) {
     }
 }
 
-static void output_geometry(void *data, struct wl_output *output, int32_t x, int32_t y, int32_t width, int32_t height, int32_t subpixel, const char *make, const char *model, int32_t transform) {
-    (void)data; (void)output; (void)x; (void)y; (void)width; (void)height;
-    (void)subpixel; (void)make; (void)model; (void)transform;
-}
-
-static void output_mode(void *data, struct wl_output *output, uint32_t flags, int32_t width, int32_t height, int32_t refresh) {
-    (void)data; (void)output; (void)flags; (void)width; (void)height; (void)refresh;
-}
-
-static void output_done(void *data, struct wl_output *output) {
-    (void)output;
-    struct cursor_output *self = data;
-    update_scale(self->owner);
-}
-
-static void output_scale(void *data, struct wl_output *output, int32_t factor) {
-    (void)output;
-    struct cursor_output *self = data;
-    self->scale = bounded_scale(factor);
-}
-
-static const struct wl_output_listener output_listener = {
-    .geometry = output_geometry, .mode = output_mode, .done = output_done, .scale = output_scale,
-};
-
-static void surface_output(telar_cursor_theme *self, struct wl_output *handle, bool entered) {
-    for (size_t i = 0; i < OUTPUT_LIMIT; i++) {
-        if (self->outputs[i].handle == handle) {
-            self->outputs[i].entered = entered;
-            update_scale(self);
-            return;
-        }
-    }
+static void outputs_changed(void *data) {
+    update_scale(data);
 }
 
 static void surface_enter(void *data, struct wl_surface *surface, struct wl_output *output) {
     (void)surface;
-    surface_output(data, output, true);
+    telar_cursor_theme *self = data;
+    if (telar_outputs_enter(self->outputs, &self->set, output)) {
+        update_scale(self);
+    }
 }
 
 static void surface_leave(void *data, struct wl_surface *surface, struct wl_output *output) {
     (void)surface;
-    surface_output(data, output, false);
+    telar_cursor_theme *self = data;
+    if (telar_outputs_leave(self->outputs, &self->set, output)) {
+        update_scale(self);
+    }
 }
 
 #ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
@@ -122,21 +91,16 @@ static const struct wl_surface_listener surface_listener = {
 #endif
 };
 
-static void destroy_output(struct cursor_output *output) {
-    if (output->handle != NULL) {
-        if (wl_output_get_version(output->handle) >= WL_OUTPUT_RELEASE_SINCE_VERSION) {
-            wl_output_release(output->handle);
-        } else {
-            wl_output_destroy(output->handle);
-        }
-    }
-
-    *output = (struct cursor_output){0};
-}
-
-telar_cursor_theme *telar_cursor_theme_create(void) {
+telar_cursor_theme *telar_cursor_theme_create(telar_outputs *outputs) {
     telar_cursor_theme *self = calloc(1, sizeof *self);
     if (self == NULL) {
+        return NULL;
+    }
+
+    self->outputs = outputs;
+    self->set = (telar_output_set){.changed = outputs_changed, .data = self};
+    if (!telar_outputs_watch(outputs, &self->set)) {
+        free(self);
         return NULL;
     }
 
@@ -167,22 +131,6 @@ void telar_cursor_theme_global(telar_cursor_theme *self, const telar_registry_gl
         self->shm = wl_registry_bind(global->registry, global->name, &wl_shm_interface, 1);
         self->shm_global = global->name;
         self->attempted_scale = 0;
-    } else if (!strcmp(global->interface, wl_output_interface.name)) {
-        for (size_t i = 0; i < OUTPUT_LIMIT; i++) {
-            struct cursor_output *output = &self->outputs[i];
-            if (output->handle == NULL) {
-                output->handle = wl_registry_bind(global->registry, global->name, &wl_output_interface, global->version < 3 ? global->version : 3);
-                if (output->handle == NULL) {
-                    return;
-                }
-
-                output->global = global->name;
-                output->scale = 1;
-                output->owner = self;
-                wl_output_add_listener(output->handle, &output_listener, output);
-                break;
-            }
-        }
     }
 }
 
@@ -193,9 +141,7 @@ static void discard_surface(telar_cursor_theme *self) {
     }
 
     self->preferred_scale = 0;
-    for (size_t i = 0; i < OUTPUT_LIMIT; i++) {
-        self->outputs[i].entered = false;
-    }
+    self->set.entered = 0;
 
     self->attempted_scale = 0;
     self->applied = false;
@@ -220,14 +166,6 @@ void telar_cursor_theme_remove(telar_cursor_theme *self, uint32_t name) {
         self->loaded_scale = 0;
         wl_shm_destroy(self->shm);
         self->shm = NULL;
-    }
-
-    for (size_t i = 0; i < OUTPUT_LIMIT; i++) {
-        if (self->outputs[i].handle != NULL && self->outputs[i].global == name) {
-            destroy_output(&self->outputs[i]);
-            update_scale(self);
-            break;
-        }
     }
 }
 
@@ -330,9 +268,7 @@ void telar_cursor_theme_destroy(telar_cursor_theme *self) {
         wl_cursor_theme_destroy(self->theme);
     }
 
-    for (size_t i = 0; i < OUTPUT_LIMIT; i++) {
-        destroy_output(&self->outputs[i]);
-    }
+    telar_outputs_unwatch(self->outputs, &self->set);
 
     if (self->shm != NULL) {
         wl_shm_destroy(self->shm);

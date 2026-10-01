@@ -97,7 +97,7 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
     });
     try writer.print("\"input_events\":{d},\"input_bytes\":{d},\"key_lease_overflows\":{d},\"mouse_events\":{d}," ++
         "\"server_messages\":{d},\"server_bytes\":{d},\"graphics_messages\":{d},\"graphics_bytes\":{d}," ++
-        "\"graphics_images\":{d},\"graphics_textures\":{d},\"graphics_upload_avg_us\":{d},\"graphics_upload_max_us\":{d},\"graphics_presented\":{d},\"graphics_gpu_bytes\":{d},\"graphics_resyncs\":{d},\"frames\":{d},\"frame_cells\":{d},\"frame_spans\":{d},\"snapshots\":{d}," ++
+        "\"graphics_images\":{d},\"graphics_textures\":{d},\"graphics_upload_avg_us\":{d},\"graphics_upload_max_us\":{d},\"graphics_presented\":{d},\"graphics_gpu_bytes\":{d},\"graphics_resyncs\":{d},\"presentations\":{d},\"frames\":{d},\"frame_cells\":{d},\"frame_spans\":{d},\"snapshots\":{d}," ++
         "\"decode_avg_us\":{d},\"decode_max_us\":{d},\"apply_avg_us\":{d},\"apply_max_us\":{d}," ++
         "\"input_enqueue_avg_us\":{d},\"input_enqueue_max_us\":{d}," ++
         "\"rss_bytes\":{d},\"lua_used\":{d},\"lua_limit\":{d}}}\n", .{
@@ -116,6 +116,7 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         metrics.graphics_presented,
         metrics.graphics_gpu_bytes,
         metrics.graphics_resyncs,
+        metrics.presentations,
         metrics.frames,
         metrics.frame_cells,
         metrics.frame_spans,
@@ -176,6 +177,7 @@ test "a telemetry line reports the counters and the client state" {
         .started_ns = 0,
         .key_lease_overflows = 3,
         .frames = 5,
+        .presentations = 7,
     };
     var buffer: [TelemetryState.buffer_size]u8 = undefined;
     const line = try format(&buffer, .{
@@ -201,6 +203,7 @@ test "a telemetry line reports the counters and the client state" {
     try std.testing.expect(std.mem.indexOf(u8, line, "\"outbox_coalesced_layout\":2") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"key_lease_overflows\":3") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"frames\":5") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"presentations\":7") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"lua_limit\":1024") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"rss_bytes\":") != null);
 }

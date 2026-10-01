@@ -1,6 +1,7 @@
 const core = @import("telar-core");
 const root = @import("../environment/environment.zig");
 const HostAppearance = @import("HostAppearance.zig").HostAppearance;
+const pacing = @import("pacing");
 const std = @import("std");
 const HostCapabilities = @This();
 
@@ -12,6 +13,9 @@ cell_height_px: u32 = 0,
 pointer_pixels: root.Support = .unknown,
 appearance: HostAppearance = .unknown,
 terminal_colors: core.TerminalColors = .{},
+/// The cadence the host presents frames at, within the wire bounds. The
+/// runtime paces this client's cell frames to it.
+frame_interval_ns: u64 = pacing.pace.default_interval,
 
 /// Resolves one cell size, preferring the host's explicit cell report.
 ///

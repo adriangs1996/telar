@@ -1,5 +1,6 @@
 #pragma once
 #include <stdbool.h>
+#include "outputs.h"
 #include "registry.h"
 
 typedef struct telar_cursor_theme telar_cursor_theme;
@@ -8,7 +9,9 @@ typedef struct {
     uint32_t serial, shape;
 } telar_cursor_request;
 
-telar_cursor_theme *telar_cursor_theme_create(void);
+// Follows the outputs of `outputs` its surface enters; the window owns the
+// table and outlives the theme.
+telar_cursor_theme *telar_cursor_theme_create(telar_outputs *outputs);
 void telar_cursor_theme_global(telar_cursor_theme *, const telar_registry_global *);
 void telar_cursor_theme_remove(telar_cursor_theme *, uint32_t name);
 void telar_cursor_theme_apply(telar_cursor_theme *, const telar_cursor_request *);

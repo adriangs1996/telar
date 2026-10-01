@@ -2,9 +2,11 @@
 #define TELAR_INPUT_H
 #include <wayland-client.h>
 #include "../native/telar_gui.h"
+#include "outputs.h"
 #include "registry.h"
 typedef struct telar_input telar_input;
-telar_input *telar_input_create(void *context, const telar_gui_callbacks *callbacks);
+// `outputs` is the window's output table; it outlives the input.
+telar_input *telar_input_create(void *context, const telar_gui_callbacks *callbacks, telar_outputs *outputs);
 int telar_input_clipboard(telar_input *, const uint8_t *bytes, size_t len);
 void telar_input_fullscreen(telar_input *, void *context, void (*toggle)(void *));
 void telar_input_global(telar_input *, const telar_registry_global *);

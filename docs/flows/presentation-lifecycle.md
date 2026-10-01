@@ -50,7 +50,8 @@ prepared work adds no frame, including while its GPU work is pending. A newer
 observation replaces the desired version; there is no frame queue.
 
 The native loop asks `GuiAdapter.frameDelayNs` before drawing. `FramePacer`
-keeps the window's frame cadence and gives admitted pane input a bounded grace,
+keeps the window's frame cadence at its display's refresh interval
+([frame pacing](frame-pacing.md)) and gives admitted pane input a bounded grace,
 so a frame carrying that pane's echo need not wait for the next interval. The
 cursor clock and widget animations report their own wakeups through
 `wakeupAfter`.

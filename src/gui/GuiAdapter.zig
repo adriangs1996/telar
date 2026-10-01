@@ -397,6 +397,7 @@ pub fn draw(self: *GuiAdapter, viewport: native.Viewport) !u64 {
         self.cursor_clock.config = self.renderer.config.cursor;
         self.cursor_clock.reset(self.now());
         self.limited = null;
+        try self.paceFrames();
     }
 
     if (limit_reached.holdsFrame(self, viewport)) {
@@ -515,6 +516,40 @@ pub fn frameDelayNs(self: *GuiAdapter) u64 {
     return deadline -| now_ns;
 }
 
+/// Takes the refresh interval of the display the window is on and paces
+/// frames to it. Zero, from a display that reports no rate, keeps the last.
+/// Example: `try gui.observeDisplay(std.time.ns_per_s / 120);`
+pub fn observeDisplay(self: *GuiAdapter, interval_ns: u64) !void {
+    if (interval_ns == 0) {
+        return;
+    }
+
+    self.driver.frame_pacer.display_interval_ns = interval_ns;
+    try self.paceFrames();
+    try self.deliverHostEffects();
+}
+
+// Paces the window at its display's rate under the configured cap and,
+// once started, tells every runtime the window shows when that changes.
+fn paceFrames(self: *GuiAdapter) !void {
+    const interval = self.driver.frame_pacer.pace(self.renderer.config.max_fps, &self.chrome.animation);
+    const own = window_machines.window(self);
+    if (!self.started or interval == own.model.host.host_capabilities.frame_interval_ns) {
+        return;
+    }
+
+    var capabilities = own.model.host.host_capabilities;
+    capabilities.frame_interval_ns = interval;
+    _ = try client.host_resize.applyHostUpdate(
+        own,
+        .{
+            .size = own.model.host.host_size,
+            .capabilities = capabilities,
+        },
+    );
+    try window_machines.shareHost(self);
+}
+
 /// Copies a changed title into native-owned output storage.
 /// Example: `const changed = try gui.windowTitle(out);`
 pub fn windowTitle(self: *GuiAdapter, out: *native.WindowTitle) !bool {
@@ -560,6 +595,7 @@ fn start(self: *GuiAdapter, colors: core.TerminalColors) !void {
     capabilities.terminal_colors = colors;
     capabilities.images = image_support;
     capabilities.pointer_pixels = .supported;
+    capabilities.frame_interval_ns = self.driver.frame_pacer.pace(self.renderer.config.max_fps, &self.chrome.animation);
 
     _ = try client.host_resize.applyHostUpdate(
         self.app,
@@ -583,7 +619,7 @@ fn start(self: *GuiAdapter, colors: core.TerminalColors) !void {
     if (self.app.runtime_transport.connection == null) {
         try client.runtime_link.start(self.app);
     } else {
-        try self.app.model.to_runtime.pushBootstrap(self.app.bootstrap.?);
+        try self.app.model.to_runtime.pushBootstrap(self.app.bootstrap.?, self.app.model.host.host_capabilities.frame_interval_ns);
         try client.runtime_io.startRuntimeIo(self.app);
     }
 
@@ -1993,6 +2029,10 @@ fn complete(self: *GuiAdapter, token: u64, delivered: bool) !void {
     widget_routing.reconcileFocus(self);
     self.pointer.hover.present(delivered);
     const delivery = self.app.presentation.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
+    if (delivered) {
+        self.app.telemetry.metrics.presentations += 1;
+    }
+
     try client.presentation_delivery.apply(&self.app.model, delivery.commit);
     if (self.pending_machine) |slot| {
         try window_machines.select(self, slot);

@@ -7,6 +7,7 @@
 #include <string.h>
 #include "cursor.c"
 #include "cursor_theme.c"
+#include "outputs.c"
 #include "pointer.c"
 
 struct fake_proxy {
@@ -161,15 +162,33 @@ static uint32_t shape(void *context) {
     return desired_shape;
 }
 
+// The window's output table, which binds every wl_output once.
+static telar_outputs outputs;
+
+// Delivers a global the way the window does: to the output table, then to input.
 static void global(telar_pointer *self, const char *interface, uint32_t name) {
     const telar_registry_global event = {.registry = (void *)proxy_new(&wl_registry_interface, 1), .name = name, .version = 6, .interface = interface};
+    telar_outputs_global(&outputs, &event);
     telar_pointer_global(self, &event);
     wl_proxy_destroy((void *)event.registry);
 }
 
+static void remove_global(telar_pointer *self, uint32_t name) {
+    telar_outputs_remove(&outputs, name);
+    telar_pointer_remove(self, name);
+}
+
+// An output reports a new scale, completed by `done` as from version 2.
+static void rescale(telar_output *output, int32_t factor) {
+    output_scale(output, output->handle, factor);
+    output_done(output, output->handle);
+}
+
 static telar_pointer *create(bool protocol) {
+    telar_outputs_deinit(&outputs);
+    outputs = (telar_outputs){0};
     telar_gui_callbacks callbacks = {.input = capture, .pointer_shape = shape};
-    telar_pointer *self = telar_pointer_create(NULL, &callbacks);
+    telar_pointer *self = telar_pointer_create(NULL, &callbacks, &outputs);
     assert(self != NULL);
     global(self, wl_compositor_interface.name, 1);
     global(self, wl_shm_interface.name, 2);
@@ -253,8 +272,8 @@ static void verify_fallback(void) {
 
     assert(theme_lookups == lookups && image_preparations == preparations && theme_loads == 1);
     telar_cursor_theme *theme = self->cursor->theme;
-    output_scale(&theme->outputs[0], theme->outputs[0].handle, 2);
-    surface_enter(theme, theme->surface, theme->outputs[0].handle);
+    rescale(&outputs.slots[0], 2);
+    surface_enter(theme, theme->surface, outputs.slots[0].handle);
     telar_pointer_update(self);
     assert(theme_loads == 2 && last_scale == 2 && last_hotspot == 6);
 #ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
@@ -266,12 +285,12 @@ static void verify_fallback(void) {
     commits = surface_commits;
     telar_pointer_update(self);
     assert(surface_commits == commits && last_serial == 51);
-    telar_pointer_remove(self, 4);
+    remove_global(self, 4);
     telar_pointer_update(self);
     assert(surface_commits == commits + 1 && last_serial == 51);
     leave(self, self->handle, 91, NULL);
     commits = surface_commits;
-    telar_pointer_remove(self, 3);
+    remove_global(self, 3);
     telar_pointer_update(self);
     assert(surface_commits == commits);
     enter(self, self->handle, 92, NULL, 0, 0);
@@ -280,7 +299,7 @@ static void verify_fallback(void) {
     self->callbacks.pointer_shape = NULL;
     telar_pointer_update(self);
     assert(theme->shape == 0);
-    telar_pointer_remove(self, 2);
+    remove_global(self, 2);
     commits = surface_commits;
     telar_pointer_update(self);
     assert(surface_commits == commits);
@@ -303,8 +322,8 @@ static void verify_legacy(void) {
     enter(self, self->handle, 123, NULL, 0, 0);
     telar_pointer_update(self);
     assert(theme->loaded_scale == 1);
-    output_scale(&theme->outputs[0], theme->outputs[0].handle, 2);
-    surface_enter(theme, theme->surface, theme->outputs[0].handle);
+    rescale(&outputs.slots[0], 2);
+    surface_enter(theme, theme->surface, outputs.slots[0].handle);
     telar_pointer_update(self);
     assert(theme->loaded_scale == 1 && last_serial == 123);
     event_count = 0;
@@ -369,12 +388,35 @@ static void verify_scroll(void) {
     telar_pointer_destroy(self);
 }
 
+// A surface's set never counts an output bound later into a freed slot, and
+// an enter naming an output already withdrawn (NULL) changes nothing.
+static void verify_output_slots(void) {
+    telar_pointer *self = create(false);
+    telar_output_set set = {0};
+    assert(telar_outputs_watch(&outputs, &set));
+    struct wl_output *first = outputs.slots[0].handle;
+    assert(telar_outputs_enter(&outputs, &set, first) && set.entered == 1);
+    assert(!telar_outputs_enter(&outputs, &set, NULL) && set.entered == 1);
+    remove_global(self, 3);
+    assert(set.entered == 0 && outputs.slots[0].handle == NULL);
+    global(self, wl_output_interface.name, 6);
+    assert(outputs.slots[0].handle != NULL && outputs.slots[0].global == 6 && set.entered == 0);
+    assert(outputs.slots[0].scale == 1 && outputs.slots[0].refresh_mhz == 0);
+    assert(!telar_outputs_enter(&outputs, &set, NULL) && set.entered == 0);
+    output_mode(&outputs.slots[0], outputs.slots[0].handle, WL_OUTPUT_MODE_CURRENT, 1920, 1080, 120000);
+    assert(outputs.slots[0].refresh_mhz == 120000);
+    telar_outputs_unwatch(&outputs, &set);
+    telar_pointer_destroy(self);
+}
+
 int main(void) {
     assert(setenv("XCURSOR_SIZE", "24", 1) == 0);
     verify_protocol();
     verify_fallback();
     verify_legacy();
     verify_scroll();
+    verify_output_slots();
+    telar_outputs_deinit(&outputs);
     for (size_t i = 0; i < proxy_count; i++) {
         assert(!proxies[i].alive);
     }

@@ -4,9 +4,15 @@ const std = @import("std");
 const Transition = @import("Transition.zig");
 const Clock = @This();
 
-pub const frame_interval_ns = std.time.ns_per_s / 60 + 1;
+/// The cadence of a clock no host has paced yet, rounded up so a frame asked
+/// for one interval ahead never lands before the next 60 Hz frame.
+pub const default_interval_ns = std.time.ns_per_s / 60 + 1;
 
 now_ns: u64 = 0,
+/// How far ahead a running transition asks for its next frame: the window's
+/// frame interval, so motion advances once per presented frame at the
+/// display's rate.
+interval_ns: u64 = default_interval_ns,
 deadline_ns: ?u64 = null,
 waiting_for_frame: bool = false,
 
@@ -30,7 +36,7 @@ pub fn sample(self: *Clock, transition: Transition) f32 {
     if (self.now_ns < transition.started_ns) {
         self.requestAt(transition.started_ns);
     } else if (!transition.finished(self.now_ns)) {
-        self.requestAt(@min(self.now_ns +| frame_interval_ns, transition.started_ns +| transition.duration_ns));
+        self.requestAt(@min(self.now_ns +| self.interval_ns, transition.started_ns +| transition.duration_ns));
     }
 
     return transition.value(self.now_ns);
@@ -142,4 +148,15 @@ test "delayed transitions request only their start including instantaneous chang
     clock.begin(transition.started_ns);
     try std.testing.expectEqual(@as(f32, 1), clock.sample(transition));
     try std.testing.expectEqual(@as(u32, 0), clock.wakeupAfter(clock.now_ns));
+}
+
+test "a transition asks for its next frame one window interval ahead" {
+    const promotion_interval_ns = std.time.ns_per_s / 120;
+    var clock: Clock = .{
+        .interval_ns = promotion_interval_ns,
+    };
+    const transition: Transition = .{ .from = 0, .to = 1, .started_ns = 0, .duration_ns = 200 * std.time.ns_per_ms };
+    clock.begin(0);
+    _ = clock.sample(transition);
+    try std.testing.expectEqual(@as(?u64, promotion_interval_ns), clock.deadline_ns);
 }

@@ -44,6 +44,7 @@ pub const Message = union(enum) {
     graphics_credit: core.GraphicsCredit,
     configure_graphics: core.ConfigureGraphics,
     configure_terminal_colors: core.TerminalColors,
+    configure_frame_interval: core.ConfigureFrameInterval,
     request_runtime_state: core.RequestRuntimeState,
     create_workspace: OwnedCreateWorkspace,
     rename_workspace: OwnedWorkspaceRename,

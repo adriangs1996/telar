@@ -61,6 +61,9 @@ owns every branch shared with host resizing:
 
 - changed terminal colors are queued to the runtime as
   `configure_terminal_colors` once startup is opening;
+- a changed frame interval is queued as `configure_frame_interval` the same
+  way, so the runtime paces this client's cell frames to its display
+  ([frame pacing](frame-pacing.md));
 - a changed appearance writes `model.theme` from the configured light or dark
   theme unless `--theme` locked it;
 - an image-support transition calls `pane_graphics.syncFallbacks`, which reads
