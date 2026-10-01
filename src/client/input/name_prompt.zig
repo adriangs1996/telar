@@ -21,7 +21,17 @@ const workspace_creation = @import("../workspace/workspace_creation.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 const workspace_rename = @import("../workspace/workspace_rename.zig");
 const agent_peek = @import("../agents/agent_peek.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 const Client = @import("../execution/Client.zig");
+
+/// Reports the limit the prompt's text last stopped at, if any: a
+/// keystroke, paste or initial name that did not fit its bound.
+/// Example: `name_prompt.reportClipped(client);`
+pub fn reportClipped(client: *Client) void {
+    if (client.model.name_prompt.takeClipped()) |reach| {
+        limit_reached.report(client, reach);
+    }
+}
 
 /// Opens the command palette with `prefix` already typed. A `?` palette
 /// starts with a cleared suggestion, like `suggestions.begin`.
@@ -97,6 +107,7 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
     const paths_request = client.model.path_picker.pending_request;
     const command = path_picker.orient(&client.model, name_prompts.commandFor(&input));
     const outcome = if (command) |value| try applyPromptCommand(client, value) else .unchanged;
+    reportClipped(client);
     try refreshPromptHistory(&client.model, before);
     try refreshPromptPaths(
         &client.model,

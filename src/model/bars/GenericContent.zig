@@ -7,28 +7,32 @@ const Node = @import("Node.zig");
 const NodeInput = @import("NodeInput.zig");
 const SegmentInput = @import("SegmentInput.zig");
 const bar_text = @import("bar_text.zig");
+const ContentBounds = @import("ContentBounds.zig");
+const ContentDemand = @import("ContentDemand.zig");
+const NodeKind = @import("NodeKind.zig").NodeKind;
 const std = @import("std");
 
-const max_samples = 64;
 const max_url_bytes = 1024;
-const max_node_samples = 32;
+const max_node_capacity = Node.max_list_nodes;
 
-/// Example: `const Content = GenericContent.Type(32, 1024, 4);`
-pub fn Type(comptime max_nodes: u8, comptime max_text: u16, comptime max_actions: u8) type {
+/// Example: `const Content = GenericContent.Type(.{ .nodes = 64, .text = 4096, .actions = 32, .samples = 256 });`
+pub fn Type(comptime bounds: ContentBounds) type {
+    comptime {
+        std.debug.assert(bounds.nodes <= max_node_capacity and bounds.actions <= max_node_capacity);
+    }
+
     return struct {
         const Self = @This();
 
-        pub const node_capacity = max_nodes;
-        pub const text_capacity = max_text;
-        pub const action_capacity = max_actions;
+        pub const capacity = bounds;
 
-        text_bytes: [max_text]u8 = @splat(0),
+        text_bytes: [bounds.text]u8 = @splat(0),
         text_len: u16 = 0,
-        nodes: [max_nodes]Node = @splat(.{}),
+        nodes: [bounds.nodes]Node = @splat(.{}),
         node_count: u8 = 0,
-        sample_bytes: [max_samples]u8 = @splat(0),
+        sample_bytes: [bounds.samples]u8 = @splat(0),
         sample_len: u16 = 0,
-        actions: [max_actions]Action = @splat(.close_panel),
+        actions: [bounds.actions]Action = @splat(.close_panel),
         action_count: u8 = 0,
 
         /// Copies one validated component and returns its index, which
@@ -39,7 +43,7 @@ pub fn Type(comptime max_nodes: u8, comptime max_text: u16, comptime max_actions
         /// _ = try content.append(.{ .kind = .meter, .parent = group, .text = "5h", .value = 220 });
         /// ```
         pub fn append(self: *Self, input: NodeInput) !u8 {
-            if (self.node_count == max_nodes) {
+            if (self.node_count == bounds.nodes) {
                 return error.TooManyBarComponents;
             }
 
@@ -47,7 +51,7 @@ pub fn Type(comptime max_nodes: u8, comptime max_text: u16, comptime max_actions
             if (input.value > Node.full_scale or (input.marker orelse 0) > Node.full_scale) {
                 return error.InvalidBarValue;
             }
-            if (input.samples.len > max_node_samples) {
+            if (input.samples.len > Node.max_samples) {
                 return error.TooManyBarSamples;
             }
             if (input.url.len != 0 and !validUrl(input.url)) {
@@ -57,13 +61,13 @@ pub fn Type(comptime max_nodes: u8, comptime max_text: u16, comptime max_actions
             // Reserve every range before copying, so a rejected component
             // leaves the list exactly as it was.
             const text_needed = input.text.len + input.detail.len + input.url.len;
-            if (@as(usize, self.text_len) + text_needed > max_text) {
+            if (@as(usize, self.text_len) + text_needed > bounds.text) {
                 return error.BarTextTooLong;
             }
-            if (@as(usize, self.sample_len) + input.samples.len > max_samples) {
+            if (@as(usize, self.sample_len) + input.samples.len > bounds.samples) {
                 return error.TooManyBarSamples;
             }
-            if (input.action != null and self.action_count == max_actions) {
+            if (input.action != null and self.action_count == bounds.actions) {
                 return error.TooManyBarActions;
             }
             for ([_][]const u8{ input.text, input.detail }) |value| {
@@ -118,6 +122,160 @@ pub fn Type(comptime max_nodes: u8, comptime max_text: u16, comptime max_actions
                 .icon = input.icon,
                 .style = input.style,
             });
+        }
+
+        /// Empties the list without touching its storage, so a large list
+        /// is reused without rewriting every byte.
+        /// Example: `staged.clear();`
+        pub fn clear(self: *Self) void {
+            self.text_len = 0;
+            self.node_count = 0;
+            self.sample_len = 0;
+            self.action_count = 0;
+        }
+
+        /// The borrowed values of one stored component, as `append` takes
+        /// them; `parent` still names this list's index.
+        /// Example: `_ = try other.append(content.inputAt(index));`
+        pub fn inputAt(self: *const Self, index: u8) NodeInput {
+            const node = self.nodes[index];
+            return .{
+                .kind = node.kind,
+                .parent = node.parent,
+                .in_tooltip = node.in_tooltip,
+                .text = self.text(node.text),
+                .detail = self.text(node.detail),
+                .url = self.text(node.url),
+                .samples = self.samples(node),
+                .icon = node.icon,
+                .mark = node.mark,
+                .metric = node.metric,
+                .tone = node.tone,
+                .style = node.style,
+                .value = node.value,
+                .marker = node.marker,
+                .priority = node.priority,
+                .primary = node.primary,
+                .action = self.action(node),
+            };
+        }
+
+        /// Replaces this list with the components of `source`, a list of
+        /// any bounds, that fit this one. Components are chosen by
+        /// priority, highest first; a component never outranks its
+        /// container and is kept only with it; equal ranks keep document
+        /// order. The kept components stay in their document order, so a
+        /// source that fits is copied whole.
+        ///
+        /// `had_children` names the source's containers that had children
+        /// before the source was built, some perhaps left out already; null
+        /// takes them from the source.
+        ///
+        /// ```zig
+        /// content.keepFitting(generation.staged_content, null);
+        /// ```
+        pub fn keepFitting(self: *Self, source: anytype, had_children: ?*const [max_node_capacity]bool) void {
+            self.clear();
+            const count = source.node_count;
+            var rank: [max_node_capacity]u8 = undefined;
+            var order: [max_node_capacity]u8 = undefined;
+            for (source.slice(), 0..) |node, index| {
+                rank[index] = node.effectivePriority();
+                if (!node.isRoot()) {
+                    rank[index] = @min(rank[index], rank[node.parent]);
+                }
+
+                order[index] = @intCast(index);
+            }
+
+            std.sort.pdq(u8, order[0..count], &rank, outranks);
+            const empty = emptyContainers(source, had_children);
+            var kept: [max_node_capacity]bool = @splat(false);
+            var budget: ContentDemand = .{};
+            for (order[0..count]) |index| {
+                const node = source.nodes[index];
+                if (empty[index] or (!node.isRoot() and !kept[node.parent])) {
+                    continue;
+                }
+
+                var next = budget;
+                next.add(source.inputAt(index));
+                if (!next.fits(bounds)) {
+                    continue;
+                }
+
+                kept[index] = true;
+                budget = next;
+            }
+
+            dropEmptyContainers(source, &kept, had_children);
+
+            var copied: [max_node_capacity]u8 = undefined;
+            for (0..count) |index| {
+                if (!kept[index]) {
+                    continue;
+                }
+
+                var value = source.inputAt(@intCast(index));
+                if (value.parent != Node.no_parent) {
+                    if (!kept[value.parent]) {
+                        kept[index] = false;
+                        continue;
+                    }
+
+                    value.parent = copied[value.parent];
+                }
+
+                copied[index] = self.append(value) catch {
+                    kept[index] = false;
+                    continue;
+                };
+            }
+        }
+
+        /// The containers that had children before `source` was built but
+        /// hold none in it, which the selection skips so they take no room.
+        fn emptyContainers(source: anytype, had_children: ?*const [max_node_capacity]bool) [max_node_capacity]bool {
+            var empty: [max_node_capacity]bool = if (had_children) |value| value.* else @splat(false);
+            for (source.slice()) |node| {
+                if (!node.isRoot()) {
+                    empty[node.parent] = false;
+                }
+            }
+
+            return empty;
+        }
+
+        /// Leaves out a kept container none of whose children were kept,
+        /// deepest first, so a group never shows empty. A container that had
+        /// no children stays.
+        fn dropEmptyContainers(source: anytype, kept: *[max_node_capacity]bool, known: ?*const [max_node_capacity]bool) void {
+            var had_children: [max_node_capacity]bool = if (known) |value| value.* else @splat(false);
+            var kept_children: [max_node_capacity]u8 = @splat(0);
+            for (source.slice(), 0..) |node, index| {
+                if (node.isRoot()) {
+                    continue;
+                }
+
+                had_children[node.parent] = true;
+                if (kept[index]) {
+                    kept_children[node.parent] += 1;
+                }
+            }
+
+            var index: usize = source.node_count;
+            while (index > 0) {
+                index -= 1;
+                if (!kept[index] or !had_children[index] or kept_children[index] != 0) {
+                    continue;
+                }
+
+                kept[index] = false;
+                const node = source.nodes[index];
+                if (!node.isRoot()) {
+                    kept_children[node.parent] -= 1;
+                }
+            }
         }
 
         pub fn text(self: *const Self, range: ContentRange) []const u8 {
@@ -241,7 +399,21 @@ fn validUrl(value: []const u8) bool {
     return std.mem.startsWith(u8, value, "https://") or std.mem.startsWith(u8, value, "http://");
 }
 
-const TestContent = Type(4, 64, 1);
+/// A higher rank first; equal ranks in document order.
+fn outranks(rank: *const [max_node_capacity]u8, left: u8, right: u8) bool {
+    if (rank[left] != rank[right]) {
+        return rank[left] > rank[right];
+    }
+
+    return left < right;
+}
+
+const TestContent = Type(.{
+    .nodes = 4,
+    .text = 64,
+    .actions = 1,
+    .samples = 64,
+});
 
 test "component lists copy text and reject a component without changing" {
     var content: TestContent = .{};
@@ -315,4 +487,133 @@ test "component urls accept only http destinations" {
     });
 
     try std.testing.expect(content.slice()[0].isActionable());
+}
+
+test "a larger list keeps its highest-priority components with their containers, in document order" {
+    var source: Type(.{
+        .nodes = 16,
+        .text = 256,
+        .actions = 4,
+        .samples = 64,
+    }) = .{};
+    _ = try source.append(.{
+        .kind = .label,
+        .text = "low",
+        .priority = 10,
+    });
+    const group = try source.append(.{
+        .kind = .group,
+        .priority = 90,
+        .action = .toggle_sidebar,
+    });
+    _ = try source.append(.{
+        .kind = .label,
+        .parent = group,
+        .text = "child",
+        // A child never outranks its group, so it is ranked 90, not 100.
+        .priority = 100,
+    });
+    _ = try source.append(.{
+        .kind = .label,
+        .text = "middle",
+        .priority = 50,
+    });
+    _ = try source.append(.{
+        .kind = .button,
+        .text = "go",
+        .action = .detach,
+        .priority = 85,
+    });
+
+    var content: TestContent = .{};
+    content.keepFitting(&source, null);
+
+    // The button needs a second action this list has no room for, so the
+    // next component that fits takes its place.
+    const nodes = content.slice();
+    try std.testing.expectEqual(@as(u8, 4), content.node_count);
+    try std.testing.expectEqualStrings("low", content.text(nodes[0].text));
+    try std.testing.expectEqual(NodeKind.group, nodes[1].kind);
+    try std.testing.expect(content.action(nodes[1]).? == .toggle_sidebar);
+    try std.testing.expectEqualStrings("child", content.text(nodes[2].text));
+    try std.testing.expectEqual(@as(u8, 1), nodes[2].parent);
+    try std.testing.expectEqualStrings("middle", content.text(nodes[3].text));
+}
+
+test "a list that fits is copied whole and a dropped container drops its children" {
+    var source: Type(.{
+        .nodes = 8,
+        .text = 256,
+        .actions = 2,
+        .samples = 64,
+    }) = .{};
+    const group = try source.append(.{
+        .kind = .group,
+        .priority = 5,
+    });
+    _ = try source.append(.{
+        .kind = .label,
+        .parent = group,
+        .text = "inside",
+        .priority = 99,
+    });
+    for (0..4) |_| {
+        _ = try source.append(.{
+            .kind = .label,
+            .text = "top",
+            .priority = 60,
+        });
+    }
+
+    var wide: Type(.{
+        .nodes = 8,
+        .text = 256,
+        .actions = 2,
+        .samples = 64,
+    }) = .{};
+    wide.keepFitting(&source, null);
+    try std.testing.expect(wide.eql(&source));
+
+    var content: TestContent = .{};
+    content.keepFitting(&source, null);
+    try std.testing.expectEqual(@as(u8, 4), content.node_count);
+    for (content.slice()) |node| {
+        try std.testing.expect(node.isRoot());
+        try std.testing.expectEqualStrings("top", content.text(node.text));
+    }
+}
+
+test "a group none of whose children fit is left out instead of shown empty" {
+    var source: Type(.{
+        .nodes = 8,
+        .text = 256,
+        .actions = 2,
+        .samples = 64,
+    }) = .{};
+    const group = try source.append(.{
+        .kind = .group,
+        .priority = 90,
+    });
+    _ = try source.append(.{
+        .kind = .label,
+        .parent = group,
+        .text = "x" ** 40,
+        .priority = 90,
+    });
+    _ = try source.append(.{
+        .kind = .label,
+        .text = "kept",
+        .priority = 10,
+    });
+
+    var content: Type(.{
+        .nodes = 4,
+        .text = 32,
+        .actions = 1,
+        .samples = 64,
+    }) = .{};
+    content.keepFitting(&source, null);
+
+    try std.testing.expectEqual(@as(u8, 1), content.node_count);
+    try std.testing.expectEqualStrings("kept", content.text(content.slice()[0].text));
 }

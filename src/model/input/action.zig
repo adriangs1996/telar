@@ -5,6 +5,7 @@
 //! allocation-free and never retains configuration-owned memory.
 
 const CommandTab = @import("CommandTab.zig");
+const CommandTabRef = @import("CommandTabRef.zig");
 const std = @import("std");
 const Notification = @import("Notification.zig");
 const CallbackRef = @import("CallbackRef.zig");
@@ -45,7 +46,7 @@ pub const Action = union(enum) {
     path_picker,
     suggest_command,
     enter_copy_mode,
-    command_tab: CommandTab,
+    command_tab: CommandTabRef,
     notification: Notification,
     lua_callback: CallbackRef,
     lua_expr: CallbackRef,
@@ -538,7 +539,16 @@ test "command tabs copy a bounded argv and derive their label" {
     try std.testing.expectError(error.InvalidCommand, CommandTab.init(&.{
         "",
     }, ""));
-    try std.testing.expectError(error.InvalidCommand, CommandTab.init(&.{
-        "a" ** 225,
+    _ = try CommandTab.init(&.{
+        "a" ** CommandTab.max_command_bytes,
+    }, "");
+    try std.testing.expectError(error.ArgumentsTooLarge, CommandTab.init(&.{
+        "a" ** CommandTab.max_command_bytes,
+        "b",
     }, ""));
+
+    const many: [CommandTab.max_arguments + 1][]const u8 = @splat("x");
+    const most = try CommandTab.init(many[0..CommandTab.max_arguments], "");
+    try std.testing.expectEqualStrings("x", most.argument(CommandTab.max_arguments - 1));
+    try std.testing.expectError(error.TooManyArguments, CommandTab.init(&many, ""));
 }

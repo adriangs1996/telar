@@ -359,6 +359,7 @@ pub fn failBackgroundJob(self: *Client, job: BackgroundJob, err: anyerror) !void
 /// try client.flush();
 /// ```
 pub fn flush(self: *Client) !void {
+    limit_reached.reportGeneration(self);
     const transport = &self.runtime_transport;
     if (transport.connection == null) {
         // Nothing reaches a runtime this client is not connected to; a new

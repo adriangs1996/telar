@@ -74,7 +74,8 @@ what scored the row.
 
 `PathPickerState` keeps the pane it inserts into, the pane's directory when
 it opened (the anchor), the root, and a page of at most 50 matches within
-16 KiB of path bytes. Only the newest request id replaces the page, and only
+50 KiB of path bytes, the longest page the runtime may send, so no match of
+a reply is left out. Only the newest request id replaces the page, and only
 for the current root. A ring of the last 32 ids recognises late failures of
 older requests; the newest one's failure shows in the footer.
 

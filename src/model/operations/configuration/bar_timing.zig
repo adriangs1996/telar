@@ -3,6 +3,7 @@ const model = @import("../../bars/model.zig");
 const BarConfiguration = @import("../../bars/BarConfiguration.zig");
 const State = @import("../../bars/BarUpdatesState.zig");
 const command_execution = @import("../../bars/command_execution.zig");
+const PanelSource = @import("../../bars/PanelSource.zig").PanelSource;
 
 pub const no_deadline: u64 = std.math.maxInt(u64);
 pub const position_count = @typeInfo(model.Position).@"enum".fields.len;
@@ -60,7 +61,7 @@ test "bar synchronization clears queued work but preserves one in-flight command
 
 test "an open panel runs its source at once and stops when it closes" {
     const configuration: BarConfiguration = .{};
-    const source: model.Source = .{ .command = .{ .generation = 4, .interval_ns = 500, .timeout_ms = 100 } };
+    const source: PanelSource = .{ .command = .{ .generation = 4, .interval_ns = 500, .timeout_ms = 100 } };
     var state: State = .{};
     state.startPanel(.{ .index = 0, .opening = 1 }, 1_000);
 

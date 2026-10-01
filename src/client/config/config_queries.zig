@@ -26,7 +26,7 @@ pub fn writeSection(snapshot: *const Snapshot, query: Query, writer: *std.Io.Wri
             try writer.print("{{\"index\":{d},\"prefixed\":{s},\"keys\":", .{ query.index, if (snapshot.bindings_prefixed[query.index]) "true" else "false" });
             try std.json.Stringify.value(binding.slice(), .{}, writer);
             try writer.writeAll(",\"action\":");
-            try writeAction(binding.action, writer);
+            try writeAction(snapshot, binding.action, writer);
             try writer.writeByte('}');
         },
         .runtime => {
@@ -37,13 +37,19 @@ pub fn writeSection(snapshot: *const Snapshot, query: Query, writer: *std.Io.Wri
     }
 }
 
-fn writeAction(action: data.Action, writer: *std.Io.Writer) !void {
+fn writeAction(snapshot: *const Snapshot, action: data.Action, writer: *std.Io.Writer) !void {
     try writer.writeAll("{\"type\":");
     try std.json.Stringify.value(@tagName(action), .{}, writer);
     try writer.writeAll(",\"value\":");
     switch (action) {
-        .command_tab => |command| {
-            var args: [32][]const u8 = undefined;
+        .command_tab => |reference| {
+            var loaded: data.CommandTab = undefined;
+            if (!snapshot.command_tabs.load(reference, &loaded)) {
+                return error.BindingNotFound;
+            }
+
+            const command = &loaded;
+            var args: [data.CommandTab.max_arguments][]const u8 = undefined;
             for (0..command.argument_count) |index| {
                 args[index] = command.argument(index);
             }
@@ -66,7 +72,9 @@ fn writeAction(action: data.Action, writer: *std.Io.Writer) !void {
 test "configuration queries serialize occupied bindings and reject missing indices" {
     var snapshot: Snapshot = .{};
     snapshot.binding_count = 1;
-    snapshot.bindings[0] = try data.config_values.ConfiguredBinding.init(&.{snapshot.prefix}, .{ .command_tab = try data.CommandTab.init(&.{ "echo", "ready" }, "test") });
+    const command = try data.CommandTab.init(&.{ "echo", "ready" }, "test");
+    const reference = try snapshot.command_tabs.add(0, &command);
+    snapshot.bindings[0] = try data.config_values.ConfiguredBinding.init(&.{snapshot.prefix}, .{ .command_tab = reference });
     snapshot.bindings_prefixed[0] = true;
     var buffer: [4096]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);

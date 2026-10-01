@@ -271,7 +271,8 @@ Once a flow reports its limit by name, the net no longer sees that error.
   paused graphics never spend that budget. An error after the message was
   applied, in the adapter, never resyncs.
 - The window's tables keep what fits instead of failing the frame. The
-  widget target registry (`gui.widgets.registry_capacity`, 1024), the band
+  widget target registry (`gui.widgets.registry_capacity`, twice the band
+  hit map rounded up to a power of two, 2048 today), the band
   and cell hit maps, the frame widget list, the editors, the published
   accessibility tree (256 nodes), the frame's and each cell's quads and the
   image placements (2048, the ones painted highest kept) each count what

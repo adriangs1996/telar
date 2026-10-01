@@ -1,6 +1,7 @@
 //! Configuration loading shared by CLI entrypoints and `telar config check`.
 
 const client = @import("telar-client");
+const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
 const Selection = @import("Selection.zig");
@@ -31,7 +32,7 @@ pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer:
         else => |other| return other,
     };
     var diagnostic: data.Diagnostic = .{};
-    return client.Generation.loadFile(.{
+    const generation = client.Generation.loadFile(.{
         .gpa = init.gpa,
         .io = init.io,
         .diagnostic = &diagnostic,
@@ -43,6 +44,21 @@ pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer:
         std.debug.print("telar config: {s}\n", .{diagnostic.message()});
         return err;
     };
+
+    _ = printReaches(generation);
+    return generation;
+}
+
+/// Prints every limit the configuration passed, which it loaded without
+/// the excess, and returns whether there was any. The client still reports
+/// them as notices once it runs.
+fn printReaches(generation: *const client.Generation) bool {
+    var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
+    for (generation.unreported.slice()) |reach| {
+        std.debug.print("telar config: limit reached, the excess was left out: {s}\n", .{reach.describe(&buffer, 1)});
+    }
+
+    return generation.unreported.count != 0;
 }
 
 /// Compiles a requested configuration, its plugin declarations and keymap,
@@ -86,6 +102,10 @@ pub fn runCheck(init: std.process.Init, options: ConfigCheckOptions) !void {
     const retired = client.retired_config.describe(generation.snapshot.retired, &retired_buffer);
     if (retired.len != 0) {
         std.debug.print("telar config: warning: {s}\n", .{retired});
+    }
+
+    if (printReaches(generation)) {
+        return error.ConfigLimitReached;
     }
 
     try std.Io.File.stdout().writeStreamingAll(init.io, "telar config: OK\n");

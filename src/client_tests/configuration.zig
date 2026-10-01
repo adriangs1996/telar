@@ -227,7 +227,7 @@ test "dynamic bar ticks commit current Lua content before paced presentation" {
     try std.testing.expectEqual(client.model.version().bars, client.presentation.prepared.model.bars);
 }
 
-test "a bar with five click actions says why it failed and its next render clears that" {
+test "a bar with more click actions than its slot holds keeps the highest-priority ones and reports the limit" {
     var harness: ClientHarness = undefined;
     try harness.init();
     defer harness.deinit();
@@ -236,14 +236,12 @@ test "a bar with five click actions says why it failed and its next render clear
     const adoption = try fixtures.testingConfigAdoptionSource(1,
         \\local telar = require("telar")
         \\local ui = telar.ui
-        \\local ticks = 0
         \\return { api_version = 2, client = { bars = {
         \\  bottom = {
         \\    left = telar.bar.dynamic({ every_ms = 100, render = function()
-        \\      ticks = ticks + 1
         \\      local items = {}
-        \\      for index = 1, ticks == 1 and 5 or 1 do
-        \\        items[#items + 1] = ui.group({ on_click = telar.action.toggle_sidebar(), ui.label("b" .. index) })
+        \\      for index = 1, 33 do
+        \\        items[#items + 1] = ui.group({ priority = index, mark = "claude", on_click = telar.action.toggle_sidebar() })
         \\      end
         \\      return items
         \\    end }),
@@ -257,15 +255,19 @@ test "a bar with five click actions says why it failed and its next render clear
         .bar_tick => |result| try client_module.bar_updates.handleTick(client, result),
         else => return error.UnexpectedEvent,
     }
-    try std.testing.expectEqualStrings("invalid telar.ui.group: TooManyBarActions", data.client_diagnostic.shown(&client.model).?);
-    try std.testing.expectEqual(data.bar_values.Position.bottom_left, client.model.bar_updates.failed_position.?);
+    try client.flush();
 
-    switch (try harness.receiveClient()) {
-        .bar_tick => |result| try client_module.bar_updates.handleTick(client, result),
-        else => return error.UnexpectedEvent,
-    }
+    const content = client.model.bars.layout.content(.bottom_left).?;
+    try std.testing.expectEqual(@as(u8, data.bar_values.max_bar_actions), content.action_count);
+    try std.testing.expectEqual(@as(u8, 2), content.slice()[0].priority);
     try std.testing.expect(data.client_diagnostic.shown(&client.model) == null);
     try std.testing.expect(client.model.bar_updates.failed_position == null);
+
+    const reaches = &client.model.limit_reaches;
+    const slot = reaches.find("bars.max_bar_actions").?;
+    try std.testing.expectEqual(@as(?u64, 33), reaches.requested[slot]);
+    try std.testing.expectEqual(@as(u64, data.bar_values.max_bar_actions), reaches.value[slot]);
+    try std.testing.expectEqual(@as(usize, 1), reaches.count);
 }
 
 test "a failed panel keeps its reason and a later render clears the diagnostic it left" {

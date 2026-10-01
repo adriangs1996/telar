@@ -53,6 +53,32 @@ pub fn report(client: *Client, reach: core.LimitReach) void {
     _ = notice(client, reach);
 }
 
+/// Reports the limits the active configuration generation reached where
+/// it could not report them itself: while it loaded, or inside a callback.
+/// One comparison when there are none; `Client.flush` calls it once per
+/// event.
+///
+/// ```zig
+/// limit_reached.reportGeneration(client);
+/// ```
+pub fn reportGeneration(client: *Client) void {
+    const generation = client.lua_generation orelse return;
+    const unreported = &generation.unreported;
+    if (unreported.count == 0) {
+        return;
+    }
+
+    for (unreported.slice()) |reach| {
+        report(client, reach);
+    }
+
+    if (unreported.dropped != 0) {
+        log.warn("{d} more configuration limits were reached and not listed", .{unreported.dropped});
+    }
+
+    unreported.clear();
+}
+
 /// The safety net of a presentation adapter: a limit error is reported
 /// under `limit`, or under its own name when null, with `route`, and the
 /// caller keeps what it has. Any other error returns; a host error is

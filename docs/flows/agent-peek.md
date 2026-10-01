@@ -30,7 +30,9 @@ Esc or submit -> agent_peek.settle -> PeekScreen.close
 ## Ownership
 
 Everything here is client state: the prompt, the peeked agent and up to
-4 KiB of its pane text. The actions are the same requests the coordinator
+16 KiB of its pane text: 16 rows of a 256-column pane at four bytes a
+cell. A longer read keeps its last bytes from a character on and reports
+`peek.text_bytes`. The actions are the same requests the coordinator
 sends, so the focus rule, the blocked refusal and the interrupt key apply
 unchanged; a refusal arrives as a request-failure notice. The GUI draws the
 pane rows in `PeekModal`.

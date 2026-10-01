@@ -10,6 +10,7 @@ const Scene = @import("../render/Scene.zig");
 const TerminalRenderer = @import("../render/TerminalRenderer.zig");
 const AccessibilityTree = @import("../native/AccessibilityTree.zig");
 const Id = @import("../widgets/interaction/Id.zig");
+const Registry = @import("../widgets/interaction/Registry.zig");
 
 test "a frame that stops at a limit keeps the previous frame and the window open" {
     const session = try TestSession.init();
@@ -253,7 +254,7 @@ test "a frame whose tables filled reports each by name and still draws" {
     limit_reached.reportFrame(gui, &scene);
     const reaches = &gui.app.model.limit_reaches;
     const registry = reaches.find("gui.widgets.registry_capacity").?;
-    try std.testing.expectEqual(@as(u64, 1024), reaches.value[registry]);
+    try std.testing.expectEqual(@as(u64, Registry.capacity), reaches.value[registry]);
     try std.testing.expect(reaches.find("chrome.band_hit_map_capacity") != null);
     try std.testing.expect(reaches.find("chrome.frame_widget_capacity") != null);
     try std.testing.expect(reaches.find("render.frame_quad_budget") != null);

@@ -5,9 +5,18 @@ creation, workspace rename and tab rename. `ClientModel.name_prompt` is its
 only authority. It owns the target identity, edit field, bracketed-paste state
 and `prompt` revision.
 
-The prompt runs on the interactive path. Its name field holds at most
-`core.max_tab_label_bytes`, editing allocates nothing and no borrowed text
-survives the synchronous submit effect.
+The prompt runs on the interactive path. Its field holds at most
+`name_prompt.max_field_bytes` (512, the suggestion request bound), and each
+target stops at the bound of what it submits (`name_prompt.limit`): a tab
+label at `core.max_tab_label_bytes`, a copy-mode search at
+`core.max_search_needle_bytes`, a path query at `core.max_path_query_bytes`,
+a history query at `OwnedHistoryQuery.max_query_bytes`, a machine label or
+SSH destination at its profile bound. A keystroke, paste or initial name
+that passes the bound keeps its start that fits, cut at a character, and the
+client reports the limit (`prompt.*_bytes`) with the limit notice; renaming
+a workspace whose name passes the field opens with the start that fits.
+Editing allocates nothing and no borrowed text survives the synchronous
+submit effect.
 
 Workspace creation is a two-field form (`Prompt.mode.create_workspace` holds
 a `WorkspaceForm`): the name and a working directory bounded by

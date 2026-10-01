@@ -131,10 +131,13 @@ keeps at most four notifications. A fifth replaces the oldest. When one
 agent snapshot turns more agents blocked, done or failed than the four fit,
 the first three alert by themselves and the rest fold into one "More agents
 changed" alert that counts them by status, so the batch never evicts its own
-alerts and no agent goes unannounced. Lua and plugin notifications past the
-bounds are refused whole when their effects are validated, like any other
-invalid effect. A card's accessible label keeps the start of the body when
-title and body do not fit its 128 bytes. The native GUI
+alerts and no agent goes unannounced. A notification action in the
+configuration or returned by a Lua callback with longer text is cut at a
+character and reports `notifications.max_title_bytes` or
+`notifications.max_message_bytes`; plugin notifications past the bounds are
+refused whole when their effects are validated, like any other invalid
+effect. A card's accessible label keeps the start of the body when title and
+body do not fit its 128 bytes. The native GUI
 shows at most two cards at a time, newest first, and suppresses a card whose
 target pane is already visible in the active tab. Items outside the visible
 set retain their original expiry time. Cards can be dismissed explicitly;

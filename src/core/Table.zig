@@ -3,14 +3,14 @@ const AgentManifest = @import("AgentManifest.zig");
 const agent_manifest = @import("agent_manifest.zig");
 const std = @import("std");
 const Signal = @import("Signal.zig");
-const Limit = @import("Limit.zig");
 const Table = @This();
 
-/// The limit a configuration reaches when it names more agents than the
-/// table holds, built-in ones included.
-pub const capacity_limit = Limit.declare("config.max_agent_manifests", "agents", types.max_agent_manifests);
+/// Manifests one table holds: every built-in agent plus the custom ones
+/// the wire's provider range allows, so built-ins never take a configured
+/// agent's room.
+pub const capacity = types.first_custom_agent_provider - 1 + types.max_agent_manifests;
 
-items: [types.max_agent_manifests]AgentManifest = undefined,
+items: [capacity]AgentManifest = undefined,
 count: u8 = 0,
 
 /// Registers one agent. Built-in names return their existing manifest so
@@ -31,11 +31,17 @@ pub fn add(self: *Table, name: []const u8) agent_manifest.AddError!*AgentManifes
         }
         return error.DuplicateName;
     }
-    if (self.count == types.max_agent_manifests) {
+    if (self.count == capacity) {
         return error.TooManyAgents;
     }
 
-    const provider: types.AgentProvider = agent_manifest.builtinProvider(name) orelse
+    const builtin = agent_manifest.builtinProvider(name);
+    // A custom index past the range would be refused on the wire.
+    if (builtin == null and self.customCount() == types.max_agent_manifests) {
+        return error.TooManyAgents;
+    }
+
+    const provider: types.AgentProvider = builtin orelse
         @enumFromInt(types.first_custom_agent_provider + self.customCount());
     const manifest = &self.items[self.count];
     manifest.* = .{ .provider = provider };
