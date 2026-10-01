@@ -1,8 +1,9 @@
 #pragma once
+#include "outputs.h"
 #include "registry.h"
 
 typedef struct telar_cursor telar_cursor;
-telar_cursor *telar_cursor_create(void);
+telar_cursor *telar_cursor_create(telar_outputs *outputs);
 void telar_cursor_global(telar_cursor *, const telar_registry_global *);
 void telar_cursor_remove(telar_cursor *, uint32_t name);
 void telar_cursor_attach(telar_cursor *, struct wl_pointer *);

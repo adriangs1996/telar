@@ -34,11 +34,13 @@ bool telar_frame_clock_request(telar_frame_clock *self, struct wl_surface *surfa
     if (!telar_frame_clock_ready(self)) {
         return false;
     }
+
     int64_t frame_ns = interval_ns > 0 && interval_ns <= INT64_MAX ? (int64_t)interval_ns : fallback_frame_ns;
     self->callback = wl_surface_frame(surface);
     if (self->callback == NULL) {
         return false;
     }
+
     wl_callback_add_listener(self->callback, &listener, self);
     int64_t now = now_ns();
     self->next_draw_ns = now - self->next_draw_ns >= frame_ns ? now + frame_ns : self->next_draw_ns + frame_ns;

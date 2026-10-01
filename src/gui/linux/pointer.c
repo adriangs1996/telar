@@ -173,12 +173,12 @@ static const struct wl_pointer_listener listener = {
     .axis_value120 = axis_value120,
 };
 
-telar_pointer *telar_pointer_create(void *context, const telar_gui_callbacks *callbacks) {
+telar_pointer *telar_pointer_create(void *context, const telar_gui_callbacks *callbacks, telar_outputs *outputs) {
     telar_pointer *self = calloc(1, sizeof *self);
     if (self != NULL) {
         self->context = context;
         self->callbacks = *callbacks;
-        self->cursor = telar_cursor_create();
+        self->cursor = telar_cursor_create(outputs);
         if (self->cursor == NULL) {
             free(self);
             return NULL;

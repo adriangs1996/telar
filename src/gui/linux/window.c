@@ -13,6 +13,7 @@
 #include "background_effect.h"
 #include "decoration.h"
 #include "display_rate.h"
+#include "outputs.h"
 #include "frame_clock.h"
 #include "frame_worker.h"
 #include "input.h"
@@ -35,6 +36,8 @@ typedef struct {
   telar_frame_worker *worker;
   bool dirty, in_flight;
   telar_frame_clock clock;
+  // Every wl_output, bound once; the cursor and the display rate follow it.
+  telar_outputs outputs;
   telar_display_rate rate;
   telar_background_effect background;
   telar_decoration decoration;
@@ -85,7 +88,7 @@ static void registry_global(void *data, struct wl_registry *registry,
   telar_input_global(self->input, &global);
   telar_background_effect_global(&self->background, name, interface);
   telar_decoration_global(&self->decoration, &global);
-  telar_display_rate_global(&self->rate, &global);
+  telar_outputs_global(&self->outputs, &global);
   if (strcmp(interface, wl_compositor_interface.name) == 0) {
     self->compositor = wl_registry_bind(
         registry, name, &wl_compositor_interface, version < 4 ? version : 4);
@@ -102,7 +105,7 @@ static void registry_global_remove(void *data, struct wl_registry *registry,
   telar_input_remove(self->input, name);
   telar_background_effect_remove(&self->background, name);
   telar_decoration_remove(&self->decoration, name);
-  telar_display_rate_remove(&self->rate, name);
+  telar_outputs_remove(&self->outputs, name);
 }
 
 static const struct wl_registry_listener registry_listener = {
@@ -240,6 +243,8 @@ static void destroy(window *self) {
   telar_background_effect_deinit(&self->background);
   telar_decoration_deinit(&self->decoration);
   telar_display_rate_deinit(&self->rate);
+  // After the input, whose cursor theme watches the table.
+  telar_outputs_deinit(&self->outputs);
   if (self->toplevel != NULL) {
     xdg_toplevel_destroy(self->toplevel);
   }
@@ -283,7 +288,7 @@ int telar_gui_run(const char *title, void *context,
   memset(&self, 0, sizeof self);
   self.context = context;
   self.callbacks = *callbacks;
-  self.input = telar_input_create(context, callbacks);
+  self.input = telar_input_create(context, callbacks, &self.outputs);
 
   if (self.input == NULL) {
     return -1;
@@ -313,7 +318,11 @@ int telar_gui_run(const char *title, void *context,
   }
 
   self.surface = wl_compositor_create_surface(self.compositor);
-  telar_display_rate_attach(&self.rate, self.surface);
+  if (!telar_display_rate_attach(&self.rate, &self.outputs, self.surface)) {
+    destroy(&self);
+    return -1;
+  }
+
   self.background.compositor = self.compositor;
   self.background.surface = self.surface;
   self.xdg_surface = xdg_wm_base_get_xdg_surface(self.shell, self.surface);

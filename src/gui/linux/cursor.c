@@ -20,13 +20,13 @@ static void ensure_device(telar_cursor *self) {
     }
 }
 
-telar_cursor *telar_cursor_create(void) {
+telar_cursor *telar_cursor_create(telar_outputs *outputs) {
     telar_cursor *self = calloc(1, sizeof *self);
     if (self == NULL) {
         return NULL;
     }
 
-    self->theme = telar_cursor_theme_create();
+    self->theme = telar_cursor_theme_create(outputs);
     if (self->theme == NULL) {
         free(self);
         return NULL;

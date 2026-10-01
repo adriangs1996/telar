@@ -304,7 +304,7 @@ static void ensure_device(telar_input *self) {
         wl_data_device_add_listener(self->device, &data_listener, self);
     }
 }
-telar_input *telar_input_create(void *context, const telar_gui_callbacks *callbacks) {
+telar_input *telar_input_create(void *context, const telar_gui_callbacks *callbacks, telar_outputs *outputs) {
     telar_input *self = calloc(1, sizeof *self);
     if (self == NULL) return NULL;
     self->context = context;
@@ -315,7 +315,7 @@ telar_input *telar_input_create(void *context, const telar_gui_callbacks *callba
         free(self);
         return NULL;
     }
-    self->pointer = telar_pointer_create(context, callbacks);
+    self->pointer = telar_pointer_create(context, callbacks, outputs);
     if (self->pointer == NULL) {
         telar_text_input_destroy(self->text_input);
         free(self);

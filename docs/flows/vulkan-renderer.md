@@ -102,7 +102,7 @@ space, preferring BGRA8 UNORM.
 Wayland supplies the compositor's pacing hints and FIFO synchronizes
 presentation. A monotonic deadline also caps submission at the window's
 interval: the refresh of the fastest output the surface is on, read from
-`wl_output` by `display_rate.c`, or longer under `gui.max_fps`
+`wl_output` through the output table (`outputs.c`) by `display_rate.c`, or longer under `gui.max_fps`
 ([frame pacing](frame-pacing.md)). The existing native poll loop uses the
 remaining deadline only when a dirty window has no callback or GPU work
 outstanding. There is no periodic timer. Cadence carries forward across small

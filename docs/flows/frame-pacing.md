@@ -46,17 +46,23 @@ removed). After each report and each preparation it reads
 `CAFrameRateRangeMake(min(60, rate), rate, rate)`, so a capped window also
 wakes less.
 
-On Wayland, `display_rate.c` binds every `wl_output`, keeps the refresh of each
-output's current mode and follows `enter` and `leave` on the window's surface.
-The window reports the fastest output it is on; an output that reports no
+On Wayland, the window's output table (`outputs.c`) binds every `wl_output`
+once and keeps each one's scale and the refresh of its current mode. The
+cursor surface and the window surface each keep their own set of the outputs
+they entered; the table clears a slot from every set when it frees the slot,
+so an output bound later into it never counts as entered, and an `enter`
+naming an output already withdrawn changes nothing. `display_rate.c` reports
+the fastest output the window's surface is on; an output that reports no
 refresh, as a virtual one may, keeps the previous interval. `frame_clock.c`
 still waits for the compositor's frame callback and caps submission at the
 interval Zig answers, instead of a fixed 60 Hz.
 
 `GuiAdapter.observeDisplay` stores the display interval in `FramePacer` and
 `FramePacer.pace` derives the window's interval: the display's, or longer under
-`gui.max_fps`, clamped to the cadences the runtime accepts. A configuration
-adoption runs the same derivation. Credits, grace and the cadence anchor carry
+`gui.max_fps`, clamped to the cadences the runtime accepts, and gives the
+same interval to the widget animation clock (`FrameClock.interval_ns`), so
+tab motion, ring fades and progress advance once per presented frame. A
+configuration adoption runs the same derivation. Credits, grace and the cadence anchor carry
 over, so a window moved to another display keeps its burst.
 
 ## Client and runtime

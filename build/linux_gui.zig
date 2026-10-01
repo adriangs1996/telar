@@ -97,7 +97,7 @@ fn addCursorSources(b: *std.Build, module: *std.Build.Module, flags: []const []c
     addProtocol(b, module, "staging/cursor-shape/cursor-shape-v1");
     addProtocol(b, module, "unstable/tablet/tablet-unstable-v2");
     module.addCSourceFiles(.{
-        .files = &.{ "src/gui/linux/cursor.c", "src/gui/linux/cursor_theme.c" },
+        .files = &.{ "src/gui/linux/cursor.c", "src/gui/linux/cursor_theme.c", "src/gui/linux/outputs.c" },
         .flags = flags,
     });
     module.linkSystemLibrary("wayland-cursor", .{});

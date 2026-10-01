@@ -96,7 +96,8 @@ static void verify_clipboard_resume(telar_input *self) {
 
 int main(void) {
     telar_gui_callbacks callbacks = {.input = capture};
-    telar_input *self = telar_input_create(NULL, &callbacks);
+    telar_outputs outputs = {0};
+    telar_input *self = telar_input_create(NULL, &callbacks, &outputs);
     assert(self != NULL);
     struct xkb_rule_names names = {.layout = "us"};
     self->keymap = xkb_keymap_new_from_names(self->xkb, &names, 0);
