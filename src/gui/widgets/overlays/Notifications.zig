@@ -125,7 +125,7 @@ fn visibility(item: *const shared_model.NotificationItem, clock: ?*Clock) f32 {
         }
 
         if (sampled.phase == .entering or (sampled.phase == .exiting and sampled.transition_position_ns > 0)) {
-            frame.requestAt(sampled.nextDeadline(frame.now_ns, Clock.frame_interval_ns));
+            frame.requestAt(sampled.nextDeadline(frame.now_ns, frame.interval_ns));
         }
     }
 

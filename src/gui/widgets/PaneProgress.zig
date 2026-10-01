@@ -8,8 +8,6 @@ const Rect = gfx.Rect;
 const Label = @import("Label.zig");
 const ProgressRing = @import("ProgressRing.zig");
 const ProgressMotions = @import("ProgressMotions.zig");
-const animate = @import("animate");
-const Clock = animate.FrameClock;
 const Progress = @This();
 
 pane: *const data.Pane,
@@ -69,7 +67,7 @@ pub fn draw(self: Progress, canvas: *Canvas) !void {
             const phase = @as(f32, @floatFromInt(clock.now_ns % period)) / period;
             rotation = phase;
             fraction = 0.22 + 0.18 * (1 - @cos(phase * 2 * std.math.pi));
-            clock.requestAt(clock.now_ns +| Clock.frame_interval_ns);
+            clock.requestAt(clock.now_ns +| clock.interval_ns);
         }
     } else if (self.pane.progress_state == .indeterminate) {
         fraction = 0.35;

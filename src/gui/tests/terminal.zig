@@ -125,6 +125,7 @@ test "the window paces itself and its runtime cell frames to the display it is o
     // Before the runtime link opens, a display report only paces the window.
     try session.gui.observeDisplay(promotion);
     try std.testing.expectEqual(promotion, session.gui.driver.frame_pacer.cadence.interval);
+    try std.testing.expectEqual(promotion, session.gui.chrome.animation.interval_ns);
     try std.testing.expect(session.pending == null);
 
     try session.gui.windowReady(

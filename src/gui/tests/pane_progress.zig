@@ -60,7 +60,7 @@ test "warm native indeterminate progress animates without allocations shaping or
     const progress: PaneProgress = .{ .pane = pane, .area = .{ .x = 8, .y = 12, .width = 260, .height = 40 }, .motions = &motions };
     for (0..90) |frame| {
         canvas.quads.clear();
-        clock.begin(frame * FrameClock.frame_interval_ns);
+        clock.begin(frame * FrameClock.default_interval_ns);
         motions.begin();
         try progress.draw(&canvas);
         motions.end();
@@ -79,12 +79,12 @@ test "warm native indeterminate progress animates without allocations shaping or
     defer canvas.quads.allocator = quad_allocator;
     for (90..210) |frame| {
         canvas.quads.clear();
-        clock.begin(frame * FrameClock.frame_interval_ns);
+        clock.begin(frame * FrameClock.default_interval_ns);
         motions.begin();
         try progress.draw(&canvas);
         motions.end();
         try expectInside(canvas.quads.items(), progress.area);
-        try std.testing.expectEqual(clock.now_ns + FrameClock.frame_interval_ns, clock.deadline_ns.?);
+        try std.testing.expectEqual(clock.now_ns + FrameClock.default_interval_ns, clock.deadline_ns.?);
     }
 
     try std.testing.expectEqual(shape_calls, atlas.shape_calls);

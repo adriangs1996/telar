@@ -532,7 +532,7 @@ pub fn observeDisplay(self: *GuiAdapter, interval_ns: u64) !void {
 // Paces the window at its display's rate under the configured cap and,
 // once started, tells every runtime the window shows when that changes.
 fn paceFrames(self: *GuiAdapter) !void {
-    const interval = self.driver.frame_pacer.pace(self.renderer.config.max_fps);
+    const interval = self.driver.frame_pacer.pace(self.renderer.config.max_fps, &self.chrome.animation);
     const own = window_machines.window(self);
     if (!self.started or interval == own.model.host.host_capabilities.frame_interval_ns) {
         return;
@@ -595,7 +595,7 @@ fn start(self: *GuiAdapter, colors: core.TerminalColors) !void {
     capabilities.terminal_colors = colors;
     capabilities.images = image_support;
     capabilities.pointer_pixels = .supported;
-    capabilities.frame_interval_ns = self.driver.frame_pacer.pace(self.renderer.config.max_fps);
+    capabilities.frame_interval_ns = self.driver.frame_pacer.pace(self.renderer.config.max_fps, &self.chrome.animation);
 
     _ = try client.host_resize.applyHostUpdate(
         self.app,
