@@ -17,6 +17,7 @@ const machine_dispatch = @import("machine_dispatch.zig");
 const notification = @import("notification.zig");
 const remote_shell = @import("remote_shell.zig");
 const LoginRequest = @import("LoginRequest.zig");
+const ScriptOutput = @import("ScriptOutput.zig");
 
 const Agent = MachinePlatform.Agent;
 const AgentLogin = core.AgentLogin;
@@ -161,14 +162,18 @@ pub fn run(init: std.process.Init, report: *SetupReport, profile: *const core.Ma
         };
 
         if (logged_in) {
-            logins.set(agent, .done);
-            try report.note(.logins, "{s}: logged in", .{@tagName(agent)});
             // A login a person finished after an earlier setup left its
             // pane open: it has nothing more to show.
             if (planFor(agent, provider)) |plan| {
-                closeLeftover(init, arena, profile, agent, plan.title);
+                closeLeftover(init, arena, profile, agent, plan.title) catch |err| {
+                    try report.note(.logins, "{s}: its login cleanup failed: {s}", .{ @tagName(agent), @errorName(err) });
+                    logins.set(agent, .failed);
+                    continue;
+                };
             }
 
+            logins.set(agent, .done);
+            try report.note(.logins, "{s}: logged in", .{@tagName(agent)});
             continue;
         }
 
@@ -192,7 +197,9 @@ pub fn run(init: std.process.Init, report: *SetupReport, profile: *const core.Ma
             };
         };
         logins.set(agent, login);
-        try report.note(.logins, "{s}: {s}", .{ @tagName(agent), @tagName(login) });
+        if (login != .failed) {
+            try report.note(.logins, "{s}: {s}", .{ @tagName(agent), @tagName(login) });
+        }
     }
 
     record(init, profile.label(), request.profiles_path, logins) catch |err| {
@@ -251,7 +258,7 @@ fn loginOne(init: std.process.Init, report: *SetupReport, login: Login, interact
 
     // A login an earlier setup left waiting keeps its pane: its link and
     // code still stand, and a second login would only race it.
-    const existing = findLoginPane(init, arena, login.profile, login.agent, login.plan.title) catch null;
+    const existing = try findLoginPane(init, arena, login.profile, login.agent, login.plan.title);
     const pane = existing orelse try openLoginPane(init, arena, login);
     errdefer closeLoginPane(init, arena, login.profile, login.agent, pane) catch {};
     if (existing != null) {
@@ -261,9 +268,16 @@ fn loginOne(init: std.process.Init, report: *SetupReport, login: Login, interact
     }
 
     if (login.plan.link) {
-        const found = try waitForLink(init, arena, login, pane) orelse {
-            try report.progress("{s}: no login link appeared in its pane on {s}; finish it there", .{ @tagName(login.agent), login.profile.label() });
-            return .pending;
+        const found = switch (try waitForLink(init, arena, report, login, pane)) {
+            .link => |found| found,
+            .ended => |outcome| {
+                try closeLoginPane(init, arena, login.profile, login.agent, pane);
+                return outcome;
+            },
+            .pending => {
+                try report.progress("{s}: no login link appeared in its pane on {s}; finish it there", .{ @tagName(login.agent), login.profile.label() });
+                return .pending;
+            },
         };
 
         try report.progress("{s} on {s}: {s}", .{ login.plan.title, login.profile.label(), found.url });
@@ -282,6 +296,11 @@ fn loginOne(init: std.process.Init, report: *SetupReport, login: Login, interact
     // Without a terminal nobody can paste or wait here: the login stays open
     // there, and the next setup sees it done or shows it again.
     if (!interactive) {
+        if (try loginEnded(init, report, login, pane, try readPane(init, arena, login.profile, pane))) |outcome| {
+            try closeLoginPane(init, arena, login.profile, login.agent, pane);
+            return outcome;
+        }
+
         return .pending;
     }
 
@@ -289,10 +308,8 @@ fn loginOne(init: std.process.Init, report: *SetupReport, login: Login, interact
         try pasteBack(init, arena, report, login, pane);
     }
 
-    const outcome = try waitForLogin(init, login);
-    closeLoginPane(init, arena, login.profile, login.agent, pane) catch |err| {
-        try report.note(.logins, "{s}: its login pane there stays open: {s}", .{ @tagName(login.agent), @errorName(err) });
-    };
+    const outcome = try waitForLogin(init, report, login, pane);
+    try closeLoginPane(init, arena, login.profile, login.agent, pane);
 
     return outcome;
 }
@@ -400,17 +417,21 @@ fn parseRecord(text: []const u8) ?LoginPane {
 }
 
 const ListedWorkspace = struct { workspace_id: u64, name: []const u8 };
+const ListedTab = struct {
+    workspace_id: u64,
+    tab_id: u64,
+    panes: []const struct { pane_id: u64 },
+};
+const ClosedLoginTab = struct {
+    workspace_id: u64,
+    tab_id: u64,
+    closed: bool,
+};
 
 // Whether the recorded pane still runs there, in a workspace named for the
 // login: a runtime that restarted may have given its ids to other panes.
 fn claimed(noted: LoginPane, title: []const u8, workspaces: []const ListedWorkspace, panes: []const LoginPane) bool {
-    const named = for (workspaces) |workspace| {
-        if (workspace.workspace_id == noted.workspace_id) {
-            break std.mem.eql(u8, workspace.name, title);
-        }
-    } else false;
-
-    if (!named) {
+    if (!namedWorkspace(noted, title, workspaces)) {
         return false;
     }
 
@@ -423,6 +444,14 @@ fn claimed(noted: LoginPane, title: []const u8, workspaces: []const ListedWorksp
     return false;
 }
 
+fn namedWorkspace(noted: LoginPane, title: []const u8, workspaces: []const ListedWorkspace) bool {
+    return for (workspaces) |workspace| {
+        if (workspace.workspace_id == noted.workspace_id) {
+            break std.mem.eql(u8, workspace.name, title);
+        }
+    } else false;
+}
+
 // The pane of a login an earlier setup opened there and nobody finished:
 // the one its record names, still in its workspace named `title`. A record
 // that no longer matches is dropped.
@@ -431,14 +460,26 @@ fn findLoginPane(init: std.process.Init, arena: std.mem.Allocator, profile: *con
     const listed = try machine_dispatch.capture(init, profile, &.{ "telar", "workspace", "list", "--json" });
     defer init.gpa.free(listed);
     const workspaces = try std.json.parseFromSliceLeaky([]const ListedWorkspace, arena, listed, .{ .ignore_unknown_fields = true });
+    if (!namedWorkspace(noted, title, workspaces)) {
+        try forgetLoginPane(init, profile.destination(), agent);
+        return null;
+    }
 
     const id = try std.fmt.allocPrintSentinel(arena, "{d}", .{noted.workspace_id}, 0);
-    // A workspace that is gone has no panes to list.
-    const panes_output = machine_dispatch.capture(init, profile, &.{ "telar", "pane", "list", "--workspace", id, "--json" }) catch null;
-    defer if (panes_output) |output| init.gpa.free(output);
-    const panes = try std.json.parseFromSliceLeaky([]const LoginPane, arena, panes_output orelse "[]", .{ .ignore_unknown_fields = true });
-    if (claimed(noted, title, workspaces, panes)) {
-        return noted;
+    const tab_id = try std.fmt.allocPrintSentinel(arena, "{d}", .{noted.tab_id}, 0);
+    // One tab snapshot avoids racing a workspace's changing list of tabs.
+    if (try captureLoginCommand(init, arena, profile, &.{ "tab", "get", tab_id, "--workspace", id, "--json" }, .tab)) |output| {
+        const tab = try std.json.parseFromSliceLeaky(ListedTab, arena, output, .{ .ignore_unknown_fields = true });
+        if (tab.workspace_id != noted.workspace_id or tab.tab_id != noted.tab_id) {
+            return error.LoginPaneUnreadable;
+        }
+
+        for (tab.panes) |pane| {
+            const candidate: LoginPane = .{ .workspace_id = tab.workspace_id, .tab_id = tab.tab_id, .pane_id = pane.pane_id };
+            if (claimed(noted, title, workspaces, &.{candidate})) {
+                return noted;
+            }
+        }
     }
 
     try forgetLoginPane(init, profile.destination(), agent);
@@ -447,13 +488,17 @@ fn findLoginPane(init: std.process.Init, arena: std.mem.Allocator, profile: *con
 
 // Closes the login's tab there, and with it its workspace, and its record.
 fn closeLoginPane(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, agent: Agent, pane: LoginPane) !void {
+    const current = try findLoginPane(init, arena, profile, agent, planFor(agent, "openai").?.title) orelse return;
+    if (!std.meta.eql(current, pane)) {
+        return;
+    }
+
     try closeTab(init, arena, profile, pane);
     try forgetLoginPane(init, profile.destination(), agent);
 }
 
 fn closeTab(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, pane: LoginPane) !void {
     const words = [_][*:0]const u8{
-        "telar",
         "tab",
         "close",
         try std.fmt.allocPrintSentinel(arena, "{d}", .{pane.tab_id}, 0),
@@ -461,15 +506,67 @@ fn closeTab(init: std.process.Init, arena: std.mem.Allocator, profile: *const co
         try std.fmt.allocPrintSentinel(arena, "{d}", .{pane.workspace_id}, 0),
         "--json",
     };
-    const output = try machine_dispatch.capture(init, profile, &words);
-    init.gpa.free(output);
+    if (try captureLoginCommand(init, arena, profile, &words, .tab)) |output| {
+        const closed = try std.json.parseFromSliceLeaky(ClosedLoginTab, arena, output, .{ .ignore_unknown_fields = true });
+        if (!closed.closed or closed.workspace_id != pane.workspace_id or closed.tab_id != pane.tab_id) {
+            return error.LoginPaneUnreadable;
+        }
+    }
 }
 
 // Closes a login pane that outlived its login, if there is one; a failure
 // leaves it for the person.
-fn closeLeftover(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, agent: Agent, title: []const u8) void {
-    const pane = (findLoginPane(init, arena, profile, agent, title) catch return) orelse return;
-    closeLoginPane(init, arena, profile, agent, pane) catch {};
+fn closeLeftover(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, agent: Agent, title: []const u8) !void {
+    const pane = try findLoginPane(init, arena, profile, agent, title) orelse return;
+    try closeLoginPane(init, arena, profile, agent, pane);
+}
+
+const MissingLoginState = enum { tab, pane };
+
+// Only these exact CLI refusals mean the owned state disappeared. In
+// particular SSH exit 255 and protocol errors must never drop its record.
+fn missingLoginState(output: *const ScriptOutput, missing: MissingLoginState) bool {
+    if (output.term != .exited or output.stdout.len != 0) {
+        return false;
+    }
+
+    const diagnostic = std.mem.trimEnd(u8, output.stderr, "\r\n");
+    return switch (missing) {
+        .tab => output.term.exited == 1 and (std.mem.eql(u8, diagnostic, "telar tab: tab not found") or std.mem.eql(u8, diagnostic, "telar tab: workspace not found")),
+        .pane => output.term.exited == 2 and std.mem.eql(u8, diagnostic, "telar pane: pane not found or its generation is stale"),
+    };
+}
+
+fn captureLoginCommand(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, arguments: []const [*:0]const u8, missing: MissingLoginState) !?[]const u8 {
+    var buffer: [2048]u8 = undefined;
+    var script: std.Io.Writer = .fixed(&buffer);
+    try script.writeAll("exec ");
+    try remote_shell.quote(&script, core.remote_telar.program(profile.telarPath()));
+    for (arguments) |argument| {
+        try script.writeByte(' ');
+        try remote_shell.quote(&script, std.mem.span(argument));
+    }
+
+    try script.writeByte('\n');
+    var output = try remote_shell.runScript(init, profile.destination(), script.buffered(), status_timeout_s);
+    defer output.deinit(init.gpa);
+    if (missingLoginState(&output, missing)) {
+        return null;
+    }
+
+    if (output.stderr.len != 0) {
+        std.debug.print("{s}", .{output.stderr});
+    }
+
+    if (output.sshFailed()) {
+        return error.SshFailed;
+    }
+
+    if (!output.succeeded()) {
+        return error.MachineCommandFailed;
+    }
+
+    return try arena.dupe(u8, try output.wholeStdout());
 }
 
 const FoundLink = struct {
@@ -477,27 +574,77 @@ const FoundLink = struct {
     code: ?[]const u8 = null,
 };
 
-fn waitForLink(init: std.process.Init, arena: std.mem.Allocator, login: Login, pane: LoginPane) !?FoundLink {
+const LinkWait = union(enum) {
+    link: FoundLink,
+    ended: AgentLogin,
+    pending,
+};
+
+const PaneRead = struct {
+    pane_id: u64,
+    truncated: bool,
+    exit_code: ?i32,
+    text: []const u8,
+};
+
+fn waitForLink(init: std.process.Init, arena: std.mem.Allocator, report: *SetupReport, login: Login, pane: LoginPane) !LinkWait {
     var waited: u64 = 0;
     while (waited < link_wait_ms) : (waited += poll_ms) {
-        const text = try readPane(init, arena, login.profile, pane);
-        if (findLink(text, login.plan.hosts, login.plan.code_marker)) |found| {
+        var scratch: std.heap.ArenaAllocator = .init(init.gpa);
+        defer scratch.deinit();
+        const read = try readPane(init, scratch.allocator(), login.profile, pane);
+        if (try loginEnded(init, report, login, pane, read)) |outcome| {
+            return .{ .ended = outcome };
+        }
+
+        if (findLink(read.?.text, login.plan.hosts, login.plan.code_marker)) |found| {
             if (login.plan.code_marker == null or found.code != null) {
-                return found;
+                return .{ .link = .{
+                    .url = try arena.dupe(u8, found.url),
+                    .code = if (found.code) |code| try arena.dupe(u8, code) else null,
+                } };
             }
         }
 
         try init.io.sleep(.fromMilliseconds(poll_ms), .awake);
     }
 
-    return null;
+    return .pending;
 }
 
-fn readPane(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, pane: LoginPane) ![]const u8 {
-    const words = [_][*:0]const u8{ "telar", "pane", "read", try std.fmt.allocPrintSentinel(arena, "{d}", .{pane.pane_id}, 0), "--lines", read_lines };
-    const output = try machine_dispatch.capture(init, profile, &words);
-    defer init.gpa.free(output);
-    return arena.dupe(u8, output);
+fn readPane(init: std.process.Init, arena: std.mem.Allocator, profile: *const core.MachineProfile, pane: LoginPane) !?PaneRead {
+    const words = [_][*:0]const u8{ "pane", "read", try std.fmt.allocPrintSentinel(arena, "{d}", .{pane.pane_id}, 0), "--lines", read_lines, "--json" };
+    const output = try captureLoginCommand(init, arena, profile, &words, .pane) orelse return null;
+    const read = std.json.parseFromSliceLeaky(PaneRead, arena, output, .{ .ignore_unknown_fields = true }) catch return error.LoginPaneUnreadable;
+    if (read.pane_id != pane.pane_id) {
+        return error.LoginPaneUnreadable;
+    }
+
+    return read;
+}
+
+// The official status remains the proof of success even after a natural
+// exit. Do not copy the pane's output into notes: it may hold OAuth secrets.
+fn loginEnded(init: std.process.Init, report: *SetupReport, login: Login, pane: LoginPane, read: ?PaneRead) !?AgentLogin {
+    if (read) |value| {
+        if (value.exit_code == null) {
+            return null;
+        }
+    }
+
+    const logged_in = try loggedIn(init, login.profile.destination(), login.agent, login.path, login.provider);
+    const code = if (read) |value| value.exit_code else null;
+    if (logged_in and (code == null or code.? == 0)) {
+        return .done;
+    }
+
+    if (code) |exit_code| {
+        try report.note(.logins, "{s}: login command exited with {d}; status is {s}. Read its diagnostic with pane read {d} --json on {s}, then retry setup", .{ @tagName(login.agent), exit_code, if (logged_in) "logged in" else "not logged in", pane.pane_id, login.profile.label() });
+    } else {
+        try report.note(.logins, "{s}: login pane disappeared before authentication completed; retry setup", .{@tagName(login.agent)});
+    }
+
+    return .failed;
 }
 
 /// The first https URL a login printed whose host is one of `hosts` and
@@ -616,16 +763,24 @@ fn sendText(init: std.process.Init, arena: std.mem.Allocator, profile: *const co
     init.gpa.free(output);
 }
 
-fn waitForLogin(init: std.process.Init, login: Login) !AgentLogin {
+fn waitForLogin(init: std.process.Init, report: *SetupReport, login: Login, pane: LoginPane) !AgentLogin {
     var waited: u64 = 0;
-    while (waited < finish_wait_ms) : (waited += status_poll_ms) {
-        if (try loggedIn(init, login.profile.destination(), login.agent, login.path, login.provider)) {
+    while (waited < finish_wait_ms) : (waited += poll_ms) {
+        var scratch: std.heap.ArenaAllocator = .init(init.gpa);
+        defer scratch.deinit();
+        const read = try readPane(init, scratch.allocator(), login.profile, pane);
+        if (try loginEnded(init, report, login, pane, read)) |outcome| {
+            return outcome;
+        }
+
+        if (waited % status_poll_ms == 0 and try loggedIn(init, login.profile.destination(), login.agent, login.path, login.provider)) {
             return .done;
         }
 
-        try init.io.sleep(.fromMilliseconds(status_poll_ms), .awake);
+        try init.io.sleep(.fromMilliseconds(poll_ms), .awake);
     }
 
+    try report.note(.logins, "{s}: authentication did not complete before the login timeout; retry setup", .{@tagName(login.agent)});
     return .failed;
 }
 
@@ -791,4 +946,30 @@ test "only the pane setup recordeded, in its login workspace, is taken for a log
 
     // The workspace is there but the pane is gone.
     try std.testing.expect(!claimed(noted, title, &own, &.{}));
+}
+
+test "only exact missing login state refusals tolerate cleanup races" {
+    var stderr = "telar tab: tab not found\n".*;
+    var output: ScriptOutput = .{
+        .term = .{ .exited = 1 },
+        .stdout = &.{},
+        .stderr = &stderr,
+    };
+    try std.testing.expect(missingLoginState(&output, .tab));
+    try std.testing.expect(!missingLoginState(&output, .pane));
+
+    output.term = .{ .exited = 255 };
+    try std.testing.expect(!missingLoginState(&output, .tab));
+    output.term = .{ .exited = 1 };
+    var protocol_error = "telar tab: unexpected reply from the runtime\n".*;
+    output.stderr = &protocol_error;
+    try std.testing.expect(!missingLoginState(&output, .tab));
+
+    var pane_missing = "telar pane: pane not found or its generation is stale\n".*;
+    output.stderr = &pane_missing;
+    output.term = .{ .exited = 2 };
+    try std.testing.expect(missingLoginState(&output, .pane));
+    var partial = "{}".*;
+    output.stdout = &partial;
+    try std.testing.expect(!missingLoginState(&output, .pane));
 }

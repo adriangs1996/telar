@@ -57,10 +57,12 @@ MachineOptions.parse -> machine_profiles.run -> machine_setup.run
         |     workspace of that runtime (`workspace create --columns 1024 --`),
         |     or the one an earlier setup left waiting (its record in
         |     ~/.local/state/telar/setup-logins there), the link read with
-        |     `pane read` and taken only on an allowed host, a notification
+        |     `pane read --json` and taken only on an allowed host, a notification
         |     here whose click opens it, a pasted code typed with `pane
         |     send-keys --stdin`, the agent's status command polled, the
-        |     tab closed when the login ends; each outcome saved as `logins`
+        |     process exit checked before and after the link, the owned tab
+        |     closed if still present when the login ends; each outcome saved
+        |     as `logins`
 10   check: remote.discover again, schemas equal
         |
 SetupReport: one numbered line per step as it ends, or one JSON object
@@ -113,6 +115,18 @@ SetupReport: one numbered line per step as it ends, or one JSON object
   no user info or port, and passes over any other link something printed
   there. The notification it sends goes to the local runtime, and its card
   shows the host before the click ([notifications](../notifications.md)).
+- **Login records name owned panes.** Setup checks the workspace id and
+  login name before querying the recorded tab, then checks its pane id.
+  Missing or mismatched state drops the record without closing another
+  pane. Cleanup rechecks ownership and tolerates an exact missing-tab
+  refusal if the child exited during cleanup; SSH, status and protocol
+  failures still fail the login step.
+- **A terminated login is no longer pending.** Structured pane reads expose
+  its exit code, including after the runtime collected the pane. Setup
+  checks the agent's official status when the process ends: a natural exit
+  succeeds only when authentication is confirmed. A failed exit reports
+  its code once and continues to the next agent. Pane text is not copied
+  into report notes because it may contain an OAuth link or device code.
 
 ## Failures
 
